@@ -30,6 +30,7 @@ import (
 	sync "sync"
 	unsafe "unsafe"
 	topodata "vitess.io/vitess/go/vt/proto/topodata"
+	vttime "vitess.io/vitess/go/vt/proto/vttime"
 )
 
 const (
@@ -511,6 +512,89 @@ func (x *PrimaryStatus) GetServerUuid() string {
 	return ""
 }
 
+// ShardPeerHealth is one tablet's most recent liveness observation of a single shard peer —
+// currently its shard's primary (see the FullStatus shard_peer_health field) — produced by the
+// shard-tablet-health ping monitor. It carries raw signals; consumers (VTOrc) apply their own
+// threshold/freshness policy.
+type ShardPeerHealth struct {
+	state                   protoimpl.MessageState `protogen:"open.v1"`
+	TabletAlias             *topodata.TabletAlias  `protobuf:"bytes,1,opt,name=tablet_alias,json=tabletAlias,proto3" json:"tablet_alias,omitempty"`
+	ConsecutivePingFailures int64                  `protobuf:"varint,2,opt,name=consecutive_ping_failures,json=consecutivePingFailures,proto3" json:"consecutive_ping_failures,omitempty"`
+	LastSuccessfulPing      *vttime.Time           `protobuf:"bytes,3,opt,name=last_successful_ping,json=lastSuccessfulPing,proto3" json:"last_successful_ping,omitempty"`
+	LastAttemptedPing       *vttime.Time           `protobuf:"bytes,4,opt,name=last_attempted_ping,json=lastAttemptedPing,proto3" json:"last_attempted_ping,omitempty"`
+	// time_since_last_attempted_ping is the age of last_attempted_ping, measured with the
+	// reporting tablet's own clock when the report was produced. Consumers should prefer it
+	// over comparing last_attempted_ping against their own clock, which is skew-sensitive.
+	TimeSinceLastAttemptedPing *vttime.Duration `protobuf:"bytes,5,opt,name=time_since_last_attempted_ping,json=timeSinceLastAttemptedPing,proto3" json:"time_since_last_attempted_ping,omitempty"`
+	unknownFields              protoimpl.UnknownFields
+	sizeCache                  protoimpl.SizeCache
+}
+
+func (x *ShardPeerHealth) Reset() {
+	*x = ShardPeerHealth{}
+	mi := &file_replicationdata_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ShardPeerHealth) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ShardPeerHealth) ProtoMessage() {}
+
+func (x *ShardPeerHealth) ProtoReflect() protoreflect.Message {
+	mi := &file_replicationdata_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ShardPeerHealth.ProtoReflect.Descriptor instead.
+func (*ShardPeerHealth) Descriptor() ([]byte, []int) {
+	return file_replicationdata_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *ShardPeerHealth) GetTabletAlias() *topodata.TabletAlias {
+	if x != nil {
+		return x.TabletAlias
+	}
+	return nil
+}
+
+func (x *ShardPeerHealth) GetConsecutivePingFailures() int64 {
+	if x != nil {
+		return x.ConsecutivePingFailures
+	}
+	return 0
+}
+
+func (x *ShardPeerHealth) GetLastSuccessfulPing() *vttime.Time {
+	if x != nil {
+		return x.LastSuccessfulPing
+	}
+	return nil
+}
+
+func (x *ShardPeerHealth) GetLastAttemptedPing() *vttime.Time {
+	if x != nil {
+		return x.LastAttemptedPing
+	}
+	return nil
+}
+
+func (x *ShardPeerHealth) GetTimeSinceLastAttemptedPing() *vttime.Duration {
+	if x != nil {
+		return x.TimeSinceLastAttemptedPing
+	}
+	return nil
+}
+
 // FullStatus contains the full status of MySQL including the replication information, semi-sync information, GTID information among others
 type FullStatus struct {
 	state                       protoimpl.MessageState `protogen:"open.v1"`
@@ -539,13 +623,17 @@ type FullStatus struct {
 	DiskStalled                 bool                   `protobuf:"varint,23,opt,name=disk_stalled,json=diskStalled,proto3" json:"disk_stalled,omitempty"`
 	SemiSyncBlocked             bool                   `protobuf:"varint,24,opt,name=semi_sync_blocked,json=semiSyncBlocked,proto3" json:"semi_sync_blocked,omitempty"`
 	TabletType                  topodata.TabletType    `protobuf:"varint,25,opt,name=tablet_type,json=tabletType,proto3,enum=topodata.TabletType" json:"tablet_type,omitempty"`
-	unknownFields               protoimpl.UnknownFields
-	sizeCache                   protoimpl.SizeCache
+	// shard_peer_health, when --track-shard-tablet-health is set, carries this tablet's most recent
+	// liveness observation of its shard's current primary's vttablet (not of all shard peers). VTOrc
+	// uses it to form a quorum before failing over an unreachable primary vttablet.
+	ShardPeerHealth []*ShardPeerHealth `protobuf:"bytes,26,rep,name=shard_peer_health,json=shardPeerHealth,proto3" json:"shard_peer_health,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *FullStatus) Reset() {
 	*x = FullStatus{}
-	mi := &file_replicationdata_proto_msgTypes[4]
+	mi := &file_replicationdata_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -557,7 +645,7 @@ func (x *FullStatus) String() string {
 func (*FullStatus) ProtoMessage() {}
 
 func (x *FullStatus) ProtoReflect() protoreflect.Message {
-	mi := &file_replicationdata_proto_msgTypes[4]
+	mi := &file_replicationdata_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -570,7 +658,7 @@ func (x *FullStatus) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FullStatus.ProtoReflect.Descriptor instead.
 func (*FullStatus) Descriptor() ([]byte, []int) {
-	return file_replicationdata_proto_rawDescGZIP(), []int{4}
+	return file_replicationdata_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *FullStatus) GetServerId() uint32 {
@@ -748,11 +836,18 @@ func (x *FullStatus) GetTabletType() topodata.TabletType {
 	return topodata.TabletType(0)
 }
 
+func (x *FullStatus) GetShardPeerHealth() []*ShardPeerHealth {
+	if x != nil {
+		return x.ShardPeerHealth
+	}
+	return nil
+}
+
 var File_replicationdata_proto protoreflect.FileDescriptor
 
 const file_replicationdata_proto_rawDesc = "" +
 	"\n" +
-	"\x15replicationdata.proto\x12\x0freplicationdata\x1a\x0etopodata.proto\"\xa5\t\n" +
+	"\x15replicationdata.proto\x12\x0freplicationdata\x1a\x0etopodata.proto\x1a\fvttime.proto\"\xa5\t\n" +
 	"\x06Status\x12\x1a\n" +
 	"\bposition\x18\x01 \x01(\tR\bposition\x126\n" +
 	"\x17replication_lag_seconds\x18\x04 \x01(\rR\x15replicationLagSeconds\x12\x1f\n" +
@@ -798,7 +893,14 @@ const file_replicationdata_proto_rawDesc = "" +
 	"\bposition\x18\x01 \x01(\tR\bposition\x12#\n" +
 	"\rfile_position\x18\x02 \x01(\tR\ffilePosition\x12\x1f\n" +
 	"\vserver_uuid\x18\x03 \x01(\tR\n" +
-	"serverUuid\"\xce\t\n" +
+	"serverUuid\"\xdb\x02\n" +
+	"\x0fShardPeerHealth\x128\n" +
+	"\ftablet_alias\x18\x01 \x01(\v2\x15.topodata.TabletAliasR\vtabletAlias\x12:\n" +
+	"\x19consecutive_ping_failures\x18\x02 \x01(\x03R\x17consecutivePingFailures\x12>\n" +
+	"\x14last_successful_ping\x18\x03 \x01(\v2\f.vttime.TimeR\x12lastSuccessfulPing\x12<\n" +
+	"\x13last_attempted_ping\x18\x04 \x01(\v2\f.vttime.TimeR\x11lastAttemptedPing\x12T\n" +
+	"\x1etime_since_last_attempted_ping\x18\x05 \x01(\v2\x10.vttime.DurationR\x1atimeSinceLastAttemptedPing\"\x9c\n" +
+	"\n" +
 	"\n" +
 	"FullStatus\x12\x1b\n" +
 	"\tserver_id\x18\x01 \x01(\rR\bserverId\x12\x1f\n" +
@@ -829,7 +931,8 @@ const file_replicationdata_proto_rawDesc = "" +
 	"\fdisk_stalled\x18\x17 \x01(\bR\vdiskStalled\x12*\n" +
 	"\x11semi_sync_blocked\x18\x18 \x01(\bR\x0fsemiSyncBlocked\x125\n" +
 	"\vtablet_type\x18\x19 \x01(\x0e2\x14.topodata.TabletTypeR\n" +
-	"tabletType*;\n" +
+	"tabletType\x12L\n" +
+	"\x11shard_peer_health\x18\x1a \x03(\v2 .replicationdata.ShardPeerHealthR\x0fshardPeerHealth*;\n" +
 	"\x13StopReplicationMode\x12\x12\n" +
 	"\x0eIOANDSQLTHREAD\x10\x00\x12\x10\n" +
 	"\fIOTHREADONLY\x10\x01B.Z,vitess.io/vitess/go/vt/proto/replicationdatab\x06proto3"
@@ -847,28 +950,37 @@ func file_replicationdata_proto_rawDescGZIP() []byte {
 }
 
 var file_replicationdata_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_replicationdata_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
+var file_replicationdata_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
 var file_replicationdata_proto_goTypes = []any{
 	(StopReplicationMode)(0),      // 0: replicationdata.StopReplicationMode
 	(*Status)(nil),                // 1: replicationdata.Status
 	(*Configuration)(nil),         // 2: replicationdata.Configuration
 	(*StopReplicationStatus)(nil), // 3: replicationdata.StopReplicationStatus
 	(*PrimaryStatus)(nil),         // 4: replicationdata.PrimaryStatus
-	(*FullStatus)(nil),            // 5: replicationdata.FullStatus
-	(topodata.TabletType)(0),      // 6: topodata.TabletType
+	(*ShardPeerHealth)(nil),       // 5: replicationdata.ShardPeerHealth
+	(*FullStatus)(nil),            // 6: replicationdata.FullStatus
+	(*topodata.TabletAlias)(nil),  // 7: topodata.TabletAlias
+	(*vttime.Time)(nil),           // 8: vttime.Time
+	(*vttime.Duration)(nil),       // 9: vttime.Duration
+	(topodata.TabletType)(0),      // 10: topodata.TabletType
 }
 var file_replicationdata_proto_depIdxs = []int32{
-	1, // 0: replicationdata.StopReplicationStatus.before:type_name -> replicationdata.Status
-	1, // 1: replicationdata.StopReplicationStatus.after:type_name -> replicationdata.Status
-	1, // 2: replicationdata.FullStatus.replication_status:type_name -> replicationdata.Status
-	4, // 3: replicationdata.FullStatus.primary_status:type_name -> replicationdata.PrimaryStatus
-	2, // 4: replicationdata.FullStatus.replication_configuration:type_name -> replicationdata.Configuration
-	6, // 5: replicationdata.FullStatus.tablet_type:type_name -> topodata.TabletType
-	6, // [6:6] is the sub-list for method output_type
-	6, // [6:6] is the sub-list for method input_type
-	6, // [6:6] is the sub-list for extension type_name
-	6, // [6:6] is the sub-list for extension extendee
-	0, // [0:6] is the sub-list for field type_name
+	1,  // 0: replicationdata.StopReplicationStatus.before:type_name -> replicationdata.Status
+	1,  // 1: replicationdata.StopReplicationStatus.after:type_name -> replicationdata.Status
+	7,  // 2: replicationdata.ShardPeerHealth.tablet_alias:type_name -> topodata.TabletAlias
+	8,  // 3: replicationdata.ShardPeerHealth.last_successful_ping:type_name -> vttime.Time
+	8,  // 4: replicationdata.ShardPeerHealth.last_attempted_ping:type_name -> vttime.Time
+	9,  // 5: replicationdata.ShardPeerHealth.time_since_last_attempted_ping:type_name -> vttime.Duration
+	1,  // 6: replicationdata.FullStatus.replication_status:type_name -> replicationdata.Status
+	4,  // 7: replicationdata.FullStatus.primary_status:type_name -> replicationdata.PrimaryStatus
+	2,  // 8: replicationdata.FullStatus.replication_configuration:type_name -> replicationdata.Configuration
+	10, // 9: replicationdata.FullStatus.tablet_type:type_name -> topodata.TabletType
+	5,  // 10: replicationdata.FullStatus.shard_peer_health:type_name -> replicationdata.ShardPeerHealth
+	11, // [11:11] is the sub-list for method output_type
+	11, // [11:11] is the sub-list for method input_type
+	11, // [11:11] is the sub-list for extension type_name
+	11, // [11:11] is the sub-list for extension extendee
+	0,  // [0:11] is the sub-list for field type_name
 }
 
 func init() { file_replicationdata_proto_init() }
@@ -882,7 +994,7 @@ func file_replicationdata_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_replicationdata_proto_rawDesc), len(file_replicationdata_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   5,
+			NumMessages:   6,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

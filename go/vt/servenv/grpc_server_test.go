@@ -72,14 +72,22 @@ func TestOrcaRecorder(t *testing.T) {
 
 func TestReportedOrca(t *testing.T) {
 	// Set the port to enable gRPC server.
-	withTempVar(&gRPCPort, getFreePort())
-	withTempVar(&gRPCEnableOrcaMetrics, true)
-	withTempVar(&GRPCServerMetricsRecorder, nil)
+	t.Cleanup(withTempVar(&gRPCPort, getFreePort()))
+	t.Cleanup(withTempVar(&gRPCEnableOrcaMetrics, true))
+	t.Cleanup(withTempVar(&GRPCServerMetricsRecorder, nil))
+	t.Cleanup(withTempVar(&GRPCServer, (*grpc.Server)(nil)))
 
 	createGRPCServer()
 	assert.NotNil(t, GRPCServerMetricsRecorder, "GRPCServerMetricsRecorder should be initialized when gRPCEnableOrcaMetrics is false")
 
-	serveGRPC()
+	// Cleanups run last-in-first-out, so the updater goroutine is fully
+	// stopped before the withTempVar cleanups above restore the globals.
+	stopOrcaUpdater := serveGRPC()
+	t.Cleanup(stopOrcaUpdater)
+	// The method value binds the receiver now, so the cleanup stops this
+	// test's server no matter when the GRPCServer global gets restored.
+	t.Cleanup(GRPCServer.Stop)
+
 	serverMetrics := GRPCServerMetricsRecorder.ServerMetrics()
 	cpuUsage := serverMetrics.CPUUtilization
 	assert.GreaterOrEqualf(t, cpuUsage, float64(0), "CPU Utilization is not set %.2f", cpuUsage)
@@ -159,19 +167,19 @@ func runIngressStatsTestRPC(t *testing.T, ingressBytes *uint64) {
 	t.Helper()
 
 	port := getFreePort()
-	defer withTempVar(&gRPCPort, port)()
-	defer withTempVar(&gRPCBindAddress, "127.0.0.1")()
-	defer withTempVar(&GRPCServer, (*grpc.Server)(nil))()
+	t.Cleanup(withTempVar(&gRPCPort, port))
+	t.Cleanup(withTempVar(&gRPCBindAddress, "127.0.0.1"))
+	t.Cleanup(withTempVar(&GRPCServer, (*grpc.Server)(nil)))
 
 	createGRPCServer()
 	require.NotNil(t, GRPCServer)
 	GRPCServer.RegisterService(&ingressStatsTestServiceDesc, &ingressStatsTestServer{ingressBytes: ingressBytes})
 	serveGRPC()
-	defer GRPCServer.Stop()
+	t.Cleanup(GRPCServer.Stop)
 
 	conn, err := grpc.NewClient(fmt.Sprintf("127.0.0.1:%d", port), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	require.NoError(t, err)
-	defer conn.Close()
+	t.Cleanup(func() { conn.Close() })
 
 	require.NoError(t, conn.Invoke(context.Background(), "/test.IngressStats/Check", &emptypb.Empty{}, &emptypb.Empty{}))
 }

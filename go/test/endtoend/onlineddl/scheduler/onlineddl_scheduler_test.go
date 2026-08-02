@@ -2365,7 +2365,10 @@ DROP TABLE IF EXISTS stress_test
 
 	var openEndedUUID string
 	t.Run("open ended migration", func(t *testing.T) {
-		openEndedUUID = testOnlineDDLStatement(t, createParams(alterTableThrottlingStatement, "vitess --singleton --postpone-completion", "vtgate", "", "hint_col", "", false))
+		// A --postpone-completion migration never reaches a terminal state on its
+		// own, so skip the terminal-state wait and wait for Running instead.
+		openEndedUUID = testOnlineDDLStatement(t, createParams(alterTableThrottlingStatement, "vitess --singleton --postpone-completion", "vtgate", "", "hint_col", "", true))
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, openEndedUUID, normalWaitTime, schema.OnlineDDLStatusRunning)
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, openEndedUUID, schema.OnlineDDLStatusRunning)
 	})
 	t.Run("failed singleton migration, vtgate", func(t *testing.T) {
@@ -2423,7 +2426,9 @@ DROP TABLE IF EXISTS stress_test
 		onlineddl.CheckCancelAllMigrations(t, &vtParams, 1)
 	})
 	t.Run("fail singleton-table same table multi submission", func(t *testing.T) {
-		uuid := testOnlineDDLStatement(t, createParams(alterTableThrottlingStatement, "vitess --singleton-table --postpone-completion", "vtctl", "", "hint_col", "", false))
+		// skipWait: a --postpone-completion migration never reaches a terminal
+		// state on its own; the wait for Running below is the one that matters.
+		uuid := testOnlineDDLStatement(t, createParams(alterTableThrottlingStatement, "vitess --singleton-table --postpone-completion", "vtctl", "", "hint_col", "", true))
 		uuids = append(uuids, uuid)
 		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, normalWaitTime, schema.OnlineDDLStatusRunning)
 
@@ -2434,7 +2439,9 @@ DROP TABLE IF EXISTS stress_test
 	var throttledUUIDs []string
 	// singleton-context
 	t.Run("postponed migrations, singleton-context", func(t *testing.T) {
-		uuidList := testOnlineDDLStatement(t, createParams(multiAlterTableThrottlingStatement, "vitess --singleton-context --postpone-completion", "vtctl", "", "hint_col", "", false))
+		// skipWait: --postpone-completion migrations never reach a terminal state
+		// on their own; the status checks below accept Queued/Ready/Running.
+		uuidList := testOnlineDDLStatement(t, createParams(multiAlterTableThrottlingStatement, "vitess --singleton-context --postpone-completion", "vtctl", "", "hint_col", "", true))
 		throttledUUIDs = strings.Split(uuidList, "\n")
 		assert.Len(t, throttledUUIDs, 3)
 		for _, uuid := range throttledUUIDs {
@@ -2492,7 +2499,9 @@ DROP TABLE IF EXISTS stress_test
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 	})
 	t.Run("fail concurrent singleton-context with revert", func(t *testing.T) {
-		revertUUID := testRevertMigration(t, createRevertParams(uuids[len(uuids)-1], "vitess --allow-concurrent --postpone-completion --singleton-context", "vtctl", "rev:ctx", "", false))
+		// skipWait: a --postpone-completion revert never reaches a terminal state
+		// on its own; the wait for Running below is the one that matters.
+		revertUUID := testRevertMigration(t, createRevertParams(uuids[len(uuids)-1], "vitess --allow-concurrent --postpone-completion --singleton-context", "vtctl", "rev:ctx", "", true))
 		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, revertUUID, normalWaitTime, schema.OnlineDDLStatusRunning)
 		// revert is running
 		_ = testOnlineDDLStatement(t, createParams(dropNonexistentTableStatement, "vitess --allow-concurrent --singleton-context", "vtctl", "migrate:ctx", "", "rejected", true))
@@ -2502,7 +2511,9 @@ DROP TABLE IF EXISTS stress_test
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, revertUUID, schema.OnlineDDLStatusCancelled)
 	})
 	t.Run("success concurrent singleton-context with no-context revert", func(t *testing.T) {
-		revertUUID := testRevertMigration(t, createRevertParams(uuids[len(uuids)-1], "vitess --allow-concurrent --postpone-completion", "vtctl", "rev:ctx", "", false))
+		// skipWait: a --postpone-completion revert never reaches a terminal state
+		// on its own; the wait for Running below is the one that matters.
+		revertUUID := testRevertMigration(t, createRevertParams(uuids[len(uuids)-1], "vitess --allow-concurrent --postpone-completion", "vtctl", "rev:ctx", "", true))
 		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, revertUUID, normalWaitTime, schema.OnlineDDLStatusRunning)
 		// revert is running but has no --singleton-context. Our next migration should be able to run.
 		uuid := testOnlineDDLStatement(t, createParams(dropNonexistentTableStatement, "vitess --allow-concurrent --singleton-context", "vtctl", "migrate:ctx", "", "", false))
@@ -3648,8 +3659,16 @@ func testOnlineDDLStatement(t *testing.T, params *testOnlineDDLStatementParams) 
 	fmt.Printf("<%s>\n", uuid)
 
 	if !strategySetting.Strategy.IsDirect() && !params.skipWait && uuid != "" {
-		status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, normalWaitTime, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
-		fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
+		// A multi-statement migration returns one UUID per statement, newline
+		// separated; wait for each of them to reach a terminal state.
+		for migrationUUID := range strings.SplitSeq(uuid, "\n") {
+			migrationUUID = strings.TrimSpace(migrationUUID)
+			if migrationUUID == "" {
+				continue
+			}
+			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, migrationUUID, normalWaitTime, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
+		}
 	}
 
 	if params.expectError == "" && params.expectHint != "" {
@@ -3686,8 +3705,9 @@ func testRevertMigration(t *testing.T, params *testRevertMigrationParams) (uuid 
 		fmt.Println("# Generated UUID (for debug purposes):")
 		fmt.Printf("<%s>\n", uuid)
 	}
-	if !params.skipWait {
-		time.Sleep(time.Second * 20)
+	if !params.skipWait && uuid != "" {
+		status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, normalWaitTime, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+		fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
 	}
 	return uuid
 }

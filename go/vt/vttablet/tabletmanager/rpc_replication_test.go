@@ -34,8 +34,10 @@ import (
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/semisyncmonitor"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver"
+	"vitess.io/vitess/go/vt/vttablet/tabletservermock"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
@@ -139,6 +141,59 @@ func TestDemotePrimaryStalled(t *testing.T) {
 	require.Eventually(t, func() bool {
 		return !qsc.primaryStalled.Load()
 	}, 5*time.Second, 100*time.Millisecond)
+}
+
+// TestDemotePrimaryLockWaitTimeout checks that a demotion enables super_read_only
+// with a 1 second lock_wait_timeout, so that it fails fast instead of stalling
+// behind metadata locks held by in-flight queries.
+func TestDemotePrimaryLockWaitTimeout(t *testing.T) {
+	old := demotePrimaryLockWaitTimeout
+	demotePrimaryLockWaitTimeout = time.Second
+	t.Cleanup(func() { demotePrimaryLockWaitTimeout = old })
+
+	fakeDb := newTestMysqlDaemon(t, 1)
+	tm := &TabletManager{
+		actionSema:  semaphore.NewWeighted(1),
+		MysqlDaemon: fakeDb,
+		tmState: &tmState{
+			displayState: displayState{
+				tablet: newTestTablet(t, 100, "ks", "-", map[string]string{}),
+			},
+		},
+		QueryServiceControl: tabletservermock.NewController(),
+		SemiSyncMonitor:     semisyncmonitor.CreateTestSemiSyncMonitor(fakeDb.DB(), exporter),
+	}
+
+	_, err := tm.demotePrimary(t.Context(), false /* revertPartialFailure */, false /* force */)
+	require.NoError(t, err)
+
+	assert.True(t, fakeDb.SuperReadOnly.Load(), "demotePrimary must enable super_read_only")
+	assert.Equal(t, time.Second, fakeDb.SetSuperReadOnlyLockWaitTimeout, "demotePrimary must enable super_read_only with a 1s lock_wait_timeout")
+}
+
+// TestDemotePrimaryLockWaitTimeoutDisabledByDefault checks that a demotion does not pass a
+// lock_wait_timeout bound when demotePrimaryLockWaitTimeout is left at its zero-value default.
+func TestDemotePrimaryLockWaitTimeoutDisabledByDefault(t *testing.T) {
+	require.Zero(t, demotePrimaryLockWaitTimeout, "test requires the flag to be at its default value")
+
+	fakeDb := newTestMysqlDaemon(t, 1)
+	tm := &TabletManager{
+		actionSema:  semaphore.NewWeighted(1),
+		MysqlDaemon: fakeDb,
+		tmState: &tmState{
+			displayState: displayState{
+				tablet: newTestTablet(t, 100, "ks", "-", map[string]string{}),
+			},
+		},
+		QueryServiceControl: tabletservermock.NewController(),
+		SemiSyncMonitor:     semisyncmonitor.CreateTestSemiSyncMonitor(fakeDb.DB(), exporter),
+	}
+
+	_, err := tm.demotePrimary(t.Context(), false /* revertPartialFailure */, false /* force */)
+	require.NoError(t, err)
+
+	assert.True(t, fakeDb.SuperReadOnly.Load(), "demotePrimary must enable super_read_only")
+	assert.Zero(t, fakeDb.SetSuperReadOnlyLockWaitTimeout, "demotePrimary must not bound lock_wait_timeout when the flag is disabled")
 }
 
 // TestDemotePrimaryWaitingForSemiSyncUnblock tests that demote primary unblocks if the primary is blocked on semi-sync ACKs
@@ -725,4 +780,25 @@ func TestSetReplicationSourceRecovery(t *testing.T) {
 		require.EqualValues(t, 3306, fakeMysqlDaemon.CurrentSourcePort)
 		require.NoError(t, fakeMysqlDaemon.CheckSuperQueryList())
 	})
+}
+
+func TestShardPeerHealthSnapshot(t *testing.T) {
+	// Without a monitor configured, FullStatus gets a nil snapshot and must not panic.
+	tm := &TabletManager{}
+	assert.Nil(t, tm.shardPeerHealthSnapshot(), "no monitor configured -> nil snapshot, no panic")
+
+	// With a monitor, the primary's latest liveness signals are surfaced. The monitor tracks only
+	// the shard primary, so the observed peer must be PRIMARY-typed.
+	self := &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}}
+	peer := &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101}, Keyspace: "ks", Shard: "0", Type: topodatapb.TabletType_PRIMARY}
+	pinger := &fakePinger{fail: true}
+	m := newShardHealthMonitor(pinger, staticLister(self, peer), staticPrimaryAlias(peer), topoproto.TabletAliasString(self.Alias), time.Second, time.Second)
+	require.NoError(t, m.refreshPeers(t.Context()))
+	m.runPingRound(t.Context())
+	assert.Eventually(t, func() bool { return m.inflightCount() == 0 }, 30*time.Second, 5*time.Millisecond)
+
+	tm = &TabletManager{shardHealthMonitor: m}
+	snap := tm.shardPeerHealthSnapshot()
+	require.Len(t, snap, 1)
+	assert.Equal(t, int64(1), snap[0].ConsecutivePingFailures)
 }

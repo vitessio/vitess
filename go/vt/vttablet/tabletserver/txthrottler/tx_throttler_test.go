@@ -187,6 +187,59 @@ func TestEnabledThrottler(t *testing.T) {
 	assert.Zero(t, throttlerImpl.throttlerRunning.Get())
 }
 
+// TestUpdateMaxLagTickerLowTargetLag verifies that a target replication lag of 1
+// second, which passes config verification, does not make the updateMaxLag
+// goroutine build a time.NewTicker with a non-positive interval and panic the
+// tablet. The old code computed TargetReplicationLagSec/2, which rounds down to 0
+// for a target of 1.
+func TestUpdateMaxLagTickerLowTargetLag(t *testing.T) {
+	ctx := t.Context()
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+
+	defer resetTxThrottlerFactories()
+	ts := memorytopo.NewServer(ctx, "cell1")
+
+	mockHealthCheck := NewMockHealthCheck(mockCtrl)
+	mockHealthCheck.EXPECT().Subscribe("TxThrottler").AnyTimes()
+	mockHealthCheck.EXPECT().RegisterStats().AnyTimes()
+	mockHealthCheck.EXPECT().Close().AnyTimes()
+	healthCheckFactory = func(ctx context.Context, topoServer *topo.Server, cell, keyspace, shard string, cellsToWatch []string) (discovery.HealthCheck, error) {
+		return mockHealthCheck, nil
+	}
+
+	mockThrottler := NewMockThrottler(mockCtrl)
+	mockThrottler.EXPECT().UpdateConfiguration(gomock.Any(), true /* copyZeroValues */).AnyTimes()
+	mockThrottler.EXPECT().MaxLag(gomock.Any()).Return(uint32(0)).AnyTimes()
+	mockThrottler.EXPECT().Close().AnyTimes()
+	throttlerFactory = func(name, unit string, threadCount int, maxRate int64, maxReplicationLagConfig throttler.MaxReplicationLagModuleConfig) (throttler.Throttler, error) {
+		return mockThrottler, nil
+	}
+
+	cfg := tabletenv.NewDefaultConfig()
+	cfg.EnableTxThrottler = true
+	cfg.TxThrottlerTabletTypes = &topoproto.TabletTypeListFlag{topodatapb.TabletType_REPLICA}
+	// A target replication lag of 1s is accepted by Verify (it only rejects < 1).
+	cfg.TxThrottlerConfig.Get().TargetReplicationLagSec = 1
+
+	env := tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, t.Name())
+	throttler := NewTxThrottler(env, ts)
+	throttlerImpl, ok := throttler.(*txThrottler)
+	require.True(t, ok)
+	throttler.InitDBConfig(&querypb.Target{
+		Cell:     "cell1",
+		Keyspace: "keyspace",
+		Shard:    "shard",
+	})
+
+	// Open starts the updateMaxLag goroutine, which builds the ticker immediately.
+	// Close blocks until that goroutine has terminated, so a non-positive ticker
+	// interval panics within this test rather than being lost in a background crash.
+	require.NoError(t, throttlerImpl.Open())
+	throttler.Close()
+	assert.Zero(t, throttlerImpl.throttlerRunning.Get())
+}
+
 func TestFetchKnownCells(t *testing.T) {
 	ctx := t.Context()
 	{

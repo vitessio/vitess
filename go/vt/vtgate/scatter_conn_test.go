@@ -18,6 +18,7 @@ package vtgate
 
 import (
 	"log/slog"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -105,7 +106,8 @@ func TestExecuteFailOnAutocommit(t *testing.T) {
 }
 
 func TestFetchLastInsertIDResets(t *testing.T) {
-	// This test verifies that the FetchLastInsertID flag is reset after a call to ExecuteMultiShard.
+	// This test verifies that each ExecuteMultiShard call passes the requested
+	// FetchLastInsertID to the shards without mutating the shared session options.
 	ks := "TestFetchLastInsertIDResets"
 	ctx := utils.LeakCheckContext(t)
 
@@ -199,11 +201,13 @@ func TestFetchLastInsertIDResets(t *testing.T) {
 			_, errs := sc.ExecuteMultiShard(ctx, nil, rss, queries, session, true /*autocommit*/, false, nullResultsObserver{}, tt.fetchLastInsertID)
 			require.NoError(t, vterrors.Aggregate(errs))
 
+			// The shared session options must not be mutated by the call; the
+			// requested FetchLastInsertId travels on a per-call copy instead.
 			if tt.expectSessionNil {
 				assert.Nil(t, session.Options)
 			} else {
 				assert.NotNil(t, session.Options)
-				assert.Equal(t, tt.fetchLastInsertID, session.Options.FetchLastInsertId)
+				assert.False(t, session.Options.FetchLastInsertId)
 			}
 
 			if tt.expectFetchLastID == nil {
@@ -213,6 +217,61 @@ func TestFetchLastInsertIDResets(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestScatterConnSharedOptionsNoRace(t *testing.T) {
+	// A streamed UNION runs each source through its own StreamExecuteMulti
+	// against the same session. Setting FetchLastInsertId on the shared session
+	// options in place raced with the sources marshalling those options for
+	// their gRPC requests. The options must be copied per call.
+	// ExecuteMultiShard shares the same session and copies the options the same
+	// way, so it is raced here too. Meant to run under -race, where the shared
+	// write would otherwise be reported.
+	ks := "TestScatterConnSharedOptionsNoRace"
+	ctx := utils.LeakCheckContext(t)
+
+	createSandbox(ks)
+	hc := discovery.NewFakeHealthCheck(nil)
+	sc := newTestScatterConn(ctx, hc, newSandboxForCells(ctx, []string{"aa"}), "aa")
+	sbc0 := hc.AddTestTablet("aa", "0", 1, ks, "0", topodatapb.TabletType_PRIMARY, true, 1, nil)
+	sbc1 := hc.AddTestTablet("aa", "1", 1, ks, "1", topodatapb.TabletType_PRIMARY, true, 1, nil)
+	// The sandboxconn only serializes Execute and StreamExecute against
+	// themselves, not against each other; mixing both here needs the shared
+	// Queries slice locked.
+	sbc0.RequireQueriesLocking()
+	sbc1.RequireQueriesLocking()
+
+	rss := []*srvtopo.ResolvedShard{{
+		Target:  &querypb.Target{Keyspace: ks, Shard: "0", TabletType: topodatapb.TabletType_PRIMARY},
+		Gateway: sbc0,
+	}, {
+		Target:  &querypb.Target{Keyspace: ks, Shard: "1", TabletType: topodatapb.TabletType_PRIMARY},
+		Gateway: sbc1,
+	}}
+	bindVars := []map[string]*querypb.BindVariable{nil, nil}
+	queries := []*querypb.BoundQuery{{Sql: "query1"}, {Sql: "query2"}}
+
+	// A single session shared across all concurrent calls, as a streamed UNION does.
+	session := econtext.NewSafeSession(&vtgatepb.Session{Options: &querypb.ExecuteOptions{}})
+
+	var wg sync.WaitGroup
+	for i := range 16 {
+		fetchLastInsertID := i%2 == 0
+		wg.Go(func() {
+			errs := sc.StreamExecuteMulti(ctx, nil, "query", rss, bindVars, session, true /*autocommit*/, func(*sqltypes.Result) error {
+				return nil
+			}, nullResultsObserver{}, fetchLastInsertID)
+			assert.NoError(t, vterrors.Aggregate(errs))
+		})
+		wg.Go(func() {
+			_, errs := sc.ExecuteMultiShard(ctx, nil, rss, queries, session, true /*autocommit*/, false, nullResultsObserver{}, fetchLastInsertID)
+			assert.NoError(t, vterrors.Aggregate(errs))
+		})
+	}
+	wg.Wait()
+
+	// The shared session options must not have been mutated by the concurrent calls.
+	assert.False(t, session.Options.FetchLastInsertId)
 }
 
 func TestExecutePanic(t *testing.T) {

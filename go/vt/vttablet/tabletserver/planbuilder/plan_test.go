@@ -193,7 +193,7 @@ func TestStreamPlan(t *testing.T) {
 		var err error
 		statement, err := parser.Parse(tcase.input)
 		if err == nil {
-			plan, err = BuildStreaming(statement, testSchema)
+			plan, err = BuildStreaming(vtenv.NewTestEnv(), statement, testSchema, "dbName")
 		}
 		var out string
 		if err != nil {
@@ -261,7 +261,7 @@ func TestBuildStatementType_CTERegression(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, sqlparser.StmtSelect, plan.StatementType)
 
-	streamPlan, err := BuildStreaming(statement, testSchema)
+	streamPlan, err := BuildStreaming(vtenv.NewTestEnv(), statement, testSchema, "dbName")
 	require.NoError(t, err)
 	require.Equal(t, sqlparser.StmtSelect, streamPlan.StatementType)
 }

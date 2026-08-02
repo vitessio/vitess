@@ -138,6 +138,10 @@ type FakeMysqlDaemon struct {
 	// SetSuperReadOnlyError is used by SetSuperReadOnly.
 	SetSuperReadOnlyError error
 
+	// SetSuperReadOnlyLockWaitTimeout records the lockWaitTimeout passed to the
+	// most recent SetSuperReadOnly call.
+	SetSuperReadOnlyLockWaitTimeout time.Duration
+
 	// ExecuteSuperQueryListCallback is called at the start of ExecuteSuperQueryList
 	// before any queries are executed, if set.
 	ExecuteSuperQueryListCallback func()
@@ -501,7 +505,12 @@ func (fmd *FakeMysqlDaemon) SetReadOnly(ctx context.Context, on bool) error {
 }
 
 // SetSuperReadOnly is part of the MysqlDaemon interface.
-func (fmd *FakeMysqlDaemon) SetSuperReadOnly(ctx context.Context, on bool) (ResetSuperReadOnlyFunc, error) {
+func (fmd *FakeMysqlDaemon) SetSuperReadOnly(ctx context.Context, on bool, opts ...SetSuperReadOnlyOption) (ResetSuperReadOnlyFunc, error) {
+	var options setSuperReadOnlyOptions
+	for _, opt := range opts {
+		opt(&options)
+	}
+	fmd.SetSuperReadOnlyLockWaitTimeout = options.lockWaitTimeout
 	if fmd.SetSuperReadOnlyError != nil {
 		return nil, fmd.SetSuperReadOnlyError
 	}

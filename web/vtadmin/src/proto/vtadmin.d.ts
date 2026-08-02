@@ -255,15 +255,15 @@ export namespace vtadmin {
 
         /** Calls ApplySchema. */
         type ApplySchema = {
-  (request: vtadmin.IApplySchemaRequest, callback: vtadmin.VTAdmin.ApplySchemaCallback): void;
-  (request: vtadmin.IApplySchemaRequest): Promise<vtctldata.ApplySchemaResponse>;
-  readonly name: "ApplySchema";
-  readonly path: "/vtadmin.VTAdmin/ApplySchema";
-  readonly requestType: "ApplySchemaRequest";
-  readonly responseType: "vtctldata.ApplySchemaResponse";
-  readonly requestStream: undefined;
-  readonly responseStream: undefined;
-};
+          (request: vtadmin.IApplySchemaRequest, callback: vtadmin.VTAdmin.ApplySchemaCallback): void;
+          (request: vtadmin.IApplySchemaRequest): Promise<vtctldata.ApplySchemaResponse>;
+          readonly name: "ApplySchema";
+          readonly path: "/vtadmin.VTAdmin/ApplySchema";
+          readonly requestType: "ApplySchemaRequest";
+          readonly responseType: "vtctldata.ApplySchemaResponse";
+          readonly requestStream: undefined;
+          readonly responseStream: undefined;
+        };
 
         /**
          * Callback as used by {@link vtadmin.VTAdmin#cancelSchemaMigration}.
@@ -274,15 +274,15 @@ export namespace vtadmin {
 
         /** Calls CancelSchemaMigration. */
         type CancelSchemaMigration = {
-  (request: vtadmin.ICancelSchemaMigrationRequest, callback: vtadmin.VTAdmin.CancelSchemaMigrationCallback): void;
-  (request: vtadmin.ICancelSchemaMigrationRequest): Promise<vtctldata.CancelSchemaMigrationResponse>;
-  readonly name: "CancelSchemaMigration";
-  readonly path: "/vtadmin.VTAdmin/CancelSchemaMigration";
-  readonly requestType: "CancelSchemaMigrationRequest";
-  readonly responseType: "vtctldata.CancelSchemaMigrationResponse";
-  readonly requestStream: undefined;
-  readonly responseStream: undefined;
-};
+          (request: vtadmin.ICancelSchemaMigrationRequest, callback: vtadmin.VTAdmin.CancelSchemaMigrationCallback): void;
+          (request: vtadmin.ICancelSchemaMigrationRequest): Promise<vtctldata.CancelSchemaMigrationResponse>;
+          readonly name: "CancelSchemaMigration";
+          readonly path: "/vtadmin.VTAdmin/CancelSchemaMigration";
+          readonly requestType: "CancelSchemaMigrationRequest";
+          readonly responseType: "vtctldata.CancelSchemaMigrationResponse";
+          readonly requestStream: undefined;
+          readonly responseStream: undefined;
+        };
 
         /**
          * Callback as used by {@link vtadmin.VTAdmin#cleanupSchemaMigration}.
@@ -293,15 +293,15 @@ export namespace vtadmin {
 
         /** Calls CleanupSchemaMigration. */
         type CleanupSchemaMigration = {
-  (request: vtadmin.ICleanupSchemaMigrationRequest, callback: vtadmin.VTAdmin.CleanupSchemaMigrationCallback): void;
-  (request: vtadmin.ICleanupSchemaMigrationRequest): Promise<vtctldata.CleanupSchemaMigrationResponse>;
-  readonly name: "CleanupSchemaMigration";
-  readonly path: "/vtadmin.VTAdmin/CleanupSchemaMigration";
-  readonly requestType: "CleanupSchemaMigrationRequest";
-  readonly responseType: "vtctldata.CleanupSchemaMigrationResponse";
-  readonly requestStream: undefined;
-  readonly responseStream: undefined;
-};
+          (request: vtadmin.ICleanupSchemaMigrationRequest, callback: vtadmin.VTAdmin.CleanupSchemaMigrationCallback): void;
+          (request: vtadmin.ICleanupSchemaMigrationRequest): Promise<vtctldata.CleanupSchemaMigrationResponse>;
+          readonly name: "CleanupSchemaMigration";
+          readonly path: "/vtadmin.VTAdmin/CleanupSchemaMigration";
+          readonly requestType: "CleanupSchemaMigrationRequest";
+          readonly responseType: "vtctldata.CleanupSchemaMigrationResponse";
+          readonly requestStream: undefined;
+          readonly responseStream: undefined;
+        };
 
         /**
          * Callback as used by {@link vtadmin.VTAdmin#completeSchemaMigration}.
@@ -312,15 +312,15 @@ export namespace vtadmin {
 
         /** Calls CompleteSchemaMigration. */
         type CompleteSchemaMigration = {
-  (request: vtadmin.ICompleteSchemaMigrationRequest, callback: vtadmin.VTAdmin.CompleteSchemaMigrationCallback): void;
-  (request: vtadmin.ICompleteSchemaMigrationRequest): Promise<vtctldata.CompleteSchemaMigrationResponse>;
-  readonly name: "CompleteSchemaMigration";
-  readonly path: "/vtadmin.VTAdmin/CompleteSchemaMigration";
-  readonly requestType: "CompleteSchemaMigrationRequest";
-  readonly responseType: "vtctldata.CompleteSchemaMigrationResponse";
-  readonly requestStream: undefined;
-  readonly responseStream: undefined;
-};
+          (request: vtadmin.ICompleteSchemaMigrationRequest, callback: vtadmin.VTAdmin.CompleteSchemaMigrationCallback): void;
+          (request: vtadmin.ICompleteSchemaMigrationRequest): Promise<vtctldata.CompleteSchemaMigrationResponse>;
+          readonly name: "CompleteSchemaMigration";
+          readonly path: "/vtadmin.VTAdmin/CompleteSchemaMigration";
+          readonly requestType: "CompleteSchemaMigrationRequest";
+          readonly responseType: "vtctldata.CompleteSchemaMigrationResponse";
+          readonly requestStream: undefined;
+          readonly responseStream: undefined;
+        };
 
         /**
          * Callback as used by {@link vtadmin.VTAdmin#concludeTransaction}.
@@ -331,15 +331,15 @@ export namespace vtadmin {
 
         /** Calls ConcludeTransaction. */
         type ConcludeTransaction = {
-  (request: vtadmin.IConcludeTransactionRequest, callback: vtadmin.VTAdmin.ConcludeTransactionCallback): void;
-  (request: vtadmin.IConcludeTransactionRequest): Promise<vtctldata.ConcludeTransactionResponse>;
-  readonly name: "ConcludeTransaction";
-  readonly path: "/vtadmin.VTAdmin/ConcludeTransaction";
-  readonly requestType: "ConcludeTransactionRequest";
-  readonly responseType: "vtctldata.ConcludeTransactionResponse";
-  readonly requestStream: undefined;
-  readonly responseStream: undefined;
-};
+          (request: vtadmin.IConcludeTransactionRequest, callback: vtadmin.VTAdmin.ConcludeTransactionCallback): void;
+          (request: vtadmin.IConcludeTransactionRequest): Promise<vtctldata.ConcludeTransactionResponse>;
+          readonly name: "ConcludeTransaction";
+          readonly path: "/vtadmin.VTAdmin/ConcludeTransaction";
+          readonly requestType: "ConcludeTransactionRequest";
+          readonly responseType: "vtctldata.ConcludeTransactionResponse";
+          readonly requestStream: undefined;
+          readonly responseStream: undefined;
+        };
 
         /**
          * Callback as used by {@link vtadmin.VTAdmin#createKeyspace}.
@@ -350,15 +350,15 @@ export namespace vtadmin {
 
         /** Calls CreateKeyspace. */
         type CreateKeyspace = {
-  (request: vtadmin.ICreateKeyspaceRequest, callback: vtadmin.VTAdmin.CreateKeyspaceCallback): void;
-  (request: vtadmin.ICreateKeyspaceRequest): Promise<vtadmin.CreateKeyspaceResponse>;
-  readonly name: "CreateKeyspace";
-  readonly path: "/vtadmin.VTAdmin/CreateKeyspace";
-  readonly requestType: "CreateKeyspaceRequest";
-  readonly responseType: "CreateKeyspaceResponse";
-  readonly requestStream: undefined;
-  readonly responseStream: undefined;
-};
+          (request: vtadmin.ICreateKeyspaceRequest, callback: vtadmin.VTAdmin.CreateKeyspaceCallback): void;
+          (request: vtadmin.ICreateKeyspaceRequest): Promise<vtadmin.CreateKeyspaceResponse>;
+          readonly name: "CreateKeyspace";
+          readonly path: "/vtadmin.VTAdmin/CreateKeyspace";
+          readonly requestType: "CreateKeyspaceRequest";
+          readonly responseType: "CreateKeyspaceResponse";
+          readonly requestStream: undefined;
+          readonly responseStream: undefined;
+        };
 
         /**
          * Callback as used by {@link vtadmin.VTAdmin#createShard}.
@@ -369,15 +369,15 @@ export namespace vtadmin {
 
         /** Calls CreateShard. */
         type CreateShard = {
-  (request: vtadmin.ICreateShardRequest, callback: vtadmin.VTAdmin.CreateShardCallback): void;
-  (request: vtadmin.ICreateShardRequest): Promise<vtctldata.CreateShardResponse>;
-  readonly name: "CreateShard";
-  readonly path: "/vtadmin.VTAdmin/CreateShard";
-  readonly requestType: "CreateShardRequest";
-  readonly responseType: "vtctldata.CreateShardResponse";
-  readonly requestStream: undefined;
-  readonly responseStream: undefined;
-};
+          (request: vtadmin.ICreateShardRequest, callback: vtadmin.VTAdmin.CreateShardCallback): void;
+          (request: vtadmin.ICreateShardRequest): Promise<vtctldata.CreateShardResponse>;
+          readonly name: "CreateShard";
+          readonly path: "/vtadmin.VTAdmin/CreateShard";
+          readonly requestType: "CreateShardRequest";
+          readonly responseType: "vtctldata.CreateShardResponse";
+          readonly requestStream: undefined;
+          readonly responseStream: undefined;
+        };
 
         /**
          * Callback as used by {@link vtadmin.VTAdmin#deleteKeyspace}.
@@ -388,15 +388,15 @@ export namespace vtadmin {
 
         /** Calls DeleteKeyspace. */
         type DeleteKeyspace = {
-  (request: vtadmin.IDeleteKeyspaceRequest, callback: vtadmin.VTAdmin.DeleteKeyspaceCallback): void;
-  (request: vtadmin.IDeleteKeyspaceRequest): Promise<vtctldata.DeleteKeyspaceResponse>;
-  readonly name: "DeleteKeyspace";
-  readonly path: "/vtadmin.VTAdmin/DeleteKeyspace";
-  readonly requestType: "DeleteKeyspaceRequest";
-  readonly responseType: "vtctldata.DeleteKeyspaceResponse";
-  readonly requestStream: undefined;
-  readonly responseStream: undefined;
-};
+          (request: vtadmin.IDeleteKeyspaceRequest, callback: vtadmin.VTAdmin.DeleteKeyspaceCallback): void;
+          (request: vtadmin.IDeleteKeyspaceRequest): Promise<vtctldata.DeleteKeyspaceResponse>;
+          readonly name: "DeleteKeyspace";
+          readonly path: "/vtadmin.VTAdmin/DeleteKeyspace";
+          readonly requestType: "DeleteKeyspaceRequest";
+          readonly responseType: "vtctldata.DeleteKeyspaceResponse";
+          readonly requestStream: undefined;
+          readonly responseStream: undefined;
+        };
 
         /**
          * Callback as used by {@link vtadmin.VTAdmin#deleteShards}.
@@ -407,15 +407,15 @@ export namespace vtadmin {
 
         /** Calls DeleteShards. */
         type DeleteShards = {
-  (request: vtadmin.IDeleteShardsRequest, callback: vtadmin.VTAdmin.DeleteShardsCallback): void;
-  (request: vtadmin.IDeleteShardsRequest): Promise<vtctldata.DeleteShardsResponse>;
-  readonly name: "DeleteShards";
-  readonly path: "/vtadmin.VTAdmin/DeleteShards";
-  readonly requestType: "DeleteShardsRequest";
-  readonly responseType: "vtctldata.DeleteShardsResponse";
-  readonly requestStream: undefined;
-  readonly responseStream: undefined;
-};
+          (request: vtadmin.IDeleteShardsRequest, callback: vtadmin.VTAdmin.DeleteShardsCallback): void;
+          (request: vtadmin.IDeleteShardsRequest): Promise<vtctldata.DeleteShardsResponse>;
+          readonly name: "DeleteShards";
+          readonly path: "/vtadmin.VTAdmin/DeleteShards";
+          readonly requestType: "DeleteShardsRequest";
+          readonly responseType: "vtctldata.DeleteShardsResponse";
+          readonly requestStream: undefined;
+          readonly responseStream: undefined;
+        };
 
         /**
          * Callback as used by {@link vtadmin.VTAdmin#deleteTablet}.
@@ -426,15 +426,15 @@ export namespace vtadmin {
 
         /** Calls DeleteTablet. */
         type DeleteTablet = {
-  (request: vtadmin.IDeleteTabletRequest, callback: vtadmin.VTAdmin.DeleteTabletCallback): void;
-  (request: vtadmin.IDeleteTabletRequest): Promise<vtadmin.DeleteTabletResponse>;
-  readonly name: "DeleteTablet";
-  readonly path: "/vtadmin.VTAdmin/DeleteTablet";
-  readonly requestType: "DeleteTabletRequest";
-  readonly responseType: "DeleteTabletResponse";
-  readonly requestStream: undefined;
-  readonly responseStream: undefined;
-};
+          (request: vtadmin.IDeleteTabletRequest, callback: vtadmin.VTAdmin.DeleteTabletCallback): void;
+          (request: vtadmin.IDeleteTabletRequest): Promise<vtadmin.DeleteTabletResponse>;
+          readonly name: "DeleteTablet";
+          readonly path: "/vtadmin.VTAdmin/DeleteTablet";
+          readonly requestType: "DeleteTabletRequest";
+          readonly responseType: "DeleteTabletResponse";
+          readonly requestStream: undefined;
+          readonly responseStream: undefined;
+        };
 
         /**
          * Callback as used by {@link vtadmin.VTAdmin#emergencyFailoverShard}.
@@ -445,15 +445,15 @@ export namespace vtadmin {
 
         /** Calls EmergencyFailoverShard. */
         type EmergencyFailoverShard = {
-  (request: vtadmin.IEmergencyFailoverShardRequest, callback: vtadmin.VTAdmin.EmergencyFailoverShardCallback): void;
-  (request: vtadmin.IEmergencyFailoverShardRequest): Promise<vtadmin.EmergencyFailoverShardResponse>;
-  readonly name: "EmergencyFailoverShard";
-  readonly path: "/vtadmin.VTAdmin/EmergencyFailoverShard";
-  readonly requestType: "EmergencyFailoverShardRequest";
-  readonly responseType: "EmergencyFailoverShardResponse";
-  readonly requestStream: undefined;
-  readonly responseStream: undefined;
-};
+          (request: vtadmin.IEmergencyFailoverShardRequest, callback: vtadmin.VTAdmin.EmergencyFailoverShardCallback): void;
+          (request: vtadmin.IEmergencyFailoverShardRequest): Promise<vtadmin.EmergencyFailoverShardResponse>;
+          readonly name: "EmergencyFailoverShard";
+          readonly path: "/vtadmin.VTAdmin/EmergencyFailoverShard";
+          readonly requestType: "EmergencyFailoverShardRequest";
+          readonly responseType: "EmergencyFailoverShardResponse";
+          readonly requestStream: undefined;
+          readonly responseStream: undefined;
+        };
 
         /**
          * Callback as used by {@link vtadmin.VTAdmin#findSchema}.
@@ -464,15 +464,15 @@ export namespace vtadmin {
 
         /** Calls FindSchema. */
         type FindSchema = {
-  (request: vtadmin.IFindSchemaRequest, callback: vtadmin.VTAdmin.FindSchemaCallback): void;
-  (request: vtadmin.IFindSchemaRequest): Promise<vtadmin.Schema>;
-  readonly name: "FindSchema";
-  readonly path: "/vtadmin.VTAdmin/FindSchema";
-  readonly requestType: "FindSchemaRequest";
-  readonly responseType: "Schema";
-  readonly requestStream: undefined;
-  readonly responseStream: undefined;
-};
+          (request: vtadmin.IFindSchemaRequest, callback: vtadmin.VTAdmin.FindSchemaCallback): void;
+          (request: vtadmin.IFindSchemaRequest): Promise<vtadmin.Schema>;
+          readonly name: "FindSchema";
+          readonly path: "/vtadmin.VTAdmin/FindSchema";
+          readonly requestType: "FindSchemaRequest";
+          readonly responseType: "Schema";
+          readonly requestStream: undefined;
+          readonly responseStream: undefined;
+        };
 
         /**
          * Callback as used by {@link vtadmin.VTAdmin#getBackups}.
@@ -483,15 +483,15 @@ export namespace vtadmin {
 
         /** Calls GetBackups. */
         type GetBackups = {
-  (request: vtadmin.IGetBackupsRequest, callback: vtadmin.VTAdmin.GetBackupsCallback): void;
-  (request: vtadmin.IGetBackupsRequest): Promise<vtadmin.GetBackupsResponse>;
-  readonly name: "GetBackups";
-  readonly path: "/vtadmin.VTAdmin/GetBackups";
-  readonly requestType: "GetBackupsRequest";
-  readonly responseType: "GetBackupsResponse";
-  readonly requestStream: undefined;
-  readonly responseStream: undefined;
-};
+          (request: vtadmin.IGetBackupsRequest, callback: vtadmin.VTAdmin.GetBackupsCallback): void;
+          (request: vtadmin.IGetBackupsRequest): Promise<vtadmin.GetBackupsResponse>;
+          readonly name: "GetBackups";
+          readonly path: "/vtadmin.VTAdmin/GetBackups";
+          readonly requestType: "GetBackupsRequest";
+          readonly responseType: "GetBackupsResponse";
+          readonly requestStream: undefined;
+          readonly responseStream: undefined;
+        };
 
         /**
          * Callback as used by {@link vtadmin.VTAdmin#getCellInfos}.
@@ -502,15 +502,15 @@ export namespace vtadmin {
 
         /** Calls GetCellInfos. */
         type GetCellInfos = {
-  (request: vtadmin.IGetCellInfosRequest, callback: vtadmin.VTAdmin.GetCellInfosCallback): void;
-  (request: vtadmin.IGetCellInfosRequest): Promise<vtadmin.GetCellInfosResponse>;
-  readonly name: "GetCellInfos";
-  readonly path: "/vtadmin.VTAdmin/GetCellInfos";
-  readonly requestType: "GetCellInfosRequest";
-  readonly responseType: "GetCellInfosResponse";
-  readonly requestStream: undefined;
-  readonly responseStream: undefined;
-};
+          (request: vtadmin.IGetCellInfosRequest, callback: vtadmin.VTAdmin.GetCellInfosCallback): void;
+          (request: vtadmin.IGetCellInfosRequest): Promise<vtadmin.GetCellInfosResponse>;
+          readonly name: "GetCellInfos";
+          readonly path: "/vtadmin.VTAdmin/GetCellInfos";
+          readonly requestType: "GetCellInfosRequest";
+          readonly responseType: "GetCellInfosResponse";
+          readonly requestStream: undefined;
+          readonly responseStream: undefined;
+        };
 
         /**
          * Callback as used by {@link vtadmin.VTAdmin#getCellsAliases}.
@@ -521,15 +521,15 @@ export namespace vtadmin {
 
         /** Calls GetCellsAliases. */
         type GetCellsAliases = {
-  (request: vtadmin.IGetCellsAliasesRequest, callback: vtadmin.VTAdmin.GetCellsAliasesCallback): void;
-  (request: vtadmin.IGetCellsAliasesRequest): Promise<vtadmin.GetCellsAliasesResponse>;
-  readonly name: "GetCellsAliases";
-  readonly path: "/vtadmin.VTAdmin/GetCellsAliases";
-  readonly requestType: "GetCellsAliasesRequest";
-  readonly responseType: "GetCellsAliasesResponse";
-  readonly requestStream: undefined;
-  readonly responseStream: undefined;
-};
+          (request: vtadmin.IGetCellsAliasesRequest, callback: vtadmin.VTAdmin.GetCellsAliasesCallback): void;
+          (request: vtadmin.IGetCellsAliasesRequest): Promise<vtadmin.GetCellsAliasesResponse>;
+          readonly name: "GetCellsAliases";
+          readonly path: "/vtadmin.VTAdmin/GetCellsAliases";
+          readonly requestType: "GetCellsAliasesRequest";
+          readonly responseType: "GetCellsAliasesResponse";
+          readonly requestStream: undefined;
+          readonly responseStream: undefined;
+        };
 
         /**
          * Callback as used by {@link vtadmin.VTAdmin#getClusters}.
@@ -540,15 +540,15 @@ export namespace vtadmin {
 
         /** Calls GetClusters. */
         type GetClusters = {
-  (request: vtadmin.IGetClustersRequest, callback: vtadmin.VTAdmin.GetClustersCallback): void;
-  (request: vtadmin.IGetClustersRequest): Promise<vtadmin.GetClustersResponse>;
-  readonly name: "GetClusters";
-  readonly path: "/vtadmin.VTAdmin/GetClusters";
-  readonly requestType: "GetClustersRequest";
-  readonly responseType: "GetClustersResponse";
-  readonly requestStream: undefined;
-  readonly responseStream: undefined;
-};
+          (request: vtadmin.IGetClustersRequest, callback: vtadmin.VTAdmin.GetClustersCallback): void;
+          (request: vtadmin.IGetClustersRequest): Promise<vtadmin.GetClustersResponse>;
+          readonly name: "GetClusters";
+          readonly path: "/vtadmin.VTAdmin/GetClusters";
+          readonly requestType: "GetClustersRequest";
+          readonly responseType: "GetClustersResponse";
+          readonly requestStream: undefined;
+          readonly responseStream: undefined;
+        };
 
         /**
          * Callback as used by {@link vtadmin.VTAdmin#getFullStatus}.
@@ -559,15 +559,15 @@ export namespace vtadmin {
 
         /** Calls GetFullStatus. */
         type GetFullStatus = {
-  (request: vtadmin.IGetFullStatusRequest, callback: vtadmin.VTAdmin.GetFullStatusCallback): void;
-  (request: vtadmin.IGetFullStatusRequest): Promise<vtctldata.GetFullStatusResponse>;
-  readonly name: "GetFullStatus";
-  readonly path: "/vtadmin.VTAdmin/GetFullStatus";
-  readonly requestType: "GetFullStatusRequest";
-  readonly responseType: "vtctldata.GetFullStatusResponse";
-  readonly requestStream: undefined;
-  readonly responseStream: undefined;
-};
+          (request: vtadmin.IGetFullStatusRequest, callback: vtadmin.VTAdmin.GetFullStatusCallback): void;
+          (request: vtadmin.IGetFullStatusRequest): Promise<vtctldata.GetFullStatusResponse>;
+          readonly name: "GetFullStatus";
+          readonly path: "/vtadmin.VTAdmin/GetFullStatus";
+          readonly requestType: "GetFullStatusRequest";
+          readonly responseType: "vtctldata.GetFullStatusResponse";
+          readonly requestStream: undefined;
+          readonly responseStream: undefined;
+        };
 
         /**
          * Callback as used by {@link vtadmin.VTAdmin#getGates}.
@@ -578,15 +578,15 @@ export namespace vtadmin {
 
         /** Calls GetGates. */
         type GetGates = {
-  (request: vtadmin.IGetGatesRequest, callback: vtadmin.VTAdmin.GetGatesCallback): void;
-  (request: vtadmin.IGetGatesRequest): Promise<vtadmin.GetGatesResponse>;
-  readonly name: "GetGates";
-  readonly path: "/vtadmin.VTAdmin/GetGates";
-  readonly requestType: "GetGatesRequest";
-  readonly responseType: "GetGatesResponse";
-  readonly requestStream: undefined;
-  readonly responseStream: undefined;
-};
+          (request: vtadmin.IGetGatesRequest, callback: vtadmin.VTAdmin.GetGatesCallback): void;
+          (request: vtadmin.IGetGatesRequest): Promise<vtadmin.GetGatesResponse>;
+          readonly name: "GetGates";
+          readonly path: "/vtadmin.VTAdmin/GetGates";
+          readonly requestType: "GetGatesRequest";
+          readonly responseType: "GetGatesResponse";
+          readonly requestStream: undefined;
+          readonly responseStream: undefined;
+        };
 
         /**
          * Callback as used by {@link vtadmin.VTAdmin#getKeyspace}.
@@ -597,15 +597,15 @@ export namespace vtadmin {
 
         /** Calls GetKeyspace. */
         type GetKeyspace = {
-  (request: vtadmin.IGetKeyspaceRequest, callback: vtadmin.VTAdmin.GetKeyspaceCallback): void;
-  (request: vtadmin.IGetKeyspaceRequest): Promise<vtadmin.Keyspace>;
-  readonly name: "GetKeyspace";
-  readonly path: "/vtadmin.VTAdmin/GetKeyspace";
-  readonly requestType: "GetKeyspaceRequest";
-  readonly responseType: "Keyspace";
-  readonly requestStream: undefined;
-  readonly responseStream: undefined;
-};
+          (request: vtadmin.IGetKeyspaceRequest, callback: vtadmin.VTAdmin.GetKeyspaceCallback): void;
+          (request: vtadmin.IGetKeyspaceRequest): Promise<vtadmin.Keyspace>;
+          readonly name: "GetKeyspace";
+          readonly path: "/vtadmin.VTAdmin/GetKeyspace";
+          readonly requestType: "GetKeyspaceRequest";
+          readonly responseType: "Keyspace";
+          readonly requestStream: undefined;
+          readonly responseStream: undefined;
+        };
 
         /**
          * Callback as used by {@link vtadmin.VTAdmin#getKeyspaces}.
@@ -616,15 +616,15 @@ export namespace vtadmin {
 
         /** Calls GetKeyspaces. */
         type GetKeyspaces = {
-  (request: vtadmin.IGetKeyspacesRequest, callback: vtadmin.VTAdmin.GetKeyspacesCallback): void;
-  (request: vtadmin.IGetKeyspacesRequest): Promise<vtadmin.GetKeyspacesResponse>;
-  readonly name: "GetKeyspaces";
-  readonly path: "/vtadmin.VTAdmin/GetKeyspaces";
-  readonly requestType: "GetKeyspacesRequest";
-  readonly responseType: "GetKeyspacesResponse";
-  readonly requestStream: undefined;
-  readonly responseStream: undefined;
-};
+          (request: vtadmin.IGetKeyspacesRequest, callback: vtadmin.VTAdmin.GetKeyspacesCallback): void;
+          (request: vtadmin.IGetKeyspacesRequest): Promise<vtadmin.GetKeyspacesResponse>;
+          readonly name: "GetKeyspaces";
+          readonly path: "/vtadmin.VTAdmin/GetKeyspaces";
+          readonly requestType: "GetKeyspacesRequest";
+          readonly responseType: "GetKeyspacesResponse";
+          readonly requestStream: undefined;
+          readonly responseStream: undefined;
+        };
 
         /**
          * Callback as used by {@link vtadmin.VTAdmin#getSchema}.
@@ -635,15 +635,15 @@ export namespace vtadmin {
 
         /** Calls GetSchema. */
         type GetSchema = {
-  (request: vtadmin.IGetSchemaRequest, callback: vtadmin.VTAdmin.GetSchemaCallback): void;
-  (request: vtadmin.IGetSchemaRequest): Promise<vtadmin.Schema>;
-  readonly name: "GetSchema";
-  readonly path: "/vtadmin.VTAdmin/GetSchema";
-  readonly requestType: "GetSchemaRequest";
-  readonly responseType: "Schema";
-  readonly requestStream: undefined;
-  readonly responseStream: undefined;
-};
+          (request: vtadmin.IGetSchemaRequest, callback: vtadmin.VTAdmin.GetSchemaCallback): void;
+          (request: vtadmin.IGetSchemaRequest): Promise<vtadmin.Schema>;
+          readonly name: "GetSchema";
+          readonly path: "/vtadmin.VTAdmin/GetSchema";
+          readonly requestType: "GetSchemaRequest";
+          readonly responseType: "Schema";
+          readonly requestStream: undefined;
+          readonly responseStream: undefined;
+        };
 
         /**
          * Callback as used by {@link vtadmin.VTAdmin#getSchemas}.
@@ -654,15 +654,15 @@ export namespace vtadmin {
 
         /** Calls GetSchemas. */
         type GetSchemas = {
-  (request: vtadmin.IGetSchemasRequest, callback: vtadmin.VTAdmin.GetSchemasCallback): void;
-  (request: vtadmin.IGetSchemasRequest): Promise<vtadmin.GetSchemasResponse>;
-  readonly name: "GetSchemas";
-  readonly path: "/vtadmin.VTAdmin/GetSchemas";
-  readonly requestType: "GetSchemasRequest";
-  readonly responseType: "GetSchemasResponse";
-  readonly requestStream: undefined;
-  readonly responseStream: undefined;
-};
+          (request: vtadmin.IGetSchemasRequest, callback: vtadmin.VTAdmin.GetSchemasCallback): void;
+          (request: vtadmin.IGetSchemasRequest): Promise<vtadmin.GetSchemasResponse>;
+          readonly name: "GetSchemas";
+          readonly path: "/vtadmin.VTAdmin/GetSchemas";
+          readonly requestType: "GetSchemasRequest";
+          readonly responseType: "GetSchemasResponse";
+          readonly requestStream: undefined;
+          readonly responseStream: undefined;
+        };
 
         /**
          * Callback as used by {@link vtadmin.VTAdmin#getSchemaMigrations}.
@@ -673,15 +673,15 @@ export namespace vtadmin {
 
         /** Calls GetSchemaMigrations. */
         type GetSchemaMigrations = {
-  (request: vtadmin.IGetSchemaMigrationsRequest, callback: vtadmin.VTAdmin.GetSchemaMigrationsCallback): void;
-  (request: vtadmin.IGetSchemaMigrationsRequest): Promise<vtadmin.GetSchemaMigrationsResponse>;
-  readonly name: "GetSchemaMigrations";
-  readonly path: "/vtadmin.VTAdmin/GetSchemaMigrations";
-  readonly requestType: "GetSchemaMigrationsRequest";
-  readonly responseType: "GetSchemaMigrationsResponse";
-  readonly requestStream: undefined;
-  readonly responseStream: undefined;
-};
+          (request: vtadmin.IGetSchemaMigrationsRequest, callback: vtadmin.VTAdmin.GetSchemaMigrationsCallback): void;
+          (request: vtadmin.IGetSchemaMigrationsRequest): Promise<vtadmin.GetSchemaMigrationsResponse>;
+          readonly name: "GetSchemaMigrations";
+          readonly path: "/vtadmin.VTAdmin/GetSchemaMigrations";
+          readonly requestType: "GetSchemaMigrationsRequest";
+          readonly responseType: "GetSchemaMigrationsResponse";
+          readonly requestStream: undefined;
+          readonly responseStream: undefined;
+        };
 
         /**
          * Callback as used by {@link vtadmin.VTAdmin#getShardReplicationPositions}.
@@ -692,15 +692,15 @@ export namespace vtadmin {
 
         /** Calls GetShardReplicationPositions. */
         type GetShardReplicationPositions = {
-  (request: vtadmin.IGetShardReplicationPositionsRequest, callback: vtadmin.VTAdmin.GetShardReplicationPositionsCallback): void;
-  (request: vtadmin.IGetShardReplicationPositionsRequest): Promise<vtadmin.GetShardReplicationPositionsResponse>;
-  readonly name: "GetShardReplicationPositions";
-  readonly path: "/vtadmin.VTAdmin/GetShardReplicationPositions";
-  readonly requestType: "GetShardReplicationPositionsRequest";
-  readonly responseType: "GetShardReplicationPositionsResponse";
-  readonly requestStream: undefined;
-  readonly responseStream: undefined;
-};
+          (request: vtadmin.IGetShardReplicationPositionsRequest, callback: vtadmin.VTAdmin.GetShardReplicationPositionsCallback): void;
+          (request: vtadmin.IGetShardReplicationPositionsRequest): Promise<vtadmin.GetShardReplicationPositionsResponse>;
+          readonly name: "GetShardReplicationPositions";
+          readonly path: "/vtadmin.VTAdmin/GetShardReplicationPositions";
+          readonly requestType: "GetShardReplicationPositionsRequest";
+          readonly responseType: "GetShardReplicationPositionsResponse";
+          readonly requestStream: undefined;
+          readonly responseStream: undefined;
+        };
 
         /**
          * Callback as used by {@link vtadmin.VTAdmin#getSrvKeyspace}.
@@ -711,15 +711,15 @@ export namespace vtadmin {
 
         /** Calls GetSrvKeyspace. */
         type GetSrvKeyspace = {
-  (request: vtadmin.IGetSrvKeyspaceRequest, callback: vtadmin.VTAdmin.GetSrvKeyspaceCallback): void;
-  (request: vtadmin.IGetSrvKeyspaceRequest): Promise<vtctldata.GetSrvKeyspacesResponse>;
-  readonly name: "GetSrvKeyspace";
-  readonly path: "/vtadmin.VTAdmin/GetSrvKeyspace";
-  readonly requestType: "GetSrvKeyspaceRequest";
-  readonly responseType: "vtctldata.GetSrvKeyspacesResponse";
-  readonly requestStream: undefined;
-  readonly responseStream: undefined;
-};
+          (request: vtadmin.IGetSrvKeyspaceRequest, callback: vtadmin.VTAdmin.GetSrvKeyspaceCallback): void;
+          (request: vtadmin.IGetSrvKeyspaceRequest): Promise<vtctldata.GetSrvKeyspacesResponse>;
+          readonly name: "GetSrvKeyspace";
+          readonly path: "/vtadmin.VTAdmin/GetSrvKeyspace";
+          readonly requestType: "GetSrvKeyspaceRequest";
+          readonly responseType: "vtctldata.GetSrvKeyspacesResponse";
+          readonly requestStream: undefined;
+          readonly responseStream: undefined;
+        };
 
         /**
          * Callback as used by {@link vtadmin.VTAdmin#getSrvKeyspaces}.
@@ -730,15 +730,15 @@ export namespace vtadmin {
 
         /** Calls GetSrvKeyspaces. */
         type GetSrvKeyspaces = {
-  (request: vtadmin.IGetSrvKeyspacesRequest, callback: vtadmin.VTAdmin.GetSrvKeyspacesCallback): void;
-  (request: vtadmin.IGetSrvKeyspacesRequest): Promise<vtadmin.GetSrvKeyspacesResponse>;
-  readonly name: "GetSrvKeyspaces";
-  readonly path: "/vtadmin.VTAdmin/GetSrvKeyspaces";
-  readonly requestType: "GetSrvKeyspacesRequest";
-  readonly responseType: "GetSrvKeyspacesResponse";
-  readonly requestStream: undefined;
-  readonly responseStream: undefined;
-};
+          (request: vtadmin.IGetSrvKeyspacesRequest, callback: vtadmin.VTAdmin.GetSrvKeyspacesCallback): void;
+          (request: vtadmin.IGetSrvKeyspacesRequest): Promise<vtadmin.GetSrvKeyspacesResponse>;
+          readonly name: "GetSrvKeyspaces";
+          readonly path: "/vtadmin.VTAdmin/GetSrvKeyspaces";
+          readonly requestType: "GetSrvKeyspacesRequest";
+          readonly responseType: "GetSrvKeyspacesResponse";
+          readonly requestStream: undefined;
+          readonly responseStream: undefined;
+        };
 
         /**
          * Callback as used by {@link vtadmin.VTAdmin#getSrvVSchema}.
@@ -749,15 +749,15 @@ export namespace vtadmin {
 
         /** Calls GetSrvVSchema. */
         type GetSrvVSchema = {
-  (request: vtadmin.IGetSrvVSchemaRequest, callback: vtadmin.VTAdmin.GetSrvVSchemaCallback): void;
-  (request: vtadmin.IGetSrvVSchemaRequest): Promise<vtadmin.SrvVSchema>;
-  readonly name: "GetSrvVSchema";
-  readonly path: "/vtadmin.VTAdmin/GetSrvVSchema";
-  readonly requestType: "GetSrvVSchemaRequest";
-  readonly responseType: "SrvVSchema";
-  readonly requestStream: undefined;
-  readonly responseStream: undefined;
-};
+          (request: vtadmin.IGetSrvVSchemaRequest, callback: vtadmin.VTAdmin.GetSrvVSchemaCallback): void;
+          (request: vtadmin.IGetSrvVSchemaRequest): Promise<vtadmin.SrvVSchema>;
+          readonly name: "GetSrvVSchema";
+          readonly path: "/vtadmin.VTAdmin/GetSrvVSchema";
+          readonly requestType: "GetSrvVSchemaRequest";
+          readonly responseType: "SrvVSchema";
+          readonly requestStream: undefined;
+          readonly responseStream: undefined;
+        };
 
         /**
          * Callback as used by {@link vtadmin.VTAdmin#getSrvVSchemas}.
@@ -768,15 +768,15 @@ export namespace vtadmin {
 
         /** Calls GetSrvVSchemas. */
         type GetSrvVSchemas = {
-  (request: vtadmin.IGetSrvVSchemasRequest, callback: vtadmin.VTAdmin.GetSrvVSchemasCallback): void;
-  (request: vtadmin.IGetSrvVSchemasRequest): Promise<vtadmin.GetSrvVSchemasResponse>;
-  readonly name: "GetSrvVSchemas";
-  readonly path: "/vtadmin.VTAdmin/GetSrvVSchemas";
-  readonly requestType: "GetSrvVSchemasRequest";
-  readonly responseType: "GetSrvVSchemasResponse";
-  readonly requestStream: undefined;
-  readonly responseStream: undefined;
-};
+          (request: vtadmin.IGetSrvVSchemasRequest, callback: vtadmin.VTAdmin.GetSrvVSchemasCallback): void;
+          (request: vtadmin.IGetSrvVSchemasRequest): Promise<vtadmin.GetSrvVSchemasResponse>;
+          readonly name: "GetSrvVSchemas";
+          readonly path: "/vtadmin.VTAdmin/GetSrvVSchemas";
+          readonly requestType: "GetSrvVSchemasRequest";
+          readonly responseType: "GetSrvVSchemasResponse";
+          readonly requestStream: undefined;
+          readonly responseStream: undefined;
+        };
 
         /**
          * Callback as used by {@link vtadmin.VTAdmin#getTablet}.
@@ -787,15 +787,15 @@ export namespace vtadmin {
 
         /** Calls GetTablet. */
         type GetTablet = {
-  (request: vtadmin.IGetTabletRequest, callback: vtadmin.VTAdmin.GetTabletCallback): void;
-  (request: vtadmin.IGetTabletRequest): Promise<vtadmin.Tablet>;
-  readonly name: "GetTablet";
-  readonly path: "/vtadmin.VTAdmin/GetTablet";
-  readonly requestType: "GetTabletRequest";
-  readonly responseType: "Tablet";
-  readonly requestStream: undefined;
-  readonly responseStream: undefined;
-};
+          (request: vtadmin.IGetTabletRequest, callback: vtadmin.VTAdmin.GetTabletCallback): void;
+          (request: vtadmin.IGetTabletRequest): Promise<vtadmin.Tablet>;
+          readonly name: "GetTablet";
+          readonly path: "/vtadmin.VTAdmin/GetTablet";
+          readonly requestType: "GetTabletRequest";
+          readonly responseType: "Tablet";
+          readonly requestStream: undefined;
+          readonly responseStream: undefined;
+        };
 
         /**
          * Callback as used by {@link vtadmin.VTAdmin#getTablets}.
@@ -806,15 +806,15 @@ export namespace vtadmin {
 
         /** Calls GetTablets. */
         type GetTablets = {
-  (request: vtadmin.IGetTabletsRequest, callback: vtadmin.VTAdmin.GetTabletsCallback): void;
-  (request: vtadmin.IGetTabletsRequest): Promise<vtadmin.GetTabletsResponse>;
-  readonly name: "GetTablets";
-  readonly path: "/vtadmin.VTAdmin/GetTablets";
-  readonly requestType: "GetTabletsRequest";
-  readonly responseType: "GetTabletsResponse";
-  readonly requestStream: undefined;
-  readonly responseStream: undefined;
-};
+          (request: vtadmin.IGetTabletsRequest, callback: vtadmin.VTAdmin.GetTabletsCallback): void;
+          (request: vtadmin.IGetTabletsRequest): Promise<vtadmin.GetTabletsResponse>;
+          readonly name: "GetTablets";
+          readonly path: "/vtadmin.VTAdmin/GetTablets";
+          readonly requestType: "GetTabletsRequest";
+          readonly responseType: "GetTabletsResponse";
+          readonly requestStream: undefined;
+          readonly responseStream: undefined;
+        };
 
         /**
          * Callback as used by {@link vtadmin.VTAdmin#getTopologyPath}.
@@ -825,15 +825,15 @@ export namespace vtadmin {
 
         /** Calls GetTopologyPath. */
         type GetTopologyPath = {
-  (request: vtadmin.IGetTopologyPathRequest, callback: vtadmin.VTAdmin.GetTopologyPathCallback): void;
-  (request: vtadmin.IGetTopologyPathRequest): Promise<vtctldata.GetTopologyPathResponse>;
-  readonly name: "GetTopologyPath";
-  readonly path: "/vtadmin.VTAdmin/GetTopologyPath";
-  readonly requestType: "GetTopologyPathRequest";
-  readonly responseType: "vtctldata.GetTopologyPathResponse";
-  readonly requestStream: undefined;
-  readonly responseStream: undefined;
-};
+          (request: vtadmin.IGetTopologyPathRequest, callback: vtadmin.VTAdmin.GetTopologyPathCallback): void;
+          (request: vtadmin.IGetTopologyPathRequest): Promise<vtctldata.GetTopologyPathResponse>;
+          readonly name: "GetTopologyPath";
+          readonly path: "/vtadmin.VTAdmin/GetTopologyPath";
+          readonly requestType: "GetTopologyPathRequest";
+          readonly responseType: "vtctldata.GetTopologyPathResponse";
+          readonly requestStream: undefined;
+          readonly responseStream: undefined;
+        };
 
         /**
          * Callback as used by {@link vtadmin.VTAdmin#getTransactionInfo}.
@@ -844,15 +844,15 @@ export namespace vtadmin {
 
         /** Calls GetTransactionInfo. */
         type GetTransactionInfo = {
-  (request: vtadmin.IGetTransactionInfoRequest, callback: vtadmin.VTAdmin.GetTransactionInfoCallback): void;
-  (request: vtadmin.IGetTransactionInfoRequest): Promise<vtctldata.GetTransactionInfoResponse>;
-  readonly name: "GetTransactionInfo";
-  readonly path: "/vtadmin.VTAdmin/GetTransactionInfo";
-  readonly requestType: "GetTransactionInfoRequest";
-  readonly responseType: "vtctldata.GetTransactionInfoResponse";
-  readonly requestStream: undefined;
-  readonly responseStream: undefined;
-};
+          (request: vtadmin.IGetTransactionInfoRequest, callback: vtadmin.VTAdmin.GetTransactionInfoCallback): void;
+          (request: vtadmin.IGetTransactionInfoRequest): Promise<vtctldata.GetTransactionInfoResponse>;
+          readonly name: "GetTransactionInfo";
+          readonly path: "/vtadmin.VTAdmin/GetTransactionInfo";
+          readonly requestType: "GetTransactionInfoRequest";
+          readonly responseType: "vtctldata.GetTransactionInfoResponse";
+          readonly requestStream: undefined;
+          readonly responseStream: undefined;
+        };
 
         /**
          * Callback as used by {@link vtadmin.VTAdmin#getUnresolvedTransactions}.
@@ -863,15 +863,15 @@ export namespace vtadmin {
 
         /** Calls GetUnresolvedTransactions. */
         type GetUnresolvedTransactions = {
-  (request: vtadmin.IGetUnresolvedTransactionsRequest, callback: vtadmin.VTAdmin.GetUnresolvedTransactionsCallback): void;
-  (request: vtadmin.IGetUnresolvedTransactionsRequest): Promise<vtctldata.GetUnresolvedTransactionsResponse>;
-  readonly name: "GetUnresolvedTransactions";
-  readonly path: "/vtadmin.VTAdmin/GetUnresolvedTransactions";
-  readonly requestType: "GetUnresolvedTransactionsRequest";
-  readonly responseType: "vtctldata.GetUnresolvedTransactionsResponse";
-  readonly requestStream: undefined;
-  readonly responseStream: undefined;
-};
+          (request: vtadmin.IGetUnresolvedTransactionsRequest, callback: vtadmin.VTAdmin.GetUnresolvedTransactionsCallback): void;
+          (request: vtadmin.IGetUnresolvedTransactionsRequest): Promise<vtctldata.GetUnresolvedTransactionsResponse>;
+          readonly name: "GetUnresolvedTransactions";
+          readonly path: "/vtadmin.VTAdmin/GetUnresolvedTransactions";
+          readonly requestType: "GetUnresolvedTransactionsRequest";
+          readonly responseType: "vtctldata.GetUnresolvedTransactionsResponse";
+          readonly requestStream: undefined;
+          readonly responseStream: undefined;
+        };
 
         /**
          * Callback as used by {@link vtadmin.VTAdmin#getVSchema}.
@@ -882,15 +882,15 @@ export namespace vtadmin {
 
         /** Calls GetVSchema. */
         type GetVSchema = {
-  (request: vtadmin.IGetVSchemaRequest, callback: vtadmin.VTAdmin.GetVSchemaCallback): void;
-  (request: vtadmin.IGetVSchemaRequest): Promise<vtadmin.VSchema>;
-  readonly name: "GetVSchema";
-  readonly path: "/vtadmin.VTAdmin/GetVSchema";
-  readonly requestType: "GetVSchemaRequest";
-  readonly responseType: "VSchema";
-  readonly requestStream: undefined;
-  readonly responseStream: undefined;
-};
+          (request: vtadmin.IGetVSchemaRequest, callback: vtadmin.VTAdmin.GetVSchemaCallback): void;
+          (request: vtadmin.IGetVSchemaRequest): Promise<vtadmin.VSchema>;
+          readonly name: "GetVSchema";
+          readonly path: "/vtadmin.VTAdmin/GetVSchema";
+          readonly requestType: "GetVSchemaRequest";
+          readonly responseType: "VSchema";
+          readonly requestStream: undefined;
+          readonly responseStream: undefined;
+        };
 
         /**
          * Callback as used by {@link vtadmin.VTAdmin#getVSchemas}.
@@ -901,15 +901,15 @@ export namespace vtadmin {
 
         /** Calls GetVSchemas. */
         type GetVSchemas = {
-  (request: vtadmin.IGetVSchemasRequest, callback: vtadmin.VTAdmin.GetVSchemasCallback): void;
-  (request: vtadmin.IGetVSchemasRequest): Promise<vtadmin.GetVSchemasResponse>;
-  readonly name: "GetVSchemas";
-  readonly path: "/vtadmin.VTAdmin/GetVSchemas";
-  readonly requestType: "GetVSchemasRequest";
-  readonly responseType: "GetVSchemasResponse";
-  readonly requestStream: undefined;
-  readonly responseStream: undefined;
-};
+          (request: vtadmin.IGetVSchemasRequest, callback: vtadmin.VTAdmin.GetVSchemasCallback): void;
+          (request: vtadmin.IGetVSchemasRequest): Promise<vtadmin.GetVSchemasResponse>;
+          readonly name: "GetVSchemas";
+          readonly path: "/vtadmin.VTAdmin/GetVSchemas";
+          readonly requestType: "GetVSchemasRequest";
+          readonly responseType: "GetVSchemasResponse";
+          readonly requestStream: undefined;
+          readonly responseStream: undefined;
+        };
 
         /**
          * Callback as used by {@link vtadmin.VTAdmin#getVtctlds}.
@@ -920,15 +920,15 @@ export namespace vtadmin {
 
         /** Calls GetVtctlds. */
         type GetVtctlds = {
-  (request: vtadmin.IGetVtctldsRequest, callback: vtadmin.VTAdmin.GetVtctldsCallback): void;
-  (request: vtadmin.IGetVtctldsRequest): Promise<vtadmin.GetVtctldsResponse>;
-  readonly name: "GetVtctlds";
-  readonly path: "/vtadmin.VTAdmin/GetVtctlds";
-  readonly requestType: "GetVtctldsRequest";
-  readonly responseType: "GetVtctldsResponse";
-  readonly requestStream: undefined;
-  readonly responseStream: undefined;
-};
+          (request: vtadmin.IGetVtctldsRequest, callback: vtadmin.VTAdmin.GetVtctldsCallback): void;
+          (request: vtadmin.IGetVtctldsRequest): Promise<vtadmin.GetVtctldsResponse>;
+          readonly name: "GetVtctlds";
+          readonly path: "/vtadmin.VTAdmin/GetVtctlds";
+          readonly requestType: "GetVtctldsRequest";
+          readonly responseType: "GetVtctldsResponse";
+          readonly requestStream: undefined;
+          readonly responseStream: undefined;
+        };
 
         /**
          * Callback as used by {@link vtadmin.VTAdmin#getWorkflow}.
@@ -939,15 +939,15 @@ export namespace vtadmin {
 
         /** Calls GetWorkflow. */
         type GetWorkflow = {
-  (request: vtadmin.IGetWorkflowRequest, callback: vtadmin.VTAdmin.GetWorkflowCallback): void;
-  (request: vtadmin.IGetWorkflowRequest): Promise<vtadmin.Workflow>;
-  readonly name: "GetWorkflow";
-  readonly path: "/vtadmin.VTAdmin/GetWorkflow";
-  readonly requestType: "GetWorkflowRequest";
-  readonly responseType: "Workflow";
-  readonly requestStream: undefined;
-  readonly responseStream: undefined;
-};
+          (request: vtadmin.IGetWorkflowRequest, callback: vtadmin.VTAdmin.GetWorkflowCallback): void;
+          (request: vtadmin.IGetWorkflowRequest): Promise<vtadmin.Workflow>;
+          readonly name: "GetWorkflow";
+          readonly path: "/vtadmin.VTAdmin/GetWorkflow";
+          readonly requestType: "GetWorkflowRequest";
+          readonly responseType: "Workflow";
+          readonly requestStream: undefined;
+          readonly responseStream: undefined;
+        };
 
         /**
          * Callback as used by {@link vtadmin.VTAdmin#getWorkflows}.
@@ -958,15 +958,15 @@ export namespace vtadmin {
 
         /** Calls GetWorkflows. */
         type GetWorkflows = {
-  (request: vtadmin.IGetWorkflowsRequest, callback: vtadmin.VTAdmin.GetWorkflowsCallback): void;
-  (request: vtadmin.IGetWorkflowsRequest): Promise<vtadmin.GetWorkflowsResponse>;
-  readonly name: "GetWorkflows";
-  readonly path: "/vtadmin.VTAdmin/GetWorkflows";
-  readonly requestType: "GetWorkflowsRequest";
-  readonly responseType: "GetWorkflowsResponse";
-  readonly requestStream: undefined;
-  readonly responseStream: undefined;
-};
+          (request: vtadmin.IGetWorkflowsRequest, callback: vtadmin.VTAdmin.GetWorkflowsCallback): void;
+          (request: vtadmin.IGetWorkflowsRequest): Promise<vtadmin.GetWorkflowsResponse>;
+          readonly name: "GetWorkflows";
+          readonly path: "/vtadmin.VTAdmin/GetWorkflows";
+          readonly requestType: "GetWorkflowsRequest";
+          readonly responseType: "GetWorkflowsResponse";
+          readonly requestStream: undefined;
+          readonly responseStream: undefined;
+        };
 
         /**
          * Callback as used by {@link vtadmin.VTAdmin#getWorkflowStatus}.
@@ -977,15 +977,15 @@ export namespace vtadmin {
 
         /** Calls GetWorkflowStatus. */
         type GetWorkflowStatus = {
-  (request: vtadmin.IGetWorkflowStatusRequest, callback: vtadmin.VTAdmin.GetWorkflowStatusCallback): void;
-  (request: vtadmin.IGetWorkflowStatusRequest): Promise<vtctldata.WorkflowStatusResponse>;
-  readonly name: "GetWorkflowStatus";
-  readonly path: "/vtadmin.VTAdmin/GetWorkflowStatus";
-  readonly requestType: "GetWorkflowStatusRequest";
-  readonly responseType: "vtctldata.WorkflowStatusResponse";
-  readonly requestStream: undefined;
-  readonly responseStream: undefined;
-};
+          (request: vtadmin.IGetWorkflowStatusRequest, callback: vtadmin.VTAdmin.GetWorkflowStatusCallback): void;
+          (request: vtadmin.IGetWorkflowStatusRequest): Promise<vtctldata.WorkflowStatusResponse>;
+          readonly name: "GetWorkflowStatus";
+          readonly path: "/vtadmin.VTAdmin/GetWorkflowStatus";
+          readonly requestType: "GetWorkflowStatusRequest";
+          readonly responseType: "vtctldata.WorkflowStatusResponse";
+          readonly requestStream: undefined;
+          readonly responseStream: undefined;
+        };
 
         /**
          * Callback as used by {@link vtadmin.VTAdmin#startWorkflow}.
@@ -996,15 +996,15 @@ export namespace vtadmin {
 
         /** Calls StartWorkflow. */
         type StartWorkflow = {
-  (request: vtadmin.IStartWorkflowRequest, callback: vtadmin.VTAdmin.StartWorkflowCallback): void;
-  (request: vtadmin.IStartWorkflowRequest): Promise<vtctldata.WorkflowUpdateResponse>;
-  readonly name: "StartWorkflow";
-  readonly path: "/vtadmin.VTAdmin/StartWorkflow";
-  readonly requestType: "StartWorkflowRequest";
-  readonly responseType: "vtctldata.WorkflowUpdateResponse";
-  readonly requestStream: undefined;
-  readonly responseStream: undefined;
-};
+          (request: vtadmin.IStartWorkflowRequest, callback: vtadmin.VTAdmin.StartWorkflowCallback): void;
+          (request: vtadmin.IStartWorkflowRequest): Promise<vtctldata.WorkflowUpdateResponse>;
+          readonly name: "StartWorkflow";
+          readonly path: "/vtadmin.VTAdmin/StartWorkflow";
+          readonly requestType: "StartWorkflowRequest";
+          readonly responseType: "vtctldata.WorkflowUpdateResponse";
+          readonly requestStream: undefined;
+          readonly responseStream: undefined;
+        };
 
         /**
          * Callback as used by {@link vtadmin.VTAdmin#stopWorkflow}.
@@ -1015,15 +1015,15 @@ export namespace vtadmin {
 
         /** Calls StopWorkflow. */
         type StopWorkflow = {
-  (request: vtadmin.IStopWorkflowRequest, callback: vtadmin.VTAdmin.StopWorkflowCallback): void;
-  (request: vtadmin.IStopWorkflowRequest): Promise<vtctldata.WorkflowUpdateResponse>;
-  readonly name: "StopWorkflow";
-  readonly path: "/vtadmin.VTAdmin/StopWorkflow";
-  readonly requestType: "StopWorkflowRequest";
-  readonly responseType: "vtctldata.WorkflowUpdateResponse";
-  readonly requestStream: undefined;
-  readonly responseStream: undefined;
-};
+          (request: vtadmin.IStopWorkflowRequest, callback: vtadmin.VTAdmin.StopWorkflowCallback): void;
+          (request: vtadmin.IStopWorkflowRequest): Promise<vtctldata.WorkflowUpdateResponse>;
+          readonly name: "StopWorkflow";
+          readonly path: "/vtadmin.VTAdmin/StopWorkflow";
+          readonly requestType: "StopWorkflowRequest";
+          readonly responseType: "vtctldata.WorkflowUpdateResponse";
+          readonly requestStream: undefined;
+          readonly responseStream: undefined;
+        };
 
         /**
          * Callback as used by {@link vtadmin.VTAdmin#launchSchemaMigration}.
@@ -1034,15 +1034,15 @@ export namespace vtadmin {
 
         /** Calls LaunchSchemaMigration. */
         type LaunchSchemaMigration = {
-  (request: vtadmin.ILaunchSchemaMigrationRequest, callback: vtadmin.VTAdmin.LaunchSchemaMigrationCallback): void;
-  (request: vtadmin.ILaunchSchemaMigrationRequest): Promise<vtctldata.LaunchSchemaMigrationResponse>;
-  readonly name: "LaunchSchemaMigration";
-  readonly path: "/vtadmin.VTAdmin/LaunchSchemaMigration";
-  readonly requestType: "LaunchSchemaMigrationRequest";
-  readonly responseType: "vtctldata.LaunchSchemaMigrationResponse";
-  readonly requestStream: undefined;
-  readonly responseStream: undefined;
-};
+          (request: vtadmin.ILaunchSchemaMigrationRequest, callback: vtadmin.VTAdmin.LaunchSchemaMigrationCallback): void;
+          (request: vtadmin.ILaunchSchemaMigrationRequest): Promise<vtctldata.LaunchSchemaMigrationResponse>;
+          readonly name: "LaunchSchemaMigration";
+          readonly path: "/vtadmin.VTAdmin/LaunchSchemaMigration";
+          readonly requestType: "LaunchSchemaMigrationRequest";
+          readonly responseType: "vtctldata.LaunchSchemaMigrationResponse";
+          readonly requestStream: undefined;
+          readonly responseStream: undefined;
+        };
 
         /**
          * Callback as used by {@link vtadmin.VTAdmin#moveTablesComplete}.
@@ -1053,15 +1053,15 @@ export namespace vtadmin {
 
         /** Calls MoveTablesComplete. */
         type MoveTablesComplete = {
-  (request: vtadmin.IMoveTablesCompleteRequest, callback: vtadmin.VTAdmin.MoveTablesCompleteCallback): void;
-  (request: vtadmin.IMoveTablesCompleteRequest): Promise<vtctldata.MoveTablesCompleteResponse>;
-  readonly name: "MoveTablesComplete";
-  readonly path: "/vtadmin.VTAdmin/MoveTablesComplete";
-  readonly requestType: "MoveTablesCompleteRequest";
-  readonly responseType: "vtctldata.MoveTablesCompleteResponse";
-  readonly requestStream: undefined;
-  readonly responseStream: undefined;
-};
+          (request: vtadmin.IMoveTablesCompleteRequest, callback: vtadmin.VTAdmin.MoveTablesCompleteCallback): void;
+          (request: vtadmin.IMoveTablesCompleteRequest): Promise<vtctldata.MoveTablesCompleteResponse>;
+          readonly name: "MoveTablesComplete";
+          readonly path: "/vtadmin.VTAdmin/MoveTablesComplete";
+          readonly requestType: "MoveTablesCompleteRequest";
+          readonly responseType: "vtctldata.MoveTablesCompleteResponse";
+          readonly requestStream: undefined;
+          readonly responseStream: undefined;
+        };
 
         /**
          * Callback as used by {@link vtadmin.VTAdmin#moveTablesCreate}.
@@ -1072,15 +1072,15 @@ export namespace vtadmin {
 
         /** Calls MoveTablesCreate. */
         type MoveTablesCreate = {
-  (request: vtadmin.IMoveTablesCreateRequest, callback: vtadmin.VTAdmin.MoveTablesCreateCallback): void;
-  (request: vtadmin.IMoveTablesCreateRequest): Promise<vtctldata.WorkflowStatusResponse>;
-  readonly name: "MoveTablesCreate";
-  readonly path: "/vtadmin.VTAdmin/MoveTablesCreate";
-  readonly requestType: "MoveTablesCreateRequest";
-  readonly responseType: "vtctldata.WorkflowStatusResponse";
-  readonly requestStream: undefined;
-  readonly responseStream: undefined;
-};
+          (request: vtadmin.IMoveTablesCreateRequest, callback: vtadmin.VTAdmin.MoveTablesCreateCallback): void;
+          (request: vtadmin.IMoveTablesCreateRequest): Promise<vtctldata.WorkflowStatusResponse>;
+          readonly name: "MoveTablesCreate";
+          readonly path: "/vtadmin.VTAdmin/MoveTablesCreate";
+          readonly requestType: "MoveTablesCreateRequest";
+          readonly responseType: "vtctldata.WorkflowStatusResponse";
+          readonly requestStream: undefined;
+          readonly responseStream: undefined;
+        };
 
         /**
          * Callback as used by {@link vtadmin.VTAdmin#materializeCreate}.
@@ -1091,15 +1091,15 @@ export namespace vtadmin {
 
         /** Calls MaterializeCreate. */
         type MaterializeCreate = {
-  (request: vtadmin.IMaterializeCreateRequest, callback: vtadmin.VTAdmin.MaterializeCreateCallback): void;
-  (request: vtadmin.IMaterializeCreateRequest): Promise<vtctldata.MaterializeCreateResponse>;
-  readonly name: "MaterializeCreate";
-  readonly path: "/vtadmin.VTAdmin/MaterializeCreate";
-  readonly requestType: "MaterializeCreateRequest";
-  readonly responseType: "vtctldata.MaterializeCreateResponse";
-  readonly requestStream: undefined;
-  readonly responseStream: undefined;
-};
+          (request: vtadmin.IMaterializeCreateRequest, callback: vtadmin.VTAdmin.MaterializeCreateCallback): void;
+          (request: vtadmin.IMaterializeCreateRequest): Promise<vtctldata.MaterializeCreateResponse>;
+          readonly name: "MaterializeCreate";
+          readonly path: "/vtadmin.VTAdmin/MaterializeCreate";
+          readonly requestType: "MaterializeCreateRequest";
+          readonly responseType: "vtctldata.MaterializeCreateResponse";
+          readonly requestStream: undefined;
+          readonly responseStream: undefined;
+        };
 
         /**
          * Callback as used by {@link vtadmin.VTAdmin#pingTablet}.
@@ -1110,15 +1110,15 @@ export namespace vtadmin {
 
         /** Calls PingTablet. */
         type PingTablet = {
-  (request: vtadmin.IPingTabletRequest, callback: vtadmin.VTAdmin.PingTabletCallback): void;
-  (request: vtadmin.IPingTabletRequest): Promise<vtadmin.PingTabletResponse>;
-  readonly name: "PingTablet";
-  readonly path: "/vtadmin.VTAdmin/PingTablet";
-  readonly requestType: "PingTabletRequest";
-  readonly responseType: "PingTabletResponse";
-  readonly requestStream: undefined;
-  readonly responseStream: undefined;
-};
+          (request: vtadmin.IPingTabletRequest, callback: vtadmin.VTAdmin.PingTabletCallback): void;
+          (request: vtadmin.IPingTabletRequest): Promise<vtadmin.PingTabletResponse>;
+          readonly name: "PingTablet";
+          readonly path: "/vtadmin.VTAdmin/PingTablet";
+          readonly requestType: "PingTabletRequest";
+          readonly responseType: "PingTabletResponse";
+          readonly requestStream: undefined;
+          readonly responseStream: undefined;
+        };
 
         /**
          * Callback as used by {@link vtadmin.VTAdmin#plannedFailoverShard}.
@@ -1129,15 +1129,15 @@ export namespace vtadmin {
 
         /** Calls PlannedFailoverShard. */
         type PlannedFailoverShard = {
-  (request: vtadmin.IPlannedFailoverShardRequest, callback: vtadmin.VTAdmin.PlannedFailoverShardCallback): void;
-  (request: vtadmin.IPlannedFailoverShardRequest): Promise<vtadmin.PlannedFailoverShardResponse>;
-  readonly name: "PlannedFailoverShard";
-  readonly path: "/vtadmin.VTAdmin/PlannedFailoverShard";
-  readonly requestType: "PlannedFailoverShardRequest";
-  readonly responseType: "PlannedFailoverShardResponse";
-  readonly requestStream: undefined;
-  readonly responseStream: undefined;
-};
+          (request: vtadmin.IPlannedFailoverShardRequest, callback: vtadmin.VTAdmin.PlannedFailoverShardCallback): void;
+          (request: vtadmin.IPlannedFailoverShardRequest): Promise<vtadmin.PlannedFailoverShardResponse>;
+          readonly name: "PlannedFailoverShard";
+          readonly path: "/vtadmin.VTAdmin/PlannedFailoverShard";
+          readonly requestType: "PlannedFailoverShardRequest";
+          readonly responseType: "PlannedFailoverShardResponse";
+          readonly requestStream: undefined;
+          readonly responseStream: undefined;
+        };
 
         /**
          * Callback as used by {@link vtadmin.VTAdmin#rebuildKeyspaceGraph}.
@@ -1148,15 +1148,15 @@ export namespace vtadmin {
 
         /** Calls RebuildKeyspaceGraph. */
         type RebuildKeyspaceGraph = {
-  (request: vtadmin.IRebuildKeyspaceGraphRequest, callback: vtadmin.VTAdmin.RebuildKeyspaceGraphCallback): void;
-  (request: vtadmin.IRebuildKeyspaceGraphRequest): Promise<vtadmin.RebuildKeyspaceGraphResponse>;
-  readonly name: "RebuildKeyspaceGraph";
-  readonly path: "/vtadmin.VTAdmin/RebuildKeyspaceGraph";
-  readonly requestType: "RebuildKeyspaceGraphRequest";
-  readonly responseType: "RebuildKeyspaceGraphResponse";
-  readonly requestStream: undefined;
-  readonly responseStream: undefined;
-};
+          (request: vtadmin.IRebuildKeyspaceGraphRequest, callback: vtadmin.VTAdmin.RebuildKeyspaceGraphCallback): void;
+          (request: vtadmin.IRebuildKeyspaceGraphRequest): Promise<vtadmin.RebuildKeyspaceGraphResponse>;
+          readonly name: "RebuildKeyspaceGraph";
+          readonly path: "/vtadmin.VTAdmin/RebuildKeyspaceGraph";
+          readonly requestType: "RebuildKeyspaceGraphRequest";
+          readonly responseType: "RebuildKeyspaceGraphResponse";
+          readonly requestStream: undefined;
+          readonly responseStream: undefined;
+        };
 
         /**
          * Callback as used by {@link vtadmin.VTAdmin#refreshState}.
@@ -1167,15 +1167,15 @@ export namespace vtadmin {
 
         /** Calls RefreshState. */
         type RefreshState = {
-  (request: vtadmin.IRefreshStateRequest, callback: vtadmin.VTAdmin.RefreshStateCallback): void;
-  (request: vtadmin.IRefreshStateRequest): Promise<vtadmin.RefreshStateResponse>;
-  readonly name: "RefreshState";
-  readonly path: "/vtadmin.VTAdmin/RefreshState";
-  readonly requestType: "RefreshStateRequest";
-  readonly responseType: "RefreshStateResponse";
-  readonly requestStream: undefined;
-  readonly responseStream: undefined;
-};
+          (request: vtadmin.IRefreshStateRequest, callback: vtadmin.VTAdmin.RefreshStateCallback): void;
+          (request: vtadmin.IRefreshStateRequest): Promise<vtadmin.RefreshStateResponse>;
+          readonly name: "RefreshState";
+          readonly path: "/vtadmin.VTAdmin/RefreshState";
+          readonly requestType: "RefreshStateRequest";
+          readonly responseType: "RefreshStateResponse";
+          readonly requestStream: undefined;
+          readonly responseStream: undefined;
+        };
 
         /**
          * Callback as used by {@link vtadmin.VTAdmin#refreshTabletReplicationSource}.
@@ -1186,15 +1186,15 @@ export namespace vtadmin {
 
         /** Calls RefreshTabletReplicationSource. */
         type RefreshTabletReplicationSource = {
-  (request: vtadmin.IRefreshTabletReplicationSourceRequest, callback: vtadmin.VTAdmin.RefreshTabletReplicationSourceCallback): void;
-  (request: vtadmin.IRefreshTabletReplicationSourceRequest): Promise<vtadmin.RefreshTabletReplicationSourceResponse>;
-  readonly name: "RefreshTabletReplicationSource";
-  readonly path: "/vtadmin.VTAdmin/RefreshTabletReplicationSource";
-  readonly requestType: "RefreshTabletReplicationSourceRequest";
-  readonly responseType: "RefreshTabletReplicationSourceResponse";
-  readonly requestStream: undefined;
-  readonly responseStream: undefined;
-};
+          (request: vtadmin.IRefreshTabletReplicationSourceRequest, callback: vtadmin.VTAdmin.RefreshTabletReplicationSourceCallback): void;
+          (request: vtadmin.IRefreshTabletReplicationSourceRequest): Promise<vtadmin.RefreshTabletReplicationSourceResponse>;
+          readonly name: "RefreshTabletReplicationSource";
+          readonly path: "/vtadmin.VTAdmin/RefreshTabletReplicationSource";
+          readonly requestType: "RefreshTabletReplicationSourceRequest";
+          readonly responseType: "RefreshTabletReplicationSourceResponse";
+          readonly requestStream: undefined;
+          readonly responseStream: undefined;
+        };
 
         /**
          * Callback as used by {@link vtadmin.VTAdmin#reloadSchemas}.
@@ -1205,15 +1205,15 @@ export namespace vtadmin {
 
         /** Calls ReloadSchemas. */
         type ReloadSchemas = {
-  (request: vtadmin.IReloadSchemasRequest, callback: vtadmin.VTAdmin.ReloadSchemasCallback): void;
-  (request: vtadmin.IReloadSchemasRequest): Promise<vtadmin.ReloadSchemasResponse>;
-  readonly name: "ReloadSchemas";
-  readonly path: "/vtadmin.VTAdmin/ReloadSchemas";
-  readonly requestType: "ReloadSchemasRequest";
-  readonly responseType: "ReloadSchemasResponse";
-  readonly requestStream: undefined;
-  readonly responseStream: undefined;
-};
+          (request: vtadmin.IReloadSchemasRequest, callback: vtadmin.VTAdmin.ReloadSchemasCallback): void;
+          (request: vtadmin.IReloadSchemasRequest): Promise<vtadmin.ReloadSchemasResponse>;
+          readonly name: "ReloadSchemas";
+          readonly path: "/vtadmin.VTAdmin/ReloadSchemas";
+          readonly requestType: "ReloadSchemasRequest";
+          readonly responseType: "ReloadSchemasResponse";
+          readonly requestStream: undefined;
+          readonly responseStream: undefined;
+        };
 
         /**
          * Callback as used by {@link vtadmin.VTAdmin#reloadSchemaShard}.
@@ -1224,15 +1224,15 @@ export namespace vtadmin {
 
         /** Calls ReloadSchemaShard. */
         type ReloadSchemaShard = {
-  (request: vtadmin.IReloadSchemaShardRequest, callback: vtadmin.VTAdmin.ReloadSchemaShardCallback): void;
-  (request: vtadmin.IReloadSchemaShardRequest): Promise<vtadmin.ReloadSchemaShardResponse>;
-  readonly name: "ReloadSchemaShard";
-  readonly path: "/vtadmin.VTAdmin/ReloadSchemaShard";
-  readonly requestType: "ReloadSchemaShardRequest";
-  readonly responseType: "ReloadSchemaShardResponse";
-  readonly requestStream: undefined;
-  readonly responseStream: undefined;
-};
+          (request: vtadmin.IReloadSchemaShardRequest, callback: vtadmin.VTAdmin.ReloadSchemaShardCallback): void;
+          (request: vtadmin.IReloadSchemaShardRequest): Promise<vtadmin.ReloadSchemaShardResponse>;
+          readonly name: "ReloadSchemaShard";
+          readonly path: "/vtadmin.VTAdmin/ReloadSchemaShard";
+          readonly requestType: "ReloadSchemaShardRequest";
+          readonly responseType: "ReloadSchemaShardResponse";
+          readonly requestStream: undefined;
+          readonly responseStream: undefined;
+        };
 
         /**
          * Callback as used by {@link vtadmin.VTAdmin#removeKeyspaceCell}.
@@ -1243,15 +1243,15 @@ export namespace vtadmin {
 
         /** Calls RemoveKeyspaceCell. */
         type RemoveKeyspaceCell = {
-  (request: vtadmin.IRemoveKeyspaceCellRequest, callback: vtadmin.VTAdmin.RemoveKeyspaceCellCallback): void;
-  (request: vtadmin.IRemoveKeyspaceCellRequest): Promise<vtadmin.RemoveKeyspaceCellResponse>;
-  readonly name: "RemoveKeyspaceCell";
-  readonly path: "/vtadmin.VTAdmin/RemoveKeyspaceCell";
-  readonly requestType: "RemoveKeyspaceCellRequest";
-  readonly responseType: "RemoveKeyspaceCellResponse";
-  readonly requestStream: undefined;
-  readonly responseStream: undefined;
-};
+          (request: vtadmin.IRemoveKeyspaceCellRequest, callback: vtadmin.VTAdmin.RemoveKeyspaceCellCallback): void;
+          (request: vtadmin.IRemoveKeyspaceCellRequest): Promise<vtadmin.RemoveKeyspaceCellResponse>;
+          readonly name: "RemoveKeyspaceCell";
+          readonly path: "/vtadmin.VTAdmin/RemoveKeyspaceCell";
+          readonly requestType: "RemoveKeyspaceCellRequest";
+          readonly responseType: "RemoveKeyspaceCellResponse";
+          readonly requestStream: undefined;
+          readonly responseStream: undefined;
+        };
 
         /**
          * Callback as used by {@link vtadmin.VTAdmin#retrySchemaMigration}.
@@ -1262,15 +1262,15 @@ export namespace vtadmin {
 
         /** Calls RetrySchemaMigration. */
         type RetrySchemaMigration = {
-  (request: vtadmin.IRetrySchemaMigrationRequest, callback: vtadmin.VTAdmin.RetrySchemaMigrationCallback): void;
-  (request: vtadmin.IRetrySchemaMigrationRequest): Promise<vtctldata.RetrySchemaMigrationResponse>;
-  readonly name: "RetrySchemaMigration";
-  readonly path: "/vtadmin.VTAdmin/RetrySchemaMigration";
-  readonly requestType: "RetrySchemaMigrationRequest";
-  readonly responseType: "vtctldata.RetrySchemaMigrationResponse";
-  readonly requestStream: undefined;
-  readonly responseStream: undefined;
-};
+          (request: vtadmin.IRetrySchemaMigrationRequest, callback: vtadmin.VTAdmin.RetrySchemaMigrationCallback): void;
+          (request: vtadmin.IRetrySchemaMigrationRequest): Promise<vtctldata.RetrySchemaMigrationResponse>;
+          readonly name: "RetrySchemaMigration";
+          readonly path: "/vtadmin.VTAdmin/RetrySchemaMigration";
+          readonly requestType: "RetrySchemaMigrationRequest";
+          readonly responseType: "vtctldata.RetrySchemaMigrationResponse";
+          readonly requestStream: undefined;
+          readonly responseStream: undefined;
+        };
 
         /**
          * Callback as used by {@link vtadmin.VTAdmin#runHealthCheck}.
@@ -1281,15 +1281,15 @@ export namespace vtadmin {
 
         /** Calls RunHealthCheck. */
         type RunHealthCheck = {
-  (request: vtadmin.IRunHealthCheckRequest, callback: vtadmin.VTAdmin.RunHealthCheckCallback): void;
-  (request: vtadmin.IRunHealthCheckRequest): Promise<vtadmin.RunHealthCheckResponse>;
-  readonly name: "RunHealthCheck";
-  readonly path: "/vtadmin.VTAdmin/RunHealthCheck";
-  readonly requestType: "RunHealthCheckRequest";
-  readonly responseType: "RunHealthCheckResponse";
-  readonly requestStream: undefined;
-  readonly responseStream: undefined;
-};
+          (request: vtadmin.IRunHealthCheckRequest, callback: vtadmin.VTAdmin.RunHealthCheckCallback): void;
+          (request: vtadmin.IRunHealthCheckRequest): Promise<vtadmin.RunHealthCheckResponse>;
+          readonly name: "RunHealthCheck";
+          readonly path: "/vtadmin.VTAdmin/RunHealthCheck";
+          readonly requestType: "RunHealthCheckRequest";
+          readonly responseType: "RunHealthCheckResponse";
+          readonly requestStream: undefined;
+          readonly responseStream: undefined;
+        };
 
         /**
          * Callback as used by {@link vtadmin.VTAdmin#reshardCreate}.
@@ -1300,15 +1300,15 @@ export namespace vtadmin {
 
         /** Calls ReshardCreate. */
         type ReshardCreate = {
-  (request: vtadmin.IReshardCreateRequest, callback: vtadmin.VTAdmin.ReshardCreateCallback): void;
-  (request: vtadmin.IReshardCreateRequest): Promise<vtctldata.WorkflowStatusResponse>;
-  readonly name: "ReshardCreate";
-  readonly path: "/vtadmin.VTAdmin/ReshardCreate";
-  readonly requestType: "ReshardCreateRequest";
-  readonly responseType: "vtctldata.WorkflowStatusResponse";
-  readonly requestStream: undefined;
-  readonly responseStream: undefined;
-};
+          (request: vtadmin.IReshardCreateRequest, callback: vtadmin.VTAdmin.ReshardCreateCallback): void;
+          (request: vtadmin.IReshardCreateRequest): Promise<vtctldata.WorkflowStatusResponse>;
+          readonly name: "ReshardCreate";
+          readonly path: "/vtadmin.VTAdmin/ReshardCreate";
+          readonly requestType: "ReshardCreateRequest";
+          readonly responseType: "vtctldata.WorkflowStatusResponse";
+          readonly requestStream: undefined;
+          readonly responseStream: undefined;
+        };
 
         /**
          * Callback as used by {@link vtadmin.VTAdmin#setReadOnly}.
@@ -1319,15 +1319,15 @@ export namespace vtadmin {
 
         /** Calls SetReadOnly. */
         type SetReadOnly = {
-  (request: vtadmin.ISetReadOnlyRequest, callback: vtadmin.VTAdmin.SetReadOnlyCallback): void;
-  (request: vtadmin.ISetReadOnlyRequest): Promise<vtadmin.SetReadOnlyResponse>;
-  readonly name: "SetReadOnly";
-  readonly path: "/vtadmin.VTAdmin/SetReadOnly";
-  readonly requestType: "SetReadOnlyRequest";
-  readonly responseType: "SetReadOnlyResponse";
-  readonly requestStream: undefined;
-  readonly responseStream: undefined;
-};
+          (request: vtadmin.ISetReadOnlyRequest, callback: vtadmin.VTAdmin.SetReadOnlyCallback): void;
+          (request: vtadmin.ISetReadOnlyRequest): Promise<vtadmin.SetReadOnlyResponse>;
+          readonly name: "SetReadOnly";
+          readonly path: "/vtadmin.VTAdmin/SetReadOnly";
+          readonly requestType: "SetReadOnlyRequest";
+          readonly responseType: "SetReadOnlyResponse";
+          readonly requestStream: undefined;
+          readonly responseStream: undefined;
+        };
 
         /**
          * Callback as used by {@link vtadmin.VTAdmin#setReadWrite}.
@@ -1338,15 +1338,15 @@ export namespace vtadmin {
 
         /** Calls SetReadWrite. */
         type SetReadWrite = {
-  (request: vtadmin.ISetReadWriteRequest, callback: vtadmin.VTAdmin.SetReadWriteCallback): void;
-  (request: vtadmin.ISetReadWriteRequest): Promise<vtadmin.SetReadWriteResponse>;
-  readonly name: "SetReadWrite";
-  readonly path: "/vtadmin.VTAdmin/SetReadWrite";
-  readonly requestType: "SetReadWriteRequest";
-  readonly responseType: "SetReadWriteResponse";
-  readonly requestStream: undefined;
-  readonly responseStream: undefined;
-};
+          (request: vtadmin.ISetReadWriteRequest, callback: vtadmin.VTAdmin.SetReadWriteCallback): void;
+          (request: vtadmin.ISetReadWriteRequest): Promise<vtadmin.SetReadWriteResponse>;
+          readonly name: "SetReadWrite";
+          readonly path: "/vtadmin.VTAdmin/SetReadWrite";
+          readonly requestType: "SetReadWriteRequest";
+          readonly responseType: "SetReadWriteResponse";
+          readonly requestStream: undefined;
+          readonly responseStream: undefined;
+        };
 
         /**
          * Callback as used by {@link vtadmin.VTAdmin#startReplication}.
@@ -1357,15 +1357,15 @@ export namespace vtadmin {
 
         /** Calls StartReplication. */
         type StartReplication = {
-  (request: vtadmin.IStartReplicationRequest, callback: vtadmin.VTAdmin.StartReplicationCallback): void;
-  (request: vtadmin.IStartReplicationRequest): Promise<vtadmin.StartReplicationResponse>;
-  readonly name: "StartReplication";
-  readonly path: "/vtadmin.VTAdmin/StartReplication";
-  readonly requestType: "StartReplicationRequest";
-  readonly responseType: "StartReplicationResponse";
-  readonly requestStream: undefined;
-  readonly responseStream: undefined;
-};
+          (request: vtadmin.IStartReplicationRequest, callback: vtadmin.VTAdmin.StartReplicationCallback): void;
+          (request: vtadmin.IStartReplicationRequest): Promise<vtadmin.StartReplicationResponse>;
+          readonly name: "StartReplication";
+          readonly path: "/vtadmin.VTAdmin/StartReplication";
+          readonly requestType: "StartReplicationRequest";
+          readonly responseType: "StartReplicationResponse";
+          readonly requestStream: undefined;
+          readonly responseStream: undefined;
+        };
 
         /**
          * Callback as used by {@link vtadmin.VTAdmin#stopReplication}.
@@ -1376,15 +1376,15 @@ export namespace vtadmin {
 
         /** Calls StopReplication. */
         type StopReplication = {
-  (request: vtadmin.IStopReplicationRequest, callback: vtadmin.VTAdmin.StopReplicationCallback): void;
-  (request: vtadmin.IStopReplicationRequest): Promise<vtadmin.StopReplicationResponse>;
-  readonly name: "StopReplication";
-  readonly path: "/vtadmin.VTAdmin/StopReplication";
-  readonly requestType: "StopReplicationRequest";
-  readonly responseType: "StopReplicationResponse";
-  readonly requestStream: undefined;
-  readonly responseStream: undefined;
-};
+          (request: vtadmin.IStopReplicationRequest, callback: vtadmin.VTAdmin.StopReplicationCallback): void;
+          (request: vtadmin.IStopReplicationRequest): Promise<vtadmin.StopReplicationResponse>;
+          readonly name: "StopReplication";
+          readonly path: "/vtadmin.VTAdmin/StopReplication";
+          readonly requestType: "StopReplicationRequest";
+          readonly responseType: "StopReplicationResponse";
+          readonly requestStream: undefined;
+          readonly responseStream: undefined;
+        };
 
         /**
          * Callback as used by {@link vtadmin.VTAdmin#tabletExternallyPromoted}.
@@ -1395,15 +1395,15 @@ export namespace vtadmin {
 
         /** Calls TabletExternallyPromoted. */
         type TabletExternallyPromoted = {
-  (request: vtadmin.ITabletExternallyPromotedRequest, callback: vtadmin.VTAdmin.TabletExternallyPromotedCallback): void;
-  (request: vtadmin.ITabletExternallyPromotedRequest): Promise<vtadmin.TabletExternallyPromotedResponse>;
-  readonly name: "TabletExternallyPromoted";
-  readonly path: "/vtadmin.VTAdmin/TabletExternallyPromoted";
-  readonly requestType: "TabletExternallyPromotedRequest";
-  readonly responseType: "TabletExternallyPromotedResponse";
-  readonly requestStream: undefined;
-  readonly responseStream: undefined;
-};
+          (request: vtadmin.ITabletExternallyPromotedRequest, callback: vtadmin.VTAdmin.TabletExternallyPromotedCallback): void;
+          (request: vtadmin.ITabletExternallyPromotedRequest): Promise<vtadmin.TabletExternallyPromotedResponse>;
+          readonly name: "TabletExternallyPromoted";
+          readonly path: "/vtadmin.VTAdmin/TabletExternallyPromoted";
+          readonly requestType: "TabletExternallyPromotedRequest";
+          readonly responseType: "TabletExternallyPromotedResponse";
+          readonly requestStream: undefined;
+          readonly responseStream: undefined;
+        };
 
         /**
          * Callback as used by {@link vtadmin.VTAdmin#validate}.
@@ -1414,15 +1414,15 @@ export namespace vtadmin {
 
         /** Calls Validate. */
         type Validate = {
-  (request: vtadmin.IValidateRequest, callback: vtadmin.VTAdmin.ValidateCallback): void;
-  (request: vtadmin.IValidateRequest): Promise<vtctldata.ValidateResponse>;
-  readonly name: "Validate";
-  readonly path: "/vtadmin.VTAdmin/Validate";
-  readonly requestType: "ValidateRequest";
-  readonly responseType: "vtctldata.ValidateResponse";
-  readonly requestStream: undefined;
-  readonly responseStream: undefined;
-};
+          (request: vtadmin.IValidateRequest, callback: vtadmin.VTAdmin.ValidateCallback): void;
+          (request: vtadmin.IValidateRequest): Promise<vtctldata.ValidateResponse>;
+          readonly name: "Validate";
+          readonly path: "/vtadmin.VTAdmin/Validate";
+          readonly requestType: "ValidateRequest";
+          readonly responseType: "vtctldata.ValidateResponse";
+          readonly requestStream: undefined;
+          readonly responseStream: undefined;
+        };
 
         /**
          * Callback as used by {@link vtadmin.VTAdmin#validateKeyspace}.
@@ -1433,15 +1433,15 @@ export namespace vtadmin {
 
         /** Calls ValidateKeyspace. */
         type ValidateKeyspace = {
-  (request: vtadmin.IValidateKeyspaceRequest, callback: vtadmin.VTAdmin.ValidateKeyspaceCallback): void;
-  (request: vtadmin.IValidateKeyspaceRequest): Promise<vtctldata.ValidateKeyspaceResponse>;
-  readonly name: "ValidateKeyspace";
-  readonly path: "/vtadmin.VTAdmin/ValidateKeyspace";
-  readonly requestType: "ValidateKeyspaceRequest";
-  readonly responseType: "vtctldata.ValidateKeyspaceResponse";
-  readonly requestStream: undefined;
-  readonly responseStream: undefined;
-};
+          (request: vtadmin.IValidateKeyspaceRequest, callback: vtadmin.VTAdmin.ValidateKeyspaceCallback): void;
+          (request: vtadmin.IValidateKeyspaceRequest): Promise<vtctldata.ValidateKeyspaceResponse>;
+          readonly name: "ValidateKeyspace";
+          readonly path: "/vtadmin.VTAdmin/ValidateKeyspace";
+          readonly requestType: "ValidateKeyspaceRequest";
+          readonly responseType: "vtctldata.ValidateKeyspaceResponse";
+          readonly requestStream: undefined;
+          readonly responseStream: undefined;
+        };
 
         /**
          * Callback as used by {@link vtadmin.VTAdmin#validateSchemaKeyspace}.
@@ -1452,15 +1452,15 @@ export namespace vtadmin {
 
         /** Calls ValidateSchemaKeyspace. */
         type ValidateSchemaKeyspace = {
-  (request: vtadmin.IValidateSchemaKeyspaceRequest, callback: vtadmin.VTAdmin.ValidateSchemaKeyspaceCallback): void;
-  (request: vtadmin.IValidateSchemaKeyspaceRequest): Promise<vtctldata.ValidateSchemaKeyspaceResponse>;
-  readonly name: "ValidateSchemaKeyspace";
-  readonly path: "/vtadmin.VTAdmin/ValidateSchemaKeyspace";
-  readonly requestType: "ValidateSchemaKeyspaceRequest";
-  readonly responseType: "vtctldata.ValidateSchemaKeyspaceResponse";
-  readonly requestStream: undefined;
-  readonly responseStream: undefined;
-};
+          (request: vtadmin.IValidateSchemaKeyspaceRequest, callback: vtadmin.VTAdmin.ValidateSchemaKeyspaceCallback): void;
+          (request: vtadmin.IValidateSchemaKeyspaceRequest): Promise<vtctldata.ValidateSchemaKeyspaceResponse>;
+          readonly name: "ValidateSchemaKeyspace";
+          readonly path: "/vtadmin.VTAdmin/ValidateSchemaKeyspace";
+          readonly requestType: "ValidateSchemaKeyspaceRequest";
+          readonly responseType: "vtctldata.ValidateSchemaKeyspaceResponse";
+          readonly requestStream: undefined;
+          readonly responseStream: undefined;
+        };
 
         /**
          * Callback as used by {@link vtadmin.VTAdmin#validateShard}.
@@ -1471,15 +1471,15 @@ export namespace vtadmin {
 
         /** Calls ValidateShard. */
         type ValidateShard = {
-  (request: vtadmin.IValidateShardRequest, callback: vtadmin.VTAdmin.ValidateShardCallback): void;
-  (request: vtadmin.IValidateShardRequest): Promise<vtctldata.ValidateShardResponse>;
-  readonly name: "ValidateShard";
-  readonly path: "/vtadmin.VTAdmin/ValidateShard";
-  readonly requestType: "ValidateShardRequest";
-  readonly responseType: "vtctldata.ValidateShardResponse";
-  readonly requestStream: undefined;
-  readonly responseStream: undefined;
-};
+          (request: vtadmin.IValidateShardRequest, callback: vtadmin.VTAdmin.ValidateShardCallback): void;
+          (request: vtadmin.IValidateShardRequest): Promise<vtctldata.ValidateShardResponse>;
+          readonly name: "ValidateShard";
+          readonly path: "/vtadmin.VTAdmin/ValidateShard";
+          readonly requestType: "ValidateShardRequest";
+          readonly responseType: "vtctldata.ValidateShardResponse";
+          readonly requestStream: undefined;
+          readonly responseStream: undefined;
+        };
 
         /**
          * Callback as used by {@link vtadmin.VTAdmin#validateVersionKeyspace}.
@@ -1490,15 +1490,15 @@ export namespace vtadmin {
 
         /** Calls ValidateVersionKeyspace. */
         type ValidateVersionKeyspace = {
-  (request: vtadmin.IValidateVersionKeyspaceRequest, callback: vtadmin.VTAdmin.ValidateVersionKeyspaceCallback): void;
-  (request: vtadmin.IValidateVersionKeyspaceRequest): Promise<vtctldata.ValidateVersionKeyspaceResponse>;
-  readonly name: "ValidateVersionKeyspace";
-  readonly path: "/vtadmin.VTAdmin/ValidateVersionKeyspace";
-  readonly requestType: "ValidateVersionKeyspaceRequest";
-  readonly responseType: "vtctldata.ValidateVersionKeyspaceResponse";
-  readonly requestStream: undefined;
-  readonly responseStream: undefined;
-};
+          (request: vtadmin.IValidateVersionKeyspaceRequest, callback: vtadmin.VTAdmin.ValidateVersionKeyspaceCallback): void;
+          (request: vtadmin.IValidateVersionKeyspaceRequest): Promise<vtctldata.ValidateVersionKeyspaceResponse>;
+          readonly name: "ValidateVersionKeyspace";
+          readonly path: "/vtadmin.VTAdmin/ValidateVersionKeyspace";
+          readonly requestType: "ValidateVersionKeyspaceRequest";
+          readonly responseType: "vtctldata.ValidateVersionKeyspaceResponse";
+          readonly requestStream: undefined;
+          readonly responseStream: undefined;
+        };
 
         /**
          * Callback as used by {@link vtadmin.VTAdmin#validateVersionShard}.
@@ -1509,15 +1509,15 @@ export namespace vtadmin {
 
         /** Calls ValidateVersionShard. */
         type ValidateVersionShard = {
-  (request: vtadmin.IValidateVersionShardRequest, callback: vtadmin.VTAdmin.ValidateVersionShardCallback): void;
-  (request: vtadmin.IValidateVersionShardRequest): Promise<vtctldata.ValidateVersionShardResponse>;
-  readonly name: "ValidateVersionShard";
-  readonly path: "/vtadmin.VTAdmin/ValidateVersionShard";
-  readonly requestType: "ValidateVersionShardRequest";
-  readonly responseType: "vtctldata.ValidateVersionShardResponse";
-  readonly requestStream: undefined;
-  readonly responseStream: undefined;
-};
+          (request: vtadmin.IValidateVersionShardRequest, callback: vtadmin.VTAdmin.ValidateVersionShardCallback): void;
+          (request: vtadmin.IValidateVersionShardRequest): Promise<vtctldata.ValidateVersionShardResponse>;
+          readonly name: "ValidateVersionShard";
+          readonly path: "/vtadmin.VTAdmin/ValidateVersionShard";
+          readonly requestType: "ValidateVersionShardRequest";
+          readonly responseType: "vtctldata.ValidateVersionShardResponse";
+          readonly requestStream: undefined;
+          readonly responseStream: undefined;
+        };
 
         /**
          * Callback as used by {@link vtadmin.VTAdmin#vDiffCreate}.
@@ -1528,15 +1528,15 @@ export namespace vtadmin {
 
         /** Calls VDiffCreate. */
         type VDiffCreate = {
-  (request: vtadmin.IVDiffCreateRequest, callback: vtadmin.VTAdmin.VDiffCreateCallback): void;
-  (request: vtadmin.IVDiffCreateRequest): Promise<vtctldata.VDiffCreateResponse>;
-  readonly name: "VDiffCreate";
-  readonly path: "/vtadmin.VTAdmin/VDiffCreate";
-  readonly requestType: "VDiffCreateRequest";
-  readonly responseType: "vtctldata.VDiffCreateResponse";
-  readonly requestStream: undefined;
-  readonly responseStream: undefined;
-};
+          (request: vtadmin.IVDiffCreateRequest, callback: vtadmin.VTAdmin.VDiffCreateCallback): void;
+          (request: vtadmin.IVDiffCreateRequest): Promise<vtctldata.VDiffCreateResponse>;
+          readonly name: "VDiffCreate";
+          readonly path: "/vtadmin.VTAdmin/VDiffCreate";
+          readonly requestType: "VDiffCreateRequest";
+          readonly responseType: "vtctldata.VDiffCreateResponse";
+          readonly requestStream: undefined;
+          readonly responseStream: undefined;
+        };
 
         /**
          * Callback as used by {@link vtadmin.VTAdmin#vDiffShow}.
@@ -1547,15 +1547,15 @@ export namespace vtadmin {
 
         /** Calls VDiffShow. */
         type VDiffShow = {
-  (request: vtadmin.IVDiffShowRequest, callback: vtadmin.VTAdmin.VDiffShowCallback): void;
-  (request: vtadmin.IVDiffShowRequest): Promise<vtadmin.VDiffShowResponse>;
-  readonly name: "VDiffShow";
-  readonly path: "/vtadmin.VTAdmin/VDiffShow";
-  readonly requestType: "VDiffShowRequest";
-  readonly responseType: "VDiffShowResponse";
-  readonly requestStream: undefined;
-  readonly responseStream: undefined;
-};
+          (request: vtadmin.IVDiffShowRequest, callback: vtadmin.VTAdmin.VDiffShowCallback): void;
+          (request: vtadmin.IVDiffShowRequest): Promise<vtadmin.VDiffShowResponse>;
+          readonly name: "VDiffShow";
+          readonly path: "/vtadmin.VTAdmin/VDiffShow";
+          readonly requestType: "VDiffShowRequest";
+          readonly responseType: "VDiffShowResponse";
+          readonly requestStream: undefined;
+          readonly responseStream: undefined;
+        };
 
         /**
          * Callback as used by {@link vtadmin.VTAdmin#vTExplain}.
@@ -1566,15 +1566,15 @@ export namespace vtadmin {
 
         /** Calls VTExplain. */
         type VTExplain = {
-  (request: vtadmin.IVTExplainRequest, callback: vtadmin.VTAdmin.VTExplainCallback): void;
-  (request: vtadmin.IVTExplainRequest): Promise<vtadmin.VTExplainResponse>;
-  readonly name: "VTExplain";
-  readonly path: "/vtadmin.VTAdmin/VTExplain";
-  readonly requestType: "VTExplainRequest";
-  readonly responseType: "VTExplainResponse";
-  readonly requestStream: undefined;
-  readonly responseStream: undefined;
-};
+          (request: vtadmin.IVTExplainRequest, callback: vtadmin.VTAdmin.VTExplainCallback): void;
+          (request: vtadmin.IVTExplainRequest): Promise<vtadmin.VTExplainResponse>;
+          readonly name: "VTExplain";
+          readonly path: "/vtadmin.VTAdmin/VTExplain";
+          readonly requestType: "VTExplainRequest";
+          readonly responseType: "VTExplainResponse";
+          readonly requestStream: undefined;
+          readonly responseStream: undefined;
+        };
 
         /**
          * Callback as used by {@link vtadmin.VTAdmin#vExplain}.
@@ -1585,15 +1585,15 @@ export namespace vtadmin {
 
         /** Calls VExplain. */
         type VExplain = {
-  (request: vtadmin.IVExplainRequest, callback: vtadmin.VTAdmin.VExplainCallback): void;
-  (request: vtadmin.IVExplainRequest): Promise<vtadmin.VExplainResponse>;
-  readonly name: "VExplain";
-  readonly path: "/vtadmin.VTAdmin/VExplain";
-  readonly requestType: "VExplainRequest";
-  readonly responseType: "VExplainResponse";
-  readonly requestStream: undefined;
-  readonly responseStream: undefined;
-};
+          (request: vtadmin.IVExplainRequest, callback: vtadmin.VTAdmin.VExplainCallback): void;
+          (request: vtadmin.IVExplainRequest): Promise<vtadmin.VExplainResponse>;
+          readonly name: "VExplain";
+          readonly path: "/vtadmin.VTAdmin/VExplain";
+          readonly requestType: "VExplainRequest";
+          readonly responseType: "VExplainResponse";
+          readonly requestStream: undefined;
+          readonly responseStream: undefined;
+        };
 
         /**
          * Callback as used by {@link vtadmin.VTAdmin#workflowDelete}.
@@ -1604,15 +1604,15 @@ export namespace vtadmin {
 
         /** Calls WorkflowDelete. */
         type WorkflowDelete = {
-  (request: vtadmin.IWorkflowDeleteRequest, callback: vtadmin.VTAdmin.WorkflowDeleteCallback): void;
-  (request: vtadmin.IWorkflowDeleteRequest): Promise<vtctldata.WorkflowDeleteResponse>;
-  readonly name: "WorkflowDelete";
-  readonly path: "/vtadmin.VTAdmin/WorkflowDelete";
-  readonly requestType: "WorkflowDeleteRequest";
-  readonly responseType: "vtctldata.WorkflowDeleteResponse";
-  readonly requestStream: undefined;
-  readonly responseStream: undefined;
-};
+          (request: vtadmin.IWorkflowDeleteRequest, callback: vtadmin.VTAdmin.WorkflowDeleteCallback): void;
+          (request: vtadmin.IWorkflowDeleteRequest): Promise<vtctldata.WorkflowDeleteResponse>;
+          readonly name: "WorkflowDelete";
+          readonly path: "/vtadmin.VTAdmin/WorkflowDelete";
+          readonly requestType: "WorkflowDeleteRequest";
+          readonly responseType: "vtctldata.WorkflowDeleteResponse";
+          readonly requestStream: undefined;
+          readonly responseStream: undefined;
+        };
 
         /**
          * Callback as used by {@link vtadmin.VTAdmin#workflowSwitchTraffic}.
@@ -1623,15 +1623,15 @@ export namespace vtadmin {
 
         /** Calls WorkflowSwitchTraffic. */
         type WorkflowSwitchTraffic = {
-  (request: vtadmin.IWorkflowSwitchTrafficRequest, callback: vtadmin.VTAdmin.WorkflowSwitchTrafficCallback): void;
-  (request: vtadmin.IWorkflowSwitchTrafficRequest): Promise<vtctldata.WorkflowSwitchTrafficResponse>;
-  readonly name: "WorkflowSwitchTraffic";
-  readonly path: "/vtadmin.VTAdmin/WorkflowSwitchTraffic";
-  readonly requestType: "WorkflowSwitchTrafficRequest";
-  readonly responseType: "vtctldata.WorkflowSwitchTrafficResponse";
-  readonly requestStream: undefined;
-  readonly responseStream: undefined;
-};
+          (request: vtadmin.IWorkflowSwitchTrafficRequest, callback: vtadmin.VTAdmin.WorkflowSwitchTrafficCallback): void;
+          (request: vtadmin.IWorkflowSwitchTrafficRequest): Promise<vtctldata.WorkflowSwitchTrafficResponse>;
+          readonly name: "WorkflowSwitchTraffic";
+          readonly path: "/vtadmin.VTAdmin/WorkflowSwitchTraffic";
+          readonly requestType: "WorkflowSwitchTrafficRequest";
+          readonly responseType: "vtctldata.WorkflowSwitchTrafficResponse";
+          readonly requestStream: undefined;
+          readonly responseStream: undefined;
+        };
     }
 
     /**
@@ -1650,7 +1650,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.Cluster.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** Cluster id. */
@@ -1749,7 +1749,7 @@ export namespace vtadmin {
             /** Cluster name */
             name?: (string|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -1773,7 +1773,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.ClusterBackup.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ClusterBackup cluster. */
@@ -1872,7 +1872,7 @@ export namespace vtadmin {
             /** ClusterBackup backup */
             backup?: (mysqlctl.BackupInfo.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -1896,7 +1896,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.ClusterCellsAliases.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ClusterCellsAliases cluster. */
@@ -1995,7 +1995,7 @@ export namespace vtadmin {
             /** ClusterCellsAliases aliases */
             aliases?: ({ [k: string]: topodata.CellsAlias.$Properties }|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -2019,7 +2019,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.ClusterCellInfo.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ClusterCellInfo cluster. */
@@ -2124,7 +2124,7 @@ export namespace vtadmin {
             /** ClusterCellInfo cell_info */
             cell_info?: (topodata.CellInfo.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -2148,7 +2148,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.ClusterShardReplicationPosition.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ClusterShardReplicationPosition cluster. */
@@ -2259,7 +2259,7 @@ export namespace vtadmin {
             /** ClusterShardReplicationPosition position_info */
             position_info?: (vtctldata.ShardReplicationPositionsResponse.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -2283,7 +2283,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.ClusterWorkflows.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ClusterWorkflows workflows. */
@@ -2382,7 +2382,7 @@ export namespace vtadmin {
             /** ClusterWorkflows warnings */
             warnings?: (string[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -2406,7 +2406,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.Keyspace.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** Keyspace cluster. */
@@ -2511,7 +2511,7 @@ export namespace vtadmin {
             /** Keyspace shards */
             shards?: ({ [k: string]: vtctldata.Shard.$Properties }|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -2535,7 +2535,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.Schema.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** Schema cluster. */
@@ -2646,7 +2646,7 @@ export namespace vtadmin {
             /** Schema table_sizes */
             table_sizes?: ({ [k: string]: vtadmin.Schema.TableSize.$Properties }|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -2669,7 +2669,7 @@ export namespace vtadmin {
              */
             constructor(properties?: vtadmin.Schema.ShardTableSize.$Properties);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
 
             /** ShardTableSize row_count. */
@@ -2768,7 +2768,7 @@ export namespace vtadmin {
                 /** ShardTableSize data_length */
                 data_length?: (number|Long|null);
 
-                /** Unknown fields preserved while decoding */
+                /** Unknown fields preserved while decoding when enabled */
                 $unknowns?: Uint8Array[];
             }
 
@@ -2792,7 +2792,7 @@ export namespace vtadmin {
              */
             constructor(properties?: vtadmin.Schema.TableSize.$Properties);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
 
             /** TableSize row_count. */
@@ -2897,7 +2897,7 @@ export namespace vtadmin {
                 /** TableSize by_shard */
                 by_shard?: ({ [k: string]: vtadmin.Schema.ShardTableSize.$Properties }|null);
 
-                /** Unknown fields preserved while decoding */
+                /** Unknown fields preserved while decoding when enabled */
                 $unknowns?: Uint8Array[];
             }
 
@@ -2922,7 +2922,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.SchemaMigration.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** SchemaMigration cluster. */
@@ -3021,7 +3021,7 @@ export namespace vtadmin {
             /** SchemaMigration schema_migration */
             schema_migration?: (vtctldata.SchemaMigration.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -3045,7 +3045,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.Shard.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** Shard cluster. */
@@ -3144,7 +3144,7 @@ export namespace vtadmin {
             /** Shard shard */
             shard?: (vtctldata.Shard.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -3168,7 +3168,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.SrvVSchema.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** SrvVSchema cell. */
@@ -3273,7 +3273,7 @@ export namespace vtadmin {
             /** SrvVSchema srv_v_schema */
             srv_v_schema?: (vschema.SrvVSchema.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -3297,7 +3297,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.Tablet.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** Tablet cluster. */
@@ -3408,7 +3408,7 @@ export namespace vtadmin {
             /** Tablet FQDN */
             FQDN?: (string|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -3445,7 +3445,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.VSchema.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** VSchema cluster. */
@@ -3550,7 +3550,7 @@ export namespace vtadmin {
             /** VSchema v_schema */
             v_schema?: (vschema.Keyspace.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -3574,7 +3574,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.Vtctld.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** Vtctld hostname. */
@@ -3679,7 +3679,7 @@ export namespace vtadmin {
             /** Vtctld FQDN */
             FQDN?: (string|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -3703,7 +3703,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.VTGate.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** VTGate hostname. */
@@ -3826,7 +3826,7 @@ export namespace vtadmin {
             /** VTGate FQDN */
             FQDN?: (string|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -3850,7 +3850,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.Workflow.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** Workflow cluster. */
@@ -3955,7 +3955,7 @@ export namespace vtadmin {
             /** Workflow workflow */
             workflow?: (vtctldata.Workflow.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -3979,7 +3979,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.WorkflowDeleteRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** WorkflowDeleteRequest cluster_id. */
@@ -4078,7 +4078,7 @@ export namespace vtadmin {
             /** WorkflowDeleteRequest request */
             request?: (vtctldata.WorkflowDeleteRequest.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -4102,7 +4102,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.WorkflowSwitchTrafficRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** WorkflowSwitchTrafficRequest cluster_id. */
@@ -4201,7 +4201,7 @@ export namespace vtadmin {
             /** WorkflowSwitchTrafficRequest request */
             request?: (vtctldata.WorkflowSwitchTrafficRequest.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -4225,7 +4225,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.ApplySchemaRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ApplySchemaRequest cluster_id. */
@@ -4336,7 +4336,7 @@ export namespace vtadmin {
             /** ApplySchemaRequest request */
             request?: (vtctldata.ApplySchemaRequest.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -4360,7 +4360,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.CancelSchemaMigrationRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** CancelSchemaMigrationRequest cluster_id. */
@@ -4459,7 +4459,7 @@ export namespace vtadmin {
             /** CancelSchemaMigrationRequest request */
             request?: (vtctldata.CancelSchemaMigrationRequest.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -4483,7 +4483,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.CleanupSchemaMigrationRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** CleanupSchemaMigrationRequest cluster_id. */
@@ -4582,7 +4582,7 @@ export namespace vtadmin {
             /** CleanupSchemaMigrationRequest request */
             request?: (vtctldata.CleanupSchemaMigrationRequest.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -4606,7 +4606,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.CompleteSchemaMigrationRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** CompleteSchemaMigrationRequest cluster_id. */
@@ -4705,7 +4705,7 @@ export namespace vtadmin {
             /** CompleteSchemaMigrationRequest request */
             request?: (vtctldata.CompleteSchemaMigrationRequest.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -4729,7 +4729,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.ConcludeTransactionRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ConcludeTransactionRequest cluster_id. */
@@ -4828,7 +4828,7 @@ export namespace vtadmin {
             /** ConcludeTransactionRequest dtid */
             dtid?: (string|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -4852,7 +4852,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.CreateKeyspaceRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** CreateKeyspaceRequest cluster_id. */
@@ -4951,7 +4951,7 @@ export namespace vtadmin {
             /** CreateKeyspaceRequest options */
             options?: (vtctldata.CreateKeyspaceRequest.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -4975,7 +4975,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.CreateKeyspaceResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** CreateKeyspaceResponse keyspace. */
@@ -5068,7 +5068,7 @@ export namespace vtadmin {
             /** CreateKeyspaceResponse keyspace */
             keyspace?: (vtadmin.Keyspace.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -5092,7 +5092,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.CreateShardRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** CreateShardRequest cluster_id. */
@@ -5191,7 +5191,7 @@ export namespace vtadmin {
             /** CreateShardRequest options */
             options?: (vtctldata.CreateShardRequest.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -5215,7 +5215,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.DeleteKeyspaceRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** DeleteKeyspaceRequest cluster_id. */
@@ -5314,7 +5314,7 @@ export namespace vtadmin {
             /** DeleteKeyspaceRequest options */
             options?: (vtctldata.DeleteKeyspaceRequest.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -5338,7 +5338,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.DeleteShardsRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** DeleteShardsRequest cluster_id. */
@@ -5437,7 +5437,7 @@ export namespace vtadmin {
             /** DeleteShardsRequest options */
             options?: (vtctldata.DeleteShardsRequest.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -5461,7 +5461,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.DeleteTabletRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** DeleteTabletRequest alias. */
@@ -5566,7 +5566,7 @@ export namespace vtadmin {
             /** DeleteTabletRequest allow_primary */
             allow_primary?: (boolean|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -5590,7 +5590,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.DeleteTabletResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** DeleteTabletResponse status. */
@@ -5689,7 +5689,7 @@ export namespace vtadmin {
             /** DeleteTabletResponse cluster */
             cluster?: (vtadmin.Cluster.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -5713,7 +5713,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.EmergencyFailoverShardRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** EmergencyFailoverShardRequest cluster_id. */
@@ -5812,7 +5812,7 @@ export namespace vtadmin {
             /** EmergencyFailoverShardRequest options */
             options?: (vtctldata.EmergencyReparentShardRequest.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -5836,7 +5836,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.EmergencyFailoverShardResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** EmergencyFailoverShardResponse cluster. */
@@ -5953,7 +5953,7 @@ export namespace vtadmin {
             /** EmergencyFailoverShardResponse events */
             events?: (logutil.Event.$Properties[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -5977,7 +5977,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.FindSchemaRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** FindSchemaRequest table. */
@@ -6082,7 +6082,7 @@ export namespace vtadmin {
             /** FindSchemaRequest table_size_options */
             table_size_options?: (vtadmin.GetSchemaTableSizeOptions.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -6106,7 +6106,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.GetBackupsRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** GetBackupsRequest cluster_ids. */
@@ -6217,7 +6217,7 @@ export namespace vtadmin {
             /** GetBackupsRequest request_options */
             request_options?: (vtctldata.GetBackupsRequest.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -6241,7 +6241,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.GetBackupsResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** GetBackupsResponse backups. */
@@ -6334,7 +6334,7 @@ export namespace vtadmin {
             /** GetBackupsResponse backups */
             backups?: (vtadmin.ClusterBackup.$Properties[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -6358,7 +6358,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.GetCellInfosRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** GetCellInfosRequest cluster_ids. */
@@ -6463,7 +6463,7 @@ export namespace vtadmin {
             /** GetCellInfosRequest names_only */
             names_only?: (boolean|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -6487,7 +6487,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.GetCellInfosResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** GetCellInfosResponse cell_infos. */
@@ -6580,7 +6580,7 @@ export namespace vtadmin {
             /** GetCellInfosResponse cell_infos */
             cell_infos?: (vtadmin.ClusterCellInfo.$Properties[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -6604,7 +6604,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.GetCellsAliasesRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** GetCellsAliasesRequest cluster_ids. */
@@ -6697,7 +6697,7 @@ export namespace vtadmin {
             /** GetCellsAliasesRequest cluster_ids */
             cluster_ids?: (string[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -6721,7 +6721,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.GetCellsAliasesResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** GetCellsAliasesResponse aliases. */
@@ -6814,7 +6814,7 @@ export namespace vtadmin {
             /** GetCellsAliasesResponse aliases */
             aliases?: (vtadmin.ClusterCellsAliases.$Properties[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -6838,7 +6838,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.GetClustersRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /**
@@ -6925,7 +6925,7 @@ export namespace vtadmin {
         /** Properties of a GetClustersRequest. */
         interface $Properties {
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -6949,7 +6949,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.GetClustersResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** GetClustersResponse clusters. */
@@ -7042,7 +7042,7 @@ export namespace vtadmin {
             /** GetClustersResponse clusters */
             clusters?: (vtadmin.Cluster.$Properties[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -7066,7 +7066,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.GetFullStatusRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** GetFullStatusRequest cluster_id. */
@@ -7165,7 +7165,7 @@ export namespace vtadmin {
             /** GetFullStatusRequest alias */
             alias?: (topodata.TabletAlias.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -7189,7 +7189,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.GetGatesRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** GetGatesRequest cluster_ids. */
@@ -7282,7 +7282,7 @@ export namespace vtadmin {
             /** GetGatesRequest cluster_ids */
             cluster_ids?: (string[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -7306,7 +7306,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.GetGatesResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** GetGatesResponse gates. */
@@ -7399,7 +7399,7 @@ export namespace vtadmin {
             /** GetGatesResponse gates */
             gates?: (vtadmin.VTGate.$Properties[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -7423,7 +7423,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.GetKeyspaceRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** GetKeyspaceRequest cluster_id. */
@@ -7522,7 +7522,7 @@ export namespace vtadmin {
             /** GetKeyspaceRequest keyspace */
             keyspace?: (string|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -7546,7 +7546,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.GetKeyspacesRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** GetKeyspacesRequest cluster_ids. */
@@ -7639,7 +7639,7 @@ export namespace vtadmin {
             /** GetKeyspacesRequest cluster_ids */
             cluster_ids?: (string[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -7663,7 +7663,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.GetKeyspacesResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** GetKeyspacesResponse keyspaces. */
@@ -7756,7 +7756,7 @@ export namespace vtadmin {
             /** GetKeyspacesResponse keyspaces */
             keyspaces?: (vtadmin.Keyspace.$Properties[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -7780,7 +7780,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.GetSchemaRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** GetSchemaRequest cluster_id. */
@@ -7891,7 +7891,7 @@ export namespace vtadmin {
             /** GetSchemaRequest table_size_options */
             table_size_options?: (vtadmin.GetSchemaTableSizeOptions.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -7915,7 +7915,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.GetSchemasRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** GetSchemasRequest cluster_ids. */
@@ -8014,7 +8014,7 @@ export namespace vtadmin {
             /** GetSchemasRequest table_size_options */
             table_size_options?: (vtadmin.GetSchemaTableSizeOptions.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -8038,7 +8038,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.GetSchemasResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** GetSchemasResponse schemas. */
@@ -8131,7 +8131,7 @@ export namespace vtadmin {
             /** GetSchemasResponse schemas */
             schemas?: (vtadmin.Schema.$Properties[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -8155,7 +8155,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.GetSchemaMigrationsRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** GetSchemaMigrationsRequest cluster_requests. */
@@ -8248,7 +8248,7 @@ export namespace vtadmin {
             /** GetSchemaMigrationsRequest cluster_requests */
             cluster_requests?: (vtadmin.GetSchemaMigrationsRequest.ClusterRequest.$Properties[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -8271,7 +8271,7 @@ export namespace vtadmin {
              */
             constructor(properties?: vtadmin.GetSchemaMigrationsRequest.ClusterRequest.$Properties);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
 
             /** ClusterRequest cluster_id. */
@@ -8370,7 +8370,7 @@ export namespace vtadmin {
                 /** ClusterRequest request */
                 request?: (vtctldata.GetSchemaMigrationsRequest.$Properties|null);
 
-                /** Unknown fields preserved while decoding */
+                /** Unknown fields preserved while decoding when enabled */
                 $unknowns?: Uint8Array[];
             }
 
@@ -8395,7 +8395,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.GetSchemaMigrationsResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** GetSchemaMigrationsResponse schema_migrations. */
@@ -8488,7 +8488,7 @@ export namespace vtadmin {
             /** GetSchemaMigrationsResponse schema_migrations */
             schema_migrations?: (vtadmin.SchemaMigration.$Properties[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -8512,7 +8512,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.GetShardReplicationPositionsRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** GetShardReplicationPositionsRequest cluster_ids. */
@@ -8617,7 +8617,7 @@ export namespace vtadmin {
             /** GetShardReplicationPositionsRequest keyspace_shards */
             keyspace_shards?: (string[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -8641,7 +8641,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.GetShardReplicationPositionsResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** GetShardReplicationPositionsResponse replication_positions. */
@@ -8734,7 +8734,7 @@ export namespace vtadmin {
             /** GetShardReplicationPositionsResponse replication_positions */
             replication_positions?: (vtadmin.ClusterShardReplicationPosition.$Properties[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -8758,7 +8758,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.GetSrvKeyspaceRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** GetSrvKeyspaceRequest cluster_id. */
@@ -8863,7 +8863,7 @@ export namespace vtadmin {
             /** GetSrvKeyspaceRequest cells */
             cells?: (string[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -8887,7 +8887,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.GetSrvKeyspacesRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** GetSrvKeyspacesRequest cluster_ids. */
@@ -8986,7 +8986,7 @@ export namespace vtadmin {
             /** GetSrvKeyspacesRequest cells */
             cells?: (string[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -9010,7 +9010,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.GetSrvKeyspacesResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** GetSrvKeyspacesResponse srv_keyspaces. */
@@ -9103,7 +9103,7 @@ export namespace vtadmin {
             /** GetSrvKeyspacesResponse srv_keyspaces */
             srv_keyspaces?: ({ [k: string]: vtctldata.GetSrvKeyspacesResponse.$Properties }|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -9127,7 +9127,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.GetSrvVSchemaRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** GetSrvVSchemaRequest cluster_id. */
@@ -9226,7 +9226,7 @@ export namespace vtadmin {
             /** GetSrvVSchemaRequest cell */
             cell?: (string|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -9250,7 +9250,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.GetSrvVSchemasRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** GetSrvVSchemasRequest cluster_ids. */
@@ -9349,7 +9349,7 @@ export namespace vtadmin {
             /** GetSrvVSchemasRequest cells */
             cells?: (string[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -9373,7 +9373,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.GetSrvVSchemasResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** GetSrvVSchemasResponse srv_v_schemas. */
@@ -9466,7 +9466,7 @@ export namespace vtadmin {
             /** GetSrvVSchemasResponse srv_v_schemas */
             srv_v_schemas?: (vtadmin.SrvVSchema.$Properties[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -9490,7 +9490,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.GetSchemaTableSizeOptions.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** GetSchemaTableSizeOptions aggregate_sizes. */
@@ -9589,7 +9589,7 @@ export namespace vtadmin {
             /** GetSchemaTableSizeOptions include_non_serving_shards */
             include_non_serving_shards?: (boolean|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -9613,7 +9613,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.GetTabletRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** GetTabletRequest alias. */
@@ -9712,7 +9712,7 @@ export namespace vtadmin {
             /** GetTabletRequest cluster_ids */
             cluster_ids?: (string[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -9736,7 +9736,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.GetTabletsRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** GetTabletsRequest cluster_ids. */
@@ -9829,7 +9829,7 @@ export namespace vtadmin {
             /** GetTabletsRequest cluster_ids */
             cluster_ids?: (string[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -9853,7 +9853,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.GetTabletsResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** GetTabletsResponse tablets. */
@@ -9946,7 +9946,7 @@ export namespace vtadmin {
             /** GetTabletsResponse tablets */
             tablets?: (vtadmin.Tablet.$Properties[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -9970,7 +9970,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.GetTopologyPathRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** GetTopologyPathRequest cluster_id. */
@@ -10069,7 +10069,7 @@ export namespace vtadmin {
             /** GetTopologyPathRequest path */
             path?: (string|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -10093,7 +10093,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.GetTransactionInfoRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** GetTransactionInfoRequest cluster_id. */
@@ -10192,7 +10192,7 @@ export namespace vtadmin {
             /** GetTransactionInfoRequest request */
             request?: (vtctldata.GetTransactionInfoRequest.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -10216,7 +10216,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.GetUnresolvedTransactionsRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** GetUnresolvedTransactionsRequest cluster_id. */
@@ -10321,7 +10321,7 @@ export namespace vtadmin {
             /** GetUnresolvedTransactionsRequest abandon_age */
             abandon_age?: (number|Long|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -10345,7 +10345,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.GetVSchemaRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** GetVSchemaRequest cluster_id. */
@@ -10444,7 +10444,7 @@ export namespace vtadmin {
             /** GetVSchemaRequest keyspace */
             keyspace?: (string|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -10468,7 +10468,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.GetVSchemasRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** GetVSchemasRequest cluster_ids. */
@@ -10561,7 +10561,7 @@ export namespace vtadmin {
             /** GetVSchemasRequest cluster_ids */
             cluster_ids?: (string[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -10585,7 +10585,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.GetVSchemasResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** GetVSchemasResponse v_schemas. */
@@ -10678,7 +10678,7 @@ export namespace vtadmin {
             /** GetVSchemasResponse v_schemas */
             v_schemas?: (vtadmin.VSchema.$Properties[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -10702,7 +10702,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.GetVtctldsRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** GetVtctldsRequest cluster_ids. */
@@ -10795,7 +10795,7 @@ export namespace vtadmin {
             /** GetVtctldsRequest cluster_ids */
             cluster_ids?: (string[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -10819,7 +10819,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.GetVtctldsResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** GetVtctldsResponse vtctlds. */
@@ -10912,7 +10912,7 @@ export namespace vtadmin {
             /** GetVtctldsResponse vtctlds */
             vtctlds?: (vtadmin.Vtctld.$Properties[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -10936,7 +10936,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.GetWorkflowRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** GetWorkflowRequest cluster_id. */
@@ -11047,7 +11047,7 @@ export namespace vtadmin {
             /** GetWorkflowRequest active_only */
             active_only?: (boolean|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -11071,7 +11071,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.GetWorkflowStatusRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** GetWorkflowStatusRequest cluster_id. */
@@ -11176,7 +11176,7 @@ export namespace vtadmin {
             /** GetWorkflowStatusRequest name */
             name?: (string|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -11200,7 +11200,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.StartWorkflowRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** StartWorkflowRequest cluster_id. */
@@ -11305,7 +11305,7 @@ export namespace vtadmin {
             /** StartWorkflowRequest workflow */
             workflow?: (string|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -11329,7 +11329,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.StopWorkflowRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** StopWorkflowRequest cluster_id. */
@@ -11434,7 +11434,7 @@ export namespace vtadmin {
             /** StopWorkflowRequest workflow */
             workflow?: (string|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -11458,7 +11458,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.GetWorkflowsRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** GetWorkflowsRequest cluster_ids. */
@@ -11569,7 +11569,7 @@ export namespace vtadmin {
             /** GetWorkflowsRequest ignore_keyspaces */
             ignore_keyspaces?: (string[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -11593,7 +11593,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.GetWorkflowsResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** GetWorkflowsResponse workflows_by_cluster. */
@@ -11686,7 +11686,7 @@ export namespace vtadmin {
             /** GetWorkflowsResponse workflows_by_cluster */
             workflows_by_cluster?: ({ [k: string]: vtadmin.ClusterWorkflows.$Properties }|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -11710,7 +11710,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.LaunchSchemaMigrationRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** LaunchSchemaMigrationRequest cluster_id. */
@@ -11809,7 +11809,7 @@ export namespace vtadmin {
             /** LaunchSchemaMigrationRequest request */
             request?: (vtctldata.LaunchSchemaMigrationRequest.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -11833,7 +11833,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.MaterializeCreateRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** MaterializeCreateRequest cluster_id. */
@@ -11938,7 +11938,7 @@ export namespace vtadmin {
             /** MaterializeCreateRequest request */
             request?: (vtctldata.MaterializeCreateRequest.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -11962,7 +11962,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.MoveTablesCompleteRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** MoveTablesCompleteRequest cluster_id. */
@@ -12061,7 +12061,7 @@ export namespace vtadmin {
             /** MoveTablesCompleteRequest request */
             request?: (vtctldata.MoveTablesCompleteRequest.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -12085,7 +12085,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.MoveTablesCreateRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** MoveTablesCreateRequest cluster_id. */
@@ -12184,7 +12184,7 @@ export namespace vtadmin {
             /** MoveTablesCreateRequest request */
             request?: (vtctldata.MoveTablesCreateRequest.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -12208,7 +12208,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.PingTabletRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** PingTabletRequest alias. */
@@ -12307,7 +12307,7 @@ export namespace vtadmin {
             /** PingTabletRequest cluster_ids */
             cluster_ids?: (string[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -12331,7 +12331,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.PingTabletResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** PingTabletResponse status. */
@@ -12430,7 +12430,7 @@ export namespace vtadmin {
             /** PingTabletResponse cluster */
             cluster?: (vtadmin.Cluster.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -12454,7 +12454,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.PlannedFailoverShardRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** PlannedFailoverShardRequest cluster_id. */
@@ -12553,7 +12553,7 @@ export namespace vtadmin {
             /** PlannedFailoverShardRequest options */
             options?: (vtctldata.PlannedReparentShardRequest.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -12577,7 +12577,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.PlannedFailoverShardResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** PlannedFailoverShardResponse cluster. */
@@ -12694,7 +12694,7 @@ export namespace vtadmin {
             /** PlannedFailoverShardResponse events */
             events?: (logutil.Event.$Properties[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -12718,7 +12718,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.RebuildKeyspaceGraphRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** RebuildKeyspaceGraphRequest cluster_id. */
@@ -12829,7 +12829,7 @@ export namespace vtadmin {
             /** RebuildKeyspaceGraphRequest allow_partial */
             allow_partial?: (boolean|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -12853,7 +12853,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.RebuildKeyspaceGraphResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** RebuildKeyspaceGraphResponse status. */
@@ -12946,7 +12946,7 @@ export namespace vtadmin {
             /** RebuildKeyspaceGraphResponse status */
             status?: (string|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -12970,7 +12970,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.RefreshStateRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** RefreshStateRequest alias. */
@@ -13069,7 +13069,7 @@ export namespace vtadmin {
             /** RefreshStateRequest cluster_ids */
             cluster_ids?: (string[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -13093,7 +13093,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.RefreshStateResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** RefreshStateResponse status. */
@@ -13192,7 +13192,7 @@ export namespace vtadmin {
             /** RefreshStateResponse cluster */
             cluster?: (vtadmin.Cluster.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -13216,7 +13216,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.ReloadSchemasRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ReloadSchemasRequest keyspaces. */
@@ -13345,7 +13345,7 @@ export namespace vtadmin {
             /** ReloadSchemasRequest include_primary */
             include_primary?: (boolean|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -13369,7 +13369,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.ReloadSchemasResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ReloadSchemasResponse keyspace_results. */
@@ -13474,7 +13474,7 @@ export namespace vtadmin {
             /** ReloadSchemasResponse tablet_results */
             tablet_results?: (vtadmin.ReloadSchemasResponse.TabletResult.$Properties[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -13497,7 +13497,7 @@ export namespace vtadmin {
              */
             constructor(properties?: vtadmin.ReloadSchemasResponse.KeyspaceResult.$Properties);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
 
             /** KeyspaceResult keyspace. */
@@ -13596,7 +13596,7 @@ export namespace vtadmin {
                 /** KeyspaceResult events */
                 events?: (logutil.Event.$Properties[]|null);
 
-                /** Unknown fields preserved while decoding */
+                /** Unknown fields preserved while decoding when enabled */
                 $unknowns?: Uint8Array[];
             }
 
@@ -13620,7 +13620,7 @@ export namespace vtadmin {
              */
             constructor(properties?: vtadmin.ReloadSchemasResponse.ShardResult.$Properties);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
 
             /** ShardResult shard. */
@@ -13719,7 +13719,7 @@ export namespace vtadmin {
                 /** ShardResult events */
                 events?: (logutil.Event.$Properties[]|null);
 
-                /** Unknown fields preserved while decoding */
+                /** Unknown fields preserved while decoding when enabled */
                 $unknowns?: Uint8Array[];
             }
 
@@ -13743,7 +13743,7 @@ export namespace vtadmin {
              */
             constructor(properties?: vtadmin.ReloadSchemasResponse.TabletResult.$Properties);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
 
             /** TabletResult tablet. */
@@ -13842,7 +13842,7 @@ export namespace vtadmin {
                 /** TabletResult result */
                 result?: (string|null);
 
-                /** Unknown fields preserved while decoding */
+                /** Unknown fields preserved while decoding when enabled */
                 $unknowns?: Uint8Array[];
             }
 
@@ -13867,7 +13867,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.ReloadSchemaShardRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ReloadSchemaShardRequest cluster_id. */
@@ -13990,7 +13990,7 @@ export namespace vtadmin {
             /** ReloadSchemaShardRequest concurrency */
             concurrency?: (number|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -14014,7 +14014,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.ReloadSchemaShardResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ReloadSchemaShardResponse events. */
@@ -14107,7 +14107,7 @@ export namespace vtadmin {
             /** ReloadSchemaShardResponse events */
             events?: (logutil.Event.$Properties[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -14131,7 +14131,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.RefreshTabletReplicationSourceRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** RefreshTabletReplicationSourceRequest alias. */
@@ -14230,7 +14230,7 @@ export namespace vtadmin {
             /** RefreshTabletReplicationSourceRequest cluster_ids */
             cluster_ids?: (string[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -14254,7 +14254,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.RefreshTabletReplicationSourceResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** RefreshTabletReplicationSourceResponse keyspace. */
@@ -14365,7 +14365,7 @@ export namespace vtadmin {
             /** RefreshTabletReplicationSourceResponse cluster */
             cluster?: (vtadmin.Cluster.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -14389,7 +14389,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.RemoveKeyspaceCellRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** RemoveKeyspaceCellRequest cluster_id. */
@@ -14506,7 +14506,7 @@ export namespace vtadmin {
             /** RemoveKeyspaceCellRequest recursive */
             recursive?: (boolean|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -14530,7 +14530,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.RemoveKeyspaceCellResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** RemoveKeyspaceCellResponse status. */
@@ -14623,7 +14623,7 @@ export namespace vtadmin {
             /** RemoveKeyspaceCellResponse status */
             status?: (string|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -14647,7 +14647,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.RetrySchemaMigrationRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** RetrySchemaMigrationRequest cluster_id. */
@@ -14746,7 +14746,7 @@ export namespace vtadmin {
             /** RetrySchemaMigrationRequest request */
             request?: (vtctldata.RetrySchemaMigrationRequest.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -14770,7 +14770,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.RunHealthCheckRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** RunHealthCheckRequest alias. */
@@ -14869,7 +14869,7 @@ export namespace vtadmin {
             /** RunHealthCheckRequest cluster_ids */
             cluster_ids?: (string[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -14893,7 +14893,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.RunHealthCheckResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** RunHealthCheckResponse status. */
@@ -14992,7 +14992,7 @@ export namespace vtadmin {
             /** RunHealthCheckResponse cluster */
             cluster?: (vtadmin.Cluster.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -15016,7 +15016,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.ReshardCreateRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ReshardCreateRequest cluster_id. */
@@ -15115,7 +15115,7 @@ export namespace vtadmin {
             /** ReshardCreateRequest request */
             request?: (vtctldata.ReshardCreateRequest.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -15139,7 +15139,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.SetReadOnlyRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** SetReadOnlyRequest alias. */
@@ -15238,7 +15238,7 @@ export namespace vtadmin {
             /** SetReadOnlyRequest cluster_ids */
             cluster_ids?: (string[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -15262,7 +15262,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.SetReadOnlyResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /**
@@ -15349,7 +15349,7 @@ export namespace vtadmin {
         /** Properties of a SetReadOnlyResponse. */
         interface $Properties {
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -15373,7 +15373,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.SetReadWriteRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** SetReadWriteRequest alias. */
@@ -15472,7 +15472,7 @@ export namespace vtadmin {
             /** SetReadWriteRequest cluster_ids */
             cluster_ids?: (string[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -15496,7 +15496,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.SetReadWriteResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /**
@@ -15583,7 +15583,7 @@ export namespace vtadmin {
         /** Properties of a SetReadWriteResponse. */
         interface $Properties {
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -15607,7 +15607,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.StartReplicationRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** StartReplicationRequest alias. */
@@ -15706,7 +15706,7 @@ export namespace vtadmin {
             /** StartReplicationRequest cluster_ids */
             cluster_ids?: (string[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -15730,7 +15730,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.StartReplicationResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** StartReplicationResponse status. */
@@ -15829,7 +15829,7 @@ export namespace vtadmin {
             /** StartReplicationResponse cluster */
             cluster?: (vtadmin.Cluster.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -15853,7 +15853,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.StopReplicationRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** StopReplicationRequest alias. */
@@ -15952,7 +15952,7 @@ export namespace vtadmin {
             /** StopReplicationRequest cluster_ids */
             cluster_ids?: (string[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -15976,7 +15976,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.StopReplicationResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** StopReplicationResponse status. */
@@ -16075,7 +16075,7 @@ export namespace vtadmin {
             /** StopReplicationResponse cluster */
             cluster?: (vtadmin.Cluster.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -16099,7 +16099,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.TabletExternallyPromotedRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** TabletExternallyPromotedRequest alias. */
@@ -16198,7 +16198,7 @@ export namespace vtadmin {
             /** TabletExternallyPromotedRequest cluster_ids */
             cluster_ids?: (string[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -16222,7 +16222,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.TabletExternallyPromotedResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** TabletExternallyPromotedResponse cluster. */
@@ -16339,7 +16339,7 @@ export namespace vtadmin {
             /** TabletExternallyPromotedResponse old_primary */
             old_primary?: (topodata.TabletAlias.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -16363,7 +16363,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.TabletExternallyReparentedRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** TabletExternallyReparentedRequest alias. */
@@ -16462,7 +16462,7 @@ export namespace vtadmin {
             /** TabletExternallyReparentedRequest cluster_ids */
             cluster_ids?: (string[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -16486,7 +16486,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.ValidateRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ValidateRequest cluster_id. */
@@ -16585,7 +16585,7 @@ export namespace vtadmin {
             /** ValidateRequest ping_tablets */
             ping_tablets?: (boolean|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -16609,7 +16609,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.ValidateKeyspaceRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ValidateKeyspaceRequest cluster_id. */
@@ -16714,7 +16714,7 @@ export namespace vtadmin {
             /** ValidateKeyspaceRequest ping_tablets */
             ping_tablets?: (boolean|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -16738,7 +16738,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.ValidateSchemaKeyspaceRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ValidateSchemaKeyspaceRequest cluster_id. */
@@ -16837,7 +16837,7 @@ export namespace vtadmin {
             /** ValidateSchemaKeyspaceRequest keyspace */
             keyspace?: (string|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -16861,7 +16861,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.ValidateShardRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ValidateShardRequest cluster_id. */
@@ -16972,7 +16972,7 @@ export namespace vtadmin {
             /** ValidateShardRequest ping_tablets */
             ping_tablets?: (boolean|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -16996,7 +16996,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.ValidateVersionKeyspaceRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ValidateVersionKeyspaceRequest cluster_id. */
@@ -17095,7 +17095,7 @@ export namespace vtadmin {
             /** ValidateVersionKeyspaceRequest keyspace */
             keyspace?: (string|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -17119,7 +17119,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.ValidateVersionShardRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ValidateVersionShardRequest cluster_id. */
@@ -17224,7 +17224,7 @@ export namespace vtadmin {
             /** ValidateVersionShardRequest shard */
             shard?: (string|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -17248,7 +17248,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.VDiffCreateRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** VDiffCreateRequest cluster_id. */
@@ -17347,7 +17347,7 @@ export namespace vtadmin {
             /** VDiffCreateRequest request */
             request?: (vtctldata.VDiffCreateRequest.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -17371,7 +17371,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.VDiffShowRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** VDiffShowRequest cluster_id. */
@@ -17470,7 +17470,7 @@ export namespace vtadmin {
             /** VDiffShowRequest request */
             request?: (vtctldata.VDiffShowRequest.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -17494,7 +17494,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.VDiffProgress.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** VDiffProgress percentage. */
@@ -17593,7 +17593,7 @@ export namespace vtadmin {
             /** VDiffProgress eta */
             eta?: (string|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -17617,7 +17617,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.VDiffShardReport.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** VDiffShardReport state. */
@@ -17740,7 +17740,7 @@ export namespace vtadmin {
             /** VDiffShardReport progress */
             progress?: (vtadmin.VDiffProgress.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -17764,7 +17764,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.VDiffShowResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** VDiffShowResponse shard_report. */
@@ -17857,7 +17857,7 @@ export namespace vtadmin {
             /** VDiffShowResponse shard_report */
             shard_report?: ({ [k: string]: vtadmin.VDiffShardReport.$Properties }|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -17881,7 +17881,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.VTExplainRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** VTExplainRequest cluster. */
@@ -17986,7 +17986,7 @@ export namespace vtadmin {
             /** VTExplainRequest sql */
             sql?: (string|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -18010,7 +18010,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.VTExplainResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** VTExplainResponse response. */
@@ -18103,7 +18103,7 @@ export namespace vtadmin {
             /** VTExplainResponse response */
             response?: (string|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -18127,7 +18127,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.VExplainRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** VExplainRequest cluster_id. */
@@ -18232,7 +18232,7 @@ export namespace vtadmin {
             /** VExplainRequest sql */
             sql?: (string|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -18256,7 +18256,7 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.VExplainResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** VExplainResponse response. */
@@ -18349,7 +18349,7 @@ export namespace vtadmin {
             /** VExplainResponse response */
             response?: (string|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -18393,7 +18393,7 @@ export namespace logutil {
          */
         constructor(properties?: logutil.Event.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** Event time. */
@@ -18510,7 +18510,7 @@ export namespace logutil {
             /** Event value */
             value?: (string|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -18538,7 +18538,7 @@ export namespace vttime {
          */
         constructor(properties?: vttime.Time.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** Time seconds. */
@@ -18637,7 +18637,7 @@ export namespace vttime {
             /** Time nanoseconds */
             nanoseconds?: (number|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -18661,7 +18661,7 @@ export namespace vttime {
          */
         constructor(properties?: vttime.Duration.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** Duration seconds. */
@@ -18760,7 +18760,7 @@ export namespace vttime {
             /** Duration nanos */
             nanos?: (number|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -18788,7 +18788,7 @@ export namespace mysqlctl {
          */
         constructor(properties?: mysqlctl.StartRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** StartRequest mysqld_args. */
@@ -18881,7 +18881,7 @@ export namespace mysqlctl {
             /** StartRequest mysqld_args */
             mysqld_args?: (string[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -18905,7 +18905,7 @@ export namespace mysqlctl {
          */
         constructor(properties?: mysqlctl.StartResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /**
@@ -18992,7 +18992,7 @@ export namespace mysqlctl {
         /** Properties of a StartResponse. */
         interface $Properties {
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -19016,7 +19016,7 @@ export namespace mysqlctl {
          */
         constructor(properties?: mysqlctl.ShutdownRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ShutdownRequest wait_for_mysqld. */
@@ -19115,7 +19115,7 @@ export namespace mysqlctl {
             /** ShutdownRequest mysql_shutdown_timeout */
             mysql_shutdown_timeout?: (vttime.Duration.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -19139,7 +19139,7 @@ export namespace mysqlctl {
          */
         constructor(properties?: mysqlctl.ShutdownResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /**
@@ -19226,7 +19226,7 @@ export namespace mysqlctl {
         /** Properties of a ShutdownResponse. */
         interface $Properties {
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -19250,7 +19250,7 @@ export namespace mysqlctl {
          */
         constructor(properties?: mysqlctl.RunMysqlUpgradeRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /**
@@ -19337,7 +19337,7 @@ export namespace mysqlctl {
         /** Properties of a RunMysqlUpgradeRequest. */
         interface $Properties {
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -19361,7 +19361,7 @@ export namespace mysqlctl {
          */
         constructor(properties?: mysqlctl.RunMysqlUpgradeResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /**
@@ -19448,7 +19448,7 @@ export namespace mysqlctl {
         /** Properties of a RunMysqlUpgradeResponse. */
         interface $Properties {
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -19472,7 +19472,7 @@ export namespace mysqlctl {
          */
         constructor(properties?: mysqlctl.ApplyBinlogFileRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ApplyBinlogFileRequest binlog_file_name. */
@@ -19577,7 +19577,7 @@ export namespace mysqlctl {
             /** ApplyBinlogFileRequest binlog_restore_datetime */
             binlog_restore_datetime?: (vttime.Time.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -19601,7 +19601,7 @@ export namespace mysqlctl {
          */
         constructor(properties?: mysqlctl.ApplyBinlogFileResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /**
@@ -19688,7 +19688,7 @@ export namespace mysqlctl {
         /** Properties of an ApplyBinlogFileResponse. */
         interface $Properties {
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -19712,7 +19712,7 @@ export namespace mysqlctl {
          */
         constructor(properties?: mysqlctl.ReadBinlogFilesTimestampsRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ReadBinlogFilesTimestampsRequest binlog_file_names. */
@@ -19805,7 +19805,7 @@ export namespace mysqlctl {
             /** ReadBinlogFilesTimestampsRequest binlog_file_names */
             binlog_file_names?: (string[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -19829,7 +19829,7 @@ export namespace mysqlctl {
          */
         constructor(properties?: mysqlctl.ReadBinlogFilesTimestampsResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ReadBinlogFilesTimestampsResponse first_timestamp. */
@@ -19940,7 +19940,7 @@ export namespace mysqlctl {
             /** ReadBinlogFilesTimestampsResponse last_timestamp_binlog */
             last_timestamp_binlog?: (string|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -19964,7 +19964,7 @@ export namespace mysqlctl {
          */
         constructor(properties?: mysqlctl.ReinitConfigRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /**
@@ -20051,7 +20051,7 @@ export namespace mysqlctl {
         /** Properties of a ReinitConfigRequest. */
         interface $Properties {
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -20075,7 +20075,7 @@ export namespace mysqlctl {
          */
         constructor(properties?: mysqlctl.ReinitConfigResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /**
@@ -20162,7 +20162,7 @@ export namespace mysqlctl {
         /** Properties of a ReinitConfigResponse. */
         interface $Properties {
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -20186,7 +20186,7 @@ export namespace mysqlctl {
          */
         constructor(properties?: mysqlctl.RefreshConfigRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /**
@@ -20273,7 +20273,7 @@ export namespace mysqlctl {
         /** Properties of a RefreshConfigRequest. */
         interface $Properties {
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -20297,7 +20297,7 @@ export namespace mysqlctl {
          */
         constructor(properties?: mysqlctl.RefreshConfigResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /**
@@ -20384,7 +20384,7 @@ export namespace mysqlctl {
         /** Properties of a RefreshConfigResponse. */
         interface $Properties {
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -20408,7 +20408,7 @@ export namespace mysqlctl {
          */
         constructor(properties?: mysqlctl.VersionStringRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /**
@@ -20495,7 +20495,7 @@ export namespace mysqlctl {
         /** Properties of a VersionStringRequest. */
         interface $Properties {
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -20519,7 +20519,7 @@ export namespace mysqlctl {
          */
         constructor(properties?: mysqlctl.VersionStringResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** VersionStringResponse version. */
@@ -20612,7 +20612,7 @@ export namespace mysqlctl {
             /** VersionStringResponse version */
             version?: (string|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -20636,7 +20636,7 @@ export namespace mysqlctl {
          */
         constructor(properties?: mysqlctl.HostMetricsRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /**
@@ -20723,7 +20723,7 @@ export namespace mysqlctl {
         /** Properties of a HostMetricsRequest. */
         interface $Properties {
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -20747,7 +20747,7 @@ export namespace mysqlctl {
          */
         constructor(properties?: mysqlctl.HostMetricsResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** HostMetricsResponse metrics. */
@@ -20840,7 +20840,7 @@ export namespace mysqlctl {
             /** HostMetricsResponse metrics */
             metrics?: ({ [k: string]: mysqlctl.HostMetricsResponse.Metric.$Properties }|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -20863,7 +20863,7 @@ export namespace mysqlctl {
              */
             constructor(properties?: mysqlctl.HostMetricsResponse.Metric.$Properties);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
 
             /** Metric name. */
@@ -20968,7 +20968,7 @@ export namespace mysqlctl {
                 /** Metric error */
                 error?: (vtrpc.RPCError.$Properties|null);
 
-                /** Unknown fields preserved while decoding */
+                /** Unknown fields preserved while decoding when enabled */
                 $unknowns?: Uint8Array[];
             }
 
@@ -21036,15 +21036,15 @@ export namespace mysqlctl {
 
         /** Calls Start. */
         type Start = {
-  (request: mysqlctl.IStartRequest, callback: mysqlctl.MysqlCtl.StartCallback): void;
-  (request: mysqlctl.IStartRequest): Promise<mysqlctl.StartResponse>;
-  readonly name: "Start";
-  readonly path: "/mysqlctl.MysqlCtl/Start";
-  readonly requestType: "StartRequest";
-  readonly responseType: "StartResponse";
-  readonly requestStream: undefined;
-  readonly responseStream: undefined;
-};
+          (request: mysqlctl.IStartRequest, callback: mysqlctl.MysqlCtl.StartCallback): void;
+          (request: mysqlctl.IStartRequest): Promise<mysqlctl.StartResponse>;
+          readonly name: "Start";
+          readonly path: "/mysqlctl.MysqlCtl/Start";
+          readonly requestType: "StartRequest";
+          readonly responseType: "StartResponse";
+          readonly requestStream: undefined;
+          readonly responseStream: undefined;
+        };
 
         /**
          * Callback as used by {@link mysqlctl.MysqlCtl#shutdown}.
@@ -21055,15 +21055,15 @@ export namespace mysqlctl {
 
         /** Calls Shutdown. */
         type Shutdown = {
-  (request: mysqlctl.IShutdownRequest, callback: mysqlctl.MysqlCtl.ShutdownCallback): void;
-  (request: mysqlctl.IShutdownRequest): Promise<mysqlctl.ShutdownResponse>;
-  readonly name: "Shutdown";
-  readonly path: "/mysqlctl.MysqlCtl/Shutdown";
-  readonly requestType: "ShutdownRequest";
-  readonly responseType: "ShutdownResponse";
-  readonly requestStream: undefined;
-  readonly responseStream: undefined;
-};
+          (request: mysqlctl.IShutdownRequest, callback: mysqlctl.MysqlCtl.ShutdownCallback): void;
+          (request: mysqlctl.IShutdownRequest): Promise<mysqlctl.ShutdownResponse>;
+          readonly name: "Shutdown";
+          readonly path: "/mysqlctl.MysqlCtl/Shutdown";
+          readonly requestType: "ShutdownRequest";
+          readonly responseType: "ShutdownResponse";
+          readonly requestStream: undefined;
+          readonly responseStream: undefined;
+        };
 
         /**
          * Callback as used by {@link mysqlctl.MysqlCtl#runMysqlUpgrade}.
@@ -21074,15 +21074,15 @@ export namespace mysqlctl {
 
         /** Calls RunMysqlUpgrade. */
         type RunMysqlUpgrade = {
-  (request: mysqlctl.IRunMysqlUpgradeRequest, callback: mysqlctl.MysqlCtl.RunMysqlUpgradeCallback): void;
-  (request: mysqlctl.IRunMysqlUpgradeRequest): Promise<mysqlctl.RunMysqlUpgradeResponse>;
-  readonly name: "RunMysqlUpgrade";
-  readonly path: "/mysqlctl.MysqlCtl/RunMysqlUpgrade";
-  readonly requestType: "RunMysqlUpgradeRequest";
-  readonly responseType: "RunMysqlUpgradeResponse";
-  readonly requestStream: undefined;
-  readonly responseStream: undefined;
-};
+          (request: mysqlctl.IRunMysqlUpgradeRequest, callback: mysqlctl.MysqlCtl.RunMysqlUpgradeCallback): void;
+          (request: mysqlctl.IRunMysqlUpgradeRequest): Promise<mysqlctl.RunMysqlUpgradeResponse>;
+          readonly name: "RunMysqlUpgrade";
+          readonly path: "/mysqlctl.MysqlCtl/RunMysqlUpgrade";
+          readonly requestType: "RunMysqlUpgradeRequest";
+          readonly responseType: "RunMysqlUpgradeResponse";
+          readonly requestStream: undefined;
+          readonly responseStream: undefined;
+        };
 
         /**
          * Callback as used by {@link mysqlctl.MysqlCtl#applyBinlogFile}.
@@ -21093,15 +21093,15 @@ export namespace mysqlctl {
 
         /** Calls ApplyBinlogFile. */
         type ApplyBinlogFile = {
-  (request: mysqlctl.IApplyBinlogFileRequest, callback: mysqlctl.MysqlCtl.ApplyBinlogFileCallback): void;
-  (request: mysqlctl.IApplyBinlogFileRequest): Promise<mysqlctl.ApplyBinlogFileResponse>;
-  readonly name: "ApplyBinlogFile";
-  readonly path: "/mysqlctl.MysqlCtl/ApplyBinlogFile";
-  readonly requestType: "ApplyBinlogFileRequest";
-  readonly responseType: "ApplyBinlogFileResponse";
-  readonly requestStream: undefined;
-  readonly responseStream: undefined;
-};
+          (request: mysqlctl.IApplyBinlogFileRequest, callback: mysqlctl.MysqlCtl.ApplyBinlogFileCallback): void;
+          (request: mysqlctl.IApplyBinlogFileRequest): Promise<mysqlctl.ApplyBinlogFileResponse>;
+          readonly name: "ApplyBinlogFile";
+          readonly path: "/mysqlctl.MysqlCtl/ApplyBinlogFile";
+          readonly requestType: "ApplyBinlogFileRequest";
+          readonly responseType: "ApplyBinlogFileResponse";
+          readonly requestStream: undefined;
+          readonly responseStream: undefined;
+        };
 
         /**
          * Callback as used by {@link mysqlctl.MysqlCtl#readBinlogFilesTimestamps}.
@@ -21112,15 +21112,15 @@ export namespace mysqlctl {
 
         /** Calls ReadBinlogFilesTimestamps. */
         type ReadBinlogFilesTimestamps = {
-  (request: mysqlctl.IReadBinlogFilesTimestampsRequest, callback: mysqlctl.MysqlCtl.ReadBinlogFilesTimestampsCallback): void;
-  (request: mysqlctl.IReadBinlogFilesTimestampsRequest): Promise<mysqlctl.ReadBinlogFilesTimestampsResponse>;
-  readonly name: "ReadBinlogFilesTimestamps";
-  readonly path: "/mysqlctl.MysqlCtl/ReadBinlogFilesTimestamps";
-  readonly requestType: "ReadBinlogFilesTimestampsRequest";
-  readonly responseType: "ReadBinlogFilesTimestampsResponse";
-  readonly requestStream: undefined;
-  readonly responseStream: undefined;
-};
+          (request: mysqlctl.IReadBinlogFilesTimestampsRequest, callback: mysqlctl.MysqlCtl.ReadBinlogFilesTimestampsCallback): void;
+          (request: mysqlctl.IReadBinlogFilesTimestampsRequest): Promise<mysqlctl.ReadBinlogFilesTimestampsResponse>;
+          readonly name: "ReadBinlogFilesTimestamps";
+          readonly path: "/mysqlctl.MysqlCtl/ReadBinlogFilesTimestamps";
+          readonly requestType: "ReadBinlogFilesTimestampsRequest";
+          readonly responseType: "ReadBinlogFilesTimestampsResponse";
+          readonly requestStream: undefined;
+          readonly responseStream: undefined;
+        };
 
         /**
          * Callback as used by {@link mysqlctl.MysqlCtl#reinitConfig}.
@@ -21131,15 +21131,15 @@ export namespace mysqlctl {
 
         /** Calls ReinitConfig. */
         type ReinitConfig = {
-  (request: mysqlctl.IReinitConfigRequest, callback: mysqlctl.MysqlCtl.ReinitConfigCallback): void;
-  (request: mysqlctl.IReinitConfigRequest): Promise<mysqlctl.ReinitConfigResponse>;
-  readonly name: "ReinitConfig";
-  readonly path: "/mysqlctl.MysqlCtl/ReinitConfig";
-  readonly requestType: "ReinitConfigRequest";
-  readonly responseType: "ReinitConfigResponse";
-  readonly requestStream: undefined;
-  readonly responseStream: undefined;
-};
+          (request: mysqlctl.IReinitConfigRequest, callback: mysqlctl.MysqlCtl.ReinitConfigCallback): void;
+          (request: mysqlctl.IReinitConfigRequest): Promise<mysqlctl.ReinitConfigResponse>;
+          readonly name: "ReinitConfig";
+          readonly path: "/mysqlctl.MysqlCtl/ReinitConfig";
+          readonly requestType: "ReinitConfigRequest";
+          readonly responseType: "ReinitConfigResponse";
+          readonly requestStream: undefined;
+          readonly responseStream: undefined;
+        };
 
         /**
          * Callback as used by {@link mysqlctl.MysqlCtl#refreshConfig}.
@@ -21150,15 +21150,15 @@ export namespace mysqlctl {
 
         /** Calls RefreshConfig. */
         type RefreshConfig = {
-  (request: mysqlctl.IRefreshConfigRequest, callback: mysqlctl.MysqlCtl.RefreshConfigCallback): void;
-  (request: mysqlctl.IRefreshConfigRequest): Promise<mysqlctl.RefreshConfigResponse>;
-  readonly name: "RefreshConfig";
-  readonly path: "/mysqlctl.MysqlCtl/RefreshConfig";
-  readonly requestType: "RefreshConfigRequest";
-  readonly responseType: "RefreshConfigResponse";
-  readonly requestStream: undefined;
-  readonly responseStream: undefined;
-};
+          (request: mysqlctl.IRefreshConfigRequest, callback: mysqlctl.MysqlCtl.RefreshConfigCallback): void;
+          (request: mysqlctl.IRefreshConfigRequest): Promise<mysqlctl.RefreshConfigResponse>;
+          readonly name: "RefreshConfig";
+          readonly path: "/mysqlctl.MysqlCtl/RefreshConfig";
+          readonly requestType: "RefreshConfigRequest";
+          readonly responseType: "RefreshConfigResponse";
+          readonly requestStream: undefined;
+          readonly responseStream: undefined;
+        };
 
         /**
          * Callback as used by {@link mysqlctl.MysqlCtl#versionString}.
@@ -21169,15 +21169,15 @@ export namespace mysqlctl {
 
         /** Calls VersionString. */
         type VersionString = {
-  (request: mysqlctl.IVersionStringRequest, callback: mysqlctl.MysqlCtl.VersionStringCallback): void;
-  (request: mysqlctl.IVersionStringRequest): Promise<mysqlctl.VersionStringResponse>;
-  readonly name: "VersionString";
-  readonly path: "/mysqlctl.MysqlCtl/VersionString";
-  readonly requestType: "VersionStringRequest";
-  readonly responseType: "VersionStringResponse";
-  readonly requestStream: undefined;
-  readonly responseStream: undefined;
-};
+          (request: mysqlctl.IVersionStringRequest, callback: mysqlctl.MysqlCtl.VersionStringCallback): void;
+          (request: mysqlctl.IVersionStringRequest): Promise<mysqlctl.VersionStringResponse>;
+          readonly name: "VersionString";
+          readonly path: "/mysqlctl.MysqlCtl/VersionString";
+          readonly requestType: "VersionStringRequest";
+          readonly responseType: "VersionStringResponse";
+          readonly requestStream: undefined;
+          readonly responseStream: undefined;
+        };
 
         /**
          * Callback as used by {@link mysqlctl.MysqlCtl#hostMetrics}.
@@ -21188,15 +21188,15 @@ export namespace mysqlctl {
 
         /** Calls HostMetrics. */
         type HostMetrics = {
-  (request: mysqlctl.IHostMetricsRequest, callback: mysqlctl.MysqlCtl.HostMetricsCallback): void;
-  (request: mysqlctl.IHostMetricsRequest): Promise<mysqlctl.HostMetricsResponse>;
-  readonly name: "HostMetrics";
-  readonly path: "/mysqlctl.MysqlCtl/HostMetrics";
-  readonly requestType: "HostMetricsRequest";
-  readonly responseType: "HostMetricsResponse";
-  readonly requestStream: undefined;
-  readonly responseStream: undefined;
-};
+          (request: mysqlctl.IHostMetricsRequest, callback: mysqlctl.MysqlCtl.HostMetricsCallback): void;
+          (request: mysqlctl.IHostMetricsRequest): Promise<mysqlctl.HostMetricsResponse>;
+          readonly name: "HostMetrics";
+          readonly path: "/mysqlctl.MysqlCtl/HostMetrics";
+          readonly requestType: "HostMetricsRequest";
+          readonly responseType: "HostMetricsResponse";
+          readonly requestStream: undefined;
+          readonly responseStream: undefined;
+        };
     }
 
     /**
@@ -21215,7 +21215,7 @@ export namespace mysqlctl {
          */
         constructor(properties?: mysqlctl.BackupInfo.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** BackupInfo name. */
@@ -21350,7 +21350,7 @@ export namespace mysqlctl {
             /** BackupInfo status */
             status?: (mysqlctl.BackupInfo.Status|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -21397,7 +21397,7 @@ export namespace topodata {
          */
         constructor(properties?: topodata.KeyRange.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** KeyRange start. */
@@ -21496,7 +21496,7 @@ export namespace topodata {
             /** KeyRange end */
             end?: (Uint8Array|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -21530,7 +21530,7 @@ export namespace topodata {
          */
         constructor(properties?: topodata.TabletAlias.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** TabletAlias cell. */
@@ -21629,7 +21629,7 @@ export namespace topodata {
             /** TabletAlias uid */
             uid?: (number|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -21690,7 +21690,7 @@ export namespace topodata {
          */
         constructor(properties?: topodata.Tablet.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** Tablet alias. */
@@ -21867,7 +21867,7 @@ export namespace topodata {
             /** Tablet tablet_shutdown_time */
             tablet_shutdown_time?: (vttime.Time.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -21891,7 +21891,7 @@ export namespace topodata {
          */
         constructor(properties?: topodata.Shard.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** Shard primary_alias. */
@@ -22020,7 +22020,7 @@ export namespace topodata {
             /** Shard vtorc_state */
             vtorc_state?: (vtorcdata.Shard.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -22043,7 +22043,7 @@ export namespace topodata {
              */
             constructor(properties?: topodata.Shard.SourceShard.$Properties);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
 
             /** SourceShard uid. */
@@ -22160,7 +22160,7 @@ export namespace topodata {
                 /** SourceShard tables */
                 tables?: (string[]|null);
 
-                /** Unknown fields preserved while decoding */
+                /** Unknown fields preserved while decoding when enabled */
                 $unknowns?: Uint8Array[];
             }
 
@@ -22184,7 +22184,7 @@ export namespace topodata {
              */
             constructor(properties?: topodata.Shard.TabletControl.$Properties);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
 
             /** TabletControl tablet_type. */
@@ -22301,7 +22301,7 @@ export namespace topodata {
                 /** TabletControl allow_reads */
                 allow_reads?: (boolean|null);
 
-                /** Unknown fields preserved while decoding */
+                /** Unknown fields preserved while decoding when enabled */
                 $unknowns?: Uint8Array[];
             }
 
@@ -22326,7 +22326,7 @@ export namespace topodata {
          */
         constructor(properties?: topodata.Keyspace.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** Keyspace keyspace_type. */
@@ -22461,7 +22461,7 @@ export namespace topodata {
             /** Keyspace query_throttler_config */
             query_throttler_config?: (querythrottler.Config.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -22485,7 +22485,7 @@ export namespace topodata {
          */
         constructor(properties?: topodata.ShardReplication.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ShardReplication nodes. */
@@ -22578,7 +22578,7 @@ export namespace topodata {
             /** ShardReplication nodes */
             nodes?: (topodata.ShardReplication.Node.$Properties[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -22601,7 +22601,7 @@ export namespace topodata {
              */
             constructor(properties?: topodata.ShardReplication.Node.$Properties);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
 
             /** Node tablet_alias. */
@@ -22694,7 +22694,7 @@ export namespace topodata {
                 /** Node tablet_alias */
                 tablet_alias?: (topodata.TabletAlias.$Properties|null);
 
-                /** Unknown fields preserved while decoding */
+                /** Unknown fields preserved while decoding when enabled */
                 $unknowns?: Uint8Array[];
             }
 
@@ -22719,7 +22719,7 @@ export namespace topodata {
          */
         constructor(properties?: topodata.ShardReplicationError.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ShardReplicationError type. */
@@ -22818,7 +22818,7 @@ export namespace topodata {
             /** ShardReplicationError tablet_alias */
             tablet_alias?: (topodata.TabletAlias.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -22855,7 +22855,7 @@ export namespace topodata {
          */
         constructor(properties?: topodata.ShardReference.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ShardReference name. */
@@ -22954,7 +22954,7 @@ export namespace topodata {
             /** ShardReference key_range */
             key_range?: (topodata.KeyRange.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -22978,7 +22978,7 @@ export namespace topodata {
          */
         constructor(properties?: topodata.ShardTabletControl.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ShardTabletControl name. */
@@ -23083,7 +23083,7 @@ export namespace topodata {
             /** ShardTabletControl query_service_disabled */
             query_service_disabled?: (boolean|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -23107,7 +23107,7 @@ export namespace topodata {
          */
         constructor(properties?: topodata.ThrottledAppRule.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ThrottledAppRule name. */
@@ -23218,7 +23218,7 @@ export namespace topodata {
             /** ThrottledAppRule exempt */
             exempt?: (boolean|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -23242,7 +23242,7 @@ export namespace topodata {
          */
         constructor(properties?: topodata.ThrottlerConfig.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ThrottlerConfig enabled. */
@@ -23371,7 +23371,7 @@ export namespace topodata {
             /** ThrottlerConfig metric_thresholds */
             metric_thresholds?: ({ [k: string]: number }|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -23394,7 +23394,7 @@ export namespace topodata {
              */
             constructor(properties?: topodata.ThrottlerConfig.MetricNames.$Properties);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
 
             /** MetricNames names. */
@@ -23487,7 +23487,7 @@ export namespace topodata {
                 /** MetricNames names */
                 names?: (string[]|null);
 
-                /** Unknown fields preserved while decoding */
+                /** Unknown fields preserved while decoding when enabled */
                 $unknowns?: Uint8Array[];
             }
 
@@ -23512,7 +23512,7 @@ export namespace topodata {
          */
         constructor(properties?: topodata.SrvKeyspace.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** SrvKeyspace partitions. */
@@ -23617,7 +23617,7 @@ export namespace topodata {
             /** SrvKeyspace query_throttler_config */
             query_throttler_config?: (querythrottler.Config.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -23640,7 +23640,7 @@ export namespace topodata {
              */
             constructor(properties?: topodata.SrvKeyspace.KeyspacePartition.$Properties);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
 
             /** KeyspacePartition served_type. */
@@ -23745,7 +23745,7 @@ export namespace topodata {
                 /** KeyspacePartition shard_tablet_controls */
                 shard_tablet_controls?: (topodata.ShardTabletControl.$Properties[]|null);
 
-                /** Unknown fields preserved while decoding */
+                /** Unknown fields preserved while decoding when enabled */
                 $unknowns?: Uint8Array[];
             }
 
@@ -23770,7 +23770,7 @@ export namespace topodata {
          */
         constructor(properties?: topodata.CellInfo.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** CellInfo server_address. */
@@ -23869,7 +23869,7 @@ export namespace topodata {
             /** CellInfo root */
             root?: (string|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -23893,7 +23893,7 @@ export namespace topodata {
          */
         constructor(properties?: topodata.CellsAlias.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** CellsAlias cells. */
@@ -23986,7 +23986,7 @@ export namespace topodata {
             /** CellsAlias cells */
             cells?: (string[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -24010,7 +24010,7 @@ export namespace topodata {
          */
         constructor(properties?: topodata.TopoConfig.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** TopoConfig topo_type. */
@@ -24115,7 +24115,7 @@ export namespace topodata {
             /** TopoConfig root */
             root?: (string|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -24139,7 +24139,7 @@ export namespace topodata {
          */
         constructor(properties?: topodata.ExternalVitessCluster.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ExternalVitessCluster topo_config. */
@@ -24232,7 +24232,7 @@ export namespace topodata {
             /** ExternalVitessCluster topo_config */
             topo_config?: (topodata.TopoConfig.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -24256,7 +24256,7 @@ export namespace topodata {
          */
         constructor(properties?: topodata.ExternalClusters.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ExternalClusters vitess_cluster. */
@@ -24349,7 +24349,7 @@ export namespace topodata {
             /** ExternalClusters vitess_cluster */
             vitess_cluster?: (topodata.ExternalVitessCluster.$Properties[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -24377,7 +24377,7 @@ export namespace vtorcdata {
          */
         constructor(properties?: vtorcdata.Keyspace.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** Keyspace disable_emergency_reparent. */
@@ -24470,7 +24470,7 @@ export namespace vtorcdata {
             /** Keyspace disable_emergency_reparent */
             disable_emergency_reparent?: (boolean|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -24494,7 +24494,7 @@ export namespace vtorcdata {
          */
         constructor(properties?: vtorcdata.Shard.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** Shard disable_emergency_reparent. */
@@ -24587,7 +24587,7 @@ export namespace vtorcdata {
             /** Shard disable_emergency_reparent */
             disable_emergency_reparent?: (boolean|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -24611,7 +24611,7 @@ export namespace vtorcdata {
          */
         constructor(properties?: vtorcdata.PrimaryHealthEvent.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** PrimaryHealthEvent at_unix_nanos. */
@@ -24710,7 +24710,7 @@ export namespace vtorcdata {
             /** PrimaryHealthEvent success */
             success?: (boolean|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -24734,7 +24734,7 @@ export namespace vtorcdata {
          */
         constructor(properties?: vtorcdata.PrimaryHealthState.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** PrimaryHealthState events. */
@@ -24833,7 +24833,7 @@ export namespace vtorcdata {
             /** PrimaryHealthState unhealthy */
             unhealthy?: (boolean|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -24871,7 +24871,7 @@ export namespace querythrottler {
          */
         constructor(properties?: querythrottler.Config.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** Config enabled. */
@@ -24982,7 +24982,7 @@ export namespace querythrottler {
             /** Config dry_run */
             dry_run?: (boolean|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -25006,7 +25006,7 @@ export namespace querythrottler {
          */
         constructor(properties?: querythrottler.TabletStrategyConfig.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** TabletStrategyConfig tablet_rules. */
@@ -25099,7 +25099,7 @@ export namespace querythrottler {
             /** TabletStrategyConfig tablet_rules */
             tablet_rules?: ({ [k: string]: querythrottler.StatementRuleSet.$Properties }|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -25123,7 +25123,7 @@ export namespace querythrottler {
          */
         constructor(properties?: querythrottler.StatementRuleSet.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** StatementRuleSet statement_rules. */
@@ -25216,7 +25216,7 @@ export namespace querythrottler {
             /** StatementRuleSet statement_rules */
             statement_rules?: ({ [k: string]: querythrottler.MetricRuleSet.$Properties }|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -25240,7 +25240,7 @@ export namespace querythrottler {
          */
         constructor(properties?: querythrottler.MetricRuleSet.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** MetricRuleSet metric_rules. */
@@ -25333,7 +25333,7 @@ export namespace querythrottler {
             /** MetricRuleSet metric_rules */
             metric_rules?: ({ [k: string]: querythrottler.MetricRule.$Properties }|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -25357,7 +25357,7 @@ export namespace querythrottler {
          */
         constructor(properties?: querythrottler.MetricRule.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** MetricRule thresholds. */
@@ -25450,7 +25450,7 @@ export namespace querythrottler {
             /** MetricRule thresholds */
             thresholds?: (querythrottler.ThrottleThreshold.$Properties[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -25474,7 +25474,7 @@ export namespace querythrottler {
          */
         constructor(properties?: querythrottler.ThrottleThreshold.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ThrottleThreshold above. */
@@ -25573,7 +25573,7 @@ export namespace querythrottler {
             /** ThrottleThreshold throttle */
             throttle?: (number|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -25601,7 +25601,7 @@ export namespace vtrpc {
          */
         constructor(properties?: vtrpc.CallerID.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** CallerID principal. */
@@ -25712,7 +25712,7 @@ export namespace vtrpc {
             /** CallerID groups */
             groups?: (string[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -25797,7 +25797,7 @@ export namespace vtrpc {
          */
         constructor(properties?: vtrpc.RPCError.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** RPCError message. */
@@ -25896,7 +25896,7 @@ export namespace vtrpc {
             /** RPCError code */
             code?: (vtrpc.Code|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -25937,7 +25937,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.TableDefinition.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** TableDefinition name. */
@@ -26072,7 +26072,7 @@ export namespace tabletmanagerdata {
             /** TableDefinition fields */
             fields?: (query.Field.$Properties[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -26096,7 +26096,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.SchemaDefinition.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** SchemaDefinition database_schema. */
@@ -26195,7 +26195,7 @@ export namespace tabletmanagerdata {
             /** SchemaDefinition table_definitions */
             table_definitions?: (tabletmanagerdata.TableDefinition.$Properties[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -26219,7 +26219,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.SchemaChangeResult.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** SchemaChangeResult before_schema. */
@@ -26318,7 +26318,7 @@ export namespace tabletmanagerdata {
             /** SchemaChangeResult after_schema */
             after_schema?: (tabletmanagerdata.SchemaDefinition.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -26342,7 +26342,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.UserPermission.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** UserPermission host. */
@@ -26453,7 +26453,7 @@ export namespace tabletmanagerdata {
             /** UserPermission privileges */
             privileges?: ({ [k: string]: string }|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -26477,7 +26477,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.DbPermission.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** DbPermission host. */
@@ -26588,7 +26588,7 @@ export namespace tabletmanagerdata {
             /** DbPermission privileges */
             privileges?: ({ [k: string]: string }|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -26612,7 +26612,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.Permissions.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** Permissions user_permissions. */
@@ -26711,7 +26711,7 @@ export namespace tabletmanagerdata {
             /** Permissions db_permissions */
             db_permissions?: (tabletmanagerdata.DbPermission.$Properties[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -26735,7 +26735,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.PingRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** PingRequest payload. */
@@ -26828,7 +26828,7 @@ export namespace tabletmanagerdata {
             /** PingRequest payload */
             payload?: (string|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -26852,7 +26852,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.PingResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** PingResponse payload. */
@@ -26945,7 +26945,7 @@ export namespace tabletmanagerdata {
             /** PingResponse payload */
             payload?: (string|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -26969,7 +26969,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.SleepRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** SleepRequest duration. */
@@ -27062,7 +27062,7 @@ export namespace tabletmanagerdata {
             /** SleepRequest duration */
             duration?: (number|Long|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -27086,7 +27086,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.SleepResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /**
@@ -27173,7 +27173,7 @@ export namespace tabletmanagerdata {
         /** Properties of a SleepResponse. */
         interface $Properties {
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -27197,7 +27197,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.ExecuteHookRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ExecuteHookRequest name. */
@@ -27302,7 +27302,7 @@ export namespace tabletmanagerdata {
             /** ExecuteHookRequest extra_env */
             extra_env?: ({ [k: string]: string }|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -27326,7 +27326,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.ExecuteHookResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ExecuteHookResponse exit_status. */
@@ -27431,7 +27431,7 @@ export namespace tabletmanagerdata {
             /** ExecuteHookResponse stderr */
             stderr?: (string|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -27455,7 +27455,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.GetSchemaRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** GetSchemaRequest tables. */
@@ -27566,7 +27566,7 @@ export namespace tabletmanagerdata {
             /** GetSchemaRequest table_schema_only */
             table_schema_only?: (boolean|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -27590,7 +27590,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.GetSchemaResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** GetSchemaResponse schema_definition. */
@@ -27683,7 +27683,7 @@ export namespace tabletmanagerdata {
             /** GetSchemaResponse schema_definition */
             schema_definition?: (tabletmanagerdata.SchemaDefinition.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -27707,7 +27707,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.GetPermissionsRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /**
@@ -27794,7 +27794,7 @@ export namespace tabletmanagerdata {
         /** Properties of a GetPermissionsRequest. */
         interface $Properties {
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -27818,7 +27818,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.GetPermissionsResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** GetPermissionsResponse permissions. */
@@ -27911,7 +27911,7 @@ export namespace tabletmanagerdata {
             /** GetPermissionsResponse permissions */
             permissions?: (tabletmanagerdata.Permissions.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -27935,7 +27935,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.GetGlobalStatusVarsRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** GetGlobalStatusVarsRequest variables. */
@@ -28028,7 +28028,7 @@ export namespace tabletmanagerdata {
             /** GetGlobalStatusVarsRequest variables */
             variables?: (string[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -28052,7 +28052,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.GetGlobalStatusVarsResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** GetGlobalStatusVarsResponse status_values. */
@@ -28145,7 +28145,7 @@ export namespace tabletmanagerdata {
             /** GetGlobalStatusVarsResponse status_values */
             status_values?: ({ [k: string]: string }|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -28169,7 +28169,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.SetReadOnlyRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /**
@@ -28256,7 +28256,7 @@ export namespace tabletmanagerdata {
         /** Properties of a SetReadOnlyRequest. */
         interface $Properties {
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -28280,7 +28280,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.SetReadOnlyResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /**
@@ -28367,7 +28367,7 @@ export namespace tabletmanagerdata {
         /** Properties of a SetReadOnlyResponse. */
         interface $Properties {
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -28391,7 +28391,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.SetReadWriteRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /**
@@ -28478,7 +28478,7 @@ export namespace tabletmanagerdata {
         /** Properties of a SetReadWriteRequest. */
         interface $Properties {
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -28502,7 +28502,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.SetReadWriteResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /**
@@ -28589,7 +28589,7 @@ export namespace tabletmanagerdata {
         /** Properties of a SetReadWriteResponse. */
         interface $Properties {
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -28613,7 +28613,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.ChangeTypeRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ChangeTypeRequest tablet_type. */
@@ -28712,7 +28712,7 @@ export namespace tabletmanagerdata {
             /** ChangeTypeRequest semiSync */
             semiSync?: (boolean|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -28736,7 +28736,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.ChangeTypeResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /**
@@ -28823,7 +28823,7 @@ export namespace tabletmanagerdata {
         /** Properties of a ChangeTypeResponse. */
         interface $Properties {
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -28847,7 +28847,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.RefreshStateRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /**
@@ -28934,7 +28934,7 @@ export namespace tabletmanagerdata {
         /** Properties of a RefreshStateRequest. */
         interface $Properties {
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -28958,7 +28958,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.RefreshStateResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /**
@@ -29045,7 +29045,7 @@ export namespace tabletmanagerdata {
         /** Properties of a RefreshStateResponse. */
         interface $Properties {
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -29069,7 +29069,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.RunHealthCheckRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /**
@@ -29156,7 +29156,7 @@ export namespace tabletmanagerdata {
         /** Properties of a RunHealthCheckRequest. */
         interface $Properties {
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -29180,7 +29180,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.RunHealthCheckResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /**
@@ -29267,7 +29267,7 @@ export namespace tabletmanagerdata {
         /** Properties of a RunHealthCheckResponse. */
         interface $Properties {
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -29291,7 +29291,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.ReloadSchemaRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ReloadSchemaRequest wait_position. */
@@ -29384,7 +29384,7 @@ export namespace tabletmanagerdata {
             /** ReloadSchemaRequest wait_position */
             wait_position?: (string|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -29408,7 +29408,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.ReloadSchemaResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /**
@@ -29495,7 +29495,7 @@ export namespace tabletmanagerdata {
         /** Properties of a ReloadSchemaResponse. */
         interface $Properties {
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -29519,7 +29519,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.PreflightSchemaRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** PreflightSchemaRequest changes. */
@@ -29612,7 +29612,7 @@ export namespace tabletmanagerdata {
             /** PreflightSchemaRequest changes */
             changes?: (string[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -29636,7 +29636,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.PreflightSchemaResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** PreflightSchemaResponse change_results. */
@@ -29729,7 +29729,7 @@ export namespace tabletmanagerdata {
             /** PreflightSchemaResponse change_results */
             change_results?: (tabletmanagerdata.SchemaChangeResult.$Properties[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -29753,7 +29753,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.ApplySchemaRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ApplySchemaRequest sql. */
@@ -29888,7 +29888,7 @@ export namespace tabletmanagerdata {
             /** ApplySchemaRequest disable_foreign_key_checks */
             disable_foreign_key_checks?: (boolean|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -29912,7 +29912,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.ApplySchemaResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ApplySchemaResponse before_schema. */
@@ -30011,7 +30011,7 @@ export namespace tabletmanagerdata {
             /** ApplySchemaResponse after_schema */
             after_schema?: (tabletmanagerdata.SchemaDefinition.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -30035,7 +30035,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.LockTablesRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /**
@@ -30122,7 +30122,7 @@ export namespace tabletmanagerdata {
         /** Properties of a LockTablesRequest. */
         interface $Properties {
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -30146,7 +30146,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.LockTablesResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /**
@@ -30233,7 +30233,7 @@ export namespace tabletmanagerdata {
         /** Properties of a LockTablesResponse. */
         interface $Properties {
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -30257,7 +30257,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.UnlockTablesRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /**
@@ -30344,7 +30344,7 @@ export namespace tabletmanagerdata {
         /** Properties of an UnlockTablesRequest. */
         interface $Properties {
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -30368,7 +30368,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.UnlockTablesResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /**
@@ -30455,7 +30455,7 @@ export namespace tabletmanagerdata {
         /** Properties of an UnlockTablesResponse. */
         interface $Properties {
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -30479,7 +30479,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.ExecuteQueryRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ExecuteQueryRequest query. */
@@ -30590,7 +30590,7 @@ export namespace tabletmanagerdata {
             /** ExecuteQueryRequest caller_id */
             caller_id?: (vtrpc.CallerID.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -30614,7 +30614,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.ExecuteQueryResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ExecuteQueryResponse result. */
@@ -30707,7 +30707,7 @@ export namespace tabletmanagerdata {
             /** ExecuteQueryResponse result */
             result?: (query.QueryResult.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -30731,7 +30731,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.ExecuteFetchAsDbaRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ExecuteFetchAsDbaRequest query. */
@@ -30854,7 +30854,7 @@ export namespace tabletmanagerdata {
             /** ExecuteFetchAsDbaRequest disable_foreign_key_checks */
             disable_foreign_key_checks?: (boolean|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -30878,7 +30878,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.ExecuteFetchAsDbaResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ExecuteFetchAsDbaResponse result. */
@@ -30971,7 +30971,7 @@ export namespace tabletmanagerdata {
             /** ExecuteFetchAsDbaResponse result */
             result?: (query.QueryResult.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -30995,7 +30995,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.ExecuteMultiFetchAsDbaRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ExecuteMultiFetchAsDbaRequest sql. */
@@ -31118,7 +31118,7 @@ export namespace tabletmanagerdata {
             /** ExecuteMultiFetchAsDbaRequest disable_foreign_key_checks */
             disable_foreign_key_checks?: (boolean|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -31142,7 +31142,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.ExecuteMultiFetchAsDbaResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ExecuteMultiFetchAsDbaResponse results. */
@@ -31235,7 +31235,7 @@ export namespace tabletmanagerdata {
             /** ExecuteMultiFetchAsDbaResponse results */
             results?: (query.QueryResult.$Properties[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -31259,7 +31259,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.ExecuteFetchAsAllPrivsRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ExecuteFetchAsAllPrivsRequest query. */
@@ -31370,7 +31370,7 @@ export namespace tabletmanagerdata {
             /** ExecuteFetchAsAllPrivsRequest reload_schema */
             reload_schema?: (boolean|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -31394,7 +31394,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.ExecuteFetchAsAllPrivsResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ExecuteFetchAsAllPrivsResponse result. */
@@ -31487,7 +31487,7 @@ export namespace tabletmanagerdata {
             /** ExecuteFetchAsAllPrivsResponse result */
             result?: (query.QueryResult.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -31511,7 +31511,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.ExecuteFetchAsAppRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ExecuteFetchAsAppRequest query. */
@@ -31610,7 +31610,7 @@ export namespace tabletmanagerdata {
             /** ExecuteFetchAsAppRequest max_rows */
             max_rows?: (number|Long|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -31634,7 +31634,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.ExecuteFetchAsAppResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ExecuteFetchAsAppResponse result. */
@@ -31727,7 +31727,7 @@ export namespace tabletmanagerdata {
             /** ExecuteFetchAsAppResponse result */
             result?: (query.QueryResult.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -31751,7 +31751,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.GetUnresolvedTransactionsRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** GetUnresolvedTransactionsRequest abandon_age. */
@@ -31844,7 +31844,7 @@ export namespace tabletmanagerdata {
             /** GetUnresolvedTransactionsRequest abandon_age */
             abandon_age?: (number|Long|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -31868,7 +31868,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.GetUnresolvedTransactionsResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** GetUnresolvedTransactionsResponse transactions. */
@@ -31961,7 +31961,7 @@ export namespace tabletmanagerdata {
             /** GetUnresolvedTransactionsResponse transactions */
             transactions?: (query.TransactionMetadata.$Properties[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -31985,7 +31985,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.ReadTransactionRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ReadTransactionRequest dtid. */
@@ -32078,7 +32078,7 @@ export namespace tabletmanagerdata {
             /** ReadTransactionRequest dtid */
             dtid?: (string|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -32102,7 +32102,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.ReadTransactionResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ReadTransactionResponse transaction. */
@@ -32195,7 +32195,7 @@ export namespace tabletmanagerdata {
             /** ReadTransactionResponse transaction */
             transaction?: (query.TransactionMetadata.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -32219,7 +32219,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.GetTransactionInfoRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** GetTransactionInfoRequest dtid. */
@@ -32312,7 +32312,7 @@ export namespace tabletmanagerdata {
             /** GetTransactionInfoRequest dtid */
             dtid?: (string|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -32336,7 +32336,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.GetTransactionInfoResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** GetTransactionInfoResponse state. */
@@ -32447,7 +32447,7 @@ export namespace tabletmanagerdata {
             /** GetTransactionInfoResponse statements */
             statements?: (string[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -32471,7 +32471,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.ConcludeTransactionRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ConcludeTransactionRequest dtid. */
@@ -32570,7 +32570,7 @@ export namespace tabletmanagerdata {
             /** ConcludeTransactionRequest mm */
             mm?: (boolean|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -32594,7 +32594,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.ConcludeTransactionResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /**
@@ -32681,7 +32681,7 @@ export namespace tabletmanagerdata {
         /** Properties of a ConcludeTransactionResponse. */
         interface $Properties {
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -32705,7 +32705,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.MysqlHostMetricsRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /**
@@ -32792,7 +32792,7 @@ export namespace tabletmanagerdata {
         /** Properties of a MysqlHostMetricsRequest. */
         interface $Properties {
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -32816,7 +32816,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.MysqlHostMetricsResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** MysqlHostMetricsResponse HostMetrics. */
@@ -32909,7 +32909,7 @@ export namespace tabletmanagerdata {
             /** MysqlHostMetricsResponse HostMetrics */
             HostMetrics?: (mysqlctl.HostMetricsResponse.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -32933,7 +32933,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.ReplicationStatusRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /**
@@ -33020,7 +33020,7 @@ export namespace tabletmanagerdata {
         /** Properties of a ReplicationStatusRequest. */
         interface $Properties {
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -33044,7 +33044,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.ReplicationStatusResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ReplicationStatusResponse status. */
@@ -33137,7 +33137,7 @@ export namespace tabletmanagerdata {
             /** ReplicationStatusResponse status */
             status?: (replicationdata.Status.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -33161,7 +33161,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.PrimaryStatusRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /**
@@ -33248,7 +33248,7 @@ export namespace tabletmanagerdata {
         /** Properties of a PrimaryStatusRequest. */
         interface $Properties {
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -33272,7 +33272,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.PrimaryStatusResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** PrimaryStatusResponse status. */
@@ -33365,7 +33365,7 @@ export namespace tabletmanagerdata {
             /** PrimaryStatusResponse status */
             status?: (replicationdata.PrimaryStatus.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -33389,7 +33389,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.PrimaryPositionRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /**
@@ -33476,7 +33476,7 @@ export namespace tabletmanagerdata {
         /** Properties of a PrimaryPositionRequest. */
         interface $Properties {
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -33500,7 +33500,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.PrimaryPositionResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** PrimaryPositionResponse position. */
@@ -33593,7 +33593,7 @@ export namespace tabletmanagerdata {
             /** PrimaryPositionResponse position */
             position?: (string|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -33617,7 +33617,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.WaitForPositionRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** WaitForPositionRequest position. */
@@ -33710,7 +33710,7 @@ export namespace tabletmanagerdata {
             /** WaitForPositionRequest position */
             position?: (string|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -33734,7 +33734,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.WaitForPositionResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /**
@@ -33821,7 +33821,7 @@ export namespace tabletmanagerdata {
         /** Properties of a WaitForPositionResponse. */
         interface $Properties {
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -33845,7 +33845,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.StopReplicationRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /**
@@ -33932,7 +33932,7 @@ export namespace tabletmanagerdata {
         /** Properties of a StopReplicationRequest. */
         interface $Properties {
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -33956,7 +33956,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.StopReplicationResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /**
@@ -34043,7 +34043,7 @@ export namespace tabletmanagerdata {
         /** Properties of a StopReplicationResponse. */
         interface $Properties {
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -34067,7 +34067,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.StopReplicationMinimumRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** StopReplicationMinimumRequest position. */
@@ -34166,7 +34166,7 @@ export namespace tabletmanagerdata {
             /** StopReplicationMinimumRequest wait_timeout */
             wait_timeout?: (number|Long|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -34190,7 +34190,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.StopReplicationMinimumResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** StopReplicationMinimumResponse position. */
@@ -34283,7 +34283,7 @@ export namespace tabletmanagerdata {
             /** StopReplicationMinimumResponse position */
             position?: (string|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -34307,7 +34307,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.StartReplicationRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** StartReplicationRequest semiSync. */
@@ -34400,7 +34400,7 @@ export namespace tabletmanagerdata {
             /** StartReplicationRequest semiSync */
             semiSync?: (boolean|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -34424,7 +34424,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.StartReplicationResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /**
@@ -34511,7 +34511,7 @@ export namespace tabletmanagerdata {
         /** Properties of a StartReplicationResponse. */
         interface $Properties {
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -34535,7 +34535,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.RestartReplicationRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** RestartReplicationRequest semiSync. */
@@ -34628,7 +34628,7 @@ export namespace tabletmanagerdata {
             /** RestartReplicationRequest semiSync */
             semiSync?: (boolean|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -34652,7 +34652,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.RestartReplicationResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /**
@@ -34739,7 +34739,7 @@ export namespace tabletmanagerdata {
         /** Properties of a RestartReplicationResponse. */
         interface $Properties {
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -34763,7 +34763,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.StartReplicationUntilAfterRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** StartReplicationUntilAfterRequest position. */
@@ -34862,7 +34862,7 @@ export namespace tabletmanagerdata {
             /** StartReplicationUntilAfterRequest wait_timeout */
             wait_timeout?: (number|Long|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -34886,7 +34886,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.StartReplicationUntilAfterResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /**
@@ -34973,7 +34973,7 @@ export namespace tabletmanagerdata {
         /** Properties of a StartReplicationUntilAfterResponse. */
         interface $Properties {
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -34997,7 +34997,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.GetReplicasRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /**
@@ -35084,7 +35084,7 @@ export namespace tabletmanagerdata {
         /** Properties of a GetReplicasRequest. */
         interface $Properties {
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -35108,7 +35108,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.GetReplicasResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** GetReplicasResponse addrs. */
@@ -35201,7 +35201,7 @@ export namespace tabletmanagerdata {
             /** GetReplicasResponse addrs */
             addrs?: (string[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -35225,7 +35225,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.ResetReplicationRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /**
@@ -35312,7 +35312,7 @@ export namespace tabletmanagerdata {
         /** Properties of a ResetReplicationRequest. */
         interface $Properties {
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -35336,7 +35336,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.ResetReplicationResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /**
@@ -35423,7 +35423,7 @@ export namespace tabletmanagerdata {
         /** Properties of a ResetReplicationResponse. */
         interface $Properties {
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -35447,7 +35447,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.VReplicationExecRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** VReplicationExecRequest query. */
@@ -35540,7 +35540,7 @@ export namespace tabletmanagerdata {
             /** VReplicationExecRequest query */
             query?: (string|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -35564,7 +35564,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.VReplicationExecResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** VReplicationExecResponse result. */
@@ -35657,7 +35657,7 @@ export namespace tabletmanagerdata {
             /** VReplicationExecResponse result */
             result?: (query.QueryResult.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -35681,7 +35681,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.VReplicationWaitForPosRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** VReplicationWaitForPosRequest id. */
@@ -35780,7 +35780,7 @@ export namespace tabletmanagerdata {
             /** VReplicationWaitForPosRequest position */
             position?: (string|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -35804,7 +35804,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.VReplicationWaitForPosResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /**
@@ -35891,7 +35891,7 @@ export namespace tabletmanagerdata {
         /** Properties of a VReplicationWaitForPosResponse. */
         interface $Properties {
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -35915,7 +35915,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.InitPrimaryRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** InitPrimaryRequest semiSync. */
@@ -36008,7 +36008,7 @@ export namespace tabletmanagerdata {
             /** InitPrimaryRequest semiSync */
             semiSync?: (boolean|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -36032,7 +36032,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.InitPrimaryResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** InitPrimaryResponse position. */
@@ -36125,7 +36125,7 @@ export namespace tabletmanagerdata {
             /** InitPrimaryResponse position */
             position?: (string|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -36149,7 +36149,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.PopulateReparentJournalRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** PopulateReparentJournalRequest time_created_ns. */
@@ -36260,7 +36260,7 @@ export namespace tabletmanagerdata {
             /** PopulateReparentJournalRequest replication_position */
             replication_position?: (string|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -36284,7 +36284,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.PopulateReparentJournalResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /**
@@ -36371,7 +36371,7 @@ export namespace tabletmanagerdata {
         /** Properties of a PopulateReparentJournalResponse. */
         interface $Properties {
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -36395,7 +36395,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.ReadReparentJournalInfoRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /**
@@ -36482,7 +36482,7 @@ export namespace tabletmanagerdata {
         /** Properties of a ReadReparentJournalInfoRequest. */
         interface $Properties {
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -36506,7 +36506,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.ReadReparentJournalInfoResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ReadReparentJournalInfoResponse length. */
@@ -36599,7 +36599,7 @@ export namespace tabletmanagerdata {
             /** ReadReparentJournalInfoResponse length */
             length?: (number|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -36623,7 +36623,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.InitReplicaRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** InitReplicaRequest parent. */
@@ -36734,7 +36734,7 @@ export namespace tabletmanagerdata {
             /** InitReplicaRequest semiSync */
             semiSync?: (boolean|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -36758,7 +36758,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.InitReplicaResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /**
@@ -36845,7 +36845,7 @@ export namespace tabletmanagerdata {
         /** Properties of an InitReplicaResponse. */
         interface $Properties {
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -36869,7 +36869,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.DemotePrimaryRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** DemotePrimaryRequest force. */
@@ -36962,7 +36962,7 @@ export namespace tabletmanagerdata {
             /** DemotePrimaryRequest force */
             force?: (boolean|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -36986,7 +36986,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.DemotePrimaryResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** DemotePrimaryResponse primary_status. */
@@ -37079,7 +37079,7 @@ export namespace tabletmanagerdata {
             /** DemotePrimaryResponse primary_status */
             primary_status?: (replicationdata.PrimaryStatus.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -37103,7 +37103,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.UndoDemotePrimaryRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** UndoDemotePrimaryRequest semiSync. */
@@ -37196,7 +37196,7 @@ export namespace tabletmanagerdata {
             /** UndoDemotePrimaryRequest semiSync */
             semiSync?: (boolean|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -37220,7 +37220,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.UndoDemotePrimaryResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /**
@@ -37307,7 +37307,7 @@ export namespace tabletmanagerdata {
         /** Properties of an UndoDemotePrimaryResponse. */
         interface $Properties {
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -37331,7 +37331,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.ReplicaWasPromotedRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /**
@@ -37418,7 +37418,7 @@ export namespace tabletmanagerdata {
         /** Properties of a ReplicaWasPromotedRequest. */
         interface $Properties {
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -37442,7 +37442,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.ReplicaWasPromotedResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /**
@@ -37529,7 +37529,7 @@ export namespace tabletmanagerdata {
         /** Properties of a ReplicaWasPromotedResponse. */
         interface $Properties {
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -37553,7 +37553,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.ResetReplicationParametersRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /**
@@ -37640,7 +37640,7 @@ export namespace tabletmanagerdata {
         /** Properties of a ResetReplicationParametersRequest. */
         interface $Properties {
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -37664,7 +37664,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.ResetReplicationParametersResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /**
@@ -37751,7 +37751,7 @@ export namespace tabletmanagerdata {
         /** Properties of a ResetReplicationParametersResponse. */
         interface $Properties {
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -37775,7 +37775,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.FullStatusRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /**
@@ -37862,7 +37862,7 @@ export namespace tabletmanagerdata {
         /** Properties of a FullStatusRequest. */
         interface $Properties {
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -37886,7 +37886,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.FullStatusResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** FullStatusResponse status. */
@@ -37979,7 +37979,7 @@ export namespace tabletmanagerdata {
             /** FullStatusResponse status */
             status?: (replicationdata.FullStatus.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -38003,7 +38003,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.SetReplicationSourceRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** SetReplicationSourceRequest parent. */
@@ -38126,7 +38126,7 @@ export namespace tabletmanagerdata {
             /** SetReplicationSourceRequest heartbeat_interval */
             heartbeat_interval?: (number|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -38150,7 +38150,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.SetReplicationSourceResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /**
@@ -38237,7 +38237,7 @@ export namespace tabletmanagerdata {
         /** Properties of a SetReplicationSourceResponse. */
         interface $Properties {
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -38261,7 +38261,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.ReplicaWasRestartedRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ReplicaWasRestartedRequest parent. */
@@ -38354,7 +38354,7 @@ export namespace tabletmanagerdata {
             /** ReplicaWasRestartedRequest parent */
             parent?: (topodata.TabletAlias.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -38378,7 +38378,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.ReplicaWasRestartedResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /**
@@ -38465,7 +38465,7 @@ export namespace tabletmanagerdata {
         /** Properties of a ReplicaWasRestartedResponse. */
         interface $Properties {
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -38489,7 +38489,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.StopReplicationAndGetStatusRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** StopReplicationAndGetStatusRequest stop_replication_mode. */
@@ -38582,7 +38582,7 @@ export namespace tabletmanagerdata {
             /** StopReplicationAndGetStatusRequest stop_replication_mode */
             stop_replication_mode?: (replicationdata.StopReplicationMode|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -38606,7 +38606,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.StopReplicationAndGetStatusResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** StopReplicationAndGetStatusResponse status. */
@@ -38699,7 +38699,7 @@ export namespace tabletmanagerdata {
             /** StopReplicationAndGetStatusResponse status */
             status?: (replicationdata.StopReplicationStatus.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -38723,7 +38723,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.PromoteReplicaRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** PromoteReplicaRequest semiSync. */
@@ -38816,7 +38816,7 @@ export namespace tabletmanagerdata {
             /** PromoteReplicaRequest semiSync */
             semiSync?: (boolean|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -38840,7 +38840,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.PromoteReplicaResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** PromoteReplicaResponse position. */
@@ -38933,7 +38933,7 @@ export namespace tabletmanagerdata {
             /** PromoteReplicaResponse position */
             position?: (string|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -38957,7 +38957,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.BackupRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** BackupRequest concurrency. */
@@ -39086,7 +39086,7 @@ export namespace tabletmanagerdata {
             /** BackupRequest init_sql */
             init_sql?: (tabletmanagerdata.BackupRequest.InitSQL.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -39109,7 +39109,7 @@ export namespace tabletmanagerdata {
              */
             constructor(properties?: tabletmanagerdata.BackupRequest.InitSQL.$Properties);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
 
             /** InitSQL queries. */
@@ -39220,7 +39220,7 @@ export namespace tabletmanagerdata {
                 /** InitSQL fail_on_error */
                 fail_on_error?: (boolean|null);
 
-                /** Unknown fields preserved while decoding */
+                /** Unknown fields preserved while decoding when enabled */
                 $unknowns?: Uint8Array[];
             }
 
@@ -39245,7 +39245,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.BackupResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** BackupResponse event. */
@@ -39338,7 +39338,7 @@ export namespace tabletmanagerdata {
             /** BackupResponse event */
             event?: (logutil.Event.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -39362,7 +39362,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.RestoreFromBackupRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** RestoreFromBackupRequest backup_time. */
@@ -39479,7 +39479,7 @@ export namespace tabletmanagerdata {
             /** RestoreFromBackupRequest allowed_backup_engines */
             allowed_backup_engines?: (string[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -39503,7 +39503,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.RestoreFromBackupResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** RestoreFromBackupResponse event. */
@@ -39596,7 +39596,7 @@ export namespace tabletmanagerdata {
             /** RestoreFromBackupResponse event */
             event?: (logutil.Event.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -39620,7 +39620,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.CreateVReplicationWorkflowRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** CreateVReplicationWorkflowRequest workflow. */
@@ -39773,7 +39773,7 @@ export namespace tabletmanagerdata {
             /** CreateVReplicationWorkflowRequest options */
             options?: (string|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -39797,7 +39797,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.CreateVReplicationWorkflowResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** CreateVReplicationWorkflowResponse result. */
@@ -39890,7 +39890,7 @@ export namespace tabletmanagerdata {
             /** CreateVReplicationWorkflowResponse result */
             result?: (query.QueryResult.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -39914,7 +39914,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.DeleteTableDataRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** DeleteTableDataRequest table_filters. */
@@ -40013,7 +40013,7 @@ export namespace tabletmanagerdata {
             /** DeleteTableDataRequest batch_size */
             batch_size?: (number|Long|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -40037,7 +40037,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.DeleteTableDataResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /**
@@ -40124,7 +40124,7 @@ export namespace tabletmanagerdata {
         /** Properties of a DeleteTableDataResponse. */
         interface $Properties {
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -40148,7 +40148,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.DeleteVReplicationWorkflowRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** DeleteVReplicationWorkflowRequest workflow. */
@@ -40241,7 +40241,7 @@ export namespace tabletmanagerdata {
             /** DeleteVReplicationWorkflowRequest workflow */
             workflow?: (string|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -40265,7 +40265,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.DeleteVReplicationWorkflowResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** DeleteVReplicationWorkflowResponse result. */
@@ -40358,7 +40358,7 @@ export namespace tabletmanagerdata {
             /** DeleteVReplicationWorkflowResponse result */
             result?: (query.QueryResult.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -40382,7 +40382,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.HasVReplicationWorkflowsRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /**
@@ -40469,7 +40469,7 @@ export namespace tabletmanagerdata {
         /** Properties of a HasVReplicationWorkflowsRequest. */
         interface $Properties {
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -40493,7 +40493,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.HasVReplicationWorkflowsResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** HasVReplicationWorkflowsResponse has. */
@@ -40586,7 +40586,7 @@ export namespace tabletmanagerdata {
             /** HasVReplicationWorkflowsResponse has */
             has?: (boolean|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -40610,7 +40610,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.ReadVReplicationWorkflowsRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ReadVReplicationWorkflowsRequest include_ids. */
@@ -40733,7 +40733,7 @@ export namespace tabletmanagerdata {
             /** ReadVReplicationWorkflowsRequest exclude_frozen */
             exclude_frozen?: (boolean|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -40757,7 +40757,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.ReadVReplicationWorkflowsResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ReadVReplicationWorkflowsResponse workflows. */
@@ -40850,7 +40850,7 @@ export namespace tabletmanagerdata {
             /** ReadVReplicationWorkflowsResponse workflows */
             workflows?: (tabletmanagerdata.ReadVReplicationWorkflowResponse.$Properties[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -40874,7 +40874,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.ReadVReplicationWorkflowRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ReadVReplicationWorkflowRequest workflow. */
@@ -40967,7 +40967,7 @@ export namespace tabletmanagerdata {
             /** ReadVReplicationWorkflowRequest workflow */
             workflow?: (string|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -40991,7 +40991,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.ReadVReplicationWorkflowResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ReadVReplicationWorkflowResponse workflow. */
@@ -41150,7 +41150,7 @@ export namespace tabletmanagerdata {
             /** ReadVReplicationWorkflowResponse config_overrides */
             config_overrides?: ({ [k: string]: string }|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -41173,7 +41173,7 @@ export namespace tabletmanagerdata {
              */
             constructor(properties?: tabletmanagerdata.ReadVReplicationWorkflowResponse.Stream.$Properties);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
 
             /** Stream id. */
@@ -41344,7 +41344,7 @@ export namespace tabletmanagerdata {
                 /** Stream component_throttled */
                 component_throttled?: (string|null);
 
-                /** Unknown fields preserved while decoding */
+                /** Unknown fields preserved while decoding when enabled */
                 $unknowns?: Uint8Array[];
             }
 
@@ -41369,7 +41369,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.ValidateVReplicationPermissionsRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /**
@@ -41456,7 +41456,7 @@ export namespace tabletmanagerdata {
         /** Properties of a ValidateVReplicationPermissionsRequest. */
         interface $Properties {
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -41480,7 +41480,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.ValidateVReplicationPermissionsResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ValidateVReplicationPermissionsResponse user. */
@@ -41585,7 +41585,7 @@ export namespace tabletmanagerdata {
             /** ValidateVReplicationPermissionsResponse error */
             error?: (string|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -41609,7 +41609,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.VDiffRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** VDiffRequest keyspace. */
@@ -41732,7 +41732,7 @@ export namespace tabletmanagerdata {
             /** VDiffRequest options */
             options?: (tabletmanagerdata.VDiffOptions.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -41756,7 +41756,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.VDiffResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** VDiffResponse id. */
@@ -41861,7 +41861,7 @@ export namespace tabletmanagerdata {
             /** VDiffResponse vdiff_uuid */
             vdiff_uuid?: (string|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -41885,7 +41885,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.VDiffPickerOptions.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** VDiffPickerOptions tablet_types. */
@@ -41990,7 +41990,7 @@ export namespace tabletmanagerdata {
             /** VDiffPickerOptions target_cell */
             target_cell?: (string|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -42014,7 +42014,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.VDiffReportOptions.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** VDiffReportOptions only_pks. */
@@ -42131,7 +42131,7 @@ export namespace tabletmanagerdata {
             /** VDiffReportOptions row_diff_column_truncate_at */
             row_diff_column_truncate_at?: (number|Long|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -42155,7 +42155,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.VDiffCoreOptions.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** VDiffCoreOptions tables. */
@@ -42302,7 +42302,7 @@ export namespace tabletmanagerdata {
             /** VDiffCoreOptions auto_start */
             auto_start?: (boolean|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -42326,7 +42326,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.VDiffOptions.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** VDiffOptions picker_options. */
@@ -42431,7 +42431,7 @@ export namespace tabletmanagerdata {
             /** VDiffOptions report_options */
             report_options?: (tabletmanagerdata.VDiffReportOptions.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -42455,7 +42455,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.VDiffTableLastPK.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** VDiffTableLastPK target. */
@@ -42554,7 +42554,7 @@ export namespace tabletmanagerdata {
             /** VDiffTableLastPK source */
             source?: (query.QueryResult.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -42578,7 +42578,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.UpdateVReplicationWorkflowRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** UpdateVReplicationWorkflowRequest workflow. */
@@ -42725,7 +42725,7 @@ export namespace tabletmanagerdata {
             /** UpdateVReplicationWorkflowRequest filter_rules */
             filter_rules?: (binlogdata.Rule.$Properties[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -42749,7 +42749,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.UpdateVReplicationWorkflowResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** UpdateVReplicationWorkflowResponse result. */
@@ -42842,7 +42842,7 @@ export namespace tabletmanagerdata {
             /** UpdateVReplicationWorkflowResponse result */
             result?: (query.QueryResult.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -42866,7 +42866,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.UpdateVReplicationWorkflowsRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** UpdateVReplicationWorkflowsRequest all_workflows. */
@@ -42989,7 +42989,7 @@ export namespace tabletmanagerdata {
             /** UpdateVReplicationWorkflowsRequest stop_position */
             stop_position?: (string|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -43013,7 +43013,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.UpdateVReplicationWorkflowsResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** UpdateVReplicationWorkflowsResponse result. */
@@ -43106,7 +43106,7 @@ export namespace tabletmanagerdata {
             /** UpdateVReplicationWorkflowsResponse result */
             result?: (query.QueryResult.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -43130,7 +43130,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.ResetSequencesRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ResetSequencesRequest tables. */
@@ -43223,7 +43223,7 @@ export namespace tabletmanagerdata {
             /** ResetSequencesRequest tables */
             tables?: (string[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -43247,7 +43247,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.ResetSequencesResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /**
@@ -43334,7 +43334,7 @@ export namespace tabletmanagerdata {
         /** Properties of a ResetSequencesResponse. */
         interface $Properties {
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -43358,7 +43358,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.CheckThrottlerRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** CheckThrottlerRequest app_name. */
@@ -43475,7 +43475,7 @@ export namespace tabletmanagerdata {
             /** CheckThrottlerRequest throttler_type */
             throttler_type?: (tabletmanagerdata.ThrottlerType|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -43531,7 +43531,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.CheckThrottlerResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** CheckThrottlerResponse value. */
@@ -43672,7 +43672,7 @@ export namespace tabletmanagerdata {
             /** CheckThrottlerResponse response_code */
             response_code?: (tabletmanagerdata.CheckThrottlerResponseCode|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -43695,7 +43695,7 @@ export namespace tabletmanagerdata {
              */
             constructor(properties?: tabletmanagerdata.CheckThrottlerResponse.Metric.$Properties);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
 
             /** Metric name. */
@@ -43824,7 +43824,7 @@ export namespace tabletmanagerdata {
                 /** Metric response_code */
                 response_code?: (tabletmanagerdata.CheckThrottlerResponseCode|null);
 
-                /** Unknown fields preserved while decoding */
+                /** Unknown fields preserved while decoding when enabled */
                 $unknowns?: Uint8Array[];
             }
 
@@ -43849,7 +43849,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.GetThrottlerStatusRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** GetThrottlerStatusRequest throttler_type. */
@@ -43942,7 +43942,7 @@ export namespace tabletmanagerdata {
             /** GetThrottlerStatusRequest throttler_type */
             throttler_type?: (tabletmanagerdata.ThrottlerType|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -43966,7 +43966,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.GetThrottlerStatusResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** GetThrottlerStatusResponse tablet_alias. */
@@ -44161,7 +44161,7 @@ export namespace tabletmanagerdata {
             /** GetThrottlerStatusResponse recent_apps */
             recent_apps?: ({ [k: string]: tabletmanagerdata.GetThrottlerStatusResponse.RecentApp.$Properties }|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -44184,7 +44184,7 @@ export namespace tabletmanagerdata {
              */
             constructor(properties?: tabletmanagerdata.GetThrottlerStatusResponse.MetricResult.$Properties);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
 
             /** MetricResult value. */
@@ -44283,7 +44283,7 @@ export namespace tabletmanagerdata {
                 /** MetricResult error */
                 error?: (string|null);
 
-                /** Unknown fields preserved while decoding */
+                /** Unknown fields preserved while decoding when enabled */
                 $unknowns?: Uint8Array[];
             }
 
@@ -44307,7 +44307,7 @@ export namespace tabletmanagerdata {
              */
             constructor(properties?: tabletmanagerdata.GetThrottlerStatusResponse.MetricHealth.$Properties);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
 
             /** MetricHealth last_healthy_at. */
@@ -44406,7 +44406,7 @@ export namespace tabletmanagerdata {
                 /** MetricHealth seconds_since_last_healthy */
                 seconds_since_last_healthy?: (number|Long|null);
 
-                /** Unknown fields preserved while decoding */
+                /** Unknown fields preserved while decoding when enabled */
                 $unknowns?: Uint8Array[];
             }
 
@@ -44430,7 +44430,7 @@ export namespace tabletmanagerdata {
              */
             constructor(properties?: tabletmanagerdata.GetThrottlerStatusResponse.RecentApp.$Properties);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
 
             /** RecentApp checked_at. */
@@ -44529,7 +44529,7 @@ export namespace tabletmanagerdata {
                 /** RecentApp response_code */
                 response_code?: (tabletmanagerdata.CheckThrottlerResponseCode|null);
 
-                /** Unknown fields preserved while decoding */
+                /** Unknown fields preserved while decoding when enabled */
                 $unknowns?: Uint8Array[];
             }
 
@@ -44554,7 +44554,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.ChangeTagsRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ChangeTagsRequest tags. */
@@ -44653,7 +44653,7 @@ export namespace tabletmanagerdata {
             /** ChangeTagsRequest replace */
             replace?: (boolean|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -44677,7 +44677,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.ChangeTagsResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ChangeTagsResponse tags. */
@@ -44770,7 +44770,7 @@ export namespace tabletmanagerdata {
             /** ChangeTagsResponse tags */
             tags?: ({ [k: string]: string }|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -44794,7 +44794,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.UpdateSequenceTablesRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** UpdateSequenceTablesRequest sequences. */
@@ -44887,7 +44887,7 @@ export namespace tabletmanagerdata {
             /** UpdateSequenceTablesRequest sequences */
             sequences?: (tabletmanagerdata.UpdateSequenceTablesRequest.SequenceMetadata.$Properties[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -44910,7 +44910,7 @@ export namespace tabletmanagerdata {
              */
             constructor(properties?: tabletmanagerdata.UpdateSequenceTablesRequest.SequenceMetadata.$Properties);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
 
             /** SequenceMetadata backing_table_name. */
@@ -45015,7 +45015,7 @@ export namespace tabletmanagerdata {
                 /** SequenceMetadata max_value */
                 max_value?: (number|Long|null);
 
-                /** Unknown fields preserved while decoding */
+                /** Unknown fields preserved while decoding when enabled */
                 $unknowns?: Uint8Array[];
             }
 
@@ -45040,7 +45040,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.UpdateSequenceTablesResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /**
@@ -45127,7 +45127,7 @@ export namespace tabletmanagerdata {
         /** Properties of an UpdateSequenceTablesResponse. */
         interface $Properties {
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -45151,7 +45151,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.GetMaxValueForSequencesRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** GetMaxValueForSequencesRequest sequences. */
@@ -45244,7 +45244,7 @@ export namespace tabletmanagerdata {
             /** GetMaxValueForSequencesRequest sequences */
             sequences?: (tabletmanagerdata.GetMaxValueForSequencesRequest.SequenceMetadata.$Properties[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -45267,7 +45267,7 @@ export namespace tabletmanagerdata {
              */
             constructor(properties?: tabletmanagerdata.GetMaxValueForSequencesRequest.SequenceMetadata.$Properties);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
 
             /** SequenceMetadata backing_table_name. */
@@ -45378,7 +45378,7 @@ export namespace tabletmanagerdata {
                 /** SequenceMetadata using_table_db_name_escaped */
                 using_table_db_name_escaped?: (string|null);
 
-                /** Unknown fields preserved while decoding */
+                /** Unknown fields preserved while decoding when enabled */
                 $unknowns?: Uint8Array[];
             }
 
@@ -45403,7 +45403,7 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.GetMaxValueForSequencesResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** GetMaxValueForSequencesResponse max_values_by_sequence_table. */
@@ -45496,7 +45496,7 @@ export namespace tabletmanagerdata {
             /** GetMaxValueForSequencesResponse max_values_by_sequence_table */
             max_values_by_sequence_table?: ({ [k: string]: (number|Long) }|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -45524,7 +45524,7 @@ export namespace binlogdata {
          */
         constructor(properties?: binlogdata.Charset.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** Charset client. */
@@ -45629,7 +45629,7 @@ export namespace binlogdata {
             /** Charset server */
             server?: (number|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -45653,7 +45653,7 @@ export namespace binlogdata {
          */
         constructor(properties?: binlogdata.BinlogTransaction.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** BinlogTransaction statements. */
@@ -45752,7 +45752,7 @@ export namespace binlogdata {
             /** BinlogTransaction event_token */
             event_token?: (query.EventToken.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -45775,7 +45775,7 @@ export namespace binlogdata {
              */
             constructor(properties?: binlogdata.BinlogTransaction.Statement.$Properties);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
 
             /** Statement category. */
@@ -45880,7 +45880,7 @@ export namespace binlogdata {
                 /** Statement sql */
                 sql?: (Uint8Array|null);
 
-                /** Unknown fields preserved while decoding */
+                /** Unknown fields preserved while decoding when enabled */
                 $unknowns?: Uint8Array[];
             }
 
@@ -45939,7 +45939,7 @@ export namespace binlogdata {
          */
         constructor(properties?: binlogdata.StreamKeyRangeRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** StreamKeyRangeRequest position. */
@@ -46044,7 +46044,7 @@ export namespace binlogdata {
             /** StreamKeyRangeRequest charset */
             charset?: (binlogdata.Charset.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -46068,7 +46068,7 @@ export namespace binlogdata {
          */
         constructor(properties?: binlogdata.StreamKeyRangeResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** StreamKeyRangeResponse binlog_transaction. */
@@ -46161,7 +46161,7 @@ export namespace binlogdata {
             /** StreamKeyRangeResponse binlog_transaction */
             binlog_transaction?: (binlogdata.BinlogTransaction.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -46185,7 +46185,7 @@ export namespace binlogdata {
          */
         constructor(properties?: binlogdata.StreamTablesRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** StreamTablesRequest position. */
@@ -46290,7 +46290,7 @@ export namespace binlogdata {
             /** StreamTablesRequest charset */
             charset?: (binlogdata.Charset.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -46314,7 +46314,7 @@ export namespace binlogdata {
          */
         constructor(properties?: binlogdata.StreamTablesResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** StreamTablesResponse binlog_transaction. */
@@ -46407,7 +46407,7 @@ export namespace binlogdata {
             /** StreamTablesResponse binlog_transaction */
             binlog_transaction?: (binlogdata.BinlogTransaction.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -46431,7 +46431,7 @@ export namespace binlogdata {
          */
         constructor(properties?: binlogdata.CharsetConversion.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** CharsetConversion from_charset. */
@@ -46530,7 +46530,7 @@ export namespace binlogdata {
             /** CharsetConversion to_charset */
             to_charset?: (string|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -46554,7 +46554,7 @@ export namespace binlogdata {
          */
         constructor(properties?: binlogdata.Rule.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** Rule match. */
@@ -46695,7 +46695,7 @@ export namespace binlogdata {
             /** Rule force_unique_key */
             force_unique_key?: (string|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -46719,7 +46719,7 @@ export namespace binlogdata {
          */
         constructor(properties?: binlogdata.Filter.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** Filter rules. */
@@ -46830,7 +46830,7 @@ export namespace binlogdata {
             /** Filter workflow_name */
             workflow_name?: (string|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -46940,7 +46940,7 @@ export namespace binlogdata {
          */
         constructor(properties?: binlogdata.BinlogSource.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** BinlogSource keyspace. */
@@ -47099,7 +47099,7 @@ export namespace binlogdata {
             /** BinlogSource target_time_zone */
             target_time_zone?: (string|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -47196,7 +47196,7 @@ export namespace binlogdata {
          */
         constructor(properties?: binlogdata.RowChange.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** RowChange before. */
@@ -47307,7 +47307,7 @@ export namespace binlogdata {
             /** RowChange json_partial_values */
             json_partial_values?: (binlogdata.RowChange.Bitmap.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -47330,7 +47330,7 @@ export namespace binlogdata {
              */
             constructor(properties?: binlogdata.RowChange.Bitmap.$Properties);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
 
             /** Bitmap count. */
@@ -47429,7 +47429,7 @@ export namespace binlogdata {
                 /** Bitmap cols */
                 cols?: (Uint8Array|null);
 
-                /** Unknown fields preserved while decoding */
+                /** Unknown fields preserved while decoding when enabled */
                 $unknowns?: Uint8Array[];
             }
 
@@ -47454,7 +47454,7 @@ export namespace binlogdata {
          */
         constructor(properties?: binlogdata.RowEvent.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** RowEvent table_name. */
@@ -47577,7 +47577,7 @@ export namespace binlogdata {
             /** RowEvent is_internal_table */
             is_internal_table?: (boolean|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -47601,7 +47601,7 @@ export namespace binlogdata {
          */
         constructor(properties?: binlogdata.FieldEvent.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** FieldEvent table_name. */
@@ -47724,7 +47724,7 @@ export namespace binlogdata {
             /** FieldEvent is_internal_table */
             is_internal_table?: (boolean|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -47748,7 +47748,7 @@ export namespace binlogdata {
          */
         constructor(properties?: binlogdata.ShardGtid.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ShardGtid keyspace. */
@@ -47859,7 +47859,7 @@ export namespace binlogdata {
             /** ShardGtid table_p_ks */
             table_p_ks?: (binlogdata.TableLastPK.$Properties[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -47883,7 +47883,7 @@ export namespace binlogdata {
          */
         constructor(properties?: binlogdata.VGtid.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** VGtid shard_gtids. */
@@ -47976,7 +47976,7 @@ export namespace binlogdata {
             /** VGtid shard_gtids */
             shard_gtids?: (binlogdata.ShardGtid.$Properties[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -48000,7 +48000,7 @@ export namespace binlogdata {
          */
         constructor(properties?: binlogdata.KeyspaceShard.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** KeyspaceShard keyspace. */
@@ -48099,7 +48099,7 @@ export namespace binlogdata {
             /** KeyspaceShard shard */
             shard?: (string|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -48133,7 +48133,7 @@ export namespace binlogdata {
          */
         constructor(properties?: binlogdata.Journal.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** Journal id. */
@@ -48262,7 +48262,7 @@ export namespace binlogdata {
             /** Journal source_workflows */
             source_workflows?: (string[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -48286,7 +48286,7 @@ export namespace binlogdata {
          */
         constructor(properties?: binlogdata.VEvent.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** VEvent type. */
@@ -48481,7 +48481,7 @@ export namespace binlogdata {
             /** VEvent event_gtid */
             event_gtid?: (string|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -48505,7 +48505,7 @@ export namespace binlogdata {
          */
         constructor(properties?: binlogdata.MinimalTable.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** MinimalTable name. */
@@ -48616,7 +48616,7 @@ export namespace binlogdata {
             /** MinimalTable p_k_index_name */
             p_k_index_name?: (string|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -48640,7 +48640,7 @@ export namespace binlogdata {
          */
         constructor(properties?: binlogdata.MinimalSchema.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** MinimalSchema tables. */
@@ -48733,7 +48733,7 @@ export namespace binlogdata {
             /** MinimalSchema tables */
             tables?: (binlogdata.MinimalTable.$Properties[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -48757,7 +48757,7 @@ export namespace binlogdata {
          */
         constructor(properties?: binlogdata.VStreamOptions.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** VStreamOptions internal_tables. */
@@ -48874,7 +48874,7 @@ export namespace binlogdata {
             /** VStreamOptions event_types */
             event_types?: (binlogdata.VEventType[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -48898,7 +48898,7 @@ export namespace binlogdata {
          */
         constructor(properties?: binlogdata.VStreamRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** VStreamRequest effective_caller_id. */
@@ -49027,7 +49027,7 @@ export namespace binlogdata {
             /** VStreamRequest options */
             options?: (binlogdata.VStreamOptions.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -49051,7 +49051,7 @@ export namespace binlogdata {
          */
         constructor(properties?: binlogdata.VStreamResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** VStreamResponse events. */
@@ -49144,7 +49144,7 @@ export namespace binlogdata {
             /** VStreamResponse events */
             events?: (binlogdata.VEvent.$Properties[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -49168,7 +49168,7 @@ export namespace binlogdata {
          */
         constructor(properties?: binlogdata.VStreamRowsRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** VStreamRowsRequest effective_caller_id. */
@@ -49291,7 +49291,7 @@ export namespace binlogdata {
             /** VStreamRowsRequest options */
             options?: (binlogdata.VStreamOptions.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -49315,7 +49315,7 @@ export namespace binlogdata {
          */
         constructor(properties?: binlogdata.VStreamRowsResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** VStreamRowsResponse fields. */
@@ -49450,7 +49450,7 @@ export namespace binlogdata {
             /** VStreamRowsResponse throttled_reason */
             throttled_reason?: (string|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -49474,7 +49474,7 @@ export namespace binlogdata {
          */
         constructor(properties?: binlogdata.VStreamTablesRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** VStreamTablesRequest effective_caller_id. */
@@ -49585,7 +49585,7 @@ export namespace binlogdata {
             /** VStreamTablesRequest options */
             options?: (binlogdata.VStreamOptions.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -49609,7 +49609,7 @@ export namespace binlogdata {
          */
         constructor(properties?: binlogdata.VStreamTablesResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** VStreamTablesResponse table_name. */
@@ -49732,7 +49732,7 @@ export namespace binlogdata {
             /** VStreamTablesResponse lastpk */
             lastpk?: (query.Row.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -49756,7 +49756,7 @@ export namespace binlogdata {
          */
         constructor(properties?: binlogdata.LastPKEvent.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** LastPKEvent table_last_p_k. */
@@ -49855,7 +49855,7 @@ export namespace binlogdata {
             /** LastPKEvent completed */
             completed?: (boolean|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -49879,7 +49879,7 @@ export namespace binlogdata {
          */
         constructor(properties?: binlogdata.TableLastPK.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** TableLastPK table_name. */
@@ -49978,7 +49978,7 @@ export namespace binlogdata {
             /** TableLastPK lastpk */
             lastpk?: (query.QueryResult.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -50002,7 +50002,7 @@ export namespace binlogdata {
          */
         constructor(properties?: binlogdata.VStreamResultsRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** VStreamResultsRequest effective_caller_id. */
@@ -50113,7 +50113,7 @@ export namespace binlogdata {
             /** VStreamResultsRequest query */
             query?: (string|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -50137,7 +50137,7 @@ export namespace binlogdata {
          */
         constructor(properties?: binlogdata.VStreamResultsResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** VStreamResultsResponse fields. */
@@ -50242,7 +50242,7 @@ export namespace binlogdata {
             /** VStreamResultsResponse rows */
             rows?: (query.Row.$Properties[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -50266,7 +50266,7 @@ export namespace binlogdata {
          */
         constructor(properties?: binlogdata.BinlogDumpGTIDRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** BinlogDumpGTIDRequest effective_caller_id. */
@@ -50395,7 +50395,7 @@ export namespace binlogdata {
             /** BinlogDumpGTIDRequest flags */
             flags?: (number|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -50419,7 +50419,7 @@ export namespace binlogdata {
          */
         constructor(properties?: binlogdata.BinlogDumpResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** BinlogDumpResponse raw. */
@@ -50512,7 +50512,7 @@ export namespace binlogdata {
             /** BinlogDumpResponse raw */
             raw?: (Uint8Array|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -50540,7 +50540,7 @@ export namespace query {
          */
         constructor(properties?: query.Target.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** Target keyspace. */
@@ -50651,7 +50651,7 @@ export namespace query {
             /** Target cell */
             cell?: (string|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -50675,7 +50675,7 @@ export namespace query {
          */
         constructor(properties?: query.VTGateCallerID.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** VTGateCallerID username. */
@@ -50774,7 +50774,7 @@ export namespace query {
             /** VTGateCallerID groups */
             groups?: (string[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -50798,7 +50798,7 @@ export namespace query {
          */
         constructor(properties?: query.EventToken.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** EventToken timestamp. */
@@ -50903,7 +50903,7 @@ export namespace query {
             /** EventToken position */
             position?: (string|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -51134,7 +51134,7 @@ export namespace query {
          */
         constructor(properties?: query.Value.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** Value type. */
@@ -51233,7 +51233,7 @@ export namespace query {
             /** Value value */
             value?: (Uint8Array|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -51257,7 +51257,7 @@ export namespace query {
          */
         constructor(properties?: query.BindVariable.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** BindVariable type. */
@@ -51362,7 +51362,7 @@ export namespace query {
             /** BindVariable values */
             values?: (query.Value.$Properties[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -51386,7 +51386,7 @@ export namespace query {
          */
         constructor(properties?: query.BoundQuery.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** BoundQuery sql. */
@@ -51485,7 +51485,7 @@ export namespace query {
             /** BoundQuery bind_variables */
             bind_variables?: ({ [k: string]: query.BindVariable.$Properties }|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -51509,7 +51509,7 @@ export namespace query {
          */
         constructor(properties?: query.ExecuteOptions.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ExecuteOptions included_fields. */
@@ -51704,33 +51704,33 @@ export namespace query {
             /** ExecuteOptions timeout */
             timeout?: "authoritative_timeout";
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
         /** Narrowed shape of an ExecuteOptions. */
         type $Shape = {
-  included_fields?: query.ExecuteOptions.IncludedFields|null;
-  client_found_rows?: boolean|null;
-  workload?: query.ExecuteOptions.Workload|null;
-  sql_select_limit?: number|Long|null;
-  transaction_isolation?: query.ExecuteOptions.TransactionIsolation|null;
-  skip_query_plan_cache?: boolean|null;
-  planner_version?: query.ExecuteOptions.PlannerVersion|null;
-  has_created_temp_tables?: boolean|null;
-  consolidator?: query.ExecuteOptions.Consolidator|null;
-  transaction_access_mode?: query.ExecuteOptions.TransactionAccessMode[]|null;
-  WorkloadName?: string|null;
-  priority?: string|null;
-  authoritative_timeout?: number|Long|null;
-  fetch_last_insert_id?: boolean|null;
-  in_dml_execution?: boolean|null;
-  transaction_timeout?: number|Long|null;
-  no_result?: boolean|null;
-  $unknowns?: Uint8Array[];
-} & (
-  ({ timeout?: undefined; authoritative_timeout?: null }|{ timeout?: "authoritative_timeout"; authoritative_timeout: number|Long })
-);
+          included_fields?: query.ExecuteOptions.IncludedFields|null;
+          client_found_rows?: boolean|null;
+          workload?: query.ExecuteOptions.Workload|null;
+          sql_select_limit?: number|Long|null;
+          transaction_isolation?: query.ExecuteOptions.TransactionIsolation|null;
+          skip_query_plan_cache?: boolean|null;
+          planner_version?: query.ExecuteOptions.PlannerVersion|null;
+          has_created_temp_tables?: boolean|null;
+          consolidator?: query.ExecuteOptions.Consolidator|null;
+          transaction_access_mode?: query.ExecuteOptions.TransactionAccessMode[]|null;
+          WorkloadName?: string|null;
+          priority?: string|null;
+          authoritative_timeout?: number|Long|null;
+          fetch_last_insert_id?: boolean|null;
+          in_dml_execution?: boolean|null;
+          transaction_timeout?: number|Long|null;
+          no_result?: boolean|null;
+          $unknowns?: Uint8Array[];
+        } & (
+          ({ timeout?: undefined; authoritative_timeout?: null }|{ timeout?: "authoritative_timeout"; authoritative_timeout: number|Long })
+        );
 
         /** IncludedFields enum. */
         enum IncludedFields {
@@ -51860,7 +51860,7 @@ export namespace query {
          */
         constructor(properties?: query.Field.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** Field name. */
@@ -52013,7 +52013,7 @@ export namespace query {
             /** Field column_type */
             column_type?: (string|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -52037,7 +52037,7 @@ export namespace query {
          */
         constructor(properties?: query.Row.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** Row lengths. */
@@ -52136,7 +52136,7 @@ export namespace query {
             /** Row values */
             values?: (Uint8Array|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -52160,7 +52160,7 @@ export namespace query {
          */
         constructor(properties?: query.QueryResult.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** QueryResult fields. */
@@ -52289,7 +52289,7 @@ export namespace query {
             /** QueryResult insert_id_changed */
             insert_id_changed?: (boolean|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -52313,7 +52313,7 @@ export namespace query {
          */
         constructor(properties?: query.QueryWarning.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** QueryWarning code. */
@@ -52412,7 +52412,7 @@ export namespace query {
             /** QueryWarning message */
             message?: (string|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -52436,7 +52436,7 @@ export namespace query {
          */
         constructor(properties?: query.StreamEvent.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** StreamEvent statements. */
@@ -52535,7 +52535,7 @@ export namespace query {
             /** StreamEvent event_token */
             event_token?: (query.EventToken.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -52558,7 +52558,7 @@ export namespace query {
              */
             constructor(properties?: query.StreamEvent.Statement.$Properties);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
 
             /** Statement category. */
@@ -52675,7 +52675,7 @@ export namespace query {
                 /** Statement sql */
                 sql?: (Uint8Array|null);
 
-                /** Unknown fields preserved while decoding */
+                /** Unknown fields preserved while decoding when enabled */
                 $unknowns?: Uint8Array[];
             }
 
@@ -52713,7 +52713,7 @@ export namespace query {
          */
         constructor(properties?: query.ExecuteRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ExecuteRequest effective_caller_id. */
@@ -52842,21 +52842,21 @@ export namespace query {
             /** ExecuteRequest reserved_id */
             reserved_id?: (number|Long|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
         /** Shape of an ExecuteRequest. */
         type $Shape = {
-  effective_caller_id?: vtrpc.CallerID.$Shape|null;
-  immediate_caller_id?: query.VTGateCallerID.$Shape|null;
-  target?: query.Target.$Shape|null;
-  query?: query.BoundQuery.$Shape|null;
-  transaction_id?: number|Long|null;
-  options?: query.ExecuteOptions.$Shape|null;
-  reserved_id?: number|Long|null;
-  $unknowns?: Uint8Array[];
-};
+          effective_caller_id?: vtrpc.CallerID.$Shape|null;
+          immediate_caller_id?: query.VTGateCallerID.$Shape|null;
+          target?: query.Target.$Shape|null;
+          query?: query.BoundQuery.$Shape|null;
+          transaction_id?: number|Long|null;
+          options?: query.ExecuteOptions.$Shape|null;
+          reserved_id?: number|Long|null;
+          $unknowns?: Uint8Array[];
+        };
     }
 
     /**
@@ -52875,7 +52875,7 @@ export namespace query {
          */
         constructor(properties?: query.ExecuteResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ExecuteResponse result. */
@@ -52968,7 +52968,7 @@ export namespace query {
             /** ExecuteResponse result */
             result?: (query.QueryResult.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -52992,7 +52992,7 @@ export namespace query {
          */
         constructor(properties?: query.ResultWithError.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ResultWithError error. */
@@ -53091,7 +53091,7 @@ export namespace query {
             /** ResultWithError result */
             result?: (query.QueryResult.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -53115,7 +53115,7 @@ export namespace query {
          */
         constructor(properties?: query.StreamExecuteRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** StreamExecuteRequest effective_caller_id. */
@@ -53244,21 +53244,21 @@ export namespace query {
             /** StreamExecuteRequest reserved_id */
             reserved_id?: (number|Long|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
         /** Shape of a StreamExecuteRequest. */
         type $Shape = {
-  effective_caller_id?: vtrpc.CallerID.$Shape|null;
-  immediate_caller_id?: query.VTGateCallerID.$Shape|null;
-  target?: query.Target.$Shape|null;
-  query?: query.BoundQuery.$Shape|null;
-  options?: query.ExecuteOptions.$Shape|null;
-  transaction_id?: number|Long|null;
-  reserved_id?: number|Long|null;
-  $unknowns?: Uint8Array[];
-};
+          effective_caller_id?: vtrpc.CallerID.$Shape|null;
+          immediate_caller_id?: query.VTGateCallerID.$Shape|null;
+          target?: query.Target.$Shape|null;
+          query?: query.BoundQuery.$Shape|null;
+          options?: query.ExecuteOptions.$Shape|null;
+          transaction_id?: number|Long|null;
+          reserved_id?: number|Long|null;
+          $unknowns?: Uint8Array[];
+        };
     }
 
     /**
@@ -53277,7 +53277,7 @@ export namespace query {
          */
         constructor(properties?: query.StreamExecuteResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** StreamExecuteResponse result. */
@@ -53370,7 +53370,7 @@ export namespace query {
             /** StreamExecuteResponse result */
             result?: (query.QueryResult.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -53394,7 +53394,7 @@ export namespace query {
          */
         constructor(properties?: query.BeginRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** BeginRequest effective_caller_id. */
@@ -53505,18 +53505,18 @@ export namespace query {
             /** BeginRequest options */
             options?: (query.ExecuteOptions.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
         /** Shape of a BeginRequest. */
         type $Shape = {
-  effective_caller_id?: vtrpc.CallerID.$Shape|null;
-  immediate_caller_id?: query.VTGateCallerID.$Shape|null;
-  target?: query.Target.$Shape|null;
-  options?: query.ExecuteOptions.$Shape|null;
-  $unknowns?: Uint8Array[];
-};
+          effective_caller_id?: vtrpc.CallerID.$Shape|null;
+          immediate_caller_id?: query.VTGateCallerID.$Shape|null;
+          target?: query.Target.$Shape|null;
+          options?: query.ExecuteOptions.$Shape|null;
+          $unknowns?: Uint8Array[];
+        };
     }
 
     /**
@@ -53535,7 +53535,7 @@ export namespace query {
          */
         constructor(properties?: query.BeginResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** BeginResponse transaction_id. */
@@ -53640,7 +53640,7 @@ export namespace query {
             /** BeginResponse session_state_changes */
             session_state_changes?: (string|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -53664,7 +53664,7 @@ export namespace query {
          */
         constructor(properties?: query.CommitRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** CommitRequest effective_caller_id. */
@@ -53775,7 +53775,7 @@ export namespace query {
             /** CommitRequest transaction_id */
             transaction_id?: (number|Long|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -53799,7 +53799,7 @@ export namespace query {
          */
         constructor(properties?: query.CommitResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** CommitResponse reserved_id. */
@@ -53892,7 +53892,7 @@ export namespace query {
             /** CommitResponse reserved_id */
             reserved_id?: (number|Long|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -53916,7 +53916,7 @@ export namespace query {
          */
         constructor(properties?: query.RollbackRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** RollbackRequest effective_caller_id. */
@@ -54027,7 +54027,7 @@ export namespace query {
             /** RollbackRequest transaction_id */
             transaction_id?: (number|Long|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -54051,7 +54051,7 @@ export namespace query {
          */
         constructor(properties?: query.RollbackResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** RollbackResponse reserved_id. */
@@ -54144,7 +54144,7 @@ export namespace query {
             /** RollbackResponse reserved_id */
             reserved_id?: (number|Long|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -54168,7 +54168,7 @@ export namespace query {
          */
         constructor(properties?: query.PrepareRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** PrepareRequest effective_caller_id. */
@@ -54285,7 +54285,7 @@ export namespace query {
             /** PrepareRequest dtid */
             dtid?: (string|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -54309,7 +54309,7 @@ export namespace query {
          */
         constructor(properties?: query.PrepareResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /**
@@ -54396,7 +54396,7 @@ export namespace query {
         /** Properties of a PrepareResponse. */
         interface $Properties {
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -54420,7 +54420,7 @@ export namespace query {
          */
         constructor(properties?: query.CommitPreparedRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** CommitPreparedRequest effective_caller_id. */
@@ -54531,7 +54531,7 @@ export namespace query {
             /** CommitPreparedRequest dtid */
             dtid?: (string|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -54555,7 +54555,7 @@ export namespace query {
          */
         constructor(properties?: query.CommitPreparedResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /**
@@ -54642,7 +54642,7 @@ export namespace query {
         /** Properties of a CommitPreparedResponse. */
         interface $Properties {
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -54666,7 +54666,7 @@ export namespace query {
          */
         constructor(properties?: query.RollbackPreparedRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** RollbackPreparedRequest effective_caller_id. */
@@ -54783,7 +54783,7 @@ export namespace query {
             /** RollbackPreparedRequest dtid */
             dtid?: (string|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -54807,7 +54807,7 @@ export namespace query {
          */
         constructor(properties?: query.RollbackPreparedResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /**
@@ -54894,7 +54894,7 @@ export namespace query {
         /** Properties of a RollbackPreparedResponse. */
         interface $Properties {
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -54918,7 +54918,7 @@ export namespace query {
          */
         constructor(properties?: query.CreateTransactionRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** CreateTransactionRequest effective_caller_id. */
@@ -55035,7 +55035,7 @@ export namespace query {
             /** CreateTransactionRequest participants */
             participants?: (query.Target.$Properties[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -55059,7 +55059,7 @@ export namespace query {
          */
         constructor(properties?: query.CreateTransactionResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /**
@@ -55146,7 +55146,7 @@ export namespace query {
         /** Properties of a CreateTransactionResponse. */
         interface $Properties {
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -55170,7 +55170,7 @@ export namespace query {
          */
         constructor(properties?: query.StartCommitRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** StartCommitRequest effective_caller_id. */
@@ -55287,7 +55287,7 @@ export namespace query {
             /** StartCommitRequest dtid */
             dtid?: (string|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -55324,7 +55324,7 @@ export namespace query {
          */
         constructor(properties?: query.StartCommitResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** StartCommitResponse state. */
@@ -55417,7 +55417,7 @@ export namespace query {
             /** StartCommitResponse state */
             state?: (query.StartCommitState|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -55441,7 +55441,7 @@ export namespace query {
          */
         constructor(properties?: query.SetRollbackRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** SetRollbackRequest effective_caller_id. */
@@ -55558,7 +55558,7 @@ export namespace query {
             /** SetRollbackRequest dtid */
             dtid?: (string|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -55582,7 +55582,7 @@ export namespace query {
          */
         constructor(properties?: query.SetRollbackResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /**
@@ -55669,7 +55669,7 @@ export namespace query {
         /** Properties of a SetRollbackResponse. */
         interface $Properties {
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -55693,7 +55693,7 @@ export namespace query {
          */
         constructor(properties?: query.ConcludeTransactionRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ConcludeTransactionRequest effective_caller_id. */
@@ -55804,7 +55804,7 @@ export namespace query {
             /** ConcludeTransactionRequest dtid */
             dtid?: (string|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -55828,7 +55828,7 @@ export namespace query {
          */
         constructor(properties?: query.ConcludeTransactionResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /**
@@ -55915,7 +55915,7 @@ export namespace query {
         /** Properties of a ConcludeTransactionResponse. */
         interface $Properties {
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -55939,7 +55939,7 @@ export namespace query {
          */
         constructor(properties?: query.ReadTransactionRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ReadTransactionRequest effective_caller_id. */
@@ -56050,7 +56050,7 @@ export namespace query {
             /** ReadTransactionRequest dtid */
             dtid?: (string|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -56074,7 +56074,7 @@ export namespace query {
          */
         constructor(properties?: query.ReadTransactionResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ReadTransactionResponse metadata. */
@@ -56167,7 +56167,7 @@ export namespace query {
             /** ReadTransactionResponse metadata */
             metadata?: (query.TransactionMetadata.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -56191,7 +56191,7 @@ export namespace query {
          */
         constructor(properties?: query.UnresolvedTransactionsRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** UnresolvedTransactionsRequest effective_caller_id. */
@@ -56302,7 +56302,7 @@ export namespace query {
             /** UnresolvedTransactionsRequest abandon_age */
             abandon_age?: (number|Long|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -56326,7 +56326,7 @@ export namespace query {
          */
         constructor(properties?: query.UnresolvedTransactionsResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** UnresolvedTransactionsResponse transactions. */
@@ -56419,7 +56419,7 @@ export namespace query {
             /** UnresolvedTransactionsResponse transactions */
             transactions?: (query.TransactionMetadata.$Properties[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -56443,7 +56443,7 @@ export namespace query {
          */
         constructor(properties?: query.BeginExecuteRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** BeginExecuteRequest effective_caller_id. */
@@ -56572,21 +56572,21 @@ export namespace query {
             /** BeginExecuteRequest pre_queries */
             pre_queries?: (string[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
         /** Shape of a BeginExecuteRequest. */
         type $Shape = {
-  effective_caller_id?: vtrpc.CallerID.$Shape|null;
-  immediate_caller_id?: query.VTGateCallerID.$Shape|null;
-  target?: query.Target.$Shape|null;
-  query?: query.BoundQuery.$Shape|null;
-  options?: query.ExecuteOptions.$Shape|null;
-  reserved_id?: number|Long|null;
-  pre_queries?: string[]|null;
-  $unknowns?: Uint8Array[];
-};
+          effective_caller_id?: vtrpc.CallerID.$Shape|null;
+          immediate_caller_id?: query.VTGateCallerID.$Shape|null;
+          target?: query.Target.$Shape|null;
+          query?: query.BoundQuery.$Shape|null;
+          options?: query.ExecuteOptions.$Shape|null;
+          reserved_id?: number|Long|null;
+          pre_queries?: string[]|null;
+          $unknowns?: Uint8Array[];
+        };
     }
 
     /**
@@ -56605,7 +56605,7 @@ export namespace query {
          */
         constructor(properties?: query.BeginExecuteResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** BeginExecuteResponse error. */
@@ -56722,7 +56722,7 @@ export namespace query {
             /** BeginExecuteResponse session_state_changes */
             session_state_changes?: (string|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -56746,7 +56746,7 @@ export namespace query {
          */
         constructor(properties?: query.BeginStreamExecuteRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** BeginStreamExecuteRequest effective_caller_id. */
@@ -56875,21 +56875,21 @@ export namespace query {
             /** BeginStreamExecuteRequest reserved_id */
             reserved_id?: (number|Long|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
         /** Shape of a BeginStreamExecuteRequest. */
         type $Shape = {
-  effective_caller_id?: vtrpc.CallerID.$Shape|null;
-  immediate_caller_id?: query.VTGateCallerID.$Shape|null;
-  target?: query.Target.$Shape|null;
-  query?: query.BoundQuery.$Shape|null;
-  options?: query.ExecuteOptions.$Shape|null;
-  pre_queries?: string[]|null;
-  reserved_id?: number|Long|null;
-  $unknowns?: Uint8Array[];
-};
+          effective_caller_id?: vtrpc.CallerID.$Shape|null;
+          immediate_caller_id?: query.VTGateCallerID.$Shape|null;
+          target?: query.Target.$Shape|null;
+          query?: query.BoundQuery.$Shape|null;
+          options?: query.ExecuteOptions.$Shape|null;
+          pre_queries?: string[]|null;
+          reserved_id?: number|Long|null;
+          $unknowns?: Uint8Array[];
+        };
     }
 
     /**
@@ -56908,7 +56908,7 @@ export namespace query {
          */
         constructor(properties?: query.BeginStreamExecuteResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** BeginStreamExecuteResponse error. */
@@ -57025,7 +57025,7 @@ export namespace query {
             /** BeginStreamExecuteResponse session_state_changes */
             session_state_changes?: (string|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -57049,7 +57049,7 @@ export namespace query {
          */
         constructor(properties?: query.MessageStreamRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** MessageStreamRequest effective_caller_id. */
@@ -57160,7 +57160,7 @@ export namespace query {
             /** MessageStreamRequest name */
             name?: (string|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -57184,7 +57184,7 @@ export namespace query {
          */
         constructor(properties?: query.MessageStreamResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** MessageStreamResponse result. */
@@ -57277,7 +57277,7 @@ export namespace query {
             /** MessageStreamResponse result */
             result?: (query.QueryResult.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -57301,7 +57301,7 @@ export namespace query {
          */
         constructor(properties?: query.MessageAckRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** MessageAckRequest effective_caller_id. */
@@ -57418,7 +57418,7 @@ export namespace query {
             /** MessageAckRequest ids */
             ids?: (query.Value.$Properties[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -57442,7 +57442,7 @@ export namespace query {
          */
         constructor(properties?: query.MessageAckResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** MessageAckResponse result. */
@@ -57535,7 +57535,7 @@ export namespace query {
             /** MessageAckResponse result */
             result?: (query.QueryResult.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -57559,7 +57559,7 @@ export namespace query {
          */
         constructor(properties?: query.ReserveExecuteRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ReserveExecuteRequest effective_caller_id. */
@@ -57688,21 +57688,21 @@ export namespace query {
             /** ReserveExecuteRequest pre_queries */
             pre_queries?: (string[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
         /** Shape of a ReserveExecuteRequest. */
         type $Shape = {
-  effective_caller_id?: vtrpc.CallerID.$Shape|null;
-  immediate_caller_id?: query.VTGateCallerID.$Shape|null;
-  target?: query.Target.$Shape|null;
-  query?: query.BoundQuery.$Shape|null;
-  transaction_id?: number|Long|null;
-  options?: query.ExecuteOptions.$Shape|null;
-  pre_queries?: string[]|null;
-  $unknowns?: Uint8Array[];
-};
+          effective_caller_id?: vtrpc.CallerID.$Shape|null;
+          immediate_caller_id?: query.VTGateCallerID.$Shape|null;
+          target?: query.Target.$Shape|null;
+          query?: query.BoundQuery.$Shape|null;
+          transaction_id?: number|Long|null;
+          options?: query.ExecuteOptions.$Shape|null;
+          pre_queries?: string[]|null;
+          $unknowns?: Uint8Array[];
+        };
     }
 
     /**
@@ -57721,7 +57721,7 @@ export namespace query {
          */
         constructor(properties?: query.ReserveExecuteResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ReserveExecuteResponse error. */
@@ -57832,7 +57832,7 @@ export namespace query {
             /** ReserveExecuteResponse tablet_alias */
             tablet_alias?: (topodata.TabletAlias.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -57856,7 +57856,7 @@ export namespace query {
          */
         constructor(properties?: query.ReserveStreamExecuteRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ReserveStreamExecuteRequest effective_caller_id. */
@@ -57985,21 +57985,21 @@ export namespace query {
             /** ReserveStreamExecuteRequest pre_queries */
             pre_queries?: (string[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
         /** Shape of a ReserveStreamExecuteRequest. */
         type $Shape = {
-  effective_caller_id?: vtrpc.CallerID.$Shape|null;
-  immediate_caller_id?: query.VTGateCallerID.$Shape|null;
-  target?: query.Target.$Shape|null;
-  query?: query.BoundQuery.$Shape|null;
-  options?: query.ExecuteOptions.$Shape|null;
-  transaction_id?: number|Long|null;
-  pre_queries?: string[]|null;
-  $unknowns?: Uint8Array[];
-};
+          effective_caller_id?: vtrpc.CallerID.$Shape|null;
+          immediate_caller_id?: query.VTGateCallerID.$Shape|null;
+          target?: query.Target.$Shape|null;
+          query?: query.BoundQuery.$Shape|null;
+          options?: query.ExecuteOptions.$Shape|null;
+          transaction_id?: number|Long|null;
+          pre_queries?: string[]|null;
+          $unknowns?: Uint8Array[];
+        };
     }
 
     /**
@@ -58018,7 +58018,7 @@ export namespace query {
          */
         constructor(properties?: query.ReserveStreamExecuteResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ReserveStreamExecuteResponse error. */
@@ -58129,7 +58129,7 @@ export namespace query {
             /** ReserveStreamExecuteResponse tablet_alias */
             tablet_alias?: (topodata.TabletAlias.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -58153,7 +58153,7 @@ export namespace query {
          */
         constructor(properties?: query.ReserveBeginExecuteRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ReserveBeginExecuteRequest effective_caller_id. */
@@ -58282,21 +58282,21 @@ export namespace query {
             /** ReserveBeginExecuteRequest post_begin_queries */
             post_begin_queries?: (string[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
         /** Shape of a ReserveBeginExecuteRequest. */
         type $Shape = {
-  effective_caller_id?: vtrpc.CallerID.$Shape|null;
-  immediate_caller_id?: query.VTGateCallerID.$Shape|null;
-  target?: query.Target.$Shape|null;
-  query?: query.BoundQuery.$Shape|null;
-  options?: query.ExecuteOptions.$Shape|null;
-  pre_queries?: string[]|null;
-  post_begin_queries?: string[]|null;
-  $unknowns?: Uint8Array[];
-};
+          effective_caller_id?: vtrpc.CallerID.$Shape|null;
+          immediate_caller_id?: query.VTGateCallerID.$Shape|null;
+          target?: query.Target.$Shape|null;
+          query?: query.BoundQuery.$Shape|null;
+          options?: query.ExecuteOptions.$Shape|null;
+          pre_queries?: string[]|null;
+          post_begin_queries?: string[]|null;
+          $unknowns?: Uint8Array[];
+        };
     }
 
     /**
@@ -58315,7 +58315,7 @@ export namespace query {
          */
         constructor(properties?: query.ReserveBeginExecuteResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ReserveBeginExecuteResponse error. */
@@ -58438,7 +58438,7 @@ export namespace query {
             /** ReserveBeginExecuteResponse session_state_changes */
             session_state_changes?: (string|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -58462,7 +58462,7 @@ export namespace query {
          */
         constructor(properties?: query.ReserveBeginStreamExecuteRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ReserveBeginStreamExecuteRequest effective_caller_id. */
@@ -58591,21 +58591,21 @@ export namespace query {
             /** ReserveBeginStreamExecuteRequest post_begin_queries */
             post_begin_queries?: (string[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
         /** Shape of a ReserveBeginStreamExecuteRequest. */
         type $Shape = {
-  effective_caller_id?: vtrpc.CallerID.$Shape|null;
-  immediate_caller_id?: query.VTGateCallerID.$Shape|null;
-  target?: query.Target.$Shape|null;
-  query?: query.BoundQuery.$Shape|null;
-  options?: query.ExecuteOptions.$Shape|null;
-  pre_queries?: string[]|null;
-  post_begin_queries?: string[]|null;
-  $unknowns?: Uint8Array[];
-};
+          effective_caller_id?: vtrpc.CallerID.$Shape|null;
+          immediate_caller_id?: query.VTGateCallerID.$Shape|null;
+          target?: query.Target.$Shape|null;
+          query?: query.BoundQuery.$Shape|null;
+          options?: query.ExecuteOptions.$Shape|null;
+          pre_queries?: string[]|null;
+          post_begin_queries?: string[]|null;
+          $unknowns?: Uint8Array[];
+        };
     }
 
     /**
@@ -58624,7 +58624,7 @@ export namespace query {
          */
         constructor(properties?: query.ReserveBeginStreamExecuteResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ReserveBeginStreamExecuteResponse error. */
@@ -58747,7 +58747,7 @@ export namespace query {
             /** ReserveBeginStreamExecuteResponse session_state_changes */
             session_state_changes?: (string|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -58771,7 +58771,7 @@ export namespace query {
          */
         constructor(properties?: query.ReleaseRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ReleaseRequest effective_caller_id. */
@@ -58888,7 +58888,7 @@ export namespace query {
             /** ReleaseRequest reserved_id */
             reserved_id?: (number|Long|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -58912,7 +58912,7 @@ export namespace query {
          */
         constructor(properties?: query.ReleaseResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /**
@@ -58999,7 +58999,7 @@ export namespace query {
         /** Properties of a ReleaseResponse. */
         interface $Properties {
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -59023,7 +59023,7 @@ export namespace query {
          */
         constructor(properties?: query.StreamHealthRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /**
@@ -59110,7 +59110,7 @@ export namespace query {
         /** Properties of a StreamHealthRequest. */
         interface $Properties {
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -59134,7 +59134,7 @@ export namespace query {
          */
         constructor(properties?: query.RealtimeStats.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** RealtimeStats health_error. */
@@ -59281,7 +59281,7 @@ export namespace query {
             /** RealtimeStats tx_unresolved */
             tx_unresolved?: (boolean|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -59305,7 +59305,7 @@ export namespace query {
          */
         constructor(properties?: query.AggregateStats.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** AggregateStats healthy_tablet_count. */
@@ -59416,7 +59416,7 @@ export namespace query {
             /** AggregateStats replication_lag_seconds_max */
             replication_lag_seconds_max?: (number|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -59440,7 +59440,7 @@ export namespace query {
          */
         constructor(properties?: query.StreamHealthResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** StreamHealthResponse target. */
@@ -59557,7 +59557,7 @@ export namespace query {
             /** StreamHealthResponse tablet_alias */
             tablet_alias?: (topodata.TabletAlias.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -59597,7 +59597,7 @@ export namespace query {
          */
         constructor(properties?: query.TransactionMetadata.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** TransactionMetadata dtid. */
@@ -59708,7 +59708,7 @@ export namespace query {
             /** TransactionMetadata participants */
             participants?: (query.Target.$Properties[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -59748,7 +59748,7 @@ export namespace query {
          */
         constructor(properties?: query.GetSchemaRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** GetSchemaRequest target. */
@@ -59853,7 +59853,7 @@ export namespace query {
             /** GetSchemaRequest table_names */
             table_names?: (string[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -59877,7 +59877,7 @@ export namespace query {
          */
         constructor(properties?: query.UDFInfo.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** UDFInfo name. */
@@ -59982,7 +59982,7 @@ export namespace query {
             /** UDFInfo return_type */
             return_type?: (query.Type|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -60006,7 +60006,7 @@ export namespace query {
          */
         constructor(properties?: query.GetSchemaResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** GetSchemaResponse udfs. */
@@ -60105,7 +60105,7 @@ export namespace query {
             /** GetSchemaResponse table_definition */
             table_definition?: ({ [k: string]: string }|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -60133,7 +60133,7 @@ export namespace replicationdata {
          */
         constructor(properties?: replicationdata.Status.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** Status position. */
@@ -60382,7 +60382,7 @@ export namespace replicationdata {
             /** Status semi_sync_replica_status */
             semi_sync_replica_status?: (boolean|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -60406,7 +60406,7 @@ export namespace replicationdata {
          */
         constructor(properties?: replicationdata.Configuration.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** Configuration heartbeat_interval. */
@@ -60505,7 +60505,7 @@ export namespace replicationdata {
             /** Configuration replica_net_timeout */
             replica_net_timeout?: (number|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -60529,7 +60529,7 @@ export namespace replicationdata {
          */
         constructor(properties?: replicationdata.StopReplicationStatus.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** StopReplicationStatus before. */
@@ -60628,7 +60628,7 @@ export namespace replicationdata {
             /** StopReplicationStatus after */
             after?: (replicationdata.Status.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -60662,7 +60662,7 @@ export namespace replicationdata {
          */
         constructor(properties?: replicationdata.PrimaryStatus.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** PrimaryStatus position. */
@@ -60767,12 +60767,153 @@ export namespace replicationdata {
             /** PrimaryStatus server_uuid */
             server_uuid?: (string|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
         /** Shape of a PrimaryStatus. */
         type $Shape = replicationdata.PrimaryStatus.$Properties;
+    }
+
+    /**
+     * Properties of a ShardPeerHealth.
+     * @deprecated Use replicationdata.ShardPeerHealth.$Properties instead.
+     */
+    interface IShardPeerHealth extends replicationdata.ShardPeerHealth.$Properties {
+    }
+
+    /** Represents a ShardPeerHealth. */
+    class ShardPeerHealth {
+
+        /**
+         * Constructs a new ShardPeerHealth.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: replicationdata.ShardPeerHealth.$Properties);
+
+        /** Unknown fields preserved while decoding when enabled */
+        $unknowns?: Uint8Array[];
+
+        /** ShardPeerHealth tablet_alias. */
+        tablet_alias?: (topodata.TabletAlias.$Properties|null);
+
+        /** ShardPeerHealth consecutive_ping_failures. */
+        consecutive_ping_failures: (number|Long);
+
+        /** ShardPeerHealth last_successful_ping. */
+        last_successful_ping?: (vttime.Time.$Properties|null);
+
+        /** ShardPeerHealth last_attempted_ping. */
+        last_attempted_ping?: (vttime.Time.$Properties|null);
+
+        /** ShardPeerHealth time_since_last_attempted_ping. */
+        time_since_last_attempted_ping?: (vttime.Duration.$Properties|null);
+
+        /**
+         * Creates a new ShardPeerHealth instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ShardPeerHealth instance
+         */
+        static create(properties: replicationdata.ShardPeerHealth.$Shape): replicationdata.ShardPeerHealth & replicationdata.ShardPeerHealth.$Shape;
+        static create(properties?: replicationdata.ShardPeerHealth.$Properties): replicationdata.ShardPeerHealth;
+
+        /**
+         * Encodes the specified ShardPeerHealth message. Does not implicitly {@link replicationdata.ShardPeerHealth.verify|verify} messages.
+         * @param message ShardPeerHealth message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        static encode(message: replicationdata.ShardPeerHealth.$Properties, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ShardPeerHealth message, length delimited. Does not implicitly {@link replicationdata.ShardPeerHealth.verify|verify} messages.
+         * @param message ShardPeerHealth message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        static encodeDelimited(message: replicationdata.ShardPeerHealth.$Properties, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ShardPeerHealth message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns {replicationdata.ShardPeerHealth & replicationdata.ShardPeerHealth.$Shape} ShardPeerHealth
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): replicationdata.ShardPeerHealth & replicationdata.ShardPeerHealth.$Shape;
+
+        /**
+         * Decodes a ShardPeerHealth message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns {replicationdata.ShardPeerHealth & replicationdata.ShardPeerHealth.$Shape} ShardPeerHealth
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): replicationdata.ShardPeerHealth & replicationdata.ShardPeerHealth.$Shape;
+
+        /**
+         * Verifies a ShardPeerHealth message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ShardPeerHealth message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ShardPeerHealth
+         */
+        static fromObject(object: { [k: string]: any }): replicationdata.ShardPeerHealth;
+
+        /**
+         * Creates a plain object from a ShardPeerHealth message. Also converts values to other types if specified.
+         * @param message ShardPeerHealth
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        static toObject(message: replicationdata.ShardPeerHealth, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ShardPeerHealth to JSON.
+         * @returns JSON object
+         */
+        toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the type url for ShardPeerHealth
+         * @param [prefix] Custom type url prefix, defaults to `"type.googleapis.com"`
+         * @returns The type url
+         */
+        static getTypeUrl(prefix?: string): string;
+    }
+
+    namespace ShardPeerHealth {
+
+        /** Properties of a ShardPeerHealth. */
+        interface $Properties {
+
+            /** ShardPeerHealth tablet_alias */
+            tablet_alias?: (topodata.TabletAlias.$Properties|null);
+
+            /** ShardPeerHealth consecutive_ping_failures */
+            consecutive_ping_failures?: (number|Long|null);
+
+            /** ShardPeerHealth last_successful_ping */
+            last_successful_ping?: (vttime.Time.$Properties|null);
+
+            /** ShardPeerHealth last_attempted_ping */
+            last_attempted_ping?: (vttime.Time.$Properties|null);
+
+            /** ShardPeerHealth time_since_last_attempted_ping */
+            time_since_last_attempted_ping?: (vttime.Duration.$Properties|null);
+
+            /** Unknown fields preserved while decoding when enabled */
+            $unknowns?: Uint8Array[];
+        }
+
+        /** Shape of a ShardPeerHealth. */
+        type $Shape = replicationdata.ShardPeerHealth.$Properties;
     }
 
     /**
@@ -60791,7 +60932,7 @@ export namespace replicationdata {
          */
         constructor(properties?: replicationdata.FullStatus.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** FullStatus server_id. */
@@ -60868,6 +61009,9 @@ export namespace replicationdata {
 
         /** FullStatus tablet_type. */
         tablet_type: topodata.TabletType;
+
+        /** FullStatus shard_peer_health. */
+        shard_peer_health: replicationdata.ShardPeerHealth.$Properties[];
 
         /**
          * Creates a new FullStatus instance using the specified properties.
@@ -61028,7 +61172,10 @@ export namespace replicationdata {
             /** FullStatus tablet_type */
             tablet_type?: (topodata.TabletType|null);
 
-            /** Unknown fields preserved while decoding */
+            /** FullStatus shard_peer_health */
+            shard_peer_health?: (replicationdata.ShardPeerHealth.$Properties[]|null);
+
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -61056,7 +61203,7 @@ export namespace vschema {
          */
         constructor(properties?: vschema.RoutingRules.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** RoutingRules rules. */
@@ -61149,7 +61296,7 @@ export namespace vschema {
             /** RoutingRules rules */
             rules?: (vschema.RoutingRule.$Properties[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -61173,7 +61320,7 @@ export namespace vschema {
          */
         constructor(properties?: vschema.RoutingRule.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** RoutingRule from_table. */
@@ -61272,7 +61419,7 @@ export namespace vschema {
             /** RoutingRule to_tables */
             to_tables?: (string[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -61296,7 +61443,7 @@ export namespace vschema {
          */
         constructor(properties?: vschema.Keyspace.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** Keyspace sharded. */
@@ -61425,7 +61572,7 @@ export namespace vschema {
             /** Keyspace prevent_cross_keyspace_reads */
             prevent_cross_keyspace_reads?: (boolean|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -61465,7 +61612,7 @@ export namespace vschema {
          */
         constructor(properties?: vschema.MultiTenantSpec.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** MultiTenantSpec tenant_id_column_name. */
@@ -61564,7 +61711,7 @@ export namespace vschema {
             /** MultiTenantSpec tenant_id_column_type */
             tenant_id_column_type?: (query.Type|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -61588,7 +61735,7 @@ export namespace vschema {
          */
         constructor(properties?: vschema.Vindex.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** Vindex type. */
@@ -61693,7 +61840,7 @@ export namespace vschema {
             /** Vindex owner */
             owner?: (string|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -61717,7 +61864,7 @@ export namespace vschema {
          */
         constructor(properties?: vschema.Table.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** Table type. */
@@ -61846,7 +61993,7 @@ export namespace vschema {
             /** Table source */
             source?: (string|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -61870,7 +62017,7 @@ export namespace vschema {
          */
         constructor(properties?: vschema.ColumnVindex.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ColumnVindex column. */
@@ -61975,7 +62122,7 @@ export namespace vschema {
             /** ColumnVindex columns */
             columns?: (string[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -61999,7 +62146,7 @@ export namespace vschema {
          */
         constructor(properties?: vschema.AutoIncrement.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** AutoIncrement column. */
@@ -62098,7 +62245,7 @@ export namespace vschema {
             /** AutoIncrement sequence */
             sequence?: (string|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -62122,7 +62269,7 @@ export namespace vschema {
          */
         constructor(properties?: vschema.Column.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** Column name. */
@@ -62263,7 +62410,7 @@ export namespace vschema {
             /** Column values */
             values?: (string[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -62287,7 +62434,7 @@ export namespace vschema {
          */
         constructor(properties?: vschema.SrvVSchema.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** SrvVSchema keyspaces. */
@@ -62404,7 +62551,7 @@ export namespace vschema {
             /** SrvVSchema mirror_rules */
             mirror_rules?: (vschema.MirrorRules.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -62428,7 +62575,7 @@ export namespace vschema {
          */
         constructor(properties?: vschema.ShardRoutingRules.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ShardRoutingRules rules. */
@@ -62521,7 +62668,7 @@ export namespace vschema {
             /** ShardRoutingRules rules */
             rules?: (vschema.ShardRoutingRule.$Properties[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -62545,7 +62692,7 @@ export namespace vschema {
          */
         constructor(properties?: vschema.ShardRoutingRule.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ShardRoutingRule from_keyspace. */
@@ -62650,7 +62797,7 @@ export namespace vschema {
             /** ShardRoutingRule shard */
             shard?: (string|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -62674,7 +62821,7 @@ export namespace vschema {
          */
         constructor(properties?: vschema.KeyspaceRoutingRules.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** KeyspaceRoutingRules rules. */
@@ -62767,7 +62914,7 @@ export namespace vschema {
             /** KeyspaceRoutingRules rules */
             rules?: (vschema.KeyspaceRoutingRule.$Properties[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -62791,7 +62938,7 @@ export namespace vschema {
          */
         constructor(properties?: vschema.KeyspaceRoutingRule.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** KeyspaceRoutingRule from_keyspace. */
@@ -62890,7 +63037,7 @@ export namespace vschema {
             /** KeyspaceRoutingRule to_keyspace */
             to_keyspace?: (string|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -62914,7 +63061,7 @@ export namespace vschema {
          */
         constructor(properties?: vschema.MirrorRules.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** MirrorRules rules. */
@@ -63007,7 +63154,7 @@ export namespace vschema {
             /** MirrorRules rules */
             rules?: (vschema.MirrorRule.$Properties[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -63031,7 +63178,7 @@ export namespace vschema {
          */
         constructor(properties?: vschema.MirrorRule.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** MirrorRule from_table. */
@@ -63136,7 +63283,7 @@ export namespace vschema {
             /** MirrorRule percent */
             percent?: (number|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -63164,7 +63311,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.ExecuteVtctlCommandRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ExecuteVtctlCommandRequest args. */
@@ -63263,7 +63410,7 @@ export namespace vtctldata {
             /** ExecuteVtctlCommandRequest action_timeout */
             action_timeout?: (number|Long|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -63287,7 +63434,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.ExecuteVtctlCommandResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ExecuteVtctlCommandResponse event. */
@@ -63380,7 +63527,7 @@ export namespace vtctldata {
             /** ExecuteVtctlCommandResponse event */
             event?: (logutil.Event.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -63420,7 +63567,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.TableMaterializeSettings.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** TableMaterializeSettings target_table. */
@@ -63525,7 +63672,7 @@ export namespace vtctldata {
             /** TableMaterializeSettings create_ddl */
             create_ddl?: (string|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -63549,7 +63696,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.MaterializeSettings.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** MaterializeSettings workflow. */
@@ -63744,7 +63891,7 @@ export namespace vtctldata {
             /** MaterializeSettings reference_tables */
             reference_tables?: (string[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -63768,7 +63915,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.Keyspace.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** Keyspace name. */
@@ -63867,7 +64014,7 @@ export namespace vtctldata {
             /** Keyspace keyspace */
             keyspace?: (topodata.Keyspace.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -63904,7 +64051,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.SchemaMigration.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** SchemaMigration uuid. */
@@ -64321,7 +64468,7 @@ export namespace vtctldata {
             /** SchemaMigration in_order_completion_pending_count */
             in_order_completion_pending_count?: (number|Long|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -64389,7 +64536,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.Shard.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** Shard keyspace. */
@@ -64494,7 +64641,7 @@ export namespace vtctldata {
             /** Shard shard */
             shard?: (topodata.Shard.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -64531,7 +64678,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.WorkflowOptions.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** WorkflowOptions tenant_id. */
@@ -64654,7 +64801,7 @@ export namespace vtctldata {
             /** WorkflowOptions lookup_vindexes */
             lookup_vindexes?: (string[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -64678,7 +64825,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.Workflow.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** Workflow name. */
@@ -64825,7 +64972,7 @@ export namespace vtctldata {
             /** Workflow options */
             options?: (vtctldata.WorkflowOptions.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -64848,7 +64995,7 @@ export namespace vtctldata {
              */
             constructor(properties?: vtctldata.Workflow.ReplicationLocation.$Properties);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
 
             /** ReplicationLocation keyspace. */
@@ -64947,7 +65094,7 @@ export namespace vtctldata {
                 /** ReplicationLocation shards */
                 shards?: (string[]|null);
 
-                /** Unknown fields preserved while decoding */
+                /** Unknown fields preserved while decoding when enabled */
                 $unknowns?: Uint8Array[];
             }
 
@@ -64971,7 +65118,7 @@ export namespace vtctldata {
              */
             constructor(properties?: vtctldata.Workflow.ShardStream.$Properties);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
 
             /** ShardStream streams. */
@@ -65076,7 +65223,7 @@ export namespace vtctldata {
                 /** ShardStream is_primary_serving */
                 is_primary_serving?: (boolean|null);
 
-                /** Unknown fields preserved while decoding */
+                /** Unknown fields preserved while decoding when enabled */
                 $unknowns?: Uint8Array[];
             }
 
@@ -65100,7 +65247,7 @@ export namespace vtctldata {
              */
             constructor(properties?: vtctldata.Workflow.Stream.$Properties);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
 
             /** Stream id. */
@@ -65307,7 +65454,7 @@ export namespace vtctldata {
                 /** Stream cells */
                 cells?: (string[]|null);
 
-                /** Unknown fields preserved while decoding */
+                /** Unknown fields preserved while decoding when enabled */
                 $unknowns?: Uint8Array[];
             }
 
@@ -65330,7 +65477,7 @@ export namespace vtctldata {
                  */
                 constructor(properties?: vtctldata.Workflow.Stream.CopyState.$Properties);
 
-                /** Unknown fields preserved while decoding */
+                /** Unknown fields preserved while decoding when enabled */
                 $unknowns?: Uint8Array[];
 
                 /** CopyState table. */
@@ -65435,7 +65582,7 @@ export namespace vtctldata {
                     /** CopyState stream_id */
                     stream_id?: (number|Long|null);
 
-                    /** Unknown fields preserved while decoding */
+                    /** Unknown fields preserved while decoding when enabled */
                     $unknowns?: Uint8Array[];
                 }
 
@@ -65459,7 +65606,7 @@ export namespace vtctldata {
                  */
                 constructor(properties?: vtctldata.Workflow.Stream.Log.$Properties);
 
-                /** Unknown fields preserved while decoding */
+                /** Unknown fields preserved while decoding when enabled */
                 $unknowns?: Uint8Array[];
 
                 /** Log id. */
@@ -65594,7 +65741,7 @@ export namespace vtctldata {
                     /** Log count */
                     count?: (number|Long|null);
 
-                    /** Unknown fields preserved while decoding */
+                    /** Unknown fields preserved while decoding when enabled */
                     $unknowns?: Uint8Array[];
                 }
 
@@ -65618,7 +65765,7 @@ export namespace vtctldata {
                  */
                 constructor(properties?: vtctldata.Workflow.Stream.ThrottlerStatus.$Properties);
 
-                /** Unknown fields preserved while decoding */
+                /** Unknown fields preserved while decoding when enabled */
                 $unknowns?: Uint8Array[];
 
                 /** ThrottlerStatus component_throttled. */
@@ -65717,7 +65864,7 @@ export namespace vtctldata {
                     /** ThrottlerStatus time_throttled */
                     time_throttled?: (vttime.Time.$Properties|null);
 
-                    /** Unknown fields preserved while decoding */
+                    /** Unknown fields preserved while decoding when enabled */
                     $unknowns?: Uint8Array[];
                 }
 
@@ -65743,7 +65890,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.AddCellInfoRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** AddCellInfoRequest name. */
@@ -65842,7 +65989,7 @@ export namespace vtctldata {
             /** AddCellInfoRequest cell_info */
             cell_info?: (topodata.CellInfo.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -65866,7 +66013,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.AddCellInfoResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /**
@@ -65953,7 +66100,7 @@ export namespace vtctldata {
         /** Properties of an AddCellInfoResponse. */
         interface $Properties {
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -65977,7 +66124,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.AddCellsAliasRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** AddCellsAliasRequest name. */
@@ -66076,7 +66223,7 @@ export namespace vtctldata {
             /** AddCellsAliasRequest cells */
             cells?: (string[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -66100,7 +66247,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.AddCellsAliasResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /**
@@ -66187,7 +66334,7 @@ export namespace vtctldata {
         /** Properties of an AddCellsAliasResponse. */
         interface $Properties {
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -66211,7 +66358,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.ApplyKeyspaceRoutingRulesRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ApplyKeyspaceRoutingRulesRequest keyspace_routing_rules. */
@@ -66316,7 +66463,7 @@ export namespace vtctldata {
             /** ApplyKeyspaceRoutingRulesRequest rebuild_cells */
             rebuild_cells?: (string[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -66340,7 +66487,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.ApplyKeyspaceRoutingRulesResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ApplyKeyspaceRoutingRulesResponse keyspace_routing_rules. */
@@ -66433,7 +66580,7 @@ export namespace vtctldata {
             /** ApplyKeyspaceRoutingRulesResponse keyspace_routing_rules */
             keyspace_routing_rules?: (vschema.KeyspaceRoutingRules.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -66457,7 +66604,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.ApplyRoutingRulesRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ApplyRoutingRulesRequest routing_rules. */
@@ -66562,7 +66709,7 @@ export namespace vtctldata {
             /** ApplyRoutingRulesRequest rebuild_cells */
             rebuild_cells?: (string[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -66586,7 +66733,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.ApplyRoutingRulesResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /**
@@ -66673,7 +66820,7 @@ export namespace vtctldata {
         /** Properties of an ApplyRoutingRulesResponse. */
         interface $Properties {
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -66697,7 +66844,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.ApplyShardRoutingRulesRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ApplyShardRoutingRulesRequest shard_routing_rules. */
@@ -66802,7 +66949,7 @@ export namespace vtctldata {
             /** ApplyShardRoutingRulesRequest rebuild_cells */
             rebuild_cells?: (string[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -66826,7 +66973,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.ApplyShardRoutingRulesResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /**
@@ -66913,7 +67060,7 @@ export namespace vtctldata {
         /** Properties of an ApplyShardRoutingRulesResponse. */
         interface $Properties {
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -66937,7 +67084,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.ApplySchemaRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ApplySchemaRequest keyspace. */
@@ -67072,7 +67219,7 @@ export namespace vtctldata {
             /** ApplySchemaRequest batch_size */
             batch_size?: (number|Long|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -67096,7 +67243,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.ApplySchemaResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ApplySchemaResponse uuid_list. */
@@ -67195,7 +67342,7 @@ export namespace vtctldata {
             /** ApplySchemaResponse rows_affected_by_shard */
             rows_affected_by_shard?: ({ [k: string]: (number|Long) }|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -67219,7 +67366,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.ApplyVSchemaRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ApplyVSchemaRequest keyspace. */
@@ -67348,7 +67495,7 @@ export namespace vtctldata {
             /** ApplyVSchemaRequest strict */
             strict?: (boolean|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -67372,7 +67519,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.ApplyVSchemaResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ApplyVSchemaResponse v_schema. */
@@ -67471,7 +67618,7 @@ export namespace vtctldata {
             /** ApplyVSchemaResponse unknown_vindex_params */
             unknown_vindex_params?: ({ [k: string]: vtctldata.ApplyVSchemaResponse.ParamList.$Properties }|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -67494,7 +67641,7 @@ export namespace vtctldata {
              */
             constructor(properties?: vtctldata.ApplyVSchemaResponse.ParamList.$Properties);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
 
             /** ParamList params. */
@@ -67587,7 +67734,7 @@ export namespace vtctldata {
                 /** ParamList params */
                 params?: (string[]|null);
 
-                /** Unknown fields preserved while decoding */
+                /** Unknown fields preserved while decoding when enabled */
                 $unknowns?: Uint8Array[];
             }
 
@@ -67612,7 +67759,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.BackupRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** BackupRequest tablet_alias. */
@@ -67747,7 +67894,7 @@ export namespace vtctldata {
             /** BackupRequest init_sql */
             init_sql?: (tabletmanagerdata.BackupRequest.InitSQL.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -67771,7 +67918,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.BackupResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** BackupResponse tablet_alias. */
@@ -67882,7 +68029,7 @@ export namespace vtctldata {
             /** BackupResponse event */
             event?: (logutil.Event.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -67906,7 +68053,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.BackupShardRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** BackupShardRequest keyspace. */
@@ -68041,7 +68188,7 @@ export namespace vtctldata {
             /** BackupShardRequest init_sql */
             init_sql?: (tabletmanagerdata.BackupRequest.InitSQL.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -68065,7 +68212,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.CancelSchemaMigrationRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** CancelSchemaMigrationRequest keyspace. */
@@ -68170,7 +68317,7 @@ export namespace vtctldata {
             /** CancelSchemaMigrationRequest caller_id */
             caller_id?: (vtrpc.CallerID.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -68194,7 +68341,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.CancelSchemaMigrationResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** CancelSchemaMigrationResponse rows_affected_by_shard. */
@@ -68287,7 +68434,7 @@ export namespace vtctldata {
             /** CancelSchemaMigrationResponse rows_affected_by_shard */
             rows_affected_by_shard?: ({ [k: string]: (number|Long) }|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -68311,7 +68458,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.ChangeTabletTagsRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ChangeTabletTagsRequest tablet_alias. */
@@ -68416,7 +68563,7 @@ export namespace vtctldata {
             /** ChangeTabletTagsRequest replace */
             replace?: (boolean|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -68440,7 +68587,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.ChangeTabletTagsResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ChangeTabletTagsResponse before_tags. */
@@ -68539,7 +68686,7 @@ export namespace vtctldata {
             /** ChangeTabletTagsResponse after_tags */
             after_tags?: ({ [k: string]: string }|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -68563,7 +68710,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.ChangeTabletTypeRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ChangeTabletTypeRequest tablet_alias. */
@@ -68668,7 +68815,7 @@ export namespace vtctldata {
             /** ChangeTabletTypeRequest dry_run */
             dry_run?: (boolean|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -68692,7 +68839,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.ChangeTabletTypeResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ChangeTabletTypeResponse before_tablet. */
@@ -68797,7 +68944,7 @@ export namespace vtctldata {
             /** ChangeTabletTypeResponse was_dry_run */
             was_dry_run?: (boolean|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -68821,7 +68968,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.CheckThrottlerRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** CheckThrottlerRequest tablet_alias. */
@@ -68944,7 +69091,7 @@ export namespace vtctldata {
             /** CheckThrottlerRequest throttler_type */
             throttler_type?: (tabletmanagerdata.ThrottlerType|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -68968,7 +69115,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.CheckThrottlerResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** CheckThrottlerResponse tablet_alias. */
@@ -69067,7 +69214,7 @@ export namespace vtctldata {
             /** CheckThrottlerResponse Check */
             Check?: (tabletmanagerdata.CheckThrottlerResponse.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -69091,7 +69238,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.CleanupSchemaMigrationRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** CleanupSchemaMigrationRequest keyspace. */
@@ -69196,7 +69343,7 @@ export namespace vtctldata {
             /** CleanupSchemaMigrationRequest caller_id */
             caller_id?: (vtrpc.CallerID.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -69220,7 +69367,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.CleanupSchemaMigrationResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** CleanupSchemaMigrationResponse rows_affected_by_shard. */
@@ -69313,7 +69460,7 @@ export namespace vtctldata {
             /** CleanupSchemaMigrationResponse rows_affected_by_shard */
             rows_affected_by_shard?: ({ [k: string]: (number|Long) }|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -69337,7 +69484,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.CompleteSchemaMigrationRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** CompleteSchemaMigrationRequest keyspace. */
@@ -69442,7 +69589,7 @@ export namespace vtctldata {
             /** CompleteSchemaMigrationRequest caller_id */
             caller_id?: (vtrpc.CallerID.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -69466,7 +69613,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.CompleteSchemaMigrationResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** CompleteSchemaMigrationResponse rows_affected_by_shard. */
@@ -69559,7 +69706,7 @@ export namespace vtctldata {
             /** CompleteSchemaMigrationResponse rows_affected_by_shard */
             rows_affected_by_shard?: ({ [k: string]: (number|Long) }|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -69583,7 +69730,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.CopySchemaShardRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** CopySchemaShardRequest source_tablet_alias. */
@@ -69718,7 +69865,7 @@ export namespace vtctldata {
             /** CopySchemaShardRequest destination_shard */
             destination_shard?: (string|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -69742,7 +69889,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.CopySchemaShardResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /**
@@ -69829,7 +69976,7 @@ export namespace vtctldata {
         /** Properties of a CopySchemaShardResponse. */
         interface $Properties {
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -69853,7 +70000,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.CreateKeyspaceRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** CreateKeyspaceRequest name. */
@@ -69988,7 +70135,7 @@ export namespace vtctldata {
             /** CreateKeyspaceRequest sidecar_db_name */
             sidecar_db_name?: (string|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -70012,7 +70159,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.CreateKeyspaceResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** CreateKeyspaceResponse keyspace. */
@@ -70105,7 +70252,7 @@ export namespace vtctldata {
             /** CreateKeyspaceResponse keyspace */
             keyspace?: (vtctldata.Keyspace.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -70129,7 +70276,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.CreateShardRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** CreateShardRequest keyspace. */
@@ -70240,7 +70387,7 @@ export namespace vtctldata {
             /** CreateShardRequest include_parent */
             include_parent?: (boolean|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -70264,7 +70411,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.CreateShardResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** CreateShardResponse keyspace. */
@@ -70369,7 +70516,7 @@ export namespace vtctldata {
             /** CreateShardResponse shard_already_exists */
             shard_already_exists?: (boolean|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -70393,7 +70540,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.DeleteCellInfoRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** DeleteCellInfoRequest name. */
@@ -70492,7 +70639,7 @@ export namespace vtctldata {
             /** DeleteCellInfoRequest force */
             force?: (boolean|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -70516,7 +70663,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.DeleteCellInfoResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /**
@@ -70603,7 +70750,7 @@ export namespace vtctldata {
         /** Properties of a DeleteCellInfoResponse. */
         interface $Properties {
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -70627,7 +70774,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.DeleteCellsAliasRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** DeleteCellsAliasRequest name. */
@@ -70720,7 +70867,7 @@ export namespace vtctldata {
             /** DeleteCellsAliasRequest name */
             name?: (string|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -70744,7 +70891,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.DeleteCellsAliasResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /**
@@ -70831,7 +70978,7 @@ export namespace vtctldata {
         /** Properties of a DeleteCellsAliasResponse. */
         interface $Properties {
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -70855,7 +71002,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.DeleteKeyspaceRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** DeleteKeyspaceRequest keyspace. */
@@ -70960,7 +71107,7 @@ export namespace vtctldata {
             /** DeleteKeyspaceRequest force */
             force?: (boolean|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -70984,7 +71131,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.DeleteKeyspaceResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /**
@@ -71071,7 +71218,7 @@ export namespace vtctldata {
         /** Properties of a DeleteKeyspaceResponse. */
         interface $Properties {
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -71095,7 +71242,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.DeleteShardsRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** DeleteShardsRequest shards. */
@@ -71206,7 +71353,7 @@ export namespace vtctldata {
             /** DeleteShardsRequest force */
             force?: (boolean|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -71230,7 +71377,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.DeleteShardsResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /**
@@ -71317,7 +71464,7 @@ export namespace vtctldata {
         /** Properties of a DeleteShardsResponse. */
         interface $Properties {
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -71341,7 +71488,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.DeleteSrvVSchemaRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** DeleteSrvVSchemaRequest cell. */
@@ -71434,7 +71581,7 @@ export namespace vtctldata {
             /** DeleteSrvVSchemaRequest cell */
             cell?: (string|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -71458,7 +71605,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.DeleteSrvVSchemaResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /**
@@ -71545,7 +71692,7 @@ export namespace vtctldata {
         /** Properties of a DeleteSrvVSchemaResponse. */
         interface $Properties {
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -71569,7 +71716,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.DeleteTabletsRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** DeleteTabletsRequest tablet_aliases. */
@@ -71668,7 +71815,7 @@ export namespace vtctldata {
             /** DeleteTabletsRequest allow_primary */
             allow_primary?: (boolean|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -71692,7 +71839,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.DeleteTabletsResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /**
@@ -71779,7 +71926,7 @@ export namespace vtctldata {
         /** Properties of a DeleteTabletsResponse. */
         interface $Properties {
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -71803,7 +71950,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.EmergencyReparentShardRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** EmergencyReparentShardRequest keyspace. */
@@ -71938,7 +72085,7 @@ export namespace vtctldata {
             /** EmergencyReparentShardRequest expected_primary */
             expected_primary?: (topodata.TabletAlias.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -71962,7 +72109,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.EmergencyReparentShardResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** EmergencyReparentShardResponse keyspace. */
@@ -72073,7 +72220,7 @@ export namespace vtctldata {
             /** EmergencyReparentShardResponse events */
             events?: (logutil.Event.$Properties[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -72097,7 +72244,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.ExecuteFetchAsAppRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ExecuteFetchAsAppRequest tablet_alias. */
@@ -72208,7 +72355,7 @@ export namespace vtctldata {
             /** ExecuteFetchAsAppRequest use_pool */
             use_pool?: (boolean|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -72232,7 +72379,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.ExecuteFetchAsAppResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ExecuteFetchAsAppResponse result. */
@@ -72325,7 +72472,7 @@ export namespace vtctldata {
             /** ExecuteFetchAsAppResponse result */
             result?: (query.QueryResult.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -72349,7 +72496,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.ExecuteFetchAsDBARequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ExecuteFetchAsDBARequest tablet_alias. */
@@ -72466,7 +72613,7 @@ export namespace vtctldata {
             /** ExecuteFetchAsDBARequest reload_schema */
             reload_schema?: (boolean|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -72490,7 +72637,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.ExecuteFetchAsDBAResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ExecuteFetchAsDBAResponse result. */
@@ -72583,7 +72730,7 @@ export namespace vtctldata {
             /** ExecuteFetchAsDBAResponse result */
             result?: (query.QueryResult.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -72607,7 +72754,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.ExecuteHookRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ExecuteHookRequest tablet_alias. */
@@ -72706,7 +72853,7 @@ export namespace vtctldata {
             /** ExecuteHookRequest tablet_hook_request */
             tablet_hook_request?: (tabletmanagerdata.ExecuteHookRequest.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -72730,7 +72877,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.ExecuteHookResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ExecuteHookResponse hook_result. */
@@ -72823,7 +72970,7 @@ export namespace vtctldata {
             /** ExecuteHookResponse hook_result */
             hook_result?: (tabletmanagerdata.ExecuteHookResponse.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -72847,7 +72994,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.ExecuteMultiFetchAsDBARequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ExecuteMultiFetchAsDBARequest tablet_alias. */
@@ -72964,7 +73111,7 @@ export namespace vtctldata {
             /** ExecuteMultiFetchAsDBARequest reload_schema */
             reload_schema?: (boolean|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -72988,7 +73135,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.ExecuteMultiFetchAsDBAResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ExecuteMultiFetchAsDBAResponse results. */
@@ -73081,7 +73228,7 @@ export namespace vtctldata {
             /** ExecuteMultiFetchAsDBAResponse results */
             results?: (query.QueryResult.$Properties[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -73105,7 +73252,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.FindAllShardsInKeyspaceRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** FindAllShardsInKeyspaceRequest keyspace. */
@@ -73198,7 +73345,7 @@ export namespace vtctldata {
             /** FindAllShardsInKeyspaceRequest keyspace */
             keyspace?: (string|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -73222,7 +73369,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.FindAllShardsInKeyspaceResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** FindAllShardsInKeyspaceResponse shards. */
@@ -73315,7 +73462,7 @@ export namespace vtctldata {
             /** FindAllShardsInKeyspaceResponse shards */
             shards?: ({ [k: string]: vtctldata.Shard.$Properties }|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -73339,7 +73486,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.ForceCutOverSchemaMigrationRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ForceCutOverSchemaMigrationRequest keyspace. */
@@ -73444,7 +73591,7 @@ export namespace vtctldata {
             /** ForceCutOverSchemaMigrationRequest caller_id */
             caller_id?: (vtrpc.CallerID.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -73468,7 +73615,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.ForceCutOverSchemaMigrationResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ForceCutOverSchemaMigrationResponse rows_affected_by_shard. */
@@ -73561,7 +73708,7 @@ export namespace vtctldata {
             /** ForceCutOverSchemaMigrationResponse rows_affected_by_shard */
             rows_affected_by_shard?: ({ [k: string]: (number|Long) }|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -73585,7 +73732,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.GetBackupsRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** GetBackupsRequest keyspace. */
@@ -73702,7 +73849,7 @@ export namespace vtctldata {
             /** GetBackupsRequest detailed_limit */
             detailed_limit?: (number|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -73726,7 +73873,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.GetBackupsResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** GetBackupsResponse backups. */
@@ -73819,7 +73966,7 @@ export namespace vtctldata {
             /** GetBackupsResponse backups */
             backups?: (mysqlctl.BackupInfo.$Properties[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -73843,7 +73990,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.GetCellInfoRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** GetCellInfoRequest cell. */
@@ -73936,7 +74083,7 @@ export namespace vtctldata {
             /** GetCellInfoRequest cell */
             cell?: (string|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -73960,7 +74107,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.GetCellInfoResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** GetCellInfoResponse cell_info. */
@@ -74053,7 +74200,7 @@ export namespace vtctldata {
             /** GetCellInfoResponse cell_info */
             cell_info?: (topodata.CellInfo.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -74077,7 +74224,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.GetCellInfoNamesRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /**
@@ -74164,7 +74311,7 @@ export namespace vtctldata {
         /** Properties of a GetCellInfoNamesRequest. */
         interface $Properties {
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -74188,7 +74335,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.GetCellInfoNamesResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** GetCellInfoNamesResponse names. */
@@ -74281,7 +74428,7 @@ export namespace vtctldata {
             /** GetCellInfoNamesResponse names */
             names?: (string[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -74305,7 +74452,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.GetCellsAliasesRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /**
@@ -74392,7 +74539,7 @@ export namespace vtctldata {
         /** Properties of a GetCellsAliasesRequest. */
         interface $Properties {
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -74416,7 +74563,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.GetCellsAliasesResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** GetCellsAliasesResponse aliases. */
@@ -74509,7 +74656,7 @@ export namespace vtctldata {
             /** GetCellsAliasesResponse aliases */
             aliases?: ({ [k: string]: topodata.CellsAlias.$Properties }|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -74533,7 +74680,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.GetFullStatusRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** GetFullStatusRequest tablet_alias. */
@@ -74626,7 +74773,7 @@ export namespace vtctldata {
             /** GetFullStatusRequest tablet_alias */
             tablet_alias?: (topodata.TabletAlias.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -74650,7 +74797,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.GetFullStatusResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** GetFullStatusResponse status. */
@@ -74743,7 +74890,7 @@ export namespace vtctldata {
             /** GetFullStatusResponse status */
             status?: (replicationdata.FullStatus.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -74767,7 +74914,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.GetKeyspacesRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /**
@@ -74854,7 +75001,7 @@ export namespace vtctldata {
         /** Properties of a GetKeyspacesRequest. */
         interface $Properties {
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -74878,7 +75025,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.GetKeyspacesResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** GetKeyspacesResponse keyspaces. */
@@ -74971,7 +75118,7 @@ export namespace vtctldata {
             /** GetKeyspacesResponse keyspaces */
             keyspaces?: (vtctldata.Keyspace.$Properties[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -74995,7 +75142,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.GetKeyspaceRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** GetKeyspaceRequest keyspace. */
@@ -75088,7 +75235,7 @@ export namespace vtctldata {
             /** GetKeyspaceRequest keyspace */
             keyspace?: (string|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -75112,7 +75259,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.GetKeyspaceResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** GetKeyspaceResponse keyspace. */
@@ -75205,7 +75352,7 @@ export namespace vtctldata {
             /** GetKeyspaceResponse keyspace */
             keyspace?: (vtctldata.Keyspace.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -75229,7 +75376,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.GetPermissionsRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** GetPermissionsRequest tablet_alias. */
@@ -75322,7 +75469,7 @@ export namespace vtctldata {
             /** GetPermissionsRequest tablet_alias */
             tablet_alias?: (topodata.TabletAlias.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -75346,7 +75493,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.GetPermissionsResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** GetPermissionsResponse permissions. */
@@ -75439,7 +75586,7 @@ export namespace vtctldata {
             /** GetPermissionsResponse permissions */
             permissions?: (tabletmanagerdata.Permissions.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -75463,7 +75610,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.GetKeyspaceRoutingRulesRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /**
@@ -75550,7 +75697,7 @@ export namespace vtctldata {
         /** Properties of a GetKeyspaceRoutingRulesRequest. */
         interface $Properties {
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -75574,7 +75721,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.GetKeyspaceRoutingRulesResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** GetKeyspaceRoutingRulesResponse keyspace_routing_rules. */
@@ -75667,7 +75814,7 @@ export namespace vtctldata {
             /** GetKeyspaceRoutingRulesResponse keyspace_routing_rules */
             keyspace_routing_rules?: (vschema.KeyspaceRoutingRules.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -75691,7 +75838,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.GetRoutingRulesRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /**
@@ -75778,7 +75925,7 @@ export namespace vtctldata {
         /** Properties of a GetRoutingRulesRequest. */
         interface $Properties {
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -75802,7 +75949,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.GetRoutingRulesResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** GetRoutingRulesResponse routing_rules. */
@@ -75895,7 +76042,7 @@ export namespace vtctldata {
             /** GetRoutingRulesResponse routing_rules */
             routing_rules?: (vschema.RoutingRules.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -75919,7 +76066,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.GetSchemaRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** GetSchemaRequest tablet_alias. */
@@ -76048,7 +76195,7 @@ export namespace vtctldata {
             /** GetSchemaRequest table_schema_only */
             table_schema_only?: (boolean|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -76072,7 +76219,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.GetSchemaResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** GetSchemaResponse schema. */
@@ -76165,7 +76312,7 @@ export namespace vtctldata {
             /** GetSchemaResponse schema */
             schema?: (tabletmanagerdata.SchemaDefinition.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -76189,7 +76336,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.GetSchemaMigrationsRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** GetSchemaMigrationsRequest keyspace. */
@@ -76324,7 +76471,7 @@ export namespace vtctldata {
             /** GetSchemaMigrationsRequest skip */
             skip?: (number|Long|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -76348,7 +76495,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.GetSchemaMigrationsResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** GetSchemaMigrationsResponse migrations. */
@@ -76441,7 +76588,7 @@ export namespace vtctldata {
             /** GetSchemaMigrationsResponse migrations */
             migrations?: (vtctldata.SchemaMigration.$Properties[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -76465,7 +76612,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.GetShardReplicationRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** GetShardReplicationRequest keyspace. */
@@ -76570,7 +76717,7 @@ export namespace vtctldata {
             /** GetShardReplicationRequest cells */
             cells?: (string[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -76594,7 +76741,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.GetShardReplicationResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** GetShardReplicationResponse shard_replication_by_cell. */
@@ -76687,7 +76834,7 @@ export namespace vtctldata {
             /** GetShardReplicationResponse shard_replication_by_cell */
             shard_replication_by_cell?: ({ [k: string]: topodata.ShardReplication.$Properties }|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -76711,7 +76858,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.GetShardRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** GetShardRequest keyspace. */
@@ -76810,7 +76957,7 @@ export namespace vtctldata {
             /** GetShardRequest shard_name */
             shard_name?: (string|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -76834,7 +76981,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.GetShardResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** GetShardResponse shard. */
@@ -76927,7 +77074,7 @@ export namespace vtctldata {
             /** GetShardResponse shard */
             shard?: (vtctldata.Shard.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -76951,7 +77098,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.GetShardRoutingRulesRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /**
@@ -77038,7 +77185,7 @@ export namespace vtctldata {
         /** Properties of a GetShardRoutingRulesRequest. */
         interface $Properties {
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -77062,7 +77209,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.GetShardRoutingRulesResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** GetShardRoutingRulesResponse shard_routing_rules. */
@@ -77155,7 +77302,7 @@ export namespace vtctldata {
             /** GetShardRoutingRulesResponse shard_routing_rules */
             shard_routing_rules?: (vschema.ShardRoutingRules.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -77179,7 +77326,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.GetSrvKeyspaceNamesRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** GetSrvKeyspaceNamesRequest cells. */
@@ -77272,7 +77419,7 @@ export namespace vtctldata {
             /** GetSrvKeyspaceNamesRequest cells */
             cells?: (string[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -77296,7 +77443,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.GetSrvKeyspaceNamesResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** GetSrvKeyspaceNamesResponse names. */
@@ -77389,7 +77536,7 @@ export namespace vtctldata {
             /** GetSrvKeyspaceNamesResponse names */
             names?: ({ [k: string]: vtctldata.GetSrvKeyspaceNamesResponse.NameList.$Properties }|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -77412,7 +77559,7 @@ export namespace vtctldata {
              */
             constructor(properties?: vtctldata.GetSrvKeyspaceNamesResponse.NameList.$Properties);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
 
             /** NameList names. */
@@ -77505,7 +77652,7 @@ export namespace vtctldata {
                 /** NameList names */
                 names?: (string[]|null);
 
-                /** Unknown fields preserved while decoding */
+                /** Unknown fields preserved while decoding when enabled */
                 $unknowns?: Uint8Array[];
             }
 
@@ -77530,7 +77677,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.GetSrvKeyspacesRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** GetSrvKeyspacesRequest keyspace. */
@@ -77629,7 +77776,7 @@ export namespace vtctldata {
             /** GetSrvKeyspacesRequest cells */
             cells?: (string[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -77653,7 +77800,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.GetSrvKeyspacesResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** GetSrvKeyspacesResponse srv_keyspaces. */
@@ -77746,7 +77893,7 @@ export namespace vtctldata {
             /** GetSrvKeyspacesResponse srv_keyspaces */
             srv_keyspaces?: ({ [k: string]: topodata.SrvKeyspace.$Properties }|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -77770,7 +77917,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.UpdateThrottlerConfigRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** UpdateThrottlerConfigRequest keyspace. */
@@ -77929,7 +78076,7 @@ export namespace vtctldata {
             /** UpdateThrottlerConfigRequest app_checked_metrics */
             app_checked_metrics?: (string[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -77953,7 +78100,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.UpdateThrottlerConfigResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /**
@@ -78040,7 +78187,7 @@ export namespace vtctldata {
         /** Properties of an UpdateThrottlerConfigResponse. */
         interface $Properties {
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -78064,7 +78211,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.GetSrvVSchemaRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** GetSrvVSchemaRequest cell. */
@@ -78157,7 +78304,7 @@ export namespace vtctldata {
             /** GetSrvVSchemaRequest cell */
             cell?: (string|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -78181,7 +78328,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.GetSrvVSchemaResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** GetSrvVSchemaResponse srv_v_schema. */
@@ -78274,7 +78421,7 @@ export namespace vtctldata {
             /** GetSrvVSchemaResponse srv_v_schema */
             srv_v_schema?: (vschema.SrvVSchema.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -78298,7 +78445,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.GetSrvVSchemasRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** GetSrvVSchemasRequest cells. */
@@ -78391,7 +78538,7 @@ export namespace vtctldata {
             /** GetSrvVSchemasRequest cells */
             cells?: (string[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -78415,7 +78562,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.GetSrvVSchemasResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** GetSrvVSchemasResponse srv_v_schemas. */
@@ -78508,7 +78655,7 @@ export namespace vtctldata {
             /** GetSrvVSchemasResponse srv_v_schemas */
             srv_v_schemas?: ({ [k: string]: vschema.SrvVSchema.$Properties }|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -78532,7 +78679,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.GetTabletRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** GetTabletRequest tablet_alias. */
@@ -78625,7 +78772,7 @@ export namespace vtctldata {
             /** GetTabletRequest tablet_alias */
             tablet_alias?: (topodata.TabletAlias.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -78649,7 +78796,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.GetTabletResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** GetTabletResponse tablet. */
@@ -78742,7 +78889,7 @@ export namespace vtctldata {
             /** GetTabletResponse tablet */
             tablet?: (topodata.Tablet.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -78766,7 +78913,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.GetTabletsRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** GetTabletsRequest keyspace. */
@@ -78889,7 +79036,7 @@ export namespace vtctldata {
             /** GetTabletsRequest tablet_type */
             tablet_type?: (topodata.TabletType|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -78913,7 +79060,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.GetTabletsResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** GetTabletsResponse tablets. */
@@ -79006,7 +79153,7 @@ export namespace vtctldata {
             /** GetTabletsResponse tablets */
             tablets?: (topodata.Tablet.$Properties[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -79030,7 +79177,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.GetThrottlerStatusRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** GetThrottlerStatusRequest tablet_alias. */
@@ -79129,7 +79276,7 @@ export namespace vtctldata {
             /** GetThrottlerStatusRequest throttler_type */
             throttler_type?: (tabletmanagerdata.ThrottlerType|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -79153,7 +79300,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.GetThrottlerStatusResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** GetThrottlerStatusResponse status. */
@@ -79246,7 +79393,7 @@ export namespace vtctldata {
             /** GetThrottlerStatusResponse status */
             status?: (tabletmanagerdata.GetThrottlerStatusResponse.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -79270,7 +79417,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.GetTopologyPathRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** GetTopologyPathRequest path. */
@@ -79375,7 +79522,7 @@ export namespace vtctldata {
             /** GetTopologyPathRequest as_json */
             as_json?: (boolean|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -79399,7 +79546,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.GetTopologyPathResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** GetTopologyPathResponse cell. */
@@ -79492,7 +79639,7 @@ export namespace vtctldata {
             /** GetTopologyPathResponse cell */
             cell?: (vtctldata.TopologyCell.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -79516,7 +79663,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.TopologyCell.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** TopologyCell name. */
@@ -79633,7 +79780,7 @@ export namespace vtctldata {
             /** TopologyCell version */
             version?: (number|Long|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -79657,7 +79804,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.GetUnresolvedTransactionsRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** GetUnresolvedTransactionsRequest keyspace. */
@@ -79756,7 +79903,7 @@ export namespace vtctldata {
             /** GetUnresolvedTransactionsRequest abandon_age */
             abandon_age?: (number|Long|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -79780,7 +79927,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.GetUnresolvedTransactionsResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** GetUnresolvedTransactionsResponse transactions. */
@@ -79873,7 +80020,7 @@ export namespace vtctldata {
             /** GetUnresolvedTransactionsResponse transactions */
             transactions?: (query.TransactionMetadata.$Properties[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -79897,7 +80044,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.GetTransactionInfoRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** GetTransactionInfoRequest dtid. */
@@ -79990,7 +80137,7 @@ export namespace vtctldata {
             /** GetTransactionInfoRequest dtid */
             dtid?: (string|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -80014,7 +80161,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.ShardTransactionState.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ShardTransactionState shard. */
@@ -80131,7 +80278,7 @@ export namespace vtctldata {
             /** ShardTransactionState statements */
             statements?: (string[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -80155,7 +80302,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.GetTransactionInfoResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** GetTransactionInfoResponse metadata. */
@@ -80254,7 +80401,7 @@ export namespace vtctldata {
             /** GetTransactionInfoResponse shard_states */
             shard_states?: (vtctldata.ShardTransactionState.$Properties[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -80278,7 +80425,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.ConcludeTransactionRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ConcludeTransactionRequest dtid. */
@@ -80377,7 +80524,7 @@ export namespace vtctldata {
             /** ConcludeTransactionRequest participants */
             participants?: (query.Target.$Properties[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -80401,7 +80548,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.ConcludeTransactionResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /**
@@ -80488,7 +80635,7 @@ export namespace vtctldata {
         /** Properties of a ConcludeTransactionResponse. */
         interface $Properties {
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -80512,7 +80659,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.GetVSchemaRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** GetVSchemaRequest keyspace. */
@@ -80605,7 +80752,7 @@ export namespace vtctldata {
             /** GetVSchemaRequest keyspace */
             keyspace?: (string|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -80629,7 +80776,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.GetVersionRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** GetVersionRequest tablet_alias. */
@@ -80722,7 +80869,7 @@ export namespace vtctldata {
             /** GetVersionRequest tablet_alias */
             tablet_alias?: (topodata.TabletAlias.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -80746,7 +80893,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.GetVersionResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** GetVersionResponse version. */
@@ -80839,7 +80986,7 @@ export namespace vtctldata {
             /** GetVersionResponse version */
             version?: (string|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -80863,7 +81010,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.GetVSchemaResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** GetVSchemaResponse v_schema. */
@@ -80956,7 +81103,7 @@ export namespace vtctldata {
             /** GetVSchemaResponse v_schema */
             v_schema?: (vschema.Keyspace.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -80980,7 +81127,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.GetWorkflowsRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** GetWorkflowsRequest keyspace. */
@@ -81103,7 +81250,7 @@ export namespace vtctldata {
             /** GetWorkflowsRequest shards */
             shards?: (string[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -81127,7 +81274,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.GetWorkflowsResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** GetWorkflowsResponse workflows. */
@@ -81220,7 +81367,7 @@ export namespace vtctldata {
             /** GetWorkflowsResponse workflows */
             workflows?: (vtctldata.Workflow.$Properties[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -81244,7 +81391,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.InitShardPrimaryRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** InitShardPrimaryRequest keyspace. */
@@ -81361,7 +81508,7 @@ export namespace vtctldata {
             /** InitShardPrimaryRequest wait_replicas_timeout */
             wait_replicas_timeout?: (vttime.Duration.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -81385,7 +81532,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.InitShardPrimaryResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** InitShardPrimaryResponse events. */
@@ -81478,7 +81625,7 @@ export namespace vtctldata {
             /** InitShardPrimaryResponse events */
             events?: (logutil.Event.$Properties[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -81502,7 +81649,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.LaunchSchemaMigrationRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** LaunchSchemaMigrationRequest keyspace. */
@@ -81607,7 +81754,7 @@ export namespace vtctldata {
             /** LaunchSchemaMigrationRequest caller_id */
             caller_id?: (vtrpc.CallerID.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -81631,7 +81778,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.LaunchSchemaMigrationResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** LaunchSchemaMigrationResponse rows_affected_by_shard. */
@@ -81724,7 +81871,7 @@ export namespace vtctldata {
             /** LaunchSchemaMigrationResponse rows_affected_by_shard */
             rows_affected_by_shard?: ({ [k: string]: (number|Long) }|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -81748,7 +81895,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.LookupVindexCompleteRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** LookupVindexCompleteRequest keyspace. */
@@ -81853,7 +82000,7 @@ export namespace vtctldata {
             /** LookupVindexCompleteRequest table_keyspace */
             table_keyspace?: (string|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -81877,7 +82024,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.LookupVindexCompleteResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /**
@@ -81964,7 +82111,7 @@ export namespace vtctldata {
         /** Properties of a LookupVindexCompleteResponse. */
         interface $Properties {
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -81988,7 +82135,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.LookupVindexCreateRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** LookupVindexCreateRequest keyspace. */
@@ -82117,7 +82264,7 @@ export namespace vtctldata {
             /** LookupVindexCreateRequest tablet_selection_preference */
             tablet_selection_preference?: (tabletmanagerdata.TabletSelectionPreference|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -82141,7 +82288,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.LookupVindexCreateResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /**
@@ -82228,7 +82375,7 @@ export namespace vtctldata {
         /** Properties of a LookupVindexCreateResponse. */
         interface $Properties {
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -82252,7 +82399,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.LookupVindexExternalizeRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** LookupVindexExternalizeRequest keyspace. */
@@ -82363,7 +82510,7 @@ export namespace vtctldata {
             /** LookupVindexExternalizeRequest delete_workflow */
             delete_workflow?: (boolean|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -82387,7 +82534,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.LookupVindexExternalizeResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** LookupVindexExternalizeResponse workflow_stopped. */
@@ -82486,7 +82633,7 @@ export namespace vtctldata {
             /** LookupVindexExternalizeResponse workflow_deleted */
             workflow_deleted?: (boolean|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -82510,7 +82657,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.LookupVindexInternalizeRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** LookupVindexInternalizeRequest keyspace. */
@@ -82615,7 +82762,7 @@ export namespace vtctldata {
             /** LookupVindexInternalizeRequest table_keyspace */
             table_keyspace?: (string|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -82639,7 +82786,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.LookupVindexInternalizeResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /**
@@ -82726,7 +82873,7 @@ export namespace vtctldata {
         /** Properties of a LookupVindexInternalizeResponse. */
         interface $Properties {
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -82750,7 +82897,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.MaterializeCreateRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** MaterializeCreateRequest settings. */
@@ -82843,7 +82990,7 @@ export namespace vtctldata {
             /** MaterializeCreateRequest settings */
             settings?: (vtctldata.MaterializeSettings.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -82867,7 +83014,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.MaterializeCreateResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /**
@@ -82954,7 +83101,7 @@ export namespace vtctldata {
         /** Properties of a MaterializeCreateResponse. */
         interface $Properties {
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -82978,7 +83125,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.WorkflowAddTablesRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** WorkflowAddTablesRequest workflow. */
@@ -83089,7 +83236,7 @@ export namespace vtctldata {
             /** WorkflowAddTablesRequest materialization_intent */
             materialization_intent?: (vtctldata.MaterializationIntent|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -83113,7 +83260,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.WorkflowAddTablesResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /**
@@ -83200,7 +83347,7 @@ export namespace vtctldata {
         /** Properties of a WorkflowAddTablesResponse. */
         interface $Properties {
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -83224,7 +83371,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.MigrateCreateRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** MigrateCreateRequest workflow. */
@@ -83413,7 +83560,7 @@ export namespace vtctldata {
             /** MigrateCreateRequest no_routing_rules */
             no_routing_rules?: (boolean|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -83437,7 +83584,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.MigrateCompleteRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** MigrateCompleteRequest workflow. */
@@ -83560,7 +83707,7 @@ export namespace vtctldata {
             /** MigrateCompleteRequest dry_run */
             dry_run?: (boolean|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -83584,7 +83731,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.MigrateCompleteResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** MigrateCompleteResponse summary. */
@@ -83683,7 +83830,7 @@ export namespace vtctldata {
             /** MigrateCompleteResponse dry_run_results */
             dry_run_results?: (string[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -83707,7 +83854,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.MountRegisterRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** MountRegisterRequest topo_type. */
@@ -83818,7 +83965,7 @@ export namespace vtctldata {
             /** MountRegisterRequest name */
             name?: (string|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -83842,7 +83989,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.MountRegisterResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /**
@@ -83929,7 +84076,7 @@ export namespace vtctldata {
         /** Properties of a MountRegisterResponse. */
         interface $Properties {
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -83953,7 +84100,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.MountUnregisterRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** MountUnregisterRequest name. */
@@ -84046,7 +84193,7 @@ export namespace vtctldata {
             /** MountUnregisterRequest name */
             name?: (string|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -84070,7 +84217,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.MountUnregisterResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /**
@@ -84157,7 +84304,7 @@ export namespace vtctldata {
         /** Properties of a MountUnregisterResponse. */
         interface $Properties {
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -84181,7 +84328,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.MountShowRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** MountShowRequest name. */
@@ -84274,7 +84421,7 @@ export namespace vtctldata {
             /** MountShowRequest name */
             name?: (string|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -84298,7 +84445,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.MountShowResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** MountShowResponse topo_type. */
@@ -84409,7 +84556,7 @@ export namespace vtctldata {
             /** MountShowResponse name */
             name?: (string|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -84433,7 +84580,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.MountListRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /**
@@ -84520,7 +84667,7 @@ export namespace vtctldata {
         /** Properties of a MountListRequest. */
         interface $Properties {
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -84544,7 +84691,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.MountListResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** MountListResponse names. */
@@ -84637,7 +84784,7 @@ export namespace vtctldata {
             /** MountListResponse names */
             names?: (string[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -84661,7 +84808,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.MoveTablesCreateRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** MoveTablesCreateRequest workflow. */
@@ -84868,7 +85015,7 @@ export namespace vtctldata {
             /** MoveTablesCreateRequest workflow_options */
             workflow_options?: (vtctldata.WorkflowOptions.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -84892,7 +85039,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.MoveTablesCreateResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** MoveTablesCreateResponse summary. */
@@ -84991,7 +85138,7 @@ export namespace vtctldata {
             /** MoveTablesCreateResponse details */
             details?: (vtctldata.MoveTablesCreateResponse.TabletInfo.$Properties[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -85014,7 +85161,7 @@ export namespace vtctldata {
              */
             constructor(properties?: vtctldata.MoveTablesCreateResponse.TabletInfo.$Properties);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
 
             /** TabletInfo tablet. */
@@ -85113,7 +85260,7 @@ export namespace vtctldata {
                 /** TabletInfo created */
                 created?: (boolean|null);
 
-                /** Unknown fields preserved while decoding */
+                /** Unknown fields preserved while decoding when enabled */
                 $unknowns?: Uint8Array[];
             }
 
@@ -85138,7 +85285,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.MoveTablesCompleteRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** MoveTablesCompleteRequest workflow. */
@@ -85273,7 +85420,7 @@ export namespace vtctldata {
             /** MoveTablesCompleteRequest ignore_source_keyspace */
             ignore_source_keyspace?: (boolean|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -85297,7 +85444,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.MoveTablesCompleteResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** MoveTablesCompleteResponse summary. */
@@ -85402,7 +85549,7 @@ export namespace vtctldata {
             /** MoveTablesCompleteResponse warnings */
             warnings?: (string[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -85426,7 +85573,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.PingTabletRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** PingTabletRequest tablet_alias. */
@@ -85519,7 +85666,7 @@ export namespace vtctldata {
             /** PingTabletRequest tablet_alias */
             tablet_alias?: (topodata.TabletAlias.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -85543,7 +85690,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.PingTabletResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /**
@@ -85630,7 +85777,7 @@ export namespace vtctldata {
         /** Properties of a PingTabletResponse. */
         interface $Properties {
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -85654,7 +85801,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.PlannedReparentShardRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** PlannedReparentShardRequest keyspace. */
@@ -85789,7 +85936,7 @@ export namespace vtctldata {
             /** PlannedReparentShardRequest expected_primary */
             expected_primary?: (topodata.TabletAlias.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -85813,7 +85960,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.PlannedReparentShardResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** PlannedReparentShardResponse keyspace. */
@@ -85924,7 +86071,7 @@ export namespace vtctldata {
             /** PlannedReparentShardResponse events */
             events?: (logutil.Event.$Properties[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -85948,7 +86095,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.RebuildKeyspaceGraphRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** RebuildKeyspaceGraphRequest keyspace. */
@@ -86053,7 +86200,7 @@ export namespace vtctldata {
             /** RebuildKeyspaceGraphRequest allow_partial */
             allow_partial?: (boolean|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -86077,7 +86224,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.RebuildKeyspaceGraphResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /**
@@ -86164,7 +86311,7 @@ export namespace vtctldata {
         /** Properties of a RebuildKeyspaceGraphResponse. */
         interface $Properties {
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -86188,7 +86335,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.RebuildVSchemaGraphRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** RebuildVSchemaGraphRequest cells. */
@@ -86281,7 +86428,7 @@ export namespace vtctldata {
             /** RebuildVSchemaGraphRequest cells */
             cells?: (string[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -86305,7 +86452,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.RebuildVSchemaGraphResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /**
@@ -86392,7 +86539,7 @@ export namespace vtctldata {
         /** Properties of a RebuildVSchemaGraphResponse. */
         interface $Properties {
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -86416,7 +86563,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.RefreshStateRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** RefreshStateRequest tablet_alias. */
@@ -86509,7 +86656,7 @@ export namespace vtctldata {
             /** RefreshStateRequest tablet_alias */
             tablet_alias?: (topodata.TabletAlias.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -86533,7 +86680,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.RefreshStateResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /**
@@ -86620,7 +86767,7 @@ export namespace vtctldata {
         /** Properties of a RefreshStateResponse. */
         interface $Properties {
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -86644,7 +86791,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.RefreshStateByShardRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** RefreshStateByShardRequest keyspace. */
@@ -86749,7 +86896,7 @@ export namespace vtctldata {
             /** RefreshStateByShardRequest cells */
             cells?: (string[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -86773,7 +86920,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.RefreshStateByShardResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** RefreshStateByShardResponse is_partial_refresh. */
@@ -86872,7 +87019,7 @@ export namespace vtctldata {
             /** RefreshStateByShardResponse partial_refresh_details */
             partial_refresh_details?: (string|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -86896,7 +87043,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.ReloadSchemaRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ReloadSchemaRequest tablet_alias. */
@@ -86989,7 +87136,7 @@ export namespace vtctldata {
             /** ReloadSchemaRequest tablet_alias */
             tablet_alias?: (topodata.TabletAlias.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -87013,7 +87160,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.ReloadSchemaResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /**
@@ -87100,7 +87247,7 @@ export namespace vtctldata {
         /** Properties of a ReloadSchemaResponse. */
         interface $Properties {
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -87124,7 +87271,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.ReloadSchemaKeyspaceRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ReloadSchemaKeyspaceRequest keyspace. */
@@ -87235,7 +87382,7 @@ export namespace vtctldata {
             /** ReloadSchemaKeyspaceRequest concurrency */
             concurrency?: (number|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -87259,7 +87406,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.ReloadSchemaKeyspaceResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ReloadSchemaKeyspaceResponse events. */
@@ -87352,7 +87499,7 @@ export namespace vtctldata {
             /** ReloadSchemaKeyspaceResponse events */
             events?: (logutil.Event.$Properties[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -87376,7 +87523,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.ReloadSchemaShardRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ReloadSchemaShardRequest keyspace. */
@@ -87493,7 +87640,7 @@ export namespace vtctldata {
             /** ReloadSchemaShardRequest concurrency */
             concurrency?: (number|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -87517,7 +87664,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.ReloadSchemaShardResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ReloadSchemaShardResponse events. */
@@ -87610,7 +87757,7 @@ export namespace vtctldata {
             /** ReloadSchemaShardResponse events */
             events?: (logutil.Event.$Properties[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -87634,7 +87781,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.RemoveBackupRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** RemoveBackupRequest keyspace. */
@@ -87739,7 +87886,7 @@ export namespace vtctldata {
             /** RemoveBackupRequest name */
             name?: (string|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -87763,7 +87910,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.RemoveBackupResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /**
@@ -87850,7 +87997,7 @@ export namespace vtctldata {
         /** Properties of a RemoveBackupResponse. */
         interface $Properties {
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -87874,7 +88021,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.RemoveKeyspaceCellRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** RemoveKeyspaceCellRequest keyspace. */
@@ -87985,7 +88132,7 @@ export namespace vtctldata {
             /** RemoveKeyspaceCellRequest recursive */
             recursive?: (boolean|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -88009,7 +88156,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.RemoveKeyspaceCellResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /**
@@ -88096,7 +88243,7 @@ export namespace vtctldata {
         /** Properties of a RemoveKeyspaceCellResponse. */
         interface $Properties {
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -88120,7 +88267,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.RemoveShardCellRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** RemoveShardCellRequest keyspace. */
@@ -88237,7 +88384,7 @@ export namespace vtctldata {
             /** RemoveShardCellRequest recursive */
             recursive?: (boolean|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -88261,7 +88408,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.RemoveShardCellResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /**
@@ -88348,7 +88495,7 @@ export namespace vtctldata {
         /** Properties of a RemoveShardCellResponse. */
         interface $Properties {
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -88372,7 +88519,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.ReparentTabletRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ReparentTabletRequest tablet. */
@@ -88465,7 +88612,7 @@ export namespace vtctldata {
             /** ReparentTabletRequest tablet */
             tablet?: (topodata.TabletAlias.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -88489,7 +88636,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.ReparentTabletResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ReparentTabletResponse keyspace. */
@@ -88594,7 +88741,7 @@ export namespace vtctldata {
             /** ReparentTabletResponse primary */
             primary?: (topodata.TabletAlias.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -88618,7 +88765,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.ReshardCreateRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ReshardCreateRequest workflow. */
@@ -88783,7 +88930,7 @@ export namespace vtctldata {
             /** ReshardCreateRequest workflow_options */
             workflow_options?: (vtctldata.WorkflowOptions.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -88807,7 +88954,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.RestoreFromBackupRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** RestoreFromBackupRequest tablet_alias. */
@@ -88930,7 +89077,7 @@ export namespace vtctldata {
             /** RestoreFromBackupRequest allowed_backup_engines */
             allowed_backup_engines?: (string[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -88954,7 +89101,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.RestoreFromBackupResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** RestoreFromBackupResponse tablet_alias. */
@@ -89065,7 +89212,7 @@ export namespace vtctldata {
             /** RestoreFromBackupResponse event */
             event?: (logutil.Event.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -89089,7 +89236,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.RetrySchemaMigrationRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** RetrySchemaMigrationRequest keyspace. */
@@ -89194,7 +89341,7 @@ export namespace vtctldata {
             /** RetrySchemaMigrationRequest caller_id */
             caller_id?: (vtrpc.CallerID.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -89218,7 +89365,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.RetrySchemaMigrationResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** RetrySchemaMigrationResponse rows_affected_by_shard. */
@@ -89311,7 +89458,7 @@ export namespace vtctldata {
             /** RetrySchemaMigrationResponse rows_affected_by_shard */
             rows_affected_by_shard?: ({ [k: string]: (number|Long) }|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -89335,7 +89482,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.RunHealthCheckRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** RunHealthCheckRequest tablet_alias. */
@@ -89428,7 +89575,7 @@ export namespace vtctldata {
             /** RunHealthCheckRequest tablet_alias */
             tablet_alias?: (topodata.TabletAlias.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -89452,7 +89599,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.RunHealthCheckResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /**
@@ -89539,7 +89686,7 @@ export namespace vtctldata {
         /** Properties of a RunHealthCheckResponse. */
         interface $Properties {
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -89563,7 +89710,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.SetKeyspaceDurabilityPolicyRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** SetKeyspaceDurabilityPolicyRequest keyspace. */
@@ -89662,7 +89809,7 @@ export namespace vtctldata {
             /** SetKeyspaceDurabilityPolicyRequest durability_policy */
             durability_policy?: (string|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -89686,7 +89833,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.SetKeyspaceDurabilityPolicyResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** SetKeyspaceDurabilityPolicyResponse keyspace. */
@@ -89779,7 +89926,7 @@ export namespace vtctldata {
             /** SetKeyspaceDurabilityPolicyResponse keyspace */
             keyspace?: (topodata.Keyspace.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -89803,7 +89950,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.SetKeyspaceShardingInfoRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** SetKeyspaceShardingInfoRequest keyspace. */
@@ -89902,7 +90049,7 @@ export namespace vtctldata {
             /** SetKeyspaceShardingInfoRequest force */
             force?: (boolean|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -89926,7 +90073,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.SetKeyspaceShardingInfoResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** SetKeyspaceShardingInfoResponse keyspace. */
@@ -90019,7 +90166,7 @@ export namespace vtctldata {
             /** SetKeyspaceShardingInfoResponse keyspace */
             keyspace?: (topodata.Keyspace.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -90043,7 +90190,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.SetShardIsPrimaryServingRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** SetShardIsPrimaryServingRequest keyspace. */
@@ -90148,7 +90295,7 @@ export namespace vtctldata {
             /** SetShardIsPrimaryServingRequest is_serving */
             is_serving?: (boolean|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -90172,7 +90319,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.SetShardIsPrimaryServingResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** SetShardIsPrimaryServingResponse shard. */
@@ -90265,7 +90412,7 @@ export namespace vtctldata {
             /** SetShardIsPrimaryServingResponse shard */
             shard?: (topodata.Shard.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -90289,7 +90436,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.SetShardTabletControlRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** SetShardTabletControlRequest keyspace. */
@@ -90418,7 +90565,7 @@ export namespace vtctldata {
             /** SetShardTabletControlRequest remove */
             remove?: (boolean|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -90442,7 +90589,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.SetShardTabletControlResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** SetShardTabletControlResponse shard. */
@@ -90535,7 +90682,7 @@ export namespace vtctldata {
             /** SetShardTabletControlResponse shard */
             shard?: (topodata.Shard.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -90559,7 +90706,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.SetWritableRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** SetWritableRequest tablet_alias. */
@@ -90658,7 +90805,7 @@ export namespace vtctldata {
             /** SetWritableRequest writable */
             writable?: (boolean|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -90682,7 +90829,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.SetWritableResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /**
@@ -90769,7 +90916,7 @@ export namespace vtctldata {
         /** Properties of a SetWritableResponse. */
         interface $Properties {
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -90793,7 +90940,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.ShardReplicationAddRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ShardReplicationAddRequest keyspace. */
@@ -90898,7 +91045,7 @@ export namespace vtctldata {
             /** ShardReplicationAddRequest tablet_alias */
             tablet_alias?: (topodata.TabletAlias.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -90922,7 +91069,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.ShardReplicationAddResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /**
@@ -91009,7 +91156,7 @@ export namespace vtctldata {
         /** Properties of a ShardReplicationAddResponse. */
         interface $Properties {
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -91033,7 +91180,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.ShardReplicationFixRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ShardReplicationFixRequest keyspace. */
@@ -91138,7 +91285,7 @@ export namespace vtctldata {
             /** ShardReplicationFixRequest cell */
             cell?: (string|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -91162,7 +91309,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.ShardReplicationFixResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ShardReplicationFixResponse error. */
@@ -91255,7 +91402,7 @@ export namespace vtctldata {
             /** ShardReplicationFixResponse error */
             error?: (topodata.ShardReplicationError.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -91279,7 +91426,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.ShardReplicationPositionsRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ShardReplicationPositionsRequest keyspace. */
@@ -91378,7 +91525,7 @@ export namespace vtctldata {
             /** ShardReplicationPositionsRequest shard */
             shard?: (string|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -91402,7 +91549,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.ShardReplicationPositionsResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ShardReplicationPositionsResponse replication_statuses. */
@@ -91501,7 +91648,7 @@ export namespace vtctldata {
             /** ShardReplicationPositionsResponse tablet_map */
             tablet_map?: ({ [k: string]: topodata.Tablet.$Properties }|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -91525,7 +91672,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.ShardReplicationRemoveRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ShardReplicationRemoveRequest keyspace. */
@@ -91630,7 +91777,7 @@ export namespace vtctldata {
             /** ShardReplicationRemoveRequest tablet_alias */
             tablet_alias?: (topodata.TabletAlias.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -91654,7 +91801,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.ShardReplicationRemoveResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /**
@@ -91741,7 +91888,7 @@ export namespace vtctldata {
         /** Properties of a ShardReplicationRemoveResponse. */
         interface $Properties {
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -91765,7 +91912,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.SleepTabletRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** SleepTabletRequest tablet_alias. */
@@ -91864,7 +92011,7 @@ export namespace vtctldata {
             /** SleepTabletRequest duration */
             duration?: (vttime.Duration.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -91888,7 +92035,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.SleepTabletResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /**
@@ -91975,7 +92122,7 @@ export namespace vtctldata {
         /** Properties of a SleepTabletResponse. */
         interface $Properties {
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -91999,7 +92146,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.SourceShardAddRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** SourceShardAddRequest keyspace. */
@@ -92128,7 +92275,7 @@ export namespace vtctldata {
             /** SourceShardAddRequest tables */
             tables?: (string[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -92152,7 +92299,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.SourceShardAddResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** SourceShardAddResponse shard. */
@@ -92245,7 +92392,7 @@ export namespace vtctldata {
             /** SourceShardAddResponse shard */
             shard?: (topodata.Shard.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -92269,7 +92416,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.SourceShardDeleteRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** SourceShardDeleteRequest keyspace. */
@@ -92374,7 +92521,7 @@ export namespace vtctldata {
             /** SourceShardDeleteRequest uid */
             uid?: (number|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -92398,7 +92545,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.SourceShardDeleteResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** SourceShardDeleteResponse shard. */
@@ -92491,7 +92638,7 @@ export namespace vtctldata {
             /** SourceShardDeleteResponse shard */
             shard?: (topodata.Shard.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -92515,7 +92662,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.StartReplicationRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** StartReplicationRequest tablet_alias. */
@@ -92608,7 +92755,7 @@ export namespace vtctldata {
             /** StartReplicationRequest tablet_alias */
             tablet_alias?: (topodata.TabletAlias.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -92632,7 +92779,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.StartReplicationResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /**
@@ -92719,7 +92866,7 @@ export namespace vtctldata {
         /** Properties of a StartReplicationResponse. */
         interface $Properties {
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -92743,7 +92890,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.StopReplicationRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** StopReplicationRequest tablet_alias. */
@@ -92836,7 +92983,7 @@ export namespace vtctldata {
             /** StopReplicationRequest tablet_alias */
             tablet_alias?: (topodata.TabletAlias.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -92860,7 +93007,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.StopReplicationResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /**
@@ -92947,7 +93094,7 @@ export namespace vtctldata {
         /** Properties of a StopReplicationResponse. */
         interface $Properties {
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -92971,7 +93118,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.TabletExternallyReparentedRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** TabletExternallyReparentedRequest tablet. */
@@ -93064,7 +93211,7 @@ export namespace vtctldata {
             /** TabletExternallyReparentedRequest tablet */
             tablet?: (topodata.TabletAlias.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -93088,7 +93235,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.TabletExternallyReparentedResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** TabletExternallyReparentedResponse keyspace. */
@@ -93199,7 +93346,7 @@ export namespace vtctldata {
             /** TabletExternallyReparentedResponse old_primary */
             old_primary?: (topodata.TabletAlias.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -93223,7 +93370,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.UpdateCellInfoRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** UpdateCellInfoRequest name. */
@@ -93322,7 +93469,7 @@ export namespace vtctldata {
             /** UpdateCellInfoRequest cell_info */
             cell_info?: (topodata.CellInfo.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -93346,7 +93493,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.UpdateCellInfoResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** UpdateCellInfoResponse name. */
@@ -93445,7 +93592,7 @@ export namespace vtctldata {
             /** UpdateCellInfoResponse cell_info */
             cell_info?: (topodata.CellInfo.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -93469,7 +93616,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.UpdateCellsAliasRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** UpdateCellsAliasRequest name. */
@@ -93568,7 +93715,7 @@ export namespace vtctldata {
             /** UpdateCellsAliasRequest cells_alias */
             cells_alias?: (topodata.CellsAlias.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -93592,7 +93739,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.UpdateCellsAliasResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** UpdateCellsAliasResponse name. */
@@ -93691,7 +93838,7 @@ export namespace vtctldata {
             /** UpdateCellsAliasResponse cells_alias */
             cells_alias?: (topodata.CellsAlias.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -93715,7 +93862,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.ValidateRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ValidateRequest ping_tablets. */
@@ -93808,7 +93955,7 @@ export namespace vtctldata {
             /** ValidateRequest ping_tablets */
             ping_tablets?: (boolean|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -93832,7 +93979,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.ValidateResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ValidateResponse results. */
@@ -93931,7 +94078,7 @@ export namespace vtctldata {
             /** ValidateResponse results_by_keyspace */
             results_by_keyspace?: ({ [k: string]: vtctldata.ValidateKeyspaceResponse.$Properties }|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -93955,7 +94102,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.ValidateKeyspaceRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ValidateKeyspaceRequest keyspace. */
@@ -94054,7 +94201,7 @@ export namespace vtctldata {
             /** ValidateKeyspaceRequest ping_tablets */
             ping_tablets?: (boolean|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -94078,7 +94225,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.ValidateKeyspaceResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ValidateKeyspaceResponse results. */
@@ -94177,7 +94324,7 @@ export namespace vtctldata {
             /** ValidateKeyspaceResponse results_by_shard */
             results_by_shard?: ({ [k: string]: vtctldata.ValidateShardResponse.$Properties }|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -94201,7 +94348,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.ValidatePermissionsKeyspaceRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ValidatePermissionsKeyspaceRequest keyspace. */
@@ -94300,7 +94447,7 @@ export namespace vtctldata {
             /** ValidatePermissionsKeyspaceRequest shards */
             shards?: (string[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -94324,7 +94471,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.ValidatePermissionsKeyspaceResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /**
@@ -94411,7 +94558,7 @@ export namespace vtctldata {
         /** Properties of a ValidatePermissionsKeyspaceResponse. */
         interface $Properties {
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -94435,7 +94582,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.ValidateSchemaKeyspaceRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ValidateSchemaKeyspaceRequest keyspace. */
@@ -94558,7 +94705,7 @@ export namespace vtctldata {
             /** ValidateSchemaKeyspaceRequest shards */
             shards?: (string[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -94582,7 +94729,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.ValidateSchemaKeyspaceResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ValidateSchemaKeyspaceResponse results. */
@@ -94681,7 +94828,7 @@ export namespace vtctldata {
             /** ValidateSchemaKeyspaceResponse results_by_shard */
             results_by_shard?: ({ [k: string]: vtctldata.ValidateShardResponse.$Properties }|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -94705,7 +94852,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.ValidateShardRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ValidateShardRequest keyspace. */
@@ -94810,7 +94957,7 @@ export namespace vtctldata {
             /** ValidateShardRequest ping_tablets */
             ping_tablets?: (boolean|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -94834,7 +94981,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.ValidateShardResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ValidateShardResponse results. */
@@ -94927,7 +95074,7 @@ export namespace vtctldata {
             /** ValidateShardResponse results */
             results?: (string[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -94951,7 +95098,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.ValidateVersionKeyspaceRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ValidateVersionKeyspaceRequest keyspace. */
@@ -95044,7 +95191,7 @@ export namespace vtctldata {
             /** ValidateVersionKeyspaceRequest keyspace */
             keyspace?: (string|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -95068,7 +95215,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.ValidateVersionKeyspaceResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ValidateVersionKeyspaceResponse results. */
@@ -95167,7 +95314,7 @@ export namespace vtctldata {
             /** ValidateVersionKeyspaceResponse results_by_shard */
             results_by_shard?: ({ [k: string]: vtctldata.ValidateShardResponse.$Properties }|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -95191,7 +95338,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.ValidateVersionShardRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ValidateVersionShardRequest keyspace. */
@@ -95290,7 +95437,7 @@ export namespace vtctldata {
             /** ValidateVersionShardRequest shard */
             shard?: (string|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -95314,7 +95461,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.ValidateVersionShardResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ValidateVersionShardResponse results. */
@@ -95407,7 +95554,7 @@ export namespace vtctldata {
             /** ValidateVersionShardResponse results */
             results?: (string[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -95431,7 +95578,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.ValidateVSchemaRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ValidateVSchemaRequest keyspace. */
@@ -95542,7 +95689,7 @@ export namespace vtctldata {
             /** ValidateVSchemaRequest include_views */
             include_views?: (boolean|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -95566,7 +95713,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.ValidateVSchemaResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** ValidateVSchemaResponse results. */
@@ -95665,7 +95812,7 @@ export namespace vtctldata {
             /** ValidateVSchemaResponse results_by_shard */
             results_by_shard?: ({ [k: string]: vtctldata.ValidateShardResponse.$Properties }|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -95689,7 +95836,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.VDiffCreateRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** VDiffCreateRequest workflow. */
@@ -95908,7 +96055,7 @@ export namespace vtctldata {
             /** VDiffCreateRequest auto_start */
             auto_start?: (boolean|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -95932,7 +96079,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.VDiffCreateResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** VDiffCreateResponse UUID. */
@@ -96025,7 +96172,7 @@ export namespace vtctldata {
             /** VDiffCreateResponse UUID */
             UUID?: (string|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -96049,7 +96196,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.VDiffDeleteRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** VDiffDeleteRequest workflow. */
@@ -96154,7 +96301,7 @@ export namespace vtctldata {
             /** VDiffDeleteRequest arg */
             arg?: (string|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -96178,7 +96325,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.VDiffDeleteResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /**
@@ -96265,7 +96412,7 @@ export namespace vtctldata {
         /** Properties of a VDiffDeleteResponse. */
         interface $Properties {
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -96289,7 +96436,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.VDiffResumeRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** VDiffResumeRequest workflow. */
@@ -96400,7 +96547,7 @@ export namespace vtctldata {
             /** VDiffResumeRequest target_shards */
             target_shards?: (string[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -96424,7 +96571,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.VDiffResumeResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /**
@@ -96511,7 +96658,7 @@ export namespace vtctldata {
         /** Properties of a VDiffResumeResponse. */
         interface $Properties {
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -96535,7 +96682,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.VDiffShowRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** VDiffShowRequest workflow. */
@@ -96640,7 +96787,7 @@ export namespace vtctldata {
             /** VDiffShowRequest arg */
             arg?: (string|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -96664,7 +96811,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.VDiffShowResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** VDiffShowResponse tablet_responses. */
@@ -96757,7 +96904,7 @@ export namespace vtctldata {
             /** VDiffShowResponse tablet_responses */
             tablet_responses?: ({ [k: string]: tabletmanagerdata.VDiffResponse.$Properties }|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -96781,7 +96928,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.VDiffStopRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** VDiffStopRequest workflow. */
@@ -96892,7 +97039,7 @@ export namespace vtctldata {
             /** VDiffStopRequest target_shards */
             target_shards?: (string[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -96916,7 +97063,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.VDiffStopResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /**
@@ -97003,7 +97150,7 @@ export namespace vtctldata {
         /** Properties of a VDiffStopResponse. */
         interface $Properties {
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -97027,7 +97174,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.WorkflowDeleteRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** WorkflowDeleteRequest keyspace. */
@@ -97156,7 +97303,7 @@ export namespace vtctldata {
             /** WorkflowDeleteRequest ignore_source_keyspace */
             ignore_source_keyspace?: (boolean|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -97180,7 +97327,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.WorkflowDeleteResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** WorkflowDeleteResponse summary. */
@@ -97285,7 +97432,7 @@ export namespace vtctldata {
             /** WorkflowDeleteResponse warnings */
             warnings?: (string[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -97308,7 +97455,7 @@ export namespace vtctldata {
              */
             constructor(properties?: vtctldata.WorkflowDeleteResponse.TabletInfo.$Properties);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
 
             /** TabletInfo tablet. */
@@ -97407,7 +97554,7 @@ export namespace vtctldata {
                 /** TabletInfo deleted */
                 deleted?: (boolean|null);
 
-                /** Unknown fields preserved while decoding */
+                /** Unknown fields preserved while decoding when enabled */
                 $unknowns?: Uint8Array[];
             }
 
@@ -97432,7 +97579,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.WorkflowStatusRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** WorkflowStatusRequest keyspace. */
@@ -97537,7 +97684,7 @@ export namespace vtctldata {
             /** WorkflowStatusRequest shards */
             shards?: (string[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -97577,7 +97724,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.WorkflowStatusResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** WorkflowStatusResponse table_copy_state. */
@@ -97682,7 +97829,7 @@ export namespace vtctldata {
             /** WorkflowStatusResponse traffic_state */
             traffic_state?: (string|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -97705,7 +97852,7 @@ export namespace vtctldata {
              */
             constructor(properties?: vtctldata.WorkflowStatusResponse.TableCopyState.$Properties);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
 
             /** TableCopyState rows_copied. */
@@ -97834,7 +97981,7 @@ export namespace vtctldata {
                 /** TableCopyState phase */
                 phase?: (vtctldata.TableCopyPhase|null);
 
-                /** Unknown fields preserved while decoding */
+                /** Unknown fields preserved while decoding when enabled */
                 $unknowns?: Uint8Array[];
             }
 
@@ -97858,7 +98005,7 @@ export namespace vtctldata {
              */
             constructor(properties?: vtctldata.WorkflowStatusResponse.ShardStreamState.$Properties);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
 
             /** ShardStreamState id. */
@@ -97981,7 +98128,7 @@ export namespace vtctldata {
                 /** ShardStreamState info */
                 info?: (string|null);
 
-                /** Unknown fields preserved while decoding */
+                /** Unknown fields preserved while decoding when enabled */
                 $unknowns?: Uint8Array[];
             }
 
@@ -98005,7 +98152,7 @@ export namespace vtctldata {
              */
             constructor(properties?: vtctldata.WorkflowStatusResponse.ShardStreams.$Properties);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
 
             /** ShardStreams streams. */
@@ -98098,7 +98245,7 @@ export namespace vtctldata {
                 /** ShardStreams streams */
                 streams?: (vtctldata.WorkflowStatusResponse.ShardStreamState.$Properties[]|null);
 
-                /** Unknown fields preserved while decoding */
+                /** Unknown fields preserved while decoding when enabled */
                 $unknowns?: Uint8Array[];
             }
 
@@ -98123,7 +98270,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.WorkflowSwitchTrafficRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** WorkflowSwitchTrafficRequest keyspace. */
@@ -98282,7 +98429,7 @@ export namespace vtctldata {
             /** WorkflowSwitchTrafficRequest force */
             force?: (boolean|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -98306,7 +98453,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.WorkflowSwitchTrafficResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** WorkflowSwitchTrafficResponse summary. */
@@ -98417,7 +98564,7 @@ export namespace vtctldata {
             /** WorkflowSwitchTrafficResponse dry_run_results */
             dry_run_results?: (string[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -98441,7 +98588,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.WorkflowUpdateRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** WorkflowUpdateRequest keyspace. */
@@ -98540,7 +98687,7 @@ export namespace vtctldata {
             /** WorkflowUpdateRequest tablet_request */
             tablet_request?: (tabletmanagerdata.UpdateVReplicationWorkflowRequest.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -98564,7 +98711,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.WorkflowUpdateResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** WorkflowUpdateResponse summary. */
@@ -98663,7 +98810,7 @@ export namespace vtctldata {
             /** WorkflowUpdateResponse details */
             details?: (vtctldata.WorkflowUpdateResponse.TabletInfo.$Properties[]|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -98686,7 +98833,7 @@ export namespace vtctldata {
              */
             constructor(properties?: vtctldata.WorkflowUpdateResponse.TabletInfo.$Properties);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
 
             /** TabletInfo tablet. */
@@ -98785,7 +98932,7 @@ export namespace vtctldata {
                 /** TabletInfo changed */
                 changed?: (boolean|null);
 
-                /** Unknown fields preserved while decoding */
+                /** Unknown fields preserved while decoding when enabled */
                 $unknowns?: Uint8Array[];
             }
 
@@ -98810,7 +98957,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.GetMirrorRulesRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /**
@@ -98897,7 +99044,7 @@ export namespace vtctldata {
         /** Properties of a GetMirrorRulesRequest. */
         interface $Properties {
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -98921,7 +99068,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.GetMirrorRulesResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** GetMirrorRulesResponse mirror_rules. */
@@ -99014,7 +99161,7 @@ export namespace vtctldata {
             /** GetMirrorRulesResponse mirror_rules */
             mirror_rules?: (vschema.MirrorRules.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -99038,7 +99185,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.WorkflowMirrorTrafficRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** WorkflowMirrorTrafficRequest keyspace. */
@@ -99149,7 +99296,7 @@ export namespace vtctldata {
             /** WorkflowMirrorTrafficRequest percent */
             percent?: (number|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -99173,7 +99320,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.WorkflowMirrorTrafficResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** WorkflowMirrorTrafficResponse summary. */
@@ -99278,7 +99425,7 @@ export namespace vtctldata {
             /** WorkflowMirrorTrafficResponse current_state */
             current_state?: (string|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -99302,7 +99449,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.SetVtorcEmergencyReparentRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** SetVtorcEmergencyReparentRequest keyspace. */
@@ -99407,7 +99554,7 @@ export namespace vtctldata {
             /** SetVtorcEmergencyReparentRequest disable */
             disable?: (boolean|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -99431,7 +99578,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.SetVtorcEmergencyReparentResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /**
@@ -99518,7 +99665,7 @@ export namespace vtctldata {
         /** Properties of a SetVtorcEmergencyReparentResponse. */
         interface $Properties {
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -99542,7 +99689,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.UpdateQueryThrottlerConfigRequest.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /** UpdateQueryThrottlerConfigRequest keyspace. */
@@ -99641,7 +99788,7 @@ export namespace vtctldata {
             /** UpdateQueryThrottlerConfigRequest query_throttler_config */
             query_throttler_config?: (querythrottler.Config.$Properties|null);
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
@@ -99665,7 +99812,7 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.UpdateQueryThrottlerConfigResponse.$Properties);
 
-        /** Unknown fields preserved while decoding */
+        /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
         /**
@@ -99752,7 +99899,7 @@ export namespace vtctldata {
         /** Properties of an UpdateQueryThrottlerConfigResponse. */
         interface $Properties {
 
-            /** Unknown fields preserved while decoding */
+            /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 

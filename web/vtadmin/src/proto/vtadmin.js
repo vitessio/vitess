@@ -3052,7 +3052,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @typedef {Object} vtadmin.Cluster.$Properties
          * @property {string|null} [id] Cluster id
          * @property {string|null} [name] Cluster name
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -3074,7 +3074,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a Cluster.
          * @constructor
          * @param {vtadmin.Cluster.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const Cluster = function (properties) {
             if (properties)
@@ -3342,7 +3342,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @typedef {Object} vtadmin.ClusterBackup.$Properties
          * @property {vtadmin.Cluster.$Properties|null} [cluster] ClusterBackup cluster
          * @property {mysqlctl.BackupInfo.$Properties|null} [backup] ClusterBackup backup
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -3364,7 +3364,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a ClusterBackup.
          * @constructor
          * @param {vtadmin.ClusterBackup.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ClusterBackup = function (properties) {
             if (properties)
@@ -3634,7 +3634,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @typedef {Object} vtadmin.ClusterCellsAliases.$Properties
          * @property {vtadmin.Cluster.$Properties|null} [cluster] ClusterCellsAliases cluster
          * @property {Object.<string,topodata.CellsAlias.$Properties>|null} [aliases] ClusterCellsAliases aliases
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -3656,7 +3656,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a ClusterCellsAliases.
          * @constructor
          * @param {vtadmin.ClusterCellsAliases.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ClusterCellsAliases = function (properties) {
             this.aliases = {};
@@ -3974,7 +3974,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @property {vtadmin.Cluster.$Properties|null} [cluster] ClusterCellInfo cluster
          * @property {string|null} [name] ClusterCellInfo name
          * @property {topodata.CellInfo.$Properties|null} [cell_info] ClusterCellInfo cell_info
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -3996,7 +3996,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a ClusterCellInfo.
          * @constructor
          * @param {vtadmin.ClusterCellInfo.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ClusterCellInfo = function (properties) {
             if (properties)
@@ -4296,7 +4296,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @property {string|null} [keyspace] ClusterShardReplicationPosition keyspace
          * @property {string|null} [shard] ClusterShardReplicationPosition shard
          * @property {vtctldata.ShardReplicationPositionsResponse.$Properties|null} [position_info] ClusterShardReplicationPosition position_info
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -4318,7 +4318,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a ClusterShardReplicationPosition.
          * @constructor
          * @param {vtadmin.ClusterShardReplicationPosition.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ClusterShardReplicationPosition = function (properties) {
             if (properties)
@@ -4644,7 +4644,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @typedef {Object} vtadmin.ClusterWorkflows.$Properties
          * @property {Array.<vtadmin.Workflow.$Properties>|null} [workflows] ClusterWorkflows workflows
          * @property {Array.<string>|null} [warnings] ClusterWorkflows warnings
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -4666,7 +4666,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a ClusterWorkflows.
          * @constructor
          * @param {vtadmin.ClusterWorkflows.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ClusterWorkflows = function (properties) {
             this.workflows = [];
@@ -4964,7 +4964,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @property {vtadmin.Cluster.$Properties|null} [cluster] Keyspace cluster
          * @property {vtctldata.Keyspace.$Properties|null} [keyspace] Keyspace keyspace
          * @property {Object.<string,vtctldata.Shard.$Properties>|null} [shards] Keyspace shards
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -4986,7 +4986,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a Keyspace.
          * @constructor
          * @param {vtadmin.Keyspace.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const Keyspace = function (properties) {
             this.shards = {};
@@ -5335,7 +5335,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @property {string|null} [keyspace] Schema keyspace
          * @property {Array.<tabletmanagerdata.TableDefinition.$Properties>|null} [table_definitions] Schema table_definitions
          * @property {Object.<string,vtadmin.Schema.TableSize.$Properties>|null} [table_sizes] Schema table_sizes
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -5357,7 +5357,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a Schema.
          * @constructor
          * @param {vtadmin.Schema.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const Schema = function (properties) {
             this.table_definitions = [];
@@ -5746,7 +5746,7 @@ export const vtadmin = $root.vtadmin = (() => {
              * @typedef {Object} vtadmin.Schema.ShardTableSize.$Properties
              * @property {number|Long|null} [row_count] ShardTableSize row_count
              * @property {number|Long|null} [data_length] ShardTableSize data_length
-             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
              */
 
             /**
@@ -5768,7 +5768,7 @@ export const vtadmin = $root.vtadmin = (() => {
              * @classdesc Represents a ShardTableSize.
              * @constructor
              * @param {vtadmin.Schema.ShardTableSize.$Properties=} [properties] Properties to set
-             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
              */
             const ShardTableSize = function (properties) {
                 if (properties)
@@ -6069,7 +6069,7 @@ export const vtadmin = $root.vtadmin = (() => {
              * @property {number|Long|null} [row_count] TableSize row_count
              * @property {number|Long|null} [data_length] TableSize data_length
              * @property {Object.<string,vtadmin.Schema.ShardTableSize.$Properties>|null} [by_shard] TableSize by_shard
-             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
              */
 
             /**
@@ -6091,7 +6091,7 @@ export const vtadmin = $root.vtadmin = (() => {
              * @classdesc Represents a TableSize.
              * @constructor
              * @param {vtadmin.Schema.TableSize.$Properties=} [properties] Properties to set
-             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
              */
             const TableSize = function (properties) {
                 this.by_shard = {};
@@ -6471,7 +6471,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @typedef {Object} vtadmin.SchemaMigration.$Properties
          * @property {vtadmin.Cluster.$Properties|null} [cluster] SchemaMigration cluster
          * @property {vtctldata.SchemaMigration.$Properties|null} [schema_migration] SchemaMigration schema_migration
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -6493,7 +6493,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a SchemaMigration.
          * @constructor
          * @param {vtadmin.SchemaMigration.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const SchemaMigration = function (properties) {
             if (properties)
@@ -6763,7 +6763,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @typedef {Object} vtadmin.Shard.$Properties
          * @property {vtadmin.Cluster.$Properties|null} [cluster] Shard cluster
          * @property {vtctldata.Shard.$Properties|null} [shard] Shard shard
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -6785,7 +6785,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a Shard.
          * @constructor
          * @param {vtadmin.Shard.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const Shard = function (properties) {
             if (properties)
@@ -7056,7 +7056,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @property {string|null} [cell] SrvVSchema cell
          * @property {vtadmin.Cluster.$Properties|null} [cluster] SrvVSchema cluster
          * @property {vschema.SrvVSchema.$Properties|null} [srv_v_schema] SrvVSchema srv_v_schema
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -7078,7 +7078,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a SrvVSchema.
          * @constructor
          * @param {vtadmin.SrvVSchema.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const SrvVSchema = function (properties) {
             if (properties)
@@ -7378,7 +7378,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @property {topodata.Tablet.$Properties|null} [tablet] Tablet tablet
          * @property {vtadmin.Tablet.ServingState|null} [state] Tablet state
          * @property {string|null} [FQDN] Tablet FQDN
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -7400,7 +7400,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a Tablet.
          * @constructor
          * @param {vtadmin.Tablet.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const Tablet = function (properties) {
             if (properties)
@@ -7767,7 +7767,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @property {vtadmin.Cluster.$Properties|null} [cluster] VSchema cluster
          * @property {string|null} [name] VSchema name
          * @property {vschema.Keyspace.$Properties|null} [v_schema] VSchema v_schema
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -7789,7 +7789,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a VSchema.
          * @constructor
          * @param {vtadmin.VSchema.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const VSchema = function (properties) {
             if (properties)
@@ -8088,7 +8088,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @property {string|null} [hostname] Vtctld hostname
          * @property {vtadmin.Cluster.$Properties|null} [cluster] Vtctld cluster
          * @property {string|null} [FQDN] Vtctld FQDN
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -8110,7 +8110,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a Vtctld.
          * @constructor
          * @param {vtadmin.Vtctld.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const Vtctld = function (properties) {
             if (properties)
@@ -8411,7 +8411,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @property {vtadmin.Cluster.$Properties|null} [cluster] VTGate cluster
          * @property {Array.<string>|null} [keyspaces] VTGate keyspaces
          * @property {string|null} [FQDN] VTGate FQDN
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -8433,7 +8433,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a VTGate.
          * @constructor
          * @param {vtadmin.VTGate.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const VTGate = function (properties) {
             this.keyspaces = [];
@@ -8828,7 +8828,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @property {vtadmin.Cluster.$Properties|null} [cluster] Workflow cluster
          * @property {string|null} [keyspace] Workflow keyspace
          * @property {vtctldata.Workflow.$Properties|null} [workflow] Workflow workflow
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -8850,7 +8850,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a Workflow.
          * @constructor
          * @param {vtadmin.Workflow.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const Workflow = function (properties) {
             if (properties)
@@ -9148,7 +9148,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @typedef {Object} vtadmin.WorkflowDeleteRequest.$Properties
          * @property {string|null} [cluster_id] WorkflowDeleteRequest cluster_id
          * @property {vtctldata.WorkflowDeleteRequest.$Properties|null} [request] WorkflowDeleteRequest request
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -9170,7 +9170,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a WorkflowDeleteRequest.
          * @constructor
          * @param {vtadmin.WorkflowDeleteRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const WorkflowDeleteRequest = function (properties) {
             if (properties)
@@ -9439,7 +9439,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @typedef {Object} vtadmin.WorkflowSwitchTrafficRequest.$Properties
          * @property {string|null} [cluster_id] WorkflowSwitchTrafficRequest cluster_id
          * @property {vtctldata.WorkflowSwitchTrafficRequest.$Properties|null} [request] WorkflowSwitchTrafficRequest request
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -9461,7 +9461,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a WorkflowSwitchTrafficRequest.
          * @constructor
          * @param {vtadmin.WorkflowSwitchTrafficRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const WorkflowSwitchTrafficRequest = function (properties) {
             if (properties)
@@ -9732,7 +9732,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @property {string|null} [sql] ApplySchemaRequest sql
          * @property {string|null} [caller_id] ApplySchemaRequest caller_id
          * @property {vtctldata.ApplySchemaRequest.$Properties|null} [request] ApplySchemaRequest request
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -9754,7 +9754,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents an ApplySchemaRequest.
          * @constructor
          * @param {vtadmin.ApplySchemaRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ApplySchemaRequest = function (properties) {
             if (properties)
@@ -10079,7 +10079,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @typedef {Object} vtadmin.CancelSchemaMigrationRequest.$Properties
          * @property {string|null} [cluster_id] CancelSchemaMigrationRequest cluster_id
          * @property {vtctldata.CancelSchemaMigrationRequest.$Properties|null} [request] CancelSchemaMigrationRequest request
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -10101,7 +10101,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a CancelSchemaMigrationRequest.
          * @constructor
          * @param {vtadmin.CancelSchemaMigrationRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const CancelSchemaMigrationRequest = function (properties) {
             if (properties)
@@ -10370,7 +10370,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @typedef {Object} vtadmin.CleanupSchemaMigrationRequest.$Properties
          * @property {string|null} [cluster_id] CleanupSchemaMigrationRequest cluster_id
          * @property {vtctldata.CleanupSchemaMigrationRequest.$Properties|null} [request] CleanupSchemaMigrationRequest request
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -10392,7 +10392,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a CleanupSchemaMigrationRequest.
          * @constructor
          * @param {vtadmin.CleanupSchemaMigrationRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const CleanupSchemaMigrationRequest = function (properties) {
             if (properties)
@@ -10661,7 +10661,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @typedef {Object} vtadmin.CompleteSchemaMigrationRequest.$Properties
          * @property {string|null} [cluster_id] CompleteSchemaMigrationRequest cluster_id
          * @property {vtctldata.CompleteSchemaMigrationRequest.$Properties|null} [request] CompleteSchemaMigrationRequest request
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -10683,7 +10683,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a CompleteSchemaMigrationRequest.
          * @constructor
          * @param {vtadmin.CompleteSchemaMigrationRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const CompleteSchemaMigrationRequest = function (properties) {
             if (properties)
@@ -10952,7 +10952,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @typedef {Object} vtadmin.ConcludeTransactionRequest.$Properties
          * @property {string|null} [cluster_id] ConcludeTransactionRequest cluster_id
          * @property {string|null} [dtid] ConcludeTransactionRequest dtid
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -10974,7 +10974,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a ConcludeTransactionRequest.
          * @constructor
          * @param {vtadmin.ConcludeTransactionRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ConcludeTransactionRequest = function (properties) {
             if (properties)
@@ -11242,7 +11242,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @typedef {Object} vtadmin.CreateKeyspaceRequest.$Properties
          * @property {string|null} [cluster_id] CreateKeyspaceRequest cluster_id
          * @property {vtctldata.CreateKeyspaceRequest.$Properties|null} [options] CreateKeyspaceRequest options
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -11264,7 +11264,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a CreateKeyspaceRequest.
          * @constructor
          * @param {vtadmin.CreateKeyspaceRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const CreateKeyspaceRequest = function (properties) {
             if (properties)
@@ -11532,7 +11532,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * Properties of a CreateKeyspaceResponse.
          * @typedef {Object} vtadmin.CreateKeyspaceResponse.$Properties
          * @property {vtadmin.Keyspace.$Properties|null} [keyspace] CreateKeyspaceResponse keyspace
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -11554,7 +11554,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a CreateKeyspaceResponse.
          * @constructor
          * @param {vtadmin.CreateKeyspaceResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const CreateKeyspaceResponse = function (properties) {
             if (properties)
@@ -11794,7 +11794,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @typedef {Object} vtadmin.CreateShardRequest.$Properties
          * @property {string|null} [cluster_id] CreateShardRequest cluster_id
          * @property {vtctldata.CreateShardRequest.$Properties|null} [options] CreateShardRequest options
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -11816,7 +11816,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a CreateShardRequest.
          * @constructor
          * @param {vtadmin.CreateShardRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const CreateShardRequest = function (properties) {
             if (properties)
@@ -12085,7 +12085,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @typedef {Object} vtadmin.DeleteKeyspaceRequest.$Properties
          * @property {string|null} [cluster_id] DeleteKeyspaceRequest cluster_id
          * @property {vtctldata.DeleteKeyspaceRequest.$Properties|null} [options] DeleteKeyspaceRequest options
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -12107,7 +12107,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a DeleteKeyspaceRequest.
          * @constructor
          * @param {vtadmin.DeleteKeyspaceRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const DeleteKeyspaceRequest = function (properties) {
             if (properties)
@@ -12376,7 +12376,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @typedef {Object} vtadmin.DeleteShardsRequest.$Properties
          * @property {string|null} [cluster_id] DeleteShardsRequest cluster_id
          * @property {vtctldata.DeleteShardsRequest.$Properties|null} [options] DeleteShardsRequest options
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -12398,7 +12398,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a DeleteShardsRequest.
          * @constructor
          * @param {vtadmin.DeleteShardsRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const DeleteShardsRequest = function (properties) {
             if (properties)
@@ -12668,7 +12668,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @property {topodata.TabletAlias.$Properties|null} [alias] DeleteTabletRequest alias
          * @property {Array.<string>|null} [cluster_ids] DeleteTabletRequest cluster_ids
          * @property {boolean|null} [allow_primary] DeleteTabletRequest allow_primary
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -12690,7 +12690,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a DeleteTabletRequest.
          * @constructor
          * @param {vtadmin.DeleteTabletRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const DeleteTabletRequest = function (properties) {
             this.cluster_ids = [];
@@ -13000,7 +13000,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @typedef {Object} vtadmin.DeleteTabletResponse.$Properties
          * @property {string|null} [status] DeleteTabletResponse status
          * @property {vtadmin.Cluster.$Properties|null} [cluster] DeleteTabletResponse cluster
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -13022,7 +13022,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a DeleteTabletResponse.
          * @constructor
          * @param {vtadmin.DeleteTabletResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const DeleteTabletResponse = function (properties) {
             if (properties)
@@ -13291,7 +13291,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @typedef {Object} vtadmin.EmergencyFailoverShardRequest.$Properties
          * @property {string|null} [cluster_id] EmergencyFailoverShardRequest cluster_id
          * @property {vtctldata.EmergencyReparentShardRequest.$Properties|null} [options] EmergencyFailoverShardRequest options
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -13313,7 +13313,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents an EmergencyFailoverShardRequest.
          * @constructor
          * @param {vtadmin.EmergencyFailoverShardRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const EmergencyFailoverShardRequest = function (properties) {
             if (properties)
@@ -13585,7 +13585,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @property {string|null} [shard] EmergencyFailoverShardResponse shard
          * @property {topodata.TabletAlias.$Properties|null} [promoted_primary] EmergencyFailoverShardResponse promoted_primary
          * @property {Array.<logutil.Event.$Properties>|null} [events] EmergencyFailoverShardResponse events
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -13607,7 +13607,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents an EmergencyFailoverShardResponse.
          * @constructor
          * @param {vtadmin.EmergencyFailoverShardResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const EmergencyFailoverShardResponse = function (properties) {
             this.events = [];
@@ -13980,7 +13980,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @property {string|null} [table] FindSchemaRequest table
          * @property {Array.<string>|null} [cluster_ids] FindSchemaRequest cluster_ids
          * @property {vtadmin.GetSchemaTableSizeOptions.$Properties|null} [table_size_options] FindSchemaRequest table_size_options
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -14002,7 +14002,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a FindSchemaRequest.
          * @constructor
          * @param {vtadmin.FindSchemaRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const FindSchemaRequest = function (properties) {
             this.cluster_ids = [];
@@ -14314,7 +14314,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @property {Array.<string>|null} [keyspaces] GetBackupsRequest keyspaces
          * @property {Array.<string>|null} [keyspace_shards] GetBackupsRequest keyspace_shards
          * @property {vtctldata.GetBackupsRequest.$Properties|null} [request_options] GetBackupsRequest request_options
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -14336,7 +14336,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a GetBackupsRequest.
          * @constructor
          * @param {vtadmin.GetBackupsRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetBackupsRequest = function (properties) {
             this.cluster_ids = [];
@@ -14697,7 +14697,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * Properties of a GetBackupsResponse.
          * @typedef {Object} vtadmin.GetBackupsResponse.$Properties
          * @property {Array.<vtadmin.ClusterBackup.$Properties>|null} [backups] GetBackupsResponse backups
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -14719,7 +14719,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a GetBackupsResponse.
          * @constructor
          * @param {vtadmin.GetBackupsResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetBackupsResponse = function (properties) {
             this.backups = [];
@@ -14976,7 +14976,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @property {Array.<string>|null} [cluster_ids] GetCellInfosRequest cluster_ids
          * @property {Array.<string>|null} [cells] GetCellInfosRequest cells
          * @property {boolean|null} [names_only] GetCellInfosRequest names_only
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -14998,7 +14998,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a GetCellInfosRequest.
          * @constructor
          * @param {vtadmin.GetCellInfosRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetCellInfosRequest = function (properties) {
             this.cluster_ids = [];
@@ -15318,7 +15318,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * Properties of a GetCellInfosResponse.
          * @typedef {Object} vtadmin.GetCellInfosResponse.$Properties
          * @property {Array.<vtadmin.ClusterCellInfo.$Properties>|null} [cell_infos] GetCellInfosResponse cell_infos
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -15340,7 +15340,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a GetCellInfosResponse.
          * @constructor
          * @param {vtadmin.GetCellInfosResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetCellInfosResponse = function (properties) {
             this.cell_infos = [];
@@ -15595,7 +15595,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * Properties of a GetCellsAliasesRequest.
          * @typedef {Object} vtadmin.GetCellsAliasesRequest.$Properties
          * @property {Array.<string>|null} [cluster_ids] GetCellsAliasesRequest cluster_ids
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -15617,7 +15617,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a GetCellsAliasesRequest.
          * @constructor
          * @param {vtadmin.GetCellsAliasesRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetCellsAliasesRequest = function (properties) {
             this.cluster_ids = [];
@@ -15867,7 +15867,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * Properties of a GetCellsAliasesResponse.
          * @typedef {Object} vtadmin.GetCellsAliasesResponse.$Properties
          * @property {Array.<vtadmin.ClusterCellsAliases.$Properties>|null} [aliases] GetCellsAliasesResponse aliases
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -15889,7 +15889,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a GetCellsAliasesResponse.
          * @constructor
          * @param {vtadmin.GetCellsAliasesResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetCellsAliasesResponse = function (properties) {
             this.aliases = [];
@@ -16143,7 +16143,7 @@ export const vtadmin = $root.vtadmin = (() => {
         /**
          * Properties of a GetClustersRequest.
          * @typedef {Object} vtadmin.GetClustersRequest.$Properties
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -16165,7 +16165,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a GetClustersRequest.
          * @constructor
          * @param {vtadmin.GetClustersRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetClustersRequest = function (properties) {
             if (properties)
@@ -16363,7 +16363,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * Properties of a GetClustersResponse.
          * @typedef {Object} vtadmin.GetClustersResponse.$Properties
          * @property {Array.<vtadmin.Cluster.$Properties>|null} [clusters] GetClustersResponse clusters
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -16385,7 +16385,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a GetClustersResponse.
          * @constructor
          * @param {vtadmin.GetClustersResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetClustersResponse = function (properties) {
             this.clusters = [];
@@ -16641,7 +16641,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @typedef {Object} vtadmin.GetFullStatusRequest.$Properties
          * @property {string|null} [cluster_id] GetFullStatusRequest cluster_id
          * @property {topodata.TabletAlias.$Properties|null} [alias] GetFullStatusRequest alias
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -16663,7 +16663,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a GetFullStatusRequest.
          * @constructor
          * @param {vtadmin.GetFullStatusRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetFullStatusRequest = function (properties) {
             if (properties)
@@ -16931,7 +16931,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * Properties of a GetGatesRequest.
          * @typedef {Object} vtadmin.GetGatesRequest.$Properties
          * @property {Array.<string>|null} [cluster_ids] GetGatesRequest cluster_ids
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -16953,7 +16953,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a GetGatesRequest.
          * @constructor
          * @param {vtadmin.GetGatesRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetGatesRequest = function (properties) {
             this.cluster_ids = [];
@@ -17203,7 +17203,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * Properties of a GetGatesResponse.
          * @typedef {Object} vtadmin.GetGatesResponse.$Properties
          * @property {Array.<vtadmin.VTGate.$Properties>|null} [gates] GetGatesResponse gates
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -17225,7 +17225,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a GetGatesResponse.
          * @constructor
          * @param {vtadmin.GetGatesResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetGatesResponse = function (properties) {
             this.gates = [];
@@ -17481,7 +17481,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @typedef {Object} vtadmin.GetKeyspaceRequest.$Properties
          * @property {string|null} [cluster_id] GetKeyspaceRequest cluster_id
          * @property {string|null} [keyspace] GetKeyspaceRequest keyspace
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -17503,7 +17503,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a GetKeyspaceRequest.
          * @constructor
          * @param {vtadmin.GetKeyspaceRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetKeyspaceRequest = function (properties) {
             if (properties)
@@ -17770,7 +17770,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * Properties of a GetKeyspacesRequest.
          * @typedef {Object} vtadmin.GetKeyspacesRequest.$Properties
          * @property {Array.<string>|null} [cluster_ids] GetKeyspacesRequest cluster_ids
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -17792,7 +17792,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a GetKeyspacesRequest.
          * @constructor
          * @param {vtadmin.GetKeyspacesRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetKeyspacesRequest = function (properties) {
             this.cluster_ids = [];
@@ -18042,7 +18042,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * Properties of a GetKeyspacesResponse.
          * @typedef {Object} vtadmin.GetKeyspacesResponse.$Properties
          * @property {Array.<vtadmin.Keyspace.$Properties>|null} [keyspaces] GetKeyspacesResponse keyspaces
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -18064,7 +18064,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a GetKeyspacesResponse.
          * @constructor
          * @param {vtadmin.GetKeyspacesResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetKeyspacesResponse = function (properties) {
             this.keyspaces = [];
@@ -18322,7 +18322,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @property {string|null} [keyspace] GetSchemaRequest keyspace
          * @property {string|null} [table] GetSchemaRequest table
          * @property {vtadmin.GetSchemaTableSizeOptions.$Properties|null} [table_size_options] GetSchemaRequest table_size_options
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -18344,7 +18344,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a GetSchemaRequest.
          * @constructor
          * @param {vtadmin.GetSchemaRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetSchemaRequest = function (properties) {
             if (properties)
@@ -18669,7 +18669,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @typedef {Object} vtadmin.GetSchemasRequest.$Properties
          * @property {Array.<string>|null} [cluster_ids] GetSchemasRequest cluster_ids
          * @property {vtadmin.GetSchemaTableSizeOptions.$Properties|null} [table_size_options] GetSchemasRequest table_size_options
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -18691,7 +18691,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a GetSchemasRequest.
          * @constructor
          * @param {vtadmin.GetSchemasRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetSchemasRequest = function (properties) {
             this.cluster_ids = [];
@@ -18971,7 +18971,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * Properties of a GetSchemasResponse.
          * @typedef {Object} vtadmin.GetSchemasResponse.$Properties
          * @property {Array.<vtadmin.Schema.$Properties>|null} [schemas] GetSchemasResponse schemas
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -18993,7 +18993,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a GetSchemasResponse.
          * @constructor
          * @param {vtadmin.GetSchemasResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetSchemasResponse = function (properties) {
             this.schemas = [];
@@ -19248,7 +19248,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * Properties of a GetSchemaMigrationsRequest.
          * @typedef {Object} vtadmin.GetSchemaMigrationsRequest.$Properties
          * @property {Array.<vtadmin.GetSchemaMigrationsRequest.ClusterRequest.$Properties>|null} [cluster_requests] GetSchemaMigrationsRequest cluster_requests
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -19270,7 +19270,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a GetSchemaMigrationsRequest.
          * @constructor
          * @param {vtadmin.GetSchemaMigrationsRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetSchemaMigrationsRequest = function (properties) {
             this.cluster_requests = [];
@@ -19523,7 +19523,7 @@ export const vtadmin = $root.vtadmin = (() => {
              * @typedef {Object} vtadmin.GetSchemaMigrationsRequest.ClusterRequest.$Properties
              * @property {string|null} [cluster_id] ClusterRequest cluster_id
              * @property {vtctldata.GetSchemaMigrationsRequest.$Properties|null} [request] ClusterRequest request
-             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
              */
 
             /**
@@ -19545,7 +19545,7 @@ export const vtadmin = $root.vtadmin = (() => {
              * @classdesc Represents a ClusterRequest.
              * @constructor
              * @param {vtadmin.GetSchemaMigrationsRequest.ClusterRequest.$Properties=} [properties] Properties to set
-             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
              */
             const ClusterRequest = function (properties) {
                 if (properties)
@@ -19816,7 +19816,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * Properties of a GetSchemaMigrationsResponse.
          * @typedef {Object} vtadmin.GetSchemaMigrationsResponse.$Properties
          * @property {Array.<vtadmin.SchemaMigration.$Properties>|null} [schema_migrations] GetSchemaMigrationsResponse schema_migrations
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -19838,7 +19838,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a GetSchemaMigrationsResponse.
          * @constructor
          * @param {vtadmin.GetSchemaMigrationsResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetSchemaMigrationsResponse = function (properties) {
             this.schema_migrations = [];
@@ -20095,7 +20095,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @property {Array.<string>|null} [cluster_ids] GetShardReplicationPositionsRequest cluster_ids
          * @property {Array.<string>|null} [keyspaces] GetShardReplicationPositionsRequest keyspaces
          * @property {Array.<string>|null} [keyspace_shards] GetShardReplicationPositionsRequest keyspace_shards
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -20117,7 +20117,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a GetShardReplicationPositionsRequest.
          * @constructor
          * @param {vtadmin.GetShardReplicationPositionsRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetShardReplicationPositionsRequest = function (properties) {
             this.cluster_ids = [];
@@ -20448,7 +20448,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * Properties of a GetShardReplicationPositionsResponse.
          * @typedef {Object} vtadmin.GetShardReplicationPositionsResponse.$Properties
          * @property {Array.<vtadmin.ClusterShardReplicationPosition.$Properties>|null} [replication_positions] GetShardReplicationPositionsResponse replication_positions
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -20470,7 +20470,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a GetShardReplicationPositionsResponse.
          * @constructor
          * @param {vtadmin.GetShardReplicationPositionsResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetShardReplicationPositionsResponse = function (properties) {
             this.replication_positions = [];
@@ -20727,7 +20727,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @property {string|null} [cluster_id] GetSrvKeyspaceRequest cluster_id
          * @property {string|null} [keyspace] GetSrvKeyspaceRequest keyspace
          * @property {Array.<string>|null} [cells] GetSrvKeyspaceRequest cells
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -20749,7 +20749,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a GetSrvKeyspaceRequest.
          * @constructor
          * @param {vtadmin.GetSrvKeyspaceRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetSrvKeyspaceRequest = function (properties) {
             this.cells = [];
@@ -21058,7 +21058,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @typedef {Object} vtadmin.GetSrvKeyspacesRequest.$Properties
          * @property {Array.<string>|null} [cluster_ids] GetSrvKeyspacesRequest cluster_ids
          * @property {Array.<string>|null} [cells] GetSrvKeyspacesRequest cells
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -21080,7 +21080,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a GetSrvKeyspacesRequest.
          * @constructor
          * @param {vtadmin.GetSrvKeyspacesRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetSrvKeyspacesRequest = function (properties) {
             this.cluster_ids = [];
@@ -21371,7 +21371,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * Properties of a GetSrvKeyspacesResponse.
          * @typedef {Object} vtadmin.GetSrvKeyspacesResponse.$Properties
          * @property {Object.<string,vtctldata.GetSrvKeyspacesResponse.$Properties>|null} [srv_keyspaces] GetSrvKeyspacesResponse srv_keyspaces
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -21393,7 +21393,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a GetSrvKeyspacesResponse.
          * @constructor
          * @param {vtadmin.GetSrvKeyspacesResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetSrvKeyspacesResponse = function (properties) {
             this.srv_keyspaces = {};
@@ -21680,7 +21680,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @typedef {Object} vtadmin.GetSrvVSchemaRequest.$Properties
          * @property {string|null} [cluster_id] GetSrvVSchemaRequest cluster_id
          * @property {string|null} [cell] GetSrvVSchemaRequest cell
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -21702,7 +21702,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a GetSrvVSchemaRequest.
          * @constructor
          * @param {vtadmin.GetSrvVSchemaRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetSrvVSchemaRequest = function (properties) {
             if (properties)
@@ -21970,7 +21970,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @typedef {Object} vtadmin.GetSrvVSchemasRequest.$Properties
          * @property {Array.<string>|null} [cluster_ids] GetSrvVSchemasRequest cluster_ids
          * @property {Array.<string>|null} [cells] GetSrvVSchemasRequest cells
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -21992,7 +21992,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a GetSrvVSchemasRequest.
          * @constructor
          * @param {vtadmin.GetSrvVSchemasRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetSrvVSchemasRequest = function (properties) {
             this.cluster_ids = [];
@@ -22283,7 +22283,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * Properties of a GetSrvVSchemasResponse.
          * @typedef {Object} vtadmin.GetSrvVSchemasResponse.$Properties
          * @property {Array.<vtadmin.SrvVSchema.$Properties>|null} [srv_v_schemas] GetSrvVSchemasResponse srv_v_schemas
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -22305,7 +22305,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a GetSrvVSchemasResponse.
          * @constructor
          * @param {vtadmin.GetSrvVSchemasResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetSrvVSchemasResponse = function (properties) {
             this.srv_v_schemas = [];
@@ -22561,7 +22561,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @typedef {Object} vtadmin.GetSchemaTableSizeOptions.$Properties
          * @property {boolean|null} [aggregate_sizes] GetSchemaTableSizeOptions aggregate_sizes
          * @property {boolean|null} [include_non_serving_shards] GetSchemaTableSizeOptions include_non_serving_shards
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -22583,7 +22583,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a GetSchemaTableSizeOptions.
          * @constructor
          * @param {vtadmin.GetSchemaTableSizeOptions.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetSchemaTableSizeOptions = function (properties) {
             if (properties)
@@ -22851,7 +22851,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @typedef {Object} vtadmin.GetTabletRequest.$Properties
          * @property {topodata.TabletAlias.$Properties|null} [alias] GetTabletRequest alias
          * @property {Array.<string>|null} [cluster_ids] GetTabletRequest cluster_ids
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -22873,7 +22873,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a GetTabletRequest.
          * @constructor
          * @param {vtadmin.GetTabletRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetTabletRequest = function (properties) {
             this.cluster_ids = [];
@@ -23153,7 +23153,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * Properties of a GetTabletsRequest.
          * @typedef {Object} vtadmin.GetTabletsRequest.$Properties
          * @property {Array.<string>|null} [cluster_ids] GetTabletsRequest cluster_ids
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -23175,7 +23175,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a GetTabletsRequest.
          * @constructor
          * @param {vtadmin.GetTabletsRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetTabletsRequest = function (properties) {
             this.cluster_ids = [];
@@ -23425,7 +23425,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * Properties of a GetTabletsResponse.
          * @typedef {Object} vtadmin.GetTabletsResponse.$Properties
          * @property {Array.<vtadmin.Tablet.$Properties>|null} [tablets] GetTabletsResponse tablets
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -23447,7 +23447,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a GetTabletsResponse.
          * @constructor
          * @param {vtadmin.GetTabletsResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetTabletsResponse = function (properties) {
             this.tablets = [];
@@ -23703,7 +23703,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @typedef {Object} vtadmin.GetTopologyPathRequest.$Properties
          * @property {string|null} [cluster_id] GetTopologyPathRequest cluster_id
          * @property {string|null} [path] GetTopologyPathRequest path
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -23725,7 +23725,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a GetTopologyPathRequest.
          * @constructor
          * @param {vtadmin.GetTopologyPathRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetTopologyPathRequest = function (properties) {
             if (properties)
@@ -23993,7 +23993,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @typedef {Object} vtadmin.GetTransactionInfoRequest.$Properties
          * @property {string|null} [cluster_id] GetTransactionInfoRequest cluster_id
          * @property {vtctldata.GetTransactionInfoRequest.$Properties|null} [request] GetTransactionInfoRequest request
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -24015,7 +24015,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a GetTransactionInfoRequest.
          * @constructor
          * @param {vtadmin.GetTransactionInfoRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetTransactionInfoRequest = function (properties) {
             if (properties)
@@ -24285,7 +24285,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @property {string|null} [cluster_id] GetUnresolvedTransactionsRequest cluster_id
          * @property {string|null} [keyspace] GetUnresolvedTransactionsRequest keyspace
          * @property {number|Long|null} [abandon_age] GetUnresolvedTransactionsRequest abandon_age
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -24307,7 +24307,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a GetUnresolvedTransactionsRequest.
          * @constructor
          * @param {vtadmin.GetUnresolvedTransactionsRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetUnresolvedTransactionsRequest = function (properties) {
             if (properties)
@@ -24619,7 +24619,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @typedef {Object} vtadmin.GetVSchemaRequest.$Properties
          * @property {string|null} [cluster_id] GetVSchemaRequest cluster_id
          * @property {string|null} [keyspace] GetVSchemaRequest keyspace
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -24641,7 +24641,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a GetVSchemaRequest.
          * @constructor
          * @param {vtadmin.GetVSchemaRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetVSchemaRequest = function (properties) {
             if (properties)
@@ -24908,7 +24908,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * Properties of a GetVSchemasRequest.
          * @typedef {Object} vtadmin.GetVSchemasRequest.$Properties
          * @property {Array.<string>|null} [cluster_ids] GetVSchemasRequest cluster_ids
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -24930,7 +24930,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a GetVSchemasRequest.
          * @constructor
          * @param {vtadmin.GetVSchemasRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetVSchemasRequest = function (properties) {
             this.cluster_ids = [];
@@ -25180,7 +25180,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * Properties of a GetVSchemasResponse.
          * @typedef {Object} vtadmin.GetVSchemasResponse.$Properties
          * @property {Array.<vtadmin.VSchema.$Properties>|null} [v_schemas] GetVSchemasResponse v_schemas
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -25202,7 +25202,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a GetVSchemasResponse.
          * @constructor
          * @param {vtadmin.GetVSchemasResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetVSchemasResponse = function (properties) {
             this.v_schemas = [];
@@ -25457,7 +25457,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * Properties of a GetVtctldsRequest.
          * @typedef {Object} vtadmin.GetVtctldsRequest.$Properties
          * @property {Array.<string>|null} [cluster_ids] GetVtctldsRequest cluster_ids
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -25479,7 +25479,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a GetVtctldsRequest.
          * @constructor
          * @param {vtadmin.GetVtctldsRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetVtctldsRequest = function (properties) {
             this.cluster_ids = [];
@@ -25729,7 +25729,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * Properties of a GetVtctldsResponse.
          * @typedef {Object} vtadmin.GetVtctldsResponse.$Properties
          * @property {Array.<vtadmin.Vtctld.$Properties>|null} [vtctlds] GetVtctldsResponse vtctlds
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -25751,7 +25751,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a GetVtctldsResponse.
          * @constructor
          * @param {vtadmin.GetVtctldsResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetVtctldsResponse = function (properties) {
             this.vtctlds = [];
@@ -26009,7 +26009,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @property {string|null} [keyspace] GetWorkflowRequest keyspace
          * @property {string|null} [name] GetWorkflowRequest name
          * @property {boolean|null} [active_only] GetWorkflowRequest active_only
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -26031,7 +26031,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a GetWorkflowRequest.
          * @constructor
          * @param {vtadmin.GetWorkflowRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetWorkflowRequest = function (properties) {
             if (properties)
@@ -26356,7 +26356,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @property {string|null} [cluster_id] GetWorkflowStatusRequest cluster_id
          * @property {string|null} [keyspace] GetWorkflowStatusRequest keyspace
          * @property {string|null} [name] GetWorkflowStatusRequest name
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -26378,7 +26378,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a GetWorkflowStatusRequest.
          * @constructor
          * @param {vtadmin.GetWorkflowStatusRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetWorkflowStatusRequest = function (properties) {
             if (properties)
@@ -26675,7 +26675,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @property {string|null} [cluster_id] StartWorkflowRequest cluster_id
          * @property {string|null} [keyspace] StartWorkflowRequest keyspace
          * @property {string|null} [workflow] StartWorkflowRequest workflow
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -26697,7 +26697,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a StartWorkflowRequest.
          * @constructor
          * @param {vtadmin.StartWorkflowRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const StartWorkflowRequest = function (properties) {
             if (properties)
@@ -26994,7 +26994,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @property {string|null} [cluster_id] StopWorkflowRequest cluster_id
          * @property {string|null} [keyspace] StopWorkflowRequest keyspace
          * @property {string|null} [workflow] StopWorkflowRequest workflow
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -27016,7 +27016,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a StopWorkflowRequest.
          * @constructor
          * @param {vtadmin.StopWorkflowRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const StopWorkflowRequest = function (properties) {
             if (properties)
@@ -27314,7 +27314,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @property {boolean|null} [active_only] GetWorkflowsRequest active_only
          * @property {Array.<string>|null} [keyspaces] GetWorkflowsRequest keyspaces
          * @property {Array.<string>|null} [ignore_keyspaces] GetWorkflowsRequest ignore_keyspaces
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -27336,7 +27336,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a GetWorkflowsRequest.
          * @constructor
          * @param {vtadmin.GetWorkflowsRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetWorkflowsRequest = function (properties) {
             this.cluster_ids = [];
@@ -27696,7 +27696,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * Properties of a GetWorkflowsResponse.
          * @typedef {Object} vtadmin.GetWorkflowsResponse.$Properties
          * @property {Object.<string,vtadmin.ClusterWorkflows.$Properties>|null} [workflows_by_cluster] GetWorkflowsResponse workflows_by_cluster
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -27718,7 +27718,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a GetWorkflowsResponse.
          * @constructor
          * @param {vtadmin.GetWorkflowsResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetWorkflowsResponse = function (properties) {
             this.workflows_by_cluster = {};
@@ -28005,7 +28005,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @typedef {Object} vtadmin.LaunchSchemaMigrationRequest.$Properties
          * @property {string|null} [cluster_id] LaunchSchemaMigrationRequest cluster_id
          * @property {vtctldata.LaunchSchemaMigrationRequest.$Properties|null} [request] LaunchSchemaMigrationRequest request
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -28027,7 +28027,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a LaunchSchemaMigrationRequest.
          * @constructor
          * @param {vtadmin.LaunchSchemaMigrationRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const LaunchSchemaMigrationRequest = function (properties) {
             if (properties)
@@ -28297,7 +28297,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @property {string|null} [cluster_id] MaterializeCreateRequest cluster_id
          * @property {string|null} [table_settings] MaterializeCreateRequest table_settings
          * @property {vtctldata.MaterializeCreateRequest.$Properties|null} [request] MaterializeCreateRequest request
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -28319,7 +28319,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a MaterializeCreateRequest.
          * @constructor
          * @param {vtadmin.MaterializeCreateRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const MaterializeCreateRequest = function (properties) {
             if (properties)
@@ -28616,7 +28616,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @typedef {Object} vtadmin.MoveTablesCompleteRequest.$Properties
          * @property {string|null} [cluster_id] MoveTablesCompleteRequest cluster_id
          * @property {vtctldata.MoveTablesCompleteRequest.$Properties|null} [request] MoveTablesCompleteRequest request
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -28638,7 +28638,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a MoveTablesCompleteRequest.
          * @constructor
          * @param {vtadmin.MoveTablesCompleteRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const MoveTablesCompleteRequest = function (properties) {
             if (properties)
@@ -28907,7 +28907,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @typedef {Object} vtadmin.MoveTablesCreateRequest.$Properties
          * @property {string|null} [cluster_id] MoveTablesCreateRequest cluster_id
          * @property {vtctldata.MoveTablesCreateRequest.$Properties|null} [request] MoveTablesCreateRequest request
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -28929,7 +28929,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a MoveTablesCreateRequest.
          * @constructor
          * @param {vtadmin.MoveTablesCreateRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const MoveTablesCreateRequest = function (properties) {
             if (properties)
@@ -29198,7 +29198,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @typedef {Object} vtadmin.PingTabletRequest.$Properties
          * @property {topodata.TabletAlias.$Properties|null} [alias] PingTabletRequest alias
          * @property {Array.<string>|null} [cluster_ids] PingTabletRequest cluster_ids
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -29220,7 +29220,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a PingTabletRequest.
          * @constructor
          * @param {vtadmin.PingTabletRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const PingTabletRequest = function (properties) {
             this.cluster_ids = [];
@@ -29501,7 +29501,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @typedef {Object} vtadmin.PingTabletResponse.$Properties
          * @property {string|null} [status] PingTabletResponse status
          * @property {vtadmin.Cluster.$Properties|null} [cluster] PingTabletResponse cluster
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -29523,7 +29523,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a PingTabletResponse.
          * @constructor
          * @param {vtadmin.PingTabletResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const PingTabletResponse = function (properties) {
             if (properties)
@@ -29792,7 +29792,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @typedef {Object} vtadmin.PlannedFailoverShardRequest.$Properties
          * @property {string|null} [cluster_id] PlannedFailoverShardRequest cluster_id
          * @property {vtctldata.PlannedReparentShardRequest.$Properties|null} [options] PlannedFailoverShardRequest options
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -29814,7 +29814,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a PlannedFailoverShardRequest.
          * @constructor
          * @param {vtadmin.PlannedFailoverShardRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const PlannedFailoverShardRequest = function (properties) {
             if (properties)
@@ -30086,7 +30086,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @property {string|null} [shard] PlannedFailoverShardResponse shard
          * @property {topodata.TabletAlias.$Properties|null} [promoted_primary] PlannedFailoverShardResponse promoted_primary
          * @property {Array.<logutil.Event.$Properties>|null} [events] PlannedFailoverShardResponse events
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -30108,7 +30108,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a PlannedFailoverShardResponse.
          * @constructor
          * @param {vtadmin.PlannedFailoverShardResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const PlannedFailoverShardResponse = function (properties) {
             this.events = [];
@@ -30482,7 +30482,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @property {string|null} [keyspace] RebuildKeyspaceGraphRequest keyspace
          * @property {Array.<string>|null} [cells] RebuildKeyspaceGraphRequest cells
          * @property {boolean|null} [allow_partial] RebuildKeyspaceGraphRequest allow_partial
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -30504,7 +30504,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a RebuildKeyspaceGraphRequest.
          * @constructor
          * @param {vtadmin.RebuildKeyspaceGraphRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const RebuildKeyspaceGraphRequest = function (properties) {
             this.cells = [];
@@ -30840,7 +30840,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * Properties of a RebuildKeyspaceGraphResponse.
          * @typedef {Object} vtadmin.RebuildKeyspaceGraphResponse.$Properties
          * @property {string|null} [status] RebuildKeyspaceGraphResponse status
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -30862,7 +30862,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a RebuildKeyspaceGraphResponse.
          * @constructor
          * @param {vtadmin.RebuildKeyspaceGraphResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const RebuildKeyspaceGraphResponse = function (properties) {
             if (properties)
@@ -31101,7 +31101,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @typedef {Object} vtadmin.RefreshStateRequest.$Properties
          * @property {topodata.TabletAlias.$Properties|null} [alias] RefreshStateRequest alias
          * @property {Array.<string>|null} [cluster_ids] RefreshStateRequest cluster_ids
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -31123,7 +31123,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a RefreshStateRequest.
          * @constructor
          * @param {vtadmin.RefreshStateRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const RefreshStateRequest = function (properties) {
             this.cluster_ids = [];
@@ -31404,7 +31404,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @typedef {Object} vtadmin.RefreshStateResponse.$Properties
          * @property {string|null} [status] RefreshStateResponse status
          * @property {vtadmin.Cluster.$Properties|null} [cluster] RefreshStateResponse cluster
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -31426,7 +31426,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a RefreshStateResponse.
          * @constructor
          * @param {vtadmin.RefreshStateResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const RefreshStateResponse = function (properties) {
             if (properties)
@@ -31700,7 +31700,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @property {number|null} [concurrency] ReloadSchemasRequest concurrency
          * @property {string|null} [wait_position] ReloadSchemasRequest wait_position
          * @property {boolean|null} [include_primary] ReloadSchemasRequest include_primary
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -31722,7 +31722,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a ReloadSchemasRequest.
          * @constructor
          * @param {vtadmin.ReloadSchemasRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ReloadSchemasRequest = function (properties) {
             this.keyspaces = [];
@@ -32186,7 +32186,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @property {Array.<vtadmin.ReloadSchemasResponse.KeyspaceResult.$Properties>|null} [keyspace_results] ReloadSchemasResponse keyspace_results
          * @property {Array.<vtadmin.ReloadSchemasResponse.ShardResult.$Properties>|null} [shard_results] ReloadSchemasResponse shard_results
          * @property {Array.<vtadmin.ReloadSchemasResponse.TabletResult.$Properties>|null} [tablet_results] ReloadSchemasResponse tablet_results
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -32208,7 +32208,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a ReloadSchemasResponse.
          * @constructor
          * @param {vtadmin.ReloadSchemasResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ReloadSchemasResponse = function (properties) {
             this.keyspace_results = [];
@@ -32552,7 +32552,7 @@ export const vtadmin = $root.vtadmin = (() => {
              * @typedef {Object} vtadmin.ReloadSchemasResponse.KeyspaceResult.$Properties
              * @property {vtadmin.Keyspace.$Properties|null} [keyspace] KeyspaceResult keyspace
              * @property {Array.<logutil.Event.$Properties>|null} [events] KeyspaceResult events
-             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
              */
 
             /**
@@ -32574,7 +32574,7 @@ export const vtadmin = $root.vtadmin = (() => {
              * @classdesc Represents a KeyspaceResult.
              * @constructor
              * @param {vtadmin.ReloadSchemasResponse.KeyspaceResult.$Properties=} [properties] Properties to set
-             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
              */
             const KeyspaceResult = function (properties) {
                 this.events = [];
@@ -32860,7 +32860,7 @@ export const vtadmin = $root.vtadmin = (() => {
              * @typedef {Object} vtadmin.ReloadSchemasResponse.ShardResult.$Properties
              * @property {vtadmin.Shard.$Properties|null} [shard] ShardResult shard
              * @property {Array.<logutil.Event.$Properties>|null} [events] ShardResult events
-             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
              */
 
             /**
@@ -32882,7 +32882,7 @@ export const vtadmin = $root.vtadmin = (() => {
              * @classdesc Represents a ShardResult.
              * @constructor
              * @param {vtadmin.ReloadSchemasResponse.ShardResult.$Properties=} [properties] Properties to set
-             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
              */
             const ShardResult = function (properties) {
                 this.events = [];
@@ -33168,7 +33168,7 @@ export const vtadmin = $root.vtadmin = (() => {
              * @typedef {Object} vtadmin.ReloadSchemasResponse.TabletResult.$Properties
              * @property {vtadmin.Tablet.$Properties|null} [tablet] TabletResult tablet
              * @property {string|null} [result] TabletResult result
-             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
              */
 
             /**
@@ -33190,7 +33190,7 @@ export const vtadmin = $root.vtadmin = (() => {
              * @classdesc Represents a TabletResult.
              * @constructor
              * @param {vtadmin.ReloadSchemasResponse.TabletResult.$Properties=} [properties] Properties to set
-             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
              */
             const TabletResult = function (properties) {
                 if (properties)
@@ -33466,7 +33466,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @property {string|null} [wait_position] ReloadSchemaShardRequest wait_position
          * @property {boolean|null} [include_primary] ReloadSchemaShardRequest include_primary
          * @property {number|null} [concurrency] ReloadSchemaShardRequest concurrency
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -33488,7 +33488,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a ReloadSchemaShardRequest.
          * @constructor
          * @param {vtadmin.ReloadSchemaShardRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ReloadSchemaShardRequest = function (properties) {
             if (properties)
@@ -33867,7 +33867,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * Properties of a ReloadSchemaShardResponse.
          * @typedef {Object} vtadmin.ReloadSchemaShardResponse.$Properties
          * @property {Array.<logutil.Event.$Properties>|null} [events] ReloadSchemaShardResponse events
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -33889,7 +33889,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a ReloadSchemaShardResponse.
          * @constructor
          * @param {vtadmin.ReloadSchemaShardResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ReloadSchemaShardResponse = function (properties) {
             this.events = [];
@@ -34145,7 +34145,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @typedef {Object} vtadmin.RefreshTabletReplicationSourceRequest.$Properties
          * @property {topodata.TabletAlias.$Properties|null} [alias] RefreshTabletReplicationSourceRequest alias
          * @property {Array.<string>|null} [cluster_ids] RefreshTabletReplicationSourceRequest cluster_ids
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -34167,7 +34167,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a RefreshTabletReplicationSourceRequest.
          * @constructor
          * @param {vtadmin.RefreshTabletReplicationSourceRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const RefreshTabletReplicationSourceRequest = function (properties) {
             this.cluster_ids = [];
@@ -34450,7 +34450,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @property {string|null} [shard] RefreshTabletReplicationSourceResponse shard
          * @property {topodata.TabletAlias.$Properties|null} [primary] RefreshTabletReplicationSourceResponse primary
          * @property {vtadmin.Cluster.$Properties|null} [cluster] RefreshTabletReplicationSourceResponse cluster
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -34472,7 +34472,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a RefreshTabletReplicationSourceResponse.
          * @constructor
          * @param {vtadmin.RefreshTabletReplicationSourceResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const RefreshTabletReplicationSourceResponse = function (properties) {
             if (properties)
@@ -34801,7 +34801,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @property {string|null} [cell] RemoveKeyspaceCellRequest cell
          * @property {boolean|null} [force] RemoveKeyspaceCellRequest force
          * @property {boolean|null} [recursive] RemoveKeyspaceCellRequest recursive
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -34823,7 +34823,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a RemoveKeyspaceCellRequest.
          * @constructor
          * @param {vtadmin.RemoveKeyspaceCellRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const RemoveKeyspaceCellRequest = function (properties) {
             if (properties)
@@ -35174,7 +35174,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * Properties of a RemoveKeyspaceCellResponse.
          * @typedef {Object} vtadmin.RemoveKeyspaceCellResponse.$Properties
          * @property {string|null} [status] RemoveKeyspaceCellResponse status
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -35196,7 +35196,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a RemoveKeyspaceCellResponse.
          * @constructor
          * @param {vtadmin.RemoveKeyspaceCellResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const RemoveKeyspaceCellResponse = function (properties) {
             if (properties)
@@ -35435,7 +35435,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @typedef {Object} vtadmin.RetrySchemaMigrationRequest.$Properties
          * @property {string|null} [cluster_id] RetrySchemaMigrationRequest cluster_id
          * @property {vtctldata.RetrySchemaMigrationRequest.$Properties|null} [request] RetrySchemaMigrationRequest request
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -35457,7 +35457,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a RetrySchemaMigrationRequest.
          * @constructor
          * @param {vtadmin.RetrySchemaMigrationRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const RetrySchemaMigrationRequest = function (properties) {
             if (properties)
@@ -35726,7 +35726,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @typedef {Object} vtadmin.RunHealthCheckRequest.$Properties
          * @property {topodata.TabletAlias.$Properties|null} [alias] RunHealthCheckRequest alias
          * @property {Array.<string>|null} [cluster_ids] RunHealthCheckRequest cluster_ids
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -35748,7 +35748,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a RunHealthCheckRequest.
          * @constructor
          * @param {vtadmin.RunHealthCheckRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const RunHealthCheckRequest = function (properties) {
             this.cluster_ids = [];
@@ -36029,7 +36029,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @typedef {Object} vtadmin.RunHealthCheckResponse.$Properties
          * @property {string|null} [status] RunHealthCheckResponse status
          * @property {vtadmin.Cluster.$Properties|null} [cluster] RunHealthCheckResponse cluster
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -36051,7 +36051,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a RunHealthCheckResponse.
          * @constructor
          * @param {vtadmin.RunHealthCheckResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const RunHealthCheckResponse = function (properties) {
             if (properties)
@@ -36320,7 +36320,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @typedef {Object} vtadmin.ReshardCreateRequest.$Properties
          * @property {string|null} [cluster_id] ReshardCreateRequest cluster_id
          * @property {vtctldata.ReshardCreateRequest.$Properties|null} [request] ReshardCreateRequest request
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -36342,7 +36342,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a ReshardCreateRequest.
          * @constructor
          * @param {vtadmin.ReshardCreateRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ReshardCreateRequest = function (properties) {
             if (properties)
@@ -36611,7 +36611,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @typedef {Object} vtadmin.SetReadOnlyRequest.$Properties
          * @property {topodata.TabletAlias.$Properties|null} [alias] SetReadOnlyRequest alias
          * @property {Array.<string>|null} [cluster_ids] SetReadOnlyRequest cluster_ids
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -36633,7 +36633,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a SetReadOnlyRequest.
          * @constructor
          * @param {vtadmin.SetReadOnlyRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const SetReadOnlyRequest = function (properties) {
             this.cluster_ids = [];
@@ -36912,7 +36912,7 @@ export const vtadmin = $root.vtadmin = (() => {
         /**
          * Properties of a SetReadOnlyResponse.
          * @typedef {Object} vtadmin.SetReadOnlyResponse.$Properties
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -36934,7 +36934,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a SetReadOnlyResponse.
          * @constructor
          * @param {vtadmin.SetReadOnlyResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const SetReadOnlyResponse = function (properties) {
             if (properties)
@@ -37133,7 +37133,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @typedef {Object} vtadmin.SetReadWriteRequest.$Properties
          * @property {topodata.TabletAlias.$Properties|null} [alias] SetReadWriteRequest alias
          * @property {Array.<string>|null} [cluster_ids] SetReadWriteRequest cluster_ids
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -37155,7 +37155,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a SetReadWriteRequest.
          * @constructor
          * @param {vtadmin.SetReadWriteRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const SetReadWriteRequest = function (properties) {
             this.cluster_ids = [];
@@ -37434,7 +37434,7 @@ export const vtadmin = $root.vtadmin = (() => {
         /**
          * Properties of a SetReadWriteResponse.
          * @typedef {Object} vtadmin.SetReadWriteResponse.$Properties
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -37456,7 +37456,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a SetReadWriteResponse.
          * @constructor
          * @param {vtadmin.SetReadWriteResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const SetReadWriteResponse = function (properties) {
             if (properties)
@@ -37655,7 +37655,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @typedef {Object} vtadmin.StartReplicationRequest.$Properties
          * @property {topodata.TabletAlias.$Properties|null} [alias] StartReplicationRequest alias
          * @property {Array.<string>|null} [cluster_ids] StartReplicationRequest cluster_ids
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -37677,7 +37677,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a StartReplicationRequest.
          * @constructor
          * @param {vtadmin.StartReplicationRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const StartReplicationRequest = function (properties) {
             this.cluster_ids = [];
@@ -37958,7 +37958,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @typedef {Object} vtadmin.StartReplicationResponse.$Properties
          * @property {string|null} [status] StartReplicationResponse status
          * @property {vtadmin.Cluster.$Properties|null} [cluster] StartReplicationResponse cluster
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -37980,7 +37980,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a StartReplicationResponse.
          * @constructor
          * @param {vtadmin.StartReplicationResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const StartReplicationResponse = function (properties) {
             if (properties)
@@ -38249,7 +38249,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @typedef {Object} vtadmin.StopReplicationRequest.$Properties
          * @property {topodata.TabletAlias.$Properties|null} [alias] StopReplicationRequest alias
          * @property {Array.<string>|null} [cluster_ids] StopReplicationRequest cluster_ids
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -38271,7 +38271,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a StopReplicationRequest.
          * @constructor
          * @param {vtadmin.StopReplicationRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const StopReplicationRequest = function (properties) {
             this.cluster_ids = [];
@@ -38552,7 +38552,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @typedef {Object} vtadmin.StopReplicationResponse.$Properties
          * @property {string|null} [status] StopReplicationResponse status
          * @property {vtadmin.Cluster.$Properties|null} [cluster] StopReplicationResponse cluster
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -38574,7 +38574,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a StopReplicationResponse.
          * @constructor
          * @param {vtadmin.StopReplicationResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const StopReplicationResponse = function (properties) {
             if (properties)
@@ -38843,7 +38843,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @typedef {Object} vtadmin.TabletExternallyPromotedRequest.$Properties
          * @property {topodata.TabletAlias.$Properties|null} [alias] TabletExternallyPromotedRequest alias
          * @property {Array.<string>|null} [cluster_ids] TabletExternallyPromotedRequest cluster_ids
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -38865,7 +38865,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a TabletExternallyPromotedRequest.
          * @constructor
          * @param {vtadmin.TabletExternallyPromotedRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const TabletExternallyPromotedRequest = function (properties) {
             this.cluster_ids = [];
@@ -39149,7 +39149,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @property {string|null} [shard] TabletExternallyPromotedResponse shard
          * @property {topodata.TabletAlias.$Properties|null} [new_primary] TabletExternallyPromotedResponse new_primary
          * @property {topodata.TabletAlias.$Properties|null} [old_primary] TabletExternallyPromotedResponse old_primary
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -39171,7 +39171,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a TabletExternallyPromotedResponse.
          * @constructor
          * @param {vtadmin.TabletExternallyPromotedResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const TabletExternallyPromotedResponse = function (properties) {
             if (properties)
@@ -39526,7 +39526,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @typedef {Object} vtadmin.TabletExternallyReparentedRequest.$Properties
          * @property {topodata.TabletAlias.$Properties|null} [alias] TabletExternallyReparentedRequest alias
          * @property {Array.<string>|null} [cluster_ids] TabletExternallyReparentedRequest cluster_ids
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -39548,7 +39548,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a TabletExternallyReparentedRequest.
          * @constructor
          * @param {vtadmin.TabletExternallyReparentedRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const TabletExternallyReparentedRequest = function (properties) {
             this.cluster_ids = [];
@@ -39829,7 +39829,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @typedef {Object} vtadmin.ValidateRequest.$Properties
          * @property {string|null} [cluster_id] ValidateRequest cluster_id
          * @property {boolean|null} [ping_tablets] ValidateRequest ping_tablets
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -39851,7 +39851,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a ValidateRequest.
          * @constructor
          * @param {vtadmin.ValidateRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ValidateRequest = function (properties) {
             if (properties)
@@ -40120,7 +40120,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @property {string|null} [cluster_id] ValidateKeyspaceRequest cluster_id
          * @property {string|null} [keyspace] ValidateKeyspaceRequest keyspace
          * @property {boolean|null} [ping_tablets] ValidateKeyspaceRequest ping_tablets
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -40142,7 +40142,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a ValidateKeyspaceRequest.
          * @constructor
          * @param {vtadmin.ValidateKeyspaceRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ValidateKeyspaceRequest = function (properties) {
             if (properties)
@@ -40438,7 +40438,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @typedef {Object} vtadmin.ValidateSchemaKeyspaceRequest.$Properties
          * @property {string|null} [cluster_id] ValidateSchemaKeyspaceRequest cluster_id
          * @property {string|null} [keyspace] ValidateSchemaKeyspaceRequest keyspace
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -40460,7 +40460,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a ValidateSchemaKeyspaceRequest.
          * @constructor
          * @param {vtadmin.ValidateSchemaKeyspaceRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ValidateSchemaKeyspaceRequest = function (properties) {
             if (properties)
@@ -40730,7 +40730,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @property {string|null} [keyspace] ValidateShardRequest keyspace
          * @property {string|null} [shard] ValidateShardRequest shard
          * @property {boolean|null} [ping_tablets] ValidateShardRequest ping_tablets
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -40752,7 +40752,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a ValidateShardRequest.
          * @constructor
          * @param {vtadmin.ValidateShardRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ValidateShardRequest = function (properties) {
             if (properties)
@@ -41076,7 +41076,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @typedef {Object} vtadmin.ValidateVersionKeyspaceRequest.$Properties
          * @property {string|null} [cluster_id] ValidateVersionKeyspaceRequest cluster_id
          * @property {string|null} [keyspace] ValidateVersionKeyspaceRequest keyspace
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -41098,7 +41098,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a ValidateVersionKeyspaceRequest.
          * @constructor
          * @param {vtadmin.ValidateVersionKeyspaceRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ValidateVersionKeyspaceRequest = function (properties) {
             if (properties)
@@ -41367,7 +41367,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @property {string|null} [cluster_id] ValidateVersionShardRequest cluster_id
          * @property {string|null} [keyspace] ValidateVersionShardRequest keyspace
          * @property {string|null} [shard] ValidateVersionShardRequest shard
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -41389,7 +41389,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a ValidateVersionShardRequest.
          * @constructor
          * @param {vtadmin.ValidateVersionShardRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ValidateVersionShardRequest = function (properties) {
             if (properties)
@@ -41685,7 +41685,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @typedef {Object} vtadmin.VDiffCreateRequest.$Properties
          * @property {string|null} [cluster_id] VDiffCreateRequest cluster_id
          * @property {vtctldata.VDiffCreateRequest.$Properties|null} [request] VDiffCreateRequest request
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -41707,7 +41707,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a VDiffCreateRequest.
          * @constructor
          * @param {vtadmin.VDiffCreateRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const VDiffCreateRequest = function (properties) {
             if (properties)
@@ -41976,7 +41976,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @typedef {Object} vtadmin.VDiffShowRequest.$Properties
          * @property {string|null} [cluster_id] VDiffShowRequest cluster_id
          * @property {vtctldata.VDiffShowRequest.$Properties|null} [request] VDiffShowRequest request
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -41998,7 +41998,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a VDiffShowRequest.
          * @constructor
          * @param {vtadmin.VDiffShowRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const VDiffShowRequest = function (properties) {
             if (properties)
@@ -42267,7 +42267,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @typedef {Object} vtadmin.VDiffProgress.$Properties
          * @property {number|null} [percentage] VDiffProgress percentage
          * @property {string|null} [eta] VDiffProgress eta
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -42289,7 +42289,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a VDiffProgress.
          * @constructor
          * @param {vtadmin.VDiffProgress.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const VDiffProgress = function (properties) {
             if (properties)
@@ -42561,7 +42561,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @property {string|null} [started_at] VDiffShardReport started_at
          * @property {string|null} [completed_at] VDiffShardReport completed_at
          * @property {vtadmin.VDiffProgress.$Properties|null} [progress] VDiffShardReport progress
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -42583,7 +42583,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a VDiffShardReport.
          * @constructor
          * @param {vtadmin.VDiffShardReport.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const VDiffShardReport = function (properties) {
             if (properties)
@@ -42979,7 +42979,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * Properties of a VDiffShowResponse.
          * @typedef {Object} vtadmin.VDiffShowResponse.$Properties
          * @property {Object.<string,vtadmin.VDiffShardReport.$Properties>|null} [shard_report] VDiffShowResponse shard_report
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -43001,7 +43001,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a VDiffShowResponse.
          * @constructor
          * @param {vtadmin.VDiffShowResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const VDiffShowResponse = function (properties) {
             this.shard_report = {};
@@ -43289,7 +43289,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @property {string|null} [cluster] VTExplainRequest cluster
          * @property {string|null} [keyspace] VTExplainRequest keyspace
          * @property {string|null} [sql] VTExplainRequest sql
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -43311,7 +43311,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a VTExplainRequest.
          * @constructor
          * @param {vtadmin.VTExplainRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const VTExplainRequest = function (properties) {
             if (properties)
@@ -43606,7 +43606,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * Properties of a VTExplainResponse.
          * @typedef {Object} vtadmin.VTExplainResponse.$Properties
          * @property {string|null} [response] VTExplainResponse response
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -43628,7 +43628,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a VTExplainResponse.
          * @constructor
          * @param {vtadmin.VTExplainResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const VTExplainResponse = function (properties) {
             if (properties)
@@ -43868,7 +43868,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @property {string|null} [cluster_id] VExplainRequest cluster_id
          * @property {string|null} [keyspace] VExplainRequest keyspace
          * @property {string|null} [sql] VExplainRequest sql
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -43890,7 +43890,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a VExplainRequest.
          * @constructor
          * @param {vtadmin.VExplainRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const VExplainRequest = function (properties) {
             if (properties)
@@ -44185,7 +44185,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * Properties of a VExplainResponse.
          * @typedef {Object} vtadmin.VExplainResponse.$Properties
          * @property {string|null} [response] VExplainResponse response
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -44207,7 +44207,7 @@ export const vtadmin = $root.vtadmin = (() => {
          * @classdesc Represents a VExplainResponse.
          * @constructor
          * @param {vtadmin.VExplainResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const VExplainResponse = function (properties) {
             if (properties)
@@ -44479,7 +44479,7 @@ export const logutil = $root.logutil = (() => {
          * @property {string|null} [file] Event file
          * @property {number|Long|null} [line] Event line
          * @property {string|null} [value] Event value
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -44501,7 +44501,7 @@ export const logutil = $root.logutil = (() => {
          * @classdesc Represents an Event.
          * @constructor
          * @param {logutil.Event.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const Event = function (properties) {
             if (properties)
@@ -44911,7 +44911,7 @@ export const vttime = $root.vttime = (() => {
          * @typedef {Object} vttime.Time.$Properties
          * @property {number|Long|null} [seconds] Time seconds
          * @property {number|null} [nanoseconds] Time nanoseconds
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -44933,7 +44933,7 @@ export const vttime = $root.vttime = (() => {
          * @classdesc Represents a Time.
          * @constructor
          * @param {vttime.Time.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const Time = function (properties) {
             if (properties)
@@ -45217,7 +45217,7 @@ export const vttime = $root.vttime = (() => {
          * @typedef {Object} vttime.Duration.$Properties
          * @property {number|Long|null} [seconds] Duration seconds
          * @property {number|null} [nanos] Duration nanos
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -45239,7 +45239,7 @@ export const vttime = $root.vttime = (() => {
          * @classdesc Represents a Duration.
          * @constructor
          * @param {vttime.Duration.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const Duration = function (properties) {
             if (properties)
@@ -45534,7 +45534,7 @@ export const mysqlctl = $root.mysqlctl = (() => {
          * Properties of a StartRequest.
          * @typedef {Object} mysqlctl.StartRequest.$Properties
          * @property {Array.<string>|null} [mysqld_args] StartRequest mysqld_args
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -45556,7 +45556,7 @@ export const mysqlctl = $root.mysqlctl = (() => {
          * @classdesc Represents a StartRequest.
          * @constructor
          * @param {mysqlctl.StartRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const StartRequest = function (properties) {
             this.mysqld_args = [];
@@ -45805,7 +45805,7 @@ export const mysqlctl = $root.mysqlctl = (() => {
         /**
          * Properties of a StartResponse.
          * @typedef {Object} mysqlctl.StartResponse.$Properties
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -45827,7 +45827,7 @@ export const mysqlctl = $root.mysqlctl = (() => {
          * @classdesc Represents a StartResponse.
          * @constructor
          * @param {mysqlctl.StartResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const StartResponse = function (properties) {
             if (properties)
@@ -46026,7 +46026,7 @@ export const mysqlctl = $root.mysqlctl = (() => {
          * @typedef {Object} mysqlctl.ShutdownRequest.$Properties
          * @property {boolean|null} [wait_for_mysqld] ShutdownRequest wait_for_mysqld
          * @property {vttime.Duration.$Properties|null} [mysql_shutdown_timeout] ShutdownRequest mysql_shutdown_timeout
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -46048,7 +46048,7 @@ export const mysqlctl = $root.mysqlctl = (() => {
          * @classdesc Represents a ShutdownRequest.
          * @constructor
          * @param {mysqlctl.ShutdownRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ShutdownRequest = function (properties) {
             if (properties)
@@ -46315,7 +46315,7 @@ export const mysqlctl = $root.mysqlctl = (() => {
         /**
          * Properties of a ShutdownResponse.
          * @typedef {Object} mysqlctl.ShutdownResponse.$Properties
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -46337,7 +46337,7 @@ export const mysqlctl = $root.mysqlctl = (() => {
          * @classdesc Represents a ShutdownResponse.
          * @constructor
          * @param {mysqlctl.ShutdownResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ShutdownResponse = function (properties) {
             if (properties)
@@ -46534,7 +46534,7 @@ export const mysqlctl = $root.mysqlctl = (() => {
         /**
          * Properties of a RunMysqlUpgradeRequest.
          * @typedef {Object} mysqlctl.RunMysqlUpgradeRequest.$Properties
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -46556,7 +46556,7 @@ export const mysqlctl = $root.mysqlctl = (() => {
          * @classdesc Represents a RunMysqlUpgradeRequest.
          * @constructor
          * @param {mysqlctl.RunMysqlUpgradeRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const RunMysqlUpgradeRequest = function (properties) {
             if (properties)
@@ -46753,7 +46753,7 @@ export const mysqlctl = $root.mysqlctl = (() => {
         /**
          * Properties of a RunMysqlUpgradeResponse.
          * @typedef {Object} mysqlctl.RunMysqlUpgradeResponse.$Properties
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -46775,7 +46775,7 @@ export const mysqlctl = $root.mysqlctl = (() => {
          * @classdesc Represents a RunMysqlUpgradeResponse.
          * @constructor
          * @param {mysqlctl.RunMysqlUpgradeResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const RunMysqlUpgradeResponse = function (properties) {
             if (properties)
@@ -46975,7 +46975,7 @@ export const mysqlctl = $root.mysqlctl = (() => {
          * @property {string|null} [binlog_file_name] ApplyBinlogFileRequest binlog_file_name
          * @property {string|null} [binlog_restore_position] ApplyBinlogFileRequest binlog_restore_position
          * @property {vttime.Time.$Properties|null} [binlog_restore_datetime] ApplyBinlogFileRequest binlog_restore_datetime
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -46997,7 +46997,7 @@ export const mysqlctl = $root.mysqlctl = (() => {
          * @classdesc Represents an ApplyBinlogFileRequest.
          * @constructor
          * @param {mysqlctl.ApplyBinlogFileRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ApplyBinlogFileRequest = function (properties) {
             if (properties)
@@ -47292,7 +47292,7 @@ export const mysqlctl = $root.mysqlctl = (() => {
         /**
          * Properties of an ApplyBinlogFileResponse.
          * @typedef {Object} mysqlctl.ApplyBinlogFileResponse.$Properties
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -47314,7 +47314,7 @@ export const mysqlctl = $root.mysqlctl = (() => {
          * @classdesc Represents an ApplyBinlogFileResponse.
          * @constructor
          * @param {mysqlctl.ApplyBinlogFileResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ApplyBinlogFileResponse = function (properties) {
             if (properties)
@@ -47512,7 +47512,7 @@ export const mysqlctl = $root.mysqlctl = (() => {
          * Properties of a ReadBinlogFilesTimestampsRequest.
          * @typedef {Object} mysqlctl.ReadBinlogFilesTimestampsRequest.$Properties
          * @property {Array.<string>|null} [binlog_file_names] ReadBinlogFilesTimestampsRequest binlog_file_names
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -47534,7 +47534,7 @@ export const mysqlctl = $root.mysqlctl = (() => {
          * @classdesc Represents a ReadBinlogFilesTimestampsRequest.
          * @constructor
          * @param {mysqlctl.ReadBinlogFilesTimestampsRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ReadBinlogFilesTimestampsRequest = function (properties) {
             this.binlog_file_names = [];
@@ -47787,7 +47787,7 @@ export const mysqlctl = $root.mysqlctl = (() => {
          * @property {string|null} [first_timestamp_binlog] ReadBinlogFilesTimestampsResponse first_timestamp_binlog
          * @property {vttime.Time.$Properties|null} [last_timestamp] ReadBinlogFilesTimestampsResponse last_timestamp
          * @property {string|null} [last_timestamp_binlog] ReadBinlogFilesTimestampsResponse last_timestamp_binlog
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -47809,7 +47809,7 @@ export const mysqlctl = $root.mysqlctl = (() => {
          * @classdesc Represents a ReadBinlogFilesTimestampsResponse.
          * @constructor
          * @param {mysqlctl.ReadBinlogFilesTimestampsResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ReadBinlogFilesTimestampsResponse = function (properties) {
             if (properties)
@@ -48133,7 +48133,7 @@ export const mysqlctl = $root.mysqlctl = (() => {
         /**
          * Properties of a ReinitConfigRequest.
          * @typedef {Object} mysqlctl.ReinitConfigRequest.$Properties
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -48155,7 +48155,7 @@ export const mysqlctl = $root.mysqlctl = (() => {
          * @classdesc Represents a ReinitConfigRequest.
          * @constructor
          * @param {mysqlctl.ReinitConfigRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ReinitConfigRequest = function (properties) {
             if (properties)
@@ -48352,7 +48352,7 @@ export const mysqlctl = $root.mysqlctl = (() => {
         /**
          * Properties of a ReinitConfigResponse.
          * @typedef {Object} mysqlctl.ReinitConfigResponse.$Properties
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -48374,7 +48374,7 @@ export const mysqlctl = $root.mysqlctl = (() => {
          * @classdesc Represents a ReinitConfigResponse.
          * @constructor
          * @param {mysqlctl.ReinitConfigResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ReinitConfigResponse = function (properties) {
             if (properties)
@@ -48571,7 +48571,7 @@ export const mysqlctl = $root.mysqlctl = (() => {
         /**
          * Properties of a RefreshConfigRequest.
          * @typedef {Object} mysqlctl.RefreshConfigRequest.$Properties
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -48593,7 +48593,7 @@ export const mysqlctl = $root.mysqlctl = (() => {
          * @classdesc Represents a RefreshConfigRequest.
          * @constructor
          * @param {mysqlctl.RefreshConfigRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const RefreshConfigRequest = function (properties) {
             if (properties)
@@ -48790,7 +48790,7 @@ export const mysqlctl = $root.mysqlctl = (() => {
         /**
          * Properties of a RefreshConfigResponse.
          * @typedef {Object} mysqlctl.RefreshConfigResponse.$Properties
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -48812,7 +48812,7 @@ export const mysqlctl = $root.mysqlctl = (() => {
          * @classdesc Represents a RefreshConfigResponse.
          * @constructor
          * @param {mysqlctl.RefreshConfigResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const RefreshConfigResponse = function (properties) {
             if (properties)
@@ -49009,7 +49009,7 @@ export const mysqlctl = $root.mysqlctl = (() => {
         /**
          * Properties of a VersionStringRequest.
          * @typedef {Object} mysqlctl.VersionStringRequest.$Properties
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -49031,7 +49031,7 @@ export const mysqlctl = $root.mysqlctl = (() => {
          * @classdesc Represents a VersionStringRequest.
          * @constructor
          * @param {mysqlctl.VersionStringRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const VersionStringRequest = function (properties) {
             if (properties)
@@ -49229,7 +49229,7 @@ export const mysqlctl = $root.mysqlctl = (() => {
          * Properties of a VersionStringResponse.
          * @typedef {Object} mysqlctl.VersionStringResponse.$Properties
          * @property {string|null} [version] VersionStringResponse version
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -49251,7 +49251,7 @@ export const mysqlctl = $root.mysqlctl = (() => {
          * @classdesc Represents a VersionStringResponse.
          * @constructor
          * @param {mysqlctl.VersionStringResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const VersionStringResponse = function (properties) {
             if (properties)
@@ -49488,7 +49488,7 @@ export const mysqlctl = $root.mysqlctl = (() => {
         /**
          * Properties of a HostMetricsRequest.
          * @typedef {Object} mysqlctl.HostMetricsRequest.$Properties
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -49510,7 +49510,7 @@ export const mysqlctl = $root.mysqlctl = (() => {
          * @classdesc Represents a HostMetricsRequest.
          * @constructor
          * @param {mysqlctl.HostMetricsRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const HostMetricsRequest = function (properties) {
             if (properties)
@@ -49708,7 +49708,7 @@ export const mysqlctl = $root.mysqlctl = (() => {
          * Properties of a HostMetricsResponse.
          * @typedef {Object} mysqlctl.HostMetricsResponse.$Properties
          * @property {Object.<string,mysqlctl.HostMetricsResponse.Metric.$Properties>|null} [metrics] HostMetricsResponse metrics
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -49730,7 +49730,7 @@ export const mysqlctl = $root.mysqlctl = (() => {
          * @classdesc Represents a HostMetricsResponse.
          * @constructor
          * @param {mysqlctl.HostMetricsResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const HostMetricsResponse = function (properties) {
             this.metrics = {};
@@ -50015,7 +50015,7 @@ export const mysqlctl = $root.mysqlctl = (() => {
              * @property {string|null} [name] Metric name
              * @property {number|null} [value] Metric value
              * @property {vtrpc.RPCError.$Properties|null} [error] Metric error
-             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
              */
 
             /**
@@ -50037,7 +50037,7 @@ export const mysqlctl = $root.mysqlctl = (() => {
              * @classdesc Represents a Metric.
              * @constructor
              * @param {mysqlctl.HostMetricsResponse.Metric.$Properties=} [properties] Properties to set
-             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
              */
             const Metric = function (properties) {
                 if (properties)
@@ -50747,7 +50747,7 @@ export const mysqlctl = $root.mysqlctl = (() => {
          * @property {vttime.Time.$Properties|null} [time] BackupInfo time
          * @property {string|null} [engine] BackupInfo engine
          * @property {mysqlctl.BackupInfo.Status|null} [status] BackupInfo status
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -50769,7 +50769,7 @@ export const mysqlctl = $root.mysqlctl = (() => {
          * @classdesc Represents a BackupInfo.
          * @constructor
          * @param {mysqlctl.BackupInfo.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const BackupInfo = function (properties) {
             if (properties)
@@ -51273,7 +51273,7 @@ export const topodata = $root.topodata = (() => {
          * @typedef {Object} topodata.KeyRange.$Properties
          * @property {Uint8Array|null} [start] KeyRange start
          * @property {Uint8Array|null} [end] KeyRange end
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -51295,7 +51295,7 @@ export const topodata = $root.topodata = (() => {
          * @classdesc Represents a KeyRange.
          * @constructor
          * @param {topodata.KeyRange.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const KeyRange = function (properties) {
             if (properties)
@@ -51595,7 +51595,7 @@ export const topodata = $root.topodata = (() => {
          * @typedef {Object} topodata.TabletAlias.$Properties
          * @property {string|null} [cell] TabletAlias cell
          * @property {number|null} [uid] TabletAlias uid
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -51617,7 +51617,7 @@ export const topodata = $root.topodata = (() => {
          * @classdesc Represents a TabletAlias.
          * @constructor
          * @param {topodata.TabletAlias.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const TabletAlias = function (properties) {
             if (properties)
@@ -51930,7 +51930,7 @@ export const topodata = $root.topodata = (() => {
          * @property {number|null} [default_conn_collation] Tablet default_conn_collation
          * @property {vttime.Time.$Properties|null} [tablet_start_time] Tablet tablet_start_time
          * @property {vttime.Time.$Properties|null} [tablet_shutdown_time] Tablet tablet_shutdown_time
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -51952,7 +51952,7 @@ export const topodata = $root.topodata = (() => {
          * @classdesc Represents a Tablet.
          * @constructor
          * @param {topodata.Tablet.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const Tablet = function (properties) {
             this.port_map = {};
@@ -52743,7 +52743,7 @@ export const topodata = $root.topodata = (() => {
          * @property {Array.<topodata.Shard.TabletControl.$Properties>|null} [tablet_controls] Shard tablet_controls
          * @property {boolean|null} [is_primary_serving] Shard is_primary_serving
          * @property {vtorcdata.Shard.$Properties|null} [vtorc_state] Shard vtorc_state
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -52765,7 +52765,7 @@ export const topodata = $root.topodata = (() => {
          * @classdesc Represents a Shard.
          * @constructor
          * @param {topodata.Shard.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const Shard = function (properties) {
             this.source_shards = [];
@@ -53213,7 +53213,7 @@ export const topodata = $root.topodata = (() => {
              * @property {string|null} [shard] SourceShard shard
              * @property {topodata.KeyRange.$Properties|null} [key_range] SourceShard key_range
              * @property {Array.<string>|null} [tables] SourceShard tables
-             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
              */
 
             /**
@@ -53235,7 +53235,7 @@ export const topodata = $root.topodata = (() => {
              * @classdesc Represents a SourceShard.
              * @constructor
              * @param {topodata.Shard.SourceShard.$Properties=} [properties] Properties to set
-             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
              */
             const SourceShard = function (properties) {
                 this.tables = [];
@@ -53604,7 +53604,7 @@ export const topodata = $root.topodata = (() => {
              * @property {Array.<string>|null} [denied_tables] TabletControl denied_tables
              * @property {boolean|null} [frozen] TabletControl frozen
              * @property {boolean|null} [allow_reads] TabletControl allow_reads
-             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
              */
 
             /**
@@ -53626,7 +53626,7 @@ export const topodata = $root.topodata = (() => {
              * @classdesc Represents a TabletControl.
              * @constructor
              * @param {topodata.Shard.TabletControl.$Properties=} [properties] Properties to set
-             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
              */
             const TabletControl = function (properties) {
                 this.cells = [];
@@ -54077,7 +54077,7 @@ export const topodata = $root.topodata = (() => {
          * @property {string|null} [sidecar_db_name] Keyspace sidecar_db_name
          * @property {vtorcdata.Keyspace.$Properties|null} [vtorc_state] Keyspace vtorc_state
          * @property {querythrottler.Config.$Properties|null} [query_throttler_config] Keyspace query_throttler_config
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -54099,7 +54099,7 @@ export const topodata = $root.topodata = (() => {
          * @classdesc Represents a Keyspace.
          * @constructor
          * @param {topodata.Keyspace.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const Keyspace = function (properties) {
             if (properties)
@@ -54557,7 +54557,7 @@ export const topodata = $root.topodata = (() => {
          * Properties of a ShardReplication.
          * @typedef {Object} topodata.ShardReplication.$Properties
          * @property {Array.<topodata.ShardReplication.Node.$Properties>|null} [nodes] ShardReplication nodes
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -54579,7 +54579,7 @@ export const topodata = $root.topodata = (() => {
          * @classdesc Represents a ShardReplication.
          * @constructor
          * @param {topodata.ShardReplication.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ShardReplication = function (properties) {
             this.nodes = [];
@@ -54831,7 +54831,7 @@ export const topodata = $root.topodata = (() => {
              * Properties of a Node.
              * @typedef {Object} topodata.ShardReplication.Node.$Properties
              * @property {topodata.TabletAlias.$Properties|null} [tablet_alias] Node tablet_alias
-             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
              */
 
             /**
@@ -54853,7 +54853,7 @@ export const topodata = $root.topodata = (() => {
              * @classdesc Represents a Node.
              * @constructor
              * @param {topodata.ShardReplication.Node.$Properties=} [properties] Properties to set
-             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
              */
             const Node = function (properties) {
                 if (properties)
@@ -55096,7 +55096,7 @@ export const topodata = $root.topodata = (() => {
          * @typedef {Object} topodata.ShardReplicationError.$Properties
          * @property {topodata.ShardReplicationError.Type|null} [type] ShardReplicationError type
          * @property {topodata.TabletAlias.$Properties|null} [tablet_alias] ShardReplicationError tablet_alias
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -55118,7 +55118,7 @@ export const topodata = $root.topodata = (() => {
          * @classdesc Represents a ShardReplicationError.
          * @constructor
          * @param {topodata.ShardReplicationError.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ShardReplicationError = function (properties) {
             if (properties)
@@ -55427,7 +55427,7 @@ export const topodata = $root.topodata = (() => {
          * @typedef {Object} topodata.ShardReference.$Properties
          * @property {string|null} [name] ShardReference name
          * @property {topodata.KeyRange.$Properties|null} [key_range] ShardReference key_range
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -55449,7 +55449,7 @@ export const topodata = $root.topodata = (() => {
          * @classdesc Represents a ShardReference.
          * @constructor
          * @param {topodata.ShardReference.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ShardReference = function (properties) {
             if (properties)
@@ -55719,7 +55719,7 @@ export const topodata = $root.topodata = (() => {
          * @property {string|null} [name] ShardTabletControl name
          * @property {topodata.KeyRange.$Properties|null} [key_range] ShardTabletControl key_range
          * @property {boolean|null} [query_service_disabled] ShardTabletControl query_service_disabled
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -55741,7 +55741,7 @@ export const topodata = $root.topodata = (() => {
          * @classdesc Represents a ShardTabletControl.
          * @constructor
          * @param {topodata.ShardTabletControl.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ShardTabletControl = function (properties) {
             if (properties)
@@ -56040,7 +56040,7 @@ export const topodata = $root.topodata = (() => {
          * @property {number|null} [ratio] ThrottledAppRule ratio
          * @property {vttime.Time.$Properties|null} [expires_at] ThrottledAppRule expires_at
          * @property {boolean|null} [exempt] ThrottledAppRule exempt
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -56062,7 +56062,7 @@ export const topodata = $root.topodata = (() => {
          * @classdesc Represents a ThrottledAppRule.
          * @constructor
          * @param {topodata.ThrottledAppRule.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ThrottledAppRule = function (properties) {
             if (properties)
@@ -56392,7 +56392,7 @@ export const topodata = $root.topodata = (() => {
          * @property {Object.<string,topodata.ThrottledAppRule.$Properties>|null} [throttled_apps] ThrottlerConfig throttled_apps
          * @property {Object.<string,topodata.ThrottlerConfig.MetricNames.$Properties>|null} [app_checked_metrics] ThrottlerConfig app_checked_metrics
          * @property {Object.<string,number>|null} [metric_thresholds] ThrottlerConfig metric_thresholds
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -56414,7 +56414,7 @@ export const topodata = $root.topodata = (() => {
          * @classdesc Represents a ThrottlerConfig.
          * @constructor
          * @param {topodata.ThrottlerConfig.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ThrottlerConfig = function (properties) {
             this.throttled_apps = {};
@@ -56956,7 +56956,7 @@ export const topodata = $root.topodata = (() => {
              * Properties of a MetricNames.
              * @typedef {Object} topodata.ThrottlerConfig.MetricNames.$Properties
              * @property {Array.<string>|null} [names] MetricNames names
-             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
              */
 
             /**
@@ -56978,7 +56978,7 @@ export const topodata = $root.topodata = (() => {
              * @classdesc Represents a MetricNames.
              * @constructor
              * @param {topodata.ThrottlerConfig.MetricNames.$Properties=} [properties] Properties to set
-             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
              */
             const MetricNames = function (properties) {
                 this.names = [];
@@ -57233,7 +57233,7 @@ export const topodata = $root.topodata = (() => {
          * @property {Array.<topodata.SrvKeyspace.KeyspacePartition.$Properties>|null} [partitions] SrvKeyspace partitions
          * @property {topodata.ThrottlerConfig.$Properties|null} [throttler_config] SrvKeyspace throttler_config
          * @property {querythrottler.Config.$Properties|null} [query_throttler_config] SrvKeyspace query_throttler_config
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -57255,7 +57255,7 @@ export const topodata = $root.topodata = (() => {
          * @classdesc Represents a SrvKeyspace.
          * @constructor
          * @param {topodata.SrvKeyspace.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const SrvKeyspace = function (properties) {
             this.partitions = [];
@@ -57569,7 +57569,7 @@ export const topodata = $root.topodata = (() => {
              * @property {topodata.TabletType|null} [served_type] KeyspacePartition served_type
              * @property {Array.<topodata.ShardReference.$Properties>|null} [shard_references] KeyspacePartition shard_references
              * @property {Array.<topodata.ShardTabletControl.$Properties>|null} [shard_tablet_controls] KeyspacePartition shard_tablet_controls
-             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
              */
 
             /**
@@ -57591,7 +57591,7 @@ export const topodata = $root.topodata = (() => {
              * @classdesc Represents a KeyspacePartition.
              * @constructor
              * @param {topodata.SrvKeyspace.KeyspacePartition.$Properties=} [properties] Properties to set
-             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
              */
             const KeyspacePartition = function (properties) {
                 this.shard_references = [];
@@ -57989,7 +57989,7 @@ export const topodata = $root.topodata = (() => {
          * @typedef {Object} topodata.CellInfo.$Properties
          * @property {string|null} [server_address] CellInfo server_address
          * @property {string|null} [root] CellInfo root
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -58011,7 +58011,7 @@ export const topodata = $root.topodata = (() => {
          * @classdesc Represents a CellInfo.
          * @constructor
          * @param {topodata.CellInfo.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const CellInfo = function (properties) {
             if (properties)
@@ -58278,7 +58278,7 @@ export const topodata = $root.topodata = (() => {
          * Properties of a CellsAlias.
          * @typedef {Object} topodata.CellsAlias.$Properties
          * @property {Array.<string>|null} [cells] CellsAlias cells
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -58300,7 +58300,7 @@ export const topodata = $root.topodata = (() => {
          * @classdesc Represents a CellsAlias.
          * @constructor
          * @param {topodata.CellsAlias.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const CellsAlias = function (properties) {
             this.cells = [];
@@ -58552,7 +58552,7 @@ export const topodata = $root.topodata = (() => {
          * @property {string|null} [topo_type] TopoConfig topo_type
          * @property {string|null} [server] TopoConfig server
          * @property {string|null} [root] TopoConfig root
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -58574,7 +58574,7 @@ export const topodata = $root.topodata = (() => {
          * @classdesc Represents a TopoConfig.
          * @constructor
          * @param {topodata.TopoConfig.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const TopoConfig = function (properties) {
             if (properties)
@@ -58869,7 +58869,7 @@ export const topodata = $root.topodata = (() => {
          * Properties of an ExternalVitessCluster.
          * @typedef {Object} topodata.ExternalVitessCluster.$Properties
          * @property {topodata.TopoConfig.$Properties|null} [topo_config] ExternalVitessCluster topo_config
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -58891,7 +58891,7 @@ export const topodata = $root.topodata = (() => {
          * @classdesc Represents an ExternalVitessCluster.
          * @constructor
          * @param {topodata.ExternalVitessCluster.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ExternalVitessCluster = function (properties) {
             if (properties)
@@ -59130,7 +59130,7 @@ export const topodata = $root.topodata = (() => {
          * Properties of an ExternalClusters.
          * @typedef {Object} topodata.ExternalClusters.$Properties
          * @property {Array.<topodata.ExternalVitessCluster.$Properties>|null} [vitess_cluster] ExternalClusters vitess_cluster
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -59152,7 +59152,7 @@ export const topodata = $root.topodata = (() => {
          * @classdesc Represents an ExternalClusters.
          * @constructor
          * @param {topodata.ExternalClusters.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ExternalClusters = function (properties) {
             this.vitess_cluster = [];
@@ -59419,7 +59419,7 @@ export const vtorcdata = $root.vtorcdata = (() => {
          * Properties of a Keyspace.
          * @typedef {Object} vtorcdata.Keyspace.$Properties
          * @property {boolean|null} [disable_emergency_reparent] Keyspace disable_emergency_reparent
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -59441,7 +59441,7 @@ export const vtorcdata = $root.vtorcdata = (() => {
          * @classdesc Represents a Keyspace.
          * @constructor
          * @param {vtorcdata.Keyspace.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const Keyspace = function (properties) {
             if (properties)
@@ -59679,7 +59679,7 @@ export const vtorcdata = $root.vtorcdata = (() => {
          * Properties of a Shard.
          * @typedef {Object} vtorcdata.Shard.$Properties
          * @property {boolean|null} [disable_emergency_reparent] Shard disable_emergency_reparent
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -59701,7 +59701,7 @@ export const vtorcdata = $root.vtorcdata = (() => {
          * @classdesc Represents a Shard.
          * @constructor
          * @param {vtorcdata.Shard.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const Shard = function (properties) {
             if (properties)
@@ -59940,7 +59940,7 @@ export const vtorcdata = $root.vtorcdata = (() => {
          * @typedef {Object} vtorcdata.PrimaryHealthEvent.$Properties
          * @property {number|Long|null} [at_unix_nanos] PrimaryHealthEvent at_unix_nanos
          * @property {boolean|null} [success] PrimaryHealthEvent success
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -59962,7 +59962,7 @@ export const vtorcdata = $root.vtorcdata = (() => {
          * @classdesc Represents a PrimaryHealthEvent.
          * @constructor
          * @param {vtorcdata.PrimaryHealthEvent.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const PrimaryHealthEvent = function (properties) {
             if (properties)
@@ -60246,7 +60246,7 @@ export const vtorcdata = $root.vtorcdata = (() => {
          * @typedef {Object} vtorcdata.PrimaryHealthState.$Properties
          * @property {Array.<vtorcdata.PrimaryHealthEvent.$Properties>|null} [events] PrimaryHealthState events
          * @property {boolean|null} [unhealthy] PrimaryHealthState unhealthy
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -60268,7 +60268,7 @@ export const vtorcdata = $root.vtorcdata = (() => {
          * @classdesc Represents a PrimaryHealthState.
          * @constructor
          * @param {vtorcdata.PrimaryHealthState.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const PrimaryHealthState = function (properties) {
             this.events = [];
@@ -60581,7 +60581,7 @@ export const querythrottler = $root.querythrottler = (() => {
          * @property {querythrottler.ThrottlingStrategy|null} [strategy] Config strategy
          * @property {querythrottler.TabletStrategyConfig.$Properties|null} [tablet_strategy_config] Config tablet_strategy_config
          * @property {boolean|null} [dry_run] Config dry_run
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -60603,7 +60603,7 @@ export const querythrottler = $root.querythrottler = (() => {
          * @classdesc Represents a Config.
          * @constructor
          * @param {querythrottler.Config.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const Config = function (properties) {
             if (properties)
@@ -60946,7 +60946,7 @@ export const querythrottler = $root.querythrottler = (() => {
          * Properties of a TabletStrategyConfig.
          * @typedef {Object} querythrottler.TabletStrategyConfig.$Properties
          * @property {Object.<string,querythrottler.StatementRuleSet.$Properties>|null} [tablet_rules] TabletStrategyConfig tablet_rules
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -60968,7 +60968,7 @@ export const querythrottler = $root.querythrottler = (() => {
          * @classdesc Represents a TabletStrategyConfig.
          * @constructor
          * @param {querythrottler.TabletStrategyConfig.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const TabletStrategyConfig = function (properties) {
             this.tablet_rules = {};
@@ -61254,7 +61254,7 @@ export const querythrottler = $root.querythrottler = (() => {
          * Properties of a StatementRuleSet.
          * @typedef {Object} querythrottler.StatementRuleSet.$Properties
          * @property {Object.<string,querythrottler.MetricRuleSet.$Properties>|null} [statement_rules] StatementRuleSet statement_rules
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -61276,7 +61276,7 @@ export const querythrottler = $root.querythrottler = (() => {
          * @classdesc Represents a StatementRuleSet.
          * @constructor
          * @param {querythrottler.StatementRuleSet.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const StatementRuleSet = function (properties) {
             this.statement_rules = {};
@@ -61562,7 +61562,7 @@ export const querythrottler = $root.querythrottler = (() => {
          * Properties of a MetricRuleSet.
          * @typedef {Object} querythrottler.MetricRuleSet.$Properties
          * @property {Object.<string,querythrottler.MetricRule.$Properties>|null} [metric_rules] MetricRuleSet metric_rules
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -61584,7 +61584,7 @@ export const querythrottler = $root.querythrottler = (() => {
          * @classdesc Represents a MetricRuleSet.
          * @constructor
          * @param {querythrottler.MetricRuleSet.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const MetricRuleSet = function (properties) {
             this.metric_rules = {};
@@ -61870,7 +61870,7 @@ export const querythrottler = $root.querythrottler = (() => {
          * Properties of a MetricRule.
          * @typedef {Object} querythrottler.MetricRule.$Properties
          * @property {Array.<querythrottler.ThrottleThreshold.$Properties>|null} [thresholds] MetricRule thresholds
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -61892,7 +61892,7 @@ export const querythrottler = $root.querythrottler = (() => {
          * @classdesc Represents a MetricRule.
          * @constructor
          * @param {querythrottler.MetricRule.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const MetricRule = function (properties) {
             this.thresholds = [];
@@ -62148,7 +62148,7 @@ export const querythrottler = $root.querythrottler = (() => {
          * @typedef {Object} querythrottler.ThrottleThreshold.$Properties
          * @property {number|null} [above] ThrottleThreshold above
          * @property {number|null} [throttle] ThrottleThreshold throttle
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -62170,7 +62170,7 @@ export const querythrottler = $root.querythrottler = (() => {
          * @classdesc Represents a ThrottleThreshold.
          * @constructor
          * @param {querythrottler.ThrottleThreshold.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ThrottleThreshold = function (properties) {
             if (properties)
@@ -62452,7 +62452,7 @@ export const vtrpc = $root.vtrpc = (() => {
          * @property {string|null} [component] CallerID component
          * @property {string|null} [subcomponent] CallerID subcomponent
          * @property {Array.<string>|null} [groups] CallerID groups
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -62474,7 +62474,7 @@ export const vtrpc = $root.vtrpc = (() => {
          * @classdesc Represents a CallerID.
          * @constructor
          * @param {vtrpc.CallerID.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const CallerID = function (properties) {
             this.groups = [];
@@ -62859,7 +62859,7 @@ export const vtrpc = $root.vtrpc = (() => {
          * @typedef {Object} vtrpc.RPCError.$Properties
          * @property {string|null} [message] RPCError message
          * @property {vtrpc.Code|null} [code] RPCError code
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -62881,7 +62881,7 @@ export const vtrpc = $root.vtrpc = (() => {
          * @classdesc Represents a RPCError.
          * @constructor
          * @param {vtrpc.RPCError.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const RPCError = function (properties) {
             if (properties)
@@ -63287,7 +63287,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @property {number|Long|null} [data_length] TableDefinition data_length
          * @property {number|Long|null} [row_count] TableDefinition row_count
          * @property {Array.<query.Field.$Properties>|null} [fields] TableDefinition fields
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -63309,7 +63309,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a TableDefinition.
          * @constructor
          * @param {tabletmanagerdata.TableDefinition.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const TableDefinition = function (properties) {
             this.columns = [];
@@ -63820,7 +63820,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @typedef {Object} tabletmanagerdata.SchemaDefinition.$Properties
          * @property {string|null} [database_schema] SchemaDefinition database_schema
          * @property {Array.<tabletmanagerdata.TableDefinition.$Properties>|null} [table_definitions] SchemaDefinition table_definitions
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -63842,7 +63842,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a SchemaDefinition.
          * @constructor
          * @param {tabletmanagerdata.SchemaDefinition.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const SchemaDefinition = function (properties) {
             this.table_definitions = [];
@@ -64127,7 +64127,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @typedef {Object} tabletmanagerdata.SchemaChangeResult.$Properties
          * @property {tabletmanagerdata.SchemaDefinition.$Properties|null} [before_schema] SchemaChangeResult before_schema
          * @property {tabletmanagerdata.SchemaDefinition.$Properties|null} [after_schema] SchemaChangeResult after_schema
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -64149,7 +64149,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a SchemaChangeResult.
          * @constructor
          * @param {tabletmanagerdata.SchemaChangeResult.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const SchemaChangeResult = function (properties) {
             if (properties)
@@ -64421,7 +64421,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @property {string|null} [user] UserPermission user
          * @property {number|Long|null} [password_checksum] UserPermission password_checksum
          * @property {Object.<string,string>|null} [privileges] UserPermission privileges
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -64443,7 +64443,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a UserPermission.
          * @constructor
          * @param {tabletmanagerdata.UserPermission.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const UserPermission = function (properties) {
             this.privileges = {};
@@ -64828,7 +64828,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @property {string|null} [db] DbPermission db
          * @property {string|null} [user] DbPermission user
          * @property {Object.<string,string>|null} [privileges] DbPermission privileges
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -64850,7 +64850,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a DbPermission.
          * @constructor
          * @param {tabletmanagerdata.DbPermission.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const DbPermission = function (properties) {
             this.privileges = {};
@@ -65217,7 +65217,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @typedef {Object} tabletmanagerdata.Permissions.$Properties
          * @property {Array.<tabletmanagerdata.UserPermission.$Properties>|null} [user_permissions] Permissions user_permissions
          * @property {Array.<tabletmanagerdata.DbPermission.$Properties>|null} [db_permissions] Permissions db_permissions
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -65239,7 +65239,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a Permissions.
          * @constructor
          * @param {tabletmanagerdata.Permissions.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const Permissions = function (properties) {
             this.user_permissions = [];
@@ -65540,7 +65540,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * Properties of a PingRequest.
          * @typedef {Object} tabletmanagerdata.PingRequest.$Properties
          * @property {string|null} [payload] PingRequest payload
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -65562,7 +65562,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a PingRequest.
          * @constructor
          * @param {tabletmanagerdata.PingRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const PingRequest = function (properties) {
             if (properties)
@@ -65800,7 +65800,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * Properties of a PingResponse.
          * @typedef {Object} tabletmanagerdata.PingResponse.$Properties
          * @property {string|null} [payload] PingResponse payload
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -65822,7 +65822,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a PingResponse.
          * @constructor
          * @param {tabletmanagerdata.PingResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const PingResponse = function (properties) {
             if (properties)
@@ -66060,7 +66060,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * Properties of a SleepRequest.
          * @typedef {Object} tabletmanagerdata.SleepRequest.$Properties
          * @property {number|Long|null} [duration] SleepRequest duration
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -66082,7 +66082,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a SleepRequest.
          * @constructor
          * @param {tabletmanagerdata.SleepRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const SleepRequest = function (properties) {
             if (properties)
@@ -66335,7 +66335,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         /**
          * Properties of a SleepResponse.
          * @typedef {Object} tabletmanagerdata.SleepResponse.$Properties
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -66357,7 +66357,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a SleepResponse.
          * @constructor
          * @param {tabletmanagerdata.SleepResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const SleepResponse = function (properties) {
             if (properties)
@@ -66557,7 +66557,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @property {string|null} [name] ExecuteHookRequest name
          * @property {Array.<string>|null} [parameters] ExecuteHookRequest parameters
          * @property {Object.<string,string>|null} [extra_env] ExecuteHookRequest extra_env
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -66579,7 +66579,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents an ExecuteHookRequest.
          * @constructor
          * @param {tabletmanagerdata.ExecuteHookRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ExecuteHookRequest = function (properties) {
             this.parameters = [];
@@ -66931,7 +66931,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @property {number|Long|null} [exit_status] ExecuteHookResponse exit_status
          * @property {string|null} [stdout] ExecuteHookResponse stdout
          * @property {string|null} [stderr] ExecuteHookResponse stderr
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -66953,7 +66953,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents an ExecuteHookResponse.
          * @constructor
          * @param {tabletmanagerdata.ExecuteHookResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ExecuteHookResponse = function (properties) {
             if (properties)
@@ -67267,7 +67267,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @property {boolean|null} [include_views] GetSchemaRequest include_views
          * @property {Array.<string>|null} [exclude_tables] GetSchemaRequest exclude_tables
          * @property {boolean|null} [table_schema_only] GetSchemaRequest table_schema_only
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -67289,7 +67289,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a GetSchemaRequest.
          * @constructor
          * @param {tabletmanagerdata.GetSchemaRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetSchemaRequest = function (properties) {
             this.tables = [];
@@ -67638,7 +67638,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * Properties of a GetSchemaResponse.
          * @typedef {Object} tabletmanagerdata.GetSchemaResponse.$Properties
          * @property {tabletmanagerdata.SchemaDefinition.$Properties|null} [schema_definition] GetSchemaResponse schema_definition
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -67660,7 +67660,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a GetSchemaResponse.
          * @constructor
          * @param {tabletmanagerdata.GetSchemaResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetSchemaResponse = function (properties) {
             if (properties)
@@ -67898,7 +67898,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         /**
          * Properties of a GetPermissionsRequest.
          * @typedef {Object} tabletmanagerdata.GetPermissionsRequest.$Properties
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -67920,7 +67920,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a GetPermissionsRequest.
          * @constructor
          * @param {tabletmanagerdata.GetPermissionsRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetPermissionsRequest = function (properties) {
             if (properties)
@@ -68118,7 +68118,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * Properties of a GetPermissionsResponse.
          * @typedef {Object} tabletmanagerdata.GetPermissionsResponse.$Properties
          * @property {tabletmanagerdata.Permissions.$Properties|null} [permissions] GetPermissionsResponse permissions
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -68140,7 +68140,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a GetPermissionsResponse.
          * @constructor
          * @param {tabletmanagerdata.GetPermissionsResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetPermissionsResponse = function (properties) {
             if (properties)
@@ -68379,7 +68379,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * Properties of a GetGlobalStatusVarsRequest.
          * @typedef {Object} tabletmanagerdata.GetGlobalStatusVarsRequest.$Properties
          * @property {Array.<string>|null} [variables] GetGlobalStatusVarsRequest variables
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -68401,7 +68401,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a GetGlobalStatusVarsRequest.
          * @constructor
          * @param {tabletmanagerdata.GetGlobalStatusVarsRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetGlobalStatusVarsRequest = function (properties) {
             this.variables = [];
@@ -68651,7 +68651,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * Properties of a GetGlobalStatusVarsResponse.
          * @typedef {Object} tabletmanagerdata.GetGlobalStatusVarsResponse.$Properties
          * @property {Object.<string,string>|null} [status_values] GetGlobalStatusVarsResponse status_values
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -68673,7 +68673,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a GetGlobalStatusVarsResponse.
          * @constructor
          * @param {tabletmanagerdata.GetGlobalStatusVarsResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetGlobalStatusVarsResponse = function (properties) {
             this.status_values = {};
@@ -68952,7 +68952,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         /**
          * Properties of a SetReadOnlyRequest.
          * @typedef {Object} tabletmanagerdata.SetReadOnlyRequest.$Properties
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -68974,7 +68974,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a SetReadOnlyRequest.
          * @constructor
          * @param {tabletmanagerdata.SetReadOnlyRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const SetReadOnlyRequest = function (properties) {
             if (properties)
@@ -69171,7 +69171,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         /**
          * Properties of a SetReadOnlyResponse.
          * @typedef {Object} tabletmanagerdata.SetReadOnlyResponse.$Properties
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -69193,7 +69193,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a SetReadOnlyResponse.
          * @constructor
          * @param {tabletmanagerdata.SetReadOnlyResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const SetReadOnlyResponse = function (properties) {
             if (properties)
@@ -69390,7 +69390,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         /**
          * Properties of a SetReadWriteRequest.
          * @typedef {Object} tabletmanagerdata.SetReadWriteRequest.$Properties
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -69412,7 +69412,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a SetReadWriteRequest.
          * @constructor
          * @param {tabletmanagerdata.SetReadWriteRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const SetReadWriteRequest = function (properties) {
             if (properties)
@@ -69609,7 +69609,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         /**
          * Properties of a SetReadWriteResponse.
          * @typedef {Object} tabletmanagerdata.SetReadWriteResponse.$Properties
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -69631,7 +69631,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a SetReadWriteResponse.
          * @constructor
          * @param {tabletmanagerdata.SetReadWriteResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const SetReadWriteResponse = function (properties) {
             if (properties)
@@ -69830,7 +69830,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @typedef {Object} tabletmanagerdata.ChangeTypeRequest.$Properties
          * @property {topodata.TabletType|null} [tablet_type] ChangeTypeRequest tablet_type
          * @property {boolean|null} [semiSync] ChangeTypeRequest semiSync
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -69852,7 +69852,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a ChangeTypeRequest.
          * @constructor
          * @param {tabletmanagerdata.ChangeTypeRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ChangeTypeRequest = function (properties) {
             if (properties)
@@ -70182,7 +70182,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         /**
          * Properties of a ChangeTypeResponse.
          * @typedef {Object} tabletmanagerdata.ChangeTypeResponse.$Properties
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -70204,7 +70204,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a ChangeTypeResponse.
          * @constructor
          * @param {tabletmanagerdata.ChangeTypeResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ChangeTypeResponse = function (properties) {
             if (properties)
@@ -70401,7 +70401,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         /**
          * Properties of a RefreshStateRequest.
          * @typedef {Object} tabletmanagerdata.RefreshStateRequest.$Properties
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -70423,7 +70423,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a RefreshStateRequest.
          * @constructor
          * @param {tabletmanagerdata.RefreshStateRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const RefreshStateRequest = function (properties) {
             if (properties)
@@ -70620,7 +70620,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         /**
          * Properties of a RefreshStateResponse.
          * @typedef {Object} tabletmanagerdata.RefreshStateResponse.$Properties
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -70642,7 +70642,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a RefreshStateResponse.
          * @constructor
          * @param {tabletmanagerdata.RefreshStateResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const RefreshStateResponse = function (properties) {
             if (properties)
@@ -70839,7 +70839,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         /**
          * Properties of a RunHealthCheckRequest.
          * @typedef {Object} tabletmanagerdata.RunHealthCheckRequest.$Properties
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -70861,7 +70861,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a RunHealthCheckRequest.
          * @constructor
          * @param {tabletmanagerdata.RunHealthCheckRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const RunHealthCheckRequest = function (properties) {
             if (properties)
@@ -71058,7 +71058,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         /**
          * Properties of a RunHealthCheckResponse.
          * @typedef {Object} tabletmanagerdata.RunHealthCheckResponse.$Properties
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -71080,7 +71080,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a RunHealthCheckResponse.
          * @constructor
          * @param {tabletmanagerdata.RunHealthCheckResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const RunHealthCheckResponse = function (properties) {
             if (properties)
@@ -71278,7 +71278,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * Properties of a ReloadSchemaRequest.
          * @typedef {Object} tabletmanagerdata.ReloadSchemaRequest.$Properties
          * @property {string|null} [wait_position] ReloadSchemaRequest wait_position
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -71300,7 +71300,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a ReloadSchemaRequest.
          * @constructor
          * @param {tabletmanagerdata.ReloadSchemaRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ReloadSchemaRequest = function (properties) {
             if (properties)
@@ -71537,7 +71537,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         /**
          * Properties of a ReloadSchemaResponse.
          * @typedef {Object} tabletmanagerdata.ReloadSchemaResponse.$Properties
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -71559,7 +71559,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a ReloadSchemaResponse.
          * @constructor
          * @param {tabletmanagerdata.ReloadSchemaResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ReloadSchemaResponse = function (properties) {
             if (properties)
@@ -71757,7 +71757,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * Properties of a PreflightSchemaRequest.
          * @typedef {Object} tabletmanagerdata.PreflightSchemaRequest.$Properties
          * @property {Array.<string>|null} [changes] PreflightSchemaRequest changes
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -71779,7 +71779,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a PreflightSchemaRequest.
          * @constructor
          * @param {tabletmanagerdata.PreflightSchemaRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const PreflightSchemaRequest = function (properties) {
             this.changes = [];
@@ -72029,7 +72029,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * Properties of a PreflightSchemaResponse.
          * @typedef {Object} tabletmanagerdata.PreflightSchemaResponse.$Properties
          * @property {Array.<tabletmanagerdata.SchemaChangeResult.$Properties>|null} [change_results] PreflightSchemaResponse change_results
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -72051,7 +72051,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a PreflightSchemaResponse.
          * @constructor
          * @param {tabletmanagerdata.PreflightSchemaResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const PreflightSchemaResponse = function (properties) {
             this.change_results = [];
@@ -72313,7 +72313,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @property {string|null} [sql_mode] ApplySchemaRequest sql_mode
          * @property {number|Long|null} [batch_size] ApplySchemaRequest batch_size
          * @property {boolean|null} [disable_foreign_key_checks] ApplySchemaRequest disable_foreign_key_checks
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -72335,7 +72335,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents an ApplySchemaRequest.
          * @constructor
          * @param {tabletmanagerdata.ApplySchemaRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ApplySchemaRequest = function (properties) {
             if (properties)
@@ -72789,7 +72789,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @typedef {Object} tabletmanagerdata.ApplySchemaResponse.$Properties
          * @property {tabletmanagerdata.SchemaDefinition.$Properties|null} [before_schema] ApplySchemaResponse before_schema
          * @property {tabletmanagerdata.SchemaDefinition.$Properties|null} [after_schema] ApplySchemaResponse after_schema
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -72811,7 +72811,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents an ApplySchemaResponse.
          * @constructor
          * @param {tabletmanagerdata.ApplySchemaResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ApplySchemaResponse = function (properties) {
             if (properties)
@@ -73079,7 +73079,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         /**
          * Properties of a LockTablesRequest.
          * @typedef {Object} tabletmanagerdata.LockTablesRequest.$Properties
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -73101,7 +73101,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a LockTablesRequest.
          * @constructor
          * @param {tabletmanagerdata.LockTablesRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const LockTablesRequest = function (properties) {
             if (properties)
@@ -73298,7 +73298,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         /**
          * Properties of a LockTablesResponse.
          * @typedef {Object} tabletmanagerdata.LockTablesResponse.$Properties
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -73320,7 +73320,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a LockTablesResponse.
          * @constructor
          * @param {tabletmanagerdata.LockTablesResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const LockTablesResponse = function (properties) {
             if (properties)
@@ -73517,7 +73517,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         /**
          * Properties of an UnlockTablesRequest.
          * @typedef {Object} tabletmanagerdata.UnlockTablesRequest.$Properties
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -73539,7 +73539,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents an UnlockTablesRequest.
          * @constructor
          * @param {tabletmanagerdata.UnlockTablesRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const UnlockTablesRequest = function (properties) {
             if (properties)
@@ -73736,7 +73736,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         /**
          * Properties of an UnlockTablesResponse.
          * @typedef {Object} tabletmanagerdata.UnlockTablesResponse.$Properties
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -73758,7 +73758,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents an UnlockTablesResponse.
          * @constructor
          * @param {tabletmanagerdata.UnlockTablesResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const UnlockTablesResponse = function (properties) {
             if (properties)
@@ -73959,7 +73959,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @property {string|null} [db_name] ExecuteQueryRequest db_name
          * @property {number|Long|null} [max_rows] ExecuteQueryRequest max_rows
          * @property {vtrpc.CallerID.$Properties|null} [caller_id] ExecuteQueryRequest caller_id
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -73981,7 +73981,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents an ExecuteQueryRequest.
          * @constructor
          * @param {tabletmanagerdata.ExecuteQueryRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ExecuteQueryRequest = function (properties) {
             if (properties)
@@ -74330,7 +74330,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * Properties of an ExecuteQueryResponse.
          * @typedef {Object} tabletmanagerdata.ExecuteQueryResponse.$Properties
          * @property {query.QueryResult.$Properties|null} [result] ExecuteQueryResponse result
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -74352,7 +74352,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents an ExecuteQueryResponse.
          * @constructor
          * @param {tabletmanagerdata.ExecuteQueryResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ExecuteQueryResponse = function (properties) {
             if (properties)
@@ -74596,7 +74596,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @property {boolean|null} [disable_binlogs] ExecuteFetchAsDbaRequest disable_binlogs
          * @property {boolean|null} [reload_schema] ExecuteFetchAsDbaRequest reload_schema
          * @property {boolean|null} [disable_foreign_key_checks] ExecuteFetchAsDbaRequest disable_foreign_key_checks
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -74618,7 +74618,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents an ExecuteFetchAsDbaRequest.
          * @constructor
          * @param {tabletmanagerdata.ExecuteFetchAsDbaRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ExecuteFetchAsDbaRequest = function (properties) {
             if (properties)
@@ -75022,7 +75022,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * Properties of an ExecuteFetchAsDbaResponse.
          * @typedef {Object} tabletmanagerdata.ExecuteFetchAsDbaResponse.$Properties
          * @property {query.QueryResult.$Properties|null} [result] ExecuteFetchAsDbaResponse result
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -75044,7 +75044,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents an ExecuteFetchAsDbaResponse.
          * @constructor
          * @param {tabletmanagerdata.ExecuteFetchAsDbaResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ExecuteFetchAsDbaResponse = function (properties) {
             if (properties)
@@ -75288,7 +75288,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @property {boolean|null} [disable_binlogs] ExecuteMultiFetchAsDbaRequest disable_binlogs
          * @property {boolean|null} [reload_schema] ExecuteMultiFetchAsDbaRequest reload_schema
          * @property {boolean|null} [disable_foreign_key_checks] ExecuteMultiFetchAsDbaRequest disable_foreign_key_checks
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -75310,7 +75310,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents an ExecuteMultiFetchAsDbaRequest.
          * @constructor
          * @param {tabletmanagerdata.ExecuteMultiFetchAsDbaRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ExecuteMultiFetchAsDbaRequest = function (properties) {
             if (properties)
@@ -75714,7 +75714,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * Properties of an ExecuteMultiFetchAsDbaResponse.
          * @typedef {Object} tabletmanagerdata.ExecuteMultiFetchAsDbaResponse.$Properties
          * @property {Array.<query.QueryResult.$Properties>|null} [results] ExecuteMultiFetchAsDbaResponse results
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -75736,7 +75736,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents an ExecuteMultiFetchAsDbaResponse.
          * @constructor
          * @param {tabletmanagerdata.ExecuteMultiFetchAsDbaResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ExecuteMultiFetchAsDbaResponse = function (properties) {
             this.results = [];
@@ -75994,7 +75994,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @property {string|null} [db_name] ExecuteFetchAsAllPrivsRequest db_name
          * @property {number|Long|null} [max_rows] ExecuteFetchAsAllPrivsRequest max_rows
          * @property {boolean|null} [reload_schema] ExecuteFetchAsAllPrivsRequest reload_schema
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -76016,7 +76016,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents an ExecuteFetchAsAllPrivsRequest.
          * @constructor
          * @param {tabletmanagerdata.ExecuteFetchAsAllPrivsRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ExecuteFetchAsAllPrivsRequest = function (properties) {
             if (properties)
@@ -76364,7 +76364,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * Properties of an ExecuteFetchAsAllPrivsResponse.
          * @typedef {Object} tabletmanagerdata.ExecuteFetchAsAllPrivsResponse.$Properties
          * @property {query.QueryResult.$Properties|null} [result] ExecuteFetchAsAllPrivsResponse result
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -76386,7 +76386,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents an ExecuteFetchAsAllPrivsResponse.
          * @constructor
          * @param {tabletmanagerdata.ExecuteFetchAsAllPrivsResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ExecuteFetchAsAllPrivsResponse = function (properties) {
             if (properties)
@@ -76626,7 +76626,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @typedef {Object} tabletmanagerdata.ExecuteFetchAsAppRequest.$Properties
          * @property {Uint8Array|null} [query] ExecuteFetchAsAppRequest query
          * @property {number|Long|null} [max_rows] ExecuteFetchAsAppRequest max_rows
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -76648,7 +76648,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents an ExecuteFetchAsAppRequest.
          * @constructor
          * @param {tabletmanagerdata.ExecuteFetchAsAppRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ExecuteFetchAsAppRequest = function (properties) {
             if (properties)
@@ -76940,7 +76940,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * Properties of an ExecuteFetchAsAppResponse.
          * @typedef {Object} tabletmanagerdata.ExecuteFetchAsAppResponse.$Properties
          * @property {query.QueryResult.$Properties|null} [result] ExecuteFetchAsAppResponse result
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -76962,7 +76962,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents an ExecuteFetchAsAppResponse.
          * @constructor
          * @param {tabletmanagerdata.ExecuteFetchAsAppResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ExecuteFetchAsAppResponse = function (properties) {
             if (properties)
@@ -77201,7 +77201,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * Properties of a GetUnresolvedTransactionsRequest.
          * @typedef {Object} tabletmanagerdata.GetUnresolvedTransactionsRequest.$Properties
          * @property {number|Long|null} [abandon_age] GetUnresolvedTransactionsRequest abandon_age
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -77223,7 +77223,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a GetUnresolvedTransactionsRequest.
          * @constructor
          * @param {tabletmanagerdata.GetUnresolvedTransactionsRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetUnresolvedTransactionsRequest = function (properties) {
             if (properties)
@@ -77477,7 +77477,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * Properties of a GetUnresolvedTransactionsResponse.
          * @typedef {Object} tabletmanagerdata.GetUnresolvedTransactionsResponse.$Properties
          * @property {Array.<query.TransactionMetadata.$Properties>|null} [transactions] GetUnresolvedTransactionsResponse transactions
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -77499,7 +77499,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a GetUnresolvedTransactionsResponse.
          * @constructor
          * @param {tabletmanagerdata.GetUnresolvedTransactionsResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetUnresolvedTransactionsResponse = function (properties) {
             this.transactions = [];
@@ -77754,7 +77754,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * Properties of a ReadTransactionRequest.
          * @typedef {Object} tabletmanagerdata.ReadTransactionRequest.$Properties
          * @property {string|null} [dtid] ReadTransactionRequest dtid
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -77776,7 +77776,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a ReadTransactionRequest.
          * @constructor
          * @param {tabletmanagerdata.ReadTransactionRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ReadTransactionRequest = function (properties) {
             if (properties)
@@ -78014,7 +78014,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * Properties of a ReadTransactionResponse.
          * @typedef {Object} tabletmanagerdata.ReadTransactionResponse.$Properties
          * @property {query.TransactionMetadata.$Properties|null} [transaction] ReadTransactionResponse transaction
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -78036,7 +78036,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a ReadTransactionResponse.
          * @constructor
          * @param {tabletmanagerdata.ReadTransactionResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ReadTransactionResponse = function (properties) {
             if (properties)
@@ -78275,7 +78275,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * Properties of a GetTransactionInfoRequest.
          * @typedef {Object} tabletmanagerdata.GetTransactionInfoRequest.$Properties
          * @property {string|null} [dtid] GetTransactionInfoRequest dtid
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -78297,7 +78297,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a GetTransactionInfoRequest.
          * @constructor
          * @param {tabletmanagerdata.GetTransactionInfoRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetTransactionInfoRequest = function (properties) {
             if (properties)
@@ -78538,7 +78538,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @property {string|null} [message] GetTransactionInfoResponse message
          * @property {number|Long|null} [time_created] GetTransactionInfoResponse time_created
          * @property {Array.<string>|null} [statements] GetTransactionInfoResponse statements
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -78560,7 +78560,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a GetTransactionInfoResponse.
          * @constructor
          * @param {tabletmanagerdata.GetTransactionInfoResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetTransactionInfoResponse = function (properties) {
             this.statements = [];
@@ -78913,7 +78913,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @typedef {Object} tabletmanagerdata.ConcludeTransactionRequest.$Properties
          * @property {string|null} [dtid] ConcludeTransactionRequest dtid
          * @property {boolean|null} [mm] ConcludeTransactionRequest mm
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -78935,7 +78935,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a ConcludeTransactionRequest.
          * @constructor
          * @param {tabletmanagerdata.ConcludeTransactionRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ConcludeTransactionRequest = function (properties) {
             if (properties)
@@ -79201,7 +79201,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         /**
          * Properties of a ConcludeTransactionResponse.
          * @typedef {Object} tabletmanagerdata.ConcludeTransactionResponse.$Properties
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -79223,7 +79223,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a ConcludeTransactionResponse.
          * @constructor
          * @param {tabletmanagerdata.ConcludeTransactionResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ConcludeTransactionResponse = function (properties) {
             if (properties)
@@ -79420,7 +79420,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         /**
          * Properties of a MysqlHostMetricsRequest.
          * @typedef {Object} tabletmanagerdata.MysqlHostMetricsRequest.$Properties
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -79442,7 +79442,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a MysqlHostMetricsRequest.
          * @constructor
          * @param {tabletmanagerdata.MysqlHostMetricsRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const MysqlHostMetricsRequest = function (properties) {
             if (properties)
@@ -79640,7 +79640,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * Properties of a MysqlHostMetricsResponse.
          * @typedef {Object} tabletmanagerdata.MysqlHostMetricsResponse.$Properties
          * @property {mysqlctl.HostMetricsResponse.$Properties|null} [HostMetrics] MysqlHostMetricsResponse HostMetrics
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -79662,7 +79662,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a MysqlHostMetricsResponse.
          * @constructor
          * @param {tabletmanagerdata.MysqlHostMetricsResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const MysqlHostMetricsResponse = function (properties) {
             if (properties)
@@ -79900,7 +79900,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         /**
          * Properties of a ReplicationStatusRequest.
          * @typedef {Object} tabletmanagerdata.ReplicationStatusRequest.$Properties
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -79922,7 +79922,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a ReplicationStatusRequest.
          * @constructor
          * @param {tabletmanagerdata.ReplicationStatusRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ReplicationStatusRequest = function (properties) {
             if (properties)
@@ -80120,7 +80120,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * Properties of a ReplicationStatusResponse.
          * @typedef {Object} tabletmanagerdata.ReplicationStatusResponse.$Properties
          * @property {replicationdata.Status.$Properties|null} [status] ReplicationStatusResponse status
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -80142,7 +80142,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a ReplicationStatusResponse.
          * @constructor
          * @param {tabletmanagerdata.ReplicationStatusResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ReplicationStatusResponse = function (properties) {
             if (properties)
@@ -80380,7 +80380,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         /**
          * Properties of a PrimaryStatusRequest.
          * @typedef {Object} tabletmanagerdata.PrimaryStatusRequest.$Properties
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -80402,7 +80402,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a PrimaryStatusRequest.
          * @constructor
          * @param {tabletmanagerdata.PrimaryStatusRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const PrimaryStatusRequest = function (properties) {
             if (properties)
@@ -80600,7 +80600,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * Properties of a PrimaryStatusResponse.
          * @typedef {Object} tabletmanagerdata.PrimaryStatusResponse.$Properties
          * @property {replicationdata.PrimaryStatus.$Properties|null} [status] PrimaryStatusResponse status
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -80622,7 +80622,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a PrimaryStatusResponse.
          * @constructor
          * @param {tabletmanagerdata.PrimaryStatusResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const PrimaryStatusResponse = function (properties) {
             if (properties)
@@ -80860,7 +80860,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         /**
          * Properties of a PrimaryPositionRequest.
          * @typedef {Object} tabletmanagerdata.PrimaryPositionRequest.$Properties
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -80882,7 +80882,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a PrimaryPositionRequest.
          * @constructor
          * @param {tabletmanagerdata.PrimaryPositionRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const PrimaryPositionRequest = function (properties) {
             if (properties)
@@ -81080,7 +81080,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * Properties of a PrimaryPositionResponse.
          * @typedef {Object} tabletmanagerdata.PrimaryPositionResponse.$Properties
          * @property {string|null} [position] PrimaryPositionResponse position
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -81102,7 +81102,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a PrimaryPositionResponse.
          * @constructor
          * @param {tabletmanagerdata.PrimaryPositionResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const PrimaryPositionResponse = function (properties) {
             if (properties)
@@ -81340,7 +81340,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * Properties of a WaitForPositionRequest.
          * @typedef {Object} tabletmanagerdata.WaitForPositionRequest.$Properties
          * @property {string|null} [position] WaitForPositionRequest position
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -81362,7 +81362,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a WaitForPositionRequest.
          * @constructor
          * @param {tabletmanagerdata.WaitForPositionRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const WaitForPositionRequest = function (properties) {
             if (properties)
@@ -81599,7 +81599,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         /**
          * Properties of a WaitForPositionResponse.
          * @typedef {Object} tabletmanagerdata.WaitForPositionResponse.$Properties
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -81621,7 +81621,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a WaitForPositionResponse.
          * @constructor
          * @param {tabletmanagerdata.WaitForPositionResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const WaitForPositionResponse = function (properties) {
             if (properties)
@@ -81818,7 +81818,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         /**
          * Properties of a StopReplicationRequest.
          * @typedef {Object} tabletmanagerdata.StopReplicationRequest.$Properties
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -81840,7 +81840,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a StopReplicationRequest.
          * @constructor
          * @param {tabletmanagerdata.StopReplicationRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const StopReplicationRequest = function (properties) {
             if (properties)
@@ -82037,7 +82037,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         /**
          * Properties of a StopReplicationResponse.
          * @typedef {Object} tabletmanagerdata.StopReplicationResponse.$Properties
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -82059,7 +82059,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a StopReplicationResponse.
          * @constructor
          * @param {tabletmanagerdata.StopReplicationResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const StopReplicationResponse = function (properties) {
             if (properties)
@@ -82258,7 +82258,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @typedef {Object} tabletmanagerdata.StopReplicationMinimumRequest.$Properties
          * @property {string|null} [position] StopReplicationMinimumRequest position
          * @property {number|Long|null} [wait_timeout] StopReplicationMinimumRequest wait_timeout
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -82280,7 +82280,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a StopReplicationMinimumRequest.
          * @constructor
          * @param {tabletmanagerdata.StopReplicationMinimumRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const StopReplicationMinimumRequest = function (properties) {
             if (properties)
@@ -82563,7 +82563,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * Properties of a StopReplicationMinimumResponse.
          * @typedef {Object} tabletmanagerdata.StopReplicationMinimumResponse.$Properties
          * @property {string|null} [position] StopReplicationMinimumResponse position
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -82585,7 +82585,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a StopReplicationMinimumResponse.
          * @constructor
          * @param {tabletmanagerdata.StopReplicationMinimumResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const StopReplicationMinimumResponse = function (properties) {
             if (properties)
@@ -82823,7 +82823,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * Properties of a StartReplicationRequest.
          * @typedef {Object} tabletmanagerdata.StartReplicationRequest.$Properties
          * @property {boolean|null} [semiSync] StartReplicationRequest semiSync
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -82845,7 +82845,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a StartReplicationRequest.
          * @constructor
          * @param {tabletmanagerdata.StartReplicationRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const StartReplicationRequest = function (properties) {
             if (properties)
@@ -83082,7 +83082,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         /**
          * Properties of a StartReplicationResponse.
          * @typedef {Object} tabletmanagerdata.StartReplicationResponse.$Properties
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -83104,7 +83104,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a StartReplicationResponse.
          * @constructor
          * @param {tabletmanagerdata.StartReplicationResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const StartReplicationResponse = function (properties) {
             if (properties)
@@ -83302,7 +83302,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * Properties of a RestartReplicationRequest.
          * @typedef {Object} tabletmanagerdata.RestartReplicationRequest.$Properties
          * @property {boolean|null} [semiSync] RestartReplicationRequest semiSync
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -83324,7 +83324,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a RestartReplicationRequest.
          * @constructor
          * @param {tabletmanagerdata.RestartReplicationRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const RestartReplicationRequest = function (properties) {
             if (properties)
@@ -83561,7 +83561,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         /**
          * Properties of a RestartReplicationResponse.
          * @typedef {Object} tabletmanagerdata.RestartReplicationResponse.$Properties
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -83583,7 +83583,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a RestartReplicationResponse.
          * @constructor
          * @param {tabletmanagerdata.RestartReplicationResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const RestartReplicationResponse = function (properties) {
             if (properties)
@@ -83782,7 +83782,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @typedef {Object} tabletmanagerdata.StartReplicationUntilAfterRequest.$Properties
          * @property {string|null} [position] StartReplicationUntilAfterRequest position
          * @property {number|Long|null} [wait_timeout] StartReplicationUntilAfterRequest wait_timeout
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -83804,7 +83804,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a StartReplicationUntilAfterRequest.
          * @constructor
          * @param {tabletmanagerdata.StartReplicationUntilAfterRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const StartReplicationUntilAfterRequest = function (properties) {
             if (properties)
@@ -84086,7 +84086,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         /**
          * Properties of a StartReplicationUntilAfterResponse.
          * @typedef {Object} tabletmanagerdata.StartReplicationUntilAfterResponse.$Properties
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -84108,7 +84108,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a StartReplicationUntilAfterResponse.
          * @constructor
          * @param {tabletmanagerdata.StartReplicationUntilAfterResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const StartReplicationUntilAfterResponse = function (properties) {
             if (properties)
@@ -84305,7 +84305,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         /**
          * Properties of a GetReplicasRequest.
          * @typedef {Object} tabletmanagerdata.GetReplicasRequest.$Properties
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -84327,7 +84327,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a GetReplicasRequest.
          * @constructor
          * @param {tabletmanagerdata.GetReplicasRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetReplicasRequest = function (properties) {
             if (properties)
@@ -84525,7 +84525,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * Properties of a GetReplicasResponse.
          * @typedef {Object} tabletmanagerdata.GetReplicasResponse.$Properties
          * @property {Array.<string>|null} [addrs] GetReplicasResponse addrs
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -84547,7 +84547,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a GetReplicasResponse.
          * @constructor
          * @param {tabletmanagerdata.GetReplicasResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetReplicasResponse = function (properties) {
             this.addrs = [];
@@ -84796,7 +84796,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         /**
          * Properties of a ResetReplicationRequest.
          * @typedef {Object} tabletmanagerdata.ResetReplicationRequest.$Properties
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -84818,7 +84818,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a ResetReplicationRequest.
          * @constructor
          * @param {tabletmanagerdata.ResetReplicationRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ResetReplicationRequest = function (properties) {
             if (properties)
@@ -85015,7 +85015,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         /**
          * Properties of a ResetReplicationResponse.
          * @typedef {Object} tabletmanagerdata.ResetReplicationResponse.$Properties
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -85037,7 +85037,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a ResetReplicationResponse.
          * @constructor
          * @param {tabletmanagerdata.ResetReplicationResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ResetReplicationResponse = function (properties) {
             if (properties)
@@ -85235,7 +85235,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * Properties of a VReplicationExecRequest.
          * @typedef {Object} tabletmanagerdata.VReplicationExecRequest.$Properties
          * @property {string|null} [query] VReplicationExecRequest query
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -85257,7 +85257,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a VReplicationExecRequest.
          * @constructor
          * @param {tabletmanagerdata.VReplicationExecRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const VReplicationExecRequest = function (properties) {
             if (properties)
@@ -85495,7 +85495,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * Properties of a VReplicationExecResponse.
          * @typedef {Object} tabletmanagerdata.VReplicationExecResponse.$Properties
          * @property {query.QueryResult.$Properties|null} [result] VReplicationExecResponse result
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -85517,7 +85517,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a VReplicationExecResponse.
          * @constructor
          * @param {tabletmanagerdata.VReplicationExecResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const VReplicationExecResponse = function (properties) {
             if (properties)
@@ -85757,7 +85757,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @typedef {Object} tabletmanagerdata.VReplicationWaitForPosRequest.$Properties
          * @property {number|null} [id] VReplicationWaitForPosRequest id
          * @property {string|null} [position] VReplicationWaitForPosRequest position
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -85779,7 +85779,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a VReplicationWaitForPosRequest.
          * @constructor
          * @param {tabletmanagerdata.VReplicationWaitForPosRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const VReplicationWaitForPosRequest = function (properties) {
             if (properties)
@@ -86045,7 +86045,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         /**
          * Properties of a VReplicationWaitForPosResponse.
          * @typedef {Object} tabletmanagerdata.VReplicationWaitForPosResponse.$Properties
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -86067,7 +86067,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a VReplicationWaitForPosResponse.
          * @constructor
          * @param {tabletmanagerdata.VReplicationWaitForPosResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const VReplicationWaitForPosResponse = function (properties) {
             if (properties)
@@ -86265,7 +86265,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * Properties of an InitPrimaryRequest.
          * @typedef {Object} tabletmanagerdata.InitPrimaryRequest.$Properties
          * @property {boolean|null} [semiSync] InitPrimaryRequest semiSync
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -86287,7 +86287,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents an InitPrimaryRequest.
          * @constructor
          * @param {tabletmanagerdata.InitPrimaryRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const InitPrimaryRequest = function (properties) {
             if (properties)
@@ -86525,7 +86525,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * Properties of an InitPrimaryResponse.
          * @typedef {Object} tabletmanagerdata.InitPrimaryResponse.$Properties
          * @property {string|null} [position] InitPrimaryResponse position
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -86547,7 +86547,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents an InitPrimaryResponse.
          * @constructor
          * @param {tabletmanagerdata.InitPrimaryResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const InitPrimaryResponse = function (properties) {
             if (properties)
@@ -86788,7 +86788,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @property {string|null} [action_name] PopulateReparentJournalRequest action_name
          * @property {topodata.TabletAlias.$Properties|null} [primary_alias] PopulateReparentJournalRequest primary_alias
          * @property {string|null} [replication_position] PopulateReparentJournalRequest replication_position
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -86810,7 +86810,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a PopulateReparentJournalRequest.
          * @constructor
          * @param {tabletmanagerdata.PopulateReparentJournalRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const PopulateReparentJournalRequest = function (properties) {
             if (properties)
@@ -87149,7 +87149,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         /**
          * Properties of a PopulateReparentJournalResponse.
          * @typedef {Object} tabletmanagerdata.PopulateReparentJournalResponse.$Properties
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -87171,7 +87171,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a PopulateReparentJournalResponse.
          * @constructor
          * @param {tabletmanagerdata.PopulateReparentJournalResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const PopulateReparentJournalResponse = function (properties) {
             if (properties)
@@ -87368,7 +87368,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         /**
          * Properties of a ReadReparentJournalInfoRequest.
          * @typedef {Object} tabletmanagerdata.ReadReparentJournalInfoRequest.$Properties
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -87390,7 +87390,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a ReadReparentJournalInfoRequest.
          * @constructor
          * @param {tabletmanagerdata.ReadReparentJournalInfoRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ReadReparentJournalInfoRequest = function (properties) {
             if (properties)
@@ -87588,7 +87588,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * Properties of a ReadReparentJournalInfoResponse.
          * @typedef {Object} tabletmanagerdata.ReadReparentJournalInfoResponse.$Properties
          * @property {number|null} [length] ReadReparentJournalInfoResponse length
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -87610,7 +87610,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a ReadReparentJournalInfoResponse.
          * @constructor
          * @param {tabletmanagerdata.ReadReparentJournalInfoResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ReadReparentJournalInfoResponse = function (properties) {
             if (properties)
@@ -87851,7 +87851,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @property {string|null} [replication_position] InitReplicaRequest replication_position
          * @property {number|Long|null} [time_created_ns] InitReplicaRequest time_created_ns
          * @property {boolean|null} [semiSync] InitReplicaRequest semiSync
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -87873,7 +87873,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents an InitReplicaRequest.
          * @constructor
          * @param {tabletmanagerdata.InitReplicaRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const InitReplicaRequest = function (properties) {
             if (properties)
@@ -88212,7 +88212,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         /**
          * Properties of an InitReplicaResponse.
          * @typedef {Object} tabletmanagerdata.InitReplicaResponse.$Properties
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -88234,7 +88234,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents an InitReplicaResponse.
          * @constructor
          * @param {tabletmanagerdata.InitReplicaResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const InitReplicaResponse = function (properties) {
             if (properties)
@@ -88432,7 +88432,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * Properties of a DemotePrimaryRequest.
          * @typedef {Object} tabletmanagerdata.DemotePrimaryRequest.$Properties
          * @property {boolean|null} [force] DemotePrimaryRequest force
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -88454,7 +88454,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a DemotePrimaryRequest.
          * @constructor
          * @param {tabletmanagerdata.DemotePrimaryRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const DemotePrimaryRequest = function (properties) {
             if (properties)
@@ -88692,7 +88692,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * Properties of a DemotePrimaryResponse.
          * @typedef {Object} tabletmanagerdata.DemotePrimaryResponse.$Properties
          * @property {replicationdata.PrimaryStatus.$Properties|null} [primary_status] DemotePrimaryResponse primary_status
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -88714,7 +88714,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a DemotePrimaryResponse.
          * @constructor
          * @param {tabletmanagerdata.DemotePrimaryResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const DemotePrimaryResponse = function (properties) {
             if (properties)
@@ -88953,7 +88953,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * Properties of an UndoDemotePrimaryRequest.
          * @typedef {Object} tabletmanagerdata.UndoDemotePrimaryRequest.$Properties
          * @property {boolean|null} [semiSync] UndoDemotePrimaryRequest semiSync
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -88975,7 +88975,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents an UndoDemotePrimaryRequest.
          * @constructor
          * @param {tabletmanagerdata.UndoDemotePrimaryRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const UndoDemotePrimaryRequest = function (properties) {
             if (properties)
@@ -89212,7 +89212,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         /**
          * Properties of an UndoDemotePrimaryResponse.
          * @typedef {Object} tabletmanagerdata.UndoDemotePrimaryResponse.$Properties
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -89234,7 +89234,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents an UndoDemotePrimaryResponse.
          * @constructor
          * @param {tabletmanagerdata.UndoDemotePrimaryResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const UndoDemotePrimaryResponse = function (properties) {
             if (properties)
@@ -89431,7 +89431,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         /**
          * Properties of a ReplicaWasPromotedRequest.
          * @typedef {Object} tabletmanagerdata.ReplicaWasPromotedRequest.$Properties
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -89453,7 +89453,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a ReplicaWasPromotedRequest.
          * @constructor
          * @param {tabletmanagerdata.ReplicaWasPromotedRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ReplicaWasPromotedRequest = function (properties) {
             if (properties)
@@ -89650,7 +89650,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         /**
          * Properties of a ReplicaWasPromotedResponse.
          * @typedef {Object} tabletmanagerdata.ReplicaWasPromotedResponse.$Properties
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -89672,7 +89672,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a ReplicaWasPromotedResponse.
          * @constructor
          * @param {tabletmanagerdata.ReplicaWasPromotedResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ReplicaWasPromotedResponse = function (properties) {
             if (properties)
@@ -89869,7 +89869,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         /**
          * Properties of a ResetReplicationParametersRequest.
          * @typedef {Object} tabletmanagerdata.ResetReplicationParametersRequest.$Properties
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -89891,7 +89891,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a ResetReplicationParametersRequest.
          * @constructor
          * @param {tabletmanagerdata.ResetReplicationParametersRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ResetReplicationParametersRequest = function (properties) {
             if (properties)
@@ -90088,7 +90088,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         /**
          * Properties of a ResetReplicationParametersResponse.
          * @typedef {Object} tabletmanagerdata.ResetReplicationParametersResponse.$Properties
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -90110,7 +90110,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a ResetReplicationParametersResponse.
          * @constructor
          * @param {tabletmanagerdata.ResetReplicationParametersResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ResetReplicationParametersResponse = function (properties) {
             if (properties)
@@ -90307,7 +90307,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         /**
          * Properties of a FullStatusRequest.
          * @typedef {Object} tabletmanagerdata.FullStatusRequest.$Properties
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -90329,7 +90329,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a FullStatusRequest.
          * @constructor
          * @param {tabletmanagerdata.FullStatusRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const FullStatusRequest = function (properties) {
             if (properties)
@@ -90527,7 +90527,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * Properties of a FullStatusResponse.
          * @typedef {Object} tabletmanagerdata.FullStatusResponse.$Properties
          * @property {replicationdata.FullStatus.$Properties|null} [status] FullStatusResponse status
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -90549,7 +90549,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a FullStatusResponse.
          * @constructor
          * @param {tabletmanagerdata.FullStatusResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const FullStatusResponse = function (properties) {
             if (properties)
@@ -90793,7 +90793,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @property {string|null} [wait_position] SetReplicationSourceRequest wait_position
          * @property {boolean|null} [semiSync] SetReplicationSourceRequest semiSync
          * @property {number|null} [heartbeat_interval] SetReplicationSourceRequest heartbeat_interval
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -90815,7 +90815,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a SetReplicationSourceRequest.
          * @constructor
          * @param {tabletmanagerdata.SetReplicationSourceRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const SetReplicationSourceRequest = function (properties) {
             if (properties)
@@ -91210,7 +91210,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         /**
          * Properties of a SetReplicationSourceResponse.
          * @typedef {Object} tabletmanagerdata.SetReplicationSourceResponse.$Properties
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -91232,7 +91232,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a SetReplicationSourceResponse.
          * @constructor
          * @param {tabletmanagerdata.SetReplicationSourceResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const SetReplicationSourceResponse = function (properties) {
             if (properties)
@@ -91430,7 +91430,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * Properties of a ReplicaWasRestartedRequest.
          * @typedef {Object} tabletmanagerdata.ReplicaWasRestartedRequest.$Properties
          * @property {topodata.TabletAlias.$Properties|null} [parent] ReplicaWasRestartedRequest parent
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -91452,7 +91452,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a ReplicaWasRestartedRequest.
          * @constructor
          * @param {tabletmanagerdata.ReplicaWasRestartedRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ReplicaWasRestartedRequest = function (properties) {
             if (properties)
@@ -91690,7 +91690,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         /**
          * Properties of a ReplicaWasRestartedResponse.
          * @typedef {Object} tabletmanagerdata.ReplicaWasRestartedResponse.$Properties
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -91712,7 +91712,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a ReplicaWasRestartedResponse.
          * @constructor
          * @param {tabletmanagerdata.ReplicaWasRestartedResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ReplicaWasRestartedResponse = function (properties) {
             if (properties)
@@ -91910,7 +91910,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * Properties of a StopReplicationAndGetStatusRequest.
          * @typedef {Object} tabletmanagerdata.StopReplicationAndGetStatusRequest.$Properties
          * @property {replicationdata.StopReplicationMode|null} [stop_replication_mode] StopReplicationAndGetStatusRequest stop_replication_mode
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -91932,7 +91932,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a StopReplicationAndGetStatusRequest.
          * @constructor
          * @param {tabletmanagerdata.StopReplicationAndGetStatusRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const StopReplicationAndGetStatusRequest = function (properties) {
             if (properties)
@@ -92189,7 +92189,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * Properties of a StopReplicationAndGetStatusResponse.
          * @typedef {Object} tabletmanagerdata.StopReplicationAndGetStatusResponse.$Properties
          * @property {replicationdata.StopReplicationStatus.$Properties|null} [status] StopReplicationAndGetStatusResponse status
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -92211,7 +92211,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a StopReplicationAndGetStatusResponse.
          * @constructor
          * @param {tabletmanagerdata.StopReplicationAndGetStatusResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const StopReplicationAndGetStatusResponse = function (properties) {
             if (properties)
@@ -92450,7 +92450,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * Properties of a PromoteReplicaRequest.
          * @typedef {Object} tabletmanagerdata.PromoteReplicaRequest.$Properties
          * @property {boolean|null} [semiSync] PromoteReplicaRequest semiSync
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -92472,7 +92472,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a PromoteReplicaRequest.
          * @constructor
          * @param {tabletmanagerdata.PromoteReplicaRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const PromoteReplicaRequest = function (properties) {
             if (properties)
@@ -92710,7 +92710,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * Properties of a PromoteReplicaResponse.
          * @typedef {Object} tabletmanagerdata.PromoteReplicaResponse.$Properties
          * @property {string|null} [position] PromoteReplicaResponse position
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -92732,7 +92732,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a PromoteReplicaResponse.
          * @constructor
          * @param {tabletmanagerdata.PromoteReplicaResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const PromoteReplicaResponse = function (properties) {
             if (properties)
@@ -92976,7 +92976,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @property {string|null} [backup_engine] BackupRequest backup_engine
          * @property {vttime.Duration.$Properties|null} [mysql_shutdown_timeout] BackupRequest mysql_shutdown_timeout
          * @property {tabletmanagerdata.BackupRequest.InitSQL.$Properties|null} [init_sql] BackupRequest init_sql
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -92998,7 +92998,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a BackupRequest.
          * @constructor
          * @param {tabletmanagerdata.BackupRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const BackupRequest = function (properties) {
             if (properties)
@@ -93415,7 +93415,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
              * @property {Array.<topodata.TabletType>|null} [tablet_types] InitSQL tablet_types
              * @property {vttime.Duration.$Properties|null} [timeout] InitSQL timeout
              * @property {boolean|null} [fail_on_error] InitSQL fail_on_error
-             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
              */
 
             /**
@@ -93437,7 +93437,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
              * @classdesc Represents an InitSQL.
              * @constructor
              * @param {tabletmanagerdata.BackupRequest.InitSQL.$Properties=} [properties] Properties to set
-             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
              */
             const InitSQL = function (properties) {
                 this.queries = [];
@@ -93865,7 +93865,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * Properties of a BackupResponse.
          * @typedef {Object} tabletmanagerdata.BackupResponse.$Properties
          * @property {logutil.Event.$Properties|null} [event] BackupResponse event
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -93887,7 +93887,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a BackupResponse.
          * @constructor
          * @param {tabletmanagerdata.BackupResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const BackupResponse = function (properties) {
             if (properties)
@@ -94130,7 +94130,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @property {boolean|null} [dry_run] RestoreFromBackupRequest dry_run
          * @property {vttime.Time.$Properties|null} [restore_to_timestamp] RestoreFromBackupRequest restore_to_timestamp
          * @property {Array.<string>|null} [allowed_backup_engines] RestoreFromBackupRequest allowed_backup_engines
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -94152,7 +94152,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a RestoreFromBackupRequest.
          * @constructor
          * @param {tabletmanagerdata.RestoreFromBackupRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const RestoreFromBackupRequest = function (properties) {
             this.allowed_backup_engines = [];
@@ -94518,7 +94518,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * Properties of a RestoreFromBackupResponse.
          * @typedef {Object} tabletmanagerdata.RestoreFromBackupResponse.$Properties
          * @property {logutil.Event.$Properties|null} [event] RestoreFromBackupResponse event
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -94540,7 +94540,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a RestoreFromBackupResponse.
          * @constructor
          * @param {tabletmanagerdata.RestoreFromBackupResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const RestoreFromBackupResponse = function (properties) {
             if (properties)
@@ -94789,7 +94789,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @property {boolean|null} [auto_start] CreateVReplicationWorkflowRequest auto_start
          * @property {boolean|null} [stop_after_copy] CreateVReplicationWorkflowRequest stop_after_copy
          * @property {string|null} [options] CreateVReplicationWorkflowRequest options
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -94811,7 +94811,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a CreateVReplicationWorkflowRequest.
          * @constructor
          * @param {tabletmanagerdata.CreateVReplicationWorkflowRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const CreateVReplicationWorkflowRequest = function (properties) {
             this.binlog_source = [];
@@ -95535,7 +95535,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * Properties of a CreateVReplicationWorkflowResponse.
          * @typedef {Object} tabletmanagerdata.CreateVReplicationWorkflowResponse.$Properties
          * @property {query.QueryResult.$Properties|null} [result] CreateVReplicationWorkflowResponse result
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -95557,7 +95557,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a CreateVReplicationWorkflowResponse.
          * @constructor
          * @param {tabletmanagerdata.CreateVReplicationWorkflowResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const CreateVReplicationWorkflowResponse = function (properties) {
             if (properties)
@@ -95797,7 +95797,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @typedef {Object} tabletmanagerdata.DeleteTableDataRequest.$Properties
          * @property {Object.<string,string>|null} [table_filters] DeleteTableDataRequest table_filters
          * @property {number|Long|null} [batch_size] DeleteTableDataRequest batch_size
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -95819,7 +95819,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a DeleteTableDataRequest.
          * @constructor
          * @param {tabletmanagerdata.DeleteTableDataRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const DeleteTableDataRequest = function (properties) {
             this.table_filters = {};
@@ -96143,7 +96143,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         /**
          * Properties of a DeleteTableDataResponse.
          * @typedef {Object} tabletmanagerdata.DeleteTableDataResponse.$Properties
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -96165,7 +96165,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a DeleteTableDataResponse.
          * @constructor
          * @param {tabletmanagerdata.DeleteTableDataResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const DeleteTableDataResponse = function (properties) {
             if (properties)
@@ -96363,7 +96363,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * Properties of a DeleteVReplicationWorkflowRequest.
          * @typedef {Object} tabletmanagerdata.DeleteVReplicationWorkflowRequest.$Properties
          * @property {string|null} [workflow] DeleteVReplicationWorkflowRequest workflow
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -96385,7 +96385,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a DeleteVReplicationWorkflowRequest.
          * @constructor
          * @param {tabletmanagerdata.DeleteVReplicationWorkflowRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const DeleteVReplicationWorkflowRequest = function (properties) {
             if (properties)
@@ -96623,7 +96623,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * Properties of a DeleteVReplicationWorkflowResponse.
          * @typedef {Object} tabletmanagerdata.DeleteVReplicationWorkflowResponse.$Properties
          * @property {query.QueryResult.$Properties|null} [result] DeleteVReplicationWorkflowResponse result
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -96645,7 +96645,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a DeleteVReplicationWorkflowResponse.
          * @constructor
          * @param {tabletmanagerdata.DeleteVReplicationWorkflowResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const DeleteVReplicationWorkflowResponse = function (properties) {
             if (properties)
@@ -96883,7 +96883,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         /**
          * Properties of a HasVReplicationWorkflowsRequest.
          * @typedef {Object} tabletmanagerdata.HasVReplicationWorkflowsRequest.$Properties
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -96905,7 +96905,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a HasVReplicationWorkflowsRequest.
          * @constructor
          * @param {tabletmanagerdata.HasVReplicationWorkflowsRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const HasVReplicationWorkflowsRequest = function (properties) {
             if (properties)
@@ -97103,7 +97103,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * Properties of a HasVReplicationWorkflowsResponse.
          * @typedef {Object} tabletmanagerdata.HasVReplicationWorkflowsResponse.$Properties
          * @property {boolean|null} [has] HasVReplicationWorkflowsResponse has
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -97125,7 +97125,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a HasVReplicationWorkflowsResponse.
          * @constructor
          * @param {tabletmanagerdata.HasVReplicationWorkflowsResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const HasVReplicationWorkflowsResponse = function (properties) {
             if (properties)
@@ -97368,7 +97368,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @property {Array.<string>|null} [exclude_workflows] ReadVReplicationWorkflowsRequest exclude_workflows
          * @property {Array.<binlogdata.VReplicationWorkflowState>|null} [exclude_states] ReadVReplicationWorkflowsRequest exclude_states
          * @property {boolean|null} [exclude_frozen] ReadVReplicationWorkflowsRequest exclude_frozen
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -97390,7 +97390,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a ReadVReplicationWorkflowsRequest.
          * @constructor
          * @param {tabletmanagerdata.ReadVReplicationWorkflowsRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ReadVReplicationWorkflowsRequest = function (properties) {
             this.include_ids = [];
@@ -97951,7 +97951,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * Properties of a ReadVReplicationWorkflowsResponse.
          * @typedef {Object} tabletmanagerdata.ReadVReplicationWorkflowsResponse.$Properties
          * @property {Array.<tabletmanagerdata.ReadVReplicationWorkflowResponse.$Properties>|null} [workflows] ReadVReplicationWorkflowsResponse workflows
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -97973,7 +97973,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a ReadVReplicationWorkflowsResponse.
          * @constructor
          * @param {tabletmanagerdata.ReadVReplicationWorkflowsResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ReadVReplicationWorkflowsResponse = function (properties) {
             this.workflows = [];
@@ -98228,7 +98228,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * Properties of a ReadVReplicationWorkflowRequest.
          * @typedef {Object} tabletmanagerdata.ReadVReplicationWorkflowRequest.$Properties
          * @property {string|null} [workflow] ReadVReplicationWorkflowRequest workflow
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -98250,7 +98250,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a ReadVReplicationWorkflowRequest.
          * @constructor
          * @param {tabletmanagerdata.ReadVReplicationWorkflowRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ReadVReplicationWorkflowRequest = function (properties) {
             if (properties)
@@ -98499,7 +98499,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @property {Array.<tabletmanagerdata.ReadVReplicationWorkflowResponse.Stream.$Properties>|null} [streams] ReadVReplicationWorkflowResponse streams
          * @property {string|null} [options] ReadVReplicationWorkflowResponse options
          * @property {Object.<string,string>|null} [config_overrides] ReadVReplicationWorkflowResponse config_overrides
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -98521,7 +98521,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a ReadVReplicationWorkflowResponse.
          * @constructor
          * @param {tabletmanagerdata.ReadVReplicationWorkflowResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ReadVReplicationWorkflowResponse = function (properties) {
             this.tablet_types = [];
@@ -99314,7 +99314,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
              * @property {vttime.Time.$Properties|null} [time_heartbeat] Stream time_heartbeat
              * @property {vttime.Time.$Properties|null} [time_throttled] Stream time_throttled
              * @property {string|null} [component_throttled] Stream component_throttled
-             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
              */
 
             /**
@@ -99336,7 +99336,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
              * @classdesc Represents a Stream.
              * @constructor
              * @param {tabletmanagerdata.ReadVReplicationWorkflowResponse.Stream.$Properties=} [properties] Properties to set
-             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
              */
             const Stream = function (properties) {
                 if (properties)
@@ -100038,7 +100038,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         /**
          * Properties of a ValidateVReplicationPermissionsRequest.
          * @typedef {Object} tabletmanagerdata.ValidateVReplicationPermissionsRequest.$Properties
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -100060,7 +100060,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a ValidateVReplicationPermissionsRequest.
          * @constructor
          * @param {tabletmanagerdata.ValidateVReplicationPermissionsRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ValidateVReplicationPermissionsRequest = function (properties) {
             if (properties)
@@ -100260,7 +100260,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @property {string|null} [user] ValidateVReplicationPermissionsResponse user
          * @property {boolean|null} [ok] ValidateVReplicationPermissionsResponse ok
          * @property {string|null} [error] ValidateVReplicationPermissionsResponse error
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -100282,7 +100282,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a ValidateVReplicationPermissionsResponse.
          * @constructor
          * @param {tabletmanagerdata.ValidateVReplicationPermissionsResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ValidateVReplicationPermissionsResponse = function (properties) {
             if (properties)
@@ -100582,7 +100582,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @property {string|null} [action_arg] VDiffRequest action_arg
          * @property {string|null} [vdiff_uuid] VDiffRequest vdiff_uuid
          * @property {tabletmanagerdata.VDiffOptions.$Properties|null} [options] VDiffRequest options
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -100604,7 +100604,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a VDiffRequest.
          * @constructor
          * @param {tabletmanagerdata.VDiffRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const VDiffRequest = function (properties) {
             if (properties)
@@ -100986,7 +100986,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @property {number|Long|null} [id] VDiffResponse id
          * @property {query.QueryResult.$Properties|null} [output] VDiffResponse output
          * @property {string|null} [vdiff_uuid] VDiffResponse vdiff_uuid
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -101008,7 +101008,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a VDiffResponse.
          * @constructor
          * @param {tabletmanagerdata.VDiffResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const VDiffResponse = function (properties) {
             if (properties)
@@ -101322,7 +101322,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @property {string|null} [tablet_types] VDiffPickerOptions tablet_types
          * @property {string|null} [source_cell] VDiffPickerOptions source_cell
          * @property {string|null} [target_cell] VDiffPickerOptions target_cell
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -101344,7 +101344,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a VDiffPickerOptions.
          * @constructor
          * @param {tabletmanagerdata.VDiffPickerOptions.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const VDiffPickerOptions = function (properties) {
             if (properties)
@@ -101643,7 +101643,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @property {string|null} [format] VDiffReportOptions format
          * @property {number|Long|null} [max_sample_rows] VDiffReportOptions max_sample_rows
          * @property {number|Long|null} [row_diff_column_truncate_at] VDiffReportOptions row_diff_column_truncate_at
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -101665,7 +101665,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a VDiffReportOptions.
          * @constructor
          * @param {tabletmanagerdata.VDiffReportOptions.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const VDiffReportOptions = function (properties) {
             if (properties)
@@ -102057,7 +102057,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @property {boolean|null} [update_table_stats] VDiffCoreOptions update_table_stats
          * @property {number|Long|null} [max_diff_seconds] VDiffCoreOptions max_diff_seconds
          * @property {boolean|null} [auto_start] VDiffCoreOptions auto_start
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -102079,7 +102079,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a VDiffCoreOptions.
          * @constructor
          * @param {tabletmanagerdata.VDiffCoreOptions.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const VDiffCoreOptions = function (properties) {
             if (properties)
@@ -102660,7 +102660,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @property {tabletmanagerdata.VDiffPickerOptions.$Properties|null} [picker_options] VDiffOptions picker_options
          * @property {tabletmanagerdata.VDiffCoreOptions.$Properties|null} [core_options] VDiffOptions core_options
          * @property {tabletmanagerdata.VDiffReportOptions.$Properties|null} [report_options] VDiffOptions report_options
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -102682,7 +102682,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a VDiffOptions.
          * @constructor
          * @param {tabletmanagerdata.VDiffOptions.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const VDiffOptions = function (properties) {
             if (properties)
@@ -102981,7 +102981,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @typedef {Object} tabletmanagerdata.VDiffTableLastPK.$Properties
          * @property {query.QueryResult.$Properties|null} [target] VDiffTableLastPK target
          * @property {query.QueryResult.$Properties|null} [source] VDiffTableLastPK source
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -103003,7 +103003,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a VDiffTableLastPK.
          * @constructor
          * @param {tabletmanagerdata.VDiffTableLastPK.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const VDiffTableLastPK = function (properties) {
             if (properties)
@@ -103293,7 +103293,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @property {Object.<string,string>|null} [config_overrides] UpdateVReplicationWorkflowRequest config_overrides
          * @property {string|null} [message] UpdateVReplicationWorkflowRequest message
          * @property {Array.<binlogdata.Rule.$Properties>|null} [filter_rules] UpdateVReplicationWorkflowRequest filter_rules
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -103315,7 +103315,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents an UpdateVReplicationWorkflowRequest.
          * @constructor
          * @param {tabletmanagerdata.UpdateVReplicationWorkflowRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const UpdateVReplicationWorkflowRequest = function (properties) {
             this.cells = [];
@@ -104095,7 +104095,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * Properties of an UpdateVReplicationWorkflowResponse.
          * @typedef {Object} tabletmanagerdata.UpdateVReplicationWorkflowResponse.$Properties
          * @property {query.QueryResult.$Properties|null} [result] UpdateVReplicationWorkflowResponse result
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -104117,7 +104117,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents an UpdateVReplicationWorkflowResponse.
          * @constructor
          * @param {tabletmanagerdata.UpdateVReplicationWorkflowResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const UpdateVReplicationWorkflowResponse = function (properties) {
             if (properties)
@@ -104361,7 +104361,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @property {binlogdata.VReplicationWorkflowState|null} [state] UpdateVReplicationWorkflowsRequest state
          * @property {string|null} [message] UpdateVReplicationWorkflowsRequest message
          * @property {string|null} [stop_position] UpdateVReplicationWorkflowsRequest stop_position
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -104383,7 +104383,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents an UpdateVReplicationWorkflowsRequest.
          * @constructor
          * @param {tabletmanagerdata.UpdateVReplicationWorkflowsRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const UpdateVReplicationWorkflowsRequest = function (properties) {
             this.include_workflows = [];
@@ -104847,7 +104847,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * Properties of an UpdateVReplicationWorkflowsResponse.
          * @typedef {Object} tabletmanagerdata.UpdateVReplicationWorkflowsResponse.$Properties
          * @property {query.QueryResult.$Properties|null} [result] UpdateVReplicationWorkflowsResponse result
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -104869,7 +104869,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents an UpdateVReplicationWorkflowsResponse.
          * @constructor
          * @param {tabletmanagerdata.UpdateVReplicationWorkflowsResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const UpdateVReplicationWorkflowsResponse = function (properties) {
             if (properties)
@@ -105108,7 +105108,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * Properties of a ResetSequencesRequest.
          * @typedef {Object} tabletmanagerdata.ResetSequencesRequest.$Properties
          * @property {Array.<string>|null} [tables] ResetSequencesRequest tables
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -105130,7 +105130,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a ResetSequencesRequest.
          * @constructor
          * @param {tabletmanagerdata.ResetSequencesRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ResetSequencesRequest = function (properties) {
             this.tables = [];
@@ -105379,7 +105379,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         /**
          * Properties of a ResetSequencesResponse.
          * @typedef {Object} tabletmanagerdata.ResetSequencesResponse.$Properties
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -105401,7 +105401,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a ResetSequencesResponse.
          * @constructor
          * @param {tabletmanagerdata.ResetSequencesResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ResetSequencesResponse = function (properties) {
             if (properties)
@@ -105603,7 +105603,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @property {boolean|null} [skip_request_heartbeats] CheckThrottlerRequest skip_request_heartbeats
          * @property {boolean|null} [ok_if_not_exists] CheckThrottlerRequest ok_if_not_exists
          * @property {tabletmanagerdata.ThrottlerType|null} [throttler_type] CheckThrottlerRequest throttler_type
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -105625,7 +105625,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a CheckThrottlerRequest.
          * @constructor
          * @param {tabletmanagerdata.CheckThrottlerRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const CheckThrottlerRequest = function (properties) {
             if (properties)
@@ -106039,7 +106039,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @property {string|null} [app_name] CheckThrottlerResponse app_name
          * @property {string|null} [summary] CheckThrottlerResponse summary
          * @property {tabletmanagerdata.CheckThrottlerResponseCode|null} [response_code] CheckThrottlerResponse response_code
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -106061,7 +106061,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a CheckThrottlerResponse.
          * @constructor
          * @param {tabletmanagerdata.CheckThrottlerResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const CheckThrottlerResponse = function (properties) {
             this.metrics = {};
@@ -106615,7 +106615,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
              * @property {string|null} [message] Metric message
              * @property {string|null} [scope] Metric scope
              * @property {tabletmanagerdata.CheckThrottlerResponseCode|null} [response_code] Metric response_code
-             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
              */
 
             /**
@@ -106637,7 +106637,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
              * @classdesc Represents a Metric.
              * @constructor
              * @param {tabletmanagerdata.CheckThrottlerResponse.Metric.$Properties=} [properties] Properties to set
-             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
              */
             const Metric = function (properties) {
                 if (properties)
@@ -107086,7 +107086,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * Properties of a GetThrottlerStatusRequest.
          * @typedef {Object} tabletmanagerdata.GetThrottlerStatusRequest.$Properties
          * @property {tabletmanagerdata.ThrottlerType|null} [throttler_type] GetThrottlerStatusRequest throttler_type
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -107108,7 +107108,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a GetThrottlerStatusRequest.
          * @constructor
          * @param {tabletmanagerdata.GetThrottlerStatusRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetThrottlerStatusRequest = function (properties) {
             if (properties)
@@ -107382,7 +107382,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @property {Object.<string,string>|null} [app_checked_metrics] GetThrottlerStatusResponse app_checked_metrics
          * @property {boolean|null} [recently_checked] GetThrottlerStatusResponse recently_checked
          * @property {Object.<string,tabletmanagerdata.GetThrottlerStatusResponse.RecentApp.$Properties>|null} [recent_apps] GetThrottlerStatusResponse recent_apps
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -107404,7 +107404,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a GetThrottlerStatusResponse.
          * @constructor
          * @param {tabletmanagerdata.GetThrottlerStatusResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetThrottlerStatusResponse = function (properties) {
             this.aggregated_metrics = {};
@@ -108390,7 +108390,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
              * @typedef {Object} tabletmanagerdata.GetThrottlerStatusResponse.MetricResult.$Properties
              * @property {number|null} [value] MetricResult value
              * @property {string|null} [error] MetricResult error
-             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
              */
 
             /**
@@ -108412,7 +108412,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
              * @classdesc Represents a MetricResult.
              * @constructor
              * @param {tabletmanagerdata.GetThrottlerStatusResponse.MetricResult.$Properties=} [properties] Properties to set
-             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
              */
             const MetricResult = function (properties) {
                 if (properties)
@@ -108680,7 +108680,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
              * @typedef {Object} tabletmanagerdata.GetThrottlerStatusResponse.MetricHealth.$Properties
              * @property {vttime.Time.$Properties|null} [last_healthy_at] MetricHealth last_healthy_at
              * @property {number|Long|null} [seconds_since_last_healthy] MetricHealth seconds_since_last_healthy
-             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
              */
 
             /**
@@ -108702,7 +108702,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
              * @classdesc Represents a MetricHealth.
              * @constructor
              * @param {tabletmanagerdata.GetThrottlerStatusResponse.MetricHealth.$Properties=} [properties] Properties to set
-             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
              */
             const MetricHealth = function (properties) {
                 if (properties)
@@ -108987,7 +108987,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
              * @typedef {Object} tabletmanagerdata.GetThrottlerStatusResponse.RecentApp.$Properties
              * @property {vttime.Time.$Properties|null} [checked_at] RecentApp checked_at
              * @property {tabletmanagerdata.CheckThrottlerResponseCode|null} [response_code] RecentApp response_code
-             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
              */
 
             /**
@@ -109009,7 +109009,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
              * @classdesc Represents a RecentApp.
              * @constructor
              * @param {tabletmanagerdata.GetThrottlerStatusResponse.RecentApp.$Properties=} [properties] Properties to set
-             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
              */
             const RecentApp = function (properties) {
                 if (properties)
@@ -109320,7 +109320,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @typedef {Object} tabletmanagerdata.ChangeTagsRequest.$Properties
          * @property {Object.<string,string>|null} [tags] ChangeTagsRequest tags
          * @property {boolean|null} [replace] ChangeTagsRequest replace
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -109342,7 +109342,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a ChangeTagsRequest.
          * @constructor
          * @param {tabletmanagerdata.ChangeTagsRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ChangeTagsRequest = function (properties) {
             this.tags = {};
@@ -109651,7 +109651,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * Properties of a ChangeTagsResponse.
          * @typedef {Object} tabletmanagerdata.ChangeTagsResponse.$Properties
          * @property {Object.<string,string>|null} [tags] ChangeTagsResponse tags
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -109673,7 +109673,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a ChangeTagsResponse.
          * @constructor
          * @param {tabletmanagerdata.ChangeTagsResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ChangeTagsResponse = function (properties) {
             this.tags = {};
@@ -109953,7 +109953,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * Properties of an UpdateSequenceTablesRequest.
          * @typedef {Object} tabletmanagerdata.UpdateSequenceTablesRequest.$Properties
          * @property {Array.<tabletmanagerdata.UpdateSequenceTablesRequest.SequenceMetadata.$Properties>|null} [sequences] UpdateSequenceTablesRequest sequences
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -109975,7 +109975,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents an UpdateSequenceTablesRequest.
          * @constructor
          * @param {tabletmanagerdata.UpdateSequenceTablesRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const UpdateSequenceTablesRequest = function (properties) {
             this.sequences = [];
@@ -110229,7 +110229,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
              * @property {string|null} [backing_table_name] SequenceMetadata backing_table_name
              * @property {string|null} [backing_table_db_name] SequenceMetadata backing_table_db_name
              * @property {number|Long|null} [max_value] SequenceMetadata max_value
-             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
              */
 
             /**
@@ -110251,7 +110251,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
              * @classdesc Represents a SequenceMetadata.
              * @constructor
              * @param {tabletmanagerdata.UpdateSequenceTablesRequest.SequenceMetadata.$Properties=} [properties] Properties to set
-             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
              */
             const SequenceMetadata = function (properties) {
                 if (properties)
@@ -110564,7 +110564,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         /**
          * Properties of an UpdateSequenceTablesResponse.
          * @typedef {Object} tabletmanagerdata.UpdateSequenceTablesResponse.$Properties
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -110586,7 +110586,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents an UpdateSequenceTablesResponse.
          * @constructor
          * @param {tabletmanagerdata.UpdateSequenceTablesResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const UpdateSequenceTablesResponse = function (properties) {
             if (properties)
@@ -110784,7 +110784,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * Properties of a GetMaxValueForSequencesRequest.
          * @typedef {Object} tabletmanagerdata.GetMaxValueForSequencesRequest.$Properties
          * @property {Array.<tabletmanagerdata.GetMaxValueForSequencesRequest.SequenceMetadata.$Properties>|null} [sequences] GetMaxValueForSequencesRequest sequences
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -110806,7 +110806,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a GetMaxValueForSequencesRequest.
          * @constructor
          * @param {tabletmanagerdata.GetMaxValueForSequencesRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetMaxValueForSequencesRequest = function (properties) {
             this.sequences = [];
@@ -111061,7 +111061,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
              * @property {string|null} [using_col_escaped] SequenceMetadata using_col_escaped
              * @property {string|null} [using_table_name_escaped] SequenceMetadata using_table_name_escaped
              * @property {string|null} [using_table_db_name_escaped] SequenceMetadata using_table_db_name_escaped
-             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
              */
 
             /**
@@ -111083,7 +111083,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
              * @classdesc Represents a SequenceMetadata.
              * @constructor
              * @param {tabletmanagerdata.GetMaxValueForSequencesRequest.SequenceMetadata.$Properties=} [properties] Properties to set
-             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
              */
             const SequenceMetadata = function (properties) {
                 if (properties)
@@ -111409,7 +111409,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * Properties of a GetMaxValueForSequencesResponse.
          * @typedef {Object} tabletmanagerdata.GetMaxValueForSequencesResponse.$Properties
          * @property {Object.<string,number|Long>|null} [max_values_by_sequence_table] GetMaxValueForSequencesResponse max_values_by_sequence_table
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -111431,7 +111431,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @classdesc Represents a GetMaxValueForSequencesResponse.
          * @constructor
          * @param {tabletmanagerdata.GetMaxValueForSequencesResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetMaxValueForSequencesResponse = function (properties) {
             this.max_values_by_sequence_table = {};
@@ -111737,7 +111737,7 @@ export const binlogdata = $root.binlogdata = (() => {
          * @property {number|null} [client] Charset client
          * @property {number|null} [conn] Charset conn
          * @property {number|null} [server] Charset server
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -111759,7 +111759,7 @@ export const binlogdata = $root.binlogdata = (() => {
          * @classdesc Represents a Charset.
          * @constructor
          * @param {binlogdata.Charset.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const Charset = function (properties) {
             if (properties)
@@ -112055,7 +112055,7 @@ export const binlogdata = $root.binlogdata = (() => {
          * @typedef {Object} binlogdata.BinlogTransaction.$Properties
          * @property {Array.<binlogdata.BinlogTransaction.Statement.$Properties>|null} [statements] BinlogTransaction statements
          * @property {query.EventToken.$Properties|null} [event_token] BinlogTransaction event_token
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -112077,7 +112077,7 @@ export const binlogdata = $root.binlogdata = (() => {
          * @classdesc Represents a BinlogTransaction.
          * @constructor
          * @param {binlogdata.BinlogTransaction.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const BinlogTransaction = function (properties) {
             this.statements = [];
@@ -112361,7 +112361,7 @@ export const binlogdata = $root.binlogdata = (() => {
              * @property {binlogdata.BinlogTransaction.Statement.Category|null} [category] Statement category
              * @property {binlogdata.Charset.$Properties|null} [charset] Statement charset
              * @property {Uint8Array|null} [sql] Statement sql
-             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
              */
 
             /**
@@ -112383,7 +112383,7 @@ export const binlogdata = $root.binlogdata = (() => {
              * @classdesc Represents a Statement.
              * @constructor
              * @param {binlogdata.BinlogTransaction.Statement.$Properties=} [properties] Properties to set
-             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
              */
             const Statement = function (properties) {
                 if (properties)
@@ -112782,7 +112782,7 @@ export const binlogdata = $root.binlogdata = (() => {
          * @property {string|null} [position] StreamKeyRangeRequest position
          * @property {topodata.KeyRange.$Properties|null} [key_range] StreamKeyRangeRequest key_range
          * @property {binlogdata.Charset.$Properties|null} [charset] StreamKeyRangeRequest charset
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -112804,7 +112804,7 @@ export const binlogdata = $root.binlogdata = (() => {
          * @classdesc Represents a StreamKeyRangeRequest.
          * @constructor
          * @param {binlogdata.StreamKeyRangeRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const StreamKeyRangeRequest = function (properties) {
             if (properties)
@@ -113101,7 +113101,7 @@ export const binlogdata = $root.binlogdata = (() => {
          * Properties of a StreamKeyRangeResponse.
          * @typedef {Object} binlogdata.StreamKeyRangeResponse.$Properties
          * @property {binlogdata.BinlogTransaction.$Properties|null} [binlog_transaction] StreamKeyRangeResponse binlog_transaction
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -113123,7 +113123,7 @@ export const binlogdata = $root.binlogdata = (() => {
          * @classdesc Represents a StreamKeyRangeResponse.
          * @constructor
          * @param {binlogdata.StreamKeyRangeResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const StreamKeyRangeResponse = function (properties) {
             if (properties)
@@ -113364,7 +113364,7 @@ export const binlogdata = $root.binlogdata = (() => {
          * @property {string|null} [position] StreamTablesRequest position
          * @property {Array.<string>|null} [tables] StreamTablesRequest tables
          * @property {binlogdata.Charset.$Properties|null} [charset] StreamTablesRequest charset
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -113386,7 +113386,7 @@ export const binlogdata = $root.binlogdata = (() => {
          * @classdesc Represents a StreamTablesRequest.
          * @constructor
          * @param {binlogdata.StreamTablesRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const StreamTablesRequest = function (properties) {
             this.tables = [];
@@ -113695,7 +113695,7 @@ export const binlogdata = $root.binlogdata = (() => {
          * Properties of a StreamTablesResponse.
          * @typedef {Object} binlogdata.StreamTablesResponse.$Properties
          * @property {binlogdata.BinlogTransaction.$Properties|null} [binlog_transaction] StreamTablesResponse binlog_transaction
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -113717,7 +113717,7 @@ export const binlogdata = $root.binlogdata = (() => {
          * @classdesc Represents a StreamTablesResponse.
          * @constructor
          * @param {binlogdata.StreamTablesResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const StreamTablesResponse = function (properties) {
             if (properties)
@@ -113957,7 +113957,7 @@ export const binlogdata = $root.binlogdata = (() => {
          * @typedef {Object} binlogdata.CharsetConversion.$Properties
          * @property {string|null} [from_charset] CharsetConversion from_charset
          * @property {string|null} [to_charset] CharsetConversion to_charset
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -113979,7 +113979,7 @@ export const binlogdata = $root.binlogdata = (() => {
          * @classdesc Represents a CharsetConversion.
          * @constructor
          * @param {binlogdata.CharsetConversion.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const CharsetConversion = function (properties) {
             if (properties)
@@ -114254,7 +114254,7 @@ export const binlogdata = $root.binlogdata = (() => {
          * @property {string|null} [source_unique_key_target_columns] Rule source_unique_key_target_columns
          * @property {Object.<string,boolean>|null} [convert_int_to_enum] Rule convert_int_to_enum
          * @property {string|null} [force_unique_key] Rule force_unique_key
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -114276,7 +114276,7 @@ export const binlogdata = $root.binlogdata = (() => {
          * @classdesc Represents a Rule.
          * @constructor
          * @param {binlogdata.Rule.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const Rule = function (properties) {
             this.convert_enum_to_text = {};
@@ -114874,7 +114874,7 @@ export const binlogdata = $root.binlogdata = (() => {
          * @property {binlogdata.Filter.FieldEventMode|null} [field_event_mode] Filter field_event_mode
          * @property {number|Long|null} [workflow_type] Filter workflow_type
          * @property {string|null} [workflow_name] Filter workflow_name
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -114896,7 +114896,7 @@ export const binlogdata = $root.binlogdata = (() => {
          * @classdesc Represents a Filter.
          * @constructor
          * @param {binlogdata.Filter.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const Filter = function (properties) {
             this.rules = [];
@@ -115377,7 +115377,7 @@ export const binlogdata = $root.binlogdata = (() => {
          * @property {string|null} [external_cluster] BinlogSource external_cluster
          * @property {string|null} [source_time_zone] BinlogSource source_time_zone
          * @property {string|null} [target_time_zone] BinlogSource target_time_zone
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -115399,7 +115399,7 @@ export const binlogdata = $root.binlogdata = (() => {
          * @classdesc Represents a BinlogSource.
          * @constructor
          * @param {binlogdata.BinlogSource.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const BinlogSource = function (properties) {
             this.tables = [];
@@ -116113,7 +116113,7 @@ export const binlogdata = $root.binlogdata = (() => {
          * @property {query.Row.$Properties|null} [after] RowChange after
          * @property {binlogdata.RowChange.Bitmap.$Properties|null} [data_columns] RowChange data_columns
          * @property {binlogdata.RowChange.Bitmap.$Properties|null} [json_partial_values] RowChange json_partial_values
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -116135,7 +116135,7 @@ export const binlogdata = $root.binlogdata = (() => {
          * @classdesc Represents a RowChange.
          * @constructor
          * @param {binlogdata.RowChange.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const RowChange = function (properties) {
             if (properties)
@@ -116460,7 +116460,7 @@ export const binlogdata = $root.binlogdata = (() => {
              * @typedef {Object} binlogdata.RowChange.Bitmap.$Properties
              * @property {number|Long|null} [count] Bitmap count
              * @property {Uint8Array|null} [cols] Bitmap cols
-             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
              */
 
             /**
@@ -116482,7 +116482,7 @@ export const binlogdata = $root.binlogdata = (() => {
              * @classdesc Represents a Bitmap.
              * @constructor
              * @param {binlogdata.RowChange.Bitmap.$Properties=} [properties] Properties to set
-             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
              */
             const Bitmap = function (properties) {
                 if (properties)
@@ -116782,7 +116782,7 @@ export const binlogdata = $root.binlogdata = (() => {
          * @property {string|null} [shard] RowEvent shard
          * @property {number|null} [flags] RowEvent flags
          * @property {boolean|null} [is_internal_table] RowEvent is_internal_table
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -116804,7 +116804,7 @@ export const binlogdata = $root.binlogdata = (() => {
          * @classdesc Represents a RowEvent.
          * @constructor
          * @param {binlogdata.RowEvent.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const RowEvent = function (properties) {
             this.row_changes = [];
@@ -117206,7 +117206,7 @@ export const binlogdata = $root.binlogdata = (() => {
          * @property {string|null} [shard] FieldEvent shard
          * @property {boolean|null} [enum_set_string_values] FieldEvent enum_set_string_values
          * @property {boolean|null} [is_internal_table] FieldEvent is_internal_table
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -117228,7 +117228,7 @@ export const binlogdata = $root.binlogdata = (() => {
          * @classdesc Represents a FieldEvent.
          * @constructor
          * @param {binlogdata.FieldEvent.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const FieldEvent = function (properties) {
             this.fields = [];
@@ -117628,7 +117628,7 @@ export const binlogdata = $root.binlogdata = (() => {
          * @property {string|null} [shard] ShardGtid shard
          * @property {string|null} [gtid] ShardGtid gtid
          * @property {Array.<binlogdata.TableLastPK.$Properties>|null} [table_p_ks] ShardGtid table_p_ks
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -117650,7 +117650,7 @@ export const binlogdata = $root.binlogdata = (() => {
          * @classdesc Represents a ShardGtid.
          * @constructor
          * @param {binlogdata.ShardGtid.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ShardGtid = function (properties) {
             this.table_p_ks = [];
@@ -117991,7 +117991,7 @@ export const binlogdata = $root.binlogdata = (() => {
          * Properties of a VGtid.
          * @typedef {Object} binlogdata.VGtid.$Properties
          * @property {Array.<binlogdata.ShardGtid.$Properties>|null} [shard_gtids] VGtid shard_gtids
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -118013,7 +118013,7 @@ export const binlogdata = $root.binlogdata = (() => {
          * @classdesc Represents a VGtid.
          * @constructor
          * @param {binlogdata.VGtid.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const VGtid = function (properties) {
             this.shard_gtids = [];
@@ -118269,7 +118269,7 @@ export const binlogdata = $root.binlogdata = (() => {
          * @typedef {Object} binlogdata.KeyspaceShard.$Properties
          * @property {string|null} [keyspace] KeyspaceShard keyspace
          * @property {string|null} [shard] KeyspaceShard shard
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -118291,7 +118291,7 @@ export const binlogdata = $root.binlogdata = (() => {
          * @classdesc Represents a KeyspaceShard.
          * @constructor
          * @param {binlogdata.KeyspaceShard.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const KeyspaceShard = function (properties) {
             if (properties)
@@ -118578,7 +118578,7 @@ export const binlogdata = $root.binlogdata = (() => {
          * @property {Array.<binlogdata.ShardGtid.$Properties>|null} [shard_gtids] Journal shard_gtids
          * @property {Array.<binlogdata.KeyspaceShard.$Properties>|null} [participants] Journal participants
          * @property {Array.<string>|null} [source_workflows] Journal source_workflows
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -118600,7 +118600,7 @@ export const binlogdata = $root.binlogdata = (() => {
          * @classdesc Represents a Journal.
          * @constructor
          * @param {binlogdata.Journal.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const Journal = function (properties) {
             this.tables = [];
@@ -119119,7 +119119,7 @@ export const binlogdata = $root.binlogdata = (() => {
          * @property {number|Long|null} [commit_parent] VEvent commit_parent
          * @property {number|Long|null} [sequence_number] VEvent sequence_number
          * @property {string|null} [event_gtid] VEvent event_gtid
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -119141,7 +119141,7 @@ export const binlogdata = $root.binlogdata = (() => {
          * @classdesc Represents a VEvent.
          * @constructor
          * @param {binlogdata.VEvent.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const VEvent = function (properties) {
             if (properties)
@@ -120052,7 +120052,7 @@ export const binlogdata = $root.binlogdata = (() => {
          * @property {Array.<query.Field.$Properties>|null} [fields] MinimalTable fields
          * @property {Array.<number|Long>|null} [p_k_columns] MinimalTable p_k_columns
          * @property {string|null} [p_k_index_name] MinimalTable p_k_index_name
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -120074,7 +120074,7 @@ export const binlogdata = $root.binlogdata = (() => {
          * @classdesc Represents a MinimalTable.
          * @constructor
          * @param {binlogdata.MinimalTable.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const MinimalTable = function (properties) {
             this.fields = [];
@@ -120451,7 +120451,7 @@ export const binlogdata = $root.binlogdata = (() => {
          * Properties of a MinimalSchema.
          * @typedef {Object} binlogdata.MinimalSchema.$Properties
          * @property {Array.<binlogdata.MinimalTable.$Properties>|null} [tables] MinimalSchema tables
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -120473,7 +120473,7 @@ export const binlogdata = $root.binlogdata = (() => {
          * @classdesc Represents a MinimalSchema.
          * @constructor
          * @param {binlogdata.MinimalSchema.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const MinimalSchema = function (properties) {
             this.tables = [];
@@ -120732,7 +120732,7 @@ export const binlogdata = $root.binlogdata = (() => {
          * @property {Array.<string>|null} [tables_to_copy] VStreamOptions tables_to_copy
          * @property {boolean|null} [no_timeouts] VStreamOptions no_timeouts
          * @property {Array.<binlogdata.VEventType>|null} [event_types] VStreamOptions event_types
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -120754,7 +120754,7 @@ export const binlogdata = $root.binlogdata = (() => {
          * @classdesc Represents a VStreamOptions.
          * @constructor
          * @param {binlogdata.VStreamOptions.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const VStreamOptions = function (properties) {
             this.internal_tables = [];
@@ -121326,7 +121326,7 @@ export const binlogdata = $root.binlogdata = (() => {
          * @property {binlogdata.Filter.$Properties|null} [filter] VStreamRequest filter
          * @property {Array.<binlogdata.TableLastPK.$Properties>|null} [table_last_p_ks] VStreamRequest table_last_p_ks
          * @property {binlogdata.VStreamOptions.$Properties|null} [options] VStreamRequest options
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -121348,7 +121348,7 @@ export const binlogdata = $root.binlogdata = (() => {
          * @classdesc Represents a VStreamRequest.
          * @constructor
          * @param {binlogdata.VStreamRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const VStreamRequest = function (properties) {
             this.table_last_p_ks = [];
@@ -121778,7 +121778,7 @@ export const binlogdata = $root.binlogdata = (() => {
          * Properties of a VStreamResponse.
          * @typedef {Object} binlogdata.VStreamResponse.$Properties
          * @property {Array.<binlogdata.VEvent.$Properties>|null} [events] VStreamResponse events
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -121800,7 +121800,7 @@ export const binlogdata = $root.binlogdata = (() => {
          * @classdesc Represents a VStreamResponse.
          * @constructor
          * @param {binlogdata.VStreamResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const VStreamResponse = function (properties) {
             this.events = [];
@@ -122060,7 +122060,7 @@ export const binlogdata = $root.binlogdata = (() => {
          * @property {string|null} [query] VStreamRowsRequest query
          * @property {query.QueryResult.$Properties|null} [lastpk] VStreamRowsRequest lastpk
          * @property {binlogdata.VStreamOptions.$Properties|null} [options] VStreamRowsRequest options
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -122082,7 +122082,7 @@ export const binlogdata = $root.binlogdata = (() => {
          * @classdesc Represents a VStreamRowsRequest.
          * @constructor
          * @param {binlogdata.VStreamRowsRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const VStreamRowsRequest = function (properties) {
             if (properties)
@@ -122473,7 +122473,7 @@ export const binlogdata = $root.binlogdata = (() => {
          * @property {boolean|null} [throttled] VStreamRowsResponse throttled
          * @property {boolean|null} [heartbeat] VStreamRowsResponse heartbeat
          * @property {string|null} [throttled_reason] VStreamRowsResponse throttled_reason
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -122495,7 +122495,7 @@ export const binlogdata = $root.binlogdata = (() => {
          * @classdesc Represents a VStreamRowsResponse.
          * @constructor
          * @param {binlogdata.VStreamRowsResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const VStreamRowsResponse = function (properties) {
             this.fields = [];
@@ -122987,7 +122987,7 @@ export const binlogdata = $root.binlogdata = (() => {
          * @property {query.VTGateCallerID.$Properties|null} [immediate_caller_id] VStreamTablesRequest immediate_caller_id
          * @property {query.Target.$Properties|null} [target] VStreamTablesRequest target
          * @property {binlogdata.VStreamOptions.$Properties|null} [options] VStreamTablesRequest options
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -123009,7 +123009,7 @@ export const binlogdata = $root.binlogdata = (() => {
          * @classdesc Represents a VStreamTablesRequest.
          * @constructor
          * @param {binlogdata.VStreamTablesRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const VStreamTablesRequest = function (properties) {
             if (properties)
@@ -123341,7 +123341,7 @@ export const binlogdata = $root.binlogdata = (() => {
          * @property {string|null} [gtid] VStreamTablesResponse gtid
          * @property {Array.<query.Row.$Properties>|null} [rows] VStreamTablesResponse rows
          * @property {query.Row.$Properties|null} [lastpk] VStreamTablesResponse lastpk
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -123363,7 +123363,7 @@ export const binlogdata = $root.binlogdata = (() => {
          * @classdesc Represents a VStreamTablesResponse.
          * @constructor
          * @param {binlogdata.VStreamTablesResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const VStreamTablesResponse = function (properties) {
             this.fields = [];
@@ -123797,7 +123797,7 @@ export const binlogdata = $root.binlogdata = (() => {
          * @typedef {Object} binlogdata.LastPKEvent.$Properties
          * @property {binlogdata.TableLastPK.$Properties|null} [table_last_p_k] LastPKEvent table_last_p_k
          * @property {boolean|null} [completed] LastPKEvent completed
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -123819,7 +123819,7 @@ export const binlogdata = $root.binlogdata = (() => {
          * @classdesc Represents a LastPKEvent.
          * @constructor
          * @param {binlogdata.LastPKEvent.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const LastPKEvent = function (properties) {
             if (properties)
@@ -124088,7 +124088,7 @@ export const binlogdata = $root.binlogdata = (() => {
          * @typedef {Object} binlogdata.TableLastPK.$Properties
          * @property {string|null} [table_name] TableLastPK table_name
          * @property {query.QueryResult.$Properties|null} [lastpk] TableLastPK lastpk
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -124110,7 +124110,7 @@ export const binlogdata = $root.binlogdata = (() => {
          * @classdesc Represents a TableLastPK.
          * @constructor
          * @param {binlogdata.TableLastPK.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const TableLastPK = function (properties) {
             if (properties)
@@ -124381,7 +124381,7 @@ export const binlogdata = $root.binlogdata = (() => {
          * @property {query.VTGateCallerID.$Properties|null} [immediate_caller_id] VStreamResultsRequest immediate_caller_id
          * @property {query.Target.$Properties|null} [target] VStreamResultsRequest target
          * @property {string|null} [query] VStreamResultsRequest query
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -124403,7 +124403,7 @@ export const binlogdata = $root.binlogdata = (() => {
          * @classdesc Represents a VStreamResultsRequest.
          * @constructor
          * @param {binlogdata.VStreamResultsRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const VStreamResultsRequest = function (properties) {
             if (properties)
@@ -124731,7 +124731,7 @@ export const binlogdata = $root.binlogdata = (() => {
          * @property {Array.<query.Field.$Properties>|null} [fields] VStreamResultsResponse fields
          * @property {string|null} [gtid] VStreamResultsResponse gtid
          * @property {Array.<query.Row.$Properties>|null} [rows] VStreamResultsResponse rows
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -124753,7 +124753,7 @@ export const binlogdata = $root.binlogdata = (() => {
          * @classdesc Represents a VStreamResultsResponse.
          * @constructor
          * @param {binlogdata.VStreamResultsResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const VStreamResultsResponse = function (properties) {
             this.fields = [];
@@ -125089,7 +125089,7 @@ export const binlogdata = $root.binlogdata = (() => {
          * @property {number|Long|null} [binlog_position] BinlogDumpGTIDRequest binlog_position
          * @property {string|null} [gtid_set] BinlogDumpGTIDRequest gtid_set
          * @property {number|null} [flags] BinlogDumpGTIDRequest flags
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -125111,7 +125111,7 @@ export const binlogdata = $root.binlogdata = (() => {
          * @classdesc Represents a BinlogDumpGTIDRequest.
          * @constructor
          * @param {binlogdata.BinlogDumpGTIDRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const BinlogDumpGTIDRequest = function (properties) {
             if (properties)
@@ -125537,7 +125537,7 @@ export const binlogdata = $root.binlogdata = (() => {
          * Properties of a BinlogDumpResponse.
          * @typedef {Object} binlogdata.BinlogDumpResponse.$Properties
          * @property {Uint8Array|null} [raw] BinlogDumpResponse raw
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -125559,7 +125559,7 @@ export const binlogdata = $root.binlogdata = (() => {
          * @classdesc Represents a BinlogDumpResponse.
          * @constructor
          * @param {binlogdata.BinlogDumpResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const BinlogDumpResponse = function (properties) {
             if (properties)
@@ -125821,7 +125821,7 @@ export const query = $root.query = (() => {
          * @property {string|null} [shard] Target shard
          * @property {topodata.TabletType|null} [tablet_type] Target tablet_type
          * @property {string|null} [cell] Target cell
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -125843,7 +125843,7 @@ export const query = $root.query = (() => {
          * @classdesc Represents a Target.
          * @constructor
          * @param {query.Target.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const Target = function (properties) {
             if (properties)
@@ -126231,7 +126231,7 @@ export const query = $root.query = (() => {
          * @typedef {Object} query.VTGateCallerID.$Properties
          * @property {string|null} [username] VTGateCallerID username
          * @property {Array.<string>|null} [groups] VTGateCallerID groups
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -126253,7 +126253,7 @@ export const query = $root.query = (() => {
          * @classdesc Represents a VTGateCallerID.
          * @constructor
          * @param {query.VTGateCallerID.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const VTGateCallerID = function (properties) {
             this.groups = [];
@@ -126534,7 +126534,7 @@ export const query = $root.query = (() => {
          * @property {number|Long|null} [timestamp] EventToken timestamp
          * @property {string|null} [shard] EventToken shard
          * @property {string|null} [position] EventToken position
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -126556,7 +126556,7 @@ export const query = $root.query = (() => {
          * @classdesc Represents an EventToken.
          * @constructor
          * @param {query.EventToken.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const EventToken = function (properties) {
             if (properties)
@@ -127028,7 +127028,7 @@ export const query = $root.query = (() => {
          * @typedef {Object} query.Value.$Properties
          * @property {query.Type|null} [type] Value type
          * @property {Uint8Array|null} [value] Value value
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -127050,7 +127050,7 @@ export const query = $root.query = (() => {
          * @classdesc Represents a Value.
          * @constructor
          * @param {query.Value.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const Value = function (properties) {
             if (properties)
@@ -127527,7 +127527,7 @@ export const query = $root.query = (() => {
          * @property {query.Type|null} [type] BindVariable type
          * @property {Uint8Array|null} [value] BindVariable value
          * @property {Array.<query.Value.$Properties>|null} [values] BindVariable values
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -127549,7 +127549,7 @@ export const query = $root.query = (() => {
          * @classdesc Represents a BindVariable.
          * @constructor
          * @param {query.BindVariable.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const BindVariable = function (properties) {
             this.values = [];
@@ -128071,7 +128071,7 @@ export const query = $root.query = (() => {
          * @typedef {Object} query.BoundQuery.$Properties
          * @property {string|null} [sql] BoundQuery sql
          * @property {Object.<string,query.BindVariable.$Properties>|null} [bind_variables] BoundQuery bind_variables
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -128093,7 +128093,7 @@ export const query = $root.query = (() => {
          * @classdesc Represents a BoundQuery.
          * @constructor
          * @param {query.BoundQuery.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const BoundQuery = function (properties) {
             this.bind_variables = {};
@@ -128425,7 +128425,7 @@ export const query = $root.query = (() => {
          * @property {number|Long|null} [transaction_timeout] ExecuteOptions transaction_timeout
          * @property {boolean|null} [no_result] ExecuteOptions no_result
          * @property {"authoritative_timeout"} [timeout] ExecuteOptions timeout
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -128468,7 +128468,7 @@ export const query = $root.query = (() => {
          * @classdesc Represents an ExecuteOptions.
          * @constructor
          * @param {query.ExecuteOptions.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ExecuteOptions = function (properties) {
             this.transaction_access_mode = [];
@@ -129566,7 +129566,7 @@ export const query = $root.query = (() => {
          * @property {number|null} [decimals] Field decimals
          * @property {number|null} [flags] Field flags
          * @property {string|null} [column_type] Field column_type
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -129588,7 +129588,7 @@ export const query = $root.query = (() => {
          * @classdesc Represents a Field.
          * @constructor
          * @param {query.Field.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const Field = function (properties) {
             if (properties)
@@ -130307,7 +130307,7 @@ export const query = $root.query = (() => {
          * @typedef {Object} query.Row.$Properties
          * @property {Array.<number|Long>|null} [lengths] Row lengths
          * @property {Uint8Array|null} [values] Row values
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -130329,7 +130329,7 @@ export const query = $root.query = (() => {
          * @classdesc Represents a Row.
          * @constructor
          * @param {query.Row.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const Row = function (properties) {
             this.lengths = [];
@@ -130646,7 +130646,7 @@ export const query = $root.query = (() => {
          * @property {string|null} [info] QueryResult info
          * @property {string|null} [session_state_changes] QueryResult session_state_changes
          * @property {boolean|null} [insert_id_changed] QueryResult insert_id_changed
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -130668,7 +130668,7 @@ export const query = $root.query = (() => {
          * @classdesc Represents a QueryResult.
          * @constructor
          * @param {query.QueryResult.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const QueryResult = function (properties) {
             this.fields = [];
@@ -131144,7 +131144,7 @@ export const query = $root.query = (() => {
          * @typedef {Object} query.QueryWarning.$Properties
          * @property {number|null} [code] QueryWarning code
          * @property {string|null} [message] QueryWarning message
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -131166,7 +131166,7 @@ export const query = $root.query = (() => {
          * @classdesc Represents a QueryWarning.
          * @constructor
          * @param {query.QueryWarning.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const QueryWarning = function (properties) {
             if (properties)
@@ -131434,7 +131434,7 @@ export const query = $root.query = (() => {
          * @typedef {Object} query.StreamEvent.$Properties
          * @property {Array.<query.StreamEvent.Statement.$Properties>|null} [statements] StreamEvent statements
          * @property {query.EventToken.$Properties|null} [event_token] StreamEvent event_token
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -131456,7 +131456,7 @@ export const query = $root.query = (() => {
          * @classdesc Represents a StreamEvent.
          * @constructor
          * @param {query.StreamEvent.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const StreamEvent = function (properties) {
             this.statements = [];
@@ -131742,7 +131742,7 @@ export const query = $root.query = (() => {
              * @property {Array.<query.Field.$Properties>|null} [primary_key_fields] Statement primary_key_fields
              * @property {Array.<query.Row.$Properties>|null} [primary_key_values] Statement primary_key_values
              * @property {Uint8Array|null} [sql] Statement sql
-             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
              */
 
             /**
@@ -131764,7 +131764,7 @@ export const query = $root.query = (() => {
              * @classdesc Represents a Statement.
              * @constructor
              * @param {query.StreamEvent.Statement.$Properties=} [properties] Properties to set
-             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
              */
             const Statement = function (properties) {
                 this.primary_key_fields = [];
@@ -132209,7 +132209,7 @@ export const query = $root.query = (() => {
          * @property {number|Long|null} [transaction_id] ExecuteRequest transaction_id
          * @property {query.ExecuteOptions.$Properties|null} [options] ExecuteRequest options
          * @property {number|Long|null} [reserved_id] ExecuteRequest reserved_id
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -132240,7 +132240,7 @@ export const query = $root.query = (() => {
          * @classdesc Represents an ExecuteRequest.
          * @constructor
          * @param {query.ExecuteRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ExecuteRequest = function (properties) {
             if (properties)
@@ -132684,7 +132684,7 @@ export const query = $root.query = (() => {
          * Properties of an ExecuteResponse.
          * @typedef {Object} query.ExecuteResponse.$Properties
          * @property {query.QueryResult.$Properties|null} [result] ExecuteResponse result
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -132706,7 +132706,7 @@ export const query = $root.query = (() => {
          * @classdesc Represents an ExecuteResponse.
          * @constructor
          * @param {query.ExecuteResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ExecuteResponse = function (properties) {
             if (properties)
@@ -132946,7 +132946,7 @@ export const query = $root.query = (() => {
          * @typedef {Object} query.ResultWithError.$Properties
          * @property {vtrpc.RPCError.$Properties|null} [error] ResultWithError error
          * @property {query.QueryResult.$Properties|null} [result] ResultWithError result
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -132968,7 +132968,7 @@ export const query = $root.query = (() => {
          * @classdesc Represents a ResultWithError.
          * @constructor
          * @param {query.ResultWithError.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ResultWithError = function (properties) {
             if (properties)
@@ -133243,7 +133243,7 @@ export const query = $root.query = (() => {
          * @property {query.ExecuteOptions.$Properties|null} [options] StreamExecuteRequest options
          * @property {number|Long|null} [transaction_id] StreamExecuteRequest transaction_id
          * @property {number|Long|null} [reserved_id] StreamExecuteRequest reserved_id
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -133274,7 +133274,7 @@ export const query = $root.query = (() => {
          * @classdesc Represents a StreamExecuteRequest.
          * @constructor
          * @param {query.StreamExecuteRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const StreamExecuteRequest = function (properties) {
             if (properties)
@@ -133718,7 +133718,7 @@ export const query = $root.query = (() => {
          * Properties of a StreamExecuteResponse.
          * @typedef {Object} query.StreamExecuteResponse.$Properties
          * @property {query.QueryResult.$Properties|null} [result] StreamExecuteResponse result
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -133740,7 +133740,7 @@ export const query = $root.query = (() => {
          * @classdesc Represents a StreamExecuteResponse.
          * @constructor
          * @param {query.StreamExecuteResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const StreamExecuteResponse = function (properties) {
             if (properties)
@@ -133982,7 +133982,7 @@ export const query = $root.query = (() => {
          * @property {query.VTGateCallerID.$Properties|null} [immediate_caller_id] BeginRequest immediate_caller_id
          * @property {query.Target.$Properties|null} [target] BeginRequest target
          * @property {query.ExecuteOptions.$Properties|null} [options] BeginRequest options
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -134010,7 +134010,7 @@ export const query = $root.query = (() => {
          * @classdesc Represents a BeginRequest.
          * @constructor
          * @param {query.BeginRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const BeginRequest = function (properties) {
             if (properties)
@@ -134339,7 +134339,7 @@ export const query = $root.query = (() => {
          * @property {number|Long|null} [transaction_id] BeginResponse transaction_id
          * @property {topodata.TabletAlias.$Properties|null} [tablet_alias] BeginResponse tablet_alias
          * @property {string|null} [session_state_changes] BeginResponse session_state_changes
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -134361,7 +134361,7 @@ export const query = $root.query = (() => {
          * @classdesc Represents a BeginResponse.
          * @constructor
          * @param {query.BeginResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const BeginResponse = function (properties) {
             if (properties)
@@ -134676,7 +134676,7 @@ export const query = $root.query = (() => {
          * @property {query.VTGateCallerID.$Properties|null} [immediate_caller_id] CommitRequest immediate_caller_id
          * @property {query.Target.$Properties|null} [target] CommitRequest target
          * @property {number|Long|null} [transaction_id] CommitRequest transaction_id
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -134698,7 +134698,7 @@ export const query = $root.query = (() => {
          * @classdesc Represents a CommitRequest.
          * @constructor
          * @param {query.CommitRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const CommitRequest = function (properties) {
             if (properties)
@@ -135040,7 +135040,7 @@ export const query = $root.query = (() => {
          * Properties of a CommitResponse.
          * @typedef {Object} query.CommitResponse.$Properties
          * @property {number|Long|null} [reserved_id] CommitResponse reserved_id
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -135062,7 +135062,7 @@ export const query = $root.query = (() => {
          * @classdesc Represents a CommitResponse.
          * @constructor
          * @param {query.CommitResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const CommitResponse = function (properties) {
             if (properties)
@@ -135319,7 +135319,7 @@ export const query = $root.query = (() => {
          * @property {query.VTGateCallerID.$Properties|null} [immediate_caller_id] RollbackRequest immediate_caller_id
          * @property {query.Target.$Properties|null} [target] RollbackRequest target
          * @property {number|Long|null} [transaction_id] RollbackRequest transaction_id
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -135341,7 +135341,7 @@ export const query = $root.query = (() => {
          * @classdesc Represents a RollbackRequest.
          * @constructor
          * @param {query.RollbackRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const RollbackRequest = function (properties) {
             if (properties)
@@ -135683,7 +135683,7 @@ export const query = $root.query = (() => {
          * Properties of a RollbackResponse.
          * @typedef {Object} query.RollbackResponse.$Properties
          * @property {number|Long|null} [reserved_id] RollbackResponse reserved_id
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -135705,7 +135705,7 @@ export const query = $root.query = (() => {
          * @classdesc Represents a RollbackResponse.
          * @constructor
          * @param {query.RollbackResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const RollbackResponse = function (properties) {
             if (properties)
@@ -135963,7 +135963,7 @@ export const query = $root.query = (() => {
          * @property {query.Target.$Properties|null} [target] PrepareRequest target
          * @property {number|Long|null} [transaction_id] PrepareRequest transaction_id
          * @property {string|null} [dtid] PrepareRequest dtid
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -135985,7 +135985,7 @@ export const query = $root.query = (() => {
          * @classdesc Represents a PrepareRequest.
          * @constructor
          * @param {query.PrepareRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const PrepareRequest = function (properties) {
             if (properties)
@@ -136354,7 +136354,7 @@ export const query = $root.query = (() => {
         /**
          * Properties of a PrepareResponse.
          * @typedef {Object} query.PrepareResponse.$Properties
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -136376,7 +136376,7 @@ export const query = $root.query = (() => {
          * @classdesc Represents a PrepareResponse.
          * @constructor
          * @param {query.PrepareResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const PrepareResponse = function (properties) {
             if (properties)
@@ -136577,7 +136577,7 @@ export const query = $root.query = (() => {
          * @property {query.VTGateCallerID.$Properties|null} [immediate_caller_id] CommitPreparedRequest immediate_caller_id
          * @property {query.Target.$Properties|null} [target] CommitPreparedRequest target
          * @property {string|null} [dtid] CommitPreparedRequest dtid
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -136599,7 +136599,7 @@ export const query = $root.query = (() => {
          * @classdesc Represents a CommitPreparedRequest.
          * @constructor
          * @param {query.CommitPreparedRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const CommitPreparedRequest = function (properties) {
             if (properties)
@@ -136924,7 +136924,7 @@ export const query = $root.query = (() => {
         /**
          * Properties of a CommitPreparedResponse.
          * @typedef {Object} query.CommitPreparedResponse.$Properties
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -136946,7 +136946,7 @@ export const query = $root.query = (() => {
          * @classdesc Represents a CommitPreparedResponse.
          * @constructor
          * @param {query.CommitPreparedResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const CommitPreparedResponse = function (properties) {
             if (properties)
@@ -137148,7 +137148,7 @@ export const query = $root.query = (() => {
          * @property {query.Target.$Properties|null} [target] RollbackPreparedRequest target
          * @property {number|Long|null} [transaction_id] RollbackPreparedRequest transaction_id
          * @property {string|null} [dtid] RollbackPreparedRequest dtid
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -137170,7 +137170,7 @@ export const query = $root.query = (() => {
          * @classdesc Represents a RollbackPreparedRequest.
          * @constructor
          * @param {query.RollbackPreparedRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const RollbackPreparedRequest = function (properties) {
             if (properties)
@@ -137539,7 +137539,7 @@ export const query = $root.query = (() => {
         /**
          * Properties of a RollbackPreparedResponse.
          * @typedef {Object} query.RollbackPreparedResponse.$Properties
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -137561,7 +137561,7 @@ export const query = $root.query = (() => {
          * @classdesc Represents a RollbackPreparedResponse.
          * @constructor
          * @param {query.RollbackPreparedResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const RollbackPreparedResponse = function (properties) {
             if (properties)
@@ -137763,7 +137763,7 @@ export const query = $root.query = (() => {
          * @property {query.Target.$Properties|null} [target] CreateTransactionRequest target
          * @property {string|null} [dtid] CreateTransactionRequest dtid
          * @property {Array.<query.Target.$Properties>|null} [participants] CreateTransactionRequest participants
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -137785,7 +137785,7 @@ export const query = $root.query = (() => {
          * @classdesc Represents a CreateTransactionRequest.
          * @constructor
          * @param {query.CreateTransactionRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const CreateTransactionRequest = function (properties) {
             this.participants = [];
@@ -138156,7 +138156,7 @@ export const query = $root.query = (() => {
         /**
          * Properties of a CreateTransactionResponse.
          * @typedef {Object} query.CreateTransactionResponse.$Properties
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -138178,7 +138178,7 @@ export const query = $root.query = (() => {
          * @classdesc Represents a CreateTransactionResponse.
          * @constructor
          * @param {query.CreateTransactionResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const CreateTransactionResponse = function (properties) {
             if (properties)
@@ -138380,7 +138380,7 @@ export const query = $root.query = (() => {
          * @property {query.Target.$Properties|null} [target] StartCommitRequest target
          * @property {number|Long|null} [transaction_id] StartCommitRequest transaction_id
          * @property {string|null} [dtid] StartCommitRequest dtid
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -138402,7 +138402,7 @@ export const query = $root.query = (() => {
          * @classdesc Represents a StartCommitRequest.
          * @constructor
          * @param {query.StartCommitRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const StartCommitRequest = function (properties) {
             if (properties)
@@ -138788,7 +138788,7 @@ export const query = $root.query = (() => {
          * Properties of a StartCommitResponse.
          * @typedef {Object} query.StartCommitResponse.$Properties
          * @property {query.StartCommitState|null} [state] StartCommitResponse state
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -138810,7 +138810,7 @@ export const query = $root.query = (() => {
          * @classdesc Represents a StartCommitResponse.
          * @constructor
          * @param {query.StartCommitResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const StartCommitResponse = function (properties) {
             if (properties)
@@ -139076,7 +139076,7 @@ export const query = $root.query = (() => {
          * @property {query.Target.$Properties|null} [target] SetRollbackRequest target
          * @property {number|Long|null} [transaction_id] SetRollbackRequest transaction_id
          * @property {string|null} [dtid] SetRollbackRequest dtid
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -139098,7 +139098,7 @@ export const query = $root.query = (() => {
          * @classdesc Represents a SetRollbackRequest.
          * @constructor
          * @param {query.SetRollbackRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const SetRollbackRequest = function (properties) {
             if (properties)
@@ -139467,7 +139467,7 @@ export const query = $root.query = (() => {
         /**
          * Properties of a SetRollbackResponse.
          * @typedef {Object} query.SetRollbackResponse.$Properties
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -139489,7 +139489,7 @@ export const query = $root.query = (() => {
          * @classdesc Represents a SetRollbackResponse.
          * @constructor
          * @param {query.SetRollbackResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const SetRollbackResponse = function (properties) {
             if (properties)
@@ -139690,7 +139690,7 @@ export const query = $root.query = (() => {
          * @property {query.VTGateCallerID.$Properties|null} [immediate_caller_id] ConcludeTransactionRequest immediate_caller_id
          * @property {query.Target.$Properties|null} [target] ConcludeTransactionRequest target
          * @property {string|null} [dtid] ConcludeTransactionRequest dtid
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -139712,7 +139712,7 @@ export const query = $root.query = (() => {
          * @classdesc Represents a ConcludeTransactionRequest.
          * @constructor
          * @param {query.ConcludeTransactionRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ConcludeTransactionRequest = function (properties) {
             if (properties)
@@ -140037,7 +140037,7 @@ export const query = $root.query = (() => {
         /**
          * Properties of a ConcludeTransactionResponse.
          * @typedef {Object} query.ConcludeTransactionResponse.$Properties
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -140059,7 +140059,7 @@ export const query = $root.query = (() => {
          * @classdesc Represents a ConcludeTransactionResponse.
          * @constructor
          * @param {query.ConcludeTransactionResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ConcludeTransactionResponse = function (properties) {
             if (properties)
@@ -140260,7 +140260,7 @@ export const query = $root.query = (() => {
          * @property {query.VTGateCallerID.$Properties|null} [immediate_caller_id] ReadTransactionRequest immediate_caller_id
          * @property {query.Target.$Properties|null} [target] ReadTransactionRequest target
          * @property {string|null} [dtid] ReadTransactionRequest dtid
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -140282,7 +140282,7 @@ export const query = $root.query = (() => {
          * @classdesc Represents a ReadTransactionRequest.
          * @constructor
          * @param {query.ReadTransactionRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ReadTransactionRequest = function (properties) {
             if (properties)
@@ -140608,7 +140608,7 @@ export const query = $root.query = (() => {
          * Properties of a ReadTransactionResponse.
          * @typedef {Object} query.ReadTransactionResponse.$Properties
          * @property {query.TransactionMetadata.$Properties|null} [metadata] ReadTransactionResponse metadata
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -140630,7 +140630,7 @@ export const query = $root.query = (() => {
          * @classdesc Represents a ReadTransactionResponse.
          * @constructor
          * @param {query.ReadTransactionResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ReadTransactionResponse = function (properties) {
             if (properties)
@@ -140872,7 +140872,7 @@ export const query = $root.query = (() => {
          * @property {query.VTGateCallerID.$Properties|null} [immediate_caller_id] UnresolvedTransactionsRequest immediate_caller_id
          * @property {query.Target.$Properties|null} [target] UnresolvedTransactionsRequest target
          * @property {number|Long|null} [abandon_age] UnresolvedTransactionsRequest abandon_age
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -140894,7 +140894,7 @@ export const query = $root.query = (() => {
          * @classdesc Represents an UnresolvedTransactionsRequest.
          * @constructor
          * @param {query.UnresolvedTransactionsRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const UnresolvedTransactionsRequest = function (properties) {
             if (properties)
@@ -141236,7 +141236,7 @@ export const query = $root.query = (() => {
          * Properties of an UnresolvedTransactionsResponse.
          * @typedef {Object} query.UnresolvedTransactionsResponse.$Properties
          * @property {Array.<query.TransactionMetadata.$Properties>|null} [transactions] UnresolvedTransactionsResponse transactions
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -141258,7 +141258,7 @@ export const query = $root.query = (() => {
          * @classdesc Represents an UnresolvedTransactionsResponse.
          * @constructor
          * @param {query.UnresolvedTransactionsResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const UnresolvedTransactionsResponse = function (properties) {
             this.transactions = [];
@@ -141519,7 +141519,7 @@ export const query = $root.query = (() => {
          * @property {query.ExecuteOptions.$Properties|null} [options] BeginExecuteRequest options
          * @property {number|Long|null} [reserved_id] BeginExecuteRequest reserved_id
          * @property {Array.<string>|null} [pre_queries] BeginExecuteRequest pre_queries
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -141550,7 +141550,7 @@ export const query = $root.query = (() => {
          * @classdesc Represents a BeginExecuteRequest.
          * @constructor
          * @param {query.BeginExecuteRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const BeginExecuteRequest = function (properties) {
             this.pre_queries = [];
@@ -141995,7 +141995,7 @@ export const query = $root.query = (() => {
          * @property {number|Long|null} [transaction_id] BeginExecuteResponse transaction_id
          * @property {topodata.TabletAlias.$Properties|null} [tablet_alias] BeginExecuteResponse tablet_alias
          * @property {string|null} [session_state_changes] BeginExecuteResponse session_state_changes
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -142017,7 +142017,7 @@ export const query = $root.query = (() => {
          * @classdesc Represents a BeginExecuteResponse.
          * @constructor
          * @param {query.BeginExecuteResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const BeginExecuteResponse = function (properties) {
             if (properties)
@@ -142393,7 +142393,7 @@ export const query = $root.query = (() => {
          * @property {query.ExecuteOptions.$Properties|null} [options] BeginStreamExecuteRequest options
          * @property {Array.<string>|null} [pre_queries] BeginStreamExecuteRequest pre_queries
          * @property {number|Long|null} [reserved_id] BeginStreamExecuteRequest reserved_id
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -142424,7 +142424,7 @@ export const query = $root.query = (() => {
          * @classdesc Represents a BeginStreamExecuteRequest.
          * @constructor
          * @param {query.BeginStreamExecuteRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const BeginStreamExecuteRequest = function (properties) {
             this.pre_queries = [];
@@ -142869,7 +142869,7 @@ export const query = $root.query = (() => {
          * @property {number|Long|null} [transaction_id] BeginStreamExecuteResponse transaction_id
          * @property {topodata.TabletAlias.$Properties|null} [tablet_alias] BeginStreamExecuteResponse tablet_alias
          * @property {string|null} [session_state_changes] BeginStreamExecuteResponse session_state_changes
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -142891,7 +142891,7 @@ export const query = $root.query = (() => {
          * @classdesc Represents a BeginStreamExecuteResponse.
          * @constructor
          * @param {query.BeginStreamExecuteResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const BeginStreamExecuteResponse = function (properties) {
             if (properties)
@@ -143264,7 +143264,7 @@ export const query = $root.query = (() => {
          * @property {query.VTGateCallerID.$Properties|null} [immediate_caller_id] MessageStreamRequest immediate_caller_id
          * @property {query.Target.$Properties|null} [target] MessageStreamRequest target
          * @property {string|null} [name] MessageStreamRequest name
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -143286,7 +143286,7 @@ export const query = $root.query = (() => {
          * @classdesc Represents a MessageStreamRequest.
          * @constructor
          * @param {query.MessageStreamRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const MessageStreamRequest = function (properties) {
             if (properties)
@@ -143612,7 +143612,7 @@ export const query = $root.query = (() => {
          * Properties of a MessageStreamResponse.
          * @typedef {Object} query.MessageStreamResponse.$Properties
          * @property {query.QueryResult.$Properties|null} [result] MessageStreamResponse result
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -143634,7 +143634,7 @@ export const query = $root.query = (() => {
          * @classdesc Represents a MessageStreamResponse.
          * @constructor
          * @param {query.MessageStreamResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const MessageStreamResponse = function (properties) {
             if (properties)
@@ -143877,7 +143877,7 @@ export const query = $root.query = (() => {
          * @property {query.Target.$Properties|null} [target] MessageAckRequest target
          * @property {string|null} [name] MessageAckRequest name
          * @property {Array.<query.Value.$Properties>|null} [ids] MessageAckRequest ids
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -143899,7 +143899,7 @@ export const query = $root.query = (() => {
          * @classdesc Represents a MessageAckRequest.
          * @constructor
          * @param {query.MessageAckRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const MessageAckRequest = function (properties) {
             this.ids = [];
@@ -144271,7 +144271,7 @@ export const query = $root.query = (() => {
          * Properties of a MessageAckResponse.
          * @typedef {Object} query.MessageAckResponse.$Properties
          * @property {query.QueryResult.$Properties|null} [result] MessageAckResponse result
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -144293,7 +144293,7 @@ export const query = $root.query = (() => {
          * @classdesc Represents a MessageAckResponse.
          * @constructor
          * @param {query.MessageAckResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const MessageAckResponse = function (properties) {
             if (properties)
@@ -144538,7 +144538,7 @@ export const query = $root.query = (() => {
          * @property {number|Long|null} [transaction_id] ReserveExecuteRequest transaction_id
          * @property {query.ExecuteOptions.$Properties|null} [options] ReserveExecuteRequest options
          * @property {Array.<string>|null} [pre_queries] ReserveExecuteRequest pre_queries
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -144569,7 +144569,7 @@ export const query = $root.query = (() => {
          * @classdesc Represents a ReserveExecuteRequest.
          * @constructor
          * @param {query.ReserveExecuteRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ReserveExecuteRequest = function (properties) {
             this.pre_queries = [];
@@ -145013,7 +145013,7 @@ export const query = $root.query = (() => {
          * @property {query.QueryResult.$Properties|null} [result] ReserveExecuteResponse result
          * @property {number|Long|null} [reserved_id] ReserveExecuteResponse reserved_id
          * @property {topodata.TabletAlias.$Properties|null} [tablet_alias] ReserveExecuteResponse tablet_alias
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -145035,7 +145035,7 @@ export const query = $root.query = (() => {
          * @classdesc Represents a ReserveExecuteResponse.
          * @constructor
          * @param {query.ReserveExecuteResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ReserveExecuteResponse = function (properties) {
             if (properties)
@@ -145383,7 +145383,7 @@ export const query = $root.query = (() => {
          * @property {query.ExecuteOptions.$Properties|null} [options] ReserveStreamExecuteRequest options
          * @property {number|Long|null} [transaction_id] ReserveStreamExecuteRequest transaction_id
          * @property {Array.<string>|null} [pre_queries] ReserveStreamExecuteRequest pre_queries
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -145414,7 +145414,7 @@ export const query = $root.query = (() => {
          * @classdesc Represents a ReserveStreamExecuteRequest.
          * @constructor
          * @param {query.ReserveStreamExecuteRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ReserveStreamExecuteRequest = function (properties) {
             this.pre_queries = [];
@@ -145858,7 +145858,7 @@ export const query = $root.query = (() => {
          * @property {query.QueryResult.$Properties|null} [result] ReserveStreamExecuteResponse result
          * @property {number|Long|null} [reserved_id] ReserveStreamExecuteResponse reserved_id
          * @property {topodata.TabletAlias.$Properties|null} [tablet_alias] ReserveStreamExecuteResponse tablet_alias
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -145880,7 +145880,7 @@ export const query = $root.query = (() => {
          * @classdesc Represents a ReserveStreamExecuteResponse.
          * @constructor
          * @param {query.ReserveStreamExecuteResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ReserveStreamExecuteResponse = function (properties) {
             if (properties)
@@ -146228,7 +146228,7 @@ export const query = $root.query = (() => {
          * @property {query.ExecuteOptions.$Properties|null} [options] ReserveBeginExecuteRequest options
          * @property {Array.<string>|null} [pre_queries] ReserveBeginExecuteRequest pre_queries
          * @property {Array.<string>|null} [post_begin_queries] ReserveBeginExecuteRequest post_begin_queries
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -146259,7 +146259,7 @@ export const query = $root.query = (() => {
          * @classdesc Represents a ReserveBeginExecuteRequest.
          * @constructor
          * @param {query.ReserveBeginExecuteRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ReserveBeginExecuteRequest = function (properties) {
             this.pre_queries = [];
@@ -146702,7 +146702,7 @@ export const query = $root.query = (() => {
          * @property {number|Long|null} [reserved_id] ReserveBeginExecuteResponse reserved_id
          * @property {topodata.TabletAlias.$Properties|null} [tablet_alias] ReserveBeginExecuteResponse tablet_alias
          * @property {string|null} [session_state_changes] ReserveBeginExecuteResponse session_state_changes
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -146724,7 +146724,7 @@ export const query = $root.query = (() => {
          * @classdesc Represents a ReserveBeginExecuteResponse.
          * @constructor
          * @param {query.ReserveBeginExecuteResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ReserveBeginExecuteResponse = function (properties) {
             if (properties)
@@ -147144,7 +147144,7 @@ export const query = $root.query = (() => {
          * @property {query.ExecuteOptions.$Properties|null} [options] ReserveBeginStreamExecuteRequest options
          * @property {Array.<string>|null} [pre_queries] ReserveBeginStreamExecuteRequest pre_queries
          * @property {Array.<string>|null} [post_begin_queries] ReserveBeginStreamExecuteRequest post_begin_queries
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -147175,7 +147175,7 @@ export const query = $root.query = (() => {
          * @classdesc Represents a ReserveBeginStreamExecuteRequest.
          * @constructor
          * @param {query.ReserveBeginStreamExecuteRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ReserveBeginStreamExecuteRequest = function (properties) {
             this.pre_queries = [];
@@ -147618,7 +147618,7 @@ export const query = $root.query = (() => {
          * @property {number|Long|null} [reserved_id] ReserveBeginStreamExecuteResponse reserved_id
          * @property {topodata.TabletAlias.$Properties|null} [tablet_alias] ReserveBeginStreamExecuteResponse tablet_alias
          * @property {string|null} [session_state_changes] ReserveBeginStreamExecuteResponse session_state_changes
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -147640,7 +147640,7 @@ export const query = $root.query = (() => {
          * @classdesc Represents a ReserveBeginStreamExecuteResponse.
          * @constructor
          * @param {query.ReserveBeginStreamExecuteResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ReserveBeginStreamExecuteResponse = function (properties) {
             if (properties)
@@ -148058,7 +148058,7 @@ export const query = $root.query = (() => {
          * @property {query.Target.$Properties|null} [target] ReleaseRequest target
          * @property {number|Long|null} [transaction_id] ReleaseRequest transaction_id
          * @property {number|Long|null} [reserved_id] ReleaseRequest reserved_id
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -148080,7 +148080,7 @@ export const query = $root.query = (() => {
          * @classdesc Represents a ReleaseRequest.
          * @constructor
          * @param {query.ReleaseRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ReleaseRequest = function (properties) {
             if (properties)
@@ -148465,7 +148465,7 @@ export const query = $root.query = (() => {
         /**
          * Properties of a ReleaseResponse.
          * @typedef {Object} query.ReleaseResponse.$Properties
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -148487,7 +148487,7 @@ export const query = $root.query = (() => {
          * @classdesc Represents a ReleaseResponse.
          * @constructor
          * @param {query.ReleaseResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ReleaseResponse = function (properties) {
             if (properties)
@@ -148684,7 +148684,7 @@ export const query = $root.query = (() => {
         /**
          * Properties of a StreamHealthRequest.
          * @typedef {Object} query.StreamHealthRequest.$Properties
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -148706,7 +148706,7 @@ export const query = $root.query = (() => {
          * @classdesc Represents a StreamHealthRequest.
          * @constructor
          * @param {query.StreamHealthRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const StreamHealthRequest = function (properties) {
             if (properties)
@@ -148913,7 +148913,7 @@ export const query = $root.query = (() => {
          * @property {Array.<string>|null} [view_schema_changed] RealtimeStats view_schema_changed
          * @property {boolean|null} [udfs_changed] RealtimeStats udfs_changed
          * @property {boolean|null} [tx_unresolved] RealtimeStats tx_unresolved
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -148935,7 +148935,7 @@ export const query = $root.query = (() => {
          * @classdesc Represents a RealtimeStats.
          * @constructor
          * @param {query.RealtimeStats.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const RealtimeStats = function (properties) {
             this.table_schema_changed = [];
@@ -149471,7 +149471,7 @@ export const query = $root.query = (() => {
          * @property {number|null} [unhealthy_tablet_count] AggregateStats unhealthy_tablet_count
          * @property {number|null} [replication_lag_seconds_min] AggregateStats replication_lag_seconds_min
          * @property {number|null} [replication_lag_seconds_max] AggregateStats replication_lag_seconds_max
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -149493,7 +149493,7 @@ export const query = $root.query = (() => {
          * @classdesc Represents an AggregateStats.
          * @constructor
          * @param {query.AggregateStats.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const AggregateStats = function (properties) {
             if (properties)
@@ -149820,7 +149820,7 @@ export const query = $root.query = (() => {
          * @property {number|Long|null} [primary_term_start_timestamp] StreamHealthResponse primary_term_start_timestamp
          * @property {query.RealtimeStats.$Properties|null} [realtime_stats] StreamHealthResponse realtime_stats
          * @property {topodata.TabletAlias.$Properties|null} [tablet_alias] StreamHealthResponse tablet_alias
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -149842,7 +149842,7 @@ export const query = $root.query = (() => {
          * @classdesc Represents a StreamHealthResponse.
          * @constructor
          * @param {query.StreamHealthResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const StreamHealthResponse = function (properties) {
             if (properties)
@@ -150233,7 +150233,7 @@ export const query = $root.query = (() => {
          * @property {query.TransactionState|null} [state] TransactionMetadata state
          * @property {number|Long|null} [time_created] TransactionMetadata time_created
          * @property {Array.<query.Target.$Properties>|null} [participants] TransactionMetadata participants
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -150255,7 +150255,7 @@ export const query = $root.query = (() => {
          * @classdesc Represents a TransactionMetadata.
          * @constructor
          * @param {query.TransactionMetadata.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const TransactionMetadata = function (properties) {
             this.participants = [];
@@ -150661,7 +150661,7 @@ export const query = $root.query = (() => {
          * @property {query.Target.$Properties|null} [target] GetSchemaRequest target
          * @property {query.SchemaTableType|null} [table_type] GetSchemaRequest table_type
          * @property {Array.<string>|null} [table_names] GetSchemaRequest table_names
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -150683,7 +150683,7 @@ export const query = $root.query = (() => {
          * @classdesc Represents a GetSchemaRequest.
          * @constructor
          * @param {query.GetSchemaRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetSchemaRequest = function (properties) {
             this.table_names = [];
@@ -151023,7 +151023,7 @@ export const query = $root.query = (() => {
          * @property {string|null} [name] UDFInfo name
          * @property {boolean|null} [aggregating] UDFInfo aggregating
          * @property {query.Type|null} [return_type] UDFInfo return_type
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -151045,7 +151045,7 @@ export const query = $root.query = (() => {
          * @classdesc Represents a UDFInfo.
          * @constructor
          * @param {query.UDFInfo.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const UDFInfo = function (properties) {
             if (properties)
@@ -151540,7 +151540,7 @@ export const query = $root.query = (() => {
          * @typedef {Object} query.GetSchemaResponse.$Properties
          * @property {Array.<query.UDFInfo.$Properties>|null} [udfs] GetSchemaResponse udfs
          * @property {Object.<string,string>|null} [table_definition] GetSchemaResponse table_definition
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -151562,7 +151562,7 @@ export const query = $root.query = (() => {
          * @classdesc Represents a GetSchemaResponse.
          * @constructor
          * @param {query.GetSchemaResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetSchemaResponse = function (properties) {
             this.udfs = [];
@@ -151926,7 +151926,7 @@ export const replicationdata = $root.replicationdata = (() => {
          * @property {boolean|null} [semi_sync_replica_enabled] Status semi_sync_replica_enabled
          * @property {boolean|null} [semi_sync_primary_status] Status semi_sync_primary_status
          * @property {boolean|null} [semi_sync_replica_status] Status semi_sync_replica_status
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -151948,7 +151948,7 @@ export const replicationdata = $root.replicationdata = (() => {
          * @classdesc Represents a Status.
          * @constructor
          * @param {replicationdata.Status.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const Status = function (properties) {
             if (properties)
@@ -152916,7 +152916,7 @@ export const replicationdata = $root.replicationdata = (() => {
          * @typedef {Object} replicationdata.Configuration.$Properties
          * @property {number|null} [heartbeat_interval] Configuration heartbeat_interval
          * @property {number|null} [replica_net_timeout] Configuration replica_net_timeout
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -152938,7 +152938,7 @@ export const replicationdata = $root.replicationdata = (() => {
          * @classdesc Represents a Configuration.
          * @constructor
          * @param {replicationdata.Configuration.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const Configuration = function (properties) {
             if (properties)
@@ -153206,7 +153206,7 @@ export const replicationdata = $root.replicationdata = (() => {
          * @typedef {Object} replicationdata.StopReplicationStatus.$Properties
          * @property {replicationdata.Status.$Properties|null} [before] StopReplicationStatus before
          * @property {replicationdata.Status.$Properties|null} [after] StopReplicationStatus after
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -153228,7 +153228,7 @@ export const replicationdata = $root.replicationdata = (() => {
          * @classdesc Represents a StopReplicationStatus.
          * @constructor
          * @param {replicationdata.StopReplicationStatus.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const StopReplicationStatus = function (properties) {
             if (properties)
@@ -153513,7 +153513,7 @@ export const replicationdata = $root.replicationdata = (() => {
          * @property {string|null} [position] PrimaryStatus position
          * @property {string|null} [file_position] PrimaryStatus file_position
          * @property {string|null} [server_uuid] PrimaryStatus server_uuid
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -153535,7 +153535,7 @@ export const replicationdata = $root.replicationdata = (() => {
          * @classdesc Represents a PrimaryStatus.
          * @constructor
          * @param {replicationdata.PrimaryStatus.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const PrimaryStatus = function (properties) {
             if (properties)
@@ -153824,6 +153824,403 @@ export const replicationdata = $root.replicationdata = (() => {
         return PrimaryStatus;
     })();
 
+    replicationdata.ShardPeerHealth = (function() {
+
+        /**
+         * Properties of a ShardPeerHealth.
+         * @typedef {Object} replicationdata.ShardPeerHealth.$Properties
+         * @property {topodata.TabletAlias.$Properties|null} [tablet_alias] ShardPeerHealth tablet_alias
+         * @property {number|Long|null} [consecutive_ping_failures] ShardPeerHealth consecutive_ping_failures
+         * @property {vttime.Time.$Properties|null} [last_successful_ping] ShardPeerHealth last_successful_ping
+         * @property {vttime.Time.$Properties|null} [last_attempted_ping] ShardPeerHealth last_attempted_ping
+         * @property {vttime.Duration.$Properties|null} [time_since_last_attempted_ping] ShardPeerHealth time_since_last_attempted_ping
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
+         */
+
+        /**
+         * Properties of a ShardPeerHealth.
+         * @memberof replicationdata
+         * @interface IShardPeerHealth
+         * @augments replicationdata.ShardPeerHealth.$Properties
+         * @deprecated Use replicationdata.ShardPeerHealth.$Properties instead.
+         */
+
+        /**
+         * Shape of a ShardPeerHealth.
+         * @typedef {replicationdata.ShardPeerHealth.$Properties} replicationdata.ShardPeerHealth.$Shape
+         */
+
+        /**
+         * Constructs a new ShardPeerHealth.
+         * @memberof replicationdata
+         * @classdesc Represents a ShardPeerHealth.
+         * @constructor
+         * @param {replicationdata.ShardPeerHealth.$Properties=} [properties] Properties to set
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
+         */
+        const ShardPeerHealth = function (properties) {
+            if (properties)
+                for (let keys = $Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                        this[keys[i]] = properties[keys[i]];
+        };
+
+        /**
+         * ShardPeerHealth tablet_alias.
+         * @member {topodata.TabletAlias.$Properties|null|undefined} tablet_alias
+         * @memberof replicationdata.ShardPeerHealth
+         * @instance
+         */
+        ShardPeerHealth.prototype.tablet_alias = null;
+
+        /**
+         * ShardPeerHealth consecutive_ping_failures.
+         * @member {number|Long} consecutive_ping_failures
+         * @memberof replicationdata.ShardPeerHealth
+         * @instance
+         */
+        ShardPeerHealth.prototype.consecutive_ping_failures = $util.Long ? $util.Long.fromBits(0,0,false) : 0;
+
+        /**
+         * ShardPeerHealth last_successful_ping.
+         * @member {vttime.Time.$Properties|null|undefined} last_successful_ping
+         * @memberof replicationdata.ShardPeerHealth
+         * @instance
+         */
+        ShardPeerHealth.prototype.last_successful_ping = null;
+
+        /**
+         * ShardPeerHealth last_attempted_ping.
+         * @member {vttime.Time.$Properties|null|undefined} last_attempted_ping
+         * @memberof replicationdata.ShardPeerHealth
+         * @instance
+         */
+        ShardPeerHealth.prototype.last_attempted_ping = null;
+
+        /**
+         * ShardPeerHealth time_since_last_attempted_ping.
+         * @member {vttime.Duration.$Properties|null|undefined} time_since_last_attempted_ping
+         * @memberof replicationdata.ShardPeerHealth
+         * @instance
+         */
+        ShardPeerHealth.prototype.time_since_last_attempted_ping = null;
+
+        /**
+         * Creates a new ShardPeerHealth instance using the specified properties.
+         * @function create
+         * @memberof replicationdata.ShardPeerHealth
+         * @static
+         * @param {replicationdata.ShardPeerHealth.$Properties=} [properties] Properties to set
+         * @returns {replicationdata.ShardPeerHealth} ShardPeerHealth instance
+         * @type {{
+         *   (properties: replicationdata.ShardPeerHealth.$Shape): replicationdata.ShardPeerHealth & replicationdata.ShardPeerHealth.$Shape;
+         *   (properties?: replicationdata.ShardPeerHealth.$Properties): replicationdata.ShardPeerHealth;
+         * }}
+         */
+        ShardPeerHealth.create = function(properties) {
+            return new ShardPeerHealth(properties);
+        };
+
+        /**
+         * Encodes the specified ShardPeerHealth message. Does not implicitly {@link replicationdata.ShardPeerHealth.verify|verify} messages.
+         * @function encode
+         * @memberof replicationdata.ShardPeerHealth
+         * @static
+         * @param {replicationdata.ShardPeerHealth.$Properties} message ShardPeerHealth message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        ShardPeerHealth.encode = function (message, writer, _depth) {
+            if (!writer)
+                writer = $Writer.create();
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            if (message.tablet_alias != null && $Object.hasOwnProperty.call(message, "tablet_alias"))
+                $root.topodata.TabletAlias.encode(message.tablet_alias, writer.uint32(/* id 1, wireType 2 =*/10).fork(), _depth + 1).ldelim();
+            if (message.consecutive_ping_failures != null && $Object.hasOwnProperty.call(message, "consecutive_ping_failures"))
+                writer.uint32(/* id 2, wireType 0 =*/16).int64(message.consecutive_ping_failures);
+            if (message.last_successful_ping != null && $Object.hasOwnProperty.call(message, "last_successful_ping"))
+                $root.vttime.Time.encode(message.last_successful_ping, writer.uint32(/* id 3, wireType 2 =*/26).fork(), _depth + 1).ldelim();
+            if (message.last_attempted_ping != null && $Object.hasOwnProperty.call(message, "last_attempted_ping"))
+                $root.vttime.Time.encode(message.last_attempted_ping, writer.uint32(/* id 4, wireType 2 =*/34).fork(), _depth + 1).ldelim();
+            if (message.time_since_last_attempted_ping != null && $Object.hasOwnProperty.call(message, "time_since_last_attempted_ping"))
+                $root.vttime.Duration.encode(message.time_since_last_attempted_ping, writer.uint32(/* id 5, wireType 2 =*/42).fork(), _depth + 1).ldelim();
+            if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
+                for (let i = 0; i < message.$unknowns.length; ++i)
+                    writer.raw(message.$unknowns[i]);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified ShardPeerHealth message, length delimited. Does not implicitly {@link replicationdata.ShardPeerHealth.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof replicationdata.ShardPeerHealth
+         * @static
+         * @param {replicationdata.ShardPeerHealth.$Properties} message ShardPeerHealth message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        ShardPeerHealth.encodeDelimited = function(message, writer) {
+            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+        };
+
+        /**
+         * Decodes a ShardPeerHealth message from the specified reader or buffer.
+         * @function decode
+         * @memberof replicationdata.ShardPeerHealth
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {replicationdata.ShardPeerHealth & replicationdata.ShardPeerHealth.$Shape} ShardPeerHealth
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        ShardPeerHealth.decode = function (reader, length, _end, _depth, _target) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $Reader.recursionLimit)
+                throw $Error("max depth exceeded");
+            let end = length === $undefined ? reader.len : reader.pos + length, message = _target || new $root.replicationdata.ShardPeerHealth(), value;
+            while (reader.pos < end) {
+                let start = reader.pos;
+                let tag = reader.tag();
+                if (tag === _end) {
+                    _end = $undefined;
+                    break;
+                }
+                let wireType = tag & 7;
+                switch (tag >>>= 3) {
+                case 1: {
+                        if (wireType !== 2)
+                            break;
+                        message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.uint32(), $undefined, _depth + 1, message.tablet_alias);
+                        continue;
+                    }
+                case 2: {
+                        if (wireType !== 0)
+                            break;
+                        if (typeof (value = reader.int64()) === "object" ? value.low || value.high : value !== 0)
+                            message.consecutive_ping_failures = value;
+                        else
+                            delete message.consecutive_ping_failures;
+                        continue;
+                    }
+                case 3: {
+                        if (wireType !== 2)
+                            break;
+                        message.last_successful_ping = $root.vttime.Time.decode(reader, reader.uint32(), $undefined, _depth + 1, message.last_successful_ping);
+                        continue;
+                    }
+                case 4: {
+                        if (wireType !== 2)
+                            break;
+                        message.last_attempted_ping = $root.vttime.Time.decode(reader, reader.uint32(), $undefined, _depth + 1, message.last_attempted_ping);
+                        continue;
+                    }
+                case 5: {
+                        if (wireType !== 2)
+                            break;
+                        message.time_since_last_attempted_ping = $root.vttime.Duration.decode(reader, reader.uint32(), $undefined, _depth + 1, message.time_since_last_attempted_ping);
+                        continue;
+                    }
+                }
+                reader.skipType(wireType, _depth, tag);
+                if (!reader.discardUnknown) {
+                    $util.makeProp(message, "$unknowns", false);
+                    (message.$unknowns || (message.$unknowns = [])).push(reader.raw(start, reader.pos));
+                }
+            }
+            if (_end !== $undefined)
+                throw $Error("missing end group");
+            return message;
+        };
+
+        /**
+         * Decodes a ShardPeerHealth message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof replicationdata.ShardPeerHealth
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {replicationdata.ShardPeerHealth & replicationdata.ShardPeerHealth.$Shape} ShardPeerHealth
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        ShardPeerHealth.decodeDelimited = function(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a ShardPeerHealth message.
+         * @function verify
+         * @memberof replicationdata.ShardPeerHealth
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        ShardPeerHealth.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.tablet_alias != null && $Object.hasOwnProperty.call(message, "tablet_alias")) {
+                let error = $root.topodata.TabletAlias.verify(message.tablet_alias, _depth + 1);
+                if (error)
+                    return "tablet_alias." + error;
+            }
+            if (message.consecutive_ping_failures != null && $Object.hasOwnProperty.call(message, "consecutive_ping_failures"))
+                if (!$util.isInteger(message.consecutive_ping_failures) && !(message.consecutive_ping_failures && $util.isInteger(message.consecutive_ping_failures.low) && $util.isInteger(message.consecutive_ping_failures.high)))
+                    return "consecutive_ping_failures: integer|Long expected";
+            if (message.last_successful_ping != null && $Object.hasOwnProperty.call(message, "last_successful_ping")) {
+                let error = $root.vttime.Time.verify(message.last_successful_ping, _depth + 1);
+                if (error)
+                    return "last_successful_ping." + error;
+            }
+            if (message.last_attempted_ping != null && $Object.hasOwnProperty.call(message, "last_attempted_ping")) {
+                let error = $root.vttime.Time.verify(message.last_attempted_ping, _depth + 1);
+                if (error)
+                    return "last_attempted_ping." + error;
+            }
+            if (message.time_since_last_attempted_ping != null && $Object.hasOwnProperty.call(message, "time_since_last_attempted_ping")) {
+                let error = $root.vttime.Duration.verify(message.time_since_last_attempted_ping, _depth + 1);
+                if (error)
+                    return "time_since_last_attempted_ping." + error;
+            }
+            return null;
+        };
+
+        /**
+         * Creates a ShardPeerHealth message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof replicationdata.ShardPeerHealth
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {replicationdata.ShardPeerHealth} ShardPeerHealth
+         */
+        ShardPeerHealth.fromObject = function (object, _depth) {
+            if (object instanceof $root.replicationdata.ShardPeerHealth)
+                return object;
+            if (!$util.isObject(object))
+                throw $TypeError(".replicationdata.ShardPeerHealth: object expected");
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            let message = new $root.replicationdata.ShardPeerHealth();
+            if (object.tablet_alias != null) {
+                if (!$util.isObject(object.tablet_alias))
+                    throw $TypeError(".replicationdata.ShardPeerHealth.tablet_alias: object expected");
+                message.tablet_alias = $root.topodata.TabletAlias.fromObject(object.tablet_alias, _depth + 1);
+            }
+            if (object.consecutive_ping_failures != null)
+                if (typeof object.consecutive_ping_failures === "object" ? object.consecutive_ping_failures.low || object.consecutive_ping_failures.high : $Number(object.consecutive_ping_failures) !== 0)
+                    if ($util.Long)
+                        message.consecutive_ping_failures = $util.Long.fromValue(object.consecutive_ping_failures, false);
+                    else if (typeof object.consecutive_ping_failures === "string")
+                        message.consecutive_ping_failures = $parseInt(object.consecutive_ping_failures, 10);
+                    else if (typeof object.consecutive_ping_failures === "number")
+                        message.consecutive_ping_failures = object.consecutive_ping_failures;
+                    else if (typeof object.consecutive_ping_failures === "object")
+                        message.consecutive_ping_failures = new $util.LongBits(object.consecutive_ping_failures.low >>> 0, object.consecutive_ping_failures.high >>> 0).toNumber();
+            if (object.last_successful_ping != null) {
+                if (!$util.isObject(object.last_successful_ping))
+                    throw $TypeError(".replicationdata.ShardPeerHealth.last_successful_ping: object expected");
+                message.last_successful_ping = $root.vttime.Time.fromObject(object.last_successful_ping, _depth + 1);
+            }
+            if (object.last_attempted_ping != null) {
+                if (!$util.isObject(object.last_attempted_ping))
+                    throw $TypeError(".replicationdata.ShardPeerHealth.last_attempted_ping: object expected");
+                message.last_attempted_ping = $root.vttime.Time.fromObject(object.last_attempted_ping, _depth + 1);
+            }
+            if (object.time_since_last_attempted_ping != null) {
+                if (!$util.isObject(object.time_since_last_attempted_ping))
+                    throw $TypeError(".replicationdata.ShardPeerHealth.time_since_last_attempted_ping: object expected");
+                message.time_since_last_attempted_ping = $root.vttime.Duration.fromObject(object.time_since_last_attempted_ping, _depth + 1);
+            }
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a ShardPeerHealth message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof replicationdata.ShardPeerHealth
+         * @static
+         * @param {replicationdata.ShardPeerHealth} message ShardPeerHealth
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        ShardPeerHealth.toObject = function (message, options, _depth) {
+            if (!options)
+                options = {};
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            let object = {};
+            if (options.defaults) {
+                object.tablet_alias = null;
+                if ($util.Long) {
+                    let long = new $util.Long(0, 0, false);
+                    object.consecutive_ping_failures = options.longs === $String ? long.toString() : options.longs === $Number ? long.toNumber() : typeof $BigInt !== "undefined" && options.longs === $BigInt ? long.toBigInt() : long;
+                } else
+                    object.consecutive_ping_failures = options.longs === $String ? "0" : typeof $BigInt !== "undefined" && options.longs === $BigInt ? $BigInt("0") : 0;
+                object.last_successful_ping = null;
+                object.last_attempted_ping = null;
+                object.time_since_last_attempted_ping = null;
+            }
+            if (message.tablet_alias != null && $Object.hasOwnProperty.call(message, "tablet_alias"))
+                object.tablet_alias = $root.topodata.TabletAlias.toObject(message.tablet_alias, options, _depth + 1);
+            if (message.consecutive_ping_failures != null && $Object.hasOwnProperty.call(message, "consecutive_ping_failures"))
+                if (typeof $BigInt !== "undefined" && options.longs === $BigInt)
+                    object.consecutive_ping_failures = typeof message.consecutive_ping_failures === "number" ? $BigInt(message.consecutive_ping_failures) : $util.Long.fromBits(message.consecutive_ping_failures.low >>> 0, message.consecutive_ping_failures.high >>> 0, false).toBigInt();
+                else if (typeof message.consecutive_ping_failures === "number")
+                    object.consecutive_ping_failures = options.longs === $String ? $String(message.consecutive_ping_failures) : message.consecutive_ping_failures;
+                else
+                    object.consecutive_ping_failures = options.longs === $String ? $util.Long.prototype.toString.call(message.consecutive_ping_failures) : options.longs === $Number ? new $util.LongBits(message.consecutive_ping_failures.low >>> 0, message.consecutive_ping_failures.high >>> 0).toNumber() : message.consecutive_ping_failures;
+            if (message.last_successful_ping != null && $Object.hasOwnProperty.call(message, "last_successful_ping"))
+                object.last_successful_ping = $root.vttime.Time.toObject(message.last_successful_ping, options, _depth + 1);
+            if (message.last_attempted_ping != null && $Object.hasOwnProperty.call(message, "last_attempted_ping"))
+                object.last_attempted_ping = $root.vttime.Time.toObject(message.last_attempted_ping, options, _depth + 1);
+            if (message.time_since_last_attempted_ping != null && $Object.hasOwnProperty.call(message, "time_since_last_attempted_ping"))
+                object.time_since_last_attempted_ping = $root.vttime.Duration.toObject(message.time_since_last_attempted_ping, options, _depth + 1);
+            return object;
+        };
+
+        /**
+         * Converts this ShardPeerHealth to JSON.
+         * @function toJSON
+         * @memberof replicationdata.ShardPeerHealth
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        ShardPeerHealth.prototype.toJSON = function() {
+            return ShardPeerHealth.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        /**
+         * Gets the type url for ShardPeerHealth
+         * @function getTypeUrl
+         * @memberof replicationdata.ShardPeerHealth
+         * @static
+         * @param {string} [prefix] Custom type url prefix, defaults to `"type.googleapis.com"`
+         * @returns {string} The type url
+         */
+        ShardPeerHealth.getTypeUrl = function(prefix) {
+            if (prefix === $undefined)
+                prefix = "type.googleapis.com";
+            return prefix + "/replicationdata.ShardPeerHealth";
+        };
+
+        return ShardPeerHealth;
+    })();
+
     replicationdata.FullStatus = (function() {
 
         /**
@@ -153854,7 +154251,8 @@ export const replicationdata = $root.replicationdata = (() => {
          * @property {boolean|null} [disk_stalled] FullStatus disk_stalled
          * @property {boolean|null} [semi_sync_blocked] FullStatus semi_sync_blocked
          * @property {topodata.TabletType|null} [tablet_type] FullStatus tablet_type
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<replicationdata.ShardPeerHealth.$Properties>|null} [shard_peer_health] FullStatus shard_peer_health
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -153876,9 +154274,10 @@ export const replicationdata = $root.replicationdata = (() => {
          * @classdesc Represents a FullStatus.
          * @constructor
          * @param {replicationdata.FullStatus.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const FullStatus = function (properties) {
+            this.shard_peer_health = [];
             if (properties)
                 for (let keys = $Object.keys(properties), i = 0; i < keys.length; ++i)
                     if (properties[keys[i]] != null && keys[i] !== "__proto__")
@@ -154086,6 +154485,14 @@ export const replicationdata = $root.replicationdata = (() => {
         FullStatus.prototype.tablet_type = 0;
 
         /**
+         * FullStatus shard_peer_health.
+         * @member {Array.<replicationdata.ShardPeerHealth.$Properties>} shard_peer_health
+         * @memberof replicationdata.FullStatus
+         * @instance
+         */
+        FullStatus.prototype.shard_peer_health = $util.emptyArray;
+
+        /**
          * Creates a new FullStatus instance using the specified properties.
          * @function create
          * @memberof replicationdata.FullStatus
@@ -154167,6 +154574,9 @@ export const replicationdata = $root.replicationdata = (() => {
                 writer.uint32(/* id 24, wireType 0 =*/192).bool(message.semi_sync_blocked);
             if (message.tablet_type != null && $Object.hasOwnProperty.call(message, "tablet_type"))
                 writer.uint32(/* id 25, wireType 0 =*/200).int32(message.tablet_type);
+            if (message.shard_peer_health != null && message.shard_peer_health.length)
+                for (let i = 0; i < message.shard_peer_health.length; ++i)
+                    $root.replicationdata.ShardPeerHealth.encode(message.shard_peer_health[i], writer.uint32(/* id 26, wireType 2 =*/210).fork(), _depth + 1).ldelim();
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
                     writer.raw(message.$unknowns[i]);
@@ -154430,6 +154840,14 @@ export const replicationdata = $root.replicationdata = (() => {
                             delete message.tablet_type;
                         continue;
                     }
+                case 26: {
+                        if (wireType !== 2)
+                            break;
+                        if (!(message.shard_peer_health && message.shard_peer_health.length))
+                            message.shard_peer_health = [];
+                        message.shard_peer_health.push($root.replicationdata.ShardPeerHealth.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        continue;
+                    }
                 }
                 reader.skipType(wireType, _depth, tag);
                 if (!reader.discardUnknown) {
@@ -154568,6 +154986,15 @@ export const replicationdata = $root.replicationdata = (() => {
                 case 8:
                     break;
                 }
+            if (message.shard_peer_health != null && $Object.hasOwnProperty.call(message, "shard_peer_health")) {
+                if (!$Array.isArray(message.shard_peer_health))
+                    return "shard_peer_health: array expected";
+                for (let i = 0; i < message.shard_peer_health.length; ++i) {
+                    let error = $root.replicationdata.ShardPeerHealth.verify(message.shard_peer_health[i], _depth + 1);
+                    if (error)
+                        return "shard_peer_health." + error;
+                }
+            }
             return null;
         };
 
@@ -154727,6 +155154,16 @@ export const replicationdata = $root.replicationdata = (() => {
                     message.tablet_type = 8;
                     break;
                 }
+            if (object.shard_peer_health) {
+                if (!$Array.isArray(object.shard_peer_health))
+                    throw $TypeError(".replicationdata.FullStatus.shard_peer_health: array expected");
+                message.shard_peer_health = $Array(object.shard_peer_health.length);
+                for (let i = 0; i < object.shard_peer_health.length; ++i) {
+                    if (!$util.isObject(object.shard_peer_health[i]))
+                        throw $TypeError(".replicationdata.FullStatus.shard_peer_health: object expected");
+                    message.shard_peer_health[i] = $root.replicationdata.ShardPeerHealth.fromObject(object.shard_peer_health[i], _depth + 1);
+                }
+            }
             return message;
         };
 
@@ -154747,6 +155184,8 @@ export const replicationdata = $root.replicationdata = (() => {
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
             let object = {};
+            if (options.arrays || options.defaults)
+                object.shard_peer_health = [];
             if (options.defaults) {
                 object.server_id = 0;
                 object.server_uuid = "";
@@ -154833,6 +155272,11 @@ export const replicationdata = $root.replicationdata = (() => {
                 object.semi_sync_blocked = message.semi_sync_blocked;
             if (message.tablet_type != null && $Object.hasOwnProperty.call(message, "tablet_type"))
                 object.tablet_type = options.enums === $String ? $root.topodata.TabletType[message.tablet_type] === $undefined ? message.tablet_type : $root.topodata.TabletType[message.tablet_type] : message.tablet_type;
+            if (message.shard_peer_health && message.shard_peer_health.length) {
+                object.shard_peer_health = $Array(message.shard_peer_health.length);
+                for (let j = 0; j < message.shard_peer_health.length; ++j)
+                    object.shard_peer_health[j] = $root.replicationdata.ShardPeerHealth.toObject(message.shard_peer_health[j], options, _depth + 1);
+            }
             return object;
         };
 
@@ -154882,7 +155326,7 @@ export const vschema = $root.vschema = (() => {
          * Properties of a RoutingRules.
          * @typedef {Object} vschema.RoutingRules.$Properties
          * @property {Array.<vschema.RoutingRule.$Properties>|null} [rules] RoutingRules rules
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -154904,7 +155348,7 @@ export const vschema = $root.vschema = (() => {
          * @classdesc Represents a RoutingRules.
          * @constructor
          * @param {vschema.RoutingRules.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const RoutingRules = function (properties) {
             this.rules = [];
@@ -155160,7 +155604,7 @@ export const vschema = $root.vschema = (() => {
          * @typedef {Object} vschema.RoutingRule.$Properties
          * @property {string|null} [from_table] RoutingRule from_table
          * @property {Array.<string>|null} [to_tables] RoutingRule to_tables
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -155182,7 +155626,7 @@ export const vschema = $root.vschema = (() => {
          * @classdesc Represents a RoutingRule.
          * @constructor
          * @param {vschema.RoutingRule.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const RoutingRule = function (properties) {
             this.to_tables = [];
@@ -155467,7 +155911,7 @@ export const vschema = $root.vschema = (() => {
          * @property {vschema.Keyspace.ForeignKeyMode|null} [foreign_key_mode] Keyspace foreign_key_mode
          * @property {vschema.MultiTenantSpec.$Properties|null} [multi_tenant_spec] Keyspace multi_tenant_spec
          * @property {boolean|null} [prevent_cross_keyspace_reads] Keyspace prevent_cross_keyspace_reads
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -155489,7 +155933,7 @@ export const vschema = $root.vschema = (() => {
          * @classdesc Represents a Keyspace.
          * @constructor
          * @param {vschema.Keyspace.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const Keyspace = function (properties) {
             this.vindexes = {};
@@ -156042,7 +156486,7 @@ export const vschema = $root.vschema = (() => {
          * @typedef {Object} vschema.MultiTenantSpec.$Properties
          * @property {string|null} [tenant_id_column_name] MultiTenantSpec tenant_id_column_name
          * @property {query.Type|null} [tenant_id_column_type] MultiTenantSpec tenant_id_column_type
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -156064,7 +156508,7 @@ export const vschema = $root.vschema = (() => {
          * @classdesc Represents a MultiTenantSpec.
          * @constructor
          * @param {vschema.MultiTenantSpec.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const MultiTenantSpec = function (properties) {
             if (properties)
@@ -156532,7 +156976,7 @@ export const vschema = $root.vschema = (() => {
          * @property {string|null} [type] Vindex type
          * @property {Object.<string,string>|null} [params] Vindex params
          * @property {string|null} [owner] Vindex owner
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -156554,7 +156998,7 @@ export const vschema = $root.vschema = (() => {
          * @classdesc Represents a Vindex.
          * @constructor
          * @param {vschema.Vindex.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const Vindex = function (properties) {
             this.params = {};
@@ -156898,7 +157342,7 @@ export const vschema = $root.vschema = (() => {
          * @property {string|null} [pinned] Table pinned
          * @property {boolean|null} [column_list_authoritative] Table column_list_authoritative
          * @property {string|null} [source] Table source
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -156920,7 +157364,7 @@ export const vschema = $root.vschema = (() => {
          * @classdesc Represents a Table.
          * @constructor
          * @param {vschema.Table.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const Table = function (properties) {
             this.column_vindexes = [];
@@ -157366,7 +157810,7 @@ export const vschema = $root.vschema = (() => {
          * @property {string|null} [column] ColumnVindex column
          * @property {string|null} [name] ColumnVindex name
          * @property {Array.<string>|null} [columns] ColumnVindex columns
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -157388,7 +157832,7 @@ export const vschema = $root.vschema = (() => {
          * @classdesc Represents a ColumnVindex.
          * @constructor
          * @param {vschema.ColumnVindex.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ColumnVindex = function (properties) {
             this.columns = [];
@@ -157697,7 +158141,7 @@ export const vschema = $root.vschema = (() => {
          * @typedef {Object} vschema.AutoIncrement.$Properties
          * @property {string|null} [column] AutoIncrement column
          * @property {string|null} [sequence] AutoIncrement sequence
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -157719,7 +158163,7 @@ export const vschema = $root.vschema = (() => {
          * @classdesc Represents an AutoIncrement.
          * @constructor
          * @param {vschema.AutoIncrement.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const AutoIncrement = function (properties) {
             if (properties)
@@ -157994,7 +158438,7 @@ export const vschema = $root.vschema = (() => {
          * @property {number|null} [scale] Column scale
          * @property {boolean|null} [nullable] Column nullable
          * @property {Array.<string>|null} [values] Column values
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -158016,7 +158460,7 @@ export const vschema = $root.vschema = (() => {
          * @classdesc Represents a Column.
          * @constructor
          * @param {vschema.Column.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const Column = function (properties) {
             this.values = [];
@@ -158703,7 +159147,7 @@ export const vschema = $root.vschema = (() => {
          * @property {vschema.ShardRoutingRules.$Properties|null} [shard_routing_rules] SrvVSchema shard_routing_rules
          * @property {vschema.KeyspaceRoutingRules.$Properties|null} [keyspace_routing_rules] SrvVSchema keyspace_routing_rules
          * @property {vschema.MirrorRules.$Properties|null} [mirror_rules] SrvVSchema mirror_rules
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -158725,7 +159169,7 @@ export const vschema = $root.vschema = (() => {
          * @classdesc Represents a SrvVSchema.
          * @constructor
          * @param {vschema.SrvVSchema.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const SrvVSchema = function (properties) {
             this.keyspaces = {};
@@ -159129,7 +159573,7 @@ export const vschema = $root.vschema = (() => {
          * Properties of a ShardRoutingRules.
          * @typedef {Object} vschema.ShardRoutingRules.$Properties
          * @property {Array.<vschema.ShardRoutingRule.$Properties>|null} [rules] ShardRoutingRules rules
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -159151,7 +159595,7 @@ export const vschema = $root.vschema = (() => {
          * @classdesc Represents a ShardRoutingRules.
          * @constructor
          * @param {vschema.ShardRoutingRules.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ShardRoutingRules = function (properties) {
             this.rules = [];
@@ -159408,7 +159852,7 @@ export const vschema = $root.vschema = (() => {
          * @property {string|null} [from_keyspace] ShardRoutingRule from_keyspace
          * @property {string|null} [to_keyspace] ShardRoutingRule to_keyspace
          * @property {string|null} [shard] ShardRoutingRule shard
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -159430,7 +159874,7 @@ export const vschema = $root.vschema = (() => {
          * @classdesc Represents a ShardRoutingRule.
          * @constructor
          * @param {vschema.ShardRoutingRule.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ShardRoutingRule = function (properties) {
             if (properties)
@@ -159725,7 +160169,7 @@ export const vschema = $root.vschema = (() => {
          * Properties of a KeyspaceRoutingRules.
          * @typedef {Object} vschema.KeyspaceRoutingRules.$Properties
          * @property {Array.<vschema.KeyspaceRoutingRule.$Properties>|null} [rules] KeyspaceRoutingRules rules
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -159747,7 +160191,7 @@ export const vschema = $root.vschema = (() => {
          * @classdesc Represents a KeyspaceRoutingRules.
          * @constructor
          * @param {vschema.KeyspaceRoutingRules.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const KeyspaceRoutingRules = function (properties) {
             this.rules = [];
@@ -160003,7 +160447,7 @@ export const vschema = $root.vschema = (() => {
          * @typedef {Object} vschema.KeyspaceRoutingRule.$Properties
          * @property {string|null} [from_keyspace] KeyspaceRoutingRule from_keyspace
          * @property {string|null} [to_keyspace] KeyspaceRoutingRule to_keyspace
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -160025,7 +160469,7 @@ export const vschema = $root.vschema = (() => {
          * @classdesc Represents a KeyspaceRoutingRule.
          * @constructor
          * @param {vschema.KeyspaceRoutingRule.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const KeyspaceRoutingRule = function (properties) {
             if (properties)
@@ -160292,7 +160736,7 @@ export const vschema = $root.vschema = (() => {
          * Properties of a MirrorRules.
          * @typedef {Object} vschema.MirrorRules.$Properties
          * @property {Array.<vschema.MirrorRule.$Properties>|null} [rules] MirrorRules rules
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -160314,7 +160758,7 @@ export const vschema = $root.vschema = (() => {
          * @classdesc Represents a MirrorRules.
          * @constructor
          * @param {vschema.MirrorRules.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const MirrorRules = function (properties) {
             this.rules = [];
@@ -160571,7 +161015,7 @@ export const vschema = $root.vschema = (() => {
          * @property {string|null} [from_table] MirrorRule from_table
          * @property {string|null} [to_table] MirrorRule to_table
          * @property {number|null} [percent] MirrorRule percent
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -160593,7 +161037,7 @@ export const vschema = $root.vschema = (() => {
          * @classdesc Represents a MirrorRule.
          * @constructor
          * @param {vschema.MirrorRule.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const MirrorRule = function (properties) {
             if (properties)
@@ -160901,7 +161345,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @typedef {Object} vtctldata.ExecuteVtctlCommandRequest.$Properties
          * @property {Array.<string>|null} [args] ExecuteVtctlCommandRequest args
          * @property {number|Long|null} [action_timeout] ExecuteVtctlCommandRequest action_timeout
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -160923,7 +161367,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents an ExecuteVtctlCommandRequest.
          * @constructor
          * @param {vtctldata.ExecuteVtctlCommandRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ExecuteVtctlCommandRequest = function (properties) {
             this.args = [];
@@ -161218,7 +161662,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * Properties of an ExecuteVtctlCommandResponse.
          * @typedef {Object} vtctldata.ExecuteVtctlCommandResponse.$Properties
          * @property {logutil.Event.$Properties|null} [event] ExecuteVtctlCommandResponse event
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -161240,7 +161684,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents an ExecuteVtctlCommandResponse.
          * @constructor
          * @param {vtctldata.ExecuteVtctlCommandResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ExecuteVtctlCommandResponse = function (properties) {
             if (properties)
@@ -161499,7 +161943,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {string|null} [target_table] TableMaterializeSettings target_table
          * @property {string|null} [source_expression] TableMaterializeSettings source_expression
          * @property {string|null} [create_ddl] TableMaterializeSettings create_ddl
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -161521,7 +161965,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a TableMaterializeSettings.
          * @constructor
          * @param {vtctldata.TableMaterializeSettings.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const TableMaterializeSettings = function (properties) {
             if (properties)
@@ -161833,7 +162277,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {boolean|null} [atomic_copy] MaterializeSettings atomic_copy
          * @property {vtctldata.WorkflowOptions.$Properties|null} [workflow_options] MaterializeSettings workflow_options
          * @property {Array.<string>|null} [reference_tables] MaterializeSettings reference_tables
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -161855,7 +162299,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a MaterializeSettings.
          * @constructor
          * @param {vtctldata.MaterializeSettings.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const MaterializeSettings = function (properties) {
             this.table_settings = [];
@@ -162668,7 +163112,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @typedef {Object} vtctldata.Keyspace.$Properties
          * @property {string|null} [name] Keyspace name
          * @property {topodata.Keyspace.$Properties|null} [keyspace] Keyspace keyspace
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -162690,7 +163134,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a Keyspace.
          * @constructor
          * @param {vtctldata.Keyspace.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const Keyspace = function (properties) {
             if (properties)
@@ -163028,7 +163472,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {vttime.Time.$Properties|null} [ready_to_complete_at] SchemaMigration ready_to_complete_at
          * @property {string|null} [removed_foreign_key_names] SchemaMigration removed_foreign_key_names
          * @property {number|Long|null} [in_order_completion_pending_count] SchemaMigration in_order_completion_pending_count
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -163050,7 +163494,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a SchemaMigration.
          * @constructor
          * @param {vtctldata.SchemaMigration.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const SchemaMigration = function (properties) {
             if (properties)
@@ -165034,7 +165478,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {string|null} [keyspace] Shard keyspace
          * @property {string|null} [name] Shard name
          * @property {topodata.Shard.$Properties|null} [shard] Shard shard
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -165056,7 +165500,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a Shard.
          * @constructor
          * @param {vtctldata.Shard.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const Shard = function (properties) {
             if (properties)
@@ -165373,7 +165817,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {Object.<string,string>|null} [config] WorkflowOptions config
          * @property {string|null} [global_keyspace] WorkflowOptions global_keyspace
          * @property {Array.<string>|null} [lookup_vindexes] WorkflowOptions lookup_vindexes
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -165395,7 +165839,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a WorkflowOptions.
          * @constructor
          * @param {vtctldata.WorkflowOptions.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const WorkflowOptions = function (properties) {
             this.shards = [];
@@ -165876,7 +166320,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {number|Long|null} [max_v_replication_transaction_lag] Workflow max_v_replication_transaction_lag
          * @property {boolean|null} [defer_secondary_keys] Workflow defer_secondary_keys
          * @property {vtctldata.WorkflowOptions.$Properties|null} [options] Workflow options
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -165898,7 +166342,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a Workflow.
          * @constructor
          * @param {vtctldata.Workflow.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const Workflow = function (properties) {
             this.shard_streams = {};
@@ -166471,7 +166915,7 @@ export const vtctldata = $root.vtctldata = (() => {
              * @typedef {Object} vtctldata.Workflow.ReplicationLocation.$Properties
              * @property {string|null} [keyspace] ReplicationLocation keyspace
              * @property {Array.<string>|null} [shards] ReplicationLocation shards
-             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
              */
 
             /**
@@ -166493,7 +166937,7 @@ export const vtctldata = $root.vtctldata = (() => {
              * @classdesc Represents a ReplicationLocation.
              * @constructor
              * @param {vtctldata.Workflow.ReplicationLocation.$Properties=} [properties] Properties to set
-             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
              */
             const ReplicationLocation = function (properties) {
                 this.shards = [];
@@ -166774,7 +167218,7 @@ export const vtctldata = $root.vtctldata = (() => {
              * @property {Array.<vtctldata.Workflow.Stream.$Properties>|null} [streams] ShardStream streams
              * @property {Array.<topodata.Shard.TabletControl.$Properties>|null} [tablet_controls] ShardStream tablet_controls
              * @property {boolean|null} [is_primary_serving] ShardStream is_primary_serving
-             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
              */
 
             /**
@@ -166796,7 +167240,7 @@ export const vtctldata = $root.vtctldata = (() => {
              * @classdesc Represents a ShardStream.
              * @constructor
              * @param {vtctldata.Workflow.ShardStream.$Properties=} [properties] Properties to set
-             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
              */
             const ShardStream = function (properties) {
                 this.streams = [];
@@ -167145,7 +167589,7 @@ export const vtctldata = $root.vtctldata = (() => {
              * @property {Array.<topodata.TabletType>|null} [tablet_types] Stream tablet_types
              * @property {tabletmanagerdata.TabletSelectionPreference|null} [tablet_selection_preference] Stream tablet_selection_preference
              * @property {Array.<string>|null} [cells] Stream cells
-             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
              */
 
             /**
@@ -167167,7 +167611,7 @@ export const vtctldata = $root.vtctldata = (() => {
              * @classdesc Represents a Stream.
              * @constructor
              * @param {vtctldata.Workflow.Stream.$Properties=} [properties] Properties to set
-             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
              */
             const Stream = function (properties) {
                 this.copy_states = [];
@@ -168145,7 +168589,7 @@ export const vtctldata = $root.vtctldata = (() => {
                  * @property {string|null} [table] CopyState table
                  * @property {string|null} [last_pk] CopyState last_pk
                  * @property {number|Long|null} [stream_id] CopyState stream_id
-                 * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+                 * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
                  */
 
                 /**
@@ -168167,7 +168611,7 @@ export const vtctldata = $root.vtctldata = (() => {
                  * @classdesc Represents a CopyState.
                  * @constructor
                  * @param {vtctldata.Workflow.Stream.CopyState.$Properties=} [properties] Properties to set
-                 * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+                 * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
                  */
                 const CopyState = function (properties) {
                     if (properties)
@@ -168485,7 +168929,7 @@ export const vtctldata = $root.vtctldata = (() => {
                  * @property {vttime.Time.$Properties|null} [updated_at] Log updated_at
                  * @property {string|null} [message] Log message
                  * @property {number|Long|null} [count] Log count
-                 * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+                 * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
                  */
 
                 /**
@@ -168507,7 +168951,7 @@ export const vtctldata = $root.vtctldata = (() => {
                  * @classdesc Represents a Log.
                  * @constructor
                  * @param {vtctldata.Workflow.Stream.Log.$Properties=} [properties] Properties to set
-                 * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+                 * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
                  */
                 const Log = function (properties) {
                     if (properties)
@@ -168993,7 +169437,7 @@ export const vtctldata = $root.vtctldata = (() => {
                  * @typedef {Object} vtctldata.Workflow.Stream.ThrottlerStatus.$Properties
                  * @property {string|null} [component_throttled] ThrottlerStatus component_throttled
                  * @property {vttime.Time.$Properties|null} [time_throttled] ThrottlerStatus time_throttled
-                 * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+                 * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
                  */
 
                 /**
@@ -169015,7 +169459,7 @@ export const vtctldata = $root.vtctldata = (() => {
                  * @classdesc Represents a ThrottlerStatus.
                  * @constructor
                  * @param {vtctldata.Workflow.Stream.ThrottlerStatus.$Properties=} [properties] Properties to set
-                 * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+                 * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
                  */
                 const ThrottlerStatus = function (properties) {
                     if (properties)
@@ -169290,7 +169734,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @typedef {Object} vtctldata.AddCellInfoRequest.$Properties
          * @property {string|null} [name] AddCellInfoRequest name
          * @property {topodata.CellInfo.$Properties|null} [cell_info] AddCellInfoRequest cell_info
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -169312,7 +169756,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents an AddCellInfoRequest.
          * @constructor
          * @param {vtctldata.AddCellInfoRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const AddCellInfoRequest = function (properties) {
             if (properties)
@@ -169579,7 +170023,7 @@ export const vtctldata = $root.vtctldata = (() => {
         /**
          * Properties of an AddCellInfoResponse.
          * @typedef {Object} vtctldata.AddCellInfoResponse.$Properties
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -169601,7 +170045,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents an AddCellInfoResponse.
          * @constructor
          * @param {vtctldata.AddCellInfoResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const AddCellInfoResponse = function (properties) {
             if (properties)
@@ -169800,7 +170244,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @typedef {Object} vtctldata.AddCellsAliasRequest.$Properties
          * @property {string|null} [name] AddCellsAliasRequest name
          * @property {Array.<string>|null} [cells] AddCellsAliasRequest cells
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -169822,7 +170266,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents an AddCellsAliasRequest.
          * @constructor
          * @param {vtctldata.AddCellsAliasRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const AddCellsAliasRequest = function (properties) {
             this.cells = [];
@@ -170100,7 +170544,7 @@ export const vtctldata = $root.vtctldata = (() => {
         /**
          * Properties of an AddCellsAliasResponse.
          * @typedef {Object} vtctldata.AddCellsAliasResponse.$Properties
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -170122,7 +170566,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents an AddCellsAliasResponse.
          * @constructor
          * @param {vtctldata.AddCellsAliasResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const AddCellsAliasResponse = function (properties) {
             if (properties)
@@ -170322,7 +170766,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {vschema.KeyspaceRoutingRules.$Properties|null} [keyspace_routing_rules] ApplyKeyspaceRoutingRulesRequest keyspace_routing_rules
          * @property {boolean|null} [skip_rebuild] ApplyKeyspaceRoutingRulesRequest skip_rebuild
          * @property {Array.<string>|null} [rebuild_cells] ApplyKeyspaceRoutingRulesRequest rebuild_cells
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -170344,7 +170788,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents an ApplyKeyspaceRoutingRulesRequest.
          * @constructor
          * @param {vtctldata.ApplyKeyspaceRoutingRulesRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ApplyKeyspaceRoutingRulesRequest = function (properties) {
             this.rebuild_cells = [];
@@ -170653,7 +171097,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * Properties of an ApplyKeyspaceRoutingRulesResponse.
          * @typedef {Object} vtctldata.ApplyKeyspaceRoutingRulesResponse.$Properties
          * @property {vschema.KeyspaceRoutingRules.$Properties|null} [keyspace_routing_rules] ApplyKeyspaceRoutingRulesResponse keyspace_routing_rules
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -170675,7 +171119,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents an ApplyKeyspaceRoutingRulesResponse.
          * @constructor
          * @param {vtctldata.ApplyKeyspaceRoutingRulesResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ApplyKeyspaceRoutingRulesResponse = function (properties) {
             if (properties)
@@ -170916,7 +171360,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {vschema.RoutingRules.$Properties|null} [routing_rules] ApplyRoutingRulesRequest routing_rules
          * @property {boolean|null} [skip_rebuild] ApplyRoutingRulesRequest skip_rebuild
          * @property {Array.<string>|null} [rebuild_cells] ApplyRoutingRulesRequest rebuild_cells
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -170938,7 +171382,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents an ApplyRoutingRulesRequest.
          * @constructor
          * @param {vtctldata.ApplyRoutingRulesRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ApplyRoutingRulesRequest = function (properties) {
             this.rebuild_cells = [];
@@ -171246,7 +171690,7 @@ export const vtctldata = $root.vtctldata = (() => {
         /**
          * Properties of an ApplyRoutingRulesResponse.
          * @typedef {Object} vtctldata.ApplyRoutingRulesResponse.$Properties
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -171268,7 +171712,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents an ApplyRoutingRulesResponse.
          * @constructor
          * @param {vtctldata.ApplyRoutingRulesResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ApplyRoutingRulesResponse = function (properties) {
             if (properties)
@@ -171468,7 +171912,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {vschema.ShardRoutingRules.$Properties|null} [shard_routing_rules] ApplyShardRoutingRulesRequest shard_routing_rules
          * @property {boolean|null} [skip_rebuild] ApplyShardRoutingRulesRequest skip_rebuild
          * @property {Array.<string>|null} [rebuild_cells] ApplyShardRoutingRulesRequest rebuild_cells
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -171490,7 +171934,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents an ApplyShardRoutingRulesRequest.
          * @constructor
          * @param {vtctldata.ApplyShardRoutingRulesRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ApplyShardRoutingRulesRequest = function (properties) {
             this.rebuild_cells = [];
@@ -171798,7 +172242,7 @@ export const vtctldata = $root.vtctldata = (() => {
         /**
          * Properties of an ApplyShardRoutingRulesResponse.
          * @typedef {Object} vtctldata.ApplyShardRoutingRulesResponse.$Properties
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -171820,7 +172264,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents an ApplyShardRoutingRulesResponse.
          * @constructor
          * @param {vtctldata.ApplyShardRoutingRulesResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ApplyShardRoutingRulesResponse = function (properties) {
             if (properties)
@@ -172025,7 +172469,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {vttime.Duration.$Properties|null} [wait_replicas_timeout] ApplySchemaRequest wait_replicas_timeout
          * @property {vtrpc.CallerID.$Properties|null} [caller_id] ApplySchemaRequest caller_id
          * @property {number|Long|null} [batch_size] ApplySchemaRequest batch_size
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -172047,7 +172491,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents an ApplySchemaRequest.
          * @constructor
          * @param {vtctldata.ApplySchemaRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ApplySchemaRequest = function (properties) {
             this.sql = [];
@@ -172527,7 +172971,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @typedef {Object} vtctldata.ApplySchemaResponse.$Properties
          * @property {Array.<string>|null} [uuid_list] ApplySchemaResponse uuid_list
          * @property {Object.<string,number|Long>|null} [rows_affected_by_shard] ApplySchemaResponse rows_affected_by_shard
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -172549,7 +172993,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents an ApplySchemaResponse.
          * @constructor
          * @param {vtctldata.ApplySchemaResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ApplySchemaResponse = function (properties) {
             this.uuid_list = [];
@@ -172888,7 +173332,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {vschema.Keyspace.$Properties|null} [v_schema] ApplyVSchemaRequest v_schema
          * @property {string|null} [sql] ApplyVSchemaRequest sql
          * @property {boolean|null} [strict] ApplyVSchemaRequest strict
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -172910,7 +173354,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents an ApplyVSchemaRequest.
          * @constructor
          * @param {vtctldata.ApplyVSchemaRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ApplyVSchemaRequest = function (properties) {
             this.cells = [];
@@ -173332,7 +173776,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @typedef {Object} vtctldata.ApplyVSchemaResponse.$Properties
          * @property {vschema.Keyspace.$Properties|null} [v_schema] ApplyVSchemaResponse v_schema
          * @property {Object.<string,vtctldata.ApplyVSchemaResponse.ParamList.$Properties>|null} [unknown_vindex_params] ApplyVSchemaResponse unknown_vindex_params
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -173354,7 +173798,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents an ApplyVSchemaResponse.
          * @constructor
          * @param {vtctldata.ApplyVSchemaResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ApplyVSchemaResponse = function (properties) {
             this.unknown_vindex_params = {};
@@ -173667,7 +174111,7 @@ export const vtctldata = $root.vtctldata = (() => {
              * Properties of a ParamList.
              * @typedef {Object} vtctldata.ApplyVSchemaResponse.ParamList.$Properties
              * @property {Array.<string>|null} [params] ParamList params
-             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
              */
 
             /**
@@ -173689,7 +174133,7 @@ export const vtctldata = $root.vtctldata = (() => {
              * @classdesc Represents a ParamList.
              * @constructor
              * @param {vtctldata.ApplyVSchemaResponse.ParamList.$Properties=} [properties] Properties to set
-             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
              */
             const ParamList = function (properties) {
                 this.params = [];
@@ -173949,7 +174393,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {string|null} [backup_engine] BackupRequest backup_engine
          * @property {vttime.Duration.$Properties|null} [mysql_shutdown_timeout] BackupRequest mysql_shutdown_timeout
          * @property {tabletmanagerdata.BackupRequest.InitSQL.$Properties|null} [init_sql] BackupRequest init_sql
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -173971,7 +174415,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a BackupRequest.
          * @constructor
          * @param {vtctldata.BackupRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const BackupRequest = function (properties) {
             if (properties)
@@ -174420,7 +174864,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {string|null} [keyspace] BackupResponse keyspace
          * @property {string|null} [shard] BackupResponse shard
          * @property {logutil.Event.$Properties|null} [event] BackupResponse event
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -174442,7 +174886,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a BackupResponse.
          * @constructor
          * @param {vtctldata.BackupResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const BackupResponse = function (properties) {
             if (properties)
@@ -174774,7 +175218,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {string|null} [incremental_from_pos] BackupShardRequest incremental_from_pos
          * @property {vttime.Duration.$Properties|null} [mysql_shutdown_timeout] BackupShardRequest mysql_shutdown_timeout
          * @property {tabletmanagerdata.BackupRequest.InitSQL.$Properties|null} [init_sql] BackupShardRequest init_sql
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -174796,7 +175240,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a BackupShardRequest.
          * @constructor
          * @param {vtctldata.BackupShardRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const BackupShardRequest = function (properties) {
             if (properties)
@@ -175235,7 +175679,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {string|null} [keyspace] CancelSchemaMigrationRequest keyspace
          * @property {string|null} [uuid] CancelSchemaMigrationRequest uuid
          * @property {vtrpc.CallerID.$Properties|null} [caller_id] CancelSchemaMigrationRequest caller_id
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -175257,7 +175701,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a CancelSchemaMigrationRequest.
          * @constructor
          * @param {vtctldata.CancelSchemaMigrationRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const CancelSchemaMigrationRequest = function (properties) {
             if (properties)
@@ -175553,7 +175997,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * Properties of a CancelSchemaMigrationResponse.
          * @typedef {Object} vtctldata.CancelSchemaMigrationResponse.$Properties
          * @property {Object.<string,number|Long>|null} [rows_affected_by_shard] CancelSchemaMigrationResponse rows_affected_by_shard
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -175575,7 +176019,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a CancelSchemaMigrationResponse.
          * @constructor
          * @param {vtctldata.CancelSchemaMigrationResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const CancelSchemaMigrationResponse = function (properties) {
             this.rows_affected_by_shard = {};
@@ -175869,7 +176313,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {topodata.TabletAlias.$Properties|null} [tablet_alias] ChangeTabletTagsRequest tablet_alias
          * @property {Object.<string,string>|null} [tags] ChangeTabletTagsRequest tags
          * @property {boolean|null} [replace] ChangeTabletTagsRequest replace
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -175891,7 +176335,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a ChangeTabletTagsRequest.
          * @constructor
          * @param {vtctldata.ChangeTabletTagsRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ChangeTabletTagsRequest = function (properties) {
             this.tags = {};
@@ -176231,7 +176675,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @typedef {Object} vtctldata.ChangeTabletTagsResponse.$Properties
          * @property {Object.<string,string>|null} [before_tags] ChangeTabletTagsResponse before_tags
          * @property {Object.<string,string>|null} [after_tags] ChangeTabletTagsResponse after_tags
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -176253,7 +176697,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a ChangeTabletTagsResponse.
          * @constructor
          * @param {vtctldata.ChangeTabletTagsResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ChangeTabletTagsResponse = function (properties) {
             this.before_tags = {};
@@ -176605,7 +177049,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {topodata.TabletAlias.$Properties|null} [tablet_alias] ChangeTabletTypeRequest tablet_alias
          * @property {topodata.TabletType|null} [db_type] ChangeTabletTypeRequest db_type
          * @property {boolean|null} [dry_run] ChangeTabletTypeRequest dry_run
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -176627,7 +177071,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a ChangeTabletTypeRequest.
          * @constructor
          * @param {vtctldata.ChangeTabletTypeRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ChangeTabletTypeRequest = function (properties) {
             if (properties)
@@ -176989,7 +177433,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {topodata.Tablet.$Properties|null} [before_tablet] ChangeTabletTypeResponse before_tablet
          * @property {topodata.Tablet.$Properties|null} [after_tablet] ChangeTabletTypeResponse after_tablet
          * @property {boolean|null} [was_dry_run] ChangeTabletTypeResponse was_dry_run
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -177011,7 +177455,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a ChangeTabletTypeResponse.
          * @constructor
          * @param {vtctldata.ChangeTabletTypeResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ChangeTabletTypeResponse = function (properties) {
             if (properties)
@@ -177313,7 +177757,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {boolean|null} [skip_request_heartbeats] CheckThrottlerRequest skip_request_heartbeats
          * @property {boolean|null} [ok_if_not_exists] CheckThrottlerRequest ok_if_not_exists
          * @property {tabletmanagerdata.ThrottlerType|null} [throttler_type] CheckThrottlerRequest throttler_type
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -177335,7 +177779,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a CheckThrottlerRequest.
          * @constructor
          * @param {vtctldata.CheckThrottlerRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const CheckThrottlerRequest = function (properties) {
             if (properties)
@@ -177735,7 +178179,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @typedef {Object} vtctldata.CheckThrottlerResponse.$Properties
          * @property {topodata.TabletAlias.$Properties|null} [tablet_alias] CheckThrottlerResponse tablet_alias
          * @property {tabletmanagerdata.CheckThrottlerResponse.$Properties|null} [Check] CheckThrottlerResponse Check
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -177757,7 +178201,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a CheckThrottlerResponse.
          * @constructor
          * @param {vtctldata.CheckThrottlerResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const CheckThrottlerResponse = function (properties) {
             if (properties)
@@ -178028,7 +178472,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {string|null} [keyspace] CleanupSchemaMigrationRequest keyspace
          * @property {string|null} [uuid] CleanupSchemaMigrationRequest uuid
          * @property {vtrpc.CallerID.$Properties|null} [caller_id] CleanupSchemaMigrationRequest caller_id
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -178050,7 +178494,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a CleanupSchemaMigrationRequest.
          * @constructor
          * @param {vtctldata.CleanupSchemaMigrationRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const CleanupSchemaMigrationRequest = function (properties) {
             if (properties)
@@ -178346,7 +178790,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * Properties of a CleanupSchemaMigrationResponse.
          * @typedef {Object} vtctldata.CleanupSchemaMigrationResponse.$Properties
          * @property {Object.<string,number|Long>|null} [rows_affected_by_shard] CleanupSchemaMigrationResponse rows_affected_by_shard
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -178368,7 +178812,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a CleanupSchemaMigrationResponse.
          * @constructor
          * @param {vtctldata.CleanupSchemaMigrationResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const CleanupSchemaMigrationResponse = function (properties) {
             this.rows_affected_by_shard = {};
@@ -178662,7 +179106,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {string|null} [keyspace] CompleteSchemaMigrationRequest keyspace
          * @property {string|null} [uuid] CompleteSchemaMigrationRequest uuid
          * @property {vtrpc.CallerID.$Properties|null} [caller_id] CompleteSchemaMigrationRequest caller_id
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -178684,7 +179128,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a CompleteSchemaMigrationRequest.
          * @constructor
          * @param {vtctldata.CompleteSchemaMigrationRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const CompleteSchemaMigrationRequest = function (properties) {
             if (properties)
@@ -178980,7 +179424,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * Properties of a CompleteSchemaMigrationResponse.
          * @typedef {Object} vtctldata.CompleteSchemaMigrationResponse.$Properties
          * @property {Object.<string,number|Long>|null} [rows_affected_by_shard] CompleteSchemaMigrationResponse rows_affected_by_shard
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -179002,7 +179446,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a CompleteSchemaMigrationResponse.
          * @constructor
          * @param {vtctldata.CompleteSchemaMigrationResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const CompleteSchemaMigrationResponse = function (properties) {
             this.rows_affected_by_shard = {};
@@ -179301,7 +179745,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {vttime.Duration.$Properties|null} [wait_replicas_timeout] CopySchemaShardRequest wait_replicas_timeout
          * @property {string|null} [destination_keyspace] CopySchemaShardRequest destination_keyspace
          * @property {string|null} [destination_shard] CopySchemaShardRequest destination_shard
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -179323,7 +179767,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a CopySchemaShardRequest.
          * @constructor
          * @param {vtctldata.CopySchemaShardRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const CopySchemaShardRequest = function (properties) {
             this.tables = [];
@@ -179785,7 +180229,7 @@ export const vtctldata = $root.vtctldata = (() => {
         /**
          * Properties of a CopySchemaShardResponse.
          * @typedef {Object} vtctldata.CopySchemaShardResponse.$Properties
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -179807,7 +180251,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a CopySchemaShardResponse.
          * @constructor
          * @param {vtctldata.CopySchemaShardResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const CopySchemaShardResponse = function (properties) {
             if (properties)
@@ -180012,7 +180456,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {vttime.Time.$Properties|null} [snapshot_time] CreateKeyspaceRequest snapshot_time
          * @property {string|null} [durability_policy] CreateKeyspaceRequest durability_policy
          * @property {string|null} [sidecar_db_name] CreateKeyspaceRequest sidecar_db_name
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -180034,7 +180478,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a CreateKeyspaceRequest.
          * @constructor
          * @param {vtctldata.CreateKeyspaceRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const CreateKeyspaceRequest = function (properties) {
             if (properties)
@@ -180489,7 +180933,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * Properties of a CreateKeyspaceResponse.
          * @typedef {Object} vtctldata.CreateKeyspaceResponse.$Properties
          * @property {vtctldata.Keyspace.$Properties|null} [keyspace] CreateKeyspaceResponse keyspace
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -180511,7 +180955,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a CreateKeyspaceResponse.
          * @constructor
          * @param {vtctldata.CreateKeyspaceResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const CreateKeyspaceResponse = function (properties) {
             if (properties)
@@ -180753,7 +181197,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {string|null} [shard_name] CreateShardRequest shard_name
          * @property {boolean|null} [force] CreateShardRequest force
          * @property {boolean|null} [include_parent] CreateShardRequest include_parent
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -180775,7 +181219,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a CreateShardRequest.
          * @constructor
          * @param {vtctldata.CreateShardRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const CreateShardRequest = function (properties) {
             if (properties)
@@ -181100,7 +181544,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {vtctldata.Keyspace.$Properties|null} [keyspace] CreateShardResponse keyspace
          * @property {vtctldata.Shard.$Properties|null} [shard] CreateShardResponse shard
          * @property {boolean|null} [shard_already_exists] CreateShardResponse shard_already_exists
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -181122,7 +181566,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a CreateShardResponse.
          * @constructor
          * @param {vtctldata.CreateShardResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const CreateShardResponse = function (properties) {
             if (properties)
@@ -181420,7 +181864,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @typedef {Object} vtctldata.DeleteCellInfoRequest.$Properties
          * @property {string|null} [name] DeleteCellInfoRequest name
          * @property {boolean|null} [force] DeleteCellInfoRequest force
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -181442,7 +181886,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a DeleteCellInfoRequest.
          * @constructor
          * @param {vtctldata.DeleteCellInfoRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const DeleteCellInfoRequest = function (properties) {
             if (properties)
@@ -181708,7 +182152,7 @@ export const vtctldata = $root.vtctldata = (() => {
         /**
          * Properties of a DeleteCellInfoResponse.
          * @typedef {Object} vtctldata.DeleteCellInfoResponse.$Properties
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -181730,7 +182174,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a DeleteCellInfoResponse.
          * @constructor
          * @param {vtctldata.DeleteCellInfoResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const DeleteCellInfoResponse = function (properties) {
             if (properties)
@@ -181928,7 +182372,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * Properties of a DeleteCellsAliasRequest.
          * @typedef {Object} vtctldata.DeleteCellsAliasRequest.$Properties
          * @property {string|null} [name] DeleteCellsAliasRequest name
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -181950,7 +182394,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a DeleteCellsAliasRequest.
          * @constructor
          * @param {vtctldata.DeleteCellsAliasRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const DeleteCellsAliasRequest = function (properties) {
             if (properties)
@@ -182187,7 +182631,7 @@ export const vtctldata = $root.vtctldata = (() => {
         /**
          * Properties of a DeleteCellsAliasResponse.
          * @typedef {Object} vtctldata.DeleteCellsAliasResponse.$Properties
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -182209,7 +182653,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a DeleteCellsAliasResponse.
          * @constructor
          * @param {vtctldata.DeleteCellsAliasResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const DeleteCellsAliasResponse = function (properties) {
             if (properties)
@@ -182409,7 +182853,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {string|null} [keyspace] DeleteKeyspaceRequest keyspace
          * @property {boolean|null} [recursive] DeleteKeyspaceRequest recursive
          * @property {boolean|null} [force] DeleteKeyspaceRequest force
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -182431,7 +182875,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a DeleteKeyspaceRequest.
          * @constructor
          * @param {vtctldata.DeleteKeyspaceRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const DeleteKeyspaceRequest = function (properties) {
             if (properties)
@@ -182725,7 +183169,7 @@ export const vtctldata = $root.vtctldata = (() => {
         /**
          * Properties of a DeleteKeyspaceResponse.
          * @typedef {Object} vtctldata.DeleteKeyspaceResponse.$Properties
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -182747,7 +183191,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a DeleteKeyspaceResponse.
          * @constructor
          * @param {vtctldata.DeleteKeyspaceResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const DeleteKeyspaceResponse = function (properties) {
             if (properties)
@@ -182948,7 +183392,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {boolean|null} [recursive] DeleteShardsRequest recursive
          * @property {boolean|null} [even_if_serving] DeleteShardsRequest even_if_serving
          * @property {boolean|null} [force] DeleteShardsRequest force
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -182970,7 +183414,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a DeleteShardsRequest.
          * @constructor
          * @param {vtctldata.DeleteShardsRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const DeleteShardsRequest = function (properties) {
             this.shards = [];
@@ -183310,7 +183754,7 @@ export const vtctldata = $root.vtctldata = (() => {
         /**
          * Properties of a DeleteShardsResponse.
          * @typedef {Object} vtctldata.DeleteShardsResponse.$Properties
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -183332,7 +183776,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a DeleteShardsResponse.
          * @constructor
          * @param {vtctldata.DeleteShardsResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const DeleteShardsResponse = function (properties) {
             if (properties)
@@ -183530,7 +183974,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * Properties of a DeleteSrvVSchemaRequest.
          * @typedef {Object} vtctldata.DeleteSrvVSchemaRequest.$Properties
          * @property {string|null} [cell] DeleteSrvVSchemaRequest cell
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -183552,7 +183996,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a DeleteSrvVSchemaRequest.
          * @constructor
          * @param {vtctldata.DeleteSrvVSchemaRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const DeleteSrvVSchemaRequest = function (properties) {
             if (properties)
@@ -183789,7 +184233,7 @@ export const vtctldata = $root.vtctldata = (() => {
         /**
          * Properties of a DeleteSrvVSchemaResponse.
          * @typedef {Object} vtctldata.DeleteSrvVSchemaResponse.$Properties
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -183811,7 +184255,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a DeleteSrvVSchemaResponse.
          * @constructor
          * @param {vtctldata.DeleteSrvVSchemaResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const DeleteSrvVSchemaResponse = function (properties) {
             if (properties)
@@ -184010,7 +184454,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @typedef {Object} vtctldata.DeleteTabletsRequest.$Properties
          * @property {Array.<topodata.TabletAlias.$Properties>|null} [tablet_aliases] DeleteTabletsRequest tablet_aliases
          * @property {boolean|null} [allow_primary] DeleteTabletsRequest allow_primary
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -184032,7 +184476,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a DeleteTabletsRequest.
          * @constructor
          * @param {vtctldata.DeleteTabletsRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const DeleteTabletsRequest = function (properties) {
             this.tablet_aliases = [];
@@ -184315,7 +184759,7 @@ export const vtctldata = $root.vtctldata = (() => {
         /**
          * Properties of a DeleteTabletsResponse.
          * @typedef {Object} vtctldata.DeleteTabletsResponse.$Properties
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -184337,7 +184781,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a DeleteTabletsResponse.
          * @constructor
          * @param {vtctldata.DeleteTabletsResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const DeleteTabletsResponse = function (properties) {
             if (properties)
@@ -184542,7 +184986,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {boolean|null} [prevent_cross_cell_promotion] EmergencyReparentShardRequest prevent_cross_cell_promotion
          * @property {boolean|null} [wait_for_all_tablets] EmergencyReparentShardRequest wait_for_all_tablets
          * @property {topodata.TabletAlias.$Properties|null} [expected_primary] EmergencyReparentShardRequest expected_primary
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -184564,7 +185008,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents an EmergencyReparentShardRequest.
          * @constructor
          * @param {vtctldata.EmergencyReparentShardRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const EmergencyReparentShardRequest = function (properties) {
             this.ignore_replicas = [];
@@ -185023,7 +185467,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {string|null} [shard] EmergencyReparentShardResponse shard
          * @property {topodata.TabletAlias.$Properties|null} [promoted_primary] EmergencyReparentShardResponse promoted_primary
          * @property {Array.<logutil.Event.$Properties>|null} [events] EmergencyReparentShardResponse events
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -185045,7 +185489,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents an EmergencyReparentShardResponse.
          * @constructor
          * @param {vtctldata.EmergencyReparentShardResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const EmergencyReparentShardResponse = function (properties) {
             this.events = [];
@@ -185390,7 +185834,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {string|null} [query] ExecuteFetchAsAppRequest query
          * @property {number|Long|null} [max_rows] ExecuteFetchAsAppRequest max_rows
          * @property {boolean|null} [use_pool] ExecuteFetchAsAppRequest use_pool
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -185412,7 +185856,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents an ExecuteFetchAsAppRequest.
          * @constructor
          * @param {vtctldata.ExecuteFetchAsAppRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ExecuteFetchAsAppRequest = function (properties) {
             if (properties)
@@ -185752,7 +186196,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * Properties of an ExecuteFetchAsAppResponse.
          * @typedef {Object} vtctldata.ExecuteFetchAsAppResponse.$Properties
          * @property {query.QueryResult.$Properties|null} [result] ExecuteFetchAsAppResponse result
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -185774,7 +186218,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents an ExecuteFetchAsAppResponse.
          * @constructor
          * @param {vtctldata.ExecuteFetchAsAppResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ExecuteFetchAsAppResponse = function (properties) {
             if (properties)
@@ -186017,7 +186461,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {number|Long|null} [max_rows] ExecuteFetchAsDBARequest max_rows
          * @property {boolean|null} [disable_binlogs] ExecuteFetchAsDBARequest disable_binlogs
          * @property {boolean|null} [reload_schema] ExecuteFetchAsDBARequest reload_schema
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -186039,7 +186483,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents an ExecuteFetchAsDBARequest.
          * @constructor
          * @param {vtctldata.ExecuteFetchAsDBARequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ExecuteFetchAsDBARequest = function (properties) {
             if (properties)
@@ -186407,7 +186851,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * Properties of an ExecuteFetchAsDBAResponse.
          * @typedef {Object} vtctldata.ExecuteFetchAsDBAResponse.$Properties
          * @property {query.QueryResult.$Properties|null} [result] ExecuteFetchAsDBAResponse result
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -186429,7 +186873,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents an ExecuteFetchAsDBAResponse.
          * @constructor
          * @param {vtctldata.ExecuteFetchAsDBAResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ExecuteFetchAsDBAResponse = function (properties) {
             if (properties)
@@ -186669,7 +187113,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @typedef {Object} vtctldata.ExecuteHookRequest.$Properties
          * @property {topodata.TabletAlias.$Properties|null} [tablet_alias] ExecuteHookRequest tablet_alias
          * @property {tabletmanagerdata.ExecuteHookRequest.$Properties|null} [tablet_hook_request] ExecuteHookRequest tablet_hook_request
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -186691,7 +187135,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents an ExecuteHookRequest.
          * @constructor
          * @param {vtctldata.ExecuteHookRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ExecuteHookRequest = function (properties) {
             if (properties)
@@ -186960,7 +187404,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * Properties of an ExecuteHookResponse.
          * @typedef {Object} vtctldata.ExecuteHookResponse.$Properties
          * @property {tabletmanagerdata.ExecuteHookResponse.$Properties|null} [hook_result] ExecuteHookResponse hook_result
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -186982,7 +187426,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents an ExecuteHookResponse.
          * @constructor
          * @param {vtctldata.ExecuteHookResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ExecuteHookResponse = function (properties) {
             if (properties)
@@ -187225,7 +187669,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {number|Long|null} [max_rows] ExecuteMultiFetchAsDBARequest max_rows
          * @property {boolean|null} [disable_binlogs] ExecuteMultiFetchAsDBARequest disable_binlogs
          * @property {boolean|null} [reload_schema] ExecuteMultiFetchAsDBARequest reload_schema
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -187247,7 +187691,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents an ExecuteMultiFetchAsDBARequest.
          * @constructor
          * @param {vtctldata.ExecuteMultiFetchAsDBARequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ExecuteMultiFetchAsDBARequest = function (properties) {
             if (properties)
@@ -187615,7 +188059,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * Properties of an ExecuteMultiFetchAsDBAResponse.
          * @typedef {Object} vtctldata.ExecuteMultiFetchAsDBAResponse.$Properties
          * @property {Array.<query.QueryResult.$Properties>|null} [results] ExecuteMultiFetchAsDBAResponse results
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -187637,7 +188081,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents an ExecuteMultiFetchAsDBAResponse.
          * @constructor
          * @param {vtctldata.ExecuteMultiFetchAsDBAResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ExecuteMultiFetchAsDBAResponse = function (properties) {
             this.results = [];
@@ -187892,7 +188336,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * Properties of a FindAllShardsInKeyspaceRequest.
          * @typedef {Object} vtctldata.FindAllShardsInKeyspaceRequest.$Properties
          * @property {string|null} [keyspace] FindAllShardsInKeyspaceRequest keyspace
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -187914,7 +188358,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a FindAllShardsInKeyspaceRequest.
          * @constructor
          * @param {vtctldata.FindAllShardsInKeyspaceRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const FindAllShardsInKeyspaceRequest = function (properties) {
             if (properties)
@@ -188152,7 +188596,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * Properties of a FindAllShardsInKeyspaceResponse.
          * @typedef {Object} vtctldata.FindAllShardsInKeyspaceResponse.$Properties
          * @property {Object.<string,vtctldata.Shard.$Properties>|null} [shards] FindAllShardsInKeyspaceResponse shards
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -188174,7 +188618,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a FindAllShardsInKeyspaceResponse.
          * @constructor
          * @param {vtctldata.FindAllShardsInKeyspaceResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const FindAllShardsInKeyspaceResponse = function (properties) {
             this.shards = {};
@@ -188462,7 +188906,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {string|null} [keyspace] ForceCutOverSchemaMigrationRequest keyspace
          * @property {string|null} [uuid] ForceCutOverSchemaMigrationRequest uuid
          * @property {vtrpc.CallerID.$Properties|null} [caller_id] ForceCutOverSchemaMigrationRequest caller_id
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -188484,7 +188928,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a ForceCutOverSchemaMigrationRequest.
          * @constructor
          * @param {vtctldata.ForceCutOverSchemaMigrationRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ForceCutOverSchemaMigrationRequest = function (properties) {
             if (properties)
@@ -188780,7 +189224,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * Properties of a ForceCutOverSchemaMigrationResponse.
          * @typedef {Object} vtctldata.ForceCutOverSchemaMigrationResponse.$Properties
          * @property {Object.<string,number|Long>|null} [rows_affected_by_shard] ForceCutOverSchemaMigrationResponse rows_affected_by_shard
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -188802,7 +189246,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a ForceCutOverSchemaMigrationResponse.
          * @constructor
          * @param {vtctldata.ForceCutOverSchemaMigrationResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ForceCutOverSchemaMigrationResponse = function (properties) {
             this.rows_affected_by_shard = {};
@@ -189098,7 +189542,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {number|null} [limit] GetBackupsRequest limit
          * @property {boolean|null} [detailed] GetBackupsRequest detailed
          * @property {number|null} [detailed_limit] GetBackupsRequest detailed_limit
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -189120,7 +189564,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a GetBackupsRequest.
          * @constructor
          * @param {vtctldata.GetBackupsRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetBackupsRequest = function (properties) {
             if (properties)
@@ -189471,7 +189915,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * Properties of a GetBackupsResponse.
          * @typedef {Object} vtctldata.GetBackupsResponse.$Properties
          * @property {Array.<mysqlctl.BackupInfo.$Properties>|null} [backups] GetBackupsResponse backups
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -189493,7 +189937,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a GetBackupsResponse.
          * @constructor
          * @param {vtctldata.GetBackupsResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetBackupsResponse = function (properties) {
             this.backups = [];
@@ -189748,7 +190192,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * Properties of a GetCellInfoRequest.
          * @typedef {Object} vtctldata.GetCellInfoRequest.$Properties
          * @property {string|null} [cell] GetCellInfoRequest cell
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -189770,7 +190214,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a GetCellInfoRequest.
          * @constructor
          * @param {vtctldata.GetCellInfoRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetCellInfoRequest = function (properties) {
             if (properties)
@@ -190008,7 +190452,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * Properties of a GetCellInfoResponse.
          * @typedef {Object} vtctldata.GetCellInfoResponse.$Properties
          * @property {topodata.CellInfo.$Properties|null} [cell_info] GetCellInfoResponse cell_info
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -190030,7 +190474,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a GetCellInfoResponse.
          * @constructor
          * @param {vtctldata.GetCellInfoResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetCellInfoResponse = function (properties) {
             if (properties)
@@ -190268,7 +190712,7 @@ export const vtctldata = $root.vtctldata = (() => {
         /**
          * Properties of a GetCellInfoNamesRequest.
          * @typedef {Object} vtctldata.GetCellInfoNamesRequest.$Properties
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -190290,7 +190734,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a GetCellInfoNamesRequest.
          * @constructor
          * @param {vtctldata.GetCellInfoNamesRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetCellInfoNamesRequest = function (properties) {
             if (properties)
@@ -190488,7 +190932,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * Properties of a GetCellInfoNamesResponse.
          * @typedef {Object} vtctldata.GetCellInfoNamesResponse.$Properties
          * @property {Array.<string>|null} [names] GetCellInfoNamesResponse names
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -190510,7 +190954,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a GetCellInfoNamesResponse.
          * @constructor
          * @param {vtctldata.GetCellInfoNamesResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetCellInfoNamesResponse = function (properties) {
             this.names = [];
@@ -190759,7 +191203,7 @@ export const vtctldata = $root.vtctldata = (() => {
         /**
          * Properties of a GetCellsAliasesRequest.
          * @typedef {Object} vtctldata.GetCellsAliasesRequest.$Properties
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -190781,7 +191225,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a GetCellsAliasesRequest.
          * @constructor
          * @param {vtctldata.GetCellsAliasesRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetCellsAliasesRequest = function (properties) {
             if (properties)
@@ -190979,7 +191423,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * Properties of a GetCellsAliasesResponse.
          * @typedef {Object} vtctldata.GetCellsAliasesResponse.$Properties
          * @property {Object.<string,topodata.CellsAlias.$Properties>|null} [aliases] GetCellsAliasesResponse aliases
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -191001,7 +191445,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a GetCellsAliasesResponse.
          * @constructor
          * @param {vtctldata.GetCellsAliasesResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetCellsAliasesResponse = function (properties) {
             this.aliases = {};
@@ -191287,7 +191731,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * Properties of a GetFullStatusRequest.
          * @typedef {Object} vtctldata.GetFullStatusRequest.$Properties
          * @property {topodata.TabletAlias.$Properties|null} [tablet_alias] GetFullStatusRequest tablet_alias
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -191309,7 +191753,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a GetFullStatusRequest.
          * @constructor
          * @param {vtctldata.GetFullStatusRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetFullStatusRequest = function (properties) {
             if (properties)
@@ -191548,7 +191992,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * Properties of a GetFullStatusResponse.
          * @typedef {Object} vtctldata.GetFullStatusResponse.$Properties
          * @property {replicationdata.FullStatus.$Properties|null} [status] GetFullStatusResponse status
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -191570,7 +192014,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a GetFullStatusResponse.
          * @constructor
          * @param {vtctldata.GetFullStatusResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetFullStatusResponse = function (properties) {
             if (properties)
@@ -191808,7 +192252,7 @@ export const vtctldata = $root.vtctldata = (() => {
         /**
          * Properties of a GetKeyspacesRequest.
          * @typedef {Object} vtctldata.GetKeyspacesRequest.$Properties
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -191830,7 +192274,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a GetKeyspacesRequest.
          * @constructor
          * @param {vtctldata.GetKeyspacesRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetKeyspacesRequest = function (properties) {
             if (properties)
@@ -192028,7 +192472,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * Properties of a GetKeyspacesResponse.
          * @typedef {Object} vtctldata.GetKeyspacesResponse.$Properties
          * @property {Array.<vtctldata.Keyspace.$Properties>|null} [keyspaces] GetKeyspacesResponse keyspaces
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -192050,7 +192494,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a GetKeyspacesResponse.
          * @constructor
          * @param {vtctldata.GetKeyspacesResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetKeyspacesResponse = function (properties) {
             this.keyspaces = [];
@@ -192305,7 +192749,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * Properties of a GetKeyspaceRequest.
          * @typedef {Object} vtctldata.GetKeyspaceRequest.$Properties
          * @property {string|null} [keyspace] GetKeyspaceRequest keyspace
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -192327,7 +192771,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a GetKeyspaceRequest.
          * @constructor
          * @param {vtctldata.GetKeyspaceRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetKeyspaceRequest = function (properties) {
             if (properties)
@@ -192565,7 +193009,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * Properties of a GetKeyspaceResponse.
          * @typedef {Object} vtctldata.GetKeyspaceResponse.$Properties
          * @property {vtctldata.Keyspace.$Properties|null} [keyspace] GetKeyspaceResponse keyspace
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -192587,7 +193031,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a GetKeyspaceResponse.
          * @constructor
          * @param {vtctldata.GetKeyspaceResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetKeyspaceResponse = function (properties) {
             if (properties)
@@ -192826,7 +193270,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * Properties of a GetPermissionsRequest.
          * @typedef {Object} vtctldata.GetPermissionsRequest.$Properties
          * @property {topodata.TabletAlias.$Properties|null} [tablet_alias] GetPermissionsRequest tablet_alias
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -192848,7 +193292,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a GetPermissionsRequest.
          * @constructor
          * @param {vtctldata.GetPermissionsRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetPermissionsRequest = function (properties) {
             if (properties)
@@ -193087,7 +193531,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * Properties of a GetPermissionsResponse.
          * @typedef {Object} vtctldata.GetPermissionsResponse.$Properties
          * @property {tabletmanagerdata.Permissions.$Properties|null} [permissions] GetPermissionsResponse permissions
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -193109,7 +193553,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a GetPermissionsResponse.
          * @constructor
          * @param {vtctldata.GetPermissionsResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetPermissionsResponse = function (properties) {
             if (properties)
@@ -193347,7 +193791,7 @@ export const vtctldata = $root.vtctldata = (() => {
         /**
          * Properties of a GetKeyspaceRoutingRulesRequest.
          * @typedef {Object} vtctldata.GetKeyspaceRoutingRulesRequest.$Properties
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -193369,7 +193813,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a GetKeyspaceRoutingRulesRequest.
          * @constructor
          * @param {vtctldata.GetKeyspaceRoutingRulesRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetKeyspaceRoutingRulesRequest = function (properties) {
             if (properties)
@@ -193567,7 +194011,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * Properties of a GetKeyspaceRoutingRulesResponse.
          * @typedef {Object} vtctldata.GetKeyspaceRoutingRulesResponse.$Properties
          * @property {vschema.KeyspaceRoutingRules.$Properties|null} [keyspace_routing_rules] GetKeyspaceRoutingRulesResponse keyspace_routing_rules
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -193589,7 +194033,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a GetKeyspaceRoutingRulesResponse.
          * @constructor
          * @param {vtctldata.GetKeyspaceRoutingRulesResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetKeyspaceRoutingRulesResponse = function (properties) {
             if (properties)
@@ -193827,7 +194271,7 @@ export const vtctldata = $root.vtctldata = (() => {
         /**
          * Properties of a GetRoutingRulesRequest.
          * @typedef {Object} vtctldata.GetRoutingRulesRequest.$Properties
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -193849,7 +194293,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a GetRoutingRulesRequest.
          * @constructor
          * @param {vtctldata.GetRoutingRulesRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetRoutingRulesRequest = function (properties) {
             if (properties)
@@ -194047,7 +194491,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * Properties of a GetRoutingRulesResponse.
          * @typedef {Object} vtctldata.GetRoutingRulesResponse.$Properties
          * @property {vschema.RoutingRules.$Properties|null} [routing_rules] GetRoutingRulesResponse routing_rules
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -194069,7 +194513,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a GetRoutingRulesResponse.
          * @constructor
          * @param {vtctldata.GetRoutingRulesResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetRoutingRulesResponse = function (properties) {
             if (properties)
@@ -194314,7 +194758,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {boolean|null} [table_names_only] GetSchemaRequest table_names_only
          * @property {boolean|null} [table_sizes_only] GetSchemaRequest table_sizes_only
          * @property {boolean|null} [table_schema_only] GetSchemaRequest table_schema_only
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -194336,7 +194780,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a GetSchemaRequest.
          * @constructor
          * @param {vtctldata.GetSchemaRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetSchemaRequest = function (properties) {
             this.tables = [];
@@ -194770,7 +195214,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * Properties of a GetSchemaResponse.
          * @typedef {Object} vtctldata.GetSchemaResponse.$Properties
          * @property {tabletmanagerdata.SchemaDefinition.$Properties|null} [schema] GetSchemaResponse schema
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -194792,7 +195236,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a GetSchemaResponse.
          * @constructor
          * @param {vtctldata.GetSchemaResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetSchemaResponse = function (properties) {
             if (properties)
@@ -195038,7 +195482,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {vtctldata.QueryOrdering|null} [order] GetSchemaMigrationsRequest order
          * @property {number|Long|null} [limit] GetSchemaMigrationsRequest limit
          * @property {number|Long|null} [skip] GetSchemaMigrationsRequest skip
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -195060,7 +195504,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a GetSchemaMigrationsRequest.
          * @constructor
          * @param {vtctldata.GetSchemaMigrationsRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetSchemaMigrationsRequest = function (properties) {
             if (properties)
@@ -195601,7 +196045,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * Properties of a GetSchemaMigrationsResponse.
          * @typedef {Object} vtctldata.GetSchemaMigrationsResponse.$Properties
          * @property {Array.<vtctldata.SchemaMigration.$Properties>|null} [migrations] GetSchemaMigrationsResponse migrations
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -195623,7 +196067,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a GetSchemaMigrationsResponse.
          * @constructor
          * @param {vtctldata.GetSchemaMigrationsResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetSchemaMigrationsResponse = function (properties) {
             this.migrations = [];
@@ -195880,7 +196324,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {string|null} [keyspace] GetShardReplicationRequest keyspace
          * @property {string|null} [shard] GetShardReplicationRequest shard
          * @property {Array.<string>|null} [cells] GetShardReplicationRequest cells
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -195902,7 +196346,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a GetShardReplicationRequest.
          * @constructor
          * @param {vtctldata.GetShardReplicationRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetShardReplicationRequest = function (properties) {
             this.cells = [];
@@ -196210,7 +196654,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * Properties of a GetShardReplicationResponse.
          * @typedef {Object} vtctldata.GetShardReplicationResponse.$Properties
          * @property {Object.<string,topodata.ShardReplication.$Properties>|null} [shard_replication_by_cell] GetShardReplicationResponse shard_replication_by_cell
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -196232,7 +196676,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a GetShardReplicationResponse.
          * @constructor
          * @param {vtctldata.GetShardReplicationResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetShardReplicationResponse = function (properties) {
             this.shard_replication_by_cell = {};
@@ -196519,7 +196963,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @typedef {Object} vtctldata.GetShardRequest.$Properties
          * @property {string|null} [keyspace] GetShardRequest keyspace
          * @property {string|null} [shard_name] GetShardRequest shard_name
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -196541,7 +196985,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a GetShardRequest.
          * @constructor
          * @param {vtctldata.GetShardRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetShardRequest = function (properties) {
             if (properties)
@@ -196808,7 +197252,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * Properties of a GetShardResponse.
          * @typedef {Object} vtctldata.GetShardResponse.$Properties
          * @property {vtctldata.Shard.$Properties|null} [shard] GetShardResponse shard
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -196830,7 +197274,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a GetShardResponse.
          * @constructor
          * @param {vtctldata.GetShardResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetShardResponse = function (properties) {
             if (properties)
@@ -197068,7 +197512,7 @@ export const vtctldata = $root.vtctldata = (() => {
         /**
          * Properties of a GetShardRoutingRulesRequest.
          * @typedef {Object} vtctldata.GetShardRoutingRulesRequest.$Properties
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -197090,7 +197534,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a GetShardRoutingRulesRequest.
          * @constructor
          * @param {vtctldata.GetShardRoutingRulesRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetShardRoutingRulesRequest = function (properties) {
             if (properties)
@@ -197288,7 +197732,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * Properties of a GetShardRoutingRulesResponse.
          * @typedef {Object} vtctldata.GetShardRoutingRulesResponse.$Properties
          * @property {vschema.ShardRoutingRules.$Properties|null} [shard_routing_rules] GetShardRoutingRulesResponse shard_routing_rules
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -197310,7 +197754,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a GetShardRoutingRulesResponse.
          * @constructor
          * @param {vtctldata.GetShardRoutingRulesResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetShardRoutingRulesResponse = function (properties) {
             if (properties)
@@ -197549,7 +197993,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * Properties of a GetSrvKeyspaceNamesRequest.
          * @typedef {Object} vtctldata.GetSrvKeyspaceNamesRequest.$Properties
          * @property {Array.<string>|null} [cells] GetSrvKeyspaceNamesRequest cells
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -197571,7 +198015,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a GetSrvKeyspaceNamesRequest.
          * @constructor
          * @param {vtctldata.GetSrvKeyspaceNamesRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetSrvKeyspaceNamesRequest = function (properties) {
             this.cells = [];
@@ -197821,7 +198265,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * Properties of a GetSrvKeyspaceNamesResponse.
          * @typedef {Object} vtctldata.GetSrvKeyspaceNamesResponse.$Properties
          * @property {Object.<string,vtctldata.GetSrvKeyspaceNamesResponse.NameList.$Properties>|null} [names] GetSrvKeyspaceNamesResponse names
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -197843,7 +198287,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a GetSrvKeyspaceNamesResponse.
          * @constructor
          * @param {vtctldata.GetSrvKeyspaceNamesResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetSrvKeyspaceNamesResponse = function (properties) {
             this.names = {};
@@ -198126,7 +198570,7 @@ export const vtctldata = $root.vtctldata = (() => {
              * Properties of a NameList.
              * @typedef {Object} vtctldata.GetSrvKeyspaceNamesResponse.NameList.$Properties
              * @property {Array.<string>|null} [names] NameList names
-             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
              */
 
             /**
@@ -198148,7 +198592,7 @@ export const vtctldata = $root.vtctldata = (() => {
              * @classdesc Represents a NameList.
              * @constructor
              * @param {vtctldata.GetSrvKeyspaceNamesResponse.NameList.$Properties=} [properties] Properties to set
-             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
              */
             const NameList = function (properties) {
                 this.names = [];
@@ -198402,7 +198846,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @typedef {Object} vtctldata.GetSrvKeyspacesRequest.$Properties
          * @property {string|null} [keyspace] GetSrvKeyspacesRequest keyspace
          * @property {Array.<string>|null} [cells] GetSrvKeyspacesRequest cells
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -198424,7 +198868,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a GetSrvKeyspacesRequest.
          * @constructor
          * @param {vtctldata.GetSrvKeyspacesRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetSrvKeyspacesRequest = function (properties) {
             this.cells = [];
@@ -198703,7 +199147,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * Properties of a GetSrvKeyspacesResponse.
          * @typedef {Object} vtctldata.GetSrvKeyspacesResponse.$Properties
          * @property {Object.<string,topodata.SrvKeyspace.$Properties>|null} [srv_keyspaces] GetSrvKeyspacesResponse srv_keyspaces
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -198725,7 +199169,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a GetSrvKeyspacesResponse.
          * @constructor
          * @param {vtctldata.GetSrvKeyspacesResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetSrvKeyspacesResponse = function (properties) {
             this.srv_keyspaces = {};
@@ -199022,7 +199466,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {string|null} [metric_name] UpdateThrottlerConfigRequest metric_name
          * @property {string|null} [app_name] UpdateThrottlerConfigRequest app_name
          * @property {Array.<string>|null} [app_checked_metrics] UpdateThrottlerConfigRequest app_checked_metrics
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -199044,7 +199488,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents an UpdateThrottlerConfigRequest.
          * @constructor
          * @param {vtctldata.UpdateThrottlerConfigRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const UpdateThrottlerConfigRequest = function (properties) {
             this.app_checked_metrics = [];
@@ -199604,7 +200048,7 @@ export const vtctldata = $root.vtctldata = (() => {
         /**
          * Properties of an UpdateThrottlerConfigResponse.
          * @typedef {Object} vtctldata.UpdateThrottlerConfigResponse.$Properties
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -199626,7 +200070,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents an UpdateThrottlerConfigResponse.
          * @constructor
          * @param {vtctldata.UpdateThrottlerConfigResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const UpdateThrottlerConfigResponse = function (properties) {
             if (properties)
@@ -199824,7 +200268,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * Properties of a GetSrvVSchemaRequest.
          * @typedef {Object} vtctldata.GetSrvVSchemaRequest.$Properties
          * @property {string|null} [cell] GetSrvVSchemaRequest cell
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -199846,7 +200290,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a GetSrvVSchemaRequest.
          * @constructor
          * @param {vtctldata.GetSrvVSchemaRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetSrvVSchemaRequest = function (properties) {
             if (properties)
@@ -200084,7 +200528,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * Properties of a GetSrvVSchemaResponse.
          * @typedef {Object} vtctldata.GetSrvVSchemaResponse.$Properties
          * @property {vschema.SrvVSchema.$Properties|null} [srv_v_schema] GetSrvVSchemaResponse srv_v_schema
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -200106,7 +200550,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a GetSrvVSchemaResponse.
          * @constructor
          * @param {vtctldata.GetSrvVSchemaResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetSrvVSchemaResponse = function (properties) {
             if (properties)
@@ -200345,7 +200789,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * Properties of a GetSrvVSchemasRequest.
          * @typedef {Object} vtctldata.GetSrvVSchemasRequest.$Properties
          * @property {Array.<string>|null} [cells] GetSrvVSchemasRequest cells
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -200367,7 +200811,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a GetSrvVSchemasRequest.
          * @constructor
          * @param {vtctldata.GetSrvVSchemasRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetSrvVSchemasRequest = function (properties) {
             this.cells = [];
@@ -200617,7 +201061,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * Properties of a GetSrvVSchemasResponse.
          * @typedef {Object} vtctldata.GetSrvVSchemasResponse.$Properties
          * @property {Object.<string,vschema.SrvVSchema.$Properties>|null} [srv_v_schemas] GetSrvVSchemasResponse srv_v_schemas
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -200639,7 +201083,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a GetSrvVSchemasResponse.
          * @constructor
          * @param {vtctldata.GetSrvVSchemasResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetSrvVSchemasResponse = function (properties) {
             this.srv_v_schemas = {};
@@ -200925,7 +201369,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * Properties of a GetTabletRequest.
          * @typedef {Object} vtctldata.GetTabletRequest.$Properties
          * @property {topodata.TabletAlias.$Properties|null} [tablet_alias] GetTabletRequest tablet_alias
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -200947,7 +201391,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a GetTabletRequest.
          * @constructor
          * @param {vtctldata.GetTabletRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetTabletRequest = function (properties) {
             if (properties)
@@ -201186,7 +201630,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * Properties of a GetTabletResponse.
          * @typedef {Object} vtctldata.GetTabletResponse.$Properties
          * @property {topodata.Tablet.$Properties|null} [tablet] GetTabletResponse tablet
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -201208,7 +201652,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a GetTabletResponse.
          * @constructor
          * @param {vtctldata.GetTabletResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetTabletResponse = function (properties) {
             if (properties)
@@ -201452,7 +201896,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {boolean|null} [strict] GetTabletsRequest strict
          * @property {Array.<topodata.TabletAlias.$Properties>|null} [tablet_aliases] GetTabletsRequest tablet_aliases
          * @property {topodata.TabletType|null} [tablet_type] GetTabletsRequest tablet_type
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -201474,7 +201918,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a GetTabletsRequest.
          * @constructor
          * @param {vtctldata.GetTabletsRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetTabletsRequest = function (properties) {
             this.cells = [];
@@ -201948,7 +202392,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * Properties of a GetTabletsResponse.
          * @typedef {Object} vtctldata.GetTabletsResponse.$Properties
          * @property {Array.<topodata.Tablet.$Properties>|null} [tablets] GetTabletsResponse tablets
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -201970,7 +202414,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a GetTabletsResponse.
          * @constructor
          * @param {vtctldata.GetTabletsResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetTabletsResponse = function (properties) {
             this.tablets = [];
@@ -202226,7 +202670,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @typedef {Object} vtctldata.GetThrottlerStatusRequest.$Properties
          * @property {topodata.TabletAlias.$Properties|null} [tablet_alias] GetThrottlerStatusRequest tablet_alias
          * @property {tabletmanagerdata.ThrottlerType|null} [throttler_type] GetThrottlerStatusRequest throttler_type
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -202248,7 +202692,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a GetThrottlerStatusRequest.
          * @constructor
          * @param {vtctldata.GetThrottlerStatusRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetThrottlerStatusRequest = function (properties) {
             if (properties)
@@ -202535,7 +202979,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * Properties of a GetThrottlerStatusResponse.
          * @typedef {Object} vtctldata.GetThrottlerStatusResponse.$Properties
          * @property {tabletmanagerdata.GetThrottlerStatusResponse.$Properties|null} [status] GetThrottlerStatusResponse status
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -202557,7 +203001,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a GetThrottlerStatusResponse.
          * @constructor
          * @param {vtctldata.GetThrottlerStatusResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetThrottlerStatusResponse = function (properties) {
             if (properties)
@@ -202798,7 +203242,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {string|null} [path] GetTopologyPathRequest path
          * @property {number|Long|null} [version] GetTopologyPathRequest version
          * @property {boolean|null} [as_json] GetTopologyPathRequest as_json
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -202820,7 +203264,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a GetTopologyPathRequest.
          * @constructor
          * @param {vtctldata.GetTopologyPathRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetTopologyPathRequest = function (properties) {
             if (properties)
@@ -203131,7 +203575,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * Properties of a GetTopologyPathResponse.
          * @typedef {Object} vtctldata.GetTopologyPathResponse.$Properties
          * @property {vtctldata.TopologyCell.$Properties|null} [cell] GetTopologyPathResponse cell
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -203153,7 +203597,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a GetTopologyPathResponse.
          * @constructor
          * @param {vtctldata.GetTopologyPathResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetTopologyPathResponse = function (properties) {
             if (properties)
@@ -203396,7 +203840,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {string|null} [data] TopologyCell data
          * @property {Array.<string>|null} [children] TopologyCell children
          * @property {number|Long|null} [version] TopologyCell version
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -203418,7 +203862,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a TopologyCell.
          * @constructor
          * @param {vtctldata.TopologyCell.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const TopologyCell = function (properties) {
             this.children = [];
@@ -203799,7 +204243,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @typedef {Object} vtctldata.GetUnresolvedTransactionsRequest.$Properties
          * @property {string|null} [keyspace] GetUnresolvedTransactionsRequest keyspace
          * @property {number|Long|null} [abandon_age] GetUnresolvedTransactionsRequest abandon_age
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -203821,7 +204265,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a GetUnresolvedTransactionsRequest.
          * @constructor
          * @param {vtctldata.GetUnresolvedTransactionsRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetUnresolvedTransactionsRequest = function (properties) {
             if (properties)
@@ -204104,7 +204548,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * Properties of a GetUnresolvedTransactionsResponse.
          * @typedef {Object} vtctldata.GetUnresolvedTransactionsResponse.$Properties
          * @property {Array.<query.TransactionMetadata.$Properties>|null} [transactions] GetUnresolvedTransactionsResponse transactions
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -204126,7 +204570,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a GetUnresolvedTransactionsResponse.
          * @constructor
          * @param {vtctldata.GetUnresolvedTransactionsResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetUnresolvedTransactionsResponse = function (properties) {
             this.transactions = [];
@@ -204381,7 +204825,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * Properties of a GetTransactionInfoRequest.
          * @typedef {Object} vtctldata.GetTransactionInfoRequest.$Properties
          * @property {string|null} [dtid] GetTransactionInfoRequest dtid
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -204403,7 +204847,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a GetTransactionInfoRequest.
          * @constructor
          * @param {vtctldata.GetTransactionInfoRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetTransactionInfoRequest = function (properties) {
             if (properties)
@@ -204645,7 +205089,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {string|null} [message] ShardTransactionState message
          * @property {number|Long|null} [time_created] ShardTransactionState time_created
          * @property {Array.<string>|null} [statements] ShardTransactionState statements
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -204667,7 +205111,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a ShardTransactionState.
          * @constructor
          * @param {vtctldata.ShardTransactionState.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ShardTransactionState = function (properties) {
             this.statements = [];
@@ -205048,7 +205492,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @typedef {Object} vtctldata.GetTransactionInfoResponse.$Properties
          * @property {query.TransactionMetadata.$Properties|null} [metadata] GetTransactionInfoResponse metadata
          * @property {Array.<vtctldata.ShardTransactionState.$Properties>|null} [shard_states] GetTransactionInfoResponse shard_states
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -205070,7 +205514,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a GetTransactionInfoResponse.
          * @constructor
          * @param {vtctldata.GetTransactionInfoResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetTransactionInfoResponse = function (properties) {
             this.shard_states = [];
@@ -205356,7 +205800,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @typedef {Object} vtctldata.ConcludeTransactionRequest.$Properties
          * @property {string|null} [dtid] ConcludeTransactionRequest dtid
          * @property {Array.<query.Target.$Properties>|null} [participants] ConcludeTransactionRequest participants
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -205378,7 +205822,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a ConcludeTransactionRequest.
          * @constructor
          * @param {vtctldata.ConcludeTransactionRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ConcludeTransactionRequest = function (properties) {
             this.participants = [];
@@ -205661,7 +206105,7 @@ export const vtctldata = $root.vtctldata = (() => {
         /**
          * Properties of a ConcludeTransactionResponse.
          * @typedef {Object} vtctldata.ConcludeTransactionResponse.$Properties
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -205683,7 +206127,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a ConcludeTransactionResponse.
          * @constructor
          * @param {vtctldata.ConcludeTransactionResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ConcludeTransactionResponse = function (properties) {
             if (properties)
@@ -205881,7 +206325,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * Properties of a GetVSchemaRequest.
          * @typedef {Object} vtctldata.GetVSchemaRequest.$Properties
          * @property {string|null} [keyspace] GetVSchemaRequest keyspace
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -205903,7 +206347,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a GetVSchemaRequest.
          * @constructor
          * @param {vtctldata.GetVSchemaRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetVSchemaRequest = function (properties) {
             if (properties)
@@ -206141,7 +206585,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * Properties of a GetVersionRequest.
          * @typedef {Object} vtctldata.GetVersionRequest.$Properties
          * @property {topodata.TabletAlias.$Properties|null} [tablet_alias] GetVersionRequest tablet_alias
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -206163,7 +206607,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a GetVersionRequest.
          * @constructor
          * @param {vtctldata.GetVersionRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetVersionRequest = function (properties) {
             if (properties)
@@ -206402,7 +206846,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * Properties of a GetVersionResponse.
          * @typedef {Object} vtctldata.GetVersionResponse.$Properties
          * @property {string|null} [version] GetVersionResponse version
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -206424,7 +206868,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a GetVersionResponse.
          * @constructor
          * @param {vtctldata.GetVersionResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetVersionResponse = function (properties) {
             if (properties)
@@ -206662,7 +207106,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * Properties of a GetVSchemaResponse.
          * @typedef {Object} vtctldata.GetVSchemaResponse.$Properties
          * @property {vschema.Keyspace.$Properties|null} [v_schema] GetVSchemaResponse v_schema
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -206684,7 +207128,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a GetVSchemaResponse.
          * @constructor
          * @param {vtctldata.GetVSchemaResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetVSchemaResponse = function (properties) {
             if (properties)
@@ -206928,7 +207372,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {string|null} [workflow] GetWorkflowsRequest workflow
          * @property {boolean|null} [include_logs] GetWorkflowsRequest include_logs
          * @property {Array.<string>|null} [shards] GetWorkflowsRequest shards
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -206950,7 +207394,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a GetWorkflowsRequest.
          * @constructor
          * @param {vtctldata.GetWorkflowsRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetWorkflowsRequest = function (properties) {
             this.shards = [];
@@ -207342,7 +207786,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * Properties of a GetWorkflowsResponse.
          * @typedef {Object} vtctldata.GetWorkflowsResponse.$Properties
          * @property {Array.<vtctldata.Workflow.$Properties>|null} [workflows] GetWorkflowsResponse workflows
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -207364,7 +207808,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a GetWorkflowsResponse.
          * @constructor
          * @param {vtctldata.GetWorkflowsResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetWorkflowsResponse = function (properties) {
             this.workflows = [];
@@ -207623,7 +208067,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {topodata.TabletAlias.$Properties|null} [primary_elect_tablet_alias] InitShardPrimaryRequest primary_elect_tablet_alias
          * @property {boolean|null} [force] InitShardPrimaryRequest force
          * @property {vttime.Duration.$Properties|null} [wait_replicas_timeout] InitShardPrimaryRequest wait_replicas_timeout
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -207645,7 +208089,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents an InitShardPrimaryRequest.
          * @constructor
          * @param {vtctldata.InitShardPrimaryRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const InitShardPrimaryRequest = function (properties) {
             if (properties)
@@ -207998,7 +208442,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * Properties of an InitShardPrimaryResponse.
          * @typedef {Object} vtctldata.InitShardPrimaryResponse.$Properties
          * @property {Array.<logutil.Event.$Properties>|null} [events] InitShardPrimaryResponse events
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -208020,7 +208464,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents an InitShardPrimaryResponse.
          * @constructor
          * @param {vtctldata.InitShardPrimaryResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const InitShardPrimaryResponse = function (properties) {
             this.events = [];
@@ -208277,7 +208721,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {string|null} [keyspace] LaunchSchemaMigrationRequest keyspace
          * @property {string|null} [uuid] LaunchSchemaMigrationRequest uuid
          * @property {vtrpc.CallerID.$Properties|null} [caller_id] LaunchSchemaMigrationRequest caller_id
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -208299,7 +208743,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a LaunchSchemaMigrationRequest.
          * @constructor
          * @param {vtctldata.LaunchSchemaMigrationRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const LaunchSchemaMigrationRequest = function (properties) {
             if (properties)
@@ -208595,7 +209039,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * Properties of a LaunchSchemaMigrationResponse.
          * @typedef {Object} vtctldata.LaunchSchemaMigrationResponse.$Properties
          * @property {Object.<string,number|Long>|null} [rows_affected_by_shard] LaunchSchemaMigrationResponse rows_affected_by_shard
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -208617,7 +209061,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a LaunchSchemaMigrationResponse.
          * @constructor
          * @param {vtctldata.LaunchSchemaMigrationResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const LaunchSchemaMigrationResponse = function (properties) {
             this.rows_affected_by_shard = {};
@@ -208911,7 +209355,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {string|null} [keyspace] LookupVindexCompleteRequest keyspace
          * @property {string|null} [name] LookupVindexCompleteRequest name
          * @property {string|null} [table_keyspace] LookupVindexCompleteRequest table_keyspace
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -208933,7 +209377,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a LookupVindexCompleteRequest.
          * @constructor
          * @param {vtctldata.LookupVindexCompleteRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const LookupVindexCompleteRequest = function (properties) {
             if (properties)
@@ -209227,7 +209671,7 @@ export const vtctldata = $root.vtctldata = (() => {
         /**
          * Properties of a LookupVindexCompleteResponse.
          * @typedef {Object} vtctldata.LookupVindexCompleteResponse.$Properties
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -209249,7 +209693,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a LookupVindexCompleteResponse.
          * @constructor
          * @param {vtctldata.LookupVindexCompleteResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const LookupVindexCompleteResponse = function (properties) {
             if (properties)
@@ -209453,7 +209897,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {boolean|null} [continue_after_copy_with_owner] LookupVindexCreateRequest continue_after_copy_with_owner
          * @property {Array.<topodata.TabletType>|null} [tablet_types] LookupVindexCreateRequest tablet_types
          * @property {tabletmanagerdata.TabletSelectionPreference|null} [tablet_selection_preference] LookupVindexCreateRequest tablet_selection_preference
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -209475,7 +209919,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a LookupVindexCreateRequest.
          * @constructor
          * @param {vtctldata.LookupVindexCreateRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const LookupVindexCreateRequest = function (properties) {
             this.cells = [];
@@ -210007,7 +210451,7 @@ export const vtctldata = $root.vtctldata = (() => {
         /**
          * Properties of a LookupVindexCreateResponse.
          * @typedef {Object} vtctldata.LookupVindexCreateResponse.$Properties
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -210029,7 +210473,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a LookupVindexCreateResponse.
          * @constructor
          * @param {vtctldata.LookupVindexCreateResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const LookupVindexCreateResponse = function (properties) {
             if (properties)
@@ -210230,7 +210674,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {string|null} [name] LookupVindexExternalizeRequest name
          * @property {string|null} [table_keyspace] LookupVindexExternalizeRequest table_keyspace
          * @property {boolean|null} [delete_workflow] LookupVindexExternalizeRequest delete_workflow
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -210252,7 +210696,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a LookupVindexExternalizeRequest.
          * @constructor
          * @param {vtctldata.LookupVindexExternalizeRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const LookupVindexExternalizeRequest = function (properties) {
             if (properties)
@@ -210576,7 +211020,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @typedef {Object} vtctldata.LookupVindexExternalizeResponse.$Properties
          * @property {boolean|null} [workflow_stopped] LookupVindexExternalizeResponse workflow_stopped
          * @property {boolean|null} [workflow_deleted] LookupVindexExternalizeResponse workflow_deleted
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -210598,7 +211042,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a LookupVindexExternalizeResponse.
          * @constructor
          * @param {vtctldata.LookupVindexExternalizeResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const LookupVindexExternalizeResponse = function (properties) {
             if (properties)
@@ -210867,7 +211311,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {string|null} [keyspace] LookupVindexInternalizeRequest keyspace
          * @property {string|null} [name] LookupVindexInternalizeRequest name
          * @property {string|null} [table_keyspace] LookupVindexInternalizeRequest table_keyspace
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -210889,7 +211333,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a LookupVindexInternalizeRequest.
          * @constructor
          * @param {vtctldata.LookupVindexInternalizeRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const LookupVindexInternalizeRequest = function (properties) {
             if (properties)
@@ -211183,7 +211627,7 @@ export const vtctldata = $root.vtctldata = (() => {
         /**
          * Properties of a LookupVindexInternalizeResponse.
          * @typedef {Object} vtctldata.LookupVindexInternalizeResponse.$Properties
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -211205,7 +211649,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a LookupVindexInternalizeResponse.
          * @constructor
          * @param {vtctldata.LookupVindexInternalizeResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const LookupVindexInternalizeResponse = function (properties) {
             if (properties)
@@ -211403,7 +211847,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * Properties of a MaterializeCreateRequest.
          * @typedef {Object} vtctldata.MaterializeCreateRequest.$Properties
          * @property {vtctldata.MaterializeSettings.$Properties|null} [settings] MaterializeCreateRequest settings
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -211425,7 +211869,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a MaterializeCreateRequest.
          * @constructor
          * @param {vtctldata.MaterializeCreateRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const MaterializeCreateRequest = function (properties) {
             if (properties)
@@ -211663,7 +212107,7 @@ export const vtctldata = $root.vtctldata = (() => {
         /**
          * Properties of a MaterializeCreateResponse.
          * @typedef {Object} vtctldata.MaterializeCreateResponse.$Properties
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -211685,7 +212129,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a MaterializeCreateResponse.
          * @constructor
          * @param {vtctldata.MaterializeCreateResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const MaterializeCreateResponse = function (properties) {
             if (properties)
@@ -211886,7 +212330,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {string|null} [keyspace] WorkflowAddTablesRequest keyspace
          * @property {Array.<vtctldata.TableMaterializeSettings.$Properties>|null} [table_settings] WorkflowAddTablesRequest table_settings
          * @property {vtctldata.MaterializationIntent|null} [materialization_intent] WorkflowAddTablesRequest materialization_intent
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -211908,7 +212352,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a WorkflowAddTablesRequest.
          * @constructor
          * @param {vtctldata.WorkflowAddTablesRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const WorkflowAddTablesRequest = function (properties) {
             this.table_settings = [];
@@ -212277,7 +212721,7 @@ export const vtctldata = $root.vtctldata = (() => {
         /**
          * Properties of a WorkflowAddTablesResponse.
          * @typedef {Object} vtctldata.WorkflowAddTablesResponse.$Properties
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -212299,7 +212743,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a WorkflowAddTablesResponse.
          * @constructor
          * @param {vtctldata.WorkflowAddTablesResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const WorkflowAddTablesResponse = function (properties) {
             if (properties)
@@ -212513,7 +212957,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {boolean|null} [defer_secondary_keys] MigrateCreateRequest defer_secondary_keys
          * @property {boolean|null} [auto_start] MigrateCreateRequest auto_start
          * @property {boolean|null} [no_routing_rules] MigrateCreateRequest no_routing_rules
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -212535,7 +212979,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a MigrateCreateRequest.
          * @constructor
          * @param {vtctldata.MigrateCreateRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const MigrateCreateRequest = function (properties) {
             this.cells = [];
@@ -213376,7 +213820,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {boolean|null} [keep_routing_rules] MigrateCompleteRequest keep_routing_rules
          * @property {boolean|null} [rename_tables] MigrateCompleteRequest rename_tables
          * @property {boolean|null} [dry_run] MigrateCompleteRequest dry_run
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -213398,7 +213842,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a MigrateCompleteRequest.
          * @constructor
          * @param {vtctldata.MigrateCompleteRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const MigrateCompleteRequest = function (properties) {
             if (properties)
@@ -213778,7 +214222,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @typedef {Object} vtctldata.MigrateCompleteResponse.$Properties
          * @property {string|null} [summary] MigrateCompleteResponse summary
          * @property {Array.<string>|null} [dry_run_results] MigrateCompleteResponse dry_run_results
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -213800,7 +214244,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a MigrateCompleteResponse.
          * @constructor
          * @param {vtctldata.MigrateCompleteResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const MigrateCompleteResponse = function (properties) {
             this.dry_run_results = [];
@@ -214082,7 +214526,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {string|null} [topo_server] MountRegisterRequest topo_server
          * @property {string|null} [topo_root] MountRegisterRequest topo_root
          * @property {string|null} [name] MountRegisterRequest name
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -214104,7 +214548,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a MountRegisterRequest.
          * @constructor
          * @param {vtctldata.MountRegisterRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const MountRegisterRequest = function (properties) {
             if (properties)
@@ -214426,7 +214870,7 @@ export const vtctldata = $root.vtctldata = (() => {
         /**
          * Properties of a MountRegisterResponse.
          * @typedef {Object} vtctldata.MountRegisterResponse.$Properties
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -214448,7 +214892,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a MountRegisterResponse.
          * @constructor
          * @param {vtctldata.MountRegisterResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const MountRegisterResponse = function (properties) {
             if (properties)
@@ -214646,7 +215090,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * Properties of a MountUnregisterRequest.
          * @typedef {Object} vtctldata.MountUnregisterRequest.$Properties
          * @property {string|null} [name] MountUnregisterRequest name
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -214668,7 +215112,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a MountUnregisterRequest.
          * @constructor
          * @param {vtctldata.MountUnregisterRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const MountUnregisterRequest = function (properties) {
             if (properties)
@@ -214905,7 +215349,7 @@ export const vtctldata = $root.vtctldata = (() => {
         /**
          * Properties of a MountUnregisterResponse.
          * @typedef {Object} vtctldata.MountUnregisterResponse.$Properties
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -214927,7 +215371,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a MountUnregisterResponse.
          * @constructor
          * @param {vtctldata.MountUnregisterResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const MountUnregisterResponse = function (properties) {
             if (properties)
@@ -215125,7 +215569,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * Properties of a MountShowRequest.
          * @typedef {Object} vtctldata.MountShowRequest.$Properties
          * @property {string|null} [name] MountShowRequest name
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -215147,7 +215591,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a MountShowRequest.
          * @constructor
          * @param {vtctldata.MountShowRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const MountShowRequest = function (properties) {
             if (properties)
@@ -215388,7 +215832,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {string|null} [topo_server] MountShowResponse topo_server
          * @property {string|null} [topo_root] MountShowResponse topo_root
          * @property {string|null} [name] MountShowResponse name
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -215410,7 +215854,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a MountShowResponse.
          * @constructor
          * @param {vtctldata.MountShowResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const MountShowResponse = function (properties) {
             if (properties)
@@ -215732,7 +216176,7 @@ export const vtctldata = $root.vtctldata = (() => {
         /**
          * Properties of a MountListRequest.
          * @typedef {Object} vtctldata.MountListRequest.$Properties
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -215754,7 +216198,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a MountListRequest.
          * @constructor
          * @param {vtctldata.MountListRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const MountListRequest = function (properties) {
             if (properties)
@@ -215952,7 +216396,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * Properties of a MountListResponse.
          * @typedef {Object} vtctldata.MountListResponse.$Properties
          * @property {Array.<string>|null} [names] MountListResponse names
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -215974,7 +216418,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a MountListResponse.
          * @constructor
          * @param {vtctldata.MountListResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const MountListResponse = function (properties) {
             this.names = [];
@@ -216243,7 +216687,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {boolean|null} [no_routing_rules] MoveTablesCreateRequest no_routing_rules
          * @property {boolean|null} [atomic_copy] MoveTablesCreateRequest atomic_copy
          * @property {vtctldata.WorkflowOptions.$Properties|null} [workflow_options] MoveTablesCreateRequest workflow_options
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -216265,7 +216709,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a MoveTablesCreateRequest.
          * @constructor
          * @param {vtctldata.MoveTablesCreateRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const MoveTablesCreateRequest = function (properties) {
             this.cells = [];
@@ -217199,7 +217643,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @typedef {Object} vtctldata.MoveTablesCreateResponse.$Properties
          * @property {string|null} [summary] MoveTablesCreateResponse summary
          * @property {Array.<vtctldata.MoveTablesCreateResponse.TabletInfo.$Properties>|null} [details] MoveTablesCreateResponse details
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -217221,7 +217665,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a MoveTablesCreateResponse.
          * @constructor
          * @param {vtctldata.MoveTablesCreateResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const MoveTablesCreateResponse = function (properties) {
             this.details = [];
@@ -217503,7 +217947,7 @@ export const vtctldata = $root.vtctldata = (() => {
              * @typedef {Object} vtctldata.MoveTablesCreateResponse.TabletInfo.$Properties
              * @property {topodata.TabletAlias.$Properties|null} [tablet] TabletInfo tablet
              * @property {boolean|null} [created] TabletInfo created
-             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
              */
 
             /**
@@ -217525,7 +217969,7 @@ export const vtctldata = $root.vtctldata = (() => {
              * @classdesc Represents a TabletInfo.
              * @constructor
              * @param {vtctldata.MoveTablesCreateResponse.TabletInfo.$Properties=} [properties] Properties to set
-             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
              */
             const TabletInfo = function (properties) {
                 if (properties)
@@ -217803,7 +218247,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {boolean|null} [dry_run] MoveTablesCompleteRequest dry_run
          * @property {Array.<string>|null} [shards] MoveTablesCompleteRequest shards
          * @property {boolean|null} [ignore_source_keyspace] MoveTablesCompleteRequest ignore_source_keyspace
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -217825,7 +218269,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a MoveTablesCompleteRequest.
          * @constructor
          * @param {vtctldata.MoveTablesCompleteRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const MoveTablesCompleteRequest = function (properties) {
             this.shards = [];
@@ -218283,7 +218727,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {string|null} [summary] MoveTablesCompleteResponse summary
          * @property {Array.<string>|null} [dry_run_results] MoveTablesCompleteResponse dry_run_results
          * @property {Array.<string>|null} [warnings] MoveTablesCompleteResponse warnings
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -218305,7 +218749,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a MoveTablesCompleteResponse.
          * @constructor
          * @param {vtctldata.MoveTablesCompleteResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const MoveTablesCompleteResponse = function (properties) {
             this.dry_run_results = [];
@@ -218625,7 +219069,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * Properties of a PingTabletRequest.
          * @typedef {Object} vtctldata.PingTabletRequest.$Properties
          * @property {topodata.TabletAlias.$Properties|null} [tablet_alias] PingTabletRequest tablet_alias
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -218647,7 +219091,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a PingTabletRequest.
          * @constructor
          * @param {vtctldata.PingTabletRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const PingTabletRequest = function (properties) {
             if (properties)
@@ -218885,7 +219329,7 @@ export const vtctldata = $root.vtctldata = (() => {
         /**
          * Properties of a PingTabletResponse.
          * @typedef {Object} vtctldata.PingTabletResponse.$Properties
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -218907,7 +219351,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a PingTabletResponse.
          * @constructor
          * @param {vtctldata.PingTabletResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const PingTabletResponse = function (properties) {
             if (properties)
@@ -219112,7 +219556,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {vttime.Duration.$Properties|null} [tolerable_replication_lag] PlannedReparentShardRequest tolerable_replication_lag
          * @property {boolean|null} [allow_cross_cell_promotion] PlannedReparentShardRequest allow_cross_cell_promotion
          * @property {topodata.TabletAlias.$Properties|null} [expected_primary] PlannedReparentShardRequest expected_primary
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -219134,7 +219578,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a PlannedReparentShardRequest.
          * @constructor
          * @param {vtctldata.PlannedReparentShardRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const PlannedReparentShardRequest = function (properties) {
             if (properties)
@@ -219577,7 +220021,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {string|null} [shard] PlannedReparentShardResponse shard
          * @property {topodata.TabletAlias.$Properties|null} [promoted_primary] PlannedReparentShardResponse promoted_primary
          * @property {Array.<logutil.Event.$Properties>|null} [events] PlannedReparentShardResponse events
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -219599,7 +220043,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a PlannedReparentShardResponse.
          * @constructor
          * @param {vtctldata.PlannedReparentShardResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const PlannedReparentShardResponse = function (properties) {
             this.events = [];
@@ -219943,7 +220387,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {string|null} [keyspace] RebuildKeyspaceGraphRequest keyspace
          * @property {Array.<string>|null} [cells] RebuildKeyspaceGraphRequest cells
          * @property {boolean|null} [allow_partial] RebuildKeyspaceGraphRequest allow_partial
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -219965,7 +220409,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a RebuildKeyspaceGraphRequest.
          * @constructor
          * @param {vtctldata.RebuildKeyspaceGraphRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const RebuildKeyspaceGraphRequest = function (properties) {
             this.cells = [];
@@ -220272,7 +220716,7 @@ export const vtctldata = $root.vtctldata = (() => {
         /**
          * Properties of a RebuildKeyspaceGraphResponse.
          * @typedef {Object} vtctldata.RebuildKeyspaceGraphResponse.$Properties
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -220294,7 +220738,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a RebuildKeyspaceGraphResponse.
          * @constructor
          * @param {vtctldata.RebuildKeyspaceGraphResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const RebuildKeyspaceGraphResponse = function (properties) {
             if (properties)
@@ -220492,7 +220936,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * Properties of a RebuildVSchemaGraphRequest.
          * @typedef {Object} vtctldata.RebuildVSchemaGraphRequest.$Properties
          * @property {Array.<string>|null} [cells] RebuildVSchemaGraphRequest cells
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -220514,7 +220958,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a RebuildVSchemaGraphRequest.
          * @constructor
          * @param {vtctldata.RebuildVSchemaGraphRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const RebuildVSchemaGraphRequest = function (properties) {
             this.cells = [];
@@ -220763,7 +221207,7 @@ export const vtctldata = $root.vtctldata = (() => {
         /**
          * Properties of a RebuildVSchemaGraphResponse.
          * @typedef {Object} vtctldata.RebuildVSchemaGraphResponse.$Properties
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -220785,7 +221229,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a RebuildVSchemaGraphResponse.
          * @constructor
          * @param {vtctldata.RebuildVSchemaGraphResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const RebuildVSchemaGraphResponse = function (properties) {
             if (properties)
@@ -220983,7 +221427,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * Properties of a RefreshStateRequest.
          * @typedef {Object} vtctldata.RefreshStateRequest.$Properties
          * @property {topodata.TabletAlias.$Properties|null} [tablet_alias] RefreshStateRequest tablet_alias
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -221005,7 +221449,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a RefreshStateRequest.
          * @constructor
          * @param {vtctldata.RefreshStateRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const RefreshStateRequest = function (properties) {
             if (properties)
@@ -221243,7 +221687,7 @@ export const vtctldata = $root.vtctldata = (() => {
         /**
          * Properties of a RefreshStateResponse.
          * @typedef {Object} vtctldata.RefreshStateResponse.$Properties
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -221265,7 +221709,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a RefreshStateResponse.
          * @constructor
          * @param {vtctldata.RefreshStateResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const RefreshStateResponse = function (properties) {
             if (properties)
@@ -221465,7 +221909,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {string|null} [keyspace] RefreshStateByShardRequest keyspace
          * @property {string|null} [shard] RefreshStateByShardRequest shard
          * @property {Array.<string>|null} [cells] RefreshStateByShardRequest cells
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -221487,7 +221931,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a RefreshStateByShardRequest.
          * @constructor
          * @param {vtctldata.RefreshStateByShardRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const RefreshStateByShardRequest = function (properties) {
             this.cells = [];
@@ -221796,7 +222240,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @typedef {Object} vtctldata.RefreshStateByShardResponse.$Properties
          * @property {boolean|null} [is_partial_refresh] RefreshStateByShardResponse is_partial_refresh
          * @property {string|null} [partial_refresh_details] RefreshStateByShardResponse partial_refresh_details
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -221818,7 +222262,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a RefreshStateByShardResponse.
          * @constructor
          * @param {vtctldata.RefreshStateByShardResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const RefreshStateByShardResponse = function (properties) {
             if (properties)
@@ -222085,7 +222529,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * Properties of a ReloadSchemaRequest.
          * @typedef {Object} vtctldata.ReloadSchemaRequest.$Properties
          * @property {topodata.TabletAlias.$Properties|null} [tablet_alias] ReloadSchemaRequest tablet_alias
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -222107,7 +222551,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a ReloadSchemaRequest.
          * @constructor
          * @param {vtctldata.ReloadSchemaRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ReloadSchemaRequest = function (properties) {
             if (properties)
@@ -222345,7 +222789,7 @@ export const vtctldata = $root.vtctldata = (() => {
         /**
          * Properties of a ReloadSchemaResponse.
          * @typedef {Object} vtctldata.ReloadSchemaResponse.$Properties
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -222367,7 +222811,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a ReloadSchemaResponse.
          * @constructor
          * @param {vtctldata.ReloadSchemaResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ReloadSchemaResponse = function (properties) {
             if (properties)
@@ -222568,7 +223012,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {string|null} [wait_position] ReloadSchemaKeyspaceRequest wait_position
          * @property {boolean|null} [include_primary] ReloadSchemaKeyspaceRequest include_primary
          * @property {number|null} [concurrency] ReloadSchemaKeyspaceRequest concurrency
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -222590,7 +223034,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a ReloadSchemaKeyspaceRequest.
          * @constructor
          * @param {vtctldata.ReloadSchemaKeyspaceRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ReloadSchemaKeyspaceRequest = function (properties) {
             if (properties)
@@ -222913,7 +223357,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * Properties of a ReloadSchemaKeyspaceResponse.
          * @typedef {Object} vtctldata.ReloadSchemaKeyspaceResponse.$Properties
          * @property {Array.<logutil.Event.$Properties>|null} [events] ReloadSchemaKeyspaceResponse events
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -222935,7 +223379,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a ReloadSchemaKeyspaceResponse.
          * @constructor
          * @param {vtctldata.ReloadSchemaKeyspaceResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ReloadSchemaKeyspaceResponse = function (properties) {
             this.events = [];
@@ -223194,7 +223638,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {string|null} [wait_position] ReloadSchemaShardRequest wait_position
          * @property {boolean|null} [include_primary] ReloadSchemaShardRequest include_primary
          * @property {number|null} [concurrency] ReloadSchemaShardRequest concurrency
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -223216,7 +223660,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a ReloadSchemaShardRequest.
          * @constructor
          * @param {vtctldata.ReloadSchemaShardRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ReloadSchemaShardRequest = function (properties) {
             if (properties)
@@ -223567,7 +224011,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * Properties of a ReloadSchemaShardResponse.
          * @typedef {Object} vtctldata.ReloadSchemaShardResponse.$Properties
          * @property {Array.<logutil.Event.$Properties>|null} [events] ReloadSchemaShardResponse events
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -223589,7 +224033,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a ReloadSchemaShardResponse.
          * @constructor
          * @param {vtctldata.ReloadSchemaShardResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ReloadSchemaShardResponse = function (properties) {
             this.events = [];
@@ -223846,7 +224290,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {string|null} [keyspace] RemoveBackupRequest keyspace
          * @property {string|null} [shard] RemoveBackupRequest shard
          * @property {string|null} [name] RemoveBackupRequest name
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -223868,7 +224312,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a RemoveBackupRequest.
          * @constructor
          * @param {vtctldata.RemoveBackupRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const RemoveBackupRequest = function (properties) {
             if (properties)
@@ -224162,7 +224606,7 @@ export const vtctldata = $root.vtctldata = (() => {
         /**
          * Properties of a RemoveBackupResponse.
          * @typedef {Object} vtctldata.RemoveBackupResponse.$Properties
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -224184,7 +224628,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a RemoveBackupResponse.
          * @constructor
          * @param {vtctldata.RemoveBackupResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const RemoveBackupResponse = function (properties) {
             if (properties)
@@ -224385,7 +224829,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {string|null} [cell] RemoveKeyspaceCellRequest cell
          * @property {boolean|null} [force] RemoveKeyspaceCellRequest force
          * @property {boolean|null} [recursive] RemoveKeyspaceCellRequest recursive
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -224407,7 +224851,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a RemoveKeyspaceCellRequest.
          * @constructor
          * @param {vtctldata.RemoveKeyspaceCellRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const RemoveKeyspaceCellRequest = function (properties) {
             if (properties)
@@ -224729,7 +225173,7 @@ export const vtctldata = $root.vtctldata = (() => {
         /**
          * Properties of a RemoveKeyspaceCellResponse.
          * @typedef {Object} vtctldata.RemoveKeyspaceCellResponse.$Properties
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -224751,7 +225195,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a RemoveKeyspaceCellResponse.
          * @constructor
          * @param {vtctldata.RemoveKeyspaceCellResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const RemoveKeyspaceCellResponse = function (properties) {
             if (properties)
@@ -224953,7 +225397,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {string|null} [cell] RemoveShardCellRequest cell
          * @property {boolean|null} [force] RemoveShardCellRequest force
          * @property {boolean|null} [recursive] RemoveShardCellRequest recursive
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -224975,7 +225419,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a RemoveShardCellRequest.
          * @constructor
          * @param {vtctldata.RemoveShardCellRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const RemoveShardCellRequest = function (properties) {
             if (properties)
@@ -225325,7 +225769,7 @@ export const vtctldata = $root.vtctldata = (() => {
         /**
          * Properties of a RemoveShardCellResponse.
          * @typedef {Object} vtctldata.RemoveShardCellResponse.$Properties
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -225347,7 +225791,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a RemoveShardCellResponse.
          * @constructor
          * @param {vtctldata.RemoveShardCellResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const RemoveShardCellResponse = function (properties) {
             if (properties)
@@ -225545,7 +225989,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * Properties of a ReparentTabletRequest.
          * @typedef {Object} vtctldata.ReparentTabletRequest.$Properties
          * @property {topodata.TabletAlias.$Properties|null} [tablet] ReparentTabletRequest tablet
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -225567,7 +226011,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a ReparentTabletRequest.
          * @constructor
          * @param {vtctldata.ReparentTabletRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ReparentTabletRequest = function (properties) {
             if (properties)
@@ -225808,7 +226252,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {string|null} [keyspace] ReparentTabletResponse keyspace
          * @property {string|null} [shard] ReparentTabletResponse shard
          * @property {topodata.TabletAlias.$Properties|null} [primary] ReparentTabletResponse primary
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -225830,7 +226274,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a ReparentTabletResponse.
          * @constructor
          * @param {vtctldata.ReparentTabletResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ReparentTabletResponse = function (properties) {
             if (properties)
@@ -226138,7 +226582,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {boolean|null} [defer_secondary_keys] ReshardCreateRequest defer_secondary_keys
          * @property {boolean|null} [auto_start] ReshardCreateRequest auto_start
          * @property {vtctldata.WorkflowOptions.$Properties|null} [workflow_options] ReshardCreateRequest workflow_options
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -226160,7 +226604,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a ReshardCreateRequest.
          * @constructor
          * @param {vtctldata.ReshardCreateRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ReshardCreateRequest = function (properties) {
             this.source_shards = [];
@@ -226890,7 +227334,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {boolean|null} [dry_run] RestoreFromBackupRequest dry_run
          * @property {vttime.Time.$Properties|null} [restore_to_timestamp] RestoreFromBackupRequest restore_to_timestamp
          * @property {Array.<string>|null} [allowed_backup_engines] RestoreFromBackupRequest allowed_backup_engines
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -226912,7 +227356,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a RestoreFromBackupRequest.
          * @constructor
          * @param {vtctldata.RestoreFromBackupRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const RestoreFromBackupRequest = function (properties) {
             this.allowed_backup_engines = [];
@@ -227310,7 +227754,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {string|null} [keyspace] RestoreFromBackupResponse keyspace
          * @property {string|null} [shard] RestoreFromBackupResponse shard
          * @property {logutil.Event.$Properties|null} [event] RestoreFromBackupResponse event
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -227332,7 +227776,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a RestoreFromBackupResponse.
          * @constructor
          * @param {vtctldata.RestoreFromBackupResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const RestoreFromBackupResponse = function (properties) {
             if (properties)
@@ -227659,7 +228103,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {string|null} [keyspace] RetrySchemaMigrationRequest keyspace
          * @property {string|null} [uuid] RetrySchemaMigrationRequest uuid
          * @property {vtrpc.CallerID.$Properties|null} [caller_id] RetrySchemaMigrationRequest caller_id
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -227681,7 +228125,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a RetrySchemaMigrationRequest.
          * @constructor
          * @param {vtctldata.RetrySchemaMigrationRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const RetrySchemaMigrationRequest = function (properties) {
             if (properties)
@@ -227977,7 +228421,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * Properties of a RetrySchemaMigrationResponse.
          * @typedef {Object} vtctldata.RetrySchemaMigrationResponse.$Properties
          * @property {Object.<string,number|Long>|null} [rows_affected_by_shard] RetrySchemaMigrationResponse rows_affected_by_shard
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -227999,7 +228443,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a RetrySchemaMigrationResponse.
          * @constructor
          * @param {vtctldata.RetrySchemaMigrationResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const RetrySchemaMigrationResponse = function (properties) {
             this.rows_affected_by_shard = {};
@@ -228291,7 +228735,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * Properties of a RunHealthCheckRequest.
          * @typedef {Object} vtctldata.RunHealthCheckRequest.$Properties
          * @property {topodata.TabletAlias.$Properties|null} [tablet_alias] RunHealthCheckRequest tablet_alias
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -228313,7 +228757,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a RunHealthCheckRequest.
          * @constructor
          * @param {vtctldata.RunHealthCheckRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const RunHealthCheckRequest = function (properties) {
             if (properties)
@@ -228551,7 +228995,7 @@ export const vtctldata = $root.vtctldata = (() => {
         /**
          * Properties of a RunHealthCheckResponse.
          * @typedef {Object} vtctldata.RunHealthCheckResponse.$Properties
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -228573,7 +229017,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a RunHealthCheckResponse.
          * @constructor
          * @param {vtctldata.RunHealthCheckResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const RunHealthCheckResponse = function (properties) {
             if (properties)
@@ -228772,7 +229216,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @typedef {Object} vtctldata.SetKeyspaceDurabilityPolicyRequest.$Properties
          * @property {string|null} [keyspace] SetKeyspaceDurabilityPolicyRequest keyspace
          * @property {string|null} [durability_policy] SetKeyspaceDurabilityPolicyRequest durability_policy
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -228794,7 +229238,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a SetKeyspaceDurabilityPolicyRequest.
          * @constructor
          * @param {vtctldata.SetKeyspaceDurabilityPolicyRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const SetKeyspaceDurabilityPolicyRequest = function (properties) {
             if (properties)
@@ -229061,7 +229505,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * Properties of a SetKeyspaceDurabilityPolicyResponse.
          * @typedef {Object} vtctldata.SetKeyspaceDurabilityPolicyResponse.$Properties
          * @property {topodata.Keyspace.$Properties|null} [keyspace] SetKeyspaceDurabilityPolicyResponse keyspace
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -229083,7 +229527,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a SetKeyspaceDurabilityPolicyResponse.
          * @constructor
          * @param {vtctldata.SetKeyspaceDurabilityPolicyResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const SetKeyspaceDurabilityPolicyResponse = function (properties) {
             if (properties)
@@ -229323,7 +229767,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @typedef {Object} vtctldata.SetKeyspaceShardingInfoRequest.$Properties
          * @property {string|null} [keyspace] SetKeyspaceShardingInfoRequest keyspace
          * @property {boolean|null} [force] SetKeyspaceShardingInfoRequest force
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -229345,7 +229789,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a SetKeyspaceShardingInfoRequest.
          * @constructor
          * @param {vtctldata.SetKeyspaceShardingInfoRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const SetKeyspaceShardingInfoRequest = function (properties) {
             if (properties)
@@ -229612,7 +230056,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * Properties of a SetKeyspaceShardingInfoResponse.
          * @typedef {Object} vtctldata.SetKeyspaceShardingInfoResponse.$Properties
          * @property {topodata.Keyspace.$Properties|null} [keyspace] SetKeyspaceShardingInfoResponse keyspace
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -229634,7 +230078,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a SetKeyspaceShardingInfoResponse.
          * @constructor
          * @param {vtctldata.SetKeyspaceShardingInfoResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const SetKeyspaceShardingInfoResponse = function (properties) {
             if (properties)
@@ -229875,7 +230319,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {string|null} [keyspace] SetShardIsPrimaryServingRequest keyspace
          * @property {string|null} [shard] SetShardIsPrimaryServingRequest shard
          * @property {boolean|null} [is_serving] SetShardIsPrimaryServingRequest is_serving
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -229897,7 +230341,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a SetShardIsPrimaryServingRequest.
          * @constructor
          * @param {vtctldata.SetShardIsPrimaryServingRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const SetShardIsPrimaryServingRequest = function (properties) {
             if (properties)
@@ -230192,7 +230636,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * Properties of a SetShardIsPrimaryServingResponse.
          * @typedef {Object} vtctldata.SetShardIsPrimaryServingResponse.$Properties
          * @property {topodata.Shard.$Properties|null} [shard] SetShardIsPrimaryServingResponse shard
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -230214,7 +230658,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a SetShardIsPrimaryServingResponse.
          * @constructor
          * @param {vtctldata.SetShardIsPrimaryServingResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const SetShardIsPrimaryServingResponse = function (properties) {
             if (properties)
@@ -230459,7 +230903,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {Array.<string>|null} [denied_tables] SetShardTabletControlRequest denied_tables
          * @property {boolean|null} [disable_query_service] SetShardTabletControlRequest disable_query_service
          * @property {boolean|null} [remove] SetShardTabletControlRequest remove
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -230481,7 +230925,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a SetShardTabletControlRequest.
          * @constructor
          * @param {vtctldata.SetShardTabletControlRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const SetShardTabletControlRequest = function (properties) {
             this.cells = [];
@@ -230978,7 +231422,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * Properties of a SetShardTabletControlResponse.
          * @typedef {Object} vtctldata.SetShardTabletControlResponse.$Properties
          * @property {topodata.Shard.$Properties|null} [shard] SetShardTabletControlResponse shard
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -231000,7 +231444,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a SetShardTabletControlResponse.
          * @constructor
          * @param {vtctldata.SetShardTabletControlResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const SetShardTabletControlResponse = function (properties) {
             if (properties)
@@ -231240,7 +231684,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @typedef {Object} vtctldata.SetWritableRequest.$Properties
          * @property {topodata.TabletAlias.$Properties|null} [tablet_alias] SetWritableRequest tablet_alias
          * @property {boolean|null} [writable] SetWritableRequest writable
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -231262,7 +231706,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a SetWritableRequest.
          * @constructor
          * @param {vtctldata.SetWritableRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const SetWritableRequest = function (properties) {
             if (properties)
@@ -231529,7 +231973,7 @@ export const vtctldata = $root.vtctldata = (() => {
         /**
          * Properties of a SetWritableResponse.
          * @typedef {Object} vtctldata.SetWritableResponse.$Properties
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -231551,7 +231995,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a SetWritableResponse.
          * @constructor
          * @param {vtctldata.SetWritableResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const SetWritableResponse = function (properties) {
             if (properties)
@@ -231751,7 +232195,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {string|null} [keyspace] ShardReplicationAddRequest keyspace
          * @property {string|null} [shard] ShardReplicationAddRequest shard
          * @property {topodata.TabletAlias.$Properties|null} [tablet_alias] ShardReplicationAddRequest tablet_alias
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -231773,7 +232217,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a ShardReplicationAddRequest.
          * @constructor
          * @param {vtctldata.ShardReplicationAddRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ShardReplicationAddRequest = function (properties) {
             if (properties)
@@ -232068,7 +232512,7 @@ export const vtctldata = $root.vtctldata = (() => {
         /**
          * Properties of a ShardReplicationAddResponse.
          * @typedef {Object} vtctldata.ShardReplicationAddResponse.$Properties
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -232090,7 +232534,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a ShardReplicationAddResponse.
          * @constructor
          * @param {vtctldata.ShardReplicationAddResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ShardReplicationAddResponse = function (properties) {
             if (properties)
@@ -232290,7 +232734,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {string|null} [keyspace] ShardReplicationFixRequest keyspace
          * @property {string|null} [shard] ShardReplicationFixRequest shard
          * @property {string|null} [cell] ShardReplicationFixRequest cell
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -232312,7 +232756,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a ShardReplicationFixRequest.
          * @constructor
          * @param {vtctldata.ShardReplicationFixRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ShardReplicationFixRequest = function (properties) {
             if (properties)
@@ -232607,7 +233051,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * Properties of a ShardReplicationFixResponse.
          * @typedef {Object} vtctldata.ShardReplicationFixResponse.$Properties
          * @property {topodata.ShardReplicationError.$Properties|null} [error] ShardReplicationFixResponse error
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -232629,7 +233073,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a ShardReplicationFixResponse.
          * @constructor
          * @param {vtctldata.ShardReplicationFixResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ShardReplicationFixResponse = function (properties) {
             if (properties)
@@ -232869,7 +233313,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @typedef {Object} vtctldata.ShardReplicationPositionsRequest.$Properties
          * @property {string|null} [keyspace] ShardReplicationPositionsRequest keyspace
          * @property {string|null} [shard] ShardReplicationPositionsRequest shard
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -232891,7 +233335,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a ShardReplicationPositionsRequest.
          * @constructor
          * @param {vtctldata.ShardReplicationPositionsRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ShardReplicationPositionsRequest = function (properties) {
             if (properties)
@@ -233159,7 +233603,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @typedef {Object} vtctldata.ShardReplicationPositionsResponse.$Properties
          * @property {Object.<string,replicationdata.Status.$Properties>|null} [replication_statuses] ShardReplicationPositionsResponse replication_statuses
          * @property {Object.<string,topodata.Tablet.$Properties>|null} [tablet_map] ShardReplicationPositionsResponse tablet_map
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -233181,7 +233625,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a ShardReplicationPositionsResponse.
          * @constructor
          * @param {vtctldata.ShardReplicationPositionsResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ShardReplicationPositionsResponse = function (properties) {
             this.replication_statuses = {};
@@ -233545,7 +233989,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {string|null} [keyspace] ShardReplicationRemoveRequest keyspace
          * @property {string|null} [shard] ShardReplicationRemoveRequest shard
          * @property {topodata.TabletAlias.$Properties|null} [tablet_alias] ShardReplicationRemoveRequest tablet_alias
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -233567,7 +234011,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a ShardReplicationRemoveRequest.
          * @constructor
          * @param {vtctldata.ShardReplicationRemoveRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ShardReplicationRemoveRequest = function (properties) {
             if (properties)
@@ -233862,7 +234306,7 @@ export const vtctldata = $root.vtctldata = (() => {
         /**
          * Properties of a ShardReplicationRemoveResponse.
          * @typedef {Object} vtctldata.ShardReplicationRemoveResponse.$Properties
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -233884,7 +234328,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a ShardReplicationRemoveResponse.
          * @constructor
          * @param {vtctldata.ShardReplicationRemoveResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ShardReplicationRemoveResponse = function (properties) {
             if (properties)
@@ -234083,7 +234527,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @typedef {Object} vtctldata.SleepTabletRequest.$Properties
          * @property {topodata.TabletAlias.$Properties|null} [tablet_alias] SleepTabletRequest tablet_alias
          * @property {vttime.Duration.$Properties|null} [duration] SleepTabletRequest duration
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -234105,7 +234549,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a SleepTabletRequest.
          * @constructor
          * @param {vtctldata.SleepTabletRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const SleepTabletRequest = function (properties) {
             if (properties)
@@ -234373,7 +234817,7 @@ export const vtctldata = $root.vtctldata = (() => {
         /**
          * Properties of a SleepTabletResponse.
          * @typedef {Object} vtctldata.SleepTabletResponse.$Properties
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -234395,7 +234839,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a SleepTabletResponse.
          * @constructor
          * @param {vtctldata.SleepTabletResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const SleepTabletResponse = function (properties) {
             if (properties)
@@ -234599,7 +235043,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {string|null} [source_shard] SourceShardAddRequest source_shard
          * @property {topodata.KeyRange.$Properties|null} [key_range] SourceShardAddRequest key_range
          * @property {Array.<string>|null} [tables] SourceShardAddRequest tables
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -234621,7 +235065,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a SourceShardAddRequest.
          * @constructor
          * @param {vtctldata.SourceShardAddRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const SourceShardAddRequest = function (properties) {
             this.tables = [];
@@ -235042,7 +235486,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * Properties of a SourceShardAddResponse.
          * @typedef {Object} vtctldata.SourceShardAddResponse.$Properties
          * @property {topodata.Shard.$Properties|null} [shard] SourceShardAddResponse shard
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -235064,7 +235508,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a SourceShardAddResponse.
          * @constructor
          * @param {vtctldata.SourceShardAddResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const SourceShardAddResponse = function (properties) {
             if (properties)
@@ -235305,7 +235749,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {string|null} [keyspace] SourceShardDeleteRequest keyspace
          * @property {string|null} [shard] SourceShardDeleteRequest shard
          * @property {number|null} [uid] SourceShardDeleteRequest uid
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -235327,7 +235771,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a SourceShardDeleteRequest.
          * @constructor
          * @param {vtctldata.SourceShardDeleteRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const SourceShardDeleteRequest = function (properties) {
             if (properties)
@@ -235622,7 +236066,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * Properties of a SourceShardDeleteResponse.
          * @typedef {Object} vtctldata.SourceShardDeleteResponse.$Properties
          * @property {topodata.Shard.$Properties|null} [shard] SourceShardDeleteResponse shard
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -235644,7 +236088,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a SourceShardDeleteResponse.
          * @constructor
          * @param {vtctldata.SourceShardDeleteResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const SourceShardDeleteResponse = function (properties) {
             if (properties)
@@ -235883,7 +236327,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * Properties of a StartReplicationRequest.
          * @typedef {Object} vtctldata.StartReplicationRequest.$Properties
          * @property {topodata.TabletAlias.$Properties|null} [tablet_alias] StartReplicationRequest tablet_alias
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -235905,7 +236349,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a StartReplicationRequest.
          * @constructor
          * @param {vtctldata.StartReplicationRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const StartReplicationRequest = function (properties) {
             if (properties)
@@ -236143,7 +236587,7 @@ export const vtctldata = $root.vtctldata = (() => {
         /**
          * Properties of a StartReplicationResponse.
          * @typedef {Object} vtctldata.StartReplicationResponse.$Properties
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -236165,7 +236609,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a StartReplicationResponse.
          * @constructor
          * @param {vtctldata.StartReplicationResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const StartReplicationResponse = function (properties) {
             if (properties)
@@ -236363,7 +236807,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * Properties of a StopReplicationRequest.
          * @typedef {Object} vtctldata.StopReplicationRequest.$Properties
          * @property {topodata.TabletAlias.$Properties|null} [tablet_alias] StopReplicationRequest tablet_alias
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -236385,7 +236829,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a StopReplicationRequest.
          * @constructor
          * @param {vtctldata.StopReplicationRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const StopReplicationRequest = function (properties) {
             if (properties)
@@ -236623,7 +237067,7 @@ export const vtctldata = $root.vtctldata = (() => {
         /**
          * Properties of a StopReplicationResponse.
          * @typedef {Object} vtctldata.StopReplicationResponse.$Properties
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -236645,7 +237089,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a StopReplicationResponse.
          * @constructor
          * @param {vtctldata.StopReplicationResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const StopReplicationResponse = function (properties) {
             if (properties)
@@ -236843,7 +237287,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * Properties of a TabletExternallyReparentedRequest.
          * @typedef {Object} vtctldata.TabletExternallyReparentedRequest.$Properties
          * @property {topodata.TabletAlias.$Properties|null} [tablet] TabletExternallyReparentedRequest tablet
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -236865,7 +237309,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a TabletExternallyReparentedRequest.
          * @constructor
          * @param {vtctldata.TabletExternallyReparentedRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const TabletExternallyReparentedRequest = function (properties) {
             if (properties)
@@ -237107,7 +237551,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {string|null} [shard] TabletExternallyReparentedResponse shard
          * @property {topodata.TabletAlias.$Properties|null} [new_primary] TabletExternallyReparentedResponse new_primary
          * @property {topodata.TabletAlias.$Properties|null} [old_primary] TabletExternallyReparentedResponse old_primary
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -237129,7 +237573,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a TabletExternallyReparentedResponse.
          * @constructor
          * @param {vtctldata.TabletExternallyReparentedResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const TabletExternallyReparentedResponse = function (properties) {
             if (properties)
@@ -237455,7 +237899,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @typedef {Object} vtctldata.UpdateCellInfoRequest.$Properties
          * @property {string|null} [name] UpdateCellInfoRequest name
          * @property {topodata.CellInfo.$Properties|null} [cell_info] UpdateCellInfoRequest cell_info
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -237477,7 +237921,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents an UpdateCellInfoRequest.
          * @constructor
          * @param {vtctldata.UpdateCellInfoRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const UpdateCellInfoRequest = function (properties) {
             if (properties)
@@ -237746,7 +238190,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @typedef {Object} vtctldata.UpdateCellInfoResponse.$Properties
          * @property {string|null} [name] UpdateCellInfoResponse name
          * @property {topodata.CellInfo.$Properties|null} [cell_info] UpdateCellInfoResponse cell_info
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -237768,7 +238212,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents an UpdateCellInfoResponse.
          * @constructor
          * @param {vtctldata.UpdateCellInfoResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const UpdateCellInfoResponse = function (properties) {
             if (properties)
@@ -238037,7 +238481,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @typedef {Object} vtctldata.UpdateCellsAliasRequest.$Properties
          * @property {string|null} [name] UpdateCellsAliasRequest name
          * @property {topodata.CellsAlias.$Properties|null} [cells_alias] UpdateCellsAliasRequest cells_alias
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -238059,7 +238503,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents an UpdateCellsAliasRequest.
          * @constructor
          * @param {vtctldata.UpdateCellsAliasRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const UpdateCellsAliasRequest = function (properties) {
             if (properties)
@@ -238328,7 +238772,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @typedef {Object} vtctldata.UpdateCellsAliasResponse.$Properties
          * @property {string|null} [name] UpdateCellsAliasResponse name
          * @property {topodata.CellsAlias.$Properties|null} [cells_alias] UpdateCellsAliasResponse cells_alias
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -238350,7 +238794,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents an UpdateCellsAliasResponse.
          * @constructor
          * @param {vtctldata.UpdateCellsAliasResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const UpdateCellsAliasResponse = function (properties) {
             if (properties)
@@ -238618,7 +239062,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * Properties of a ValidateRequest.
          * @typedef {Object} vtctldata.ValidateRequest.$Properties
          * @property {boolean|null} [ping_tablets] ValidateRequest ping_tablets
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -238640,7 +239084,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a ValidateRequest.
          * @constructor
          * @param {vtctldata.ValidateRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ValidateRequest = function (properties) {
             if (properties)
@@ -238879,7 +239323,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @typedef {Object} vtctldata.ValidateResponse.$Properties
          * @property {Array.<string>|null} [results] ValidateResponse results
          * @property {Object.<string,vtctldata.ValidateKeyspaceResponse.$Properties>|null} [results_by_keyspace] ValidateResponse results_by_keyspace
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -238901,7 +239345,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a ValidateResponse.
          * @constructor
          * @param {vtctldata.ValidateResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ValidateResponse = function (properties) {
             this.results = [];
@@ -239229,7 +239673,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @typedef {Object} vtctldata.ValidateKeyspaceRequest.$Properties
          * @property {string|null} [keyspace] ValidateKeyspaceRequest keyspace
          * @property {boolean|null} [ping_tablets] ValidateKeyspaceRequest ping_tablets
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -239251,7 +239695,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a ValidateKeyspaceRequest.
          * @constructor
          * @param {vtctldata.ValidateKeyspaceRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ValidateKeyspaceRequest = function (properties) {
             if (properties)
@@ -239519,7 +239963,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @typedef {Object} vtctldata.ValidateKeyspaceResponse.$Properties
          * @property {Array.<string>|null} [results] ValidateKeyspaceResponse results
          * @property {Object.<string,vtctldata.ValidateShardResponse.$Properties>|null} [results_by_shard] ValidateKeyspaceResponse results_by_shard
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -239541,7 +239985,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a ValidateKeyspaceResponse.
          * @constructor
          * @param {vtctldata.ValidateKeyspaceResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ValidateKeyspaceResponse = function (properties) {
             this.results = [];
@@ -239869,7 +240313,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @typedef {Object} vtctldata.ValidatePermissionsKeyspaceRequest.$Properties
          * @property {string|null} [keyspace] ValidatePermissionsKeyspaceRequest keyspace
          * @property {Array.<string>|null} [shards] ValidatePermissionsKeyspaceRequest shards
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -239891,7 +240335,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a ValidatePermissionsKeyspaceRequest.
          * @constructor
          * @param {vtctldata.ValidatePermissionsKeyspaceRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ValidatePermissionsKeyspaceRequest = function (properties) {
             this.shards = [];
@@ -240169,7 +240613,7 @@ export const vtctldata = $root.vtctldata = (() => {
         /**
          * Properties of a ValidatePermissionsKeyspaceResponse.
          * @typedef {Object} vtctldata.ValidatePermissionsKeyspaceResponse.$Properties
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -240191,7 +240635,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a ValidatePermissionsKeyspaceResponse.
          * @constructor
          * @param {vtctldata.ValidatePermissionsKeyspaceResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ValidatePermissionsKeyspaceResponse = function (properties) {
             if (properties)
@@ -240394,7 +240838,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {boolean|null} [skip_no_primary] ValidateSchemaKeyspaceRequest skip_no_primary
          * @property {boolean|null} [include_vschema] ValidateSchemaKeyspaceRequest include_vschema
          * @property {Array.<string>|null} [shards] ValidateSchemaKeyspaceRequest shards
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -240416,7 +240860,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a ValidateSchemaKeyspaceRequest.
          * @constructor
          * @param {vtctldata.ValidateSchemaKeyspaceRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ValidateSchemaKeyspaceRequest = function (properties) {
             this.exclude_tables = [];
@@ -240822,7 +241266,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @typedef {Object} vtctldata.ValidateSchemaKeyspaceResponse.$Properties
          * @property {Array.<string>|null} [results] ValidateSchemaKeyspaceResponse results
          * @property {Object.<string,vtctldata.ValidateShardResponse.$Properties>|null} [results_by_shard] ValidateSchemaKeyspaceResponse results_by_shard
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -240844,7 +241288,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a ValidateSchemaKeyspaceResponse.
          * @constructor
          * @param {vtctldata.ValidateSchemaKeyspaceResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ValidateSchemaKeyspaceResponse = function (properties) {
             this.results = [];
@@ -241173,7 +241617,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {string|null} [keyspace] ValidateShardRequest keyspace
          * @property {string|null} [shard] ValidateShardRequest shard
          * @property {boolean|null} [ping_tablets] ValidateShardRequest ping_tablets
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -241195,7 +241639,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a ValidateShardRequest.
          * @constructor
          * @param {vtctldata.ValidateShardRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ValidateShardRequest = function (properties) {
             if (properties)
@@ -241490,7 +241934,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * Properties of a ValidateShardResponse.
          * @typedef {Object} vtctldata.ValidateShardResponse.$Properties
          * @property {Array.<string>|null} [results] ValidateShardResponse results
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -241512,7 +241956,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a ValidateShardResponse.
          * @constructor
          * @param {vtctldata.ValidateShardResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ValidateShardResponse = function (properties) {
             this.results = [];
@@ -241762,7 +242206,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * Properties of a ValidateVersionKeyspaceRequest.
          * @typedef {Object} vtctldata.ValidateVersionKeyspaceRequest.$Properties
          * @property {string|null} [keyspace] ValidateVersionKeyspaceRequest keyspace
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -241784,7 +242228,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a ValidateVersionKeyspaceRequest.
          * @constructor
          * @param {vtctldata.ValidateVersionKeyspaceRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ValidateVersionKeyspaceRequest = function (properties) {
             if (properties)
@@ -242023,7 +242467,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @typedef {Object} vtctldata.ValidateVersionKeyspaceResponse.$Properties
          * @property {Array.<string>|null} [results] ValidateVersionKeyspaceResponse results
          * @property {Object.<string,vtctldata.ValidateShardResponse.$Properties>|null} [results_by_shard] ValidateVersionKeyspaceResponse results_by_shard
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -242045,7 +242489,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a ValidateVersionKeyspaceResponse.
          * @constructor
          * @param {vtctldata.ValidateVersionKeyspaceResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ValidateVersionKeyspaceResponse = function (properties) {
             this.results = [];
@@ -242373,7 +242817,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @typedef {Object} vtctldata.ValidateVersionShardRequest.$Properties
          * @property {string|null} [keyspace] ValidateVersionShardRequest keyspace
          * @property {string|null} [shard] ValidateVersionShardRequest shard
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -242395,7 +242839,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a ValidateVersionShardRequest.
          * @constructor
          * @param {vtctldata.ValidateVersionShardRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ValidateVersionShardRequest = function (properties) {
             if (properties)
@@ -242662,7 +243106,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * Properties of a ValidateVersionShardResponse.
          * @typedef {Object} vtctldata.ValidateVersionShardResponse.$Properties
          * @property {Array.<string>|null} [results] ValidateVersionShardResponse results
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -242684,7 +243128,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a ValidateVersionShardResponse.
          * @constructor
          * @param {vtctldata.ValidateVersionShardResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ValidateVersionShardResponse = function (properties) {
             this.results = [];
@@ -242937,7 +243381,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {Array.<string>|null} [shards] ValidateVSchemaRequest shards
          * @property {Array.<string>|null} [exclude_tables] ValidateVSchemaRequest exclude_tables
          * @property {boolean|null} [include_views] ValidateVSchemaRequest include_views
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -242959,7 +243403,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a ValidateVSchemaRequest.
          * @constructor
          * @param {vtctldata.ValidateVSchemaRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ValidateVSchemaRequest = function (properties) {
             this.shards = [];
@@ -243309,7 +243753,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @typedef {Object} vtctldata.ValidateVSchemaResponse.$Properties
          * @property {Array.<string>|null} [results] ValidateVSchemaResponse results
          * @property {Object.<string,vtctldata.ValidateShardResponse.$Properties>|null} [results_by_shard] ValidateVSchemaResponse results_by_shard
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -243331,7 +243775,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a ValidateVSchemaResponse.
          * @constructor
          * @param {vtctldata.ValidateVSchemaResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ValidateVSchemaResponse = function (properties) {
             this.results = [];
@@ -243679,7 +244123,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {vttime.Duration.$Properties|null} [max_diff_duration] VDiffCreateRequest max_diff_duration
          * @property {number|Long|null} [row_diff_column_truncate_at] VDiffCreateRequest row_diff_column_truncate_at
          * @property {boolean|null} [auto_start] VDiffCreateRequest auto_start
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -243701,7 +244145,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a VDiffCreateRequest.
          * @constructor
          * @param {vtctldata.VDiffCreateRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const VDiffCreateRequest = function (properties) {
             this.source_cells = [];
@@ -244752,7 +245196,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * Properties of a VDiffCreateResponse.
          * @typedef {Object} vtctldata.VDiffCreateResponse.$Properties
          * @property {string|null} [UUID] VDiffCreateResponse UUID
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -244774,7 +245218,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a VDiffCreateResponse.
          * @constructor
          * @param {vtctldata.VDiffCreateResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const VDiffCreateResponse = function (properties) {
             if (properties)
@@ -245014,7 +245458,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {string|null} [workflow] VDiffDeleteRequest workflow
          * @property {string|null} [target_keyspace] VDiffDeleteRequest target_keyspace
          * @property {string|null} [arg] VDiffDeleteRequest arg
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -245036,7 +245480,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a VDiffDeleteRequest.
          * @constructor
          * @param {vtctldata.VDiffDeleteRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const VDiffDeleteRequest = function (properties) {
             if (properties)
@@ -245330,7 +245774,7 @@ export const vtctldata = $root.vtctldata = (() => {
         /**
          * Properties of a VDiffDeleteResponse.
          * @typedef {Object} vtctldata.VDiffDeleteResponse.$Properties
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -245352,7 +245796,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a VDiffDeleteResponse.
          * @constructor
          * @param {vtctldata.VDiffDeleteResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const VDiffDeleteResponse = function (properties) {
             if (properties)
@@ -245553,7 +245997,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {string|null} [target_keyspace] VDiffResumeRequest target_keyspace
          * @property {string|null} [uuid] VDiffResumeRequest uuid
          * @property {Array.<string>|null} [target_shards] VDiffResumeRequest target_shards
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -245575,7 +246019,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a VDiffResumeRequest.
          * @constructor
          * @param {vtctldata.VDiffResumeRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const VDiffResumeRequest = function (properties) {
             this.target_shards = [];
@@ -245910,7 +246354,7 @@ export const vtctldata = $root.vtctldata = (() => {
         /**
          * Properties of a VDiffResumeResponse.
          * @typedef {Object} vtctldata.VDiffResumeResponse.$Properties
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -245932,7 +246376,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a VDiffResumeResponse.
          * @constructor
          * @param {vtctldata.VDiffResumeResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const VDiffResumeResponse = function (properties) {
             if (properties)
@@ -246132,7 +246576,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {string|null} [workflow] VDiffShowRequest workflow
          * @property {string|null} [target_keyspace] VDiffShowRequest target_keyspace
          * @property {string|null} [arg] VDiffShowRequest arg
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -246154,7 +246598,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a VDiffShowRequest.
          * @constructor
          * @param {vtctldata.VDiffShowRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const VDiffShowRequest = function (properties) {
             if (properties)
@@ -246449,7 +246893,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * Properties of a VDiffShowResponse.
          * @typedef {Object} vtctldata.VDiffShowResponse.$Properties
          * @property {Object.<string,tabletmanagerdata.VDiffResponse.$Properties>|null} [tablet_responses] VDiffShowResponse tablet_responses
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -246471,7 +246915,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a VDiffShowResponse.
          * @constructor
          * @param {vtctldata.VDiffShowResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const VDiffShowResponse = function (properties) {
             this.tablet_responses = {};
@@ -246760,7 +247204,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {string|null} [target_keyspace] VDiffStopRequest target_keyspace
          * @property {string|null} [uuid] VDiffStopRequest uuid
          * @property {Array.<string>|null} [target_shards] VDiffStopRequest target_shards
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -246782,7 +247226,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a VDiffStopRequest.
          * @constructor
          * @param {vtctldata.VDiffStopRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const VDiffStopRequest = function (properties) {
             this.target_shards = [];
@@ -247117,7 +247561,7 @@ export const vtctldata = $root.vtctldata = (() => {
         /**
          * Properties of a VDiffStopResponse.
          * @typedef {Object} vtctldata.VDiffStopResponse.$Properties
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -247139,7 +247583,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a VDiffStopResponse.
          * @constructor
          * @param {vtctldata.VDiffStopResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const VDiffStopResponse = function (properties) {
             if (properties)
@@ -247343,7 +247787,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {Array.<string>|null} [shards] WorkflowDeleteRequest shards
          * @property {number|Long|null} [delete_batch_size] WorkflowDeleteRequest delete_batch_size
          * @property {boolean|null} [ignore_source_keyspace] WorkflowDeleteRequest ignore_source_keyspace
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -247365,7 +247809,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a WorkflowDeleteRequest.
          * @constructor
          * @param {vtctldata.WorkflowDeleteRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const WorkflowDeleteRequest = function (properties) {
             this.shards = [];
@@ -247811,7 +248255,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {string|null} [summary] WorkflowDeleteResponse summary
          * @property {Array.<vtctldata.WorkflowDeleteResponse.TabletInfo.$Properties>|null} [details] WorkflowDeleteResponse details
          * @property {Array.<string>|null} [warnings] WorkflowDeleteResponse warnings
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -247833,7 +248277,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a WorkflowDeleteResponse.
          * @constructor
          * @param {vtctldata.WorkflowDeleteResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const WorkflowDeleteResponse = function (properties) {
             this.details = [];
@@ -248156,7 +248600,7 @@ export const vtctldata = $root.vtctldata = (() => {
              * @typedef {Object} vtctldata.WorkflowDeleteResponse.TabletInfo.$Properties
              * @property {topodata.TabletAlias.$Properties|null} [tablet] TabletInfo tablet
              * @property {boolean|null} [deleted] TabletInfo deleted
-             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
              */
 
             /**
@@ -248178,7 +248622,7 @@ export const vtctldata = $root.vtctldata = (() => {
              * @classdesc Represents a TabletInfo.
              * @constructor
              * @param {vtctldata.WorkflowDeleteResponse.TabletInfo.$Properties=} [properties] Properties to set
-             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
              */
             const TabletInfo = function (properties) {
                 if (properties)
@@ -248451,7 +248895,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {string|null} [keyspace] WorkflowStatusRequest keyspace
          * @property {string|null} [workflow] WorkflowStatusRequest workflow
          * @property {Array.<string>|null} [shards] WorkflowStatusRequest shards
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -248473,7 +248917,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a WorkflowStatusRequest.
          * @constructor
          * @param {vtctldata.WorkflowStatusRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const WorkflowStatusRequest = function (properties) {
             this.shards = [];
@@ -248801,7 +249245,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {Object.<string,vtctldata.WorkflowStatusResponse.TableCopyState.$Properties>|null} [table_copy_state] WorkflowStatusResponse table_copy_state
          * @property {Object.<string,vtctldata.WorkflowStatusResponse.ShardStreams.$Properties>|null} [shard_streams] WorkflowStatusResponse shard_streams
          * @property {string|null} [traffic_state] WorkflowStatusResponse traffic_state
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -248823,7 +249267,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a WorkflowStatusResponse.
          * @constructor
          * @param {vtctldata.WorkflowStatusResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const WorkflowStatusResponse = function (properties) {
             this.table_copy_state = {};
@@ -249217,7 +249661,7 @@ export const vtctldata = $root.vtctldata = (() => {
              * @property {number|Long|null} [bytes_total] TableCopyState bytes_total
              * @property {number|null} [bytes_percentage] TableCopyState bytes_percentage
              * @property {vtctldata.TableCopyPhase|null} [phase] TableCopyState phase
-             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
              */
 
             /**
@@ -249239,7 +249683,7 @@ export const vtctldata = $root.vtctldata = (() => {
              * @classdesc Represents a TableCopyState.
              * @constructor
              * @param {vtctldata.WorkflowStatusResponse.TableCopyState.$Properties=} [properties] Properties to set
-             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
              */
             const TableCopyState = function (properties) {
                 if (properties)
@@ -249744,7 +250188,7 @@ export const vtctldata = $root.vtctldata = (() => {
              * @property {string|null} [position] ShardStreamState position
              * @property {string|null} [status] ShardStreamState status
              * @property {string|null} [info] ShardStreamState info
-             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
              */
 
             /**
@@ -249766,7 +250210,7 @@ export const vtctldata = $root.vtctldata = (() => {
              * @classdesc Represents a ShardStreamState.
              * @constructor
              * @param {vtctldata.WorkflowStatusResponse.ShardStreamState.$Properties=} [properties] Properties to set
-             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
              */
             const ShardStreamState = function (properties) {
                 if (properties)
@@ -250146,7 +250590,7 @@ export const vtctldata = $root.vtctldata = (() => {
              * Properties of a ShardStreams.
              * @typedef {Object} vtctldata.WorkflowStatusResponse.ShardStreams.$Properties
              * @property {Array.<vtctldata.WorkflowStatusResponse.ShardStreamState.$Properties>|null} [streams] ShardStreams streams
-             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
              */
 
             /**
@@ -250168,7 +250612,7 @@ export const vtctldata = $root.vtctldata = (() => {
              * @classdesc Represents a ShardStreams.
              * @constructor
              * @param {vtctldata.WorkflowStatusResponse.ShardStreams.$Properties=} [properties] Properties to set
-             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
              */
             const ShardStreams = function (properties) {
                 this.streams = [];
@@ -250437,7 +250881,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {boolean|null} [initialize_target_sequences] WorkflowSwitchTrafficRequest initialize_target_sequences
          * @property {Array.<string>|null} [shards] WorkflowSwitchTrafficRequest shards
          * @property {boolean|null} [force] WorkflowSwitchTrafficRequest force
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -250459,7 +250903,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a WorkflowSwitchTrafficRequest.
          * @constructor
          * @param {vtctldata.WorkflowSwitchTrafficRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const WorkflowSwitchTrafficRequest = function (properties) {
             this.cells = [];
@@ -251124,7 +251568,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {string|null} [start_state] WorkflowSwitchTrafficResponse start_state
          * @property {string|null} [current_state] WorkflowSwitchTrafficResponse current_state
          * @property {Array.<string>|null} [dry_run_results] WorkflowSwitchTrafficResponse dry_run_results
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -251146,7 +251590,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a WorkflowSwitchTrafficResponse.
          * @constructor
          * @param {vtctldata.WorkflowSwitchTrafficResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const WorkflowSwitchTrafficResponse = function (properties) {
             this.dry_run_results = [];
@@ -251483,7 +251927,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @typedef {Object} vtctldata.WorkflowUpdateRequest.$Properties
          * @property {string|null} [keyspace] WorkflowUpdateRequest keyspace
          * @property {tabletmanagerdata.UpdateVReplicationWorkflowRequest.$Properties|null} [tablet_request] WorkflowUpdateRequest tablet_request
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -251505,7 +251949,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a WorkflowUpdateRequest.
          * @constructor
          * @param {vtctldata.WorkflowUpdateRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const WorkflowUpdateRequest = function (properties) {
             if (properties)
@@ -251774,7 +252218,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @typedef {Object} vtctldata.WorkflowUpdateResponse.$Properties
          * @property {string|null} [summary] WorkflowUpdateResponse summary
          * @property {Array.<vtctldata.WorkflowUpdateResponse.TabletInfo.$Properties>|null} [details] WorkflowUpdateResponse details
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -251796,7 +252240,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a WorkflowUpdateResponse.
          * @constructor
          * @param {vtctldata.WorkflowUpdateResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const WorkflowUpdateResponse = function (properties) {
             this.details = [];
@@ -252078,7 +252522,7 @@ export const vtctldata = $root.vtctldata = (() => {
              * @typedef {Object} vtctldata.WorkflowUpdateResponse.TabletInfo.$Properties
              * @property {topodata.TabletAlias.$Properties|null} [tablet] TabletInfo tablet
              * @property {boolean|null} [changed] TabletInfo changed
-             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
              */
 
             /**
@@ -252100,7 +252544,7 @@ export const vtctldata = $root.vtctldata = (() => {
              * @classdesc Represents a TabletInfo.
              * @constructor
              * @param {vtctldata.WorkflowUpdateResponse.TabletInfo.$Properties=} [properties] Properties to set
-             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
              */
             const TabletInfo = function (properties) {
                 if (properties)
@@ -252370,7 +252814,7 @@ export const vtctldata = $root.vtctldata = (() => {
         /**
          * Properties of a GetMirrorRulesRequest.
          * @typedef {Object} vtctldata.GetMirrorRulesRequest.$Properties
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -252392,7 +252836,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a GetMirrorRulesRequest.
          * @constructor
          * @param {vtctldata.GetMirrorRulesRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetMirrorRulesRequest = function (properties) {
             if (properties)
@@ -252590,7 +253034,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * Properties of a GetMirrorRulesResponse.
          * @typedef {Object} vtctldata.GetMirrorRulesResponse.$Properties
          * @property {vschema.MirrorRules.$Properties|null} [mirror_rules] GetMirrorRulesResponse mirror_rules
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -252612,7 +253056,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a GetMirrorRulesResponse.
          * @constructor
          * @param {vtctldata.GetMirrorRulesResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GetMirrorRulesResponse = function (properties) {
             if (properties)
@@ -252854,7 +253298,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {string|null} [workflow] WorkflowMirrorTrafficRequest workflow
          * @property {Array.<topodata.TabletType>|null} [tablet_types] WorkflowMirrorTrafficRequest tablet_types
          * @property {number|null} [percent] WorkflowMirrorTrafficRequest percent
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -252876,7 +253320,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a WorkflowMirrorTrafficRequest.
          * @constructor
          * @param {vtctldata.WorkflowMirrorTrafficRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const WorkflowMirrorTrafficRequest = function (properties) {
             this.tablet_types = [];
@@ -253289,7 +253733,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {string|null} [summary] WorkflowMirrorTrafficResponse summary
          * @property {string|null} [start_state] WorkflowMirrorTrafficResponse start_state
          * @property {string|null} [current_state] WorkflowMirrorTrafficResponse current_state
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -253311,7 +253755,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a WorkflowMirrorTrafficResponse.
          * @constructor
          * @param {vtctldata.WorkflowMirrorTrafficResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const WorkflowMirrorTrafficResponse = function (properties) {
             if (properties)
@@ -253608,7 +254052,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {string|null} [keyspace] SetVtorcEmergencyReparentRequest keyspace
          * @property {string|null} [shard] SetVtorcEmergencyReparentRequest shard
          * @property {boolean|null} [disable] SetVtorcEmergencyReparentRequest disable
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -253630,7 +254074,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a SetVtorcEmergencyReparentRequest.
          * @constructor
          * @param {vtctldata.SetVtorcEmergencyReparentRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const SetVtorcEmergencyReparentRequest = function (properties) {
             if (properties)
@@ -253924,7 +254368,7 @@ export const vtctldata = $root.vtctldata = (() => {
         /**
          * Properties of a SetVtorcEmergencyReparentResponse.
          * @typedef {Object} vtctldata.SetVtorcEmergencyReparentResponse.$Properties
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -253946,7 +254390,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents a SetVtorcEmergencyReparentResponse.
          * @constructor
          * @param {vtctldata.SetVtorcEmergencyReparentResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const SetVtorcEmergencyReparentResponse = function (properties) {
             if (properties)
@@ -254145,7 +254589,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @typedef {Object} vtctldata.UpdateQueryThrottlerConfigRequest.$Properties
          * @property {string|null} [keyspace] UpdateQueryThrottlerConfigRequest keyspace
          * @property {querythrottler.Config.$Properties|null} [query_throttler_config] UpdateQueryThrottlerConfigRequest query_throttler_config
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -254167,7 +254611,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents an UpdateQueryThrottlerConfigRequest.
          * @constructor
          * @param {vtctldata.UpdateQueryThrottlerConfigRequest.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const UpdateQueryThrottlerConfigRequest = function (properties) {
             if (properties)
@@ -254434,7 +254878,7 @@ export const vtctldata = $root.vtctldata = (() => {
         /**
          * Properties of an UpdateQueryThrottlerConfigResponse.
          * @typedef {Object} vtctldata.UpdateQueryThrottlerConfigResponse.$Properties
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
@@ -254456,7 +254900,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @classdesc Represents an UpdateQueryThrottlerConfigResponse.
          * @constructor
          * @param {vtctldata.UpdateQueryThrottlerConfigResponse.$Properties=} [properties] Properties to set
-         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const UpdateQueryThrottlerConfigResponse = function (properties) {
             if (properties)
