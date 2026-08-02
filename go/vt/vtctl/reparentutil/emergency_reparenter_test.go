@@ -4651,7 +4651,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 			err := erp.reparentShardLocked(ctx, ev, tt.keyspace, tt.shard, tt.emergencyReparentOps)
 			if tt.shouldErr {
 				require.Error(t, err)
-				assert.ErrorContains(t, err, tt.errShouldContain)
+				require.ErrorContains(t, err, tt.errShouldContain)
 				for _, expected := range tt.errShouldContainAll {
 					require.ErrorContains(t, err, expected)
 				}
@@ -4659,7 +4659,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 				return
 			}
 
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.Equal(t, tt.wantSplitBrainOverride, ersSplitBrainOverrides.Counts()[tt.keyspace+"."+tt.shard])
 			if tt.wantNewPrimary != nil {
 				require.NotNil(t, ev.NewPrimary)
