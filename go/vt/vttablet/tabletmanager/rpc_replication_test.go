@@ -26,12 +26,15 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 	"golang.org/x/sync/semaphore"
 
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/mysqlctl"
+	mysqlctlmock "vitess.io/vitess/go/vt/mysqlctl/mock"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -222,7 +225,8 @@ func TestDemotePrimaryWaitingForSemiSyncUnblock(t *testing.T) {
 	fakeDb.AddQuery("SELECT /*+ MAX_EXECUTION_TIME(500) */ variable_name, variable_value FROM performance_schema.global_status WHERE REGEXP_LIKE(variable_name, 'Rpl_semi_sync_(source|master)_(wait_sessions|yes_tx)')", sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields("variable_name|variable_value", "varchar|varchar"),
 		"Rpl_semi_sync_source_wait_sessions|1",
-		"Rpl_semi_sync_source_yes_tx|5"))
+		"Rpl_semi_sync_source_yes_tx|5",
+	))
 
 	// Verify that in the beginning the tablet is serving.
 	require.True(t, tm.QueryServiceControl.IsServing())
@@ -252,7 +256,8 @@ func TestDemotePrimaryWaitingForSemiSyncUnblock(t *testing.T) {
 	fakeDb.AddQuery("SELECT /*+ MAX_EXECUTION_TIME(1000) */ variable_name, variable_value FROM performance_schema.global_status WHERE REGEXP_LIKE(variable_name, 'Rpl_semi_sync_(source|master)_(wait_sessions|yes_tx)')", sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields("variable_name|variable_value", "varchar|varchar"),
 		"Rpl_semi_sync_source_wait_sessions|0",
-		"Rpl_semi_sync_source_yes_tx|5"))
+		"Rpl_semi_sync_source_yes_tx|5",
+	))
 	close(ch)
 
 	// This should unblock the demote primary operation eventually.
@@ -287,14 +292,16 @@ func TestDemotePrimaryWithSemiSyncProgressDetection(t *testing.T) {
 		fakeDb.AddQuery("SELECT /*+ MAX_EXECUTION_TIME(1000) */ variable_name, variable_value FROM performance_schema.global_status WHERE REGEXP_LIKE(variable_name, 'Rpl_semi_sync_(source|master)_(wait_sessions|yes_tx)')", sqltypes.MakeTestResult(
 			sqltypes.MakeTestFields("variable_name|variable_value", "varchar|varchar"),
 			"Rpl_semi_sync_source_wait_sessions|1",
-			"Rpl_semi_sync_source_yes_tx|5"))
+			"Rpl_semi_sync_source_yes_tx|5",
+		))
 	}
 	// Next calls: waiting sessions present, but ackedTrxs=6 (progress!).
 	for range 10 {
 		fakeDb.AddQuery("SELECT /*+ MAX_EXECUTION_TIME(1000) */ variable_name, variable_value FROM performance_schema.global_status WHERE REGEXP_LIKE(variable_name, 'Rpl_semi_sync_(source|master)_(wait_sessions|yes_tx)')", sqltypes.MakeTestResult(
 			sqltypes.MakeTestFields("variable_name|variable_value", "varchar|varchar"),
 			"Rpl_semi_sync_source_wait_sessions|1",
-			"Rpl_semi_sync_source_yes_tx|6"))
+			"Rpl_semi_sync_source_yes_tx|6",
+		))
 	}
 
 	// Verify that in the beginning the tablet is serving.
@@ -325,6 +332,230 @@ func TestDemotePrimaryWithSemiSyncProgressDetection(t *testing.T) {
 	require.True(t, fakeMysqlDaemon.SuperReadOnly.Load())
 }
 
+// newDemotePrimaryRollbackTM returns a primary TabletManager whose MysqlDaemon
+// is a gomock mock, for tests exercising demotePrimary rollback paths.
+func newDemotePrimaryRollbackTM(t *testing.T) (*TabletManager, *mysqlctlmock.MockMysqlDaemon) {
+	t.Helper()
+
+	ctx := t.Context()
+	ts := memorytopo.NewServer(ctx, "cell1")
+	tm := newTestTM(t, ts, 1, "ks", "0", nil)
+	err := tm.ChangeType(ctx, topodatapb.TabletType_PRIMARY, false)
+	require.NoError(t, err)
+
+	mockCtrl := gomock.NewController(t)
+	mockMysqlDaemon := mysqlctlmock.NewMockMysqlDaemon(mockCtrl)
+	tm.MysqlDaemon = mockMysqlDaemon
+	return tm, mockMysqlDaemon
+}
+
+func TestDemotePrimaryRollbackUsesDetachedContext(t *testing.T) {
+	tm, mockMysqlDaemon := newDemotePrimaryRollbackTM(t)
+
+	demoteCtx, cancelDemote := context.WithCancel(t.Context())
+	t.Cleanup(cancelDemote)
+	primaryStatusErr := errors.New("primary status failed after demotion")
+
+	gomock.InOrder(
+		mockMysqlDaemon.EXPECT().IsReadOnly(gomock.Any()).Return(false, nil),
+		mockMysqlDaemon.EXPECT().IsSemiSyncBlocked(gomock.Any()).Return(false, nil),
+		mockMysqlDaemon.EXPECT().SetSuperReadOnly(gomock.Any(), true, gomock.Any()).DoAndReturn(
+			func(ctx context.Context, on bool, _ mysqlctl.SetSuperReadOnlyOption) (mysqlctl.ResetSuperReadOnlyFunc, error) {
+				require.NoError(t, ctx.Err())
+				return nil, nil
+			},
+		),
+		mockMysqlDaemon.EXPECT().SemiSyncEnabled(gomock.Any()).Return(true, true),
+		mockMysqlDaemon.EXPECT().SetSemiSyncEnabled(gomock.Any(), false, true).DoAndReturn(
+			func(ctx context.Context, primary bool, replica bool) error {
+				require.NoError(t, ctx.Err())
+				return nil
+			},
+		),
+		mockMysqlDaemon.EXPECT().PrimaryStatus(gomock.Any()).DoAndReturn(
+			func(ctx context.Context) (replication.PrimaryStatus, error) {
+				cancelDemote()
+				return replication.PrimaryStatus{}, primaryStatusErr
+			},
+		),
+		mockMysqlDaemon.EXPECT().SetSemiSyncEnabled(gomock.Any(), true, true).DoAndReturn(
+			func(ctx context.Context, primary bool, replica bool) error {
+				require.NoError(t, ctx.Err())
+				return nil
+			},
+		),
+		mockMysqlDaemon.EXPECT().SetSuperReadOnly(gomock.Any(), false).DoAndReturn(
+			func(ctx context.Context, on bool, _ ...mysqlctl.SetSuperReadOnlyOption) (mysqlctl.ResetSuperReadOnlyFunc, error) {
+				require.NoError(t, ctx.Err())
+				return nil, nil
+			},
+		),
+		mockMysqlDaemon.EXPECT().SetReadOnly(gomock.Any(), false).DoAndReturn(
+			func(ctx context.Context, on bool) error {
+				require.NoError(t, ctx.Err())
+				return nil
+			},
+		),
+	)
+
+	_, err := tm.demotePrimary(demoteCtx, true /* revertPartialFailure */, false /* force */)
+	require.ErrorIs(t, err, primaryStatusErr)
+}
+
+func TestDemotePrimaryForceSemiSyncRollbackUsesDetachedContext(t *testing.T) {
+	tm, mockMysqlDaemon := newDemotePrimaryRollbackTM(t)
+
+	demoteCtx, cancelDemote := context.WithCancel(t.Context())
+	t.Cleanup(cancelDemote)
+	primaryStatusErr := errors.New("primary status failed after force demotion")
+
+	gomock.InOrder(
+		mockMysqlDaemon.EXPECT().IsReadOnly(gomock.Any()).Return(false, nil),
+		mockMysqlDaemon.EXPECT().IsSemiSyncBlocked(gomock.Any()).Return(true, nil),
+		mockMysqlDaemon.EXPECT().SemiSyncEnabled(gomock.Any()).Return(true, true),
+		mockMysqlDaemon.EXPECT().SetSemiSyncEnabled(gomock.Any(), false, true).DoAndReturn(
+			func(ctx context.Context, primary bool, replica bool) error {
+				require.NoError(t, ctx.Err())
+				return nil
+			},
+		),
+		mockMysqlDaemon.EXPECT().SetSuperReadOnly(gomock.Any(), true, gomock.Any()).DoAndReturn(
+			func(ctx context.Context, on bool, _ mysqlctl.SetSuperReadOnlyOption) (mysqlctl.ResetSuperReadOnlyFunc, error) {
+				require.NoError(t, ctx.Err())
+				return nil, nil
+			},
+		),
+		mockMysqlDaemon.EXPECT().SemiSyncEnabled(gomock.Any()).Return(false, true),
+		mockMysqlDaemon.EXPECT().PrimaryStatus(gomock.Any()).DoAndReturn(
+			func(ctx context.Context) (replication.PrimaryStatus, error) {
+				cancelDemote()
+				return replication.PrimaryStatus{}, primaryStatusErr
+			},
+		),
+		mockMysqlDaemon.EXPECT().SetSuperReadOnly(gomock.Any(), false).DoAndReturn(
+			func(ctx context.Context, on bool, _ ...mysqlctl.SetSuperReadOnlyOption) (mysqlctl.ResetSuperReadOnlyFunc, error) {
+				require.NoError(t, ctx.Err())
+				return nil, nil
+			},
+		),
+		mockMysqlDaemon.EXPECT().SetReadOnly(gomock.Any(), false).DoAndReturn(
+			func(ctx context.Context, on bool) error {
+				require.NoError(t, ctx.Err())
+				return nil
+			},
+		),
+		mockMysqlDaemon.EXPECT().SetSemiSyncEnabled(gomock.Any(), true, true).DoAndReturn(
+			func(ctx context.Context, primary bool, replica bool) error {
+				require.NoError(t, ctx.Err())
+				return nil
+			},
+		),
+	)
+
+	_, err := tm.demotePrimary(demoteCtx, true /* revertPartialFailure */, true /* force */)
+	require.ErrorIs(t, err, primaryStatusErr)
+}
+
+func TestDemotePrimarySetSuperReadOnlyErrorRunsRollback(t *testing.T) {
+	tm, mockMysqlDaemon := newDemotePrimaryRollbackTM(t)
+
+	setSuperReadOnlyErr := errors.New("set super read only failed after applying change")
+	superReadOnly := false
+
+	gomock.InOrder(
+		mockMysqlDaemon.EXPECT().IsReadOnly(gomock.Any()).Return(false, nil),
+		mockMysqlDaemon.EXPECT().IsSemiSyncBlocked(gomock.Any()).Return(false, nil),
+		mockMysqlDaemon.EXPECT().SetSuperReadOnly(gomock.Any(), true, gomock.Any()).DoAndReturn(
+			func(context.Context, bool, mysqlctl.SetSuperReadOnlyOption) (mysqlctl.ResetSuperReadOnlyFunc, error) {
+				superReadOnly = true
+				return nil, setSuperReadOnlyErr
+			},
+		),
+		mockMysqlDaemon.EXPECT().SetSuperReadOnly(gomock.Any(), false).DoAndReturn(
+			func(context.Context, bool, ...mysqlctl.SetSuperReadOnlyOption) (mysqlctl.ResetSuperReadOnlyFunc, error) {
+				superReadOnly = false
+				return nil, nil
+			},
+		),
+		mockMysqlDaemon.EXPECT().SetReadOnly(gomock.Any(), false).Return(nil),
+	)
+
+	_, err := tm.demotePrimary(t.Context(), true /* revertPartialFailure */, false /* force */)
+	require.ErrorIs(t, err, setSuperReadOnlyErr)
+	assert.False(t, superReadOnly)
+}
+
+func TestDemotePrimarySetServingTypeErrorRunsRollback(t *testing.T) {
+	tm, mockMysqlDaemon := newDemotePrimaryRollbackTM(t)
+
+	qsc := tm.QueryServiceControl.(*tabletservermock.Controller)
+	require.True(t, qsc.IsServing())
+	for len(qsc.StateChanges) > 0 {
+		<-qsc.StateChanges
+	}
+
+	mockMysqlDaemon.EXPECT().IsReadOnly(gomock.Any()).Return(false, nil)
+
+	qsc.SetServingTypeError = errors.New("set serving type failed after applying change")
+
+	_, err := tm.demotePrimary(t.Context(), true /* revertPartialFailure */, false /* force */)
+	require.ErrorContains(t, err, "SetServingType(serving=false) failed")
+
+	var changes []*tabletservermock.StateChange
+	for len(qsc.StateChanges) > 0 {
+		changes = append(changes, <-qsc.StateChanges)
+	}
+	require.Len(t, changes, 2)
+	assert.False(t, changes[0].Serving)
+	assert.True(t, changes[1].Serving)
+}
+
+func TestDemotePrimarySemiSyncErrorRunsRollback(t *testing.T) {
+	tests := []struct {
+		name  string
+		force bool
+	}{
+		{name: "planned reparent"},
+		{name: "forced reparent", force: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tm, mockMysqlDaemon := newDemotePrimaryRollbackTM(t)
+
+			setSemiSyncErr := errors.New("set semi-sync failed after applying change")
+			primarySemiSync := true
+
+			mockMysqlDaemon.EXPECT().IsReadOnly(gomock.Any()).Return(false, nil)
+			mockMysqlDaemon.EXPECT().IsSemiSyncBlocked(gomock.Any()).Return(tt.force, nil)
+			if !tt.force {
+				mockMysqlDaemon.EXPECT().SetSuperReadOnly(gomock.Any(), true, gomock.Any()).Return(nil, nil)
+			}
+			mockMysqlDaemon.EXPECT().SemiSyncEnabled(gomock.Any()).Return(true, true)
+			mockMysqlDaemon.EXPECT().SetSemiSyncEnabled(gomock.Any(), false, true).DoAndReturn(
+				func(context.Context, bool, bool) error {
+					primarySemiSync = false
+					return setSemiSyncErr
+				},
+			)
+			mockMysqlDaemon.EXPECT().SetSemiSyncEnabled(gomock.Any(), true, true).DoAndReturn(
+				func(context.Context, bool, bool) error {
+					primarySemiSync = true
+					return nil
+				},
+			)
+			if !tt.force {
+				mockMysqlDaemon.EXPECT().SetSuperReadOnly(gomock.Any(), false).Return(nil, nil)
+				mockMysqlDaemon.EXPECT().SetReadOnly(gomock.Any(), false).Return(nil)
+			}
+
+			_, err := tm.demotePrimary(t.Context(), true /* revertPartialFailure */, tt.force)
+			require.ErrorIs(t, err, setSemiSyncErr)
+			assert.True(t, primarySemiSync)
+		})
+	}
+}
+
 // TestDemotePrimaryWhenSemiSyncBecomesUnblockedBetweenChecks tests that demote primary
 // proceeds immediately when waiting sessions drops to 0 between the two checks.
 func TestDemotePrimaryWhenSemiSyncBecomesUnblockedBetweenChecks(t *testing.T) {
@@ -348,13 +579,15 @@ func TestDemotePrimaryWhenSemiSyncBecomesUnblockedBetweenChecks(t *testing.T) {
 	fakeDb.AddQuery("SELECT /*+ MAX_EXECUTION_TIME(1000) */ variable_name, variable_value FROM performance_schema.global_status WHERE REGEXP_LIKE(variable_name, 'Rpl_semi_sync_(source|master)_(wait_sessions|yes_tx)')", sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields("variable_name|variable_value", "varchar|varchar"),
 		"Rpl_semi_sync_source_wait_sessions|2",
-		"Rpl_semi_sync_source_yes_tx|5"))
+		"Rpl_semi_sync_source_yes_tx|5",
+	))
 	// Second and subsequent calls: no waiting sessions (unblocked!).
 	for range 10 {
 		fakeDb.AddQuery("SELECT /*+ MAX_EXECUTION_TIME(1000) */ variable_name, variable_value FROM performance_schema.global_status WHERE REGEXP_LIKE(variable_name, 'Rpl_semi_sync_(source|master)_(wait_sessions|yes_tx)')", sqltypes.MakeTestResult(
 			sqltypes.MakeTestFields("variable_name|variable_value", "varchar|varchar"),
 			"Rpl_semi_sync_source_wait_sessions|0",
-			"Rpl_semi_sync_source_yes_tx|5"))
+			"Rpl_semi_sync_source_yes_tx|5",
+		))
 	}
 
 	// Verify that in the beginning the tablet is serving.
