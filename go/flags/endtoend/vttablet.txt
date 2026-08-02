@@ -163,6 +163,7 @@ Flags:
       --external-decompressor-use-manifest                               allows the decompressor command stored in the backup manifest to be used at restore time. Enabling this is a security risk: an attacker with write access to the backup storage could modify the manifest to execute arbitrary commands on the tablet as the Vitess user. NOT RECOMMENDED.
       --file-backup-storage-root string                                  Root directory for the file backup storage.
       --filecustomrules string                                           file based custom rule path
+      --filecustomrules-strict                                           fail vttablet startup when the file based custom rules cannot be loaded, instead of continuing without them
       --filecustomrules-watch                                            set up a watch on the target file and reload query rules when it changes
       --gc-check-interval duration                                       Interval between garbage collection checks (default 1h0m0s)
       --gc-purge-check-interval duration                                 Interval between purge discovery checks (default 1m0s)

@@ -40,11 +40,17 @@ var (
 	// Commandline flag to specify rule path
 	fileRulePath        string
 	fileRuleShouldWatch bool
+	fileRuleStrict      bool
+
+	// exitFunc is called when a startup rule load failure is fatal.
+	// (it's a var not a call to os.Exit so the test can stub it).
+	exitFunc = os.Exit
 )
 
 func registerFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&fileRulePath, "filecustomrules", fileRulePath, "file based custom rule path")
 	utils.SetFlagBoolVar(fs, &fileRuleShouldWatch, "filecustomrules-watch", fileRuleShouldWatch, "set up a watch on the target file and reload query rules when it changes")
+	utils.SetFlagBoolVar(fs, &fileRuleStrict, "filecustomrules-strict", fileRuleStrict, "fail vttablet startup when the file based custom rules cannot be loaded, instead of continuing without them")
 }
 
 func init() {
@@ -118,7 +124,17 @@ func (fcr *FileCustomRule) GetRules() (qrs *rules.Rules, version int64, err erro
 func ActivateFileCustomRules(qsc tabletserver.Controller) {
 	if fileRulePath != "" {
 		qsc.RegisterQueryRuleSource(FileCustomRuleSource)
-		fileCustomRule.Open(qsc, fileRulePath)
+		if err := fileCustomRule.Open(qsc, fileRulePath); err != nil {
+			// Custom rules are usually protective, so serving without them is a
+			// fail-open worth being loud about. See
+			// https://github.com/vitessio/vitess/issues/20522.
+			if fileRuleStrict {
+				log.Error(fmt.Sprintf("Failed to load custom rules from %q: %v", fileRulePath, err))
+				exitFunc(1)
+				return
+			}
+			log.Error(fmt.Sprintf("Failed to load custom rules from %q, vttablet will serve WITHOUT file based custom rules (pass --filecustomrules-strict to make this error fatal): %v", fileRulePath, err))
+		}
 
 		if !fileRuleShouldWatch {
 			return
