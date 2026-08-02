@@ -402,6 +402,10 @@ func TestParseDDLStrategy(t *testing.T) {
 			expectError:      `session variable "FOREIGN_KEY_CHECKS" is not allowed`,
 		},
 		{
+			strategyVariable: "direct --session-variable RESTRICT_FK_ON_NON_STANDARD_KEY=off",
+			expectError:      `session variable "RESTRICT_FK_ON_NON_STANDARD_KEY" is not allowed`,
+		},
+		{
 			strategyVariable: "direct --session-variable sql_mode=ANSI --session-variable SQL_MODE=TRADITIONAL",
 			expectError:      "duplicate session variable name",
 		},

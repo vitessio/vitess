@@ -33,9 +33,10 @@ var (
 	retainArtifactsFlagRegexp   = regexp.MustCompile(fmt.Sprintf(`^[-]{1,2}%s=(.*?)$`, retainArtifactsFlag))
 	sessionVariableNameRegexp   = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]*$`)
 	deniedSessionVariables      = map[string]struct{}{
-		"foreign_key_checks": {},
-		"gtid_next":          {},
-		"sql_log_bin":        {},
+		"foreign_key_checks":              {},
+		"gtid_next":                       {},
+		"restrict_fk_on_non_standard_key": {},
+		"sql_log_bin":                     {},
 	}
 )
 
