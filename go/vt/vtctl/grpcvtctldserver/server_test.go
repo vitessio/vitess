@@ -710,6 +710,8 @@ func TestBackup(t *testing.T) {
 					EventInterval time.Duration
 					EventJitter   time.Duration
 					ErrorAfter    time.Duration
+					Manifest      string
+					Status        tabletmanagerdatapb.BackupResponse_Status
 				}{
 					"zone1-0000000100": {
 						Events: []*logutilpb.Event{{}, {}, {}},
@@ -740,6 +742,52 @@ func TestBackup(t *testing.T) {
 			},
 		},
 		{
+			name: "forwards manifest and status",
+			ts:   memorytopo.NewServer(ctx, "zone1"),
+			tmc: &testutil.TabletManagerClient{
+				Backups: map[string]struct {
+					Events        []*logutilpb.Event
+					EventInterval time.Duration
+					EventJitter   time.Duration
+					ErrorAfter    time.Duration
+					Manifest      string
+					Status        tabletmanagerdatapb.BackupResponse_Status
+				}{
+					"zone1-0000000100": {
+						Events:   []*logutilpb.Event{{}, {}},
+						Manifest: `{"BackupName":"test-backup"}`,
+						Status:   tabletmanagerdatapb.BackupResponse_USABLE,
+					},
+				},
+				SetReplicationSourceResults: map[string]error{
+					"zone1-0000000100": nil,
+				},
+			},
+			tablet: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+				Type:     topodatapb.TabletType_REPLICA,
+				Keyspace: "ks",
+				Shard:    "-",
+			},
+			req: &vtctldatapb.BackupRequest{
+				TabletAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+			assertion: func(t *testing.T, responses []*vtctldatapb.BackupResponse, err error) {
+				require.ErrorIs(t, err, io.EOF, "expected Recv loop to end with io.EOF")
+				require.Len(t, responses, 3, "expected 2 log events + 1 terminal message")
+				term := responses[len(responses)-1]
+				assert.Nil(t, term.Event, "terminal message should carry no log event")
+				assert.Equal(t, `{"BackupName":"test-backup"}`, term.Manifest)
+				assert.Equal(t, tabletmanagerdatapb.BackupResponse_USABLE, term.Status)
+			},
+		},
+		{
 			name: "cannot backup primary",
 			ts:   memorytopo.NewServer(ctx, "zone1"),
 			tmc: &testutil.TabletManagerClient{
@@ -748,6 +796,8 @@ func TestBackup(t *testing.T) {
 					EventInterval time.Duration
 					EventJitter   time.Duration
 					ErrorAfter    time.Duration
+					Manifest      string
+					Status        tabletmanagerdatapb.BackupResponse_Status
 				}{
 					"zone1-0000000100": {
 						Events: []*logutilpb.Event{{}, {}, {}},
@@ -783,6 +833,8 @@ func TestBackup(t *testing.T) {
 					EventInterval time.Duration
 					EventJitter   time.Duration
 					ErrorAfter    time.Duration
+					Manifest      string
+					Status        tabletmanagerdatapb.BackupResponse_Status
 				}{
 					"zone1-0000000100": {
 						Events: []*logutilpb.Event{{}, {}, {}},
@@ -819,6 +871,8 @@ func TestBackup(t *testing.T) {
 					EventInterval time.Duration
 					EventJitter   time.Duration
 					ErrorAfter    time.Duration
+					Manifest      string
+					Status        tabletmanagerdatapb.BackupResponse_Status
 				}{
 					"zone1-0000000100": {
 						Events: []*logutilpb.Event{{}, {}, {}},
@@ -854,6 +908,8 @@ func TestBackup(t *testing.T) {
 					EventInterval time.Duration
 					EventJitter   time.Duration
 					ErrorAfter    time.Duration
+					Manifest      string
+					Status        tabletmanagerdatapb.BackupResponse_Status
 				}{
 					"zone1-0000000100": {
 						Events:        []*logutilpb.Event{{}, {}, {}},
@@ -941,6 +997,8 @@ func TestBackupShard(t *testing.T) {
 					EventInterval time.Duration
 					EventJitter   time.Duration
 					ErrorAfter    time.Duration
+					Manifest      string
+					Status        tabletmanagerdatapb.BackupResponse_Status
 				}{
 					"zone1-0000000100": {
 						Events: []*logutilpb.Event{{}, {}, {}},
@@ -1028,6 +1086,8 @@ func TestBackupShard(t *testing.T) {
 					EventInterval time.Duration
 					EventJitter   time.Duration
 					ErrorAfter    time.Duration
+					Manifest      string
+					Status        tabletmanagerdatapb.BackupResponse_Status
 				}{
 					"zone1-0000000100": {
 						Events: []*logutilpb.Event{{}, {}, {}},
@@ -1071,6 +1131,8 @@ func TestBackupShard(t *testing.T) {
 					EventInterval time.Duration
 					EventJitter   time.Duration
 					ErrorAfter    time.Duration
+					Manifest      string
+					Status        tabletmanagerdatapb.BackupResponse_Status
 				}{
 					"zone1-0000000100": {
 						Events: []*logutilpb.Event{{}, {}, {}},
@@ -1132,6 +1194,8 @@ func TestBackupShard(t *testing.T) {
 					EventInterval time.Duration
 					EventJitter   time.Duration
 					ErrorAfter    time.Duration
+					Manifest      string
+					Status        tabletmanagerdatapb.BackupResponse_Status
 				}{
 					"zone1-0000000100": {
 						Events: []*logutilpb.Event{{}, {}, {}},
@@ -1198,6 +1262,8 @@ func TestBackupShard(t *testing.T) {
 					EventInterval time.Duration
 					EventJitter   time.Duration
 					ErrorAfter    time.Duration
+					Manifest      string
+					Status        tabletmanagerdatapb.BackupResponse_Status
 				}{
 					"zone1-0000000100": {
 						Events: []*logutilpb.Event{{}, {}, {}},
@@ -11177,6 +11243,8 @@ func TestRestoreFromBackup(t *testing.T) {
 					EventInterval time.Duration
 					EventJitter   time.Duration
 					ErrorAfter    time.Duration
+					Manifest      string
+					Status        tabletmanagerdatapb.BackupResponse_Status
 				}{
 					"zone1-0000000100": {
 						Events: []*logutilpb.Event{{}, {}, {}},

@@ -37,6 +37,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/hook"
 	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
@@ -1465,10 +1466,11 @@ var (
 	testBackupConcurrency       = int32(24)
 	testBackupAllowPrimary      = false
 	testBackupCalled            = false
+	testBackupManifest          = "{\"BackupName\":\"test-backup\"}"
 	testRestoreFromBackupCalled = false
 )
 
-func (fra *fakeRPCTM) Backup(ctx context.Context, logger logutil.Logger, request *tabletmanagerdatapb.BackupRequest) error {
+func (fra *fakeRPCTM) Backup(ctx context.Context, logger logutil.Logger, request *tabletmanagerdatapb.BackupRequest) (string, mysqlctl.BackupResult, error) {
 	if fra.panics {
 		panic(errors.New("test-triggered panic"))
 	}
@@ -1476,11 +1478,43 @@ func (fra *fakeRPCTM) Backup(ctx context.Context, logger logutil.Logger, request
 	compare(fra.t, "Backup args", request.AllowPrimary, testBackupAllowPrimary)
 	logStuff(logger, 10)
 	testBackupCalled = true
-	return nil
+	return testBackupManifest, mysqlctl.BackupUsable, nil
 }
 
 func (fra *fakeRPCTM) IsBackupRunning() bool {
 	return false
+}
+
+// compareLoggedBackupStuff reads count log-event messages followed by the
+// terminal message carrying the manifest and status, then expects EOF.
+func compareLoggedBackupStuff(t *testing.T, name string, stream tmclient.BackupStream, count int) error {
+	t.Helper()
+	for i := range count {
+		be, err := stream.Recv()
+		if err != nil {
+			t.Errorf("No logged value for %v/%v", name, i)
+			return err
+		}
+		if be.Event == nil || be.Event.Value != testLogString {
+			t.Errorf("Unexpected log response for %v: got %v expected %v", name, be.Event, testLogString)
+		}
+	}
+	// Terminal message carrying the manifest and status.
+	term, err := stream.Recv()
+	if err != nil {
+		t.Errorf("missing terminal Backup message for %v: %v", name, err)
+		return err
+	}
+	compare(t, "Backup manifest", term.Manifest, testBackupManifest)
+	compare(t, "Backup status", term.Status, tabletmanagerdatapb.BackupResponse_USABLE)
+	_, err = stream.Recv()
+	if err == nil {
+		t.Fatalf("log channel wasn't closed for %v", name)
+	}
+	if err == io.EOF {
+		return nil
+	}
+	return err
 }
 
 func tmRPCTestBackup(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
@@ -1489,7 +1523,7 @@ func tmRPCTestBackup(ctx context.Context, t *testing.T, client tmclient.TabletMa
 	if err != nil {
 		t.Fatalf("Backup failed: %v", err)
 	}
-	err = compareLoggedStuff(t, "Backup", stream, 10)
+	err = compareLoggedBackupStuff(t, "Backup", stream, 10)
 	compareError(t, "Backup", err, true, testBackupCalled)
 }
 

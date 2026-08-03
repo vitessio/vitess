@@ -56,7 +56,8 @@ const mysqlShutdownTimeout = 1 * time.Minute
 func TestBackupExecutesBackupWithScopedParams(t *testing.T) {
 	env := createFakeBackupRestoreEnv(t)
 
-	require.NoError(t, Backup(env.ctx, env.backupParams), env.logger.Events)
+	_, _, backupErr := Backup(env.ctx, env.backupParams)
+	require.NoError(t, backupErr, env.logger.Events)
 
 	require.Len(t, env.backupEngine.ExecuteBackupCalls, 1)
 	executeBackupParams := env.backupEngine.ExecuteBackupCalls[0].BackupParams
@@ -78,7 +79,8 @@ func TestBackupNoStats(t *testing.T) {
 	env := createFakeBackupRestoreEnv(t)
 	env.setStats(nil)
 
-	require.NoError(t, Backup(env.ctx, env.backupParams), env.logger.Events)
+	_, _, backupErr := Backup(env.ctx, env.backupParams)
+	require.NoError(t, backupErr, env.logger.Events)
 
 	// It parameterizes the backup storage with nop stats.
 	require.Len(t, env.backupStorage.WithParamsCalls, 1)
@@ -90,7 +92,8 @@ func TestBackupNoStats(t *testing.T) {
 func TestBackupParameterizesBackupStorageWithScopedStats(t *testing.T) {
 	env := createFakeBackupRestoreEnv(t)
 
-	require.NoError(t, Backup(env.ctx, env.backupParams), env.logger.Events)
+	_, _, backupErr := Backup(env.ctx, env.backupParams)
+	require.NoError(t, backupErr, env.logger.Events)
 
 	require.Len(t, env.backupStorage.WithParamsCalls, 1)
 	var storageStats *backupstats.FakeStats
@@ -112,7 +115,8 @@ func TestBackupEmitsStats(t *testing.T) {
 	// Force ExecuteBackup to take time so we can test stats emission.
 	env.backupEngine.ExecuteBackupDuration = 1001 * time.Millisecond
 
-	require.NoError(t, Backup(env.ctx, env.backupParams), env.logger.Events)
+	_, _, backupErr := Backup(env.ctx, env.backupParams)
+	require.NoError(t, backupErr, env.logger.Events)
 
 	require.NotZero(t, backupstats.DeprecatedBackupDurationS.Get())
 	require.Empty(t, env.stats.TimedIncrementCalls)
@@ -125,7 +129,8 @@ func TestBackupEmitsStats(t *testing.T) {
 func TestBackupTriesToParameterizeBackupStorage(t *testing.T) {
 	env := createFakeBackupRestoreEnv(t)
 
-	require.NoError(t, Backup(env.ctx, env.backupParams), env.logger.Events)
+	_, _, backupErr := Backup(env.ctx, env.backupParams)
+	require.NoError(t, backupErr, env.logger.Events)
 
 	require.Len(t, env.backupStorage.WithParamsCalls, 1)
 	require.Equal(t, env.logger, env.backupStorage.WithParamsCalls[0].Logger)

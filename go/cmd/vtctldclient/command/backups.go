@@ -17,15 +17,18 @@ limitations under the License.
 package command
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
 
 	"vitess.io/vitess/go/cmd/vtctldclient/cli"
+	"vitess.io/vitess/go/exit"
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -34,6 +37,11 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
+
+// emptyBackupExitCode is returned by the Backup/BackupShard commands when an
+// incremental backup completes with no new data to back up. It lets callers skip
+// follow-up operations by checking $? without parsing output.
+const emptyBackupExitCode = 2
 
 var (
 	// Backup makes a Backup gRPC call to a vtctld.
@@ -92,6 +100,7 @@ var backupOptions = struct {
 	InitSQLTabletTypes   []topodatapb.TabletType
 	InitSQLTimeout       time.Duration
 	InitSQLFailOnError   bool
+	OutputJSON           bool
 }{}
 
 func validateBackupOptions() error {
@@ -141,17 +150,7 @@ func commandBackup(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	for {
-		resp, err := stream.Recv()
-		switch err {
-		case nil:
-			fmt.Printf("%s/%s (%s): %v\n", resp.Keyspace, resp.Shard, topoproto.TabletAliasString(resp.TabletAlias), resp.Event)
-		case io.EOF:
-			return nil
-		default:
-			return err
-		}
-	}
+	return handleBackupStream(stream, backupOptions.OutputJSON)
 }
 
 var backupShardOptions = struct {
@@ -160,6 +159,7 @@ var backupShardOptions = struct {
 	IncrementalFromPos   string
 	UpgradeSafe          bool
 	MysqlShutdownTimeout time.Duration
+	OutputJSON           bool
 }{}
 
 func commandBackupShard(cmd *cobra.Command, args []string) error {
@@ -192,16 +192,117 @@ func commandBackupShard(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	return handleBackupStream(stream, backupShardOptions.OutputJSON)
+}
+
+// backupResponseStream is the common Recv interface of the Backup and
+// BackupShard client streams.
+type backupResponseStream interface {
+	Recv() (*vtctldatapb.BackupResponse, error)
+}
+
+// backupJSONOutput is the structure printed to stdout by Backup/BackupShard in
+// --json mode.
+type backupJSONOutput struct {
+	// Status is the terminal outcome: "USABLE", "EMPTY", or "UNKNOWN".
+	Status string `json:"status"`
+	// Manifest is the backup's MANIFEST as raw JSON, or null for an empty backup
+	// or when talking to an older server that does not return it.
+	Manifest json.RawMessage `json:"manifest"`
+}
+
+// handleBackupStream drains a Backup/BackupShard stream, printing progress and,
+// on completion, the backup's MANIFEST and outcome. When the backup is an empty
+// (no-op) incremental backup it exits the process with emptyBackupExitCode so
+// callers can skip follow-up work by checking $?.
+func handleBackupStream(stream backupResponseStream, outputJSON bool) error {
+	status, err := consumeBackupStream(stream, outputJSON, os.Stdout, os.Stderr)
+	if err != nil {
+		return err
+	}
+	if status == tabletmanagerdatapb.BackupResponse_EMPTY {
+		exit.Return(emptyBackupExitCode)
+	}
+	return nil
+}
+
+// consumeBackupStream reads all messages from a backup stream. Log events are
+// written to errOut in JSON mode (keeping out clean for the final JSON object)
+// and to out otherwise. On completion it prints the manifest/status and returns
+// the terminal status. It never calls exit, so it is safe to unit test.
+func consumeBackupStream(stream backupResponseStream, outputJSON bool, out, errOut io.Writer) (tabletmanagerdatapb.BackupResponse_Status, error) {
+	var (
+		manifest string
+		status   = tabletmanagerdatapb.BackupResponse_STATUS_UNSPECIFIED
+	)
+
 	for {
 		resp, err := stream.Recv()
 		switch err {
 		case nil:
-			fmt.Printf("%s/%s (%s): %v\n", resp.Keyspace, resp.Shard, topoproto.TabletAliasString(resp.TabletAlias), resp.Event)
+			if resp.Event != nil {
+				line := fmt.Sprintf("%s/%s (%s): %v\n", resp.Keyspace, resp.Shard, topoproto.TabletAliasString(resp.TabletAlias), resp.Event)
+				if outputJSON {
+					fmt.Fprint(errOut, line)
+				} else {
+					fmt.Fprint(out, line)
+				}
+			}
+			if resp.Manifest != "" {
+				manifest = resp.Manifest
+			}
+			if resp.Status != tabletmanagerdatapb.BackupResponse_STATUS_UNSPECIFIED {
+				status = resp.Status
+			}
 		case io.EOF:
-			return nil
+			if perr := printBackupResult(out, outputJSON, manifest, status); perr != nil {
+				return status, perr
+			}
+			return status, nil
 		default:
+			return status, err
+		}
+	}
+}
+
+// printBackupResult writes the backup's MANIFEST and outcome to out.
+func printBackupResult(out io.Writer, outputJSON bool, manifest string, status tabletmanagerdatapb.BackupResponse_Status) error {
+	if outputJSON {
+		raw := json.RawMessage("null")
+		if manifest != "" {
+			raw = json.RawMessage(manifest)
+		}
+		data, err := json.MarshalIndent(backupJSONOutput{
+			Status:   backupStatusString(status),
+			Manifest: raw,
+		}, "", "  ")
+		if err != nil {
 			return err
 		}
+		fmt.Fprintf(out, "%s\n", data)
+		return nil
+	}
+
+	switch status {
+	case tabletmanagerdatapb.BackupResponse_EMPTY:
+		fmt.Fprintln(out, mysqlctl.EmptyBackupMessage)
+	default:
+		if manifest != "" {
+			fmt.Fprintf(out, "%s\n", manifest)
+		}
+	}
+	return nil
+}
+
+// backupStatusString renders a backup status for human/JSON output.
+func backupStatusString(status tabletmanagerdatapb.BackupResponse_Status) string {
+	switch status {
+	case tabletmanagerdatapb.BackupResponse_USABLE:
+		return "USABLE"
+	case tabletmanagerdatapb.BackupResponse_EMPTY:
+		return "EMPTY"
+	default:
+		return "UNKNOWN"
 	}
 }
 
@@ -336,6 +437,7 @@ func init() {
 
 	Backup.Flags().BoolVar(&backupOptions.UpgradeSafe, "upgrade-safe", false, "Whether to use innodb_fast_shutdown=0 for the backup so it is safe to use for MySQL upgrades.")
 	Backup.Flags().DurationVar(&backupOptions.MysqlShutdownTimeout, "mysql-shutdown-timeout", mysqlctl.DefaultShutdownTimeout, "Timeout to use when MySQL is being shut down.")
+	Backup.Flags().BoolVarP(&backupOptions.OutputJSON, "json", "j", false, "Output, on completion, the backup's MANIFEST and outcome status as JSON on stdout (log events go to stderr). An empty incremental backup exits with a distinct code.")
 	addInitSQLFlags(Backup)
 	Root.AddCommand(Backup)
 
@@ -344,6 +446,7 @@ func init() {
 	BackupShard.Flags().StringVar(&backupShardOptions.IncrementalFromPos, "incremental-from-pos", "", "Position, or name of backup from which to create an incremental backup. Default: empty. If given, then this backup becomes an incremental backup from given position or given backup. If value is 'auto', this backup will be taken from the last successful backup position.")
 	BackupShard.Flags().BoolVar(&backupShardOptions.UpgradeSafe, "upgrade-safe", false, "Whether to use innodb_fast_shutdown=0 for the backup so it is safe to use for MySQL upgrades.")
 	BackupShard.Flags().DurationVar(&backupShardOptions.MysqlShutdownTimeout, "mysql-shutdown-timeout", mysqlctl.DefaultShutdownTimeout, "Timeout to use when MySQL is being shut down.")
+	BackupShard.Flags().BoolVarP(&backupShardOptions.OutputJSON, "json", "j", false, "Output, on completion, the backup's MANIFEST and outcome status as JSON on stdout (log events go to stderr). An empty incremental backup exits with a distinct code.")
 	addInitSQLFlags(BackupShard)
 	Root.AddCommand(BackupShard)
 

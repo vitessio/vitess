@@ -124,7 +124,12 @@ func registerBackupFlags(fs *pflag.FlagSet) {
 // - uses the BackupStorage service to store a new backup
 // - shuts down Mysqld during the backup
 // - remember if we were replicating, restore the exact same state
-func Backup(ctx context.Context, params BackupParams) error {
+//
+// On success it returns the classification of the backup (BackupUsable or
+// BackupEmpty) and, for a usable backup, the raw JSON contents of the backup's
+// MANIFEST file so callers can identify and log the backup (e.g. by BackupName)
+// without scraping log lines. For an empty backup the manifest is "".
+func Backup(ctx context.Context, params BackupParams) (manifest string, result BackupResult, err error) {
 	if params.Stats == nil {
 		params.Stats = backupstats.NoStats()
 	}
@@ -135,7 +140,7 @@ func Backup(ctx context.Context, params BackupParams) error {
 	// Start the backup with the BackupStorage.
 	bs, err := backupstorage.GetBackupStorage()
 	if err != nil {
-		return vterrors.Wrap(err, "unable to get backup storage")
+		return "", BackupUnusable, vterrors.Wrap(err, "unable to get backup storage")
 	}
 	defer bs.Close()
 
@@ -153,7 +158,7 @@ func Backup(ctx context.Context, params BackupParams) error {
 
 	bh, err := bs.StartBackup(ctx, backupDir, name)
 	if err != nil {
-		return vterrors.Wrap(err, "StartBackup failed")
+		return "", BackupUnusable, vterrors.Wrap(err, "StartBackup failed")
 	}
 	params.Logger.Infof("Starting backup %v", bh.Name())
 
@@ -171,7 +176,7 @@ func Backup(ctx context.Context, params BackupParams) error {
 	} else {
 		be, err = GetBackupEngine(params.BackupEngine)
 		if err != nil {
-			return vterrors.Wrap(err, "failed to find backup engine")
+			return "", BackupUnusable, vterrors.Wrap(err, "failed to find backup engine")
 		}
 	}
 
@@ -200,13 +205,56 @@ func Backup(ctx context.Context, params BackupParams) error {
 			// finish error, return the backup error.
 			logger.Errorf2(finishErr, "failed to finish backup: %v")
 		}
-		return err
+		return "", backupResult, err
+	}
+	if finishErr != nil {
+		// The backup engine succeeded but finalizing the backup (EndBackup/
+		// AbortBackup) failed, so the backup is not usable.
+		return "", backupResult, finishErr
 	}
 
-	// The backup worked, so just return the finish error, if any.
+	// The backup worked.
 	backupstats.DeprecatedBackupDurationS.Set(int64(time.Since(startTs).Seconds()))
 	params.Stats.Scope(backupstats.Operation("Backup")).TimedIncrement(time.Since(startTs))
-	return finishErr
+
+	// For a usable backup, read back the persisted MANIFEST so callers can identify
+	// and log the backup (e.g. by BackupName) without scraping log lines. Reading it
+	// back is best-effort: the backup itself already succeeded, so a read failure is
+	// logged and returns an empty manifest rather than failing the backup.
+	if backupResult == BackupUsable {
+		manifest, err = readBackupManifest(ctx, bs, backupDir, name)
+		if err != nil {
+			logger.Warningf("backup %v succeeded but reading its MANIFEST failed: %v", name, err)
+			manifest = ""
+		}
+	}
+	return manifest, backupResult, nil
+}
+
+// readBackupManifest re-reads the raw MANIFEST file of a just-completed backup
+// from storage and returns its contents as a JSON string. The returned string is
+// the file's bytes verbatim, so it preserves engine-specific fields.
+func readBackupManifest(ctx context.Context, bs backupstorage.BackupStorage, backupDir, name string) (string, error) {
+	bhs, err := bs.ListBackups(ctx, backupDir)
+	if err != nil {
+		return "", vterrors.Wrap(err, "ListBackups failed")
+	}
+	for _, bh := range bhs {
+		if bh.Name() != name {
+			continue
+		}
+		file, err := bh.ReadFile(ctx, backupManifestFileName)
+		if err != nil {
+			return "", vterrors.Wrapf(err, "can't read %v", backupManifestFileName)
+		}
+		defer file.Close()
+		data, err := io.ReadAll(file)
+		if err != nil {
+			return "", vterrors.Wrapf(err, "can't read %v contents", backupManifestFileName)
+		}
+		return string(data), nil
+	}
+	return "", vterrors.Errorf(vtrpc.Code_NOT_FOUND, "backup %v not found in %v after it was taken", name, backupDir)
 }
 
 // ParseBackupName parses the backup name for a given dir/name, according to

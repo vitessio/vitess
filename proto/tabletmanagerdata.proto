@@ -602,7 +602,32 @@ message BackupRequest {
 }
 
 message BackupResponse {
+  // Status classifies the outcome of the backup. It is only meaningful on
+  // the final (terminal) message of the stream; intermediate log-event
+  // messages leave it set to STATUS_UNSPECIFIED. Older servers that do not
+  // populate this field will always leave it at STATUS_UNSPECIFIED and
+  // callers must treat that as "unknown / unchanged behaviour".
+  enum Status {
+    STATUS_UNSPECIFIED = 0;
+    // USABLE indicates the backup was created and stored successfully and
+    // can be used for a subsequent restore.
+    USABLE = 1;
+    // EMPTY indicates an incremental backup completed without any new data
+    // to back up. No manifest was persisted and no follow-up work needs to
+    // happen. This is a successful outcome, not an error.
+    EMPTY = 2;
+  }
+
   logutil.Event event = 1;
+
+  // Manifest is the raw JSON of the backup's MANIFEST file. It is only
+  // populated on the terminal message when Status is USABLE. Empty on all
+  // other messages, including empty incremental backups.
+  string manifest = 2;
+
+  // Status classifies the terminal outcome of the backup. See the Status
+  // enum for details. Empty (STATUS_UNSPECIFIED) on log-event messages.
+  Status status = 3;
 }
 
 message RestoreFromBackupRequest {

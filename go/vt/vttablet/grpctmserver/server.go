@@ -27,6 +27,7 @@ import (
 	"vitess.io/vitess/go/vt/callinfo"
 	"vitess.io/vitess/go/vt/hook"
 	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -693,7 +694,30 @@ func (s *server) Backup(request *tabletmanagerdatapb.BackupRequest, stream table
 		})
 	})
 
-	return s.tm.Backup(ctx, logger, request)
+	manifest, result, err := s.tm.Backup(ctx, logger, request)
+	if err != nil {
+		return err
+	}
+	// Send a terminal message carrying the backup's MANIFEST and outcome so the
+	// caller can identify the backup (by name) and detect an empty incremental
+	// backup without scraping log lines.
+	return stream.Send(&tabletmanagerdatapb.BackupResponse{
+		Manifest: manifest,
+		Status:   backupResultToStatus(result),
+	})
+}
+
+// backupResultToStatus maps the mysqlctl backup classification to the proto
+// status enum sent on the terminal Backup stream message.
+func backupResultToStatus(result mysqlctl.BackupResult) tabletmanagerdatapb.BackupResponse_Status {
+	switch result {
+	case mysqlctl.BackupUsable:
+		return tabletmanagerdatapb.BackupResponse_USABLE
+	case mysqlctl.BackupEmpty:
+		return tabletmanagerdatapb.BackupResponse_EMPTY
+	default:
+		return tabletmanagerdatapb.BackupResponse_STATUS_UNSPECIFIED
+	}
 }
 
 func (s *server) RestoreFromBackup(request *tabletmanagerdatapb.RestoreFromBackupRequest, stream tabletmanagerservicepb.TabletManager_RestoreFromBackupServer) (err error) {

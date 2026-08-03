@@ -554,15 +554,21 @@ func (s *VtctldServer) backupTablet(ctx context.Context, tablet *topodatapb.Tabl
 
 	logger := logutil.NewConsoleLogger()
 	for {
-		event, err := logStream.Recv()
+		tmResp, err := logStream.Recv()
 		switch err {
 		case nil:
-			logutil.LogEvent(logger, event)
+			if tmResp.Event != nil {
+				logutil.LogEvent(logger, tmResp.Event)
+			}
+			// Forward log events as well as the terminal message carrying the
+			// backup's MANIFEST and outcome status.
 			resp := &vtctldatapb.BackupResponse{
 				TabletAlias: tablet.Alias,
 				Keyspace:    tablet.Keyspace,
 				Shard:       tablet.Shard,
-				Event:       event,
+				Event:       tmResp.Event,
+				Manifest:    tmResp.Manifest,
+				Status:      tmResp.Status,
 			}
 			if err := stream.Send(resp); err != nil {
 				logger.Errorf("failed to send stream response %+v: %v", resp, err)

@@ -484,6 +484,18 @@ message BackupResponse {
   string keyspace = 2;
   string shard = 3;
   logutil.Event event = 4;
+
+  // Manifest is the raw JSON of the backup's MANIFEST file. It is only
+  // populated on the terminal message when Status is USABLE. Empty on all
+  // other messages, including empty incremental backups.
+  string manifest = 5;
+
+  // Status classifies the terminal outcome of the backup. It is only
+  // meaningful on the terminal message; intermediate log-event messages
+  // leave it at STATUS_UNSPECIFIED. Older servers that do not populate this
+  // field will always leave it at STATUS_UNSPECIFIED and callers must treat
+  // that as "unknown / unchanged behaviour".
+  tabletmanagerdata.BackupResponse.Status status = 6;
 }
 
 message BackupShardRequest {
