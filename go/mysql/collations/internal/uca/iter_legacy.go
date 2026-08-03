@@ -79,15 +79,19 @@ func (it *WeightIteratorLegacy) Next() (uint16, bool) {
 		}
 
 		cp, width, d := it.charset.DecodeRune(it.input)
-		if d != types.DecodeOK {
+		if d == types.DecodeInvalid {
 			return 0, false
 		}
 		it.input = it.input[width:]
 		it.length++
 
+		if d == types.DecodeUnmappable {
+			cp = '?'
+		}
 		if cp > it.maxCodepoint {
 			return 0xFFFD, true
 		}
+
 		if it.contract != nil {
 			if weights, remainder, skip := it.contract.Find(it.charset, cp, it.input); weights != nil {
 				it.codepoint.initContraction(weights)

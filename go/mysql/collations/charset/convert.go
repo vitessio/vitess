@@ -156,7 +156,10 @@ func Expand(dst []rune, src []byte, srcCharset Charset) []rune {
 			dst = make([]rune, 0, len(src))
 		}
 		for len(src) > 0 {
-			cp, width, _ := srcCharset.DecodeRune(src)
+			cp, width, d := srcCharset.DecodeRune(src)
+			if d == types.DecodeUnmappable {
+				cp = '?'
+			}
 			src = src[width:]
 			dst = append(dst, cp)
 		}

@@ -147,7 +147,7 @@ func newUnicodeWildcardMatcher(
 
 	for len(pat) > 0 {
 		cp, width, d := cs.DecodeRune(pat)
-		if d != types.DecodeOK {
+		if d == types.DecodeInvalid {
 			return nopMatcher{}
 		}
 		pat = pat[width:]
@@ -228,7 +228,7 @@ retry:
 		switch p0 {
 		case patternMatchOne:
 			_, width, d := cs.DecodeRune(s)
-			if d != types.DecodeOK {
+			if d == types.DecodeInvalid {
 				return false
 			}
 			s = s[width:]
@@ -242,7 +242,7 @@ retry:
 			goto retry
 		default:
 			c0, width, d := cs.DecodeRune(s)
-			if d != types.DecodeOK {
+			if d == types.DecodeInvalid {
 				return false
 			}
 			if !wc.equals(c0, p0) {
@@ -260,7 +260,7 @@ starCheck:
 	}
 	if len(str) > 0 {
 		_, width, d := cs.DecodeRune(str)
-		if d != types.DecodeOK {
+		if d == types.DecodeInvalid {
 			return false
 		}
 		str = str[width:]
@@ -291,7 +291,7 @@ many:
 		goto many
 	case patternMatchOne:
 		_, width, d := cs.DecodeRune(in)
-		if d != types.DecodeOK {
+		if d == types.DecodeInvalid {
 			return matchFail
 		}
 		in = in[width:]
@@ -308,7 +308,7 @@ retry:
 		var cpIn rune
 		var d types.Decoding
 		cpIn, width, d = cs.DecodeRune(in)
-		if d != types.DecodeOK {
+		if d == types.DecodeInvalid {
 			return matchFail
 		}
 		if wc.equals(cpIn, p0) {
@@ -341,7 +341,7 @@ func (wc *unicodeWildcard) matchRecursive(in []byte, pat []rune, depth int) matc
 		}
 
 		cpIn, width, d := cs.DecodeRune(in)
-		if d != types.DecodeOK {
+		if d == types.DecodeInvalid {
 			return matchFail
 		}
 
@@ -643,7 +643,7 @@ func newMultibyteWildcardMatcher(
 	lastMany := false
 	for p := pat; len(p) > 0; {
 		cp, width, d := cs.DecodeRune(p)
-		if d != types.DecodeOK {
+		if d == types.DecodeInvalid {
 			return nopMatcher{}
 		}
 		p = p[width:]
@@ -782,7 +782,7 @@ many:
 		goto many
 	case patternMatchOne:
 		_, width, d := cs.DecodeRune(in)
-		if d != types.DecodeOK {
+		if d == types.DecodeInvalid {
 			return matchFail
 		}
 		in = in[width:]
@@ -798,7 +798,7 @@ retry:
 	for len(in) > 0 {
 		var d types.Decoding
 		_, width, d = cs.DecodeRune(in)
-		if d != types.DecodeOK {
+		if d == types.DecodeInvalid {
 			return matchFail
 		}
 		if wc.equals(&p0, in[:width]) {
@@ -831,7 +831,7 @@ func (wc *multibyteWildcard) matchRecursive(in []byte, pat []multibytePatternCha
 		}
 
 		_, width, d := cs.DecodeRune(in)
-		if d != types.DecodeOK {
+		if d == types.DecodeInvalid {
 			return matchFail
 		}
 
@@ -870,7 +870,7 @@ retry:
 		switch p0.match {
 		case patternMatchOne:
 			_, width, d := cs.DecodeRune(s)
-			if d != types.DecodeOK {
+			if d == types.DecodeInvalid {
 				return false
 			}
 			s = s[width:]
@@ -884,7 +884,7 @@ retry:
 			goto retry
 		default:
 			_, width, d := cs.DecodeRune(s)
-			if d != types.DecodeOK {
+			if d == types.DecodeInvalid {
 				return false
 			}
 			if len(p) == 0 || !wc.equals(&p0, s[:width]) {
@@ -902,7 +902,7 @@ starCheck:
 	}
 	if len(str) > 0 {
 		_, width, d := cs.DecodeRune(str)
-		if d != types.DecodeOK {
+		if d == types.DecodeInvalid {
 			return false
 		}
 		str = str[width:]

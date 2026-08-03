@@ -1220,3 +1220,11 @@ func BenchmarkUCA900Collation(b *testing.B) {
 		}
 	}
 }
+
+func TestGB18030UnmappableWeights(t *testing.T) {
+	coll := testcollation(t, "gb18030_unicode_520_ci")
+
+	ws := coll.WeightString(nil, []byte{0xE3, 0x32, 0x9A, 0x36}, 0)
+	require.Equal(t, []byte{0x02, 0x73}, ws)
+	require.Equal(t, coll.WeightString(nil, []byte{0x3F}, 0), ws)
+}
