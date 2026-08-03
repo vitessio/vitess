@@ -262,15 +262,14 @@ func (ftc *fakeTabletConn) VStreamRows(ctx context.Context, request *binlogdatap
 	if vstreamRowsHook != nil {
 		vstreamRowsHook(ctx)
 	}
-	var row []sqltypes.Value
+	var lastpk *sqltypes.Result
 	if request.Lastpk != nil {
-		r := sqltypes.Proto3ToResult(request.Lastpk)
-		if len(r.Rows) != 1 {
+		lastpk = sqltypes.Proto3ToResult(request.Lastpk)
+		if len(lastpk.Rows) != 1 {
 			return fmt.Errorf("unexpected lastpk input: %v", request.Lastpk)
 		}
-		row = r.Rows[0]
 	}
-	return vdiffenv.vse.StreamRows(ctx, request.Query, row, func(rows *binlogdatapb.VStreamRowsResponse) error {
+	return vdiffenv.vse.StreamRows(ctx, request.Query, lastpk, func(rows *binlogdatapb.VStreamRowsResponse) error {
 		if vstreamRowsSendHook != nil {
 			vstreamRowsSendHook(ctx)
 		}
@@ -435,11 +434,12 @@ func (dbc *realDBClient) SupportsCapability(capability capabilities.FlavorCapabi
 
 type fakeTMClient struct {
 	tmclient.TabletManagerClient
-	schema    *tabletmanagerdatapb.SchemaDefinition
-	vrQueries map[int]map[string]*querypb.QueryResult
-	waitpos   map[int]string
-	vrpos     map[int]string
-	pos       map[int]string
+	schema         *tabletmanagerdatapb.SchemaDefinition
+	vrQueries      map[int]map[string]*querypb.QueryResult
+	waitpos        map[int]string
+	vrpos          map[int]string
+	pos            map[int]string
+	execFetchAsApp func(query string) (*querypb.QueryResult, error)
 }
 
 func newFakeTMClient() *fakeTMClient {
@@ -453,6 +453,13 @@ func newFakeTMClient() *fakeTMClient {
 
 // Close satisfies the TabletManagerClient interface.
 func (tmc *fakeTMClient) Close() {}
+
+func (tmc *fakeTMClient) ExecuteFetchAsApp(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, req *tabletmanagerdatapb.ExecuteFetchAsAppRequest) (*querypb.QueryResult, error) {
+	if tmc.execFetchAsApp == nil {
+		return nil, fmt.Errorf("unexpected ExecuteFetchAsApp call: %s", req.Query)
+	}
+	return tmc.execFetchAsApp(string(req.Query))
+}
 
 func (tmc *fakeTMClient) GetSchema(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.GetSchemaRequest) (*tabletmanagerdatapb.SchemaDefinition, error) {
 	return tmc.schema, nil

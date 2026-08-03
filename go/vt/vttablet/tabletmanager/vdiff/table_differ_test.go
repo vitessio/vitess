@@ -161,3 +161,53 @@ func TestGetSourcePKCols_TableDroppedOnSource(t *testing.T) {
 	require.NoError(t, err)
 	require.Nil(t, td.tablePlan.sourcePkCols)
 }
+
+// TestGetSourcePKCols_UnparseableSourceSchema confirms that a source
+// CREATE TABLE the SQL parser cannot parse (e.g. one using the unknown
+// SECONDARY_ENGINE option) does not fail the diff and does not degrade to
+// the all-columns substitute PK: we warn and fall back to the
+// information_schema-based PKE lookup on the source tablet.
+func TestGetSourcePKCols_UnparseableSourceSchema(t *testing.T) {
+	tvde := newTestVDiffEnv(t)
+	defer tvde.close()
+
+	ct := tvde.createController(t, 1)
+
+	table := &tabletmanagerdatapb.TableDefinition{
+		Name:    "no_pk_table",
+		Columns: []string{"c1", "c2"},
+		Fields:  sqltypes.MakeTestFields("c1|c2", "int64|varchar"),
+	}
+
+	tvde.tmc.schema = &tabletmanagerdatapb.SchemaDefinition{
+		TableDefinitions: []*tabletmanagerdatapb.TableDefinition{{
+			Name:    "no_pk_table",
+			Columns: []string{"c1", "c2"},
+			Schema:  "CREATE TABLE no_pk_table (c1 int NOT NULL, c2 varchar(10), UNIQUE KEY uk1 (c1)) SECONDARY_ENGINE=RAPID",
+		}},
+	}
+	tvde.tmc.execFetchAsApp = func(query string) (*querypb.QueryResult, error) {
+		require.Contains(t, query, "information_schema.STATISTICS")
+		return sqltypes.ResultToProto3(sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields(
+				"column_name|index_name",
+				"varchar|varchar",
+			),
+			"c1|uk1",
+		)), nil
+	}
+
+	td := &tableDiffer{
+		wd: &workflowDiffer{
+			ct: ct,
+		},
+		table: table,
+		tablePlan: &tablePlan{
+			table: table,
+		},
+	}
+
+	err := td.getSourcePKCols()
+	require.NoError(t, err)
+	require.Equal(t, []int{0}, td.tablePlan.sourcePkCols)
+}

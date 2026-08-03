@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strings"
 	"sync"
@@ -29,11 +30,13 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/acl"
+	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
+	"vitess.io/vitess/go/vt/schemadiff"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/topo"
@@ -284,14 +287,17 @@ func (vse *Engine) Stream(ctx context.Context, startPos string, tablePKs []*binl
 
 // StreamRows streams rows.
 // This streams the table data rows (so we can copy the table data snapshot)
-func (vse *Engine) StreamRows(ctx context.Context, query string, lastpk []sqltypes.Value,
+// The lastpk result, when provided, carries both the values and the fields of
+// the last PK from a previous copy phase cycle, so that the row streamer can
+// verify the values still bind to the same key columns before resuming.
+func (vse *Engine) StreamRows(ctx context.Context, query string, lastpk *sqltypes.Result,
 	send func(*binlogdatapb.VStreamRowsResponse) error, options *binlogdatapb.VStreamOptions,
 ) error {
 	// Ensure vschema is initialized and the watcher is started.
 	// Starting of the watcher has to be delayed till the first call to Stream
 	// because this overhead should be incurred only if someone uses this feature.
 	vse.watcherOnce.Do(vse.setWatch)
-	log.Info(fmt.Sprintf("Streaming rows for query %s, lastpk: %s", query, lastpk))
+	log.Info(fmt.Sprintf("Streaming rows for query %s, lastpk: %v", query, lastpk))
 
 	// Create stream and add it to the map.
 	rowStreamer, idx, err := func() (*rowStreamer, int, error) {
@@ -601,20 +607,40 @@ func (vse *Engine) getMySQLEndpoint(ctx context.Context, db dbconfigs.Connector)
 	return fmt.Sprintf("%s:%d", host, port), nil
 }
 
-// mapPKEquivalentCols gets a PK equivalent from mysqld for the table
-// and maps the column names to field indexes in the MinimalTable struct.
+// mapPKEquivalentCols gets a PK equivalent for the table and maps the
+// column names to field indexes in the MinimalTable struct.
 func (vse *Engine) mapPKEquivalentCols(ctx context.Context, db dbconfigs.Connector, table *binlogdatapb.MinimalTable) ([]int, error) {
 	conn, err := db.Connect(ctx)
 	if err != nil {
 		return nil, err
 	}
 	defer conn.Close()
-	pkeColNames, indexName, err := mysqlctl.GetPrimaryKeyEquivalentColumns(ctx, conn.ExecuteFetch, vse.env.Config().DB.DBName, table.Name)
+	query := fmt.Sprintf("SHOW CREATE TABLE %s.%s", sqlescape.EscapeID(vse.env.Config().DB.DBName), sqlescape.EscapeID(table.Name))
+	qr, err := conn.ExecuteFetch(query, 1, true)
 	if err != nil {
 		return nil, err
 	}
-	if len(pkeColNames) > 0 && indexName != "" {
-		table.PKIndexName = indexName
+	if len(qr.Rows) == 0 || len(qr.Rows[0]) < 2 {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected result for SHOW CREATE TABLE query for table %s.%s: %d rows",
+			vse.env.Config().DB.DBName, table.Name, len(qr.Rows))
+	}
+	createTableSQL := qr.Rows[0][1].ToString()
+	senv := schemadiff.NewEnvWithDefaults(vse.env.Environment())
+	var pkeColNames []string
+	var indexName string
+	createTableEntity, err := schemadiff.NewCreateTableEntityFromSQL(senv, createTableSQL)
+	if err != nil {
+		// An unparseable schema is not the same as one with no PKE: fall back
+		// to the information_schema-based lookup rather than keying on all columns.
+		log.Warn("Failed to parse the CREATE TABLE schema to determine a primary key equivalent; falling back to the information_schema lookup",
+			slog.String("table", table.Name),
+			slog.Any("error", err))
+		pkeColNames, indexName, err = mysqlctl.GetPrimaryKeyEquivalentColumns(ctx, conn.ExecuteFetch, vse.env.Config().DB.DBName, table.Name)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		pkeColNames, indexName = schemadiff.GetPrimaryKeyEquivalent(createTableEntity)
 	}
 	pkeCols := make([]int, len(pkeColNames))
 	matches := 0
@@ -629,6 +655,19 @@ func (vse *Engine) mapPKEquivalentCols(ctx context.Context, db dbconfigs.Connect
 		if matches == len(pkeColNames) {
 			break
 		}
+	}
+	if matches != len(pkeColNames) {
+		// The fields can be stale, e.g. when a DDL landed after the table
+		// snapshot was taken; a partially mapped slice would silently key
+		// on the wrong columns.
+		log.Warn("Not all primary key equivalent columns were found in the table fields; falling back to using all columns",
+			slog.String("table", table.Name),
+			slog.String("index", indexName),
+			slog.Any("pke_columns", pkeColNames))
+		return nil, nil
+	}
+	if len(pkeColNames) > 0 && indexName != "" {
+		table.PKIndexName = indexName
 	}
 	return pkeCols, nil
 }
