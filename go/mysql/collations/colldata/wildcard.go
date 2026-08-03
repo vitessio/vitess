@@ -45,6 +45,7 @@ import (
 	"unicode/utf8"
 
 	"vitess.io/vitess/go/mysql/collations/charset"
+	"vitess.io/vitess/go/mysql/collations/charset/types"
 )
 
 type match byte
@@ -145,8 +146,8 @@ func newUnicodeWildcardMatcher(
 	chOneWidth, chManyWidth, chEscWidth := metaWidth(chOne), metaWidth(chMany), metaWidth(chEsc)
 
 	for len(pat) > 0 {
-		cp, width, ok := cs.DecodeRune(pat)
-		if !ok {
+		cp, width, d := cs.DecodeRune(pat)
+		if d != types.DecodeOK {
 			return nopMatcher{}
 		}
 		pat = pat[width:]
@@ -226,8 +227,8 @@ retry:
 
 		switch p0 {
 		case patternMatchOne:
-			_, width, ok := cs.DecodeRune(s)
-			if !ok {
+			_, width, d := cs.DecodeRune(s)
+			if d != types.DecodeOK {
 				return false
 			}
 			s = s[width:]
@@ -240,8 +241,8 @@ retry:
 			}
 			goto retry
 		default:
-			c0, width, ok := cs.DecodeRune(s)
-			if !ok {
+			c0, width, d := cs.DecodeRune(s)
+			if d != types.DecodeOK {
 				return false
 			}
 			if !wc.equals(c0, p0) {
@@ -258,8 +259,8 @@ starCheck:
 		return false
 	}
 	if len(str) > 0 {
-		_, width, ok := cs.DecodeRune(str)
-		if !ok {
+		_, width, d := cs.DecodeRune(str)
+		if d != types.DecodeOK {
 			return false
 		}
 		str = str[width:]
@@ -289,8 +290,8 @@ many:
 	case patternMatchMany:
 		goto many
 	case patternMatchOne:
-		_, width, ok := cs.DecodeRune(in)
-		if !ok {
+		_, width, d := cs.DecodeRune(in)
+		if d != types.DecodeOK {
 			return matchFail
 		}
 		in = in[width:]
@@ -305,9 +306,9 @@ retry:
 	var width int
 	for len(in) > 0 {
 		var cpIn rune
-		var ok bool
-		cpIn, width, ok = cs.DecodeRune(in)
-		if !ok {
+		var d types.Decoding
+		cpIn, width, d = cs.DecodeRune(in)
+		if d != types.DecodeOK {
 			return matchFail
 		}
 		if wc.equals(cpIn, p0) {
@@ -339,8 +340,8 @@ func (wc *unicodeWildcard) matchRecursive(in []byte, pat []rune, depth int) matc
 			return wc.matchMany(in, pat[1:], depth)
 		}
 
-		cpIn, width, ok := cs.DecodeRune(in)
-		if !ok {
+		cpIn, width, d := cs.DecodeRune(in)
+		if d != types.DecodeOK {
 			return matchFail
 		}
 
@@ -641,8 +642,8 @@ func newMultibyteWildcardMatcher(
 	var elements int
 	lastMany := false
 	for p := pat; len(p) > 0; {
-		cp, width, ok := cs.DecodeRune(p)
-		if !ok {
+		cp, width, d := cs.DecodeRune(p)
+		if d != types.DecodeOK {
 			return nopMatcher{}
 		}
 		p = p[width:]
@@ -780,8 +781,8 @@ many:
 	case patternMatchMany:
 		goto many
 	case patternMatchOne:
-		_, width, ok := cs.DecodeRune(in)
-		if !ok {
+		_, width, d := cs.DecodeRune(in)
+		if d != types.DecodeOK {
 			return matchFail
 		}
 		in = in[width:]
@@ -795,9 +796,9 @@ many:
 retry:
 	var width int
 	for len(in) > 0 {
-		var ok bool
-		_, width, ok = cs.DecodeRune(in)
-		if !ok {
+		var d types.Decoding
+		_, width, d = cs.DecodeRune(in)
+		if d != types.DecodeOK {
 			return matchFail
 		}
 		if wc.equals(&p0, in[:width]) {
@@ -829,8 +830,8 @@ func (wc *multibyteWildcard) matchRecursive(in []byte, pat []multibytePatternCha
 			return wc.matchMany(in, pat[1:], depth)
 		}
 
-		_, width, ok := cs.DecodeRune(in)
-		if !ok {
+		_, width, d := cs.DecodeRune(in)
+		if d != types.DecodeOK {
 			return matchFail
 		}
 
@@ -868,8 +869,8 @@ retry:
 
 		switch p0.match {
 		case patternMatchOne:
-			_, width, ok := cs.DecodeRune(s)
-			if !ok {
+			_, width, d := cs.DecodeRune(s)
+			if d != types.DecodeOK {
 				return false
 			}
 			s = s[width:]
@@ -882,8 +883,8 @@ retry:
 			}
 			goto retry
 		default:
-			_, width, ok := cs.DecodeRune(s)
-			if !ok {
+			_, width, d := cs.DecodeRune(s)
+			if d != types.DecodeOK {
 				return false
 			}
 			if len(p) == 0 || !wc.equals(&p0, s[:width]) {
@@ -900,8 +901,8 @@ starCheck:
 		return false
 	}
 	if len(str) > 0 {
-		_, width, ok := cs.DecodeRune(str)
-		if !ok {
+		_, width, d := cs.DecodeRune(str)
+		if d != types.DecodeOK {
 			return false
 		}
 		str = str[width:]
