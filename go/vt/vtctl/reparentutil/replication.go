@@ -229,7 +229,7 @@ func FindPositionsOfAllCandidates(
 		}
 	}
 	for _, position := range primaryPositions {
-		if position.IsZero() {
+		if position.GTIDSet == nil {
 			continue
 		}
 		if _, ok := position.GTIDSet.(replication.Mysql56GTIDSet); ok {

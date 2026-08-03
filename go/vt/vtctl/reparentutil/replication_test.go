@@ -174,6 +174,25 @@ func TestFindPositionsOfAllCandidates(t *testing.T) {
 			errContains: "encountered mix of GTID-based and non GTID-based relay logs",
 		},
 		{
+			name: "empty GTID-based primary with non-GTID-based replica",
+			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
+				"r1": {
+					After: &replicationdatapb.Status{
+						SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
+						RelayLogPosition: "FilePos/mysql-bin.0001:10",
+					},
+				},
+			},
+			primaryStatusMap: map[string]*replicationdatapb.PrimaryStatus{
+				"p1": {
+					Position: "MySQL56/",
+				},
+			},
+			expected:    nil,
+			shouldErr:   true,
+			errContains: "encountered mix of GTID-based and non GTID-based relay logs",
+		},
+		{
 			name: "non-GTID-based primary with GTID-based replica",
 			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
 				"r1": {
