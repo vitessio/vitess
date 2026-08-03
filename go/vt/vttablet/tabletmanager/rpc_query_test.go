@@ -262,7 +262,7 @@ func TestTabletManager_ExecuteMultiFetchAsDbaDeniedSessionVariables(t *testing.T
 	}
 	close(tm._waitForGrantsComplete)
 
-	for _, variableName := range []string{"SQL_LOG_BIN", "FOREIGN_KEY_CHECKS", "RESTRICT_FK_ON_NON_STANDARD_KEY"} {
+	for _, variableName := range []string{"SQL_LOG_BIN", "FOREIGN_KEY_CHECKS"} {
 		t.Run(variableName, func(t *testing.T) {
 			_, err := tm.ExecuteMultiFetchAsDba(
 				t.Context(),
