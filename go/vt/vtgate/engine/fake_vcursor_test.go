@@ -84,6 +84,22 @@ func (t *noopVCursor) GetUDV(key string) *querypb.BindVariable {
 	panic("implement me")
 }
 
+func (t *noopVCursor) StorePrepareData(name string, v *vtgatepb.PrepareData) {
+	panic("implement me")
+}
+
+func (t *noopVCursor) GetPrepareData(name string) *vtgatepb.PrepareData {
+	panic("implement me")
+}
+
+func (t *noopVCursor) ClearPrepareData(name string) {
+	panic("implement me")
+}
+
+func (t *noopVCursor) PlanPrepareStatement(ctx context.Context, query string) (*Plan, error) {
+	panic("implement me")
+}
+
 func (t *noopVCursor) InTransaction() bool {
 	return t.inTx
 }

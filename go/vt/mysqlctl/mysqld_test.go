@@ -471,3 +471,68 @@ func TestMysqlbinlogEnvironOverridesExistingTZ(t *testing.T) {
 	require.NotContains(t, got, "TZ=Europe/Berlin")
 	require.Equal(t, baseCopy, base)
 }
+
+// TestMysqladminAbortedWaiting verifies detection of the mysqladmin output
+// emitted when its --shutdown-timeout expires while mysqld is still
+// shutting down cleanly, which must not be treated as a shutdown failure.
+func TestMysqladminAbortedWaiting(t *testing.T) {
+	tests := []struct {
+		name   string
+		output string
+		want   bool
+	}{
+		{
+			name: "aborted waiting on pid file",
+			output: `mysqladmin: connect to server at 'localhost' failed
+error: 'Can't connect to local MySQL server through socket '/vt/socket/mysql.sock' (2)'
+Check that mysqld is running and that the socket: '/vt/socket/mysql.sock' exists!
+Warning;  Aborted waiting on pid file: '/vt/vtdataroot/vt_0000000101/mysql.pid' after 3600 seconds`,
+			want: true,
+		},
+		{
+			name: "access denied",
+			output: `mysqladmin: connect to server at 'localhost' failed
+error: 'Access denied for user 'vt_dba'@'localhost' (using password: NO)'`,
+			want: false,
+		},
+		{
+			name:   "empty output",
+			output: "",
+			want:   false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, mysqladminAbortedWaiting(tt.output))
+		})
+	}
+}
+
+// TestBoundShutdownWaitContext pins the contract that surfaced in review of
+// the mysqladmin aborted-wait handling: the pid/socket file wait must run to
+// a caller-supplied deadline (e.g. the remaining --builtinbackup-mysqld-timeout
+// budget) and must never be shortened to the grace period; only callers with
+// no deadline get the grace bound.
+func TestBoundShutdownWaitContext(t *testing.T) {
+	t.Run("caller deadline is preserved", func(t *testing.T) {
+		parent, cancel := context.WithTimeout(t.Context(), 10*time.Minute)
+		defer cancel()
+		parentDeadline, ok := parent.Deadline()
+		require.True(t, ok)
+
+		bounded, boundedCancel := boundShutdownWaitContext(parent)
+		defer boundedCancel()
+		deadline, ok := bounded.Deadline()
+		require.True(t, ok)
+		assert.Equal(t, parentDeadline, deadline)
+	})
+
+	t.Run("no deadline gets the grace bound", func(t *testing.T) {
+		before := time.Now()
+		bounded, boundedCancel := boundShutdownWaitContext(t.Context())
+		defer boundedCancel()
+		deadline, ok := bounded.Deadline()
+		require.True(t, ok)
+		assert.WithinDuration(t, before.Add(MysqldShutdownGracePeriod), deadline, 5*time.Second)
+	})
+}

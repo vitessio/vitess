@@ -26,7 +26,7 @@ jobs:
 
     steps:
       - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
+        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
         with:
           egress-policy: audit
 
@@ -36,7 +36,7 @@ jobs:
           persist-credentials: 'false'
 
       - name: Login to Docker Hub
-        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4.2.0
+        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4.4.0
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
@@ -48,7 +48,7 @@ jobs:
       - name: Build and push on main
         if: startsWith(github.ref, 'refs/tags/') == false
         timeout-minutes: 15
-        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         with:
           context: .
           file: ${{ env.DOCKERFILE }}
@@ -70,7 +70,7 @@ jobs:
       - name: Build and push on tags
         if: startsWith(github.ref, 'refs/tags/')
         timeout-minutes: 15
-        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         with:
           context: .
           file: ${{ env.DOCKERFILE }}
@@ -94,7 +94,7 @@ jobs:
           persist-credentials: 'false'
 
       - name: Login to Docker Hub
-        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4.2.0
+        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4.4.0
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
@@ -110,7 +110,7 @@ jobs:
       - name: Build and push on main
         if: startsWith(github.ref, 'refs/tags/') == false
         timeout-minutes: 15
-        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         with:
           context: .
           file: ${{ env.DOCKERFILE }}
@@ -136,7 +136,7 @@ jobs:
       - name: Build and push on tags
         if: startsWith(github.ref, 'refs/tags/')
         timeout-minutes: 15
-        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         with:
           context: .
           file: ${{ env.DOCKERFILE }}
@@ -163,7 +163,7 @@ jobs:
           persist-credentials: 'false'
 
       - name: Login to Docker Hub
-        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4.2.0
+        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4.4.0
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
@@ -175,7 +175,7 @@ jobs:
       - name: Build and push on main latest tag
         if: startsWith(github.ref, 'refs/tags/') == false && matrix.debian == 'bookworm'
         timeout-minutes: 15
-        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         with:
           context: ${{ env.DOCKER_CTX }}
           push: true
@@ -187,7 +187,7 @@ jobs:
       - name: Build and push on main debian specific tag
         if: startsWith(github.ref, 'refs/tags/') == false
         timeout-minutes: 15
-        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         with:
           context: ${{ env.DOCKER_CTX }}
           push: true
@@ -220,7 +220,7 @@ jobs:
       - name: Build and push on tags using Debian extension
         if: startsWith(github.ref, 'refs/tags/')
         timeout-minutes: 15
-        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         with:
           context: ${{ env.DOCKER_CTX }}
           push: true
@@ -234,7 +234,7 @@ jobs:
       - name: Build and push on tags without Debian extension
         if: startsWith(github.ref, 'refs/tags/') && matrix.debian == 'bookworm'
         timeout-minutes: 15
-        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         with:
           context: ${{ env.DOCKER_CTX }}
           push: true

@@ -34,7 +34,7 @@ Flags:
       --builtinbackup-file-read-buffer-size uint                         read files using an IO buffer of this many bytes. Golang defaults are used when set to 0.
       --builtinbackup-file-write-buffer-size uint                        write files using an IO buffer of this many bytes. Golang defaults are used when set to 0. (default 2097152)
       --builtinbackup-incremental-restore-path string                    the directory where incremental restore files, namely binlog files, are extracted to. In k8s environments, this should be set to a directory that is shared between the vttablet and mysqld pods. The path should exist. When empty, the default OS temp dir is assumed.
-      --builtinbackup-mysqld-timeout duration                            how long to wait for mysqld to shutdown at the start of the backup. (default 10m0s)
+      --builtinbackup-mysqld-timeout duration                            how long to wait for mysqld to shutdown at the start of the backup. Raised to the mysqld shutdown timeout of the backup request plus a grace period when that is larger. (default 10m0s)
       --builtinbackup-progress duration                                  how often to send progress updates when backing up large files. (default 5s)
       --catch-sigpipe                                                    catch and ignore SIGPIPE on stdout and stderr if specified
       --cell string                                                      cell to use
@@ -111,6 +111,7 @@ Flags:
       --ddl-strategy string                                              Set default strategy for DDL statements. Override with @@ddl_strategy session variable (default "direct")
       --default-tablet-type topodatapb.TabletType                        The default tablet type to set for queries, when one is not explicitly selected. (default PRIMARY)
       --degraded-threshold duration                                      replication lag after which a replica is considered degraded (default 30s)
+      --demote-primary-lock-wait-timeout duration                        Sets the session lock_wait_timeout when enabling super_read_only during a primary demotion. 0 leaves it unset and uses the default of the MySQL server.
       --denied-system-variables strings                                  Comma-separated list of system variables that clients are not allowed to SET; attempts return an unsupported error. Names are matched case-insensitively.
       --disk-write-dir string                                            if provided, tablet will attempt to write a file to this directory to check if the disk is stalled
       --disk-write-interval duration                                     how often to write to the disk to check whether it is stalled (default 5s)

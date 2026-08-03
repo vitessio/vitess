@@ -351,6 +351,55 @@ func TestConnectionWithoutSourceHost(t *testing.T) {
 	c.Close()
 }
 
+// TestConnectionWithProxyProtocol covers the MySQL listener with proxy protocol
+// support enabled: connections that open with a PROXY protocol header must have
+// their advertised source address honored, and connections without a header must
+// still complete the regular MySQL handshake, since deployments may mix proxied
+// and direct traffic (e.g. load balancer traffic alongside direct health checks).
+func TestConnectionWithProxyProtocol(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+	th := &testHandler{}
+
+	authServer := NewAuthServerStatic("", "", 0)
+	authServer.entries["user1"] = []*AuthServerStaticEntry{{
+		Password: "password1",
+		UserData: "userData1",
+	}}
+	t.Cleanup(authServer.close)
+
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, true, false, 0, 0, false)
+	require.NoError(t, err, "NewListener failed")
+	host, port := getHostPort(t, l.Addr())
+	params := &ConnParams{
+		Host:  host,
+		Port:  port,
+		Uname: "user1",
+		Pass:  "password1",
+	}
+	go l.Accept()
+	t.Cleanup(func() { cleanupListener(ctx, l, params) })
+
+	t.Run("with PROXY header", func(t *testing.T) {
+		conn, err := net.Dial("tcp", net.JoinHostPort(host, strconv.Itoa(port)))
+		require.NoError(t, err, "net.Dial failed")
+		t.Cleanup(func() { conn.Close() })
+
+		_, err = conn.Write([]byte("PROXY TCP4 10.9.8.7 127.0.0.1 1234 5678\r\n"))
+		require.NoError(t, err, "writing PROXY header failed")
+
+		c := newConn(conn, 0, 0)
+		require.NoError(t, c.clientHandshake(params, ConnectionAttributes{}), "handshake after a PROXY header should succeed")
+		require.Equal(t, "10.9.8.7:1234", th.LastConn().RemoteAddr().String(), "server should report the source address from the PROXY header")
+		c.Close()
+	})
+
+	t.Run("without PROXY header", func(t *testing.T) {
+		c, err := Connect(ctx, params)
+		require.NoError(t, err, "a connection without a PROXY header should complete the regular MySQL handshake")
+		c.Close()
+	})
+}
+
 func TestConnectionWithSourceHost(t *testing.T) {
 	ctx := utils.LeakCheckContext(t)
 	th := &testHandler{}

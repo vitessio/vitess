@@ -75,7 +75,7 @@ var (
 
 	timeouts = &servenv.TimeoutFlags{
 		LameduckPeriod: 50 * time.Millisecond,
-		OnTermTimeout:  shutdownWaitTime + 10*time.Second,
+		OnTermTimeout:  shutdownWaitTime + mysqlctl.MysqldShutdownGracePeriod,
 		OnCloseTimeout: 10 * time.Second,
 	}
 )
@@ -168,7 +168,7 @@ func run(cmd *cobra.Command, args []string) error {
 	// Take mysqld down with us on SIGTERM before entering lame duck.
 	servenv.OnTermSync(func() {
 		log.Info("mysqlctl received SIGTERM, shutting down mysqld first")
-		ctx, cancel := context.WithTimeout(cmd.Context(), shutdownWaitTime+10*time.Second)
+		ctx, cancel := context.WithTimeout(cmd.Context(), shutdownWaitTime+mysqlctl.MysqldShutdownGracePeriod)
 		defer cancel()
 		if err := mysqld.Shutdown(ctx, cnf, true, shutdownWaitTime); err != nil {
 			log.Error(fmt.Sprintf("failed to shutdown mysqld: %v", err))
