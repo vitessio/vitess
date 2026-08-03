@@ -4495,6 +4495,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 				WaitReplicasTimeout: time.Second,
 			},
 			tmc: &testutil.TabletManagerClient{
+				ReadReparentJournalInfoResults: map[string]int32{},
 				DemotePrimaryResults: map[string]struct {
 					Status *replicationdatapb.PrimaryStatus
 					Error  error

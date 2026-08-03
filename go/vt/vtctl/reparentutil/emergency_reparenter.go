@@ -1329,6 +1329,17 @@ func (erp *EmergencyReparenter) findErrantGTIDs(
 	waitReplicasTimeout time.Duration,
 	extraEvidence []replication.Position,
 ) (map[string]*RelayLogPositions, []string, error) {
+	allPositionsZero := len(validCandidates) > 0
+	for _, positions := range validCandidates {
+		if positions == nil || !positions.IsZero() {
+			allPositionsZero = false
+			break
+		}
+	}
+	if allPositionsZero {
+		return maps.Clone(validCandidates), nil, nil
+	}
+
 	// First we need to collect the reparent journal length for all the candidates.
 	// This will tell us, which of the tablets are severly lagged, and haven't even seen all the primary promotions.
 	// Such severely lagging tablets cannot be used to find errant GTIDs in other tablets, seeing that they themselves don't have enough information.
