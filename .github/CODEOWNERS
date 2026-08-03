@@ -2,20 +2,20 @@ bootstrap.sh @frouioui
 go.mod @mattlord @frouioui @timvaillancourt
 go.sum @mattlord @frouioui @timvaillancourt
 /.golangci.yml @timvaillancourt
-/.github/ @mattlord @frouioui
+/.github/ @mattlord @frouioui @mhamza15
 /.github/ISSUE_TEMPLATE/ @frouioui @mattlord
-/.github/workflows/ @frouioui @mattlord
+/.github/workflows/ @frouioui @mattlord @mhamza15
 /config/mycnf/ @mattlord
 /doc/ @frouioui
-/docker/ @derekperkins @mattlord @frouioui
-/examples/compose @frouioui
+/docker/ @derekperkins @mattlord @frouioui @mhamza15
+/examples/compose @frouioui @mhamza15
 /examples/demo @mattlord
 /examples/local @frouioui @mattlord
 /examples/operator @frouioui @mattlord
 /examples/region_sharding @mattlord
 /java/ @mattlord
 /go/cmd @mattlord
-/go/cmd/vtadmin @mattlord
+/go/cmd/vtadmin @mattlord @mhamza15
 /go/cmd/vtctldclient @mattlord
 /go/cmd/vtctldclient/command/throttler.go @mattlord
 /go/cmd/vtctldclient/command/vreplication @mattlord @beingnoble03
@@ -64,7 +64,7 @@ go.sum @mattlord @frouioui @timvaillancourt
 /go/vt/vtgate/planbuilder @frouioui @arthurschreiber
 /go/vt/vtgate/*vstream* @mattlord
 /go/vt/vtgate/evalengine @arthurschreiber
-/go/vt/vtorc @mattlord @timvaillancourt
+/go/vt/vtorc @mattlord @timvaillancourt @mhamza15
 /go/vt/vttablet/*conn* @arthurschreiber
 /go/vt/vttablet/endtoend @mattlord @arthurschreiber
 /go/vt/vttablet/grpc* @mattlord @timvaillancourt
