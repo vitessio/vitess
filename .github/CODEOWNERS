@@ -4,7 +4,7 @@ go.sum @mattlord @frouioui @timvaillancourt
 /.golangci.yml @timvaillancourt
 /.github/ @mattlord @frouioui @mhamza15
 /.github/ISSUE_TEMPLATE/ @frouioui @mattlord
-/.github/workflows/ @frouioui @mattlord @mhamza15
+/.github/workflows/ @frouioui @mattlord @mhamza15 @arthurschreiber
 /config/mycnf/ @mattlord
 /doc/ @frouioui
 /docker/ @derekperkins @mattlord @frouioui @mhamza15
@@ -22,7 +22,7 @@ go.sum @mattlord @frouioui @timvaillancourt
 /go/cmd/vtctldclient/command/backups.go @frouioui @mattlord
 /go/cmd/vtbackup @frouioui
 /go/internal/flag @mattlord
-/go/mysql @mattlord
+/go/mysql @mattlord @arthurschreiber
 /go/pools @arthurschreiber
 /go/protoutil @mattlord @timvaillancourt
 /go/sqltypes @arthurschreiber
@@ -48,7 +48,7 @@ go.sum @mattlord @frouioui @timvaillancourt
 /go/vt/sysvars @mattlord
 /go/vt/topo @mattlord @timvaillancourt
 /go/vt/topotools @mattlord @timvaillancourt
-/go/vt/vitessdriver @mattlord @arthurschreiber
+/go/vt/vitessdriver @mattlord
 /go/vt/vtadmin @mattlord
 /go/vt/vtctl @mattlord
 /go/vt/vtctl/vtctl.go @mattlord
@@ -57,7 +57,7 @@ go.sum @mattlord @frouioui @timvaillancourt
 /go/vt/vtctl/reparentutil @timvaillancourt
 /go/vt/vtctl/vtctldclient @mattlord @timvaillancourt
 /go/vt/vtctld @mattlord @timvaillancourt
-/go/vt/vterrors @arthurschreiber @frouioui @timvaillancourt
+/go/vt/vterrors @frouioui @timvaillancourt
 /go/vt/vtexplain @systay @harshit-gangal
 /go/vt/vtgate @arthurschreiber @frouioui
 /go/vt/vtgate/endtoend/*vstream* @mattlord

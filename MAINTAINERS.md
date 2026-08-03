@@ -21,16 +21,16 @@ shlomi-noach, frouioui
 rohit-nayak-ps, mattlord
 
 ### Parser
-systay, harshit-gangal, dbussink
+systay, harshit-gangal, dbussink, arthurschreiber
 
 ### Evaluation Engine
-dbussink, systay
+dbussink, systay, arthurschreiber
 
 ### Planner
 systay, harshit-gangal, frouioui 
 
 ### Query Serving
-systay, harshit-gangal, frouioui, dbussink
+systay, harshit-gangal, frouioui, dbussink, arthurschreiber
 
 ### Online DDL
 shlomi-noach, dbussink
