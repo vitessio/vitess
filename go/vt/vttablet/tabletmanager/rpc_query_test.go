@@ -17,6 +17,7 @@ limitations under the License.
 package tabletmanager
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
@@ -136,6 +137,151 @@ func TestTabletManager_MysqlHostMetricsNilCnf(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, resp)
 	assert.Nil(t, resp.HostMetrics)
+}
+
+// TestTabletManager_ExecuteMultiFetchAsDbaSessionVariables verifies assignments
+// execute in order before schema DDL.
+func TestTabletManager_ExecuteMultiFetchAsDbaSessionVariables(t *testing.T) {
+	ctx := t.Context()
+	cp := mysql.ConnParams{}
+	db := fakesqldb.New(t)
+	db.AddQueryPattern(".*", &sqltypes.Result{})
+	daemon := mysqlctl.NewFakeMysqlDaemon(db)
+
+	dbName := "testdb"
+	tm := &TabletManager{
+		MysqlDaemon:            daemon,
+		DBConfigs:              dbconfigs.NewTestDBConfigs(cp, cp, dbName),
+		QueryServiceControl:    tabletservermock.NewController(),
+		_waitForGrantsComplete: make(chan struct{}),
+		Env:                    vtenv.NewTestEnv(),
+	}
+	close(tm._waitForGrantsComplete)
+
+	_, err := tm.ExecuteMultiFetchAsDba(ctx, &tabletmanagerdatapb.ExecuteMultiFetchAsDbaRequest{
+		Sql:                     []byte("create /*vt+ allowZeroInDate=true */ table t (id int primary key)"),
+		DbName:                  dbName,
+		MaxRows:                 10,
+		DisableBinlogs:          true,
+		DisableForeignKeyChecks: true,
+		SessionVariables: []*tabletmanagerdatapb.SessionVariable{
+			{Name: "innodb_strict_mode", Value: "off"},
+			{Name: "sql_mode", Value: "ANSI"},
+		},
+	})
+	require.NoError(t, err)
+
+	got := strings.Split(db.QueryLog(), ";")
+	require.Contains(t, got, "use `testdb`")
+	firstVariableIdx := -1
+	secondVariableIdx := -1
+	disableBinlogsIdx := -1
+	disableForeignKeyChecksIdx := -1
+	allowZeroInDateIdx := -1
+	createIdx := -1
+	for i, q := range got {
+		q = strings.ToLower(strings.TrimSpace(q))
+		if q == "set @@session.innodb_strict_mode=x'6f6666'" {
+			firstVariableIdx = i
+		}
+		if q == "set @@session.sql_mode=x'414e5349'" {
+			secondVariableIdx = i
+		}
+		if q == "set sql_log_bin = off" {
+			disableBinlogsIdx = i
+		}
+		if q == "set session foreign_key_checks = off" {
+			disableForeignKeyChecksIdx = i
+		}
+		if strings.Contains(q, "set @@session.sql_mode=replace") {
+			allowZeroInDateIdx = i
+		}
+		if strings.Contains(q, "create /*vt+ allowzeroindate=true */ table t") {
+			createIdx = i
+		}
+	}
+	require.NotEqual(t, -1, firstVariableIdx, "expected first session variable setup in %v", got)
+	require.NotEqual(t, -1, secondVariableIdx, "expected second session variable setup in %v", got)
+	require.NotEqual(t, -1, disableBinlogsIdx, "expected binlogs disabled in %v", got)
+	require.NotEqual(t, -1, disableForeignKeyChecksIdx, "expected foreign key checks disabled in %v", got)
+	require.NotEqual(t, -1, allowZeroInDateIdx, "expected zero-date modes removed in %v", got)
+	require.NotEqual(t, -1, createIdx, "expected schema SQL")
+	assert.Less(t, firstVariableIdx, secondVariableIdx)
+	assert.Less(t, secondVariableIdx, disableBinlogsIdx)
+	assert.Less(t, secondVariableIdx, disableForeignKeyChecksIdx)
+	assert.Less(t, secondVariableIdx, allowZeroInDateIdx)
+	assert.Less(t, disableBinlogsIdx, createIdx)
+	assert.Less(t, disableForeignKeyChecksIdx, createIdx)
+	assert.Less(t, allowZeroInDateIdx, createIdx)
+}
+
+// TestTabletManager_ExecuteMultiFetchAsDbaSessionVariableFailure verifies a
+// failed assignment prevents schema DDL.
+func TestTabletManager_ExecuteMultiFetchAsDbaSessionVariableFailure(t *testing.T) {
+	ctx := t.Context()
+	cp := mysql.ConnParams{}
+	db := fakesqldb.New(t)
+	db.AddQueryPattern(".*", &sqltypes.Result{})
+	db.AddRejectedQuery("set @@session.sql_mode=X'414e5349'", errors.New("cannot set session variable"))
+	daemon := mysqlctl.NewFakeMysqlDaemon(db)
+
+	tm := &TabletManager{
+		MysqlDaemon:            daemon,
+		DBConfigs:              dbconfigs.NewTestDBConfigs(cp, cp, "testdb"),
+		QueryServiceControl:    tabletservermock.NewController(),
+		_waitForGrantsComplete: make(chan struct{}),
+		Env:                    vtenv.NewTestEnv(),
+	}
+	close(tm._waitForGrantsComplete)
+
+	_, err := tm.ExecuteMultiFetchAsDba(ctx, &tabletmanagerdatapb.ExecuteMultiFetchAsDbaRequest{
+		Sql:    []byte("create table t (id int primary key)"),
+		DbName: "testdb",
+		SessionVariables: []*tabletmanagerdatapb.SessionVariable{
+			{Name: "sql_mode", Value: "ANSI"},
+		},
+	})
+	require.ErrorContains(t, err, "cannot set session variable")
+	assert.NotContains(t, db.QueryLog(), "create table t")
+}
+
+// TestTabletManager_ExecuteMultiFetchAsDbaDeniedSessionVariables verifies RPC
+// callers cannot bypass the session variable deny list.
+func TestTabletManager_ExecuteMultiFetchAsDbaDeniedSessionVariables(t *testing.T) {
+	cp := mysql.ConnParams{}
+	db := fakesqldb.New(t)
+	db.AddQueryPattern(".*", &sqltypes.Result{})
+	daemon := mysqlctl.NewFakeMysqlDaemon(db)
+
+	tm := &TabletManager{
+		MysqlDaemon:            daemon,
+		DBConfigs:              dbconfigs.NewTestDBConfigs(cp, cp, "testdb"),
+		QueryServiceControl:    tabletservermock.NewController(),
+		_waitForGrantsComplete: make(chan struct{}),
+		Env:                    vtenv.NewTestEnv(),
+	}
+	close(tm._waitForGrantsComplete)
+
+	for _, variableName := range []string{"SQL_LOG_BIN", "FOREIGN_KEY_CHECKS"} {
+		t.Run(variableName, func(t *testing.T) {
+			_, err := tm.ExecuteMultiFetchAsDba(
+				t.Context(),
+				&tabletmanagerdatapb.ExecuteMultiFetchAsDbaRequest{
+					Sql:    []byte("create table t (id int primary key)"),
+					DbName: "testdb",
+					SessionVariables: []*tabletmanagerdatapb.SessionVariable{
+						{Name: variableName, Value: "off"},
+					},
+				},
+			)
+			require.EqualError(
+				t,
+				err,
+				`session variable "`+variableName+`" is not allowed`,
+			)
+			assert.NotContains(t, db.QueryLog(), "create table t")
+		})
+	}
 }
 
 func TestTabletManager_ExecuteFetchAsDba(t *testing.T) {

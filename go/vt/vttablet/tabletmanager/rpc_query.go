@@ -24,6 +24,7 @@ import (
 	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
+	ddlschema "vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
@@ -113,6 +114,7 @@ func (tm *TabletManager) executeMultiFetchAsDba(
 	reloadSchema bool,
 	disableBinlogs bool,
 	disableForeignKeyChecks bool,
+	sessionVariables []ddlschema.SessionVariable,
 	validateQueries func(queries []string, countCreate int) error,
 ) ([]*querypb.QueryResult, error) {
 	if err := tm.waitForGrantsToHaveApplied(ctx); err != nil {
@@ -140,6 +142,17 @@ func (tm *TabletManager) executeMultiFetchAsDba(
 			return nil, err
 		}
 	}
+	if err := ddlschema.ValidateSessionVariables(sessionVariables); err != nil {
+		return nil, err
+	}
+	sessionVariableQueries := make([]string, 0, len(sessionVariables))
+	for _, variable := range sessionVariables {
+		query, err := variable.SetStatement()
+		if err != nil {
+			return nil, err
+		}
+		sessionVariableQueries = append(sessionVariableQueries, query)
+	}
 
 	// Get a connection.
 	conn, err := tm.MysqlDaemon.GetDbaConnection(ctx)
@@ -147,6 +160,14 @@ func (tm *TabletManager) executeMultiFetchAsDba(
 		return nil, err
 	}
 	defer conn.Close()
+
+	// Apply requested session state before Vitess-enforced settings so callers
+	// cannot undo the guarantees provided by the request options.
+	for _, query := range sessionVariableQueries {
+		if _, err := conn.ExecuteFetch(query, 0, false); err != nil {
+			return nil, err
+		}
+	}
 
 	// Disable binlogs if necessary.
 	if disableBinlogs {
@@ -231,6 +252,7 @@ func (tm *TabletManager) ExecuteFetchAsDba(ctx context.Context, req *tabletmanag
 		req.ReloadSchema,
 		req.DisableBinlogs,
 		req.DisableForeignKeyChecks,
+		nil, /* sessionVariables */
 		func(queries []string, countCreate int) error {
 			// As of v23 we do not allow multi-statement SQL in ExecuteFetchAsDba at all, and
 			// ExecuteMultiFetchAsDba will be the only way to execute multiple statements.
@@ -252,6 +274,16 @@ func (tm *TabletManager) ExecuteFetchAsDba(ctx context.Context, req *tabletmanag
 
 // ExecuteMultiFetchAsDba will execute the given queries, possibly disabling binlogs and reload schema.
 func (tm *TabletManager) ExecuteMultiFetchAsDba(ctx context.Context, req *tabletmanagerdatapb.ExecuteMultiFetchAsDbaRequest) ([]*querypb.QueryResult, error) {
+	sessionVariables := make([]ddlschema.SessionVariable, 0, len(req.SessionVariables))
+	for _, variable := range req.SessionVariables {
+		if variable == nil {
+			return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "session variable must not be nil")
+		}
+		sessionVariables = append(sessionVariables, ddlschema.SessionVariable{
+			Name:  variable.Name,
+			Value: variable.Value,
+		})
+	}
 	results, err := tm.executeMultiFetchAsDba(
 		ctx,
 		req.DbName,
@@ -260,6 +292,7 @@ func (tm *TabletManager) ExecuteMultiFetchAsDba(ctx context.Context, req *tablet
 		req.ReloadSchema,
 		req.DisableBinlogs,
 		req.DisableForeignKeyChecks,
+		sessionVariables,
 		nil, // Validation query is not needed for ExecuteMultiFetchAsDba
 	)
 	return results, err

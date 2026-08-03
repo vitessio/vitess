@@ -38,6 +38,7 @@
         - [New `--demote-primary-lock-wait-timeout` flag](#vttablet-demote-primary-lock-wait-timeout)
         - [Schema engine table-count limit is now configurable](#vttablet-schema-max-table-count)
         - [Skip MySQL version check when restoring from a mysql-shell backup](#vttablet-mysql-shell-restore-skip-version-check)
+        - [ApplySchema session variables](#vttablet-applyschema-session-variables)
     - **[Backup/Restore](#minor-changes-backup)**
         - [Chunked backup/restore for the builtinbackupengine](#backup-chunked-builtin)
         - [Slow clean mysqld shutdowns no longer fail backups](#backup-mysqld-shutdown-timeout)
@@ -340,6 +341,41 @@ A new `--mysql-shell-restore-skip-version-check` flag (default `false`) has been
 Because mysql-shell performs a logical restore, its backups are not tied to the on-disk data dictionary format the way physical backups are, so restoring across otherwise-incompatible MySQL versions can be safe. This flag lets operators opt into that behavior.
 
 **Impact**: With this flag set, VTTablet may select and restore a `mysqlshell` backup whose MySQL version would otherwise be rejected as incompatible. Leave it unset to preserve the existing behavior.
+
+#### <a id="vttablet-applyschema-session-variables"/>ApplySchema session variables</a>
+
+`ApplySchema` now accepts repeatable `--session-variable name=value` DDL
+strategy options. The assignments use MySQL `SESSION` scope and are applied in
+the order supplied.
+
+For the `direct` strategy, the variables apply to the dedicated DBA connection
+that executes the requested schema statements. For Online DDL, they apply to
+the dedicated connections used for:
+
+- scheduler-executed direct DDL;
+- VReplication shadow-table creation, alteration, and `AUTO_INCREMENT`
+  adjustment;
+- declarative comparison-table DDL; and
+- online view artifact creation and its view swap.
+
+The variables do not apply to the pooled connections used during a
+VReplication cutover. In particular, they do not affect sentry-table DDL or the
+final `RENAME TABLE` that swaps the original and shadow tables.
+
+Each affected connection's previous values are restored afterward. Invalid,
+duplicate, or denied variable names and failed assignments stop the operation
+before schema DDL executes on that connection. `sql_log_bin`,
+`foreign_key_checks`, and `gtid_next` are denied.
+
+**Compatibility note:** `--session-variable` requires vtctld and vttablet at
+v25 or newer. On a mixed-version cluster, an upgraded caller can send the new
+`session_variables` RPC field (or Online DDL options) to an older tablet that
+does not understand them. The tablet may still run the DDL while skipping the
+requested session state, so the option can appear to succeed without effect.
+Upgrade vtctld, vtctldclient, vtgate and vttablet before executing a schema
+change with `--session-variable`.
+
+See [#20654](https://github.com/vitessio/vitess/pull/20654) for details.
 
 ### <a id="minor-changes-backup"/>Backup/Restore</a>
 
