@@ -1024,8 +1024,21 @@ func (td *tableDiffer) getSourcePKCols() error {
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected statement type for source query of table %s", td.table.Name)
 	}
 
-	td.tablePlan.sourcePkCols = make([]int, 0, len(sourceTable.PrimaryKeyColumns))
-	for _, pkc := range sourceTable.PrimaryKeyColumns {
+	indices, err := sourcePKSelectIndices(sourceSelect, sourceTable.PrimaryKeyColumns)
+	if err != nil {
+		return vterrors.Wrapf(err, "table %s", td.table.Name)
+	}
+	td.tablePlan.sourcePkCols = indices
+
+	return nil
+}
+
+// sourcePKSelectIndices maps each PK column to its position in the SELECT expression list.
+// It uses two passes: first matching by underlying ColName (to prevent alias shadowing),
+// then falling back to alias matching for cross-table filters.
+func sourcePKSelectIndices(sourceSelect *sqlparser.Select, pkColumns []string) ([]int, error) {
+	indices := make([]int, 0, len(pkColumns))
+	for _, pkc := range pkColumns {
 		found := false
 		// Pass 1: match by underlying ColName (direct source column match).
 		// This must run first so that an alias shadowing a PK name cannot
@@ -1038,12 +1051,12 @@ func (td *tableDiffer) getSourcePKCols() error {
 			switch ct := aliasedExpr.Expr.(type) {
 			case *sqlparser.ColName:
 				if strings.EqualFold(pkc, ct.Name.String()) {
-					td.tablePlan.sourcePkCols = append(td.tablePlan.sourcePkCols, i)
+					indices = append(indices, i)
 					found = true
 				}
 			case *sqlparser.FuncExpr:
 				if strings.EqualFold(pkc, aliasedExpr.As.String()) {
-					td.tablePlan.sourcePkCols = append(td.tablePlan.sourcePkCols, i)
+					indices = append(indices, i)
 					found = true
 				}
 			}
@@ -1060,19 +1073,17 @@ func (td *tableDiffer) getSourcePKCols() error {
 					continue
 				}
 				if !aliasedExpr.As.IsEmpty() && strings.EqualFold(pkc, aliasedExpr.As.String()) {
-					td.tablePlan.sourcePkCols = append(td.tablePlan.sourcePkCols, i)
+					indices = append(indices, i)
 					found = true
 					break
 				}
 			}
 		}
 		if !found {
-			return vterrors.Errorf(vtrpcpb.Code_INTERNAL,
-				"source PK column %s not found in source query SELECT list for table %s", pkc, td.table.Name)
+			return nil, fmt.Errorf("source PK column %s not found in SELECT list", pkc)
 		}
 	}
-
-	return nil
+	return indices, nil
 }
 
 func getColumnNameForSelectExpr(selectExpression sqlparser.SelectExpr) (string, error) {

@@ -24,6 +24,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/sqlparser"
 
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 )
@@ -143,6 +144,128 @@ func TestSourcePKColsOrdering(t *testing.T) {
 
 			assert.Equal(t, tc.wantSourcePkCols, td.tablePlan.sourcePkCols,
 				"sourcePkCols should reflect PK column positions in the source SELECT expression list")
+		})
+	}
+}
+
+// TestSourcePKSelectIndices tests the extracted sourcePKSelectIndices function
+// directly with parsed queries, without needing topo/tablet infrastructure.
+func TestSourcePKSelectIndices(t *testing.T) {
+	testCases := []struct {
+		name        string
+		sourceQuery string
+		pkColumns   []string
+		wantIndices []int
+		wantErr     bool
+	}{
+		{
+			name:        "natural order single PK",
+			sourceQuery: "select c1, c2 from t1 order by c1 asc",
+			pkColumns:   []string{"c1"},
+			wantIndices: []int{0},
+		},
+		{
+			name:        "reordered columns single PK",
+			sourceQuery: "select c2, c1 from t1 order by c1 asc",
+			pkColumns:   []string{"c1"},
+			wantIndices: []int{1},
+		},
+		{
+			name:        "composite PK natural order",
+			sourceQuery: "select c1, c2 from multipk order by c1 asc, c2 asc",
+			pkColumns:   []string{"c1", "c2"},
+			wantIndices: []int{0, 1},
+		},
+		{
+			name:        "composite PK columns reordered in select",
+			sourceQuery: "select c2, c1 from multipk order by c1 asc, c2 asc",
+			pkColumns:   []string{"c1", "c2"},
+			wantIndices: []int{1, 0},
+		},
+		{
+			name:        "composite PK 4 columns fully reversed",
+			sourceQuery: "select d, c, b, a from t order by b asc, d asc",
+			pkColumns:   []string{"b", "d"},
+			wantIndices: []int{2, 0},
+		},
+		{
+			name:        "alias matches PK (cross-table MoveTables filter)",
+			sourceQuery: "select c0 as c1, c2 from t2 order by c1 asc",
+			pkColumns:   []string{"c1"},
+			wantIndices: []int{0},
+		},
+		{
+			name:        "function expression with alias",
+			sourceQuery: "select c1, c2, count(*) as c3, sum(c4) as c4 from t group by c1 order by c1 asc",
+			pkColumns:   []string{"c1"},
+			wantIndices: []int{0},
+		},
+		{
+			name:        "PK at last position",
+			sourceQuery: "select a, b, c, id from t order by id asc",
+			pkColumns:   []string{"id"},
+			wantIndices: []int{3},
+		},
+		{
+			name:        "case insensitive match",
+			sourceQuery: "select ID, Name from t order by ID asc",
+			pkColumns:   []string{"id"},
+			wantIndices: []int{0},
+		},
+		{
+			name:        "PK not found in select list",
+			sourceQuery: "select a, b from t order by a asc",
+			pkColumns:   []string{"missing_col"},
+			wantErr:     true,
+		},
+		{
+			name:        "in_keyrange filter preserves column positions",
+			sourceQuery: "select c1, c2 from t1 where in_keyrange('-80') order by c1 asc",
+			pkColumns:   []string{"c1"},
+			wantIndices: []int{0},
+		},
+		{
+			name:        "three PKs scattered across wide select",
+			sourceQuery: "select a, b, c, d, e, f from t order by b asc, d asc, f asc",
+			pkColumns:   []string{"b", "d", "f"},
+			wantIndices: []int{1, 3, 5},
+		},
+		{
+			name:        "multi-alias cross-table filter",
+			sourceQuery: "select src_a as id, src_b as name, src_c as value from source_t order by id asc",
+			pkColumns:   []string{"id", "name"},
+			wantIndices: []int{0, 1},
+		},
+		{
+			name:        "column swap alias does not shadow real PK",
+			sourceQuery: "select b as a, a as b from t order by a asc",
+			pkColumns:   []string{"a"},
+			wantIndices: []int{1},
+		},
+		{
+			name:        "column swap composite PK prefers ColName over alias",
+			sourceQuery: "select b as a, a as b, c from t order by a asc, b asc",
+			pkColumns:   []string{"a", "b"},
+			wantIndices: []int{1, 0},
+		},
+	}
+
+	parser := sqlparser.NewTestParser()
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			statement, err := parser.Parse(tc.sourceQuery)
+			require.NoError(t, err)
+			sourceSelect, ok := statement.(*sqlparser.Select)
+			require.True(t, ok)
+
+			indices, err := sourcePKSelectIndices(sourceSelect, tc.pkColumns)
+			if tc.wantErr {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tc.wantIndices, indices)
 		})
 	}
 }
