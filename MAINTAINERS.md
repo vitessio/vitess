@@ -15,34 +15,37 @@ The following is the full list, alphabetically ordered.
 mattlord, derekperkins
 
 ### Builds
-shlomi-noach, frouioui
+mattlord, frouioui
 
-### Resharding
-rohit-nayak-ps, mattlord
+### Sharding
+mattlord
+
+### VReplication
+mattlord
 
 ### Parser
-systay, harshit-gangal, dbussink, arthurschreiber
+arthurschreiber
 
 ### Evaluation Engine
-dbussink, systay, arthurschreiber
+arthurschreiber
 
 ### Planner
-systay, harshit-gangal, frouioui 
+frouioui arthurschreiber
 
 ### Query Serving
-systay, harshit-gangal, frouioui, dbussink, arthurschreiber
+frouioui, arthurschreiber
 
 ### Online DDL
-shlomi-noach, dbussink
+mattlord
 
 ### Cluster Management
-dbussink, timvaillancourt
+mattlord, timvaillancourt
 
 ### Java
-harshit-gangal
+mattlord
 
 ### Kubernetes
-derekperkins, frouioui
+derekperkins, frouioui, mattlord
 
 ### VTAdmin
 mattlord
