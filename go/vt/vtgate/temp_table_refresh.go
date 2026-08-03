@@ -215,17 +215,22 @@ func (r *tempTableActivityRefresher) dueTargets(session *econtext.SafeSession) [
 // A's temp table expire mid-command even though the session is visibly
 // active. The rate limiter dedupes the start/tick/end calls, so a short
 // command still costs at most one refresh per connection. The returned stop
-// is idempotent and fires the settling refresh, which also covers a session
-// whose first temporary table was created by this very command.
+// is idempotent; it joins the ticker goroutine before firing the settling
+// refresh — each command wraps the shared session state in its own
+// SafeSession, so a tick left running past stop would race the next
+// command's session mutations — and the settling refresh also covers a
+// session whose first temporary table was created by this very command.
 func (r *tempTableActivityRefresher) commandLease(ctx context.Context, session *econtext.SafeSession) func() {
 	if r == nil || session == nil {
 		return func() {}
 	}
 	r.onSessionActivity(ctx, session)
-	var done chan struct{}
+	var done, exited chan struct{}
 	if interval := tempTableHeartbeatTime; interval > 0 && session.GetOptions().GetHasCreatedTempTables() {
 		done = make(chan struct{})
+		exited = make(chan struct{})
 		go func() {
+			defer close(exited)
 			ticker := time.NewTicker(interval)
 			defer ticker.Stop()
 			for {
@@ -245,6 +250,7 @@ func (r *tempTableActivityRefresher) commandLease(ctx context.Context, session *
 		once.Do(func() {
 			if done != nil {
 				close(done)
+				<-exited
 			}
 			r.onSessionActivity(ctx, session)
 		})

@@ -1735,14 +1735,18 @@ func planKeepsConnOnTimeout(planID p.PlanType) bool {
 }
 
 // keepsConnOnTimeout is the per-query timeout decision: a safe plan may keep
-// its connection unless the query carries fetch_last_insert_id. A
-// last_insert_id(expr) assignment survives KILL QUERY on the connection even
-// when the statement's row changes roll back, and the error return skips the
-// post-exec fetch that reports the new value to the vtgate session — keeping
-// the connection would leave it holding a last_insert_id the session never
-// recorded, so it is closed instead.
+// its connection unless the statement carries state a kill does not roll
+// back. A last_insert_id(expr) assignment survives KILL QUERY on the
+// connection even when the statement's row changes roll back, and the error
+// return skips the post-exec fetch that reports the new value to the vtgate
+// session. DML containing a mutating lock function (plan.KillsConnOnTimeout)
+// has the same shape: the rows roll back but the lock grant or release can
+// race the kill. Keeping such a connection would leave it holding state the
+// session never recorded, so it is closed instead.
 func (qre *QueryExecutor) keepsConnOnTimeout() bool {
-	return planKeepsConnOnTimeout(qre.plan.PlanID) && !qre.options.GetFetchLastInsertId()
+	return planKeepsConnOnTimeout(qre.plan.PlanID) &&
+		!qre.plan.KillsConnOnTimeout &&
+		!qre.options.GetFetchLastInsertId()
 }
 
 func (qre *QueryExecutor) execStatefulConn(conn *StatefulConnection, sql string, wantfields bool) (*sqltypes.Result, error) {

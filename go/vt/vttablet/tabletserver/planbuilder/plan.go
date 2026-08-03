@@ -200,6 +200,15 @@ type Plan struct {
 
 	// NeedsReservedConn indicates at a reserved connection is needed to execute this plan
 	NeedsReservedConn bool
+
+	// KillsConnOnTimeout forces a query timeout to kill the stateful
+	// connection instead of keeping it, overriding the plan type's normal
+	// keep-on-timeout safety. Set for DML containing a mutating lock
+	// function: the statement's row changes roll back atomically under KILL
+	// QUERY, but the lock grant or release does not, and can race the kill —
+	// leaving lock state the session never recorded. SELECT carries the same
+	// fact as the SelectLockFunc plan type instead.
+	KillsConnOnTimeout bool
 }
 
 // TableName returns the table name for the plan.
@@ -316,6 +325,18 @@ func BuildStreaming(env *vtenv.Environment, statement sqlparser.Statement, table
 	if err != nil {
 		return nil, err
 	}
+	// A lock function reached through DML mutates or acquires connection-
+	// scoped lock state exactly as it does in a SELECT predicate; the plan
+	// type stays DML (dispatch is unchanged) but the timeout and reservation
+	// consequences carry over. See lockFuncs.
+	switch statement.(type) {
+	case *sqlparser.Insert, *sqlparser.Update, *sqlparser.Delete:
+		mutating, acquiring := lockFuncs(statement)
+		plan.KillsConnOnTimeout = mutating
+		if acquiring {
+			plan.NeedsReservedConn = true
+		}
+	}
 	plan.AllTables = lookupAllTables(statement, tables)
 	plan.Permissions = BuildPermissions(statement)
 	return plan, nil
@@ -340,22 +361,23 @@ func BuildMessageStreaming(name string, tables map[string]*schema.Table) (*Plan,
 	return plan, nil
 }
 
-// lockFuncs reports whether the select query contains a mutating lock
-// function — get_lock, release_lock, release_all_locks — anywhere in the
-// statement (select list, predicates, subqueries: a get_lock in a WHERE
-// clause acquires the lock just the same), and whether one of them acquires a
-// lock. Mutating lock functions plan as SelectLockFunc so
-// that on a reserved connection a query timeout kills the connection rather
-// than keep it: the kill can race the server-side grant or release, leaving
-// lock state vtgate never recorded on a connection it goes on reusing. Only
-// acquisition requires a reserved connection — a lock is scoped to one MySQL
-// connection, so acquiring it on a pooled connection is meaningless. The
-// release functions stay allowed without one: vtgate sends them as plain
-// executes when the session holds no locks, and a pooled connection can hold
-// no user-level lock, so MySQL correctly answers NULL (no such lock) or 0
-// (held by another connection). The pure reads (is_free_lock, is_used_lock)
-// stay ordinary selects.
-func lockFuncs(sel *sqlparser.Select) (mutating, acquiring bool) {
+// lockFuncs reports whether the statement contains a mutating lock function
+// — get_lock, release_lock, release_all_locks — anywhere in it (select list,
+// predicates, subqueries, DML expressions: a get_lock in a WHERE clause
+// acquires the lock just the same), and whether one of them acquires a lock.
+// A mutating lock function means a query timeout on a reserved connection
+// must kill the connection rather than keep it: the kill can race the
+// server-side grant or release, leaving lock state vtgate never recorded on
+// a connection it goes on reusing. SELECT encodes that as the SelectLockFunc
+// plan type; DML keeps its plan type and carries the KillsConnOnTimeout
+// flag. Only acquisition requires a reserved connection — a lock is scoped
+// to one MySQL connection, so acquiring it on a pooled connection is
+// meaningless. The release functions stay allowed without one: vtgate sends
+// them as plain executes when the session holds no locks, and a pooled
+// connection can hold no user-level lock, so MySQL correctly answers NULL
+// (no such lock) or 0 (held by another connection). The pure reads
+// (is_free_lock, is_used_lock) stay ordinary wherever they appear.
+func lockFuncs(stmt sqlparser.Statement) (mutating, acquiring bool) {
 	_ = sqlparser.Walk(func(in sqlparser.SQLNode) (bool, error) {
 		lFunc, isLFunc := in.(*sqlparser.LockingFunc)
 		if !isLFunc {
@@ -370,7 +392,7 @@ func lockFuncs(sel *sqlparser.Select) (mutating, acquiring bool) {
 			mutating = true
 		}
 		return true, nil
-	}, sel)
+	}, stmt)
 	return mutating, acquiring
 }
 

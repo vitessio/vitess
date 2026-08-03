@@ -28,6 +28,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"testing"
 	"time"
@@ -2525,8 +2526,10 @@ func TestReserveExecute_WithoutTx(t *testing.T) {
 // TestTempTableIdleTimeoutAutoWaitTimeout verifies the temp-table idle
 // timeout's auto mode (-1, the default): the tablet mirrors its own mysqld's
 // @@global.wait_timeout, read via the dba pool when the query service opens
-// and refreshed on the schema-reload path so a runtime SET GLOBAL converges.
-// A failed read logs a warning and retains the last successfully read value,
+// and re-read on the schema-reload cadence so a runtime SET GLOBAL converges.
+// The notifier only triggers the read — it runs in the background, off the
+// schema engine's locks, with triggers dropped while one is in flight. A
+// failed read logs a warning and retains the last successfully read value,
 // so a transient error cannot snap existing temp-table connections back to
 // the much shorter pre-feature timer.
 func TestTempTableIdleTimeoutAutoWaitTimeout(t *testing.T) {
@@ -2535,24 +2538,51 @@ func TestTempTableIdleTimeoutAutoWaitTimeout(t *testing.T) {
 	defer tsv.StopService()
 	defer db.Close()
 
-	// Read at query-service open (the fake serves 28800, mysqld's default).
-	require.Equal(t, 28800*time.Second, tsv.te.txPool.scp.MysqlWaitTimeout())
+	waitTimeout := func() time.Duration { return tsv.te.txPool.scp.MysqlWaitTimeout() }
+	refreshDone := func() bool { return !tsv.qe.mysqlWaitTimeoutRefreshInFlight.Load() }
+
+	// Read triggered at query-service open (the fake serves 28800, mysqld's
+	// default); it lands asynchronously.
+	require.Eventually(t, func() bool { return waitTimeout() == 28800*time.Second },
+		30*time.Second, 10*time.Millisecond, "the open-triggered read must publish")
 
 	// A runtime SET GLOBAL wait_timeout converges on the schema-reload path:
-	// every reload broadcast re-reads the value.
+	// every reload broadcast triggers a background re-read.
 	db.AddQuery("select @@global.wait_timeout", sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields("@@global.wait_timeout", "int64"),
 		"600",
 	))
 	tsv.se.BroadcastForTesting(nil, nil, nil, false)
-	require.Equal(t, 600*time.Second, tsv.te.txPool.scp.MysqlWaitTimeout())
+	require.Eventually(t, func() bool { return waitTimeout() == 600*time.Second },
+		30*time.Second, 10*time.Millisecond, "a reload-triggered read must converge")
+
+	// A trigger arriving while a read is in flight is dropped, not queued:
+	// with the read blocked, a second broadcast must not produce a second
+	// query — releasing the read would otherwise run the queued one.
+	var reads atomic.Int32
+	releaseRead := make(chan struct{})
+	db.SetBeforeFunc("select @@global.wait_timeout", func() {
+		reads.Add(1)
+		<-releaseRead
+	})
+	tsv.se.BroadcastForTesting(nil, nil, nil, false)
+	require.Eventually(t, func() bool { return reads.Load() == 1 },
+		30*time.Second, 10*time.Millisecond, "the first trigger must start a read")
+	tsv.se.BroadcastForTesting(nil, nil, nil, false)
+	require.False(t, refreshDone(), "the blocked read must still hold the in-flight guard")
+	close(releaseRead)
+	db.SetBeforeFunc("select @@global.wait_timeout", nil)
+	require.Eventually(t, refreshDone, 30*time.Second, 10*time.Millisecond)
+	assert.EqualValues(t, 1, reads.Load(), "a trigger during an in-flight read must be dropped")
 
 	// A failed read retains the last successfully read value: a transient
 	// error must not move existing temp-table connections back to the much
-	// shorter normal timer.
+	// shorter normal timer. The guard clearing after the broadcast proves
+	// the failed attempt ran before the retention assertion.
 	db.DeleteQuery("select @@global.wait_timeout")
 	tsv.se.BroadcastForTesting(nil, nil, nil, false)
-	require.Equal(t, 600*time.Second, tsv.te.txPool.scp.MysqlWaitTimeout())
+	require.Eventually(t, refreshDone, 30*time.Second, 10*time.Millisecond)
+	require.Equal(t, 600*time.Second, waitTimeout())
 
 	// The next successful read converges again.
 	db.AddQuery("select @@global.wait_timeout", sqltypes.MakeTestResult(
@@ -2560,7 +2590,8 @@ func TestTempTableIdleTimeoutAutoWaitTimeout(t *testing.T) {
 		"28800",
 	))
 	tsv.se.BroadcastForTesting(nil, nil, nil, false)
-	require.Equal(t, 28800*time.Second, tsv.te.txPool.scp.MysqlWaitTimeout())
+	require.Eventually(t, func() bool { return waitTimeout() == 28800*time.Second },
+		30*time.Second, 10*time.Millisecond)
 }
 
 func TestReserveExecute_WithTx(t *testing.T) {

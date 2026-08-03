@@ -2579,6 +2579,11 @@ func TestExecStreamSQLTimeoutConnFateByPlan(t *testing.T) {
 		// KILL QUERY, and the error return skips the post-exec fetch that
 		// keeps the vtgate session in sync with the connection.
 		{"select last_insert_id(42)", false, true},
+		// DML normally keeps the connection (rows roll back atomically), but
+		// a mutating lock function reached through DML can be granted or
+		// released just as the kill lands — lock state the session never
+		// recorded — so the connection is lost.
+		{"update test_table set name = 1 where get_lock('foo', 10) = 1", false, false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.sql, func(t *testing.T) {
@@ -2645,4 +2650,13 @@ func TestPlanKeepsConnOnTimeout(t *testing.T) {
 	assert.False(t, qre.keepsConnOnTimeout(), "fetch_last_insert_id must lose the connection on a query timeout")
 	qre.options.FetchLastInsertId = false
 	assert.True(t, qre.keepsConnOnTimeout(), "a safe plan without fetch_last_insert_id keeps the connection")
+
+	// A mutating lock function in DML overrides the plan type the same way:
+	// the rows roll back under KILL QUERY but the lock grant or release can
+	// race the kill, leaving lock state the session never recorded.
+	qre = &QueryExecutor{
+		plan:    &TabletPlan{Plan: &planbuilder.Plan{PlanID: planbuilder.PlanUpdate, KillsConnOnTimeout: true}},
+		options: &querypb.ExecuteOptions{},
+	}
+	assert.False(t, qre.keepsConnOnTimeout(), "DML with a mutating lock function must lose the connection on a query timeout")
 }

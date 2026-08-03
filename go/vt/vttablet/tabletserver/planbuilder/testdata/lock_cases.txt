@@ -92,3 +92,75 @@
   "TableName": "",
   "FullQuery": "select 1 from dual where is_free_lock('foo') = 1 limit :#maxLimit"
 }
+
+# a mutating lock function reached through DML keeps its DML plan but kills
+# the connection on timeout: KILL QUERY rolls the rows back atomically while
+# the lock grant races the kill. get_lock also requires a reserved
+# connection, exactly as in a SELECT predicate
+"update t set id = 1 where get_lock('foo', 10) = 1"
+{
+  "PlanID": "Update",
+  "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "t",
+      "Role": 1
+    }
+  ],
+  "FullQuery": "update t set id = 1 where get_lock('foo', 10) = 1",
+  "WhereClause": " where get_lock('foo', 10) = 1",
+  "NeedsReservedConn": true,
+  "KillsConnOnTimeout": true
+}
+
+# a release function in DML kills the connection on timeout but stays
+# runnable on a pooled connection
+"delete from t where release_lock('foo') = 1"
+{
+  "PlanID": "Delete",
+  "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "t",
+      "Role": 1
+    }
+  ],
+  "FullQuery": "delete from t where release_lock('foo') = 1",
+  "WhereClause": " where release_lock('foo') = 1",
+  "KillsConnOnTimeout": true
+}
+
+# an acquiring lock function reached through insert ... select classifies too
+"insert into t(id) select id from t where get_lock('foo', 10) = 1"
+{
+  "PlanID": "Insert",
+  "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "t",
+      "Role": 1
+    },
+    {
+      "TableName": "t",
+      "Role": 0
+    }
+  ],
+  "FullQuery": "insert into t(id) select id from t where get_lock('foo', 10) = 1",
+  "NeedsReservedConn": true,
+  "KillsConnOnTimeout": true
+}
+
+# the pure reads stay plain DML wherever they appear
+"update t set id = 1 where is_free_lock('foo') = 1"
+{
+  "PlanID": "Update",
+  "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "t",
+      "Role": 1
+    }
+  ],
+  "FullQuery": "update t set id = 1 where is_free_lock('foo') = 1",
+  "WhereClause": " where is_free_lock('foo') = 1"
+}

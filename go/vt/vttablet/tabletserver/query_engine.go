@@ -157,6 +157,12 @@ type QueryEngine struct {
 	// and fed when the query service opens and on the schema-reload cadence.
 	publishMysqlWaitTimeout func(time.Duration)
 
+	// mysqlWaitTimeoutRefreshInFlight guards the background wait_timeout
+	// read: a trigger that finds one already running is dropped — the
+	// running read publishes the same freshest-available value, and the
+	// next schema reload retriggers anyway.
+	mysqlWaitTimeoutRefreshInFlight atomic.Bool
+
 	// mu protects the following fields.
 	schemaMu sync.Mutex
 	epoch    uint32
@@ -604,14 +610,35 @@ func (qe *QueryEngine) schemaChanged(tables map[string]*schema.Table, created, a
 	// Piggyback on the schema-reload cadence (the notifier also runs when it
 	// is registered at query-service open): mirror mysqld's wait_timeout for
 	// the temp-table idle timeout's auto mode, so a runtime SET GLOBAL
-	// converges without a tablet restart.
-	qe.refreshMysqlWaitTimeout()
+	// converges without a tablet restart. The notifier runs under the schema
+	// engine's locks, so it only triggers the read — the read itself runs in
+	// the background. Startup deliberately gets the same treatment: auto
+	// mode is off (zero) until the first read lands moments later, which the
+	// timer selection tolerates by design, and a slow mysqld then cannot
+	// delay query-service open.
+	qe.triggerMysqlWaitTimeoutRefresh()
 }
 
-// mysqlWaitTimeoutQueryTimeout bounds the @@global.wait_timeout read: the
-// refresh runs on the schema engine's reload path, which holds the schema
-// engine's lock, so it must not hang indefinitely.
+// mysqlWaitTimeoutQueryTimeout bounds the @@global.wait_timeout read so a
+// wedged mysqld cannot pin the refresh's in-flight guard — and with it all
+// future refreshes — indefinitely.
 const mysqlWaitTimeoutQueryTimeout = 30 * time.Second
+
+// triggerMysqlWaitTimeoutRefresh starts one background refresh of the
+// wait_timeout mirror, dropping the trigger if a refresh is already
+// running; see mysqlWaitTimeoutRefreshInFlight.
+func (qe *QueryEngine) triggerMysqlWaitTimeoutRefresh() {
+	if qe.publishMysqlWaitTimeout == nil || qe.env.Config().TempTableIdleTimeout >= 0 {
+		return
+	}
+	if !qe.mysqlWaitTimeoutRefreshInFlight.CompareAndSwap(false, true) {
+		return
+	}
+	go func() {
+		defer qe.mysqlWaitTimeoutRefreshInFlight.Store(false)
+		qe.refreshMysqlWaitTimeout()
+	}()
+}
 
 // refreshMysqlWaitTimeout mirrors mysqld's @@global.wait_timeout for the
 // temp-table idle timeout's auto mode. A failed read logs a warning and

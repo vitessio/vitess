@@ -286,4 +286,45 @@ func TestTempTableCommandLease(t *testing.T) {
 	noTemp := econtext.NewSafeSession(&vtgatepb.Session{Autocommit: true, TargetString: "@primary"})
 	stopNoop := r.commandLease(ctx, noTemp)
 	stopNoop()
+
+	// stop joins the ticker goroutine. Each protocol command wraps the SAME
+	// underlying session proto in its own SafeSession — different mutex
+	// instances — so a tick overrunning stop would read shard-session state
+	// unsynchronized with the next command's mutations. With the join, the
+	// mutation issued after stop() returns can never overlap a tick; without
+	// it, this section is a data race the race detector can catch.
+	origInterval := tempTableHeartbeatTime
+	tempTableHeartbeatTime = time.Millisecond
+	defer func() { tempTableHeartbeatTime = origInterval }()
+	proto := &vtgatepb.Session{
+		Autocommit:     true,
+		TargetString:   "@primary",
+		InReservedConn: true,
+		Options:        &querypb.ExecuteOptions{HasCreatedTempTables: true},
+		ShardSessions: []*vtgatepb.Session_ShardSession{{
+			Target: &querypb.Target{
+				Keyspace:   lookupTablet.Keyspace,
+				Shard:      lookupTablet.Shard,
+				TabletType: lookupTablet.Type,
+			},
+			TabletAlias: lookupTablet.Alias,
+			ReservedId:  78,
+		}},
+	}
+	for i := range 200 {
+		cmdSession := econtext.NewSafeSession(proto)
+		stopLease := r.commandLease(ctx, cmdSession)
+		if i%10 == 0 {
+			time.Sleep(2 * time.Millisecond) // let ticks actually fire sometimes
+		}
+		stopLease()
+		// The "next command": a fresh SafeSession over the same proto,
+		// mutating the shard session exactly as command execution does.
+		next := econtext.NewSafeSession(proto)
+		require.NoError(t, next.AppendOrUpdate(proto.ShardSessions[0].Target, &refreshTestActionInfo{
+			transactionID: int64(i % 2 * 7),
+			reservedID:    78,
+			alias:         lookupTablet.Alias,
+		}, next.ShardSessionsForCleanup()[0], vtgatepb.TransactionMode_MULTI))
+	}
 }
