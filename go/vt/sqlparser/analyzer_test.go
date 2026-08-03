@@ -94,6 +94,18 @@ func TestPreview(t *testing.T) {
 	}
 }
 
+func TestIsValidStatementType(t *testing.T) {
+	// Every name String() can produce must be accepted.
+	for s := StmtUnknown; s <= StmtKill; s++ {
+		assert.Truef(t, IsValidStatementType(s.String()), "String() output %q must be valid", s.String())
+	}
+
+	// Typos, wrong case, and non-statement strings must be rejected.
+	for _, name := range []string{"SELEC", "PRIMAY", "select", "insert", "", "FOO", "PRIMARY"} {
+		assert.Falsef(t, IsValidStatementType(name), "%q must be rejected", name)
+	}
+}
+
 func TestIsDML(t *testing.T) {
 	testcases := []struct {
 		sql  string

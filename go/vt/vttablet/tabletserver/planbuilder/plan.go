@@ -177,6 +177,10 @@ func (pt PlanType) MarshalJSON() ([]byte, error) {
 // Plan contains the parameters for executing a request.
 type Plan struct {
 	PlanID PlanType
+	// StatementType is the statement type derived from the parsed AST via
+	// sqlparser.ASTToStatementType. Unlike a textual scan (sqlparser.Preview),
+	// it classifies CTE queries (WITH ... SELECT/DML) by their real plan type.
+	StatementType sqlparser.StatementType
 	// When the query indicates a single table
 	Table *schema.Table
 	// This indicates all the tables that are accessed in the query.
@@ -316,6 +320,7 @@ func BuildStreaming(env *vtenv.Environment, statement sqlparser.Statement, table
 	if err != nil {
 		return nil, err
 	}
+	plan.StatementType = sqlparser.ASTToStatementType(statement)
 	plan.AllTables = lookupAllTables(statement, tables)
 	plan.Permissions = BuildPermissions(statement)
 	return plan, nil
