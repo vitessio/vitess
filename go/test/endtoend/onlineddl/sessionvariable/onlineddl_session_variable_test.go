@@ -5,9 +5,9 @@ Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
 
-    http://www.apache.org/licenses/LICENSE-2.0
+	http://www.apache.org/licenses/LICENSE-2.0
 
-    10|Unless required by applicable law or agreed to in writing, software
+Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
@@ -53,7 +53,15 @@ var (
 			d DATE DEFAULT '0000-00-00',
 			PRIMARY KEY (id)
 		) ENGINE=InnoDB`
-	dropTable = `DROP TABLE IF EXISTS %s`
+	createBaseTable = `
+		CREATE TABLE %s (
+			id INT NOT NULL,
+			PRIMARY KEY (id)
+		) ENGINE=InnoDB`
+	// Adding a zero-date default must fail during VReplication shadow-table ALTER
+	// unless sql_mode allows invalid dates.
+	alterAddZeroDateColumn = `ALTER TABLE %s ADD COLUMN d DATE DEFAULT '0000-00-00'`
+	dropTable              = `DROP TABLE IF EXISTS %s`
 
 	sessionVariableStrategy = "direct --session-variable sql_mode=ALLOW_INVALID_DATES"
 	onlineSessionStrategy   = "vitess --session-variable sql_mode=ALLOW_INVALID_DATES"
@@ -149,13 +157,15 @@ func TestVtctldclientDirectSessionVariable(t *testing.T) {
 }
 
 // TestVtgateOnlineSessionVariable verifies @@ddl_strategy --session-variable is
-// applied for Online DDL submitted through vtgate.
+// applied on the VReplication shadow-table path (initVreplicationOriginalMigration),
+// not only on CREATE TABLE which executes directly.
 func TestVtgateOnlineSessionVariable(t *testing.T) {
 	require.NoError(t, clusterInstance.WaitForTabletsToHealthyInVtgate())
 	shards = clusterInstance.Keyspaces[0].Shards
 
 	tableName := "vtgate_session_var"
-	createSQL := fmt.Sprintf(createZeroDateTable, tableName)
+	createSQL := fmt.Sprintf(createBaseTable, tableName)
+	alterSQL := fmt.Sprintf(alterAddZeroDateColumn, tableName)
 	dropSQL := fmt.Sprintf(dropTable, tableName)
 	t.Cleanup(func() {
 		_, _ = clusterInstance.VtctldClientProcess.ApplySchemaWithOutput(
@@ -165,24 +175,32 @@ func TestVtgateOnlineSessionVariable(t *testing.T) {
 		)
 	})
 
+	_, err := clusterInstance.VtctldClientProcess.ApplySchemaWithOutput(
+		keyspaceName,
+		createSQL,
+		cluster.ApplySchemaParams{DDLStrategy: "direct"},
+	)
+	require.NoError(t, err)
+	assertTableExists(t, tableName)
+
 	t.Run("without session variable", func(t *testing.T) {
-		uuid := submitOnlineDDL(t, "vitess", createSQL)
+		uuid := submitOnlineDDL(t, "vitess", alterSQL)
 		status := onlineddl.WaitForMigrationStatus(
 			t, &vtParams, shards, uuid, migrationWaitTimeout,
 			schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed,
 		)
 		require.Equal(t, schema.OnlineDDLStatusFailed, status)
-		assertTableMissing(t, tableName)
+		assertColumnMissing(t, tableName, "d")
 	})
 
 	t.Run("with session variable", func(t *testing.T) {
-		uuid := submitOnlineDDL(t, onlineSessionStrategy, createSQL)
+		uuid := submitOnlineDDL(t, onlineSessionStrategy, alterSQL)
 		status := onlineddl.WaitForMigrationStatus(
 			t, &vtParams, shards, uuid, migrationWaitTimeout,
 			schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed,
 		)
 		require.Equal(t, schema.OnlineDDLStatusComplete, status)
-		assertTableExists(t, tableName)
+		assertColumnExists(t, tableName, "d")
 	})
 }
 
@@ -202,9 +220,24 @@ func assertTableExists(t *testing.T, tableName string) {
 	require.Len(t, qr.Rows, 1, "expected table %s to exist", tableName)
 }
 
-func assertTableMissing(t *testing.T, tableName string) {
+func assertColumnExists(t *testing.T, tableName, columnName string) {
 	t.Helper()
-	qr, err := onlineddl.VtgateExecQuery(t.Context(), &vtParams, "show tables like '"+tableName+"'")
+	qr, err := onlineddl.VtgateExecQuery(
+		t.Context(),
+		&vtParams,
+		fmt.Sprintf("show columns from %s like '%s'", tableName, columnName),
+	)
 	require.NoError(t, err)
-	require.Empty(t, qr.Rows, "expected table %s to be missing", tableName)
+	require.Len(t, qr.Rows, 1, "expected column %s.%s to exist", tableName, columnName)
+}
+
+func assertColumnMissing(t *testing.T, tableName, columnName string) {
+	t.Helper()
+	qr, err := onlineddl.VtgateExecQuery(
+		t.Context(),
+		&vtParams,
+		fmt.Sprintf("show columns from %s like '%s'", tableName, columnName),
+	)
+	require.NoError(t, err)
+	require.Empty(t, qr.Rows, "expected column %s.%s to be missing", tableName, columnName)
 }

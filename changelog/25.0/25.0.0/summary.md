@@ -339,8 +339,8 @@ final `RENAME TABLE` that swaps the original and shadow tables.
 
 Each affected connection's previous values are restored afterward. Invalid,
 duplicate, or denied variable names and failed assignments stop the operation
-before schema DDL executes on that connection. `sql_log_bin` and
-`foreign_key_checks` are denied.
+before schema DDL executes on that connection. `sql_log_bin`,
+`foreign_key_checks`, and `gtid_next` are denied.
 
 **Compatibility note:** `--session-variable` requires vtctld and vttablet at
 v25 or newer. On a mixed-version cluster, an upgraded caller can send the new
