@@ -101,9 +101,26 @@ func (cm *fastMatcher) Match(in []byte) bool {
 // unicodeWildcard is an implementation of WildcardPattern for multibyte charsets;
 // it is used for all UCA collations, multibyte collations and all Unicode-based collations
 type unicodeWildcard struct {
-	equals  func(a, b rune) bool
+	eq      func(a, b rune) bool
 	charset charset.Charset
-	pattern []rune
+	pattern []unicodePatternChar
+}
+
+// unicodePatternChar is one parsed pattern element: a wildcard when match is
+// patternMatchOne or patternMatchMany, otherwise one literal character. A
+// character with no Unicode mapping has no usable rune, so its encoded bytes
+// are kept instead and compared against the input bytes; MySQL compares such
+// characters by their encoding, and two different unmapped sequences are not
+// equal to each other.
+type unicodePatternChar struct {
+	ch    [4]byte
+	cp    rune
+	match int16
+	width uint8
+}
+
+func (p *unicodePatternChar) literal() []byte {
+	return p.ch[:p.width]
 }
 
 func newUnicodeWildcardMatcher(
@@ -114,7 +131,7 @@ func newUnicodeWildcardMatcher(
 ) WildcardPattern {
 	var escape bool
 	var chOneCount, chManyCount, chEscCount int
-	parsedPattern := make([]rune, 0, len(pat))
+	parsedPattern := make([]unicodePatternChar, 0, len(pat))
 	patOriginal := pat
 
 	if chOne == 0 {
@@ -145,38 +162,49 @@ func newUnicodeWildcardMatcher(
 	}
 	chOneWidth, chManyWidth, chEscWidth := metaWidth(chOne), metaWidth(chMany), metaWidth(chEsc)
 
+	appendLiteral := func(cp rune, ch []byte, d types.Decoding) {
+		var token unicodePatternChar
+		if d == types.DecodeUnmappable {
+			token.width = uint8(copy(token.ch[:], ch))
+		} else {
+			token.cp = cp
+		}
+		parsedPattern = append(parsedPattern, token)
+	}
+
 	for len(pat) > 0 {
 		cp, width, d := cs.DecodeRune(pat)
 		if d == types.DecodeInvalid {
 			return nopMatcher{}
 		}
+		ch := pat[:width]
 		pat = pat[width:]
 
 		if escape {
-			parsedPattern = append(parsedPattern, cp)
+			appendLiteral(cp, ch, d)
 			escape = false
 			continue
 		}
 
 		switch {
-		case cp == chOne && width == chOneWidth:
+		case d == types.DecodeOK && cp == chOne && width == chOneWidth:
 			chOneCount++
-			parsedPattern = append(parsedPattern, patternMatchOne)
-		case cp == chMany && width == chManyWidth:
+			parsedPattern = append(parsedPattern, unicodePatternChar{match: patternMatchOne})
+		case d == types.DecodeOK && cp == chMany && width == chManyWidth:
 			chManyCount++
-			if len(parsedPattern) > 0 && parsedPattern[len(parsedPattern)-1] == patternMatchMany {
+			if len(parsedPattern) > 0 && parsedPattern[len(parsedPattern)-1].match == patternMatchMany {
 				continue
 			}
-			parsedPattern = append(parsedPattern, patternMatchMany)
-		case cp == chEsc && width == chEscWidth:
+			parsedPattern = append(parsedPattern, unicodePatternChar{match: patternMatchMany})
+		case d == types.DecodeOK && cp == chEsc && width == chEscWidth:
 			chEscCount++
 			escape = true
 		default:
-			parsedPattern = append(parsedPattern, cp)
+			appendLiteral(cp, ch, d)
 		}
 	}
 	if escape {
-		parsedPattern = append(parsedPattern, chEsc)
+		parsedPattern = append(parsedPattern, unicodePatternChar{cp: chEsc})
 	}
 
 	// if we have a collation callback, we can detect some common cases for patterns
@@ -193,7 +221,8 @@ func newUnicodeWildcardMatcher(
 					isPrefix: false,
 				}
 			}
-			if chManyCount == 1 && chMany < utf8.RuneSelf && parsedPattern[len(parsedPattern)-1] == chMany {
+			if chManyCount == 1 && chMany < utf8.RuneSelf &&
+				parsedPattern[len(parsedPattern)-1].match == patternMatchMany {
 				return &fastMatcher{
 					collate:  collate,
 					pattern:  patOriginal[:len(patOriginal)-1],
@@ -204,15 +233,22 @@ func newUnicodeWildcardMatcher(
 	}
 
 	return &unicodeWildcard{
-		equals:  equals,
+		eq:      equals,
 		charset: cs,
 		pattern: parsedPattern,
 	}
 }
 
-func (wc *unicodeWildcard) matchIter(str []byte, pat []rune) bool {
+func (wc *unicodeWildcard) equals(p *unicodePatternChar, cpIn rune, in []byte, d types.Decoding) bool {
+	if p.width > 0 || d == types.DecodeUnmappable {
+		return p.width > 0 && d == types.DecodeUnmappable && bytes.Equal(p.literal(), in)
+	}
+	return wc.eq(p.cp, cpIn)
+}
+
+func (wc *unicodeWildcard) matchIter(str []byte, pat []unicodePatternChar) bool {
 	var s []byte
-	var p []rune
+	var p []unicodePatternChar
 	star := false
 	cs := wc.charset
 
@@ -220,12 +256,12 @@ retry:
 	s = str
 	p = pat
 	for len(s) > 0 {
-		var p0 rune
+		var p0 unicodePatternChar
 		if len(p) > 0 {
 			p0 = p[0]
 		}
 
-		switch p0 {
+		switch p0.match {
 		case patternMatchOne:
 			_, width, d := cs.DecodeRune(s)
 			if d == types.DecodeInvalid {
@@ -245,14 +281,14 @@ retry:
 			if d == types.DecodeInvalid {
 				return false
 			}
-			if !wc.equals(c0, p0) {
+			if len(p) == 0 || !wc.equals(&p0, c0, s[:width], d) {
 				goto starCheck
 			}
 			s = s[width:]
 		}
 		p = p[1:]
 	}
-	return len(p) == 0 || (len(p) == 1 && p[0] == patternMatchMany)
+	return len(p) == 0 || (len(p) == 1 && p[0].match == patternMatchMany)
 
 starCheck:
 	if !star {
@@ -275,9 +311,9 @@ func (wc *unicodeWildcard) Match(in []byte) bool {
 	return wc.matchRecursive(in, wc.pattern, 0) == matchOK
 }
 
-func (wc *unicodeWildcard) matchMany(in []byte, pat []rune, depth int) match {
+func (wc *unicodeWildcard) matchMany(in []byte, pat []unicodePatternChar, depth int) match {
 	cs := wc.charset
-	var p0 rune
+	var p0 unicodePatternChar
 
 many:
 	if len(pat) == 0 {
@@ -286,7 +322,7 @@ many:
 	p0 = pat[0]
 	pat = pat[1:]
 
-	switch p0 {
+	switch p0.match {
 	case patternMatchMany:
 		goto many
 	case patternMatchOne:
@@ -311,7 +347,7 @@ retry:
 		if d == types.DecodeInvalid {
 			return matchFail
 		}
-		if wc.equals(cpIn, p0) {
+		if wc.equals(&p0, cpIn, in[:width], d) {
 			break
 		}
 		in = in[width:]
@@ -329,14 +365,14 @@ retry:
 	return m
 }
 
-func (wc *unicodeWildcard) matchRecursive(in []byte, pat []rune, depth int) match {
+func (wc *unicodeWildcard) matchRecursive(in []byte, pat []unicodePatternChar, depth int) match {
 	if depth >= wildcardRecursionDepth {
 		return matchFail
 	}
 
 	cs := wc.charset
 	for len(pat) > 0 {
-		if pat[0] == patternMatchMany {
+		if pat[0].match == patternMatchMany {
 			return wc.matchMany(in, pat[1:], depth)
 		}
 
@@ -346,8 +382,8 @@ func (wc *unicodeWildcard) matchRecursive(in []byte, pat []rune, depth int) matc
 		}
 
 		switch {
-		case pat[0] == patternMatchOne:
-		case wc.equals(pat[0], cpIn):
+		case pat[0].match == patternMatchOne:
+		case wc.equals(&pat[0], cpIn, in[:width], d):
 		default:
 			return matchFail
 		}
