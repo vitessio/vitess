@@ -32,14 +32,15 @@ var (
 	forceCutOverAfterFlagRegexp = regexp.MustCompile(fmt.Sprintf(`^[-]{1,2}%s=(.*?)$`, forceCutOverAfterFlag))
 	retainArtifactsFlagRegexp   = regexp.MustCompile(fmt.Sprintf(`^[-]{1,2}%s=(.*?)$`, retainArtifactsFlag))
 	sessionVariableNameRegexp   = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]*$`)
-	deniedSessionVariables      = map[string]struct{}{
+	// restrict_fk_on_non_standard_key is intentionally omitted from
+	// deniedSessionVariables: MySQL replica appliers force it OFF when applying
+	// events, so primary SESSION settings stay consistent on replicas even
+	// though the variable is NOT_IN_BINLOG.
+	// See https://github.com/mysql/mysql-server/blob/mysql-8.4.5/sql/rpl_replica.cc#L6059
+	deniedSessionVariables = map[string]struct{}{
 		"foreign_key_checks": {},
 		"gtid_next":          {},
-		// restrict_fk_on_non_standard_key is intentionally omitted: MySQL replica
-		// appliers force it OFF when applying events, so primary SESSION settings
-		// stay consistent on replicas even though the variable is NOT_IN_BINLOG.
-		// See https://github.com/mysql/mysql-server/blob/mysql-8.4.5/sql/rpl_replica.cc#L6059
-		"sql_log_bin": {},
+		"sql_log_bin":        {},
 	}
 )
 
