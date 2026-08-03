@@ -58,7 +58,7 @@ go.sum @mattlord @frouioui @timvaillancourt
 /go/vt/vtctl/vtctldclient @mattlord @timvaillancourt
 /go/vt/vtctld @mattlord @timvaillancourt
 /go/vt/vterrors @frouioui @timvaillancourt
-/go/vt/vtexplain @systay @harshit-gangal
+/go/vt/vtexplain @arthurschreiber
 /go/vt/vtgate @arthurschreiber @frouioui
 /go/vt/vtgate/endtoend/*vstream* @mattlord
 /go/vt/vtgate/planbuilder @frouioui @arthurschreiber
