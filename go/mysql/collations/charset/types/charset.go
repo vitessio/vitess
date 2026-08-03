@@ -16,6 +16,20 @@ limitations under the License.
 
 package types
 
+type Decoding uint8
+
+const (
+	DecodeOK Decoding = iota
+
+	DecodeUnmappable
+
+	DecodeInvalid
+)
+
+func (d Decoding) IsChar() bool { return d != DecodeInvalid }
+
+func (d Decoding) IsMapped() bool { return d == DecodeOK }
+
 type Charset interface {
 	Name() string
 	SupportsSupplementaryChars() bool
@@ -24,8 +38,8 @@ type Charset interface {
 
 	EncodeRune([]byte, rune) int
 	// DecodeRune decodes the first rune in the input and returns it along with
-	// its width in bytes and whether the input was well-formed. On malformed
+	// its width in bytes and the decoding result. On malformed
 	// input it returns RuneError, the number of bytes to skip to reach the
 	// next rune (zero for empty input), and false.
-	DecodeRune([]byte) (rune, int, bool)
+	DecodeRune([]byte) (rune, int, Decoding)
 }

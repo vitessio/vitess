@@ -230,18 +230,18 @@ write4:
 	return 4
 }
 
-func (Charset_gb18030) DecodeRune(src []byte) (rune, int, bool) {
+func (Charset_gb18030) DecodeRune(src []byte) (rune, int, types.Decoding) {
 	if len(src) < 1 {
-		return utf8.RuneError, 0, false
+		return utf8.RuneError, 0, types.DecodeInvalid
 	}
 
 	switch c0 := src[0]; {
 	case c0 < utf8.RuneSelf:
-		return rune(c0), 1, true
+		return rune(c0), 1, types.DecodeOK
 
 	case 0x81 <= c0 && c0 < 0xff:
 		if len(src) < 2 {
-			return utf8.RuneError, 1, false
+			return utf8.RuneError, 1, types.DecodeInvalid
 		}
 
 		c1 := src[1]
@@ -254,15 +254,15 @@ func (Charset_gb18030) DecodeRune(src []byte) (rune, int, bool) {
 			if len(src) < 4 {
 				// The second byte here is always ASCII, so we can set size
 				// to 1 in all cases.
-				return utf8.RuneError, 1, false
+				return utf8.RuneError, 1, types.DecodeInvalid
 			}
 			c2 := src[2]
 			if c2 < 0x81 || 0xfe < c2 {
-				return utf8.RuneError, 1, false
+				return utf8.RuneError, 1, types.DecodeInvalid
 			}
 			c3 := src[3]
 			if c3 < 0x30 || 0x3a <= c3 {
-				return utf8.RuneError, 1, false
+				return utf8.RuneError, 1, types.DecodeInvalid
 			}
 			r := ((rune(c0-0x81)*10+rune(c1-0x30))*126+rune(c2-0x81))*10 + rune(c3-0x30)
 			if r < 39420 {
@@ -282,27 +282,27 @@ func (Charset_gb18030) DecodeRune(src []byte) (rune, int, bool) {
 					// U+1E3F moved to the two-byte position A8BC.
 					r = 0xE7C7
 				}
-				return r, 4, true
+				return r, 4, types.DecodeOK
 			}
 			r -= 189000
 			if 0 <= r && r < 0x100000 {
 				r += 0x10000
 			} else {
-				return utf8.RuneError, 4, false
+				return utf8.RuneError, 4, types.DecodeUnmappable
 			}
-			return r, 4, true
+			return r, 4, types.DecodeOK
 		default:
-			return utf8.RuneError, 1, false
+			return utf8.RuneError, 1, types.DecodeInvalid
 		}
 		if i := int(c0-0x81)*190 + int(c1); i < len(gb18030Decode) {
 			if r := rune(gb18030Decode[i]); r != 0 {
-				return r, 2, true
+				return r, 2, types.DecodeOK
 			}
 		}
-		return utf8.RuneError, 2, false
+		return utf8.RuneError, 2, types.DecodeUnmappable
 
 	default:
-		return utf8.RuneError, 1, false
+		return utf8.RuneError, 1, types.DecodeInvalid
 	}
 }
 

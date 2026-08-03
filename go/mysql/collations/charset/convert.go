@@ -20,6 +20,7 @@ import (
 	"fmt"
 
 	"vitess.io/vitess/go/hack"
+	"vitess.io/vitess/go/mysql/collations/charset/types"
 )
 
 func failedConversionError(from, to Charset, input []byte) error {
@@ -70,9 +71,11 @@ func convertSlow(dst []byte, dstCharset Charset, src []byte, srcCharset Charset)
 	}
 
 	for len(src) > 0 {
-		cp, width, ok := srcCharset.DecodeRune(src)
-		if !ok {
-			failed++
+		cp, width, d := srcCharset.DecodeRune(src)
+		if d != types.DecodeOK {
+			if d == types.DecodeInvalid {
+				failed++
+			}
 			cp = '?'
 		}
 		src = src[width:]

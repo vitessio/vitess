@@ -55,58 +55,58 @@ func ujisEncodeRune(dst []byte, r rune, table208, table212 *[65536]uint16) int {
 	return -1
 }
 
-func ujisDecodeRune(src []byte, table208, table212 *[65536]uint16) (rune, int, bool) {
+func ujisDecodeRune(src []byte, table208, table212 *[65536]uint16) (rune, int, types.Decoding) {
 	if len(src) < 1 {
-		return utf8.RuneError, 0, false
+		return utf8.RuneError, 0, types.DecodeInvalid
 	}
 
 	switch c0 := src[0]; {
 	case c0 < utf8.RuneSelf:
-		return rune(c0), 1, true
+		return rune(c0), 1, types.DecodeOK
 
 	case c0 == 0x8e:
 		if len(src) < 2 {
-			return utf8.RuneError, 1, false
+			return utf8.RuneError, 1, types.DecodeInvalid
 		}
 		c1 := src[1]
 		if c1 < 0xa1 || 0xdf < c1 {
-			return utf8.RuneError, 1, false
+			return utf8.RuneError, 1, types.DecodeInvalid
 		}
-		return rune(c1) + (0xff61 - 0xa1), 2, true
+		return rune(c1) + (0xff61 - 0xa1), 2, types.DecodeOK
 	case c0 == 0x8f:
 		if len(src) < 3 {
-			return utf8.RuneError, 1, false
+			return utf8.RuneError, 1, types.DecodeInvalid
 		}
 		c1 := src[1]
 		if c1 < 0xa1 || 0xfe < c1 {
-			return utf8.RuneError, 1, false
+			return utf8.RuneError, 1, types.DecodeInvalid
 		}
 		c2 := src[2]
 		if c2 < 0xa1 || 0xfe < c2 {
-			return utf8.RuneError, 1, false
+			return utf8.RuneError, 1, types.DecodeInvalid
 		}
 		r := rune(table212[uint16(c1)<<8|uint16(c2)])
 		if r == 0 {
-			return utf8.RuneError, 3, false
+			return utf8.RuneError, 3, types.DecodeUnmappable
 		}
-		return r, 3, true
+		return r, 3, types.DecodeOK
 
 	case 0xa1 <= c0 && c0 <= 0xfe:
 		if len(src) < 2 {
-			return utf8.RuneError, 1, false
+			return utf8.RuneError, 1, types.DecodeInvalid
 		}
 		c1 := src[1]
 		if c1 < 0xa1 || 0xfe < c1 {
-			return utf8.RuneError, 1, false
+			return utf8.RuneError, 1, types.DecodeInvalid
 		}
 		r := rune(table208[uint16(c0)<<8|uint16(c1)])
 		if r == 0 {
-			return utf8.RuneError, 2, false
+			return utf8.RuneError, 2, types.DecodeUnmappable
 		}
-		return r, 2, true
+		return r, 2, types.DecodeOK
 
 	default:
-		return utf8.RuneError, 1, false
+		return utf8.RuneError, 1, types.DecodeInvalid
 	}
 }
 
@@ -133,7 +133,7 @@ func (Charset_ujis) EncodeRune(dst []byte, r rune) int {
 	return ujisEncodeRune(dst, r, &table_jis208Encode, &table_jis212Encode)
 }
 
-func (Charset_ujis) DecodeRune(src []byte) (rune, int, bool) {
+func (Charset_ujis) DecodeRune(src []byte) (rune, int, types.Decoding) {
 	return ujisDecodeRune(src, &table_jis208Decode, &table_jis212Decode)
 }
 
@@ -169,7 +169,7 @@ func (Charset_eucjpms) EncodeRune(dst []byte, r rune) int {
 // intentional difference from MySQL. The MySQL eucjpms converter removes the
 // incomplete character and shows no warning. The MySQL sjis and ujis
 // converters show warning 1300 for the same input.
-func (Charset_eucjpms) DecodeRune(src []byte) (rune, int, bool) {
+func (Charset_eucjpms) DecodeRune(src []byte) (rune, int, types.Decoding) {
 	return ujisDecodeRune(src, &table_jis208_eucjpmsDecode, &table_jis212_eucjpmsDecode)
 }
 
