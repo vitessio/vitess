@@ -105,7 +105,6 @@ func validateEmergencyReparentShardOptions(_ *cobra.Command, _ []string) error {
 	if emergencyReparentShardOptions.AllowSplitBrainPromotion && emergencyReparentShardOptions.NewPrimaryAliasStr == "" {
 		return errors.New("--allow-split-brain-promotion requires --new-primary")
 	}
-
 	return nil
 }
 

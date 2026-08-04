@@ -57,13 +57,13 @@ type EmergencyReparenter struct {
 // EmergencyReparentShard operations. Options are passed by value, so it is safe
 // for callers to mutate and reuse options structs for multiple calls.
 type EmergencyReparentOptions struct {
-	NewPrimaryAlias          *topodatapb.TabletAlias
-	AllowSplitBrainPromotion bool
-	IgnoreReplicas           sets.Set[string]
+	NewPrimaryAlias *topodatapb.TabletAlias
+	IgnoreReplicas  sets.Set[string]
 	// WaitAllTablets is used to specify whether ERS should wait for all the tablets to return and not proceed
 	// further after n-1 tablets have returned.
 	WaitAllTablets            bool
 	WaitReplicasTimeout       time.Duration
+	AllowSplitBrainPromotion  bool
 	PreventCrossCellPromotion bool
 	ExpectedPrimaryAlias      *topodatapb.TabletAlias
 
