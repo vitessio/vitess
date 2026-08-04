@@ -178,10 +178,11 @@ CREATE TABLE recovery_detection (
 	detection_timestamp timestamp NOT NULL default (''),
 	PRIMARY KEY (detection_id)
 )`,
-	// The UNIQUE index on (alias, analysis) collapses repeated detections of the
-	// same analysis on the same tablet into a single row. Without it, every poll
-	// cycle inserts a new row for an ongoing failure, growing the table by one row
-	// per tablet per poll until the retention window expires.
+	// The UNIQUE index on (alias, analysis) deduplicates repeated detections of the
+	// same analysis on the same tablet within an ongoing incident. When a failure
+	// clears and recurs, InsertRecoveryDetection refreshes detection_timestamp via
+	// an UPSERT conditioned on database_instance_last_analysis.analysis_timestamp,
+	// so the single row always reflects the current incident.
 	`
 CREATE UNIQUE INDEX recovery_detection_alias_analysis_uniq ON recovery_detection (alias, analysis)`,
 	`

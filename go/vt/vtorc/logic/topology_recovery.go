@@ -1008,20 +1008,17 @@ func executeCheckAndRecoverFunction(analysisEntry *inst.DetectionAnalysis) (err 
 		// of a shard because a new tablet could have been promoted, and we need to have this visibility
 		// before we run a shard-wide operation of our own.
 		if isShardWideRecovery(checkAndRecoverFunctionCode) {
-			tabletsToIgnore := shardWideRecoveryIgnoredTablets(checkAndRecoverFunctionCode, analysisEntry)
-			// We ignore dead primary tablets because they are going to be unreachable. If all the other tablets aren't able to reach this tablet either,
-			// we can proceed with the dead primary recovery. We don't need to refresh the information for this dead tablet.
-			logger.Info("Force refreshing all shard tablets")
-			forceRefreshAllTabletsInShard(ctx, analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard, tabletsToIgnore)
 			if analysisEntry.Analysis == inst.ClusterHasNoPrimary && len(cellsNoRecovery) > 0 {
-				// Read shard membership from topo rather than the SQLite cache: the preceding
-				// forceRefreshAllTabletsInShard swallows errors, so the cache may still reflect
-				// a stale allowed-cell tablet if the refresh failed. A direct topo read either
-				// succeeds (authoritative) or returns an error (we abort before PRS).
+				// Check the cell gate before the expensive forceRefreshAllTabletsInShard.
+				// Recovery polls every second and this skip never registers an active
+				// recovery, so a persistent no-primary shard would repeatedly contend
+				// for the shard lock and force MySQL discovery on every tablet before
+				// doing nothing. Reading from topo is authoritative regardless of
+				// whether the force refresh has run.
 				var shardTablets []*topo.TabletInfo
 				shardTablets, err = getShardTabletsByCell(ctx, analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard, nil)
 				if err != nil {
-					logger.Error(fmt.Sprintf("CheckAndRecover: Tablet: %+v: error fetching shard tablets for --cells-no-recovery check after refresh, aborting recovery: %v", analyzedInstanceAliasString, err))
+					logger.Error(fmt.Sprintf("CheckAndRecover: Tablet: %+v: error fetching shard tablets for --cells-no-recovery check, aborting recovery: %v", analyzedInstanceAliasString, err))
 					return err
 				}
 				seen := make(map[string]bool)
@@ -1038,6 +1035,11 @@ func executeCheckAndRecoverFunction(analysisEntry *inst.DetectionAnalysis) (err 
 					return nil
 				}
 			}
+			tabletsToIgnore := shardWideRecoveryIgnoredTablets(checkAndRecoverFunctionCode, analysisEntry)
+			// We ignore dead primary tablets because they are going to be unreachable. If all the other tablets aren't able to reach this tablet either,
+			// we can proceed with the dead primary recovery. We don't need to refresh the information for this dead tablet.
+			logger.Info("Force refreshing all shard tablets")
+			forceRefreshAllTabletsInShard(ctx, analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard, tabletsToIgnore)
 		} else {
 			// If we are not running a shard-wide recovery, then it is only concerned with the specific tablet
 			// on which the failure occurred and the primary instance of the shard.

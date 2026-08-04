@@ -1702,3 +1702,88 @@ func TestCellsNoRecoveryGateSkip(t *testing.T) {
 		})
 	}
 }
+
+func TestInsertRecoveryDetectionNewIncident(t *testing.T) {
+	orcDb, fromCache, err := db.OpenVTOrcWithCache()
+	require.NoError(t, err)
+	defer func() {
+		if !fromCache {
+			require.NoError(t, orcDb.Close())
+		}
+	}()
+	defer func() {
+		_, err = orcDb.Exec("DELETE FROM recovery_detection")
+		require.NoError(t, err)
+		_, err = orcDb.Exec("DELETE FROM database_instance_last_analysis")
+		require.NoError(t, err)
+	}()
+
+	alias := &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}
+	aliasStr := topoproto.TabletAliasString(alias)
+	analysis := inst.ReplicationStopped
+
+	_, err = orcDb.Exec(
+		`INSERT INTO database_instance_last_analysis (alias, analysis, analysis_timestamp)
+		 VALUES (?, ?, '2026-01-01 00:00:00')`,
+		aliasStr, string(analysis))
+	require.NoError(t, err)
+
+	entry1 := &inst.DetectionAnalysis{
+		AnalyzedInstanceAlias: alias,
+		Analysis:              analysis,
+		AnalyzedKeyspace:      "ks",
+		AnalyzedShard:         "0",
+	}
+	require.NoError(t, InsertRecoveryDetection(entry1))
+	require.NotZero(t, entry1.RecoveryId)
+
+	// Same ongoing incident: should reuse detection_id.
+	entry2 := &inst.DetectionAnalysis{
+		AnalyzedInstanceAlias: alias,
+		Analysis:              analysis,
+		AnalyzedKeyspace:      "ks",
+		AnalyzedShard:         "0",
+	}
+	require.NoError(t, InsertRecoveryDetection(entry2))
+	require.Equal(t, entry1.RecoveryId, entry2.RecoveryId, "same ongoing incident should reuse detection_id")
+
+	// Pin the detection_timestamp to a known past value so the UPSERT's
+	// DATETIME('now') is distinguishable even when the test runs sub-second.
+	_, err = orcDb.Exec(
+		`UPDATE recovery_detection SET detection_timestamp = '2026-01-01 00:00:00'
+		 WHERE detection_id = ?`, entry1.RecoveryId)
+	require.NoError(t, err)
+	var firstTimestamp string
+	require.NoError(t, orcDb.QueryRow(
+		`SELECT detection_timestamp FROM recovery_detection WHERE detection_id = ?`,
+		entry1.RecoveryId).Scan(&firstTimestamp))
+
+	// Simulate the analysis clearing (NoProblem) and then recurring.
+	_, err = orcDb.Exec(
+		`UPDATE database_instance_last_analysis
+		 SET analysis = 'NoProblem', analysis_timestamp = '2026-01-01 01:00:00'
+		 WHERE alias = ?`, aliasStr)
+	require.NoError(t, err)
+	_, err = orcDb.Exec(
+		`UPDATE database_instance_last_analysis
+		 SET analysis = ?, analysis_timestamp = '2026-01-01 02:00:00'
+		 WHERE alias = ?`, string(analysis), aliasStr)
+	require.NoError(t, err)
+
+	// Recurring failure: UPSERT refreshes detection_timestamp on the existing row.
+	entry3 := &inst.DetectionAnalysis{
+		AnalyzedInstanceAlias: alias,
+		Analysis:              analysis,
+		AnalyzedKeyspace:      "ks",
+		AnalyzedShard:         "0",
+	}
+	require.NoError(t, InsertRecoveryDetection(entry3))
+	require.Equal(t, entry1.RecoveryId, entry3.RecoveryId, "UPSERT reuses the same detection_id")
+
+	var refreshedTimestamp string
+	require.NoError(t, orcDb.QueryRow(
+		`SELECT detection_timestamp FROM recovery_detection WHERE detection_id = ?`,
+		entry3.RecoveryId).Scan(&refreshedTimestamp))
+	require.NotEqual(t, firstTimestamp, refreshedTimestamp,
+		"recurring failure after analysis cleared should refresh detection_timestamp")
+}
