@@ -3,7 +3,8 @@
 # - Adds initial labels (NeedsWebsiteDocsUpdate, NeedsDescriptionUpdate, NeedsIssue, NeedsBackportReason)
 name: PR opened tasks
 
-permissions: read-all
+permissions:
+  contents: read
 
 on:
   pull_request_target:

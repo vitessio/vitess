@@ -73,7 +73,7 @@ jobs:
         ./tools/make-release-packages.sh
 
     - name: Upload Files
-      uses: csexton/release-asset-action@3567794e918fa3068116688122a76cdeb57b5f09 # v3.0.0
+      uses: csexton/release-asset-action@3567794e918fa3068116688122a76cdeb57b5f09 # v3
       with:
         github-token: ${{ secrets.GITHUB_TOKEN }}
         pattern: "releases/*.{tar.gz,rpm,deb}"
