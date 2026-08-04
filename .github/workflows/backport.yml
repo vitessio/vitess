@@ -37,6 +37,23 @@ jobs:
         with:
           app-id: ${{ vars.APP_ID }}
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
+<<<<<<< HEAD
+||||||| parent of 2b4cc780e7 (CI: let the backport app token update workflow files (#20792))
+          # contents to push the port branches, pull-requests to create the
+          # port PRs and request reviews, issues to apply labels and comment.
+          permission-contents: write
+          permission-issues: write
+          permission-pull-requests: write
+=======
+          # contents to push the port branches, pull-requests to create the
+          # port PRs and request reviews, issues to apply labels and comment,
+          # workflows because GitHub rejects a push from an app that touches
+          # .github/workflows without it.
+          permission-contents: write
+          permission-issues: write
+          permission-pull-requests: write
+          permission-workflows: write
+>>>>>>> 2b4cc780e7 (CI: let the backport app token update workflow files (#20792))
 
       - name: Get GitHub App User ID
         id: get-user-id
