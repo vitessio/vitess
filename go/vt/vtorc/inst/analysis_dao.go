@@ -785,7 +785,8 @@ func postProcessAnalyses(result []*DetectionAnalysis, clusters map[string]*clust
 			if ca.shardPrimaryAlias != nil {
 				analysis.AnalyzedCell = ca.shardPrimaryAlias.GetCell()
 			} else {
-				log.Warn(fmt.Sprintf("PrimaryTabletDeleted: no primary alias recorded for shard %v/%v; --cells-no-recovery cell gate will use the surviving replica's cell instead of the deleted primary's cell", analysis.AnalyzedKeyspace, analysis.AnalyzedShard))
+				log.Warn(fmt.Sprintf("PrimaryTabletDeleted: no primary alias recorded for shard %v/%v; AnalyzedCell cleared so --cells-no-recovery fails closed", analysis.AnalyzedKeyspace, analysis.AnalyzedShard))
+				analysis.AnalyzedCell = ""
 			}
 		}
 	}

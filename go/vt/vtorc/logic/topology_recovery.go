@@ -954,13 +954,22 @@ func executeCheckAndRecoverFunction(analysisEntry *inst.DetectionAnalysis) (err 
 		// Tablet-level cell check: skip recovery when the failed tablet's cell is denied.
 		// ClusterHasNoPrimary is handled separately below (post-lock, topo read) because it
 		// is shard-wide and AnalyzedCell is non-deterministic for that analysis.
-		if isActionableRecovery &&
-			analysisEntry.Analysis != inst.ClusterHasNoPrimary &&
-			slices.Contains(cellsNoRecovery, analysisEntry.AnalyzedCell) {
-			logger.Info(fmt.Sprintf("CheckAndRecover: Tablet: %+v: NOT Recovering host (cell %v is in --cells-no-recovery)",
-				analyzedInstanceAliasString, analysisEntry.AnalyzedCell))
-			recoveriesSkippedCounter.Add(append(recoveryLabels, RecoverySkipCellNoRecovery.String()), 1)
-			return nil
+		if isActionableRecovery && analysisEntry.Analysis != inst.ClusterHasNoPrimary {
+			if analysisEntry.AnalyzedCell == "" {
+				// The failed tablet's cell is unknown (e.g. PrimaryTabletDeleted after
+				// DeleteTablets --allow-primary nils the shard's primary alias). Fail
+				// closed: we cannot determine whether the cell is denied.
+				logger.Info(fmt.Sprintf("CheckAndRecover: Tablet: %+v: NOT Recovering host (failed tablet's cell is unknown; --cells-no-recovery fail-closed)",
+					analyzedInstanceAliasString))
+				recoveriesSkippedCounter.Add(append(recoveryLabels, RecoverySkipCellNoRecovery.String()), 1)
+				return nil
+			}
+			if slices.Contains(cellsNoRecovery, analysisEntry.AnalyzedCell) {
+				logger.Info(fmt.Sprintf("CheckAndRecover: Tablet: %+v: NOT Recovering host (cell %v is in --cells-no-recovery)",
+					analyzedInstanceAliasString, analysisEntry.AnalyzedCell))
+				recoveriesSkippedCounter.Add(append(recoveryLabels, RecoverySkipCellNoRecovery.String()), 1)
+				return nil
+			}
 		}
 	}
 

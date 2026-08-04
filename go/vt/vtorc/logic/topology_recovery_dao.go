@@ -33,7 +33,7 @@ import (
 func InsertRecoveryDetection(analysisEntry *inst.DetectionAnalysis) error {
 	aliasStr := topoproto.TabletAliasString(analysisEntry.AnalyzedInstanceAlias)
 	analysisStr := string(analysisEntry.Analysis)
-	sqlResult, err := db.ExecVTOrc(`INSERT INTO recovery_detection (
+	_, err := db.ExecVTOrc(`INSERT INTO recovery_detection (
 			alias,
 			analysis,
 			keyspace,
@@ -61,24 +61,10 @@ func InsertRecoveryDetection(analysisEntry *inst.DetectionAnalysis) error {
 		log.Error(err.Error())
 		return err
 	}
-	rows, err := sqlResult.RowsAffected()
-	if err != nil {
-		log.Error(err.Error())
-		return err
-	}
-	if rows > 0 {
-		id, err := sqlResult.LastInsertId()
-		if err != nil {
-			log.Error(err.Error())
-			return err
-		}
-		analysisEntry.RecoveryId = id
-		return nil
-	}
-	// Conflict with WHERE false: the (alias, analysis) row already exists for this
-	// ongoing incident and detection_timestamp is still current. Retrieve its
-	// detection_id: SQLite's last_insert_rowid() is not updated when an UPSERT's
-	// DO UPDATE WHERE clause is false, so it may retain a stale value.
+	// Always SELECT the detection_id rather than relying on LastInsertId():
+	// SQLite's last_insert_rowid() behaviour for ON CONFLICT DO UPDATE varies
+	// by version (reliable only since 3.35.0) and is not updated at all when
+	// the DO UPDATE WHERE clause is false (ongoing-incident dedup).
 	err = db.QueryVTOrc(
 		`SELECT detection_id FROM recovery_detection WHERE alias = ? AND analysis = ?`,
 		sqlutils.Args(aliasStr, analysisStr),
