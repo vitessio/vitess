@@ -69,6 +69,9 @@ func TestReparentSorter(t *testing.T) {
 		},
 		Type: topodatapb.TabletType_RDONLY,
 	}
+	tabletWithoutAlias := &topodatapb.Tablet{
+		Type: topodatapb.TabletType_REPLICA,
+	}
 
 	mysqlGTID1 := replication.Mysql56GTID{
 		Server:   sid1,
@@ -207,6 +210,16 @@ func TestReparentSorter(t *testing.T) {
 			tablets:       []*topodatapb.Tablet{tabletReplica1_101, tabletRdonly1_102},
 			positions:     []*RelayLogPositions{positionMostAdvanced, positionMostAdvanced},
 			sortedTablets: []*topodatapb.Tablet{tabletReplica1_101, tabletRdonly1_102},
+		}, {
+			name:          "nil alias sorts last",
+			tablets:       []*topodatapb.Tablet{tabletWithoutAlias, tabletRdonly1_102},
+			positions:     []*RelayLogPositions{positionMostAdvanced, positionMostAdvanced},
+			sortedTablets: []*topodatapb.Tablet{tabletRdonly1_102, tabletWithoutAlias},
+		}, {
+			name:          "nil alias does not affect dominance counts",
+			tablets:       []*topodatapb.Tablet{tabletReplica1_100, tabletReplica2_100, tabletWithoutAlias},
+			positions:     []*RelayLogPositions{positionIntermediate1, positionDisjoint1, positionIntermediate2},
+			sortedTablets: []*topodatapb.Tablet{tabletReplica1_100, tabletReplica2_100, tabletWithoutAlias},
 		}, {
 			name:          "mixed",
 			tablets:       []*topodatapb.Tablet{tabletReplica1_101, tabletReplica2_100, tabletReplica1_100, tabletRdonly1_102, tabletReplica3_103},
