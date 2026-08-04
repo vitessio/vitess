@@ -11,7 +11,8 @@ concurrency:
   group: format('{0}-{1}', ${{ github.ref }}, 'Build Docker Images')
   cancel-in-progress: true
 
-permissions: read-all
+permissions:
+  contents: read
 
 jobs:
   build_and_push_vttestserver:
@@ -233,6 +234,8 @@ jobs:
   slack_notification:
     name: Slack Notification if failed
     runs-on: ubuntu-24.04
+    permissions:
+      actions: read
     needs:
       - build_and_push_vttestserver
       - build_and_push_lite
