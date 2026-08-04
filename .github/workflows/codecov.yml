@@ -134,16 +134,19 @@ jobs:
     - name: Run coverage tests
       if: steps.mode.outputs.is_full_run == 'true' || (steps.changes.outputs.changed_files == 'true' && steps.packages.outputs.packages != '')
       timeout-minutes: 60
+      env:
+        IS_FULL_RUN: ${{ steps.mode.outputs.is_full_run }}
+        COVERAGE_PACKAGES: ${{ steps.packages.outputs.packages }}
       run: |
         set -exo pipefail
         export VTDATAROOT="/tmp/"
         export NOVTADMINBUILD=1
         source build.env
 
-        if [ "${{ steps.mode.outputs.is_full_run }}" = "true" ]; then
+        if [ "$IS_FULL_RUN" = "true" ]; then
           make unit_test_cover
         else
-          make COVERAGE_PACKAGES="${{ steps.packages.outputs.packages }}" unit_test_cover
+          make COVERAGE_PACKAGES="$COVERAGE_PACKAGES" unit_test_cover
         fi
 
     - name: Upload coverage reports
