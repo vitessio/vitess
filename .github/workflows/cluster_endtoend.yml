@@ -13,7 +13,8 @@ concurrency:
   group: format('{0}-{1}', ${{ github.ref }}, 'Cluster End-to-End Tests')
   cancel-in-progress: true
 
-permissions: read-all
+permissions:
+  contents: read
 
 env:
   LAUNCHABLE_ORGANIZATION: "vitess"
