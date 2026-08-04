@@ -2,7 +2,7 @@
 name: Update error code docs
 
 on:
-  workflow_run: # zizmor: ignore[dangerous-triggers] consumes only artifacts from the trusted upstream run
+  workflow_run:
     workflows: ["Generate error code docs"]
     types: [completed]
 
