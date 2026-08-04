@@ -1990,6 +1990,44 @@ func TestPlannedReparenter_performInitialPromotion(t *testing.T) {
 			shouldErr: true,
 		},
 		{
+			// PrimaryPosition on a file-position tablet returns that tablet's own
+			// binlog coordinates, which are not comparable across tablets. Here the
+			// elect's coordinates (higher file/offset by string+numeric compare) would
+			// make AtLeast wrongly report it as containing the peer, waving through a
+			// lossy promotion — so the guard must fail closed on file-position rather
+			// than trust that comparison.
+			name: "file-position candidate fails closed",
+			tmc: &testutil.TabletManagerClient{
+				PrimaryPositionResults: map[string]struct {
+					Position string
+					Error    error
+				}{
+					"zone1-0000000200": {Position: "FilePos/vt-bin.000009:5000"},
+					"zone1-0000000201": {Position: "FilePos/vt-bin.000002:100"},
+				},
+				InitPrimaryResults: map[string]struct {
+					Result string
+					Error  error
+				}{
+					"zone1-0000000200": {Result: "should not be reached"},
+				},
+			},
+			ev:       &events.Reparent{},
+			keyspace: "testkeyspace",
+			shard:    "-",
+			primaryElect: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  200,
+				},
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000200": {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 200}}},
+				"zone1-0000000201": {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 201}}},
+			},
+			shouldErr: true,
+		},
+		{
 			name: "primary-elect fails to promote",
 			tmc: &testutil.TabletManagerClient{
 				PrimaryPositionResults: map[string]struct {
@@ -2574,6 +2612,61 @@ func TestPlannedReparenter_performPotentialPromotion(t *testing.T) {
 						Alias: &topodatapb.TabletAlias{
 							Cell: "zone1",
 							Uid:  102,
+						},
+					},
+				},
+			},
+			shouldErr: true,
+		},
+		{
+			// DemotePrimary on a file-position tablet returns that tablet's own binlog
+			// coordinates, which are not comparable across tablets. The elect's
+			// coordinates (higher file/offset) would make AtLeast falsely report it as
+			// dominant, so the dominance check must fail closed rather than promote and
+			// risk discarding a peer's transactions.
+			name: "file-position candidate fails closed",
+			tmc: &testutil.TabletManagerClient{
+				DemotePrimaryResults: map[string]struct {
+					Status *replicationdatapb.PrimaryStatus
+					Error  error
+				}{
+					"zone1-0000000100": {
+						Status: &replicationdatapb.PrimaryStatus{
+							Position: "FilePos/vt-bin.000009:5000",
+						},
+						Error: nil,
+					},
+					"zone1-0000000101": {
+						Status: &replicationdatapb.PrimaryStatus{
+							Position: "FilePos/vt-bin.000002:100",
+						},
+						Error: nil,
+					},
+				},
+			},
+			unlockTopo: false,
+			keyspace:   "testkeyspace",
+			shard:      "-",
+			primaryElect: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+					},
+				},
+				"zone1-0000000101": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  101,
 						},
 					},
 				},

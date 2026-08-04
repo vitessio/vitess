@@ -373,7 +373,9 @@ func (pr *PlannedReparenter) performInitialPromotion(
 // so that promoting it (via InitPrimary, with no catch-up) cannot discard
 // transactions another tablet holds. It returns an error if any tablet has a
 // position the elect does not contain, including a position that is incomparable
-// with the elect's (divergent GTID history).
+// with the elect's (divergent GTID history). It also fails closed on file-position
+// (non-GTID) tablets, whose per-tablet binlog coordinates cannot be compared across
+// tablets to establish containment.
 func (pr *PlannedReparenter) checkPrimaryElectContainsAllPositions(
 	ctx context.Context,
 	primaryElect *topodatapb.Tablet,
@@ -438,11 +440,26 @@ func (pr *PlannedReparenter) checkPrimaryElectContainsAllPositions(
 // promoting it cannot discard transactions another tablet holds. A position that
 // is incomparable with the elect's (divergent GTID history) also fails, since
 // AtLeast is false for it. positions must include the primary-elect's own alias.
-// Shared by the initial-promotion and potential-promotion paths.
+// Shared by the initial-promotion and potential-promotion paths, both of which
+// promote without catching the elect up to a source first.
+//
+// It fails closed on file-position (non-GTID) positions: these are each tablet's
+// own SHOW BINARY LOG STATUS coordinates, whose file names and offsets are local
+// to a tablet and not comparable across tablets. Feeding them to AtLeast would
+// produce a meaningless verdict that could wave through a promotion discarding a
+// peer's transactions. An empty position (a genuinely fresh tablet on a
+// never-initialized shard) carries no FilePosGTID and is still safe to compare, so
+// GTID and fresh-init promotions are unaffected.
 func verifyPrimaryElectDominates(primaryElectAliasStr string, positions map[string]replication.Position) error {
 	electPos, ok := positions[primaryElectAliasStr]
 	if !ok {
 		return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "primary-elect tablet %v not found in tablet map", primaryElectAliasStr)
+	}
+
+	for alias, pos := range positions {
+		if _, isFilePos := pos.GTIDSet.(replication.FilePosGTID); isFilePos {
+			return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "cannot verify primary-elect %v contains all transactions: tablet %v reports a file-position replication position (%v), which is not comparable across tablets; specify an explicit primary to promote", primaryElectAliasStr, alias, replication.EncodePosition(pos))
+		}
 	}
 
 	for alias, pos := range positions {
