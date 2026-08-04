@@ -191,7 +191,7 @@ jobs:
       # There is no separate 'zookeeper' need, so 'consul' is the correct proxy for "this shard needs ZooKeeper".
       - name: Cache ZooKeeper
         if: steps.changes.outputs.end_to_end == 'true' && contains(matrix.needs, 'consul')
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0  # zizmor: ignore[cache-poisoning] this workflow publishes no artifacts
         with:
           path: dist/vt-zookeeper-*
           key: zookeeper-${{ hashFiles('build.env', 'bootstrap.sh') }}
