@@ -154,6 +154,6 @@ jobs:
         files: coverage.out
         fail_ci_if_error: true
         verbose: true
-        flags: ${{ steps.mode.outputs.is_full_run == 'true' && '' || 'partial' }}
+        flags: ${{ steps.mode.outputs.is_full_run != 'true' && 'partial' || '' }}
       env:
         CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
