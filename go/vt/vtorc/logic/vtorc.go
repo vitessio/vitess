@@ -22,7 +22,6 @@ import (
 	"os"
 	"sync"
 	"sync/atomic"
-	"syscall"
 	"time"
 
 	"github.com/patrickmn/go-cache"
@@ -352,16 +351,13 @@ func refreshAllInformation(ctx context.Context) error {
 		defer retryCancel()
 		if retryErr := validateCellsNoRecovery(retryCtx); retryErr != nil {
 			log.Error(fmt.Sprintf("--cells-no-recovery validation failed, shutting down: %v", retryErr))
-			// Trigger graceful shutdown so closeVTOrc runs (releases shard locks,
-			// fires OnTermSync hooks) instead of os.Exit which would abandon any
-			// in-flight recovery holding a shard lock. The nil guard is defensive:
-			// ExitChan is always initialized by the time topo ticks fire, but if
-			// it somehow isn't, fall back to os.Exit.
-			if servenv.ExitChan != nil {
-				servenv.ExitChan <- syscall.SIGTERM
-			} else {
-				os.Exit(1)
-			}
+			// Run graceful shutdown directly (releases shard locks, closes topo)
+			// then exit nonzero so restart-on-failure policies detect the fatal
+			// configuration error. We call closeVTOrc ourselves instead of
+			// signalling ExitChan because servenv.Run consumes that signal and
+			// exits with status 0.
+			closeVTOrc()
+			os.Exit(1)
 		}
 	}
 	return err
