@@ -36,9 +36,10 @@ import (
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/hook"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/proto/replicationdata"
+	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -46,7 +47,9 @@ import (
 
 const (
 	// Queries used for RPCs
-	getGlobalStatusQuery = "SELECT variable_name, variable_value FROM performance_schema.global_status"
+	getGlobalStatusQuery           = "SELECT variable_name, variable_value FROM performance_schema.global_status"
+	fullStatusGlobalVariablesQuery = "SELECT variable_name, variable_value FROM performance_schema.global_variables WHERE variable_name IN %a"
+	fullStatusGlobalStatusQuery    = "SELECT variable_name, variable_value FROM performance_schema.global_status WHERE variable_name IN %a"
 
 	// superReadOnlyResetTimeout bounds the reset function returned by
 	// SetSuperReadOnly.
@@ -56,11 +59,40 @@ const (
 type (
 	ResetSuperReadOnlyFunc func() error
 
+	// FullStatusResult contains the FullStatus proto assembled by
+	// TryCollectFullStatusData along with any non-fatal errors collected while
+	// reading semi-sync data.
+	FullStatusResult struct {
+		Status     *replicationdatapb.FullStatus
+		SoftErrors []error
+	}
+
 	// SetSuperReadOnlyOption configures how SetSuperReadOnly runs.
 	SetSuperReadOnlyOption func(*setSuperReadOnlyOptions)
 
 	setSuperReadOnlyOptions struct {
 		lockWaitTimeout time.Duration
+	}
+)
+
+var (
+	fullStatusSemiSyncVariables = []string{
+		"rpl_semi_sync_source_enabled",
+		"rpl_semi_sync_replica_enabled",
+		"rpl_semi_sync_source_timeout",
+		"rpl_semi_sync_source_wait_for_replica_count",
+		"rpl_semi_sync_master_enabled",
+		"rpl_semi_sync_slave_enabled",
+		"rpl_semi_sync_master_timeout",
+		"rpl_semi_sync_master_wait_for_slave_count",
+	}
+	fullStatusSemiSyncStatuses = []string{
+		"Rpl_semi_sync_source_status",
+		"Rpl_semi_sync_replica_status",
+		"Rpl_semi_sync_source_clients",
+		"Rpl_semi_sync_master_status",
+		"Rpl_semi_sync_slave_status",
+		"Rpl_semi_sync_master_clients",
 	}
 )
 
@@ -514,7 +546,7 @@ func (mysqld *Mysqld) PrimaryStatus(ctx context.Context) (replication.PrimarySta
 	return primaryStatus, nil
 }
 
-func (mysqld *Mysqld) ReplicationConfiguration(ctx context.Context) (*replicationdata.Configuration, error) {
+func (mysqld *Mysqld) ReplicationConfiguration(ctx context.Context) (*replicationdatapb.Configuration, error) {
 	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
 	if err != nil {
 		return nil, err
@@ -522,6 +554,251 @@ func (mysqld *Mysqld) ReplicationConfiguration(ctx context.Context) (*replicatio
 	defer conn.Recycle()
 
 	return conn.Conn.ReplicationConfiguration()
+}
+
+// TryCollectFullStatusData collects FullStatus data on one connection for
+// supported MySQL flavors. A nil result (with a nil error) means the caller
+// should use the existing collection path.
+func (mysqld *Mysqld) TryCollectFullStatusData(ctx context.Context) (*FullStatusResult, error) {
+	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Recycle()
+
+	if conn.Conn.IsMariaDB() {
+		return nil, nil
+	}
+
+	variables, err := mysqld.fetchFullStatusVariables(ctx, conn)
+	if err != nil {
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		log.Warn("FullStatus optimized collection failed; falling back to legacy collection",
+			slog.String("recovery", "legacy_full_status"),
+			slog.Any("error", err))
+		return nil, nil
+	}
+
+	_, parsedVersion, err := ParseVersionString(versionStringPrefix + variables.Version)
+	if err != nil {
+		return nil, err
+	}
+
+	result := &FullStatusResult{
+		Status: &replicationdatapb.FullStatus{
+			ServerId:          variables.ServerID,
+			ServerUuid:        variables.ServerUUID,
+			Version:           fmt.Sprintf("%d.%d.%d", parsedVersion.Major, parsedVersion.Minor, parsedVersion.Patch),
+			VersionComment:    variables.VersionComment,
+			ReadOnly:          variables.ReadOnly,
+			SuperReadOnly:     variables.SuperReadOnly,
+			GtidMode:          variables.GTIDMode,
+			BinlogFormat:      variables.BinlogFormat,
+			BinlogRowImage:    variables.BinlogRowImage,
+			LogBinEnabled:     variables.LogBin,
+			LogReplicaUpdates: variables.LogReplicaUpdates,
+		},
+	}
+	status := result.Status
+
+	var replicationStatus replication.ReplicationStatus
+	err = runFullStatusQuery(ctx, conn, "replication status", func() error {
+		var queryErr error
+		replicationStatus, queryErr = conn.Conn.ShowReplicationStatus()
+		return queryErr
+	})
+	if err != nil && err != mysql.ErrNotReplica {
+		return nil, err
+	}
+	if err == nil {
+		status.ReplicationStatus = replication.ReplicationStatusToProto(replicationStatus)
+	}
+
+	var primaryStatus replication.PrimaryStatus
+	err = runFullStatusQuery(ctx, conn, "primary status", func() error {
+		var queryErr error
+		primaryStatus, queryErr = conn.Conn.ShowPrimaryStatus()
+		return queryErr
+	})
+	if err != nil && err != mysql.ErrNoPrimaryStatus {
+		return nil, err
+	}
+	if err == nil {
+		primaryStatus.ServerUUID = variables.ServerUUID
+		status.PrimaryStatus = replication.PrimaryStatusToProto(primaryStatus)
+	}
+
+	var gtidPurged replication.Position
+	err = runFullStatusQuery(ctx, conn, "GTID purged", func() error {
+		var queryErr error
+		gtidPurged, queryErr = conn.Conn.GetGTIDPurged()
+		return queryErr
+	})
+	if err != nil {
+		return nil, err
+	}
+	status.GtidPurged = replication.EncodePosition(gtidPurged)
+
+	err = runFullStatusQuery(ctx, conn, "replication configuration", func() error {
+		var queryErr error
+		status.ReplicationConfiguration, queryErr = conn.Conn.ReplicationConfiguration()
+		return queryErr
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	if err := mysqld.collectFullStatusSemiSync(ctx, conn, result); err != nil {
+		return nil, err
+	}
+
+	return result, nil
+}
+
+func runFullStatusQuery(ctx context.Context, conn *dbconnpool.PooledDBConnection, queryName string, query func() error) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
+	err := query()
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return ctxErr
+	}
+	if err == nil {
+		return nil
+	}
+
+	sqlErr, ok := errors.AsType[*sqlerror.SQLError](err)
+	if !ok || (sqlErr.Number() != sqlerror.CRServerGone && sqlErr.Number() != sqlerror.CRServerLost) {
+		return err
+	}
+
+	log.Warn("FullStatus query lost its MySQL connection; reconnecting before retry",
+		slog.String("workflow", "full_status"),
+		slog.String("query", queryName),
+		slog.String("recovery", "reconnect"),
+		slog.Any("error", err))
+	if err := conn.Conn.Reconnect(ctx); err != nil {
+		return vterrors.Wrapf(err, "failed to reconnect while collecting FullStatus %s", queryName)
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
+	err = query()
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return ctxErr
+	}
+	return err
+}
+
+func (mysqld *Mysqld) fetchFullStatusVariables(ctx context.Context, conn *dbconnpool.PooledDBConnection) (*mysql.FullStatusVariables, error) {
+	qr, err := mysqld.executeFetchContext(ctx, conn, conn.Conn.FullStatusVariablesQuery(), 1, true)
+	if err != nil {
+		return nil, err
+	}
+	return mysql.ParseFullStatusVariables(qr)
+}
+
+func (mysqld *Mysqld) collectFullStatusSemiSync(ctx context.Context, conn *dbconnpool.PooledDBConnection, result *FullStatusResult) error {
+	variables, err := mysqld.fetchFullStatusValues(ctx, conn, fullStatusGlobalVariablesQuery, fullStatusSemiSyncVariables)
+	if err != nil {
+		result.SoftErrors = append(result.SoftErrors, vterrors.Wrapf(err, "failed to read semi-sync variables"))
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+
+		if err = conn.Conn.Reconnect(ctx); err != nil {
+			result.SoftErrors = append(result.SoftErrors, vterrors.Wrapf(err, "failed to reconnect before reading semi-sync status"))
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+			return nil
+		}
+	} else {
+		result.parseSemiSyncVariables(variables)
+	}
+
+	statuses, err := mysqld.fetchFullStatusValues(ctx, conn, fullStatusGlobalStatusQuery, fullStatusSemiSyncStatuses)
+	if err != nil {
+		result.SoftErrors = append(result.SoftErrors, vterrors.Wrapf(err, "failed to read semi-sync status"))
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+	} else {
+		result.parseSemiSyncStatuses(statuses)
+	}
+	return nil
+}
+
+func (mysqld *Mysqld) fetchFullStatusValues(ctx context.Context, conn *dbconnpool.PooledDBConnection, queryTemplate string, names []string) (map[string]string, error) {
+	bv, err := sqltypes.BuildBindVariable(names)
+	if err != nil {
+		return nil, err
+	}
+	query, err := sqlparser.ParseAndBind(queryTemplate, bv)
+	if err != nil {
+		return nil, err
+	}
+	qr, err := mysqld.executeFetchContext(ctx, conn, query, len(names), false)
+	if err != nil {
+		return nil, err
+	}
+	values := make(map[string]string, len(qr.Rows))
+	for _, row := range qr.Rows {
+		if len(row) != 2 {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "semi-sync query returned %d fields, expected 2", len(row))
+		}
+		values[row[0].ToString()] = row[1].ToString()
+	}
+	return values, nil
+}
+
+func (result *FullStatusResult) parseSemiSyncVariables(values map[string]string) {
+	status := result.Status
+	if _, ok := values["rpl_semi_sync_source_enabled"]; ok {
+		status.SemiSyncPrimaryEnabled = values["rpl_semi_sync_source_enabled"] == "ON"
+		status.SemiSyncReplicaEnabled = values["rpl_semi_sync_replica_enabled"] == "ON"
+		status.SemiSyncPrimaryTimeout = result.parseOptionalUint(values, "rpl_semi_sync_source_timeout", 64)
+		status.SemiSyncWaitForReplicaCount = uint32(result.parseOptionalUint(values, "rpl_semi_sync_source_wait_for_replica_count", 32))
+		return
+	}
+	if _, ok := values["rpl_semi_sync_master_enabled"]; ok {
+		status.SemiSyncPrimaryEnabled = values["rpl_semi_sync_master_enabled"] == "ON"
+		status.SemiSyncReplicaEnabled = values["rpl_semi_sync_slave_enabled"] == "ON"
+		status.SemiSyncPrimaryTimeout = result.parseOptionalUint(values, "rpl_semi_sync_master_timeout", 64)
+		status.SemiSyncWaitForReplicaCount = uint32(result.parseOptionalUint(values, "rpl_semi_sync_master_wait_for_slave_count", 32))
+	}
+}
+
+func (result *FullStatusResult) parseSemiSyncStatuses(values map[string]string) {
+	status := result.Status
+	if _, ok := values["Rpl_semi_sync_source_status"]; ok {
+		status.SemiSyncPrimaryStatus = values["Rpl_semi_sync_source_status"] == "ON"
+		status.SemiSyncReplicaStatus = values["Rpl_semi_sync_replica_status"] == "ON"
+		status.SemiSyncPrimaryClients = uint32(result.parseOptionalUint(values, "Rpl_semi_sync_source_clients", 32))
+		return
+	}
+	if _, ok := values["Rpl_semi_sync_master_status"]; ok {
+		status.SemiSyncPrimaryStatus = values["Rpl_semi_sync_master_status"] == "ON"
+		status.SemiSyncReplicaStatus = values["Rpl_semi_sync_slave_status"] == "ON"
+		status.SemiSyncPrimaryClients = uint32(result.parseOptionalUint(values, "Rpl_semi_sync_master_clients", 32))
+	}
+}
+
+func (result *FullStatusResult) parseOptionalUint(values map[string]string, name string, bitSize int) uint64 {
+	value, ok := values[name]
+	if !ok {
+		return 0
+	}
+	parsed, err := strconv.ParseUint(value, 10, bitSize)
+	if err != nil {
+		result.SoftErrors = append(result.SoftErrors, vterrors.Wrapf(err, "failed to parse %s", name))
+		return 0
+	}
+	return parsed
 }
 
 // GetGTIDPurged returns the gtid purged statuses

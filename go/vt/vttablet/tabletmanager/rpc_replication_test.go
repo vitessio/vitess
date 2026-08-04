@@ -40,10 +40,11 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver"
 	"vitess.io/vitess/go/vt/vttablet/tabletservermock"
 
+	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
-func newTestReplicationTM(tablet *topodatapb.Tablet, mysqlDaemon *mysqlctl.FakeMysqlDaemon, ts *topo.Server) *TabletManager {
+func newTestReplicationTM(tablet *topodatapb.Tablet, mysqlDaemon mysqlctl.MysqlDaemon, ts *topo.Server) *TabletManager {
 	waitForGrantsComplete := make(chan struct{})
 	close(waitForGrantsComplete)
 
@@ -97,6 +98,13 @@ type (
 		postStopTimeoutRemaining chan time.Duration
 		stopDelay                time.Duration
 	}
+
+	fullStatusCollectorMysqlDaemon struct {
+		*mysqlctl.FakeMysqlDaemon
+		result *mysqlctl.FullStatusResult
+		err    error
+		calls  int
+	}
 )
 
 func (d *demotePrimaryStallQS) SetDemotePrimaryStalled(val bool) {
@@ -130,6 +138,103 @@ func (rmd *restartReplicationMysqlDaemon) SemiSyncExtensionLoaded(ctx context.Co
 		rmd.postStopTimeoutRemaining <- time.Until(deadline)
 	}
 	return mysql.SemiSyncTypeOff, nil
+}
+
+func (fmd *fullStatusCollectorMysqlDaemon) TryCollectFullStatusData(context.Context) (*mysqlctl.FullStatusResult, error) {
+	fmd.calls++
+	return fmd.result, fmd.err
+}
+
+func TestFullStatusUsesOptimizedCollector(t *testing.T) {
+	fakeMysqlDaemon := newTestMysqlDaemon(t, 1)
+	t.Cleanup(fakeMysqlDaemon.DB().Close)
+	collector := &fullStatusCollectorMysqlDaemon{
+		FakeMysqlDaemon: fakeMysqlDaemon,
+		result: &mysqlctl.FullStatusResult{
+			Status: &replicationdatapb.FullStatus{
+				ServerId:               42,
+				ServerUuid:             "test-uuid",
+				Version:                "8.0.35",
+				VersionComment:         "MySQL Community Server - GPL",
+				ReadOnly:               true,
+				SuperReadOnly:          true,
+				GtidMode:               "ON",
+				BinlogFormat:           "ROW",
+				BinlogRowImage:         "FULL",
+				LogBinEnabled:          true,
+				LogReplicaUpdates:      true,
+				SemiSyncPrimaryEnabled: true,
+				SemiSyncPrimaryStatus:  true,
+			},
+		},
+	}
+	tablet := newTestTablet(t, 100, "ks", "0", nil)
+	tm := newTestReplicationTM(tablet, collector, nil)
+	tm.QueryServiceControl = tabletservermock.NewController()
+	tm.SemiSyncMonitor = semisyncmonitor.CreateTestSemiSyncMonitor(fakeMysqlDaemon.DB(), exporter)
+
+	status, err := tm.FullStatus(t.Context())
+	require.NoError(t, err)
+	require.NotNil(t, status)
+
+	assert.Equal(t, 1, collector.calls)
+	assert.Equal(t, uint32(42), status.ServerId)
+	assert.Equal(t, "test-uuid", status.ServerUuid)
+	assert.Equal(t, "8.0.35", status.Version)
+	assert.Equal(t, "MySQL Community Server - GPL", status.VersionComment)
+	assert.True(t, status.ReadOnly)
+	assert.True(t, status.SuperReadOnly)
+	assert.Equal(t, "ON", status.GtidMode)
+	assert.Equal(t, "ROW", status.BinlogFormat)
+	assert.Equal(t, "FULL", status.BinlogRowImage)
+	assert.True(t, status.LogBinEnabled)
+	assert.True(t, status.LogReplicaUpdates)
+	assert.True(t, status.SemiSyncPrimaryEnabled)
+	assert.True(t, status.SemiSyncPrimaryStatus)
+	assert.Equal(t, topodatapb.TabletType_REPLICA, status.TabletType)
+}
+
+func TestFullStatusFallsBackWhenCollectorIsUnsupported(t *testing.T) {
+	fakeMysqlDaemon := newTestMysqlDaemon(t, 1)
+	t.Cleanup(fakeMysqlDaemon.DB().Close)
+	fakeMysqlDaemon.Version = "Ver 8.0.32"
+	fakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+		"FAKE select @@global",
+		"FAKE select @@global",
+	}
+	collector := &fullStatusCollectorMysqlDaemon{
+		FakeMysqlDaemon: fakeMysqlDaemon,
+	}
+	tablet := newTestTablet(t, 100, "ks", "0", nil)
+	tm := newTestReplicationTM(tablet, collector, nil)
+	tm.QueryServiceControl = tabletservermock.NewController()
+	tm.SemiSyncMonitor = semisyncmonitor.CreateTestSemiSyncMonitor(fakeMysqlDaemon.DB(), exporter)
+
+	status, err := tm.FullStatus(t.Context())
+	require.NoError(t, err)
+	require.NotNil(t, status)
+
+	assert.Equal(t, 1, collector.calls)
+	assert.Equal(t, uint32(1), status.ServerId)
+	assert.Equal(t, "8.0.32", status.Version)
+}
+
+func TestFullStatusReturnsOptimizedCollectorError(t *testing.T) {
+	fakeMysqlDaemon := newTestMysqlDaemon(t, 1)
+	t.Cleanup(fakeMysqlDaemon.DB().Close)
+	collector := &fullStatusCollectorMysqlDaemon{
+		FakeMysqlDaemon: fakeMysqlDaemon,
+		err:             errors.New("collector failed"),
+	}
+	tablet := newTestTablet(t, 100, "ks", "0", nil)
+	tm := newTestReplicationTM(tablet, collector, nil)
+	tm.QueryServiceControl = tabletservermock.NewController()
+
+	status, err := tm.FullStatus(t.Context())
+
+	require.ErrorContains(t, err, "collector failed")
+	assert.Nil(t, status)
+	assert.Equal(t, 1, collector.calls)
 }
 
 // TestDemotePrimaryStalled checks that if demote primary takes too long, then we mark it as stalled.
@@ -256,7 +361,8 @@ func TestDemotePrimaryWaitingForSemiSyncUnblock(t *testing.T) {
 	fakeDb.AddQuery("SELECT /*+ MAX_EXECUTION_TIME(500) */ variable_name, variable_value FROM performance_schema.global_status WHERE REGEXP_LIKE(variable_name, 'Rpl_semi_sync_(source|master)_(wait_sessions|yes_tx)')", sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields("variable_name|variable_value", "varchar|varchar"),
 		"Rpl_semi_sync_source_wait_sessions|1",
-		"Rpl_semi_sync_source_yes_tx|5"))
+		"Rpl_semi_sync_source_yes_tx|5",
+	))
 
 	// Verify that in the beginning the tablet is serving.
 	require.True(t, tm.QueryServiceControl.IsServing())
@@ -286,7 +392,8 @@ func TestDemotePrimaryWaitingForSemiSyncUnblock(t *testing.T) {
 	fakeDb.AddQuery("SELECT /*+ MAX_EXECUTION_TIME(1000) */ variable_name, variable_value FROM performance_schema.global_status WHERE REGEXP_LIKE(variable_name, 'Rpl_semi_sync_(source|master)_(wait_sessions|yes_tx)')", sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields("variable_name|variable_value", "varchar|varchar"),
 		"Rpl_semi_sync_source_wait_sessions|0",
-		"Rpl_semi_sync_source_yes_tx|5"))
+		"Rpl_semi_sync_source_yes_tx|5",
+	))
 	close(ch)
 
 	// This should unblock the demote primary operation eventually.
@@ -321,14 +428,16 @@ func TestDemotePrimaryWithSemiSyncProgressDetection(t *testing.T) {
 		fakeDb.AddQuery("SELECT /*+ MAX_EXECUTION_TIME(1000) */ variable_name, variable_value FROM performance_schema.global_status WHERE REGEXP_LIKE(variable_name, 'Rpl_semi_sync_(source|master)_(wait_sessions|yes_tx)')", sqltypes.MakeTestResult(
 			sqltypes.MakeTestFields("variable_name|variable_value", "varchar|varchar"),
 			"Rpl_semi_sync_source_wait_sessions|1",
-			"Rpl_semi_sync_source_yes_tx|5"))
+			"Rpl_semi_sync_source_yes_tx|5",
+		))
 	}
 	// Next calls: waiting sessions present, but ackedTrxs=6 (progress!).
 	for range 10 {
 		fakeDb.AddQuery("SELECT /*+ MAX_EXECUTION_TIME(1000) */ variable_name, variable_value FROM performance_schema.global_status WHERE REGEXP_LIKE(variable_name, 'Rpl_semi_sync_(source|master)_(wait_sessions|yes_tx)')", sqltypes.MakeTestResult(
 			sqltypes.MakeTestFields("variable_name|variable_value", "varchar|varchar"),
 			"Rpl_semi_sync_source_wait_sessions|1",
-			"Rpl_semi_sync_source_yes_tx|6"))
+			"Rpl_semi_sync_source_yes_tx|6",
+		))
 	}
 
 	// Verify that in the beginning the tablet is serving.
@@ -382,13 +491,15 @@ func TestDemotePrimaryWhenSemiSyncBecomesUnblockedBetweenChecks(t *testing.T) {
 	fakeDb.AddQuery("SELECT /*+ MAX_EXECUTION_TIME(1000) */ variable_name, variable_value FROM performance_schema.global_status WHERE REGEXP_LIKE(variable_name, 'Rpl_semi_sync_(source|master)_(wait_sessions|yes_tx)')", sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields("variable_name|variable_value", "varchar|varchar"),
 		"Rpl_semi_sync_source_wait_sessions|2",
-		"Rpl_semi_sync_source_yes_tx|5"))
+		"Rpl_semi_sync_source_yes_tx|5",
+	))
 	// Second and subsequent calls: no waiting sessions (unblocked!).
 	for range 10 {
 		fakeDb.AddQuery("SELECT /*+ MAX_EXECUTION_TIME(1000) */ variable_name, variable_value FROM performance_schema.global_status WHERE REGEXP_LIKE(variable_name, 'Rpl_semi_sync_(source|master)_(wait_sessions|yes_tx)')", sqltypes.MakeTestResult(
 			sqltypes.MakeTestFields("variable_name|variable_value", "varchar|varchar"),
 			"Rpl_semi_sync_source_wait_sessions|0",
-			"Rpl_semi_sync_source_yes_tx|5"))
+			"Rpl_semi_sync_source_yes_tx|5",
+		))
 	}
 
 	// Verify that in the beginning the tablet is serving.

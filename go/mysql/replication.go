@@ -22,6 +22,7 @@ import (
 	"math"
 
 	"vitess.io/vitess/go/mysql/sqlerror"
+	"vitess.io/vitess/go/sqltypes"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 )
@@ -208,7 +209,24 @@ func (c *Conn) WritePacketDirect(payload []byte) error {
 	return nil
 }
 
-type SemiSyncType int8
+type (
+	SemiSyncType int8
+
+	// FullStatusVariables contains the mandatory global variables used by FullStatus.
+	FullStatusVariables struct {
+		ServerID          uint32
+		ServerUUID        string
+		Version           string
+		VersionComment    string
+		ReadOnly          bool
+		SuperReadOnly     bool
+		GTIDMode          string
+		BinlogFormat      string
+		LogBin            bool
+		LogReplicaUpdates bool
+		BinlogRowImage    string
+	}
+)
 
 const (
 	SemiSyncTypeUnknown SemiSyncType = iota
@@ -233,6 +251,90 @@ func (c *Conn) SemiSyncExtensionLoaded() (SemiSyncType, error) {
 		}
 	}
 	return SemiSyncTypeOff, nil
+}
+
+// ParseFullStatusVariables parses the mandatory global variables used by FullStatus.
+func ParseFullStatusVariables(qr *sqltypes.Result) (*FullStatusVariables, error) {
+	if len(qr.Rows) != 1 {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected result length for FullStatus variables: %d", len(qr.Rows))
+	}
+
+	row := qr.Named().Row()
+	serverID, err := row.ToUint64("server_id")
+	if err != nil {
+		return nil, vterrors.Wrapf(err, "failed to read server_id")
+	}
+	if serverID > math.MaxUint32 {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "server_id %d exceeds uint32", serverID)
+	}
+	serverUUID, err := row.ToString("server_uuid")
+	if err != nil {
+		return nil, vterrors.Wrapf(err, "failed to read server_uuid")
+	}
+	version, err := row.ToString("version")
+	if err != nil {
+		return nil, vterrors.Wrapf(err, "failed to read version")
+	}
+	versionComment, err := row.ToString("version_comment")
+	if err != nil {
+		return nil, vterrors.Wrapf(err, "failed to read version_comment")
+	}
+	readOnly, err := row.ToInt64("read_only")
+	if err != nil {
+		return nil, vterrors.Wrapf(err, "failed to read read_only")
+	}
+	superReadOnly, err := row.ToInt64("super_read_only")
+	if err != nil {
+		return nil, vterrors.Wrapf(err, "failed to read super_read_only")
+	}
+	gtidMode, err := row.ToString("gtid_mode")
+	if err != nil {
+		return nil, vterrors.Wrapf(err, "failed to read gtid_mode")
+	}
+	binlogFormat, err := row.ToString("binlog_format")
+	if err != nil {
+		return nil, vterrors.Wrapf(err, "failed to read binlog_format")
+	}
+	logBin, err := row.ToInt64("log_bin")
+	if err != nil {
+		return nil, vterrors.Wrapf(err, "failed to read log_bin")
+	}
+	logReplicaUpdates, err := row.ToInt64("log_replica_updates")
+	if err != nil {
+		return nil, vterrors.Wrapf(err, "failed to read log_replica_updates")
+	}
+	binlogRowImage, err := row.ToString("binlog_row_image")
+	if err != nil {
+		return nil, vterrors.Wrapf(err, "failed to read binlog_row_image")
+	}
+
+	return &FullStatusVariables{
+		ServerID:          uint32(serverID),
+		ServerUUID:        serverUUID,
+		Version:           version,
+		VersionComment:    versionComment,
+		ReadOnly:          readOnly == 1,
+		SuperReadOnly:     superReadOnly == 1,
+		GTIDMode:          gtidMode,
+		BinlogFormat:      binlogFormat,
+		LogBin:            logBin == 1,
+		LogReplicaUpdates: logReplicaUpdates == 1,
+		BinlogRowImage:    binlogRowImage,
+	}, nil
+}
+
+func (c *Conn) FullStatusVariablesQuery() string {
+	return fmt.Sprintf(`SELECT @@global.server_id AS server_id,
+	@@global.server_uuid AS server_uuid,
+	@@global.version AS version,
+	@@global.version_comment AS version_comment,
+	@@global.read_only AS read_only,
+	@@global.super_read_only AS super_read_only,
+	@@global.gtid_mode AS gtid_mode,
+	@@global.binlog_format AS binlog_format,
+	@@global.log_bin AS log_bin,
+	%s AS log_replica_updates,
+	@@global.binlog_row_image AS binlog_row_image`, c.flavor.binlogReplicatedUpdates())
 }
 
 func (c *Conn) BinlogInformation() (string, bool, bool, string, error) {

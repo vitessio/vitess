@@ -17,11 +17,14 @@ limitations under the License.
 package mysqlctl
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"log/slog"
 	"math"
 	"net"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -34,6 +37,9 @@ import (
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
+	"vitess.io/vitess/go/vt/dbconnpool"
+	"vitess.io/vitess/go/vt/log"
+	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 )
 
 func testRedacted(t *testing.T, source, expected string) {
@@ -769,6 +775,371 @@ func TestSemiSyncExtensionLoaded(t *testing.T) {
 	res, err = testMysqld.SemiSyncExtensionLoaded(ctx)
 	require.NoError(t, err)
 	assert.Equal(t, mysql.SemiSyncTypeOff, res)
+}
+
+func TestTryCollectFullStatusData(t *testing.T) {
+	db := fakesqldb.New(t)
+	t.Cleanup(db.Close)
+
+	params := db.ConnParams()
+	cp := *params
+	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb")
+
+	db.AddQuery("SELECT 1", &sqltypes.Result{})
+	db.AddQueryPattern(
+		"SELECT @@global.server_id AS server_id,.*",
+		sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields("server_id|server_uuid|version|version_comment|read_only|super_read_only|gtid_mode|binlog_format|log_bin|log_replica_updates|binlog_row_image", "uint64|varchar|varchar|varchar|int64|int64|varchar|varchar|int64|int64|varchar"),
+			"42|test-uuid|8.0.35|MySQL Community Server - GPL|1|1|ON|ROW|1|1|FULL",
+		),
+	)
+	db.AddQuery("SHOW REPLICA STATUS", sqltypes.MakeTestResult(sqltypes.MakeTestFields("Last_SQL_Error|Last_IO_Error", "varchar|varchar"), "|"))
+	db.AddQuery("SHOW BINARY LOG STATUS", sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("File|Position|Binlog_Do_DB|Binlog_Ignore_DB|Executed_Gtid_Set", "varchar|int64|varchar|varchar|varchar"),
+		"binlog.000001|154|||8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8",
+	))
+	db.AddQuery("SELECT @@global.gtid_purged", sqltypes.MakeTestResult(sqltypes.MakeTestFields("gtid_purged", "varchar"), "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-5"))
+	db.AddQueryPattern(
+		"SELECT variable_name, variable_value FROM performance_schema.global_variables WHERE variable_name IN .*",
+		sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields("variable_name|variable_value", "varchar|varchar"),
+			"rpl_semi_sync_source_enabled|ON",
+			"rpl_semi_sync_replica_enabled|OFF",
+			"rpl_semi_sync_source_timeout|10000",
+			"rpl_semi_sync_source_wait_for_replica_count|2",
+		),
+	)
+	db.AddQueryPattern(
+		"SELECT variable_name, variable_value FROM performance_schema.global_status WHERE variable_name IN .*",
+		sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields("variable_name|variable_value", "varchar|varchar"),
+			"Rpl_semi_sync_source_status|ON",
+			"Rpl_semi_sync_replica_status|OFF",
+			"Rpl_semi_sync_source_clients|3",
+		),
+	)
+	db.AddQuery("SELECT * FROM performance_schema.replication_connection_configuration", sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("HEARTBEAT_INTERVAL", "float64"),
+		"4.5",
+	))
+	db.AddQuery("select @@global.replica_net_timeout", sqltypes.MakeTestResult(sqltypes.MakeTestFields("replica_net_timeout", "int64"), "9"))
+
+	testMysqld := NewMysqld(dbc)
+	t.Cleanup(testMysqld.Close)
+	conn, err := getPoolReconnect(t.Context(), testMysqld.dbaPool)
+	require.NoError(t, err)
+	conn.Recycle()
+	selectOneCalls := db.GetQueryCalledNum("SELECT 1")
+	db.ResetQueryLog()
+
+	result, err := testMysqld.TryCollectFullStatusData(t.Context())
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.NotNil(t, result.Status)
+
+	status := result.Status
+	assert.Equal(t, uint32(42), status.ServerId)
+	assert.Equal(t, "test-uuid", status.ServerUuid)
+	assert.Equal(t, "8.0.35", status.Version)
+	assert.Equal(t, "MySQL Community Server - GPL", status.VersionComment)
+	assert.True(t, status.ReadOnly)
+	assert.True(t, status.SuperReadOnly)
+	assert.Equal(t, "ON", status.GtidMode)
+	assert.Equal(t, "ROW", status.BinlogFormat)
+	assert.Equal(t, "FULL", status.BinlogRowImage)
+	assert.True(t, status.LogBinEnabled)
+	assert.True(t, status.LogReplicaUpdates)
+	assert.True(t, status.SemiSyncPrimaryEnabled)
+	assert.False(t, status.SemiSyncReplicaEnabled)
+	assert.True(t, status.SemiSyncPrimaryStatus)
+	assert.False(t, status.SemiSyncReplicaStatus)
+	assert.Equal(t, uint32(3), status.SemiSyncPrimaryClients)
+	assert.Equal(t, uint64(10000), status.SemiSyncPrimaryTimeout)
+	assert.Equal(t, uint32(2), status.SemiSyncWaitForReplicaCount)
+	require.NotNil(t, status.ReplicationStatus)
+	require.NotNil(t, status.PrimaryStatus)
+	assert.Equal(t, "test-uuid", status.PrimaryStatus.ServerUuid)
+	assert.Equal(t, "MySQL56/8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-5", status.GtidPurged)
+	require.NotNil(t, status.ReplicationConfiguration)
+	assert.Equal(t, int32(9), status.ReplicationConfiguration.ReplicaNetTimeout)
+	assert.Empty(t, result.SoftErrors)
+	assert.Len(t, strings.Split(db.QueryLog(), ";"), 9)
+	assert.Equal(t, selectOneCalls+1, db.GetQueryCalledNum("SELECT 1"))
+
+	db.AddQuery("SHOW REPLICA STATUS", &sqltypes.Result{})
+	db.AddQuery("SELECT * FROM performance_schema.replication_connection_configuration", sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("HEARTBEAT_INTERVAL", "float64"),
+	))
+	netTimeoutCalls := db.GetQueryCalledNum("select @@global.replica_net_timeout")
+	db.ResetQueryLog()
+
+	result, err = testMysqld.TryCollectFullStatusData(t.Context())
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.NotNil(t, result.Status)
+	assert.Nil(t, result.Status.ReplicationStatus)
+	assert.Nil(t, result.Status.ReplicationConfiguration)
+	assert.Equal(t, netTimeoutCalls, db.GetQueryCalledNum("select @@global.replica_net_timeout"))
+	assert.Len(t, strings.Split(db.QueryLog(), ";"), 8)
+}
+
+func newTryCollectFullStatusDataTestMysqld(t *testing.T) (*fakesqldb.DB, *Mysqld) {
+	t.Helper()
+
+	db := fakesqldb.New(t)
+	t.Cleanup(db.Close)
+
+	params := db.ConnParams()
+	cp := *params
+	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb")
+
+	db.AddQuery("SELECT 1", &sqltypes.Result{})
+	db.AddQueryPattern(
+		"SELECT @@global.server_id AS server_id,.*",
+		sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields("server_id|server_uuid|version|version_comment|read_only|super_read_only|gtid_mode|binlog_format|log_bin|log_replica_updates|binlog_row_image", "uint64|varchar|varchar|varchar|int64|int64|varchar|varchar|int64|int64|varchar"),
+			"42|test-uuid|8.0.35|MySQL Community Server - GPL|1|1|ON|ROW|1|1|FULL",
+		),
+	)
+	db.AddQuery("SHOW REPLICA STATUS", &sqltypes.Result{})
+	db.AddQuery("SHOW BINARY LOG STATUS", &sqltypes.Result{})
+	db.AddQuery("SELECT @@global.gtid_purged", sqltypes.MakeTestResult(sqltypes.MakeTestFields("gtid_purged", "varchar"), "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-5"))
+	db.AddQuery("SELECT * FROM performance_schema.replication_connection_configuration", &sqltypes.Result{})
+	db.AddQueryPattern("SELECT variable_name, variable_value FROM performance_schema.global_variables WHERE variable_name IN .*", &sqltypes.Result{})
+	db.AddQueryPattern("SELECT variable_name, variable_value FROM performance_schema.global_status WHERE variable_name IN .*", &sqltypes.Result{})
+
+	mysqld := NewMysqld(dbc)
+	t.Cleanup(mysqld.Close)
+	return db, mysqld
+}
+
+func TestTryCollectFullStatusDataStopsAfterCancellation(t *testing.T) {
+	db, mysqld := newTryCollectFullStatusDataTestMysqld(t)
+	ctx, cancel := context.WithCancel(t.Context())
+	db.SetBeforeFunc("SHOW REPLICA STATUS", cancel)
+
+	result, err := mysqld.TryCollectFullStatusData(ctx)
+
+	require.ErrorIs(t, err, context.Canceled)
+	assert.Nil(t, result)
+	assert.Zero(t, db.GetQueryCalledNum("SHOW BINARY LOG STATUS"))
+	assert.Zero(t, db.GetQueryCalledNum("SELECT @@global.gtid_purged"))
+	assert.Zero(t, db.GetQueryCalledNum("SELECT * FROM performance_schema.replication_connection_configuration"))
+}
+
+func TestTryCollectFullStatusDataRetriesLostConnectionOnce(t *testing.T) {
+	t.Run("successful retry", func(t *testing.T) {
+		db, mysqld := newTryCollectFullStatusDataTestMysqld(t)
+		var connectionClosed atomic.Bool
+		db.SetBeforeFunc("SHOW REPLICA STATUS", func() {
+			if connectionClosed.CompareAndSwap(false, true) {
+				db.CloseAllConnections()
+			}
+		})
+
+		result, err := mysqld.TryCollectFullStatusData(t.Context())
+
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.Equal(t, 2, db.GetQueryCalledNum("SHOW REPLICA STATUS"))
+	})
+
+	t.Run("retry failure", func(t *testing.T) {
+		db, mysqld := newTryCollectFullStatusDataTestMysqld(t)
+		db.SetBeforeFunc("SHOW REPLICA STATUS", db.CloseAllConnections)
+
+		result, err := mysqld.TryCollectFullStatusData(t.Context())
+
+		require.Error(t, err)
+		assert.Nil(t, result)
+		assert.Equal(t, 2, db.GetQueryCalledNum("SHOW REPLICA STATUS"))
+	})
+}
+
+func TestTryCollectFullStatusDataFallsBackWhenCoreBatchFails(t *testing.T) {
+	var logOutput bytes.Buffer
+	previousLogger := log.SwapLogger(slog.New(slog.NewTextHandler(&logOutput, nil)))
+	t.Cleanup(func() {
+		log.SwapLogger(previousLogger)
+	})
+
+	db := fakesqldb.New(t)
+	t.Cleanup(db.Close)
+
+	params := db.ConnParams()
+	cp := *params
+	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb")
+	db.AddQuery("SELECT 1", &sqltypes.Result{})
+	db.AddQueryPattern(
+		"SELECT @@global.server_id AS server_id,.*",
+		sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields("server_id|version|version_comment|read_only|super_read_only|gtid_mode|binlog_format|log_bin|log_replica_updates|binlog_row_image", "uint64|varchar|varchar|int64|int64|varchar|varchar|int64|int64|varchar"),
+			"42|8.0.35|MySQL Community Server - GPL|1|1|ON|ROW|1|1|FULL",
+		),
+	)
+
+	testMysqld := NewMysqld(dbc)
+	t.Cleanup(testMysqld.Close)
+
+	result, err := testMysqld.TryCollectFullStatusData(t.Context())
+	require.NoError(t, err)
+	assert.Nil(t, result)
+	assert.Zero(t, db.GetQueryCalledNum("SHOW REPLICA STATUS"))
+	assert.Contains(t, logOutput.String(), "FullStatus optimized collection failed")
+	assert.Contains(t, logOutput.String(), "failed to read server_uuid")
+	assert.Contains(t, logOutput.String(), "legacy_full_status")
+}
+
+func TestFetchFullStatusVariablesHonorsCanceledContext(t *testing.T) {
+	db := fakesqldb.New(t)
+	t.Cleanup(db.Close)
+
+	params := db.ConnParams()
+	cp := *params
+	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb")
+	db.AddQuery("SELECT 1", &sqltypes.Result{})
+
+	testMysqld := NewMysqld(dbc)
+	t.Cleanup(testMysqld.Close)
+	conn, err := getPoolReconnect(t.Context(), testMysqld.dbaPool)
+	require.NoError(t, err)
+	t.Cleanup(conn.Recycle)
+
+	query := conn.Conn.FullStatusVariablesQuery()
+	db.AddQuery(query, &sqltypes.Result{})
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	_, err = testMysqld.fetchFullStatusVariables(ctx, conn)
+
+	require.ErrorIs(t, err, context.Canceled)
+	assert.Zero(t, db.GetQueryCalledNum(query))
+}
+
+func TestCollectFullStatusSemiSync(t *testing.T) {
+	newTestMysqld := func(t *testing.T) (*fakesqldb.DB, *Mysqld, *dbconnpool.PooledDBConnection) {
+		t.Helper()
+		db := fakesqldb.New(t)
+		t.Cleanup(db.Close)
+		params := db.ConnParams()
+		cp := *params
+		dbc := dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb")
+		db.AddQuery("SELECT 1", &sqltypes.Result{})
+		mysqld := NewMysqld(dbc)
+		t.Cleanup(mysqld.Close)
+		require.NoError(t, mysqld.dbaPool.SetCapacity(t.Context(), 1))
+		conn, err := getPoolReconnect(t.Context(), mysqld.dbaPool)
+		require.NoError(t, err)
+		t.Cleanup(conn.Recycle)
+		return db, mysqld, conn
+	}
+
+	t.Run("legacy names and malformed optional value", func(t *testing.T) {
+		db, mysqld, conn := newTestMysqld(t)
+		db.AddQueryPattern(
+			"SELECT variable_name, variable_value FROM performance_schema.global_variables WHERE variable_name IN .*",
+			sqltypes.MakeTestResult(
+				sqltypes.MakeTestFields("variable_name|variable_value", "varchar|varchar"),
+				"rpl_semi_sync_master_enabled|ON",
+				"rpl_semi_sync_slave_enabled|ON",
+				"rpl_semi_sync_master_timeout|invalid",
+				"rpl_semi_sync_master_wait_for_slave_count|2",
+			),
+		)
+		db.AddQueryPattern(
+			"SELECT variable_name, variable_value FROM performance_schema.global_status WHERE variable_name IN .*",
+			sqltypes.MakeTestResult(
+				sqltypes.MakeTestFields("variable_name|variable_value", "varchar|varchar"),
+				"Rpl_semi_sync_master_status|ON",
+				"Rpl_semi_sync_slave_status|OFF",
+				"Rpl_semi_sync_master_clients|3",
+			),
+		)
+
+		result := &FullStatusResult{Status: &replicationdatapb.FullStatus{}}
+		err := mysqld.collectFullStatusSemiSync(t.Context(), conn, result)
+		require.NoError(t, err)
+
+		status := result.Status
+		assert.True(t, status.SemiSyncPrimaryEnabled)
+		assert.True(t, status.SemiSyncReplicaEnabled)
+		assert.Zero(t, status.SemiSyncPrimaryTimeout)
+		assert.Equal(t, uint32(2), status.SemiSyncWaitForReplicaCount)
+		assert.True(t, status.SemiSyncPrimaryStatus)
+		assert.False(t, status.SemiSyncReplicaStatus)
+		assert.Equal(t, uint32(3), status.SemiSyncPrimaryClients)
+		require.Len(t, result.SoftErrors, 1)
+		assert.ErrorContains(t, result.SoftErrors[0], "rpl_semi_sync_master_timeout")
+	})
+
+	t.Run("variable query failure does not hide status", func(t *testing.T) {
+		db, mysqld, conn := newTestMysqld(t)
+		db.RejectQueryPattern(
+			"SELECT variable_name, variable_value FROM performance_schema.global_variables WHERE variable_name IN .*",
+			"semi-sync variables unavailable",
+		)
+		db.AddQueryPattern(
+			"SELECT variable_name, variable_value FROM performance_schema.global_status WHERE variable_name IN .*",
+			sqltypes.MakeTestResult(
+				sqltypes.MakeTestFields("variable_name|variable_value", "varchar|varchar"),
+				"Rpl_semi_sync_source_status|ON",
+				"Rpl_semi_sync_replica_status|OFF",
+				"Rpl_semi_sync_source_clients|3",
+			),
+		)
+
+		result := &FullStatusResult{Status: &replicationdatapb.FullStatus{}}
+		ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+		defer cancel()
+		err := mysqld.collectFullStatusSemiSync(ctx, conn, result)
+		require.NoError(t, err)
+
+		status := result.Status
+		assert.False(t, status.SemiSyncPrimaryEnabled)
+		assert.True(t, status.SemiSyncPrimaryStatus)
+		assert.Equal(t, uint32(3), status.SemiSyncPrimaryClients)
+		require.Len(t, result.SoftErrors, 1)
+		assert.ErrorContains(t, result.SoftErrors[0], "semi-sync variables unavailable")
+	})
+
+	t.Run("status query failure retains variables", func(t *testing.T) {
+		db, mysqld, conn := newTestMysqld(t)
+		db.AddQueryPattern(
+			"SELECT variable_name, variable_value FROM performance_schema.global_variables WHERE variable_name IN .*",
+			sqltypes.MakeTestResult(
+				sqltypes.MakeTestFields("variable_name|variable_value", "varchar|varchar"),
+				"rpl_semi_sync_source_enabled|ON",
+				"rpl_semi_sync_replica_enabled|OFF",
+				"rpl_semi_sync_source_timeout|10000",
+				"rpl_semi_sync_source_wait_for_replica_count|2",
+			),
+		)
+		db.RejectQueryPattern(
+			"SELECT variable_name, variable_value FROM performance_schema.global_status WHERE variable_name IN .*",
+			"semi-sync status unavailable",
+		)
+
+		result := &FullStatusResult{Status: &replicationdatapb.FullStatus{}}
+		err := mysqld.collectFullStatusSemiSync(t.Context(), conn, result)
+		require.NoError(t, err)
+
+		status := result.Status
+		assert.True(t, status.SemiSyncPrimaryEnabled)
+		assert.False(t, status.SemiSyncPrimaryStatus)
+		require.Len(t, result.SoftErrors, 1)
+		assert.ErrorContains(t, result.SoftErrors[0], "semi-sync status unavailable")
+	})
+
+	t.Run("context cancellation remains fatal", func(t *testing.T) {
+		_, mysqld, conn := newTestMysqld(t)
+		ctx, cancel := context.WithCancel(t.Context())
+		cancel()
+
+		result := &FullStatusResult{Status: &replicationdatapb.FullStatus{}}
+		err := mysqld.collectFullStatusSemiSync(ctx, conn, result)
+
+		assert.ErrorIs(t, err, context.Canceled)
+	})
 }
 
 func TestSetSuperReadOnlyLockWaitTimeout(t *testing.T) {

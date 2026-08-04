@@ -30,6 +30,42 @@ import (
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
 
+func TestFullStatusVariablesQueryUsesFlavorTerminology(t *testing.T) {
+	testcases := []struct {
+		name      string
+		conn      *Conn
+		contained string
+		excluded  string
+	}{
+		{
+			name:      "MySQL 5.7",
+			conn:      &Conn{flavor: mysqlFlavor57{}},
+			contained: "@@global.log_slave_updates AS log_replica_updates",
+			excluded:  "@@global.log_replica_updates AS log_replica_updates",
+		},
+		{
+			name:      "modern MySQL",
+			conn:      &Conn{flavor: mysqlFlavor8{}},
+			contained: "@@global.log_replica_updates AS log_replica_updates",
+			excluded:  "@@global.log_slave_updates AS log_replica_updates",
+		},
+		{
+			name:      "file position",
+			conn:      &Conn{flavor: &filePosFlavor{}},
+			contained: "@@global.log_slave_updates AS log_replica_updates",
+			excluded:  "@@global.log_replica_updates AS log_replica_updates",
+		},
+	}
+
+	for _, testcase := range testcases {
+		t.Run(testcase.name, func(t *testing.T) {
+			query := testcase.conn.FullStatusVariablesQuery()
+			assert.Contains(t, query, testcase.contained)
+			assert.NotContains(t, query, testcase.excluded)
+		})
+	}
+}
+
 func TestComBinlogDump(t *testing.T) {
 	_ = utils.LeakCheckContext(t)
 	listener, sConn, cConn := createSocketPair(t)

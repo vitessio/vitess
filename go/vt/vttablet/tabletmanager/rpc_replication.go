@@ -75,6 +75,18 @@ func (tm *TabletManager) FullStatus(ctx context.Context) (*replicationdatapb.Ful
 		}, nil
 	}
 
+	if collector, ok := tm.MysqlDaemon.(interface {
+		TryCollectFullStatusData(context.Context) (*mysqlctl.FullStatusResult, error)
+	}); ok {
+		result, err := collector.TryCollectFullStatusData(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if result != nil {
+			return tm.fullStatusFromResult(result)
+		}
+	}
+
 	// Server ID - "select @@global.server_id"
 	serverID, err := tm.MysqlDaemon.GetServerID(ctx)
 	if err != nil {
@@ -198,6 +210,23 @@ func (tm *TabletManager) FullStatus(ctx context.Context) (*replicationdatapb.Ful
 		TabletType:                  tm.Tablet().Type,
 		ShardPeerHealth:             tm.shardPeerHealthSnapshot(),
 	}, nil
+}
+
+func (tm *TabletManager) fullStatusFromResult(result *mysqlctl.FullStatusResult) (*replicationdatapb.FullStatus, error) {
+	if result == nil || result.Status == nil {
+		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "FullStatus collector returned no data")
+	}
+	for _, err := range result.SoftErrors {
+		log.Warn("FullStatus collected partial semi-sync data",
+			slog.String("tablet_alias", topoproto.TabletAliasString(tm.Tablet().Alias)),
+			slog.Any("error", err))
+	}
+
+	status := result.Status
+	status.SemiSyncBlocked = tm.SemiSyncMonitor.AllWritesBlocked()
+	status.TabletType = tm.Tablet().Type
+	status.ShardPeerHealth = tm.shardPeerHealthSnapshot()
+	return status, nil
 }
 
 // shardPeerHealthSnapshot returns the latest shard-peer liveness signals, or nil when
