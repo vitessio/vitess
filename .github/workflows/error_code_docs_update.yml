@@ -55,16 +55,11 @@ jobs:
           permission-contents: write
           permission-pull-requests: write
 
-      - name: Set token in environment
-        if: steps.metadata.outputs.skip != 'true'
-        env:
-          TOKEN: ${{ steps.app-token.outputs.token }}
-        run: echo "GH_TOKEN=$TOKEN" >> "$GITHUB_ENV"
-
       - name: Determine docs version
         if: steps.metadata.outputs.skip != 'true'
         id: docs_version
         env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
           BASE_REF: ${{ steps.metadata.outputs.base_ref }}
           REPO_OWNER: ${{ github.repository_owner }}
         run: |
@@ -130,6 +125,7 @@ jobs:
         if: steps.metadata.outputs.skip != 'true' && steps.docs_version.outputs.skip != 'true' && steps.update_docs.outputs.skip != 'true'
         id: get-user-id
         env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
           APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
         run: |
           echo "user-id=$(gh api "/users/${APP_SLUG}[bot]" --jq .id)" >> "$GITHUB_OUTPUT"
@@ -146,6 +142,7 @@ jobs:
       - name: Create or update PR on website
         if: steps.metadata.outputs.skip != 'true' && steps.docs_version.outputs.skip != 'true' && steps.update_docs.outputs.skip != 'true'
         env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
           PR_NUMBER: ${{ steps.metadata.outputs.pr_number }}
           DOC_PATH: ${{ steps.update_docs.outputs.doc_path }}
           REPO_OWNER: ${{ github.repository_owner }}
