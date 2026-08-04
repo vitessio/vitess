@@ -17,7 +17,6 @@ limitations under the License.
 package vtsql
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -34,7 +33,7 @@ func assertImmediateCaller(t *testing.T, im *querypb.VTGateCallerID, expected st
 	t.Helper()
 
 	require.NotNil(t, im, "immediate caller cannot be nil")
-	assert.Equal(t, im.Username, expected, "immediate caller username mismatch")
+	assert.Equal(t, expected, im.Username, "immediate caller username mismatch")
 }
 
 func assertEffectiveCaller(t *testing.T, ef *vtrpcpb.CallerID, principal string, component string, subcomponent string) {
@@ -49,7 +48,7 @@ func assertEffectiveCaller(t *testing.T, ef *vtrpcpb.CallerID, principal string,
 func Test_getQueryContext(t *testing.T) {
 	t.Parallel()
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	creds := &StaticAuthCredentials{
 		EffectiveUser: "efuser",

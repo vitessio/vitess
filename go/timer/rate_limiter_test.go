@@ -31,9 +31,9 @@ func TestRateLimiterLong(t *testing.T) {
 	defer r.Stop()
 	val := 0
 	incr := func() error { val++; return nil }
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		err := r.Do(incr)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 	}
 	assert.Equal(t, 1, val)
 }
@@ -44,10 +44,10 @@ func TestRateLimiterShort(t *testing.T) {
 	defer r.Stop()
 	val := 0
 	incr := func() error { val++; return nil }
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		time.Sleep(time.Millisecond * 100)
 		err := r.Do(incr)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 	}
 	// we expect some 3-5 entries; this depends on the CI server performance.
 	assert.Greater(t, val, 2)
@@ -65,7 +65,7 @@ func TestRateLimiterAllowOne(t *testing.T) {
 		time.Sleep(time.Millisecond * 100)
 		r.AllowOne()
 		err := r.Do(incr)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 	}
 	// we expect exactly 10 successful entries.
 	assert.Equal(t, times, val)
@@ -77,19 +77,19 @@ func TestRateLimiterStop(t *testing.T) {
 	defer r.Stop()
 	val := 0
 	incr := func() error { val++; return nil }
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		time.Sleep(time.Millisecond * 10)
 		err := r.Do(incr)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 	}
 	// we expect some 3-5 entries; this depends on the CI server performance.
 	assert.Greater(t, val, 2)
 	valSnapshot := val
 	r.Stop()
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		time.Sleep(time.Millisecond * 10)
 		err := r.Do(incr)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 	}
 	assert.Equal(t, valSnapshot, val)
 }

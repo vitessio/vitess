@@ -17,11 +17,13 @@ limitations under the License.
 package topotools
 
 import (
-	"context"
 	"math/rand/v2"
 	"strconv"
 	"sync"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
@@ -29,8 +31,7 @@ import (
 
 // TestCreateShard tests a few cases for topo.CreateShard
 func TestCreateShard(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "test_cell")
 	defer ts.Close()
 
@@ -38,18 +39,17 @@ func TestCreateShard(t *testing.T) {
 	shard := "0"
 
 	// create shard in a non-existing keyspace
-	if err := ts.CreateShard(ctx, keyspace, shard); err == nil {
-		t.Fatalf("CreateShard(invalid keyspace) didn't fail")
-	}
+	err := ts.CreateShard(ctx, keyspace, shard)
+	require.Error(t, err, "CreateShard(invalid keyspace) didn't fail")
 
 	// create keyspace
 	if err := ts.CreateKeyspace(ctx, keyspace, &topodatapb.Keyspace{}); err != nil {
-		t.Fatalf("CreateKeyspace failed: %v", err)
+		require.NoError(t, err)
 	}
 
 	// create shard should now work
 	if err := ts.CreateShard(ctx, keyspace, shard); err != nil {
-		t.Fatalf("CreateShard failed: %v", err)
+		require.NoError(t, err)
 	}
 }
 
@@ -58,41 +58,36 @@ func TestCreateShard(t *testing.T) {
 // TODO(sougou): we should eventually disallow multiple shards
 // for unsharded keyspaces.
 func TestCreateShardMultiUnsharded(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "test_cell")
 	defer ts.Close()
 
 	// create keyspace
 	keyspace := "test_keyspace"
 	if err := ts.CreateKeyspace(ctx, keyspace, &topodatapb.Keyspace{}); err != nil {
-		t.Fatalf("CreateKeyspace failed: %v", err)
+		require.NoError(t, err)
 	}
 
 	// create first shard in keyspace
 	shard0 := "0"
 	if err := ts.CreateShard(ctx, keyspace, shard0); err != nil {
-		t.Fatalf("CreateShard(shard0) failed: %v", err)
+		require.NoError(t, err)
 	}
 	if si, err := ts.GetShard(ctx, keyspace, shard0); err != nil {
-		t.Fatalf("GetShard(shard0) failed: %v", err)
+		require.NoError(t, err)
 	} else {
-		if !si.IsPrimaryServing {
-			t.Fatalf("shard0 should have all 3 served types")
-		}
+		require.True(t, si.IsPrimaryServing, "shard0 should have all 3 served types")
 	}
 
 	// create second shard in keyspace
 	shard1 := "1"
 	if err := ts.CreateShard(ctx, keyspace, shard1); err != nil {
-		t.Fatalf("CreateShard(shard1) failed: %v", err)
+		require.NoError(t, err)
 	}
 	if si, err := ts.GetShard(ctx, keyspace, shard1); err != nil {
-		t.Fatalf("GetShard(shard1) failed: %v", err)
+		require.NoError(t, err)
 	} else {
-		if si.IsPrimaryServing {
-			t.Fatalf("shard1 should have all 3 served types")
-		}
+		require.False(t, si.IsPrimaryServing, "shard1 should have all 3 served types")
 	}
 }
 
@@ -100,28 +95,25 @@ func TestCreateShardMultiUnsharded(t *testing.T) {
 // for a long time in parallel, making sure the locking and everything
 // works correctly.
 func TestGetOrCreateShard(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "test_cell")
 	defer ts.Close()
 
 	// and do massive parallel GetOrCreateShard
 	keyspace := "test_keyspace"
 	wg := sync.WaitGroup{}
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
 
-			for j := 0; j < 100; j++ {
+			for range 100 {
 				index := rand.IntN(10)
 				shard := strconv.Itoa(index)
 				si, err := ts.GetOrCreateShard(ctx, keyspace, shard)
-				if err != nil {
-					t.Errorf("GetOrCreateShard(%v, %v) failed: %v", i, shard, err)
-				}
-				if si.ShardName() != shard {
-					t.Errorf("si.ShardName() is wrong, got %v expected %v", si.ShardName(), shard)
+				assert.NoErrorf(t, err, "GetOrCreateShard(%v, %v) failed", i, shard)
+				if err == nil {
+					assert.Equalf(t, shard, si.ShardName(), "si.ShardName() is wrong")
 				}
 			}
 		}(i)

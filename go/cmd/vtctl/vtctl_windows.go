@@ -23,5 +23,5 @@ import (
 )
 
 func logSyslog(msg string) {
-	log.Warningf("windows does not have syslog support")
+	log.Warn("windows does not have syslog support")
 }

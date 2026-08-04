@@ -78,11 +78,8 @@ func simplifyResultsMismatchedQuery(t *testing.T, query string) string {
 	defer closer()
 
 	_, err := mcmp.ExecAllowAndCompareError(query, utils.CompareOptions{})
-	if err == nil {
-		t.Fatalf("query (%s) does not error", query)
-	} else if !strings.Contains(err.Error(), "mismatched") {
-		t.Fatalf("query (%s) does not error with results mismatched\nError: %v", query, err)
-	}
+	require.Errorf(t, err, "query (%s) does not error", query)
+	require.Containsf(t, err.Error(), "mismatched", "query (%s) does not error with results mismatched\nError: %v", query, err)
 
 	require.NoError(t, utils.WaitForAuthoritative(t, keyspaceName, "emp", clusterInstance.VtgateProcess.ReadVSchema))
 	require.NoError(t, utils.WaitForAuthoritative(t, keyspaceName, "dept", clusterInstance.VtgateProcess.ReadVSchema))

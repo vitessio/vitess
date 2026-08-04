@@ -17,7 +17,6 @@ limitations under the License.
 package grpcvtctldclient
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -37,8 +36,7 @@ import (
 )
 
 func TestFindAllShardsInKeyspace(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "cell1")
 	defer ts.Close()
 	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
@@ -58,7 +56,7 @@ func TestFindAllShardsInKeyspace(t *testing.T) {
 		require.NoError(t, err)
 
 		resp, err := client.FindAllShardsInKeyspace(ctx, &vtctldatapb.FindAllShardsInKeyspaceRequest{Keyspace: ks.Name})
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.NotNil(t, resp)
 
 		expected := map[string]*vtctldatapb.Shard{
@@ -83,8 +81,7 @@ func TestFindAllShardsInKeyspace(t *testing.T) {
 }
 
 func TestGetKeyspace(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	ts := memorytopo.NewServer(ctx, "cell1")
 	defer ts.Close()
@@ -102,7 +99,7 @@ func TestGetKeyspace(t *testing.T) {
 		testutil.AddKeyspace(ctx, t, ts, expected.Keyspace)
 
 		resp, err := client.GetKeyspace(ctx, &vtctldatapb.GetKeyspaceRequest{Keyspace: expected.Keyspace.Name})
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		utils.MustMatch(t, expected, resp)
 
 		client.Close()
@@ -112,8 +109,7 @@ func TestGetKeyspace(t *testing.T) {
 }
 
 func TestGetKeyspaces(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	ts := memorytopo.NewServer(ctx, "cell1")
 	defer ts.Close()
@@ -123,7 +119,7 @@ func TestGetKeyspaces(t *testing.T) {
 
 	testutil.WithTestServer(ctx, t, vtctld, func(t *testing.T, client vtctldclient.VtctldClient) {
 		resp, err := client.GetKeyspaces(ctx, &vtctldatapb.GetKeyspacesRequest{})
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Empty(t, resp.Keyspaces)
 
 		expected := &vtctldatapb.Keyspace{
@@ -133,7 +129,7 @@ func TestGetKeyspaces(t *testing.T) {
 		testutil.AddKeyspace(ctx, t, ts, expected)
 
 		resp, err = client.GetKeyspaces(ctx, &vtctldatapb.GetKeyspacesRequest{})
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		utils.MustMatch(t, []*vtctldatapb.Keyspace{expected}, resp.Keyspaces)
 
 		client.Close()

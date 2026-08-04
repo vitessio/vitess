@@ -111,7 +111,6 @@ func ClientConfig(mode SslMode, cert, key, ca, crl, name string, minTLSVersion u
 	// Load the client-side cert & key if any.
 	if cert != "" && key != "" {
 		certificates, err := loadTLSCertificate(cert, key)
-
 		if err != nil {
 			return nil, err
 		}
@@ -122,7 +121,6 @@ func ClientConfig(mode SslMode, cert, key, ca, crl, name string, minTLSVersion u
 	// Load the server CA if any.
 	if ca != "" {
 		certificatePool, err := loadx509CertPool(ca)
-
 		if err != nil {
 			return nil, err
 		}
@@ -203,7 +201,6 @@ func ServerConfig(cert, key, ca, crl, serverCA string, minTLSVersion uint16) (*t
 	// and enforce clients present valid certs.
 	if ca != "" {
 		certificatePool, err := loadx509CertPool(ca)
-
 		if err != nil {
 			return nil, err
 		}

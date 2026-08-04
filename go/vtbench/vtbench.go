@@ -18,16 +18,20 @@ package vtbench
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/vterrors"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 // ClientProtocol indicates how to connect
@@ -85,10 +89,12 @@ type Bench struct {
 	lock sync.RWMutex
 
 	Rows    *stats.Counter
+	Errors  *stats.CountersWithSingleLabel
 	Bytes   *stats.Counter
 	Timings *stats.Timings
 
-	TotalTime time.Duration
+	ContinueOnError bool
+	TotalTime       time.Duration
 }
 
 type benchThread struct {
@@ -107,6 +113,7 @@ func NewBench(threads, count int, cp ConnParams, query string) *Bench {
 		ConnParams: cp,
 		Query:      query,
 		Rows:       stats.NewCounter("", ""),
+		Errors:     stats.NewCountersWithSingleLabel("", "", "code"),
 		Timings:    stats.NewTimings("", "", ""),
 	}
 	return &bench
@@ -127,7 +134,7 @@ func (b *Bench) Run(ctx context.Context) error {
 }
 
 func (b *Bench) createConns(ctx context.Context) error {
-	log.V(10).Infof("creating %d client connections...", b.Threads)
+	log.V(10).Info(fmt.Sprintf("creating %d client connections...", b.Threads))
 	start := time.Now()
 	reportInterval := 2 * time.Second
 	report := start.Add(reportInterval)
@@ -141,15 +148,15 @@ func (b *Bench) createConns(ctx context.Context) error {
 
 		switch b.ConnParams.Protocol {
 		case MySQL:
-			log.V(5).Infof("connecting to %s using mysql protocol...", host)
+			log.V(5).Info(fmt.Sprintf("connecting to %s using mysql protocol...", host))
 			conn = &mysqlClientConn{}
 			err = conn.connect(ctx, cp)
 		case GRPCVtgate:
-			log.V(5).Infof("connecting to %s using grpc vtgate protocol...", host)
+			log.V(5).Info(fmt.Sprintf("connecting to %s using grpc vtgate protocol...", host))
 			conn = &grpcVtgateConn{}
 			err = conn.connect(ctx, cp)
 		case GRPCVttablet:
-			log.V(5).Infof("connecting to %s using grpc vttablet protocol...", host)
+			log.V(5).Info(fmt.Sprintf("connecting to %s using grpc vttablet protocol...", host))
 			conn = &grpcVttabletConn{}
 			err = conn.connect(ctx, cp)
 		default:
@@ -189,13 +196,13 @@ func (b *Bench) createThreads(ctx context.Context) {
 	// Create a barrier so all the threads start at the same time
 	b.lock.Lock()
 
-	log.V(10).Infof("starting %d threads", b.Threads)
+	log.V(10).Info(fmt.Sprintf("starting %d threads", b.Threads))
 	for i := 0; i < b.Threads; i++ {
 		b.wg.Add(1)
 		go b.threads[i].clientLoop(ctx)
 	}
 
-	log.V(10).Infof("waiting for %d threads to start", b.Threads)
+	log.V(10).Info(fmt.Sprintf("waiting for %d threads to start", b.Threads))
 	b.wg.Wait()
 
 	b.wg.Add(b.Threads)
@@ -207,7 +214,7 @@ func (b *Bench) runTest(ctx context.Context) error {
 	b.lock.Unlock()
 
 	// Then wait for them all to finish looping
-	log.V(10).Infof("waiting for %d threads to finish", b.Threads)
+	log.V(10).Info(fmt.Sprintf("waiting for %d threads to finish", b.Threads))
 	b.wg.Wait()
 	b.TotalTime = time.Since(start)
 
@@ -220,16 +227,26 @@ func (bt *benchThread) clientLoop(ctx context.Context) {
 	// Declare that startup is finished and wait for
 	// the barrier
 	b.wg.Done()
-	log.V(10).Infof("thread %d waiting for startup barrier", bt.i)
+	log.V(10).Info(fmt.Sprintf("thread %d waiting for startup barrier", bt.i))
 	b.lock.RLock()
-	log.V(10).Infof("thread %d starting loop", bt.i)
+	log.V(10).Info(fmt.Sprintf("thread %d starting loop", bt.i))
 
 	for i := 0; i < b.Count; i++ {
+		// Enforce the deadline across all protocols, even if execute()
+		// ignores ctx (e.g. mysqlClientConn).
+		if ctx.Err() != nil {
+			break
+		}
 		start := time.Now()
 		result, err := bt.conn.execute(ctx, bt.query, bt.bindVars)
 		b.Timings.Record("query", start)
 		if err != nil {
-			log.Errorf("query error: %v", err)
+			b.Errors.Add(errorCode(err).String(), 1)
+			if b.ContinueOnError && ctx.Err() == nil {
+				log.V(1).Info(fmt.Sprintf("query error: %v", err))
+				continue
+			}
+			log.Error(fmt.Sprintf("query error: %v", err))
 			break
 		} else {
 			b.Rows.Add(int64(len(result.Rows)))
@@ -237,4 +254,15 @@ func (bt *benchThread) clientLoop(ctx context.Context) {
 	}
 
 	b.wg.Done()
+}
+
+// errorCode returns the vtrpcpb.Code for err, preferring the MySQL
+// classification of a *sqlerror.SQLError when present so that the
+// per-protocol error summary remains accurate for the mysql protocol.
+func errorCode(err error) vtrpcpb.Code {
+	var sqlErr *sqlerror.SQLError
+	if errors.As(err, &sqlErr) {
+		return sqlErr.VtRpcErrorCode()
+	}
+	return vterrors.Code(err)
 }

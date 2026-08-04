@@ -164,7 +164,7 @@ func createDMLWithInput(ctx *plancontext.PlanningContext, op, src Operator, in *
 
 	var targetTable *Table
 	_ = Visit(src, func(operator Operator) error {
-		if tbl, ok := operator.(*Table); ok && tbl.QTable.ID == in.Target.ID {
+		if tbl, ok := operator.(*Table); ok && tbl.QTable != nil && tbl.QTable.ID == in.Target.ID {
 			targetTable = tbl
 			return io.EOF
 		}

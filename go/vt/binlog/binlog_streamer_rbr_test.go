@@ -17,10 +17,10 @@ limitations under the License.
 package binlog
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/binlog"
@@ -172,7 +172,8 @@ func TestStreamerParseRBREvents(t *testing.T) {
 		mysql.NewMariaDBGTIDEvent(f, s, replication.MariadbGTID{Domain: 0, Sequence: 0xd}, false /* hasBegin */),
 		mysql.NewQueryEvent(f, s, mysql.Query{
 			Database: "vt_test_keyspace",
-			SQL:      "BEGIN"}),
+			SQL:      "BEGIN",
+		}),
 		mysql.NewWriteRowsEvent(f, s, tableID, insertRows),
 		mysql.NewUpdateRowsEvent(f, s, tableID, updateRows),
 		mysql.NewUpdateRowsEvent(f, s, tableID, updateRowsNull),
@@ -270,8 +271,8 @@ func TestStreamerParseRBREvents(t *testing.T) {
 	bls := NewStreamer(dbcfgs, se, nil, replication.Position{}, 0, sendTransaction)
 
 	go sendTestEvents(events, input)
-	_, err := bls.parseEvents(context.Background(), events, errs)
-	assert.EqualError(t, err, ErrServerEOF.Error(), "unexpected error")
+	_, err := bls.parseEvents(t.Context(), events, errs)
+	require.EqualError(t, err, ErrServerEOF.Error(), "unexpected error")
 	assert.Equal(t, want, got, "binlogConnStreamer.parseEvents()")
 }
 
@@ -410,7 +411,8 @@ func TestStreamerParseRBRNameEscapes(t *testing.T) {
 		mysql.NewMariaDBGTIDEvent(f, s, replication.MariadbGTID{Domain: 0, Sequence: 0xd}, false /* hasBegin */),
 		mysql.NewQueryEvent(f, s, mysql.Query{
 			Database: "vt_test_keyspace",
-			SQL:      "BEGIN"}),
+			SQL:      "BEGIN",
+		}),
 		mysql.NewWriteRowsEvent(f, s, tableID, insertRows),
 		mysql.NewUpdateRowsEvent(f, s, tableID, updateRows),
 		mysql.NewUpdateRowsEvent(f, s, tableID, updateRowsNull),
@@ -508,7 +510,7 @@ func TestStreamerParseRBRNameEscapes(t *testing.T) {
 	bls := NewStreamer(dbcfgs, se, nil, replication.Position{}, 0, sendTransaction)
 
 	go sendTestEvents(events, input)
-	_, err := bls.parseEvents(context.Background(), events, errs)
-	assert.EqualError(t, err, ErrServerEOF.Error(), "unexpected error")
+	_, err := bls.parseEvents(t.Context(), events, errs)
+	require.EqualError(t, err, ErrServerEOF.Error(), "unexpected error")
 	assert.Equal(t, want, got, "binlogConnStreamer.parseEvents()")
 }

@@ -1,5 +1,4 @@
 //go:build !noasm && !appengine
-// +build !noasm,!appengine
 
 /*
 Copyright (c) 2017 Minio Inc. All rights reserved.

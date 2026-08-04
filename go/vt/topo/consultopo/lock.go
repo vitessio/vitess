@@ -18,10 +18,11 @@ package consultopo
 
 import (
 	"context"
+	"fmt"
 	"path"
 	"time"
 
-	"github.com/hashicorp/consul/api"
+	"github.com/hashicorp/consul/api/v2"
 
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -216,7 +217,7 @@ func (s *Server) unlock(ctx context.Context, lockPath string) error {
 		// If someone else has the lock, we can't remove it,
 		// but we don't need to.
 		if err != api.ErrLockInUse {
-			log.Warningf("failed to clean up lock file %v: %v", lockPath, err)
+			log.Warn(fmt.Sprintf("failed to clean up lock file %v: %v", lockPath, err))
 		}
 	}
 

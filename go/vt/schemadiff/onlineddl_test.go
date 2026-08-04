@@ -18,6 +18,7 @@ package schemadiff
 
 import (
 	"fmt"
+	"maps"
 	"strings"
 	"testing"
 
@@ -145,7 +146,7 @@ func TestRemovedForeignKeyNames(t *testing.T) {
 			require.NoError(t, err)
 
 			names, err := RemovedForeignKeyNames(before, after)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			if tcase.names == nil {
 				tcase.names = []string{}
 			}
@@ -789,7 +790,7 @@ func TestRevertible(t *testing.T) {
 		expandedColumnNames         string
 	}
 
-	var testCases = []revertibleTestCase{
+	testCases := []revertibleTestCase{
 		{
 			name:       "identical schemas",
 			fromSchema: `id int primary key, i1 int not null default 0`,
@@ -943,9 +944,7 @@ func TestRevertible(t *testing.T) {
 		},
 	}
 
-	var (
-		createTableWrapper = `CREATE TABLE t (%s)`
-	)
+	createTableWrapper := `CREATE TABLE t (%s)`
 
 	env := NewTestEnv()
 	diffHints := &DiffHints{}
@@ -1105,7 +1104,7 @@ func TestValidateAndEditCreateTableStatement(t *testing.T) {
 				assert.ErrorContains(t, err, tc.expectError)
 				return
 			}
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.Equal(t, tc.expectConstraintMap, constraintMap)
 
 			uniqueConstraintNames := map[string]bool{}
@@ -1116,9 +1115,9 @@ func TestValidateAndEditCreateTableStatement(t *testing.T) {
 				}
 				return true, nil
 			}, createTable)
-			assert.NoError(t, err)
-			assert.Equal(t, tc.countConstraints, len(uniqueConstraintNames))
-			assert.Equalf(t, tc.countConstraints, len(constraintMap), "got contraints: %v", constraintMap)
+			require.NoError(t, err)
+			assert.Len(t, uniqueConstraintNames, tc.countConstraints)
+			assert.Lenf(t, constraintMap, tc.countConstraints, "got contraints: %v", constraintMap)
 		})
 	}
 }
@@ -1216,6 +1215,13 @@ func TestValidateAndEditAlterTableStatement(t *testing.T) {
 			},
 			expect: []string{"alter table t drop foreign key ibfk_1_aaaaaaaaaaaaaa"},
 		},
+		{
+			alter: "alter table t drop constraint t_ibfk_1",
+			m: map[string]string{
+				"t_ibfk_1": "ibfk_1_aaaaaaaaaaaaaa",
+			},
+			expect: []string{"alter table t drop constraint ibfk_1_aaaaaaaaaaaaaa"},
+		},
 	}
 
 	env := NewTestEnv()
@@ -1230,13 +1236,11 @@ func TestValidateAndEditAlterTableStatement(t *testing.T) {
 			require.True(t, ok)
 
 			m := map[string]string{}
-			for k, v := range tc.m {
-				m[k] = v
-			}
+			maps.Copy(m, tc.m)
 			baseUUID := "a5a563da_dc1a_11ec_a416_0a43f95f28a3"
 			tableName := "t"
 			alters, err := ValidateAndEditAlterTableStatement(tableName, baseUUID, tc.capableOf, alterTable, m)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			var altersStrings []string
 			for _, alter := range alters {
 				altersStrings = append(altersStrings, sqlparser.String(alter))
@@ -1338,13 +1342,13 @@ func TestDuplicateCreateTable(t *testing.T) {
 			require.True(t, ok)
 			require.NotNil(t, originalCreateTable)
 			newCreateTable, constraintMap, err := DuplicateCreateTable(originalCreateTable, baseUUID, tcase.newName, allowForeignKeys)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.NotNil(t, newCreateTable)
 			assert.NotNil(t, constraintMap)
 
 			newSQL := sqlparser.String(newCreateTable)
 			assert.Equal(t, tcase.expectSQL, newSQL)
-			assert.Equal(t, tcase.expectMapSize, len(constraintMap))
+			assert.Len(t, constraintMap, tcase.expectMapSize)
 		})
 	}
 }

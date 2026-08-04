@@ -28,8 +28,10 @@ import (
 	"vitess.io/vitess/go/mysql/icuregex/internal/udata"
 )
 
-var charNamesOnce sync.Once
-var charNames *unames
+var (
+	charNamesOnce sync.Once
+	charNames     *unames
+)
 
 type unames struct {
 	tokens       []uint16

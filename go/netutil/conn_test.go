@@ -20,34 +20,31 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func createSocketPair(t *testing.T) (net.Listener, net.Conn, net.Conn) {
 	// Create a listener.
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	addr := listener.Addr().String()
 
 	// Dial a client, Accept a server.
 	wg := sync.WaitGroup{}
 
 	var clientConn net.Conn
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		var err error
 		clientConn, err = net.Dial("tcp", addr)
 		assert.NoError(t, err)
-	}()
+	})
 
 	var serverConn net.Conn
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		var err error
 		serverConn, err = listener.Accept()
 		assert.NoError(t, err)
-	}()
+	})
 
 	wg.Wait()
 
@@ -72,9 +69,9 @@ func TestReadTimeout(t *testing.T) {
 
 	select {
 	case err := <-c:
-		assert.ErrorContains(t, err, "i/o timeout", "Expected error timeout")
+		require.ErrorContains(t, err, "i/o timeout", "Expected error timeout")
 	case <-time.After(10 * time.Second):
-		t.Errorf("Timeout did not happen")
+		assert.Fail(t, "Timeout did not happen")
 	}
 }
 
@@ -102,9 +99,9 @@ func TestWriteTimeout(t *testing.T) {
 
 	select {
 	case err := <-c:
-		assert.ErrorContains(t, err, "i/o timeout", "Expected error timeout")
+		require.ErrorContains(t, err, "i/o timeout", "Expected error timeout")
 	case <-time.After(10 * time.Second):
-		t.Errorf("Timeout did not happen")
+		assert.Fail(t, "Timeout did not happen")
 	}
 }
 
@@ -126,7 +123,7 @@ func TestNoTimeouts(t *testing.T) {
 
 	select {
 	case <-c:
-		t.Fatalf("Connection timeout, without a timeout")
+		assert.Fail(t, "Connection timeout, without a timeout")
 	case <-time.After(100 * time.Millisecond):
 		// NOOP
 	}
@@ -145,7 +142,7 @@ func TestNoTimeouts(t *testing.T) {
 	}()
 	select {
 	case <-c2:
-		t.Fatalf("Connection timeout, without a timeout")
+		assert.Fail(t, "Connection timeout, without a timeout")
 	case <-time.After(100 * time.Millisecond):
 		// NOOP
 	}

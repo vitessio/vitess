@@ -17,7 +17,6 @@ limitations under the License.
 package engine
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -35,7 +34,7 @@ func TestPlanSwitcherMetrics(t *testing.T) {
 		metrics: InitMetrics(servenv.NewExporter("PlanTest", "")),
 	}
 	initial := vc.metrics.optimizedQueryExec.Counts()
-	_, err := p.TryExecute(context.Background(), vc, nil, false)
+	_, err := p.TryExecute(t.Context(), vc, nil, false)
 	require.NoError(t, err)
 	after := vc.metrics.optimizedQueryExec.Counts()
 	require.EqualValues(t, 1, after["MultiShard"]-initial["MultiShard"])

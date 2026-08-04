@@ -66,7 +66,7 @@ func GetFuncForType[T any]() func(v *viper.Viper) func(key string) T {
 		}
 	case reflect.Int64:
 		switch typ {
-		case reflect.TypeOf(time.Duration(0)):
+		case reflect.TypeFor[time.Duration]():
 			f = func(v *viper.Viper) func(key string) time.Duration {
 				return v.GetDuration
 			}
@@ -135,7 +135,7 @@ func GetFuncForType[T any]() func(v *viper.Viper) func(key string) T {
 					}
 				}
 			case reflect.Interface:
-				f = func(v *viper.Viper) func(key string) map[string]interface{} {
+				f = func(v *viper.Viper) func(key string) map[string]any {
 					return v.GetStringMap
 				}
 			}
@@ -162,7 +162,7 @@ func GetFuncForType[T any]() func(v *viper.Viper) func(key string) T {
 		}
 	case reflect.Struct:
 		switch typ {
-		case reflect.TypeOf(time.Time{}):
+		case reflect.TypeFor[time.Time]():
 			f = func(v *viper.Viper) func(key string) time.Time {
 				return v.GetTime
 			}

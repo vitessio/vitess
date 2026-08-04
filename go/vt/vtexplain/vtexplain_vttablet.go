@@ -503,8 +503,8 @@ func newTabletEnvironment(ddls []sqlparser.DDLStatement, opts *Options, collatio
 
 		tEnv.tableColumns[table] = make(map[string]querypb.Type)
 		var rowTypes []*querypb.Field
-		var colTypes []*querypb.Field
 		var colValues [][]sqltypes.Value
+		colTypes := make([]*querypb.Field, 0, 1)
 		colType := &querypb.Field{
 			Name:    "column_type",
 			Type:    sqltypes.VarChar,
@@ -643,7 +643,7 @@ func (t *explainTablet) handleSelect(query string) (*sqltypes.Result, error) {
 
 		tableName := sqlparser.String(sqlparser.GetTableName(table.Expr))
 		columns, exists := t.vte.getGlobalTabletEnv().tableColumns[tableName]
-		if !exists && tableName != "" && tableName != "dual" {
+		if !exists && tableName != "" {
 			return nil, fmt.Errorf("unable to resolve table name %s", tableName)
 		}
 
@@ -686,7 +686,7 @@ func (t *explainTablet) handleSelect(query string) (*sqltypes.Result, error) {
 		}
 	}
 
-	for j := 0; j < rowCount; j++ {
+	for j := range rowCount {
 		values := make([]sqltypes.Value, len(colNames))
 		for i, col := range colNames {
 			// Generate a fake value for the given column. For the column in the IN clause,
@@ -730,14 +730,17 @@ func (t *explainTablet) analyzeWhere(selStmt *sqlparser.Select, tableColumnMap m
 	}
 	colName := strings.ToLower(c.Name.String())
 	colType := querypb.Type_VARCHAR
-	tableExpr := selStmt.From[0]
-	expr, ok := tableExpr.(*sqlparser.AliasedTableExpr)
-	if ok {
-		m := tableColumnMap[sqlparser.GetTableName(expr.Expr)]
-		if m != nil {
-			t, found := m[colName]
-			if found {
-				colType = t
+	// FROM-less SELECTs (post-DUAL-as-keyword virtual dual) have no tables to
+	// infer column types from — leave the default and proceed.
+	if len(selStmt.From) > 0 {
+		expr, ok := selStmt.From[0].(*sqlparser.AliasedTableExpr)
+		if ok {
+			m := tableColumnMap[sqlparser.GetTableName(expr.Expr)]
+			if m != nil {
+				t, found := m[colName]
+				if found {
+					colType = t
+				}
 			}
 		}
 	}
@@ -837,7 +840,7 @@ func inferColTypeFromExpr(node sqlparser.Expr, tableColumnMap map[sqlparser.Iden
 			for _, colTypeMap := range tableColumnMap {
 				if colTypeMap[col] != querypb.Type_NULL_TYPE {
 					if colType != querypb.Type_NULL_TYPE {
-						log.Errorf("vtexplain: ambiguous column %s", col)
+						log.Error("vtexplain: ambiguous column " + col)
 						return colNames, colTypes
 					}
 
@@ -846,7 +849,7 @@ func inferColTypeFromExpr(node sqlparser.Expr, tableColumnMap map[sqlparser.Iden
 			}
 
 			if colType == querypb.Type_NULL_TYPE {
-				log.Errorf("vtexplain: invalid column %s.%s, tableColumnMap +%v", node.Qualifier.Name, col, tableColumnMap)
+				log.Error(fmt.Sprintf("vtexplain: invalid column %s.%s, tableColumnMap +%v", node.Qualifier.Name, col, tableColumnMap))
 			}
 
 			colNames = append(colNames, col)
@@ -858,7 +861,7 @@ func inferColTypeFromExpr(node sqlparser.Expr, tableColumnMap map[sqlparser.Iden
 			colType := colTypeMap[col]
 
 			if colType == querypb.Type_NULL_TYPE {
-				log.Errorf("vtexplain: invalid column %s.%s, tableColumnMap +%v", node.Qualifier.Name, col, tableColumnMap)
+				log.Error(fmt.Sprintf("vtexplain: invalid column %s.%s, tableColumnMap +%v", node.Qualifier.Name, col, tableColumnMap))
 			}
 
 			colNames = append(colNames, col)
@@ -892,7 +895,7 @@ func inferColTypeFromExpr(node sqlparser.Expr, tableColumnMap map[sqlparser.Iden
 		case sqlparser.DecimalVal:
 			colTypes = append(colTypes, querypb.Type_DECIMAL)
 		default:
-			log.Errorf("vtexplain: unsupported sql value %s", sqlparser.String(node))
+			log.Error("vtexplain: unsupported sql value " + sqlparser.String(node))
 		}
 	case *sqlparser.CaseExpr:
 		colNames, colTypes = inferColTypeFromExpr(node.Whens[0].Val, tableColumnMap, colNames, colTypes)
@@ -903,7 +906,7 @@ func inferColTypeFromExpr(node sqlparser.Expr, tableColumnMap map[sqlparser.Iden
 		colNames = append(colNames, sqlparser.String(node))
 		colTypes = append(colTypes, querypb.Type_INT64)
 	default:
-		log.Errorf("vtexplain: unsupported select expression type +%v node %s", reflect.TypeOf(node), sqlparser.String(node))
+		log.Error(fmt.Sprintf("vtexplain: unsupported select expression type +%v node %s", reflect.TypeOf(node), sqlparser.String(node)))
 	}
 
 	return colNames, colTypes

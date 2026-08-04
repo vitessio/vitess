@@ -203,11 +203,9 @@ func NewWithEnv(t testing.TB, env *vtenv.Environment) *DB {
 		t.Fatalf("NewListener failed: %v", err)
 	}
 
-	db.acceptWG.Add(1)
-	go func() {
-		defer db.acceptWG.Done()
+	db.acceptWG.Go(func() {
 		db.listener.Accept()
-	}()
+	})
 
 	db.AddQuery(useQuery, &sqltypes.Result{})
 	// Return the db.
@@ -413,7 +411,7 @@ func (db *DB) HandleQuery(c *mysql.Conn, query string, callback func(*sqltypes.R
 
 		// log error
 		if err := callback(&sqltypes.Result{}); err != nil {
-			log.Errorf("callback failed : %v", err)
+			log.Error(fmt.Sprintf("callback failed : %v", err))
 		}
 		return nil
 	}
@@ -426,7 +424,7 @@ func (db *DB) HandleQuery(c *mysql.Conn, query string, callback func(*sqltypes.R
 
 		// log error
 		if err := callback(&sqltypes.Result{}); err != nil {
-			log.Errorf("callback failed : %v", err)
+			log.Error(fmt.Sprintf("callback failed : %v", err))
 		}
 		return nil
 	}
@@ -471,7 +469,7 @@ func (db *DB) HandleQuery(c *mysql.Conn, query string, callback func(*sqltypes.R
 	parser := sqlparser.NewTestParser()
 	err = fmt.Errorf("fakesqldb:: query: '%s' is not supported on %v",
 		parser.TruncateForUI(query), db.name)
-	log.Errorf("Query not found: %s", parser.TruncateForUI(query))
+	log.Error("Query not found: " + parser.TruncateForUI(query))
 
 	return err
 }
@@ -564,7 +562,7 @@ func (db *DB) ComBinlogDump(c *mysql.Conn, logFile string, binlogPos uint32) err
 }
 
 // ComBinlogDumpGTID is part of the mysql.Handler interface.
-func (db *DB) ComBinlogDumpGTID(c *mysql.Conn, logFile string, logPos uint64, gtidSet replication.GTIDSet) error {
+func (db *DB) ComBinlogDumpGTID(c *mysql.Conn, logFile string, logPos uint64, gtidSet replication.GTIDSet, flags uint16) error {
 	return nil
 }
 
@@ -846,18 +844,36 @@ func (db *DB) MockQueriesForTable(table string, result *sqltypes.Result) {
 	db.AddQueryPattern(selectQueryPattern, result)
 
 	// mock query for returning columns from information_schema.columns based on specified result
-	var cols []string
+	cols := make([]string, 0, len(result.Fields))
 	for _, field := range result.Fields {
 		cols = append(cols, field.Name)
 	}
-	db.AddQueryPattern(fmt.Sprintf(mysql.GetColumnNamesQueryPatternForTable, table), sqltypes.MakeTestResult(
+	db.AddQueryPattern(fmt.Sprintf(GetColumnNamesQueryPatternForTable, table), sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
 			"column_name",
 			"varchar",
 		),
 		cols...,
 	))
+
+	// mock the query that fetches the table's ENUM/SET column type definitions,
+	// returning no rows by default
+	db.AddQueryPattern(fmt.Sprintf(enumSetColumnTypesQueryPattern, table), &sqltypes.Result{})
 }
+
+const (
+	// GetColumnNamesQueryPatternForTable matches the information_schema query
+	// that fetches a table's column names (see mysqlctl.GetColumnNamesQuery);
+	// %s is the table name. It is exported for tests that mock the query with
+	// a result other than MockQueriesForTable's default.
+	GetColumnNamesQueryPatternForTable = `SELECT COLUMN_NAME.*TABLE_NAME.*%s.*`
+
+	// enumSetColumnTypesQueryPattern matches the query that the tabletserver's
+	// schema engine issues when loading a table to fetch the type definitions of
+	// its ENUM/SET columns (see enumSetColumnTypesQuery in
+	// go/vt/vttablet/tabletserver/schema); %s is the table name.
+	enumSetColumnTypesQueryPattern = `select isc\.column_name, isc\.column_type from information_schema\.columns.*table_name='%s' and isc\.data_type in \('enum', 'set'\)`
+)
 
 // GetRejectedQueryResult checks if we should reject the query.
 func (db *DB) GetRejectedQueryResult(key string) error {

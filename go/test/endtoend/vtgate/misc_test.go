@@ -17,7 +17,12 @@ limitations under the License.
 package vtgate
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -27,7 +32,14 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/sqlerror"
+	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/utils"
+	"vitess.io/vitess/go/vt/grpcclient"
+	"vitess.io/vitess/go/vt/vttablet/tabletconn"
+
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 func TestInsertOnDuplicateKey(t *testing.T) {
@@ -230,7 +242,7 @@ func TestExplainPassthrough(t *testing.T) {
 	// but we are trying to make the test less fragile
 
 	result = utils.Exec(t, conn, "explain ks.t1")
-	require.EqualValues(t, 2, len(result.Rows))
+	require.Len(t, result.Rows, 2)
 }
 
 func TestXXHash(t *testing.T) {
@@ -312,6 +324,260 @@ func TestInsertStmtInOLAP(t *testing.T) {
 	utils.AssertMatches(t, conn, `select id1 from t1 order by id1`, `[[INT64(1)] [INT64(2)] [INT64(3)] [INT64(4)] [INT64(5)]]`)
 }
 
+// TestShardTargetedDMLInOLAP covers https://github.com/vitessio/vitess/issues/19561.
+// When a session targets a specific shard, DML is planned as a Send primitive whose
+// streaming path (used in OLAP mode) issues a StreamExecute RPC to the tablet. DML
+// must succeed on that path and run in an implicit transaction, just like the
+// non-streaming path.
+func TestShardTargetedDMLInOLAP(t *testing.T) {
+	conn, closer := start(t)
+	t.Cleanup(closer)
+
+	utils.Exec(t, conn, `set workload='olap'`)
+	utils.Exec(t, conn, "use `ks:-80`")
+	qr := utils.Exec(t, conn, `insert into t1(id1, id2) values (1, 1)`)
+	require.EqualValues(t, 1, qr.RowsAffected)
+	utils.AssertMatches(t, conn, `select id1, id2 from t1`, `[[INT64(1) INT64(1)]]`)
+}
+
+// TestShardTargetedDMLInOLAPRecordsTabletStats verifies that DML executed on the
+// streaming path (StreamExecute, used for shard-targeted DML in OLAP mode) records
+// the same per-table query stats on the tablet as the non-streaming Execute path.
+// Before the fix, streamed DML returned the correct result but recorded no
+// QueryRowsAffected, leaving these DMLs invisible to per-table tablet metrics.
+func TestShardTargetedDMLInOLAPRecordsTabletStats(t *testing.T) {
+	conn, closer := start(t)
+	t.Cleanup(closer)
+
+	// The DML below is shard-targeted to -80, so it runs on that shard's primary.
+	primary := shardPrimaryTablet(t, "-80")
+	const statKey = "t1.Insert"
+	rowsAffectedBefore := tabletQueryStat(t, primary, "QueryRowsAffected", statKey)
+
+	utils.Exec(t, conn, `set workload='olap'`)
+	utils.Exec(t, conn, "use `ks:-80`")
+	qr := utils.Exec(t, conn, `insert into t1(id1, id2) values (1, 1)`)
+	require.EqualValues(t, 1, qr.RowsAffected)
+
+	rowsAffectedAfter := tabletQueryStat(t, primary, "QueryRowsAffected", statKey)
+	require.Equal(t, rowsAffectedBefore+1, rowsAffectedAfter,
+		"streamed DML must record QueryRowsAffected on the tablet like the non-streaming path")
+}
+
+// TestShardTargetedFailedDMLInOLAPRecordsErrorStats verifies that a DML that fails
+// on the streaming path records error stats on the tablet, just like the
+// non-streaming Execute path. Before the fix, a failed streamed DML returned the
+// error to the client but incremented no QueryErrorCounts.
+func TestShardTargetedFailedDMLInOLAPRecordsErrorStats(t *testing.T) {
+	conn, closer := start(t)
+	t.Cleanup(closer)
+
+	// The DML below is shard-targeted to -80, so it runs on that shard's primary.
+	primary := shardPrimaryTablet(t, "-80")
+	const statKey = "t1.Insert"
+	errCountBefore := tabletQueryStat(t, primary, "QueryErrorCounts", statKey)
+
+	utils.Exec(t, conn, `set workload='olap'`)
+	utils.Exec(t, conn, "use `ks:-80`")
+	// The first insert succeeds; the duplicate primary key makes the second fail
+	// on the tablet, exercising streamDML's error path.
+	utils.Exec(t, conn, `insert into t1(id1, id2) values (1, 1)`)
+	_, err := utils.ExecAllowError(t, conn, `insert into t1(id1, id2) values (1, 1)`)
+	require.ErrorContains(t, err, "errno 1062")
+
+	errCountAfter := tabletQueryStat(t, primary, "QueryErrorCounts", statKey)
+	require.Equal(t, errCountBefore+1, errCountAfter,
+		"failed streamed DML must record QueryErrorCounts on the tablet like the non-streaming path")
+}
+
+// TestShardTargetedFailedSelectInOLAPRecordsErrorStats verifies that a read that
+// fails on the streaming path records error stats on the tablet, just like the
+// non-streaming Execute path. A failed streamed read that only surfaces its
+// error to the client, without incrementing QueryErrorCounts, would leave the
+// per-table error stats blind to streaming failures.
+func TestShardTargetedFailedSelectInOLAPRecordsErrorStats(t *testing.T) {
+	conn, closer := start(t)
+	t.Cleanup(closer)
+
+	// The select below is shard-targeted to -80, so it runs on that shard's primary.
+	primary := shardPrimaryTablet(t, "-80")
+	const statKey = "t1.Select"
+	errCountBefore := tabletQueryStat(t, primary, "QueryErrorCounts", statKey)
+
+	utils.Exec(t, conn, "use `ks:-80`")
+	utils.Exec(t, conn, `set workload='olap'`)
+	// The tablet planbuilder doesn't validate columns, so this still plans as a
+	// t1 select and MySQL rejects it when the tablet runs it.
+	_, err := utils.ExecAllowError(t, conn, `select no_such_column from t1`)
+	require.ErrorContains(t, err, "errno 1054")
+
+	errCountAfter := tabletQueryStat(t, primary, "QueryErrorCounts", statKey)
+	require.Equal(t, errCountBefore+1, errCountAfter,
+		"failed streamed select must record QueryErrorCounts on the tablet like the non-streaming path")
+}
+
+// TestShardTargetedDDLInOLAPReloadsSchema verifies that DDL executed over the
+// streaming path reloads the tablet's schema engine, just like the non-streaming
+// Execute path. A streamed DDL that runs as generic SQL would leave the schema
+// engine unaware of the new table until the periodic schema reload.
+func TestShardTargetedDDLInOLAPReloadsSchema(t *testing.T) {
+	conn, closer := start(t)
+	t.Cleanup(closer)
+
+	primary := shardPrimaryTablet(t, "-80")
+
+	utils.Exec(t, conn, "use `ks:-80`")
+	t.Cleanup(func() {
+		utils.Exec(t, conn, `set workload='oltp'`)
+		utils.Exec(t, conn, "drop table if exists t_streamed_ddl")
+	})
+	utils.Exec(t, conn, `set workload='olap'`)
+	utils.Exec(t, conn, "create table t_streamed_ddl(id bigint primary key)")
+
+	require.Eventually(t, func() bool {
+		return tabletHasTableInSchema(primary, "t_streamed_ddl")
+	}, 30*time.Second, 500*time.Millisecond,
+		"streamed DDL must reload the tablet schema engine like the non-streaming path")
+}
+
+// TestStreamedSetWithSettingsIsNoOp verifies that a SET statement executed
+// over the streaming path with a settings list attached is not executed, just
+// like the non-streaming Execute path, which returns an empty result because
+// the settings list itself carries the session state to apply. Executing the
+// raw SET on a pooled connection instead would leak session state into the
+// connection pool; the global variable used here makes any execution directly
+// observable, as a value change or a privilege error.
+func TestStreamedSetWithSettingsIsNoOp(t *testing.T) {
+	primary := shardPrimaryTablet(t, "-80")
+	tablet, err := clusterInstance.VtctldClientProcess.GetTablet(primary.Alias)
+	require.NoError(t, err)
+
+	ctx := t.Context()
+	qsConn, err := tabletconn.GetDialer()(ctx, tablet, grpcclient.FailFast(false))
+	require.NoError(t, err)
+	t.Cleanup(func() { qsConn.Close(context.WithoutCancel(ctx)) })
+
+	readGlobal := func() string {
+		qr, err := primary.VttabletProcess.QueryTablet("select @@global.slow_launch_time", KeyspaceName, false)
+		require.NoError(t, err)
+		require.Len(t, qr.Rows, 1)
+		return qr.Rows[0][0].ToString()
+	}
+	before := readGlobal()
+	t.Cleanup(func() {
+		_, err := primary.VttabletProcess.QueryTablet("set @@global.slow_launch_time = "+before, KeyspaceName, false)
+		require.NoError(t, err)
+	})
+
+	target := &querypb.Target{Keyspace: KeyspaceName, Shard: "-80", TabletType: topodatapb.TabletType_PRIMARY}
+	_, err = qsConn.ReserveStreamExecute(ctx, nil, target, []string{"set sql_mode = ''"},
+		"set @@global.slow_launch_time = 42", nil, 0, nil,
+		func(*sqltypes.Result) error { return nil })
+	require.NoError(t, err)
+
+	require.Equal(t, before, readGlobal(),
+		"a streamed SET with a settings list must not execute, like the non-streaming path")
+}
+
+// TestShardTargetedMigrationStatementInTxParity verifies that a migration
+// admin statement issued inside a transaction fails identically in OLAP and
+// OLTP workloads. Execute rejects these statements inside a transaction, and
+// the streaming path must not instead run them through their dedicated
+// executors, ignoring the open transaction.
+func TestShardTargetedMigrationStatementInTxParity(t *testing.T) {
+	conn, closer := start(t)
+	t.Cleanup(closer)
+
+	utils.Exec(t, conn, "use `ks:-80`")
+
+	errByWorkload := map[string]string{}
+	for _, workload := range []string{"oltp", "olap"} {
+		utils.Exec(t, conn, "set workload='"+workload+"'")
+		utils.Exec(t, conn, "begin")
+		_, err := utils.ExecAllowError(t, conn, "alter vitess_migration 'aaa' cancel")
+		require.Errorf(t, err, "a migration statement inside a transaction must fail in %s mode", workload)
+		errByWorkload[workload] = err.Error()
+		utils.Exec(t, conn, "rollback")
+	}
+	require.Equal(t, errByWorkload["oltp"], errByWorkload["olap"],
+		"a migration statement inside a transaction must fail identically in OLTP and OLAP")
+}
+
+// TestStreamedUnlockTablesWithoutConnFails verifies that UNLOCK TABLES over
+// the streaming path without an existing transaction or reserved connection
+// fails like the non-streaming Execute path, instead of running it as a
+// silent no-op on a pooled connection while the client's locks stay held on
+// its own connection.
+func TestStreamedUnlockTablesWithoutConnFails(t *testing.T) {
+	primary := shardPrimaryTablet(t, "-80")
+	tablet, err := clusterInstance.VtctldClientProcess.GetTablet(primary.Alias)
+	require.NoError(t, err)
+
+	ctx := t.Context()
+	qsConn, err := tabletconn.GetDialer()(ctx, tablet, grpcclient.FailFast(false))
+	require.NoError(t, err)
+	t.Cleanup(func() { qsConn.Close(context.WithoutCancel(ctx)) })
+
+	target := &querypb.Target{Keyspace: KeyspaceName, Shard: "-80", TabletType: topodatapb.TabletType_PRIMARY}
+
+	_, execErr := qsConn.Execute(ctx, nil, target, "unlock tables", nil, 0, 0, nil)
+	require.ErrorContains(t, execErr, "unlock tables should be executed with an existing connection")
+
+	streamErr := qsConn.StreamExecute(ctx, nil, target, "unlock tables", nil, 0, 0, nil,
+		func(*sqltypes.Result) error { return nil })
+	require.ErrorContains(t, streamErr, "unlock tables should be executed with an existing connection",
+		"streamed UNLOCK TABLES without a connection must fail like the non-streaming path")
+}
+
+// tabletHasTableInSchema reports whether the tablet's schema engine knows the
+// table, via the /debug/schema endpoint.
+func tabletHasTableInSchema(tablet *cluster.Vttablet, tableName string) bool {
+	url := fmt.Sprintf("http://%s:%d/debug/schema", tablet.VttabletProcess.TabletHostname, tablet.VttabletProcess.Port)
+	client := http.Client{Timeout: 5 * time.Second}
+	resp, err := client.Get(url)
+	if err != nil {
+		return false
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return false
+	}
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return false
+	}
+	tables := make(map[string]json.RawMessage)
+	if err := json.Unmarshal(body, &tables); err != nil {
+		return false
+	}
+	_, ok := tables[tableName]
+	return ok
+}
+
+func shardPrimaryTablet(t *testing.T, shardName string) *cluster.Vttablet {
+	t.Helper()
+	for _, shard := range clusterInstance.Keyspaces[0].Shards {
+		if shard.Name == shardName {
+			primary := shard.FindPrimaryTablet()
+			require.NotNilf(t, primary, "no primary tablet for shard %q", shardName)
+			return primary
+		}
+	}
+	require.Failf(t, "shard not found", "no shard %q in keyspace %s", shardName, KeyspaceName)
+	return nil
+}
+
+func tabletQueryStat(t *testing.T, tablet *cluster.Vttablet, varName, key string) float64 {
+	t.Helper()
+	vars := tablet.VttabletProcess.GetVars()
+	counter, ok := vars[varName].(map[string]any)
+	if !ok {
+		return 0
+	}
+	val, _ := counter[key].(float64)
+	return val
+}
+
 func TestCreateIndex(t *testing.T) {
 	conn, closer := start(t)
 	defer closer()
@@ -356,7 +622,9 @@ func TestFlushLock(t *testing.T) {
 	go func() {
 		ctx := t.Context()
 		conn2, err := mysql.Connect(ctx, &vtParams)
-		require.NoError(t, err)
+		if !assert.NoError(t, err) {
+			return
+		}
 		defer conn2.Close()
 
 		cnt.Add(1)
@@ -377,7 +645,7 @@ func TestFlushLock(t *testing.T) {
 	for cnt.Load() != 2 {
 		select {
 		case <-timeout:
-			t.Fatalf("test timeout waiting for select query to complete")
+			require.Fail(t, "test timeout waiting for select query to complete")
 		default:
 		}
 	}
@@ -403,13 +671,13 @@ func TestShowVGtid(t *testing.T) {
 
 	query := "show global vgtid_executed from ks"
 	qr := utils.Exec(t, conn, query)
-	require.Equal(t, 1, len(qr.Rows))
-	require.Equal(t, 2, len(qr.Rows[0]))
+	require.Len(t, qr.Rows, 1)
+	require.Len(t, qr.Rows[0], 2)
 
 	utils.Exec(t, conn, `insert into t1(id1, id2) values (1, 1), (2, 2), (3, 3), (4, 4), (5, 5)`)
 	qr2 := utils.Exec(t, conn, query)
-	require.Equal(t, 1, len(qr2.Rows))
-	require.Equal(t, 2, len(qr2.Rows[0]))
+	require.Len(t, qr2.Rows, 1)
+	require.Len(t, qr2.Rows[0], 2)
 
 	require.Equal(t, qr.Rows[0][0], qr2.Rows[0][0], "keyspace should be same")
 	require.NotEqual(t, qr.Rows[0][1].ToString(), qr2.Rows[0][1].ToString(), "vgtid should have changed")
@@ -421,7 +689,7 @@ func TestShowGtid(t *testing.T) {
 
 	query := "show global gtid_executed from ks"
 	qr := utils.Exec(t, conn, query)
-	require.Equal(t, 2, len(qr.Rows))
+	require.Len(t, qr.Rows, 2)
 
 	res := make(map[string]string, 2)
 	for _, row := range qr.Rows {
@@ -431,7 +699,7 @@ func TestShowGtid(t *testing.T) {
 
 	utils.Exec(t, conn, `insert into t1(id1, id2) values (1, 1), (2, 2), (3, 3), (4, 4), (5, 5)`)
 	qr2 := utils.Exec(t, conn, query)
-	require.Equal(t, 2, len(qr2.Rows))
+	require.Len(t, qr2.Rows, 2)
 
 	for _, row := range qr2.Rows {
 		require.Equal(t, KeyspaceName, row[0].ToString())
@@ -497,7 +765,7 @@ func TestRenameFieldsOnOLAP(t *testing.T) {
 	_ = utils.Exec(t, conn, "set workload = olap")
 
 	qr := utils.Exec(t, conn, "show tables")
-	require.Equal(t, 1, len(qr.Fields))
+	require.Len(t, qr.Fields, 1)
 	assert.Equal(t, `Tables_in_ks`, qr.Fields[0].Name)
 	_ = utils.Exec(t, conn, "use mysql")
 	qr = utils.Exec(t, conn, "select @@workload")
@@ -540,10 +808,10 @@ func TestSQLSelectLimit(t *testing.T) {
 
 		//	without order by the results are not deterministic for testing purpose. Checking row count only.
 		qr := utils.Exec(t, conn, "select /*vt+ PLANNER=gen4 */ uid, msg from t7_xxhash union all select uid, msg from t7_xxhash")
-		assert.Equal(t, 2, len(qr.Rows))
+		assert.Len(t, qr.Rows, 2)
 
 		qr = utils.Exec(t, conn, "select /*vt+ PLANNER=gen4 */ uid, msg from t7_xxhash union all select uid, msg from t7_xxhash limit 3")
-		assert.Equal(t, 3, len(qr.Rows))
+		assert.Len(t, qr.Rows, 3)
 	}
 }
 
@@ -709,6 +977,28 @@ func TestUnionWithManyInfSchemaQueries(t *testing.T) {
                     TABLE_NAME = 'user'`)
 }
 
+// TestUnionInfSchemaQueriesOLAP streams a UNION of many information_schema
+// queries (OLAP workload). Each branch routes through routeInfoSchemaQuery,
+// which mutates the bindVars map in place; the parallel streaming Concatenate
+// path must hand each source its own copy, otherwise the sources race on the
+// shared map and crash vtgate with a concurrent map write.
+func TestUnionInfSchemaQueriesOLAP(t *testing.T) {
+	conn, closer := start(t)
+	defer closer()
+
+	utils.Exec(t, conn, "set workload='olap'")
+
+	selects := make([]string, 0, 16)
+	for i := range 16 {
+		selects = append(selects, fmt.Sprintf("select TABLE_SCHEMA, TABLE_NAME from INFORMATION_SCHEMA.TABLES where TABLE_SCHEMA = 'ionescu' and TABLE_NAME = 'table_%d'", i))
+	}
+	query := strings.Join(selects, " UNION ")
+
+	for range 100 {
+		utils.Exec(t, conn, query)
+	}
+}
+
 func TestTransactionsInStreamingMode(t *testing.T) {
 	conn, closer := start(t)
 	defer closer()
@@ -814,7 +1104,7 @@ func TestRowCountExceed(t *testing.T) {
 		conn.Close()
 	}()
 
-	for i := 0; i < 250; i++ {
+	for i := range 250 {
 		utils.Exec(t, conn, fmt.Sprintf("insert into t1 (id1, id2) values (%d, %d)", i, i+1))
 	}
 
@@ -837,6 +1127,169 @@ func TestDDLTargeted(t *testing.T) {
 	utils.Exec(t, conn, `rollback`)
 	// validating the row
 	utils.AssertMatches(t, conn, `select id from ddl_targeted`, `[[INT64(1)]]`)
+}
+
+// TestTabletTargeting tests tablet-specific routing with USE keyspace:shard@tablet-alias syntax.
+// When shard is specified, tablet-specific routing bypasses vindex-based shard resolution.
+func TestTabletTargeting(t *testing.T) {
+	ctx := t.Context()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	instances := make(map[string]map[string][]string)
+
+	for _, ks := range clusterInstance.Keyspaces {
+		if ks.Name != "ks" {
+			continue
+		}
+		for _, shard := range ks.Shards {
+			instances[shard.Name] = make(map[string][]string)
+			for _, tablet := range shard.Vttablets {
+				instances[shard.Name][tablet.Type] = append(instances[shard.Name][tablet.Type], tablet.Alias)
+			}
+		}
+	}
+
+	require.NotEmpty(t, instances["-80"]["primary"][0], "no PRIMARY tablet found for -80 shard")
+	require.NotEmpty(t, instances["80-"]["primary"][0], "no PRIMARY tablet found for 80- shard")
+	require.NotEmpty(t, instances["-80"]["replica"], "no REPLICA tablets found for -80 shard")
+	require.NotEmpty(t, instances["80-"]["replica"], "no REPLICA tablets found for 80- shard")
+
+	// Insert data that would normally hash to 80- shard, but goes to -80 because of shard targeting
+	useStmt := fmt.Sprintf("USE `ks:-80@primary|%s`", instances["-80"]["primary"][0])
+	utils.Exec(t, conn, useStmt)
+	utils.Exec(t, conn, "INSERT into t1(id1, id2) values(1, 100), (2, 200)")
+	// id1=4 hashes to 80-, but we're targeting -80 shard explicitly
+	utils.Exec(t, conn, "insert into t1(id1, id2) values(4, 400)")
+
+	// Verify the data went to -80 shard (not where vindex would have put it)
+	utils.Exec(t, conn, "USE `ks:-80`")
+	utils.AssertMatches(t, conn, "select id1 from t1 where id1 in (1, 2, 4) order by id1", "[[INT64(1)] [INT64(2)] [INT64(4)]]")
+
+	// Verify the data did NOT go to 80- shard (where vindex says id1=4 should be)
+	utils.Exec(t, conn, "USE `ks:80-`")
+	utils.AssertIsEmpty(t, conn, "select id1 from t1 where id1=4")
+
+	// Transaction with tablet-specific routing maintains sticky connection
+	useStmt = fmt.Sprintf("USE `ks:-80@primary|%s`", instances["-80"]["primary"][0])
+	utils.Exec(t, conn, useStmt)
+	utils.Exec(t, conn, "begin")
+	utils.Exec(t, conn, "insert into t1(id1, id2) values(10, 300)")
+	// Subsequent queries in transaction should go to same tablet
+	utils.AssertMatches(t, conn, "select id1 from t1 where id1=10", "[[INT64(10)]]")
+	utils.Exec(t, conn, "commit")
+	utils.AssertMatches(t, conn, "select id1 from t1 where id1=10", "[[INT64(10)]]")
+
+	// Rollback with tablet-specific routing
+	useStmt = fmt.Sprintf("USE `ks:-80@primary|%s`", instances["-80"]["primary"][0])
+	utils.Exec(t, conn, useStmt)
+	utils.Exec(t, conn, "begin")
+	utils.Exec(t, conn, "insert into t1(id1, id2) values(20, 500)")
+	utils.Exec(t, conn, "rollback")
+	utils.AssertIsEmpty(t, conn, "select id1 from t1 where id1=20")
+
+	// Invalid tablet alias should fail
+	useStmt = "USE `ks:-80@primary|nonexistent-tablet`"
+	_, err = conn.ExecuteFetch(useStmt, 1, false)
+	require.Error(t, err, "query should fail on invalid tablet")
+	require.Contains(t, err.Error(), "invalid tablet alias in target")
+
+	// Tablet alias without shard should fail
+	useStmt = fmt.Sprintf("USE `ks@primary|%s`", instances["-80"]["primary"][0])
+	_, err = conn.ExecuteFetch(useStmt, 1, false)
+	require.Error(t, err, "tablet alias must be used with a shard")
+
+	// Clear tablet targeting returns to normal routing
+	// With normal routing, the query for id1=4 will be sent to the wrong shard (80-), so it won't be found.
+	// This is expected and demonstrates that vindex routing is back in effect.
+	utils.Exec(t, conn, "USE ks")
+	utils.AssertMatches(t, conn, "select id1 from t1 where id1 in (1, 2, 4, 10) order by id1", "[[INT64(1)] [INT64(2)] [INT64(10)]]")
+
+	// Targeting a specific REPLICA tablet allows reads but not writes
+	replicaAlias := instances["-80"]["replica"][0]
+	useStmt = fmt.Sprintf("USE `ks:-80@replica|%s`", replicaAlias)
+	utils.Exec(t, conn, useStmt)
+
+	// Reads should work on replica (wait for replication)
+	require.Eventually(t, func() bool {
+		result, err := conn.ExecuteFetch("select id1 from t1 where id1 in (1, 2, 4, 10) order by id1", 10, false)
+		return err == nil && len(result.Rows) == 4
+	}, 15*time.Second, 100*time.Millisecond, "replication did not catch up for first replica read")
+
+	// Writes should fail on replica (replicas are read-only)
+	_, err = conn.ExecuteFetch("insert into t1(id1, id2) values(99, 999)", 1, false)
+	require.Error(t, err, "write should fail on replica tablet")
+	require.Contains(t, err.Error(), "1290")
+
+	// Targeting different REPLICA tablets in the same shard
+	secondReplicaAlias := instances["-80"]["replica"][1]
+	useStmt = fmt.Sprintf("USE `ks:-80@replica|%s`", secondReplicaAlias)
+	utils.Exec(t, conn, useStmt)
+
+	// Should still be able to read from this different replica (wait for replication)
+	require.Eventually(t, func() bool {
+		result, err := conn.ExecuteFetch("select id1 from t1 where id1 in (1, 2, 4, 10) order by id1", 10, false)
+		return err == nil && len(result.Rows) == 4
+	}, 15*time.Second, 100*time.Millisecond, "replication did not catch up for second replica read")
+
+	// Writes should still fail
+	_, err = conn.ExecuteFetch("insert into t1(id1, id2) values(98, 998)", 1, false)
+	require.Error(t, err, "write should fail on replica tablet")
+	require.Contains(t, err.Error(), "1290")
+
+	// Write to primary, verify it replicates to replica
+	// This tests that tablet-specific routing doesn't break replication
+	useStmt = fmt.Sprintf("USE `ks:-80@primary|%s`", instances["-80"]["primary"][0])
+	utils.Exec(t, conn, useStmt)
+	utils.Exec(t, conn, "insert into t1(id1, id2) values(50, 5000)")
+	utils.AssertMatches(t, conn, "select id1 from t1 where id1=50", "[[INT64(50)]]")
+
+	// Switch to replica and verify the data replicated
+	replicaAlias = instances["-80"]["replica"][0]
+	useStmt = fmt.Sprintf("USE `ks:-80@replica|%s`", replicaAlias)
+	utils.Exec(t, conn, useStmt)
+	// Wait for replication to catch up
+	require.Eventually(t, func() bool {
+		result, err := conn.ExecuteFetch("select id1 from t1 where id1=50", 1, false)
+		return err == nil && len(result.Rows) == 1
+	}, 15*time.Second, 100*time.Millisecond, "replication did not catch up")
+
+	// Query different replicas and verify different server UUIDs
+	// This proves we're actually hitting different physical tablets
+
+	// Get server UUID from first replica
+	useStmt = fmt.Sprintf("USE `ks:-80@replica|%s`", instances["-80"]["replica"][0])
+	utils.Exec(t, conn, useStmt)
+	var uuid1 string
+	for i := range 5 {
+		result1 := utils.Exec(t, conn, "SELECT @@server_uuid")
+		require.NotNil(t, result1)
+		require.NotEmpty(t, result1.Rows)
+		if i > 0 {
+			// UUID should be the same across multiple queries to same tablet
+			require.Equal(t, uuid1, result1.Rows[0][0].ToString())
+		}
+		uuid1 = result1.Rows[0][0].ToString()
+	}
+
+	// Get server UUID from second replica
+	useStmt = fmt.Sprintf("USE `ks:-80@replica|%s`", instances["-80"]["replica"][1])
+	utils.Exec(t, conn, useStmt)
+	var uuid2 string
+	for i := range 5 {
+		result2 := utils.Exec(t, conn, "SELECT @@server_uuid")
+		require.NotNil(t, result2)
+		require.NotEmpty(t, result2.Rows)
+		if i > 0 {
+			// UUID should be the same across multiple queries to same tablet
+			require.Equal(t, uuid2, result2.Rows[0][0].ToString())
+		}
+		uuid2 = result2.Rows[0][0].ToString()
+	}
+
+	// Server UUIDs should be different, proving we're targeting different tablets
+	require.NotEqual(t, uuid1, uuid2, "different replicas should have different server UUIDs")
 }
 
 // TestDynamicConfig tests the dynamic configurations.
@@ -925,7 +1378,7 @@ func TestLookupErrorMetric(t *testing.T) {
 	require.ErrorContains(t, err, `(errno 1062) (sqlstate 23000)`)
 
 	newErrCount := getVtgateApiErrorCounts(t)
-	require.EqualValues(t, oldErrCount+1, newErrCount)
+	require.Equal(t, oldErrCount+1, newErrCount)
 }
 
 func getVtgateApiErrorCounts(t *testing.T) float64 {
@@ -933,7 +1386,7 @@ func getVtgateApiErrorCounts(t *testing.T) float64 {
 	if apiErr == nil {
 		return 0
 	}
-	mapErrors := apiErr.(map[string]interface{})
+	mapErrors := apiErr.(map[string]any)
 	val, exists := mapErrors["Execute.ks.primary.ALREADY_EXISTS"]
 	if exists {
 		return val.(float64)
@@ -941,7 +1394,7 @@ func getVtgateApiErrorCounts(t *testing.T) float64 {
 	return 0
 }
 
-func getVar(t *testing.T, key string) interface{} {
+func getVar(t *testing.T, key string) any {
 	vars := clusterInstance.VtgateProcess.GetVars()
 	require.NotNil(t, vars)
 
@@ -1029,6 +1482,42 @@ func TestQueryProcessedMetric(t *testing.T) {
 				assert.EqualValuesf(t, 1, getValue(updatedQT, metric)-getValue(initialQT, metric), "queryExecutionsByTable metric: %s", metric)
 			}
 			initialQP, initialQR, initialQT = updatedQP, updatedQR, updatedQT
+		})
+	}
+}
+
+// TestStreamingJoinQueryRoutes verifies that a join executed on the streaming
+// path issues the same number of shard routes as the buffered path. A previous
+// implementation labelled the output with a dedicated right-hand-side GetFields
+// query, which added one extra route per streamed join. The OLAP workload
+// forces streaming so the streaming join path is exercised.
+func TestStreamingJoinQueryRoutes(t *testing.T) {
+	conn, closer := start(t)
+	defer closer()
+
+	utils.Exec(t, conn, "set workload = olap")
+
+	tcases := []struct {
+		sql         string
+		queryMetric string
+		routes      float64
+	}{{
+		sql:         "select 1 from t1 a, t1 b",
+		queryMetric: "SELECT.Join.PRIMARY",
+		routes:      3,
+	}, {
+		sql:         "select count(*) from t1 a, t1 b",
+		queryMetric: "SELECT.Complex.PRIMARY",
+		routes:      6,
+	}}
+
+	initialQR := getQPMetric(t, "QueryRoutes")
+	for _, tc := range tcases {
+		t.Run(tc.sql, func(t *testing.T) {
+			utils.Exec(t, conn, tc.sql)
+			updatedQR := getQPMetric(t, "QueryRoutes")
+			assert.Equalf(t, tc.routes, getValue(updatedQR, tc.queryMetric)-getValue(initialQR, tc.queryMetric), "queryRoutes metric: %s", tc.queryMetric)
+			initialQR = updatedQR
 		})
 	}
 }

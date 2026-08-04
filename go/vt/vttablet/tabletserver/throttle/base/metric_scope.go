@@ -30,13 +30,11 @@ const (
 	SelfScope      Scope = "self"
 )
 
-var (
-	pascalScopeNames = map[Scope]string{
-		UndefinedScope: "",
-		ShardScope:     "Shard",
-		SelfScope:      "Self",
-	}
-)
+var pascalScopeNames = map[Scope]string{
+	UndefinedScope: "",
+	ShardScope:     "Shard",
+	SelfScope:      "Self",
+}
 
 func (s Scope) Pascal() string {
 	return pascalScopeNames[s]

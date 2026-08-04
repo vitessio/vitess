@@ -22,21 +22,23 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/utils"
 	"vitess.io/vitess/go/vt/log"
 )
 
-var (
-	testKeyspace = &cluster.Keyspace{
-		Name: "kstest",
-		SchemaSQL: `create table vt_user (
+var testKeyspace = &cluster.Keyspace{
+	Name: "kstest",
+	SchemaSQL: `create table vt_user (
 id bigint,
 name varchar(64),
 primary key (id)
 ) Engine=InnoDB`,
-		VSchema: `{
+	VSchema: `{
  "sharded": true,
  "vindexes": {
    "hash_index": {
@@ -54,14 +56,13 @@ primary key (id)
    }
  }
 }`,
-	}
-)
+}
 
 func TestAddKeyspace(t *testing.T) {
 	cell := clusterInstance.Cell
 	if err := clusterInstance.StartKeyspace(*testKeyspace, []string{"-80", "80-"}, 0, false, cell); err != nil {
-		log.Errorf("failed to AddKeyspace %v: %v", *testKeyspace, err)
-		t.Fatal(err)
+		log.Error(fmt.Sprintf("failed to AddKeyspace %v: %v", *testKeyspace, err))
+		require.NoError(t, err)
 	}
 	// Restart vtgate process
 	_ = clusterInstance.VtgateProcess.TearDown()
@@ -74,15 +75,13 @@ func TestAddKeyspace(t *testing.T) {
 		Port: clusterInstance.VtgateMySQLPort,
 	}
 	conn, err := mysql.Connect(ctx, &vtParams)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer conn.Close()
 
 	utils.Exec(t, conn, "insert into vt_user(id, name) values(1,'name1')")
 
 	qr := utils.Exec(t, conn, "select id, name from vt_user")
 	if got, want := fmt.Sprintf("%v", qr.Rows), `[[INT64(1) VARCHAR("name1")]]`; got != want {
-		t.Errorf("select:\n%v want\n%v", got, want)
+		assert.Equalf(t, want, got, "select:\n%v want\n%v", got, want)
 	}
 }

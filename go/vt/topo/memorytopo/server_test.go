@@ -17,7 +17,6 @@ limitations under the License.
 package memorytopo
 
 import (
-	"context"
 	"testing"
 
 	"vitess.io/vitess/go/vt/topo"
@@ -26,8 +25,7 @@ import (
 
 func TestMemoryTopo(t *testing.T) {
 	// Run the TopoServerTestSuite tests.
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	test.TopoServerTestSuite(t, ctx, func() *topo.Server {
 		return NewServer(ctx, test.LocalCellName)
 	}, []string{"checkTryLock", "checkShardWithLock"})

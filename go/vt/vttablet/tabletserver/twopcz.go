@@ -19,6 +19,7 @@ package tabletserver
 import (
 	"encoding/json"
 	"fmt"
+	"html"
 	"net/http"
 
 	"github.com/google/safehtml/template"
@@ -182,14 +183,14 @@ func twopczHandler(txe *DTExecutor, w http.ResponseWriter, r *http.Request) {
 	w.Write(gridTable)
 	w.Write([]byte("<h2>WARNING: Actions on this page can jeopardize data integrity.</h2>\n"))
 	if msg != "" {
-		fmt.Fprintln(w, msg)
+		fmt.Fprintln(w, html.EscapeString(msg))
 	}
 
 	w.Write(startTable)
 	w.Write(failedzHeader)
 	for _, row := range failed {
 		if err := failedzRow.Execute(w, row); err != nil {
-			log.Errorf("queryz: couldn't execute template: %v", err)
+			log.Error(fmt.Sprintf("queryz: couldn't execute template: %v", err))
 		}
 	}
 	w.Write(endTable)
@@ -198,7 +199,7 @@ func twopczHandler(txe *DTExecutor, w http.ResponseWriter, r *http.Request) {
 	w.Write(preparedzHeader)
 	for _, row := range prepared {
 		if err := preparedzRow.Execute(w, row); err != nil {
-			log.Errorf("queryz: couldn't execute template: %v", err)
+			log.Error(fmt.Sprintf("queryz: couldn't execute template: %v", err))
 		}
 	}
 	w.Write(endTable)
@@ -207,7 +208,7 @@ func twopczHandler(txe *DTExecutor, w http.ResponseWriter, r *http.Request) {
 	w.Write(distributedzHeader)
 	for _, row := range distributed {
 		if err := distributedzRow.Execute(w, row); err != nil {
-			log.Errorf("queryz: couldn't execute template: %v", err)
+			log.Error(fmt.Sprintf("queryz: couldn't execute template: %v", err))
 		}
 	}
 	w.Write(endTable)

@@ -58,8 +58,8 @@ var _ colldata.Collation = (*Collation)(nil)
 
 func makeRemoteCollation(conn *mysql.Conn, collid collations.ID, collname string) *Collation {
 	cs := collname
-	if idx := strings.IndexByte(collname, '_'); idx >= 0 {
-		cs = collname[:idx]
+	if before, _, ok := strings.Cut(collname, "_"); ok {
+		cs = before
 	}
 
 	coll := &Collation{

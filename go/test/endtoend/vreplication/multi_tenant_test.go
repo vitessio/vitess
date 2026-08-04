@@ -201,7 +201,7 @@ func TestMultiTenantSimple(t *testing.T) {
 		},
 	}
 
-	require.Zero(t, len(getKeyspaceRoutingRules(t, vc).Rules))
+	require.Empty(t, getKeyspaceRoutingRules(t, vc).Rules)
 
 	createFunc := func() {
 		mt.Create()
@@ -209,7 +209,7 @@ func TestMultiTenantSimple(t *testing.T) {
 		validateKeyspaceRoutingRules(t, vc, initialRules)
 
 		lastIndex = insertRows(lastIndex, sourceKeyspace)
-		waitForWorkflowState(t, vc, fmt.Sprintf("%s.%s", targetKeyspace, mt.workflowName), binlogdatapb.VReplicationWorkflowState_Running.String())
+		require.NoError(t, waitForWorkflowState(vc, fmt.Sprintf("%s.%s", targetKeyspace, mt.workflowName), binlogdatapb.VReplicationWorkflowState_Running.String()))
 	}
 
 	t.Run("cancel", func(t *testing.T) {
@@ -252,12 +252,12 @@ func TestMultiTenantSimple(t *testing.T) {
 	waitForRowCountInTablet(t, sourceTablet, sourceKeyspace, "t1", lastIndex)
 
 	mt.Complete()
-	require.Zero(t, len(getKeyspaceRoutingRules(t, vc).Rules))
+	require.Empty(t, getKeyspaceRoutingRules(t, vc).Rules)
 	// Targeting to target keyspace should start working now. Upto this point we had to target the source keyspace.
 	lastIndex = insertRows(lastIndex, targetKeyspace)
 
 	actualRowsInserted := getRowCount(t, vtgateConn, fmt.Sprintf("%s.%s", targetKeyspace, "t1"))
-	log.Infof("Migration completed, total rows in target: %d", actualRowsInserted)
+	log.Info(fmt.Sprintf("Migration completed, total rows in target: %d", actualRowsInserted))
 	require.Equal(t, lastIndex, int64(actualRowsInserted))
 
 	t.Run("Test ApplyKeyspaceRoutingRules", func(t *testing.T) {
@@ -383,30 +383,30 @@ func TestMultiTenantSharded(t *testing.T) {
 	})
 
 	mt.Create()
-	waitForWorkflowState(t, vc, fmt.Sprintf("%s.%s", targetKeyspace, mt.workflowName), binlogdatapb.VReplicationWorkflowState_Running.String())
+	require.NoError(t, waitForWorkflowState(vc, fmt.Sprintf("%s.%s", targetKeyspace, mt.workflowName), binlogdatapb.VReplicationWorkflowState_Running.String()))
 	mt.Show()
 	var workflowState vtctldata.GetWorkflowsResponse
 	err = protojson.Unmarshal([]byte(mt.lastOutput), &workflowState)
 	require.NoError(t, err)
-	require.Equal(t, 1, len(workflowState.Workflows))
+	require.Len(t, workflowState.Workflows, 1)
 	wf := workflowState.Workflows[0]
 	// Verifies that only one stream is created for the tenant on the shard to which this tenant id will be routed.
-	require.Equal(t, 1, len(wf.ShardStreams))
+	require.Len(t, wf.ShardStreams, 1)
 
 	// Note: we cannot insert into the target keyspace since that is never routed to the source keyspace.
 	lastIndex = insertRows(lastIndex, sourceKeyspace)
-	waitForWorkflowState(t, vc, fmt.Sprintf("%s.%s", targetKeyspace, mt.workflowName), binlogdatapb.VReplicationWorkflowState_Running.String())
+	require.NoError(t, waitForWorkflowState(vc, fmt.Sprintf("%s.%s", targetKeyspace, mt.workflowName), binlogdatapb.VReplicationWorkflowState_Running.String()))
 	vdiff(t, targetKeyspace, defaultWorkflowName, defaultCellName, nil)
 	mt.SwitchReadsAndWrites()
 	// Note: here we have already switched, and we can insert into the target keyspace, and it should get reverse
 	// replicated to the source keyspace. The source keyspace is routed to the target keyspace at this point.
 	lastIndex = insertRows(lastIndex, sourceKeyspace)
 	mt.Complete()
-	require.Zero(t, len(getKeyspaceRoutingRules(t, vc).Rules))
+	require.Empty(t, getKeyspaceRoutingRules(t, vc).Rules)
 	actualRowsInserted := getRowCount(t, vtgateConn, fmt.Sprintf("%s.%s", targetKeyspace, "t1"))
 	require.Equal(t, lastIndex, int64(actualRowsInserted))
 	require.Equal(t, lastIndex, int64(getRowCount(t, vtgateConn, fmt.Sprintf("%s.%s", targetKeyspace, "t1"))))
-	log.Infof("Migration completed, total rows in target: %d", actualRowsInserted)
+	log.Info(fmt.Sprintf("Migration completed, total rows in target: %d", actualRowsInserted))
 }
 
 func confirmBothReadsAndWritesSwitched(t *testing.T) {
@@ -491,7 +491,7 @@ func TestMultiTenantComplex(t *testing.T) {
 		totalRowsInserted := totalRowsInsertedPerTenant * numTenants
 		totalActualRowsInserted := getRowCount(t, vtgateConn, fmt.Sprintf("%s.%s", mtm.targetKeyspace, "t1"))
 		require.Equal(t, totalRowsInserted, totalActualRowsInserted)
-		log.Infof("Migration completed, total rows inserted in target: %d", totalActualRowsInserted)
+		log.Info(fmt.Sprintf("Migration completed, total rows inserted in target: %d", totalActualRowsInserted))
 	})
 }
 
@@ -562,7 +562,7 @@ func getInitialTabletIdForTenant(tenantId int64) int {
 }
 
 func (mtm *multiTenantMigration) setup(tenantId int64) {
-	log.Infof("Creating MoveTables for tenant %d", tenantId)
+	log.Info(fmt.Sprintf("Creating MoveTables for tenant %d", tenantId))
 	mtm.setLastID(tenantId, 0)
 	sourceKeyspace := getSourceKeyspace(tenantId)
 	_, err := vc.AddKeyspace(mtm.t, []*Cell{vc.Cells["zone1"]}, sourceKeyspace, "0", stVSchema, stSchema,
@@ -595,7 +595,7 @@ func (mtm *multiTenantMigration) switchTraffic(tenantId int64) {
 	sourceKeyspaceName := getSourceKeyspace(tenantId)
 	mt := mtm.getActiveMoveTables(tenantId)
 	ksWorkflow := fmt.Sprintf("%s.%s", mtm.targetKeyspace, mt.workflowName)
-	waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
+	require.NoError(t, waitForWorkflowState(vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String()))
 	vdiff(t, mt.targetKeyspace, mt.workflowName, defaultCellName, nil)
 	mtm.insertSomeData(t, tenantId, sourceKeyspaceName, numAdditionalRowsPerTenant)
 	mt.SwitchReadsAndWrites()

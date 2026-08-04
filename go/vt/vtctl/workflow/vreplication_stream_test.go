@@ -18,8 +18,9 @@ package workflow
 
 import (
 	"fmt"
-	"reflect"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 // TestVReplicationStreams tests various methods of VReplicationStreams.
@@ -31,22 +32,20 @@ func TestVReplicationStreams(t *testing.T) {
 
 	tests := []struct {
 		name           string
-		funcUnderTest  func(VReplicationStreams) interface{}
-		expectedResult interface{}
+		funcUnderTest  func(VReplicationStreams) any
+		expectedResult any
 	}{
-		{"Test IDs", func(s VReplicationStreams) interface{} { return s.IDs() }, []int32{1, 2, 3}},
-		{"Test Values", func(s VReplicationStreams) interface{} { return s.Values() }, "(1, 2, 3)"},
-		{"Test Workflows", func(s VReplicationStreams) interface{} { return s.Workflows() }, []string{"workflow1", "workflow2", "workflow3"}},
-		{"Test Copy", func(s VReplicationStreams) interface{} { return s.Copy() }, streams.Copy()},
-		{"Test ToSlice", func(s VReplicationStreams) interface{} { return s.ToSlice() }, []*VReplicationStream{streams[0], streams[1], streams[2]}},
+		{"Test IDs", func(s VReplicationStreams) any { return s.IDs() }, []int32{1, 2, 3}},
+		{"Test Values", func(s VReplicationStreams) any { return s.Values() }, "(1, 2, 3)"},
+		{"Test Workflows", func(s VReplicationStreams) any { return s.Workflows() }, []string{"workflow1", "workflow2", "workflow3"}},
+		{"Test Copy", func(s VReplicationStreams) any { return s.Copy() }, streams.Copy()},
+		{"Test ToSlice", func(s VReplicationStreams) any { return s.ToSlice() }, []*VReplicationStream{streams[0], streams[1], streams[2]}},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := tt.funcUnderTest(streams)
-			if !reflect.DeepEqual(result, tt.expectedResult) {
-				t.Errorf("Failed %s: expected %v, got %v", tt.name, tt.expectedResult, result)
-			}
+			assert.Equalf(t, tt.expectedResult, result, "Failed %s", tt.name)
 		})
 	}
 }

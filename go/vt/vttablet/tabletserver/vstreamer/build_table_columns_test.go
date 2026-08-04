@@ -17,7 +17,6 @@ limitations under the License.
 package vstreamer
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -35,7 +34,7 @@ import (
 // TestBuildTableColumns tests the buildTableColumns vstreamer method to ensure
 // that the fields we get back in various scenarios are expected/correct.
 func TestBuildTableColumns(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	execStatements(t, []string{
 		"create table test_build_cols (id bigint primary key, txt text, val varchar(64))",
@@ -184,7 +183,7 @@ func TestBuildTableColumns(t *testing.T) {
 				// Should return basic field info with @N position based names.
 				require.Equal(t, "@1", fields[0].Name)
 				require.Equal(t, "@4", fields[3].Name)
-				require.Equal(t, fields[3].Type, sqltypes.Int32)
+				require.Equal(t, sqltypes.Int32, fields[3].Type)
 			},
 		},
 	}

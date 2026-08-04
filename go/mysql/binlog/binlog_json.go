@@ -205,9 +205,7 @@ func ParseBinaryJSONDiff(data []byte) (sqltypes.Value, error) {
 		// character set (e.g. vreplication always uses set names binary).
 		// The generated path will look like this: _utf8mb4'$.role'
 		diff.WriteString(sqlparser.Utf8mb4Str)
-		diff.WriteByte('\'')
-		diff.Write(path)
-		diff.WriteByte('\'')
+		diff.WriteString(sqltypes.EncodeStringSQL(string(path)))
 		if opType == jsonDiffOpRemove { // No value for remove
 			diff.WriteByte(')') // Close the JSON function
 			continue
@@ -251,10 +249,10 @@ const (
 	jsonInt32       = 7
 	jsonUint32      = 8
 	jsonInt64       = 9
-	jsonUint64      = 10 //0x0a
-	jsonDouble      = 11 //0x0b
-	jsonString      = 12 //0x0c a utf8mb4 string
-	jsonOpaque      = 15 //0x0f "custom" data
+	jsonUint64      = 10 // 0x0a
+	jsonDouble      = 11 // 0x0b
+	jsonString      = 12 // 0x0c a utf8mb4 string
+	jsonOpaque      = 15 // 0x0f "custom" data
 )
 
 // literals in the binary json format can be one of three types: null, true, false
@@ -374,7 +372,7 @@ func binparserElement(data []byte, pos int, large bool) (*json.Value, int, error
 			return nil, 0, fmt.Errorf("unable to decode element: %+v", data)
 		}
 		newData := data[offset:]
-		//newPos ignored because this is an offset into the "extra" section of the buffer
+		// newPos ignored because this is an offset into the "extra" section of the buffer
 		elem, err = binparserNode(typ, newData, 1)
 		if err != nil {
 			return nil, 0, err
@@ -383,8 +381,7 @@ func binparserElement(data []byte, pos int, large bool) (*json.Value, int, error
 	return elem, pos, nil
 }
 
-//endregion
-
+// endregion
 var binaryIntSizes = map[jsonDataType]int{
 	jsonUint64: 8,
 	jsonInt64:  8,
@@ -556,7 +553,7 @@ func binparserArray(typ jsonDataType, data []byte, pos int) (node *json.Value, e
 // | type_identifier(0/1) | elem count | obj size | list of offsets+lengths of keys | list of offsets+lengths of values | actual keys | actual values |
 func binparserObject(typ jsonDataType, data []byte, pos int) (node *json.Value, err error) {
 	// "large" decides number of bytes used to specify element count and total object size: 4 bytes for large, 2 for small
-	var large = typ == jsonLargeObject
+	large := typ == jsonLargeObject
 	var elementCount int // total number of elements (== keys) in this object map. (element can be another object: recursively handled)
 
 	elementCount, pos = readInt(data, pos, large)

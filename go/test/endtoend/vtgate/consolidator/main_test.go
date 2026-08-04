@@ -196,13 +196,13 @@ func testConsolidator(t *testing.T, testCases []consolidatorTestCase) {
 	for _, testCase := range testCases {
 		t.Run(fmt.Sprintf("%s%s", testCase.query, testCase.tabletType), func(t *testing.T) {
 			// Create a connection.
-			conn1, err := mysql.Connect(context.Background(), &vtParams)
+			conn1, err := mysql.Connect(t.Context(), &vtParams)
 			require.NoError(t, err)
 			utils.Exec(t, conn1, "use "+testCase.tabletType)
 			defer conn1.Close()
 
 			// Create another connection.
-			conn2, err := mysql.Connect(context.Background(), &vtParams)
+			conn2, err := mysql.Connect(t.Context(), &vtParams)
 			require.NoError(t, err)
 			utils.Exec(t, conn2, "use "+testCase.tabletType)
 			defer conn2.Close()

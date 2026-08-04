@@ -17,11 +17,9 @@ limitations under the License.
 package testlib
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"strings"
 	"testing"
 	"time"
 
@@ -33,6 +31,8 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/wrangler"
+
+	"github.com/stretchr/testify/require"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
@@ -68,8 +68,7 @@ func TestVersion(t *testing.T) {
 	discovery.SetTabletPickerRetryDelay(5 * time.Millisecond)
 
 	// Initialize our environment
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "cell1", "cell2")
 	wr := wrangler.New(vtenv.NewTestEnv(), logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 	vp := NewVtctlPipe(ctx, t, ts)
@@ -105,14 +104,12 @@ func TestVersion(t *testing.T) {
 	// test when versions are the same
 	sourceReplicaGitRev = "fake git rev"
 	if err := vp.Run([]string{"ValidateVersionKeyspace", sourcePrimary.Tablet.Keyspace}); err != nil {
-		t.Fatalf("ValidateVersionKeyspace(same) failed: %v", err)
+		require.NoError(t, err)
 	}
 
 	// test when versions are different
 	sourceReplicaGitRev = "different fake git rev"
 	err := vp.Run([]string{"ValidateVersionKeyspace", sourcePrimary.Tablet.Keyspace})
 	fmt.Printf("ERROR %v", err)
-	if err == nil || !strings.Contains(err.Error(), "is different than replica") {
-		t.Fatalf("ValidateVersionKeyspace(different) returned an unexpected error: %v", err)
-	}
+	require.ErrorContains(t, err, "is different than replica")
 }

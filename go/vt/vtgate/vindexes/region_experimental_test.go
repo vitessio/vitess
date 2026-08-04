@@ -17,7 +17,6 @@ limitations under the License.
 package vindexes
 
 import (
-	"context"
 	"strconv"
 	"testing"
 
@@ -125,9 +124,9 @@ func TestRegionExperimentalMisc(t *testing.T) {
 
 func TestRegionExperimentalMap(t *testing.T) {
 	vindex, err := createRegionVindex(t, "region_experimental", "f1,f2", 1)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	ge := vindex.(MultiColumn)
-	got, err := ge.Map(context.Background(), nil, [][]sqltypes.Value{{
+	got, err := ge.Map(t.Context(), nil, [][]sqltypes.Value{{
 		sqltypes.NewInt64(1), sqltypes.NewInt64(1),
 	}, {
 		sqltypes.NewInt64(255), sqltypes.NewInt64(1),
@@ -143,7 +142,7 @@ func TestRegionExperimentalMap(t *testing.T) {
 		// Invalid id.
 		sqltypes.NewInt64(1), sqltypes.NewVarBinary("abcd"),
 	}})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	want := []key.ShardDestination{
 		key.DestinationKeyspaceID([]byte("\x01\x16k@\xb4J\xbaK\xd6")),
@@ -158,9 +157,9 @@ func TestRegionExperimentalMap(t *testing.T) {
 
 func TestRegionExperimentalMapMulti2(t *testing.T) {
 	vindex, err := createRegionVindex(t, "region_experimental", "f1,f2", 2)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	ge := vindex.(MultiColumn)
-	got, err := ge.Map(context.Background(), nil, [][]sqltypes.Value{{
+	got, err := ge.Map(t.Context(), nil, [][]sqltypes.Value{{
 		sqltypes.NewInt64(1), sqltypes.NewInt64(1),
 	}, {
 		sqltypes.NewInt64(255), sqltypes.NewInt64(1),
@@ -169,7 +168,7 @@ func TestRegionExperimentalMapMulti2(t *testing.T) {
 	}, {
 		sqltypes.NewInt64(0x10000), sqltypes.NewInt64(1),
 	}})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	want := []key.ShardDestination{
 		key.DestinationKeyspaceID([]byte("\x00\x01\x16k@\xb4J\xbaK\xd6")),
@@ -182,7 +181,7 @@ func TestRegionExperimentalMapMulti2(t *testing.T) {
 
 func TestRegionExperimentalVerifyMulti(t *testing.T) {
 	vindex, err := createRegionVindex(t, "region_experimental", "f1,f2", 1)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	ge := vindex.(MultiColumn)
 	vals := [][]sqltypes.Value{{
 		// One for match
@@ -201,8 +200,8 @@ func TestRegionExperimentalVerifyMulti(t *testing.T) {
 	}
 
 	want := []bool{true, false, false}
-	got, err := ge.Verify(context.Background(), nil, vals, ksids)
-	assert.NoError(t, err)
+	got, err := ge.Verify(t.Context(), nil, vals, ksids)
+	require.NoError(t, err)
 	assert.Equal(t, want, got)
 }
 

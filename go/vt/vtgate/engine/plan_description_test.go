@@ -19,6 +19,9 @@ package engine
 import (
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
@@ -86,6 +89,63 @@ func TestPlanDescriptionWithInputs(t *testing.T) {
 	}
 
 	utils.MustMatch(t, expected, planDescription, "descriptions did not match")
+}
+
+// TestPrimitiveDescriptionFromMapRowsReceived verifies that RowsReceived is
+// reconstructed from the lossy JSON form (NoOfCalls + AvgNumberOfRows) without
+// truncating the total row count, including the streaming-mode case where the
+// average is fractional (e.g. RowsReceived [0, 1] -> AvgNumberOfRows 0.5).
+func TestPrimitiveDescriptionFromMapRowsReceived(t *testing.T) {
+	tests := []struct {
+		name string
+		in   map[string]any
+		want RowsReceived
+	}{
+		{
+			name: "streaming fractional average rounds to total",
+			in: map[string]any{
+				"NoOfCalls":       float64(2),
+				"AvgNumberOfRows": float64(0.5),
+			},
+			want: RowsReceived{1},
+		},
+		{
+			name: "single call preserves count",
+			in: map[string]any{
+				"NoOfCalls":       float64(1),
+				"AvgNumberOfRows": float64(5),
+			},
+			want: RowsReceived{5},
+		},
+		{
+			name: "missing NoOfCalls falls back to single call",
+			in: map[string]any{
+				"AvgNumberOfRows": float64(7),
+			},
+			want: RowsReceived{7},
+		},
+		{
+			name: "missing AvgNumberOfRows leaves RowsReceived unset",
+			in:   map[string]any{},
+			want: nil,
+		},
+		{
+			name: "non-trivial average across multiple calls",
+			in: map[string]any{
+				"NoOfCalls":       float64(3),
+				"AvgNumberOfRows": float64(2.6666666666666665), // (3+2+3)/3
+			},
+			want: RowsReceived{8},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			pd, err := PrimitiveDescriptionFromMap(tc.in)
+			require.NoError(t, err)
+			assert.Equal(t, tc.want, pd.RowsReceived)
+		})
+	}
 }
 
 func getDescriptionFor(route *Route) PrimitiveDescription {

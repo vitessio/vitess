@@ -17,15 +17,20 @@ limitations under the License.
 package codegen
 
 import (
+	"errors"
 	"log"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"strings"
+	"sync"
 
 	"github.com/dave/jennifer/jen"
 )
 
-// FormatJenFile formats the given *jen.File with goimports and return a slice
-// of byte corresponding to the formatted file.
+// FormatJenFile writes the given *jen.File to a temporary file, applies
+// goimports and gofumpt, and returns the formatted contents.
+// The output matches the repository's import grouping and formatting rules.
 func FormatJenFile(file *jen.File) ([]byte, error) {
 	tempFile, err := os.CreateTemp("/tmp", "*.go")
 	if err != nil {
@@ -44,17 +49,35 @@ func FormatJenFile(file *jen.File) ([]byte, error) {
 	return os.ReadFile(tempFile.Name())
 }
 
-func GoImports(fullPath string) error {
-	// we need to run both gofmt and goimports because goimports does not support the
-	// simplification flag (-s) that our static linter checks require.
+// moduleRoot returns the root directory of the enclosing vitess module.
+// goimports and gofumpt live in their own modules under tools/, so their
+// modfiles must be addressed relative to the repository root, regardless of
+// the caller's working directory.
+var moduleRoot = sync.OnceValues(func() (string, error) {
+	out, err := exec.Command("go", "env", "GOMOD").Output()
+	if err != nil {
+		return "", err
+	}
+	gomod := strings.TrimSpace(string(out))
+	if gomod == "" || gomod == os.DevNull {
+		return "", errors.New("codegen must run inside the vitess module")
+	}
+	return filepath.Dir(gomod), nil
+})
 
-	cmd := exec.Command("gofmt", "-s", "-w", fullPath)
+func GoImports(fullPath string) error {
+	root, err := moduleRoot()
+	if err != nil {
+		return err
+	}
+
+	cmd := exec.Command("go", "tool", "-modfile="+filepath.Join(root, "tools", "goimports", "go.mod"), "goimports", "-local", "vitess.io/vitess", "-w", fullPath)
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
 		return err
 	}
 
-	cmd = exec.Command("goimports", "-local", "vitess.io/vitess", "-w", fullPath)
+	cmd = exec.Command("go", "tool", "-modfile="+filepath.Join(root, "tools", "gofumpt", "go.mod"), "gofumpt", "-w", fullPath)
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
 		return err

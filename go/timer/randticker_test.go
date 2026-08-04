@@ -19,6 +19,8 @@ package timer
 import (
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
 const (
@@ -28,18 +30,16 @@ const (
 
 func TestTick(t *testing.T) {
 	tkr := NewRandTicker(testDuration, testVariance)
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		start := time.Now()
 		end := <-tkr.C
 		diff := start.Add(testDuration).Sub(end)
 		tolerance := testVariance + 20*time.Millisecond
 		if diff < -tolerance || diff > tolerance {
-			t.Errorf("start: %v, end: %v, diff %v. Want <%v tolerenace", start, end, diff, tolerance)
+			assert.Failf(t, "tick out of tolerance", "start: %v, end: %v, diff %v. Want <%v tolerenace", start, end, diff, tolerance)
 		}
 	}
 	tkr.Stop()
 	_, ok := <-tkr.C
-	if ok {
-		t.Error("Channel was not closed")
-	}
+	assert.False(t, ok, "Channel was not closed")
 }

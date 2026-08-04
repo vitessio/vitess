@@ -52,18 +52,7 @@ func TestAPIEndpoints(t *testing.T) {
 	assert.NotNil(t, primary, "should have elected a primary")
 
 	// find the replica and rdonly tablet
-	var replica, rdonly *cluster.Vttablet
-	for _, tablet := range shard0.Vttablets {
-		// we know we have only two replica type tablets, so the one not the primary must be the replica
-		if tablet.Alias != primary.Alias && tablet.Type == "replica" {
-			replica = tablet
-		}
-		if tablet.Type == "rdonly" {
-			rdonly = tablet
-		}
-	}
-	assert.NotNil(t, replica, "could not find replica tablet")
-	assert.NotNil(t, rdonly, "could not find rdonly tablet")
+	replica, rdonly := utils.FindReplicaAndRdonly(t, shard0, primary)
 
 	// check that the replication is setup correctly before we set read-only
 	utils.CheckReplication(t, clusterInfo, primary, []*cluster.Vttablet{replica, rdonly}, 10*time.Second)
@@ -85,7 +74,7 @@ func TestAPIEndpoints(t *testing.T) {
 	})
 
 	// Before we disable recoveries, let us wait until VTOrc has fixed all the issues (if any).
-	_, _ = utils.MakeAPICallRetry(t, vtorc, "/api/replication-analysis", func(_ int, response string) bool {
+	_, _ = utils.MakeAPICallRetry(t, vtorc, "/api/detection-analysis", func(i int, response string) bool {
 		return response != "null"
 	})
 
@@ -164,15 +153,15 @@ func TestAPIEndpoints(t *testing.T) {
 		assert.Equal(t, "Global recoveries disabled\n", resp)
 	})
 
-	t.Run("Replication Analysis API", func(t *testing.T) {
+	t.Run("Detection Analysis API", func(t *testing.T) {
 		// use vtctldclient to stop replication
 		_, err := clusterInfo.ClusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("StopReplication", replica.Alias)
 		require.NoError(t, err)
 
 		// We know VTOrc won't fix this since we disabled global recoveries!
 		// Wait until VTOrc picks up on this issue and verify
-		// that we see a not null result on the api/replication-analysis page
-		status, resp := utils.MakeAPICallRetry(t, vtorc, "/api/replication-analysis", func(_ int, response string) bool {
+		// that we see a not null result on the api/detection-analysis page
+		status, resp := utils.MakeAPICallRetry(t, vtorc, "/api/detection-analysis", func(_ int, response string) bool {
 			return response == "null"
 		})
 		assert.Equal(t, 200, status, resp)
@@ -180,25 +169,25 @@ func TestAPIEndpoints(t *testing.T) {
 		assert.Contains(t, resp, `"Analysis": "ReplicationStopped"`)
 
 		// Verify that filtering also works in the API as intended
-		status, resp, err = utils.MakeAPICall(t, vtorc, "/api/replication-analysis?keyspace=ks&shard=0")
+		status, resp, err = utils.MakeAPICall(t, vtorc, "/api/detection-analysis?keyspace=ks&shard=0")
 		require.NoError(t, err)
 		assert.Equal(t, 200, status, resp)
 		assert.Contains(t, resp, fmt.Sprintf(`"AnalyzedInstanceAlias": "%s"`, replica.Alias))
 
 		// Verify that filtering by keyspace also works in the API as intended
-		status, resp, err = utils.MakeAPICall(t, vtorc, "/api/replication-analysis?keyspace=ks")
+		status, resp, err = utils.MakeAPICall(t, vtorc, "/api/detection-analysis?keyspace=ks")
 		require.NoError(t, err)
 		assert.Equal(t, 200, status, resp)
 		assert.Contains(t, resp, fmt.Sprintf(`"AnalyzedInstanceAlias": "%s"`, replica.Alias))
 
 		// Check that filtering using keyspace and shard works
-		status, resp, err = utils.MakeAPICall(t, vtorc, "/api/replication-analysis?keyspace=ks&shard=80-")
+		status, resp, err = utils.MakeAPICall(t, vtorc, "/api/detection-analysis?keyspace=ks&shard=80-")
 		require.NoError(t, err)
 		assert.Equal(t, 200, status, resp)
 		assert.Equal(t, "null", resp)
 
 		// Check that filtering using just the shard fails
-		status, resp, err = utils.MakeAPICall(t, vtorc, "/api/replication-analysis?shard=0")
+		status, resp, err = utils.MakeAPICall(t, vtorc, "/api/detection-analysis?shard=0")
 		require.NoError(t, err)
 		assert.Equal(t, 400, status, resp)
 		assert.Equal(t, "Filtering by shard without keyspace isn't supported\n", resp)
@@ -303,7 +292,7 @@ func waitForErrantGTIDTabletCount(t *testing.T, vtorc *cluster.VTOrcProcess, err
 	for {
 		select {
 		case <-timeout:
-			t.Fatalf("Timed out waiting for errant gtid count in the metrics to be %v", errantGTIDCountWanted)
+			require.Failf(t, "errant gtid count timeout", "Timed out waiting for errant gtid count in the metrics to be %v", errantGTIDCountWanted)
 			return
 		default:
 			_, resp, err := utils.MakeAPICall(t, vtorc, "/debug/vars")
@@ -322,9 +311,9 @@ func waitForErrantGTIDTabletCount(t *testing.T, vtorc *cluster.VTOrcProcess, err
 
 func verifyErrantGTIDCount(t *testing.T, vtorc *cluster.VTOrcProcess, tabletAlias string, countWanted int) {
 	vars := vtorc.GetVars()
-	errantGTIDCounts := vars["CurrentErrantGTIDCount"].(map[string]interface{})
+	errantGTIDCounts := vars["CurrentErrantGTIDCount"].(map[string]any)
 	gtidCountVal, isPresent := errantGTIDCounts[tabletAlias]
 	require.True(t, isPresent, "Tablet %s not found in errant GTID counts", tabletAlias)
 	gtidCount := utils.GetIntFromValue(gtidCountVal)
-	require.EqualValues(t, countWanted, gtidCount, "Tablet %s has %d errant GTIDs, wanted %d", tabletAlias, gtidCount, countWanted)
+	require.Equal(t, countWanted, gtidCount, "Tablet %s has %d errant GTIDs, wanted %d", tabletAlias, gtidCount, countWanted)
 }

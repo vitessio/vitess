@@ -17,10 +17,11 @@ limitations under the License.
 package tabletmanager
 
 import (
+	"context"
+	"fmt"
+
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/vt/vterrors"
-
-	"context"
 
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
@@ -48,13 +49,13 @@ func (tm *TabletManager) ReloadSchema(ctx context.Context, waitPosition string) 
 		if err != nil {
 			return vterrors.Wrapf(err, "ReloadSchema: can't parse wait position (%q)", waitPosition)
 		}
-		log.Infof("ReloadSchema: waiting for replication position: %v", waitPosition)
+		log.Info(fmt.Sprintf("ReloadSchema: waiting for replication position: %v", waitPosition))
 		if err := tm.MysqlDaemon.WaitSourcePos(ctx, pos); err != nil {
 			return err
 		}
 	}
 
-	log.Infof("ReloadSchema requested via RPC")
+	log.Info("ReloadSchema requested via RPC")
 	return tm.QueryServiceControl.ReloadSchema(ctx)
 }
 
@@ -83,6 +84,12 @@ func (tm *TabletManager) ApplySchema(ctx context.Context, change *tmutils.Schema
 		return nil, err
 	}
 	defer tm.unlock()
+
+	// Reject any CREATE TABLE that would push the schema engine past its
+	// configured table-count limit before we touch mysqld.
+	if err := checkCreateTableLimitForSQL(tm.Env.Parser(), tm.schemaEngine(), change.SQL); err != nil {
+		return nil, err
+	}
 
 	// get the db name from the tablet
 	dbName := topoproto.TabletDbName(tm.Tablet())

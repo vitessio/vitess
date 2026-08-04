@@ -29,6 +29,16 @@ import (
 	"vitess.io/vitess/go/vt/log"
 )
 
+// execError wraps a SQL execution error, preserving the error chain for
+// errors.As while surfacing a redacted message safe for logging and propagation.
+type execError struct {
+	msg   string
+	cause error
+}
+
+func (e *execError) Error() string { return e.msg }
+func (e *execError) Unwrap() error { return e.cause }
+
 // getPoolReconnect gets a connection from a pool, tests it, and reconnects if
 // the connection is lost.
 func getPoolReconnect(ctx context.Context, pool *dbconnpool.ConnectionPool) (*dbconnpool.PooledDBConnection, error) {
@@ -78,10 +88,11 @@ func limitString(s string, limit int) string {
 func (mysqld *Mysqld) executeSuperQueryListConn(ctx context.Context, conn *dbconnpool.PooledDBConnection, queryList []string) error {
 	const LogQueryLengthLimit = 200
 	for _, query := range queryList {
-		log.Infof("exec %s", limitString(redactPassword(query), LogQueryLengthLimit))
+		log.Info("exec " + limitString(redactPassword(query), LogQueryLengthLimit))
 		if _, err := mysqld.executeFetchContext(ctx, conn, query, 10000, false); err != nil {
-			log.Errorf("ExecuteFetch(%v) failed: %v", redactPassword(query), redactPassword(err.Error()))
-			return fmt.Errorf("ExecuteFetch(%v) failed: %v", redactPassword(query), redactPassword(err.Error()))
+			msg := fmt.Sprintf("ExecuteFetch(%v) failed: %v", redactPassword(query), redactPassword(err.Error()))
+			log.Error(msg)
+			return &execError{msg: msg, cause: err}
 		}
 	}
 	return nil
@@ -138,10 +149,10 @@ func (mysqld *Mysqld) executeFetchContext(ctx context.Context, conn *dbconnpool.
 		// The context expired or was canceled.
 		// Try to kill the connection to effectively cancel the ExecuteFetch().
 		connID := conn.Conn.ID()
-		log.Infof("Mysqld.executeFetchContext(): killing connID %v due to timeout of query: %v", connID, query)
+		log.Info(fmt.Sprintf("Mysqld.executeFetchContext(): killing connID %v due to timeout of query: %v", connID, query))
 		if killErr := mysqld.killConnection(connID); killErr != nil {
 			// Log it, but go ahead and wait for the query anyway.
-			log.Warningf("Mysqld.executeFetchContext(): failed to kill connID %v: %v", connID, killErr)
+			log.Warn(fmt.Sprintf("Mysqld.executeFetchContext(): failed to kill connID %v: %v", connID, killErr))
 		}
 		// Wait for the conn.ExecuteFetch() call to return.
 		<-done

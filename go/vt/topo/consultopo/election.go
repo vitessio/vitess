@@ -18,9 +18,10 @@ package consultopo
 
 import (
 	"context"
+	"fmt"
 	"path"
 
-	"github.com/hashicorp/consul/api"
+	"github.com/hashicorp/consul/api/v2"
 
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
@@ -96,7 +97,7 @@ func (mp *consulLeaderParticipation) WaitForLeadership() (context.Context, error
 			lockCancel()
 			// We could have lost the lock. Per consul API, explicitly call Unlock to make sure that session will not be renewed.
 			if err := l.Unlock(); err != nil {
-				log.Errorf("Leader election(%v) Unlock failed: %v", mp.name, err)
+				log.Error(fmt.Sprintf("Leader election(%v) Unlock failed: %v", mp.name, err))
 			}
 		case <-mp.stop:
 			// Stop was called. We stop the context first,
@@ -104,7 +105,7 @@ func (mp *consulLeaderParticipation) WaitForLeadership() (context.Context, error
 			// is the primary any more, then we unlock.
 			lockCancel()
 			if err := l.Unlock(); err != nil {
-				log.Errorf("Leader election(%v) Unlock failed: %v", mp.name, err)
+				log.Error(fmt.Sprintf("Leader election(%v) Unlock failed: %v", mp.name, err))
 			}
 			close(mp.done)
 		}

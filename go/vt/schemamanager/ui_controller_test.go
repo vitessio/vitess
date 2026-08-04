@@ -21,8 +21,6 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"context"
-
 	"github.com/stretchr/testify/require"
 )
 
@@ -30,7 +28,7 @@ func TestUIController(t *testing.T) {
 	sql := "CREATE TABLE test_table (pk int)"
 	response := httptest.NewRecorder()
 	controller := NewUIController(sql, "test_keyspace", response)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	err := controller.Open(ctx)
 	require.NoError(t, err)

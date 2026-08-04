@@ -178,6 +178,7 @@ func (m *ExecuteOptions) CloneVT() *ExecuteOptions {
 	r.Priority = m.Priority
 	r.FetchLastInsertId = m.FetchLastInsertId
 	r.InDmlExecution = m.InDmlExecution
+	r.NoResult = m.NoResult
 	if rhs := m.TransactionAccessMode; rhs != nil {
 		tmpContainer := make([]ExecuteOptions_TransactionAccessMode, len(rhs))
 		copy(tmpContainer, rhs)
@@ -1899,6 +1900,18 @@ func (m *ExecuteOptions) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 			return 0, err
 		}
 		i -= size
+	}
+	if m.NoResult {
+		i--
+		if m.NoResult {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x1
+		i--
+		dAtA[i] = 0xa8
 	}
 	if m.TransactionTimeout != nil {
 		i = protohelpers.EncodeVarint(dAtA, i, uint64(*m.TransactionTimeout))
@@ -6226,6 +6239,9 @@ func (m *ExecuteOptions) SizeVT() (n int) {
 	if m.TransactionTimeout != nil {
 		n += 2 + protohelpers.SizeOfVarint(uint64(*m.TransactionTimeout))
 	}
+	if m.NoResult {
+		n += 3
+	}
 	n += len(m.unknownFields)
 	return n
 }
@@ -9034,6 +9050,26 @@ func (m *ExecuteOptions) UnmarshalVT(dAtA []byte) error {
 				}
 			}
 			m.TransactionTimeout = &v
+		case 21:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field NoResult", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.NoResult = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])

@@ -69,8 +69,8 @@ func newCopyAllState(vc *vcopier) (*copyAllState, error) {
 func (vc *vcopier) copyAll(ctx context.Context, settings binlogplayer.VRSettings) error {
 	var err error
 
-	log.Infof("Starting copyAll for %s", settings.WorkflowName)
-	defer log.Infof("Returning from copyAll for %s", settings.WorkflowName)
+	log.Info("Starting copyAll for " + settings.WorkflowName)
+	defer log.Info("Returning from copyAll for " + settings.WorkflowName)
 	defer vc.vr.dbClient.Rollback()
 
 	state, err := newCopyAllState(vc)
@@ -85,8 +85,8 @@ func (vc *vcopier) copyAll(ctx context.Context, settings binlogplayer.VRSettings
 	defer rowsCopiedTicker.Stop()
 
 	parallelism := int(math.Max(1, float64(vc.vr.workflowConfig.ParallelInsertWorkers)))
-
-	copyWorkerFactory := vc.newCopyWorkerFactory(parallelism)
+	maxQuerySize := vc.vr.maxQuerySize(vc.vr.dbClient)
+	copyWorkerFactory := vc.newCopyWorkerFactory(parallelism, maxQuerySize)
 	var copyWorkQueue *vcopierCopyWorkQueue
 
 	// Allocate a result channel to collect results from tasks. To not block fast workers, we allocate a buffer of
@@ -102,14 +102,18 @@ func (vc *vcopier) copyAll(ctx context.Context, settings binlogplayer.VRSettings
 	var prevCh <-chan *vcopierCopyTaskResult
 	var gtid string
 
+	// Errors observed inside the VStreamTables callback. The callback returns
+	// io.EOF on the first Fail; drainAndAggregateErrors reports them
+	// alongside any concurrent insert workers that race in afterwards.
+	var preTerrs []error
+
 	vstreamOptions := &binlogdatapb.VStreamOptions{
 		ConfigOverrides: vc.vr.workflowConfig.Overrides,
 	}
 	serr := vc.vr.sourceVStreamer.VStreamTables(ctx, func(resp *binlogdatapb.VStreamTablesResponse) error {
 		defer vc.vr.stats.PhaseTimings.Record("copy", time.Now())
 		defer vc.vr.stats.CopyLoopCount.Add(1)
-		log.Infof("VStreamTablesResponse: received table %s, #fields %d, #rows %d, gtid %s, lastpk %+v",
-			resp.TableName, len(resp.Fields), len(resp.Rows), resp.Gtid, resp.Lastpk)
+		log.Info(fmt.Sprintf("VStreamTablesResponse: received table %s, #fields %d, #rows %d, gtid %s, lastpk %+v", resp.TableName, len(resp.Fields), len(resp.Rows), resp.Gtid, resp.Lastpk))
 		tableName := resp.TableName
 		gtid = resp.Gtid
 		updateRowsCopied := func() error {
@@ -136,12 +140,12 @@ func (vc *vcopier) copyAll(ctx context.Context, settings binlogplayer.VRSettings
 			}
 			copyWorkQueue = vc.newCopyWorkQueue(parallelism, copyWorkerFactory)
 			if state.currentTableName != "" {
-				log.Infof("copy of table %s is done at lastpk %+v", state.currentTableName, lastpkbv)
+				log.Info(fmt.Sprintf("copy of table %s is done at lastpk %+v", state.currentTableName, lastpkbv))
 				if err := vc.runPostCopyActionsAndDeleteCopyState(ctx, state.currentTableName); err != nil {
 					return err
 				}
 			} else {
-				log.Infof("starting copy phase with table %s", tableName)
+				log.Info("starting copy phase with table " + tableName)
 			}
 
 			state.currentTableName = tableName
@@ -175,7 +179,8 @@ func (vc *vcopier) copyAll(ctx context.Context, settings binlogplayer.VRSettings
 			buf.Myprintf(
 				"insert into _vt.copy_state (lastpk, vrepl_id, table_name) values (%a, %s, %s)", ":lastpk",
 				strconv.Itoa(int(vc.vr.id)),
-				encodeString(tableName))
+				encodeString(tableName),
+			)
 			addLatestCopyState := buf.ParsedQuery()
 			copyWorkQueue.open(addLatestCopyState, pkfields, tablePlan)
 		}
@@ -198,7 +203,7 @@ func (vc *vcopier) copyAll(ctx context.Context, settings binlogplayer.VRSettings
 				Value: lastpkbuf,
 			},
 		}
-		log.Infof("copying table %s with lastpk %v", tableName, lastpkbv)
+		log.Info(fmt.Sprintf("copying table %s with lastpk %v", tableName, lastpkbv))
 		// Prepare a vcopierCopyTask for the current batch of work.
 		currCh := make(chan *vcopierCopyTaskResult, 1)
 
@@ -245,7 +250,7 @@ func (vc *vcopier) copyAll(ctx context.Context, settings binlogplayer.VRSettings
 		})
 
 		if err := copyWorkQueue.enqueue(ctx, currT); err != nil {
-			log.Warningf("failed to enqueue task in workflow %s: %s", vc.vr.WorkflowName, err.Error())
+			log.Warn(fmt.Sprintf("failed to enqueue task in workflow %s: %s", vc.vr.WorkflowName, err.Error()))
 			return err
 		}
 
@@ -263,45 +268,53 @@ func (vc *vcopier) copyAll(ctx context.Context, settings binlogplayer.VRSettings
 		// * We keep lastpk up-to-date.
 		select {
 		case result := <-resultCh:
-			if result != nil {
-				switch result.state {
-				case vcopierCopyTaskCancel:
-					log.Warningf("task was canceled in workflow %s: %v", vc.vr.WorkflowName, result.err)
-					return io.EOF
-				case vcopierCopyTaskComplete:
-					// Collect lastpk. Needed for logging at the end.
-					lastpk = result.args.lastpk
-				case vcopierCopyTaskFail:
-					return vterrors.Wrapf(result.err, "task error")
-				}
-			} else {
+			if result == nil {
 				return io.EOF
+			}
+			switch result.state {
+			case vcopierCopyTaskCancel:
+				log.Warn(fmt.Sprintf("task was canceled in workflow %s: %v", vc.vr.WorkflowName, result.err))
+				return io.EOF
+			case vcopierCopyTaskFail:
+				// Defer the report to drainAndAggregateErrors so concurrent
+				// insert workers that race in after this read are included.
+				if result.err != nil {
+					preTerrs = append(preTerrs, result.err)
+				}
+				return io.EOF
+			case vcopierCopyTaskComplete:
+				// Collect lastpk. Needed for logging at the end.
+				lastpk = result.args.lastpk
 			}
 		default:
 		}
 		return nil
 	}, vstreamOptions)
-	if serr != nil {
-		log.Infof("VStreamTables failed: %v", serr)
-		return serr
+
+	if copyWorkQueue != nil {
+		copyWorkQueue.close()
 	}
+
+	// Drain late-arriving task results and aggregate.
+	if terr := drainAndAggregateErrors(resultCh, serr, preTerrs); terr != nil {
+		log.Warn(fmt.Sprintf("task errors in workflow %s: %v", vc.vr.WorkflowName, terr))
+		return terr
+	}
+
 	// A context expiration was probably caused by a PlannedReparentShard or an
 	// elapsed copy phase duration. CopyAll is not resilient to these events.
 	select {
 	case <-ctx.Done():
-		log.Infof("Copy of %v stopped", state.currentTableName)
+		log.Info(fmt.Sprintf("Copy of %v stopped", state.currentTableName))
 		return errors.New("CopyAll was interrupted due to context expiration")
 	default:
-		if copyWorkQueue != nil {
-			copyWorkQueue.close()
-		}
 		if err := vc.runPostCopyActionsAndDeleteCopyState(ctx, state.currentTableName); err != nil {
 			return err
 		}
 		if err := vc.updatePos(ctx, gtid); err != nil {
 			return err
 		}
-		log.Infof("Completed copy of all tables")
+		log.Info("Completed copy of all tables")
 	}
 	return nil
 }
@@ -313,7 +326,7 @@ func (vc *vcopier) runPostCopyActionsAndDeleteCopyState(ctx context.Context, tab
 	if err := vc.vr.execPostCopyActions(ctx, tableName); err != nil {
 		return vterrors.Wrapf(err, "failed to execute post copy actions for table %q", tableName)
 	}
-	log.Infof("Deleting copy state and post copy actions for table %s", tableName)
+	log.Info("Deleting copy state and post copy actions for table " + tableName)
 	delQueryBuf := sqlparser.NewTrackedBuffer(nil)
 	delQueryBuf.Myprintf(
 		"delete cs, pca from _vt.%s as cs left join _vt.%s as pca on cs.vrepl_id=pca.vrepl_id and cs.table_name=pca.table_name where cs.vrepl_id=%d and cs.table_name=%s",
@@ -324,4 +337,34 @@ func (vc *vcopier) runPostCopyActionsAndDeleteCopyState(ctx context.Context, tab
 		return err
 	}
 	return nil
+}
+
+// drainAndAggregateErrors combines preTerrs (errors stashed by the caller's
+// VStreamTables callback), any late-arriving Fail results on resultCh, and
+// an optional vstream error into a single aggregated workflow error.
+// formatTaskError surfaces the root cause and collapses dependent-batch
+// failures to a count (issue #20316).
+func drainAndAggregateErrors(resultCh <-chan *vcopierCopyTaskResult, vstreamErr error, preTerrs []error) error {
+	terrs := preTerrs
+	for {
+		select {
+		case result := <-resultCh:
+			if result == nil {
+				continue
+			}
+			if result.state == vcopierCopyTaskFail && result.err != nil {
+				terrs = append(terrs, result.err)
+			}
+		default:
+			goto done
+		}
+	}
+done:
+	// Skip vstreamErr if it is the synthetic io.EOF the callback returned
+	// after observing a task Fail — it would just noise the real root
+	// cause.
+	if vstreamErr != nil && !(errors.Is(vstreamErr, io.EOF) && len(terrs) > 0) {
+		terrs = append(terrs, vstreamErr)
+	}
+	return formatTaskError(terrs)
 }

@@ -154,12 +154,10 @@ func TestReferenceRouting(t *testing.T) {
 
 // TestMultiReferenceQuery tests that a query with multiple references with unsharded keyspace and sharded keyspace works with join.
 func TestMultiReferenceQuery(t *testing.T) {
-	utils.SkipIfBinaryIsBelowVersion(t, 21, "vtgate")
 	conn, closer := start(t)
 	defer closer()
 
-	query :=
-		`select 1
+	query := `select 1
 		 from delivery_failure df1
 		 	join delivery_failure df2 on df1.id = df2.id
 		 	join uks.zip_detail zd1 on df1.zip_detail_id = zd1.zip_id
@@ -169,7 +167,6 @@ func TestMultiReferenceQuery(t *testing.T) {
 }
 
 func TestDMLReferenceUsingShardedKS(t *testing.T) {
-	utils.SkipIfBinaryIsBelowVersion(t, 22, "vtgate")
 	conn, closer := start(t)
 	defer closer()
 

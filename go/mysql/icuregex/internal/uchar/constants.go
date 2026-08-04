@@ -187,9 +187,11 @@ var (
 	GcZMask = (GcZsMask | GcZlMask | GcZpMask)
 )
 
-const upropsAgeShift = 24
-const maxVersionLength = 4
-const versionDelimiter = '.'
+const (
+	upropsAgeShift   = 24
+	maxVersionLength = 4
+	versionDelimiter = '.'
+)
 
 type UVersionInfo [maxVersionLength]uint8
 

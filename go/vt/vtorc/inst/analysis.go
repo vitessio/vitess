@@ -21,6 +21,7 @@ import (
 	"time"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 	"vitess.io/vitess/go/vt/vtorc/config"
 )
 
@@ -30,6 +31,7 @@ const (
 	NoProblem                              AnalysisCode = "NoProblem"
 	ClusterHasNoPrimary                    AnalysisCode = "ClusterHasNoPrimary"
 	PrimaryTabletDeleted                   AnalysisCode = "PrimaryTabletDeleted"
+	IncapacitatedPrimary                   AnalysisCode = "IncapacitatedPrimary"
 	InvalidPrimary                         AnalysisCode = "InvalidPrimary"
 	InvalidReplica                         AnalysisCode = "InvalidReplica"
 	DeadPrimaryWithoutReplicas             AnalysisCode = "DeadPrimaryWithoutReplicas"
@@ -56,10 +58,14 @@ const (
 	AllPrimaryReplicasNotReplicating       AnalysisCode = "AllPrimaryReplicasNotReplicating"
 	AllPrimaryReplicasNotReplicatingOrDead AnalysisCode = "AllPrimaryReplicasNotReplicatingOrDead"
 	LockedSemiSyncPrimaryHypothesis        AnalysisCode = "LockedSemiSyncPrimaryHypothesis"
-	LockedSemiSyncPrimary                  AnalysisCode = "LockedSemiSyncPrimary"
 	PrimarySemiSyncBlocked                 AnalysisCode = "PrimarySemiSyncBlocked"
 	ErrantGTIDDetected                     AnalysisCode = "ErrantGTIDDetected"
 	PrimaryDiskStalled                     AnalysisCode = "PrimaryDiskStalled"
+	PrimaryTabletUnreachableByQuorum       AnalysisCode = "PrimaryTabletUnreachableByQuorum"
+
+	// StaleTopoPrimary describes when a tablet still has the type PRIMARY in the topology when a newer primary
+	// has been elected. VTOrc should demote this primary to a replica.
+	StaleTopoPrimary AnalysisCode = "StaleTopoPrimary"
 )
 
 type StructureAnalysisCode string
@@ -87,30 +93,49 @@ type DetectionAnalysisHints struct {
 
 // DetectionAnalysis represents an analysis of a detected problem.
 type DetectionAnalysis struct {
-	AnalyzedInstanceAlias                     string
-	AnalyzedInstancePrimaryAlias              string
-	TabletType                                topodatapb.TabletType
-	CurrentTabletType                         topodatapb.TabletType
+	AnalyzedInstanceAlias        *topodatapb.TabletAlias
+	AnalyzedInstancePrimaryAlias *topodatapb.TabletAlias
+
+	// TabletType is the tablet's type as seen in the topology.
+	TabletType topodatapb.TabletType
+
+	// IsTabletShutdown is true when the analyzed tablet's record carries a TabletShutdownTime,
+	// i.e. its vttablet was gracefully shut down (an intentional operator action) rather than
+	// crashing. The quorum-confirmed ERS path fails closed when this is set so an intentionally
+	// shut down primary is never failed over.
+	IsTabletShutdown bool
+
+	// CurrentTabletType is the type this tablet is currently running as.
+	CurrentTabletType topodatapb.TabletType
+
 	PrimaryTimeStamp                          time.Time
 	AnalyzedKeyspace                          string
 	AnalyzedShard                             string
 	AnalyzedKeyspaceEmergencyReparentDisabled bool
 	AnalyzedShardEmergencyReparentDisabled    bool
 	// ShardPrimaryTermTimestamp is the primary term start time stored in the shard record.
-	ShardPrimaryTermTimestamp                 time.Time
-	AnalyzedInstanceBinlogCoordinates         BinlogCoordinates
-	IsPrimary                                 bool
-	IsClusterPrimary                          bool
-	LastCheckValid                            bool
-	LastCheckPartialSuccess                   bool
-	CountReplicas                             uint
+	ShardPrimaryTermTimestamp         time.Time
+	AnalyzedInstanceBinlogCoordinates BinlogCoordinates
+	IsPrimary                         bool
+	IsClusterPrimary                  bool
+	LastCheckValid                    bool
+	PrimaryHealthUnhealthy            bool
+	LastCheckPartialSuccess           bool
+	CountReplicas                     uint
+	// ShardEligibleObservers is the number of REPLICA/RDONLY tablets in the shard (from topo),
+	// i.e. the population eligible to vote in the shard-peer health quorum. It is the expected
+	// observer count fed to the quorum gate, derived independently of the primary's instance data
+	// so it is available even when VTOrc has never reached the primary (the cold-start case).
+	ShardEligibleObservers                    uint
 	CountValidReplicas                        uint
 	CountValidReplicatingReplicas             uint
+	CountValidSemiSyncReplicatingReplicas     uint
 	ReplicationStopped                        bool
 	ErrantGTID                                string
 	ReplicaNetTimeout                         int32
 	HeartbeatInterval                         float64
 	Analysis                                  AnalysisCode
+	AnalysisMatchedProblems                   []*DetectionAnalysisProblemMeta
 	Description                               string
 	StructureAnalysis                         []StructureAnalysisCode
 	OracleGTIDImmediateTopology               bool
@@ -137,6 +162,17 @@ type DetectionAnalysis struct {
 	MaxReplicaGTIDErrant                      string
 	IsReadOnly                                bool
 	IsDiskStalled                             bool
+	QuorumDetail                              *QuorumResult `json:",omitempty"`
+}
+
+// hasMinSemiSyncAckers returns true if there are a minimum number of semi-sync ackers enabled and replicating.
+// True is always returned if the durability policy does not require semi-sync ackers (eg: "none"). This gives
+// a useful signal if it is safe to enable semi-sync without risk of stalling ongoing PRIMARY writes.
+func hasMinSemiSyncAckers(durabler policy.Durabler, primary *topodatapb.Tablet, analysis *DetectionAnalysis) bool {
+	if durabler == nil || analysis == nil {
+		return false
+	}
+	return int(analysis.CountValidSemiSyncReplicatingReplicas) >= durabler.SemiSyncAckers(primary)
 }
 
 func (detectionAnalysis *DetectionAnalysis) MarshalJSON() ([]byte, error) {

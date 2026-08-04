@@ -502,11 +502,11 @@ func buildREPlan(env *vtenv.Environment, ti *Table, vschema *localVSchema, filte
 func buildTablePlan(env *vtenv.Environment, ti *Table, vschema *localVSchema, query string) (*Plan, error) {
 	sel, fromTable, err := analyzeSelect(query, env.Parser())
 	if err != nil {
-		log.Errorf("%s", err.Error())
+		log.Error(err.Error())
 		return nil, err
 	}
 	if fromTable.String() != ti.Name {
-		log.Errorf("unsupported: select expression table %v does not match the table entry name %s", sqlparser.String(fromTable), ti.Name)
+		log.Error(fmt.Sprintf("unsupported: select expression table %v does not match the table entry name %s", sqlparser.String(fromTable), ti.Name))
 		return nil, fmt.Errorf("unsupported: select expression table %v does not match the table entry name %s", sqlparser.String(fromTable), ti.Name)
 	}
 
@@ -515,11 +515,11 @@ func buildTablePlan(env *vtenv.Environment, ti *Table, vschema *localVSchema, qu
 		env:   env,
 	}
 	if err := plan.analyzeWhere(vschema, sel.Where); err != nil {
-		log.Errorf("%s", err.Error())
+		log.Error(err.Error())
 		return nil, err
 	}
 	if err := plan.analyzeExprs(vschema, sel.GetColumns()); err != nil {
-		log.Errorf("%s", err.Error())
+		log.Error(err.Error())
 		return nil, err
 	}
 
@@ -534,6 +534,9 @@ func analyzeSelect(query string, parser *sqlparser.Parser) (sel *sqlparser.Selec
 	sel, ok := statement.(*sqlparser.Select)
 	if !ok {
 		return nil, fromTable, fmt.Errorf("unsupported: %v", sqlparser.String(statement))
+	}
+	if len(sel.From) == 0 {
+		return nil, fromTable, fmt.Errorf("unsupported select from dual: %v", sqlparser.String(sel))
 	}
 	if len(sel.From) > 1 {
 		return nil, fromTable, fmt.Errorf("unsupported: %v", sqlparser.String(sel))
@@ -946,7 +949,7 @@ func (plan *Plan) analyzeExpr(vschema *localVSchema, selExpr sqlparser.SelectExp
 			Field:  field,
 		}, nil
 	default:
-		log.Infof("Unsupported expression: %v", inner)
+		log.Info(fmt.Sprintf("Unsupported expression: %v", inner))
 		return ColExpr{}, fmt.Errorf("unsupported: %v", sqlparser.String(aliased.Expr))
 	}
 }

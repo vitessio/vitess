@@ -31,7 +31,6 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/utils"
-	vtutils "vitess.io/vitess/go/vt/utils"
 )
 
 var (
@@ -74,7 +73,7 @@ func TestMain(m *testing.M) {
 		}
 
 		// List of users authorized to execute vschema ddl operations
-		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, vtutils.GetFlagVariantForTests("--schema-change-signal")) // Start keyspace
+		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, "--schema-change-signal") // Start keyspace
 		keyspace := &cluster.Keyspace{
 			Name:      keyspaceName,
 			SchemaSQL: sqlSchema,
@@ -140,7 +139,7 @@ func TestVSchemaTrackerKeyspaceReInit(t *testing.T) {
 	assert.NotNil(t, originalResults)
 
 	// restart the primary tablet so that the vschema gets reloaded for the keyspace
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		err := primaryTablet.VttabletProcess.TearDownWithTimeout(30 * time.Second)
 		require.NoError(t, err)
 		err = primaryTablet.VttabletProcess.Setup()

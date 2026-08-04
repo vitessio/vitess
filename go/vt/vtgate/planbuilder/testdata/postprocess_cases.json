@@ -2417,7 +2417,6 @@
         ]
       },
       "TablesUsed": [
-        "main.dual",
         "user.user",
         "user.user_extra"
       ]
@@ -2481,7 +2480,6 @@
         ]
       },
       "TablesUsed": [
-        "main.dual",
         "user.user",
         "user.user_extra"
       ]

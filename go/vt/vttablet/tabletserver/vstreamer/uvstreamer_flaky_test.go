@@ -58,6 +58,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/proto/query"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/log"
@@ -78,16 +79,18 @@ type TestState struct {
 
 var testState = &TestState{}
 
-var positions map[string]string
-var allEvents []*binlogdatapb.VEvent
-var muAllEvents sync.Mutex
-var callbacks map[string]func()
+var (
+	positions   map[string]string
+	allEvents   []*binlogdatapb.VEvent
+	muAllEvents sync.Mutex
+	callbacks   map[string]func()
+)
 
 func TestVStreamCopyFilterValidations(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
 	}
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
 	defer execStatements(t, []string{
@@ -101,9 +104,9 @@ func TestVStreamCopyFilterValidations(t *testing.T) {
 		"create table t2a(id21 int, id22 int, primary key(id21))",
 		"create table t2b(id21 int, id22 int, primary key(id21))",
 	})
-	engine.se.Reload(context.Background())
+	engine.se.Reload(t.Context())
 
-	var getUVStreamer = func(filter *binlogdatapb.Filter, tablePKs []*binlogdatapb.TableLastPK) *uvstreamer {
+	getUVStreamer := func(filter *binlogdatapb.Filter, tablePKs []*binlogdatapb.TableLastPK) *uvstreamer {
 		uvs := &uvstreamer{
 			ctx:        ctx,
 			cancel:     cancel,
@@ -119,7 +122,7 @@ func TestVStreamCopyFilterValidations(t *testing.T) {
 		}
 		return uvs
 	}
-	var testFilter = func(rules []*binlogdatapb.Rule, tablePKs []*binlogdatapb.TableLastPK, expected []string, expectedError string) {
+	testFilter := func(rules []*binlogdatapb.Rule, tablePKs []*binlogdatapb.TableLastPK, expected []string, expectedError string) {
 		uvs := getUVStreamer(&binlogdatapb.Filter{Rules: rules}, tablePKs)
 		if expectedError == "" {
 			require.NoError(t, uvs.init())
@@ -127,9 +130,9 @@ func TestVStreamCopyFilterValidations(t *testing.T) {
 			require.Error(t, uvs.init(), expectedError)
 			return
 		}
-		require.Equalf(t, len(expected), len(uvs.plans), "Plans: %+v", uvs.plans)
+		require.Lenf(t, uvs.plans, len(expected), "Plans: %+v", uvs.plans)
 		for _, tableName := range expected {
-			require.True(t, uvs.plans[tableName].tablePK.TableName == tableName)
+			require.Equal(t, uvs.plans[tableName].tablePK.TableName, tableName)
 			if tablePKs == nil {
 				require.Nil(t, uvs.plans[tableName].tablePK.Lastpk)
 			}
@@ -163,7 +166,7 @@ func TestVStreamCopyFilterValidations(t *testing.T) {
 	testCases = append(testCases, &TestCase{[]*binlogdatapb.Rule{{Match: "/x.*"}}, nil, []string{""}, "stream needs a position or a table to copy"})
 
 	for _, tc := range testCases {
-		log.Infof("Running %v", tc.rules)
+		log.Info(fmt.Sprintf("Running %v", tc.rules))
 		testFilter(tc.rules, tc.tablePKs, tc.expected, tc.expectedError)
 	}
 }
@@ -172,7 +175,7 @@ func TestVStreamCopyCompleteFlow(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
 	}
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
 	defer execStatements(t, []string{
@@ -185,9 +188,7 @@ func TestVStreamCopyCompleteFlow(t *testing.T) {
 	defer func() { uvstreamerTestMode = false }()
 	initialize(t)
 
-	if err := engine.se.Reload(context.Background()); err != nil {
-		t.Fatal("Error reloading schema")
-	}
+	require.NoError(t, engine.se.Reload(t.Context()), "Error reloading schema")
 
 	var rules []*binlogdatapb.Rule
 	var tablePKs []*binlogdatapb.TableLastPK
@@ -214,7 +215,7 @@ func TestVStreamCopyCompleteFlow(t *testing.T) {
 		log.Info("Inserting row for fast forward to find, locking t2")
 		conn.ExecuteFetch("lock tables t2 write", 1, false)
 		insertRow(t, "t1", 1, numInitialRows+2)
-		log.Infof("Position after second insert into t1: %s", primaryPosition(t))
+		log.Info("Position after second insert into t1: " + primaryPosition(t))
 		conn.ExecuteFetch("unlock tables", 1, false)
 		log.Info("Inserted row for fast forward to find, unlocked tables")
 	}
@@ -228,7 +229,7 @@ func TestVStreamCopyCompleteFlow(t *testing.T) {
 		conn.ExecuteFetch("lock tables t3 write", 1, false)
 		insertRow(t, "t1", 1, numInitialRows+3)
 		insertRow(t, "t2", 2, numInitialRows+2)
-		log.Infof("Position after third insert into t1: %s", primaryPosition(t))
+		log.Info("Position after third insert into t1: " + primaryPosition(t))
 		conn.ExecuteFetch("unlock tables", 1, false)
 		log.Info("Inserted rows for fast forward to find, unlocked tables")
 	}
@@ -262,14 +263,14 @@ func TestVStreamCopyCompleteFlow(t *testing.T) {
 	var lastRowEventSeen bool
 
 	callbacks["ROW.*t3.*13390"] = func() {
-		log.Infof("Saw last row event")
+		log.Info("Saw last row event")
 		lastRowEventSeen = true
 	}
 
 	callbacks["COMMIT"] = func() {
-		log.Infof("Got commit, lastRowSeen is %t", lastRowEventSeen)
+		log.Info(fmt.Sprintf("Got commit, lastRowSeen is %t", lastRowEventSeen))
 		if lastRowEventSeen {
-			log.Infof("Found last row event, canceling context")
+			log.Info("Found last row event, canceling context")
 			cancel()
 		}
 	}
@@ -279,17 +280,17 @@ func TestVStreamCopyCompleteFlow(t *testing.T) {
 	select {
 	case <-time.After(5 * time.Second):
 		printAllEvents("Timed out")
-		t.Fatal("Timed out waiting for events")
+		require.Fail(t, "Timed out waiting for events")
 	case <-ctx.Done():
-		log.Infof("Received context.Done, ending test")
+		log.Info("Received context.Done, ending test")
 	}
 	muAllEvents.Lock()
 	defer muAllEvents.Unlock()
 	if len(allEvents) != numExpectedEvents {
 		printAllEvents(fmt.Sprintf("Received %d events, expected %d", len(allEvents), numExpectedEvents))
-		t.Fatalf("Received %d events, expected %d", len(allEvents), numExpectedEvents)
+		require.Failf(t, "wrong event count", "Received %d events, expected %d", len(allEvents), numExpectedEvents)
 	} else {
-		log.Infof("Successfully received %d events", numExpectedEvents)
+		log.Info(fmt.Sprintf("Successfully received %d events", numExpectedEvents))
 	}
 	validateReceivedEvents(t)
 	validateMetrics(t)
@@ -324,7 +325,7 @@ func validateReceivedEvents(t *testing.T) {
 		want := env.RemoveAnyDeprecatedDisplayWidths(expectedEvents[i])
 		if !strings.HasPrefix(got, want) {
 			printAllEvents("Events not received in the right order")
-			t.Fatalf("Event %d did not match, want %s, got %s", i, want, got)
+			require.Failf(t, "event mismatch", "Event %d did not match, want %s, got %s", i, want, got)
 		}
 	}
 }
@@ -340,12 +341,12 @@ func resetMetrics(t *testing.T) {
 
 func validateMetrics(t *testing.T) {
 	require.Equal(t, engine.vstreamerEventsStreamed.Get(), int64(len(allEvents)))
-	require.Equal(t, engine.resultStreamerNumRows.Get(), int64(0))
-	require.Equal(t, engine.rowStreamerNumRows.Get(), int64(31))
-	require.Equal(t, engine.vstreamerPhaseTimings.Counts()["VStreamerTest.copy"], int64(3))
-	require.Equal(t, engine.vstreamerPhaseTimings.Counts()["VStreamerTest.catchup"], int64(2))
-	require.Equal(t, engine.vstreamerPhaseTimings.Counts()["VStreamerTest.fastforward"], int64(2))
-	require.Equal(t, engine.rowStreamerWaits.Counts()["VStreamerTest.waitForMySQL"], int64(0))
+	require.Equal(t, int64(0), engine.resultStreamerNumRows.Get())
+	require.Equal(t, int64(31), engine.rowStreamerNumRows.Get())
+	require.Equal(t, int64(3), engine.vstreamerPhaseTimings.Counts()["VStreamerTest.copy"])
+	require.Equal(t, int64(2), engine.vstreamerPhaseTimings.Counts()["VStreamerTest.catchup"])
+	require.Equal(t, int64(2), engine.vstreamerPhaseTimings.Counts()["VStreamerTest.fastforward"])
+	require.Equal(t, int64(0), engine.rowStreamerWaits.Counts()["VStreamerTest.waitForMySQL"])
 }
 
 func insertMultipleRows(t *testing.T, table string, idx int, numRows int) {
@@ -375,7 +376,7 @@ func initTables(t *testing.T, tables []string) {
 		positions[table+"BulkInsert"] = primaryPosition(t)
 
 		callbacks[fmt.Sprintf("LASTPK.*%s.*%d", table, numInitialRows)] = func() {
-			ctx := context.Background()
+			ctx := t.Context()
 			if tableName == "t1" {
 				idx := 1
 				id := numInitialRows + 1
@@ -392,12 +393,12 @@ func initTables(t *testing.T, tables []string) {
 					"commit",
 				}
 				env.Mysqld.ExecuteSuperQueryList(ctx, queries)
-				log.Infof("Position after first insert into t1 and t2: %s", primaryPosition(t))
+				log.Info("Position after first insert into t1 and t2: " + primaryPosition(t))
 			}
 		}
 	}
 	callbacks["LASTPK.*t2.*complete"] = func() {
-		ctx := context.Background()
+		ctx := t.Context()
 		idx := 1
 		id := numInitialRows + 100
 		table := "t1"
@@ -408,7 +409,7 @@ func initTables(t *testing.T, tables []string) {
 			"commit",
 		}
 		env.Mysqld.ExecuteSuperQueryList(ctx, queries)
-		log.Infof("Position after insert into t1 and t2 after t2 complete: %s", primaryPosition(t))
+		log.Info("Position after insert into t1 and t2 after t2 complete: " + primaryPosition(t))
 	}
 	positions["afterInitialInsert"] = primaryPosition(t)
 }
@@ -419,7 +420,7 @@ func initialize(t *testing.T) {
 	positions = make(map[string]string)
 	initTables(t, testState.tables)
 	callbacks["gtid.*"+positions["afterInitialInsert"]] = func() {
-		log.Infof("Callback: afterInitialInsert")
+		log.Info("Callback: afterInitialInsert")
 	}
 }
 
@@ -445,9 +446,9 @@ func insertRow(t *testing.T, table string, idx int, id int) {
 }
 
 func printAllEvents(msg string) {
-	log.Errorf("%s: Received %d events", msg, len(allEvents))
+	log.Error(fmt.Sprintf("%s: Received %d events", msg, len(allEvents)))
 	for i, ev := range allEvents {
-		log.Errorf("%d:\t%s", i, ev)
+		log.Error(fmt.Sprintf("%d:\t%s", i, ev))
 	}
 }
 
@@ -487,7 +488,9 @@ func startVStreamCopy(ctx context.Context, t *testing.T, filter *binlogdatapb.Fi
 			}
 			return nil
 		}, nil)
-		require.Nil(t, err)
+		if !assert.NoError(t, err) {
+			return
+		}
 	}()
 }
 

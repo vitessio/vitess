@@ -380,6 +380,13 @@ message VStreamFlags {
   // Events are still chunked to prevent OOM. Transactions smaller than this are sent
   // without locking for better parallelism.
   int64 transaction_chunk_size = 11;
+  // Maximum duration (in seconds) a VStream runs before the server terminates it with
+  // UNAVAILABLE. This is best-effort: if a send to the client is in-flight when the age is reached,
+  // the server waits for it to complete before returning.
+  // The client is expected to reconnect.
+  // A random jitter of +/-10% is added to spread out reconnections.
+  // 0 means no maximum age.
+  uint32 max_stream_age_seconds = 12;
 }
 
 // VStreamRequest is the payload for VStream.
@@ -446,4 +453,50 @@ message CloseSessionResponse {
   // session may have changed, even when an error is returned (for
   // instance if a database integrity error happened).
   vtrpc.RPCError error = 1;
+}
+
+// BinlogDumpGTIDRequest is the payload for BinlogDumpGTID.
+message BinlogDumpGTIDRequest {
+  // caller_id identifies the caller. This is the effective caller ID,
+  // set by the application to further identify the caller.
+  vtrpc.CallerID caller_id = 1;
+
+  // keyspace is the keyspace to stream binlog events from.
+  string keyspace = 2;
+  // shard is the specific shard within the keyspace.
+  string shard = 3;
+  // tablet_type is the type of tablet to stream from (default: PRIMARY).
+  topodata.TabletType tablet_type = 4;
+  // tablet_alias optionally targets a specific tablet by alias.
+  // When set, the stream is routed directly to this tablet.
+  // When unset, routing goes through health-check-based selection.
+  topodata.TabletAlias tablet_alias = 5;
+
+  // binlog_filename is not supported through vtgate and must be empty.
+  // Binlog filenames are local to individual MySQL instances and differ
+  // across replicas. Use gtid_set for positioning instead.
+  string binlog_filename = 6;
+  // binlog_position must be exactly 4. Position-based replication is not
+  // supported through vtgate; use gtid_set for positioning instead.
+  // Values below 4 are rejected (MySQL requires >= 4 / BIN_LOG_HEADER_SIZE).
+  // Values above 4 are rejected because binlog positions are local to
+  // individual MySQL instances and differ across replicas.
+  uint64 binlog_position = 7;
+  // gtid_set is the GTID set in string format (e.g., "uuid:1-5,uuid2:1-3").
+  string gtid_set = 8;
+
+  // flags is the raw 2-byte flags field passed through to MySQL.
+  // Known flags:
+  //   BINLOG_DUMP_NON_BLOCK  (0x01) — return EOF instead of blocking when caught up
+  //   USE_HEARTBEAT_EVENT_V2 (0x02) — use Heartbeat_event_v2 format
+  uint32 flags = 9;
+}
+
+// BinlogDumpResponse is streamed by BinlogDumpGTID.
+message BinlogDumpResponse {
+  // Raw MySQL response stream including MySQL packet headers.
+  // A single MySQL packet may be split across multiple BinlogDumpResponse
+  // messages (while preserving packet header boundaries), as documented in
+  // binlogdata.proto. gRPC clients must reassemble packets that span responses.
+  bytes raw = 1;
 }

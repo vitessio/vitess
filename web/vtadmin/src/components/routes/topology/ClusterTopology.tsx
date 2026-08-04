@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import { useTopologyPath } from '../../../hooks/api';
 import { useDocumentTitle } from '../../../hooks/useDocumentTitle';
@@ -24,7 +24,8 @@ import { WorkspaceTitle } from '../../layout/WorkspaceTitle';
 import { Link, useParams } from 'react-router-dom';
 import { generateGraph, TopologyCell, TopologyCellChild } from './Nodes';
 
-import ReactFlow, {
+import {
+    ReactFlow,
     addEdge,
     MiniMap,
     Controls,
@@ -32,7 +33,8 @@ import ReactFlow, {
     useNodesState,
     useEdgesState,
     Connection,
-} from 'react-flow-renderer';
+} from '@xyflow/react';
+import '@xyflow/react/dist/style.css';
 import { getTopologyPath } from '../../../api/http';
 
 export const ClusterTopology = () => {
@@ -85,7 +87,6 @@ export const ClusterTopology = () => {
         if (data?.cell) {
             setTopology({ cell: data?.cell as TopologyCell });
         }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [data]);
 
     if (!data) {

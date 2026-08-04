@@ -22,9 +22,7 @@ import (
 	"strings"
 )
 
-var (
-	re = regexp.MustCompile(`([^\\]?|[\\]{2})[%_]`)
-)
+var re = regexp.MustCompile(`([^\\]?|[\\]{2})[%_]`)
 
 func replacer(s string) string {
 	if strings.HasPrefix(s, `\\`) {

@@ -17,9 +17,8 @@ limitations under the License.
 package etcd2topo
 
 import (
-	"path"
-
 	"context"
+	"path"
 
 	clientv3 "go.etcd.io/etcd/client/v3"
 

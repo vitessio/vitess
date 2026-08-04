@@ -73,9 +73,7 @@ func TestUnicodeHashGenerate(t *testing.T) {
 	}
 
 	golden := &testutil.GoldenTest{}
-	if err := golden.DecodeFromFile("../../../mysql/collations/testdata/wiki_416c626572742045696e737465696e.gob.gz"); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, golden.DecodeFromFile("../../../mysql/collations/testdata/wiki_416c626572742045696e737465696e.gob.gz"))
 
 	var inputs [][]byte
 	for _, tc := range golden.Cases {

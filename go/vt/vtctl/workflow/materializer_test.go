@@ -57,9 +57,7 @@ const (
 	getNonEmptyTable     = "select 1 from `t1` limit 1"
 )
 
-var (
-	defaultOnDDL = binlogdatapb.OnDDLAction_IGNORE.String()
-)
+var defaultOnDDL = binlogdatapb.OnDDLAction_IGNORE.String()
 
 func gtid(position string) string {
 	arr := strings.Split(position, "/")
@@ -124,9 +122,7 @@ func TestStripForeignKeys(t *testing.T) {
 
 	for _, tc := range tcs {
 		newDDL, err := stripTableForeignKeys(tc.ddl, sqlparser.NewTestParser())
-		if tc.hasErr != (err != nil) {
-			t.Fatalf("hasErr does not match: err: %v, tc: %+v", err, tc)
-		}
+		require.Equalf(t, tc.hasErr, err != nil, "hasErr does not match: err: %v, tc: %+v", err, tc)
 
 		if newDDL != tc.newDDL {
 			utils.MustMatch(t, tc.newDDL, newDDL, fmt.Sprintf("newDDL does not match. tc: %+v", tc))
@@ -198,9 +194,7 @@ func TestStripConstraints(t *testing.T) {
 
 	for _, tc := range tcs {
 		newDDL, err := stripTableConstraints(tc.ddl, sqlparser.NewTestParser())
-		if tc.hasErr != (err != nil) {
-			t.Fatalf("hasErr does not match: err: %v, tc: %+v", err, tc)
-		}
+		require.Equalf(t, tc.hasErr, err != nil, "hasErr does not match: err: %v, tc: %+v", err, tc)
 
 		if newDDL != tc.newDDL {
 			utils.MustMatch(t, tc.newDDL, newDDL, fmt.Sprintf("newDDL does not match. tc: %+v", tc))
@@ -292,13 +286,12 @@ func TestStripAutoIncrement(t *testing.T) {
 	for _, tc := range tcs {
 		strippedDDL, err := stripAutoIncrement(tc.ddl, parser, nil)
 		require.Equal(t, tc.expectErr, (err != nil), "unexpected error result", "expected error %t, got: %v", tc.expectErr, err)
-		require.Equal(t, tc.want, strippedDDL, fmt.Sprintf("stripped DDL %q does not match our expected result: %q", strippedDDL, tc.want))
+		require.Equal(t, tc.want, strippedDDL, "stripped DDL %q does not match our expected result: %q", strippedDDL, tc.want)
 	}
 }
 
 func TestAddTablesToVSchema(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "zone1")
 	defer ts.Close()
 	srcks := "source"
@@ -511,8 +504,7 @@ func TestAddTablesToVSchema(t *testing.T) {
 }
 
 func TestMigrateVSchema(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ms := &vtctldatapb.MaterializeSettings{
 		Workflow:       "workflow",
 		Cell:           "cell",
@@ -545,7 +537,8 @@ func TestMigrateVSchema(t *testing.T) {
 	vschema, err := env.ws.ts.GetSrvVSchema(ctx, env.cell)
 	require.NoError(t, err)
 	got := fmt.Sprintf("%v", vschema)
-	want := []string{`keyspaces:{key:"sourceks" value:{}}`,
+	want := []string{
+		`keyspaces:{key:"sourceks" value:{}}`,
 		`keyspaces:{key:"sourceks" value:{}} keyspaces:{key:"targetks" value:{tables:{key:"t1" value:{}}}}`,
 		`rules:{from_table:"t1" to_tables:"sourceks.t1"}`,
 		`rules:{from_table:"targetks.t1" to_tables:"sourceks.t1"}`,
@@ -572,8 +565,7 @@ func TestMoveTablesDDLFlag(t *testing.T) {
 
 	for onDDLAction := range binlogdatapb.OnDDLAction_value {
 		t.Run(fmt.Sprintf("OnDDL Flag:%v", onDDLAction), func(t *testing.T) {
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			ctx := t.Context()
 			env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"0"})
 			defer env.close()
 			// This is the default and go does not marshal defaults
@@ -910,8 +902,7 @@ func TestShardedAutoIncHandling(t *testing.T) {
 
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			ctx := t.Context()
 			if tc.targetShards == nil {
 				tc.targetShards = []string{"0"}
 			}
@@ -977,8 +968,7 @@ func TestMoveTablesNoRoutingRules(t *testing.T) {
 		}},
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"0"})
 	defer env.close()
 	// This is the default and go does not marshal defaults
@@ -1028,10 +1018,10 @@ func TestMoveTablesNoRoutingRules(t *testing.T) {
 		NoRoutingRules: true,
 	})
 	require.NoError(t, err)
-	require.EqualValues(t, want, res, "got: %+v, want: %+v", res, want)
+	require.Equal(t, want, res, "got: %+v, want: %+v", res, want)
 	rr, err := env.ws.ts.GetRoutingRules(ctx)
 	require.NoError(t, err)
-	require.Zerof(t, len(rr.Rules), "routing rules should be empty, found %+v", rr.Rules)
+	require.Emptyf(t, rr.Rules, "routing rules should be empty, found %+v", rr.Rules)
 }
 
 func TestMoveTablesCreateShardedVSchemaRollback(t *testing.T) {
@@ -1045,8 +1035,7 @@ func TestMoveTablesCreateShardedVSchemaRollback(t *testing.T) {
 		}},
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	env := newTestMaterializerEnv(t, ctx, ms, []string{"-"}, []string{"-"})
 	defer env.close()
 
@@ -1130,8 +1119,7 @@ func TestMoveTablesCreateUnshardedVSchemaRollback(t *testing.T) {
 		}},
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	env := newTestMaterializerEnv(t, ctx, ms, []string{"-"}, []string{"-"})
 	defer env.close()
 
@@ -1244,8 +1232,7 @@ func TestCreateLookupVindexFull(t *testing.T) {
 		SourceKeyspace: "sourceks",
 		TargetKeyspace: "targetks",
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"0"})
 	defer env.close()
@@ -1306,18 +1293,16 @@ func TestCreateLookupVindexFull(t *testing.T) {
 			Schema: sourceSchema,
 		}},
 	}
-	if err := env.topoServ.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
+	err := env.topoServ.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
 		Name:     ms.TargetKeyspace,
 		Keyspace: &vschemapb.Keyspace{},
-	}); err != nil {
-		t.Fatal(err)
-	}
-	if err := env.topoServ.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
+	})
+	require.NoError(t, err)
+	err = env.topoServ.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
 		Name:     ms.SourceKeyspace,
 		Keyspace: sourceVSchema,
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
 
 	env.tmc.expectVRQuery(100, mzCheckJournal, &sqltypes.Result{})
 	env.tmc.expectFetchAsAllPrivsQuery(200, "select 1 from `lookup` limit 1", &sqltypes.Result{})
@@ -1335,7 +1320,7 @@ func TestCreateLookupVindexFull(t *testing.T) {
 		Vindex:      specs,
 	}
 
-	_, err := env.ws.LookupVindexCreate(ctx, req)
+	_, err = env.ws.LookupVindexCreate(ctx, req)
 	require.NoError(t, err)
 
 	wantvschema := &vschemapb.Keyspace{
@@ -1387,8 +1372,7 @@ func TestCreateLookupVindexMultipleCreate(t *testing.T) {
 		SourceKeyspace: "sourceks",
 		TargetKeyspace: "targetks",
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"0"})
 	defer env.close()
@@ -1483,18 +1467,16 @@ func TestCreateLookupVindexMultipleCreate(t *testing.T) {
 			Schema: sourceSchema2,
 		}},
 	}
-	if err := env.topoServ.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
+	err := env.topoServ.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
 		Name:     ms.TargetKeyspace,
 		Keyspace: &vschemapb.Keyspace{},
-	}); err != nil {
-		t.Fatal(err)
-	}
-	if err := env.topoServ.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
+	})
+	require.NoError(t, err)
+	err = env.topoServ.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
 		Name:     ms.SourceKeyspace,
 		Keyspace: sourceVSchema,
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
 
 	env.tmc.expectVRQuery(100, mzCheckJournal, &sqltypes.Result{})
 	env.tmc.expectFetchAsAllPrivsQuery(200, "select 1 from `lookup` limit 1", &sqltypes.Result{})
@@ -1516,7 +1498,7 @@ func TestCreateLookupVindexMultipleCreate(t *testing.T) {
 		Vindex:      specs,
 	}
 
-	_, err := env.ws.LookupVindexCreate(ctx, req)
+	_, err = env.ws.LookupVindexCreate(ctx, req)
 	require.NoError(t, err)
 
 	wantvschema := &vschemapb.Keyspace{
@@ -1583,8 +1565,7 @@ func TestCreateLookupVindexCreateDDL(t *testing.T) {
 		SourceKeyspace: "sourceks",
 		TargetKeyspace: "targetks",
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"0"})
 	defer env.close()
@@ -1983,8 +1964,7 @@ func TestCreateLookupVindexSourceVSchema(t *testing.T) {
 		SourceKeyspace: "sourceks",
 		TargetKeyspace: "targetks",
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"0"})
 	defer env.close()
@@ -2202,25 +2182,21 @@ func TestCreateLookupVindexSourceVSchema(t *testing.T) {
 				Schema: sourceSchema,
 			}},
 		}
-		if err := env.topoServ.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
+		err := env.topoServ.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
 			Name:     ms.TargetKeyspace,
 			Keyspace: &vschemapb.Keyspace{},
-		}); err != nil {
-			t.Fatal(err)
-		}
-		if err := env.topoServ.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
+		})
+		require.NoError(t, err)
+		err = env.topoServ.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
 			Name:     ms.SourceKeyspace,
 			Keyspace: tcase.sourceVSchema,
-		}); err != nil {
-			t.Fatal(err)
-		}
+		})
+		require.NoError(t, err)
 
 		lv := newLookupVindex(env.ws)
 		_, got, _, _, err := lv.prepareCreate(ctx, "workflow", ms.SourceKeyspace, specs, false)
 		require.NoError(t, err)
-		if !proto.Equal(got, tcase.out) {
-			t.Errorf("%s: got:\n%v, want\n%v", tcase.description, got, tcase.out)
-		}
+		assert.True(t, proto.Equal(got, tcase.out), "got:\n%v, want\n%v", got, tcase.out)
 	}
 }
 
@@ -2229,8 +2205,7 @@ func TestCreateLookupVindexTargetVSchema(t *testing.T) {
 		SourceKeyspace: "sourceks",
 		TargetKeyspace: "targetks",
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"0"})
 	defer env.close()
@@ -2250,12 +2225,11 @@ func TestCreateLookupVindexTargetVSchema(t *testing.T) {
 			},
 		},
 	}
-	if err := env.topoServ.SaveVSchema(context.Background(), &topo.KeyspaceVSchemaInfo{
+	err := env.topoServ.SaveVSchema(t.Context(), &topo.KeyspaceVSchemaInfo{
 		Name:     ms.SourceKeyspace,
 		Keyspace: sourcevs,
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
 
 	// withTable is a target vschema with a pre-existing table.
 	withTable := &vschemapb.Keyspace{
@@ -2451,25 +2425,22 @@ func TestCreateLookupVindexTargetVSchema(t *testing.T) {
 				}},
 			}
 			specs.Vindexes["v"].Params["table"] = fmt.Sprintf("%s.%s", ms.TargetKeyspace, tcase.targetTable)
-			if err := env.topoServ.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
+			err := env.topoServ.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
 				Name:     ms.TargetKeyspace,
 				Keyspace: tcase.targetVSchema,
-			}); err != nil {
-				t.Fatal(err)
-			}
+			})
+			require.NoError(t, err)
 
 			lv := newLookupVindex(env.ws)
 			_, _, got, cancelFunc, err := lv.prepareCreate(ctx, "workflow", ms.SourceKeyspace, specs, false)
 			if tcase.err != "" {
-				if err == nil || !strings.Contains(err.Error(), tcase.err) {
-					t.Errorf("prepareCreateLookup(%s) err: %v, must contain %v", tcase.description, err, tcase.err)
-				}
+				require.ErrorContainsf(t, err, tcase.err, "prepareCreateLookup(%s) err: %v, must contain %v", tcase.description, err, tcase.err)
 				return
 			}
 			require.NoError(t, err)
 			// withTable is a vschema that already contains the table and thus
 			// we don't make any vschema changes and there's nothing to cancel.
-			require.True(t, (cancelFunc != nil) == (tcase.targetVSchema != withTable))
+			require.Equal(t, (cancelFunc != nil), (tcase.targetVSchema != withTable))
 			utils.MustMatch(t, tcase.out, got.Keyspace, tcase.description)
 		})
 	}
@@ -2480,8 +2451,7 @@ func TestCreateLookupVindexSameKeyspace(t *testing.T) {
 		SourceKeyspace: "ks",
 		TargetKeyspace: "ks",
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"0"})
 	defer env.close()
@@ -2577,19 +2547,16 @@ func TestCreateLookupVindexSameKeyspace(t *testing.T) {
 			Schema: sourceSchema,
 		}},
 	}
-	if err := env.topoServ.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
+	err := env.topoServ.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
 		Name:     ms.TargetKeyspace,
 		Keyspace: vschema,
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
 
 	lv := newLookupVindex(env.ws)
 	_, got, _, _, err := lv.prepareCreate(ctx, "keyspace", ms.TargetKeyspace, specs, false)
 	require.NoError(t, err)
-	if !proto.Equal(got, want) {
-		t.Errorf("same keyspace: got:\n%v, want\n%v", got, want)
-	}
+	assert.True(t, proto.Equal(got, want), "got:\n%v, want\n%v", got, want)
 }
 
 func TestCreateCustomizedVindex(t *testing.T) {
@@ -2597,8 +2564,7 @@ func TestCreateCustomizedVindex(t *testing.T) {
 		SourceKeyspace: "ks",
 		TargetKeyspace: "ks",
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"0"})
 	defer env.close()
@@ -2707,19 +2673,16 @@ func TestCreateCustomizedVindex(t *testing.T) {
 			Schema: sourceSchema,
 		}},
 	}
-	if err := env.topoServ.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
+	err := env.topoServ.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
 		Name:     ms.TargetKeyspace,
 		Keyspace: vschema,
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
 
 	lv := newLookupVindex(env.ws)
 	_, got, _, _, err := lv.prepareCreate(ctx, "workflow", ms.TargetKeyspace, specs, false)
 	require.NoError(t, err)
-	if !proto.Equal(got, want) {
-		t.Errorf("customize create lookup error same: got:\n%v, want\n%v", got, want)
-	}
+	assert.True(t, proto.Equal(got, want), "got:\n%v, want\n%v", got, want)
 }
 
 func TestCreateLookupVindexIgnoreNulls(t *testing.T) {
@@ -2727,8 +2690,7 @@ func TestCreateLookupVindexIgnoreNulls(t *testing.T) {
 		SourceKeyspace: "ks",
 		TargetKeyspace: "ks",
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"0"})
 	defer env.close()
@@ -2829,19 +2791,16 @@ func TestCreateLookupVindexIgnoreNulls(t *testing.T) {
 			Schema: sourceSchema,
 		}},
 	}
-	if err := env.topoServ.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
+	err := env.topoServ.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
 		Name:     ms.TargetKeyspace,
 		Keyspace: vschema,
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
 
 	lv := newLookupVindex(env.ws)
 	ms, ks, _, _, err := lv.prepareCreate(ctx, "workflow", ms.TargetKeyspace, specs, false)
 	require.NoError(t, err)
-	if !proto.Equal(wantKs, ks) {
-		t.Errorf("unexpected keyspace value: got:\n%v, want\n%v", ks, wantKs)
-	}
+	assert.True(t, proto.Equal(wantKs, ks), "got:\n%v, want\n%v", ks, wantKs)
 	require.NotNil(t, ms)
 	require.GreaterOrEqual(t, len(ms.TableSettings), 1)
 	require.Equal(t, wantQuery, ms.TableSettings[0].SourceExpression, "unexpected query")
@@ -2852,8 +2811,7 @@ func TestStopAfterCopyFlag(t *testing.T) {
 		SourceKeyspace: "ks",
 		TargetKeyspace: "ks",
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"0"})
 	defer env.close()
@@ -2913,21 +2871,20 @@ func TestStopAfterCopyFlag(t *testing.T) {
 			Schema: sourceSchema,
 		}},
 	}
-	if err := env.topoServ.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
+	err := env.topoServ.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
 		Name:     ms.SourceKeyspace,
 		Keyspace: vschema,
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
 
 	lv := newLookupVindex(env.ws)
 	ms1, _, _, _, err := lv.prepareCreate(ctx, "workflow", ms.TargetKeyspace, specs, false)
 	require.NoError(t, err)
-	require.Equal(t, ms1.StopAfterCopy, true)
+	require.True(t, ms1.StopAfterCopy)
 
 	ms2, _, _, _, err := lv.prepareCreate(ctx, "workflow", ms.TargetKeyspace, specs, true)
 	require.NoError(t, err)
-	require.Equal(t, ms2.StopAfterCopy, false)
+	require.False(t, ms2.StopAfterCopy)
 }
 
 func TestCreateLookupVindexFailures(t *testing.T) {
@@ -2950,8 +2907,7 @@ func TestCreateLookupVindexFailures(t *testing.T) {
 			},
 		},
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"-80", "80-"})
 	defer env.close()
@@ -3316,9 +3272,7 @@ func TestCreateLookupVindexFailures(t *testing.T) {
 				}
 			}
 			_, err := env.ws.LookupVindexCreate(ctx, req)
-			if !strings.Contains(err.Error(), tcase.err) {
-				t.Errorf("CreateLookupVindex(%s) err: %v, must contain %v", tcase.description, err, tcase.err)
-			}
+			require.ErrorContainsf(t, err, tcase.err, "CreateLookupVindex(%s) err: %v, must contain %v", tcase.description, err, tcase.err)
 			// Confirm that the original vschema where the vindex would
 			// be created is still in place -- since the workflow
 			// creation failed in each test case. That vindex is created
@@ -3337,7 +3291,7 @@ func TestCreateLookupVindexFailures(t *testing.T) {
 // means that even if the target keyspace is sharded, the source
 // does not need to perform the in_keyrange filtering.
 func TestKeyRangesEqualOptimization(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 	defer cancel()
 	workflow := "testwf"
 	cells := []string{"cell"}
@@ -3637,8 +3591,7 @@ func TestKeyRangesEqualOptimization(t *testing.T) {
 }
 
 func TestValidateEmptyTables(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "zone1")
 	defer ts.Close()
 
@@ -3748,8 +3701,8 @@ func TestValidateEmptyTables(t *testing.T) {
 
 	err = mz.validateEmptyTables()
 
-	assert.ErrorContains(t, err, "table1")
+	require.ErrorContains(t, err, "table1")
 	assert.NotContains(t, err.Error(), "table2")
 	// Check if the error message doesn't include duplicate tables
-	assert.Equal(t, strings.Count(err.Error(), "table3"), 1)
+	assert.Equal(t, 1, strings.Count(err.Error(), "table3"))
 }

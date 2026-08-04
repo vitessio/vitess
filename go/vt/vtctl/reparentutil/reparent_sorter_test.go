@@ -19,6 +19,7 @@ package reparentutil
 import (
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/replication"
@@ -67,6 +68,9 @@ func TestReparentSorter(t *testing.T) {
 		},
 		Type: topodatapb.TabletType_RDONLY,
 	}
+	tabletWithoutAlias := &topodatapb.Tablet{
+		Type: topodatapb.TabletType_REPLICA,
+	}
 
 	mysqlGTID1 := replication.Mysql56GTID{
 		Server:   sid1,
@@ -100,6 +104,17 @@ func TestReparentSorter(t *testing.T) {
 	positionAlmostMostAdvanced.Combined.GTIDSet = positionAlmostMostAdvanced.Combined.GTIDSet.AddGTID(mysqlGTID3)
 	positionAlmostMostAdvanced.Executed.GTIDSet = positionAlmostMostAdvanced.Executed.GTIDSet.AddGTID(mysqlGTID1)
 
+	positionExecutedGap := &RelayLogPositions{
+		Combined: positionMostAdvanced.Combined,
+		Executed: replication.Position{GTIDSet: replication.Mysql56GTIDSet{}},
+	}
+	positionExecutedGap.Executed.GTIDSet = positionExecutedGap.Executed.GTIDSet.AddGTID(mysqlGTID3)
+
+	positionNothingExecuted := &RelayLogPositions{
+		Combined: positionMostAdvanced.Combined,
+		Executed: replication.Position{GTIDSet: replication.Mysql56GTIDSet{}},
+	}
+
 	positionEmpty := &RelayLogPositions{
 		Combined: replication.Position{GTIDSet: replication.Mysql56GTIDSet{}},
 		Executed: replication.Position{GTIDSet: replication.Mysql56GTIDSet{}},
@@ -119,6 +134,33 @@ func TestReparentSorter(t *testing.T) {
 	positionIntermediate2.Combined.GTIDSet = positionIntermediate2.Combined.GTIDSet.AddGTID(mysqlGTID1)
 	positionIntermediate2.Combined.GTIDSet = positionIntermediate2.Combined.GTIDSet.AddGTID(mysqlGTID2)
 	positionIntermediate2.Executed.GTIDSet = positionIntermediate2.Executed.GTIDSet.AddGTID(mysqlGTID1)
+
+	// positions with GTIDs from servers no other position has seen, making them
+	// incomparable to every other position in this test
+	sid3 := replication.SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 17}
+	sid4 := replication.SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 18}
+	mysqlGTID4 := replication.Mysql56GTID{
+		Server:   sid3,
+		Sequence: 12,
+	}
+	mysqlGTID5 := replication.Mysql56GTID{
+		Server:   sid4,
+		Sequence: 13,
+	}
+
+	positionDisjoint1 := &RelayLogPositions{
+		Combined: replication.Position{GTIDSet: replication.Mysql56GTIDSet{}},
+		Executed: replication.Position{GTIDSet: replication.Mysql56GTIDSet{}},
+	}
+	positionDisjoint1.Combined.GTIDSet = positionDisjoint1.Combined.GTIDSet.AddGTID(mysqlGTID4)
+	positionDisjoint1.Executed.GTIDSet = positionDisjoint1.Executed.GTIDSet.AddGTID(mysqlGTID4)
+
+	positionDisjoint2 := &RelayLogPositions{
+		Combined: replication.Position{GTIDSet: replication.Mysql56GTIDSet{}},
+		Executed: replication.Position{GTIDSet: replication.Mysql56GTIDSet{}},
+	}
+	positionDisjoint2.Combined.GTIDSet = positionDisjoint2.Combined.GTIDSet.AddGTID(mysqlGTID5)
+	positionDisjoint2.Executed.GTIDSet = positionDisjoint2.Executed.GTIDSet.AddGTID(mysqlGTID5)
 
 	testcases := []struct {
 		name             string
@@ -155,6 +197,16 @@ func TestReparentSorter(t *testing.T) {
 			positions:     []*RelayLogPositions{positionMostAdvanced, positionMostAdvanced},
 			sortedTablets: []*topodatapb.Tablet{tabletReplica1_101, tabletRdonly1_102},
 		}, {
+			name:          "nil alias sorts last",
+			tablets:       []*topodatapb.Tablet{tabletWithoutAlias, tabletRdonly1_102},
+			positions:     []*RelayLogPositions{positionMostAdvanced, positionMostAdvanced},
+			sortedTablets: []*topodatapb.Tablet{tabletRdonly1_102, tabletWithoutAlias},
+		}, {
+			name:          "nil alias does not affect dominance counts",
+			tablets:       []*topodatapb.Tablet{tabletReplica1_100, tabletReplica2_100, tabletWithoutAlias},
+			positions:     []*RelayLogPositions{positionIntermediate1, positionDisjoint1, positionIntermediate2},
+			sortedTablets: []*topodatapb.Tablet{tabletReplica1_100, tabletReplica2_100, tabletWithoutAlias},
+		}, {
 			name:          "mixed",
 			tablets:       []*topodatapb.Tablet{tabletReplica1_101, tabletReplica2_100, tabletReplica1_100, tabletRdonly1_102, tabletReplica3_103},
 			positions:     []*RelayLogPositions{positionEmpty, positionIntermediate1, positionMostAdvanced, positionIntermediate1, positionAlmostMostAdvanced},
@@ -165,6 +217,24 @@ func TestReparentSorter(t *testing.T) {
 			positions:        []*RelayLogPositions{positionIntermediate1, positionIntermediate1, positionMostAdvanced, positionIntermediate1, positionAlmostMostAdvanced},
 			innodbBufferPool: []int{100, 200, 0, 200, 200},
 			sortedTablets:    []*topodatapb.Tablet{tabletReplica1_100, tabletReplica3_103, tabletReplica2_100, tabletReplica1_101, tabletRdonly1_102},
+		}, {
+			name:          "equal candidates use full tablet alias as stable tiebreaker",
+			tablets:       []*topodatapb.Tablet{tabletReplica3_103, tabletReplica2_100, tabletReplica1_101, tabletReplica1_100},
+			positions:     []*RelayLogPositions{positionMostAdvanced, positionMostAdvanced, positionMostAdvanced, positionMostAdvanced},
+			sortedTablets: []*topodatapb.Tablet{tabletReplica1_100, tabletReplica1_101, tabletReplica3_103, tabletReplica2_100},
+		}, {
+			// an incomparable position must not shadow the ordering between two
+			// comparable positions: tabletReplica1_100 strictly dominates
+			// tabletReplica1_101 and must sort above it
+			name:          "dominated tablet sorts below an incomparable maximum",
+			tablets:       []*topodatapb.Tablet{tabletReplica1_101, tabletReplica2_100, tabletReplica1_100},
+			positions:     []*RelayLogPositions{positionIntermediate1, positionDisjoint1, positionIntermediate2},
+			sortedTablets: []*topodatapb.Tablet{tabletReplica1_100, tabletReplica2_100, tabletReplica1_101},
+		}, {
+			name:          "incomparable positions fall through to deterministic tiebreak",
+			tablets:       []*topodatapb.Tablet{tabletReplica2_100, tabletReplica1_101},
+			positions:     []*RelayLogPositions{positionDisjoint1, positionDisjoint2},
+			sortedTablets: []*topodatapb.Tablet{tabletReplica1_101, tabletReplica2_100},
 		},
 	}
 
@@ -181,4 +251,115 @@ func TestReparentSorter(t *testing.T) {
 			}
 		})
 	}
+
+	mariaDBPosition10Server1 := &RelayLogPositions{
+		Executed: replication.MustParsePosition(replication.MariadbFlavorID, "0-1-10"),
+	}
+	mariaDBPosition5Server1 := &RelayLogPositions{
+		Executed: replication.MustParsePosition(replication.MariadbFlavorID, "0-1-5"),
+	}
+	mariaDBPosition10Server2 := &RelayLogPositions{
+		Executed: replication.MustParsePosition(replication.MariadbFlavorID, "0-2-10"),
+	}
+	mariaDBPosition1Server1 := &RelayLogPositions{
+		Executed: replication.MustParsePosition(replication.MariadbFlavorID, "0-1-1"),
+	}
+
+	layerTests := []struct {
+		name               string
+		candidatePositions []*RelayLogPositions
+		expectedPositions  []*RelayLogPositions
+	}{
+		{
+			name: "combined position dominance layers are input order independent",
+			candidatePositions: []*RelayLogPositions{
+				positionIntermediate2,
+				positionIntermediate1,
+				positionDisjoint1,
+				positionEmpty,
+			},
+			expectedPositions: []*RelayLogPositions{
+				positionDisjoint1,
+				positionIntermediate2,
+				positionIntermediate1,
+				positionEmpty,
+			},
+		},
+		{
+			name: "executed position dominance layers are input order independent",
+			candidatePositions: []*RelayLogPositions{
+				positionMostAdvanced,
+				positionAlmostMostAdvanced,
+				positionExecutedGap,
+				positionNothingExecuted,
+			},
+			expectedPositions: []*RelayLogPositions{
+				positionExecutedGap,
+				positionMostAdvanced,
+				positionAlmostMostAdvanced,
+				positionNothingExecuted,
+			},
+		},
+		{
+			name: "reciprocal MariaDB containment preserves executed position dominance layers",
+			candidatePositions: []*RelayLogPositions{
+				mariaDBPosition10Server1,
+				mariaDBPosition5Server1,
+				mariaDBPosition10Server2,
+				mariaDBPosition1Server1,
+			},
+			expectedPositions: []*RelayLogPositions{
+				mariaDBPosition10Server2,
+				mariaDBPosition10Server1,
+				mariaDBPosition5Server1,
+				mariaDBPosition1Server1,
+			},
+		},
+	}
+	candidateTablets := []*topodatapb.Tablet{
+		tabletReplica2_100,
+		tabletReplica1_100,
+		tabletReplica1_101,
+		tabletReplica3_103,
+	}
+	expectedTablets := []*topodatapb.Tablet{
+		tabletReplica1_101,
+		tabletReplica2_100,
+		tabletReplica1_100,
+		tabletReplica3_103,
+	}
+
+	for _, testcase := range layerTests {
+		t.Run(testcase.name, func(t *testing.T) {
+			forEachReparentSorterPermutation([]int{0, 1, 2, 3}, func(permutation []int) {
+				tablets := make([]*topodatapb.Tablet, 0, len(permutation))
+				positions := make([]*RelayLogPositions, 0, len(permutation))
+				for _, index := range permutation {
+					tablets = append(tablets, candidateTablets[index])
+					positions = append(positions, testcase.candidatePositions[index])
+				}
+
+				err := sortTabletsForReparent(tablets, positions, nil, durability)
+				require.NoError(t, err)
+				assert.Equalf(t, expectedTablets, tablets, "input permutation: %v", permutation)
+				assert.Equalf(t, testcase.expectedPositions, positions, "input permutation: %v", permutation)
+			})
+		})
+	}
+}
+
+func forEachReparentSorterPermutation(values []int, test func([]int)) {
+	var permute func(int)
+	permute = func(i int) {
+		if i == len(values) {
+			test(values)
+			return
+		}
+		for j := i; j < len(values); j++ {
+			values[i], values[j] = values[j], values[i]
+			permute(i + 1)
+			values[i], values[j] = values[j], values[i]
+		}
+	}
+	permute(0)
 }

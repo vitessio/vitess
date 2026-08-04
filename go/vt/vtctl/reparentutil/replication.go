@@ -18,6 +18,10 @@ package reparentutil
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -80,6 +84,93 @@ func (rlp *RelayLogPositions) Equal(pos *RelayLogPositions) bool {
 // IsZero returns true if the RelayLogPositions is zero.
 func (rlp *RelayLogPositions) IsZero() bool {
 	return rlp.Combined.IsZero()
+}
+
+// hasDominantPosition returns true if position a is strictly ahead of position b, meaning
+// a contains everything b has, plus more.
+func hasDominantPosition(a, b replication.Position) bool {
+	return a.AtLeast(b) && !b.AtLeast(a)
+}
+
+// haveIncomparablePositions returns true if neither position contains the other. Replication
+// lag alone can't cause this, it takes writes that no other tablet has seen (split brain
+// or errant GTIDs).
+func haveIncomparablePositions(a, b replication.Position) bool {
+	return !a.AtLeast(b) && !b.AtLeast(a)
+}
+
+// haveReciprocallyContainedPositions returns true if two unequal positions contain each
+// other. Containment can't order these: MariaDB GTID containment ignores the origin
+// server, so positions like 0-1-10 and 0-2-10 "contain" each other while holding
+// different histories (a split brain).
+func haveReciprocallyContainedPositions(a, b replication.Position) bool {
+	return a.AtLeast(b) && b.AtLeast(a) && !a.Equal(b)
+}
+
+// hasUniformCombinedPosition returns true when every candidate has the same Combined position. On the
+// output of filterToMostAdvancedCombined a false result means the leading candidates have
+// incomparable positions, as the filter already removed anything dominated.
+func hasUniformCombinedPosition(candidates map[string]*RelayLogPositions) bool {
+	var ref replication.Position
+	var set bool
+	for _, pos := range candidates {
+		if !set {
+			ref = pos.Combined
+			set = true
+			continue
+		}
+		if !pos.Combined.Equal(ref) {
+			return false
+		}
+	}
+	return true
+}
+
+// filterToMostAdvancedCombined returns the candidates that no other candidate dominates on
+// the Combined position. GTID positions are partially ordered, so each candidate is
+// compared against all of the others; two incomparable leaders don't dominate each other
+// and both must be kept, which hasUniformCombinedPosition relies on. The returned map shares the
+// caller's RelayLogPositions structs.
+func filterToMostAdvancedCombined(candidates map[string]*RelayLogPositions, logger logutil.Logger) map[string]*RelayLogPositions {
+	if len(candidates) == 0 {
+		return candidates
+	}
+
+	result := make(map[string]*RelayLogPositions, len(candidates))
+	for alias, pos := range candidates {
+		var dominated bool
+		for otherAlias, otherPos := range candidates {
+			if otherAlias == alias {
+				continue
+			}
+			if hasDominantPosition(otherPos.Combined, pos.Combined) {
+				dominated = true
+				break
+			}
+		}
+		if !dominated {
+			result[alias] = pos
+		}
+	}
+
+	if len(result) < len(candidates) {
+		excluded := make([]string, 0, len(candidates)-len(result))
+		kept := make([]string, 0, len(result))
+		for alias := range candidates {
+			if _, ok := result[alias]; !ok {
+				excluded = append(excluded, alias)
+			}
+		}
+		for alias := range result {
+			kept = append(kept, alias)
+		}
+		slices.Sort(excluded)
+		slices.Sort(kept)
+		logger.Infof("excluding %d candidate(s) strictly behind the most-advanced received relay log position from the relay-log-apply wait: %s (still repointed after promotion); waiting on: %s",
+			len(excluded), strings.Join(excluded, ", "), strings.Join(kept, ", "))
+	}
+
+	return result
 }
 
 // FindPositionsOfAllCandidates will find candidates for an emergency
@@ -145,7 +236,7 @@ func FindPositionsOfAllCandidates(
 	for alias, primaryStatus := range primaryStatusMap {
 		executedPosition, err := replication.DecodePosition(primaryStatus.Position)
 		if err != nil {
-			return nil, false, vterrors.Wrapf(err, "could not decode a primary status executed position for tablet %v: %v", alias, err)
+			return nil, false, vterrors.Wrapf(err, "could not decode a primary status executed position for tablet %v", alias)
 		}
 
 		positionMap[alias] = &RelayLogPositions{Combined: executedPosition}
@@ -186,7 +277,7 @@ func SetReplicationSource(ctx context.Context, ts *topo.Server, tmc tmclient.Tab
 	if err != nil {
 		return err
 	}
-	log.Infof("Getting a new durability policy for %v", durabilityName)
+	log.Info(fmt.Sprintf("Getting a new durability policy for %v", durabilityName))
 	durability, err := policy.GetDurabilityPolicy(durabilityName)
 	if err != nil {
 		return err
@@ -205,6 +296,64 @@ type replicationSnapshot struct {
 	tabletsBackupState map[string]bool
 }
 
+// replicasWithStoppedIO returns the reachable replicas whose IO threads ERS
+// stopped and should restart during cleanup.
+func (rs *replicationSnapshot) replicasWithStoppedIO(tabletMap map[string]*topo.TabletInfo) []*topodatapb.Tablet {
+	replicas := make([]*topodatapb.Tablet, 0, len(rs.statusMap))
+
+	for alias, stopStatus := range rs.statusMap {
+		ioThreadWasRunning, err := replicaIOThreadWasRunning(stopStatus)
+		if err != nil || !ioThreadWasRunning {
+			continue
+		}
+
+		tabletInfo := tabletMap[alias]
+		if tabletInfo == nil || tabletInfo.Tablet == nil {
+			continue
+		}
+
+		replicas = append(replicas, tabletInfo.Tablet)
+	}
+
+	return replicas
+}
+
+// replicaIOThreadWasRunning returns true if a StopReplicationStatus indicates
+// that ERS stopped a healthy IO thread that should restart during cleanup.
+func replicaIOThreadWasRunning(stopStatus *replicationdatapb.StopReplicationStatus) (bool, error) {
+	if stopStatus == nil || stopStatus.Before == nil {
+		return false, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "could not determine Before state of StopReplicationStatus %v", stopStatus)
+	}
+
+	replStatus := replication.ProtoToReplicationStatus(stopStatus.Before)
+
+	return replStatus.IOHealthy(), nil
+}
+
+// tabletAliasError wraps an error with the tablet alias that produced it.
+type tabletAliasError struct {
+	alias *topodatapb.TabletAlias
+	err   error
+}
+
+// Error returns the wrapped error.
+func (e *tabletAliasError) Error() string {
+	if e.err == nil {
+		return ""
+	}
+	return e.err.Error()
+}
+
+// GetAlias returns the tablet alias that produced the error.
+func (e *tabletAliasError) GetAlias() *topodatapb.TabletAlias {
+	return e.alias
+}
+
+// Unwrap returns the underlying error.
+func (e *tabletAliasError) Unwrap() error {
+	return e.err
+}
+
 // stopReplicationAndBuildStatusMaps stops replication on all replicas, then
 // collects and returns a mapping of TabletAlias (as string) to their current
 // replication positions.
@@ -214,6 +363,7 @@ func stopReplicationAndBuildStatusMaps(
 	tmc tmclient.TabletManagerClient,
 	ev *events.Reparent,
 	tabletMap map[string]*topo.TabletInfo,
+	primaryAlias *topodatapb.TabletAlias,
 	stopReplicationTimeout time.Duration,
 	ignoredTablets sets.Set[string],
 	tabletToWaitFor *topodatapb.TabletAlias,
@@ -226,11 +376,11 @@ func stopReplicationAndBuildStatusMaps(
 	var (
 		m          sync.Mutex
 		errChan    = make(chan concurrency.Error)
-		allTablets []*topodatapb.Tablet
+		allTablets = make([]*topodatapb.Tablet, 0, len(tabletMap))
 		res        = &replicationSnapshot{
 			statusMap:          map[string]*replicationdatapb.StopReplicationStatus{},
 			primaryStatusMap:   map[string]*replicationdatapb.PrimaryStatus{},
-			reachableTablets:   []*topodatapb.Tablet{},
+			reachableTablets:   make([]*topodatapb.Tablet, 0, len(tabletMap)),
 			tabletsBackupState: map[string]bool{},
 		}
 	)
@@ -242,7 +392,12 @@ func stopReplicationAndBuildStatusMaps(
 		var concurrencyErr concurrency.Error
 		var err error
 		defer func() {
-			concurrencyErr.Err = err
+			if err != nil {
+				concurrencyErr.Err = &tabletAliasError{
+					alias: tabletInfo.GetAlias(),
+					err:   err,
+				}
+			}
 			concurrencyErr.MustWaitFor = mustWaitForTablet
 			errChan <- concurrencyErr
 		}()
@@ -257,10 +412,9 @@ func stopReplicationAndBuildStatusMaps(
 
 				primaryStatus, err = tmc.DemotePrimary(groupCtx, tabletInfo.Tablet, true /* force */)
 				if err != nil {
-					msg := "replica %v thinks it's primary but we failed to demote it: %v"
-					err = vterrors.Wrapf(err, msg, alias, err)
+					err = vterrors.Wrapf(err, "replica %v thinks it's primary but we failed to demote it", alias)
 
-					logger.Warningf(msg, alias, err)
+					logger.Warningf("replica %v thinks it's primary but we failed to demote it: %v", alias, err)
 					return
 				}
 
@@ -270,7 +424,7 @@ func stopReplicationAndBuildStatusMaps(
 				m.Unlock()
 			} else {
 				logger.Warningf("failed to get replication status from %v: %v", alias, err)
-				err = vterrors.Wrapf(err, "error when getting replication status for alias %v: %v", alias, err)
+				err = vterrors.Wrapf(err, "error when getting replication status for alias %v", alias)
 			}
 		} else {
 			isTakingBackup := false
@@ -302,6 +456,7 @@ func stopReplicationAndBuildStatusMaps(
 	if tabletToWaitFor != nil {
 		tabletAliasToWaitFor = topoproto.TabletAliasString(tabletToWaitFor)
 	}
+	numGoRoutines := 0
 	for alias, tabletInfo := range tabletMap {
 		allTablets = append(allTablets, tabletInfo.Tablet)
 		if !ignoredTablets.Has(alias) {
@@ -313,11 +468,14 @@ func stopReplicationAndBuildStatusMaps(
 			if mustWaitFor {
 				numErrorsToWaitFor++
 			}
+			numGoRoutines++
 			go fillStatus(alias, tabletInfo, mustWaitFor)
 		}
 	}
 
-	numGoRoutines := len(tabletMap) - ignoredTablets.Len()
+	if numGoRoutines == 0 && len(tabletMap) > 0 {
+		return res, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "no tablets available to stop replication on (%d tablets in map, %d ignored)", len(tabletMap), ignoredTablets.Len())
+	}
 	// In general we want to wait for n-1 tablets to respond, since we know the primary tablet is down.
 	requiredSuccesses := numGoRoutines - 1
 	if waitForAllTablets {
@@ -333,15 +491,33 @@ func stopReplicationAndBuildStatusMaps(
 		// even in case of multiple failures. We rely on the revoke function below to determine if we have more failures than we can tolerate
 		NumErrorsToWaitFor: numErrorsToWaitFor,
 	}
-
 	errRecorder := errgroup.Wait(groupCancel, errChan)
-	if len(errRecorder.Errors) <= 1 {
+
+	// Exit early if we encountered no errors.
+	if len(errRecorder.Errors) == 0 {
 		return res, nil
 	}
+
+	// If there are recorded errors, confirm there is a single error from the PRIMARY.
+	// We intentionally do not check for specific error types here because the nature
+	// of ERS means we expect any number of possible errors from the PRIMARY we are
+	// abandoning (e.g. connection refused, context deadline, MySQL down, etc.) and
+	// we don't need to handle them differently — the goal is simply to confirm the
+	// error came from the PRIMARY tablet, not to diagnose why it failed.
+	if primaryAlias != nil && len(errRecorder.Errors) == 1 {
+		var tabletErr *tabletAliasError
+		if errors.As(errRecorder.Errors[0], &tabletErr) {
+			// Failure to reach the PRIMARY tablet is expected, return early.
+			if topoproto.TabletAliasEqual(primaryAlias, tabletErr.GetAlias()) {
+				return res, nil
+			}
+		}
+	}
+
 	// check that the tablets we were able to reach are sufficient for us to guarantee that no new write will be accepted by any tablet
 	revokeSuccessful := haveRevoked(durability, res.reachableTablets, allTablets)
 	if !revokeSuccessful {
-		return nil, vterrors.Wrapf(errRecorder.Error(), "could not reach sufficient tablets to guarantee safety: %v", errRecorder.Error())
+		return res, vterrors.Wrapf(errRecorder.Error(), "could not reach sufficient tablets to guarantee safety")
 	}
 
 	return res, nil

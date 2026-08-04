@@ -1,3 +1,19 @@
+/*
+Copyright 2026 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package plancontext
 
 import (
@@ -25,7 +41,7 @@ type PlannerVersion = querypb.ExecuteOptions_PlannerVersion
 // info about tables.
 type VSchema interface {
 	FindTable(tablename sqlparser.TableName) (*vindexes.BaseTable, string, topodatapb.TabletType, key.ShardDestination, error)
-	FindView(name sqlparser.TableName) sqlparser.TableStatement
+	FindView(name sqlparser.TableName) (sqlparser.TableStatement, *sqlparser.TableName)
 	// FindViewTarget finds the target keyspace for the view table provided.
 	FindViewTarget(name sqlparser.TableName) (*vindexes.Keyspace, error)
 	FindTableOrVindex(tablename sqlparser.TableName) (*vindexes.BaseTable, vindexes.Vindex, string, topodatapb.TabletType, key.ShardDestination, error)
@@ -39,6 +55,12 @@ type VSchema interface {
 	AnyKeyspace() (*vindexes.Keyspace, error)
 	FirstSortedKeyspace() (*vindexes.Keyspace, error)
 	SysVarSetEnabled() bool
+	// IsSystemVariableDenied reports whether the given system variable name is
+	// in the VTGate-configured denylist. Names are compared case-insensitively.
+	IsSystemVariableDenied(name string) bool
+	// HasDeniedSystemVariables reports whether the VTGate-configured denylist
+	// contains any system variables.
+	HasDeniedSystemVariables() bool
 	KeyspaceExists(keyspace string) bool
 	AllKeyspace() ([]*vindexes.Keyspace, error)
 	FindKeyspace(keyspace string) (*vindexes.Keyspace, error)
@@ -63,6 +85,10 @@ type VSchema interface {
 	// ForeignKeyMode returns the foreign_key flag value
 	ForeignKeyMode(keyspace string) (vschemapb.Keyspace_ForeignKeyMode, error)
 
+	// AllowCrossKeyspaceReads returns true if cross-keyspace reads are allowed for the given keyspace.
+	// Returns false if denied by the vtgate flag or the keyspace-level vschema setting.
+	AllowCrossKeyspaceReads(keyspace string) (bool, error)
+
 	// KeyspaceError returns any error in the keyspace vschema.
 	KeyspaceError(keyspace string) error
 
@@ -83,20 +109,11 @@ type VSchema interface {
 	// IsViewsEnabled returns true if Vitess manages the views.
 	IsViewsEnabled() bool
 
-	// GetUDV returns user defined value from the variable passed.
-	GetUDV(name string) *querypb.BindVariable
-
 	// PlanPrepareStatement plans the prepared statement.
 	PlanPrepareStatement(ctx context.Context, query string) (*engine.Plan, error)
 
-	// ClearPrepareData clears the prepared data from the session.
-	ClearPrepareData(stmtName string)
-
 	// GetPrepareData returns the prepared data for the statement from the session.
 	GetPrepareData(stmtName string) *vtgatepb.PrepareData
-
-	// StorePrepareData stores the prepared data in the session.
-	StorePrepareData(name string, v *vtgatepb.PrepareData)
 
 	// GetAggregateUDFs returns the list of aggregate UDFs.
 	GetAggregateUDFs() []string

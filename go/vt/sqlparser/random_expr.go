@@ -376,7 +376,7 @@ func (g *Generator) randomBool(prob float32) bool {
 }
 
 func (g *Generator) intLiteral() Expr {
-	t := strconv.Itoa(rand.IntN(100) - rand.IntN(100)) //nolint:staticcheck
+	t := strconv.Itoa(rand.IntN(100) - rand.IntN(100))
 
 	return NewIntLiteral(t)
 }
@@ -429,7 +429,7 @@ func (g *Generator) caseExpr(genConfig ExprGeneratorConfig) Expr {
 
 	size := rand.IntN(2) + 1
 	var whens []*When
-	for i := 0; i < size; i++ {
+	for range size {
 		var cond Expr
 		if exp == nil {
 			cond = g.Expression(genConfig.boolTypeConfig())
@@ -569,8 +569,7 @@ func (g *Generator) existsExpr(genConfig ExprGeneratorConfig) Expr {
 		// if g.subqueryExpr doesn't return a valid subquery, replace with
 		// select 1
 		selectExprs := &SelectExprs{Exprs: []SelectExpr{NewAliasedExpr(NewIntLiteral("1"), "")}}
-		from := TableExprs{NewAliasedTableExpr(NewTableName("dual"), "")}
-		expr = NewExistsExpr(NewSubquery(NewSelect(nil, selectExprs, nil, nil, from, nil, nil, nil, nil)))
+		expr = NewExistsExpr(NewSubquery(NewSelect(nil, selectExprs, nil, nil, nil, nil, nil, nil, nil)))
 	}
 
 	// not exists

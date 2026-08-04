@@ -18,6 +18,7 @@ package clone
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -53,25 +54,25 @@ func TestMain(m *testing.M) {
 		// Check MySQL version first - skip entire test suite if not supported
 		versionStr, err := mysqlctl.GetVersionString()
 		if err != nil {
-			log.Infof("Skipping clone tests: unable to get MySQL version: %v", err)
+			log.Info(fmt.Sprintf("Skipping clone tests: unable to get MySQL version: %v", err))
 			return 0
 		}
-		log.Infof("Detected MySQL version: %s", versionStr)
+		log.Info("Detected MySQL version: " + versionStr)
 
 		flavor, version, err := mysqlctl.ParseVersionString(versionStr)
 		if err != nil {
-			log.Infof("Skipping clone tests: unable to parse MySQL version: %v", err)
+			log.Info(fmt.Sprintf("Skipping clone tests: unable to parse MySQL version: %v", err))
 			return 0
 		}
-		log.Infof("Parsed flavor: %v, version: %d.%d.%d", flavor, version.Major, version.Minor, version.Patch)
+		log.Info(fmt.Sprintf("Parsed flavor: %v, version: %d.%d.%d", flavor, version.Major, version.Minor, version.Patch))
 
 		// Clone is only supported on MySQL 8.0.17+
 		if flavor != mysqlctl.FlavorMySQL && flavor != mysqlctl.FlavorPercona {
-			log.Infof("Skipping clone tests: MySQL CLONE requires MySQL or Percona, got flavor: %v", flavor)
+			log.Info(fmt.Sprintf("Skipping clone tests: MySQL CLONE requires MySQL or Percona, got flavor: %v", flavor))
 			return 0
 		}
 		if version.Major < 8 || (version.Major == 8 && version.Minor == 0 && version.Patch < 17) {
-			log.Infof("Skipping clone tests: MySQL CLONE requires version 8.0.17+, got: %d.%d.%d", version.Major, version.Minor, version.Patch)
+			log.Info(fmt.Sprintf("Skipping clone tests: MySQL CLONE requires version 8.0.17+, got: %d.%d.%d", version.Major, version.Minor, version.Patch))
 			return 0
 		}
 
@@ -79,19 +80,19 @@ func TestMain(m *testing.M) {
 		cleanVersion := fmt.Sprintf("%d.%d.%d", version.Major, version.Minor, version.Patch)
 		capableOf := mysql.ServerVersionCapableOf(cleanVersion)
 		if capableOf == nil {
-			log.Infof("Skipping clone tests: unable to get capability checker for version %s", cleanVersion)
+			log.Info("Skipping clone tests: unable to get capability checker for version " + cleanVersion)
 			return 0
 		}
 		hasClone, err := capableOf(capabilities.MySQLClonePluginFlavorCapability)
 		if err != nil || !hasClone {
-			log.Infof("Skipping clone tests: MySQL version %s does not support CLONE plugin", cleanVersion)
+			log.Info(fmt.Sprintf("Skipping clone tests: MySQL version %s does not support CLONE plugin", cleanVersion))
 			return 0
 		}
-		log.Infof("MySQL version %s supports CLONE plugin, proceeding with tests", cleanVersion)
+		log.Info(fmt.Sprintf("MySQL version %s supports CLONE plugin, proceeding with tests", cleanVersion))
 
 		// Setup EXTRA_MY_CNF for clone plugin
 		if err := setupExtraMyCnf(); err != nil {
-			log.Errorf("Failed to setup extra MySQL config: %v", err)
+			log.Error(fmt.Sprintf("Failed to setup extra MySQL config: %v", err))
 			return 1
 		}
 
@@ -100,13 +101,13 @@ func TestMain(m *testing.M) {
 
 		// Start topo server
 		if err := clusterInstance.StartTopo(); err != nil {
-			log.Errorf("Failed to start topo: %v", err)
+			log.Error(fmt.Sprintf("Failed to start topo: %v", err))
 			return 1
 		}
 
 		// Initialize cluster with 2 tablets for clone testing
 		if err := initClusterForClone(); err != nil {
-			log.Errorf("Failed to init cluster: %v", err)
+			log.Error(fmt.Sprintf("Failed to init cluster: %v", err))
 			return 1
 		}
 
@@ -115,7 +116,7 @@ func TestMain(m *testing.M) {
 			for _, tablet := range []*cluster.Vttablet{donorTablet, recipientTablet} {
 				if tablet != nil {
 					if err := tablet.MysqlctlProcess.Stop(); err != nil {
-						log.Errorf("Failed to stop MySQL for tablet %d: %v", tablet.TabletUID, err)
+						log.Error(fmt.Sprintf("Failed to stop MySQL for tablet %d: %v", tablet.TabletUID, err))
 					}
 				}
 			}
@@ -146,7 +147,7 @@ func setupExtraMyCnf() error {
 		}
 	}
 
-	log.Infof("Set EXTRA_MY_CNF to include clone plugin: %s", os.Getenv("EXTRA_MY_CNF"))
+	log.Info("Set EXTRA_MY_CNF to include clone plugin: " + os.Getenv("EXTRA_MY_CNF"))
 	return nil
 }
 
@@ -155,9 +156,9 @@ func initClusterForClone() error {
 	// Create a combined init file that includes clone user
 	initDBWithClone, err := createInitDBWithCloneUser()
 	if err != nil {
-		return fmt.Errorf("failed to create init DB file: %v", err)
+		return fmt.Errorf("failed to create init DB with clone user: %v", err)
 	}
-	log.Infof("Created combined init file at: %s", initDBWithClone)
+	log.Info("Created combined init file at: " + initDBWithClone)
 
 	var mysqlCtlProcessList []*exec.Cmd
 
@@ -205,10 +206,10 @@ func initClusterForClone() error {
 	// Wait for MySQL processes to be ready
 	for _, proc := range mysqlCtlProcessList {
 		if err := proc.Wait(); err != nil {
-			return fmt.Errorf("MySQL process failed to start: %v", err)
+			return fmt.Errorf("failed waiting for MySQL process: %v", err)
 		}
 	}
-	log.Infof("MySQL processes started successfully")
+	log.Info("MySQL processes started successfully")
 
 	// Note: We intentionally do NOT register tablets with shards/keyspaces
 	// because we only start MySQL processes (not vttablets). The standard
@@ -237,13 +238,13 @@ func createInitDBWithCloneUser() (string, error) {
 	// Use the official {{custom_sql}} marker pattern to inject clone user SQL
 	combined, err := utils.GetInitDBSQL(string(initDB), string(initClone), "")
 	if err != nil {
-		return "", fmt.Errorf("failed to inject clone SQL: %v", err)
+		return "", fmt.Errorf("failed to generate combined init SQL: %v", err)
 	}
 
 	// Write to temp file
 	combinedPath := path.Join(clusterInstance.TmpDirectory, "init_db_with_clone.sql")
-	if err := os.WriteFile(combinedPath, []byte(combined), 0666); err != nil {
-		return "", fmt.Errorf("failed to write combined init file: %v", err)
+	if err := os.WriteFile(combinedPath, []byte(combined), 0o666); err != nil {
+		return "", fmt.Errorf("failed to write combined init SQL: %v", err)
 	}
 
 	return combinedPath, nil
@@ -257,6 +258,31 @@ func connectToTablet(ctx context.Context, tablet *cluster.Vttablet) (*mysql.Conn
 		UnixSocket: socketPath,
 	}
 	return mysql.Connect(ctx, &params)
+}
+
+// stopMysqldSafeForTablet stops mysqld_safe for a tablet without stopping
+// mysqld itself. This is used to exercise the case where MySQL finishes the
+// clone but cannot restart itself.
+func stopMysqldSafeForTablet(tablet *cluster.Vttablet) error {
+	mysqldSafePattern := fmt.Sprintf("mysqld_safe.*vt_%010d", tablet.TabletUID)
+
+	output, err := exec.Command("pkill", "-9", "-f", mysqldSafePattern).CombinedOutput()
+	if exitErr, ok := errors.AsType[*exec.ExitError](err); ok && exitErr.ExitCode() == 1 {
+		// pkill exits 1 when no process matched. That is fine if the local
+		// MySQL install already starts mysqld directly.
+		return nil
+	}
+
+	if err != nil {
+		return fmt.Errorf(
+			"failed to stop mysqld_safe for tablet %d: %w, output: %s",
+			tablet.TabletUID,
+			err,
+			output,
+		)
+	}
+
+	return nil
 }
 
 // createMysqldForTablet creates a Mysqld instance for CloneExecutor
@@ -276,7 +302,7 @@ func createMysqldForTablet(tablet *cluster.Vttablet) *mysqlctl.Mysqld {
 
 // TestCloneRemote tests MySQL CLONE INSTANCE functionality
 func TestCloneRemote(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 6*time.Minute)
+	ctx, cancel := context.WithTimeout(t.Context(), 6*time.Minute)
 	defer cancel()
 
 	// Connect to donor and insert test data
@@ -321,12 +347,25 @@ func TestCloneRemote(t *testing.T) {
 	require.NoError(t, err, "Failed to connect to recipient for pre-clone check")
 	qr, err = recipientConnPreClone.ExecuteFetch("SHOW DATABASES LIKE 'test_clone'", 1, false)
 	require.NoError(t, err, "Failed to check for test_clone database on recipient")
-	require.Len(t, qr.Rows, 0, "Recipient should NOT have test_clone database before clone")
+	require.Empty(t, qr.Rows, "Recipient should NOT have test_clone database before clone")
 	recipientConnPreClone.Close()
 
 	// Create Mysqld instance for recipient (needed by CloneExecutor)
 	recipientMysqld := createMysqldForTablet(recipientTablet)
 	defer recipientMysqld.Close()
+
+	// Keep the tablet my.cnf available for the recovery path. The clone stops
+	// mysqld, and this test expects mysqlctl to start mysqld again afterward.
+	recipientMycnf, err := mysqlctl.ReadMycnf(
+		mysqlctl.NewMycnf(uint32(recipientTablet.TabletUID), recipientTablet.MySQLPort),
+		30*time.Second,
+	)
+	require.NoError(t, err, "Failed to read recipient my.cnf")
+
+	// Stop only mysqld_safe. The mysqld process must stay alive for CLONE to
+	// run, but mysqld_safe should not restart it when CLONE finishes.
+	err = stopMysqldSafeForTablet(recipientTablet)
+	require.NoError(t, err, "Failed to stop recipient mysqld_safe")
 
 	// Enable MySQL CLONE for the test
 	mysqlctl.SetMySQLCloneEnabled(true)
@@ -341,7 +380,7 @@ func TestCloneRemote(t *testing.T) {
 		UseSSL:        false,
 	}
 
-	err = executor.ExecuteClone(ctx, recipientMysqld, 5*time.Minute)
+	err = executor.ExecuteClone(ctx, recipientMysqld, recipientMycnf, 5*time.Minute)
 	require.NoError(t, err, "Clone operation failed")
 
 	// Connect to recipient and verify data
@@ -349,7 +388,7 @@ func TestCloneRemote(t *testing.T) {
 	require.NoError(t, err, "Failed to connect to recipient after clone")
 	defer recipientConn.Close()
 
-	// Verify clone succeeded at MySQL level via performance_schema.clone_status
+	// Verify clone succeeded at MySQL level using performance_schema.clone_status
 	qr, err = recipientConn.ExecuteFetch(
 		"SELECT STATE, ERROR_NO, ERROR_MESSAGE FROM performance_schema.clone_status ORDER BY ID DESC LIMIT 1", 1, false)
 	require.NoError(t, err, "Failed to query clone_status")
@@ -373,7 +412,7 @@ func TestCloneRemote(t *testing.T) {
 	recipientData, err := recipientConn.ExecuteFetch("SELECT id, msg FROM test_clone.clone_test ORDER BY id", 100, false)
 	require.NoError(t, err)
 
-	require.Equal(t, len(donorData.Rows), len(recipientData.Rows), "Row counts should match")
+	require.Len(t, recipientData.Rows, len(donorData.Rows), "Row counts should match")
 	for i := range donorData.Rows {
 		assert.Equal(t, donorData.Rows[i][0].ToString(), recipientData.Rows[i][0].ToString(), "IDs should match at row %d", i)
 		assert.Equal(t, donorData.Rows[i][1].ToString(), recipientData.Rows[i][1].ToString(), "Messages should match at row %d", i)

@@ -18,14 +18,95 @@ package gc
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/vt/schema"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/mysql/capabilities"
+	"vitess.io/vitess/go/mysql/fakesqldb"
+	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/dbconfigs"
+	"vitess.io/vitess/go/vt/schema"
+	"vitess.io/vitess/go/vt/vtenv"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 )
+
+// newFakeDBTableGC builds a TableGC wired to a fake MySQL, sufficient for exercising purge/dropTable.
+func newFakeDBTableGC(t *testing.T, db *fakesqldb.DB) *TableGC {
+	cfg := tabletenv.NewDefaultConfig()
+	cfg.DB = dbconfigs.NewTestDBConfigs(*db.ConnParams(), *db.ConnParams(), "fakesqldb")
+	env := tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "TableGCTest")
+
+	collector := &TableGC{
+		env:             env,
+		throttlerClient: throttle.NewBackgroundClient(nil, throttlerapp.TableGCName, base.UndefinedScope),
+		purgingTables:   map[string]bool{},
+	}
+	var err error
+	collector.lifecycleStates, err = schema.ParseGCLifecycle("hold,purge,evac,drop")
+	require.NoError(t, err)
+	return collector
+}
+
+// TestDropTableDisablesForeignKeyChecks verifies that dropTable disables foreign key checks before
+// issuing the DROP (and restores them afterwards). This lets the GC drop a table that is still
+// referenced by another (also-doomed) table's foreign key, regardless of the order in which held
+// tables are reclaimed.
+func TestDropTableDisablesForeignKeyChecks(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	db.SetNeverFail(true)
+
+	collector := newFakeDBTableGC(t, db)
+
+	err := collector.dropTable(t.Context(), "_vt_DROP_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_", true)
+	require.NoError(t, err)
+
+	queryLog := strings.ToLower(db.QueryLog())
+	disableIdx := strings.Index(queryLog, "set session foreign_key_checks = 0")
+	dropIdx := strings.Index(queryLog, "drop table if exists")
+	restoreIdx := strings.Index(queryLog, "set session foreign_key_checks = 1")
+
+	require.GreaterOrEqual(t, disableIdx, 0, "foreign_key_checks must be disabled; query log: %s", queryLog)
+	require.GreaterOrEqual(t, dropIdx, 0, "table must be dropped; query log: %s", queryLog)
+	require.GreaterOrEqual(t, restoreIdx, 0, "foreign_key_checks must be restored; query log: %s", queryLog)
+	// foreign_key_checks must be disabled before the drop, and restored after it.
+	assert.Less(t, disableIdx, dropIdx, "foreign_key_checks must be disabled before the drop")
+	assert.Less(t, dropIdx, restoreIdx, "foreign_key_checks must be restored after the drop")
+}
+
+// TestPurgeDisablesForeignKeyChecks verifies that purge disables foreign key checks before deleting
+// rows. This lets the GC purge a doomed parent table's rows even while a doomed child still
+// references them under ON DELETE RESTRICT, without wedging.
+func TestPurgeDisablesForeignKeyChecks(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	db.SetNeverFail(true)
+
+	collector := newFakeDBTableGC(t, db)
+	require.True(t, collector.addPurgingTable("_vt_prg_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_"))
+
+	_, err := collector.purge(t.Context())
+	require.NoError(t, err)
+
+	queryLog := strings.ToLower(db.QueryLog())
+	disableIdx := strings.Index(queryLog, "set session foreign_key_checks = 0")
+	deleteIdx := strings.Index(queryLog, "delete from")
+	restoreIdx := strings.Index(queryLog, "set session foreign_key_checks = 1")
+
+	require.GreaterOrEqual(t, disableIdx, 0, "foreign_key_checks must be disabled; query log: %s", queryLog)
+	require.GreaterOrEqual(t, deleteIdx, 0, "rows must be purged; query log: %s", queryLog)
+	require.GreaterOrEqual(t, restoreIdx, 0, "foreign_key_checks must be restored; query log: %s", queryLog)
+	// foreign_key_checks must be disabled before purging rows, and restored afterwards.
+	assert.Less(t, disableIdx, deleteIdx, "foreign_key_checks must be disabled before purging rows")
+	assert.Less(t, deleteIdx, restoreIdx, "foreign_key_checks must be restored after purging")
+}
 
 func TestNextTableToPurge(t *testing.T) {
 	tt := []struct {
@@ -82,7 +163,7 @@ func TestNextTableToPurge(t *testing.T) {
 			}
 			var err error
 			collector.lifecycleStates, err = schema.ParseGCLifecycle("hold,purge,evac,drop")
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			for _, table := range ts.tables {
 				collector.addPurgingTable(table)
 			}
@@ -167,7 +248,7 @@ func TestNextState(t *testing.T) {
 		collector := &TableGC{}
 		var err error
 		collector.lifecycleStates, err = schema.ParseGCLifecycle(ts.lifecycle)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		next := collector.nextState(ts.state)
 		assert.NotNil(t, next)
 		assert.Equal(t, ts.next, *next)
@@ -266,7 +347,7 @@ func TestShouldTransitionTable(t *testing.T) {
 				ts.handledStates = "purge,evac,drop"
 			}
 			lifecycleStates, err := schema.ParseGCLifecycle(ts.handledStates)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			collector := &TableGC{
 				lifecycleStates: lifecycleStates,
 			}
@@ -275,7 +356,7 @@ func TestShouldTransitionTable(t *testing.T) {
 			if ts.isError {
 				assert.Error(t, err)
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.Equal(t, ts.shouldTransition, shouldTransition)
 				assert.Equal(t, ts.state, state)
 				assert.Equal(t, ts.uuid, uuid)
@@ -379,13 +460,13 @@ func TestCheckTables(t *testing.T) {
 		},
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+	ctx, cancel := context.WithTimeout(t.Context(), time.Second*5)
 	defer cancel()
 	dropTablesChan := make(chan *gcTable)
 	transitionRequestsChan := make(chan *transitionRequest)
 
 	err = collector.checkTables(ctx, gcTables, dropTablesChan, transitionRequestsChan)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	var responses int
 	var foundDropTables []*gcTable
@@ -405,4 +486,69 @@ func TestCheckTables(t *testing.T) {
 	}
 	assert.ElementsMatch(t, expectDropTables, foundDropTables)
 	assert.ElementsMatch(t, expectTransitionRequests, foundTransitionRequests)
+}
+
+type fakeGCConn struct {
+	query  string
+	result *sqltypes.Result
+	err    error
+}
+
+func (c *fakeGCConn) ExecuteFetch(query string, maxrows int, wantfields bool) (*sqltypes.Result, error) {
+	c.query = query
+	if c.err != nil {
+		return nil, c.err
+	}
+	if c.result != nil {
+		return c.result, nil
+	}
+	return &sqltypes.Result{}, nil
+}
+
+func (c *fakeGCConn) SupportsCapability(capability capabilities.FlavorCapability) (bool, error) {
+	return true, nil
+}
+
+func (c *fakeGCConn) Close() {}
+
+func TestOpenSkipsPurgeEvacBasedOnAHI(t *testing.T) {
+	type testCase struct {
+		name            string
+		ahiSetting      string
+		expectPurgeEvac bool
+	}
+	testCases := []testCase{
+		{
+			name:            "AHI OFF",
+			ahiSetting:      "OFF",
+			expectPurgeEvac: false,
+		},
+		{
+			name:            "AHI ON",
+			ahiSetting:      "ON",
+			expectPurgeEvac: true,
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			collector := &TableGC{}
+			collector.lifecycleStates = map[schema.TableGCState]bool{
+				schema.HoldTableGCState:  true,
+				schema.PurgeTableGCState: true,
+				schema.EvacTableGCState:  true,
+				schema.DropTableGCState:  true,
+			}
+			conn := &fakeGCConn{
+				result: sqltypes.MakeTestResult(
+					sqltypes.MakeTestFields("variable_value", "varchar"),
+					tc.ahiSetting,
+				),
+			}
+			states, err := adjustLifecycleForFastDrops(conn, collector.lifecycleStates)
+			require.NoError(t, err)
+			require.Equal(t, tc.expectPurgeEvac, states[schema.PurgeTableGCState])
+			require.Equal(t, tc.expectPurgeEvac, states[schema.EvacTableGCState])
+			require.True(t, states[schema.DropTableGCState])
+		})
+	}
 }

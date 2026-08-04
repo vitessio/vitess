@@ -20,6 +20,9 @@ import (
 	"encoding/hex"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/collations/charset"
 	"vitess.io/vitess/go/mysql/collations/colldata"
@@ -30,7 +33,7 @@ func TestRemoteWildcardMatches(t *testing.T) {
 	conn := mysqlconn(t)
 	defer conn.Close()
 
-	var cases = []struct {
+	cases := []struct {
 		in, pat string
 	}{
 		{"abc", "abc"},
@@ -81,9 +84,9 @@ func TestRemoteWildcardMatches(t *testing.T) {
 
 	for _, local := range colldata.All(collations.MySQL8()) {
 		t.Run(local.Name(), func(t *testing.T) {
-			var remote = remote.NewCollation(conn, local.Name())
+			remote := remote.NewCollation(conn, local.Name())
 			var err error
-			var chEscape = '\\'
+			chEscape := '\\'
 
 			if !charset.IsBackslashSafe(local.Charset()) {
 				chEscape = '/'
@@ -112,10 +115,10 @@ func TestRemoteWildcardMatches(t *testing.T) {
 				localResult := local.Wildcard(pat, 0, 0, chEscape).Match(input)
 				remoteResult := remote.Wildcard(pat, 0, 0, chEscape).Match(input)
 				if err := remote.LastError(); err != nil {
-					t.Fatalf("remote collation failed: %v", err)
+					require.NoError(t, err)
 				}
 				if localResult != remoteResult {
-					t.Errorf("expected %q LIKE %q = %v (got %v)", tc.in, tc.pat, remoteResult, localResult)
+					assert.Failf(t, "wildcard mismatch", "expected %q LIKE %q = %v (got %v)", tc.in, tc.pat, remoteResult, localResult)
 
 					printDebugData(t, []string{
 						"wildcmp",

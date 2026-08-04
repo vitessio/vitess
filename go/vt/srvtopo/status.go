@@ -123,8 +123,9 @@ type SrvKeyspaceCacheStatus struct {
 	LastError      error
 }
 
-var noData = safehtml.HTMLEscaped("No Data")
-var partitions = template.Must(template.New("partitions").Parse(`
+var (
+	noData     = safehtml.HTMLEscaped("No Data")
+	partitions = template.Must(template.New("partitions").Parse(`
 <b>Partitions:</b><br>
 {{ range .Partitions }}
 &nbsp;<b>{{ .ServedType }}:</b>
@@ -134,6 +135,7 @@ var partitions = template.Must(template.New("partitions").Parse(`
 <br>
 {{ end }}
 `))
+)
 
 // StatusAsHTML returns an HTML version of our status.
 // It works best if there is data in the cache.

@@ -55,6 +55,10 @@ var (
 	tmclientFactoryLock sync.Mutex
 	tmclients           = map[string]tmclient.TabletManagerClient{}
 	tmclientFactories   = map[string]func() tmclient.TabletManagerClient{}
+
+	// waitForPositionSucceededLock guards every fake's waitForPositionSucceeded
+	// map, which is written and read concurrently for all the candidates.
+	waitForPositionSucceededLock sync.Mutex
 )
 
 // NewVtctldServerWithTabletManagerClient returns a new
@@ -141,13 +145,13 @@ func setTMClientProtocol(protocol string) (reset func()) {
 	case nil:
 		reset = func() { setTMClientProtocol(oldVal) }
 	default:
-		log.Errorf("failed to get string value for flag %q: %v", tmclientProtocolFlagName, err)
+		log.Error(fmt.Sprintf("failed to get string value for flag %q: %v", tmclientProtocolFlagName, err))
 		reset = func() {}
 	}
 
 	if err := fs.Set(tmclientProtocolFlagName, protocol); err != nil {
 		msg := "failed to set flag %q to %q: %v"
-		log.Errorf(msg, tmclientProtocolFlagName, protocol, err)
+		log.Error(fmt.Sprintf(msg, tmclientProtocolFlagName, protocol, err))
 		reset = func() {}
 	}
 
@@ -168,7 +172,7 @@ func init() {
 
 		tmclient.RegisterFlags(fs)
 	})
-	servenv.ParseFlags(fsName)
+	servenv.ParseFlagsForTests(fsName)
 }
 
 // TabletManagerClient implements the tmclient.TabletManagerClient interface
@@ -297,6 +301,15 @@ type TabletManagerClient struct {
 	PopulateReparentJournalResults map[string]error
 	// keyed by tablet alias
 	ReadReparentJournalInfoResults map[string]int32
+	// keyed by tablet alias. once a WaitForPosition call for the tablet has
+	// succeeded, this value is returned instead of ReadReparentJournalInfoResults,
+	// mirroring how the reparent journal count only advances once relay logs are
+	// applied.
+	ReadReparentJournalInfoAfterApplyResults map[string]int32
+	// keyed by tablet alias. records the tablets whose WaitForPosition succeeded.
+	// guarded by the package-level waitForPositionSucceededLock; the fake itself
+	// must stay free of lock fields, since tests copy it by value.
+	waitForPositionSucceeded map[string]bool
 	// keyed by tablet alias.
 	PromoteReplicaDelays map[string]time.Duration
 	// keyed by tablet alias. injects a sleep to the end of the function
@@ -443,12 +456,12 @@ func (fake *TabletManagerClient) Backup(ctx context.Context, tablet *topodatapb.
 	go func() {
 		if testdata.EventInterval == 0 {
 			testdata.EventInterval = 10 * time.Millisecond
-			log.Warningf("testutil.TabletManagerClient.Backup faked with no event interval for %s, defaulting to %s", key, testdata.EventInterval)
+			log.Warn(fmt.Sprintf("testutil.TabletManagerClient.Backup faked with no event interval for %s, defaulting to %s", key, testdata.EventInterval))
 		}
 
 		if testdata.EventJitter == 0 {
 			testdata.EventJitter = time.Millisecond
-			log.Warningf("testutil.TabletManagerClient.Backup faked with no event jitter for %s, defaulting to %s", key, testdata.EventJitter)
+			log.Warn(fmt.Sprintf("testutil.TabletManagerClient.Backup faked with no event jitter for %s, defaulting to %s", key, testdata.EventJitter))
 		}
 
 		errCtx, errCancel := context.WithCancel(context.Background())
@@ -980,10 +993,20 @@ func (fake *TabletManagerClient) PopulateReparentJournal(ctx context.Context, ta
 
 // ReadReparentJournalInfo is part of the tmclient.TabletManagerClient interface.
 func (fake *TabletManagerClient) ReadReparentJournalInfo(ctx context.Context, tablet *topodatapb.Tablet) (int32, error) {
+	key := topoproto.TabletAliasString(tablet.Alias)
+
+	if result, ok := fake.ReadReparentJournalInfoAfterApplyResults[key]; ok {
+		waitForPositionSucceededLock.Lock()
+		applied := fake.waitForPositionSucceeded[key]
+		waitForPositionSucceededLock.Unlock()
+		if applied {
+			return result, nil
+		}
+	}
+
 	if fake.ReadReparentJournalInfoResults == nil {
 		return 1, nil
 	}
-	key := topoproto.TabletAliasString(tablet.Alias)
 	if result, ok := fake.ReadReparentJournalInfoResults[key]; ok {
 		return result, nil
 	}
@@ -1166,12 +1189,12 @@ func (fake *TabletManagerClient) RestoreFromBackup(ctx context.Context, tablet *
 	go func() {
 		if testdata.EventInterval == 0 {
 			testdata.EventInterval = 10 * time.Millisecond
-			log.Warningf("testutil.TabletManagerClient.RestoreFromBackup faked with no event interval for %s, defaulting to %s", key, testdata.EventInterval)
+			log.Warn(fmt.Sprintf("testutil.TabletManagerClient.RestoreFromBackup faked with no event interval for %s, defaulting to %s", key, testdata.EventInterval))
 		}
 
 		if testdata.EventJitter == 0 {
 			testdata.EventJitter = time.Millisecond
-			log.Warningf("testutil.TabletManagerClient.RestoreFromBackup faked with no event jitter for %s, defaulting to %s", key, testdata.EventJitter)
+			log.Warn(fmt.Sprintf("testutil.TabletManagerClient.RestoreFromBackup faked with no event jitter for %s, defaulting to %s", key, testdata.EventJitter))
 		}
 
 		errCtx, errCancel := context.WithCancel(context.Background())
@@ -1529,6 +1552,14 @@ func (fake *TabletManagerClient) WaitForPosition(ctx context.Context, tablet *to
 	result, ok := tabletResultsByPosition[position]
 	if !ok {
 		return assert.AnError
+	}
+	if result == nil {
+		waitForPositionSucceededLock.Lock()
+		if fake.waitForPositionSucceeded == nil {
+			fake.waitForPositionSucceeded = map[string]bool{}
+		}
+		fake.waitForPositionSucceeded[tabletKey] = true
+		waitForPositionSucceededLock.Unlock()
 	}
 
 	return result

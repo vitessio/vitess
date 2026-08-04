@@ -24,7 +24,7 @@ import (
 )
 
 func TestSingletons(t *testing.T) {
-	for i := 0; i < 40; i++ {
+	for i := range 40 {
 		bs := Single(i)
 
 		require.Equal(t, 1, bs.Popcount())

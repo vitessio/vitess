@@ -22,7 +22,6 @@ Then we add an alias, and these tablets should be routable
 package binlog
 
 import (
-	"context"
 	"flag"
 	"fmt"
 	"os"
@@ -35,7 +34,6 @@ import (
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/proto/topodata"
-	"vitess.io/vitess/go/vt/utils"
 )
 
 var (
@@ -55,13 +53,12 @@ var (
 					) Engine=InnoDB
 `
 	commonTabletArg = []string{
-		utils.GetFlagVariantForTests("--vreplication-retry-delay"), "1s",
-		utils.GetFlagVariantForTests("--degraded-threshold"), "5s",
-		utils.GetFlagVariantForTests("--lock-tables-timeout"), "5s",
-		utils.GetFlagVariantForTests("--watch-replication-stream"),
-		utils.GetFlagVariantForTests("--enable-replication-reporter"),
-		utils.GetFlagVariantForTests("--serving-state-grace-period"), "1s",
-		utils.GetFlagVariantForTests("--binlog-player-protocol"), "grpc",
+		"--vreplication-retry-delay", "1s",
+		"--degraded-threshold", "5s",
+		"--lock-tables-timeout", "5s",
+		"--enable-replication-reporter",
+		"--serving-state-grace-period", "1s",
+		"--binlog-player-protocol", "grpc",
 	}
 	vSchema = `
 		{
@@ -344,7 +341,7 @@ func waitTillAllTabletsAreHealthyInVtgate(t *testing.T, vtgateInstance cluster.V
 }
 
 func testQueriesOnTabletType(t *testing.T, tabletType string, vtgateGrpcPort int, shouldFail bool) {
-	qr, err := localCluster.ExecOnVTGate(context.Background(),
+	qr, err := localCluster.ExecOnVTGate(t.Context(),
 		fmt.Sprintf("%s:%d", localCluster.Hostname, vtgateGrpcPort),
 		"@"+tabletType,
 		"select * from "+tableName, nil, nil,
@@ -353,7 +350,7 @@ func testQueriesOnTabletType(t *testing.T, tabletType string, vtgateGrpcPort int
 		require.Error(t, err)
 		return
 	}
-	assert.Equal(t, len(qr.Rows), 3)
+	assert.Len(t, qr.Rows, 3)
 }
 
 func insertInitialValues(t *testing.T) {

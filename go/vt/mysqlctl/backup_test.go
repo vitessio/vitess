@@ -20,11 +20,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path"
-	"reflect"
 	"sort"
 	"strings"
 	"sync"
@@ -37,6 +37,7 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
@@ -55,9 +56,9 @@ const mysqlShutdownTimeout = 1 * time.Minute
 func TestBackupExecutesBackupWithScopedParams(t *testing.T) {
 	env := createFakeBackupRestoreEnv(t)
 
-	require.Nil(t, Backup(env.ctx, env.backupParams), env.logger.Events)
+	require.NoError(t, Backup(env.ctx, env.backupParams), env.logger.Events)
 
-	require.Equal(t, 1, len(env.backupEngine.ExecuteBackupCalls))
+	require.Len(t, env.backupEngine.ExecuteBackupCalls, 1)
 	executeBackupParams := env.backupEngine.ExecuteBackupCalls[0].BackupParams
 	var executeBackupStats *backupstats.FakeStats
 	for _, sr := range env.stats.ScopeReturns {
@@ -77,10 +78,10 @@ func TestBackupNoStats(t *testing.T) {
 	env := createFakeBackupRestoreEnv(t)
 	env.setStats(nil)
 
-	require.Nil(t, Backup(env.ctx, env.backupParams), env.logger.Events)
+	require.NoError(t, Backup(env.ctx, env.backupParams), env.logger.Events)
 
 	// It parameterizes the backup storage with nop stats.
-	require.Equal(t, 1, len(env.backupStorage.WithParamsCalls))
+	require.Len(t, env.backupStorage.WithParamsCalls, 1)
 	require.Equal(t, backupstats.NoStats(), env.backupStorage.WithParamsCalls[0].Stats)
 }
 
@@ -89,9 +90,9 @@ func TestBackupNoStats(t *testing.T) {
 func TestBackupParameterizesBackupStorageWithScopedStats(t *testing.T) {
 	env := createFakeBackupRestoreEnv(t)
 
-	require.Nil(t, Backup(env.ctx, env.backupParams), env.logger.Events)
+	require.NoError(t, Backup(env.ctx, env.backupParams), env.logger.Events)
 
-	require.Equal(t, 1, len(env.backupStorage.WithParamsCalls))
+	require.Len(t, env.backupStorage.WithParamsCalls, 1)
 	var storageStats *backupstats.FakeStats
 	for _, sr := range env.stats.ScopeReturns {
 		if sr == env.backupStorage.WithParamsCalls[0].Stats {
@@ -111,11 +112,11 @@ func TestBackupEmitsStats(t *testing.T) {
 	// Force ExecuteBackup to take time so we can test stats emission.
 	env.backupEngine.ExecuteBackupDuration = 1001 * time.Millisecond
 
-	require.Nil(t, Backup(env.ctx, env.backupParams), env.logger.Events)
+	require.NoError(t, Backup(env.ctx, env.backupParams), env.logger.Events)
 
 	require.NotZero(t, backupstats.DeprecatedBackupDurationS.Get())
-	require.Equal(t, 0, len(env.stats.TimedIncrementCalls))
-	require.Equal(t, 0, len(env.stats.ScopeV))
+	require.Empty(t, env.stats.TimedIncrementCalls)
+	require.Empty(t, env.stats.ScopeV)
 }
 
 // TestBackupTriesToParameterizeBackupStorage tests that Backup tries to pass
@@ -124,9 +125,9 @@ func TestBackupEmitsStats(t *testing.T) {
 func TestBackupTriesToParameterizeBackupStorage(t *testing.T) {
 	env := createFakeBackupRestoreEnv(t)
 
-	require.Nil(t, Backup(env.ctx, env.backupParams), env.logger.Events)
+	require.NoError(t, Backup(env.ctx, env.backupParams), env.logger.Events)
 
-	require.Equal(t, 1, len(env.backupStorage.WithParamsCalls))
+	require.Len(t, env.backupStorage.WithParamsCalls, 1)
 	require.Equal(t, env.logger, env.backupStorage.WithParamsCalls[0].Logger)
 	var scopedStats backupstats.Stats
 	for _, sr := range env.stats.ScopeReturns {
@@ -161,28 +162,27 @@ func TestFindFilesToBackupWithoutRedoLog(t *testing.T) {
 	innodbLogFile := "innodb_log_1"
 
 	if err := os.WriteFile(path.Join(innodbDataDir, "innodb_data_1"), []byte("innodb data 1 contents"), os.ModePerm); err != nil {
-		t.Fatalf("failed to write file innodb_data_1: %v", err)
+		require.NoError(t, err)
 	}
-	if err := os.WriteFile(path.Join(innodbLogDir, innodbLogFile), []byte("innodb log 1 contents"), os.ModePerm); err != nil {
-		t.Fatalf("failed to write file %s: %v", innodbLogFile, err)
-	}
+	err := os.WriteFile(path.Join(innodbLogDir, innodbLogFile), []byte("innodb log 1 contents"), os.ModePerm)
+	require.NoErrorf(t, err, "failed to write file %s: %v", innodbLogFile, err)
 	if err := os.WriteFile(path.Join(dataDbDir, "db.opt"), []byte("db opt file"), os.ModePerm); err != nil {
-		t.Fatalf("failed to write file db.opt: %v", err)
+		require.NoError(t, err)
 	}
 	if err := os.WriteFile(path.Join(extraDir, "extra.stuff"), []byte("extra file"), os.ModePerm); err != nil {
-		t.Fatalf("failed to write file extra.stuff: %v", err)
+		require.NoError(t, err)
 	}
 	if err := os.WriteFile(path.Join(outsideDbDir, "table1.frm"), []byte("frm file"), os.ModePerm); err != nil {
-		t.Fatalf("failed to write file table1.opt: %v", err)
+		require.NoError(t, err)
 	}
 	if err := os.Symlink(outsideDbDir, path.Join(dataDir, "vt_symlink")); err != nil {
-		t.Fatalf("failed to symlink vt_symlink: %v", err)
+		require.NoError(t, err)
 	}
 	if err := os.WriteFile(path.Join(rocksdbDir, "000011.sst"), []byte("rocksdb file"), os.ModePerm); err != nil {
-		t.Fatalf("failed to write file 000011.sst: %v", err)
+		require.NoError(t, err)
 	}
 	if err := os.WriteFile(path.Join(sdiOnlyDir, "table1.sdi"), []byte("sdi file"), os.ModePerm); err != nil {
-		t.Fatalf("failed to write file table1.sdi: %v", err)
+		require.NoError(t, err)
 	}
 
 	cnf := &Mycnf{
@@ -192,9 +192,7 @@ func TestFindFilesToBackupWithoutRedoLog(t *testing.T) {
 	}
 
 	result, totalSize, err := findFilesToBackup(cnf)
-	if err != nil {
-		t.Fatalf("findFilesToBackup failed: %v", err)
-	}
+	require.NoError(t, err)
 	sort.Sort(forTest(result))
 	t.Logf("findFilesToBackup returned: %v", result)
 	expected := []FileEntry{
@@ -223,12 +221,8 @@ func TestFindFilesToBackupWithoutRedoLog(t *testing.T) {
 			Name: innodbLogFile,
 		},
 	}
-	if !reflect.DeepEqual(result, expected) {
-		t.Fatalf("got wrong list of FileEntry %v, expected %v", result, expected)
-	}
-	if totalSize <= 0 {
-		t.Fatalf("backup size should be > 0, got %v", totalSize)
-	}
+	require.Equalf(t, expected, result, "got wrong list of FileEntry %v, expected %v", result, expected)
+	require.Positivef(t, totalSize, "backup size should be > 0, got %v", totalSize)
 }
 
 func TestFindFilesToBackupWithRedoLog(t *testing.T) {
@@ -244,9 +238,8 @@ func TestFindFilesToBackupWithRedoLog(t *testing.T) {
 	rocksdbDir := path.Join(dataDir, ".rocksdb")
 	sdiOnlyDir := path.Join(dataDir, "sdi_dir")
 	for _, s := range []string{innodbDataDir, innodbLogDir, dataDbDir, extraDir, outsideDbDir, rocksdbDir, sdiOnlyDir} {
-		if err := os.MkdirAll(s, os.ModePerm); err != nil {
-			t.Fatalf("failed to create directory %v: %v", s, err)
-		}
+		err := os.MkdirAll(s, os.ModePerm)
+		require.NoErrorf(t, err, "failed to create directory %v: %v", s, err)
 	}
 
 	cnf := &Mycnf{
@@ -259,34 +252,31 @@ func TestFindFilesToBackupWithRedoLog(t *testing.T) {
 	innodbLogFile := path.Join(mysql.DynamicRedoLogSubdir, "#ib_redo1")
 
 	if err := os.WriteFile(path.Join(innodbDataDir, "innodb_data_1"), []byte("innodb data 1 contents"), os.ModePerm); err != nil {
-		t.Fatalf("failed to write file innodb_data_1: %v", err)
+		require.NoError(t, err)
 	}
-	if err := os.WriteFile(path.Join(innodbLogDir, innodbLogFile), []byte("innodb log 1 contents"), os.ModePerm); err != nil {
-		t.Fatalf("failed to write file %s: %v", innodbLogFile, err)
-	}
+	err := os.WriteFile(path.Join(innodbLogDir, innodbLogFile), []byte("innodb log 1 contents"), os.ModePerm)
+	require.NoErrorf(t, err, "failed to write file %s: %v", innodbLogFile, err)
 	if err := os.WriteFile(path.Join(dataDbDir, "db.opt"), []byte("db opt file"), os.ModePerm); err != nil {
-		t.Fatalf("failed to write file db.opt: %v", err)
+		require.NoError(t, err)
 	}
 	if err := os.WriteFile(path.Join(extraDir, "extra.stuff"), []byte("extra file"), os.ModePerm); err != nil {
-		t.Fatalf("failed to write file extra.stuff: %v", err)
+		require.NoError(t, err)
 	}
 	if err := os.WriteFile(path.Join(outsideDbDir, "table1.frm"), []byte("frm file"), os.ModePerm); err != nil {
-		t.Fatalf("failed to write file table1.opt: %v", err)
+		require.NoError(t, err)
 	}
 	if err := os.Symlink(outsideDbDir, path.Join(dataDir, "vt_symlink")); err != nil {
-		t.Fatalf("failed to symlink vt_symlink: %v", err)
+		require.NoError(t, err)
 	}
 	if err := os.WriteFile(path.Join(rocksdbDir, "000011.sst"), []byte("rocksdb file"), os.ModePerm); err != nil {
-		t.Fatalf("failed to write file 000011.sst: %v", err)
+		require.NoError(t, err)
 	}
 	if err := os.WriteFile(path.Join(sdiOnlyDir, "table1.sdi"), []byte("sdi file"), os.ModePerm); err != nil {
-		t.Fatalf("failed to write file table1.sdi: %v", err)
+		require.NoError(t, err)
 	}
 
 	result, totalSize, err := findFilesToBackup(cnf)
-	if err != nil {
-		t.Fatalf("findFilesToBackup failed: %v", err)
-	}
+	require.NoError(t, err)
 	sort.Sort(forTest(result))
 	t.Logf("findFilesToBackup returned: %v", result)
 	expected := []FileEntry{
@@ -315,12 +305,8 @@ func TestFindFilesToBackupWithRedoLog(t *testing.T) {
 			Name: innodbLogFile,
 		},
 	}
-	if !reflect.DeepEqual(result, expected) {
-		t.Fatalf("got wrong list of FileEntry %v, expected %v", result, expected)
-	}
-	if totalSize <= 0 {
-		t.Fatalf("backup size should be > 0, got %v", totalSize)
-	}
+	require.Equalf(t, expected, result, "got wrong list of FileEntry %v, expected %v", result, expected)
+	require.Positivef(t, totalSize, "backup size should be > 0, got %v", totalSize)
 }
 
 // TestRestoreEmitsStats tests that Restore emits stats.
@@ -331,11 +317,11 @@ func TestRestoreEmitsStats(t *testing.T) {
 	env.backupEngine.ExecuteRestoreDuration = 1001 * time.Millisecond
 
 	_, err := Restore(env.ctx, env.restoreParams)
-	require.Nil(t, err, env.logger.Events)
+	require.NoError(t, err, env.logger.Events)
 
 	require.NotZero(t, backupstats.DeprecatedRestoreDurationS.Get())
-	require.Equal(t, 0, len(env.stats.TimedIncrementCalls))
-	require.Equal(t, 0, len(env.stats.ScopeV))
+	require.Empty(t, env.stats.TimedIncrementCalls)
+	require.Empty(t, env.stats.ScopeV)
 }
 
 // TestRestoreExecutesRestoreWithScopedParams tests that Restore passes
@@ -344,9 +330,9 @@ func TestRestoreExecutesRestoreWithScopedParams(t *testing.T) {
 	env := createFakeBackupRestoreEnv(t)
 
 	_, err := Restore(env.ctx, env.restoreParams)
-	require.Nil(t, err, env.logger.Events)
+	require.NoError(t, err, env.logger.Events)
 
-	require.Equal(t, 1, len(env.backupEngine.ExecuteRestoreCalls))
+	require.Len(t, env.backupEngine.ExecuteRestoreCalls, 1)
 	executeRestoreParams := env.backupEngine.ExecuteRestoreCalls[0].RestoreParams
 	var executeRestoreStats *backupstats.FakeStats
 	for _, sr := range env.stats.ScopeReturns {
@@ -367,10 +353,10 @@ func TestRestoreNoStats(t *testing.T) {
 	env.setStats(nil)
 
 	_, err := Restore(env.ctx, env.restoreParams)
-	require.Nil(t, err, env.logger.Events)
+	require.NoError(t, err, env.logger.Events)
 
 	// It parameterizes the backup storage with nop stats.
-	require.Equal(t, 1, len(env.backupStorage.WithParamsCalls))
+	require.Len(t, env.backupStorage.WithParamsCalls, 1)
 	require.Equal(t, backupstats.NoStats(), env.backupStorage.WithParamsCalls[0].Stats)
 }
 
@@ -380,9 +366,9 @@ func TestRestoreParameterizesBackupStorageWithScopedStats(t *testing.T) {
 	env := createFakeBackupRestoreEnv(t)
 
 	_, err := Restore(env.ctx, env.restoreParams)
-	require.Nil(t, err, env.logger.Events)
+	require.NoError(t, err, env.logger.Events)
 
-	require.Equal(t, 1, len(env.backupStorage.WithParamsCalls))
+	require.Len(t, env.backupStorage.WithParamsCalls, 1)
 	var storageStats *backupstats.FakeStats
 	for _, sr := range env.stats.ScopeReturns {
 		if sr == env.backupStorage.WithParamsCalls[0].Stats {
@@ -402,9 +388,9 @@ func TestRestoreTriesToParameterizeBackupStorage(t *testing.T) {
 	env := createFakeBackupRestoreEnv(t)
 
 	_, err := Restore(env.ctx, env.restoreParams)
-	require.Nil(t, err, env.logger.Events)
+	require.NoError(t, err, env.logger.Events)
 
-	require.Equal(t, 1, len(env.backupStorage.WithParamsCalls))
+	require.Len(t, env.backupStorage.WithParamsCalls, 1)
 	require.Equal(t, env.logger, env.backupStorage.WithParamsCalls[0].Logger)
 	var scopedStats backupstats.Stats
 	for _, sr := range env.stats.ScopeReturns {
@@ -510,7 +496,7 @@ func TestRestoreManifestMySQLVersionValidation(t *testing.T) {
 			}
 
 			manifestBytes, err := json.Marshal(manifest)
-			require.Nil(t, err)
+			require.NoError(t, err)
 
 			env.backupEngine.ExecuteRestoreReturn = FakeBackupEngineExecuteRestoreReturn{&manifest, nil}
 			env.backupStorage.ListBackupsReturn = FakeBackupStorageListBackupsReturn{
@@ -533,6 +519,88 @@ func TestRestoreManifestMySQLVersionValidation(t *testing.T) {
 	}
 }
 
+// TestFindBackupToRestoreSkipVersionCheck tests that FindBackupToRestore skips
+// the MySQL version compatibility check exactly when the engine that created the
+// backup reports ShouldSkipVersionCheck() == true.
+func TestFindBackupToRestoreSkipVersionCheck(t *testing.T) {
+	// 8.4.10 -> 8.0.36 is a downgrade, which is never version-compatible.
+	const (
+		backupVersion  = "mysqld  Ver 8.4.10"
+		restoreVersion = "mysqld  Ver 8.0.36"
+	)
+
+	testCases := []struct {
+		name string
+		// engineSkips is the value the backup's engine returns from
+		// ShouldSkipVersionCheck().
+		engineSkips bool
+		wantBackup  bool
+	}{
+		{
+			name:        "engine skips version check",
+			engineSkips: true,
+			wantBackup:  true,
+		},
+		{
+			name:        "engine enforces version check",
+			engineSkips: false,
+			wantBackup:  false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			env := createFakeBackupRestoreEnv(t)
+			env.mysqld.Version = restoreVersion
+			env.backupEngine.ShouldSkipVersionCheckReturn = tc.engineSkips
+			// look at all backups, regardless of when they were taken.
+			env.restoreParams.StartTime = time.Time{}
+
+			manifest := BackupManifest{
+				BackupTime:   FormatRFC3339(time.Now().Add(-1 * time.Hour)),
+				BackupMethod: fakeBackupEngineName,
+				Keyspace:     "test",
+				Shard:        "-",
+				MySQLVersion: backupVersion,
+				UpgradeSafe:  false,
+			}
+			manifestBytes, err := json.Marshal(manifest)
+			require.NoError(t, err)
+
+			bhs := []backupstorage.BackupHandle{
+				&FakeBackupHandle{
+					ReadFileReturnF: func(context.Context, string) (io.ReadCloser, error) {
+						return io.NopCloser(bytes.NewBuffer(manifestBytes)), nil
+					},
+				},
+			}
+
+			restorePath, err := FindBackupToRestore(env.ctx, env.restoreParams, bhs)
+			if tc.wantBackup {
+				require.NoError(t, err)
+				require.False(t, restorePath.IsEmpty())
+			} else {
+				require.ErrorIs(t, err, ErrNoCompleteBackup)
+			}
+		})
+	}
+}
+
+// TestMySQLShellEngineShouldSkipVersionCheck verifies that the mysql-shell engine
+// wires ShouldSkipVersionCheck() to the --mysql-shell-restore-skip-version-check flag.
+func TestMySQLShellEngineShouldSkipVersionCheck(t *testing.T) {
+	originalSkip := mysqlShellRestoreSkipVersionCheck
+	t.Cleanup(func() { mysqlShellRestoreSkipVersionCheck = originalSkip })
+
+	be := &MySQLShellBackupEngine{}
+
+	mysqlShellRestoreSkipVersionCheck = true
+	require.True(t, be.ShouldSkipVersionCheck())
+
+	mysqlShellRestoreSkipVersionCheck = false
+	require.False(t, be.ShouldSkipVersionCheck())
+}
+
 type forTest []FileEntry
 
 func (f forTest) Len() int           { return len(f) }
@@ -551,16 +619,16 @@ type fakeBackupRestoreEnv struct {
 }
 
 func createFakeBackupRestoreEnv(t *testing.T) *fakeBackupRestoreEnv {
-	ctx := context.Background()
+	ctx := t.Context()
 	logger := logutil.NewMemoryLogger()
 
 	sqldb := fakesqldb.New(t)
 	sqldb.SetNeverFail(true)
 	mysqld := NewFakeMysqlDaemon(sqldb)
-	require.Nil(t, mysqld.Shutdown(ctx, nil, false, mysqlShutdownTimeout))
+	require.NoError(t, mysqld.Shutdown(ctx, nil, false, mysqlShutdownTimeout))
 
 	dirName, err := os.MkdirTemp("", "vt_backup_test")
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	cnf := &Mycnf{
 		DataDir: dirName,
@@ -609,7 +677,7 @@ func createFakeBackupRestoreEnv(t *testing.T) *fakeBackupRestoreEnv {
 	}
 
 	manifestBytes, err := json.Marshal(manifest)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	testBackupEngine := FakeBackupEngine{}
 	testBackupEngine.ExecuteRestoreReturn = FakeBackupEngineExecuteRestoreReturn{&manifest, nil}
@@ -674,17 +742,17 @@ func (fbe *fakeBackupRestoreEnv) setStats(stats *backupstats.FakeStats) {
 func TestParseBackupName(t *testing.T) {
 	// backup name doesn't contain 3 parts
 	_, _, err := ParseBackupName("dir", "asd.saddsa")
-	assert.ErrorContains(t, err, "cannot backup name")
+	require.ErrorContains(t, err, "cannot backup name")
 
 	// Invalid time
 	bt, al, err := ParseBackupName("dir", "2024-03-18.123.tablet_id")
 	assert.Nil(t, bt)
 	assert.Nil(t, al)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// Valid case
 	bt, al, err = ParseBackupName("dir", "2024-03-18.180911.cell1-42")
-	assert.NotNil(t, *bt, time.Date(2024, 03, 18, 18, 9, 11, 0, time.UTC))
+	assert.NotNil(t, *bt, time.Date(2024, 0o3, 18, 18, 9, 11, 0, time.UTC))
 	assert.Equal(t, "cell1", al.Cell)
 	assert.Equal(t, uint32(42), al.Uid)
 	assert.NoError(t, err)
@@ -693,27 +761,31 @@ func TestParseBackupName(t *testing.T) {
 func TestShouldRestore(t *testing.T) {
 	env := createFakeBackupRestoreEnv(t)
 
-	b, err := ShouldRestore(env.ctx, env.restoreParams)
+	b, err := ShouldRestore(env.ctx, env.restoreParams.Logger, env.restoreParams.Cnf,
+		env.restoreParams.Mysqld, env.restoreParams.DbName, env.restoreParams.DeleteBeforeRestore)
 	assert.False(t, b)
-	assert.Error(t, err)
+	require.Error(t, err)
 
 	env.restoreParams.DeleteBeforeRestore = true
-	b, err = ShouldRestore(env.ctx, env.restoreParams)
+	b, err = ShouldRestore(env.ctx, env.restoreParams.Logger, env.restoreParams.Cnf,
+		env.restoreParams.Mysqld, env.restoreParams.DbName, env.restoreParams.DeleteBeforeRestore)
 	assert.True(t, b)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	env.restoreParams.DeleteBeforeRestore = false
 
 	env.mysqld.FetchSuperQueryMap = map[string]*sqltypes.Result{
 		"SHOW DATABASES": {Rows: [][]sqltypes.Value{{sqltypes.NewVarBinary("any_db")}}},
 	}
-	b, err = ShouldRestore(env.ctx, env.restoreParams)
-	assert.NoError(t, err)
+	b, err = ShouldRestore(env.ctx, env.restoreParams.Logger, env.restoreParams.Cnf,
+		env.restoreParams.Mysqld, env.restoreParams.DbName, env.restoreParams.DeleteBeforeRestore)
+	require.NoError(t, err)
 	assert.True(t, b)
 
 	env.mysqld.FetchSuperQueryMap = map[string]*sqltypes.Result{
 		"SHOW DATABASES": {Rows: [][]sqltypes.Value{{sqltypes.NewVarBinary("test")}}},
 	}
-	b, err = ShouldRestore(env.ctx, env.restoreParams)
+	b, err = ShouldRestore(env.ctx, env.restoreParams.Logger, env.restoreParams.Cnf,
+		env.restoreParams.Mysqld, env.restoreParams.DbName, env.restoreParams.DeleteBeforeRestore)
 	assert.False(t, b)
 	assert.NoError(t, err)
 }
@@ -734,7 +806,7 @@ func TestScanLinesToLogger(t *testing.T) {
 	writer.Close()
 	wg.Wait()
 
-	require.Equal(t, 100, len(logger.Events))
+	require.Len(t, logger.Events, 100)
 
 	for i, event := range logger.Events {
 		require.Equal(t, fmt.Sprintf("test: foobar %d", i), event.Value)
@@ -924,7 +996,120 @@ func TestExecuteBackupInitSQL(t *testing.T) {
 			wantErrString: "no timeout provided",
 			wantNoLogMsg:  true,
 		},
+		{
+			name: "SetSuperReadOnly failure with FailOnError true",
+			params: &BackupParams{
+				TabletType: topodatapb.TabletType_PRIMARY,
+				InitSQL: &tabletmanagerdatapb.BackupRequest_InitSQL{
+					Queries:     []string{"OPTIMIZE TABLE foo"},
+					TabletTypes: []topodatapb.TabletType{topodatapb.TabletType_PRIMARY},
+					Timeout:     protoutil.DurationToProto(30 * time.Second),
+					FailOnError: true,
+				},
+				Logger: logutil.NewMemoryLogger(),
+			},
+			setupMysqld: func(fmd *FakeMysqlDaemon) {
+				fmd.SetSuperReadOnlyError = errors.New("access denied")
+			},
+			wantErr:       true,
+			wantErrString: "failed to disable super_read_only for init SQL queries",
+		},
+		{
+			name: "SetSuperReadOnly ERUnknownSystemVariable with FailOnError true",
+			params: &BackupParams{
+				TabletType: topodatapb.TabletType_PRIMARY,
+				InitSQL: &tabletmanagerdatapb.BackupRequest_InitSQL{
+					Queries:     []string{"OPTIMIZE TABLE foo"},
+					TabletTypes: []topodatapb.TabletType{topodatapb.TabletType_PRIMARY},
+					Timeout:     protoutil.DurationToProto(30 * time.Second),
+					FailOnError: true,
+				},
+				Logger: logutil.NewMemoryLogger(),
+			},
+			setupMysqld: func(fmd *FakeMysqlDaemon) {
+				fmd.SetSuperReadOnlyError = sqlerror.NewSQLError(sqlerror.ERUnknownSystemVariable, "", "Unknown system variable 'super_read_only'")
+				fmd.ExpectedExecuteSuperQueryList = []string{"OPTIMIZE TABLE foo"}
+			},
+			wantErr:    false,
+			wantLogMsg: "Server does not support super_read_only",
+		},
+		{
+			name: "SetSuperReadOnly failure with FailOnError false",
+			params: &BackupParams{
+				TabletType: topodatapb.TabletType_PRIMARY,
+				InitSQL: &tabletmanagerdatapb.BackupRequest_InitSQL{
+					Queries:     []string{"OPTIMIZE TABLE foo"},
+					TabletTypes: []topodatapb.TabletType{topodatapb.TabletType_PRIMARY},
+					Timeout:     protoutil.DurationToProto(30 * time.Second),
+					FailOnError: false,
+				},
+				Logger: logutil.NewMemoryLogger(),
+			},
+			setupMysqld: func(fmd *FakeMysqlDaemon) {
+				fmd.SetSuperReadOnlyError = errors.New("access denied")
+				fmd.ExpectedExecuteSuperQueryList = []string{"OPTIMIZE TABLE foo"}
+			},
+			wantErr:    false,
+			wantLogMsg: "Failed to disable super_read_only for init SQL queries",
+		},
 	}
+
+	// Test that super_read_only is disabled before query execution and reset after.
+	t.Run("super_read_only disabled and reset after queries", func(t *testing.T) {
+		sqldb := fakesqldb.New(t)
+		defer sqldb.Close()
+		mysqld := NewFakeMysqlDaemon(sqldb)
+		defer mysqld.Close()
+
+		mysqld.SuperReadOnly.Store(true)
+		mysqld.ExpectedExecuteSuperQueryList = []string{"OPTIMIZE TABLE foo"}
+		superReadOnlyDuringQueries := true
+		mysqld.ExecuteSuperQueryListCallback = func() {
+			superReadOnlyDuringQueries = mysqld.SuperReadOnly.Load()
+		}
+
+		params := &BackupParams{
+			TabletType: topodatapb.TabletType_PRIMARY,
+			InitSQL: &tabletmanagerdatapb.BackupRequest_InitSQL{
+				Queries:     []string{"OPTIMIZE TABLE foo"},
+				TabletTypes: []topodatapb.TabletType{topodatapb.TabletType_PRIMARY},
+				Timeout:     protoutil.DurationToProto(30 * time.Second),
+			},
+			Mysqld: mysqld,
+			Logger: logutil.NewMemoryLogger(),
+		}
+
+		err := ExecuteBackupInitSQL(t.Context(), params)
+		require.NoError(t, err)
+		assert.False(t, superReadOnlyDuringQueries, "super_read_only should be disabled during query execution")
+		assert.True(t, mysqld.SuperReadOnly.Load(), "super_read_only should be reset to true after queries complete")
+	})
+
+	// Test that super_read_only is not reset when it was already off.
+	t.Run("super_read_only already off no reset needed", func(t *testing.T) {
+		sqldb := fakesqldb.New(t)
+		defer sqldb.Close()
+		mysqld := NewFakeMysqlDaemon(sqldb)
+		defer mysqld.Close()
+
+		mysqld.SuperReadOnly.Store(false)
+		mysqld.ExpectedExecuteSuperQueryList = []string{"OPTIMIZE TABLE foo"}
+
+		params := &BackupParams{
+			TabletType: topodatapb.TabletType_PRIMARY,
+			InitSQL: &tabletmanagerdatapb.BackupRequest_InitSQL{
+				Queries:     []string{"OPTIMIZE TABLE foo"},
+				TabletTypes: []topodatapb.TabletType{topodatapb.TabletType_PRIMARY},
+				Timeout:     protoutil.DurationToProto(30 * time.Second),
+			},
+			Mysqld: mysqld,
+			Logger: logutil.NewMemoryLogger(),
+		}
+
+		err := ExecuteBackupInitSQL(t.Context(), params)
+		require.NoError(t, err)
+		assert.False(t, mysqld.SuperReadOnly.Load(), "super_read_only should remain false")
+	})
 
 	// Test case for context cancellation during query execution.
 	t.Run("parent context canceled with query failure", func(t *testing.T) {
@@ -949,7 +1134,7 @@ func TestExecuteBackupInitSQL(t *testing.T) {
 			Logger: logger,
 		}
 
-		ctx, cancel := context.WithCancel(context.Background())
+		ctx, cancel := context.WithCancel(t.Context())
 		cancel() // Cancel immediately to simulate parent context cancellation
 
 		err := ExecuteBackupInitSQL(ctx, params)
@@ -978,20 +1163,20 @@ func TestExecuteBackupInitSQL(t *testing.T) {
 				tc.params.Mysqld = mysqld
 			}
 
-			ctx := context.Background()
+			ctx := t.Context()
 			err := ExecuteBackupInitSQL(ctx, tc.params)
 
 			if tc.wantErr {
 				require.Error(t, err)
 				if tc.wantErrString != "" {
-					assert.ErrorContains(t, err, tc.wantErrString)
+					require.ErrorContains(t, err, tc.wantErrString)
 				}
 			} else {
 				require.NoError(t, err)
 			}
 
 			if mysqld != nil && !tc.wantErr {
-				assert.NoError(t, mysqld.CheckSuperQueryList())
+				require.NoError(t, mysqld.CheckSuperQueryList())
 			}
 
 			// Verify logging too.

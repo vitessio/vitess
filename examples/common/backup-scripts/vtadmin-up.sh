@@ -36,7 +36,7 @@ vtadmin \
   --addr "${case_insensitive_hostname}:${vtadmin_api_port}" \
   --http-origin "http://${case_insensitive_hostname}:${vtadmin_web_port}" \
   --http-tablet-url-tmpl "http://{{ .Tablet.Hostname }}:15{{ .Tablet.Alias.Uid }}" \
-  --tracer "opentracing-jaeger" \
+  --tracer "opentelemetry" \
   --grpc-tracing \
   --http-tracing \
   --logtostderr \

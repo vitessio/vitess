@@ -21,11 +21,12 @@ package grpcclient
 import (
 	"context"
 	"crypto/tls"
+	"fmt"
 	"net"
+	"os"
 	"sync"
 	"time"
 
-	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
 	"github.com/spf13/pflag"
 	"golang.org/x/sync/semaphore"
@@ -152,7 +153,8 @@ func DialContext(ctx context.Context, target string, failFast FailFast, opts ...
 	for _, grpcDialOptionInitializer := range grpcDialOptions {
 		newopts, err = grpcDialOptionInitializer(newopts)
 		if err != nil {
-			log.Fatalf("There was an error initializing client grpc.DialOption: %v", err)
+			log.Error(fmt.Sprintf("There was an error initializing client grpc.DialOption: %v", err))
+			os.Exit(1)
 		}
 	}
 	grpcDialOptionsMu.Unlock()
@@ -240,8 +242,8 @@ func (collector *clientInterceptorBuilder) Build() []grpc.DialOption {
 		return []grpc.DialOption{}
 	default:
 		return []grpc.DialOption{
-			grpc.WithUnaryInterceptor(grpc_middleware.ChainUnaryClient(collector.unaryInterceptors...)),
-			grpc.WithStreamInterceptor(grpc_middleware.ChainStreamClient(collector.streamInterceptors...)),
+			grpc.WithChainUnaryInterceptor(collector.unaryInterceptors...),
+			grpc.WithChainStreamInterceptor(collector.streamInterceptors...),
 		}
 	}
 }

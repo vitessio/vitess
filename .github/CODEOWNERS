@@ -87,6 +87,7 @@ go.sum @harshit-gangal @mattlord @rohit-nayak-ps @systay @frouioui @timvaillanco
 /proto/vtadmin.proto @beingnoble03 @mattlord
 /proto/vtctldata.proto @mattlord
 /proto/vtctlservice.proto @mattlord
+/proto/vtgateservice.proto @vitessio/vtgateservice
 /proto/vtorcdata.proto @mattlord @shlomi-noach @timvaillancourt
 /test/ @frouioui @rohit-nayak-ps @mattlord @harshit-gangal
 /tools/ @frouioui @rohit-nayak-ps

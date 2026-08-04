@@ -54,7 +54,7 @@ func TestDoErr(t *testing.T) {
 		return "", someErr
 	})
 
-	assert.ErrorIs(t, err, someErr, "incorrect Do error")
+	require.ErrorIs(t, err, someErr, "incorrect Do error")
 	assert.Empty(t, v, "unexpected non-empty value")
 }
 
@@ -62,9 +62,9 @@ func TestDoDupSuppress(t *testing.T) {
 	g := NewGroup[string, string]()
 	var wg1, wg2 sync.WaitGroup
 	c := make(chan string, 1)
-	var calls int32
+	var calls atomic.Int32
 	fn := func() (string, error) {
-		if atomic.AddInt32(&calls, 1) == 1 {
+		if calls.Add(1) == 1 {
 			// First invocation.
 			wg1.Done()
 		}
@@ -78,27 +78,26 @@ func TestDoDupSuppress(t *testing.T) {
 
 	const n = 10
 	wg1.Add(1)
-	for range n {
+	errs := make([]error, n)
+	vals := make([]string, n)
+	for i := range n {
 		wg1.Add(1)
-		wg2.Add(1)
-		go func() {
-			defer wg2.Done()
+		wg2.Go(func() {
 			wg1.Done()
-			v, err, _ := g.Do("key", fn)
-			if !assert.NoError(t, err) {
-				return
-			}
-
-			assert.Equal(t, "bar", v)
-		}()
+			vals[i], errs[i], _ = g.Do("key", fn)
+		})
 	}
 	wg1.Wait()
 	// At least one goroutine is in fn now and all of them have at
 	// least reached the line before the Do.
 	c <- "bar"
 	wg2.Wait()
-	got := atomic.LoadInt32(&calls)
-	assert.Greater(t, got, int32(0))
+	for i := range n {
+		require.NoError(t, errs[i])
+		assert.Equal(t, "bar", vals[i])
+	}
+	got := calls.Load()
+	assert.Positive(t, got)
 	assert.Less(t, got, int32(n))
 }
 
@@ -148,17 +147,15 @@ func TestGoexitDo(t *testing.T) {
 	const n = 5
 	waited := int32(n)
 	done := make(chan struct{})
-	for range n {
+	errs := make([]error, n)
+	for i := range n {
 		go func() {
-			var err error
 			defer func() {
-				assert.NoError(t, err)
-
 				if atomic.AddInt32(&waited, -1) == 0 {
 					close(done)
 				}
 			}()
-			_, err, _ = g.Do("key", fn)
+			_, errs[i], _ = g.Do("key", fn)
 		}()
 	}
 
@@ -166,6 +163,9 @@ func TestGoexitDo(t *testing.T) {
 	case <-done:
 	case <-time.After(time.Second):
 		require.Fail(t, "Do hangs")
+	}
+	for _, err := range errs {
+		require.NoError(t, err)
 	}
 }
 

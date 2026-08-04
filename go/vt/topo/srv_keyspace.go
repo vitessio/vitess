@@ -21,6 +21,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"path"
+	"slices"
 	"sync"
 
 	"vitess.io/vitess/go/vt/vterrors"
@@ -149,10 +150,8 @@ func (ts *Server) GetShardServingCells(ctx context.Context, si *ShardInfo) (serv
 								mu.Lock()
 								defer mu.Unlock()
 								// Check that this cell hasn't been added already
-								for _, servingCell := range servingCells {
-									if servingCell == cell {
-										return
-									}
+								if slices.Contains(servingCells, cell) {
+									return
 								}
 								servingCells = append(servingCells, cell)
 							}()
@@ -197,13 +196,7 @@ func (ts *Server) GetShardServingTypes(ctx context.Context, si *ShardInfo) (serv
 					mu.Lock()
 					defer mu.Unlock()
 					for _, partition := range srvKeyspace.GetPartitions() {
-						partitionAlreadyAdded := false
-						for _, servingType := range servingTypes {
-							if servingType == partition.ServedType {
-								partitionAlreadyAdded = true
-								break
-							}
-						}
+						partitionAlreadyAdded := slices.Contains(servingTypes, partition.ServedType)
 
 						if !partitionAlreadyAdded {
 							for _, shardReference := range partition.ShardReferences {
@@ -286,7 +279,7 @@ func (ts *Server) AddSrvKeyspacePartitions(ctx context.Context, keyspace string,
 						ServedType: tabletType,
 					}
 
-					shardReferences := make([]*topodatapb.ShardReference, 0)
+					shardReferences := make([]*topodatapb.ShardReference, 0, len(shards))
 					for _, si := range shards {
 						shardReference := &topodatapb.ShardReference{
 							Name:     si.ShardName(),
@@ -359,7 +352,7 @@ func (ts *Server) DeleteSrvKeyspacePartitions(ctx context.Context, keyspace stri
 						}
 
 						if found {
-							shardReferences := make([]*topodatapb.ShardReference, 0)
+							shardReferences := make([]*topodatapb.ShardReference, 0, len(partition.GetShardReferences()))
 							for _, shardReference := range partition.GetShardReferences() {
 								// Use shard name rather than key range so it works
 								// for both range-based and non-range-based shards.
@@ -559,7 +552,7 @@ func (ts *Server) MigrateServedType(ctx context.Context, keyspace string, shards
 						continue
 					}
 
-					shardReferences := make([]*topodatapb.ShardReference, 0)
+					shardReferences := make([]*topodatapb.ShardReference, 0, len(partition.GetShardReferences()))
 
 					for _, shardReference := range partition.GetShardReferences() {
 						inShardsToRemove := false

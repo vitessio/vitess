@@ -1,7 +1,22 @@
+/*
+Copyright 2026 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package vtctl
 
 import (
-	"context"
 	"fmt"
 	"math"
 	"testing"
@@ -35,8 +50,7 @@ var (
 )
 
 func TestVDiff2Unsharded(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	env := newTestVDiffEnv(t, ctx, []string{"0"}, []string{"0"}, "", nil)
 	defer env.close()
 
@@ -264,7 +278,7 @@ func TestVDiff2Unsharded(t *testing.T) {
 				Output: sqltypes.ResultToProto3(tcase.result),
 			}
 			env.tmc.setVDResults(env.tablets[200].tablet, req, res)
-			output, err := env.wr.VDiff2(context.Background(), "target", env.workflow, vdiff.ShowAction, UUID, UUID, options)
+			output, err := env.wr.VDiff2(t.Context(), "target", env.workflow, vdiff.ShowAction, UUID, UUID, options)
 			require.NoError(t, err)
 			vds, err := displayVDiff2ShowSingleSummary(env.wr, options.ReportOptions.Format, "target", env.workflow, UUID, output, false)
 			require.NoError(t, err)
@@ -277,8 +291,7 @@ func TestVDiff2Unsharded(t *testing.T) {
 }
 
 func TestVDiff2Sharded(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	env := newTestVDiffEnv(t, ctx, []string{"-40", "40-"}, []string{"-80", "80-"}, "", map[string]string{
 		"-80": "MySQL56/0e45e704-7cb9-11ed-a1eb-0242ac120002:1-890",
 		"80-": "MySQL56/1497ddb0-7cb9-11ed-a1eb-0242ac120002:1-891",
@@ -373,7 +386,7 @@ func TestVDiff2Sharded(t *testing.T) {
 			}
 			env.tmc.setVDResults(env.tablets[200].tablet, req, shard1Res)
 			env.tmc.setVDResults(env.tablets[210].tablet, req, shard2Res)
-			output, err := env.wr.VDiff2(context.Background(), "target", env.workflow, vdiff.ShowAction, UUID, UUID, options)
+			output, err := env.wr.VDiff2(t.Context(), "target", env.workflow, vdiff.ShowAction, UUID, UUID, options)
 			require.NoError(t, err)
 			vds, err := displayVDiff2ShowSingleSummary(env.wr, options.ReportOptions.Format, "target", env.workflow, UUID, output, true /* verbose */)
 			require.NoError(t, err)
@@ -392,7 +405,7 @@ func TestGetStructNames(t *testing.T) {
 	}
 	got := getStructFieldNames(s{})
 	want := []string{"A", "B"}
-	require.EqualValues(t, want, got)
+	require.Equal(t, want, got)
 }
 
 func TestBuildProgressReport(t *testing.T) {

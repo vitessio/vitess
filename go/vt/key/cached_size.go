@@ -29,6 +29,7 @@ func (cached *DestinationExactKeyRange) CachedSize(alloc bool) int64 {
 	size += cached.KeyRange.CachedSize(true)
 	return size
 }
+
 func (cached *DestinationKeyRange) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)

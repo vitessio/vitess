@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useParams, Link, useHistory } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import {
     useDeleteShard,
     useEmergencyFailoverShard,
@@ -14,7 +14,7 @@ import {
 import { useDocumentTitle } from '../../../hooks/useDocumentTitle';
 import ActionPanel from '../../ActionPanel';
 import { success, warn } from '../../Snackbar';
-import { UseMutationResult } from 'react-query';
+import { UseMutationResult } from '@tanstack/react-query';
 import Toggle from '../../toggle/Toggle';
 import { Label } from '../../inputs/Label';
 import { TextInput } from '../../TextInput';
@@ -33,7 +33,7 @@ interface RouteParams {
 
 const Advanced: React.FC = () => {
     const params = useParams<RouteParams>();
-    const history = useHistory();
+    const navigate = useNavigate();
 
     const shardName = `${params.keyspace}/${params.shard}`;
 
@@ -63,7 +63,7 @@ const Advanced: React.FC = () => {
         {
             onSuccess: (result) => {
                 success(`Successfully deleted shard ${shardName}`, { autoClose: 7000 });
-                history.push(`/keyspace/${params.keyspace}/${params.clusterID}/shards`);
+                navigate(`/keyspace/${params.keyspace}/${params.clusterID}/shards`);
             },
             onError: (error) => warn(`There was an error deleting shard ${shardName}: ${error}`),
         }

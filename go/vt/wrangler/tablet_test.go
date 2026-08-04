@@ -17,7 +17,6 @@ limitations under the License.
 package wrangler
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -33,8 +32,7 @@ import (
 // shard name to lower case when it's a keyrange, and populates
 // KeyRange properly.
 func TestInitTabletShardConversion(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	cell := "cell1"
 	ts := memorytopo.NewServer(ctx, cell)
@@ -49,10 +47,10 @@ func TestInitTabletShardConversion(t *testing.T) {
 		Shard:    "80-C0",
 	}
 
-	err := wr.TopoServer().InitTablet(context.Background(), tablet, false /*allowPrimaryOverride*/, true /*createShardAndKeyspace*/, false /*allowUpdate*/)
+	err := wr.TopoServer().InitTablet(t.Context(), tablet, false /*allowPrimaryOverride*/, true /*createShardAndKeyspace*/, false /*allowUpdate*/)
 	require.NoError(t, err)
 
-	ti, err := ts.GetTablet(context.Background(), tablet.Alias)
+	ti, err := ts.GetTablet(t.Context(), tablet.Alias)
 	require.NoError(t, err)
 	require.Equal(t, "80-c0", ti.Shard, "Got wrong tablet.Shard")
 	require.Equal(t, "\x80", string(ti.KeyRange.Start), "Got wrong tablet.KeyRange start")
@@ -61,8 +59,7 @@ func TestInitTabletShardConversion(t *testing.T) {
 
 // TestDeleteTabletBasic tests delete of non-primary tablet
 func TestDeleteTabletBasic(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	cell := "cell1"
 	ts := memorytopo.NewServer(ctx, cell)
@@ -77,21 +74,20 @@ func TestDeleteTabletBasic(t *testing.T) {
 		Keyspace: "test",
 	}
 
-	err := wr.TopoServer().InitTablet(context.Background(), tablet, false /*allowPrimaryOverride*/, true /*createShardAndKeyspace*/, false /*allowUpdate*/)
+	err := wr.TopoServer().InitTablet(t.Context(), tablet, false /*allowPrimaryOverride*/, true /*createShardAndKeyspace*/, false /*allowUpdate*/)
 	require.NoError(t, err)
 
-	_, err = ts.GetTablet(context.Background(), tablet.Alias)
+	_, err = ts.GetTablet(t.Context(), tablet.Alias)
 	require.NoError(t, err)
 
-	err = wr.DeleteTablet(context.Background(), tablet.Alias, false)
+	err = wr.DeleteTablet(t.Context(), tablet.Alias, false)
 	require.NoError(t, err)
 }
 
 // TestDeleteTabletTruePrimary tests that you can delete a true primary tablet
 // only if allowPrimary is set to true
 func TestDeleteTabletTruePrimary(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	cell := "cell1"
 	ts := memorytopo.NewServer(ctx, cell)
@@ -107,33 +103,32 @@ func TestDeleteTabletTruePrimary(t *testing.T) {
 		Type:     topodatapb.TabletType_PRIMARY,
 	}
 
-	err := wr.TopoServer().InitTablet(context.Background(), tablet, false /*allowPrimaryOverride*/, true /*createShardAndKeyspace*/, false /*allowUpdate*/)
+	err := wr.TopoServer().InitTablet(t.Context(), tablet, false /*allowPrimaryOverride*/, true /*createShardAndKeyspace*/, false /*allowUpdate*/)
 	require.NoError(t, err)
 
-	_, err = ts.GetTablet(context.Background(), tablet.Alias)
+	_, err = ts.GetTablet(t.Context(), tablet.Alias)
 	require.NoError(t, err)
 
 	// set PrimaryAlias and PrimaryTermStartTime on shard to match chosen primary tablet
-	_, err = ts.UpdateShardFields(context.Background(), "test", "0", func(si *topo.ShardInfo) error {
+	_, err = ts.UpdateShardFields(t.Context(), "test", "0", func(si *topo.ShardInfo) error {
 		si.PrimaryAlias = tablet.Alias
 		si.PrimaryTermStartTime = tablet.PrimaryTermStartTime
 		return nil
 	})
 	require.NoError(t, err)
 
-	err = wr.DeleteTablet(context.Background(), tablet.Alias, false)
+	err = wr.DeleteTablet(t.Context(), tablet.Alias, false)
 	wantError := "as it is a primary, use allow_primary flag"
 	require.ErrorContains(t, err, wantError, "DeleteTablet on primary: want specific error message")
 
-	err = wr.DeleteTablet(context.Background(), tablet.Alias, true)
+	err = wr.DeleteTablet(t.Context(), tablet.Alias, true)
 	require.NoError(t, err)
 }
 
 // TestDeleteTabletFalsePrimary tests that you can delete a false primary tablet
 // with allowPrimary set to false
 func TestDeleteTabletFalsePrimary(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	cell := "cell1"
 	ts := memorytopo.NewServer(ctx, cell)
@@ -149,7 +144,7 @@ func TestDeleteTabletFalsePrimary(t *testing.T) {
 		Type:     topodatapb.TabletType_PRIMARY,
 	}
 
-	err := wr.TopoServer().InitTablet(context.Background(), tablet1, false /*allowPrimaryOverride*/, true /*createShardAndKeyspace*/, false /*allowUpdate*/)
+	err := wr.TopoServer().InitTablet(t.Context(), tablet1, false /*allowPrimaryOverride*/, true /*createShardAndKeyspace*/, false /*allowUpdate*/)
 	require.NoError(t, err)
 
 	tablet2 := &topodatapb.Tablet{
@@ -161,11 +156,11 @@ func TestDeleteTabletFalsePrimary(t *testing.T) {
 		Shard:    "0",
 		Type:     topodatapb.TabletType_PRIMARY,
 	}
-	err = wr.TopoServer().InitTablet(context.Background(), tablet2, true /*allowPrimaryOverride*/, false /*createShardAndKeyspace*/, false /*allowUpdate*/)
+	err = wr.TopoServer().InitTablet(t.Context(), tablet2, true /*allowPrimaryOverride*/, false /*createShardAndKeyspace*/, false /*allowUpdate*/)
 	require.NoError(t, err)
 
 	// set PrimaryAlias and PrimaryTermStartTime on shard to match chosen primary tablet
-	_, err = ts.UpdateShardFields(context.Background(), "test", "0", func(si *topo.ShardInfo) error {
+	_, err = ts.UpdateShardFields(t.Context(), "test", "0", func(si *topo.ShardInfo) error {
 		si.PrimaryAlias = tablet2.Alias
 		si.PrimaryTermStartTime = tablet2.PrimaryTermStartTime
 		return nil
@@ -173,15 +168,14 @@ func TestDeleteTabletFalsePrimary(t *testing.T) {
 	require.NoError(t, err)
 
 	// Should be able to delete old (false) primary with allowPrimary = false
-	err = wr.DeleteTablet(context.Background(), tablet1.Alias, false)
+	err = wr.DeleteTablet(t.Context(), tablet1.Alias, false)
 	require.NoError(t, err)
 }
 
 // TestDeleteTabletShardNonExisting tests that you can delete a true primary
 // tablet if a shard does not exists anymore.
 func TestDeleteTabletShardNonExisting(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	cell := "cell1"
 	ts := memorytopo.NewServer(ctx, cell)
@@ -197,14 +191,14 @@ func TestDeleteTabletShardNonExisting(t *testing.T) {
 		Type:     topodatapb.TabletType_PRIMARY,
 	}
 
-	err := wr.TopoServer().InitTablet(context.Background(), tablet, false /*allowPrimaryOverride*/, true /*createShardAndKeyspace*/, false /*allowUpdate*/)
+	err := wr.TopoServer().InitTablet(t.Context(), tablet, false /*allowPrimaryOverride*/, true /*createShardAndKeyspace*/, false /*allowUpdate*/)
 	require.NoError(t, err)
 
-	_, err = ts.GetTablet(context.Background(), tablet.Alias)
+	_, err = ts.GetTablet(t.Context(), tablet.Alias)
 	require.NoError(t, err)
 
 	// set PrimaryAlias and PrimaryTermStartTime on shard to match chosen primary tablet
-	_, err = ts.UpdateShardFields(context.Background(), "test", "0", func(si *topo.ShardInfo) error {
+	_, err = ts.UpdateShardFields(t.Context(), "test", "0", func(si *topo.ShardInfo) error {
 		si.PrimaryAlias = tablet.Alias
 		si.PrimaryTermStartTime = tablet.PrimaryTermStartTime
 		return nil
@@ -212,10 +206,10 @@ func TestDeleteTabletShardNonExisting(t *testing.T) {
 	require.NoError(t, err)
 
 	// trigger a shard deletion
-	err = ts.DeleteShard(context.Background(), "test", "0")
+	err = ts.DeleteShard(t.Context(), "test", "0")
 	require.NoError(t, err)
 
 	// DeleteTablet should not fail if a shard no longer exist
-	err = wr.DeleteTablet(context.Background(), tablet.Alias, true)
+	err = wr.DeleteTablet(t.Context(), tablet.Alias, true)
 	require.NoError(t, err)
 }

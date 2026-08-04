@@ -58,7 +58,7 @@ func failoverExternalReparenting(t *testing.T, clusterInstance *cluster.LocalPro
 	minUnavailabilityInS := 1.0
 	if duration.Seconds() < minUnavailabilityInS {
 		w := minUnavailabilityInS - duration.Seconds()
-		log.Infof("Waiting for %.1f seconds because the failover was too fast (took only %.3f seconds)", w, duration.Seconds())
+		log.Info(fmt.Sprintf("Waiting for %.1f seconds because the failover was too fast (took only %.3f seconds)", w, duration.Seconds()))
 		time.Sleep(time.Duration(w) * time.Second)
 	}
 
@@ -103,9 +103,9 @@ func failoverPlannedReparenting(t *testing.T, clusterInstance *cluster.LocalProc
 func assertFailover(t *testing.T, shard string, stats *buffer.VTGateBufferingStats) {
 	stopLabel := fmt.Sprintf("%s.%s", shard, "NewPrimarySeen")
 
-	assert.Greater(t, stats.BufferFailoverDurationSumMs[shard], 0)
-	assert.Greater(t, stats.BufferRequestsBuffered[shard], 0)
-	assert.Greater(t, stats.BufferStops[stopLabel], 0)
+	assert.Positive(t, stats.BufferFailoverDurationSumMs[shard])
+	assert.Positive(t, stats.BufferRequestsBuffered[shard])
+	assert.Positive(t, stats.BufferStops[stopLabel])
 
 	// Number of buffering stops must be equal to the number of seen failovers.
 	assert.Equal(t, stats.HealthcheckPrimaryPromoted[shard], stats.BufferStops[stopLabel])

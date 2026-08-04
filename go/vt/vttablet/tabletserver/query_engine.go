@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strings"
 	"sync"
@@ -123,11 +124,15 @@ func isValid(planType planbuilder.PlanType, hasReservedCon bool, hasSysSettings 
 
 // _______________________________________________
 
-type PlanCacheKey = theine.StringKey
-type PlanCache = theine.Store[PlanCacheKey, *TabletPlan]
+type (
+	PlanCacheKey = theine.StringKey
+	PlanCache    = theine.Store[PlanCacheKey, *TabletPlan]
+)
 
-type SettingsCacheKey = theine.StringKey
-type SettingsCache = theine.Store[SettingsCacheKey, *smartconnpool.Setting]
+type (
+	SettingsCacheKey = theine.StringKey
+	SettingsCache    = theine.Store[SettingsCacheKey, *smartconnpool.Setting]
+)
 
 type currentSchema struct {
 	tables map[string]*schema.Table
@@ -220,7 +225,7 @@ func NewQueryEngine(env tabletenv.Env, se *schema.Engine) *QueryEngine {
 	// cache for connection settings: default to 1/4th of the size for the query cache and do
 	// not use a doorkeeper because custom connection settings are rarely one-off and we always
 	// want to cache them
-	var settingsCacheMemory = config.QueryCacheMemory / 4
+	settingsCacheMemory := config.QueryCacheMemory / 4
 	qe.settings = theine.NewStore[SettingsCacheKey, *smartconnpool.Setting](settingsCacheMemory, false)
 
 	qe.schema.Store(&currentSchema{
@@ -233,8 +238,7 @@ func NewQueryEngine(env tabletenv.Env, se *schema.Engine) *QueryEngine {
 	qe.consolidatorMode.Store(config.Consolidator)
 	qe.consolidator = sync2.NewConsolidator()
 	if config.ConsolidatorStreamTotalSize > 0 && config.ConsolidatorStreamQuerySize > 0 {
-		log.Infof("Stream consolidator is enabled with query size set to %d and total size set to %d.",
-			config.ConsolidatorStreamQuerySize, config.ConsolidatorStreamTotalSize)
+		log.Info(fmt.Sprintf("Stream consolidator is enabled with query size set to %d and total size set to %d.", config.ConsolidatorStreamQuerySize, config.ConsolidatorStreamTotalSize))
 		qe.streamConsolidator = NewStreamConsolidator(config.ConsolidatorStreamTotalSize, config.ConsolidatorStreamQuerySize, returnStreamResult)
 	} else {
 		log.Info("Stream consolidator is not enabled.")
@@ -249,13 +253,13 @@ func NewQueryEngine(env tabletenv.Env, se *schema.Engine) *QueryEngine {
 	if config.TableACLExemptACL != "" {
 		if f, err := tableacl.GetCurrentACLFactory(); err == nil {
 			if exemptACL, err := f.New([]string{config.TableACLExemptACL}); err == nil {
-				log.Infof("Setting Table ACL exempt rule for %v", config.TableACLExemptACL)
+				log.Info(fmt.Sprintf("Setting Table ACL exempt rule for %v", config.TableACLExemptACL))
 				qe.exemptACL = exemptACL
 			} else {
-				log.Infof("Cannot build exempt ACL for table ACL: %v", err)
+				log.Info(fmt.Sprintf("Cannot build exempt ACL for table ACL: %v", err))
 			}
 		} else {
-			log.Infof("Cannot get current ACL Factory: %v", err)
+			log.Info(fmt.Sprintf("Cannot get current ACL Factory: %v", err))
 		}
 	}
 
@@ -384,7 +388,7 @@ func (qe *QueryEngine) getPlan(curSchema *currentSchema, sql string, noRowsLimit
 		return nil, err
 	}
 	plan := &TabletPlan{Plan: splan, Original: sql}
-	plan.Rules = qe.queryRuleSources.FilterByPlan(sql, plan.PlanID, plan.TableNames()...)
+	plan.Rules = qe.queryRuleSources.FilterByPlan(sql, []planbuilder.PlanType{plan.PlanID}, plan.TableNames()...)
 	plan.buildAuthorized()
 	if sqlparser.CachePlan(statement) {
 		return plan, nil
@@ -423,14 +427,31 @@ func (qe *QueryEngine) getStreamPlan(curSchema *currentSchema, sql string) (*Tab
 		return nil, err
 	}
 
-	splan, err := planbuilder.BuildStreaming(statement, curSchema.tables)
-
+	splan, err := planbuilder.BuildStreaming(qe.env.Environment(), statement, curSchema.tables, qe.env.Config().DB.DBName)
 	if err != nil {
 		return nil, err
 	}
 
 	plan := &TabletPlan{Plan: splan, Original: sql}
-	plan.Rules = qe.queryRuleSources.FilterByPlan(sql, plan.PlanID, plan.TableName().String())
+	// Rules keyed on a statement's pre-v25 streaming plan type keep matching
+	// it here on the streaming path: the deprecated SelectStream name for
+	// SELECT, UNION, EXPLAIN, and SHOW, and OtherRead for ANALYZE (which
+	// plans as Select today). To be removed in v26 along with the
+	// SelectStream plan name.
+	ruleIDs := []planbuilder.PlanType{plan.PlanID}
+	legacyID, hasLegacyID := planbuilder.LegacyStreamRulePlan(statement)
+	if hasLegacyID {
+		ruleIDs = append(ruleIDs, legacyID)
+	}
+	plan.Rules = qe.queryRuleSources.FilterByPlan(sql, ruleIDs, plan.TableNames()...)
+	// The OtherRead plan name is not deprecated, so an ANALYZE rule match
+	// through it cannot be flagged when the rules file is loaded; warn when the
+	// legacy plan type is the sole reason a rule applied. (SelectStream rules
+	// are flagged at rule-load time, so the warning is only for ANALYZE.)
+	if _, isAnalyze := statement.(*sqlparser.Analyze); isAnalyze &&
+		qe.queryRuleSources.PlanMatchesExclusively(sql, []planbuilder.PlanType{plan.PlanID}, legacyID, plan.TableNames()...) {
+		warnAnalyzeLegacyRuleMatch(sql)
+	}
 	plan.buildAuthorized()
 
 	if sqlparser.CachePlan(statement) {
@@ -464,6 +485,20 @@ func (qe *QueryEngine) GetStreamPlan(ctx context.Context, logStats *tabletenv.Lo
 	return plan, err
 }
 
+// analyzeLegacyRuleMatchOnce limits the ANALYZE legacy-rule warning to one
+// line per process: the same statement can be re-planned on every schema
+// change or cache eviction, and the warning is equally actionable however
+// often it fires.
+var analyzeLegacyRuleMatchOnce sync.Once
+
+func warnAnalyzeLegacyRuleMatch(sql string) {
+	analyzeLegacyRuleMatchOnce.Do(func() {
+		log.Warn("a query rule matched a streamed ANALYZE statement only through its pre-v25 streaming plan type OtherRead; "+
+			"this compatibility matching will be removed in v26, key the rule on the Select plan or a Query pattern to keep matching streamed ANALYZE",
+			slog.String("query", sql))
+	})
+}
+
 // gets key used to cache stream query plan
 func (qe *QueryEngine) getStreamPlanCacheKey(sql string) string {
 	return "__STREAM__" + sql
@@ -484,7 +519,7 @@ func (qe *QueryEngine) GetMessageStreamPlan(name string) (*TabletPlan, error) {
 		return nil, err
 	}
 	plan := &TabletPlan{Plan: splan}
-	plan.Rules = qe.queryRuleSources.FilterByPlan("stream from "+name, plan.PlanID, plan.TableName().String())
+	plan.Rules = qe.queryRuleSources.FilterByPlan("stream from "+name, []planbuilder.PlanType{plan.PlanID}, plan.TableName().String())
 	plan.buildAuthorized()
 	return plan, nil
 }
@@ -603,7 +638,7 @@ func (qe *QueryEngine) AddStats(plan *TabletPlan, tableName, workload string, ta
 	// But there are special cases like `SELECT ... INTO OUTFILE ''` which return positive rows affected
 	// So we check if it is positive and add that too.
 	switch plan.PlanID {
-	case planbuilder.PlanSelect, planbuilder.PlanSelectStream, planbuilder.PlanSelectImpossible, planbuilder.PlanShow, planbuilder.PlanOtherRead:
+	case planbuilder.PlanSelect, planbuilder.PlanSelectImpossible, planbuilder.PlanShow, planbuilder.PlanOtherRead:
 		qe.queryRowsReturned.Add(keys, rowsReturned)
 		if rowsAffected > 0 {
 			qe.queryRowsAffected.Add(keys, rowsAffected)

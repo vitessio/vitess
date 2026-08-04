@@ -73,7 +73,7 @@ type (
 	}
 	// VSchemaViews provides access to view definitions within the VSchema.
 	VSchemaViews interface {
-		FindView(name TableName) TableStatement
+		FindView(name TableName) (TableStatement, *TableName)
 	}
 )
 
@@ -220,12 +220,18 @@ func (nz *normalizer) noteAliasedExprName(node *AliasedExpr) {
 	if node.As.NotEmpty() {
 		return
 	}
-	buf := NewTrackedBuffer(nil)
-	node.Expr.Format(buf)
+	var originalText string
+	if node.InputExpression != "" {
+		originalText = node.InputExpression
+	} else {
+		buf := NewTrackedBuffer(nil)
+		node.Expr.Format(buf)
+		originalText = buf.String()
+	}
 	rewrites := nz.bindVarNeeds.NumberOfRewrites()
 	nz.onLeave[node] = func(newAliasedExpr *AliasedExpr) {
 		if nz.bindVarNeeds.NumberOfRewrites() > rewrites {
-			newAliasedExpr.As = NewIdentifierCI(buf.String())
+			newAliasedExpr.As = NewIdentifierCI(originalText)
 		}
 	}
 }
@@ -575,18 +581,7 @@ func shouldRewriteDatabaseFunc(in Statement) bool {
 	if !ok {
 		return false
 	}
-	if len(selct.From) != 1 {
-		return false
-	}
-	aliasedTable, ok := selct.From[0].(*AliasedTableExpr)
-	if !ok {
-		return false
-	}
-	tableName, ok := aliasedTable.Expr.(TableName)
-	if !ok {
-		return false
-	}
-	return tableName.Name.String() == "dual"
+	return len(selct.From) == 0
 }
 
 // rewriteUnion sets the SELECT limit for UNION statements if not already set.
@@ -603,12 +598,6 @@ func (nz *normalizer) rewriteAliasedTable(cursor *Cursor, node *AliasedTableExpr
 		return
 	}
 
-	// Do not add qualifiers to the dual table.
-	tblName := aliasTableName.Name.String()
-	if tblName == "dual" {
-		return
-	}
-
 	if SystemSchema(nz.keyspace) {
 		if aliasTableName.Qualifier.IsEmpty() {
 			aliasTableName.Qualifier = NewIdentifierCS(nz.keyspace)
@@ -619,18 +608,38 @@ func (nz *normalizer) rewriteAliasedTable(cursor *Cursor, node *AliasedTableExpr
 	}
 
 	// Replace views with their underlying definitions.
+	nz.rewriteView(aliasTableName, node)
+}
+
+// rewriteView looks up viewName in the view definitions and, if found, replaces the table
+// reference with a derived table containing the view's SELECT. If a view routing rule matched
+// but the target view definition is missing, the table name is rewritten to the routed target
+// so that error messages reference the intended destination rather than the original source name.
+func (nz *normalizer) rewriteView(viewName TableName, node *AliasedTableExpr) {
 	if nz.views == nil {
 		return
 	}
-	view := nz.views.FindView(aliasTableName)
-	if view == nil {
+
+	view, routedViewName := nz.views.FindView(viewName)
+
+	// If the view was found, substitute the view's SELECT as a derived table.
+	if view != nil {
+		node.Expr = &DerivedTable{Select: Clone(view)}
+
+		// If an alias wasn't already set, use the view name as the alias so that references to
+		// the view like `view.col` continue to resolve.
+		if node.As.IsEmpty() {
+			node.As = NewIdentifierCS(viewName.Name.String())
+		}
+
 		return
 	}
 
-	// Substitute the view with a derived table.
-	node.Expr = &DerivedTable{Select: Clone(view)}
-	if node.As.IsEmpty() {
-		node.As = NewIdentifierCS(tblName)
+	// The view definition was not found. If a routing rule was found, rewrite the view name
+	// to the target view name so any subsequent "table not found" error points the user at
+	// the routed destination and not the original source.
+	if routedViewName != nil {
+		node.Expr = *routedViewName
 	}
 }
 
@@ -796,21 +805,13 @@ func (nz *normalizer) unnestSubQueries(cursor *Cursor, subquery *Subquery) {
 	if len(sel.SelectExprs.Exprs) != 1 ||
 		len(sel.OrderBy) != 0 ||
 		sel.GroupBy != nil ||
-		len(sel.From) != 1 ||
+		len(sel.From) != 0 ||
 		sel.Where != nil ||
 		sel.Having != nil ||
 		sel.Limit != nil || sel.Lock != NoLock {
 		return
 	}
 
-	aliasedTable, ok := sel.From[0].(*AliasedTableExpr)
-	if !ok {
-		return
-	}
-	table, ok := aliasedTable.Expr.(TableName)
-	if !ok || table.Name.String() != "dual" {
-		return
-	}
 	expr, ok := sel.SelectExprs.Exprs[0].(*AliasedExpr)
 	if !ok {
 		return

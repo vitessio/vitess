@@ -31,7 +31,6 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
-	"vitess.io/vitess/go/vt/utils"
 )
 
 var (
@@ -97,7 +96,7 @@ func createCluster(extraVTGateArgs []string) (*cluster.LocalProcessCluster, int)
 
 	vtGateArgs := []string{
 		"--mysql-auth-server-static-file", clusterInstance.TmpDirectory + "/" + mysqlAuthServerStatic,
-		utils.GetFlagVariantForTests("--keyspaces-to-watch"), keyspaceUnshardedName,
+		"--keyspaces-to-watch", keyspaceUnshardedName,
 	}
 
 	if extraVTGateArgs != nil {
@@ -130,12 +129,12 @@ func TestRoutingWithKeyspacesToWatch(t *testing.T) {
 		clusterInstance.VtgateMySQLPort,
 	)
 	db, err := sql.Open("mysql", dsn)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	defer db.Close()
 
 	// if this returns w/o failing the test we're good to go
 	_, err = db.Exec("select * from keyspaces_to_watch_test")
-	require.Nil(t, err)
+	require.NoError(t, err)
 }
 
 func TestVSchemaDDLWithKeyspacesToWatch(t *testing.T) {
@@ -155,7 +154,7 @@ func TestVSchemaDDLWithKeyspacesToWatch(t *testing.T) {
 		clusterInstance.VtgateMySQLPort,
 	)
 	db, err := sql.Open("mysql", dsn)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	defer db.Close()
 
 	// The topo server must be read-only when using keyspaces-to-watch in order to prevent

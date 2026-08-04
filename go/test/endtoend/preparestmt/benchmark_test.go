@@ -17,12 +17,11 @@ limitations under the License.
 package preparestmt
 
 import (
-	"context"
 	"fmt"
 	"math/rand/v2"
 	"testing"
 
-	"github.com/icrowley/fake"
+	"github.com/brianvoe/gofakeit/v7"
 )
 
 /*
@@ -66,7 +65,7 @@ WHERE
 	b.Run("Insert", func(b *testing.B) {
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			_, err := iStmt.Exec(fake.FirstName(), rand.IntN(100), fake.EmailAddress(), rand.IntN(2))
+			_, err := iStmt.Exec(gofakeit.FirstName(), rand.IntN(100), gofakeit.Email(), rand.IntN(2))
 			if err != nil {
 				b.Fatal(err)
 			}
@@ -176,13 +175,12 @@ WHERE
     AND parent.id = %d
     AND manager.id = %d`
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := b.Context()
 
 	b.Run("Insert", func(b *testing.B) {
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			_, err := dbo.ExecContext(ctx, fmt.Sprintf(insertStmt, fake.FirstName(), rand.IntN(100), fake.EmailAddress(), rand.IntN(2)))
+			_, err := dbo.ExecContext(ctx, fmt.Sprintf(insertStmt, gofakeit.FirstName(), rand.IntN(100), gofakeit.Email(), rand.IntN(2)))
 			if err != nil {
 				b.Fatal(err)
 			}

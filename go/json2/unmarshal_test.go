@@ -44,7 +44,7 @@ func TestUnmarshal(t *testing.T) {
 		err: "",
 	}}
 	for _, tcase := range tcases {
-		out := make(map[string]interface{})
+		out := make(map[string]any)
 		err := Unmarshal([]byte(tcase.in), &out)
 
 		got := ""
@@ -58,7 +58,7 @@ func TestUnmarshal(t *testing.T) {
 func TestUnmarshalProto(t *testing.T) {
 	protoData := &emptypb.Empty{}
 	protoJSONData, err := protojson.Marshal(protoData)
-	assert.Nil(t, err, "protojson.Marshal error")
+	require.NoError(t, err, "protojson.Marshal error")
 
 	tcase := struct {
 		in  string
@@ -70,7 +70,7 @@ func TestUnmarshalProto(t *testing.T) {
 
 	err = Unmarshal([]byte(tcase.in), tcase.out)
 
-	assert.Nil(t, err, "Unmarshal(%v) protobuf message", tcase.in)
+	require.NoError(t, err, "Unmarshal(%v) protobuf message", tcase.in)
 	assert.Equal(t, protoData, tcase.out, "Unmarshal(%v) protobuf message result", tcase.in)
 }
 

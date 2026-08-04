@@ -25,6 +25,7 @@ import (
 	"path"
 	"regexp"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/stretchr/testify/assert"
@@ -74,6 +75,9 @@ func CreateMysqldAndMycnf(tabletUID uint32, mysqlSocket string, mysqlPort int) (
 	var cfg dbconfigs.DBConfigs
 	// ensure the DBA username is 'root' instead of the system's default username so that mysqladmin can shutdown
 	cfg.Dba.User = "root"
+	// use the replication user created by createInitSQLFile: replicating with an
+	// empty username makes the IO thread fail on MySQL 8.0.24+
+	cfg.Repl.User = "vt_repl"
 	cfg.InitWithSocket(mycnf.SocketFile, collations.MySQL8())
 	return mysqlctl.NewMysqld(&cfg), mycnf, nil
 }
@@ -119,7 +123,7 @@ func NewMySQLWithMysqld(port int, hostname, dbName string, schemaSQL ...string) 
 
 func createMySQLDir(portNo uint32) (string, error) {
 	mysqlDir := mysqlctl.TabletDir(portNo)
-	err := os.Mkdir(mysqlDir, 0700)
+	err := os.Mkdir(mysqlDir, 0o700)
 	if err != nil {
 		return "", err
 	}
@@ -138,6 +142,11 @@ func createInitSQLFile(mysqlDir, ksName string) (string, error) {
 		return "", err
 	}
 	_, err = fmt.Fprintf(f, "CREATE DATABASE IF NOT EXISTS %s;", ksName)
+	if err != nil {
+		return "", err
+	}
+	// create the replication user the same way config/init_db.sql does
+	_, err = f.WriteString("CREATE USER 'vt_repl'@'%';GRANT REPLICATION SLAVE ON *.* TO 'vt_repl'@'%';")
 	if err != nil {
 		return "", err
 	}
@@ -233,14 +242,18 @@ func CompareVitessAndMySQLResults(t TestingT, query string, vtConn *mysql.Conn, 
 	}
 
 	errStr := "Query (" + query + ") results mismatched.\nVitess Results:\n"
+	var errStrSb236 strings.Builder
 	for _, row := range vtQr.Rows {
-		errStr += fmt.Sprintf("%s\n", row)
+		fmt.Fprintf(&errStrSb236, "%s\n", row)
 	}
+	errStr += errStrSb236.String()
 	errStr += fmt.Sprintf("Vitess RowsAffected: %v\n", vtQr.RowsAffected)
 	errStr += "MySQL Results:\n"
+	var errStrSb241 strings.Builder
 	for _, row := range mysqlQr.Rows {
-		errStr += fmt.Sprintf("%s\n", row)
+		fmt.Fprintf(&errStrSb241, "%s\n", row)
 	}
+	errStr += errStrSb241.String()
 	errStr += fmt.Sprintf("MySQL RowsAffected: %v\n", mysqlQr.RowsAffected)
 	if vtConn != nil {
 		qr, _ := ExecAllowError(t, vtConn, "vexplain plan "+query)
@@ -290,8 +303,8 @@ func checkFields(t TestingT, columnName string, vtField, myField *querypb.Field)
 		}
 	}
 
-	// starting in Vitess 20, decimal types are properly sized in their field information
-	if BinaryIsAtLeastAtVersion(20, "vtgate") && vtField.Type == sqltypes.Decimal {
+	// decimal types are properly sized in their field information
+	if vtField.Type == sqltypes.Decimal {
 		if vtField.Decimals != myField.Decimals {
 			t.Errorf("for column %s field decimals count do not match\nNot equal: \nMySQL: %v\nVitess: %v\n", columnName, myField.Decimals, vtField.Decimals)
 		}
@@ -302,5 +315,8 @@ func compareVitessAndMySQLErrors(t TestingT, vtErr, mysqlErr error) {
 	if vtErr != nil && mysqlErr != nil || vtErr == nil && mysqlErr == nil {
 		return
 	}
+	// TestingT has no ErrorIs method, and this reports an error-vs-error mismatch
+	// (one side errored, the other did not) rather than an errors.Is/As check.
+	//nolint:testifylint
 	t.Errorf("Vitess and MySQL are not erroring the same way.\nVitess error: %v\nMySQL error: %v", vtErr, mysqlErr)
 }

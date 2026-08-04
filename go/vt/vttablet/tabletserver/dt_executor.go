@@ -18,6 +18,7 @@ package tabletserver
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"vitess.io/vitess/go/trace"
@@ -27,6 +28,7 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/planbuilder"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tx"
@@ -95,7 +97,7 @@ func (dte *DTExecutor) Prepare(transactionID int64, dtid string) error {
 	// This could be due to ongoing cutover happening in vreplication workflow
 	// regarding OnlineDDL or MoveTables.
 	for _, query := range queries {
-		qr := dte.qe.queryRuleSources.FilterByPlan(query.Sql, 0, query.Tables...)
+		qr := dte.qe.queryRuleSources.FilterByPlan(query.Sql, []planbuilder.PlanType{planbuilder.PlanSelect}, query.Tables...)
 		if qr != nil {
 			act, _, _, _ := qr.GetAction("", "", nil, sqlparser.MarginComments{})
 			if act != rules.QRContinue {
@@ -115,7 +117,7 @@ func (dte *DTExecutor) Prepare(transactionID int64, dtid string) error {
 	// If they are put in the prepared pool, then vreplication workflow waits.
 	// This check helps reject the prepare that came later.
 	for _, query := range queries {
-		qr := dte.qe.queryRuleSources.FilterByPlan(query.Sql, 0, query.Tables...)
+		qr := dte.qe.queryRuleSources.FilterByPlan(query.Sql, []planbuilder.PlanType{planbuilder.PlanSelect}, query.Tables...)
 		if qr != nil {
 			act, _, _, _ := qr.GetAction("", "", nil, sqlparser.MarginComments{})
 			if act != rules.QRContinue {
@@ -160,7 +162,7 @@ func (dte *DTExecutor) CommitPrepared(dtid string) (err error) {
 	ctx := trace.CopySpan(context.Background(), dte.ctx)
 	defer func() {
 		if err != nil {
-			log.Warningf("failed to commit the prepared transaction '%s' with error: %v", dtid, err)
+			log.Warn(fmt.Sprintf("failed to commit the prepared transaction '%s' with error: %v", dtid, err))
 			fail := dte.te.checkErrorAndMarkFailed(ctx, dtid, err, "TwopcCommit")
 			if fail {
 				dte.te.env.Stats().CommitPreparedFail.Add("NonRetryable", 1)
@@ -172,7 +174,7 @@ func (dte *DTExecutor) CommitPrepared(dtid string) (err error) {
 	}()
 	if DebugTwoPc {
 		if err := checkTestFailure(dte.ctx, dte.shardFunc()); err != nil {
-			log.Errorf("failing test on commit prepared: %v", err)
+			log.Error(fmt.Sprintf("failing test on commit prepared: %v", err))
 			return err
 		}
 	}
@@ -282,7 +284,7 @@ func (dte *DTExecutor) SetRollback(dtid string, transactionID int64) error {
 		dte.te.Rollback(dte.ctx, transactionID)
 	} else {
 		// This is a warning because it should not happen in normal operation.
-		log.Warningf("SetRollback called with no transactionID for dtid %s", dtid)
+		log.Warn("SetRollback called with no transactionID for dtid " + dtid)
 	}
 
 	return dte.inTransaction(func(conn *StatefulConnection) error {

@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"math"
 	"sort"
 	"strings"
 
@@ -165,9 +166,12 @@ func PrimitiveDescriptionFromMap(data map[string]any) (pd PrimitiveDescription, 
 		pd.InputName = inpName.(string)
 	}
 	if avgRows, isPresent := data["AvgNumberOfRows"]; isPresent {
-		pd.RowsReceived = RowsReceived{
-			int(avgRows.(float64)),
+		noOfCalls := 1
+		if n, ok := data["NoOfCalls"]; ok {
+			noOfCalls = int(n.(float64))
 		}
+		totalRows := int(math.Round(avgRows.(float64) * float64(noOfCalls)))
+		pd.RowsReceived = RowsReceived{totalRows}
 	}
 	if sq, isPresent := data["ShardsQueried"]; isPresent {
 		sq := int(sq.(float64))
@@ -422,7 +426,7 @@ func (m orderedMap) Swap(i, j int) {
 	m[i], m[j] = m[j], m[i]
 }
 
-var _ sort.Interface = (orderedMap)(nil)
+var _ sort.Interface = orderedMap(nil)
 
 func (m orderedMap) MarshalJSON() ([]byte, error) {
 	var buf bytes.Buffer
@@ -452,7 +456,7 @@ func (m orderedMap) MarshalJSON() ([]byte, error) {
 }
 
 func (m orderedMap) String() string {
-	var output []string
+	output := make([]string, 0, len(m))
 	for _, val := range m {
 		output = append(output, fmt.Sprintf("%s:%v", val.key, val.val))
 	}

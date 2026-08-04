@@ -46,7 +46,7 @@ func TestRandomBalancerUniformDistribution(t *testing.T) {
 	const numPicks = 60000
 	pickCounts := make(map[uint32]int)
 
-	for i := 0; i < numPicks; i++ {
+	for range numPicks {
 		th := b.Pick(target, tablets)
 		require.NotNil(t, th, "Pick should not return nil")
 		pickCounts[th.Tablet.Alias.Uid]++
@@ -79,7 +79,7 @@ func TestRandomBalancerPickSingle(t *testing.T) {
 	b := newRandomBalancer("cell1", []string{})
 
 	// Pick multiple times, should always return the same tablet
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		th := b.Pick(target, tablets)
 		require.NotNil(t, th, "Pick should not return nil")
 		assert.Equal(t, tablets[0].Tablet.Alias.Uid, th.Tablet.Alias.Uid,
@@ -101,13 +101,13 @@ func TestRandomBalancerFactory(t *testing.T) {
 func TestBalancerFactoryInvalidModes(t *testing.T) {
 	// Test that "cell" mode returns an error (should be handled by gateway)
 	b, err := NewTabletBalancer(ModeCell, "cell1", []string{})
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Nil(t, b)
-	assert.ErrorContains(t, err, "cell mode should be handled by the gateway")
+	require.ErrorContains(t, err, "cell mode should be handled by the gateway")
 
 	// Test that an invalid mode returns an error
 	b, err = NewTabletBalancer(ModeInvalid, "cell1", []string{})
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Nil(t, b)
 	assert.ErrorContains(t, err, "unsupported balancer mode")
 }
@@ -132,15 +132,15 @@ func TestRandomBalancerCellFiltering(t *testing.T) {
 	const numPicks = 10000
 	pickCounts := make(map[string]int)
 
-	for i := 0; i < numPicks; i++ {
+	for range numPicks {
 		th := b.Pick(target, tablets)
 		require.NotNil(t, th)
 		pickCounts[th.Tablet.Alias.Cell]++
 	}
 
 	// Should only pick from cell1 and cell2, never cell3
-	assert.Greater(t, pickCounts["cell1"], 0, "should pick from cell1")
-	assert.Greater(t, pickCounts["cell2"], 0, "should pick from cell2")
+	assert.Positive(t, pickCounts["cell1"], "should pick from cell1")
+	assert.Positive(t, pickCounts["cell2"], "should pick from cell2")
 	assert.Equal(t, 0, pickCounts["cell3"], "should never pick from cell3")
 
 	// Each filtered cell should get approximately half the picks

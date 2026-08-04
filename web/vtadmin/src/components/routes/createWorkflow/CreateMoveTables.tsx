@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 import { useEffect, useState } from 'react';
-import { Link, useHistory } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 
 import { useClusters, useCreateMoveTables, useKeyspaces, useSchemas } from '../../../hooks/api';
 import { useDocumentTitle } from '../../../hooks/useDocumentTitle';
@@ -68,7 +68,7 @@ const onDDLOptions = ['IGNORE', 'STOP', 'EXEC', 'EXEC_IGNORE'];
 export const CreateMoveTables = () => {
     useDocumentTitle('Create a MoveTables Workflow');
 
-    const history = useHistory();
+    const navigate = useNavigate();
 
     const [formData, setFormData] = useState<FormData>(DEFAULT_FORM_DATA);
 
@@ -103,7 +103,7 @@ export const CreateMoveTables = () => {
         {
             onSuccess: () => {
                 success(`Created workflow ${formData.workflow}`, { autoClose: 1600 });
-                history.push(`/workflows`);
+                navigate(`/workflows`);
             },
             onError: () => {
                 setErrorDialogOpen(true);
@@ -112,17 +112,17 @@ export const CreateMoveTables = () => {
     );
 
     let selectedCluster = null;
-    if (!!formData.clusterID) {
+    if (formData.clusterID) {
         selectedCluster = clusters.find((c) => c.id === formData.clusterID);
     }
 
     let selectedSourceKeyspace = null;
-    if (!!formData.sourceKeyspace) {
+    if (formData.sourceKeyspace) {
         selectedSourceKeyspace = keyspaces.find((ks) => ks.keyspace?.name === formData.sourceKeyspace);
     }
 
     let selectedTargetKeyspace = null;
-    if (!!formData.targetKeyspace) {
+    if (formData.targetKeyspace) {
         selectedTargetKeyspace = keyspaces.find((ks) => ks.keyspace?.name === formData.targetKeyspace);
     }
 
@@ -133,7 +133,7 @@ export const CreateMoveTables = () => {
         !!formData.workflow &&
         !!formData.onDDL;
 
-    const isDisabled = !isValid || mutation.isLoading;
+    const isDisabled = !isValid || mutation.isPending;
 
     const onSubmit: React.FormEventHandler<HTMLFormElement> = (e) => {
         e.preventDefault();
@@ -316,12 +316,12 @@ export const CreateMoveTables = () => {
 
                     <div className="my-8">
                         <button className="btn" disabled={isDisabled} type="submit">
-                            {mutation.isLoading ? 'Creating Workflow...' : 'Create Workflow'}
+                            {mutation.isPending ? 'Creating Workflow...' : 'Create Workflow'}
                         </button>
                     </div>
                 </form>
 
-                {mutation.isError && !mutation.isLoading && (
+                {mutation.isError && !mutation.isPending && (
                     <ErrorDialog
                         errorDescription={mutation.error.message}
                         errorTitle="Error Creating Workflow"

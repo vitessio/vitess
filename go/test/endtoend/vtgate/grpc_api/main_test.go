@@ -24,7 +24,6 @@ import (
 	"testing"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
-	"vitess.io/vitess/go/vt/utils"
 )
 
 var (
@@ -40,11 +39,14 @@ var (
 			primary key(id)
 		) Engine=InnoDB;
 `
+	// The config mixes plaintext and SHA256-hashed passwords so both
+	// authentication paths of the static auth plugin are exercised.
+	// SHA256(SHA256("test_password")): "9a3932ac9cde99161f6fbe5fe6102391bef0c46f0f396f104dd22cfb7f1fd5d1"
 	grpcServerAuthStaticJSON = `
 		[
 		  {
 			"Username": "some_other_user",
-			"Password": "test_password"
+			"CachingSha2Password": "*9a3932ac9cde99161f6fbe5fe6102391bef0c46f0f396f104dd22cfb7f1fd5d1"
 		  },
 		  {
 			"Username": "another_unrelated_user",
@@ -52,7 +54,7 @@ var (
 		  },
 		  {
 			"Username": "user_with_access",
-			"Password": "test_password"
+			"CachingSha2Password": "9a3932ac9cde99161f6fbe5fe6102391bef0c46f0f396f104dd22cfb7f1fd5d1"
 		  },
 		  {
 			"Username": "user_no_access",
@@ -89,7 +91,7 @@ func TestMain(m *testing.M) {
 
 		// Directory for authn / authz config files
 		authDirectory := path.Join(clusterInstance.TmpDirectory, "auth")
-		if err := os.Mkdir(authDirectory, 0700); err != nil {
+		if err := os.Mkdir(authDirectory, 0o700); err != nil {
 			return 1
 		}
 
@@ -107,10 +109,10 @@ func TestMain(m *testing.M) {
 
 		// Configure vtgate to use static auth
 		clusterInstance.VtGateExtraArgs = []string{
-			utils.GetFlagVariantForTests("--grpc-auth-mode"), "static",
-			utils.GetFlagVariantForTests("--grpc-auth-static-password-file"), grpcServerAuthStaticPath,
-			utils.GetFlagVariantForTests("--grpc-use-effective-callerid"),
-			utils.GetFlagVariantForTests("--grpc-use-static-authentication-callerid"),
+			"--grpc-auth-mode", "static",
+			"--grpc-auth-static-password-file", grpcServerAuthStaticPath,
+			"--grpc-use-effective-callerid",
+			"--grpc-use-static-authentication-callerid",
 		}
 
 		// Configure vttablet to use table ACL

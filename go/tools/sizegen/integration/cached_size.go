@@ -33,6 +33,7 @@ func (cached *A) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *Bimpl) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -43,6 +44,7 @@ func (cached *Bimpl) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *C) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -57,6 +59,7 @@ func (cached *C) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *D) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -124,6 +127,7 @@ func (cached *Map3) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *Padded) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -134,6 +138,31 @@ func (cached *Padded) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
+func (cached *PtrToBasic) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(24)
+	}
+	// field field1 *bool
+	if cached.field1 != nil {
+		size += hack.RuntimeAllocSize(int64(1))
+	}
+	// field field2 *int
+	if cached.field2 != nil {
+		size += hack.RuntimeAllocSize(int64(8))
+	}
+	// field field3 *string
+	if cached.field3 != nil {
+		size += hack.RuntimeAllocSize(int64(16))
+		size += hack.RuntimeAllocSize(int64(len(*cached.field3)))
+	}
+	return size
+}
+
 func (cached *Slice1) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -148,6 +177,7 @@ func (cached *Slice1) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *Slice2) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -167,6 +197,7 @@ func (cached *Slice2) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *Slice3) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -186,6 +217,7 @@ func (cached *Slice3) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *String1) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)

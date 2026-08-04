@@ -197,7 +197,7 @@ func (v *vschema) FindTable(tablename sqlparser.TableName) (*vindexes.BaseTable,
 	panic("implement me")
 }
 
-func (v *vschema) FindView(name sqlparser.TableName) sqlparser.TableStatement {
+func (v *vschema) FindView(name sqlparser.TableName) (sqlparser.TableStatement, *sqlparser.TableName) {
 	// TODO implement me
 	panic("implement me")
 }
@@ -245,6 +245,14 @@ func (v *vschema) FirstSortedKeyspace() (*vindexes.Keyspace, error) {
 func (v *vschema) SysVarSetEnabled() bool {
 	// TODO implement me
 	panic("implement me")
+}
+
+func (v *vschema) IsSystemVariableDenied(string) bool {
+	return false
+}
+
+func (v *vschema) HasDeniedSystemVariables() bool {
+	return false
 }
 
 func (v *vschema) KeyspaceExists(keyspace string) bool {
@@ -306,6 +314,10 @@ func (v *vschema) ForeignKeyMode(keyspace string) (vschemapb.Keyspace_ForeignKey
 	panic("implement me")
 }
 
+func (v *vschema) AllowCrossKeyspaceReads(keyspace string) (bool, error) {
+	return true, nil
+}
+
 func (v *vschema) KeyspaceError(keyspace string) error {
 	// TODO implement me
 	panic("implement me")
@@ -341,27 +353,12 @@ func (v *vschema) IsViewsEnabled() bool {
 	panic("implement me")
 }
 
-func (v *vschema) GetUDV(name string) *querypb.BindVariable {
-	// TODO implement me
-	panic("implement me")
-}
-
 func (v *vschema) PlanPrepareStatement(context.Context, string) (*engine.Plan, error) {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (v *vschema) ClearPrepareData(stmtName string) {
-	// TODO implement me
-	panic("implement me")
-}
-
 func (v *vschema) GetPrepareData(stmtName string) *vtgatepb.PrepareData {
-	// TODO implement me
-	panic("implement me")
-}
-
-func (v *vschema) StorePrepareData(name string, pd *vtgatepb.PrepareData) {
 	// TODO implement me
 	panic("implement me")
 }

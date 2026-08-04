@@ -22,7 +22,9 @@ import (
 	"errors"
 	"fmt"
 	"hash/fnv"
+	"maps"
 	"math"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -32,6 +34,7 @@ import (
 
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sets"
+	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/discovery"
@@ -80,7 +83,7 @@ func getTablesInKeyspace(ctx context.Context, ts *topo.Server, tmc tmclient.Tabl
 	if err != nil {
 		return nil, err
 	}
-	log.Infof("got table schemas: %+v from source primary %v.", schema, primary)
+	log.Info(fmt.Sprintf("got table schemas: %+v from source primary %v.", schema, primary))
 
 	var sourceTables []string
 	for _, td := range schema.TableDefinitions {
@@ -153,7 +156,7 @@ func createDefaultShardRoutingRules(ctx context.Context, ms *vtctldatapb.Materia
 		if srr[fromSource] == "" && srr[fromTarget] == "" {
 			srr[fromTarget] = ms.SourceKeyspace
 			changed = true
-			log.Infof("Added default shard routing rule from %q to %q", fromTarget, fromSource)
+			log.Info(fmt.Sprintf("Added default shard routing rule from %q to %q", fromTarget, fromSource))
 		}
 	}
 	if changed {
@@ -332,12 +335,7 @@ func shouldInclude(table string, excludes []string) bool {
 	if schema.IsInternalOperationTableName(table) {
 		return false
 	}
-	for _, t := range excludes {
-		if t == table {
-			return false
-		}
-	}
-	return true
+	return !slices.Contains(excludes, table)
 }
 
 // getMigrationID produces a reproducible hash based on the input parameters.
@@ -620,6 +618,24 @@ func ReverseWorkflowName(workflow string) string {
 	return workflow + reverseSuffix
 }
 
+// resolveWorkflowKeepData preserves request field presence so we can tell the
+// difference between "keep_data was omitted" and "keep_data was explicitly set
+// to false". That matters for reverse workflows: omitting keep_data should take
+// the safer path and keep the data by default, while an explicit false must
+// still be honored so callers can force cleanup.
+func resolveWorkflowKeepData(workflow string, keepData *bool) (bool, []string) {
+	if keepData != nil {
+		return *keepData, nil
+	}
+	if !strings.HasSuffix(workflow, reverseSuffix) {
+		return false, nil
+	}
+
+	return true, []string{
+		fmt.Sprintf("Workflow %s is a reverse workflow; keeping data by default. Explicitly set keep_data=false or pass --keep-data=false to remove the data.", workflow),
+	}
+}
+
 // Straight copy-paste of encodeString from wrangler/keyspace.go. I want to make
 // this public, but it doesn't belong in package workflow. Maybe package sqltypes,
 // or maybe package sqlescape?
@@ -697,7 +713,8 @@ func areTabletsAvailableToStreamFrom(ctx context.Context, req *vtctldatapb.Workf
 //
 // It returns ErrNoStreams if there are no targets found for the workflow.
 func LegacyBuildTargets(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManagerClient, targetKeyspace string, workflow string,
-	targetShards []string) (*TargetInfo, error) {
+	targetShards []string,
+) (*TargetInfo, error) {
 	var (
 		frozen          bool
 		optCells        string
@@ -819,7 +836,8 @@ func addFilter(sel *sqlparser.Select, filter sqlparser.Expr) {
 }
 
 func getTenantClause(vrOptions *vtctldatapb.WorkflowOptions,
-	targetVSchema *vindexes.KeyspaceSchema, parser *sqlparser.Parser) (*sqlparser.Expr, error) {
+	targetVSchema *vindexes.KeyspaceSchema, parser *sqlparser.Parser,
+) (*sqlparser.Expr, error) {
 	if vrOptions.TenantId == "" {
 		return nil, nil
 	}
@@ -841,12 +859,12 @@ func getTenantClause(vrOptions *vtctldatapb.WorkflowOptions,
 		}
 		tenantId = vrOptions.TenantId
 	case querypb.Type_VARCHAR:
-		tenantId = fmt.Sprintf("'%s'", vrOptions.TenantId)
+		tenantId = sqltypes.EncodeStringSQL(vrOptions.TenantId)
 	default:
 		return nil, fmt.Errorf("unsupported tenant column type: %s", tenantColumnType)
 	}
 
-	stmt, err := parser.Parse(fmt.Sprintf("select * from t where %s = %s", tenantColumnName, tenantId))
+	stmt, err := parser.Parse(fmt.Sprintf("select * from t where %s = %s", sqlescape.EscapeID(tenantColumnName), tenantId))
 	if err != nil {
 		return nil, err
 	}
@@ -858,7 +876,8 @@ func getTenantClause(vrOptions *vtctldatapb.WorkflowOptions,
 }
 
 func changeKeyspaceRouting(ctx context.Context, ts *topo.Server, tabletTypes []topodatapb.TabletType,
-	sourceKeyspace, targetKeyspace, reason string) error {
+	sourceKeyspace, targetKeyspace, reason string,
+) error {
 	routes := make(map[string]string)
 	for _, tabletType := range tabletTypes {
 		suffix := getTabletTypeSuffix(tabletType)
@@ -876,9 +895,7 @@ func updateKeyspaceRoutingRules(ctx context.Context, ts *topo.Server, reason str
 	update := func() error {
 		return topotools.UpdateKeyspaceRoutingRules(ctx, ts, reason,
 			func(ctx context.Context, rules *map[string]string) error {
-				for fromKeyspace, toKeyspace := range routes {
-					(*rules)[fromKeyspace] = toKeyspace
-				}
+				maps.Copy((*rules), routes)
 				return nil
 			})
 	}
@@ -1028,14 +1045,7 @@ func validateSourceTablesExist(sourceKeyspace string, ksTables, tables []string)
 		if schema.IsInternalOperationTableName(table) {
 			continue
 		}
-		found := false
-
-		for _, ksTable := range ksTables {
-			if table == ksTable {
-				found = true
-				break
-			}
-		}
+		found := slices.Contains(ksTables, table)
 		if !found {
 			missingTables = append(missingTables, table)
 		}

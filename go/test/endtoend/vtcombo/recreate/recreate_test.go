@@ -86,7 +86,7 @@ func TestMain(m *testing.M) {
 		return m.Run(), nil
 	}()
 	if err != nil {
-		log.Errorf("top level error: %v\n", err)
+		log.Error(fmt.Sprintf("top level error: %v\n", err))
 		os.Exit(1)
 	} else {
 		os.Exit(exitcode)
@@ -96,26 +96,26 @@ func TestMain(m *testing.M) {
 func TestDropAndRecreateWithSameShards(t *testing.T) {
 	ctx := t.Context()
 	conn, err := vtgateconn.Dial(ctx, grpcAddress)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	defer conn.Close()
 
 	cur := conn.Session(ks1+"@primary", nil)
 
 	mysqlConnCountBefore, err := getMySQLConnectionCount(ctx, cur)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	_, err = cur.Execute(ctx, "DROP DATABASE "+ks1, nil, false)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	_, err = cur.Execute(ctx, "CREATE DATABASE "+ks1, nil, false)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	assertTabletsPresent(t)
 
 	// Check the connection count after the CREATE. There will be zero connections after the DROP as the database
 	// no longer exists, but after it gets recreated any open pools will be able to reestablish connections.
 	mysqlConnCountAfter, err := getMySQLConnectionCount(ctx, cur)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	// Assert that we're not leaking mysql connections, but allow for some wiggle room due to transient connections
 	assert.InDelta(t, mysqlConnCountBefore, mysqlConnCountAfter, 5,
@@ -133,14 +133,14 @@ func getMySQLConnectionCount(ctx context.Context, session *vtgateconn.VTGateSess
 func assertTabletsPresent(t *testing.T) {
 	tmpCmd := exec.Command("vtctldclient", "--server", grpcAddress, "GetTablets", "--cell", "test")
 
-	log.Infof("Running vtctldclient with command: %v", tmpCmd.Args)
+	log.Info(fmt.Sprintf("Running vtctldclient with command: %v", tmpCmd.Args))
 
 	output, err := tmpCmd.CombinedOutput()
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	numPrimary, numReplica, numRdonly, numDash80, num80Dash := 0, 0, 0, 0, 0
-	lines := strings.Split(string(output), "\n")
-	for _, line := range lines {
+	lines := strings.SplitSeq(string(output), "\n")
+	for line := range lines {
 		if !strings.HasPrefix(line, "test-") {
 			continue
 		}

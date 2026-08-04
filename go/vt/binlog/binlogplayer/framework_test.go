@@ -18,9 +18,9 @@ package binlogplayer
 
 import (
 	"context"
-	"reflect"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"google.golang.org/protobuf/proto"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -96,18 +96,10 @@ func (t *btStream) Recv() (*binlogdatapb.BinlogTransaction, error) {
 
 func expectFBCRequest(t *testing.T, fbc *fakeBinlogClient, tablet *topodatapb.Tablet, pos string, tables []string, kr *topodatapb.KeyRange) {
 	t.Helper()
-	if !proto.Equal(tablet, fbc.lastTablet) {
-		t.Errorf("Request tablet: %v, want %v", fbc.lastTablet, tablet)
-	}
-	if pos != fbc.lastPos {
-		t.Errorf("Request pos: %v, want %v", fbc.lastPos, pos)
-	}
-	if !reflect.DeepEqual(tables, fbc.lastTables) {
-		t.Errorf("Request tables: %v, want %v", fbc.lastTables, tables)
-	}
-	if !proto.Equal(kr, fbc.lastKeyRange) {
-		t.Errorf("Request KeyRange: %v, want %v", fbc.lastKeyRange, kr)
-	}
+	assert.Truef(t, proto.Equal(tablet, fbc.lastTablet), "Request tablet: %v, want %v", fbc.lastTablet, tablet)
+	assert.Equalf(t, pos, fbc.lastPos, "Request pos: %v, want %v", fbc.lastPos, pos)
+	assert.Equalf(t, tables, fbc.lastTables, "Request tables: %v, want %v", fbc.lastTables, tables)
+	assert.Truef(t, proto.Equal(kr, fbc.lastKeyRange), "Request KeyRange: %v, want %v", fbc.lastKeyRange, kr)
 }
 
 // globalFBC is set by newFakeBinlogClient, which is then returned by the client factory below.

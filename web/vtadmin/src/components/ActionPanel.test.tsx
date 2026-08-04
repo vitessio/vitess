@@ -17,7 +17,7 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { delay, http, HttpResponse } from 'msw';
-import { QueryClient, QueryClientProvider, useMutation } from 'react-query';
+import { QueryClient, QueryClientProvider, useMutation } from '@tanstack/react-query';
 import { describe, it, expect, vi } from 'vitest';
 
 import ActionPanel, { ActionPanelProps } from './ActionPanel';
@@ -33,7 +33,9 @@ describe('ActionPanel', () => {
      * provides such a function and should be `render`ed in the context QueryClientProvider.
      */
     const Wrapper: React.FC<ActionPanelProps & { url: string }> = (props) => {
-        const mutation = useMutation(() => fetch(new URL(props['url']), { method: 'post' }));
+        const mutation = useMutation({
+            mutationFn: () => fetch(new URL(props['url']), { method: 'post' }),
+        });
         return <ActionPanel {...props} mutation={mutation as any} />;
     };
 
@@ -74,7 +76,7 @@ describe('ActionPanel', () => {
         await user.click(button);
 
         // Validate form while API request is in flight
-        expect(button).toHaveTextContent('Doing Action...');
+        await waitFor(() => expect(button).toHaveTextContent('Doing Action...'));
 
         expect(global.fetch).toHaveBeenCalledTimes(1);
         expect(global.fetch).toHaveBeenCalledWith(new URL(url), { method: 'post' });

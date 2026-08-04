@@ -1,6 +1,23 @@
+/*
+Copyright 2026 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package backupstats
 
 import (
+	"maps"
 	"sync"
 	"time"
 )
@@ -35,15 +52,13 @@ func (fs *FakeStats) Scope(scopes ...Scope) Stats {
 	defer fs.mutex.Unlock()
 	fs.ScopeCalls = append(fs.ScopeCalls, scopes)
 	newScopeV := map[ScopeType]ScopeValue{}
-	for t, v := range fs.ScopeV {
-		newScopeV[t] = v
-	}
+	maps.Copy(newScopeV, fs.ScopeV)
 	for _, s := range scopes {
 		if _, ok := newScopeV[s.Type]; !ok {
 			newScopeV[s.Type] = s.Value
 		}
 	}
-	newScopes := []Scope{}
+	newScopes := make([]Scope, 0, len(newScopeV))
 	for t, v := range newScopeV {
 		newScopes = append(newScopes, Scope{t, v})
 	}

@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -41,7 +42,7 @@ func TestIdentifierCache(t *testing.T) {
 	cache, err := GetIdentifierCache()
 	require.Error(t, err)
 	require.Nil(t, cache)
-	require.Equal(t, err.Error(), errIdentifierCacheUninitialized)
+	require.Equal(t, errIdentifierCacheUninitialized, err.Error())
 	// Create the cache to use for lookups of the sidecar database
 	// identifier in use by each keyspace.
 	var created bool
@@ -157,12 +158,10 @@ func TestIdentifierCache(t *testing.T) {
 				require.NoError(t, err)
 			}
 			if tt.wantErr != emptyErr && (err == nil || tt.wantErr.Error() != err.Error()) {
-				t.Errorf("cache.Get() produced error: %v, wanted error: %v", err, tt.wantErr)
+				assert.Failf(t, "cache.Get() unexpected error", "produced error: %v, wanted error: %v", err, tt.wantErr)
 				return
 			}
-			if got != tt.want {
-				t.Errorf("cache.Get() returned: %v, wanted: %v", got, tt.want)
-			}
+			assert.Equalf(t, tt.want, got, "cache.Get() returned: %v, wanted: %v", got, tt.want)
 		})
 	}
 }

@@ -183,3 +183,73 @@ func TestMergeLimitExpressions(t *testing.T) {
 		})
 	}
 }
+
+func TestTryPushDistinctWithWindow(t *testing.T) {
+	tests := []struct {
+		name                     string
+		distinctRequired         bool
+		sourceAlreadyHasDistinct bool
+		expectRewrite            bool
+	}{
+		{
+			name:                     "required distinct pushes performance distinct under window and keeps original",
+			distinctRequired:         true,
+			sourceAlreadyHasDistinct: false,
+			expectRewrite:            true,
+		},
+		{
+			name:                     "performance distinct pushes under window and returns window",
+			distinctRequired:         false,
+			sourceAlreadyHasDistinct: false,
+			expectRewrite:            true,
+		},
+		{
+			name:                     "no rewrite when window source already has distinct",
+			distinctRequired:         true,
+			sourceAlreadyHasDistinct: true,
+			expectRewrite:            false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var windowSource Operator = &fakeOp{}
+			if tt.sourceAlreadyHasDistinct {
+				windowSource = newDistinct(windowSource, nil, false)
+			}
+			window := newWindow(windowSource, nil)
+			distinct := newDistinct(window, nil, tt.distinctRequired)
+
+			result, rewriteResult := tryPushDistinct(distinct)
+
+			if !tt.expectRewrite {
+				assert.Equal(t, NoRewrite, rewriteResult)
+				assert.Same(t, distinct, result, "expected the exact same Distinct object to be returned")
+				resultDistinct := result.(*Distinct)
+				assert.Same(t, window, resultDistinct.Source, "expected Window to be unchanged")
+				assert.Same(t, windowSource, window.Source, "expected Window source to be unchanged")
+				return
+			}
+
+			assert.NotEqual(t, NoRewrite, rewriteResult)
+
+			var resultWindow *Window
+			if tt.distinctRequired {
+				resultDistinct, ok := result.(*Distinct)
+				assert.True(t, ok, "expected Distinct to be returned")
+				assert.True(t, resultDistinct.Required)
+				assert.True(t, resultDistinct.PushedPerformance)
+				resultWindow, ok = resultDistinct.Source.(*Window)
+				assert.True(t, ok, "expected Window under Distinct")
+			} else {
+				var ok bool
+				resultWindow, ok = result.(*Window)
+				assert.True(t, ok, "expected Window to be returned")
+			}
+
+			underWindow, ok := resultWindow.Source.(*Distinct)
+			assert.True(t, ok, "expected Distinct under Window")
+			assert.False(t, underWindow.Required, "pushed distinct should not be required")
+		})
+	}
+}

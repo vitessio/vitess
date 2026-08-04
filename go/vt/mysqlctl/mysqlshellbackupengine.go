@@ -18,6 +18,7 @@ package mysqlctl
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -26,19 +27,23 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"path/filepath"
 	"slices"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/google/shlex"
 	"github.com/spf13/pflag"
 
+	"vitess.io/vitess/go/fileutil"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/capabilities"
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vterrors"
 )
@@ -56,6 +61,8 @@ var (
 	mysqlShellBackupShouldDrain = false
 	// disable redo logging and double write buffer
 	mysqlShellSpeedUpRestore = false
+	// skip the MySQL version compatibility check when restoring from a mysql-shell backup
+	mysqlShellRestoreSkipVersionCheck = false
 
 	// use when checking if we need to create the directory on the local filesystem or not.
 	knownObjectStoreParams = []string{"s3BucketName", "osBucketName", "azureContainerName"}
@@ -102,6 +109,7 @@ func registerMysqlShellBackupEngineFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&mysqlShellLoadFlags, "mysql-shell-load-flags", mysqlShellLoadFlags, "flags to pass to mysql shell load utility. This should be a JSON string")
 	fs.BoolVar(&mysqlShellBackupShouldDrain, "mysql-shell-should-drain", mysqlShellBackupShouldDrain, "decide if we should drain while taking a backup or continue to serving traffic")
 	fs.BoolVar(&mysqlShellSpeedUpRestore, "mysql-shell-speedup-restore", mysqlShellSpeedUpRestore, "speed up restore by disabling redo logging and double write buffer during the restore process")
+	fs.BoolVar(&mysqlShellRestoreSkipVersionCheck, "mysql-shell-restore-skip-version-check", mysqlShellRestoreSkipVersionCheck, "skip the MySQL version compatibility check when restoring from a mysql-shell backup")
 }
 
 // MySQLShellBackupEngine encapsulates the logic to implement the restoration
@@ -118,9 +126,12 @@ const (
 func (be *MySQLShellBackupEngine) ExecuteBackup(ctx context.Context, params BackupParams, bh backupstorage.BackupHandle) (result BackupResult, finalErr error) {
 	params.Logger.Infof("Starting ExecuteBackup in %s", params.TabletAlias)
 
-	location := path.Join(mysqlShellBackupLocation, bh.Directory(), bh.Name())
+	location, err := be.backupLocation(bh.Directory(), bh.Name())
+	if err != nil {
+		return BackupUnusable, vterrors.Wrap(err, "cannot safely determine backup location")
+	}
 
-	err := be.backupPreCheck(location)
+	err = be.backupPreCheck(location)
 	if err != nil {
 		return BackupUnusable, vterrors.Wrap(err, "failed backup precheck")
 	}
@@ -135,14 +146,20 @@ func (be *MySQLShellBackupEngine) ExecuteBackup(ctx context.Context, params Back
 		return BackupUnusable, vterrors.Wrap(err, "can't get MySQL version")
 	}
 
-	args := []string{}
-	if mysqlShellFlags != "" {
-		args = append(args, strings.Fields(mysqlShellFlags)...)
+	args, err := shlex.Split(mysqlShellFlags)
+	if err != nil {
+		return BackupUnusable, vterrors.Wrap(err, "failed to parse --mysql-shell-flags")
+	}
+
+	// compact and validate the json input from mysqlShellDumpFlags.
+	var compactDumpFlags bytes.Buffer
+	if err := json.Compact(&compactDumpFlags, []byte(mysqlShellDumpFlags)); err != nil {
+		return BackupUnusable, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "failed to parse --mysql-shell-dump-flags as JSON: %v", err)
 	}
 
 	args = append(args, "-e", fmt.Sprintf("util.dumpInstance(%q, %s)",
 		location,
-		mysqlShellDumpFlags,
+		compactDumpFlags.String(),
 	))
 
 	// to be able to get the consistent GTID sets, we will acquire a global read lock before starting mysql shell.
@@ -262,6 +279,24 @@ func (be *MySQLShellBackupEngine) ExecuteRestore(ctx context.Context, params Res
 		return nil, err
 	}
 
+	// Validate bm.BackupLocation from the MANIFEST. For local filesystem
+	// mode, use SafePathJoin to prevent path traversal. For object storage,
+	// trust the manifest location directly since SafePathJoin relies on
+	// OS-native path operations that don't understand cloud URIs.
+	var location string
+	if isObjectStoreFlags(mysqlShellLoadFlags) {
+		location = bm.BackupLocation
+	} else {
+		relLocation, err := filepath.Rel(mysqlShellBackupLocation, bm.BackupLocation)
+		if err != nil {
+			return nil, vterrors.Wrapf(err, "cannot determine relative backup location from manifest")
+		}
+		location, err = fileutil.SafePathJoin(mysqlShellBackupLocation, relLocation)
+		if err != nil {
+			return nil, vterrors.Wrapf(err, "backup location %q in manifest is outside the backup root %q", bm.BackupLocation, mysqlShellBackupLocation)
+		}
+	}
+
 	// mark restore as in progress
 	if err := createStateFile(params.Cnf); err != nil {
 		return nil, err
@@ -296,7 +331,7 @@ func (be *MySQLShellBackupEngine) ExecuteRestore(ctx context.Context, params Res
 
 	err = cleanupMySQL(ctx, params, shouldDeleteUsers)
 	if err != nil {
-		log.Errorf(err.Error())
+		log.Error(err.Error())
 		// time.Sleep(time.Minute * 2)
 		return nil, vterrors.Wrap(err, "error cleaning MySQL")
 	}
@@ -339,15 +374,20 @@ func (be *MySQLShellBackupEngine) ExecuteRestore(ctx context.Context, params Res
 	}
 	defer resetFunc()
 
-	args := []string{}
+	args, err := shlex.Split(mysqlShellFlags)
+	if err != nil {
+		return nil, vterrors.Wrap(err, "failed to parse --mysql-shell-flags")
+	}
 
-	if mysqlShellFlags != "" {
-		args = append(args, strings.Fields(mysqlShellFlags)...)
+	// compact and validate the json input from mysqlShellLoadFlags.
+	var compactLoadFlags bytes.Buffer
+	if err := json.Compact(&compactLoadFlags, []byte(mysqlShellLoadFlags)); err != nil {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "failed to parse --mysql-shell-load-flags as JSON: %v", err)
 	}
 
 	args = append(args, "-e", fmt.Sprintf("util.loadDump(%q, %s)",
-		bm.BackupLocation,
-		mysqlShellLoadFlags,
+		location,
+		compactLoadFlags.String(),
 	))
 
 	cmd := exec.CommandContext(ctx, "mysqlsh", args...)
@@ -402,7 +442,40 @@ func (be *MySQLShellBackupEngine) ShouldStartMySQLAfterRestore() bool {
 	return false
 }
 
+// ShouldSkipVersionCheck returns whether the MySQL version compatibility check
+// should be skipped when restoring a mysql-shell backup. Because mysql-shell
+// performs a logical restore, its backups are not tied to the on-disk data
+// dictionary format the way physical backups are, so operators can opt out of
+// the version check via --mysql-shell-restore-skip-version-check.
+func (be *MySQLShellBackupEngine) ShouldSkipVersionCheck() bool {
+	return mysqlShellRestoreSkipVersionCheck
+}
+
 func (be *MySQLShellBackupEngine) Name() string { return mysqlShellBackupEngineName }
+
+// isObjectStoreFlags returns true if the given flags JSON string contains
+// any known object store parameters, indicating cloud storage is in use.
+func isObjectStoreFlags(flags string) bool {
+	for _, objStore := range knownObjectStoreParams {
+		if strings.Contains(flags, objStore) {
+			return true
+		}
+	}
+	return false
+}
+
+// backupLocation returns a backup location path by joining the configured
+// mysqlShellBackupLocation with the provided directory and name components.
+// For local filesystem mode, it uses fileutil.SafePathJoin to prevent path
+// traversal outside the configured backup location. For object storage,
+// path.Join is used since SafePathJoin relies on OS-native path operations
+// that don't understand cloud URIs.
+func (be *MySQLShellBackupEngine) backupLocation(dir, name string) (string, error) {
+	if isObjectStoreFlags(mysqlShellDumpFlags) {
+		return path.Join(mysqlShellBackupLocation, dir, name), nil
+	}
+	return fileutil.SafePathJoin(mysqlShellBackupLocation, dir, name)
+}
 
 func (be *MySQLShellBackupEngine) backupPreCheck(location string) error {
 	if mysqlShellBackupLocation == "" {
@@ -413,17 +486,9 @@ func (be *MySQLShellBackupEngine) backupPreCheck(location string) error {
 		return fmt.Errorf("%w: at least the --js flag is required in the value of the flag --mysql-shell-flags", ErrMySQLShellPreCheck)
 	}
 
-	// make sure the targe directory exists if the target location for the backup is not an object store
+	// make sure the target directory exists if the target location for the backup is not an object store
 	// (e.g. is the local filesystem) as MySQL Shell doesn't create the entire path beforehand:
-	isObjectStorage := false
-	for _, objStore := range knownObjectStoreParams {
-		if strings.Contains(mysqlShellDumpFlags, objStore) {
-			isObjectStorage = true
-			break
-		}
-	}
-
-	if !isObjectStorage {
+	if !isObjectStoreFlags(mysqlShellDumpFlags) {
 		err := os.MkdirAll(location, 0o750)
 		if err != nil {
 			return fmt.Errorf("failure creating directory %s: %w", location, err)
@@ -438,7 +503,7 @@ func (be *MySQLShellBackupEngine) restorePreCheck(ctx context.Context, params Re
 		return shouldDeleteUsers, fmt.Errorf("%w: at least the --js flag is required in the value of the flag --mysql-shell-flags", ErrMySQLShellPreCheck)
 	}
 
-	loadFlags := map[string]interface{}{}
+	loadFlags := map[string]any{}
 	err = json.Unmarshal([]byte(mysqlShellLoadFlags), &loadFlags)
 	if err != nil {
 		return false, fmt.Errorf("%w: unable to parse JSON of load flags", ErrMySQLShellPreCheck)

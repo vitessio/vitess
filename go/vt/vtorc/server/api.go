@@ -20,11 +20,15 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
+	"time"
 
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/viperutil/debug"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtorc/inst"
 	"vitess.io/vitess/go/vt/vtorc/logic"
 	"vitess.io/vitess/go/vt/vtorc/process"
@@ -42,10 +46,10 @@ const (
 	disableGlobalRecoveriesAPI = "/api/disable-global-recoveries"
 	enableGlobalRecoveriesAPI  = "/api/enable-global-recoveries"
 	detectionAnalysisAPI       = "/api/detection-analysis"
-	replicationAnalysisAPI     = "/api/replication-analysis" // TODO: remove in v24+
 	databaseStateAPI           = "/api/database-state"
 	configAPI                  = "/api/config"
 	healthAPI                  = "/debug/health"
+	shardQuorumAPI             = "/api/shard-tablet-health-quorum"
 
 	shardWithoutKeyspaceFilteringErrorStr = "Filtering by shard without keyspace isn't supported"
 	notAValidValueForSeconds              = "Invalid value for seconds"
@@ -59,10 +63,10 @@ var (
 		disableGlobalRecoveriesAPI,
 		enableGlobalRecoveriesAPI,
 		detectionAnalysisAPI,
-		replicationAnalysisAPI,
 		databaseStateAPI,
 		configAPI,
 		healthAPI,
+		shardQuorumAPI,
 	}
 )
 
@@ -85,12 +89,14 @@ func (v *vtorcAPI) ServeHTTP(response http.ResponseWriter, request *http.Request
 		problemsAPIHandler(response, request)
 	case errantGTIDsAPI:
 		errantGTIDsAPIHandler(response, request)
-	case detectionAnalysisAPI, replicationAnalysisAPI:
+	case detectionAnalysisAPI:
 		detectionAnalysisAPIHandler(response, request)
 	case databaseStateAPI:
 		databaseStateAPIHandler(response)
 	case configAPI:
 		configAPIHandler(response)
+	case shardQuorumAPI:
+		shardQuorumAPIHandler(response)
 	default:
 		// This should be unreachable. Any endpoint which isn't registered is automatically redirected to /debug/status.
 		// This code will only be reachable if we register an API but don't handle it here. That will be a bug.
@@ -105,9 +111,11 @@ func getACLPermissionLevelForAPI(apiEndpoint string) string {
 		return acl.MONITORING
 	case disableGlobalRecoveriesAPI, enableGlobalRecoveriesAPI:
 		return acl.ADMIN
-	case detectionAnalysisAPI, replicationAnalysisAPI, configAPI:
+	case detectionAnalysisAPI, configAPI:
 		return acl.MONITORING
 	case healthAPI, databaseStateAPI:
+		return acl.MONITORING
+	case shardQuorumAPI:
 		return acl.MONITORING
 	}
 	return acl.ADMIN
@@ -148,7 +156,11 @@ func problemsAPIHandler(response http.ResponseWriter, request *http.Request) {
 		http.Error(response, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	returnAsJSON(response, http.StatusOK, instances)
+	var processed []*LegacyInstanceJSON
+	for _, i := range instances {
+		processed = append(processed, &LegacyInstanceJSON{i})
+	}
+	returnAsJSON(response, http.StatusOK, processed)
 }
 
 // errantGTIDsAPIHandler is the handler for the errantGTIDsAPI endpoint
@@ -166,7 +178,11 @@ func errantGTIDsAPIHandler(response http.ResponseWriter, request *http.Request) 
 		http.Error(response, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	returnAsJSON(response, http.StatusOK, instances)
+	var processed []*LegacyInstanceJSON
+	for _, i := range instances {
+		processed = append(processed, &LegacyInstanceJSON{i})
+	}
+	returnAsJSON(response, http.StatusOK, processed)
 }
 
 // databaseStateAPIHandler is the handler for the databaseStateAPI endpoint
@@ -190,6 +206,36 @@ func configAPIHandler(response http.ResponseWriter) {
 	writePlainTextResponse(response, string(jsonOut), http.StatusOK)
 }
 
+// shardQuorumAPIHandler is the handler for the shardQuorumAPI endpoint. For each shard that
+// currently has shard-peer observer data it returns the computed quorum evaluation: the primary,
+// the verdict, the per-observer votes, and the thresholds. Read-only; best-effort per shard.
+func shardQuorumAPIHandler(response http.ResponseWriter) {
+	opts := inst.QuorumOptionsFromConfig()
+	observedShards := inst.ObservedShards()
+	now := time.Now()
+	results := make([]inst.QuorumResult, 0, len(observedShards))
+	for _, ks := range observedShards {
+		// Best-effort: if we can't resolve the shard's primary, still emit the shard with an
+		// empty primary (EvaluatePrimaryQuorum returns no observer votes without a primary).
+		primaryAlias, _, err := inst.ReadShardPrimaryInformation(ks.Keyspace, ks.Shard)
+		if err != nil {
+			primaryAlias = nil
+		}
+		// Source the expected observer count from topo exactly as the ERS analysis path does, so
+		// this endpoint's verdict matches the actionable recovery decision — a minority of fresh
+		// down reports must not read as Down in a larger shard. On a count error fall back to 0
+		// (the majority gate then uses only the observers actually seen) and log it.
+		expectedObservers, err := inst.ShardEligibleObserverCount(ks.Keyspace, ks.Shard)
+		if err != nil {
+			log.Warn("shard-tablet-health-quorum API: could not count eligible observers, using observed-only base",
+				slog.String("keyspace", ks.Keyspace), slog.String("shard", ks.Shard), slog.Any("error", err))
+			expectedObservers = 0
+		}
+		results = append(results, inst.EvaluatePrimaryQuorum(primaryAlias, ks.Keyspace, ks.Shard, expectedObservers, opts, now))
+	}
+	returnAsJSON(response, http.StatusOK, results)
+}
+
 // disableGlobalRecoveriesAPIHandler is the handler for the disableGlobalRecoveriesAPI endpoint
 func disableGlobalRecoveriesAPIHandler(response http.ResponseWriter) {
 	err := logic.DisableRecovery()
@@ -210,6 +256,62 @@ func enableGlobalRecoveriesAPIHandler(response http.ResponseWriter) {
 	writePlainTextResponse(response, "Global recoveries enabled", http.StatusOK)
 }
 
+// LegacyDetectionAnalysisJSON is a wrapper to *inst.DetectionAnalysis that
+// provides the AnalyzedInstanceAlias field in the old string-based format.
+type LegacyDetectionAnalysisJSON struct {
+	*inst.DetectionAnalysis
+}
+
+// NewLegacyDetectionAnalysisJSON wraps a *inst.DetectionAnalysis with *LegacyDetectionAnalysisJSON.
+func NewLegacyDetectionAnalysisJSON(da *inst.DetectionAnalysis) *LegacyDetectionAnalysisJSON {
+	return &LegacyDetectionAnalysisJSON{da}
+}
+
+// MarshalJSON converts a *LegacyDetectionAnalysisJSON to the legacy format JSON,
+// outputting AnalyzedInstanceAlias and AnalyzedInstancePrimaryAlias as strings.
+func (ldaj *LegacyDetectionAnalysisJSON) MarshalJSON() ([]byte, error) {
+	type plain inst.DetectionAnalysis
+	data, err := json.Marshal((*plain)(ldaj.DetectionAnalysis))
+	if err != nil {
+		return nil, err
+	}
+	var m map[string]json.RawMessage
+	if err := json.Unmarshal(data, &m); err != nil {
+		return nil, err
+	}
+	if b, err := json.Marshal(topoproto.TabletAliasString(ldaj.AnalyzedInstanceAlias)); err == nil {
+		m["AnalyzedInstanceAlias"] = b
+	}
+	if b, err := json.Marshal(topoproto.TabletAliasString(ldaj.AnalyzedInstancePrimaryAlias)); err == nil {
+		m["AnalyzedInstancePrimaryAlias"] = b
+	}
+	return json.Marshal(m)
+}
+
+// LegacyInstanceJSON is a wrapper to *inst.Instance that provides the
+// InstanceAlias field in the old string-based format.
+type LegacyInstanceJSON struct {
+	*inst.Instance
+}
+
+// MarshalJSON converts a *LegacyInstanceJSON to the legacy format JSON,
+// outputting InstanceAlias as a string.
+func (lij *LegacyInstanceJSON) MarshalJSON() ([]byte, error) {
+	type plain inst.Instance
+	data, err := json.Marshal((*plain)(lij.Instance))
+	if err != nil {
+		return nil, err
+	}
+	var m map[string]json.RawMessage
+	if err := json.Unmarshal(data, &m); err != nil {
+		return nil, err
+	}
+	if b, err := json.Marshal(topoproto.TabletAliasString(lij.InstanceAlias)); err == nil {
+		m["InstanceAlias"] = b
+	}
+	return json.Marshal(m)
+}
+
 // detectionAnalysisAPIHandler is the handler for the detectionAnalysisAPI endpoint
 func detectionAnalysisAPIHandler(response http.ResponseWriter, request *http.Request) {
 	// This api also supports filtering by shard and keyspace provided.
@@ -224,10 +326,11 @@ func detectionAnalysisAPIHandler(response http.ResponseWriter, request *http.Req
 		http.Error(response, err.Error(), http.StatusInternalServerError)
 		return
 	}
-
-	// TODO: We can also add filtering for a specific instance too based on the tablet alias.
-	// Currently inst.DetectionAnalysis doesn't store the tablet alias, but once it does we can filter on that too
-	returnAsJSON(response, http.StatusOK, analysis)
+	var processed []*LegacyDetectionAnalysisJSON
+	for _, a := range analysis {
+		processed = append(processed, NewLegacyDetectionAnalysisJSON(a))
+	}
+	returnAsJSON(response, http.StatusOK, processed)
 }
 
 // healthAPIHandler is the handler for the healthAPI endpoint

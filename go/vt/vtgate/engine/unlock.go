@@ -45,7 +45,7 @@ func (u *Unlock) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[s
 		return &sqltypes.Result{}, nil
 	}
 	bqs := make([]*querypb.BoundQuery, len(rss))
-	for i := 0; i < len(rss); i++ {
+	for i := range rss {
 		bqs[i] = &querypb.BoundQuery{Sql: unlockTables}
 	}
 	qr, errs := vcursor.ExecuteMultiShard(ctx, u, rss, bqs, true, false, false)

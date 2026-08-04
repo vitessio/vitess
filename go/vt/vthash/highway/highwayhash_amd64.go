@@ -1,5 +1,4 @@
 //go:build amd64 && !gccgo && !appengine && !nacl && !noasm
-// +build amd64,!gccgo,!appengine,!nacl,!noasm
 
 /*
 Copyright (c) 2017 Minio Inc. All rights reserved.

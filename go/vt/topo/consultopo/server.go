@@ -21,12 +21,13 @@ package consultopo
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/hashicorp/consul/api"
+	"github.com/hashicorp/consul/api/v2"
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/vt/log"
@@ -80,7 +81,7 @@ func getClientCreds() (creds map[string]*ClientAuthCred, err error) {
 
 	if consulAuthClientStaticFile == "" {
 		// Not configured, nothing to do.
-		log.Infof("Consul client auth is not set up. consul-auth-static-file was not provided")
+		log.Info("Consul client auth is not set up. consul-auth-static-file was not provided")
 		return nil, nil
 	}
 
@@ -142,7 +143,7 @@ func NewServer(cell, serverAddr, root string) (*Server, error) {
 		if creds[cell] != nil {
 			cfg.Token = creds[cell].ACLToken
 		} else {
-			log.Warningf("Client auth not configured for cell: %v", cell)
+			log.Warn(fmt.Sprintf("Client auth not configured for cell: %v", cell))
 		}
 	}
 

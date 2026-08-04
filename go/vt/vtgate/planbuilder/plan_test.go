@@ -29,6 +29,7 @@ import (
 	"testing"
 
 	"github.com/nsf/jsondiff"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 
@@ -62,9 +63,9 @@ type planTestSuite struct {
 func (s *planTestSuite) SetupSuite() {
 	dir := getTestExpectationDir()
 	err := os.RemoveAll(dir)
-	require.NoError(s.T(), err)
-	err = os.Mkdir(dir, 0755)
-	require.NoError(s.T(), err)
+	s.Require().NoError(err)
+	err = os.Mkdir(dir, 0o755)
+	s.Require().NoError(err)
 	s.outputDir = dir
 }
 
@@ -78,7 +79,7 @@ func (s *planTestSuite) TestPlan() {
 	env := vtenv.NewTestEnv()
 	vschema := loadSchema(s.T(), "vschemas/schema.json", true)
 	vw, err := vschemawrapper.NewVschemaWrapper(env, vschema, TestBuilder)
-	require.NoError(s.T(), err)
+	s.Require().NoError(err)
 
 	s.addPKs(vschema, "user", []string{"user", "music"})
 	s.addPKsProvided(vschema, "user", []string{"user_extra"}, []string{"id", "user_id"})
@@ -128,7 +129,7 @@ func (s *planTestSuite) TestForeignKeyPlanning() {
 	env := vtenv.NewTestEnv()
 	vschema := loadSchema(s.T(), "vschemas/schema.json", true)
 	vw, err := vschemawrapper.NewVschemaWrapper(env, vschema, TestBuilder)
-	require.NoError(s.T(), err)
+	s.Require().NoError(err)
 
 	s.setFks(vschema)
 	s.testFile("foreignkey_cases.json", vw, false)
@@ -139,7 +140,7 @@ func (s *planTestSuite) TestForeignKeyChecksOn() {
 	env := vtenv.NewTestEnv()
 	vschema := loadSchema(s.T(), "vschemas/schema.json", true)
 	vw, err := vschemawrapper.NewVschemaWrapper(env, vschema, TestBuilder)
-	require.NoError(s.T(), err)
+	s.Require().NoError(err)
 
 	fkChecksState := true
 	vw.ForeignKeyChecksState = &fkChecksState
@@ -153,7 +154,7 @@ func (s *planTestSuite) TestForeignKeyChecksOff() {
 	env := vtenv.NewTestEnv()
 	vschema := loadSchema(s.T(), "vschemas/schema.json", true)
 	vw, err := vschemawrapper.NewVschemaWrapper(env, vschema, TestBuilder)
-	require.NoError(s.T(), err)
+	s.Require().NoError(err)
 
 	fkChecksState := false
 	vw.ForeignKeyChecksState = &fkChecksState
@@ -197,8 +198,10 @@ func (s *planTestSuite) setFks(vschema *vindexes.VSchema) {
 
 		// FK from tbl_auth referencing tbl20 that is shard scoped of CASCADE types.
 		_ = vschema.AddForeignKey("sharded_fk_allow", "tbl_auth", createFkDefinition([]string{"id"}, "tbl20", []string{"col2"}, sqlparser.Cascade, sqlparser.Cascade))
-		s.addPKs(vschema, "sharded_fk_allow", []string{"tbl1", "tbl2", "tbl3", "tbl4", "tbl5", "tbl6", "tbl7", "tbl9", "tbl10",
-			"multicol_tbl1", "multicol_tbl2", "tbl_auth", "tblrefDef", "tbl20"})
+		s.addPKs(vschema, "sharded_fk_allow", []string{
+			"tbl1", "tbl2", "tbl3", "tbl4", "tbl5", "tbl6", "tbl7", "tbl9", "tbl10",
+			"multicol_tbl1", "multicol_tbl2", "tbl_auth", "tblrefDef", "tbl20",
+		})
 	}
 	if vschema.Keyspaces["unsharded_fk_allow"] != nil {
 		// u_tbl2(col2)  				-> u_tbl1(col1)  				Cascade.
@@ -241,22 +244,22 @@ func (s *planTestSuite) setFks(vschema *vindexes.VSchema) {
 		// FK from u_tbl12 that is self-referential.
 		_ = vschema.AddForeignKey("unsharded_fk_allow", "u_tbl12", createFkDefinition([]string{"parent_id"}, "u_tbl12", []string{"id"}, sqlparser.Restrict, sqlparser.Restrict))
 
-		s.addPKs(vschema, "unsharded_fk_allow", []string{"u_tbl1", "u_tbl2", "u_tbl3", "u_tbl4", "u_tbl5", "u_tbl6", "u_tbl7", "u_tbl8", "u_tbl9", "u_tbl10", "u_tbl11", "u_tbl12",
-			"u_multicol_tbl1", "u_multicol_tbl2", "u_multicol_tbl3"})
+		s.addPKs(vschema, "unsharded_fk_allow", []string{
+			"u_tbl1", "u_tbl2", "u_tbl3", "u_tbl4", "u_tbl5", "u_tbl6", "u_tbl7", "u_tbl8", "u_tbl9", "u_tbl10", "u_tbl11", "u_tbl12",
+			"u_multicol_tbl1", "u_multicol_tbl2", "u_multicol_tbl3",
+		})
 	}
 }
 
 func (s *planTestSuite) addPKs(vschema *vindexes.VSchema, ks string, tbls []string) {
 	for _, tbl := range tbls {
-		require.NoError(s.T(),
-			vschema.AddPrimaryKey(ks, tbl, []string{"id"}))
+		s.Require().NoError(vschema.AddPrimaryKey(ks, tbl, []string{"id"}))
 	}
 }
 
 func (s *planTestSuite) addPKsProvided(vschema *vindexes.VSchema, ks string, tbls []string, pks []string) {
 	for _, tbl := range tbls {
-		require.NoError(s.T(),
-			vschema.AddPrimaryKey(ks, tbl, pks))
+		s.Require().NoError(vschema.AddPrimaryKey(ks, tbl, pks))
 	}
 }
 
@@ -265,10 +268,10 @@ func (s *planTestSuite) TestSystemTables57() {
 	env, err := vtenv.New(vtenv.Options{
 		MySQLServerVersion: "5.7.9",
 	})
-	require.NoError(s.T(), err)
+	s.Require().NoError(err)
 	vschema := loadSchema(s.T(), "vschemas/schema.json", true)
 	vw, err := vschemawrapper.NewVschemaWrapper(env, vschema, TestBuilder)
-	require.NoError(s.T(), err)
+	s.Require().NoError(err)
 
 	s.testFile("info_schema57_cases.json", vw, false)
 }
@@ -277,7 +280,7 @@ func (s *planTestSuite) TestSysVarSetDisabled() {
 	env := vtenv.NewTestEnv()
 	vschema := loadSchema(s.T(), "vschemas/schema.json", true)
 	vw, err := vschemawrapper.NewVschemaWrapper(env, vschema, TestBuilder)
-	require.NoError(s.T(), err)
+	s.Require().NoError(err)
 
 	vw.SysVarEnabled = false
 
@@ -288,7 +291,7 @@ func (s *planTestSuite) TestViews() {
 	env := vtenv.NewTestEnv()
 	vschema := loadSchema(s.T(), "vschemas/schema.json", true)
 	vw, err := vschemawrapper.NewVschemaWrapper(env, vschema, TestBuilder)
-	require.NoError(s.T(), err)
+	s.Require().NoError(err)
 
 	vw.EnableViews = true
 
@@ -302,7 +305,7 @@ func (s *planTestSuite) TestOne() {
 	env := vtenv.NewTestEnv()
 	vschema := loadSchema(s.T(), "vschemas/schema.json", true)
 	vw, err := vschemawrapper.NewVschemaWrapper(env, vschema, TestBuilder)
-	require.NoError(s.T(), err)
+	s.Require().NoError(err)
 
 	s.setFks(vschema)
 	s.addPKs(vschema, "user", []string{"user", "music"})
@@ -322,7 +325,7 @@ func (s *planTestSuite) TestOneTPCC() {
 	env := vtenv.NewTestEnv()
 	vschema := loadSchema(s.T(), "vschemas/tpcc_schema.json", true)
 	vw, err := vschemawrapper.NewVschemaWrapper(env, vschema, TestBuilder)
-	require.NoError(s.T(), err)
+	s.Require().NoError(err)
 
 	s.testFile("onecase.json", vw, false)
 }
@@ -334,7 +337,7 @@ func (s *planTestSuite) TestOneWithMainAsDefault() {
 	env := vtenv.NewTestEnv()
 	vschema := loadSchema(s.T(), "vschemas/schema.json", true)
 	vw, err := vschemawrapper.NewVschemaWrapper(env, vschema, TestBuilder)
-	require.NoError(s.T(), err)
+	s.Require().NoError(err)
 
 	vw.Vcursor.SetTarget("main")
 	vw.Keyspace = &vindexes.Keyspace{Name: "main"}
@@ -349,7 +352,7 @@ func (s *planTestSuite) TestOneWithSecondUserAsDefault() {
 	env := vtenv.NewTestEnv()
 	vschema := loadSchema(s.T(), "vschemas/schema.json", true)
 	vw, err := vschemawrapper.NewVschemaWrapper(env, vschema, TestBuilder)
-	require.NoError(s.T(), err)
+	s.Require().NoError(err)
 
 	vw.Vcursor.SetTarget("second_user")
 	vw.Keyspace = &vindexes.Keyspace{
@@ -367,7 +370,7 @@ func (s *planTestSuite) TestOneWithUserAsDefault() {
 	env := vtenv.NewTestEnv()
 	vschema := loadSchema(s.T(), "vschemas/schema.json", true)
 	vw, err := vschemawrapper.NewVschemaWrapper(env, vschema, TestBuilder)
-	require.NoError(s.T(), err)
+	s.Require().NoError(err)
 
 	vw.Vcursor.SetTarget("user")
 	vw.Keyspace = &vindexes.Keyspace{
@@ -385,7 +388,7 @@ func (s *planTestSuite) TestOneWithTPCHVSchema() {
 	env := vtenv.NewTestEnv()
 	vschema := loadSchema(s.T(), "vschemas/tpch_schema.json", true)
 	vw, err := vschemawrapper.NewVschemaWrapper(env, vschema, TestBuilder)
-	require.NoError(s.T(), err)
+	s.Require().NoError(err)
 
 	s.testFile("onecase.json", vw, false)
 }
@@ -397,10 +400,10 @@ func (s *planTestSuite) TestOneWith57Version() {
 	env, err := vtenv.New(vtenv.Options{
 		MySQLServerVersion: "5.7.9",
 	})
-	require.NoError(s.T(), err)
+	s.Require().NoError(err)
 	vschema := loadSchema(s.T(), "vschemas/schema.json", true)
 	vw, err := vschemawrapper.NewVschemaWrapper(env, vschema, TestBuilder)
-	require.NoError(s.T(), err)
+	s.Require().NoError(err)
 
 	s.testFile("onecase.json", vw, false)
 }
@@ -409,7 +412,7 @@ func (s *planTestSuite) TestRubyOnRailsQueries() {
 	env := vtenv.NewTestEnv()
 	vschema := loadSchema(s.T(), "vschemas/rails_schema.json", true)
 	vw, err := vschemawrapper.NewVschemaWrapper(env, vschema, TestBuilder)
-	require.NoError(s.T(), err)
+	s.Require().NoError(err)
 
 	s.testFile("rails_cases.json", vw, false)
 }
@@ -418,7 +421,7 @@ func (s *planTestSuite) TestOLTP() {
 	env := vtenv.NewTestEnv()
 	vschema := loadSchema(s.T(), "vschemas/oltp_schema.json", true)
 	vw, err := vschemawrapper.NewVschemaWrapper(env, vschema, TestBuilder)
-	require.NoError(s.T(), err)
+	s.Require().NoError(err)
 
 	s.testFile("oltp_cases.json", vw, false)
 }
@@ -427,7 +430,7 @@ func (s *planTestSuite) TestTPCC() {
 	env := vtenv.NewTestEnv()
 	vschema := loadSchema(s.T(), "vschemas/tpcc_schema.json", true)
 	vw, err := vschemawrapper.NewVschemaWrapper(env, vschema, TestBuilder)
-	require.NoError(s.T(), err)
+	s.Require().NoError(err)
 
 	s.testFile("tpcc_cases.json", vw, false)
 }
@@ -436,7 +439,7 @@ func (s *planTestSuite) TestTPCH() {
 	env := vtenv.NewTestEnv()
 	vschema := loadSchema(s.T(), "vschemas/tpch_schema.json", true)
 	vw, err := vschemawrapper.NewVschemaWrapper(env, vschema, TestBuilder)
-	require.NoError(s.T(), err)
+	s.Require().NoError(err)
 
 	s.testFile("tpch_cases.json", vw, false)
 }
@@ -483,7 +486,7 @@ func (s *planTestSuite) TestBypassPlanningKeyrangeTargetFromFile() {
 	env := vtenv.NewTestEnv()
 	vschema := loadSchema(s.T(), "vschemas/schema.json", true)
 	vw, err := vschemawrapper.NewVschemaWrapper(env, vschema, TestBuilder)
-	require.NoError(s.T(), err)
+	s.Require().NoError(err)
 
 	keyRange, _ := key.ParseShardingSpec("-")
 	vw.Dest = key.DestinationExactKeyRange{KeyRange: keyRange[0]}
@@ -502,7 +505,7 @@ func (s *planTestSuite) TestWithDefaultKeyspaceFromFile() {
 	env := vtenv.NewTestEnv()
 	vschema := loadSchema(s.T(), "vschemas/schema.json", true)
 	vw, err := vschemawrapper.NewVschemaWrapper(env, vschema, TestBuilder)
-	require.NoError(s.T(), err)
+	s.Require().NoError(err)
 
 	vw.Vcursor.SetTarget("main")
 	vw.Keyspace = &vindexes.Keyspace{Name: "main"}
@@ -519,7 +522,7 @@ func (s *planTestSuite) TestWithDefaultKeyspaceFromFile() {
 		}
 		return ki.SidecarDbName, nil
 	})
-	require.True(s.T(), created)
+	s.Require().True(created)
 
 	s.testFile("alterVschema_cases.json", vw, false)
 	s.testFile("ddl_cases.json", vw, false)
@@ -533,7 +536,7 @@ func (s *planTestSuite) TestSingleUnshardedKeyspace() {
 	env := vtenv.NewTestEnv()
 	vschema := loadSchema(s.T(), "vschemas/unsharded_schema.json", false)
 	vw, err := vschemawrapper.NewVschemaWrapper(env, vschema, TestBuilder)
-	require.NoError(s.T(), err)
+	s.Require().NoError(err)
 
 	s.testFile("unsharded_cases.json", vw, false)
 }
@@ -543,7 +546,7 @@ func (s *planTestSuite) TestWithDefaultKeyspaceFromFileSharded() {
 	env := vtenv.NewTestEnv()
 	vschema := loadSchema(s.T(), "vschemas/schema.json", true)
 	vw, err := vschemawrapper.NewVschemaWrapper(env, vschema, TestBuilder)
-	require.NoError(s.T(), err)
+	s.Require().NoError(err)
 
 	vw.Vcursor.SetTarget("second_user")
 	vw.Keyspace = &vindexes.Keyspace{
@@ -559,7 +562,7 @@ func (s *planTestSuite) TestWithUserDefaultKeyspaceFromFileSharded() {
 	env := vtenv.NewTestEnv()
 	vschema := loadSchema(s.T(), "vschemas/schema.json", true)
 	vw, err := vschemawrapper.NewVschemaWrapper(env, vschema, TestBuilder)
-	require.NoError(s.T(), err)
+	s.Require().NoError(err)
 
 	vw.Vcursor.SetTarget("user")
 	vw.Keyspace = &vindexes.Keyspace{
@@ -576,7 +579,7 @@ func (s *planTestSuite) TestWithSystemSchemaAsDefaultKeyspace() {
 	env := vtenv.NewTestEnv()
 	vschema := loadSchema(s.T(), "vschemas/schema.json", true)
 	vw, err := vschemawrapper.NewVschemaWrapper(env, vschema, TestBuilder)
-	require.NoError(s.T(), err)
+	s.Require().NoError(err)
 
 	vw.Keyspace = &vindexes.Keyspace{Name: "information_schema"}
 
@@ -588,7 +591,7 @@ func (s *planTestSuite) TestOtherPlanningFromFile() {
 	env := vtenv.NewTestEnv()
 	vschema := loadSchema(s.T(), "vschemas/schema.json", true)
 	vw, err := vschemawrapper.NewVschemaWrapper(env, vschema, TestBuilder)
-	require.NoError(s.T(), err)
+	s.Require().NoError(err)
 
 	s.testFile("other_read_cases.json", vw, false)
 
@@ -601,7 +604,7 @@ func (s *planTestSuite) TestMirrorPlanning() {
 	env := vtenv.NewTestEnv()
 	vschema := loadSchema(s.T(), "vschemas/mirror_schema.json", true)
 	vw, err := vschemawrapper.NewVschemaWrapper(env, vschema, TestBuilder)
-	require.NoError(s.T(), err)
+	s.Require().NoError(err)
 
 	s.testFile("mirror_cases.json", vw, false)
 }
@@ -613,7 +616,7 @@ func (s *planTestSuite) TestOneMirror() {
 	env := vtenv.NewTestEnv()
 	vschema := loadSchema(s.T(), "vschemas/schema.json", true)
 	vw, err := vschemawrapper.NewVschemaWrapper(env, vschema, TestBuilder)
-	require.NoError(s.T(), err)
+	s.Require().NoError(err)
 
 	s.testFile("onecase.json", vw, false)
 }
@@ -667,7 +670,8 @@ func createFkDefinition(childCols []string, parentTableName string, parentCols [
 func (s *planTestSuite) testFile(filename string, vschema *vschemawrapper.VSchemaWrapper, render bool) {
 	opts := jsondiff.DefaultConsoleOptions()
 
-	s.T().Run(filename, func(t *testing.T) {
+	s.Run(filename, func() {
+		t := s.T()
 		failed := false
 		var expected []PlanTest
 		for _, tcase := range readJSONTests(filename) {
@@ -702,10 +706,10 @@ func (s *planTestSuite) testFile(filename string, vschema *vschemawrapper.VSchem
 					if tcase.Skip {
 						t.Skip(message)
 					} else {
-						t.Error(message)
+						assert.Fail(t, message)
 					}
 				} else if tcase.Skip {
-					t.Errorf("query is correct even though it is skipped:\n %s", tcase.Query)
+					assert.Failf(t, "skipped query is correct", "query is correct even though it is skipped:\n %s", tcase.Query)
 				}
 				current.Plan = []byte(out)
 			})
@@ -799,7 +803,7 @@ func BenchmarkSemAnalysis(b *testing.B) {
 	vw, err := vschemawrapper.NewVschemaWrapper(env, vschema, TestBuilder)
 	require.NoError(b, err)
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		for _, filename := range benchMarkFiles {
 			for _, tc := range readJSONTests(filename) {
 				exerciseAnalyzer(tc.Query, vw.CurrentDb(), vw)

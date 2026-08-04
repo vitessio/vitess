@@ -135,9 +135,7 @@ func newTestTableMigraterCustom(ctx context.Context, t *testing.T, sourceShards,
 		tabletID += 10
 
 		_, sourceKeyRange, err := topo.ValidateShardName(shard)
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
 		tme.sourceKeyRanges = append(tme.sourceKeyRanges, sourceKeyRange)
 	}
 	tpChoiceTablet := tme.sourcePrimaries[0].Tablet
@@ -150,9 +148,7 @@ func newTestTableMigraterCustom(ctx context.Context, t *testing.T, sourceShards,
 		tabletID += 10
 
 		_, targetKeyRange, err := topo.ValidateShardName(shard)
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
 		tme.targetKeyRanges = append(tme.targetKeyRanges, targetKeyRange)
 	}
 
@@ -204,20 +200,16 @@ func newTestTableMigraterCustom(ctx context.Context, t *testing.T, sourceShards,
 	}
 	tme.setPrimarySchemas(schema)
 	if len(sourceShards) != 1 {
-		if err := tme.ts.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
+		require.NoError(t, tme.ts.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
 			Name:     "ks1",
 			Keyspace: vs,
-		}); err != nil {
-			t.Fatal(err)
-		}
+		}))
 	}
 	if len(targetShards) != 1 {
-		if err := tme.ts.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
+		require.NoError(t, tme.ts.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
 			Name:     "ks2",
 			Keyspace: vs,
-		}); err != nil {
-			t.Fatal(err)
-		}
+		}))
 	}
 	if useSequences {
 		// Add another unsharded keyspace with sequence tables in
@@ -236,12 +228,10 @@ func newTestTableMigraterCustom(ctx context.Context, t *testing.T, sourceShards,
 		tabletID += 10
 		gfdb := fakesqldb.New(t)
 		tme.additionalPrimaries = append(tme.additionalPrimaries, newFakeTablet(t, tme.wr, "cell1", uint32(tabletID), topodatapb.TabletType_PRIMARY, gfdb, TabletKeyspaceShard(t, "global", "0")))
-		if err := tme.ts.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
+		require.NoError(t, tme.ts.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
 			Name:     "global",
 			Keyspace: uvs,
-		}); err != nil {
-			t.Fatal(err)
-		}
+		}))
 
 		// Now use these sequence tables in the target sharded keyspace.
 		tks := vs.CloneVT()
@@ -253,12 +243,10 @@ func newTestTableMigraterCustom(ctx context.Context, t *testing.T, sourceShards,
 			Column:   "id",
 			Sequence: "t2_seq",
 		}
-		if err := tme.ts.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
+		require.NoError(t, tme.ts.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
 			Name:     "ks2",
 			Keyspace: tks,
-		}); err != nil {
-			t.Fatal(err)
-		}
+		}))
 
 		// Now tell the fakesqldb used by the target keyspace tablets to expect
 		// the sequence management related queries against the target keyspace.
@@ -292,17 +280,11 @@ func newTestTableMigraterCustom(ctx context.Context, t *testing.T, sourceShards,
 			&sqltypes.Result{RowsAffected: 0},
 		)
 	}
-	if err := tme.ts.RebuildSrvVSchema(ctx, nil); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, tme.ts.RebuildSrvVSchema(ctx, nil))
 	err := topotools.RebuildKeyspace(ctx, logutil.NewConsoleLogger(), tme.ts, "ks1", []string{"cell1"}, false)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	err = topotools.RebuildKeyspace(ctx, logutil.NewConsoleLogger(), tme.ts, "ks2", []string{"cell1"}, false)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	tme.startTablets(t)
 	tme.createDBClients(ctx, t)
@@ -375,17 +357,13 @@ func newTestTableMigraterCustom(ctx context.Context, t *testing.T, sourceShards,
 		)
 	}
 
-	if err := topotools.SaveRoutingRules(ctx, tme.wr.ts, map[string][]string{
+	require.NoError(t, topotools.SaveRoutingRules(ctx, tme.wr.ts, map[string][]string{
 		"t1":     {"ks1.t1"},
 		"ks2.t1": {"ks1.t1"},
 		"t2":     {"ks1.t2"},
 		"ks2.t2": {"ks1.t2"},
-	}); err != nil {
-		t.Fatal(err)
-	}
-	if err := tme.ts.RebuildSrvVSchema(ctx, nil); err != nil {
-		t.Fatal(err)
-	}
+	}))
+	require.NoError(t, tme.ts.RebuildSrvVSchema(ctx, nil))
 
 	tme.targetKeyspace = "ks2"
 	return tme
@@ -413,9 +391,7 @@ func newTestTablePartialMigrater(ctx context.Context, t *testing.T, shards, shar
 		tabletID += 10
 
 		_, sourceKeyRange, err := topo.ValidateShardName(shard)
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
 		tme.sourceKeyRanges = append(tme.sourceKeyRanges, sourceKeyRange)
 	}
 	tpChoiceTablet := tme.sourcePrimaries[0].Tablet
@@ -428,9 +404,7 @@ func newTestTablePartialMigrater(ctx context.Context, t *testing.T, shards, shar
 		tabletID += 10
 
 		_, targetKeyRange, err := topo.ValidateShardName(shard)
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
 		tme.targetKeyRanges = append(tme.targetKeyRanges, targetKeyRange)
 	}
 
@@ -517,8 +491,7 @@ func newTestTablePartialMigrater(ctx context.Context, t *testing.T, shards, shar
 		}
 		vreplIDsJoined := strings.Join(vreplIDs, ", ")
 		tme.dbTargetClients[i].addInvariant(fmt.Sprintf(copyStateQuery, vreplIDsJoined, vreplIDsJoined), noResult)
-		log.Infof("Adding streamInfoKs2 invariant for shard %s,  client %s,rows %q",
-			shard, tme.dbTargetClients[i].name, streamExtInfoRows)
+		log.Info(fmt.Sprintf("Adding streamInfoKs2 invariant for shard %s,  client %s,rows %q", shard, tme.dbTargetClients[i].name, streamExtInfoRows))
 		tme.dbTargetClients[i].addInvariant(streamInfoKs2, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 			"id|source|message|cell|tablet_types|workflow_type|workflow_sub_type|defer_secondary_keys",
 			"int64|varchar|varchar|varchar|varchar|int64|int64|int64"),
@@ -583,9 +556,7 @@ func newTestShardMigrater(ctx context.Context, t *testing.T, sourceShards, targe
 		tabletID += 10
 
 		_, sourceKeyRange, err := topo.ValidateShardName(shard)
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
 		tme.sourceKeyRanges = append(tme.sourceKeyRanges, sourceKeyRange)
 	}
 	tpChoiceTablet := tme.sourcePrimaries[0].Tablet
@@ -599,9 +570,7 @@ func newTestShardMigrater(ctx context.Context, t *testing.T, sourceShards, targe
 		tabletID += 10
 
 		_, targetKeyRange, err := topo.ValidateShardName(shard)
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
 		tme.targetKeyRanges = append(tme.targetKeyRanges, targetKeyRange)
 	}
 
@@ -646,19 +615,13 @@ func newTestShardMigrater(ctx context.Context, t *testing.T, sourceShards, targe
 			},
 		},
 	}
-	if err := tme.ts.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
+	require.NoError(t, tme.ts.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
 		Name:     "ks",
 		Keyspace: vs,
-	}); err != nil {
-		t.Fatal(err)
-	}
-	if err := tme.ts.RebuildSrvVSchema(ctx, nil); err != nil {
-		t.Fatal(err)
-	}
+	}))
+	require.NoError(t, tme.ts.RebuildSrvVSchema(ctx, nil))
 	err := topotools.RebuildKeyspace(ctx, logutil.NewConsoleLogger(), tme.ts, "ks", nil, false)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	tme.startTablets(t)
 	tme.createDBClients(ctx, t)
@@ -735,20 +698,16 @@ func (tme *testMigraterEnv) startTablets(t *testing.T) {
 	// Wait for the shard record primaries to be set.
 	for _, primary := range allPrimarys {
 		primaryFound := false
-		for i := 0; i < 10; i++ {
-			si, err := tme.wr.ts.GetShard(context.Background(), primary.Tablet.Keyspace, primary.Tablet.Shard)
-			if err != nil {
-				t.Fatal(err)
-			}
+		for range 10 {
+			si, err := tme.wr.ts.GetShard(t.Context(), primary.Tablet.Keyspace, primary.Tablet.Shard)
+			require.NoError(t, err)
 			if si.PrimaryAlias != nil {
 				primaryFound = true
 				break
 			}
 			time.Sleep(10 * time.Millisecond)
 		}
-		if !primaryFound {
-			t.Fatalf("shard primary did not get updated for tablet: %v", primary)
-		}
+		require.Truef(t, primaryFound, "shard primary did not get updated for tablet: %v", primary)
 	}
 }
 
@@ -776,7 +735,7 @@ func (tme *testMigraterEnv) createDBClients(ctx context.Context, t *testing.T) {
 		primary.TM.VREngine.Open(ctx)
 	}
 	for _, primary := range tme.targetPrimaries {
-		log.Infof("Adding as targetPrimary %s", primary.Tablet.Alias)
+		log.Info(fmt.Sprintf("Adding as targetPrimary %s", primary.Tablet.Alias))
 		dbclient := newFakeDBClient(primary.Tablet.Alias.String())
 		tme.dbTargetClients = append(tme.dbTargetClients, dbclient)
 		dbClientFactory := func() binlogplayer.DBClient { return dbclient }
@@ -785,7 +744,7 @@ func (tme *testMigraterEnv) createDBClients(ctx context.Context, t *testing.T) {
 		primary.TM.VREngine.Open(ctx)
 	}
 	for _, primary := range tme.additionalPrimaries {
-		log.Infof("Adding as additionalPrimary %s", primary.Tablet.Alias)
+		log.Info(fmt.Sprintf("Adding as additionalPrimary %s", primary.Tablet.Alias))
 		dbclient := newFakeDBClient(primary.Tablet.Alias.String())
 		tme.dbAdditionalClients = append(tme.dbTargetClients, dbclient)
 	}
@@ -950,9 +909,9 @@ func (tme *testShardMigraterEnv) expectNoPreviousJournals() {
 }
 
 func (tme *testMigraterEnv) close(t *testing.T) {
+	tme.stopTablets(t)
 	tme.mu.Lock()
 	defer tme.mu.Unlock()
-	tme.stopTablets(t)
 	for _, dbclient := range tme.dbSourceClients {
 		dbclient.Close()
 	}

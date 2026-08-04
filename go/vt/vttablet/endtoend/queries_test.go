@@ -1787,8 +1787,7 @@ func name(tc framework.Testable) string {
 func BenchmarkTabletQueries(b *testing.B) {
 	client := framework.NewClient()
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		tcase := TestQueryCases[rand.IntN(len(TestQueryCases))]
 		if err := tcase.Benchmark(client); err != nil {
 			b.Error(err)

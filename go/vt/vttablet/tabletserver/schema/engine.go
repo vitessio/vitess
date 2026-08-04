@@ -21,6 +21,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	maps0 "maps"
 	"net/http"
 	"strings"
 	"sync"
@@ -52,13 +53,10 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
-
-const maxTableCount = 10000
-const maxPartitionsPerTable = 8192
-const maxIndexesPerTable = 64
 
 type notifier func(full map[string]*Table, created, altered, dropped []*Table, udfsChanged bool)
 
@@ -162,9 +160,9 @@ func (se *Engine) InitDBConfig(cp dbconfigs.Connector) {
 // in a future version (>v16) once the new schema init functionality
 // is stable.
 func (se *Engine) syncSidecarDB(ctx context.Context, conn *dbconnpool.DBConnection) error {
-	log.Infof("In syncSidecarDB")
+	log.Info("In syncSidecarDB")
 	defer func(start time.Time) {
-		log.Infof("syncSidecarDB took %d ms", time.Since(start).Milliseconds())
+		log.Info(fmt.Sprintf("syncSidecarDB took %d ms", time.Since(start).Milliseconds()))
 	}(time.Now())
 
 	var exec sidecardb.Exec = func(ctx context.Context, query string, maxRows int, useDB bool) (*sqltypes.Result, error) {
@@ -177,15 +175,15 @@ func (se *Engine) syncSidecarDB(ctx context.Context, conn *dbconnpool.DBConnecti
 		return conn.ExecuteFetch(query, maxRows, true)
 	}
 	if err := sidecardb.Init(ctx, se.env.Environment(), exec); err != nil {
-		log.Errorf("Error in sidecardb.Init: %+v", err)
+		log.Error(fmt.Sprintf("Error in sidecardb.Init: %+v", err))
 		if se.env.Config().DB.HasGlobalSettings() {
-			log.Warning("Ignoring sidecardb.Init error for unmanaged tablets")
+			log.Warn("Ignoring sidecardb.Init error for unmanaged tablets")
 			return nil
 		}
-		log.Errorf("syncSidecarDB error %+v", err)
+		log.Error(fmt.Sprintf("syncSidecarDB error %+v", err))
 		return err
 	}
-	log.Infof("syncSidecarDB done")
+	log.Info("syncSidecarDB done")
 	return nil
 }
 
@@ -229,13 +227,13 @@ func (se *Engine) EnsureConnectionAndDB(tabletType topodatapb.TabletType, servin
 	if err != nil {
 		if !se.dbCreationFailed {
 			// This is the first failure.
-			log.Errorf("db creation failed for %v: %v, will keep retrying", dbname, err)
+			log.Error(fmt.Sprintf("db creation failed for %v: %v, will keep retrying", dbname, err))
 			se.dbCreationFailed = true
 		}
 		return err
 	}
 
-	log.Infof("db %v created", dbname)
+	log.Info(fmt.Sprintf("db %v created", dbname))
 	se.dbCreationFailed = false
 	// creates sidecar schema, the first time the database is created
 	if err := se.syncSidecarDB(ctx, conn); err != nil {
@@ -267,9 +265,7 @@ func (se *Engine) Open() error {
 		}
 	}()
 
-	se.tables = map[string]*Table{
-		"dual": NewTable("dual", NoType),
-	}
+	se.tables = make(map[string]*Table)
 	se.notifiers = make(map[string]notifier)
 
 	if err := se.reload(ctx, false); err != nil {
@@ -284,7 +280,7 @@ func (se *Engine) Open() error {
 	se.ticks.Start(func() {
 		// update stats on periodic reloads
 		if err := se.reloadAndIncludeStats(ctx); err != nil {
-			log.Errorf("periodic schema reload failed: %v", err)
+			log.Error(fmt.Sprintf("periodic schema reload failed: %v", err))
 		}
 	})
 
@@ -321,11 +317,9 @@ func (se *Engine) closeLocked() {
 	// configured function to complete running and that function (ReloadAt) will block
 	// on the lock we have already acquired
 	wg := sync.WaitGroup{}
-	wg.Add(1)
-	go func() {
+	wg.Go(func() {
 		se.ticks.Stop()
-		wg.Done()
-	}()
+	})
 	se.historian.Close()
 	se.conns.Close()
 
@@ -399,11 +393,11 @@ func (se *Engine) ReloadAtEx(ctx context.Context, pos replication.Position, incl
 	se.mu.Lock()
 	defer se.mu.Unlock()
 	if !se.isOpen {
-		log.Warning("Schema reload called for an engine that is not yet open")
+		log.Warn("Schema reload called for an engine that is not yet open")
 		return nil
 	}
 	if !pos.IsZero() && se.reloadAtPos.AtLeast(pos) {
-		log.V(2).Infof("ReloadAtEx: found cached schema at %s", replication.EncodePosition(pos))
+		log.V(2).Info("ReloadAtEx: found cached schema at " + replication.EncodePosition(pos))
 		return nil
 	}
 	if err := se.reload(ctx, includeStats); err != nil {
@@ -419,7 +413,7 @@ func populateInnoDBStats(ctx context.Context, conn *connpool.Conn) (map[string]*
 		return nil, nil
 	}
 
-	innodbResults, err := conn.Exec(ctx, innodbTableSizesQuery, maxTableCount*maxPartitionsPerTable, false)
+	innodbResults, err := conn.Exec(ctx, innodbTableSizesQuery, mysql.FETCH_ALL_ROWS, false)
 	if err != nil {
 		return nil, vterrors.Wrapf(err, "in Engine.reload(), reading innodb tables")
 	}
@@ -496,7 +490,7 @@ func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 		includeStats = false
 
 		if err := se.updateTableIndexMetrics(ctx, conn.Conn); err != nil {
-			log.Errorf("Updating index/table statistics failed, error: %v", err)
+			log.Error(fmt.Sprintf("Updating index/table statistics failed, error: %v", err))
 		}
 	}
 	tableData, err := getTableData(ctx, conn.Conn, includeStats)
@@ -533,7 +527,7 @@ func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 
 	rec := concurrency.AllErrorRecorder{}
 	// curTables keeps track of tables in the new snapshot so we can detect what was dropped.
-	curTables := map[string]bool{"dual": true}
+	curTables := make(map[string]bool)
 	// changedTables keeps track of tables that have changed so we can reload their pk info.
 	changedTables := make(map[string]*Table)
 	// created and altered contain the names of created and altered tables for broadcast.
@@ -594,9 +588,10 @@ func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 			continue
 		}
 
-		log.V(2).Infof("Reading schema for table: %s", tableName)
+		log.V(2).Info("Reading schema for table: " + tableName)
 		tableType := row[1].String()
-		table, err := LoadTable(conn, se.cp.DBName(), tableName, tableType, row[3].ToString(), se.env.Environment().CollationEnv())
+		table, err := LoadTable(conn, se.cp.DBName(), tableName, tableType, row[3].ToString(), se.env.Environment().CollationEnv(),
+			se.env.Config().TrackSchemaVersions)
 		if err != nil {
 			// Non recoverable error:
 			rec.RecordError(vterrors.Wrapf(err, "in Engine.reload(), reading table %s", tableName))
@@ -634,17 +629,15 @@ func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 		// So, we do this step in the end when we can receive no more errors that fail the reload operation.
 		err = reloadDataInDB(ctx, conn.Conn, altered, created, dropped, udfsChanged, se.env.Environment().Parser())
 		if err != nil {
-			log.Errorf("error in updating schema information in Engine.reload() - %v", err)
+			log.Error(fmt.Sprintf("error in updating schema information in Engine.reload() - %v", err))
 		}
 	}
 
 	// Update se.tables
-	for k, t := range changedTables {
-		se.tables[k] = t
-	}
+	maps0.Copy(se.tables, changedTables)
 	se.lastChange = curTime
 	if len(created) > 0 || len(altered) > 0 || len(dropped) > 0 {
-		log.Infof("schema engine created %v, altered %v, dropped %v", extractNamesFromTablesList(created), extractNamesFromTablesList(altered), extractNamesFromTablesList(dropped))
+		log.Info(fmt.Sprintf("schema engine created %v, altered %v, dropped %v", extractNamesFromTablesList(created), extractNamesFromTablesList(altered), extractNamesFromTablesList(dropped)))
 	}
 	se.broadcast(created, altered, dropped, udfsChanged)
 	return nil
@@ -694,7 +687,7 @@ func getTableData(ctx context.Context, conn *connpool.Conn, includeStats bool) (
 	} else {
 		showTablesQuery = conn.BaseShowTables()
 	}
-	return conn.Exec(ctx, showTablesQuery, maxTableCount, false)
+	return conn.Exec(ctx, showTablesQuery, mysql.FETCH_ALL_ROWS, false)
 }
 
 func (se *Engine) updateInnoDBRowsRead(ctx context.Context, conn *connpool.Conn) error {
@@ -711,7 +704,7 @@ func (se *Engine) updateInnoDBRowsRead(ctx context.Context, conn *connpool.Conn)
 
 		se.innoDbReadRowsCounter.Set(value)
 	} else {
-		log.Warningf("got strange results from 'show status': %v", readRowsData.Rows)
+		log.Warn(fmt.Sprintf("got strange results from 'show status': %v", readRowsData.Rows))
 	}
 	return nil
 }
@@ -729,7 +722,7 @@ func (se *Engine) updateTableIndexMetrics(ctx context.Context, conn *connpool.Co
 		partition string
 	}
 
-	partitionsResults, err := conn.Exec(ctx, conn.BaseShowPartitions(), 8192*maxTableCount, false)
+	partitionsResults, err := conn.Exec(ctx, conn.BaseShowPartitions(), mysql.FETCH_ALL_ROWS, false)
 	if err != nil {
 		return err
 	}
@@ -750,7 +743,7 @@ func (se *Engine) updateTableIndexMetrics(ctx context.Context, conn *connpool.Co
 		rowBytes int64
 	}
 	tables := make(map[string]table)
-	tableStatsResults, err := conn.Exec(ctx, conn.BaseShowTableRowCountClusteredIndex(), maxTableCount*maxPartitionsPerTable, false)
+	tableStatsResults, err := conn.Exec(ctx, conn.BaseShowTableRowCountClusteredIndex(), mysql.FETCH_ALL_ROWS, false)
 	if err != nil {
 		return err
 	}
@@ -781,7 +774,7 @@ func (se *Engine) updateTableIndexMetrics(ctx context.Context, conn *connpool.Co
 	indexes := make(map[[2]string]index)
 
 	// Load the byte sizes of all indexes. Results contain one row for every index/partition combination.
-	bytesResults, err := conn.Exec(ctx, conn.BaseShowIndexSizes(), maxTableCount*maxIndexesPerTable, false)
+	bytesResults, err := conn.Exec(ctx, conn.BaseShowIndexSizes(), mysql.FETCH_ALL_ROWS, false)
 	if err != nil {
 		return err
 	}
@@ -807,7 +800,7 @@ func (se *Engine) updateTableIndexMetrics(ctx context.Context, conn *connpool.Co
 	}
 
 	// Load index cardinalities. Results contain one row for every index (pre-aggregated across partitions).
-	cardinalityResults, err := conn.Exec(ctx, conn.BaseShowIndexCardinalities(), maxTableCount*maxPartitionsPerTable, false)
+	cardinalityResults, err := conn.Exec(ctx, conn.BaseShowIndexCardinalities(), mysql.FETCH_ALL_ROWS, false)
 	if err != nil {
 		return err
 	}
@@ -864,7 +857,7 @@ func (se *Engine) mysqlTime(ctx context.Context, conn *connpool.Conn) (int64, er
 
 // populatePrimaryKeys populates the PKColumns for the specified tables.
 func (se *Engine) populatePrimaryKeys(ctx context.Context, conn *connpool.Conn, tables map[string]*Table) error {
-	pkData, err := conn.Exec(ctx, mysql.BaseShowPrimary, maxTableCount, false)
+	pkData, err := conn.Exec(ctx, mysql.BaseShowPrimary, mysql.FETCH_ALL_ROWS, false)
 	if err != nil {
 		return vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "could not get table primary key info: %v", err)
 	}
@@ -891,6 +884,13 @@ func (se *Engine) RegisterVersionEvent() error {
 	return se.historian.RegisterVersionEvent()
 }
 
+// RefreshHistorianForStreamStart performs the strict historian refresh used during stream
+// startup. It returns schema_version read errors so the caller can abort startup instead
+// of proceeding with stale historian state.
+func (se *Engine) RefreshHistorianForStreamStart(ctx context.Context) error {
+	return se.historian.RefreshForStreamStart(ctx)
+}
+
 // GetTableForPos makes a best-effort attempt to return a table's schema at a specific
 // GTID/position. If it cannot get the table schema for the given GTID/position then it
 // returns the latest table schema that is available in the database -- the table schema
@@ -901,7 +901,7 @@ func (se *Engine) RegisterVersionEvent() error {
 func (se *Engine) GetTableForPos(ctx context.Context, tableName sqlparser.IdentifierCS, gtid string) (*binlogdatapb.MinimalTable, error) {
 	mt, err := se.historian.GetTableForPos(tableName, gtid)
 	if err != nil {
-		log.Infof("GetTableForPos returned error: %s", err.Error())
+		log.Info("GetTableForPos returned error: " + err.Error())
 		return nil, err
 	}
 	if mt != nil {
@@ -911,7 +911,7 @@ func (se *Engine) GetTableForPos(ctx context.Context, tableName sqlparser.Identi
 	se.mu.Lock()
 	defer se.mu.Unlock()
 	tableNameStr := tableName.String()
-	if st, ok := se.tables[tableNameStr]; ok && tableNameStr != "dual" { // No need to refresh dual
+	if st, ok := se.tables[tableNameStr]; ok {
 		// Test Engines (NewEngineForTests()) don't have a conns pool and are not
 		// supposed to talk to the database, so don't update the cache entry in that
 		// case.
@@ -927,7 +927,7 @@ func (se *Engine) GetTableForPos(ctx context.Context, tableName sqlparser.Identi
 		defer conn.Recycle()
 		cst := *st       // Make a copy
 		cst.Fields = nil // We're going to refresh the columns/fields
-		if err := fetchColumns(&cst, conn, se.cp.DBName(), tableNameStr); err != nil {
+		if err := fetchColumns(&cst, conn, se.cp.DBName(), tableNameStr, se.env.Config().TrackSchemaVersions); err != nil {
 			return nil, err
 		}
 		// Update the PK columns for the table as well as they may have changed.
@@ -941,7 +941,7 @@ func (se *Engine) GetTableForPos(ctx context.Context, tableName sqlparser.Identi
 	// It's expected that internal tables are not found within VReplication workflows.
 	// No need to refresh the cache for internal tables.
 	if schema.IsInternalOperationTableName(tableNameStr) {
-		log.Infof("internal table %v found in vttablet schema: skipping for GTID search", tableNameStr)
+		log.Info(fmt.Sprintf("internal table %v found in vttablet schema: skipping for GTID search", tableNameStr))
 		return nil, nil
 	}
 	// We don't currently have the non-internal table in the cache. This can happen when
@@ -965,7 +965,7 @@ func (se *Engine) GetTableForPos(ctx context.Context, tableName sqlparser.Identi
 		}
 	}
 
-	log.Infof("table %v not found in vttablet schema, current tables: %v", tableNameStr, se.tables)
+	log.Info(fmt.Sprintf("table %v not found in vttablet schema, current tables: %v", tableNameStr, se.tables))
 	return nil, fmt.Errorf("table %v not found in vttablet schema", tableNameStr)
 }
 
@@ -987,7 +987,7 @@ func (se *Engine) RegisterNotifier(name string, f notifier, runNotifier bool) {
 		created = append(created, table)
 	}
 	if runNotifier {
-		s := maps.Clone(se.tables)
+		s := maps0.Clone(se.tables)
 		f(s, created, nil, nil, true)
 	}
 }
@@ -995,17 +995,17 @@ func (se *Engine) RegisterNotifier(name string, f notifier, runNotifier bool) {
 // UnregisterNotifier unregisters the notifier function.
 func (se *Engine) UnregisterNotifier(name string) {
 	if !se.isOpen {
-		log.Infof("schema Engine is not open")
+		log.Info("schema Engine is not open")
 		return
 	}
 
-	log.Infof("schema Engine - acquiring notifierMu lock")
+	log.Info("schema Engine - acquiring notifierMu lock")
 	se.notifierMu.Lock()
-	log.Infof("schema Engine - acquired notifierMu lock")
+	log.Info("schema Engine - acquired notifierMu lock")
 	defer se.notifierMu.Unlock()
 
 	delete(se.notifiers, name)
-	log.Infof("schema Engine - finished UnregisterNotifier")
+	log.Info("schema Engine - finished UnregisterNotifier")
 }
 
 // broadcast must be called while holding a lock on se.mu.
@@ -1016,7 +1016,7 @@ func (se *Engine) broadcast(created, altered, dropped []*Table, udfsChanged bool
 
 	se.notifierMu.Lock()
 	defer se.notifierMu.Unlock()
-	s := maps.Clone(se.tables)
+	s := maps0.Clone(se.tables)
 	for _, f := range se.notifiers {
 		f(s, created, altered, dropped, udfsChanged)
 	}
@@ -1036,26 +1036,91 @@ func (se *Engine) GetTable(tableName sqlparser.IdentifierCS) *Table {
 	return se.tables[tableName.String()]
 }
 
+// TableCount returns the number of real schema objects currently tracked in the
+// schema engine. Safe for concurrent use.
+func (se *Engine) TableCount() int {
+	se.mu.Lock()
+	defer se.mu.Unlock()
+	return len(se.tables)
+}
+
 // GetSchema returns the current schema. The Tables are a
 // shared data structure and must be treated as read-only.
 func (se *Engine) GetSchema() map[string]*Table {
 	se.mu.Lock()
 	defer se.mu.Unlock()
-	tables := maps.Clone(se.tables)
+	tables := maps0.Clone(se.tables)
 	return tables
 }
 
-// MarshalMinimalSchema returns a protobuf encoded binlogdata.MinimalSchema
+// MarshalMinimalSchema returns a protobuf encoded binlogdata.MinimalSchema.
+//
+// ENUM and SET fields carry their full type definition (the ColumnType, e.g.
+// enum('a','b')), recorded when the table was loaded (see fetchColumns). This
+// lets schema version tracking decode historical ROW events for these columns
+// even after they are dropped or modified: the binlog only stores the integer
+// index (ENUM) or bitmask (SET), so the string values are otherwise
+// unrecoverable once the live column changes.
 func (se *Engine) MarshalMinimalSchema() ([]byte, error) {
+	dbSchema, err := se.snapshotMinimalSchema()
+	if err != nil {
+		return nil, err
+	}
+	return dbSchema.MarshalVT()
+}
+
+// snapshotMinimalSchema builds a MinimalSchema from the in-memory schema under
+// se.mu. Each field is deep-copied so that the ENUM/SET type definitions can be
+// attached without mutating the live se.tables fields (newMinimalTable
+// otherwise shares the *querypb.Field pointers), which must keep an empty
+// ColumnType: live tables get fresh definitions at decode time instead.
+//
+// A field that reports as ENUM/SET but has no recorded type definition fails
+// the snapshot: persisting it would be permanently lossy (nothing can backfill
+// the string values once the live column changes), while a failed save is
+// retried by the schema tracker from the previous GTID. This can only happen
+// if a concurrent DDL hits the narrow window between the field read and the
+// type-definition read in fetchColumns; the next reload of the table resolves
+// it.
+//
+// This check is asymmetric: a binary-collation ENUM/SET column reports as
+// BINARY (not ENUM/SET) in field metadata, so it cannot be verified here. Its
+// definition is normally still recorded (the information_schema lookup matches
+// on data_type, which is 'enum'/'set' regardless of collation), so the only
+// gap is the same narrow concurrent-DDL window, in which such a column would
+// persist with an empty ColumnType rather than failing the save.
+func (se *Engine) snapshotMinimalSchema() (*binlogdatapb.MinimalSchema, error) {
 	se.mu.Lock()
 	defer se.mu.Unlock()
 	dbSchema := &binlogdatapb.MinimalSchema{
 		Tables: make([]*binlogdatapb.MinimalTable, 0, len(se.tables)),
 	}
 	for _, table := range se.tables {
-		dbSchema.Tables = append(dbSchema.Tables, newMinimalTable(table))
+		mt := newMinimalTable(table)
+		// newMinimalTable shares the live Fields slice and its *querypb.Field
+		// pointers. Copy the slice so swapping in cloned ENUM/SET fields below
+		// cannot mutate the live schema; only ENUM/SET fields are cloned (they
+		// get a ColumnType attached), while every other field keeps its shared,
+		// read-only pointer to avoid a per-field allocation on every save.
+		fields := make([]*querypb.Field, len(mt.Fields))
+		copy(fields, mt.Fields)
+		for i, field := range fields {
+			columnType, ok := table.EnumSetColumnTypes[field.Name]
+			switch {
+			case ok:
+				cloned := field.CloneVT()
+				cloned.ColumnType = columnType
+				fields[i] = cloned
+			case field.Type == querypb.Type_ENUM || field.Type == querypb.Type_SET:
+				return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL,
+					"no type definition recorded for ENUM/SET column %s.%s; "+
+						"the column may have been changed by a concurrent schema change", mt.Name, field.Name)
+			}
+		}
+		mt.Fields = fields
+		dbSchema.Tables = append(dbSchema.Tables, mt)
 	}
-	return dbSchema.MarshalVT()
+	return dbSchema, nil
 }
 
 func newMinimalTable(st *Table) *binlogdatapb.MinimalTable {
@@ -1127,6 +1192,13 @@ func (se *Engine) SetTableForTests(table *Table) {
 	se.tables[table.Name.String()] = table
 }
 
+// ResetTablesForTests clears the engine's table map. For test use only.
+func (se *Engine) ResetTablesForTests() {
+	se.mu.Lock()
+	defer se.mu.Unlock()
+	se.tables = map[string]*Table{}
+}
+
 func (se *Engine) GetDBConnector() dbconfigs.Connector {
 	return se.cp
 }
@@ -1149,7 +1221,7 @@ func (se *Engine) ResetSequences(tables []string) error {
 	for _, tableName := range tables {
 		if table, ok := se.tables[tableName]; ok {
 			if table.SequenceInfo != nil {
-				log.Infof("Resetting sequence info for table %s: %+v", tableName, table.SequenceInfo)
+				log.Info(fmt.Sprintf("Resetting sequence info for table %s: %+v", tableName, table.SequenceInfo))
 				table.SequenceInfo.Reset()
 			}
 		} else {

@@ -18,7 +18,6 @@ package io.vitess.jdbc;
 
 import io.vitess.proto.Query;
 import io.vitess.util.Constants;
-
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
 import java.sql.ResultSet;

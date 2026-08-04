@@ -459,6 +459,16 @@ var StreamExecuteQueryResult1 = sqltypes.Result{
 
 // StreamExecuteQueryResult2 is the second packet of a streaming result.
 var StreamExecuteQueryResult2 = sqltypes.Result{
+	Fields: []*querypb.Field{
+		{
+			Name: "field1",
+			Type: sqltypes.Int8,
+		},
+		{
+			Name: "field2",
+			Type: sqltypes.Char,
+		},
+	},
 	Rows: [][]sqltypes.Value{
 		{
 			sqltypes.TestValue(sqltypes.Int8, "1"),
@@ -718,6 +728,11 @@ func (f *FakeQueryService) VStreamTables(ctx context.Context, request *binlogdat
 
 // VStreamResults is part of the QueryService interface.
 func (f *FakeQueryService) VStreamResults(ctx context.Context, target *querypb.Target, query string, send func(*binlogdatapb.VStreamResultsResponse) error) error {
+	panic("not implemented")
+}
+
+// BinlogDumpGTID is part of the QueryService interface.
+func (f *FakeQueryService) BinlogDumpGTID(ctx context.Context, request *binlogdatapb.BinlogDumpGTIDRequest, send func(*binlogdatapb.BinlogDumpResponse) error) error {
 	panic("not implemented")
 }
 

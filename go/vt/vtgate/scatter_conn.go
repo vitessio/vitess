@@ -166,8 +166,17 @@ func (stc *ScatterConn) ExecuteMultiShard(
 		go stc.runLockQuery(ctx, session)
 	}
 
-	if session.Options != nil {
-		session.Options.FetchLastInsertId = fetchLastInsertID
+	// Build a per-call copy of the execute options carrying the requested
+	// FetchLastInsertId. Mutating the shared session options in place races
+	// with concurrent sources marshalling them (e.g. a streamed UNION runs
+	// each source through its own StreamExecuteMulti against the same session).
+	var callOptions *querypb.ExecuteOptions
+	// The explicit session.Session selector spells out why the nil check
+	// on the embedded session is needed.
+	//nolint:staticcheck // QF1008
+	if session != nil && session.Session != nil && session.Session.Options != nil {
+		callOptions = session.Session.Options.CloneVT()
+		callOptions.FetchLastInsertId = fetchLastInsertID
 	}
 
 	allErrors := stc.multiGoTransaction(
@@ -187,9 +196,7 @@ func (stc *ScatterConn) ExecuteMultiShard(
 			transactionID := info.transactionID
 			reservedID := info.reservedID
 
-			if session != nil && session.Session != nil {
-				opts = session.Options
-			}
+			opts = callOptions
 
 			if opts == nil && fetchLastInsertID {
 				opts = &querypb.ExecuteOptions{FetchLastInsertId: fetchLastInsertID}
@@ -306,7 +313,7 @@ func (stc *ScatterConn) runLockQuery(ctx context.Context, session *econtext.Safe
 	query := &querypb.BoundQuery{Sql: "select 1", BindVariables: nil}
 	_, lockErr := stc.ExecuteLock(ctx, rs, query, session, sqlparser.IsUsedLock)
 	if lockErr != nil {
-		log.Warningf("Locking heartbeat failed, held locks might be released: %s", lockErr.Error())
+		log.Warn("Locking heartbeat failed, held locks might be released: " + lockErr.Error())
 	}
 }
 
@@ -398,8 +405,17 @@ func (stc *ScatterConn) StreamExecuteMulti(
 		return callback(reply)
 	}
 
-	if session.Options != nil {
-		session.Options.FetchLastInsertId = fetchLastInsertID
+	// Build a per-call copy of the execute options carrying the requested
+	// FetchLastInsertId. Mutating the shared session options in place races
+	// with concurrent sources marshalling them (e.g. a streamed UNION runs
+	// each source through its own StreamExecuteMulti against the same session).
+	var callOptions *querypb.ExecuteOptions
+	// The explicit session.Session selector spells out why the nil check
+	// on the embedded session is needed.
+	//nolint:staticcheck // QF1008
+	if session != nil && session.Session != nil && session.Session.Options != nil {
+		callOptions = session.Session.Options.CloneVT()
+		callOptions.FetchLastInsertId = fetchLastInsertID
 	}
 
 	allErrors := stc.multiGoTransaction(
@@ -418,9 +434,7 @@ func (stc *ScatterConn) StreamExecuteMulti(
 			transactionID := info.transactionID
 			reservedID := info.reservedID
 
-			if session != nil && session.Session != nil {
-				opts = session.Options
-			}
+			opts = callOptions
 
 			if opts == nil && fetchLastInsertID {
 				opts = &querypb.ExecuteOptions{FetchLastInsertId: fetchLastInsertID}
@@ -736,7 +750,7 @@ func (stc *ScatterConn) multiGoTransaction(
 		}
 		wg.Wait()
 		if pr, ok := panicRecord.Load().(*panicData); ok {
-			log.Errorf("caught a panic during parallel execution:\n%s", string(pr.trace))
+			log.Error("caught a panic during parallel execution:\n" + string(pr.trace))
 			panic(pr.p) // rethrow the captured panic in the main thread
 		}
 	}
@@ -859,6 +873,13 @@ func requireNewQS(err error, target *querypb.Target) bool {
 // actionInfo looks at the current session, and returns information about what needs to be done for this tablet
 func actionInfo(ctx context.Context, target *querypb.Target, session *econtext.SafeSession, autocommit bool, txMode vtgatepb.TransactionMode) (*shardActionInfo, *vtgatepb.Session_ShardSession, error) {
 	if !session.InTransaction() && !session.InReservedConn() {
+		// Check for tablet-specific routing for non-transactional queries
+		if alias := session.GetTargetTabletAlias(); alias != nil {
+			return &shardActionInfo{
+				actionNeeded: nothing,
+				alias:        alias,
+			}, nil, nil
+		}
 		return &shardActionInfo{}, nil, nil
 	}
 	ignoreSession := ctx.Value(engine.IgnoreReserveTxn)
@@ -895,6 +916,16 @@ func actionInfo(ctx context.Context, target *querypb.Target, session *econtext.S
 		info.reservedID = shardSession.ReservedId
 		info.alias = shardSession.TabletAlias
 		info.rowsAffected = shardSession.RowsAffected
+	}
+	// Set tablet alias for routing if tablet-specific targeting is active
+	if targetAlias := session.GetTargetTabletAlias(); targetAlias != nil {
+		if info.alias == nil {
+			info.alias = targetAlias
+		} else if !proto.Equal(info.alias, targetAlias) {
+			return nil, nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
+				"cannot change tablet target mid-transaction: session has %s, target is %s",
+				topoproto.TabletAliasString(info.alias), topoproto.TabletAliasString(targetAlias))
+		}
 	}
 	return info, shardSession, nil
 }

@@ -79,7 +79,8 @@ func (dml *DML) execUnsharded(ctx context.Context, primitive Primitive, vcursor 
 }
 
 func (dml *DML) execMultiDestination(ctx context.Context, primitive Primitive, vcursor VCursor, bindVars map[string]*querypb.BindVariable, rss []*srvtopo.ResolvedShard, dmlSpecialFunc func(context.Context, VCursor,
-	map[string]*querypb.BindVariable, []*srvtopo.ResolvedShard) error, bvs []map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+	map[string]*querypb.BindVariable, []*srvtopo.ResolvedShard) error, bvs []map[string]*querypb.BindVariable,
+) (*sqltypes.Result, error) {
 	if len(rss) == 0 {
 		return &sqltypes.Result{}, nil
 	}

@@ -18,6 +18,7 @@ package schema
 
 import (
 	"context"
+	"fmt"
 	"sort"
 	"sync"
 	"time"
@@ -33,8 +34,10 @@ import (
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
 
-const getInitialSchemaVersions = "select id, pos, ddl, time_updated, schemax from %s.schema_version where time_updated > %d order by id asc"
-const getNextSchemaVersions = "select id, pos, ddl, time_updated, schemax from %s.schema_version where id > %d order by id asc"
+const (
+	getInitialSchemaVersions = "select id, pos, ddl, time_updated, schemax from %s.schema_version where time_updated > %d order by id asc"
+	getNextSchemaVersions    = "select id, pos, ddl, time_updated, schemax from %s.schema_version where id > %d order by id asc"
+)
 
 // vl defines the glog verbosity level for the package
 const vl = 10
@@ -95,8 +98,8 @@ func (h *historian) Open() error {
 	log.Info("Historian: opening")
 
 	ctx := tabletenv.LocalContext()
-	if err := h.loadFromDB(ctx); err != nil {
-		log.Errorf("Historian failed to open: %v", err)
+	if err := h.loadFromDBBestEffort(ctx); err != nil {
+		log.Error(fmt.Sprintf("Historian failed to open: %v", err))
 		return err
 	}
 
@@ -127,10 +130,22 @@ func (h *historian) RegisterVersionEvent() error {
 		return nil
 	}
 	ctx := tabletenv.LocalContext()
-	if err := h.loadFromDB(ctx); err != nil {
+	if err := h.loadFromDBBestEffort(ctx); err != nil {
 		return err
 	}
 	return nil
+}
+
+// RefreshForStreamStart performs a strict one-time refresh for a new stream startup.
+// Unlike open and live version-event updates, it returns schema_version read errors so
+// the caller can fail stream startup instead of continuing with a stale cache.
+func (h *historian) RefreshForStreamStart(ctx context.Context) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if !h.enabled || !h.isOpen {
+		return nil
+	}
+	return h.loadFromDBStrict(ctx)
 }
 
 // GetTableForPos returns a best-effort schema for a specific gtid
@@ -141,7 +156,7 @@ func (h *historian) GetTableForPos(tableName sqlparser.IdentifierCS, gtid string
 		return nil, nil
 	}
 
-	log.V(2).Infof("GetTableForPos called for %s with pos %s", tableName, gtid)
+	log.Debug(fmt.Sprintf("GetTableForPos called for %s with pos %s", tableName, gtid))
 	if gtid == "" {
 		return nil, nil
 	}
@@ -154,14 +169,23 @@ func (h *historian) GetTableForPos(tableName sqlparser.IdentifierCS, gtid string
 		t = h.getTableFromHistoryForPos(tableName, pos)
 	}
 	if t != nil {
-		log.V(2).Infof("Returning table %s from history for pos %s, schema %s", tableName, gtid, t)
+		log.Debug(fmt.Sprintf("Returning table %s from history for pos %s, schema %s", tableName, gtid, t))
 	}
 	return t, nil
 }
 
-// loadFromDB loads all rows from the schema_version table that the historian does not have as yet
+func (h *historian) loadFromDBBestEffort(ctx context.Context) error {
+	return h.loadFromDB(ctx, false)
+}
+
+func (h *historian) loadFromDBStrict(ctx context.Context) error {
+	return h.loadFromDB(ctx, true)
+}
+
+// loadFromDB loads all rows from the schema_version table that the historian does not have as yet.
+// Query read errors are either suppressed or returned based on the caller-specific helper.
 // caller should have locked h.mu
-func (h *historian) loadFromDB(ctx context.Context) error {
+func (h *historian) loadFromDB(ctx context.Context, failOnReadError bool) error {
 	conn, err := h.conns.Get(ctx, nil)
 	if err != nil {
 		return err
@@ -179,7 +203,10 @@ func (h *historian) loadFromDB(ctx context.Context) error {
 	}
 
 	if err != nil {
-		log.Infof("Error reading schema_tracking table %v, will operate with the latest available schema", err)
+		if failOnReadError {
+			return err
+		}
+		log.Info(fmt.Sprintf("Error reading %s.schema_version table: %v, will operate with the latest available schema", sidecar.GetIdentifier(), err))
 		return nil
 	}
 	for _, row := range tableData.Rows {
@@ -230,8 +257,7 @@ func (h *historian) readRow(row []sqltypes.Value) (*trackedSchema, int64, error)
 	if err := sch.UnmarshalVT(rowBytes); err != nil {
 		return nil, 0, err
 	}
-	log.V(vl).Infof("Read tracked schema from db: id %d, pos %v, ddl %s, schema len %d, time_updated %d \n",
-		id, replication.EncodePosition(pos), ddl, len(sch.Tables), timeUpdated)
+	log.V(vl).Info(fmt.Sprintf("Read tracked schema from db: id %d, pos %v, ddl %s, schema len %d, time_updated %d \n", id, replication.EncodePosition(pos), ddl, len(sch.Tables), timeUpdated))
 
 	tables := map[string]*binlogdatapb.MinimalTable{}
 	for _, t := range sch.Tables {
@@ -284,13 +310,17 @@ func (h *historian) getTableFromHistoryForPos(tableName sqlparser.IdentifierCS, 
 	idx := sort.Search(len(h.schemas), func(i int) bool {
 		return pos.Equal(h.schemas[i].pos) || !pos.AtLeast(h.schemas[i].pos)
 	})
-	if idx >= len(h.schemas) || idx == 0 && !pos.Equal(h.schemas[idx].pos) { // beyond the range of the cache
-		log.Infof("Schema not found in cache for %s with pos %s", tableName, pos)
+	if idx == len(h.schemas) {
+		log.Debug(fmt.Sprintf("Requested schema for %s with pos %s is newer than cached high-water mark %s; using latest cached schema", tableName, pos, h.schemas[len(h.schemas)-1].pos))
+		return h.schemas[len(h.schemas)-1].schema[tableName.String()]
+	}
+	if idx == 0 && !pos.Equal(h.schemas[idx].pos) {
+		log.Info(fmt.Sprintf("Schema not found in cache for %s with pos %s because it is older than the oldest cached schema %s", tableName, pos, h.schemas[idx].pos))
 		return nil
 	}
-	if pos.Equal(h.schemas[idx].pos) { //exact match to a cache entry
+	if pos.Equal(h.schemas[idx].pos) { // exact match to a cache entry
 		return h.schemas[idx].schema[tableName.String()]
 	}
-	//not an exact match, so based on our sort algo idx is one less than found: from 40,44,48 : 43 < 44 but we want 40
+	// not an exact match, so based on our sort algo idx is one less than found: from 40,44,48 : 43 < 44 but we want 40
 	return h.schemas[idx-1].schema[tableName.String()]
 }

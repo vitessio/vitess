@@ -17,6 +17,8 @@ limitations under the License.
 package simplifier
 
 import (
+	"fmt"
+
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
@@ -79,7 +81,7 @@ func trySimplifyDistinct(in sqlparser.TableStatement, test func(statement sqlpar
 			if sel.Distinct {
 				sel.Distinct = false
 				if test(sel) {
-					log.Errorf("removed distinct to yield: %s", sqlparser.String(sel))
+					log.Error("removed distinct to yield: " + sqlparser.String(sel))
 					simplified = true
 				} else {
 					sel.Distinct = true
@@ -105,7 +107,7 @@ func trySimplifyExpressions(in sqlparser.TableStatement, test func(sqlparser.Tab
 		// first - let's try to remove the expression
 		if cursor.remove() {
 			if test(in) {
-				log.Errorf("removed expression: %s", sqlparser.String(cursor.expr))
+				log.Error("removed expression: " + sqlparser.String(cursor.expr))
 				simplified = true
 				// initially return false, but that made the rewriter prematurely abort, if it was the last selectExpr
 				return true
@@ -117,7 +119,7 @@ func trySimplifyExpressions(in sqlparser.TableStatement, test func(sqlparser.Tab
 		newExpr := SimplifyExpr(cursor.expr, func(expr sqlparser.Expr) bool {
 			cursor.replace(expr)
 			if test(in) {
-				log.Errorf("simplified expression: %s -> %s", sqlparser.String(cursor.expr), sqlparser.String(expr))
+				log.Error(fmt.Sprintf("simplified expression: %s -> %s", sqlparser.String(cursor.expr), sqlparser.String(expr)))
 				cursor.restore()
 				simplified = true
 				return true
@@ -166,14 +168,14 @@ func trySimplifyUnions(in sqlparser.TableStatement, test func(subquery sqlparser
 			cursor.Replace(node.Left)
 			clone := sqlparser.Clone(in)
 			if test(clone) {
-				log.Errorf("replaced UNION with its left child: %s -> %s", sqlparser.String(node), sqlparser.String(node.Left))
+				log.Error(fmt.Sprintf("replaced UNION with its left child: %s -> %s", sqlparser.String(node), sqlparser.String(node.Left)))
 				simplified = true
 				return true
 			}
 			cursor.Replace(node.Right)
 			clone = sqlparser.Clone(in)
 			if test(clone) {
-				log.Errorf("replaced UNION with its right child: %s -> %s", sqlparser.String(node), sqlparser.String(node.Right))
+				log.Error(fmt.Sprintf("replaced UNION with its right child: %s -> %s", sqlparser.String(node), sqlparser.String(node.Right)))
 				simplified = true
 				return true
 			}
@@ -199,7 +201,7 @@ func tryRemoveTable(tables []semantics.TableInfo, in sqlparser.TableStatement, c
 		simplified := removeTable(clone, searchedTS, currentDB, si)
 		name, _ := tbl.Name()
 		if simplified && test(clone) {
-			log.Errorf("removed table `%s`: \n%s\n%s", sqlparser.String(name), sqlparser.String(in), sqlparser.String(clone))
+			log.Error(fmt.Sprintf("removed table `%s`: \n%s\n%s", sqlparser.String(name), sqlparser.String(in), sqlparser.String(clone)))
 			return clone
 		}
 	}
@@ -232,7 +234,7 @@ func simplifyStarExpr(in sqlparser.TableStatement, test func(sqlparser.TableStat
 			Expr: sqlparser.NewIntLiteral("0"),
 		})
 		if test(in) {
-			log.Errorf("replaced star with literal")
+			log.Error("replaced star with literal")
 			simplified = true
 			return true
 		}
@@ -490,7 +492,7 @@ func visitSelectExprs(node *sqlparser.SelectExprs, cursor *sqlparser.Cursor, vis
 			},
 			/*restore*/ func() {
 				if removed {
-					front := make([]sqlparser.SelectExpr, idx)
+					front := make([]sqlparser.SelectExpr, idx, idx+1)
 					copy(front, node.Exprs[:idx])
 					back := make([]sqlparser.SelectExpr, len(node.Exprs)-idx)
 					copy(back, node.Exprs[idx:])
@@ -584,7 +586,7 @@ func visitOrderBy(node sqlparser.OrderBy, cursor *sqlparser.Cursor, visit func(e
 			},
 			/*restore*/ func() {
 				if removed {
-					front := make(sqlparser.OrderBy, idx)
+					front := make(sqlparser.OrderBy, idx, idx+1)
 					copy(front, node[:idx])
 					back := make(sqlparser.OrderBy, len(node)-idx)
 					copy(back, node[idx:])
@@ -681,7 +683,7 @@ func visitExpressions(
 			},
 			/*restore*/ func() {
 				if removed {
-					front := make([]sqlparser.Expr, idx)
+					front := make([]sqlparser.Expr, idx, idx+1)
 					copy(front, exprs[:idx])
 					back := make([]sqlparser.Expr, len(exprs)-idx)
 					copy(back, exprs[idx:])

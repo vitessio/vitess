@@ -44,7 +44,7 @@ func TestFKWorkflow(t *testing.T) {
 	setSidecarDBName("_vt")
 	extraVTTabletArgs = []string{
 		// Ensure that there are multiple copy phase cycles per table.
-		"--vstream_packet_size=256",
+		"--vstream-packet-size=256",
 	}
 	defer func() { extraVTTabletArgs = nil }()
 
@@ -68,7 +68,7 @@ func TestFKWorkflow(t *testing.T) {
 	var cancel context.CancelFunc
 	var ctx context.Context
 	if withLoad {
-		ctx, cancel = context.WithCancel(context.Background())
+		ctx, cancel = context.WithCancel(t.Context())
 		ls = newFKLoadSimulator(t, ctx)
 		defer func() {
 			select {
@@ -100,7 +100,7 @@ func TestFKWorkflow(t *testing.T) {
 	}, testWorkflowFlavor)
 	mt.Create()
 
-	waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
+	require.NoError(t, waitForWorkflowState(vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String()))
 	targetKs := vc.Cells[cellName].Keyspaces[targetKeyspace]
 	targetTab := targetKs.Shards["0"].Tablets[fmt.Sprintf("%s-%d", cellName, targetTabletId)].Vttablet
 
@@ -123,7 +123,7 @@ func TestFKWorkflow(t *testing.T) {
 	time.Sleep(2 * vttablet.GetDefaultVReplicationConfig().RetryDelay)
 
 	// Verify workflow is still running and hasn't terminated due to errors
-	waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
+	require.NoError(t, waitForWorkflowState(vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String()))
 
 	// Restart the source database to allow workflow to continue
 	err = sourceTab.DbServer.StartProvideInit(false)
@@ -134,7 +134,7 @@ func TestFKWorkflow(t *testing.T) {
 
 	// Restart the LoadSimulator.
 	if withLoad {
-		ctx, cancel = context.WithCancel(context.Background())
+		ctx, cancel = context.WithCancel(t.Context())
 		ls = newFKLoadSimulator(t, ctx)
 		defer func() {
 			select {
@@ -159,10 +159,10 @@ func TestFKWorkflow(t *testing.T) {
 	}
 	mt.SwitchReadsAndWrites()
 
-	log.Infof("Switch traffic done")
+	log.Info("Switch traffic done")
 
 	if withLoad {
-		ctx, cancel = context.WithCancel(context.Background())
+		ctx, cancel = context.WithCancel(t.Context())
 		ls = newFKLoadSimulator(t, ctx)
 		defer cancel()
 		go ls.simulateLoad()
@@ -192,26 +192,31 @@ func insertInitialFKData(t *testing.T) {
 		sourceKeyspace := "fksource"
 		shard := "0"
 		db := fmt.Sprintf("%s:%s", sourceKeyspace, shard)
-		log.Infof("Inserting initial FK data")
+		log.Info("Inserting initial FK data")
 		execMultipleQueries(t, vtgateConn, db, initialFKData)
-		log.Infof("Done inserting initial FK data")
+		log.Info("Done inserting initial FK data")
 
 		type tableCounts struct {
 			name  string
 			count int
 		}
 		for _, table := range []tableCounts{
-			{"parent", 2}, {"child", 3},
-			{"t1", 2}, {"t2", 3},
-			{"t11", 1}, {"t12", 1},
+			{"parent", 2},
+			{"child", 3},
+			{"t1", 2},
+			{"t2", 3},
+			{"t11", 1},
+			{"t12", 1},
 		} {
 			waitForRowCount(t, vtgateConn, db, table.name, table.count)
 		}
 	})
 }
 
-var currentParentId int64
-var currentChildId int64
+var (
+	currentParentId int64
+	currentChildId  int64
+)
 
 func init() {
 	currentParentId = 100
@@ -238,7 +243,7 @@ func (ls *fkLoadSimulator) simulateLoad() {
 	var err error
 	for i := 0; ; i++ {
 		if i%1000 == 0 {
-			log.Infof("Load simulation iteration %d", i)
+			log.Info(fmt.Sprintf("Load simulation iteration %d", i))
 		}
 		select {
 		case <-ls.ctx.Done():
@@ -268,7 +273,8 @@ func (ls *fkLoadSimulator) simulateLoad() {
 
 func (ls *fkLoadSimulator) getNumRowsParent(vtgateConn *mysql.Conn) int {
 	t := ls.t
-	qr := execVtgateQuery(t, vtgateConn, "fksource", "SELECT COUNT(*) FROM parent")
+	qr, err := execVtgateQuery(vtgateConn, "fksource", "SELECT COUNT(*) FROM parent")
+	require.NoError(t, err)
 	require.NotNil(t, qr)
 	numRows, err := strconv.Atoi(qr.Rows[0][0].ToString())
 	require.NoError(t, err)
@@ -285,7 +291,7 @@ func (ls *fkLoadSimulator) waitForAdditionalRows(count int) {
 	for {
 		switch {
 		case shortCtx.Err() != nil:
-			t.Fatalf("Timed out waiting for additional rows")
+			require.Failf(t, "timeout", "Timed out waiting for additional rows")
 		default:
 			numRows := ls.getNumRowsParent(vtgateConn)
 			if numRows >= numRowsStart+count {
@@ -342,7 +348,8 @@ func (ls *fkLoadSimulator) exec(query string) *sqltypes.Result {
 	t := ls.t
 	vtgateConn, closeConn := getVTGateConn()
 	defer closeConn()
-	qr := execVtgateQuery(t, vtgateConn, "fksource", query)
+	qr, err := execVtgateQuery(vtgateConn, "fksource", query)
+	require.NoError(t, err)
 	require.NotNil(t, qr)
 	return qr
 }
@@ -365,6 +372,6 @@ func testFKCancel(t *testing.T, vc *VitessCluster) {
 		atomicCopy:     true,
 	}, testWorkflowFlavor)
 	mt.Create()
-	waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
+	require.NoError(t, waitForWorkflowState(vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String()))
 	mt.Cancel()
 }

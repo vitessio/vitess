@@ -19,7 +19,7 @@ package aggregation
 import (
 	"testing"
 
-	"vitess.io/vitess/go/test/endtoend/utils"
+	"github.com/stretchr/testify/require"
 )
 
 func TestDistinct(t *testing.T) {
@@ -61,10 +61,66 @@ func TestDistinctIt(t *testing.T) {
 	mcmp.Exec("insert into example_set_unknown(id, foo) values (1, 'a'), (2, 'c')")
 	mcmp.AssertMatchesNoOrder("select distinct foo from example_set_unknown", `[[SET("a")] [SET("c")]]`)
 
-	if utils.BinaryIsAtLeastAtVersion(17, "vtgate") {
-		mcmp.AssertMatches("select distinct val1 from aggr_test order by val1 desc", `[[VARCHAR("e")] [VARCHAR("d")] [VARCHAR("c")] [VARCHAR("b")] [VARCHAR("a")]]`)
-		mcmp.AssertMatchesNoOrder("select distinct val1, count(*) from aggr_test group by val1", `[[VARCHAR("a") INT64(2)] [VARCHAR("b") INT64(1)] [VARCHAR("c") INT64(2)] [VARCHAR("d") INT64(1)] [VARCHAR("e") INT64(2)]]`)
-		mcmp.AssertMatchesNoOrder("select distinct val1+val2 from aggr_test", `[[NULL] [FLOAT64(1)] [FLOAT64(3)] [FLOAT64(4)]]`)
-		mcmp.AssertMatchesNoOrder("select distinct count(*) from aggr_test group by val1", `[[INT64(2)] [INT64(1)]]`)
-	}
+	mcmp.AssertMatches("select distinct val1 from aggr_test order by val1 desc", `[[VARCHAR("e")] [VARCHAR("d")] [VARCHAR("c")] [VARCHAR("b")] [VARCHAR("a")]]`)
+	mcmp.AssertMatchesNoOrder("select distinct val1, count(*) from aggr_test group by val1", `[[VARCHAR("a") INT64(2)] [VARCHAR("b") INT64(1)] [VARCHAR("c") INT64(2)] [VARCHAR("d") INT64(1)] [VARCHAR("e") INT64(2)]]`)
+	mcmp.AssertMatchesNoOrder("select distinct val1+val2 from aggr_test", `[[NULL] [FLOAT64(1)] [FLOAT64(3)] [FLOAT64(4)]]`)
+	mcmp.AssertMatchesNoOrder("select distinct count(*) from aggr_test group by val1", `[[INT64(2)] [INT64(1)]]`)
+}
+
+func TestWindowFunctionWithGroupByError(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+
+	_, err := mcmp.ExecAllowError(
+		`SELECT FIRST_VALUE(empno) OVER (PARTITION BY deptno ORDER BY hiredate DESC) AS fv, deptno FROM emp GROUP BY fv, deptno`,
+	)
+	require.ErrorContains(t, err, "(errno 3593) (sqlstate HY000)")
+}
+
+func TestDistinctWindowLimitShardTruncation(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+
+	mcmp.Exec(`INSERT INTO emp (empno, ename, job, mgr, hiredate, sal, comm, deptno) VALUES
+		(101, 'A1', 'Analyst', NULL, '2024-01-01', 1000, NULL, 10),
+		(102, 'A2', 'Analyst', NULL, '2024-01-02', 1000, NULL, 10),
+		(103, 'A3', 'Analyst', NULL, '2024-01-03', 1000, NULL, 10),
+		(201, 'B1', 'Clerk',   NULL, '2024-02-01', 2000, NULL, 20),
+		(202, 'B2', 'Clerk',   NULL, '2024-02-02', 2000, NULL, 20),
+		(203, 'B3', 'Clerk',   NULL, '2024-02-03', 2000, NULL, 20),
+		(501, 'C1', 'Manager', NULL, '2024-03-01', 3000, NULL, 5),
+		(502, 'C2', 'Manager', NULL, '2024-03-02', 3000, NULL, 5),
+		(503, 'C3', 'Manager', NULL, '2024-03-03', 3000, NULL, 5)`)
+
+	mcmp.AssertMatches(`SELECT empno, hiredate, deptno FROM emp
+	WHERE empno IN (
+		SELECT fv FROM (
+			SELECT DISTINCT
+				FIRST_VALUE(empno) OVER (PARTITION BY deptno ORDER BY hiredate DESC) AS fv
+			FROM emp
+			WHERE deptno IN (5, 10, 20)
+			ORDER BY fv
+			LIMIT 3
+		) AS dt
+	)
+	AND deptno IN (5, 10, 20)
+	ORDER BY deptno ASC
+	LIMIT 3`,
+		`[[INT64(503) DATE("2024-03-03") INT64(5)] [INT64(103) DATE("2024-01-03") INT64(10)] [INT64(203) DATE("2024-02-03") INT64(20)]]`)
+
+	mcmp.AssertMatches(`SELECT empno, hiredate, deptno FROM emp
+	WHERE empno IN (
+		SELECT fv FROM (
+			SELECT DISTINCT
+				FIRST_VALUE(empno) OVER (PARTITION BY deptno ORDER BY hiredate ASC) AS fv
+			FROM emp
+			WHERE deptno IN (5, 10, 20)
+			ORDER BY fv
+			LIMIT 3 OFFSET 0
+		) AS dt
+	)
+	AND deptno IN (5, 10, 20)
+	ORDER BY deptno ASC
+	LIMIT 3 OFFSET 1`,
+		`[[INT64(101) DATE("2024-01-01") INT64(10)] [INT64(201) DATE("2024-02-01") INT64(20)]]`)
 }

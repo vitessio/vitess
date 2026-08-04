@@ -857,6 +857,55 @@ func (conn *gRPCQueryClient) VStreamResults(ctx context.Context, target *querypb
 	}
 }
 
+// BinlogDumpGTID streams raw binlog events from MySQL using COM_BINLOG_DUMP_GTID (GTID-based).
+func (conn *gRPCQueryClient) BinlogDumpGTID(ctx context.Context, request *binlogdatapb.BinlogDumpGTIDRequest, send func(*binlogdatapb.BinlogDumpResponse) error) error {
+	// Please see comments in StreamExecute to see how this works.
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	stream, err := func() (queryservicepb.Query_BinlogDumpGTIDClient, error) {
+		conn.mu.RLock()
+		defer conn.mu.RUnlock()
+		if conn.cc == nil {
+			return nil, tabletconn.ConnClosed
+		}
+
+		req := &binlogdatapb.BinlogDumpGTIDRequest{
+			Target:            request.Target,
+			EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
+			ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
+			BinlogFilename:    request.BinlogFilename,
+			BinlogPosition:    request.BinlogPosition,
+			GtidSet:           request.GtidSet,
+			Flags:             request.Flags,
+		}
+		stream, err := conn.c.BinlogDumpGTID(ctx, req)
+		if err != nil {
+			return nil, tabletconn.ErrorFromGRPC(err)
+		}
+		return stream, nil
+	}()
+	if err != nil {
+		return err
+	}
+	r := binlogdatapb.BinlogDumpResponseFromVTPool()
+	defer r.ReturnToVTPool()
+	for {
+		if err := stream.RecvMsg(r); err != nil {
+			return tabletconn.ErrorFromGRPC(err)
+		}
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if err := send(r); err != nil {
+			if err == io.EOF {
+				return nil
+			}
+			return err
+		}
+		r.ResetVT()
+	}
+}
+
 // HandlePanic is a no-op.
 func (conn *gRPCQueryClient) HandlePanic(err *error) {
 }

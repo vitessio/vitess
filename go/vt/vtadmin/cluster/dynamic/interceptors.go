@@ -1,7 +1,24 @@
+/*
+Copyright 2026 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package dynamic
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	"google.golang.org/grpc"
@@ -19,7 +36,7 @@ import (
 // its metadata. Otherwise, the interceptor is a no-op, and the original stream
 // handler is invoked.
 func StreamServerInterceptor(api API) grpc.StreamServerInterceptor {
-	return func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+	return func(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 		c, id, ok, err := clusterFromIncomingContextMetadata(ss.Context())
 		switch { // TODO: see if it's possible to de-duplicate this somehow. Unfortunately the callbacks have different signatures which might make it impossible.
 		case !ok:
@@ -28,12 +45,12 @@ func StreamServerInterceptor(api API) grpc.StreamServerInterceptor {
 		case id == "":
 			// There was a cluster spec in the metadata, but we couldn't even
 			// get an id out of it. Warn and fallback to static API.
-			log.Warningf("failed to unmarshal dynamic cluster spec from incoming context metadata; falling back to static API; error: %v", err)
+			log.Warn(fmt.Sprintf("failed to unmarshal dynamic cluster spec from incoming context metadata; falling back to static API; error: %v", err))
 			return handler(srv, ss)
 		}
 
 		if err != nil {
-			log.Warningf("failed to extract valid cluster from incoming metadata; attempting to use existing cluster with id=%s; error: %v", id, err)
+			log.Warn(fmt.Sprintf("failed to extract valid cluster from incoming metadata; attempting to use existing cluster with id=%s; error: %v", id, err))
 		}
 
 		dynamicAPI := api.WithCluster(c, id)
@@ -47,7 +64,7 @@ func StreamServerInterceptor(api API) grpc.StreamServerInterceptor {
 // metadata. Otherwise, the interceptor is a no-op, and the original method
 // handler is invoked.
 func UnaryServerInterceptor(api API) grpc.UnaryServerInterceptor {
-	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp interface{}, err error) {
+	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp any, err error) {
 		c, id, ok, err := clusterFromIncomingContextMetadata(ctx)
 		switch {
 		case !ok:
@@ -56,12 +73,12 @@ func UnaryServerInterceptor(api API) grpc.UnaryServerInterceptor {
 		case id == "":
 			// There was a cluster spec in the metadata, but we couldn't even
 			// get an id out of it. Warn and fallback to static API.
-			log.Warningf("failed to unmarshal dynamic cluster spec from incoming context metadata; falling back to static API; error: %v", err)
+			log.Warn(fmt.Sprintf("failed to unmarshal dynamic cluster spec from incoming context metadata; falling back to static API; error: %v", err))
 			return handler(ctx, req)
 		}
 
 		if err != nil {
-			log.Warningf("failed to extract valid cluster from incoming metadata; attempting to use existing cluster with id=%s; error: %v", id, err)
+			log.Warn(fmt.Sprintf("failed to extract valid cluster from incoming metadata; attempting to use existing cluster with id=%s; error: %v", id, err))
 		}
 
 		dynamicAPI := api.WithCluster(c, id)
@@ -91,8 +108,8 @@ func clusterFromIncomingContextMetadata(ctx context.Context) (*cluster.Cluster, 
 }
 
 // dec returns a function that merges the src proto.Message into dst.
-func dec(src interface{}) func(dst interface{}) error {
-	return func(dst interface{}) error {
+func dec(src any) func(dst any) error {
+	return func(dst any) error {
 		// gRPC handlers expect a function called `dec` which
 		// decodes an arbitrary req into a req of the correct type
 		// for the particular handler.
@@ -121,7 +138,7 @@ var (
 // the init() below will fail to compile if our types ever stop aligning.
 //
 // c.f. https://github.com/grpc/grpc-go/blob/v1.39.0/server.go#L81
-type methodHandler func(srv interface{}, ctx context.Context, dec func(in interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error)
+type methodHandler func(srv any, ctx context.Context, dec func(in any) error, interceptor grpc.UnaryServerInterceptor) (any, error)
 
 func init() {
 	for _, m := range vtadminpb.VTAdmin_ServiceDesc.Methods {

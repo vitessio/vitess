@@ -26,6 +26,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/stats"
@@ -130,12 +131,12 @@ func runTestCase(testcase, mode string, opts *Options, topts *testopts, t *testi
 		if diff := cmp.Diff(strings.TrimSpace(string(expected)), strings.TrimSpace(explainText)); diff != "" {
 			// Print the Text that was actually returned and also dump to a
 			// temp file to be able to diff the results.
-			t.Errorf("Text output did not match (-want +got):\n%s", diff)
+			assert.Failf(t, "text output mismatch", "Text output did not match (-want +got):\n%s", diff)
 
 			testOutputTempDir, err := os.MkdirTemp("testdata", "plan_test")
 			require.NoError(t, err)
 			gotFile := fmt.Sprintf("%s/%s-output.txt", testOutputTempDir, testcase)
-			os.WriteFile(gotFile, []byte(explainText), 0644)
+			os.WriteFile(gotFile, []byte(explainText), 0o644)
 
 			t.Logf("run the following command to update the expected output:")
 			t.Logf("cp %s/* %s", testOutputTempDir, path.Dir(textOutFile))
@@ -249,28 +250,20 @@ func TestJSONOutput(t *testing.T) {
 	require.NoError(t, err, "error unmarshaling json")
 
 	array, ok := data.([]any)
-	if !ok || len(array) != 1 {
-		t.Errorf("expected single-element top-level array, got:\n%s", explainJSON)
-	}
+	assert.True(t, ok && len(array) == 1, "expected single-element top-level array, got:\n%s", explainJSON)
 
 	explain, ok := array[0].(map[string]any)
-	if !ok {
-		t.Errorf("expected explain map, got:\n%s", explainJSON)
-	}
+	assert.True(t, ok, "expected explain map, got:\n%s", explainJSON)
 
 	if explain["SQL"] != sql {
-		t.Errorf("expected SQL, got:\n%s", explainJSON)
+		assert.Failf(t, "unexpected SQL", "expected SQL, got:\n%s", explainJSON)
 	}
 
 	plans, ok := explain["Plans"].([]any)
-	if !ok || len(plans) != 1 {
-		t.Errorf("expected single-element plans array, got:\n%s", explainJSON)
-	}
+	assert.True(t, ok && len(plans) == 1, "expected single-element plans array, got:\n%s", explainJSON)
 
 	actions, ok := explain["TabletActions"].(map[string]any)
-	if !ok {
-		t.Errorf("expected TabletActions map, got:\n%s", explainJSON)
-	}
+	assert.True(t, ok, "expected TabletActions map, got:\n%s", explainJSON)
 
 	actionsJSON, err := json.MarshalIndent(actions, "", "    ")
 	require.NoError(t, err, "error in json marshal")
@@ -295,9 +288,7 @@ func TestJSONOutput(t *testing.T) {
     }
 }`
 	diff := cmp.Diff(wantJSON, string(actionsJSON))
-	if diff != "" {
-		t.Error(diff)
-	}
+	assert.Empty(t, diff)
 }
 
 func testShardInfo(ks, start, end string, primaryServing bool, t *testing.T) *topo.ShardInfo {
@@ -361,8 +352,7 @@ func TestUsingKeyspaceShardMap(t *testing.T) {
 }
 
 func TestInit(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	vschema := `{
   "ks1": {

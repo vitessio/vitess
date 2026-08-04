@@ -21,6 +21,8 @@ package mysqlctlclient
 import (
 	"context"
 	"fmt"
+	"os"
+	"time"
 
 	"github.com/spf13/pflag"
 
@@ -46,7 +48,7 @@ type MysqlctlClient interface {
 	Start(ctx context.Context, mysqldArgs ...string) error
 
 	// Shutdown calls Mysqld.Shutdown remotely.
-	Shutdown(ctx context.Context, waitForMysqld bool) error
+	Shutdown(ctx context.Context, waitForMysqld bool, shutdownTimeout time.Duration) error
 
 	// RunMysqlUpgrade calls Mysqld.RunMysqlUpgrade remotely.
 	RunMysqlUpgrade(ctx context.Context) error
@@ -78,7 +80,8 @@ var factories = make(map[string]Factory)
 // RegisterFactory allows a client implementation to register itself
 func RegisterFactory(name string, factory Factory) {
 	if _, ok := factories[name]; ok {
-		log.Fatalf("RegisterFactory %s already exists", name)
+		log.Error(fmt.Sprintf("RegisterFactory %s already exists", name))
+		os.Exit(1)
 	}
 	factories[name] = factory
 }

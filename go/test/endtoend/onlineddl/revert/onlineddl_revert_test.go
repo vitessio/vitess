@@ -18,6 +18,7 @@ package revert
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"math/rand/v2"
@@ -34,7 +35,6 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	"vitess.io/vitess/go/vt/schema"
-	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
@@ -147,7 +147,7 @@ func TestMain(m *testing.M) {
 		defer clusterInstance.Teardown()
 
 		if _, err := os.Stat(schemaChangeDirectory); os.IsNotExist(err) {
-			_ = os.Mkdir(schemaChangeDirectory, 0700)
+			_ = os.Mkdir(schemaChangeDirectory, 0o700)
 		}
 
 		clusterInstance.VtctldExtraArgs = []string{
@@ -157,13 +157,12 @@ func TestMain(m *testing.M) {
 		}
 
 		clusterInstance.VtTabletExtraArgs = []string{
-			utils.GetFlagVariantForTests("--heartbeat-interval"), "250ms",
-			utils.GetFlagVariantForTests("--heartbeat-on-demand-duration"), "5s",
-			utils.GetFlagVariantForTests("--migration-check-interval"), "5s",
-			utils.GetFlagVariantForTests("--watch-replication-stream"),
+			"--heartbeat-interval", "250ms",
+			"--heartbeat-on-demand-duration", "5s",
+			"--migration-check-interval", "5s",
 		}
 		clusterInstance.VtGateExtraArgs = []string{
-			utils.GetFlagVariantForTests("--ddl-strategy"), "online",
+			"--ddl-strategy", "online",
 		}
 
 		if err := clusterInstance.StartTopo(); err != nil {
@@ -204,7 +203,7 @@ func TestMain(m *testing.M) {
 
 func TestRevertSchemaChanges(t *testing.T) {
 	shards = clusterInstance.Keyspaces[0].Shards
-	require.Equal(t, 1, len(shards))
+	require.Len(t, shards, 1)
 
 	throttler.EnableLagThrottlerAndWaitForStatus(t, clusterInstance)
 	throttler.WaitForCheckThrottlerResult(t, &clusterInstance.VtctldClientProcess, primaryTablet, throttlerapp.TestingName, nil, tabletmanagerdatapb.CheckThrottlerResponseCode_OK, time.Minute)
@@ -235,7 +234,7 @@ func testRevertible(t *testing.T) {
 		t.Logf("MySQL support for 'rename_table_preserve_foreign_key': %v", fkOnlineDDLPossible)
 	})
 
-	var testCases = []revertibleTestCase{
+	testCases := []revertibleTestCase{
 		{
 			name:       "identical schemas",
 			fromSchema: `id int primary key, i1 int not null default 0`,
@@ -385,7 +384,8 @@ func testRevertible(t *testing.T) {
 		createParentTable = "create table parent (id int primary key)"
 	)
 
-	onlineddl.VtgateExecQuery(t, &vtParams, createParentTable, "")
+	_, err := onlineddl.VtgateExecQuery(t.Context(), &vtParams, createParentTable)
+	require.NoError(t, err)
 
 	removeBackticks := func(s string) string {
 		return strings.ReplaceAll(s, "`", "")
@@ -418,11 +418,11 @@ func testRevertible(t *testing.T) {
 				uuid = testOnlineDDLStatement(t, toStatement, ddlStrategy, "vtgate", tableName, "")
 				if !onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete) {
 					resp, err := throttler.CheckThrottler(&clusterInstance.VtctldClientProcess, primaryTablet, throttlerapp.TestingName, nil)
-					assert.NoError(t, err)
+					require.NoError(t, err)
 					fmt.Println("Throttler check response: ", resp)
 
 					output, err := throttler.GetThrottlerStatusRaw(&clusterInstance.VtctldClientProcess, primaryTablet)
-					assert.NoError(t, err)
+					require.NoError(t, err)
 					fmt.Println("Throttler status response: ", output)
 				}
 
@@ -430,7 +430,8 @@ func testRevertible(t *testing.T) {
 			})
 			t.Run("check migration", func(t *testing.T) {
 				// All right, the actual test
-				rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
+				rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, uuid)
+				require.NoError(t, err)
 				require.NotNil(t, rs)
 				for _, row := range rs.Named().Rows {
 					removedForeignKeyNames := row.AsString("removed_foreign_key_names", "")
@@ -442,7 +443,7 @@ func testRevertible(t *testing.T) {
 					// The name of e.g. "some_fk_2_" might turn into "some_fk_2_518ubnm034rel35l1m0u1dc7m"
 					expectRemovedForeignKeyNames := strings.Split(testcase.removedForeignKeyNames, ",")
 					actualRemovedForeignKeyNames := strings.Split(removeBackticks(removedForeignKeyNames), ",")
-					assert.Equal(t, len(expectRemovedForeignKeyNames), len(actualRemovedForeignKeyNames))
+					assert.Len(t, actualRemovedForeignKeyNames, len(expectRemovedForeignKeyNames))
 					for _, actualRemovedForeignKeyName := range actualRemovedForeignKeyNames {
 						found := false
 						for _, expectRemovedForeignKeyName := range expectRemovedForeignKeyNames {
@@ -450,7 +451,7 @@ func testRevertible(t *testing.T) {
 								found = true
 							}
 						}
-						assert.Truef(t, found, "unexpected FK name", "%s", actualRemovedForeignKeyName)
+						assert.Truef(t, found, "unexpected FK name %s", actualRemovedForeignKeyName)
 					}
 					assert.Equal(t, testcase.removedUniqueKeyNames, removeBackticks(removedUniqueKeyNames))
 					assert.Equal(t, testcase.droppedNoDefaultColumnNames, removeBackticks(droppedNoDefaultColumnNames))
@@ -481,7 +482,8 @@ func testRevertible(t *testing.T) {
 		})
 		t.Run("check migration", func(t *testing.T) {
 			// All right, the actual test
-			rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
+			rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, uuid)
+			require.NoError(t, err)
 			require.NotNil(t, rs)
 			for _, row := range rs.Named().Rows {
 				removedForeignKeyNames := row.AsString("removed_foreign_key_names", "")
@@ -491,9 +493,9 @@ func testRevertible(t *testing.T) {
 
 				// Online DDL renames constraint names, and keeps the original name as a prefix. The name will be e.g. some_fk_2_518ubnm034rel35l1m0u1dc7m
 				assert.Contains(t, removeBackticks(removedForeignKeyNames), "some_fk_2")
-				assert.Equal(t, "", removeBackticks(removedUniqueKeyNames))
-				assert.Equal(t, "", removeBackticks(droppedNoDefaultColumnNames))
-				assert.Equal(t, "", removeBackticks(expandedColumnNames))
+				assert.Empty(t, removeBackticks(removedUniqueKeyNames))
+				assert.Empty(t, removeBackticks(droppedNoDefaultColumnNames))
+				assert.Empty(t, removeBackticks(expandedColumnNames))
 			}
 		})
 	})
@@ -568,7 +570,8 @@ func testRevert(t *testing.T) {
 	)
 
 	populatePartitionedTable := func(t *testing.T) {
-		onlineddl.VtgateExecQuery(t, &vtParams, populatePartitionedTableStatement, "")
+		_, err := onlineddl.VtgateExecQuery(t.Context(), &vtParams, populatePartitionedTableStatement)
+		require.NoError(t, err)
 	}
 
 	mysqlVersion = onlineddl.GetMySQLVersion(t, primaryTablet)
@@ -580,7 +583,8 @@ func testRevert(t *testing.T) {
 	ddlStrategy := "online"
 
 	testRevertedUUID := func(t *testing.T, uuid string, expectRevertedUUID string) {
-		rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
+		rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, uuid)
+		require.NoError(t, err)
 		require.NotNil(t, rs)
 		for _, row := range rs.Named().Rows {
 			revertedUUID := row["reverted_uuid"].ToString()
@@ -857,7 +861,7 @@ func testRevert(t *testing.T) {
 	// If they fail, it has nothing to do with revert.
 	// We run these tests because we expect their functionality to work in the next step.
 	var alterHints []string
-	for i := 0; i < 2; i++ {
+	for i := range 2 {
 		testName := fmt.Sprintf("online ALTER TABLE %d", i)
 		hint := fmt.Sprintf("hint-alter-%d", i)
 		alterHints = append(alterHints, hint)
@@ -866,14 +870,13 @@ func testRevert(t *testing.T) {
 			// This specific test is similar to `onlineddl_vrepl_stress` endtond tests.
 			// If it fails, it has nothing to do with revert.
 			// We run this test because we expect its functionality to work in the next step.
-			ctx, cancel := context.WithCancel(context.Background())
+			ctx, cancel := context.WithCancel(t.Context())
 			defer cancel()
 			var wg sync.WaitGroup
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				runMultipleConnections(ctx, t)
-			}()
+			var workloadErr error
+			wg.Go(func() {
+				workloadErr = runMultipleConnections(ctx, t)
+			})
 
 			func() {
 				// Ensures runMultipleConnections completes before the overall
@@ -888,6 +891,7 @@ func testRevert(t *testing.T) {
 				uuids = append(uuids, uuid)
 				onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 			}()
+			require.NoError(t, workloadErr)
 
 			testSelectTableMetrics(t)
 		})
@@ -895,14 +899,13 @@ func testRevert(t *testing.T) {
 	t.Run("revert ALTER TABLE", func(t *testing.T) {
 		// This reverts the last ALTER TABLE.
 		// And we run traffic on the table during the revert
-		ctx, cancel := context.WithCancel(context.Background())
+		ctx, cancel := context.WithCancel(t.Context())
 		defer cancel()
 		var wg sync.WaitGroup
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			runMultipleConnections(ctx, t)
-		}()
+		var workloadErr error
+		wg.Go(func() {
+			workloadErr = runMultipleConnections(ctx, t)
+		})
 
 		func() {
 			// Ensures runMultipleConnections completes before the overall
@@ -917,20 +920,20 @@ func testRevert(t *testing.T) {
 			uuids = append(uuids, uuid)
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 		}()
+		require.NoError(t, workloadErr)
 		checkMigratedTable(t, tableName, alterHints[0])
 		testSelectTableMetrics(t)
 	})
 	t.Run("revert revert ALTER TABLE", func(t *testing.T) {
 		// This reverts the last revert (reapplying the last ALTER TABLE).
 		// And we run traffic on the table during the revert
-		ctx, cancel := context.WithCancel(context.Background())
+		ctx, cancel := context.WithCancel(t.Context())
 		defer cancel()
 		var wg sync.WaitGroup
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			runMultipleConnections(ctx, t)
-		}()
+		var workloadErr error
+		wg.Go(func() {
+			workloadErr = runMultipleConnections(ctx, t)
+		})
 
 		func() {
 			// Ensures runMultipleConnections completes before the overall
@@ -945,20 +948,20 @@ func testRevert(t *testing.T) {
 			uuids = append(uuids, uuid)
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 		}()
+		require.NoError(t, workloadErr)
 		checkMigratedTable(t, tableName, alterHints[1])
 		testSelectTableMetrics(t)
 	})
 	t.Run("revert revert revert ALTER TABLE", func(t *testing.T) {
 		// For good measure, let's verify that revert-revert-revert works...
 		// So this again pulls us back to first ALTER
-		ctx, cancel := context.WithCancel(context.Background())
+		ctx, cancel := context.WithCancel(t.Context())
 		defer cancel()
 		var wg sync.WaitGroup
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			runMultipleConnections(ctx, t)
-		}()
+		var workloadErr error
+		wg.Go(func() {
+			workloadErr = runMultipleConnections(ctx, t)
+		})
 
 		func() {
 			// Ensures runMultipleConnections completes before the overall
@@ -973,19 +976,19 @@ func testRevert(t *testing.T) {
 			uuids = append(uuids, uuid)
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 		}()
+		require.NoError(t, workloadErr)
 		checkMigratedTable(t, tableName, alterHints[0])
 		testSelectTableMetrics(t)
 	})
 	testPostponedRevert := func(t *testing.T, expectStatuses ...schema.OnlineDDLStatus) {
 		require.NotEmpty(t, expectStatuses)
-		ctx, cancel := context.WithCancel(context.Background())
+		ctx, cancel := context.WithCancel(t.Context())
 		defer cancel()
 		var wg sync.WaitGroup
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			runMultipleConnections(ctx, t)
-		}()
+		var workloadErr error
+		wg.Go(func() {
+			workloadErr = runMultipleConnections(ctx, t)
+		})
 
 		// Ensures runMultipleConnections completes before the overall
 		// test does, even in the face of calls to t.FailNow() in the
@@ -993,6 +996,7 @@ func testRevert(t *testing.T) {
 		defer func() {
 			cancel() // will cause runMultipleConnections() to terminate
 			wg.Wait()
+			require.NoError(t, workloadErr)
 		}()
 
 		uuid := testRevertMigration(t, uuids[len(uuids)-1], ddlStrategy+" --postpone-completion")
@@ -1050,14 +1054,15 @@ func testRevert(t *testing.T) {
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 		checkTable(t, tableName, true)
 
-		rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
+		rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, uuid)
+		require.NoError(t, err)
 		require.NotNil(t, rs)
 		row := rs.Named().Row()
 		require.NotNil(t, row)
 		specialPlan := row.AsString("special_plan", "")
 		artifacts := row.AsString("artifacts", "")
 		instantDDLCapable, err := capableOf(capabilities.InstantDDLFlavorCapability)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		if instantDDLCapable {
 			// instant DDL expected to apply in 8.0
 			assert.Contains(t, specialPlan, "instant-ddl")
@@ -1074,7 +1079,7 @@ func testRevert(t *testing.T) {
 		uuid := testRevertMigration(t, uuids[len(uuids)-1], ddlStrategy)
 		uuids = append(uuids, uuid)
 		instantDDLCapable, err := capableOf(capabilities.InstantDDLFlavorCapability)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		if instantDDLCapable {
 			// instant DDL expected to apply in 8.0, therefore revert is impossible
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusFailed)
@@ -1138,7 +1143,8 @@ func testRevert(t *testing.T) {
 
 	// PARTITIONS
 	checkPartitionedTableCountRows := func(t *testing.T, expectRows int64) {
-		rs := onlineddl.VtgateExecQuery(t, &vtParams, "select count(*) as c from part_test", "")
+		rs, err := onlineddl.VtgateExecQuery(t.Context(), &vtParams, "select count(*) as c from part_test")
+		require.NoError(t, err)
 		require.NotNil(t, rs)
 		row := rs.Named().Row()
 		require.NotNil(t, row)
@@ -1209,14 +1215,14 @@ func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy str
 	} else {
 		var err error
 		uuid, err = clusterInstance.VtctldClientProcess.ApplySchemaWithOutput(keyspaceName, alterStatement, cluster.ApplySchemaParams{DDLStrategy: ddlStrategy})
-		assert.NoError(t, err)
+		require.NoError(t, err)
 	}
 	uuid = strings.TrimSpace(uuid)
 	fmt.Println("# Generated UUID (for debug purposes):")
 	fmt.Printf("<%s>\n", uuid)
 
 	strategySetting, err := schema.ParseDDLStrategy(ddlStrategy)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	if !strategySetting.Strategy.IsDirect() {
 		status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, 20*time.Second, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
@@ -1261,19 +1267,39 @@ func checkTable(t *testing.T, showTableName string, expectExists bool) bool {
 		expectCount = 1
 	}
 	for i := range clusterInstance.Keyspaces[0].Shards {
-		if !checkTablesCount(t, clusterInstance.Keyspaces[0].Shards[i].Vttablets[0], showTableName, expectCount) {
+		count, err := tablesCount(clusterInstance.Keyspaces[0].Shards[i].Vttablets[0], showTableName)
+		require.NoError(t, err)
+		if !assert.Equal(t, expectCount, count) {
 			return false
 		}
 	}
 	return true
 }
 
-// checkTablesCount checks the number of tables in the given tablet
-func checkTablesCount(t *testing.T, tablet *cluster.Vttablet, showTableName string, expectCount int) bool {
+// tablesCount returns the number of tables in the given tablet matching showTableName.
+func tablesCount(tablet *cluster.Vttablet, showTableName string) (int, error) {
 	query := fmt.Sprintf(`show tables like '%%%s%%';`, showTableName)
 	queryResult, err := tablet.VttabletProcess.QueryTablet(query, keyspaceName, true)
-	require.Nil(t, err)
-	return assert.Equal(t, expectCount, len(queryResult.Rows))
+	if err != nil {
+		return 0, err
+	}
+	return len(queryResult.Rows), nil
+}
+
+// tableExists reports whether the given table exists on the first tablet of
+// each shard. It runs on worker goroutines, so it returns errors rather than
+// asserting.
+func tableExists(showTableName string) (bool, error) {
+	for i := range clusterInstance.Keyspaces[0].Shards {
+		count, err := tablesCount(clusterInstance.Keyspaces[0].Shards[i].Vttablets[0], showTableName)
+		if err != nil {
+			return false, err
+		}
+		if count != 1 {
+			return false, nil
+		}
+	}
+	return true, nil
 }
 
 // checkMigratedTables checks the CREATE STATEMENT of a table after migration
@@ -1287,9 +1313,9 @@ func checkMigratedTable(t *testing.T, tableName, expectHint string) {
 // getCreateTableStatement returns the CREATE TABLE statement for a given table
 func getCreateTableStatement(t *testing.T, tablet *cluster.Vttablet, tableName string) (statement string) {
 	queryResult, err := tablet.VttabletProcess.QueryTablet(fmt.Sprintf("show create table %s;", tableName), keyspaceName, true)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
-	assert.Equal(t, len(queryResult.Rows), 1)
+	assert.Len(t, queryResult.Rows, 1)
 	assert.GreaterOrEqual(t, len(queryResult.Rows[0]), 2) // table name, create statement (for view, also more columns)
 	statement = queryResult.Rows[0][1].ToString()
 	return statement
@@ -1367,21 +1393,29 @@ func generateDelete(t *testing.T, conn *mysql.Conn) error {
 	return err
 }
 
-func runSingleConnection(ctx context.Context, t *testing.T, done *int64) {
-	log.Infof("Running single connection")
+// runSingleConnection runs on a worker goroutine, so it returns errors rather
+// than asserting: require would call runtime.Goexit off the test goroutine.
+func runSingleConnection(ctx context.Context, t *testing.T, done *int64) error {
+	log.Info("Running single connection")
 	conn, err := mysql.Connect(ctx, &vtParams)
-	require.Nil(t, err)
+	if err != nil {
+		return err
+	}
 	defer conn.Close()
 
 	_, err = conn.ExecuteFetch("set autocommit=1", 1000, true)
-	require.Nil(t, err)
+	if err != nil {
+		return err
+	}
 	_, err = conn.ExecuteFetch("set transaction isolation level read committed", 1000, true)
-	require.Nil(t, err)
+	if err != nil {
+		return err
+	}
 
 	for {
 		if atomic.LoadInt64(done) == 1 {
-			log.Infof("Terminating single connection")
-			return
+			log.Info("Terminating single connection")
+			return nil
 		}
 		switch rand.Int32N(3) {
 		case 0:
@@ -1391,51 +1425,61 @@ func runSingleConnection(ctx context.Context, t *testing.T, done *int64) {
 		case 2:
 			err = generateDelete(t, conn)
 		}
-		assert.Nil(t, err)
+		if err != nil {
+			return err
+		}
 		time.Sleep(10 * time.Millisecond)
 	}
 }
 
-func runMultipleConnections(ctx context.Context, t *testing.T) {
-	log.Infof("Running multiple connections")
+// runMultipleConnections runs on a worker goroutine, so it returns errors
+// rather than asserting; callers check the error after wg.Wait().
+func runMultipleConnections(ctx context.Context, t *testing.T) error {
+	log.Info("Running multiple connections")
 
-	require.True(t, checkTable(t, tableName, true))
+	exists, err := tableExists(tableName)
+	if err != nil {
+		return err
+	}
+	if !exists {
+		return fmt.Errorf("table %s does not exist", tableName)
+	}
 	var done int64
 	var wg sync.WaitGroup
-	for i := 0; i < maxConcurrency; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			runSingleConnection(ctx, t, &done)
-		}()
+	errs := make([]error, maxConcurrency)
+	for i := range maxConcurrency {
+		wg.Go(func() {
+			errs[i] = runSingleConnection(ctx, t, &done)
+		})
 	}
 	<-ctx.Done()
 	atomic.StoreInt64(&done, 1)
-	log.Infof("Running multiple connections: done")
+	log.Info("Running multiple connections: done")
 	wg.Wait()
-	log.Infof("All connections cancelled")
+	log.Info("All connections cancelled")
+	return errors.Join(errs...)
 }
 
 func initTable(t *testing.T) {
-	log.Infof("initTable begin")
-	defer log.Infof("initTable complete")
+	log.Info("initTable begin")
+	defer log.Info("initTable complete")
 
 	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	defer conn.Close()
 
 	writeMetrics.Clear()
 	_, err = conn.ExecuteFetch(truncateStatement, 1000, true)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
-	for i := 0; i < maxTableRows/2; i++ {
+	for range maxTableRows / 2 {
 		generateInsert(t, conn)
 	}
-	for i := 0; i < maxTableRows/4; i++ {
+	for range maxTableRows / 4 {
 		generateUpdate(t, conn)
 	}
-	for i := 0; i < maxTableRows/4; i++ {
+	for range maxTableRows / 4 {
 		generateDelete(t, conn)
 	}
 }
@@ -1444,7 +1488,7 @@ func testSelectTableMetrics(t *testing.T) {
 	writeMetrics.mu.Lock()
 	defer writeMetrics.mu.Unlock()
 
-	log.Infof("%s", writeMetrics.String())
+	log.Info(writeMetrics.String())
 
 	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
@@ -1456,7 +1500,7 @@ func testSelectTableMetrics(t *testing.T) {
 
 	row := rs.Named().Row()
 	require.NotNil(t, row)
-	log.Infof("testSelectTableMetrics, row: %v", row)
+	log.Info(fmt.Sprintf("testSelectTableMetrics, row: %v", row))
 	numRows := row.AsInt64("num_rows", 0)
 	sumUpdates := row.AsInt64("sum_updates", 0)
 

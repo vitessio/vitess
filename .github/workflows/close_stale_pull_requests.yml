@@ -15,11 +15,11 @@ jobs:
 
     steps:
       - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@20cf305ff2072d973412fa9b1e3a4f227bda3c76 # v2.14.0
+        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
         with:
           egress-policy: audit
 
-      - uses: actions/stale@f7176fd3007623b69d27091f9b9d4ab7995f0a06 # v5.2.1
+      - uses: actions/stale@1e223db275d687790206a7acac4d1a11bd6fe629 # v10.4.0
         with:
           days-before-stale: 30
           # Do not handle issues at all. We only want to handle PRs.
@@ -36,4 +36,3 @@ jobs:
           close-pr-message: "This PR was closed because it has been stale for 7 days with no activity."
 
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-

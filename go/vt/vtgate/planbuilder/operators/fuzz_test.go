@@ -1,5 +1,4 @@
 //go:build gofuzz
-// +build gofuzz
 
 /*
 Copyright 2021 The Vitess Authors.
@@ -25,6 +24,7 @@ import (
 	"runtime/debug"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -37,8 +37,7 @@ func TestFuzzAnalyze(t *testing.T) {
 			defer func() {
 				r := recover()
 				if r != nil {
-					t.Error(r)
-					t.Fatal(string(debug.Stack()))
+					assert.Fail(t, "panic recovered", "%v\n%s", r, string(debug.Stack()))
 				}
 			}()
 			testcase, err := os.ReadFile(path.Join(directoryName, file.Name()))

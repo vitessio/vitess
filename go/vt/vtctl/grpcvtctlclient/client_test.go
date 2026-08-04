@@ -17,7 +17,6 @@ limitations under the License.
 package grpcvtctlclient
 
 import (
-	"context"
 	"fmt"
 	"io"
 	"net"
@@ -40,15 +39,12 @@ import (
 // the test here creates a fake server implementation, a fake client
 // implementation, and runs the test suite against the setup.
 func TestVtctlServer(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := vtctlclienttest.CreateTopoServer(t, ctx)
 
 	// Listen on a random port
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("Cannot listen: %v", err)
-	}
+	require.NoError(t, err)
 	port := listener.Addr().(*net.TCPAddr).Port
 
 	// Create a gRPC server and listen on the port
@@ -58,9 +54,7 @@ func TestVtctlServer(t *testing.T) {
 
 	// Create a VtctlClient gRPC client to talk to the fake server
 	client, err := gRPCVtctlClientFactory(ctx, fmt.Sprintf("localhost:%v", port))
-	if err != nil {
-		t.Fatalf("Cannot create client: %v", err)
-	}
+	require.NoError(t, err)
 	defer client.Close()
 
 	vtctlclienttest.TestSuite(t, ts, client)
@@ -69,15 +63,12 @@ func TestVtctlServer(t *testing.T) {
 // the test here creates a fake server implementation, a fake client with auth
 // implementation, and runs the test suite against the setup.
 func TestVtctlAuthClient(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := vtctlclienttest.CreateTopoServer(t, ctx)
 
 	// Listen on a random port
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("Cannot listen: %v", err)
-	}
+	require.NoError(t, err)
 	port := listener.Addr().(*net.TCPAddr).Port
 
 	// Create a gRPC server and listen on the port
@@ -96,16 +87,11 @@ func TestVtctlAuthClient(t *testing.T) {
         }`
 
 	f, err := os.CreateTemp("", "static_auth_creds.json")
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer os.Remove(f.Name())
-	if _, err := io.WriteString(f, authJSON); err != nil {
-		t.Fatal(err)
-	}
-	if err := f.Close(); err != nil {
-		t.Fatal(err)
-	}
+	_, err = io.WriteString(f, authJSON)
+	require.NoError(t, err)
+	require.NoError(t, f.Close())
 
 	fs := pflag.NewFlagSet("", pflag.ContinueOnError)
 	grpcclient.RegisterFlags(fs)
@@ -118,9 +104,7 @@ func TestVtctlAuthClient(t *testing.T) {
 
 	// Create a VtctlClient gRPC client to talk to the fake server
 	client, err := gRPCVtctlClientFactory(ctx, fmt.Sprintf("localhost:%v", port))
-	if err != nil {
-		t.Fatalf("Cannot create client: %v", err)
-	}
+	require.NoError(t, err)
 	defer client.Close()
 
 	vtctlclienttest.TestSuite(t, ts, client)

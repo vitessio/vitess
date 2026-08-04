@@ -34,6 +34,7 @@ func (mlc *MockLdapClient) Bind(username, password string) error {
 	}
 	return nil
 }
+
 func (mlc *MockLdapClient) Search(searchRequest *ldap.SearchRequest) (*ldap.SearchResult, error) {
 	return &ldap.SearchResult{}, nil
 }

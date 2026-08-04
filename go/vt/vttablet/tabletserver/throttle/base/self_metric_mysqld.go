@@ -91,6 +91,9 @@ func getMysqlHostMetric(ctx context.Context, params *SelfMetricReadParams, mysql
 	if resp == nil {
 		return metric.WithError(ErrNoResultYet)
 	}
+	if resp.HostMetrics == nil || resp.HostMetrics.Metrics == nil {
+		return metric.WithError(ErrNoSuchMetric)
+	}
 	mysqlMetric := resp.HostMetrics.Metrics[mysqlHostMetricName]
 	if mysqlMetric == nil {
 		return metric.WithError(ErrNoSuchMetric)
@@ -102,12 +105,13 @@ func getMysqlHostMetric(ctx context.Context, params *SelfMetricReadParams, mysql
 	return metric
 }
 
-var _ SelfMetric = registerSelfMetric(&MysqldLoadAvgSelfMetric{})
-var _ SelfMetric = registerSelfMetric(&MysqldDatadirUsedRatioSelfMetric{})
+var (
+	_ SelfMetric = registerSelfMetric(&MysqldLoadAvgSelfMetric{})
+	_ SelfMetric = registerSelfMetric(&MysqldDatadirUsedRatioSelfMetric{})
+)
 
 // MysqldLoadAvgSelfMetric stands for the load average per cpu, on the MySQL host.
-type MysqldLoadAvgSelfMetric struct {
-}
+type MysqldLoadAvgSelfMetric struct{}
 
 func (m *MysqldLoadAvgSelfMetric) Name() MetricName {
 	return MysqldLoadAvgMetricName
@@ -131,8 +135,7 @@ func (m *MysqldLoadAvgSelfMetric) Read(ctx context.Context, params *SelfMetricRe
 
 // MysqldDatadirUsedRatioSelfMetric stands for the disk space usage of the mount where MySQL's datadir is located.
 // Range: 0.0 (empty) - 1.0 (full)
-type MysqldDatadirUsedRatioSelfMetric struct {
-}
+type MysqldDatadirUsedRatioSelfMetric struct{}
 
 func (m *MysqldDatadirUsedRatioSelfMetric) Name() MetricName {
 	return MysqldDatadirUsedRatioMetricName

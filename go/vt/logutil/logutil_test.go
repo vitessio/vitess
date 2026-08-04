@@ -23,33 +23,34 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestParsing(t *testing.T) {
 	path := []string{
 		"/tmp/something.foo/zkocc.goedel.szopa.log.INFO.20130806-151006.10530",
-		"/tmp/something.foo/zkocc.goedel.szopa.test.log.ERROR.20130806-151006.10530"}
+		"/tmp/something.foo/zkocc.goedel.szopa.test.log.ERROR.20130806-151006.10530",
+	}
 
 	for _, filepath := range path {
 		ts, err := parseCreatedTimestamp(filepath)
-		if err != nil {
-			t.Fatalf("parse: %v", err)
-		}
+		require.NoError(t, err)
 
-		if want := time.Date(2013, 8, 6, 15, 10, 06, 0, time.Now().Location()); ts != want {
-			t.Errorf("timestamp: want %v, got %v", want, ts)
-		}
+		want := time.Date(2013, 8, 6, 15, 10, 0o6, 0, time.Now().Location())
+		assert.Equalf(t, want, ts, "timestamp: want %v, got %v", want, ts)
 	}
 }
 
 func TestPurgeByCtime(t *testing.T) {
 	logDir := path.Join(os.TempDir(), fmt.Sprintf("%v-%v", os.Args[0], os.Getpid()))
-	if err := os.MkdirAll(logDir, 0777); err != nil {
-		t.Fatalf("os.MkdirAll: %v", err)
+	if err := os.MkdirAll(logDir, 0o777); err != nil {
+		require.NoError(t, err)
 	}
 	defer os.RemoveAll(logDir)
 
-	now := time.Date(2013, 8, 6, 15, 10, 06, 0, time.Now().Location())
+	now := time.Date(2013, 8, 6, 15, 10, 0o6, 0, time.Now().Location())
 	files := []string{
 		"zkocc.goedel.szopa.log.INFO.20130806-121006.10530",
 		"zkocc.goedel.szopa.log.INFO.20130806-131006.10530",
@@ -59,33 +60,29 @@ func TestPurgeByCtime(t *testing.T) {
 
 	for _, file := range files {
 		if _, err := os.Create(path.Join(logDir, file)); err != nil {
-			t.Fatalf("os.Create: %v", err)
+			require.NoError(t, err)
 		}
 	}
 	if err := os.Symlink(files[1], path.Join(logDir, "zkocc.INFO")); err != nil {
-		t.Fatalf("os.Symlink: %v", err)
+		require.NoError(t, err)
 	}
 
 	purgeLogsOnce(now, logDir, "zkocc", 30*time.Minute, 0)
 
 	left, err := filepath.Glob(path.Join(logDir, "zkocc.*"))
-	if err != nil {
-		t.Fatalf("filepath.Glob: %v", err)
-	}
+	require.NoError(t, err)
 
-	if len(left) != 3 {
-		// 131006 is current
-		// 151006 is within 30 min
-		// symlink remains
-		// the rest should be removed.
-		t.Errorf("wrong number of files remain: want %v, got %v", 3, len(left))
-	}
+	// 131006 is current
+	// 151006 is within 30 min
+	// symlink remains
+	// the rest should be removed.
+	assert.Lenf(t, left, 3, "wrong number of files remain: want %v, got %v", 3, len(left))
 }
 
 func TestPurgeByMtime(t *testing.T) {
 	logDir := path.Join(os.TempDir(), fmt.Sprintf("%v-%v", os.Args[0], os.Getpid()))
-	if err := os.MkdirAll(logDir, 0777); err != nil {
-		t.Fatalf("os.MkdirAll: %v", err)
+	if err := os.MkdirAll(logDir, 0o777); err != nil {
+		require.NoError(t, err)
 	}
 	defer os.RemoveAll(logDir)
 	createFileWithMtime := func(filename, mtimeStr string) {
@@ -93,13 +90,13 @@ func TestPurgeByMtime(t *testing.T) {
 		var mtime time.Time
 		filepath := path.Join(logDir, filename)
 		if mtime, err = time.Parse(time.RFC3339, mtimeStr); err != nil {
-			t.Fatalf("time.Parse: %v", err)
+			require.NoError(t, err)
 		}
 		if _, err = os.Create(filepath); err != nil {
-			t.Fatalf("os.Create: %v", err)
+			require.NoError(t, err)
 		}
 		if err = os.Chtimes(filepath, mtime, mtime); err != nil {
-			t.Fatalf("os.Chtimes: %v", err)
+			require.NoError(t, err)
 		}
 	}
 	now := time.Date(2020, 1, 1, 12, 0, 0, 0, time.UTC)
@@ -117,21 +114,17 @@ func TestPurgeByMtime(t *testing.T) {
 	// current log (100000) is not the latest log (113000). This will not happen
 	// IRL but it helps us test edge cases of purging by mtime.
 	if err := os.Symlink("vtadam.localhost.vitess.log.INFO.20200101-100000.00000", path.Join(logDir, "vtadam.INFO")); err != nil {
-		t.Fatalf("os.Symlink: %v", err)
+		require.NoError(t, err)
 	}
 
 	purgeLogsOnce(now, logDir, "vtadam", 0, 1*time.Hour)
 
 	left, err := filepath.Glob(path.Join(logDir, "vtadam.*"))
-	if err != nil {
-		t.Fatalf("filepath.Glob: %v", err)
-	}
+	require.NoError(t, err)
 
-	if len(left) != 3 {
-		// 1. 113000 is within 1 hour
-		// 2. 100000 is current (vtadam.INFO)
-		// 3. vtadam.INFO symlink remains
-		// rest are removed
-		t.Errorf("wrong number of files remain: want %v, got %v", 3, len(left))
-	}
+	// 1. 113000 is within 1 hour
+	// 2. 100000 is current (vtadam.INFO)
+	// 3. vtadam.INFO symlink remains
+	// rest are removed
+	assert.Lenf(t, left, 3, "wrong number of files remain: want %v, got %v", 3, len(left))
 }

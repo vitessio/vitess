@@ -21,6 +21,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -35,16 +36,12 @@ func TestVtDataRoot(t *testing.T) {
 	defer os.Setenv(envVar, oldEnvVar)
 
 	root := VtDataRoot()
-	if root != DefaultVtDataRoot {
-		t.Errorf("When VTDATAROOT is not set, the default value should be %v, not %v.", DefaultVtDataRoot, root)
-	}
+	assert.Equalf(t, DefaultVtDataRoot, root, "When VTDATAROOT is not set, the default value should be %v, not %v.", DefaultVtDataRoot, root)
 
 	passed := "/tmp"
 	os.Setenv(envVar, passed)
 	root = VtDataRoot()
-	if root != passed {
-		t.Errorf("The value of VtDataRoot should be %v, not %v.", passed, root)
-	}
+	assert.Equalf(t, passed, root, "The value of VtDataRoot should be %v, not %v.", passed, root)
 }
 
 func TestVtMysqlRoot(t *testing.T) {
@@ -58,9 +55,9 @@ func TestVtMysqlRoot(t *testing.T) {
 	testDir := t.TempDir() // This is automatically cleaned up
 	createExecutable := func(path string) error {
 		fullPath := testDir + path
-		err := os.MkdirAll(filepath.Dir(fullPath), 0755)
+		err := os.MkdirAll(filepath.Dir(fullPath), 0o755)
 		require.NoError(t, err)
-		return os.WriteFile(fullPath, []byte("test"), 0755)
+		return os.WriteFile(fullPath, []byte("test"), 0o755)
 	}
 
 	type testcase struct {

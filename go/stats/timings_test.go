@@ -32,9 +32,7 @@ func TestTimings(t *testing.T) {
 	tm.Add("tag1", 1*time.Millisecond)
 	tm.Add("tag2", 1*time.Millisecond)
 	want := `{"TotalCount":3,"TotalTime":2500000,"Histograms":{"tag1":{"500000":1,"1000000":1,"5000000":0,"10000000":0,"50000000":0,"100000000":0,"500000000":0,"1000000000":0,"5000000000":0,"10000000000":0,"inf":0,"Count":2,"Time":1500000},"tag2":{"500000":0,"1000000":1,"5000000":0,"10000000":0,"50000000":0,"100000000":0,"500000000":0,"1000000000":0,"5000000000":0,"10000000000":0,"inf":0,"Count":1,"Time":1000000}}}`
-	if got := tm.String(); got != want {
-		t.Errorf("got %s, want %s", got, want)
-	}
+	assert.Equal(t, want, tm.String())
 }
 
 func TestMultiTimings(t *testing.T) {
@@ -44,9 +42,7 @@ func TestMultiTimings(t *testing.T) {
 	mtm.Add([]string{"tag1a", "tag1b"}, 1*time.Millisecond)
 	mtm.Add([]string{"tag2a", "tag2b"}, 1*time.Millisecond)
 	want := `{"TotalCount":3,"TotalTime":2500000,"Histograms":{"tag1a.tag1b":{"500000":1,"1000000":1,"5000000":0,"10000000":0,"50000000":0,"100000000":0,"500000000":0,"1000000000":0,"5000000000":0,"10000000000":0,"inf":0,"Count":2,"Time":1500000},"tag2a.tag2b":{"500000":0,"1000000":1,"5000000":0,"10000000":0,"50000000":0,"100000000":0,"500000000":0,"1000000000":0,"5000000000":0,"10000000000":0,"inf":0,"Count":1,"Time":1000000}}}`
-	if got := mtm.String(); got != want {
-		t.Errorf("got %s, want %s", got, want)
-	}
+	assert.Equal(t, want, mtm.String())
 }
 
 func TestMultiTimingsDot(t *testing.T) {
@@ -56,9 +52,7 @@ func TestMultiTimingsDot(t *testing.T) {
 	safe := safeLabel("value.dot")
 	safeJSON := strings.ReplaceAll(safe, "\\", "\\\\")
 	want := `{"TotalCount":1,"TotalTime":500000,"Histograms":{"` + safeJSON + `":{"500000":1,"1000000":0,"5000000":0,"10000000":0,"50000000":0,"100000000":0,"500000000":0,"1000000000":0,"5000000000":0,"10000000000":0,"inf":0,"Count":1,"Time":500000}}}`
-	if got := mtm.String(); got != want {
-		t.Errorf("got %s, want %s", got, want)
-	}
+	assert.Equal(t, want, mtm.String())
 }
 
 func TestTimingsHook(t *testing.T) {
@@ -72,12 +66,8 @@ func TestTimingsHook(t *testing.T) {
 
 	name := "timings2"
 	v := NewTimings(name, "help", "")
-	if gotname != name {
-		t.Errorf("got %q, want %q", gotname, name)
-	}
-	if gotv != v {
-		t.Errorf("got %#v, want %#v", gotv, v)
-	}
+	assert.Equal(t, name, gotname)
+	assert.Equal(t, v, gotv)
 }
 
 func TestTimingsCombineDimension(t *testing.T) {

@@ -203,7 +203,7 @@ func (upd *Update) description() PrimitiveDescription {
 
 	addFieldsIfNotEmpty(upd.DML, other)
 
-	var changedVindexes []string
+	changedVindexes := make([]string, 0, len(upd.ChangedVindexValues))
 	for k, v := range upd.ChangedVindexValues {
 		changedVindexes = append(changedVindexes, fmt.Sprintf("%s:%d", k, v.Offset))
 	}

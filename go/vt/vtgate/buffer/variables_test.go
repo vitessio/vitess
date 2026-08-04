@@ -17,12 +17,14 @@ limitations under the License.
 package buffer
 
 import (
-	"context"
 	"fmt"
 	"strings"
 	"testing"
 
 	"github.com/spf13/pflag"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/stats"
 )
@@ -31,7 +33,7 @@ func TestVariables(t *testing.T) {
 	fs := pflag.NewFlagSet("vtgate_buffer_variables_test", pflag.ContinueOnError)
 	registerFlags(fs)
 	if err := fs.Parse(nil); err != nil {
-		t.Errorf("failed to parse with default values: %v", err)
+		assert.NoError(t, err)
 	}
 
 	fs.Set("buffer-size", "23")
@@ -42,19 +44,16 @@ func TestVariables(t *testing.T) {
 	// Create new buffer which will the flags.
 	NewConfigFromFlags()
 
-	if got, want := bufferSizeStat.Get(), int64(23); got != want {
-		t.Fatalf("BufferSize variable not set during initilization: got = %v, want = %v", got, want)
-	}
+	got, want := bufferSizeStat.Get(), int64(23)
+	require.Equalf(t, want, got, "BufferSize variable not set during initilization: got = %v, want = %v", got, want)
 }
 
 func TestVariablesAreInitialized(t *testing.T) {
 	// Create a new buffer and make a call which will create the shardBuffer object.
 	// After that, the variables should be initialized for that shard.
 	b := New(NewDefaultConfig())
-	_, err := b.WaitForFailoverEnd(context.Background(), "init_test", "0", nil, nil)
-	if err != nil {
-		t.Fatalf("buffer should just passthrough and not return an error: %v", err)
-	}
+	_, err := b.WaitForFailoverEnd(t.Context(), "init_test", "0", nil, nil)
+	require.NoError(t, err)
 
 	statsKey := []string{"init_test", "0"}
 	type testCase struct {
@@ -87,9 +86,8 @@ func TestVariablesAreInitialized(t *testing.T) {
 			// The request passed through above was registered as skipped.
 			wantValue = 1
 		}
-		if err := checkEntry(tc.counter, tc.statsKey, wantValue); err != nil {
-			t.Fatalf("variable: %v not correctly initialized: %v", tc.desc, err)
-		}
+		err := checkEntry(tc.counter, tc.statsKey, wantValue)
+		require.NoErrorf(t, err, "variable: %v not correctly initialized: %v", tc.desc, err)
 	}
 }
 

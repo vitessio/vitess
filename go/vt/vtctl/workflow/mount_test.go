@@ -17,7 +17,6 @@ limitations under the License.
 package workflow
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -35,7 +34,7 @@ func TestMount(t *testing.T) {
 		topoServer = "localhost:2379"
 		topoRoot   = "/vitess/global"
 	)
-	ctx := context.Background()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "cell")
 	tmc := &fakeTMC{}
 	s := NewServer(vtenv.NewTestEnv(), ts, tmc)

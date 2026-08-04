@@ -22,6 +22,8 @@ import (
 	"log/syslog"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
@@ -34,10 +36,6 @@ func TestKeyspaceChangeSyslog(t *testing.T) {
 	}
 	gotSev, gotMsg := kc.Syslog()
 
-	if gotSev != wantSev {
-		t.Errorf("wrong severity: got %v, want %v", gotSev, wantSev)
-	}
-	if gotMsg != wantMsg {
-		t.Errorf("wrong message: got %q, want %q", gotMsg, wantMsg)
-	}
+	assert.Equalf(t, wantSev, gotSev, "wrong severity: got %v, want %v", gotSev, wantSev)
+	assert.Equalf(t, wantMsg, gotMsg, "wrong message: got %q, want %q", gotMsg, wantMsg)
 }

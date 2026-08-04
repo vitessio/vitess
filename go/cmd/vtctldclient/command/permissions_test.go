@@ -46,7 +46,7 @@ func TestPermissions(t *testing.T) {
 	discovery.SetTabletPickerRetryDelay(5 * time.Millisecond)
 
 	// Initialize our environment.
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*60)
+	ctx, cancel := context.WithTimeout(t.Context(), time.Second*60)
 	defer cancel()
 	ts := memorytopo.NewServer(ctx, "cell1", "cell2")
 	defer ts.Close()
@@ -241,7 +241,8 @@ func TestPermissions(t *testing.T) {
 				{
 					Name: "is_role",
 					Type: sqltypes.Char,
-				}},
+				},
+			},
 			RowsAffected: 0x6,
 			InsertID:     0x0,
 			Rows: [][]sqltypes.Value{
@@ -289,7 +290,8 @@ func TestPermissions(t *testing.T) {
 					sqltypes.NewVarBinary(""),
 					sqltypes.NewVarBinary(""),
 					sqltypes.NewVarBinary("N"),
-					sqltypes.NewVarBinary("N")},
+					sqltypes.NewVarBinary("N"),
+				},
 				{
 					sqltypes.NewVarBinary("test_host2"),
 					sqltypes.NewVarBinary("test_user2"),
@@ -334,7 +336,8 @@ func TestPermissions(t *testing.T) {
 					sqltypes.NewVarBinary(""),
 					sqltypes.NewVarBinary(""),
 					sqltypes.NewVarBinary("N"),
-					sqltypes.NewVarBinary("N")},
+					sqltypes.NewVarBinary("N"),
+				},
 				{
 					sqltypes.NewVarBinary("test_host3"),
 					sqltypes.NewVarBinary("test_user3"),
@@ -379,7 +382,8 @@ func TestPermissions(t *testing.T) {
 					sqltypes.NewVarBinary(""),
 					sqltypes.NewVarBinary(""),
 					sqltypes.NewVarBinary("N"),
-					sqltypes.NewVarBinary("N")},
+					sqltypes.NewVarBinary("N"),
+				},
 				{
 					sqltypes.NewVarBinary("test_host4"),
 					sqltypes.NewVarBinary("test_user4"),
@@ -621,7 +625,7 @@ func TestRedactUserPermissions(t *testing.T) {
 		},
 	}
 	redactUserPermissions(perms)
-	require.EqualValues(t, &tabletmanagerdatapb.Permissions{
+	require.Equal(t, &tabletmanagerdatapb.Permissions{
 		UserPermissions: []*tabletmanagerdatapb.UserPermission{
 			{
 				Host:       "%",

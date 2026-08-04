@@ -29,7 +29,6 @@ import (
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/encryption"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/utils"
 )
 
 var (
@@ -53,7 +52,7 @@ func testReplicationBase(t *testing.T, isClientCertPassed bool) {
 
 	// initialize cluster
 	_, err := initializeCluster(t)
-	require.Nil(t, err, "setup failed")
+	require.NoError(t, err, "setup failed")
 
 	defer teardownCluster()
 
@@ -62,9 +61,9 @@ func testReplicationBase(t *testing.T, isClientCertPassed bool) {
 
 	if isClientCertPassed {
 		replicaTablet.VttabletProcess.ExtraArgs = append(replicaTablet.VttabletProcess.ExtraArgs,
-			utils.GetFlagVariantForTests("--db-flags"), "2048",
-			utils.GetFlagVariantForTests("--db-ssl-ca"), path.Join(certDirectory, "ca-cert.pem"),
-			utils.GetFlagVariantForTests("--db-ssl-cert"), path.Join(certDirectory, "client-cert.pem"),
+			"--db-flags", "2048",
+			"--db-ssl-ca", path.Join(certDirectory, "ca-cert.pem"),
+			"--db-ssl-cert", path.Join(certDirectory, "client-cert.pem"),
 			"--db-ssl-key", path.Join(certDirectory, "client-key.pem"),
 		)
 	}
@@ -98,7 +97,7 @@ func initializeCluster(t *testing.T) (int, error) {
 	// create certs directory
 	log.Info("Creating certificates")
 	certDirectory = path.Join(clusterInstance.TmpDirectory, "certs")
-	_ = encryption.CreateDirectory(certDirectory, 0700)
+	_ = encryption.CreateDirectory(certDirectory, 0o700)
 
 	err := encryption.ExecuteVttlstestCommand("CreateCA", "--root", certDirectory)
 	require.NoError(t, err)
@@ -138,7 +137,7 @@ func initializeCluster(t *testing.T) (int, error) {
 		shard := &cluster.Shard{
 			Name: shardName,
 		}
-		for i := 0; i < 2; i++ {
+		for range 2 {
 			// instantiate vttablet object with reserved ports
 			tabletUID := clusterInstance.GetAndReserveTabletUID()
 			tablet := clusterInstance.NewVttabletInstance("replica", tabletUID, cell)

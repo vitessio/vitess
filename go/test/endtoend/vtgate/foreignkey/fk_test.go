@@ -50,11 +50,11 @@ func TestInsertWithFK(t *testing.T) {
 
 	// Verify that insertion fails if the data doesn't follow the fk constraint.
 	_, err := utils.ExecAllowError(t, conn, `insert into t2(id, col) values (1310, 125)`)
-	assert.ErrorContains(t, err, "Cannot add or update a child row: a foreign key constraint fails")
+	require.ErrorContains(t, err, "Cannot add or update a child row: a foreign key constraint fails")
 
 	// Verify that insertion fails if the table has cross-shard foreign keys (even if the data follows the constraints).
 	_, err = utils.ExecAllowError(t, conn, `insert into t3(id, col) values (100, 100)`)
-	assert.ErrorContains(t, err, "VT12002: unsupported: cross-shard foreign keys")
+	require.ErrorContains(t, err, "VT12002: unsupported: cross-shard foreign keys")
 
 	// insert some data in a table with multicol vindex.
 	utils.Exec(t, conn, `insert into multicol_tbl1(cola, colb, colc, msg) values (100, 'a', 'b', 'msg'), (101, 'c', 'd', 'msg2')`)
@@ -82,7 +82,7 @@ func TestDeleteWithFK(t *testing.T) {
 
 	// child foreign key is shard scoped. Query will fail at mysql due to On Delete Restrict.
 	_, err := utils.ExecAllowError(t, conn, `delete from t2 where col = 132`)
-	assert.ErrorContains(t, err, "Cannot delete or update a parent row: a foreign key constraint fails")
+	require.ErrorContains(t, err, "Cannot delete or update a parent row: a foreign key constraint fails")
 
 	// child row does not exist so query will succeed.
 	qr := utils.Exec(t, conn, `delete from t2 where col = 125`)
@@ -90,7 +90,7 @@ func TestDeleteWithFK(t *testing.T) {
 
 	// table's child foreign key has cross shard fk, so query will fail at vtgate.
 	_, err = utils.ExecAllowError(t, conn, `delete from t1 where id = 42`)
-	assert.ErrorContains(t, err, "VT12002: unsupported: cross-shard foreign keys between table 't1' and 'ks.t3' (errno 1235) (sqlstate 42000)")
+	require.ErrorContains(t, err, "VT12002: unsupported: cross-shard foreign keys between table 't1' and 'ks.t3' (errno 1235) (sqlstate 42000)")
 
 	// child foreign key is cascade, so this should work as expected.
 	qr = utils.Exec(t, conn, `delete from multicol_tbl1 where cola = 100`)
@@ -130,7 +130,7 @@ func TestUpdateWithFK(t *testing.T) {
 
 	// parent foreign key is shard scoped and value does not exists in parent table. Query will fail at mysql due to On Update Restrict.
 	_, err := utils.ExecAllowError(t, conn, `update t4 set t2_mycol = 'foo' where id = 1`)
-	assert.ErrorContains(t, err, "Cannot add or update a child row: a foreign key constraint fails")
+	require.ErrorContains(t, err, "Cannot add or update a child row: a foreign key constraint fails")
 
 	// updating column which does not have foreign key constraint, so query will succeed.
 	qr := utils.Exec(t, conn, `update t4 set col = 20 where id = 1`)
@@ -183,11 +183,11 @@ func TestUpdateWithFK(t *testing.T) {
 
 // TestVstreamForFKBinLog tests that dml queries with fks are written with child row first approach in the binary logs.
 func TestVstreamForFKBinLog(t *testing.T) {
-	vtgateConn, err := cluster.DialVTGate(context.Background(), t.Name(), vtgateGrpcAddress, "fk_user", "")
+	vtgateConn, err := cluster.DialVTGate(t.Context(), t.Name(), vtgateGrpcAddress, "fk_user", "")
 	require.NoError(t, err)
 	defer vtgateConn.Close()
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
 	ch := make(chan *binlogdatapb.VEvent)
@@ -261,7 +261,8 @@ func runVStream(t *testing.T, ctx context.Context, ch chan *binlogdatapb.VEvent,
 	vgtid := &binlogdatapb.VGtid{
 		ShardGtids: []*binlogdatapb.ShardGtid{
 			{Keyspace: unshardedKs, Shard: "0", Gtid: "current"},
-		}}
+		},
+	}
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
 			Match: "/u.*",
@@ -276,7 +277,9 @@ func runVStream(t *testing.T, ctx context.Context, ch chan *binlogdatapb.VEvent,
 			if err == io.EOF || ctx.Err() != nil {
 				return
 			}
-			require.NoError(t, err)
+			if !assert.NoError(t, err) {
+				return
+			}
 
 			for _, ev := range evs {
 				if ev.Type == binlogdatapb.VEventType_ROW {
@@ -289,12 +292,12 @@ func runVStream(t *testing.T, ctx context.Context, ch chan *binlogdatapb.VEvent,
 
 func drainEvents(t *testing.T, ch chan *binlogdatapb.VEvent, count int) []string {
 	var rowEvents []string
-	for i := 0; i < count; i++ {
+	for i := range count {
 		select {
 		case re := <-ch:
 			rowEvents = append(rowEvents, re.RowEvent.String())
 		case <-time.After(10 * time.Second):
-			t.Fatalf("timeout waiting for event number: %d", i+1)
+			require.Failf(t, "timeout", "timeout waiting for event number: %d", i+1)
 		}
 	}
 	return rowEvents
@@ -905,9 +908,9 @@ func TestFkScenarios(t *testing.T) {
 				// Run the DML query that needs to be tested and verify output with MySQL.
 				_, err := mcmp.ExecAllowAndCompareError(tt.dmlQuery, utils.CompareOptions{})
 				if tt.dmlShouldErr {
-					assert.Error(t, err)
+					require.Error(t, err)
 				} else {
-					assert.NoError(t, err)
+					require.NoError(t, err)
 				}
 
 				// Run the assertion queries and verify we get the expected outputs.
@@ -1016,14 +1019,16 @@ func TestFkQueries(t *testing.T) {
 				"insert into fk_t11 (id, col) values (1,1),(2,2),(3,3),(4,4),(5,5)",
 				"update fk_t10 set col = id + 3",
 			},
-		}, {
+		},
+		{
 			name: "Non-literal update with order by",
 			queries: []string{
 				"insert into fk_t10 (id, col) values (1,1),(2,2),(3,3),(4,4),(5,5)",
 				"insert into fk_t11 (id, col) values (1,1),(2,2),(3,3),(4,4),(5,5)",
 				"update fk_t10 set col = id + 3 order by id desc",
 			},
-		}, {
+		},
+		{
 			name: "Non-literal update with order by that require parent and child foreign keys verification - success",
 			queries: []string{
 				"insert into fk_t10 (id, col) values (1,1),(2,2),(3,3),(4,4),(5,5),(6,6),(7,7),(8,8)",
@@ -1032,7 +1037,8 @@ func TestFkQueries(t *testing.T) {
 				"insert into fk_t13 (id, col) values (1,1),(2,2)",
 				"update fk_t11 set col = id + 3 where id >= 3",
 			},
-		}, {
+		},
+		{
 			name: "Non-literal update with order by that require parent and child foreign keys verification - parent fails",
 			queries: []string{
 				"insert into fk_t10 (id, col) values (1,1),(2,2),(3,3),(4,4),(5,5)",
@@ -1040,7 +1046,8 @@ func TestFkQueries(t *testing.T) {
 				"insert into fk_t12 (id, col) values (1,1),(2,2),(3,3),(4,4),(5,5)",
 				"update fk_t11 set col = id + 3",
 			},
-		}, {
+		},
+		{
 			name: "Non-literal update with order by that require parent and child foreign keys verification - child fails",
 			queries: []string{
 				"insert into fk_t10 (id, col) values (1,1),(2,2),(3,3),(4,4),(5,5),(6,6),(7,7),(8,8)",
@@ -1049,21 +1056,24 @@ func TestFkQueries(t *testing.T) {
 				"insert into fk_t13 (id, col) values (1,1),(2,2)",
 				"update fk_t11 set col = id + 3",
 			},
-		}, {
+		},
+		{
 			name: "Single column update in a multi-col table - success",
 			queries: []string{
 				"insert into fk_multicol_t1 (id, cola, colb) values (1, 1, 1), (2, 2, 2)",
 				"insert into fk_multicol_t2 (id, cola, colb) values (1, 1, 1)",
 				"update fk_multicol_t1 set colb = 4 + (colb) where id = 2",
 			},
-		}, {
+		},
+		{
 			name: "Single column update in a multi-col table - restrict failure",
 			queries: []string{
 				"insert into fk_multicol_t1 (id, cola, colb) values (1, 1, 1), (2, 2, 2)",
 				"insert into fk_multicol_t2 (id, cola, colb) values (1, 1, 1)",
 				"update fk_multicol_t1 set colb = 4 + (colb) where id = 1",
 			},
-		}, {
+		},
+		{
 			name: "Single column update in multi-col table - cascade and set null",
 			queries: []string{
 				"insert into fk_multicol_t15 (id, cola, colb) values (1, 1, 1), (2, 2, 2)",
@@ -1071,7 +1081,8 @@ func TestFkQueries(t *testing.T) {
 				"insert into fk_multicol_t17 (id, cola, colb) values (1, 1, 1), (2, 2, 2)",
 				"update fk_multicol_t15 set colb = 4 + (colb) where id = 1",
 			},
-		}, {
+		},
+		{
 			name: "Non literal update that evaluates to NULL - restricted",
 			queries: []string{
 				"insert into fk_t10 (id, col) values (1,1),(2,2),(3,3),(4,4),(5,5)",
@@ -1079,7 +1090,8 @@ func TestFkQueries(t *testing.T) {
 				"insert into fk_t13 (id, col) values (1,1),(2,2),(3,3),(4,4),(5,5)",
 				"update fk_t10 set col = id + null where id = 1",
 			},
-		}, {
+		},
+		{
 			name: "Non literal update that evaluates to NULL - success",
 			queries: []string{
 				"insert into fk_t10 (id, col) values (1,1),(2,2),(3,3),(4,4),(5,5)",
@@ -1087,14 +1099,16 @@ func TestFkQueries(t *testing.T) {
 				"insert into fk_t12 (id, col) values (1,1),(2,2),(3,3),(4,4),(5,5)",
 				"update fk_t10 set col = id + null where id = 1",
 			},
-		}, {
+		},
+		{
 			name: "Multi column foreign key update with one literal and one non-literal update",
 			queries: []string{
 				"insert into fk_multicol_t15 (id, cola, colb) values (1,1,1),(2,2,2)",
 				"insert into fk_multicol_t16 (id, cola, colb) values (1,1,1),(2,2,2)",
 				"update fk_multicol_t15 set cola = 3, colb = (id * 2) - 2",
 			},
-		}, {
+		},
+		{
 			name: "Update that sets to 0 and -0 values",
 			queries: []string{
 				"insert into fk_t15 (id, col) values (1,'-0'), (2, '0'), (3, '5'), (4, '-5')",
@@ -1222,18 +1236,18 @@ func TestFkOneCase(t *testing.T) {
 	for _, query := range queries {
 		if strings.HasPrefix(query, "vexplain") {
 			res := utils.Exec(t, mcmp.VtConn, query)
-			log.Errorf("Query %v, Result - %v", query, res.Rows)
+			log.Error(fmt.Sprintf("Query %v, Result - %v", query, res.Rows))
 			continue
 		}
 		_, _ = mcmp.ExecAllowAndCompareError(query, utils.CompareOptions{})
 		if t.Failed() {
-			log.Errorf("Query failed - %v", query)
+			log.Error(fmt.Sprintf("Query failed - %v", query))
 			break
 		}
 	}
 	vitessData := collectFkTablesState(mcmp.VtConn)
 	for idx, table := range fkTables {
-		log.Errorf("Vitess data for %v -\n%v", table, vitessData[idx].Rows)
+		log.Error(fmt.Sprintf("Vitess data for %v -\n%v", table, vitessData[idx].Rows))
 	}
 
 	// ensure Vitess database has some data. This ensures not all the commands failed.
@@ -1528,7 +1542,7 @@ func TestForeignKeyWithKeyspaceQualifier(t *testing.T) {
 
 	// This should fail due to FK constraint.
 	_, err := utils.ExecAllowError(t, mcmp.VtConn, `insert into fk_child(id, parent_id) values (101, 999)`)
-	assert.ErrorContains(t, err, "Cannot add or update a child row: a foreign key constraint fails")
+	require.ErrorContains(t, err, "Cannot add or update a child row: a foreign key constraint fails")
 
 	// Test ALTER TABLE with keyspace-qualified foreign key.
 	utils.Exec(t, mcmp.VtConn, `create table fk_child2(id bigint primary key, parent_id bigint)`)
@@ -1537,7 +1551,7 @@ func TestForeignKeyWithKeyspaceQualifier(t *testing.T) {
 	// Verify the constraint works for the altered table.
 	utils.Exec(t, mcmp.VtConn, `insert into fk_child2(id, parent_id) values (200, 2)`)
 	_, err = utils.ExecAllowError(t, mcmp.VtConn, `insert into fk_child2(id, parent_id) values (201, 888)`)
-	assert.ErrorContains(t, err, "Cannot add or update a child row: a foreign key constraint fails")
+	require.ErrorContains(t, err, "Cannot add or update a child row: a foreign key constraint fails")
 
 	// Clean up.
 	utils.Exec(t, mcmp.VtConn, `drop table fk_child`)
@@ -1552,7 +1566,7 @@ func TestRestrictFkOnNonStandardKey(t *testing.T) {
 
 	// First check MySQL version to ensure we're on 8.4+
 	versionResult := utils.Exec(t, mcmp.MySQLConn, `SELECT VERSION()`)
-	require.Equal(t, 1, len(versionResult.Rows), "Expected exactly one row for VERSION()")
+	require.Len(t, versionResult.Rows, 1, "Expected exactly one row for VERSION()")
 	version := versionResult.Rows[0][0].ToString()
 	t.Logf("MySQL version: %s", version)
 
@@ -1563,6 +1577,6 @@ func TestRestrictFkOnNonStandardKey(t *testing.T) {
 
 	// Check the setting on the MySQL side - this verifies that our extra_my.cnf is being applied
 	result := utils.Exec(t, mcmp.MySQLConn, `SHOW VARIABLES LIKE 'restrict_fk_on_non_standard_key'`)
-	require.Equal(t, 1, len(result.Rows), "Expected exactly one row for restrict_fk_on_non_standard_key variable")
+	require.Len(t, result.Rows, 1, "Expected exactly one row for restrict_fk_on_non_standard_key variable")
 	require.Equal(t, "OFF", result.Rows[0][1].ToString(), "Expected restrict_fk_on_non_standard_key to be OFF")
 }

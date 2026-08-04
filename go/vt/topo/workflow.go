@@ -17,9 +17,8 @@ limitations under the License.
 package topo
 
 import (
-	"path"
-
 	"context"
+	"path"
 
 	workflowpb "vitess.io/vitess/go/vt/proto/workflow"
 )

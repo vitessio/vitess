@@ -25,6 +25,7 @@ import (
 	"os/exec"
 	"path"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -39,7 +40,6 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
-	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 	"vitess.io/vitess/go/vt/vtorc/logic"
 
@@ -134,7 +134,7 @@ func createVttablets(clusterInstance *cluster.LocalProcessCluster, cellInfos []*
 		}
 	}
 	clusterInstance.VtTabletExtraArgs = []string{
-		utils.GetFlagVariantForTests("--lock-tables-timeout"), "5s",
+		"--lock-tables-timeout", "5s",
 	}
 	// Initialize Cluster
 	shard0.Vttablets = tablets
@@ -142,10 +142,10 @@ func createVttablets(clusterInstance *cluster.LocalProcessCluster, cellInfos []*
 	if err != nil {
 		return err
 	}
-	//Start MySql
+	// Start MySql
 	var mysqlCtlProcessList []*exec.Cmd
 	for _, tablet := range shard0.Vttablets {
-		log.Infof("Starting MySql for tablet %v", tablet.Alias)
+		log.Info(fmt.Sprintf("Starting MySql for tablet %v", tablet.Alias))
 		proc, err := tablet.MysqlctlProcess.StartProcess()
 		if err != nil {
 			return err
@@ -242,7 +242,7 @@ func StartVTOrcs(t *testing.T, clusterInfo *VTOrcClusterInfo, orcExtraArgs []str
 
 	// Start vtorc
 	for cell, count := range countByCell {
-		for i := 0; i < count; i++ {
+		for range count {
 			vtorcProcess := clusterInfo.ClusterInstance.NewVTOrcProcess(config, cell)
 			vtorcProcess.ExtraArgs = orcExtraArgs
 			err := vtorcProcess.Setup()
@@ -258,7 +258,7 @@ func StopVTOrcs(t *testing.T, clusterInfo *VTOrcClusterInfo) {
 	// Stop vtorc
 	for _, vtorcProcess := range clusterInfo.ClusterInstance.VTOrcProcesses {
 		if err := vtorcProcess.TearDown(); err != nil {
-			log.Errorf("Error in vtorc teardown: %v", err)
+			log.Error(fmt.Sprintf("Error in vtorc teardown: %v", err))
 		}
 	}
 	clusterInfo.ClusterInstance.VTOrcProcesses = nil
@@ -371,7 +371,7 @@ func ShardPrimaryTablet(t *testing.T, clusterInfo *VTOrcClusterInfo, keyspace *c
 		require.NoError(t, err)
 
 		if si.Shard.PrimaryAlias == nil {
-			log.Warningf("Shard %v/%v has no primary yet, sleep for 1 second\n", keyspace.Name, shard.Name)
+			log.Warn(fmt.Sprintf("Shard %v/%v has no primary yet, sleep for 1 second\n", keyspace.Name, shard.Name))
 			time.Sleep(time.Second)
 			continue
 		}
@@ -381,6 +381,24 @@ func ShardPrimaryTablet(t *testing.T, clusterInfo *VTOrcClusterInfo, keyspace *c
 			}
 		}
 	}
+}
+
+// FindReplicaAndRdonly returns the shard's replica tablet (the "replica"-type tablet that is
+// not the given primary) and its rdonly tablet. It fails the test if either cannot be found.
+func FindReplicaAndRdonly(t *testing.T, shard *cluster.Shard, primary *cluster.Vttablet) (replica, rdonly *cluster.Vttablet) {
+	t.Helper()
+	for _, tablet := range shard.Vttablets {
+		// we know we have only two replica tablets, so the one not the primary must be the other replica
+		if tablet.Alias != primary.Alias && tablet.Type == "replica" {
+			replica = tablet
+		}
+		if tablet.Type == "rdonly" {
+			rdonly = tablet
+		}
+	}
+	require.NotNil(t, replica, "could not find replica tablet")
+	require.NotNil(t, rdonly, "could not find rdonly tablet")
+	return replica, rdonly
 }
 
 // CheckPrimaryTablet waits until the specified tablet becomes the primary tablet
@@ -395,7 +413,7 @@ func CheckPrimaryTablet(t *testing.T, clusterInfo *VTOrcClusterInfo, tablet *clu
 		tabletInfo, err := clusterInfo.ClusterInstance.VtctldClientProcess.GetTablet(tablet.Alias)
 		require.NoError(t, err)
 		if topodatapb.TabletType_PRIMARY != tabletInfo.GetType() {
-			log.Warningf("Tablet %v is not primary yet, sleep for 1 second\n", tablet.Alias)
+			log.Warn(fmt.Sprintf("Tablet %v is not primary yet, sleep for 1 second\n", tablet.Alias))
 			time.Sleep(time.Second)
 			continue
 		}
@@ -406,13 +424,13 @@ func CheckPrimaryTablet(t *testing.T, clusterInfo *VTOrcClusterInfo, tablet *clu
 		streamHealthResponse := shrs[0]
 
 		if checkServing && !streamHealthResponse.GetServing() {
-			log.Warningf("Tablet %v is not serving in health stream yet, sleep for 1 second\n", tablet.Alias)
+			log.Warn(fmt.Sprintf("Tablet %v is not serving in health stream yet, sleep for 1 second\n", tablet.Alias))
 			time.Sleep(time.Second)
 			continue
 		}
 		tabletType := streamHealthResponse.GetTarget().GetTabletType()
 		if tabletType != topodatapb.TabletType_PRIMARY {
-			log.Warningf("Tablet %v is not primary in health stream yet, sleep for 1 second\n", tablet.Alias)
+			log.Warn(fmt.Sprintf("Tablet %v is not primary in health stream yet, sleep for 1 second\n", tablet.Alias))
 			time.Sleep(time.Second)
 			continue
 		}
@@ -440,7 +458,7 @@ func CheckReplication(t *testing.T, clusterInfo *VTOrcClusterInfo, primary *clus
 		default:
 			_, err := RunSQL(t, sqlSchema, primary, "")
 			if err != nil {
-				log.Warningf("create table failed on primary - %v, will retry", err)
+				log.Warn(fmt.Sprintf("create table failed on primary - %v, will retry", err))
 				time.Sleep(100 * time.Millisecond)
 				break
 			}
@@ -462,7 +480,7 @@ func VerifyWritesSucceed(t *testing.T, clusterInfo *VTOrcClusterInfo, primary *c
 
 func confirmReplication(t *testing.T, primary *cluster.Vttablet, replicas []*cluster.Vttablet, timeToWait time.Duration, valueToInsert int) {
 	t.Helper()
-	log.Infof("Insert data into primary and check that it is replicated to replica")
+	log.Info("Insert data into primary and check that it is replicated to replica")
 	// insert data into the new primary, check the connected replica work
 	insertSQL := fmt.Sprintf("insert into vt_insert_test(id, msg) values (%d, 'test %d')", valueToInsert, valueToInsert)
 	_, err := RunSQL(t, insertSQL, primary, "vt_ks")
@@ -483,7 +501,7 @@ func confirmReplication(t *testing.T, primary *cluster.Vttablet, replicas []*clu
 				}
 			}
 			if err != nil {
-				log.Warningf("waiting for replication - error received - %v, will retry", err)
+				log.Warn(fmt.Sprintf("waiting for replication - error received - %v, will retry", err))
 				time.Sleep(300 * time.Millisecond)
 				break
 			}
@@ -547,7 +565,7 @@ func validateTopology(t *testing.T, clusterInfo *VTOrcClusterInfo, pingTablets b
 					output, err = clusterInfo.ClusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("Validate")
 				}
 				if err != nil {
-					log.Warningf("Validate failed, retrying, output - %s", output)
+					log.Warn("Validate failed, retrying, output - " + output)
 					time.Sleep(100 * time.Millisecond)
 					break
 				}
@@ -569,9 +587,9 @@ func validateTopology(t *testing.T, clusterInfo *VTOrcClusterInfo, pingTablets b
 // KillTablets is used to kill the tablets
 func KillTablets(vttablets []*cluster.Vttablet) {
 	for _, tablet := range vttablets {
-		log.Infof("Shutting down MySQL for %v", tablet.Alias)
+		log.Info(fmt.Sprintf("Shutting down MySQL for %v", tablet.Alias))
 		_ = tablet.MysqlctlProcess.Stop()
-		log.Infof("Calling TearDown on tablet %v", tablet.Alias)
+		log.Info(fmt.Sprintf("Calling TearDown on tablet %v", tablet.Alias))
 		_ = tablet.VttabletProcess.TearDown()
 	}
 }
@@ -594,7 +612,7 @@ func RunSQL(t *testing.T, sql string, tablet *cluster.Vttablet, db string) (*sql
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	conn, err := mysql.Connect(ctx, &tabletParams)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	defer conn.Close()
 
 	// RunSQL
@@ -605,11 +623,11 @@ func RunSQL(t *testing.T, sql string, tablet *cluster.Vttablet, db string) (*sql
 func RunSQLs(t *testing.T, sqls []string, tablet *cluster.Vttablet, db string) error {
 	// Get Connection
 	tabletParams := getMysqlConnParam(tablet, db)
-	var timeoutDuration = time.Duration(5 * len(sqls))
+	timeoutDuration := time.Duration(5 * len(sqls))
 	ctx, cancel := context.WithTimeout(context.Background(), timeoutDuration*time.Second)
 	defer cancel()
 	conn, err := mysql.Connect(ctx, &tabletParams)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	defer conn.Close()
 
 	// Run SQLs
@@ -657,12 +675,7 @@ func StartVttablet(t *testing.T, clusterInfo *VTOrcClusterInfo, cell string, isR
 }
 
 func isVttabletInUse(clusterInfo *VTOrcClusterInfo, tablet *cluster.Vttablet) bool {
-	for _, vttablet := range clusterInfo.ClusterInstance.Keyspaces[0].Shards[0].Vttablets {
-		if tablet == vttablet {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(clusterInfo.ClusterInstance.Keyspaces[0].Shards[0].Vttablets, tablet)
 }
 
 // PermanentlyRemoveVttablet removes the tablet specified from the cluster. It makes it so that
@@ -696,7 +709,7 @@ func ResetPrimaryLogs(t *testing.T, curPrimary *cluster.Vttablet) {
 
 	binLogsOutput, err := RunSQL(t, "SHOW BINARY LOGS", curPrimary, "")
 	require.NoError(t, err)
-	require.True(t, len(binLogsOutput.Rows) >= 2, "there should be atlease 2 binlog files")
+	require.GreaterOrEqual(t, len(binLogsOutput.Rows), 2, "there should be atlease 2 binlog files")
 
 	lastLogFile := binLogsOutput.Rows[len(binLogsOutput.Rows)-1][0].ToString()
 
@@ -718,7 +731,7 @@ func CheckSourcePort(t *testing.T, replica *cluster.Vttablet, source *cluster.Vt
 			require.NoError(t, err)
 
 			if len(res.Rows) != 1 {
-				log.Warningf("no replication status yet, will retry")
+				log.Warn("no replication status yet, will retry")
 				break
 			}
 
@@ -731,7 +744,7 @@ func CheckSourcePort(t *testing.T, replica *cluster.Vttablet, source *cluster.Vt
 					}
 				}
 			}
-			log.Warningf("source port not set correctly yet, will retry")
+			log.Warn("source port not set correctly yet, will retry")
 		}
 		time.Sleep(300 * time.Millisecond)
 	}
@@ -751,7 +764,7 @@ func CheckHeartbeatInterval(t *testing.T, replica *cluster.Vttablet, heartbeatIn
 			require.NoError(t, err)
 
 			if len(res.Rows) != 1 {
-				log.Warningf("no replication configuration yet, will retry")
+				log.Warn("no replication configuration yet, will retry")
 				break
 			}
 
@@ -762,11 +775,11 @@ func CheckHeartbeatInterval(t *testing.T, replica *cluster.Vttablet, heartbeatIn
 					if readVal == heartbeatInterval {
 						return
 					} else {
-						log.Warningf("heartbeat interval set to - %v", readVal)
+						log.Warn(fmt.Sprintf("heartbeat interval set to - %v", readVal))
 					}
 				}
 			}
-			log.Warningf("heartbeat interval not set correctly yet, will retry")
+			log.Warn("heartbeat interval not set correctly yet, will retry")
 		}
 		time.Sleep(300 * time.Millisecond)
 	}
@@ -800,6 +813,27 @@ func MakeAPICallRetry(t *testing.T, vtorc *cluster.VTOrcProcess, url string, ret
 	}
 }
 
+// MakeAPICallRetryTimeout is used to make an API call and retry until timeout.
+// The function provided takes in the status and response and returns if we should continue to retry or not.
+func MakeAPICallRetryTimeout(t *testing.T, vtorc *cluster.VTOrcProcess, url string, timeout time.Duration, retry func(int, string) bool) (status int, response string) {
+	t.Helper()
+	timer := time.After(timeout)
+	for {
+		select {
+		case <-timer:
+			require.FailNow(t, "timed out waiting for api to work", "Last response - %s", response)
+			return
+		default:
+			status, response, _ = MakeAPICall(t, vtorc, url)
+			if retry(status, response) {
+				time.Sleep(time.Second)
+				continue
+			}
+			return
+		}
+	}
+}
+
 // SetupNewClusterSemiSync is used to setup a new cluster with semi-sync set.
 // It creates a cluster with 4 tablets, one of which is a Replica
 func SetupNewClusterSemiSync(t *testing.T) *VTOrcClusterInfo {
@@ -813,7 +847,7 @@ func SetupNewClusterSemiSync(t *testing.T) *VTOrcClusterInfo {
 	err = clusterInstance.TopoProcess.ManageTopoDir("mkdir", "/vitess/"+Cell1)
 	require.NoError(t, err, "Error managing topo: %v", err)
 
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		tablet := clusterInstance.NewVttabletInstance("replica", 100+i, Cell1)
 		tablets = append(tablets, tablet)
 	}
@@ -824,18 +858,18 @@ func SetupNewClusterSemiSync(t *testing.T) *VTOrcClusterInfo {
 	shard.Vttablets = tablets
 
 	clusterInstance.VtTabletExtraArgs = []string{
-		utils.GetFlagVariantForTests("--lock-tables-timeout"), "5s",
+		"--lock-tables-timeout", "5s",
 	}
 
 	// Initialize Cluster
 	err = clusterInstance.SetupCluster(keyspace, []cluster.Shard{*shard})
 	require.NoError(t, err, "Cannot launch cluster: %v", err)
 
-	//Start MySql
+	// Start MySql
 	var mysqlCtlProcessList []*exec.Cmd
 	for _, shard := range clusterInstance.Keyspaces[0].Shards {
 		for _, tablet := range shard.Vttablets {
-			log.Infof("Starting MySql for tablet %v", tablet.Alias)
+			log.Info(fmt.Sprintf("Starting MySql for tablet %v", tablet.Alias))
 			proc, err := tablet.MysqlctlProcess.StartProcess()
 			if err != nil {
 				require.NoError(t, err, "Error starting start mysql: %v", err)
@@ -885,7 +919,7 @@ func AddSemiSyncKeyspace(t *testing.T, clusterInfo *VTOrcClusterInfo) {
 	keyspaceSemiSyncName := "ks2"
 	keyspace := &cluster.Keyspace{Name: keyspaceSemiSyncName}
 
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		tablet := clusterInfo.ClusterInstance.NewVttabletInstance("replica", 300+i, Cell1)
 		tablets = append(tablets, tablet)
 	}
@@ -898,18 +932,18 @@ func AddSemiSyncKeyspace(t *testing.T, clusterInfo *VTOrcClusterInfo) {
 		clusterInfo.ClusterInstance.VtTabletExtraArgs = oldVttabletArgs
 	}()
 	clusterInfo.ClusterInstance.VtTabletExtraArgs = []string{
-		utils.GetFlagVariantForTests("--lock-tables-timeout"), "5s",
+		"--lock-tables-timeout", "5s",
 	}
 
 	// Initialize Cluster
 	err := clusterInfo.ClusterInstance.SetupCluster(keyspace, []cluster.Shard{*shard})
 	require.NoError(t, err, "Cannot launch cluster: %v", err)
 
-	//Start MySql
+	// Start MySql
 	var mysqlCtlProcessList []*exec.Cmd
 	for _, shard := range clusterInfo.ClusterInstance.Keyspaces[1].Shards {
 		for _, tablet := range shard.Vttablets {
-			log.Infof("Starting MySql for tablet %v", tablet.Alias)
+			log.Info(fmt.Sprintf("Starting MySql for tablet %v", tablet.Alias))
 			proc, err := tablet.MysqlctlProcess.StartProcess()
 			if err != nil {
 				require.NoError(t, err, "Error starting start mysql: %v", err)
@@ -1000,6 +1034,20 @@ func WaitForReadOnlyValue(t *testing.T, curPrimary *cluster.Vttablet, expectValu
 	return false
 }
 
+// GetSuccessfulRecoveryCount returns the current successful recovery count for
+// the given recovery name, keyspace, and shard. Returns 0 if the metric is not
+// yet available.
+func GetSuccessfulRecoveryCount(t *testing.T, vtorcInstance *cluster.VTOrcProcess, recoveryName, keyspace, shard string) int {
+	t.Helper()
+	vars := vtorcInstance.GetVars()
+	successfulRecoveriesMap, ok := vars["SuccessfulRecoveries"].(map[string]any)
+	if !ok {
+		return 0
+	}
+	mapKey := fmt.Sprintf("%s.%s.%s", recoveryName, keyspace, shard)
+	return GetIntFromValue(successfulRecoveriesMap[mapKey])
+}
+
 // WaitForSuccessfulRecoveryCount waits until the given recovery name's count of successful runs matches the count expected
 func WaitForSuccessfulRecoveryCount(t *testing.T, vtorcInstance *cluster.VTOrcProcess, recoveryName, keyspace, shard string, countExpected int) {
 	t.Helper()
@@ -1007,9 +1055,10 @@ func WaitForSuccessfulRecoveryCount(t *testing.T, vtorcInstance *cluster.VTOrcPr
 	mapKey := fmt.Sprintf("%s.%s.%s", recoveryName, keyspace, shard)
 	assert.EventuallyWithT(t, func(c *assert.CollectT) {
 		vars := vtorcInstance.GetVars()
-		successfulRecoveriesMap := vars["SuccessfulRecoveries"].(map[string]interface{})
+		successfulRecoveriesMap, ok := vars["SuccessfulRecoveries"].(map[string]any)
+		assert.True(c, ok, "SuccessfulRecoveries metric not yet available")
 		successCount := GetIntFromValue(successfulRecoveriesMap[mapKey])
-		assert.EqualValues(c, countExpected, successCount)
+		assert.Equal(c, countExpected, successCount)
 	}, timeout, time.Second, "timed out waiting for successful recovery count")
 }
 
@@ -1020,7 +1069,7 @@ func WaitForSkippedRecoveryCount(t *testing.T, vtorcInstance *cluster.VTOrcProce
 	mapKey := fmt.Sprintf("%s.%s.%s.%s", recoveryName, keyspace, shard, recoverySkipCode)
 	assert.EventuallyWithT(t, func(c *assert.CollectT) {
 		vars := vtorcInstance.GetVars()
-		skippedRecoveriesMap := vars["SkippedRecoveries"].(map[string]interface{})
+		skippedRecoveriesMap := vars["SkippedRecoveries"].(map[string]any)
 		skippedCount := GetIntFromValue(skippedRecoveriesMap[mapKey])
 		assert.GreaterOrEqual(c, skippedCount, countExpected)
 	}, timeout, time.Second, "timeout waiting for skipped recoveries")
@@ -1033,9 +1082,9 @@ func WaitForSuccessfulPRSCount(t *testing.T, vtorcInstance *cluster.VTOrcProcess
 	mapKey := fmt.Sprintf("%v.%v.success", keyspace, shard)
 	assert.EventuallyWithT(t, func(c *assert.CollectT) {
 		vars := vtorcInstance.GetVars()
-		prsCountsMap := vars["PlannedReparentCounts"].(map[string]interface{})
+		prsCountsMap := vars["PlannedReparentCounts"].(map[string]any)
 		successCount := GetIntFromValue(prsCountsMap[mapKey])
-		assert.EqualValues(c, countExpected, successCount)
+		assert.Equal(c, countExpected, successCount)
 	}, timeout, time.Second, "timed out waiting for successful PRS count")
 }
 
@@ -1046,9 +1095,9 @@ func WaitForSuccessfulERSCount(t *testing.T, vtorcInstance *cluster.VTOrcProcess
 	mapKey := fmt.Sprintf("%v.%v.success", keyspace, shard)
 	assert.EventuallyWithT(t, func(c *assert.CollectT) {
 		vars := vtorcInstance.GetVars()
-		ersCountsMap := vars["EmergencyReparentCounts"].(map[string]interface{})
+		ersCountsMap := vars["EmergencyReparentCounts"].(map[string]any)
 		successCount := GetIntFromValue(ersCountsMap[mapKey])
-		assert.EqualValues(c, countExpected, successCount)
+		assert.Equal(c, countExpected, successCount)
 	}, timeout, time.Second, "timed out waiting for successful ERS count")
 }
 
@@ -1063,9 +1112,9 @@ func WaitForShardERSDisabledState(t *testing.T, vtorcInstance *cluster.VTOrcProc
 	mapKey := fmt.Sprintf("%v.%v", keyspace, shard)
 	assert.EventuallyWithT(t, func(c *assert.CollectT) {
 		vars := vtorcInstance.GetVars()
-		ersDisabledMap := vars["EmergencyReparentShardDisabled"].(map[string]interface{})
+		ersDisabledMap := vars["EmergencyReparentShardDisabled"].(map[string]any)
 		disabledValue := GetIntFromValue(ersDisabledMap[mapKey])
-		assert.EqualValues(c, expectedValue, disabledValue)
+		assert.Equal(c, expectedValue, disabledValue)
 	}, timeout, time.Second, "timed out waiting for shard ERS-disabled state")
 }
 
@@ -1105,7 +1154,8 @@ func WaitForDetectedProblems(t *testing.T, vtorcInstance *cluster.VTOrcProcess, 
 	timeout := 15 * time.Second
 	assert.EventuallyWithT(t, func(c *assert.CollectT) {
 		vars := vtorcInstance.GetVars()
-		problems := vars["DetectedProblems"].(map[string]interface{})
+		problems, ok := vars["DetectedProblems"].(map[string]any)
+		assert.True(c, ok, "DetectedProblems metric not yet available")
 		actual, ok := problems[key]
 		actual = GetIntFromValue(actual)
 		assert.True(c, ok,
@@ -1135,7 +1185,7 @@ func WaitForInstancePollSecondsExceededCount(t *testing.T, vtorcInstance *cluste
 		vars := vtorcInstance.GetVars()
 		exceeded := GetIntFromValue(vars["DiscoveriesInstancePollSecondsExceeded"])
 		if enforceEquality {
-			ok := assert.EqualValues(c, minCountExpected, exceeded,
+			ok := assert.Equal(c, minCountExpected, exceeded,
 				"The metric DiscoveriesInstancePollSecondsExceeded should be %v but is %v",
 				minCountExpected, exceeded,
 			)
@@ -1157,18 +1207,18 @@ func PrintVTOrcLogsOnFailure(t *testing.T, clusterInstance *cluster.LocalProcess
 		return
 	}
 
-	log.Errorf("Printing VTOrc logs")
+	log.Error("Printing VTOrc logs")
 	for _, vtorc := range clusterInstance.VTOrcProcesses {
 		if vtorc == nil || vtorc.LogFileName == "" {
 			continue
 		}
 		filePath := path.Join(vtorc.LogDir, vtorc.LogFileName)
-		log.Errorf("Printing file - %s", filePath)
+		log.Error("Printing file - " + filePath)
 		content, err := os.ReadFile(filePath)
 		if err != nil {
-			log.Errorf("Error while reading the file - %v", err)
+			log.Error(fmt.Sprintf("Error while reading the file - %v", err))
 		}
-		log.Errorf("%s", string(content))
+		log.Error(string(content))
 	}
 }
 
@@ -1195,7 +1245,7 @@ func SemiSyncExtensionLoaded(t *testing.T, tablet *cluster.Vttablet) (mysql.Semi
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	conn, err := mysql.Connect(ctx, &tabletParams)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	defer conn.Close()
 
 	return conn.SemiSyncExtensionLoaded()

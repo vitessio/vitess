@@ -18,6 +18,7 @@ package executorcontext
 
 import (
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -64,6 +65,11 @@ type (
 		execReadQuery bool
 
 		logging *ExecuteLogger
+
+		// targetTabletAlias is set when using tablet-specific routing via USE keyspace:shard@tablet_type|tablet-alias.
+		// This causes all queries to route to the specified tablet until cleared.
+		// Note: This is stored in the Go wrapper, not in the protobuf Session.
+		targetTabletAlias *topodatapb.TabletAlias
 
 		*vtgatepb.Session
 	}
@@ -414,6 +420,28 @@ func (session *SafeSession) InTransaction() bool {
 	return session.Session.InTransaction
 }
 
+// ShardSessionsForCleanup returns a snapshot of PreSessions, ShardSessions, and PostSessions for Rollback/Release.
+// Safe for concurrent use by multiple goroutines.
+
+func (session *SafeSession) ShardSessionsForCleanup() []*vtgatepb.Session_ShardSession {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	return slices.Concat(session.PreSessions, session.ShardSessions, session.PostSessions)
+}
+
+// ShardSessionsForReleaseAll returns a snapshot of all shard sessions including LockSession for ReleaseAll.
+// Safe for concurrent use by multiple goroutines.
+
+func (session *SafeSession) ShardSessionsForReleaseAll() []*vtgatepb.Session_ShardSession {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	var lockSessions []*vtgatepb.Session_ShardSession
+	if session.LockSession != nil {
+		lockSessions = []*vtgatepb.Session_ShardSession{session.LockSession}
+	}
+	return slices.Concat(session.PreSessions, session.ShardSessions, session.PostSessions, lockSessions)
+}
+
 // FindAndChangeSessionIfInSingleTxMode retrieves the ShardSession matching the given keyspace, shard, and tablet type.
 // It performs additional checks and may modify the ShardSession in specific cases for single-mode transactions.
 //
@@ -749,10 +777,10 @@ func (session *SafeSession) SetPreQueries() []string {
 	first := true
 	for _, k := range keys {
 		if first {
-			preQuery.WriteString(fmt.Sprintf("set %s = %s", k, sysVars[k]))
+			fmt.Fprintf(&preQuery, "set %s = %s", k, sysVars[k])
 			first = false
 		} else {
-			preQuery.WriteString(fmt.Sprintf(", %s = %s", k, sysVars[k]))
+			fmt.Fprintf(&preQuery, ", %s = %s", k, sysVars[k])
 		}
 	}
 	return []string{preQuery.String()}
@@ -1086,6 +1114,14 @@ func (session *SafeSession) GetPrepareData(name string) *vtgatepb.PrepareData {
 	return session.PrepareStatement[name]
 }
 
+// ClearPrepareData removes the prepared data information for the given key.
+func (session *SafeSession) ClearPrepareData(name string) {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+
+	delete(session.PrepareStatement, name)
+}
+
 func (session *SafeSession) Log(primitive engine.Primitive, target *querypb.Target, gateway srvtopo.Gateway, query string, begin bool, bv map[string]*querypb.BindVariable) {
 	session.logging.Log(primitive, target, gateway, query, begin, bv)
 }
@@ -1142,4 +1178,20 @@ func (l *ExecuteLogger) GetLogs() []engine.ExecuteEntry {
 	result := make([]engine.ExecuteEntry, len(l.entries))
 	copy(result, l.entries)
 	return result
+}
+
+// SetTargetTabletAlias sets the tablet alias for tablet-specific routing.
+// When set, all queries will route to the specified tablet until cleared.
+func (session *SafeSession) SetTargetTabletAlias(alias *topodatapb.TabletAlias) {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	session.targetTabletAlias = alias
+}
+
+// GetTargetTabletAlias returns the current tablet alias for tablet-specific routing,
+// or nil if not set.
+func (session *SafeSession) GetTargetTabletAlias() *topodatapb.TabletAlias {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	return session.targetTabletAlias
 }

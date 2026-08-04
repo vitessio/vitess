@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/vtadmin/cache"
 )
@@ -78,9 +79,7 @@ func TestBackfillDuplicates(t *testing.T) {
 
 			key := testkey("testkey")
 			for i := 0; i < tt.enqueueCount; i++ {
-				if !c.EnqueueBackfill(key) {
-					assert.Fail(t, "failed to enqueue backfill for key %s", key)
-				}
+				assert.Truef(t, c.EnqueueBackfill(key), "failed to enqueue backfill for key %s", key)
 
 				time.Sleep(tt.enqueueInterval)
 			}
@@ -123,7 +122,7 @@ func TestBackfillQueueSize(t *testing.T) {
 			}, cache.Config{
 				BackfillQueueSize: tt.configuredBackfillQueueSize,
 			})
-			var config = c.Debug()["config"].(cache.Config)
+			config := c.Debug()["config"].(cache.Config)
 			assert.Equal(t, tt.expectedBackfillQueueSize, config.BackfillQueueSize)
 		})
 	}
@@ -179,9 +178,7 @@ func TestBackfillTTL(t *testing.T) {
 
 			key := testkey("testkey")
 			for i := 0; i < tt.enqueueCount; i++ {
-				if !c.EnqueueBackfill(key) {
-					assert.Fail(t, "failed to enqueue backfill for key %s", key)
-				}
+				assert.Truef(t, c.EnqueueBackfill(key), "failed to enqueue backfill for key %s", key)
 			}
 
 			time.Sleep(tt.fillSleep * time.Duration(tt.enqueueCount))
@@ -208,7 +205,7 @@ func TestEnqueueBackfillTimeout(t *testing.T) {
 		BackfillEnqueueWaitTime: time.Millisecond * 10,
 	})
 
-	var enqueues = []struct {
+	enqueues := []struct {
 		shouldFail bool
 		msg        string
 	}{
@@ -237,7 +234,7 @@ func TestUpsertCacheKey(t *testing.T) {
 		BackfillEnqueueWaitTime: time.Millisecond * 10,
 	})
 
-	var inserts = []struct {
+	inserts := []struct {
 		shouldFail  bool
 		msg         string
 		key         intkey
@@ -263,11 +260,11 @@ func TestUpsertCacheKey(t *testing.T) {
 	for _, tt := range inserts {
 		err := c.Add(tt.key, tt.val, tt.duration)
 		if !tt.shouldFail {
-			assert.Nil(t, err)
+			require.NoError(t, err)
 		}
 
 		val, exists := c.Get(tt.key)
 		assert.True(t, exists)
-		assert.Equal(t, val, tt.expectedVal)
+		assert.Equal(t, tt.expectedVal, val)
 	}
 }

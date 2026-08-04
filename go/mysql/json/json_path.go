@@ -414,8 +414,10 @@ type PathParser struct {
 	path *Path
 }
 
-var errInvalid = errors.New("Invalid JSON path expression")
-var errRootPathNotAllowed = errors.New("The path expression '$' is not allowed in this context.")
+var (
+	errInvalid            = errors.New("Invalid JSON path expression")
+	errRootPathNotAllowed = errors.New("The path expression '$' is not allowed in this context.")
+)
 
 func stepRoot(p *PathParser, in []byte) ([]byte, error) {
 	if in[0] == '$' {
@@ -426,7 +428,7 @@ func stepRoot(p *PathParser, in []byte) ([]byte, error) {
 }
 
 func trim(in []byte) ([]byte, int) {
-	for n := 0; n < len(in); n++ {
+	for n := range in {
 		switch in[n] {
 		case ' ', '\t', '\n':
 		default:
@@ -649,7 +651,7 @@ func (p *PathParser) lexQuotedString(in []byte) (string, []byte, error) {
 	}
 
 	var buf strings.Builder
-	var n = 1
+	n := 1
 	for n < len(in) {
 		if in[n] == '"' {
 			return buf.String(), in[n+1:], nil
@@ -699,7 +701,7 @@ func (p *PathParser) ParseBytes(in []byte) (*Path, error) {
 	p.step = stepRoot
 
 	var err error
-	var ptr = in
+	ptr := in
 	for {
 		ptr, err = p.step(p, ptr)
 		if err != nil {

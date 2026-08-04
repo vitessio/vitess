@@ -53,7 +53,7 @@ func toBitset(words []byte) Bitset {
 // Overlaps returns whether this Bitset and the input have any bits in common
 func (bs Bitset) Overlaps(b2 Bitset) bool {
 	min := min(len(bs), len(b2))
-	for i := 0; i < min; i++ {
+	for i := range min {
 		if bs[i]&b2[i] != 0 {
 			return true
 		}

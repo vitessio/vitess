@@ -1,0 +1,44 @@
+#!/bin/bash
+# Copyright 2019 The Vitess Authors.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# golangci-lint is version-pinned in its own module; `go tool` builds and
+# caches the pinned version on demand.
+GOLANGCI_LINT_MODFILE="$(git rev-parse --show-toplevel)/tools/golangci-lint/go.mod"
+
+# Lint only changed packages. Packages in nested Go modules
+# are skipped: golangci-lint can only typecheck belonging
+# to the module it runs in, and CI doesn't lint them either.
+changed_pkgs=$(git diff --cached --name-only --diff-filter=ACM -- '*.go' \
+  | xargs -n1 dirname \
+  | sort -u \
+  | while read -r dir; do
+      mod_dir=$dir
+      while [ "$mod_dir" != "." ] && [ ! -f "$mod_dir/go.mod" ]; do
+        mod_dir=$(dirname "$mod_dir")
+      done
+      if [ "$mod_dir" = "." ]; then
+        echo "$dir/..."
+      else
+        echo "skipping $dir (nested module $mod_dir)" >&2
+      fi
+    done)
+
+if [ -z "$changed_pkgs" ]; then
+  echo "No staged .go files, skipping lint."
+  exit 0
+fi
+
+echo "Linting staged changes..."
+go tool -modfile="$GOLANGCI_LINT_MODFILE" golangci-lint run --new-from-rev=HEAD $changed_pkgs

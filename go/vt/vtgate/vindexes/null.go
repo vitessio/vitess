@@ -73,7 +73,7 @@ func (vind *Null) NeedsVCursor() bool {
 // Map can map ids to key.ShardDestination objects.
 func (vind *Null) Map(ctx context.Context, vcursor VCursor, ids []sqltypes.Value) ([]key.ShardDestination, error) {
 	out := make([]key.ShardDestination, 0, len(ids))
-	for i := 0; i < len(ids); i++ {
+	for range ids {
 		out = append(out, key.DestinationKeyspaceID(nullksid))
 	}
 	return out, nil

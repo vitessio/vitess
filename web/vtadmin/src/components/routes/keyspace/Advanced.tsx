@@ -15,7 +15,7 @@
  */
 
 import { useState } from 'react';
-import { UseMutationResult } from 'react-query';
+import { UseMutationResult } from '@tanstack/react-query';
 
 import {
     useCreateShard,

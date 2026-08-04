@@ -23,6 +23,7 @@ package test
 
 import (
 	"context"
+	"slices"
 	"testing"
 
 	"vitess.io/vitess/go/vt/topo"
@@ -43,11 +44,9 @@ func newKeyRange(value string) *topodatapb.KeyRange {
 
 func executeTestSuite(f func(*testing.T, context.Context, *topo.Server), t *testing.T, ctx context.Context, ts *topo.Server, ignoreList []string, name string) {
 	// some test does not apply every where therefore we ignore them
-	for _, n := range ignoreList {
-		if n == name {
-			t.Logf("=== ignoring test %s", name)
-			return
-		}
+	if slices.Contains(ignoreList, name) {
+		t.Logf("=== ignoring test %s", name)
+		return
 	}
 	f(t, ctx, ts)
 }

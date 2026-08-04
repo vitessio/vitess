@@ -54,7 +54,7 @@ func getMoveTablesWorkflow(t *testing.T, cells, tabletTypes string) *VReplicatio
 	}
 	mtwf := &VReplicationWorkflow{
 		workflowType: MoveTablesWorkflow,
-		ctx:          context.Background(),
+		ctx:          t.Context(),
 		wr:           nil,
 		params:       p,
 		ts:           nil,
@@ -67,6 +67,7 @@ func testComplete(t *testing.T, vrwf *VReplicationWorkflow) error {
 	_, err := vrwf.Complete()
 	return err
 }
+
 func TestReshardingWorkflowErrorsAndMisc(t *testing.T) {
 	mtwf := getMoveTablesWorkflow(t, "cell1,cell2", "replica,rdonly")
 	require.False(t, mtwf.Exists())
@@ -128,7 +129,7 @@ func expectCanSwitchQueries(t *testing.T, tme *testMigraterEnv, keyspace, state 
 // TestCanSwitch validates the logic to determine if traffic can be switched or not
 func TestCanSwitch(t *testing.T) {
 	var wf *VReplicationWorkflow
-	ctx := context.Background()
+	ctx := t.Context()
 	workflowName := "test"
 	p := &VReplicationWorkflowParams{
 		Workflow:       workflowName,
@@ -182,7 +183,7 @@ func TestCanSwitch(t *testing.T) {
 					require.Greater(t, curLag, allowedLag, "current lag %d should be strictly greater than allowed lag %d (from reason %q)", curLag, allowedLag, reason)
 				default:
 					// unexpected regexp, fail loudly
-					require.Fail(t, "unknown reason regexp %s -- did you add a new test case?", tc.expectedReason)
+					require.Failf(t, "unknown reason regexp", "%s -- did you add a new test case?", tc.expectedReason)
 				}
 			} else {
 				require.Empty(t, reason, "should be able to switch, but cannot because %s", reason)
@@ -194,7 +195,7 @@ func TestCanSwitch(t *testing.T) {
 func TestCopyProgress(t *testing.T) {
 	var err error
 	var wf *VReplicationWorkflow
-	ctx := context.Background()
+	ctx := t.Context()
 	workflowName := "test"
 	p := &VReplicationWorkflowParams{
 		Workflow:       workflowName,
@@ -217,7 +218,7 @@ func TestCopyProgress(t *testing.T) {
 	var cp *CopyProgress
 	cp, err = wf.GetCopyProgress()
 	require.NoError(t, err)
-	log.Infof("CopyProgress is %+v,%+v", (*cp)["t1"], (*cp)["t2"])
+	log.Info(fmt.Sprintf("CopyProgress is %+v,%+v", (*cp)["t1"], (*cp)["t2"]))
 
 	require.Equal(t, int64(800), (*cp)["t1"].SourceRowCount)
 	require.Equal(t, int64(200), (*cp)["t1"].TargetRowCount)
@@ -271,7 +272,7 @@ func expectCopyProgressQueries(t *testing.T, tme *testMigraterEnv) {
 const defaultMaxAllowedTransactionLagSeconds = 30
 
 func TestMoveTablesV2(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	p := &VReplicationWorkflowParams{
 		Workflow:                        "test",
 		SourceKeyspace:                  "ks1",
@@ -305,7 +306,7 @@ func TestMoveTablesV2(t *testing.T) {
 // as expected. This test moves tables from one sharded keyspace (ks1)
 // to another sharded keyspace (ks2), but only for the -80 shard.
 func TestPartialMoveTables(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	shards := []string{"-80", "80-"}
 	shardsToMove := shards[0:1]
 	p := &VReplicationWorkflowParams{
@@ -392,7 +393,7 @@ func TestPartialMoveTables(t *testing.T) {
 
 // TestPartialMoveTablesShardSubset is a version of TestPartialMoveTables which uses the --shards option.
 func TestPartialMoveTablesShardSubset(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	shards := []string{"-40", "40-80", "80-c0", "c0-"}
 	shardsToMove := shards[0:2]
 	otherShards := shards[2:]
@@ -485,7 +486,7 @@ func validateRoutingRuleCount(ctx context.Context, t *testing.T, ts *topo.Server
 	require.NoError(t, err)
 	require.NotNil(t, rr)
 	rules := rr.Rules
-	require.Equal(t, cnt, len(rules))
+	require.Len(t, rules, cnt)
 }
 
 func checkIfTableExistInVSchema(ctx context.Context, t *testing.T, ts *topo.Server, keyspace string, table string) bool {
@@ -497,7 +498,7 @@ func checkIfTableExistInVSchema(ctx context.Context, t *testing.T, ts *topo.Serv
 }
 
 func TestMoveTablesV2Complete(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	p := &VReplicationWorkflowParams{
 		Workflow:                        "test",
 		SourceKeyspace:                  "ks1",
@@ -520,7 +521,7 @@ func TestMoveTablesV2Complete(t *testing.T) {
 	require.NoError(t, testSwitchForward(t, wf))
 	require.Equal(t, WorkflowStateAllSwitched, wf.CurrentState())
 
-	//16 rules, 8 per table t1,t2 eg: t1,t1@replica,t1@rdonly,ks1.t1,ks1.t1@replica,ks1.t1@rdonly,ks2.t1@replica,ks2.t1@rdonly
+	// 16 rules, 8 per table t1,t2 eg: t1,t1@replica,t1@rdonly,ks1.t1,ks1.t1@replica,ks1.t1@rdonly,ks2.t1@replica,ks2.t1@rdonly
 	validateRoutingRuleCount(ctx, t, wf.wr.ts, 16)
 	require.True(t, checkIfTableExistInVSchema(ctx, t, wf.wr.ts, "ks1", "t1"))
 	require.True(t, checkIfTableExistInVSchema(ctx, t, wf.wr.ts, "ks1", "t2"))
@@ -546,7 +547,7 @@ func testReverse(t *testing.T, wf *VReplicationWorkflow) error {
 }
 
 func TestMoveTablesV2SwitchTraffic(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	p := &VReplicationWorkflowParams{
 		Workflow:                        "test",
 		SourceKeyspace:                  "ks1",
@@ -603,7 +604,7 @@ func TestMoveTablesV2SwitchTraffic(t *testing.T) {
 }
 
 func TestMoveTablesV2Cancel(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	p := &VReplicationWorkflowParams{
 		Workflow:                        "test",
 		SourceKeyspace:                  "ks1",
@@ -650,7 +651,7 @@ func TestMoveTablesV2Cancel(t *testing.T) {
 }
 
 func TestReshardV2(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	sourceShards := []string{"-40", "40-"}
 	targetShards := []string{"-80", "80-"}
 	p := &VReplicationWorkflowParams{
@@ -686,7 +687,7 @@ func TestReshardV2(t *testing.T) {
 }
 
 func TestVRWSchemaValidation(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	sourceShards := []string{"-80", "80-"}
 	targetShards := []string{"-40", "40-80", "80-c0", "c0-"}
 	p := &VReplicationWorkflowParams{
@@ -723,7 +724,7 @@ func TestVRWSchemaValidation(t *testing.T) {
 }
 
 func TestReshardV2Cancel(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	sourceShards := []string{"-40", "40-"}
 	targetShards := []string{"-80", "80-"}
 	p := &VReplicationWorkflowParams{

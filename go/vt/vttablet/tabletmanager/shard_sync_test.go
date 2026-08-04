@@ -45,7 +45,7 @@ const (
 )
 
 func TestShardSync(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
 	defer cancel()
 	ts := memorytopo.NewServer(ctx, "cell1")
 	statsTabletTypeCount.ResetAll()
@@ -108,7 +108,7 @@ func waitForShardWatchToStart(ctx context.Context, t *testing.T, tm *TabletManag
 		default:
 			updatePrimaryInfoInShardRecord(ctx, t, tm, nil, originalTime.Add(-1*time.Duration(idx)*time.Second))
 			idx = idx + 1
-			checkCtx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+			checkCtx, cancel := context.WithTimeout(t.Context(), 1*time.Second)
 			err := checkShardRecord(checkCtx, t, tm.TopoServer, ti.Alias, ti.PrimaryTermStartTime)
 			cancel()
 			if err == nil {

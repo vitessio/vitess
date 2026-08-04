@@ -17,11 +17,10 @@ limitations under the License.
 package consultopo
 
 import (
+	"context"
 	"path"
 
-	"context"
-
-	"github.com/hashicorp/consul/api"
+	"github.com/hashicorp/consul/api/v2"
 
 	"vitess.io/vitess/go/vt/topo"
 )

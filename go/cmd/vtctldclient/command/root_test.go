@@ -61,7 +61,7 @@ func TestRoot(t *testing.T) {
 // implementation -- used with --server=internal -- works for
 // commands as expected.
 func TestRootWithInternalVtctld(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 	defer cancel()
 	cell := "zone1"
 	ts, factory := memorytopo.NewServerAndFactory(ctx, cell)

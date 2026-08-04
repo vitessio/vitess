@@ -17,7 +17,6 @@ limitations under the License.
 package engine
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -55,7 +54,7 @@ func TestDDL(t *testing.T) {
 	}
 
 	vc := &loggingVCursor{}
-	_, err := ddl.TryExecute(context.Background(), vc, nil, true)
+	_, err := ddl.TryExecute(t.Context(), vc, nil, true)
 	require.NoError(t, err)
 
 	vc.ExpectLog(t, []string{
@@ -83,7 +82,7 @@ func TestDDLTempTable(t *testing.T) {
 	}
 
 	vc := &loggingVCursor{}
-	_, err := ddl.TryExecute(context.Background(), vc, nil, true)
+	_, err := ddl.TryExecute(t.Context(), vc, nil, true)
 	require.NoError(t, err)
 
 	vc.ExpectLog(t, []string{

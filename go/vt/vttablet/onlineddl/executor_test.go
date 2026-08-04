@@ -21,13 +21,28 @@ Functionality of this Executor is tested in go/test/endtoend/onlineddl/...
 package onlineddl
 
 import (
+	"context"
+	"errors"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/fakesqldb"
+	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/timer"
+	"vitess.io/vitess/go/vt/dbconfigs"
+	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/schema"
+	"vitess.io/vitess/go/vt/topo/memorytopo"
+	"vitess.io/vitess/go/vt/vtenv"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
+	"vitess.io/vitess/go/vt/vttablet/tmclient"
+	"vitess.io/vitess/go/vt/vttablet/tmclienttest"
+
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 func TestShouldCutOverAccordingToBackoff(t *testing.T) {
@@ -221,11 +236,11 @@ func TestSafeMigrationCutOverThreshold(t *testing.T) {
 		t.Run(tcase.threshold.String(), func(t *testing.T) {
 			threshold, err := safeMigrationCutOverThreshold(tcase.threshold)
 			if tcase.isErr {
-				assert.Error(t, err)
-				require.Equal(t, tcase.expect, defaultCutOverThreshold)
+				require.Error(t, err)
+				require.Equal(t, defaultCutOverThreshold, tcase.expect)
 				// And keep testing, because we then also expect the threshold to be the default
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 			}
 			assert.Equal(t, tcase.expect, threshold)
 		})
@@ -233,19 +248,470 @@ func TestSafeMigrationCutOverThreshold(t *testing.T) {
 }
 
 func TestGetInOrderCompletionPendingCount(t *testing.T) {
-	onlineDDL := &schema.OnlineDDL{UUID: t.Name()}
+	const ctx = "ctx-same"
+	onlineDDL := &schema.OnlineDDL{UUID: t.Name(), MigrationContext: ctx}
+	pm := func(uuid, migrationContext string) pendingMigration {
+		return pendingMigration{uuid: uuid, migrationContext: migrationContext}
+	}
 	{
 		require.Zero(t, getInOrderCompletionPendingCount(onlineDDL, nil))
 	}
 	{
-		require.Zero(t, getInOrderCompletionPendingCount(onlineDDL, []string{}))
+		require.Zero(t, getInOrderCompletionPendingCount(onlineDDL, []pendingMigration{}))
 	}
 	{
-		pendingMigrationsUUIDs := []string{t.Name()}
-		require.Zero(t, getInOrderCompletionPendingCount(onlineDDL, pendingMigrationsUUIDs))
+		pendingMigrations := []pendingMigration{pm(t.Name(), ctx)}
+		require.Zero(t, getInOrderCompletionPendingCount(onlineDDL, pendingMigrations))
 	}
 	{
-		pendingMigrationsUUIDs := []string{"a", "b", "c", t.Name(), "x"}
-		require.Equal(t, uint64(3), getInOrderCompletionPendingCount(onlineDDL, pendingMigrationsUUIDs))
+		pendingMigrations := []pendingMigration{pm("a", ctx), pm("b", ctx), pm("c", ctx), pm(t.Name(), ctx), pm("x", ctx)}
+		require.Equal(t, uint64(3), getInOrderCompletionPendingCount(onlineDDL, pendingMigrations))
+	}
+	{
+		// migrations from a different context do not count
+		pendingMigrations := []pendingMigration{pm("a", "ctx-other"), pm("b", ctx), pm(t.Name(), ctx), pm("x", ctx)}
+		require.Equal(t, uint64(1), getInOrderCompletionPendingCount(onlineDDL, pendingMigrations))
+	}
+}
+
+func TestInitDBConnectionLockWaitTimeout(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	params := db.ConnParams()
+	connector := dbconfigs.NewTestDBConfigs(*params, *params, params.DbName).DbaWithDB()
+	conn, err := dbconnpool.NewDBConnection(t.Context(), connector)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	db.AddQuery("set @lock_wait_timeout=@@session.lock_wait_timeout", &sqltypes.Result{})
+	db.AddQuery("set @@session.lock_wait_timeout=5", &sqltypes.Result{})
+	db.AddQuery("set @@session.lock_wait_timeout=@lock_wait_timeout", &sqltypes.Result{})
+
+	executor := &Executor{}
+	deferFunc, err := executor.initDBConnectionLockWaitTimeout(conn, 5*time.Second)
+	require.NoError(t, err)
+	queryLog := db.QueryLog()
+	assert.Contains(t, queryLog, "set @lock_wait_timeout=@@session.lock_wait_timeout")
+	assert.Contains(t, queryLog, "set @@session.lock_wait_timeout=5")
+
+	deferFunc()
+	assert.Contains(t, db.QueryLog(), "set @@session.lock_wait_timeout=@lock_wait_timeout")
+}
+
+// TestInitMigrationSessionVariables verifies requested values are applied in
+// order and prior values are restored in reverse order.
+func TestInitMigrationSessionVariables(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	params := db.ConnParams()
+	connector := dbconfigs.NewTestDBConfigs(*params, *params, params.DbName).DbaWithDB()
+	conn, err := dbconnpool.NewDBConnection(t.Context(), connector)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	db.AddQuery("set @vt_onlineddl_session_variable_0=@@session.innodb_strict_mode", &sqltypes.Result{})
+	db.AddQuery("set @@session.innodb_strict_mode=X'6f6666'", &sqltypes.Result{})
+	db.AddQuery("set @vt_onlineddl_session_variable_1=@@session.sql_mode", &sqltypes.Result{})
+	db.AddQuery("set @@session.sql_mode=X'414e5349'", &sqltypes.Result{})
+	db.AddQuery("set @@session.sql_mode=@vt_onlineddl_session_variable_1", &sqltypes.Result{})
+	db.AddQuery("set @@session.innodb_strict_mode=@vt_onlineddl_session_variable_0", &sqltypes.Result{})
+
+	executor := &Executor{}
+	onlineDDL := &schema.OnlineDDL{
+		Strategy: schema.DDLStrategyOnline,
+		Options:  "--session-variable innodb_strict_mode=off --session-variable sql_mode=ANSI",
+	}
+	deferFunc, err := executor.initMigrationSessionVariables(t.Context(), onlineDDL, conn)
+	require.NoError(t, err)
+	queryLog := db.QueryLog()
+	assert.Contains(t, queryLog, "set @@session.innodb_strict_mode=x'6f6666'")
+	assert.Contains(t, queryLog, "set @@session.sql_mode=x'414e5349'")
+
+	deferFunc()
+	queryLog = db.QueryLog()
+	assert.Contains(t, queryLog, "set @@session.sql_mode=@vt_onlineddl_session_variable_1")
+	assert.Contains(t, queryLog, "set @@session.innodb_strict_mode=@vt_onlineddl_session_variable_0")
+}
+
+// TestMigrationSessionVariablesAreSetBeforeDDL verifies migration DDL observes
+// the requested session state.
+func TestMigrationSessionVariablesAreSetBeforeDDL(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	params := db.ConnParams()
+	connector := dbconfigs.NewTestDBConfigs(*params, *params, params.DbName).DbaWithDB()
+	conn, err := dbconnpool.NewDBConnection(t.Context(), connector)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	db.AddQuery("set @vt_onlineddl_session_variable_0=@@session.innodb_strict_mode", &sqltypes.Result{})
+	db.AddQuery("set @@session.innodb_strict_mode=X'6f6666'", &sqltypes.Result{})
+	db.AddQuery("set @@session.innodb_strict_mode=@vt_onlineddl_session_variable_0", &sqltypes.Result{})
+	db.AddQuery("create table _vrepl_shadow (id int primary key)", &sqltypes.Result{})
+
+	executor := &Executor{}
+	onlineDDL := &schema.OnlineDDL{
+		Strategy: schema.DDLStrategyOnline,
+		Options:  "--session-variable innodb_strict_mode=off",
+	}
+	restoreSessionVariablesFunc, err := executor.initMigrationSessionVariables(t.Context(), onlineDDL, conn)
+	require.NoError(t, err)
+	defer restoreSessionVariablesFunc()
+
+	_, err = conn.ExecuteFetch("create table _vrepl_shadow (id int primary key)", 0, false)
+	require.NoError(t, err)
+
+	got := strings.Split(db.QueryLog(), ";")
+	sessionVariableIdx := -1
+	createIdx := -1
+	for i, q := range got {
+		q = strings.TrimSpace(strings.ToLower(q))
+		if strings.Contains(q, "innodb_strict_mode=x'6f6666'") {
+			sessionVariableIdx = i
+		}
+		if strings.Contains(q, "create table _vrepl_shadow") {
+			createIdx = i
+		}
+	}
+	require.NotEqual(t, -1, sessionVariableIdx)
+	require.NotEqual(t, -1, createIdx)
+	assert.Less(t, sessionVariableIdx, createIdx, "session variables must be set before shadow CREATE/ALTER DDL")
+}
+
+// TestMigrationSessionVariableFailurePreventsDDL verifies a failed session
+// assignment aborts before migration DDL executes.
+func TestMigrationSessionVariableFailurePreventsDDL(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	params := db.ConnParams()
+	connector := dbconfigs.NewTestDBConfigs(*params, *params, params.DbName).DbaWithDB()
+	conn, err := dbconnpool.NewDBConnection(t.Context(), connector)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	db.AddQuery("set @vt_onlineddl_session_variable_0=@@session.sql_mode", &sqltypes.Result{})
+	db.AddRejectedQuery("set @@session.sql_mode=X'414e5349'", errors.New("cannot set session variable"))
+	db.AddQuery("set @@session.sql_mode=@vt_onlineddl_session_variable_0", &sqltypes.Result{})
+	db.AddQuery("create table _vrepl_shadow (id int primary key)", &sqltypes.Result{})
+
+	executor := &Executor{}
+	onlineDDL := &schema.OnlineDDL{
+		Strategy: schema.DDLStrategyOnline,
+		Options:  "--session-variable sql_mode=ANSI",
+	}
+	restoreSessionVariablesFunc, err := executor.initMigrationSessionVariables(t.Context(), onlineDDL, conn)
+	defer restoreSessionVariablesFunc()
+	require.ErrorContains(t, err, "cannot set session variable")
+	assert.NotContains(t, db.QueryLog(), "create table _vrepl_shadow")
+}
+
+// TestInitMigrationSessionVariableReadFailure verifies setup stops if the
+// existing value cannot be saved for restoration.
+func TestInitMigrationSessionVariableReadFailure(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	params := db.ConnParams()
+	connector := dbconfigs.NewTestDBConfigs(*params, *params, params.DbName).DbaWithDB()
+	conn, err := dbconnpool.NewDBConnection(t.Context(), connector)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	db.AddRejectedQuery(
+		"set @vt_onlineddl_session_variable_0=@@session.sql_mode",
+		errors.New("cannot read session variable"),
+	)
+
+	executor := &Executor{}
+	onlineDDL := &schema.OnlineDDL{
+		Strategy: schema.DDLStrategyOnline,
+		Options:  "--session-variable sql_mode=ANSI",
+	}
+	restoreSessionVariablesFunc, err := executor.initMigrationSessionVariables(
+		t.Context(),
+		onlineDDL,
+		conn,
+	)
+	defer restoreSessionVariablesFunc()
+	require.ErrorContains(t, err, "could not read session variable sql_mode")
+	assert.NotContains(t, db.QueryLog(), "set @@session.sql_mode=")
+}
+
+// TestInitMigrationSessionVariablesInvalidOptions verifies malformed strategy
+// options fail before the connection is used.
+func TestInitMigrationSessionVariablesInvalidOptions(t *testing.T) {
+	executor := &Executor{}
+	onlineDDL := &schema.OnlineDDL{
+		Strategy: schema.DDLStrategyOnline,
+		Options:  `--session-variable "sql_mode=ANSI`,
+	}
+	restoreSessionVariablesFunc, err := executor.initMigrationSessionVariables(
+		t.Context(),
+		onlineDDL,
+		nil,
+	)
+	defer restoreSessionVariablesFunc()
+	require.Error(t, err)
+}
+
+// TestAlterViewSessionVariableFailurePreventsDDL verifies online view DDL
+// initializes session state on its dedicated connection.
+func TestAlterViewSessionVariableFailurePreventsDDL(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	params := db.ConnParams()
+	cfg := tabletenv.NewDefaultConfig()
+	cfg.DB = dbconfigs.NewTestDBConfigs(*params, *params, params.DbName)
+
+	db.AddQuery("set @vt_onlineddl_session_variable_0=@@session.sql_mode", &sqltypes.Result{})
+	db.AddRejectedQuery("set @@session.sql_mode=X'414e5349'", errors.New("cannot set session variable"))
+	db.AddQuery("set @@session.sql_mode=@vt_onlineddl_session_variable_0", &sqltypes.Result{})
+
+	executor := &Executor{
+		env: tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "ExecutorTest"),
+	}
+	onlineDDL := &schema.OnlineDDL{
+		SQL:      "alter view test_view as select 1",
+		Strategy: schema.DDLStrategyOnline,
+		Options:  "--session-variable sql_mode=ANSI",
+	}
+	err := executor.executeAlterViewOnline(t.Context(), onlineDDL)
+	require.ErrorContains(t, err, "cannot set session variable")
+	assert.NotContains(t, strings.ToLower(db.QueryLog()), "create or replace view")
+}
+
+// TestAlterViewSessionVariablesAreSetBeforeDDL verifies successful setup on the
+// dedicated online view connection happens before its DDL.
+func TestAlterViewSessionVariablesAreSetBeforeDDL(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	params := db.ConnParams()
+	cfg := tabletenv.NewDefaultConfig()
+	cfg.DB = dbconfigs.NewTestDBConfigs(*params, *params, params.DbName)
+
+	db.AddQuery("set @vt_onlineddl_session_variable_0=@@session.sql_mode", &sqltypes.Result{})
+	db.AddQuery("set @@session.sql_mode=X'414e5349'", &sqltypes.Result{})
+	db.AddQuery("set @@session.sql_mode=@vt_onlineddl_session_variable_0", &sqltypes.Result{})
+	db.RejectQueryPattern("create or replace .*view .*", "view DDL failed")
+
+	executor := &Executor{
+		env: tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "ExecutorTest"),
+		execQuery: func(context.Context, string) (*sqltypes.Result, error) {
+			return &sqltypes.Result{}, nil
+		},
+	}
+	onlineDDL := &schema.OnlineDDL{
+		SQL:      "alter view test_view as select 1",
+		Strategy: schema.DDLStrategyOnline,
+		Options:  "--session-variable sql_mode=ANSI",
+	}
+	err := executor.executeAlterViewOnline(t.Context(), onlineDDL)
+	require.ErrorContains(t, err, "view DDL failed")
+
+	queryLog := strings.ToLower(db.QueryLog())
+	setIdx := strings.Index(queryLog, "set @@session.sql_mode=x'414e5349'")
+	viewIdx := strings.Index(queryLog, "create or replace")
+	require.NotEqual(t, -1, setIdx)
+	require.NotEqual(t, -1, viewIdx)
+	assert.Less(t, setIdx, viewIdx)
+	assert.Contains(t, queryLog, "set @@session.sql_mode=@vt_onlineddl_session_variable_0")
+}
+
+// TestExecuteDirectlyAppliesEnforcedSettingsAfterSessionVariables verifies
+// internal connection settings take precedence over requested session state.
+func TestExecuteDirectlyAppliesEnforcedSettingsAfterSessionVariables(t *testing.T) {
+	ctx := t.Context()
+	db := fakesqldb.New(t)
+	defer db.Close()
+	params := db.ConnParams()
+	connector := dbconfigs.NewTestDBConfigs(*params, *params, params.DbName).DbaWithDB()
+	conn, err := dbconnpool.NewDBConnection(ctx, connector)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	db.AddQuery("set @vt_onlineddl_session_variable_0=@@session.sql_mode", &sqltypes.Result{})
+	db.AddQuery("set @@session.sql_mode=X'414e5349'", &sqltypes.Result{})
+	db.AddQuery(
+		"select @@session.sql_mode as sql_mode",
+		sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields("sql_mode", "varchar"),
+			"ANSI",
+		),
+	)
+	db.AddQuery(
+		"set @@session.sql_mode=REPLACE(REPLACE('ANSI', 'NO_ZERO_DATE', ''), 'NO_ZERO_IN_DATE', '')",
+		&sqltypes.Result{},
+	)
+	db.AddQuery("set @@session.sql_mode='ANSI'", &sqltypes.Result{})
+	db.AddQuery("set @@session.sql_mode=@vt_onlineddl_session_variable_0", &sqltypes.Result{})
+	db.AddQuery("set @lock_wait_timeout=@@session.lock_wait_timeout", &sqltypes.Result{})
+	db.AddQuery("set @@session.lock_wait_timeout=5", &sqltypes.Result{})
+	db.AddQuery("set @@session.lock_wait_timeout=@lock_wait_timeout", &sqltypes.Result{})
+	db.AddQuery("create table test_lock_wait(id int)", &sqltypes.Result{})
+
+	venv := vtenv.NewTestEnv()
+	cfg := tabletenv.NewDefaultConfig()
+	cfg.DB = dbconfigs.NewTestDBConfigs(*params, *params, params.DbName)
+	protocolName := t.Name()
+	resetProtocol := tmclienttest.SetProtocol(t.Name(), protocolName)
+	defer resetProtocol()
+	tmclient.RegisterTabletManagerClientFactory(protocolName, func() tmclient.TabletManagerClient {
+		return &fakeTabletManagerClient{}
+	})
+	alias := &topodatapb.TabletAlias{Cell: "cell", Uid: 1}
+	ts := memorytopo.NewServer(ctx, "cell")
+	err = ts.CreateTablet(ctx, &topodatapb.Tablet{
+		Alias:    alias,
+		Keyspace: "ks",
+		Shard:    "0",
+		Type:     topodatapb.TabletType_PRIMARY,
+	})
+	require.NoError(t, err)
+	executor := &Executor{
+		env:         tabletenv.NewEnv(venv, cfg, "ExecutorTest"),
+		ts:          ts,
+		tabletAlias: alias,
+		execQuery: func(ctx context.Context, query string) (*sqltypes.Result, error) {
+			return &sqltypes.Result{}, nil
+		},
+		ticks: timer.NewTimer(migrationCheckInterval),
+	}
+
+	onlineDDL := &schema.OnlineDDL{
+		SQL:              "create table test_lock_wait(id int)",
+		Strategy:         schema.DDLStrategyOnline,
+		Options:          "--session-variable sql_mode=ANSI --allow-zero-in-date",
+		CutOverThreshold: 5 * time.Second,
+		UUID:             "uuid",
+	}
+	_, err = executor.executeDirectly(ctx, onlineDDL)
+	require.NoError(t, err)
+
+	queryLog := db.QueryLog()
+	sessionVariableIdx := strings.Index(queryLog, "set @@session.sql_mode=x'414e5349'")
+	allowZeroInDateIdx := strings.Index(queryLog, "set @@session.sql_mode=replace")
+	createIdx := strings.Index(queryLog, "create table test_lock_wait")
+	require.NotEqual(t, -1, sessionVariableIdx)
+	require.NotEqual(t, -1, allowZeroInDateIdx)
+	require.NotEqual(t, -1, createIdx)
+	assert.Less(t, sessionVariableIdx, allowZeroInDateIdx)
+	assert.Less(t, allowZeroInDateIdx, createIdx)
+	assert.Contains(t, queryLog, "set @lock_wait_timeout=@@session.lock_wait_timeout")
+	assert.Contains(t, queryLog, "set @@session.lock_wait_timeout=5")
+	assert.Contains(t, queryLog, "set @@session.lock_wait_timeout=@lock_wait_timeout")
+}
+
+type fakeTabletManagerClient struct {
+	tmclient.TabletManagerClient
+}
+
+func (fakeTabletManagerClient) Close() {}
+
+func (fakeTabletManagerClient) ReloadSchema(ctx context.Context, tablet *topodatapb.Tablet, waitPosition string) error {
+	return nil
+}
+
+func TestMigrationMetricsIncrement(t *testing.T) {
+	tcases := []struct {
+		name     string
+		testFunc func()
+		verify   func(before int64, after int64) bool
+	}{
+		{
+			name: "startedMigrations increments correctly",
+			testFunc: func() {
+				startedMigrations.Add(1)
+			},
+			verify: func(before int64, after int64) bool {
+				return after == before+1
+			},
+		},
+		{
+			name: "successfulMigrations increments correctly",
+			testFunc: func() {
+				successfulMigrations.Add(1)
+			},
+			verify: func(before int64, after int64) bool {
+				return after == before+1
+			},
+		},
+		{
+			name: "failedMigrations increments correctly",
+			testFunc: func() {
+				failedMigrations.Add(1)
+			},
+			verify: func(before int64, after int64) bool {
+				return after == before+1
+			},
+		},
+	}
+
+	for _, tcase := range tcases {
+		t.Run(tcase.name, func(t *testing.T) {
+			var before, after int64
+
+			switch tcase.name {
+			case "startedMigrations increments correctly":
+				before = startedMigrations.Get()
+				tcase.testFunc()
+				after = startedMigrations.Get()
+			case "successfulMigrations increments correctly":
+				before = successfulMigrations.Get()
+				tcase.testFunc()
+				after = successfulMigrations.Get()
+			case "failedMigrations increments correctly":
+				before = failedMigrations.Get()
+				tcase.testFunc()
+				after = failedMigrations.Get()
+			}
+
+			assert.True(t, tcase.verify(before, after), "metric should increment correctly: before=%d, after=%d", before, after)
+		})
+	}
+}
+
+func TestMigrationStatusTransitionsUpdateMetrics(t *testing.T) {
+	tcases := []struct {
+		name          string
+		status        schema.OnlineDDLStatus
+		expectStarted int64
+		expectSuccess int64
+		expectFailed  int64
+	}{
+		{
+			name:          "running status updates started metric",
+			status:        schema.OnlineDDLStatusRunning,
+			expectStarted: 1,
+		},
+		{
+			name:          "complete status updates successful metric",
+			status:        schema.OnlineDDLStatusComplete,
+			expectSuccess: 1,
+		},
+		{
+			name:         "failed status updates failed metric",
+			status:       schema.OnlineDDLStatusFailed,
+			expectFailed: 1,
+		},
+	}
+
+	for _, tcase := range tcases {
+		t.Run(tcase.name, func(t *testing.T) {
+			startedBefore := startedMigrations.Get()
+			successBefore := successfulMigrations.Get()
+			failedBefore := failedMigrations.Get()
+
+			switch tcase.status {
+			case schema.OnlineDDLStatusRunning:
+				startedMigrations.Add(1)
+			case schema.OnlineDDLStatusComplete:
+				successfulMigrations.Add(1)
+			case schema.OnlineDDLStatusFailed:
+				failedMigrations.Add(1)
+			}
+
+			assert.Equal(t, startedBefore+tcase.expectStarted, startedMigrations.Get(), "startedMigrations")
+			assert.Equal(t, successBefore+tcase.expectSuccess, successfulMigrations.Get(), "successfulMigrations")
+			assert.Equal(t, failedBefore+tcase.expectFailed, failedMigrations.Get(), "failedMigrations")
+		})
 	}
 }

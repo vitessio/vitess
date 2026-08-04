@@ -17,10 +17,9 @@ limitations under the License.
 package consultopo
 
 import (
+	"context"
 	"errors"
 	"net/url"
-
-	"context"
 
 	"vitess.io/vitess/go/vt/topo"
 )

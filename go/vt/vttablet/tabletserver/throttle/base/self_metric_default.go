@@ -23,8 +23,7 @@ import (
 
 var _ SelfMetric = registerSelfMetric(&DefaultSelfMetric{})
 
-type DefaultSelfMetric struct {
-}
+type DefaultSelfMetric struct{}
 
 func (m *DefaultSelfMetric) Name() MetricName {
 	return DefaultMetricName

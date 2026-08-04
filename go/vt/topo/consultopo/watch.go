@@ -21,7 +21,7 @@ import (
 	"path"
 	"time"
 
-	"github.com/hashicorp/consul/api"
+	"github.com/hashicorp/consul/api/v2"
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/vt/servenv"
@@ -29,9 +29,7 @@ import (
 	"vitess.io/vitess/go/vt/utils"
 )
 
-var (
-	watchPollDuration = 30 * time.Second
-)
+var watchPollDuration = 30 * time.Second
 
 func init() {
 	servenv.RegisterFlagsForTopoBinaries(registerWatchFlags)

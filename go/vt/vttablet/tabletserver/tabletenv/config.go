@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"sync"
 	"time"
 
@@ -148,6 +149,9 @@ func registerTabletEnvFlags(fs *pflag.FlagSet) {
 	fs.IntVar(&currentConfig.OltpReadPool.MaxIdleCount, "queryserver-config-query-pool-max-idle-count", defaultConfig.OltpReadPool.MaxIdleCount, "query server query pool - maximum number of idle connections to retain in the pool. Use this to balance between faster response times during traffic bursts and resource efficiency during low-traffic periods.")
 	fs.IntVar(&currentConfig.OlapReadPool.MaxIdleCount, "queryserver-config-stream-pool-max-idle-count", defaultConfig.OlapReadPool.MaxIdleCount, "query server stream pool - maximum number of idle connections to retain in the pool. Use this to balance between faster response times during traffic bursts and resource efficiency during low-traffic periods.")
 	fs.IntVar(&currentConfig.TxPool.MaxIdleCount, "queryserver-config-txpool-max-idle-count", defaultConfig.TxPool.MaxIdleCount, "query server transaction pool - maximum number of idle connections to retain in the pool. Use this to balance between faster response times during traffic bursts and resource efficiency during low-traffic periods.")
+	fs.UintVar(&currentConfig.OltpReadPool.MaxWaiters, "queryserver-config-query-pool-waiter-cap", defaultConfig.OltpReadPool.MaxWaiters, "query server query pool waiter cap is the maximum number of queries allowed to wait for a connection from the pool. If set to 0 (default) then there is no limit.")
+	fs.UintVar(&currentConfig.OlapReadPool.MaxWaiters, "queryserver-config-stream-pool-waiter-cap", defaultConfig.OlapReadPool.MaxWaiters, "query server stream pool waiter cap is the maximum number of streaming queries allowed to wait for a connection from the pool. If set to 0 (default) then there is no limit.")
+	fs.UintVar(&currentConfig.TxPool.MaxWaiters, "queryserver-config-txpool-waiter-cap", defaultConfig.TxPool.MaxWaiters, "query server transaction pool waiter cap is the maximum number of transactions allowed to wait for a connection from the pool. If set to 0 (default) then there is no limit.")
 	fs.DurationVar(&currentConfig.OltpReadPool.IdleTimeout, "queryserver-config-idle-timeout", defaultConfig.OltpReadPool.IdleTimeout, "query server idle timeout, vttablet manages various mysql connection pools. This config means if a connection has not been used in given idle timeout, this connection will be removed from pool. This effectively manages number of connection objects and optimize the pool performance.")
 	fs.DurationVar(&currentConfig.OltpReadPool.MaxLifetime, "queryserver-config-pool-conn-max-lifetime", defaultConfig.OltpReadPool.MaxLifetime, "query server connection max lifetime, vttablet manages various mysql connection pools. This config means if a connection has lived at least this long, it connection will be removed from pool upon the next time it is returned to the pool.")
 
@@ -158,7 +162,6 @@ func registerTabletEnvFlags(fs *pflag.FlagSet) {
 	fs.BoolVar(&currentConfig.TerseErrors, "queryserver-config-terse-errors", defaultConfig.TerseErrors, "prevent bind vars from escaping in client error messages")
 	fs.IntVar(&currentConfig.TruncateErrorLen, "queryserver-config-truncate-error-len", defaultConfig.TruncateErrorLen, "truncate errors sent to client if they are longer than this value (0 means do not truncate)")
 	fs.BoolVar(&currentConfig.AnnotateQueries, "queryserver-config-annotate-queries", defaultConfig.AnnotateQueries, "prefix queries to MySQL backend with comment indicating vtgate principal (user) and target tablet type")
-	utils.SetFlagBoolVar(fs, &currentConfig.WatchReplication, "watch-replication-stream", false, "When enabled, vttablet will stream the MySQL replication stream from the local server, and use it to update schema when it sees a DDL.")
 	utils.SetFlagBoolVar(fs, &currentConfig.TrackSchemaVersions, "track-schema-versions", false, "When enabled, vttablet will store versions of schemas at each position that a DDL is applied and allow retrieval of the schema corresponding to a position")
 	fs.Int64Var(&currentConfig.SchemaVersionMaxAgeSeconds, "schema-version-max-age-seconds", 0, "max age of schema version records to kept in memory by the vreplication historian")
 
@@ -201,6 +204,8 @@ func registerTabletEnvFlags(fs *pflag.FlagSet) {
 	fs.Int64Var(&currentConfig.ConsolidatorStreamTotalSize, "consolidator-stream-total-size", defaultConfig.ConsolidatorStreamTotalSize, "Configure the stream consolidator total size in bytes. Setting to 0 disables the stream consolidator.")
 
 	fs.Int64Var(&currentConfig.ConsolidatorQueryWaiterCap, "consolidator-query-waiter-cap", 0, "Configure the maximum number of clients allowed to wait on the consolidator.")
+	fs.BoolVar(&currentConfig.ConsolidatorCacheProto3Rows, "consolidator-cache-proto3-rows", defaultConfig.ConsolidatorCacheProto3Rows, "If true, the consolidation leader pre-caches proto3-encoded rows so that waiters avoid redundant encoding work.")
+	fs.BoolVar(&currentConfig.ConsolidatorRejectOnCap, "consolidator-reject-on-cap", defaultConfig.ConsolidatorRejectOnCap, "If true, reject queries with a RESOURCE_EXHAUSTED error when the global consolidator waiter cap is exceeded, instead of falling back to independent execution. The cap is enforced globally across all consolidated queries, not per-query.")
 	utils.SetFlagDurationVar(fs, &healthCheckInterval, "health-check-interval", defaultConfig.Healthcheck.Interval, "Interval between health checks")
 	utils.SetFlagDurationVar(fs, &degradedThreshold, "degraded-threshold", defaultConfig.Healthcheck.DegradedThreshold, "replication lag after which a replica is considered degraded")
 	utils.SetFlagDurationVar(fs, &unhealthyThreshold, "unhealthy-threshold", defaultConfig.Healthcheck.UnhealthyThreshold, "replication lag after which a replica is considered unhealthy")
@@ -291,7 +296,8 @@ func Init() {
 	case streamlog.QueryLogFormatText:
 	case streamlog.QueryLogFormatJSON:
 	default:
-		log.Exitf("Invalid querylog-format value %v: must be either text or json", logFormat)
+		log.Error(fmt.Sprintf("Invalid querylog-format value %v: must be either text or json", logFormat))
+		os.Exit(1)
 	}
 
 	if queryLogHandler != "" {
@@ -313,20 +319,20 @@ type TabletConfig struct {
 
 	Unmanaged bool `json:"unmanaged,omitempty"`
 
-	OltpReadPool ConnPoolConfig `json:"oltpReadPool,omitempty"`
-	OlapReadPool ConnPoolConfig `json:"olapReadPool,omitempty"`
-	TxPool       ConnPoolConfig `json:"txPool,omitempty"`
+	OltpReadPool ConnPoolConfig `json:"oltpReadPool"`
+	OlapReadPool ConnPoolConfig `json:"olapReadPool"`
+	TxPool       ConnPoolConfig `json:"txPool"`
 
-	Olap             OlapConfig             `json:"olap,omitempty"`
-	Oltp             OltpConfig             `json:"oltp,omitempty"`
-	HotRowProtection HotRowProtectionConfig `json:"hotRowProtection,omitempty"`
+	Olap             OlapConfig             `json:"olap"`
+	Oltp             OltpConfig             `json:"oltp"`
+	HotRowProtection HotRowProtectionConfig `json:"hotRowProtection"`
 
-	Healthcheck  HealthcheckConfig  `json:"healthcheck,omitempty"`
-	GracePeriods GracePeriodsConfig `json:"gracePeriods,omitempty"`
+	Healthcheck  HealthcheckConfig  `json:"healthcheck"`
+	GracePeriods GracePeriodsConfig `json:"gracePeriods"`
 
-	SemiSyncMonitor SemiSyncMonitorConfig `json:"semiSyncMonitor,omitempty"`
+	SemiSyncMonitor SemiSyncMonitorConfig `json:"semiSyncMonitor"`
 
-	ReplicationTracker ReplicationTrackerConfig `json:"replicationTracker,omitempty"`
+	ReplicationTracker ReplicationTrackerConfig `json:"replicationTracker"`
 
 	// Consolidator can be enable, disable, or notOnPrimary. Default is enable.
 	Consolidator                string        `json:"consolidator,omitempty"`
@@ -335,11 +341,12 @@ type TabletConfig struct {
 	ConsolidatorStreamTotalSize int64         `json:"consolidatorStreamTotalSize,omitempty"`
 	ConsolidatorStreamQuerySize int64         `json:"consolidatorStreamQuerySize,omitempty"`
 	ConsolidatorQueryWaiterCap  int64         `json:"consolidatorMaxQueryWait,omitempty"`
+	ConsolidatorRejectOnCap     bool          `json:"consolidatorRejectOnCap,omitempty"`
+	ConsolidatorCacheProto3Rows bool          `json:"consolidatorCacheProto3Rows,omitempty"`
 	QueryCacheMemory            int64         `json:"queryCacheMemory,omitempty"`
 	QueryCacheDoorkeeper        bool          `json:"queryCacheDoorkeeper,omitempty"`
 	SchemaReloadInterval        time.Duration `json:"schemaReloadIntervalSeconds,omitempty"`
 	SchemaChangeReloadTimeout   time.Duration `json:"schemaChangeReloadTimeout,omitempty"`
-	WatchReplication            bool          `json:"watchReplication,omitempty"`
 	TrackSchemaVersions         bool          `json:"trackSchemaVersions,omitempty"`
 	SchemaVersionMaxAgeSeconds  int64         `json:"schemaVersionMaxAgeSeconds,omitempty"`
 	TerseErrors                 bool          `json:"terseErrors,omitempty"`
@@ -371,7 +378,7 @@ type TabletConfig struct {
 	EnforceStrictTransTables bool `json:"-"`
 	EnableOnlineDDL          bool `json:"-"`
 
-	RowStreamer RowStreamerConfig `json:"rowStreamer,omitempty"`
+	RowStreamer RowStreamerConfig `json:"rowStreamer"`
 
 	EnableViews bool `json:"-"`
 
@@ -443,6 +450,7 @@ type ConnPoolConfig struct {
 	IdleTimeout        time.Duration `json:"idleTimeoutSeconds,omitempty"`
 	MaxIdleCount       int           `json:"maxIdleCount,omitempty"`
 	MaxLifetime        time.Duration `json:"maxLifetimeSeconds,omitempty"`
+	MaxWaiters         uint          `json:"maxWaiters,omitempty"`
 	PrefillParallelism int           `json:"prefillParallelism,omitempty"`
 }
 
@@ -481,6 +489,7 @@ func (cfg *ConnPoolConfig) UnmarshalJSON(data []byte) (err error) {
 		IdleTimeout        string `json:"idleTimeoutSeconds,omitempty"`
 		MaxIdleCount       int    `json:"maxIdleCount,omitempty"`
 		MaxLifetime        string `json:"maxLifetimeSeconds,omitempty"`
+		MaxWaiters         uint   `json:"maxWaiters,omitempty"`
 		PrefillParallelism int    `json:"prefillParallelism,omitempty"`
 	}
 
@@ -511,6 +520,7 @@ func (cfg *ConnPoolConfig) UnmarshalJSON(data []byte) (err error) {
 
 	cfg.Size = tmp.Size
 	cfg.MaxIdleCount = tmp.MaxIdleCount
+	cfg.MaxWaiters = tmp.MaxWaiters
 	cfg.PrefillParallelism = tmp.PrefillParallelism
 
 	return nil
@@ -1087,6 +1097,7 @@ var defaultConfig = TabletConfig{
 	Consolidator:                Enable,
 	ConsolidatorStreamTotalSize: 128 * 1024 * 1024,
 	ConsolidatorStreamQuerySize: 2 * 1024 * 1024,
+	ConsolidatorCacheProto3Rows: false,
 	// The value for StreamBufferSize was chosen after trying out a few of
 	// them. Too small buffers force too many packets to be sent. Too big
 	// buffers force the clients to read them in multiple chunks and make

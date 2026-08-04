@@ -18,6 +18,7 @@ package semantics
 
 import (
 	"fmt"
+	"maps"
 	"strconv"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -783,7 +784,7 @@ func (r *earlyRewriter) rewriteOrderByLiteral(node *sqlparser.Literal) (expr sql
 	}
 
 	// We loop like this instead of directly accessing the offset, to make sure there are no unexpanded `*` before
-	for i := 0; i < num; i++ {
+	for i := range num {
 		if _, ok := stmt.GetColumns()[i].(*sqlparser.AliasedExpr); !ok {
 			return nil, false, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "cannot use column offsets in %s when using `%s`", r.clause, sqlparser.String(stmt.GetColumns()[i]))
 		}
@@ -835,7 +836,7 @@ func (r *earlyRewriter) rewriteGroupByExpr(node *sqlparser.Literal) (sqlparser.E
 	}
 
 	// We loop like this instead of directly accessing the offset, to make sure there are no unexpanded `*` before
-	for i := 0; i < num; i++ {
+	for i := range num {
 		if _, ok := stmt.GetColumns()[i].(*sqlparser.AliasedExpr); !ok {
 			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "cannot use column offsets in %s when using `%s`", r.clause, sqlparser.String(stmt.GetColumns()[i]))
 		}
@@ -1096,9 +1097,7 @@ func (r *earlyRewriter) expandTableColumns(
 	}
 
 	if starExpanded {
-		for k, v := range state.expandedColumns {
-			r.expandedColumns[k] = v
-		}
+		maps.Copy(r.expandedColumns, state.expandedColumns)
 	}
 
 	return starExpanded, state.colNames, nil

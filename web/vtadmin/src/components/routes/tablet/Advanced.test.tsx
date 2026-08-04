@@ -15,11 +15,10 @@
  */
 
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { createMemoryHistory } from 'history';
 import { merge } from 'lodash-es';
 import React from 'react';
-import { QueryClient, QueryClientProvider } from 'react-query';
-import { Router } from 'react-router';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { MemoryRouter } from 'react-router-dom';
 
 import { topodata, vtadmin } from '../../../proto/vtadmin';
 import { formatAlias } from '../../../util/tablets';
@@ -51,16 +50,14 @@ const makePrimaryTablet = (overrides: Partial<vtadmin.ITablet> = {}): vtadmin.Ta
 };
 
 const renderHelper = (children: React.ReactNode) => {
-    const history = createMemoryHistory();
-
     const queryClient = new QueryClient({
         defaultOptions: { queries: { retry: false } },
     });
 
     render(
-        <Router history={history}>
+        <MemoryRouter>
             <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
-        </Router>
+        </MemoryRouter>
     );
 };
 

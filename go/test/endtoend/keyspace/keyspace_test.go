@@ -68,16 +68,20 @@ var (
       }
 	}`
 	shardKIdMap = map[string][]uint64{
-		"-80": {527875958493693904, 626750931627689502,
+		"-80": {
+			527875958493693904, 626750931627689502,
 			345387386794260318, 332484755310826578,
 			1842642426274125671, 1326307661227634652,
 			1761124146422844620, 1661669973250483744,
-			3361397649937244239, 2444880764308344533},
-		"80-": {9767889778372766922, 9742070682920810358,
+			3361397649937244239, 2444880764308344533,
+		},
+		"80-": {
+			9767889778372766922, 9742070682920810358,
 			10296850775085416642, 9537430901666854108,
 			10440455099304929791, 11454183276974683945,
 			11185910247776122031, 10460396697869122981,
-			13379616110062597001, 12826553979133932576},
+			13379616110062597001, 12826553979133932576,
+		},
 	}
 )
 
@@ -169,9 +173,9 @@ func checkDurabilityPolicy(t *testing.T, durabilityPolicy string) {
 
 func TestGetSrvKeyspaceNames(t *testing.T) {
 	data, err := clusterForKSTest.VtctldClientProcess.ExecuteCommandWithOutput("GetSrvKeyspaceNames", cell)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
-	var namesByCell = map[string]*vtctldatapb.GetSrvKeyspaceNamesResponse_NameList{}
+	namesByCell := map[string]*vtctldatapb.GetSrvKeyspaceNamesResponse_NameList{}
 	err = json2.Unmarshal([]byte(data), &namesByCell)
 	require.NoError(t, err)
 
@@ -191,20 +195,20 @@ func TestGetSrvKeyspacePartitions(t *testing.T) {
 			otherShardRefFound = true
 		}
 	}
-	assert.True(t, !otherShardRefFound)
+	assert.False(t, otherShardRefFound)
 
 	unShardedSrvKeyspace := getSrvKeyspace(t, cell, keyspaceUnshardedName)
 	otherShardRefFound = false
 	for _, partition := range unShardedSrvKeyspace.Partitions {
 		if servedTypes[partition.ServedType] {
 			for _, shardRef := range partition.ShardReferences {
-				assert.True(t, shardRef.Name == keyspaceUnshardedName)
+				assert.Equal(t, shardRef.Name, keyspaceUnshardedName)
 			}
 		} else {
 			otherShardRefFound = true
 		}
 	}
-	assert.True(t, !otherShardRefFound)
+	assert.False(t, otherShardRefFound)
 }
 
 func TestShardNames(t *testing.T) {
@@ -215,7 +219,7 @@ func TestShardNames(t *testing.T) {
 
 func TestGetKeyspace(t *testing.T) {
 	_, err := clusterForKSTest.VtctldClientProcess.GetKeyspace(keyspaceUnshardedName)
-	require.Nil(t, err)
+	require.NoError(t, err)
 }
 
 func TestDeleteKeyspace(t *testing.T) {

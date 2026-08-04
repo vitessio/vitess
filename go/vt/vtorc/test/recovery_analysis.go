@@ -75,6 +75,7 @@ type InfoForRecoveryAnalysis struct {
 	CountMixedBasedLoggingReplicas            uint
 	CountRowBasedLoggingReplicas              uint
 	CountDistinctMajorVersionsLoggingReplicas uint
+	CountValidSemiSyncReplicatingReplicas     uint
 	CountDelayedReplicas                      uint
 	CountLaggingReplicas                      uint
 	MinReplicaGTIDMode                        string
@@ -106,6 +107,7 @@ func (info *InfoForRecoveryAnalysis) ConvertToRowMap() sqlutils.RowMap {
 	rowMap["count_valid_oracle_gtid_replicas"] = sqlutils.CellData{String: strconv.FormatUint(uint64(info.CountValidOracleGTIDReplicas), 10), Valid: true}
 	rowMap["count_valid_replicas"] = sqlutils.CellData{String: strconv.FormatUint(uint64(info.CountValidReplicas), 10), Valid: true}
 	rowMap["count_valid_replicating_replicas"] = sqlutils.CellData{String: strconv.FormatUint(uint64(info.CountValidReplicatingReplicas), 10), Valid: true}
+	rowMap["count_valid_semi_sync_replicating_replicas"] = sqlutils.CellData{String: strconv.FormatUint(uint64(info.CountValidSemiSyncReplicatingReplicas), 10), Valid: true}
 	rowMap["downtime_end_timestamp"] = sqlutils.CellData{String: info.DowntimeEndTimestamp, Valid: true}
 	rowMap["downtime_remaining_seconds"] = sqlutils.CellData{String: strconv.Itoa(info.DowntimeRemainingSeconds), Valid: true}
 	rowMap["durability_policy"] = sqlutils.CellData{String: info.DurabilityPolicy, Valid: true}

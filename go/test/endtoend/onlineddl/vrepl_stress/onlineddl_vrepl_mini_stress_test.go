@@ -18,6 +18,7 @@ package vreplstress
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"math/rand/v2"
@@ -38,7 +39,6 @@ import (
 	"vitess.io/vitess/go/test/endtoend/throttler"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/schema"
-	"vitess.io/vitess/go/vt/utils"
 )
 
 type WriteMetrics struct {
@@ -136,9 +136,7 @@ var (
 	writeMetrics WriteMetrics
 )
 
-var (
-	countIterations = 5
-)
+var countIterations = 5
 
 const (
 	maxTableRows         = 4096
@@ -169,7 +167,7 @@ func TestMain(m *testing.M) {
 		defer clusterInstance.Teardown()
 
 		if _, err := os.Stat(schemaChangeDirectory); os.IsNotExist(err) {
-			_ = os.Mkdir(schemaChangeDirectory, 0700)
+			_ = os.Mkdir(schemaChangeDirectory, 0o700)
 		}
 
 		clusterInstance.VtctldExtraArgs = []string{
@@ -179,13 +177,12 @@ func TestMain(m *testing.M) {
 		}
 
 		clusterInstance.VtTabletExtraArgs = []string{
-			utils.GetFlagVariantForTests("--heartbeat-interval"), "250ms",
-			utils.GetFlagVariantForTests("--heartbeat-on-demand-duration"), "5s",
-			utils.GetFlagVariantForTests("--migration-check-interval"), "5s",
-			utils.GetFlagVariantForTests("--watch-replication-stream"),
+			"--heartbeat-interval", "250ms",
+			"--heartbeat-on-demand-duration", "5s",
+			"--migration-check-interval", "5s",
 		}
 		clusterInstance.VtGateExtraArgs = []string{
-			utils.GetFlagVariantForTests("--ddl-strategy"), "online",
+			"--ddl-strategy", "online",
 		}
 
 		if err := clusterInstance.StartTopo(); err != nil {
@@ -228,15 +225,15 @@ func TestVreplMiniStressSchemaChanges(t *testing.T) {
 	ctx := t.Context()
 
 	shards = clusterInstance.Keyspaces[0].Shards
-	require.Equal(t, 1, len(shards))
+	require.Len(t, shards, 1)
 
 	throttler.EnableLagThrottlerAndWaitForStatus(t, clusterInstance)
 
 	t.Run("create schema", func(t *testing.T) {
-		assert.Equal(t, 1, len(clusterInstance.Keyspaces[0].Shards))
+		assert.Len(t, clusterInstance.Keyspaces[0].Shards, 1)
 		testWithInitialSchema(t)
 	})
-	for i := 0; i < countIterations; i++ {
+	for i := range countIterations {
 		// This first tests the general functionality of initializing the table with data,
 		// no concurrency involved. Just counting.
 		testName := fmt.Sprintf("init table %d/%d", (i + 1), countIterations)
@@ -245,7 +242,7 @@ func TestVreplMiniStressSchemaChanges(t *testing.T) {
 			testSelectTableMetrics(t)
 		})
 	}
-	for i := 0; i < countIterations; i++ {
+	for i := range countIterations {
 		// This tests running a workload on the table, then comparing expected metrics with
 		// actual table metrics. All this without any ALTER TABLE: this is to validate
 		// that our testing/metrics logic is sound in the first place.
@@ -257,12 +254,12 @@ func TestVreplMiniStressSchemaChanges(t *testing.T) {
 			defer cancel()
 
 			var wg sync.WaitGroup
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				runMultipleConnections(ctx, t)
-			}()
+			var workloadErr error
+			wg.Go(func() {
+				workloadErr = runMultipleConnections(ctx, t)
+			})
 			wg.Wait()
+			require.NoError(t, workloadErr)
 			testSelectTableMetrics(t)
 		})
 	}
@@ -277,7 +274,7 @@ func TestVreplMiniStressSchemaChanges(t *testing.T) {
 		testSelectTableMetrics(t)
 	})
 
-	for i := 0; i < countIterations; i++ {
+	for i := range countIterations {
 		// Finally, this is the real test:
 		// We populate a table, and begin a concurrent workload (this is the "mini stress")
 		// We then ALTER TABLE via vreplication.
@@ -298,16 +295,16 @@ func TestVreplMiniStressSchemaChanges(t *testing.T) {
 				defer cancel()
 
 				var wg sync.WaitGroup
-				wg.Add(1)
-				go func() {
-					defer wg.Done()
-					runMultipleConnections(ctx, t)
-				}()
+				var workloadErr error
+				wg.Go(func() {
+					workloadErr = runMultipleConnections(ctx, t)
+				})
 				hint := fmt.Sprintf("hint-alter-with-workload-%d", i)
 				uuid := testOnlineDDLStatement(t, fmt.Sprintf(alterHintStatement, hint), onlineDDLStrategy, "vtgate", hint)
 				onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 				cancel() // Now that the migration is complete, we can stop the workload.
 				wg.Wait()
+				require.NoError(t, workloadErr)
 			})
 			t.Run("validate metrics", func(t *testing.T) {
 				testSelectTableMetrics(t)
@@ -323,11 +320,11 @@ func TestVreplMiniStressSchemaChanges(t *testing.T) {
 func testWithInitialSchema(t *testing.T) {
 	for _, statement := range cleanupStatements {
 		err := clusterInstance.VtctldClientProcess.ApplySchema(keyspaceName, statement)
-		require.Nil(t, err)
+		require.NoError(t, err)
 	}
 	// Create the stress table
 	err := clusterInstance.VtctldClientProcess.ApplySchema(keyspaceName, createStatement)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	// Check if table is created
 	checkTable(t, tableName)
@@ -343,14 +340,14 @@ func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy str
 	} else {
 		var err error
 		uuid, err = clusterInstance.VtctldClientProcess.ApplySchemaWithOutput(keyspaceName, alterStatement, cluster.ApplySchemaParams{DDLStrategy: ddlStrategy})
-		assert.NoError(t, err)
+		require.NoError(t, err)
 	}
 	uuid = strings.TrimSpace(uuid)
 	fmt.Println("# Generated UUID (for debug purposes):")
 	fmt.Printf("<%s>\n", uuid)
 
 	strategySetting, err := schema.ParseDDLStrategy(ddlStrategy)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	if !strategySetting.Strategy.IsDirect() {
 		status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, migrationWaitTimeout, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
@@ -365,40 +362,35 @@ func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy str
 
 // checkTable checks the number of tables in the first two shards.
 func checkTable(t *testing.T, showTableName string) {
-	for i := range clusterInstance.Keyspaces[0].Shards {
-		checkTablesCount(t, clusterInstance.Keyspaces[0].Shards[i].Vttablets[0], showTableName, 1)
-	}
-}
-
-// checkTablesCount checks the number of tables in the given tablet
-func checkTablesCount(t *testing.T, tablet *cluster.Vttablet, showTableName string, expectCount int) {
 	query := fmt.Sprintf(`show tables like '%%%s%%';`, showTableName)
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	ticker := time.NewTicker(time.Second)
-	defer ticker.Stop()
+	for i := range clusterInstance.Keyspaces[0].Shards {
+		tablet := clusterInstance.Keyspaces[0].Shards[i].Vttablets[0]
+		ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+		defer cancel()
+		ticker := time.NewTicker(time.Second)
+		defer ticker.Stop()
 
-	rowcount := 0
+		rowcount := 0
+		for {
+			queryResult, err := tablet.VttabletProcess.QueryTablet(query, keyspaceName, true)
+			require.NoError(t, err)
+			rowcount = len(queryResult.Rows)
+			if rowcount > 0 {
+				break
+			}
 
-	for {
-		queryResult, err := tablet.VttabletProcess.QueryTablet(query, keyspaceName, true)
-		require.Nil(t, err)
-		rowcount = len(queryResult.Rows)
-		if rowcount > 0 {
+			select {
+			case <-ticker.C:
+				continue // Keep looping
+			case <-ctx.Done():
+				// Break below to the assertion
+			}
+
 			break
 		}
 
-		select {
-		case <-ticker.C:
-			continue // Keep looping
-		case <-ctx.Done():
-			// Break below to the assertion
-		}
-
-		break
+		assert.Equal(t, 1, rowcount)
 	}
-
-	assert.Equal(t, expectCount, rowcount)
 }
 
 // checkMigratedTables checks the CREATE STATEMENT of a table after migration
@@ -412,10 +404,10 @@ func checkMigratedTable(t *testing.T, tableName, expectHint string) {
 // getCreateTableStatement returns the CREATE TABLE statement for a given table
 func getCreateTableStatement(t *testing.T, tablet *cluster.Vttablet, tableName string) (statement string) {
 	queryResult, err := tablet.VttabletProcess.QueryTablet(fmt.Sprintf("show create table %s;", tableName), keyspaceName, true)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
-	assert.Equal(t, len(queryResult.Rows), 1)
-	assert.Equal(t, len(queryResult.Rows[0]), 2) // table name, create statement
+	assert.Len(t, queryResult.Rows, 1)
+	assert.Len(t, queryResult.Rows[0], 2) // table name, create statement
 	statement = queryResult.Rows[0][1].ToString()
 	return statement
 }
@@ -492,16 +484,24 @@ func generateDelete(t *testing.T, conn *mysql.Conn) error {
 	return err
 }
 
-func runSingleConnection(ctx context.Context, t *testing.T, sleepInterval time.Duration) {
-	log.Infof("Running single connection")
+// runSingleConnection runs on a worker goroutine, so it returns errors rather
+// than asserting: require would call runtime.Goexit off the test goroutine.
+func runSingleConnection(ctx context.Context, t *testing.T, sleepInterval time.Duration) error {
+	log.Info("Running single connection")
 	conn, err := mysql.Connect(ctx, &vtParams)
-	require.Nil(t, err)
+	if err != nil {
+		return err
+	}
 	defer conn.Close()
 
 	_, err = conn.ExecuteFetch("set autocommit=1", 1000, true)
-	require.Nil(t, err)
+	if err != nil {
+		return err
+	}
 	_, err = conn.ExecuteFetch("set transaction isolation level read committed", 1000, true)
-	require.Nil(t, err)
+	if err != nil {
+		return err
+	}
 
 	ticker := time.NewTicker(sleepInterval)
 	defer ticker.Stop()
@@ -517,15 +517,19 @@ func runSingleConnection(ctx context.Context, t *testing.T, sleepInterval time.D
 		}
 		select {
 		case <-ctx.Done():
-			log.Infof("Terminating single connection")
-			return
+			log.Info("Terminating single connection")
+			return nil
 		case <-ticker.C:
 		}
-		assert.Nil(t, err)
+		if err != nil {
+			return err
+		}
 	}
 }
 
-func runMultipleConnections(ctx context.Context, t *testing.T) {
+// runMultipleConnections runs on a worker goroutine, so it returns errors
+// rather than asserting; callers check the error after wg.Wait().
+func runMultipleConnections(ctx context.Context, t *testing.T) error {
 	// The workload for a 16 vCPU machine is:
 	// - Concurrency of 16
 	// - 2ms interval between queries for each connection
@@ -537,26 +541,27 @@ func runMultipleConnections(ctx context.Context, t *testing.T) {
 	singleConnectionSleepIntervalNanoseconds := float64(baseSleepInterval.Nanoseconds()) * sleepModifier
 	sleepInterval := time.Duration(int64(singleConnectionSleepIntervalNanoseconds))
 
-	log.Infof("Running multiple connections: maxConcurrency=%v, sleep interval=%v", maxConcurrency, sleepInterval)
+	log.Info(fmt.Sprintf("Running multiple connections: maxConcurrency=%v, sleep interval=%v", maxConcurrency, sleepInterval))
 	var wg sync.WaitGroup
-	for i := 0; i < maxConcurrency; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			runSingleConnection(ctx, t, sleepInterval)
-		}()
+	errs := make([]error, maxConcurrency)
+	for i := range maxConcurrency {
+		wg.Go(func() {
+			errs[i] = runSingleConnection(ctx, t, sleepInterval)
+		})
 	}
 	wg.Wait()
-	log.Infof("Running multiple connections: done")
+	log.Info("Running multiple connections: done")
+	return errors.Join(errs...)
 }
 
 func initTable(t *testing.T) {
-	log.Infof("initTable begin")
-	defer log.Infof("initTable complete")
+	log.Info("initTable begin")
+	defer log.Info("initTable complete")
 
 	t.Run("cancel pending migrations", func(t *testing.T) {
 		cancelQuery := "alter vitess_migration cancel all"
-		r := onlineddl.VtgateExecQuery(t, &vtParams, cancelQuery, "")
+		r, err := onlineddl.VtgateExecQuery(t.Context(), &vtParams, cancelQuery)
+		require.NoError(t, err)
 		if r.RowsAffected > 0 {
 			fmt.Printf("# Cancelled migrations (for debug purposes): %d\n", r.RowsAffected)
 		}
@@ -564,21 +569,21 @@ func initTable(t *testing.T) {
 
 	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	defer conn.Close()
 
 	resetOpOrder()
 	writeMetrics.Clear()
 	_, err = conn.ExecuteFetch(truncateStatement, 1000, true)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
-	for i := 0; i < maxTableRows/2; i++ {
+	for range maxTableRows / 2 {
 		generateInsert(t, conn)
 	}
-	for i := 0; i < maxTableRows/4; i++ {
+	for range maxTableRows / 4 {
 		generateUpdate(t, conn)
 	}
-	for i := 0; i < maxTableRows/4; i++ {
+	for range maxTableRows / 4 {
 		generateDelete(t, conn)
 	}
 }
@@ -588,7 +593,8 @@ func testSelectTableMetrics(t *testing.T) {
 	defer writeMetrics.mu.Unlock()
 
 	{
-		rs := onlineddl.VtgateExecQuery(t, &vtParams, selectMaxOpOrder, "")
+		rs, err := onlineddl.VtgateExecQuery(t.Context(), &vtParams, selectMaxOpOrder)
+		require.NoError(t, err)
 		row := rs.Named().Row()
 		require.NotNil(t, row)
 
@@ -596,19 +602,19 @@ func testSelectTableMetrics(t *testing.T) {
 		fmt.Printf("# max op_order in table: %d\n", maxOpOrder)
 	}
 
-	log.Infof("%s", writeMetrics.String())
+	log.Info(writeMetrics.String())
 
 	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	defer conn.Close()
 
 	rs, err := conn.ExecuteFetch(selectCountRowsStatement, 1000, true)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	row := rs.Named().Row()
 	require.NotNil(t, row)
-	log.Infof("testSelectTableMetrics, row: %v", row)
+	log.Info(fmt.Sprintf("testSelectTableMetrics, row: %v", row))
 	numRows := row.AsInt64("num_rows", 0)
 	sumUpdates := row.AsInt64("sum_updates", 0)
 	assert.NotZero(t, numRows)

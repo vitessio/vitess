@@ -179,13 +179,7 @@ type Store[K cachekey, V cacheval] struct {
 }
 
 func NewStore[K cachekey, V cacheval](maxsize int64, doorkeeper bool) *Store[K, V] {
-	writeBufSize := maxsize / 100
-	if writeBufSize < MinWriteBuffSize {
-		writeBufSize = MinWriteBuffSize
-	}
-	if writeBufSize > MaxWriteBuffSize {
-		writeBufSize = MaxWriteBuffSize
-	}
+	writeBufSize := min(max(maxsize/100, MinWriteBuffSize), MaxWriteBuffSize)
 	shardCount := 1
 	for shardCount < runtime.GOMAXPROCS(0)*2 {
 		shardCount *= 2

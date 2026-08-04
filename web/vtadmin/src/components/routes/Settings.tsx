@@ -168,8 +168,8 @@ export const Settings = () => {
                             <h3 className="mt-12 mb-8">Icons</h3>
                             <div className={style.iconContainer}>
                                 {Object.values(Icons).map((i) => (
-                                    <Tooltip text={i}>
-                                        <Icon className={style.icon} icon={i} key={i} tabIndex={0} />
+                                    <Tooltip text={i} key={i}>
+                                        <Icon className={style.icon} icon={i} tabIndex={0} />
                                     </Tooltip>
                                 ))}
                             </div>
@@ -309,7 +309,7 @@ export const Settings = () => {
 
                             {['btn-lg', '', 'btn-sm'].map((s, idx) => {
                                 return (
-                                    <div className="my-16">
+                                    <div className="my-16" key={idx}>
                                         {['', 'btn-danger', 'btn-warning', 'btn-success'].map((v) => {
                                             return (
                                                 <div className="flex gap-4 my-6" key={`${idx}-${v}`}>

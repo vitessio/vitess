@@ -18,12 +18,10 @@ package vitessdriver
 
 import (
 	"database/sql/driver"
-	"fmt"
 	"io"
 	"reflect"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -75,18 +73,6 @@ var rowsResult1 = sqltypes.Result{
 	},
 }
 
-func logMismatchedTypes(t *testing.T, gotRow, wantRow []driver.Value) {
-	for i := 1; i < len(wantRow); i++ {
-		got := gotRow[i]
-		want := wantRow[i]
-		v1 := reflect.ValueOf(got)
-		v2 := reflect.ValueOf(want)
-		if v1.Type() != v2.Type() {
-			t.Errorf("Wrong type: field: %d got: %T want: %T", i+1, got, want)
-		}
-	}
-}
-
 func TestRows(t *testing.T) {
 	ri := newRows(&rowsResult1, &converter{})
 	wantCols := []string{
@@ -97,9 +83,7 @@ func TestRows(t *testing.T) {
 		"field5",
 	}
 	gotCols := ri.Columns()
-	if !reflect.DeepEqual(gotCols, wantCols) {
-		t.Errorf("cols: %v, want %v", gotCols, wantCols)
-	}
+	require.Equal(t, wantCols, gotCols)
 
 	wantRow := []driver.Value{
 		int64(1),
@@ -111,10 +95,7 @@ func TestRows(t *testing.T) {
 	gotRow := make([]driver.Value, len(wantRow))
 	err := ri.Next(gotRow)
 	require.NoError(t, err)
-	if !reflect.DeepEqual(gotRow, wantRow) {
-		t.Errorf("row1: %#v, want %#v type: %T", gotRow, wantRow, wantRow[3])
-		logMismatchedTypes(t, gotRow, wantRow)
-	}
+	require.Equal(t, wantRow, gotRow)
 
 	wantRow = []driver.Value{
 		int64(2),
@@ -125,15 +106,10 @@ func TestRows(t *testing.T) {
 	}
 	err = ri.Next(gotRow)
 	require.NoError(t, err)
-	if !reflect.DeepEqual(gotRow, wantRow) {
-		t.Errorf("row1: %v, want %v", gotRow, wantRow)
-		logMismatchedTypes(t, gotRow, wantRow)
-	}
+	require.Equal(t, wantRow, gotRow)
 
 	err = ri.Next(gotRow)
-	if err != io.EOF {
-		t.Errorf("got: %v, want %v", err, io.EOF)
-	}
+	require.ErrorIs(t, err, io.EOF)
 
 	_ = ri.Close()
 }
@@ -141,7 +117,7 @@ func TestRows(t *testing.T) {
 // Test that the ColumnTypeScanType function returns the correct reflection type for each
 // sql type. The sql type in turn comes from a table column's type.
 func TestColumnTypeScanType(t *testing.T) {
-	var r = sqltypes.Result{
+	r := sqltypes.Result{
 		Fields: []*querypb.Field{
 			{
 				Name: "field1",
@@ -222,15 +198,15 @@ func TestColumnTypeScanType(t *testing.T) {
 		typeTime,
 	}
 
-	for i := 0; i < len(wantTypes); i++ {
-		assert.Equal(t, ri.ColumnTypeScanType(i), wantTypes[i], fmt.Sprintf("unexpected type %v, wanted %v", ri.ColumnTypeScanType(i), wantTypes[i]))
+	for i := range wantTypes {
+		require.Equal(t, wantTypes[i], ri.ColumnTypeScanType(i))
 	}
 }
 
 // Test that the ColumnTypeScanType function returns the correct reflection type for each
 // sql type. The sql type in turn comes from a table column's type.
 func TestColumnTypeDatabaseTypeName(t *testing.T) {
-	var r = sqltypes.Result{
+	r := sqltypes.Result{
 		Fields: []*querypb.Field{
 			{
 				Name: "field1",
@@ -311,15 +287,15 @@ func TestColumnTypeDatabaseTypeName(t *testing.T) {
 		"DATETIME",
 	}
 
-	for i := 0; i < len(wantTypes); i++ {
-		assert.Equal(t, ri.ColumnTypeDatabaseTypeName(i), wantTypes[i], fmt.Sprintf("unexpected type %v, wanted %v", ri.ColumnTypeDatabaseTypeName(i), wantTypes[i]))
+	for i := range wantTypes {
+		require.Equal(t, wantTypes[i], ri.ColumnTypeDatabaseTypeName(i))
 	}
 }
 
 // Test that the ColumnTypeScanType function returns the correct reflection type for each
 // sql type. The sql type in turn comes from a table column's type.
 func TestColumnTypeNullable(t *testing.T) {
-	var r = sqltypes.Result{
+	r := sqltypes.Result{
 		Fields: []*querypb.Field{
 			{
 				Name:  "field1",
@@ -341,8 +317,8 @@ func TestColumnTypeNullable(t *testing.T) {
 		true,
 	}
 
-	for i := 0; i < len(nullable); i++ {
+	for i := range nullable {
 		null, _ := ri.ColumnTypeNullable(i)
-		assert.Equal(t, null, nullable[i], fmt.Sprintf("unexpected type %v, wanted %v", null, nullable[i]))
+		require.Equal(t, nullable[i], null)
 	}
 }

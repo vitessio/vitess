@@ -37,7 +37,7 @@ var ThisNodeHealth = &NodeHealth{}
 func writeHealthToDatabase() bool {
 	_, err := db.ExecVTOrc("DELETE FROM node_health")
 	if err != nil {
-		log.Error(err)
+		log.Error(err.Error())
 		return false
 	}
 	sqlResult, err := db.ExecVTOrc(`INSERT
@@ -47,12 +47,12 @@ func writeHealthToDatabase() bool {
 			DATETIME('now')
 		)`)
 	if err != nil {
-		log.Error(err)
+		log.Error(err.Error())
 		return false
 	}
 	rows, err := sqlResult.RowsAffected()
 	if err != nil {
-		log.Error(err)
+		log.Error(err.Error())
 		return false
 	}
 	return rows > 0

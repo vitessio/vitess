@@ -20,6 +20,8 @@ import (
 	"sort"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestShardSorter(t *testing.T) {
@@ -45,8 +47,6 @@ func TestShardSorter(t *testing.T) {
 		arr := strings.Split(shards, ",")
 		sort.Sort(ShardSorter(arr))
 		newShards := strings.Join(arr, ",")
-		if sortedShardsArray[i] != newShards {
-			t.Errorf("Shards sorted incorrectly, want %s, got %s", sortedShardsArray[i], newShards)
-		}
+		assert.Equalf(t, sortedShardsArray[i], newShards, "Shards sorted incorrectly, want %s, got %s", sortedShardsArray[i], newShards)
 	}
 }

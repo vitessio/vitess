@@ -26,7 +26,6 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/vt/sidecardb"
-	"vitess.io/vitess/go/vt/utils"
 
 	"github.com/stretchr/testify/require"
 
@@ -130,9 +129,9 @@ func getTablet(tabletGrpcPort int) *tabletpb.Tablet {
 // resurrectTablet is used to resurrect the given tablet
 func resurrectTablet(t *testing.T, tab cluster.Vttablet) {
 	// initialize config again to regenerate the my.cnf file which has the port to use
-	_, err := tab.MysqlctlProcess.ExecuteCommandWithOutput("--log_dir", tab.MysqlctlProcess.LogDirectory,
-		utils.GetFlagVariantForTestsByVersion("--tablet-uid", tab.MysqlctlProcess.MajorVersion), strconv.Itoa(tab.MysqlctlProcess.TabletUID),
-		utils.GetFlagVariantForTests("--mysql-port"), strconv.Itoa(tab.MysqlctlProcess.MySQLPort),
+	_, err := tab.MysqlctlProcess.ExecuteCommandWithOutput(
+		"--tablet-uid", strconv.Itoa(tab.MysqlctlProcess.TabletUID),
+		"--mysql-port", strconv.Itoa(tab.MysqlctlProcess.MySQLPort),
 		"init_config")
 	require.NoError(t, err)
 
@@ -176,6 +175,7 @@ func getSidecarDBDDLQueryCount(tablet *cluster.VttabletProcess) (int64, error) {
 	}
 	return int64(val.(float64)), nil
 }
+
 func TestReplicationRepairAfterPrimaryTabletChange(t *testing.T) {
 	ctx := t.Context()
 	// Check that initially replication is setup correctly on the replica tablet
@@ -185,7 +185,7 @@ func TestReplicationRepairAfterPrimaryTabletChange(t *testing.T) {
 	sidecarDDLCount, err := getSidecarDBDDLQueryCount(primaryTablet.VttabletProcess)
 	require.NoError(t, err)
 	// sidecar db should create all _vt tables when vttablet started
-	require.Greater(t, sidecarDDLCount, int64(0))
+	require.Positive(t, sidecarDDLCount)
 
 	// Stop the primary tablet
 	stopTablet(t, primaryTablet)
@@ -204,11 +204,11 @@ func TestReplicationRepairAfterPrimaryTabletChange(t *testing.T) {
 	sidecarDDLCount, err = getSidecarDBDDLQueryCount(primaryTablet.VttabletProcess)
 	require.NoError(t, err)
 	// sidecardb should find the desired _vt schema and not apply any new creates or upgrades when the tablet comes up again
-	require.Equal(t, sidecarDDLCount, int64(0))
+	require.Equal(t, int64(0), sidecarDDLCount)
 }
 
 func TestReparentJournalInfo(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
 	for _, vttablet := range clusterInstance.Keyspaces[0].Shards[0].Vttablets {
 		length, err := tmClient.ReadReparentJournalInfo(ctx, getTablet(vttablet.GrpcPort))

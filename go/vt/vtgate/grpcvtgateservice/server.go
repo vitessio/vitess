@@ -19,6 +19,7 @@ package grpcvtgateservice
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/spf13/pflag"
 	"google.golang.org/grpc"
@@ -50,16 +51,12 @@ var (
 	useEffective                    bool
 	useEffectiveGroups              bool
 	useStaticAuthenticationIdentity bool
-
-	sendSessionInStreaming bool
 )
 
 func registerFlags(fs *pflag.FlagSet) {
 	utils.SetFlagBoolVar(fs, &useEffective, "grpc-use-effective-callerid", false, "If set, and SSL is not used, will set the immediate caller id from the effective caller id's principal.")
 	utils.SetFlagBoolVar(fs, &useEffectiveGroups, "grpc-use-effective-groups", false, "If set, and SSL is not used, will set the immediate caller's security groups from the effective caller id's groups.")
 	utils.SetFlagBoolVar(fs, &useStaticAuthenticationIdentity, "grpc-use-static-authentication-callerid", false, "If set, will set the immediate caller id to the username authenticated by the static auth plugin.")
-	utils.SetFlagBoolVar(fs, &sendSessionInStreaming, "grpc-send-session-in-streaming", true, "If set, will send the session as last packet in streaming api to support transactions in streaming")
-	_ = fs.MarkDeprecated("grpc-send-session-in-streaming", "This option is deprecated and will be deleted in a future release")
 }
 
 func init() {
@@ -111,9 +108,9 @@ func immediateCallerIdFromStaticAuthentication(ctx context.Context) (string, []s
 	return "", nil
 }
 
-// withCallerIDContext creates a context that extracts what we need
-// from the incoming call and can be forwarded for use when talking to vttablet.
-func withCallerIDContext(ctx context.Context, effectiveCallerID *vtrpcpb.CallerID) context.Context {
+// withVTGateContext creates a context that extracts what VTGate needs from the
+// incoming gRPC call and can be forwarded when talking to vttablet.
+func withVTGateContext(ctx context.Context, effectiveCallerID *vtrpcpb.CallerID) context.Context {
 	// The client cert common name (if using mTLS)
 	immediate, securityGroups := immediateCallerIDFromCert(ctx)
 
@@ -133,15 +130,20 @@ func withCallerIDContext(ctx context.Context, effectiveCallerID *vtrpcpb.CallerI
 	if immediate == "" {
 		immediate = unsecureClient
 	}
-	return callerid.NewContext(callinfo.GRPCCallInfo(ctx),
+	ingressBytes, hasIngressBytes := servenv.GRPCIngressBytes(ctx)
+	ctx = callerid.NewContext(callinfo.GRPCCallInfo(ctx),
 		effectiveCallerID,
 		&querypb.VTGateCallerID{Username: immediate, Groups: securityGroups})
+	if hasIngressBytes {
+		ctx = vtgateservice.ContextWithIngressBytes(ctx, ingressBytes)
+	}
+	return ctx
 }
 
 // Execute is the RPC version of vtgateservice.VTGateService method
 func (vtg *VTGate) Execute(ctx context.Context, request *vtgatepb.ExecuteRequest) (response *vtgatepb.ExecuteResponse, err error) {
 	defer vtg.server.HandlePanic(&err)
-	ctx = withCallerIDContext(ctx, request.CallerId)
+	ctx = withVTGateContext(ctx, request.CallerId)
 
 	// Handle backward compatibility.
 	session := request.Session
@@ -159,7 +161,7 @@ func (vtg *VTGate) Execute(ctx context.Context, request *vtgatepb.ExecuteRequest
 // ExecuteMulti is the RPC version of vtgateservice.VTGateService method
 func (vtg *VTGate) ExecuteMulti(ctx context.Context, request *vtgatepb.ExecuteMultiRequest) (response *vtgatepb.ExecuteMultiResponse, err error) {
 	defer vtg.server.HandlePanic(&err)
-	ctx = withCallerIDContext(ctx, request.CallerId)
+	ctx = withVTGateContext(ctx, request.CallerId)
 
 	// Handle backward compatibility.
 	session := request.Session
@@ -176,7 +178,7 @@ func (vtg *VTGate) ExecuteMulti(ctx context.Context, request *vtgatepb.ExecuteMu
 
 func (vtg *VTGate) StreamExecuteMulti(request *vtgatepb.StreamExecuteMultiRequest, stream vtgateservicepb.Vitess_StreamExecuteMultiServer) (err error) {
 	defer vtg.server.HandlePanic(&err)
-	ctx := withCallerIDContext(stream.Context(), request.CallerId)
+	ctx := withVTGateContext(stream.Context(), request.CallerId)
 
 	session := request.Session
 	if session == nil {
@@ -198,15 +200,13 @@ func (vtg *VTGate) StreamExecuteMulti(request *vtgatepb.StreamExecuteMultiReques
 		errs = append(errs, vtgErr)
 	}
 
-	if sendSessionInStreaming {
-		// even if there is an error, session could have been modified.
-		// So, this needs to be sent back to the client. Session is sent in the last stream response.
-		lastErr := stream.Send(&vtgatepb.StreamExecuteMultiResponse{
-			Session: session,
-		})
-		if lastErr != nil {
-			errs = append(errs, lastErr)
-		}
+	// Even if there is an error, session could have been modified.
+	// So, this needs to be sent back to the client. Session is sent in the last stream response.
+	lastErr := stream.Send(&vtgatepb.StreamExecuteMultiResponse{
+		Session: session,
+	})
+	if lastErr != nil {
+		errs = append(errs, lastErr)
 	}
 
 	return vterrors.ToGRPC(vterrors.Aggregate(errs))
@@ -215,13 +215,14 @@ func (vtg *VTGate) StreamExecuteMulti(request *vtgatepb.StreamExecuteMultiReques
 // ExecuteBatch is the RPC version of vtgateservice.VTGateService method
 func (vtg *VTGate) ExecuteBatch(ctx context.Context, request *vtgatepb.ExecuteBatchRequest) (response *vtgatepb.ExecuteBatchResponse, err error) {
 	defer vtg.server.HandlePanic(&err)
-	ctx = withCallerIDContext(ctx, request.CallerId)
+	ctx = withVTGateContext(ctx, request.CallerId)
 	sqlQueries := make([]string, len(request.Queries))
 	bindVars := make([]map[string]*querypb.BindVariable, len(request.Queries))
 	for queryNum, query := range request.Queries {
 		sqlQueries[queryNum] = query.Sql
 		bindVars[queryNum] = query.BindVariables
 	}
+
 	// Handle backward compatibility.
 	session := request.Session
 	if session == nil {
@@ -238,7 +239,7 @@ func (vtg *VTGate) ExecuteBatch(ctx context.Context, request *vtgatepb.ExecuteBa
 // StreamExecute is the RPC version of vtgateservice.VTGateService method
 func (vtg *VTGate) StreamExecute(request *vtgatepb.StreamExecuteRequest, stream vtgateservicepb.Vitess_StreamExecuteServer) (err error) {
 	defer vtg.server.HandlePanic(&err)
-	ctx := withCallerIDContext(stream.Context(), request.CallerId)
+	ctx := withVTGateContext(stream.Context(), request.CallerId)
 
 	// Handle backward compatibility.
 	session := request.Session
@@ -246,7 +247,8 @@ func (vtg *VTGate) StreamExecute(request *vtgatepb.StreamExecuteRequest, stream 
 		session = &vtgatepb.Session{Autocommit: true}
 	}
 
-	session, vtgErr := vtg.server.StreamExecute(ctx, nil, session, request.Query.Sql, request.Query.BindVariables, func(value *sqltypes.Result) error {
+	// The streaming gRPC API has no prepared-statement field, so prepared is always false here.
+	session, vtgErr := vtg.server.StreamExecute(ctx, nil, session, request.Query.Sql, request.Query.BindVariables, false, func(value *sqltypes.Result) error {
 		// Send is not safe to call concurrently, but vtgate
 		// guarantees that it's not.
 		return stream.Send(&vtgatepb.StreamExecuteResponse{
@@ -259,15 +261,13 @@ func (vtg *VTGate) StreamExecute(request *vtgatepb.StreamExecuteRequest, stream 
 		errs = append(errs, vtgErr)
 	}
 
-	if sendSessionInStreaming {
-		// even if there is an error, session could have been modified.
-		// So, this needs to be sent back to the client. Session is sent in the last stream response.
-		lastErr := stream.Send(&vtgatepb.StreamExecuteResponse{
-			Session: session,
-		})
-		if lastErr != nil {
-			errs = append(errs, lastErr)
-		}
+	// Even if there is an error, session could have been modified.
+	// So, this needs to be sent back to the client. Session is sent in the last stream response.
+	lastErr := stream.Send(&vtgatepb.StreamExecuteResponse{
+		Session: session,
+	})
+	if lastErr != nil {
+		errs = append(errs, lastErr)
 	}
 
 	return vterrors.ToGRPC(vterrors.Aggregate(errs))
@@ -276,7 +276,7 @@ func (vtg *VTGate) StreamExecute(request *vtgatepb.StreamExecuteRequest, stream 
 // Prepare is the RPC version of vtgateservice.VTGateService method
 func (vtg *VTGate) Prepare(ctx context.Context, request *vtgatepb.PrepareRequest) (response *vtgatepb.PrepareResponse, err error) {
 	defer vtg.server.HandlePanic(&err)
-	ctx = withCallerIDContext(ctx, request.CallerId)
+	ctx = withVTGateContext(ctx, request.CallerId)
 
 	session := request.Session
 	if session == nil {
@@ -295,7 +295,7 @@ func (vtg *VTGate) Prepare(ctx context.Context, request *vtgatepb.PrepareRequest
 // CloseSession is the RPC version of vtgateservice.VTGateService method
 func (vtg *VTGate) CloseSession(ctx context.Context, request *vtgatepb.CloseSessionRequest) (response *vtgatepb.CloseSessionResponse, err error) {
 	defer vtg.server.HandlePanic(&err)
-	ctx = withCallerIDContext(ctx, request.CallerId)
+	ctx = withVTGateContext(ctx, request.CallerId)
 
 	session := request.Session
 	if session == nil {
@@ -310,7 +310,7 @@ func (vtg *VTGate) CloseSession(ctx context.Context, request *vtgatepb.CloseSess
 // VStream is the RPC version of vtgateservice.VTGateService method
 func (vtg *VTGate) VStream(request *vtgatepb.VStreamRequest, stream vtgateservicepb.Vitess_VStreamServer) (err error) {
 	defer vtg.server.HandlePanic(&err)
-	ctx := withCallerIDContext(stream.Context(), request.CallerId)
+	ctx := withVTGateContext(stream.Context(), request.CallerId)
 
 	// For backward compatibility.
 	// The mysql query equivalent has logic to use topodatapb.TabletType_PRIMARY if tablet_type is not set.
@@ -329,8 +329,19 @@ func (vtg *VTGate) VStream(request *vtgatepb.VStreamRequest, stream vtgateservic
 			})
 		})
 	if vtgErr != nil {
-		log.Infof("VStream grpc error: %v", vtgErr)
+		log.Info(fmt.Sprintf("VStream grpc error: %v", vtgErr))
 	}
+	return vterrors.ToGRPC(vtgErr)
+}
+
+// BinlogDumpGTID is the RPC version of vtgateservice.VTGateService method
+func (vtg *VTGate) BinlogDumpGTID(request *vtgatepb.BinlogDumpGTIDRequest, stream vtgateservicepb.Vitess_BinlogDumpGTIDServer) (err error) {
+	defer vtg.server.HandlePanic(&err)
+	ctx := withVTGateContext(stream.Context(), request.CallerId)
+	vtgErr := vtg.server.BinlogDumpGTID(ctx, request,
+		func(response *vtgatepb.BinlogDumpResponse) error {
+			return stream.Send(response)
+		})
 	return vterrors.ToGRPC(vtgErr)
 }
 

@@ -17,7 +17,6 @@ limitations under the License.
 package cli
 
 import (
-	"context"
 	"os"
 	"testing"
 
@@ -32,7 +31,7 @@ import (
 // When starting, the TabletManager checks if it needs to restore, in tm.handleRestore but this step will
 // fail if we do not provide a cnf file and if the flag --restore-from-backup is provided.
 func TestRunFailsToStartTabletManager(t *testing.T) {
-	ts, factory := memorytopo.NewServerAndFactory(context.Background(), "cell")
+	ts, factory := memorytopo.NewServerAndFactory(t.Context(), "cell")
 	topo.RegisterFactory("test", factory)
 
 	args := append([]string{}, os.Args...)
@@ -65,9 +64,8 @@ func TestRunFailsToStartTabletManager(t *testing.T) {
 	os.Args = append([]string{"vttablet"}, flagArgs...)
 
 	// Creating and canceling the context so that pending tasks in tm_init gets canceled before we close the topo server
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	err := Main.ExecuteContext(ctx)
-	require.ErrorContains(t, err, "you cannot enable --restore-from-backup without a my.cnf file")
+	require.ErrorContains(t, err, "you cannot enable --restore-from-backup or --restore-with-clone without a my.cnf file")
 }

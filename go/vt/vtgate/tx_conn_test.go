@@ -42,9 +42,11 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/sandboxconn"
 )
 
-var queries = []*querypb.BoundQuery{{Sql: "query1"}}
-var twoQueries = []*querypb.BoundQuery{{Sql: "query1"}, {Sql: "query1"}}
-var threeQueries = []*querypb.BoundQuery{{Sql: "query1"}, {Sql: "query1"}, {Sql: "query1"}}
+var (
+	queries      = []*querypb.BoundQuery{{Sql: "query1"}}
+	twoQueries   = []*querypb.BoundQuery{{Sql: "query1"}, {Sql: "query1"}}
+	threeQueries = []*querypb.BoundQuery{{Sql: "query1"}, {Sql: "query1"}, {Sql: "query1"}}
+)
 
 func TestTxConnBegin(t *testing.T) {
 	ctx := utils.LeakCheckContext(t)
@@ -184,7 +186,7 @@ func TestTxConnCommitFailureAfterNonAtomicCommitMaxShards(t *testing.T) {
 		ShardSessions: []*vtgatepb.Session_ShardSession{},
 	}
 
-	for i := 0; i < 18; i++ {
+	for i := range 18 {
 		sc.ExecuteMultiShard(ctx, nil, rssm[i], queries, session, false, false, nullResultsObserver{}, false)
 		wantSession.ShardSessions = append(wantSession.ShardSessions, &vtgatepb.Session_ShardSession{
 			Target: &querypb.Target{
@@ -216,8 +218,8 @@ func TestTxConnCommitFailureAfterNonAtomicCommitMaxShards(t *testing.T) {
 	}
 
 	utils.MustMatch(t, &wantSession, session.Session, "Session")
-	for i := 0; i < 17; i++ {
-		assert.EqualValues(t, 1, sbcs[i].CommitCount.Load(), fmt.Sprintf("sbc%d.CommitCount", i))
+	for i := range 17 {
+		assert.EqualValues(t, 1, sbcs[i].CommitCount.Load(), "sbc%d.CommitCount", i)
 	}
 
 	require.Equal(t, nonAtomicCommitCount+1, warnings.Counts()["NonAtomicCommit"])
@@ -238,7 +240,7 @@ func TestTxConnCommitFailureBeforeNonAtomicCommitMaxShards(t *testing.T) {
 		ShardSessions: []*vtgatepb.Session_ShardSession{},
 	}
 
-	for i := 0; i < 17; i++ {
+	for i := range 17 {
 		sc.ExecuteMultiShard(ctx, nil, rssm[i], queries, session, false, false, nullResultsObserver{}, false)
 		wantSession.ShardSessions = append(wantSession.ShardSessions, &vtgatepb.Session_ShardSession{
 			Target: &querypb.Target{
@@ -270,8 +272,8 @@ func TestTxConnCommitFailureBeforeNonAtomicCommitMaxShards(t *testing.T) {
 	}
 
 	utils.MustMatch(t, &wantSession, session.Session, "Session")
-	for i := 0; i < 16; i++ {
-		assert.EqualValues(t, 1, sbcs[i].CommitCount.Load(), fmt.Sprintf("sbc%d.CommitCount", i))
+	for i := range 16 {
+		assert.EqualValues(t, 1, sbcs[i].CommitCount.Load(), "sbc%d.CommitCount", i)
 	}
 
 	require.Equal(t, nonAtomicCommitCount+1, warnings.Counts()["NonAtomicCommit"])
@@ -649,13 +651,13 @@ func TestTxConnCommitOrderFailure2(t *testing.T) {
 
 	// Sequence the executes to ensure commit order
 	session := econtext.NewSafeSession(&vtgatepb.Session{InTransaction: true})
-	sc.ExecuteMultiShard(context.Background(), nil, rss1, queries, session, false, false, nullResultsObserver{}, false)
+	sc.ExecuteMultiShard(t.Context(), nil, rss1, queries, session, false, false, nullResultsObserver{}, false)
 
 	session.SetCommitOrder(vtgatepb.CommitOrder_PRE)
-	sc.ExecuteMultiShard(context.Background(), nil, rss0, queries, session, false, false, nullResultsObserver{}, false)
+	sc.ExecuteMultiShard(t.Context(), nil, rss0, queries, session, false, false, nullResultsObserver{}, false)
 
 	session.SetCommitOrder(vtgatepb.CommitOrder_POST)
-	sc.ExecuteMultiShard(context.Background(), nil, rss1, queries, session, false, false, nullResultsObserver{}, false)
+	sc.ExecuteMultiShard(t.Context(), nil, rss1, queries, session, false, false, nullResultsObserver{}, false)
 
 	sbc1.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
 	err := sc.txConn.Commit(ctx, session)
@@ -1177,7 +1179,7 @@ func TestTxConnReservedRollbackFailure(t *testing.T) {
 	sc.ExecuteMultiShard(ctx, nil, rss01, twoQueries, session, false, false, nullResultsObserver{}, false)
 
 	sbc1.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
-	assert.Error(t,
+	require.Error(t,
 		sc.txConn.Rollback(ctx, session))
 
 	expectErr := NewShardError(vterrors.New(
@@ -1634,7 +1636,7 @@ func newTestTxConnEnvNShards(t *testing.T, ctx context.Context, name string, n i
 	sc = newTestScatterConn(ctx, hc, newSandboxForCells(ctx, []string{"aa"}), "aa")
 
 	sNames := make([]string, n)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		sNames[i] = strconv.FormatInt(int64(i), 10)
 	}
 

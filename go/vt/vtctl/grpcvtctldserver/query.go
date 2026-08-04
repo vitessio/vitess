@@ -191,6 +191,13 @@ func valueToVTTime(s string) (*vttime.Time, error) {
 		return nil, nil
 	}
 
+	// Handle MySQL's zero/NULL timestamp (0000-00-00 00:00:00)
+	// This is what MySQL returns for NULL datetime values when the connection
+	// is not configured to return SQL NULL values.
+	if strings.HasPrefix(s, "0000-00-00") {
+		return nil, nil
+	}
+
 	gotime, err := time.ParseInLocation(sqltypes.TimestampFormat, s, time.Local)
 	if err != nil {
 		return nil, err
@@ -221,21 +228,20 @@ func valueToVTDuration(s string, defaultUnit string) (*vttime.Duration, error) {
 
 // queryResultForTabletResults aggregates given results into a combined result set
 func queryResultForTabletResults(results map[string]*sqltypes.Result) *sqltypes.Result {
-	var qr = &sqltypes.Result{}
+	qr := &sqltypes.Result{}
 	defaultFields := []*querypb.Field{{
 		Name:    "Tablet",
 		Type:    sqltypes.VarBinary,
 		Charset: collations.CollationBinaryID,
 		Flags:   uint32(querypb.MySqlFlag_BINARY_FLAG),
 	}}
-	var row2 []sqltypes.Value
 	for tabletAlias, result := range results {
 		if qr.Fields == nil {
 			qr.Fields = append(qr.Fields, defaultFields...)
 			qr.Fields = append(qr.Fields, result.Fields...)
 		}
 		for _, row := range result.Rows {
-			row2 = nil
+			row2 := make([]sqltypes.Value, 0, len(row)+1)
 			row2 = append(row2, sqltypes.NewVarBinary(tabletAlias))
 			row2 = append(row2, row...)
 			qr.Rows = append(qr.Rows, row2)

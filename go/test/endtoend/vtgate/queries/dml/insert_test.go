@@ -139,8 +139,8 @@ func TestAutoIncInsertSelect(t *testing.T) {
 	for _, tcase := range tcases {
 		mcmp.Run(tcase.query, func(mcmp *utils.MySQLCompare) {
 			qr := utils.Exec(t, mcmp.VtConn, tcase.query)
-			assert.EqualValues(t, tcase.expRowsAffected, qr.RowsAffected)
-			assert.EqualValues(t, tcase.expInsertID, qr.InsertID)
+			assert.Equal(t, tcase.expRowsAffected, qr.RowsAffected)
+			assert.Equal(t, tcase.expInsertID, qr.InsertID)
 		})
 	}
 
@@ -190,8 +190,8 @@ func TestAutoIncInsertSelectOlapMode(t *testing.T) {
 	for _, tcase := range tcases {
 		mcmp.Run(tcase.query, func(mcmp *utils.MySQLCompare) {
 			qr := utils.Exec(t, mcmp.VtConn, tcase.query)
-			assert.EqualValues(t, tcase.expRowsAffected, qr.RowsAffected)
-			assert.EqualValues(t, tcase.expInsertID, qr.InsertID)
+			assert.Equal(t, tcase.expRowsAffected, qr.RowsAffected)
+			assert.Equal(t, tcase.expInsertID, qr.InsertID)
 		})
 	}
 
@@ -496,8 +496,6 @@ func TestInsertAlias(t *testing.T) {
 
 // TestInsertJson tests that selected json values are encoded correctly.
 func TestInsertJson(t *testing.T) {
-	utils.SkipIfBinaryIsBelowVersion(t, 21, "vttablet")
-	utils.SkipIfBinaryIsBelowVersion(t, 21, "vtgate")
 	mcmp, closer := start(t)
 	defer closer()
 

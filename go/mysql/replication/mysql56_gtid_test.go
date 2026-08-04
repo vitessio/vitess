@@ -87,23 +87,20 @@ func TestMysql56GTIDString(t *testing.T) {
 		Sequence: 12345,
 	}
 	want := "00010203-0405-0607-0809-0a0b0c0d0e0f:12345"
-	if got := strings.ToLower(input.String()); got != want {
-		t.Errorf("%#v.String() = %#v, want %#v", input, got, want)
-	}
+	got := strings.ToLower(input.String())
+	assert.Equalf(t, want, got, "%#v.String() = %#v, want %#v", input, got, want)
 }
 
 func TestMysql56GTIDFlavor(t *testing.T) {
 	input := Mysql56GTID{}
-	if got, want := input.Flavor(), "MySQL56"; got != want {
-		t.Errorf("%#v.Flavor() = %#v, want %#v", input, got, want)
-	}
+	got := input.Flavor()
+	assert.Equalf(t, "MySQL56", got, "%#v.Flavor() = %#v, want %#v", input, got, "MySQL56")
 }
 
 func TestMysql56SequenceDomain(t *testing.T) {
 	input := Mysql56GTID{}
-	if got, want := input.SequenceDomain(), any(nil); got != want {
-		t.Errorf("%#v.SequenceDomain() = %#v, want %#v", input, got, want)
-	}
+	got := input.SequenceDomain()
+	assert.Equalf(t, any(nil), got, "%#v.SequenceDomain() = %#v, want %#v", input, got, any(nil))
 }
 
 func TestMysql56SourceServer(t *testing.T) {
@@ -111,9 +108,8 @@ func TestMysql56SourceServer(t *testing.T) {
 		Server: SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15},
 	}
 	want := any(SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15})
-	if got := input.SourceServer(); got != want {
-		t.Errorf("%#v.SourceServer() = %#v, want %#v", input, got, want)
-	}
+	got := input.SourceServer()
+	assert.Equalf(t, want, got, "%#v.SourceServer() = %#v, want %#v", input, got, want)
 }
 
 func TestMysql56SequenceNumber(t *testing.T) {
@@ -122,9 +118,8 @@ func TestMysql56SequenceNumber(t *testing.T) {
 		Sequence: 5432,
 	}
 	want := any(int64(5432))
-	if got := input.SequenceNumber(); got != want {
-		t.Errorf("%#v.SequenceNumber() = %#v, want %#v", input, got, want)
-	}
+	got := input.SequenceNumber()
+	assert.Equalf(t, want, got, "%#v.SequenceNumber() = %#v, want %#v", input, got, want)
 }
 
 func TestMysql56GTIDGTIDSet(t *testing.T) {
@@ -149,43 +144,45 @@ func TestMysql56ParseGTID(t *testing.T) {
 func TestDecodePositionMySQL56(t *testing.T) {
 	{
 		pos, gtidSet, err := DecodePositionMySQL56("")
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.True(t, pos.IsZero())
 		assert.Nil(t, gtidSet)
 	}
 	{
 		pos, gtidSet, err := DecodePositionMySQL56("MySQL56/00010203-0405-0607-0809-0A0B0C0D0E0F:1-615")
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.False(t, pos.IsZero())
 		assert.NotNil(t, gtidSet)
 		expectGTID := Mysql56GTIDSet{
 			SID{
 				0x0, 0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0x7, 0x8, 0x9, 0xa, 0xb, 0xc, 0xd, 0xe, 0xf,
-			}: []interval{{start: 1, end: 615}}}
+			}: []interval{{start: 1, end: 615}},
+		}
 		assert.Equal(t, expectGTID, gtidSet)
 	}
 	{
 		pos, gtidSet, err := DecodePositionMySQL56("00010203-0405-0607-0809-0A0B0C0D0E0F:1-615")
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.False(t, pos.IsZero())
 		assert.NotNil(t, gtidSet)
 		expectGTID := Mysql56GTIDSet{
 			SID{
 				0x0, 0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0x7, 0x8, 0x9, 0xa, 0xb, 0xc, 0xd, 0xe, 0xf,
-			}: []interval{{start: 1, end: 615}}}
+			}: []interval{{start: 1, end: 615}},
+		}
 		assert.Equal(t, expectGTID, gtidSet)
 	}
 	{
 		_, _, err := DecodePositionMySQL56("q-22b6-11ed-b765-0a43f95f28a3:1-615")
-		assert.Error(t, err)
+		require.Error(t, err)
 	}
 	{
 		_, _, err := DecodePositionMySQL56("16b1039f-22b6-11ed-b765-0a43f95f28a3")
-		assert.Error(t, err)
+		require.Error(t, err)
 	}
 	{
 		_, _, err := DecodePositionMySQL56("FilePos/mysql-bin.000001:234")
-		assert.Error(t, err)
+		require.Error(t, err)
 	}
 	{
 		_, _, err := DecodePositionMySQL56("mysql-bin.000001:234")

@@ -33,12 +33,12 @@ We will form a bootstrap Steering Committee to serve for one year. The responsib
 * Conduct elections to form the next Steering Committee.
 
 ### Members
-* Rafael Chacon @rafael
-* Michael Demmer @demmer
-* Paul Hemberger @pH14
+* Andres Taylor @systay
+* Arthur Schreiber @arthurschreiber
 * Derek Perkins @derekperkins
-* Deepthi Sigireddi @deepthi
-* Sugu Sougoumarane @sougou, Chair
+* Matt Lord @mattlord
+* Rohit Nayak @rohit-nayak-ps
+* Tim Vaillancourt @timvaillancourt
 
 ## Credits
 This document was inspired by

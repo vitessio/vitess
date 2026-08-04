@@ -29,6 +29,7 @@ import (
 func WireupRoute(ctx *plancontext.PlanningContext, eroute *engine.Route, sel sqlparser.SelectStatement) (engine.Primitive, error) {
 	// prepare the queries we will pass down
 	eroute.Query = sqlparser.String(sel)
+	eroute.QueryStatement = sel
 	buffer := sqlparser.NewTrackedBuffer(sqlparser.FormatImpossibleQuery)
 	node := buffer.WriteNode(sel)
 	eroute.FieldQuery = node.ParsedQuery().Query

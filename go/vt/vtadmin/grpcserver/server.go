@@ -29,11 +29,8 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
-	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
-	grpc_recovery "github.com/grpc-ecosystem/go-grpc-middleware/recovery"
-	otgrpc "github.com/grpc-ecosystem/go-grpc-middleware/tracing/opentracing"
+	grpc_recovery "github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/recovery"
 	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
-	"github.com/opentracing/opentracing-go"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/soheilhy/cmux"
 	"google.golang.org/grpc"
@@ -41,6 +38,7 @@ import (
 	"google.golang.org/grpc/health"
 	"google.golang.org/grpc/reflection"
 
+	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -64,7 +62,7 @@ type Options struct {
 	// AllowReflection specifies whether to register the gRPC server for
 	// reflection. This is required to use with tools like grpc_cli.
 	AllowReflection bool
-	// EnableTracing specifies whether to install opentracing interceptors on
+	// EnableTracing specifies whether to install tracing interceptors on
 	// the gRPC server.
 	EnableTracing bool
 	// EnableChannelz specifies whether to register the channelz service on the
@@ -107,30 +105,31 @@ type Server struct {
 // The full list of interceptors is as follows:
 // - (optional) interceptors defined on the Options struct
 // - prometheus
-// - (optional) opentracing, if opts.EnableTracing is set
+// - (optional) tracing, if opts.EnableTracing is set
 // - recovery
 func New(name string, opts Options) *Server {
 	streamInterceptors := append(opts.StreamInterceptors, grpc_prometheus.StreamServerInterceptor)
 	unaryInterceptors := append(opts.UnaryInterceptors, grpc_prometheus.UnaryServerInterceptor)
 
 	if opts.EnableTracing {
-		tracer := opentracing.GlobalTracer()
-		streamInterceptors = append(streamInterceptors, otgrpc.StreamServerInterceptor(otgrpc.WithTracer(tracer)))
-		unaryInterceptors = append(unaryInterceptors, otgrpc.UnaryServerInterceptor(otgrpc.WithTracer(tracer)))
+		trace.AddGrpcServerOptions(func(s grpc.StreamServerInterceptor, u grpc.UnaryServerInterceptor) {
+			streamInterceptors = append(streamInterceptors, s)
+			unaryInterceptors = append(unaryInterceptors, u)
+		})
 	}
 
-	streamInterceptors = append(streamInterceptors, func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+	streamInterceptors = append(streamInterceptors, func(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 		err := handler(srv, ss)
 		if err != nil {
-			log.Errorf("%s error: %s", info.FullMethod, err)
+			log.Error(fmt.Sprintf("%s error: %s", info.FullMethod, err))
 		}
 
 		return err
 	})
-	unaryInterceptors = append(unaryInterceptors, func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp interface{}, err error) {
+	unaryInterceptors = append(unaryInterceptors, func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp any, err error) {
 		resp, err = handler(ctx, req)
 		if err != nil {
-			log.Errorf("%s error: %s", info.FullMethod, err)
+			log.Error(fmt.Sprintf("%s error: %s", info.FullMethod, err))
 		}
 
 		return resp, err
@@ -144,8 +143,8 @@ func New(name string, opts Options) *Server {
 	unaryInterceptors = append(unaryInterceptors, grpc_recovery.UnaryServerInterceptor(recoveryHandler))
 
 	gserv := grpc.NewServer(
-		grpc.StreamInterceptor(grpc_middleware.ChainStreamServer(streamInterceptors...)),
-		grpc.UnaryInterceptor(grpc_middleware.ChainUnaryServer(unaryInterceptors...)),
+		grpc.ChainStreamInterceptor(streamInterceptors...),
+		grpc.ChainUnaryInterceptor(unaryInterceptors...),
 	)
 
 	if opts.AllowReflection {
@@ -220,7 +219,7 @@ func (s *Server) ListenAndServe() error {
 	go func() {
 		sig := <-signals
 		err := fmt.Errorf("received signal: %v", sig)
-		log.Warning(err)
+		log.Warn(fmt.Sprint(err))
 		shutdown <- err
 	}()
 
@@ -237,14 +236,14 @@ func (s *Server) ListenAndServe() error {
 	go func() {
 		err := s.gRPCServer.Serve(grpcLis)
 		err = fmt.Errorf("grpc server stopped: %w", err)
-		log.Warning(err)
+		log.Warn(fmt.Sprint(err))
 		shutdown <- err
 	}()
 
 	go func() {
 		err := http.Serve(anyLis, s.router)
 		err = fmt.Errorf("http server stopped: %w", err)
-		log.Warning(err)
+		log.Warn(fmt.Sprint(err))
 		shutdown <- err
 	}()
 
@@ -252,7 +251,7 @@ func (s *Server) ListenAndServe() error {
 	go func() {
 		err := lmux.Serve()
 		err = fmt.Errorf("listener closed: %w", err)
-		log.Warning(err)
+		log.Warn(fmt.Sprint(err))
 		shutdown <- err
 	}()
 
@@ -261,17 +260,17 @@ func (s *Server) ListenAndServe() error {
 	}
 
 	s.setServing(true)
-	log.Infof("server %s listening on %s", s.name, s.opts.Addr)
+	log.Info(fmt.Sprintf("server %s listening on %s", s.name, s.opts.Addr))
 
 	reason := <-shutdown
-	log.Warningf("graceful shutdown triggered by: %v", reason)
+	log.Warn(fmt.Sprintf("graceful shutdown triggered by: %v", reason))
 
 	if s.opts.LameDuckDuration > 0 {
-		log.Infof("entering lame duck period for %v", s.opts.LameDuckDuration)
+		log.Info(fmt.Sprintf("entering lame duck period for %v", s.opts.LameDuckDuration))
 		s.healthServer.Shutdown()
 		time.Sleep(s.opts.LameDuckDuration)
 	} else {
-		log.Infof("lame duck disabled")
+		log.Info("lame duck disabled")
 	}
 
 	log.Info("beginning graceful shutdown")

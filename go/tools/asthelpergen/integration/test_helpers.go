@@ -33,6 +33,7 @@ func sliceStringAST(els ...AST) string {
 	}
 	return strings.Join(result, ", ")
 }
+
 func sliceStringLeaf(els ...*Leaf) string {
 	result := make([]string, len(els))
 	for i, el := range els {
@@ -172,7 +173,7 @@ func (path ASTPath) DebugString() string {
 			}
 			offset, readBytes := binary.Varint(remaining)
 			remaining = remaining[readBytes:]
-			sb.WriteString(fmt.Sprintf("(%d)", offset))
+			fmt.Fprintf(&sb, "(%d)", offset)
 		}
 	}
 

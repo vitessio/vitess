@@ -17,7 +17,6 @@ limitations under the License.
 package vtgate
 
 import (
-	"context"
 	"fmt"
 	"strconv"
 	"testing"
@@ -164,7 +163,7 @@ func TestSubQueries(t *testing.T) {
 
 	// fail as projection subquery is not scalar
 	_, err := utils.ExecAllowError(t, mcmp.VtConn, `select (select id from t2) from t2 order by id`)
-	assert.EqualError(t, err, "subquery returned more than one row (errno 1105) (sqlstate HY000) during query: select (select id from t2) from t2 order by id")
+	require.EqualError(t, err, "subquery returned more than one row (errno 1105) (sqlstate HY000) during query: select (select id from t2) from t2 order by id")
 
 	utils.AssertMatches(t, mcmp.VtConn, `select (select id from t2 order by id limit 1) from t2 order by id limit 2`, `[[INT64(1)] [INT64(1)]]`)
 }
@@ -181,9 +180,9 @@ func TestSubQueriesOnOuterJoinOnCondition(t *testing.T) {
 	// inserting some data in u_a
 	utils.Exec(t, mcmp.VtConn, `insert into u_a(id, a) values (1, 1)`)
 	qr := utils.Exec(t, mcmp.VtConn, `select u_a.a from u_a left join t2 on t2.id IN (select id from t2)`)
-	assert.EqualValues(t, 8, len(qr.Rows))
+	assert.Len(t, qr.Rows, 8)
 	for index, row := range qr.Rows {
-		assert.EqualValues(t, `[INT64(1)]`, fmt.Sprintf("%v", row), "does not match for row: %d", index+1)
+		assert.Equal(t, `[INT64(1)]`, fmt.Sprintf("%v", row), "does not match for row: %d", index+1)
 	}
 }
 
@@ -252,7 +251,7 @@ func TestFanoutVindex(t *testing.T) {
 		}
 	}
 
-	newConn, err := mysql.Connect(context.Background(), &vtParams)
+	newConn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer newConn.Close()
 
@@ -307,7 +306,7 @@ func TestSubShardVindex(t *testing.T) {
 		}
 	}
 
-	newConn, err := mysql.Connect(context.Background(), &vtParams)
+	newConn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer newConn.Close()
 
@@ -357,7 +356,7 @@ func TestSubShardVindexDML(t *testing.T) {
 		}
 	}
 
-	newConn, err := mysql.Connect(context.Background(), &vtParams)
+	newConn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer newConn.Close()
 

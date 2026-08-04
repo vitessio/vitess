@@ -32,11 +32,11 @@ func TestByteToString(t *testing.T) {
 
 	v1 = []byte("")
 	s = String(v1)
-	assert.Equal(t, "", s)
+	assert.Empty(t, s)
 
 	v1 = nil
 	s = String(v1)
-	assert.Equal(t, "", s)
+	assert.Empty(t, s)
 }
 
 func TestStringToByte(t *testing.T) {
@@ -56,7 +56,7 @@ func testMapSize[K comparable, V any](t *testing.T, gen func(i int) (K, V)) {
 		runtime.ReadMemStats(&before)
 
 		m := make(map[K]V, size)
-		for i := 0; i < size; i++ {
+		for i := range size {
 			k, v := gen(i)
 			m[k] = v
 		}

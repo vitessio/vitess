@@ -23,10 +23,13 @@ import { topodata, vtadmin as pb } from '../proto/vtadmin';
  * So, we make the assumption that if there are duplicate keys, we will
  * always take the first value.
  */
-export const TABLET_TYPES = Object.entries(invertBy(topodata.TabletType)).reduce((acc, [k, vs]) => {
-    acc[k] = vs[0];
-    return acc;
-}, {} as { [k: string]: string });
+export const TABLET_TYPES = Object.entries(invertBy(topodata.TabletType)).reduce(
+    (acc, [k, vs]) => {
+        acc[k] = vs[0];
+        return acc;
+    },
+    {} as { [k: string]: string }
+);
 
 /**
  * formatAlias formats a tablet.alias object as a single string, The Vitess Way™.

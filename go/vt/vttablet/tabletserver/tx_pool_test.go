@@ -23,7 +23,6 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/ptr"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -32,6 +31,7 @@ import (
 
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tx"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/fakesqldb"
@@ -42,8 +42,7 @@ import (
 )
 
 func TestTxPoolExecuteCommit(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	db, txPool, _, closer := setup(t)
 	defer closer()
 
@@ -78,8 +77,7 @@ func TestTxPoolExecuteCommit(t *testing.T) {
 }
 
 func TestTxPoolExecuteRollback(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	db, txPool, _, closer := setup(t)
 	defer closer()
@@ -99,8 +97,7 @@ func TestTxPoolExecuteRollback(t *testing.T) {
 }
 
 func TestTxPoolExecuteRollbackOnClosedConn(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	db, txPool, _, closer := setup(t)
 	defer closer()
@@ -119,8 +116,7 @@ func TestTxPoolExecuteRollbackOnClosedConn(t *testing.T) {
 }
 
 func TestTxPoolRollbackNonBusy(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	db, txPool, _, closer := setup(t)
 	defer closer()
@@ -149,8 +145,7 @@ func TestTxPoolRollbackNonBusy(t *testing.T) {
 }
 
 func TestTxPoolTransactionIsolation(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	db, txPool, _, closer := setup(t)
 	defer closer()
@@ -163,8 +158,7 @@ func TestTxPoolTransactionIsolation(t *testing.T) {
 }
 
 func TestTxPoolAutocommit(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	db, txPool, _, closer := setup(t)
 	defer closer()
@@ -193,8 +187,7 @@ func TestTxPoolAutocommit(t *testing.T) {
 // db connection. DBConn.Exec() is going to reconnect and retry automatically
 // due to this connection error and the BEGIN will succeed.
 func TestTxPoolBeginWithPoolConnectionError_Errno2006_Transient(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	db, txPool := primeTxPoolWithConnection(t, ctx)
 	defer db.Close()
@@ -216,11 +209,11 @@ func primeTxPoolWithConnection(t *testing.T, ctx context.Context) (*fakesqldb.DB
 	t.Helper()
 	db := fakesqldb.New(t)
 	txPool, _ := newTxPool()
-	// Set the capacity to 1 to ensure that the db connection is reused.
-	err := txPool.scp.conns.SetCapacity(context.Background(), 1)
-	require.NoError(t, err)
 	params := dbconfigs.New(db.ConnParams())
 	txPool.Open(params, params, params)
+	// Set the capacity to 1 to ensure that the db connection is reused.
+	err := txPool.scp.conns.SetCapacity(t.Context(), 1)
+	require.NoError(t, err)
 
 	// Run a query to trigger a database connection. That connection will be
 	// reused by subsequent transactions.
@@ -234,8 +227,7 @@ func primeTxPoolWithConnection(t *testing.T, ctx context.Context) (*fakesqldb.DB
 }
 
 func TestTxPoolBeginWithError(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	db, txPool, limiter, closer := setup(t)
 	defer closer()
@@ -275,7 +267,7 @@ func TestTxPoolCancelledContextError(t *testing.T) {
 	// given
 	db, txPool, _, closer := setup(t)
 	defer closer()
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 
 	// when
@@ -289,8 +281,7 @@ func TestTxPoolCancelledContextError(t *testing.T) {
 }
 
 func TestTxPoolWaitTimeoutError(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	env := newEnv("TabletServerTest")
 	env.Config().TxPool.Size = 1
@@ -317,8 +308,7 @@ func TestTxPoolWaitTimeoutError(t *testing.T) {
 }
 
 func TestTxPoolRollbackFailIsPassedThrough(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	sql := "alter table test_table add test_column int"
 	db, txPool, _, closer := setup(t)
@@ -340,8 +330,7 @@ func TestTxPoolRollbackFailIsPassedThrough(t *testing.T) {
 }
 
 func TestTxPoolGetConnRecentlyRemovedTransaction(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	db, txPool, _, _ := setup(t)
 	defer db.Close()
@@ -354,7 +343,7 @@ func TestTxPoolGetConnRecentlyRemovedTransaction(t *testing.T) {
 		conn, err := txPool.GetAndLock(id, "for query")
 		if err == nil { //
 			conn.ReleaseString("fail")
-			t.Errorf("expected to get an error")
+			assert.Fail(t, "expected to get an error")
 			return
 		}
 
@@ -400,7 +389,7 @@ func TestTxPoolCloseKillsStrayTransactions(t *testing.T) {
 	startingStray := txPool.env.Stats().InternalErrors.Counts()["StrayTransactions"]
 
 	// Start stray transaction.
-	conn, _, _, err := txPool.Begin(context.Background(), &querypb.ExecuteOptions{}, false, 0, nil)
+	conn, _, _, err := txPool.Begin(t.Context(), &querypb.ExecuteOptions{}, false, 0, nil)
 	require.NoError(t, err)
 	conn.Unlock()
 
@@ -411,8 +400,7 @@ func TestTxPoolCloseKillsStrayTransactions(t *testing.T) {
 }
 
 func TestTxTimeoutKillsTransactions(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	env := newEnv("TabletServerTest")
 	env.Config().TxPool.Size = 1
@@ -459,8 +447,7 @@ func TestTxTimeoutKillsTransactions(t *testing.T) {
 }
 
 func TestTxTimeoutDoesNotKillShortLivedTransactions(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	env := newEnv("TabletServerTest")
 	env.Config().TxPool.Size = 1
@@ -491,8 +478,7 @@ func TestTxTimeoutDoesNotKillShortLivedTransactions(t *testing.T) {
 }
 
 func TestTxTimeoutKillsOlapTransactions(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	env := newEnv("TabletServerTest")
 	env.Config().TxPool.Size = 1
@@ -528,8 +514,7 @@ func TestTxTimeoutKillsOlapTransactions(t *testing.T) {
 }
 
 func TestTxTimeoutNotEnforcedForZeroLengthTimeouts(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	env := newEnv("TabletServerTest")
 	env.Config().TxPool.Size = 2
@@ -570,8 +555,7 @@ func TestTxTimeoutNotEnforcedForZeroLengthTimeouts(t *testing.T) {
 }
 
 func TestTxTimeoutReservedConn(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	env := newEnv("TabletServerTest")
 	env.Config().TxPool.Size = 1
@@ -612,8 +596,7 @@ func TestTxTimeoutReservedConn(t *testing.T) {
 }
 
 func TestTxTimeoutReusedReservedConn(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	env := newEnv("TabletServerTest")
 	env.Config().TxPool.Size = 1
@@ -767,8 +750,7 @@ func TestTxPoolBeginStatements(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(fmt.Sprintf("%v:%v:readOnly:%v", tc.txIsolationLevel, tc.txAccessModes, tc.readOnly), func(t *testing.T) {
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			ctx := t.Context()
 
 			options := &querypb.ExecuteOptions{
 				TransactionIsolation:  tc.txIsolationLevel,
@@ -804,17 +786,17 @@ func TestGetTransactionTimeout(t *testing.T) {
 	require.Equal(t, 5*time.Millisecond, timeout)
 
 	// Options with larger timeout should use smaller workload timeout
-	options.TransactionTimeout = ptr.Of(int64(10)) // ms
+	options.TransactionTimeout = new(int64(10)) // ms
 	timeout = getTransactionTimeout(options, txPool.env.Config(), options.Workload)
 	require.Equal(t, 5*time.Millisecond, timeout)
 
 	// Options with smaller timeout should use smaller session timeout
-	options.TransactionTimeout = ptr.Of(int64(3)) // ms
+	options.TransactionTimeout = new(int64(3)) // ms
 	timeout = getTransactionTimeout(options, txPool.env.Config(), options.Workload)
 	require.Equal(t, 3*time.Millisecond, timeout)
 
 	// Options with explicit zero timeout should use larger workload timeout
-	options.TransactionTimeout = ptr.Of(int64(0))
+	options.TransactionTimeout = new(int64(0))
 	timeout = getTransactionTimeout(options, txPool.env.Config(), options.Workload)
 	require.Equal(t, 5*time.Millisecond, timeout)
 }

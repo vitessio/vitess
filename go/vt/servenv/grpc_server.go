@@ -19,12 +19,16 @@ package servenv
 import (
 	"context"
 	"crypto/tls"
+	"errors"
+	"fmt"
 	"math"
 	"net"
+	"os"
+	"runtime"
 	"strconv"
+	"sync"
 	"time"
 
-	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
 	"github.com/spf13/pflag"
 	"google.golang.org/grpc"
@@ -207,7 +211,7 @@ func isGRPCEnabled() bool {
 func createGRPCServer() {
 	// skip if not registered
 	if !isGRPCEnabled() {
-		log.Infof("Skipping gRPC server creation")
+		log.Info("Skipping gRPC server creation")
 		return
 	}
 
@@ -215,13 +219,14 @@ func createGRPCServer() {
 	if gRPCCert != "" && gRPCKey != "" {
 		config, err := vttls.ServerConfig(gRPCCert, gRPCKey, gRPCCA, gRPCCRL, gRPCServerCA, tls.VersionTLS12)
 		if err != nil {
-			log.Exitf("Failed to log gRPC cert/key/ca: %v", err)
+			log.Error(fmt.Sprintf("Failed to log gRPC cert/key/ca: %v", err))
+			os.Exit(1)
 		}
 
 		// create the creds server options
 		creds := credentials.NewTLS(config)
 		if gRPCEnableOptionalTLS {
-			log.Warning("Optional TLS is active. Plain-text connections will be accepted")
+			log.Warn("Optional TLS is active. Plain-text connections will be accepted")
 			creds = grpcoptionaltls.New(creds)
 		}
 		opts = []grpc.ServerOption{grpc.Creds(creds)}
@@ -234,7 +239,7 @@ func createGRPCServer() {
 	// Note: For gRPC 1.0.0 it's sufficient to set the limit on the server only
 	// because it's not enforced on the client side.
 	msgSize := grpccommon.MaxMessageSize()
-	log.Infof("Setting grpc max message size to %d", msgSize)
+	log.Info(fmt.Sprintf("Setting grpc max message size to %d", msgSize))
 	opts = append(opts, grpc.MaxRecvMsgSize(msgSize))
 	opts = append(opts, grpc.MaxSendMsgSize(msgSize))
 
@@ -244,12 +249,12 @@ func createGRPCServer() {
 	}
 
 	if gRPCInitialConnWindowSize != 0 {
-		log.Infof("Setting grpc server initial conn window size to %d", int32(gRPCInitialConnWindowSize))
+		log.Info(fmt.Sprintf("Setting grpc server initial conn window size to %d", int32(gRPCInitialConnWindowSize)))
 		opts = append(opts, grpc.InitialConnWindowSize(int32(gRPCInitialConnWindowSize)))
 	}
 
 	if gRPCInitialWindowSize != 0 {
-		log.Infof("Setting grpc server initial window size to %d", int32(gRPCInitialWindowSize))
+		log.Info(fmt.Sprintf("Setting grpc server initial window size to %d", int32(gRPCInitialWindowSize)))
 		opts = append(opts, grpc.InitialWindowSize(int32(gRPCInitialWindowSize)))
 	}
 
@@ -267,6 +272,14 @@ func createGRPCServer() {
 	}
 	opts = append(opts, grpc.KeepaliveParams(ka))
 
+	// Reuse a fixed pool of worker goroutines for incoming streams instead
+	// of spawning a new goroutine per RPC. This avoids per-RPC goroutine
+	// creation and cold-start scheduling latency on the hot path.
+	opts = append(opts, grpc.NumStreamWorkers(uint32(runtime.GOMAXPROCS(0))))
+	if gRPCIngressStatsEnabled {
+		opts = append(opts, grpc.StatsHandler(GRPCIngressStatsHandler()))
+	}
+
 	opts = append(opts, interceptors()...)
 
 	GRPCServer = grpc.NewServer(opts...)
@@ -277,11 +290,12 @@ func interceptors() []grpc.ServerOption {
 	interceptors := &serverInterceptorBuilder{}
 
 	if gRPCAuth != "" {
-		log.Infof("enabling auth plugin %v", gRPCAuth)
+		log.Info(fmt.Sprintf("enabling auth plugin %v", gRPCAuth))
 		pluginInitializer := GetAuthenticator(gRPCAuth)
 		authPluginImpl, err := pluginInitializer()
 		if err != nil {
-			log.Fatalf("Failed to load auth plugin: %v", err)
+			log.Error(fmt.Sprintf("Failed to load auth plugin: %v", err))
+			os.Exit(1)
 		}
 		authPlugin = authPluginImpl
 		interceptors.Add(authenticatingStreamInterceptor, authenticatingUnaryInterceptor)
@@ -296,18 +310,21 @@ func interceptors() []grpc.ServerOption {
 	return interceptors.Build()
 }
 
-func serveGRPC() {
+// serveGRPC returns a stop function that terminates the ORCA metrics updater
+// goroutine, if one was started; it is a no-op otherwise.
+func serveGRPC() (stopOrcaUpdater func()) {
+	stopOrcaUpdater = func() {}
 	if grpccommon.EnableGRPCPrometheus() {
 		grpc_prometheus.Register(GRPCServer)
 		grpc_prometheus.EnableHandlingTimeHistogram()
 	}
 	// skip if not registered
 	if gRPCPort == 0 {
-		return
+		return stopOrcaUpdater
 	}
 
 	if gRPCEnableOrcaMetrics {
-		registerOrca()
+		stopOrcaUpdater = registerOrca()
 	}
 
 	// register reflection to support list calls :)
@@ -322,10 +339,12 @@ func serveGRPC() {
 	}
 
 	// listen on the port
-	log.Infof("Listening for gRPC calls on port %v", gRPCPort)
-	listener, err := net.Listen("tcp", net.JoinHostPort(gRPCBindAddress, strconv.Itoa(gRPCPort)))
+	log.Info(fmt.Sprintf("Listening for gRPC calls on port %v", gRPCPort))
+
+	listener, err := Listen("tcp", net.JoinHostPort(gRPCBindAddress, strconv.Itoa(gRPCPort)))
 	if err != nil {
-		log.Exitf("Cannot listen on port %v for gRPC: %v", gRPCPort, err)
+		log.Error(fmt.Sprintf("Cannot listen on port %v for gRPC: %v", gRPCPort, err))
+		os.Exit(1)
 	}
 
 	// and serve on it
@@ -334,41 +353,69 @@ func serveGRPC() {
 	//       runs all OnRun() hooks after createGRPCServer() and before
 	//       serveGRPC(). If this was not the case, the binary would crash with
 	//       the error "grpc: Server.RegisterService after Server.Serve".
+	// Capture the server so the goroutine below does not read the GRPCServer
+	// global, which tests swap out between runs.
+	server := GRPCServer
 	go func() {
-		err := GRPCServer.Serve(listener)
-		if err != nil {
-			log.Exitf("Failed to start grpc server: %v", err)
+		err := server.Serve(listener)
+		// Serve returns ErrServerStopped when Stop or GracefulStop was called
+		// before it started; that is a clean shutdown, not a startup failure.
+		if err != nil && !errors.Is(err, grpc.ErrServerStopped) {
+			log.Error(fmt.Sprintf("Failed to start grpc server: %v", err))
+			os.Exit(1)
 		}
 	}()
 
 	OnTermSync(func() {
 		log.Info("Initiated graceful stop of gRPC server")
-		GRPCServer.GracefulStop()
+		server.GracefulStop()
 		log.Info("gRPC server stopped")
 	})
+
+	return stopOrcaUpdater
 }
 
-func registerOrca() {
+// registerOrca returns a stop function that terminates the metrics updater
+// goroutine and waits for it to exit, so that once it returns the goroutine
+// no longer touches any package state.
+func registerOrca() (stop func()) {
 	if err := orcaRegisterFunc(GRPCServer, orca.ServiceOptions{
 		// The minimum interval of orca is 30 seconds, unless we enable a testing flag.
 		MinReportingInterval:  30 * time.Second,
 		ServerMetricsProvider: GRPCServerMetricsRecorder,
 	}); err != nil {
-		log.Exitf("Failed to register ORCA service: %v", err)
+		log.Error(fmt.Sprintf("Failed to register ORCA service: %v", err))
+		os.Exit(1)
 	}
 
 	// Initialize the server metrics values.
 	GRPCServerMetricsRecorder.SetCPUUtilization(getCpuUsage())
 	GRPCServerMetricsRecorder.SetMemoryUtilization(getMemoryUsage())
 
+	// Capture the recorder so the goroutine below does not read the
+	// GRPCServerMetricsRecorder global, which tests swap out between runs.
+	recorder := GRPCServerMetricsRecorder
+	stopCh := make(chan struct{})
+	doneCh := make(chan struct{})
 	go func() {
+		defer close(doneCh)
 		ticker := time.NewTicker(30 * time.Second)
 		defer ticker.Stop()
-		for range ticker.C {
-			GRPCServerMetricsRecorder.SetCPUUtilization(getCpuUsage())
-			GRPCServerMetricsRecorder.SetMemoryUtilization(getMemoryUsage())
+		for {
+			select {
+			case <-ticker.C:
+				recorder.SetCPUUtilization(getCpuUsage())
+				recorder.SetMemoryUtilization(getMemoryUsage())
+			case <-stopCh:
+				return
+			}
 		}
 	}()
+
+	return sync.OnceFunc(func() {
+		close(stopCh)
+		<-doneCh
+	})
 }
 
 // GRPCCheckServiceMap returns if we should register a gRPC service
@@ -386,7 +433,6 @@ func GRPCCheckServiceMap(name string) bool {
 
 func authenticatingStreamInterceptor(srv any, stream grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 	newCtx, err := authPlugin.Authenticate(stream.Context(), info.FullMethod)
-
 	if err != nil {
 		return err
 	}
@@ -443,14 +489,14 @@ func (collector *serverInterceptorBuilder) AddUnary(u grpc.UnaryServerIntercepto
 
 // Build returns DialOptions to add to the grpc.Dial call
 func (collector *serverInterceptorBuilder) Build() []grpc.ServerOption {
-	log.Infof("Building interceptors with %d unary interceptors and %d stream interceptors", len(collector.unaryInterceptors), len(collector.streamInterceptors))
+	log.Info(fmt.Sprintf("Building interceptors with %d unary interceptors and %d stream interceptors", len(collector.unaryInterceptors), len(collector.streamInterceptors)))
 	switch len(collector.unaryInterceptors) + len(collector.streamInterceptors) {
 	case 0:
 		return []grpc.ServerOption{}
 	default:
 		return []grpc.ServerOption{
-			grpc.UnaryInterceptor(grpc_middleware.ChainUnaryServer(collector.unaryInterceptors...)),
-			grpc.StreamInterceptor(grpc_middleware.ChainStreamServer(collector.streamInterceptors...)),
+			grpc.ChainUnaryInterceptor(collector.unaryInterceptors...),
+			grpc.ChainStreamInterceptor(collector.streamInterceptors...),
 		}
 	}
 }

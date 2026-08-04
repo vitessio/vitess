@@ -32,14 +32,12 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-var (
-	oneTableOutput = `+---+
+var oneTableOutput = `+---+
 | a |
 +---+
 | 1 |
 +---+
 `
-)
 
 func TestVtctldProcess(t *testing.T) {
 	url := fmt.Sprintf("http://%s:%d/api/keyspaces/", clusterInstance.Hostname, clusterInstance.VtctldHTTPPort)
@@ -61,7 +59,7 @@ func testTopoDataAPI(t *testing.T, url string) {
 	resp, err := http.Get(url)
 	require.NoError(t, err)
 	defer resp.Body.Close()
-	assert.Equal(t, resp.StatusCode, 200)
+	assert.Equal(t, 200, resp.StatusCode)
 
 	resultMap := make(map[string]any)
 	respByte, err := io.ReadAll(resp.Body)
@@ -95,7 +93,7 @@ func testGetTablets(t *testing.T) {
 			assert.Contains(t, tablets, strings.Split(line, " ")[0])
 		}
 	}
-	assert.Equal(t, tabletCountFromCMD, len(tablets))
+	assert.Len(t, tablets, tabletCountFromCMD)
 
 	// now filtering with the first keyspace and tablet type of primary, in
 	// addition to the cell
@@ -121,9 +119,9 @@ func testTabletStatus(t *testing.T) {
 	respByte, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
 	result := string(respByte)
-	log.Infof("Tablet status response: %v", result)
-	assert.True(t, strings.Contains(result, `/debug/health`))
-	assert.True(t, strings.Contains(result, `</html>`))
+	log.Info(fmt.Sprintf("Tablet status response: %v", result))
+	assert.Contains(t, result, `/debug/health`)
+	assert.Contains(t, result, `</html>`)
 }
 
 func testExecuteAsDba(t *testing.T) {

@@ -17,6 +17,7 @@ limitations under the License.
 package registry
 
 import (
+	querythrottlerpb "vitess.io/vitess/go/vt/proto/querythrottler"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle"
 )
@@ -55,9 +56,11 @@ type ThrottleDecision struct {
 }
 
 // StrategyConfig defines the configuration interface that strategy implementations
-// must satisfy. This avoids circular imports by using a generic interface.
+// must satisfy. This matches the proto querythrottlerpb.Config interface.
 type StrategyConfig interface {
-	GetStrategy() ThrottlingStrategy
+	GetEnabled() bool
+	GetDryRun() bool
+	GetStrategy() querythrottlerpb.ThrottlingStrategy
 }
 
 // Deps holds the dependencies required by strategy factories.

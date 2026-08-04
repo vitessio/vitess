@@ -19,12 +19,14 @@ package schemamanager
 import (
 	"context"
 	"strconv"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 
@@ -35,13 +37,11 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
-var (
-	testWaitReplicasTimeout = 10 * time.Second
-)
+var testWaitReplicasTimeout = 10 * time.Second
 
 func TestTabletExecutorOpen(t *testing.T) {
 	executor := newFakeExecutor(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	err := executor.Open(ctx, "test_keyspace")
 	require.NoError(t, err)
@@ -53,8 +53,7 @@ func TestTabletExecutorOpen(t *testing.T) {
 }
 
 func TestTabletExecutorOpenWithEmptyPrimaryAlias(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "test_cell")
 	tablet := &topodatapb.Tablet{
 		Alias: &topodatapb.TabletAlias{
@@ -103,7 +102,7 @@ func TestTabletExecutorValidate(t *testing.T) {
 	})
 
 	executor := NewTabletExecutor("TestTabletExecutorValidate", newFakeTopo(t), fakeTmc, logutil.NewConsoleLogger(), testWaitReplicasTimeout, 0, sqlparser.NewTestParser())
-	ctx := context.Background()
+	ctx := t.Context()
 
 	sqls := []string{
 		"ALTER TABLE test_table ADD COLUMN new_id bigint(20)",
@@ -172,7 +171,7 @@ func TestTabletExecutorDML(t *testing.T) {
 	})
 
 	executor := NewTabletExecutor("TestTabletExecutorDML", newFakeTopo(t), fakeTmc, logutil.NewConsoleLogger(), testWaitReplicasTimeout, 0, sqlparser.NewTestParser())
-	ctx := context.Background()
+	ctx := t.Context()
 
 	executor.Open(ctx, "unsharded_keyspace")
 	defer executor.Close()
@@ -186,7 +185,7 @@ func TestTabletExecutorDML(t *testing.T) {
 
 func TestTabletExecutorExecute(t *testing.T) {
 	executor := newFakeExecutor(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	sqls := []string{"DROP TABLE unknown_table"}
 
@@ -258,10 +257,10 @@ func TestIsOnlineSchemaDDL(t *testing.T) {
 	for _, ts := range tt {
 		e := &TabletExecutor{}
 		err := e.SetDDLStrategy(ts.ddlStrategy)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 
 		stmt, err := parser.Parse(ts.query)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 
 		ddlStmt, ok := stmt.(sqlparser.DDLStatement)
 		assert.True(t, ok)
@@ -389,7 +388,7 @@ func TestAllSQLsAreCreateQueries(t *testing.T) {
 	for _, tcase := range tcases {
 		t.Run(tcase.name, func(t *testing.T) {
 			result, err := allSQLsAreCreateQueries(tcase.sqls, sqlparser.NewTestParser())
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.Equal(t, tcase.expect, result)
 		})
 	}
@@ -424,8 +423,49 @@ func TestApplyAllowZeroInDate(t *testing.T) {
 	for _, tcase := range tcases {
 		t.Run(tcase.sql, func(t *testing.T) {
 			result, err := applyAllowZeroInDate(tcase.sql, sqlparser.NewTestParser())
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.Equal(t, tcase.expect, result)
 		})
+	}
+}
+
+type capturingMultiFetchClient struct {
+	*fakeTabletManagerClient
+	mu   sync.Mutex
+	reqs []*tabletmanagerdatapb.ExecuteMultiFetchAsDbaRequest
+}
+
+func (client *capturingMultiFetchClient) ExecuteMultiFetchAsDba(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, req *tabletmanagerdatapb.ExecuteMultiFetchAsDbaRequest) ([]*querypb.QueryResult, error) {
+	client.mu.Lock()
+	client.reqs = append(client.reqs, req)
+	client.mu.Unlock()
+	return []*querypb.QueryResult{{RowsAffected: 1}}, nil
+}
+
+func (client *capturingMultiFetchClient) requests() []*tabletmanagerdatapb.ExecuteMultiFetchAsDbaRequest {
+	client.mu.Lock()
+	defer client.mu.Unlock()
+	return append([]*tabletmanagerdatapb.ExecuteMultiFetchAsDbaRequest(nil), client.reqs...)
+}
+
+// TestTabletExecutorPropagatesSessionVariables verifies direct ApplySchema
+// preserves ordered assignments in the tablet RPC.
+func TestTabletExecutorPropagatesSessionVariables(t *testing.T) {
+	ctx := t.Context()
+	client := &capturingMultiFetchClient{fakeTabletManagerClient: newFakeTabletManagerClient()}
+	executor := NewTabletExecutor("TestTabletExecutorPropagatesSessionVariables", newFakeTopo(t), client, logutil.NewConsoleLogger(), testWaitReplicasTimeout, 0, sqlparser.NewTestParser())
+	require.NoError(t, executor.SetDDLStrategy("direct --session-variable innodb_strict_mode=off --session-variable sql_mode=ANSI"))
+	require.NoError(t, executor.Open(ctx, "test_keyspace"))
+	defer executor.Close()
+
+	result := executor.Execute(ctx, []string{"create table t (id int primary key)"})
+	require.Empty(t, result.ExecutorErr)
+	requests := client.requests()
+	require.NotEmpty(t, requests)
+	for _, request := range requests {
+		assert.Equal(t, []*tabletmanagerdatapb.SessionVariable{
+			{Name: "innodb_strict_mode", Value: "off"},
+			{Name: "sql_mode", Value: "ANSI"},
+		}, request.SessionVariables)
 	}
 }

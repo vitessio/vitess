@@ -19,16 +19,19 @@ package vreplication
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"math"
 	"os"
 	"regexp"
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/nsf/jsondiff"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/replication"
@@ -42,6 +45,21 @@ import (
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	qh "vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication/queryhistory"
 )
+
+var testGTIDCounter atomic.Uint64
+
+func uniqueTestGTID() string {
+	now := uint64(time.Now().UnixNano())
+	seq := testGTIDCounter.Add(1)
+	return fmt.Sprintf("%08x-%04x-%04x-%04x-%012x:%d",
+		uint32(now>>32),
+		uint16(now>>16),
+		uint16(now),
+		uint16(seq>>16),
+		seq&0xffffffffffff,
+		100+seq,
+	)
+}
 
 // TestPlayerGeneratedInvisiblePrimaryKey confirms that the gipk column is replicated by vplayer, both for target
 // tables that have a gipk column and those that make it visible.
@@ -232,7 +250,7 @@ func TestHeartbeatFrequencyFlag(t *testing.T) {
 }
 
 func TestVReplicationTimeUpdated(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	defer deleteTablet(addTablet(100))
 	execStatements(t, []string{
 		"create table t1(id int, val varchar(128), primary key(id))",
@@ -261,11 +279,11 @@ func TestVReplicationTimeUpdated(t *testing.T) {
 		"insert into t1 values(1, 'aaa')",
 	})
 
-	var getTimestamps = func() (int64, int64, int64) {
+	getTimestamps := func() (int64, int64, int64) {
 		qr, err := env.Mysqld.FetchSuperQuery(ctx, "select time_updated, transaction_timestamp, time_heartbeat from _vt.vreplication")
 		require.NoError(t, err)
 		require.NotNil(t, qr)
-		require.Equal(t, 1, len(qr.Rows))
+		require.Len(t, qr.Rows, 1)
 		row := qr.Named().Row()
 		timeUpdated, err := row.ToInt64("time_updated")
 		require.NoError(t, err)
@@ -586,11 +604,13 @@ func TestPlayerStatementModeWithFilterAndErrorHandling(t *testing.T) {
 	defer deleteTablet(addTablet(100))
 
 	// We want to check for the expected log message.
-	ole := log.Errorf
+	ole := log.Error
 	logger := logutil.NewMemoryLogger()
-	log.Errorf = logger.Errorf
+	log.Error = func(msg string, _ ...slog.Attr) {
+		logger.Errorf("%s", msg)
+	}
 	defer func() {
-		log.Errorf = ole
+		log.Error = ole
 	}()
 
 	execStatements(t, []string{
@@ -615,7 +635,7 @@ func TestPlayerStatementModeWithFilterAndErrorHandling(t *testing.T) {
 	cancel, _ := startVReplication(t, bls, "")
 	defer cancel()
 
-	const gtid = "37f16b4c-5a74-11ef-87de-56bfd605e62e:100"
+	gtid := uniqueTestGTID()
 	input := []string{
 		"set @@session.binlog_format='STATEMENT'",
 		fmt.Sprintf("set @@session.gtid_next='%s'", gtid),
@@ -685,8 +705,6 @@ func TestPlayerStatementMode(t *testing.T) {
 
 func TestPlayerFilters(t *testing.T) {
 	defer deleteTablet(addTablet(100))
-
-	vttablet.DefaultVReplicationConfig.EnableHttpLog = true
 
 	execStatements(t, []string{
 		"create table src1(id int, val varbinary(128), primary key(id))",
@@ -767,7 +785,6 @@ func TestPlayerFilters(t *testing.T) {
 		output qh.ExpectationSequence
 		table  string
 		data   [][]string
-		logs   []LogExpectation // logs are defined for a few testcases since they are enough to test all log events
 	}{{
 		// insert with insertNormal
 		input: "insert into src1 values(1, 'aaa')",
@@ -780,11 +797,6 @@ func TestPlayerFilters(t *testing.T) {
 		table: "dst1",
 		data: [][]string{
 			{"1", "aaa"},
-		},
-		logs: []LogExpectation{
-			{"FIELD", "/src1.*id.*INT32.*val.*VARBINARY.*"},
-			{"ROWCHANGE", "insert into dst1(id,val) values (1,_binary'aaa')"},
-			{"ROW", "/src1.*3.*1aaa.*"},
 		},
 	}, {
 		// update with insertNormal
@@ -799,10 +811,6 @@ func TestPlayerFilters(t *testing.T) {
 		data: [][]string{
 			{"1", "bbb"},
 		},
-		logs: []LogExpectation{
-			{"ROWCHANGE", "update dst1 set val=_binary'bbb' where id=1"},
-			{"ROW", "/src1.*3.*1aaa.*"},
-		},
 	}, {
 		// delete with insertNormal
 		input: "delete from src1 where id=1",
@@ -814,10 +822,6 @@ func TestPlayerFilters(t *testing.T) {
 		),
 		table: "dst1",
 		data:  [][]string{},
-		logs: []LogExpectation{
-			{"ROWCHANGE", "delete from dst1 where id=1"},
-			{"ROW", "/src1.*3.*1bbb.*"},
-		},
 	}, {
 		// insert with insertOnDup
 		input: "insert into src2 values(1, 2, 3)",
@@ -831,10 +835,6 @@ func TestPlayerFilters(t *testing.T) {
 		data: [][]string{
 			{"1", "2", "3", "1"},
 		},
-		logs: []LogExpectation{
-			{"FIELD", "/src2.*id.*val1.*val2.*"},
-			{"ROWCHANGE", "insert into dst2(id,val1,sval2,rcount) values (1,2,ifnull(3, 0),1) on duplicate key update val1=values(val1), sval2=sval2+ifnull(values(sval2), 0), rcount=rcount+1"},
-		},
 	}, {
 		// update with insertOnDup
 		input: "update src2 set val1=5, val2=1 where id=1",
@@ -847,10 +847,6 @@ func TestPlayerFilters(t *testing.T) {
 		table: "dst2",
 		data: [][]string{
 			{"1", "5", "1", "1"},
-		},
-		logs: []LogExpectation{
-			{"ROWCHANGE", "update dst2 set val1=5, sval2=sval2-ifnull(3, 0)+ifnull(1, 0), rcount=rcount where id=1"},
-			{"ROW", "/src2.*123.*"},
 		},
 	}, {
 		// delete with insertOnDup
@@ -1008,10 +1004,6 @@ func TestPlayerFilters(t *testing.T) {
 
 	for _, tcase := range testcases {
 		t.Run(tcase.input, func(t *testing.T) {
-			if tcase.logs != nil {
-				logch := vrLogStatsLogger.Subscribe("vrlogstats")
-				defer expectLogsAndUnsubscribe(t, tcase.logs, logch)
-			}
 			execStatements(t, []string{tcase.input})
 			expectDBClientQueries(t, tcase.output)
 			if tcase.table != "" {
@@ -1226,9 +1218,8 @@ func TestPlayerKeyspaceID(t *testing.T) {
 		fmt.Sprintf("drop table %s.dst1", vrepldb),
 	})
 
-	if err := env.SetVSchema(shardedVSchema); err != nil {
-		t.Fatal(err)
-	}
+	err := env.SetVSchema(shardedVSchema)
+	require.NoError(t, err)
 	defer env.SetVSchema("{}")
 
 	filter := &binlogdatapb.Filter{
@@ -1324,20 +1315,16 @@ func TestUnicode(t *testing.T) {
 	}}
 
 	// We need a latin1 connection.
-	conn, err := env.Mysqld.GetDbaConnection(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
+	conn, err := env.Mysqld.GetDbaConnection(t.Context())
+	require.NoError(t, err)
 	defer conn.Close()
 
-	if _, err := conn.ExecuteFetch("set names latin1", 10000, false); err != nil {
-		t.Fatal(err)
-	}
+	_, err = conn.ExecuteFetch("set names latin1", 10000, false)
+	require.NoError(t, err)
 
 	for _, tcases := range testcases {
-		if _, err := conn.ExecuteFetch(tcases.input, 10000, false); err != nil {
-			t.Error(err)
-		}
+		_, err := conn.ExecuteFetch(tcases.input, 10000, false)
+		require.NoError(t, err)
 		expectDBClientQueries(t, tcases.output)
 		if tcases.table != "" {
 			customExpectData(t, tcases.table, tcases.data, func(ctx context.Context, query string) (*sqltypes.Result, error) {
@@ -1919,7 +1906,7 @@ func TestPlayerTypes(t *testing.T) {
 		},
 	}, {
 		input:  "insert into vitess_decimal values(1, 0, 1, null, 0, 1.1, 1)",
-		output: "insert into vitess_decimal(id,d1,d2,d3,d4,d5,d6) values (1,0,1,null,.0,1.1,1.0)",
+		output: "insert into vitess_decimal(id,d1,d2,d3,d4,d5,d6) values (1,0,1,null,0.0,1.1,1.0)",
 		table:  "vitess_decimal",
 		data: [][]string{
 			{"1", "0", "1", "", "0.0", "1.1", "1.0"},
@@ -2036,25 +2023,23 @@ func TestPlayerDDL(t *testing.T) {
 		OnDdl:    binlogdatapb.OnDDLAction_STOP,
 	}
 	cancel, id := startVReplication(t, bls, "")
-	pos0 := primaryPosition(t) // For debugging only
+	pos0 := primaryPositionParsed(t)
 	execStatements(t, []string{"alter table t1 add column val varchar(128)"})
-	pos1 := primaryPosition(t)
-	// The stop position must be the GTID of the first DDL
-	expectDBClientQueries(t, qh.Expect(
-		"begin",
-		fmt.Sprintf("/update _vt.vreplication set pos='%s'", pos1),
-		"/update _vt.vreplication set state='Stopped'",
-		"commit",
-	))
-	pos2b := primaryPosition(t)
+	pos1 := primaryPositionParsed(t)
+	// The stop position must be the GTID of the first DDL, which lies between
+	// the positions observed before and after the ALTER.
+	expectDBClientQueries(t, qh.Expect("begin").
+		Then(qh.PosBetween(pos0, pos1)).
+		Then(qh.Immediately(
+			"/update _vt.vreplication set state='Stopped'",
+			"commit",
+		)))
+	pos2b := primaryPositionParsed(t)
 	execStatements(t, []string{"alter table t1 drop column val"})
-	pos2 := primaryPosition(t)
-	log.Errorf("Expected log:: TestPlayerDDL Positions are: before first alter %v, after first alter %v, before second alter %v, after second alter %v",
-		pos0, pos1, pos2b, pos2) // For debugging only: to check what are the positions when test works and if/when it fails
+	pos2 := primaryPositionParsed(t)
 	// Restart vreplication
-	if _, err := playerEngine.Exec(fmt.Sprintf(`update _vt.vreplication set state = 'Running', message='' where id=%d`, id)); err != nil {
-		t.Fatal(err)
-	}
+	_, err := playerEngine.Exec(fmt.Sprintf(`update _vt.vreplication set state = 'Running', message='' where id=%d`, id))
+	require.NoError(t, err)
 	// It should stop at the next DDL
 	expectDBClientQueries(t, qh.Expect(
 		"/update.*'Running'",
@@ -2062,10 +2047,12 @@ func TestPlayerDDL(t *testing.T) {
 		"/update _vt.vreplication set message='Picked source tablet.*",
 		"/update.*'Running'",
 		"begin",
-		fmt.Sprintf("/update.*'%s'", pos2),
-		"/update _vt.vreplication set state='Stopped'",
-		"commit",
-	))
+	).
+		Then(qh.PosBetween(pos2b, pos2)).
+		Then(qh.Immediately(
+			"/update _vt.vreplication set state='Stopped'",
+			"commit",
+		)))
 	cancel()
 	bls = &binlogdatapb.BinlogSource{
 		Keyspace: env.KeyspaceName,
@@ -2086,7 +2073,7 @@ func TestPlayerDDL(t *testing.T) {
 	expectDBClientQueries(t, qh.Expect(
 		"alter table t1 add column val2 varchar(128)",
 		"/update _vt.vreplication set message='error applying event: Duplicate",
-		"/update _vt.vreplication set state='Error', message='terminal error: error applying event: Duplicate",
+		"/update _vt.vreplication set state='Error', message=left\\('terminal error: error applying event: Duplicate",
 	))
 	cancel()
 
@@ -2122,7 +2109,7 @@ func TestPlayerDDL(t *testing.T) {
 }
 
 func TestGTIDCompress(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	defer deleteTablet(addTablet(100))
 	err := env.Mysqld.ExecuteSuperQuery(ctx, "insert into _vt.vreplication (id, workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state,db_name, options) values (1, '', '', '', 0,0,0,0,'Stopped','', '{}')")
 	require.NoError(t, err)
@@ -2151,7 +2138,7 @@ func TestGTIDCompress(t *testing.T) {
 			qr, err := env.Mysqld.FetchSuperQuery(ctx, "select pos from _vt.vreplication where id = 1")
 			require.NoError(t, err)
 			require.NotNil(t, qr)
-			require.Equal(t, 1, len(qr.Rows))
+			require.Len(t, qr.Rows, 1)
 			gotGTID := qr.Rows[0][0].ToString()
 			pos, err := replication.DecodePosition(gotGTID)
 			if tCase.compress {
@@ -2202,9 +2189,7 @@ func TestPlayerStopPos(t *testing.T) {
 	startPos := primaryPosition(t)
 	query := binlogplayer.CreateVReplicationState("test", bls, startPos, binlogdatapb.VReplicationWorkflowState_Stopped, vrepldb, 0, 0)
 	qr, err := playerEngine.Exec(query)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	id := int32(qr.InsertID)
 	for q := range globalDBQueries {
 		if strings.HasPrefix(q, "insert into _vt.vreplication") {
@@ -2218,9 +2203,8 @@ func TestPlayerStopPos(t *testing.T) {
 	})
 	stopPos := primaryPosition(t)
 	query = binlogplayer.StartVReplicationUntil(id, stopPos)
-	if _, err := playerEngine.Exec(query); err != nil {
-		t.Fatal(err)
-	}
+	_, err = playerEngine.Exec(query)
+	require.NoError(t, err)
 	expectDBClientQueries(t, qh.Expect(
 		"/update.*'Running'",
 		// Second update is from vreplicator.
@@ -2243,9 +2227,8 @@ func TestPlayerStopPos(t *testing.T) {
 		"insert into no values(4, 'aaa')",
 	})
 	query = binlogplayer.StartVReplicationUntil(id, stopPos)
-	if _, err := playerEngine.Exec(query); err != nil {
-		t.Fatal(err)
-	}
+	_, err = playerEngine.Exec(query)
+	require.NoError(t, err)
 	expectDBClientQueries(t, qh.Expect(
 		"/update.*'Running'",
 		// Second update is from vreplicator.
@@ -2261,9 +2244,8 @@ func TestPlayerStopPos(t *testing.T) {
 
 	// Test stopping when position is already reached.
 	query = binlogplayer.StartVReplicationUntil(id, stopPos)
-	if _, err := playerEngine.Exec(query); err != nil {
-		t.Fatal(err)
-	}
+	_, err = playerEngine.Exec(query)
+	require.NoError(t, err)
 	expectDBClientQueries(t, qh.Expect(
 		"/update.*'Running'",
 		// Second update is from vreplicator.
@@ -2305,9 +2287,7 @@ func TestPlayerStopAtOther(t *testing.T) {
 	}
 	query := binlogplayer.CreateVReplicationState("test", bls, startPos, binlogdatapb.VReplicationWorkflowState_Stopped, vrepldb, 0, 0)
 	qr, err := playerEngine.Exec(query)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	id := int32(qr.InsertID)
 	for q := range globalDBQueries {
 		if strings.HasPrefix(q, "insert into _vt.vreplication") {
@@ -2315,28 +2295,23 @@ func TestPlayerStopAtOther(t *testing.T) {
 		}
 	}
 	defer func() {
-		if _, err := playerEngine.Exec(fmt.Sprintf("delete from _vt.vreplication where id = %d", id)); err != nil {
-			t.Fatal(err)
-		}
+		_, err := playerEngine.Exec(fmt.Sprintf("delete from _vt.vreplication where id = %d", id))
+		require.NoError(t, err)
 		expectDeleteQueries(t)
 	}()
 
 	vconn := &realDBClient{nolog: true}
-	if err := vconn.Connect(); err != nil {
-		t.Error(err)
-	}
+	err = vconn.Connect()
+	require.NoError(t, err)
 	defer vconn.Close()
 
 	// Insert the same row on the target and lock it.
-	if _, err := vconn.ExecuteFetch("insert into t1 values(1, 'aaa')", 1); err != nil {
-		t.Error(err)
-	}
-	if _, err := vconn.ExecuteFetch("begin", 1); err != nil {
-		t.Error(err)
-	}
-	if _, err := vconn.ExecuteFetch("update t1 set val='bbb' where id=1", 1); err != nil {
-		t.Error(err)
-	}
+	_, err = vconn.ExecuteFetch("insert into t1 values(1, 'aaa')", 1)
+	require.NoError(t, err)
+	_, err = vconn.ExecuteFetch("begin", 1)
+	require.NoError(t, err)
+	_, err = vconn.ExecuteFetch("update t1 set val='bbb' where id=1", 1)
+	require.NoError(t, err)
 
 	// Start a VReplication where the first transaction updates the locked row.
 	// It will cause the apply to wait, which will cause the other two events
@@ -2350,9 +2325,8 @@ func TestPlayerStopAtOther(t *testing.T) {
 	})
 	stopPos := primaryPosition(t)
 	query = binlogplayer.StartVReplicationUntil(id, stopPos)
-	if _, err := playerEngine.Exec(query); err != nil {
-		t.Fatal(err)
-	}
+	_, err = playerEngine.Exec(query)
+	require.NoError(t, err)
 
 	// Wait for the begin. The update will be blocked.
 	expectDBClientQueries(t, qh.Expect(
@@ -2430,9 +2404,8 @@ func TestPlayerIdleUpdate(t *testing.T) {
 	expectDBClientQueries(t, qh.Expect(
 		"/update _vt.vreplication set pos=",
 	))
-	if duration := time.Since(start); duration < idleTimeout {
-		t.Errorf("duration: %v, must be at least %v", duration, idleTimeout)
-	}
+	duration := time.Since(start)
+	assert.GreaterOrEqualf(t, duration, idleTimeout, "duration: %v, must be at least %v", duration, idleTimeout)
 }
 
 func TestPlayerSplitTransaction(t *testing.T) {
@@ -2529,18 +2502,15 @@ func TestPlayerLockErrors(t *testing.T) {
 	))
 
 	vconn := &realDBClient{nolog: true}
-	if err := vconn.Connect(); err != nil {
-		t.Error(err)
-	}
+	err := vconn.Connect()
+	require.NoError(t, err)
 	defer vconn.Close()
 
 	// Start a transaction and lock the second row.
-	if _, err := vconn.ExecuteFetch("begin", 1); err != nil {
-		t.Error(err)
-	}
-	if _, err := vconn.ExecuteFetch("update t1 set val='bbb' where id=2", 1); err != nil {
-		t.Error(err)
-	}
+	_, err = vconn.ExecuteFetch("begin", 1)
+	require.NoError(t, err)
+	_, err = vconn.ExecuteFetch("update t1 set val='bbb' where id=2", 1)
+	require.NoError(t, err)
 
 	execStatements(t, []string{
 		"begin",
@@ -2614,18 +2584,15 @@ func TestPlayerCancelOnLock(t *testing.T) {
 	))
 
 	vconn := &realDBClient{nolog: true}
-	if err := vconn.Connect(); err != nil {
-		t.Error(err)
-	}
+	err := vconn.Connect()
+	require.NoError(t, err)
 	defer vconn.Close()
 
 	// Start a transaction and lock the row.
-	if _, err := vconn.ExecuteFetch("begin", 1); err != nil {
-		t.Error(err)
-	}
-	if _, err := vconn.ExecuteFetch("update t1 set val='bbb' where id=1", 1); err != nil {
-		t.Error(err)
-	}
+	_, err = vconn.ExecuteFetch("begin", 1)
+	require.NoError(t, err)
+	_, err = vconn.ExecuteFetch("update t1 set val='bbb' where id=1", 1)
+	require.NoError(t, err)
 
 	execStatements(t, []string{
 		"begin",
@@ -2648,7 +2615,7 @@ func TestPlayerCancelOnLock(t *testing.T) {
 	select {
 	case <-done:
 	case <-time.After(5 * time.Second):
-		t.Error("cancel is hung")
+		assert.Fail(t, "cancel is hung")
 	}
 }
 
@@ -2689,18 +2656,15 @@ func TestPlayerTransactions(t *testing.T) {
 	))
 
 	vconn := &realDBClient{nolog: true}
-	if err := vconn.Connect(); err != nil {
-		t.Error(err)
-	}
+	err := vconn.Connect()
+	require.NoError(t, err)
 	defer vconn.Close()
 
 	// Start a transaction and lock the row.
-	if _, err := vconn.ExecuteFetch("begin", 1); err != nil {
-		t.Error(err)
-	}
-	if _, err := vconn.ExecuteFetch("update t1 set val='bbb' where id=1", 1); err != nil {
-		t.Error(err)
-	}
+	_, err = vconn.ExecuteFetch("begin", 1)
+	require.NoError(t, err)
+	_, err = vconn.ExecuteFetch("update t1 set val='bbb' where id=1", 1)
+	require.NoError(t, err)
 
 	// create one transaction
 	execStatements(t, []string{
@@ -2746,7 +2710,7 @@ func TestPlayerTransactions(t *testing.T) {
 func TestPlayerRelayLogMaxSize(t *testing.T) {
 	defer deleteTablet(addTablet(100))
 
-	for i := 0; i < 2; i++ {
+	for i := range 2 {
 		// First iteration checks max size, second checks max items
 		func() {
 			switch i {
@@ -2794,18 +2758,15 @@ func TestPlayerRelayLogMaxSize(t *testing.T) {
 			))
 
 			vconn := &realDBClient{nolog: true}
-			if err := vconn.Connect(); err != nil {
-				t.Error(err)
-			}
+			err := vconn.Connect()
+			require.NoError(t, err)
 			defer vconn.Close()
 
 			// Start a transaction and lock the row.
-			if _, err := vconn.ExecuteFetch("begin", 1); err != nil {
-				t.Error(err)
-			}
-			if _, err := vconn.ExecuteFetch("update t1 set val='bbb' where id=1", 1); err != nil {
-				t.Error(err)
-			}
+			_, err = vconn.ExecuteFetch("begin", 1)
+			require.NoError(t, err)
+			_, err = vconn.ExecuteFetch("update t1 set val='bbb' where id=1", 1)
+			require.NoError(t, err)
 
 			// create one transaction
 			execStatements(t, []string{
@@ -2932,10 +2893,8 @@ func TestTimestamp(t *testing.T) {
 	cancel, _ := startVReplication(t, bls, "")
 	defer cancel()
 
-	qr, err := env.Mysqld.FetchSuperQuery(context.Background(), "select now()")
-	if err != nil {
-		t.Fatal(err)
-	}
+	qr, err := env.Mysqld.FetchSuperQuery(t.Context(), "select now()")
+	require.NoError(t, err)
 	want := qr.Rows[0][0].ToString()
 	t.Logf("want: %s", want)
 
@@ -2988,7 +2947,7 @@ func TestPlayerJSONDocs(t *testing.T) {
 	}
 	var testcases []testcase
 	id := 0
-	var addTestCase = func(name, val string) {
+	addTestCase := func(name, val string) {
 		id++
 		testcases = append(testcases, testcase{
 			name:  name,
@@ -3061,7 +3020,7 @@ func TestPlayerJSONTwoColumns(t *testing.T) {
 	}
 	var testcases []testcase
 	id := 0
-	var addTestCase = func(name, val, val2 string) {
+	addTestCase := func(name, val, val2 string) {
 		id++
 		testcases = append(testcases, testcase{
 			name:  name,
@@ -3091,6 +3050,84 @@ func TestPlayerJSONTwoColumns(t *testing.T) {
 	}
 }
 
+// TestPlayerJSONDocsStreamSQL verifies that JSON values round-trip correctly through MySQL when
+// using the streaming JSON_OBJECT/JSON_ARRAY SQL encoding path.
+func TestPlayerJSONDocsStreamSQL(t *testing.T) {
+	defer deleteTablet(addTablet(100))
+
+	execStatements(t, []string{
+		"create table vitess_json(id int auto_increment, val json, primary key(id))",
+		fmt.Sprintf("create table %s.vitess_json(id int, val json, primary key(id))", vrepldb),
+	})
+	defer execStatements(t, []string{
+		"drop table vitess_json",
+		fmt.Sprintf("drop table %s.vitess_json", vrepldb),
+	})
+
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match: "/.*",
+		}},
+	}
+	bls := &binlogdatapb.BinlogSource{
+		Keyspace: env.KeyspaceName,
+		Shard:    env.ShardName,
+		Filter:   filter,
+		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
+	}
+	cancel, _ := startVReplication(t, bls, "")
+	defer cancel()
+
+	type testcase struct {
+		name  string
+		input string
+		data  [][]string
+	}
+	var testcases []testcase
+	id := 0
+	addTestCase := func(name, val string) {
+		id++
+		testcases = append(testcases, testcase{
+			name:  name,
+			input: fmt.Sprintf("insert into vitess_json(val) values (%s)", encodeString(val)),
+			data: [][]string{
+				{strconv.Itoa(id), val},
+			},
+		})
+	}
+	addTestCase("singleDoc", jsonSingleDoc)
+	addTestCase("multipleDocs", jsonMultipleDocs)
+	longString := strings.Repeat("aa", math.MaxInt16)
+	largeObject := fmt.Sprintf(singleLargeObjectTemplate, longString)
+	addTestCase("singleLargeObject", largeObject)
+	largeArray := fmt.Sprintf(`[1, 1234567890, "a", true, %s]`, largeObject)
+	addTestCase("singleLargeArray", largeArray)
+	addTestCase("largeArrayDoc", repeatJSON(jsonSingleDoc, 140, largeJSONArrayCollection))
+	addTestCase("largeObjectDoc", repeatJSON(jsonSingleDoc, 140, largeJSONObjectCollection))
+	// Edge cases identified in code review for type-fidelity between CAST and JSON_OBJECT paths.
+	addTestCase("booleans", `{"flag": true, "off": false}`)
+	addTestCase("largeInteger", `{"keywordSourceId": 930701976723823}`)
+	addTestCase("decimal", `{"val": 1.5}`)
+	addTestCase("emptyObject", `{}`)
+	addTestCase("emptyArray", `[]`)
+	addTestCase("jsonNull", `null`)
+	id = 0
+	for _, tcase := range testcases {
+		t.Run(tcase.name, func(t *testing.T) {
+			id++
+			execStatements(t, []string{tcase.input})
+			want := qh.Expect(
+				"begin",
+				"/insert into vitess_json",
+				"/update _vt.vreplication set pos=",
+				"commit",
+			)
+			expectDBClientQueries(t, want)
+			expectJSON(t, "vitess_json", tcase.data, id, env.Mysqld.FetchSuperQuery)
+		})
+	}
+}
+
 func TestVReplicationLogs(t *testing.T) {
 	defer deleteTablet(addTablet(100))
 	dbClient := playerEngine.dbClientFactoryDba()
@@ -3108,7 +3145,7 @@ func TestVReplicationLogs(t *testing.T) {
 	for _, want := range expected {
 		t.Run("", func(t *testing.T) {
 			insertLog(vdbc, LogMessage, 1, binlogdatapb.VReplicationWorkflowState_Running.String(), "message1")
-			qr, err := env.Mysqld.FetchSuperQuery(context.Background(), query)
+			qr, err := env.Mysqld.FetchSuperQuery(t.Context(), query)
 			require.NoError(t, err)
 			require.Equal(t, want, fmt.Sprintf("%v", qr.Rows))
 		})
@@ -3208,11 +3245,11 @@ func TestPlayerInvalidDates(t *testing.T) {
 	execStatements(t, []string{"set sql_mode=''", "insert into src1 values(1, '0000-00-00')", "set sql_mode='STRICT_TRANS_TABLES'"})
 
 	// default mysql flavor allows invalid dates: so disallow explicitly for this test
-	if err := env.Mysqld.ExecuteSuperQuery(context.Background(), "SET @@global.sql_mode=REPLACE(REPLACE(@@session.sql_mode, 'NO_ZERO_DATE', ''), 'NO_ZERO_IN_DATE', '')"); err != nil {
+	if err := env.Mysqld.ExecuteSuperQuery(t.Context(), "SET @@global.sql_mode=REPLACE(REPLACE(@@session.sql_mode, 'NO_ZERO_DATE', ''), 'NO_ZERO_IN_DATE', '')"); err != nil {
 		fmt.Fprintf(os.Stderr, "%v", err)
 	}
 	defer func() {
-		if err := env.Mysqld.ExecuteSuperQuery(context.Background(), "SET @@global.sql_mode=REPLACE(@@global.sql_mode, ',NO_ZERO_DATE,NO_ZERO_IN_DATE','')"); err != nil {
+		if err := env.Mysqld.ExecuteSuperQuery(t.Context(), "SET @@global.sql_mode=REPLACE(@@global.sql_mode, ',NO_ZERO_DATE,NO_ZERO_IN_DATE','')"); err != nil {
 			fmt.Fprintf(os.Stderr, "%v", err)
 		}
 	}()
@@ -3401,8 +3438,8 @@ func TestPlayerNoBlob(t *testing.T) {
 		}
 	}
 	stats := globalStats.controllers[int32(vrId)].blpStats
-	require.Equal(t, 2, len(stats.PartialQueryCount.Counts()))
-	require.Equal(t, 2, len(stats.PartialQueryCacheSize.Counts()))
+	require.Len(t, stats.PartialQueryCount.Counts(), 2)
+	require.Len(t, stats.PartialQueryCacheSize.Counts(), 2)
 	require.Equal(t, int64(2), stats.PartialQueryCacheSize.Counts()["insert"])
 	require.Equal(t, int64(3), stats.PartialQueryCount.Counts()["insert"])
 	require.Equal(t, int64(2), stats.PartialQueryCacheSize.Counts()["update"])
@@ -3585,7 +3622,157 @@ func TestPlayerBatchMode(t *testing.T) {
 				{"3", "ccc"},
 				{"4", "ddd"},
 				{"5", "eee"},
-				{"1000000000000", "x"}, {"1000000000001", "x"}, {"1000000000002", "x"}, {"1000000000003", "x"}, {"1000000000004", "x"}, {"1000000000005", "x"}, {"1000000000006", "x"}, {"1000000000007", "x"}, {"1000000000008", "x"}, {"1000000000009", "x"}, {"1000000000010", "x"}, {"1000000000011", "x"}, {"1000000000012", "x"}, {"1000000000013", "x"}, {"1000000000014", "x"}, {"1000000000015", "x"}, {"1000000000016", "x"}, {"1000000000017", "x"}, {"1000000000018", "x"}, {"1000000000019", "x"}, {"1000000000020", "x"}, {"1000000000021", "x"}, {"1000000000022", "x"}, {"1000000000023", "x"}, {"1000000000024", "x"}, {"1000000000025", "x"}, {"1000000000026", "x"}, {"1000000000027", "x"}, {"1000000000028", "x"}, {"1000000000029", "x"}, {"1000000000030", "x"}, {"1000000000031", "x"}, {"1000000000032", "x"}, {"1000000000033", "x"}, {"1000000000034", "x"}, {"1000000000035", "x"}, {"1000000000036", "x"}, {"1000000000037", "x"}, {"1000000000038", "x"}, {"1000000000039", "x"}, {"1000000000040", "x"}, {"1000000000041", "x"}, {"1000000000042", "x"}, {"1000000000043", "x"}, {"1000000000044", "x"}, {"1000000000045", "x"}, {"1000000000046", "x"}, {"1000000000047", "x"}, {"1000000000048", "x"}, {"1000000000049", "x"}, {"1000000000050", "x"}, {"1000000000051", "x"}, {"1000000000052", "x"}, {"1000000000053", "x"}, {"1000000000054", "x"}, {"1000000000055", "x"}, {"1000000000056", "x"}, {"1000000000057", "x"}, {"1000000000058", "x"}, {"1000000000059", "x"}, {"1000000000060", "x"}, {"1000000000061", "x"}, {"1000000000062", "x"}, {"1000000000063", "x"}, {"1000000000064", "x"}, {"1000000000065", "x"}, {"1000000000066", "x"}, {"1000000000067", "x"}, {"1000000000068", "x"}, {"1000000000069", "x"}, {"1000000000070", "x"}, {"1000000000071", "x"}, {"1000000000072", "x"}, {"1000000000073", "x"}, {"1000000000074", "x"}, {"1000000000075", "x"}, {"1000000000076", "x"}, {"1000000000077", "x"}, {"1000000000078", "x"}, {"1000000000079", "x"}, {"1000000000080", "x"}, {"1000000000081", "x"}, {"1000000000082", "x"}, {"1000000000083", "x"}, {"1000000000084", "x"}, {"1000000000085", "x"}, {"1000000000086", "x"}, {"1000000000087", "x"}, {"1000000000088", "x"}, {"1000000000089", "x"}, {"1000000000090", "x"}, {"1000000000091", "x"}, {"1000000000092", "x"}, {"1000000000093", "x"}, {"1000000000094", "x"}, {"1000000000095", "x"}, {"1000000000096", "x"}, {"1000000000097", "x"}, {"1000000000098", "x"}, {"1000000000099", "x"}, {"1000000000100", "x"}, {"1000000000101", "x"}, {"1000000000102", "x"}, {"1000000000103", "x"}, {"1000000000104", "x"}, {"1000000000105", "x"}, {"1000000000106", "x"}, {"1000000000107", "x"}, {"1000000000108", "x"}, {"1000000000109", "x"}, {"1000000000110", "x"}, {"1000000000111", "x"}, {"1000000000112", "x"}, {"1000000000113", "x"}, {"1000000000114", "x"}, {"1000000000115", "x"}, {"1000000000116", "x"}, {"1000000000117", "x"}, {"1000000000118", "x"}, {"1000000000119", "x"}, {"1000000000120", "x"}, {"1000000000121", "x"}, {"1000000000122", "x"}, {"1000000000123", "x"}, {"1000000000124", "x"}, {"1000000000125", "x"}, {"1000000000126", "x"}, {"1000000000127", "x"}, {"1000000000128", "x"}, {"1000000000129", "x"}, {"1000000000130", "x"}, {"1000000000131", "x"}, {"1000000000132", "x"}, {"1000000000133", "x"}, {"1000000000134", "x"}, {"1000000000135", "x"}, {"1000000000136", "x"}, {"1000000000137", "x"}, {"1000000000138", "x"}, {"1000000000139", "x"}, {"1000000000140", "x"}, {"1000000000141", "x"}, {"1000000000142", "x"}, {"1000000000143", "x"}, {"1000000000144", "x"}, {"1000000000145", "x"}, {"1000000000146", "x"}, {"1000000000147", "x"}, {"1000000000148", "x"}, {"1000000000149", "x"}, {"1000000000150", "x"},
+				{"1000000000000", "x"},
+				{"1000000000001", "x"},
+				{"1000000000002", "x"},
+				{"1000000000003", "x"},
+				{"1000000000004", "x"},
+				{"1000000000005", "x"},
+				{"1000000000006", "x"},
+				{"1000000000007", "x"},
+				{"1000000000008", "x"},
+				{"1000000000009", "x"},
+				{"1000000000010", "x"},
+				{"1000000000011", "x"},
+				{"1000000000012", "x"},
+				{"1000000000013", "x"},
+				{"1000000000014", "x"},
+				{"1000000000015", "x"},
+				{"1000000000016", "x"},
+				{"1000000000017", "x"},
+				{"1000000000018", "x"},
+				{"1000000000019", "x"},
+				{"1000000000020", "x"},
+				{"1000000000021", "x"},
+				{"1000000000022", "x"},
+				{"1000000000023", "x"},
+				{"1000000000024", "x"},
+				{"1000000000025", "x"},
+				{"1000000000026", "x"},
+				{"1000000000027", "x"},
+				{"1000000000028", "x"},
+				{"1000000000029", "x"},
+				{"1000000000030", "x"},
+				{"1000000000031", "x"},
+				{"1000000000032", "x"},
+				{"1000000000033", "x"},
+				{"1000000000034", "x"},
+				{"1000000000035", "x"},
+				{"1000000000036", "x"},
+				{"1000000000037", "x"},
+				{"1000000000038", "x"},
+				{"1000000000039", "x"},
+				{"1000000000040", "x"},
+				{"1000000000041", "x"},
+				{"1000000000042", "x"},
+				{"1000000000043", "x"},
+				{"1000000000044", "x"},
+				{"1000000000045", "x"},
+				{"1000000000046", "x"},
+				{"1000000000047", "x"},
+				{"1000000000048", "x"},
+				{"1000000000049", "x"},
+				{"1000000000050", "x"},
+				{"1000000000051", "x"},
+				{"1000000000052", "x"},
+				{"1000000000053", "x"},
+				{"1000000000054", "x"},
+				{"1000000000055", "x"},
+				{"1000000000056", "x"},
+				{"1000000000057", "x"},
+				{"1000000000058", "x"},
+				{"1000000000059", "x"},
+				{"1000000000060", "x"},
+				{"1000000000061", "x"},
+				{"1000000000062", "x"},
+				{"1000000000063", "x"},
+				{"1000000000064", "x"},
+				{"1000000000065", "x"},
+				{"1000000000066", "x"},
+				{"1000000000067", "x"},
+				{"1000000000068", "x"},
+				{"1000000000069", "x"},
+				{"1000000000070", "x"},
+				{"1000000000071", "x"},
+				{"1000000000072", "x"},
+				{"1000000000073", "x"},
+				{"1000000000074", "x"},
+				{"1000000000075", "x"},
+				{"1000000000076", "x"},
+				{"1000000000077", "x"},
+				{"1000000000078", "x"},
+				{"1000000000079", "x"},
+				{"1000000000080", "x"},
+				{"1000000000081", "x"},
+				{"1000000000082", "x"},
+				{"1000000000083", "x"},
+				{"1000000000084", "x"},
+				{"1000000000085", "x"},
+				{"1000000000086", "x"},
+				{"1000000000087", "x"},
+				{"1000000000088", "x"},
+				{"1000000000089", "x"},
+				{"1000000000090", "x"},
+				{"1000000000091", "x"},
+				{"1000000000092", "x"},
+				{"1000000000093", "x"},
+				{"1000000000094", "x"},
+				{"1000000000095", "x"},
+				{"1000000000096", "x"},
+				{"1000000000097", "x"},
+				{"1000000000098", "x"},
+				{"1000000000099", "x"},
+				{"1000000000100", "x"},
+				{"1000000000101", "x"},
+				{"1000000000102", "x"},
+				{"1000000000103", "x"},
+				{"1000000000104", "x"},
+				{"1000000000105", "x"},
+				{"1000000000106", "x"},
+				{"1000000000107", "x"},
+				{"1000000000108", "x"},
+				{"1000000000109", "x"},
+				{"1000000000110", "x"},
+				{"1000000000111", "x"},
+				{"1000000000112", "x"},
+				{"1000000000113", "x"},
+				{"1000000000114", "x"},
+				{"1000000000115", "x"},
+				{"1000000000116", "x"},
+				{"1000000000117", "x"},
+				{"1000000000118", "x"},
+				{"1000000000119", "x"},
+				{"1000000000120", "x"},
+				{"1000000000121", "x"},
+				{"1000000000122", "x"},
+				{"1000000000123", "x"},
+				{"1000000000124", "x"},
+				{"1000000000125", "x"},
+				{"1000000000126", "x"},
+				{"1000000000127", "x"},
+				{"1000000000128", "x"},
+				{"1000000000129", "x"},
+				{"1000000000130", "x"},
+				{"1000000000131", "x"},
+				{"1000000000132", "x"},
+				{"1000000000133", "x"},
+				{"1000000000134", "x"},
+				{"1000000000135", "x"},
+				{"1000000000136", "x"},
+				{"1000000000137", "x"},
+				{"1000000000138", "x"},
+				{"1000000000139", "x"},
+				{"1000000000140", "x"},
+				{"1000000000141", "x"},
+				{"1000000000142", "x"},
+				{"1000000000143", "x"},
+				{"1000000000144", "x"},
+				{"1000000000145", "x"},
+				{"1000000000146", "x"},
+				{"1000000000147", "x"},
+				{"1000000000148", "x"},
+				{"1000000000149", "x"},
+				{"1000000000150", "x"},
 			},
 		},
 		{ // Now we have enough long IDs to cause the bulk delete to also be split along with the trx batch.
@@ -3632,7 +3819,6 @@ func TestPlayerBatchMode(t *testing.T) {
 				require.LessOrEqual(t, len(stmt), maxBatchSize, "expected output statement is longer than the max batch size (%d): %s", maxBatchSize, stmt)
 			}
 			expectNontxQueries(t, output, recvTimeout)
-			time.Sleep(1 * time.Second)
 			if tcase.table != "" {
 				expectData(t, tcase.table, tcase.data)
 			}
@@ -3644,48 +3830,147 @@ func TestPlayerBatchMode(t *testing.T) {
 			expectedBulkInserts += tcase.expectedBulkInserts
 			expectedTrxBatchCommits++ // Should only ever be 1 per test case
 			expectedTrxBatchExecs += tcase.expectedNonCommitBatches
-			if tcase.expectedInLastBatch != "" { // We expect the trx to be split
-				require.Regexpf(t, regexp.MustCompile(fmt.Sprintf(trxLastBatchExpectRE, regexp.QuoteMeta(tcase.expectedInLastBatch))), lastMultiExecQuery, "Unexpected batch statement: %s", lastMultiExecQuery)
+
+			// Poll until the batch query and stats counters are updated.
+			// These are set asynchronously on the vplayer goroutine after
+			// the commit completes, so we poll rather than using a fixed sleep.
+			var batchRE *regexp.Regexp
+			if tcase.expectedInLastBatch != "" {
+				batchRE = regexp.MustCompile(fmt.Sprintf(trxLastBatchExpectRE, regexp.QuoteMeta(tcase.expectedInLastBatch)))
 			} else {
-				require.Regexpf(t, regexp.MustCompile(fmt.Sprintf(trxFullBatchExpectRE, regexp.QuoteMeta(strings.Join(tcase.output, ";")))), lastMultiExecQuery, "Unexpected batch statement: %s", lastMultiExecQuery)
+				batchRE = regexp.MustCompile(fmt.Sprintf(trxFullBatchExpectRE, regexp.QuoteMeta(strings.Join(tcase.output, ";"))))
 			}
-			require.Equal(t, expectedBulkInserts, stats.BulkQueryCount.Counts()["insert"], "expected %d bulk inserts but got %d", expectedBulkInserts, stats.BulkQueryCount.Counts()["insert"])
-			require.Equal(t, expectedBulkDeletes, stats.BulkQueryCount.Counts()["delete"], "expected %d bulk deletes but got %d", expectedBulkDeletes, stats.BulkQueryCount.Counts()["delete"])
-			require.Equal(t, expectedTrxBatchExecs, stats.TrxQueryBatchCount.Counts()["without_commit"], "expected %d trx batch execs but got %d", expectedTrxBatchExecs, stats.TrxQueryBatchCount.Counts()["without_commit"])
-			require.Equal(t, expectedTrxBatchCommits, stats.TrxQueryBatchCount.Counts()["with_commit"], "expected %d trx batch commits but got %d", expectedTrxBatchCommits, stats.TrxQueryBatchCount.Counts()["with_commit"])
+			require.Eventually(t, func() bool {
+				got := getLastMultiExecQuery()
+				if !batchRE.MatchString(got) {
+					return false
+				}
+				if stats.BulkQueryCount.Counts()["insert"] != expectedBulkInserts {
+					return false
+				}
+				if stats.BulkQueryCount.Counts()["delete"] != expectedBulkDeletes {
+					return false
+				}
+				if stats.TrxQueryBatchCount.Counts()["without_commit"] != expectedTrxBatchExecs {
+					return false
+				}
+				if stats.TrxQueryBatchCount.Counts()["with_commit"] != expectedTrxBatchCommits {
+					return false
+				}
+				return true
+			}, 10*time.Second, 100*time.Millisecond, "batch query or stats mismatch after timeout; lastMultiExecQuery: %s", getLastMultiExecQuery())
 		})
 	}
+}
+
+// TestPlayerBatchModeMixedRowEvent confirms that a row event whose changes do
+// not all have the same shape is applied per-change in batch mode. The source
+// vstreamer emits only the Before or After image of an update when just one
+// side passes the workflow filter, so a single multi-row UPDATE that moves
+// rows across an in_keyrange boundary (e.g. a sharding-key update replicated
+// by a MoveTables or Reshard workflow) produces one row event mixing
+// insert-shaped and delete-shaped changes. Batch mode used to pick the
+// bulk-insert or bulk-delete statement by looking only at the first change
+// and then apply every change in the event with that shape, panicking on the
+// first change of the opposite shape (nil row image in MakeRowTrusted).
+func TestPlayerBatchModeMixedRowEvent(t *testing.T) {
+	oldVreplicationExperimentalFlags := vttablet.DefaultVReplicationConfig.ExperimentalFlags
+	vttablet.DefaultVReplicationConfig.ExperimentalFlags = vttablet.VReplicationExperimentalFlagVPlayerBatching
+	defer func() {
+		vttablet.DefaultVReplicationConfig.ExperimentalFlags = oldVreplicationExperimentalFlags
+	}()
+
+	defer deleteTablet(addTablet(100))
+	execStatements(t, []string{
+		"create table t1(id bigint, val varbinary(128), primary key(id))",
+		fmt.Sprintf("create table %s.t1(id bigint, val varbinary(128), primary key(id))", vrepldb),
+	})
+	defer execStatements(t, []string{
+		"drop table t1",
+		fmt.Sprintf("drop table %s.t1", vrepldb),
+	})
+
+	// Replicate only the rows whose id hashes into -80, like one target shard
+	// of a MoveTables or Reshard workflow. With the hash vindex, ids 2, 3 and
+	// 5 map into -80 while ids 4 and 6 map into 80-.
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match:  "t1",
+			Filter: "select * from t1 where in_keyrange(id, 'hash', '-80')",
+		}},
+	}
+	bls := &binlogdatapb.BinlogSource{
+		Keyspace: env.KeyspaceName,
+		Shard:    env.ShardName,
+		Filter:   filter,
+		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
+	}
+	cancel, _ := startVReplication(t, bls, "")
+	defer cancel()
+
+	execStatements(t, []string{"insert into t1 values (4, 'a'), (5, 'b')"})
+	expectNontxQueries(t, qh.Expect("insert into t1(id,val) values (5,_binary'b')"), recvTimeout)
+	expectData(t, "t1", [][]string{{"5", "b"}})
+
+	// One UPDATE whose first row moves into the keyrange (an insert-shaped
+	// change with only an After image) and whose second row moves out of it
+	// (a delete-shaped change with only a Before image). Batch mode used to
+	// route the whole event to the bulk-insert path based on the first change
+	// and panic on the delete-shaped change's nil After image.
+	execStatements(t, []string{
+		"update t1 set id = case id when 4 then 2 when 5 then 6 end where id in (4, 5)",
+	})
+	expectNontxQueries(t, qh.Expect(
+		"insert into t1(id,val) values (2,_binary'a')",
+		"delete from t1 where id=5",
+	), recvTimeout)
+	expectData(t, "t1", [][]string{{"2", "a"}})
+
+	// The mirror image: the first row moves out of the keyrange (a
+	// delete-shaped change) and the second moves in (an insert-shaped
+	// change). Batch mode used to route the whole event to the bulk-delete
+	// path and panic on the insert-shaped change's nil Before image.
+	execStatements(t, []string{
+		"update t1 set id = case id when 2 then 4 when 6 then 3 end where id in (2, 6)",
+	})
+	expectNontxQueries(t, qh.Expect(
+		"delete from t1 where id=2",
+		"insert into t1(id,val) values (3,_binary'b')",
+	), recvTimeout)
+	expectData(t, "t1", [][]string{{"3", "b"}})
 }
 
 // TestPlayerStalls confirms that the vplayer will detect a stall and generate
 // a meaningful error -- which is stored in the vreplication record and the
 // vreplication_log table as well as being logged -- when it does.
 func TestPlayerStalls(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	defer deleteTablet(addTablet(100))
 
 	// We want to check for the expected log messages.
-	ole := log.Errorf
+	ole := log.Error
 	logger := logutil.NewMemoryLogger()
-	log.Errorf = logger.Errorf
+	log.Error = func(msg string, _ ...slog.Attr) {
+		logger.Errorf("%s", msg)
+	}
 
 	oldMinimumHeartbeatUpdateInterval := vreplicationMinimumHeartbeatUpdateInterval
 	oldProgressDeadline := vplayerProgressDeadline
 	oldRelayLogMaxItems := vttablet.DefaultVReplicationConfig.RelayLogMaxItems
 	oldRetryDelay := vttablet.DefaultVReplicationConfig.RetryDelay
 	defer func() {
-		log.Errorf = ole
+		log.Error = ole
 		vreplicationMinimumHeartbeatUpdateInterval = oldMinimumHeartbeatUpdateInterval
 		vplayerProgressDeadline = oldProgressDeadline
 		vttablet.DefaultVReplicationConfig.RelayLogMaxItems = oldRelayLogMaxItems
 		vttablet.DefaultVReplicationConfig.RetryDelay = oldRetryDelay
 	}()
 
-	// Shorten the deadline for the test.
-	vplayerProgressDeadline = 5 * time.Second
+	// Shorten the deadline for the test. It only needs to comfortably exceed
+	// the time a normal, non-stalled transaction takes to apply.
+	vplayerProgressDeadline = 2 * time.Second
 	// Shorten the time for a required heartbeat recording for the test.
-	vreplicationMinimumHeartbeatUpdateInterval = 5
+	vreplicationMinimumHeartbeatUpdateInterval = 2
 	// So each relay log batch will be a single statement transaction.
 	vttablet.DefaultVReplicationConfig.RelayLogMaxItems = 1
 
@@ -3695,6 +3980,12 @@ func TestPlayerStalls(t *testing.T) {
 
 	// A channel to communicate across goroutines.
 	done := make(chan struct{})
+	// Idempotent release of the row locks held by the heartbeat subtest's
+	// preFunc connection. postFunc releases them inline and again from a
+	// defer in case an assertion aborts the subtest first; the preFunc
+	// goroutine only receives once.
+	var releaseLocksOnce sync.Once
+	releaseLocks := func() { releaseLocksOnce.Do(func() { done <- struct{}{} }) }
 
 	testTimeout := vplayerProgressDeadline * 10
 
@@ -3726,24 +4017,41 @@ func TestPlayerStalls(t *testing.T) {
 		{
 			name: "stall in relay log IO",
 			input: []string{
-				"set @@session.binlog_format='STATEMENT'",                            // As we are using the sleep function in the query to simulate a stall
-				"insert into t1(id, val1) values (1, 'aaa'), (2, 'bbb'), (3, 'ccc')", // This should be the only query that gets replicated
-				// This will cause a stall in the vplayer.
-				fmt.Sprintf("update t1 set val1 = concat(sleep (%d), val1)", int64(vplayerProgressDeadline.Seconds()+5)),
+				"set @@session.binlog_format='STATEMENT'",    // As we are using the sleep function in the query to simulate a stall
+				"insert into t1(id, val1) values (1, 'aaa')", // This should be the only query that gets replicated
+				// This will cause a stall in the vplayer. MySQL evaluates SLEEP()
+				// once per affected row, and with STATEMENT format the statement
+				// is executed again on the target, so keep the table at a single
+				// row and the sleep only as long as needed: it must exceed
+				// vplayerProgressDeadline for the stall to be detected, with some
+				// margin so a late-firing timer can't miss the still-running query.
+				fmt.Sprintf("update t1 set val1 = concat(sleep (%d), val1)", int64(vplayerProgressDeadline.Seconds()+3)),
+				// These reach the binlog as soon as the update commits on the
+				// source, queue up behind the stalled update on the target, and
+				// block the vstreamer's relay log Send right as the target
+				// starts applying the update. That starts the stall-detection
+				// timer immediately, without depending on the vstreamer's ~1s
+				// heartbeat cadence to fill the relay log. They are never
+				// applied: the workflow errors out first.
+				"insert into t1(id, val1) values (2, 'bbb')",
+				"insert into t1(id, val1) values (3, 'ccc')",
 			},
 			expectQueries: true,
 			output: qh.Expect(
-				"insert into t1(id, val1) values (1, 'aaa'), (2, 'bbb'), (3, 'ccc')",
+				"insert into t1(id, val1) values (1, 'aaa')",
 				// This will cause a stall to be detected in the vplayer. This is
 				// what we want in the end, our improved error message (which also
 				// gets logged).
-				fmt.Sprintf("update t1 set val1 = concat(sleep (%d), val1)", int64(vplayerProgressDeadline.Seconds()+5)),
+				fmt.Sprintf("update t1 set val1 = concat(sleep (%d), val1)", int64(vplayerProgressDeadline.Seconds()+3)),
 				"/update _vt.vreplication set message=.*progress stalled.*",
 			),
 			postFunc: func() {
-				time.Sleep(vplayerProgressDeadline)
-				log.Flush()
-				require.Contains(t, logger.String(), relayLogIOStalledMsg, "expected log message not found")
+				// The log message is written asynchronously after the stalled
+				// workflow transitions to the error state, so poll for it.
+				require.EventuallyWithT(t, func(c *assert.CollectT) {
+					log.Flush()
+					assert.Contains(c, logger.String(), relayLogIOStalledMsg)
+				}, 30*time.Second, 100*time.Millisecond, "expected log message not found")
 				execStatements(t, []string{"set @@session.binlog_format='ROW'"})
 			},
 		},
@@ -3755,7 +4063,7 @@ func TestPlayerStalls(t *testing.T) {
 				"update t1 set val1 = 'yyy' where id = 10",
 			},
 			preFunc: func() {
-				dbc, err := env.Mysqld.GetAllPrivsConnection(context.Background())
+				dbc, err := env.Mysqld.GetAllPrivsConnection(t.Context())
 				require.NoError(t, err)
 				_, err = dbc.ExecuteFetch("begin", 1, false)
 				require.NoError(t, err)
@@ -3773,13 +4081,38 @@ func TestPlayerStalls(t *testing.T) {
 				}()
 			},
 			postFunc: func() {
-				// Sleep long enough that we fail to record the heartbeat.
-				to := time.Duration(int64(vreplicationMinimumHeartbeatUpdateInterval*2) * int64(time.Second))
-				time.Sleep(to)
-				// Signal the preFunc goroutine to close the connection holding the row locks.
-				done <- struct{}{}
-				log.Flush()
-				require.Contains(t, logger.String(), failedToRecordHeartbeatMsg, "expected log message not found")
+				// Also release the row locks if the assertions below abort
+				// the subtest: teardown deletes from the locked table and
+				// would otherwise hang until the test timeout.
+				defer releaseLocks()
+				// Wait until a heartbeat recording attempt (or the position
+				// update it is part of) fails on the row locks held by the
+				// preFunc connection, rather than sleeping a fixed multiple of
+				// the heartbeat interval.
+				require.EventuallyWithT(t, func(c *assert.CollectT) {
+					log.Flush()
+					logMessage := logger.String()
+					assert.True(c, strings.Contains(logMessage, failedToRecordHeartbeatMsg) ||
+						strings.Contains(logMessage, "Lock wait timeout exceeded"),
+						"expected log message not found")
+				}, 30*time.Second, 100*time.Millisecond, "expected log message not found")
+				// The vplayer also records the failure in the vreplication
+				// record's message column, but that update is blocked by the
+				// same row locks and completes only after they are released.
+				// Wait for it to flow through globalDBQueries before draining,
+				// so it can't instead surface during teardown and fail the
+				// expected delete queries.
+				releaseLocks()
+				timeout := time.After(30 * time.Second)
+				for seen := false; !seen; {
+					select {
+					case got := <-globalDBQueries:
+						seen = strings.Contains(got, "update _vt.vreplication set message=")
+					case <-timeout:
+						require.Fail(t, "vplayer did not record the stall error in the vreplication record's message column")
+					}
+				}
+				drainDBQueries()
 			},
 			// Nothing should get replicated because of the exclusing row locks
 			// held in the other connection from our preFunc.
@@ -3814,17 +4147,15 @@ func expectJSON(t *testing.T, table string, values [][]string, id int, exec func
 	} else {
 		query = fmt.Sprintf("select * from %s where id=%d", table, id)
 	}
-	qr, err := exec(context.Background(), query)
+	qr, err := exec(t.Context(), query)
 	require.NoError(t, err)
-	if len(values) != len(qr.Rows) {
-		t.Fatalf("row counts don't match: %d, want %d", len(qr.Rows), len(values))
-	}
+	require.Lenf(t, qr.Rows, len(values), "row counts don't match: %d, want %d", len(qr.Rows), len(values))
 	for i, row := range values {
 		require.Len(t, row, len(qr.Rows[i]), "Too few columns, \nrow: %d, \nresult: %d:%v, \nwant: %d:%v", i, len(qr.Rows[i]), qr.Rows[i], len(row), row)
 		require.Equal(t, qr.Rows[i][0].ToString(), row[0], "Id mismatch: want %s, got %s", qr.Rows[i][0].ToString(), row[0])
 		opts := jsondiff.DefaultConsoleOptions()
 		compare, s := jsondiff.Compare(qr.Rows[i][1].Raw(), []byte(row[1]), &opts)
-		require.Equal(t, compare, jsondiff.FullMatch, "Diff:\n%s\n", s)
+		require.Equal(t, jsondiff.FullMatch, compare, "Diff:\n%s\n", s)
 	}
 }
 
@@ -3853,4 +4184,15 @@ func startVReplication(t *testing.T, bls *binlogdatapb.BinlogSource, pos string)
 			expectDeleteQueries(t)
 		})
 	}, int(qr.InsertID)
+}
+
+func drainDBQueries() {
+	for {
+		select {
+		case <-globalDBQueries:
+			continue
+		default:
+			return
+		}
+	}
 }

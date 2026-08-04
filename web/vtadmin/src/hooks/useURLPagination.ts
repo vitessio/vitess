@@ -15,7 +15,7 @@
  */
 import { useEffect } from 'react';
 
-import { useHistory, useLocation } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
 import { useURLQuery } from './useURLQuery';
 
 export interface PaginationOpts {
@@ -37,7 +37,6 @@ const FIRST_PAGE = 1;
  * 	- encode pagination state in the URL (e.g., /some/route?page=123)
  */
 export const useURLPagination = ({ totalPages, pageQueryKey = 'page' }: PaginationOpts): PaginationParams => {
-    const history = useHistory();
     const location = useLocation();
     const { query, replaceQuery } = useURLQuery({ parseNumbers: true });
 
@@ -56,7 +55,7 @@ export const useURLPagination = ({ totalPages, pageQueryKey = 'page' }: Paginati
             // Replace history so the invalid value is not persisted in browser history
             replaceQuery({ [pageQueryKey]: FIRST_PAGE });
         }
-    }, [page, pageQueryKey, totalPages, history, location.pathname, query, replaceQuery]);
+    }, [page, pageQueryKey, totalPages, location.pathname, query, replaceQuery]);
 
     return {
         page,

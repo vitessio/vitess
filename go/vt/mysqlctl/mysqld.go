@@ -30,12 +30,14 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path"
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -73,6 +75,20 @@ const maxLogFileSampleSize = 4096
 
 // DbaGrantWaitTime is the amount of time to wait for the grants to have applied
 const DbaGrantWaitTime = 10 * time.Second
+
+const (
+	// mysqldExitPollInterval is how often waitForMysqldExit checks whether
+	// mysqld has removed its socket and pid files.
+	mysqldExitPollInterval = 100 * time.Millisecond
+)
+
+// MysqldShutdownGracePeriod bounds the pid/socket file wait in
+// Mysqld.Shutdown after mysqladmin has given up waiting, for callers
+// whose context has no deadline. It also pads the shutdown contexts
+// derived from the shutdown timeout by mysqlctl, mysqlctld, vtbackup,
+// vtcombo and the builtin backup engine, giving that wait a window to
+// observe the exit.
+const MysqldShutdownGracePeriod = 30 * time.Second
 
 var (
 	// DisableActiveReparents is a flag to disable active
@@ -138,6 +154,9 @@ func init() {
 	for _, cmd := range []string{"mysqlctl", "mysqlctld", "vtcombo", "vttablet", "vttestserver"} {
 		servenv.OnParseFor(cmd, registerPoolFlags)
 	}
+	for _, cmd := range []string{"vtcombo", "vttablet", "vtbackup", "vttestserver"} {
+		servenv.OnParseFor(cmd, registerMySQLDCloneFlags)
+	}
 }
 
 func registerMySQLDFlags(fs *pflag.FlagSet) {
@@ -145,7 +164,6 @@ func registerMySQLDFlags(fs *pflag.FlagSet) {
 	utils.SetFlagStringVar(fs, &mycnfTemplateFile, "mysqlctl-mycnf-template", mycnfTemplateFile, "template file to use for generating the my.cnf file during server init")
 	utils.SetFlagStringVar(fs, &socketFile, "mysqlctl-socket", socketFile, "socket file to use for remote mysqlctl actions (empty for local actions)")
 	utils.SetFlagDurationVar(fs, &replicationConnectRetry, "replication-connect-retry", replicationConnectRetry, "how long to wait in between replica reconnect attempts. Only precise to the second.")
-	utils.SetFlagBoolVar(fs, &mysqlCloneEnabled, "mysql-clone-enabled", mysqlCloneEnabled, "Enable MySQL CLONE plugin and user for backup/replica provisioning (requires MySQL 8.0.17+)")
 }
 
 // MySQLCloneEnabled returns whether MySQL CLONE support is enabled.
@@ -156,6 +174,10 @@ func MySQLCloneEnabled() bool {
 // SetMySQLCloneEnabled sets the MySQL CLONE enabled flag. This is intended for testing.
 func SetMySQLCloneEnabled(enabled bool) {
 	mysqlCloneEnabled = enabled
+}
+
+func registerMySQLDCloneFlags(fs *pflag.FlagSet) {
+	utils.SetFlagBoolVar(fs, &mysqlCloneEnabled, "mysql-clone-enabled", mysqlCloneEnabled, "Enable MySQL CLONE plugin and user for backup/replica provisioning (requires MySQL 8.0.17+)")
 }
 
 func registerReparentFlags(fs *pflag.FlagSet) {
@@ -213,7 +235,7 @@ func NewMysqld(dbcfgs *dbconfigs.DBConfigs) *Mysqld {
 		failVersionDetection(err)
 	}
 
-	log.Infof("Using flavor: %v, version: %v", f, v)
+	log.Info(fmt.Sprintf("Using flavor: %v, version: %v", f, v))
 	result.capabilities = newCapabilitySet(f, v)
 	return result
 }
@@ -273,7 +295,7 @@ func ParseVersionString(version string) (flavor MySQLFlavor, ver ServerVersion, 
 func (mysqld *Mysqld) RunMysqlUpgrade(ctx context.Context) error {
 	// Execute as remote action on mysqlctld if requested.
 	if socketFile != "" {
-		log.Infof("executing Mysqld.RunMysqlUpgrade() remotely via mysqlctld server: %v", socketFile)
+		log.Info(fmt.Sprintf("executing Mysqld.RunMysqlUpgrade() remotely via mysqlctld server: %v", socketFile))
 		client, err := mysqlctlclient.New(ctx, "unix", socketFile)
 		if err != nil {
 			return fmt.Errorf("can't dial mysqlctld: %v", err)
@@ -283,7 +305,7 @@ func (mysqld *Mysqld) RunMysqlUpgrade(ctx context.Context) error {
 	}
 
 	if mysqld.capabilities.hasMySQLUpgradeInServer() {
-		log.Warningf("MySQL version has built-in upgrade, skipping RunMySQLUpgrade")
+		log.Warn("MySQL version has built-in upgrade, skipping RunMySQLUpgrade")
 		return nil
 	}
 
@@ -315,18 +337,18 @@ func (mysqld *Mysqld) RunMysqlUpgrade(ctx context.Context) error {
 	// Find mysql_upgrade. If not there, we do nothing.
 	vtMysqlRoot, err := vtenv.VtMysqlRoot()
 	if err != nil {
-		log.Warningf("VT_MYSQL_ROOT not set, skipping mysql_upgrade step: %v", err)
+		log.Warn(fmt.Sprintf("VT_MYSQL_ROOT not set, skipping mysql_upgrade step: %v", err))
 		return nil
 	}
 	name, err := binaryPath(vtMysqlRoot, "mysql_upgrade")
 	if err != nil {
-		log.Warningf("mysql_upgrade binary not present, skipping it: %v", err)
+		log.Warn(fmt.Sprintf("mysql_upgrade binary not present, skipping it: %v", err))
 		return nil
 	}
 
 	env, err := buildLdPaths()
 	if err != nil {
-		log.Warningf("skipping mysql_upgrade step: %v", err)
+		log.Warn(fmt.Sprintf("skipping mysql_upgrade step: %v", err))
 		return nil
 	}
 
@@ -342,7 +364,7 @@ func (mysqld *Mysqld) RunMysqlUpgrade(ctx context.Context) error {
 func (mysqld *Mysqld) Start(ctx context.Context, cnf *Mycnf, mysqldArgs ...string) error {
 	// Execute as remote action on mysqlctld if requested.
 	if socketFile != "" {
-		log.Infof("executing Mysqld.Start() remotely via mysqlctld server: %v", socketFile)
+		log.Info(fmt.Sprintf("executing Mysqld.Start() remotely via mysqlctld server: %v", socketFile))
 		client, err := mysqlctlclient.New(ctx, "unix", socketFile)
 		if err != nil {
 			return fmt.Errorf("can't dial mysqlctld: %v", err)
@@ -370,7 +392,7 @@ func (mysqld *Mysqld) startNoWait(cnf *Mycnf, mysqldArgs ...string) error {
 		name = "mysqld_start hook" //nolint:ineffassign
 	case hook.HOOK_DOES_NOT_EXIST:
 		// hook doesn't exist, run mysqld_safe ourselves
-		log.Infof("%v: No mysqld_start hook, running mysqld_safe directly", ts)
+		log.Info(fmt.Sprintf("%v: No mysqld_start hook, running mysqld_safe directly", ts))
 		vtMysqlRoot, err := vtenv.VtMysqlRoot()
 		if err != nil {
 			return err
@@ -379,7 +401,7 @@ func (mysqld *Mysqld) startNoWait(cnf *Mycnf, mysqldArgs ...string) error {
 		if err != nil {
 			// The movement to use systemd means that mysqld_safe is not always provided.
 			// This should not be considered an issue do not generate a warning.
-			log.Infof("%v: trying to launch mysqld instead", err)
+			log.Info(fmt.Sprintf("%v: trying to launch mysqld instead", err))
 			name, err = binaryPath(vtMysqlRoot, "mysqld")
 			// If this also fails, return an error.
 			if err != nil {
@@ -397,10 +419,9 @@ func (mysqld *Mysqld) startNoWait(cnf *Mycnf, mysqldArgs ...string) error {
 		if err != nil {
 			return err
 		}
-		args := []string{
-			"--defaults-file=" + cnf.Path,
-			"--basedir=" + mysqlBaseDir,
-		}
+		args := make([]string, 0, 2+len(mysqldArgs))
+		args = append(args, "--defaults-file="+cnf.Path,
+			"--basedir="+mysqlBaseDir)
 		args = append(args, mysqldArgs...)
 		env, err := buildLdPaths()
 		if err != nil {
@@ -410,7 +431,7 @@ func (mysqld *Mysqld) startNoWait(cnf *Mycnf, mysqldArgs ...string) error {
 		cmd := exec.Command(name, args...)
 		cmd.Dir = vtMysqlRoot
 		cmd.Env = env
-		log.Infof("%v %#v", ts, cmd)
+		log.Info(fmt.Sprintf("%v %#v", ts, cmd))
 		stderr, err := cmd.StderrPipe()
 		if err != nil {
 			return err
@@ -422,13 +443,13 @@ func (mysqld *Mysqld) startNoWait(cnf *Mycnf, mysqldArgs ...string) error {
 		go func() {
 			scanner := bufio.NewScanner(stderr)
 			for scanner.Scan() {
-				log.Infof("%v stderr: %v", ts, scanner.Text())
+				log.Info(fmt.Sprintf("%v stderr: %v", ts, scanner.Text()))
 			}
 		}()
 		go func() {
 			scanner := bufio.NewScanner(stdout)
 			for scanner.Scan() {
-				log.Infof("%v stdout: %v", ts, scanner.Text())
+				log.Info(fmt.Sprintf("%v stdout: %v", ts, scanner.Text()))
 			}
 		}()
 		err = cmd.Start()
@@ -441,17 +462,19 @@ func (mysqld *Mysqld) startNoWait(cnf *Mycnf, mysqldArgs ...string) error {
 		go func(cancel <-chan struct{}) {
 			// Wait regardless of cancel, so we don't generate defunct processes.
 			err := cmd.Wait()
-			log.Infof("%v exit: %v", ts, err)
+			log.Info(fmt.Sprintf("%v exit: %v", ts, err))
 
 			// The process exited. Trigger OnTerm callbacks, unless we were canceled.
 			select {
 			case <-cancel:
 			default:
 				mysqld.mutex.Lock()
-				for _, callback := range mysqld.onTermFuncs {
-					go callback()
-				}
+				callbacks := append([]func(){}, mysqld.onTermFuncs...)
 				mysqld.mutex.Unlock()
+
+				for _, callback := range callbacks {
+					callback()
+				}
 			}
 		}(mysqld.cancelWaitCmd)
 		mysqld.mutex.Unlock()
@@ -476,27 +499,27 @@ func cleanupLockfile(socket string, ts string) error {
 	lockPath := socket + ".lock"
 	pid, err := os.ReadFile(lockPath)
 	if errors.Is(err, os.ErrNotExist) {
-		log.Infof("%v: no stale lock file at %s", ts, lockPath)
+		log.Info(fmt.Sprintf("%v: no stale lock file at %s", ts, lockPath))
 		// If there's no lock file, we can early return here, nothing
 		// to clean up then.
 		return nil
 	} else if err != nil {
-		log.Errorf("%v: error checking if lock file exists: %v", ts, err)
+		log.Error(fmt.Sprintf("%v: error checking if lock file exists: %v", ts, err))
 		// Any other errors here are unexpected.
 		return err
 	}
 	p, err := strconv.Atoi(string(bytes.TrimSpace(pid)))
 	if err != nil {
-		log.Errorf("%v: error parsing pid from lock file: %v", ts, err)
+		log.Error(fmt.Sprintf("%v: error parsing pid from lock file: %v", ts, err))
 		return err
 	}
 	if os.Getpid() == p {
-		log.Infof("%v: lock file at %s is ours, removing it", ts, lockPath)
+		log.Info(fmt.Sprintf("%v: lock file at %s is ours, removing it", ts, lockPath))
 		return os.Remove(lockPath)
 	}
 	proc, err := os.FindProcess(p)
 	if err != nil {
-		log.Errorf("%v: error finding process: %v", ts, err)
+		log.Error(fmt.Sprintf("%v: error finding process: %v", ts, err))
 		return err
 	}
 	err = proc.Signal(syscall.Signal(0))
@@ -506,21 +529,21 @@ func cleanupLockfile(socket string, ts string) error {
 		cmdline, err := os.ReadFile(fmt.Sprintf("/proc/%d/cmdline", p))
 		if err == nil {
 			name := string(bytes.ReplaceAll(cmdline, []byte{0}, []byte(" ")))
-			log.Errorf("%v: not removing socket lock file: %v with pid %v for %q", ts, lockPath, p, name)
+			log.Error(fmt.Sprintf("%v: not removing socket lock file: %v with pid %v for %q", ts, lockPath, p, name))
 		} else {
-			log.Errorf("%v: not removing socket lock file: %v with pid %v (failed to read process name: %v)", ts, lockPath, p, err)
+			log.Error(fmt.Sprintf("%v: not removing socket lock file: %v with pid %v (failed to read process name: %v)", ts, lockPath, p, err))
 		}
 		return fmt.Errorf("process %v is still running", p)
 	}
 	if !errors.Is(err, os.ErrProcessDone) {
 		// Any errors except for the process being done
 		// is unexpected here.
-		log.Errorf("%v: error checking process %v: %v", ts, p, err)
+		log.Error(fmt.Sprintf("%v: error checking process %v: %v", ts, p, err))
 		return err
 	}
 
 	// All good, process is gone and we can safely clean up the lock file.
-	log.Infof("%v: removing stale socket lock file: %v", ts, lockPath)
+	log.Info(fmt.Sprintf("%v: removing stale socket lock file: %v", ts, lockPath))
 	return os.Remove(lockPath)
 }
 
@@ -554,7 +577,7 @@ func (mysqld *Mysqld) WaitForDBAGrants(ctx context.Context, waitTime time.Durati
 			res, fetchErr := conn.ExecuteFetch("SHOW GRANTS", 1000, false)
 			conn.Close()
 			if fetchErr != nil {
-				log.Errorf("Error running SHOW GRANTS - %v", fetchErr)
+				log.Error(fmt.Sprintf("Error running SHOW GRANTS - %v", fetchErr))
 			}
 			if fetchErr == nil && res != nil && len(res.Rows) > 0 && len(res.Rows[0]) > 0 {
 				privileges := res.Rows[0][0].ToString()
@@ -576,7 +599,7 @@ func (mysqld *Mysqld) WaitForDBAGrants(ctx context.Context, waitTime time.Durati
 
 // wait is the internal version of Wait, that takes credentials.
 func (mysqld *Mysqld) wait(ctx context.Context, cnf *Mycnf, params *mysql.ConnParams) error {
-	log.Infof("Waiting for mysqld socket file (%v) to be ready...", cnf.SocketFile)
+	log.Info(fmt.Sprintf("Waiting for mysqld socket file (%v) to be ready...", cnf.SocketFile))
 
 	for {
 		select {
@@ -593,7 +616,7 @@ func (mysqld *Mysqld) wait(ctx context.Context, cnf *Mycnf, params *mysql.ConnPa
 				conn.Close()
 				return nil
 			}
-			log.Infof("mysqld socket file exists, but can't connect: %v", connErr)
+			log.Info(fmt.Sprintf("mysqld socket file exists, but can't connect: %v", connErr))
 		} else if !os.IsNotExist(statErr) {
 			return fmt.Errorf("can't stat mysqld socket file: %v", statErr)
 		}
@@ -609,17 +632,17 @@ func (mysqld *Mysqld) wait(ctx context.Context, cnf *Mycnf, params *mysql.ConnPa
 //
 // If a mysqlctld address is provided in a flag, Shutdown will run remotely.
 func (mysqld *Mysqld) Shutdown(ctx context.Context, cnf *Mycnf, waitForMysqld bool, shutdownTimeout time.Duration) error {
-	log.Infof("Mysqld.Shutdown")
+	log.Info("Mysqld.Shutdown")
 
 	// Execute as remote action on mysqlctld if requested.
 	if socketFile != "" {
-		log.Infof("executing Mysqld.Shutdown() remotely via mysqlctld server: %v", socketFile)
+		log.Info(fmt.Sprintf("executing Mysqld.Shutdown() remotely via mysqlctld server: %v", socketFile))
 		client, err := mysqlctlclient.New(ctx, "unix", socketFile)
 		if err != nil {
 			return fmt.Errorf("can't dial mysqlctld: %v", err)
 		}
 		defer client.Close()
-		return client.Shutdown(ctx, waitForMysqld)
+		return client.Shutdown(ctx, waitForMysqld, shutdownTimeout)
 	}
 
 	// We're shutting down on purpose. We no longer want to be notified when
@@ -635,7 +658,7 @@ func (mysqld *Mysqld) Shutdown(ctx context.Context, cnf *Mycnf, waitForMysqld bo
 	_, socketPathErr := os.Stat(cnf.SocketFile)
 	_, pidPathErr := os.Stat(cnf.PidFile)
 	if os.IsNotExist(socketPathErr) && os.IsNotExist(pidPathErr) {
-		log.Warningf("assuming mysqld already shut down - no socket, no pid file found")
+		log.Warn("assuming mysqld already shut down - no socket, no pid file found")
 		return nil
 	}
 
@@ -658,7 +681,7 @@ func (mysqld *Mysqld) Shutdown(ctx context.Context, cnf *Mycnf, waitForMysqld bo
 		// hook exists and worked, we can keep going
 	case hook.HOOK_DOES_NOT_EXIST:
 		// hook doesn't exist, try mysqladmin
-		log.Infof("No mysqld_shutdown hook, running mysqladmin directly")
+		log.Info("No mysqld_shutdown hook, running mysqladmin directly")
 		dir, err := vtenv.VtMysqlRoot()
 		if err != nil {
 			return err
@@ -687,8 +710,27 @@ func (mysqld *Mysqld) Shutdown(ctx context.Context, cnf *Mycnf, waitForMysqld bo
 		if err != nil {
 			return err
 		}
-		if _, _, err = execCmd(name, args, env, dir, nil); err != nil {
-			return err
+		if _, output, err := execCmd(name, args, env, dir, nil); err != nil {
+			// mysqladmin exits non-zero when its --shutdown-timeout expires
+			// while mysqld is still shutting down. The SHUTDOWN command has
+			// already been delivered at that point, so a slow-but-clean
+			// shutdown (e.g. innodb_fast_shutdown=0 purging large undo logs)
+			// should not be treated as a failure here; the pid/socket file
+			// wait below decides the outcome instead, running to the
+			// caller's deadline. Callers whose ctx has no deadline get a
+			// bounded grace window instead, so a truly hung mysqld still
+			// fails in finite time rather than waiting forever.
+			//
+			// The error is only suppressed when the wait below will run:
+			// for waitForMysqld=false callers a nil return would claim a
+			// shutdown nothing verified, so they get the error as before.
+			if !waitForMysqld || !mysqladminAbortedWaiting(output) {
+				return err
+			}
+			log.Warn("mysqladmin gave up waiting for mysqld to stop, waiting on pid/socket files instead", slog.Any("error", err))
+			var cancel context.CancelFunc
+			ctx, cancel = boundShutdownWaitContext(ctx)
+			defer cancel()
 		}
 	default:
 		// hook failed, we report error
@@ -699,25 +741,67 @@ func (mysqld *Mysqld) Shutdown(ctx context.Context, cnf *Mycnf, waitForMysqld bo
 	// proxy for that since we can't call wait() in a process we
 	// didn't start.
 	if waitForMysqld {
-		log.Infof("Mysqld.Shutdown: waiting for socket file (%v) and pid file (%v) to disappear",
-			cnf.SocketFile, cnf.PidFile)
-
-		for {
-			select {
-			case <-ctx.Done():
-				return errors.New("gave up waiting for mysqld to stop")
-			default:
-			}
-
-			_, socketPathErr = os.Stat(cnf.SocketFile)
-			_, pidPathErr = os.Stat(cnf.PidFile)
-			if os.IsNotExist(socketPathErr) && os.IsNotExist(pidPathErr) {
-				return nil
-			}
-			time.Sleep(100 * time.Millisecond)
+		log.Info(fmt.Sprintf("Mysqld.Shutdown: waiting for socket file (%v) and pid file (%v) to disappear", cnf.SocketFile, cnf.PidFile))
+		if err := waitForMysqldExit(ctx, cnf.SocketFile, cnf.PidFile); err != nil {
+			return err
 		}
 	}
 	return nil
+}
+
+// StartAfterExit waits for a mysqld process that shut itself down (e.g. after a
+// CLONE operation) to fully exit, then starts a new one. It polls for the
+// disappearance of the socket and pid files before calling Start.
+func (mysqld *Mysqld) StartAfterExit(ctx context.Context, cnf *Mycnf) error {
+	if err := waitForMysqldExit(ctx, cnf.SocketFile, cnf.PidFile); err != nil {
+		return err
+	}
+	return mysqld.Start(ctx, cnf)
+}
+
+// boundShutdownWaitContext bounds ctx by MysqldShutdownGracePeriod when it
+// has no deadline, so a truly hung mysqld still fails in finite time after
+// mysqladmin has given up waiting. A caller-supplied deadline is never
+// shortened: the pid/socket file wait runs to it, e.g. to the remainder of
+// the builtin backup engine's --builtinbackup-mysqld-timeout budget.
+func boundShutdownWaitContext(ctx context.Context) (context.Context, context.CancelFunc) {
+	if _, hasDeadline := ctx.Deadline(); hasDeadline {
+		return ctx, func() {}
+	}
+	return context.WithTimeout(ctx, MysqldShutdownGracePeriod)
+}
+
+// mysqladminAbortedWaiting reports whether mysqladmin output shows it
+// delivered the SHUTDOWN command but gave up waiting for mysqld to exit,
+// which happens when a clean shutdown outlives mysqladmin's
+// --shutdown-timeout ("Warning; Aborted waiting on pid file: '...' after
+// N seconds").
+//
+// This deliberately couples to mysqladmin's literal message, emitted by
+// wait_pidfile() in client/mysqladmin.cc and unchanged across MySQL 5.7,
+// 8.0 and 8.4. The coupling fails closed: if a future MySQL changes the
+// message, the match returns false and Shutdown reports the mysqladmin
+// error exactly as it did before this check existed. The endtoend mysqlctl
+// suite exercises this match against the real mysqladmin binary.
+func mysqladminAbortedWaiting(output string) bool {
+	return strings.Contains(output, "Aborted waiting on pid file")
+}
+
+// waitForMysqldExit polls until both socketFile and pidFile have been removed,
+// which signals that the mysqld process has fully exited.
+func waitForMysqldExit(ctx context.Context, socketFile, pidFile string) error {
+	for {
+		_, socketErr := os.Stat(socketFile)
+		_, pidErr := os.Stat(pidFile)
+		if os.IsNotExist(socketErr) && os.IsNotExist(pidErr) {
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return errors.New("gave up waiting for mysqld to stop")
+		case <-time.After(mysqldExitPollInterval):
+		}
+	}
 }
 
 // execCmd searches the PATH for a command and runs it, logging the output.
@@ -734,7 +818,7 @@ func execCmd(name string, args, env []string, dir string, input io.Reader) (cmd 
 	out, err := cmd.CombinedOutput()
 	output = string(out)
 	if err != nil {
-		log.Errorf("execCmd: %v failed: %v", name, err)
+		log.Error(fmt.Sprintf("execCmd: %v failed: %v", name, err))
 		err = fmt.Errorf("%v: %w, output: %v", name, err, output)
 	}
 	return cmd, output, err
@@ -758,15 +842,15 @@ func binaryPath(root, binary string) (string, error) {
 // InitConfig will create the default directory structure for the mysqld process,
 // generate / configure a my.cnf file.
 func (mysqld *Mysqld) InitConfig(cnf *Mycnf) error {
-	log.Infof("mysqlctl.InitConfig")
+	log.Info("mysqlctl.InitConfig")
 	err := mysqld.createDirs(cnf)
 	if err != nil {
-		log.Errorf("%s", err.Error())
+		log.Error(err.Error())
 		return err
 	}
 	// Set up config files.
 	if err = mysqld.initConfig(cnf, cnf.Path); err != nil {
-		log.Errorf("failed creating %v: %v", cnf.Path, err)
+		log.Error(fmt.Sprintf("failed creating %v: %v", cnf.Path, err))
 		return err
 	}
 	return nil
@@ -776,10 +860,10 @@ func (mysqld *Mysqld) InitConfig(cnf *Mycnf) error {
 // generate / configure a my.cnf file install a skeleton database,
 // and apply the provided initial SQL file.
 func (mysqld *Mysqld) Init(ctx context.Context, cnf *Mycnf, initDBSQLFile string) error {
-	log.Infof("mysqlctl.Init running with contents previously embedded from %s", initDBSQLFile)
+	log.Info("mysqlctl.Init running with contents previously embedded from " + initDBSQLFile)
 	err := mysqld.InitConfig(cnf)
 	if err != nil {
-		log.Errorf("%s", err.Error())
+		log.Error(err.Error())
 		return err
 	}
 	// Install data dir.
@@ -790,7 +874,7 @@ func (mysqld *Mysqld) Init(ctx context.Context, cnf *Mycnf, initDBSQLFile string
 	// Start mysqld. We do not use Start, as we have to wait using
 	// the root user.
 	if err = mysqld.startNoWait(cnf); err != nil {
-		log.Errorf("failed starting mysqld: %v\n%v", err, readTailOfMysqldErrorLog(cnf.ErrorLogPath))
+		log.Error(fmt.Sprintf("failed starting mysqld: %v\n%v", err, readTailOfMysqldErrorLog(cnf.ErrorLogPath)))
 		return err
 	}
 
@@ -801,7 +885,7 @@ func (mysqld *Mysqld) Init(ctx context.Context, cnf *Mycnf, initDBSQLFile string
 		UnixSocket: cnf.SocketFile,
 	}
 	if err = mysqld.wait(ctx, cnf, params); err != nil {
-		log.Errorf("failed starting mysqld in time: %v\n%v", err, readTailOfMysqldErrorLog(cnf.ErrorLogPath))
+		log.Error(fmt.Sprintf("failed starting mysqld in time: %v\n%v", err, readTailOfMysqldErrorLog(cnf.ErrorLogPath)))
 		return err
 	}
 	if initDBSQLFile == "" { // default to built-in
@@ -878,20 +962,20 @@ func (mysqld *Mysqld) installDataDir(cnf *Mycnf) error {
 		return err
 	}
 	if mysqld.capabilities.hasInitializeInServer() {
-		log.Infof("Installing data dir with mysqld --initialize-insecure")
+		log.Info("Installing data dir with mysqld --initialize-insecure")
 		args := []string{
 			"--defaults-file=" + cnf.Path,
 			"--basedir=" + mysqlBaseDir,
 			"--initialize-insecure", // Use empty 'root'@'localhost' password.
 		}
 		if _, _, err = execCmd(mysqldPath, args, nil, mysqlRoot, nil); err != nil {
-			log.Errorf("mysqld --initialize-insecure failed: %v\n%v", err, readTailOfMysqldErrorLog(cnf.ErrorLogPath))
+			log.Error(fmt.Sprintf("mysqld --initialize-insecure failed: %v\n%v", err, readTailOfMysqldErrorLog(cnf.ErrorLogPath)))
 			return err
 		}
 		return nil
 	}
 
-	log.Infof("Installing data dir with mysql_install_db")
+	log.Info("Installing data dir with mysql_install_db")
 	args := []string{
 		"--defaults-file=" + cnf.Path,
 		"--basedir=" + mysqlBaseDir,
@@ -904,7 +988,7 @@ func (mysqld *Mysqld) installDataDir(cnf *Mycnf) error {
 		return err
 	}
 	if _, _, err = execCmd(cmdPath, args, nil, mysqlRoot, nil); err != nil {
-		log.Errorf("mysql_install_db failed: %v\n%v", err, readTailOfMysqldErrorLog(cnf.ErrorLogPath))
+		log.Error(fmt.Sprintf("mysql_install_db failed: %v\n%v", err, readTailOfMysqldErrorLog(cnf.ErrorLogPath)))
 		return err
 	}
 	return nil
@@ -922,7 +1006,7 @@ func (mysqld *Mysqld) initConfig(cnf *Mycnf, outFile string) error {
 
 	switch hr := hook.NewHookWithEnv("make_mycnf", nil, env).Execute(); hr.ExitStatus {
 	case hook.HOOK_DOES_NOT_EXIST:
-		log.Infof("make_mycnf hook doesn't exist, reading template files")
+		log.Info("make_mycnf hook doesn't exist, reading template files")
 		configData, err = cnf.makeMycnf(mysqld.getMycnfTemplate())
 	case hook.HOOK_SUCCESS:
 		configData, err = cnf.fillMycnfTemplate(hr.Stdout)
@@ -940,7 +1024,8 @@ func (mysqld *Mysqld) getMycnfTemplate() string {
 	if mycnfTemplateFile != "" {
 		data, err := os.ReadFile(mycnfTemplateFile)
 		if err != nil {
-			log.Fatalf("template file specified by -mysqlctl-mycnf-template could not be read: %v", mycnfTemplateFile)
+			log.Error(fmt.Sprintf("template file specified by -mysqlctl-mycnf-template could not be read: %v", mycnfTemplateFile))
+			os.Exit(1)
 		}
 		return string(data) // use only specified template
 	}
@@ -962,7 +1047,7 @@ func (mysqld *Mysqld) getMycnfTemplate() string {
 			if mysqld.capabilities.version.Minor == 7 {
 				versionConfig = config.MycnfMySQL57
 			} else {
-				log.Infof("this version of Vitess does not include built-in support for %v %v", mysqld.capabilities.flavor, mysqld.capabilities.version)
+				log.Info(fmt.Sprintf("this version of Vitess does not include built-in support for %v %v", mysqld.capabilities.flavor, mysqld.capabilities.version))
 			}
 		case 8:
 			if mysqld.capabilities.version.Minor >= 4 {
@@ -975,14 +1060,14 @@ func (mysqld *Mysqld) getMycnfTemplate() string {
 		case 9:
 			versionConfig = config.MycnfMySQL90
 		default:
-			log.Infof("this version of Vitess does not include built-in support for %v %v", mysqld.capabilities.flavor, mysqld.capabilities.version)
+			log.Info(fmt.Sprintf("this version of Vitess does not include built-in support for %v %v", mysqld.capabilities.flavor, mysqld.capabilities.version))
 		}
 	case FlavorMariaDB:
 		switch mysqld.capabilities.version.Major {
 		case 10:
 			versionConfig = config.MycnfMariaDB10
 		default:
-			log.Infof("this version of Vitess does not include built-in support for %v %v", mysqld.capabilities.flavor, mysqld.capabilities.version)
+			log.Info(fmt.Sprintf("this version of Vitess does not include built-in support for %v %v", mysqld.capabilities.flavor, mysqld.capabilities.version))
 		}
 	}
 
@@ -992,8 +1077,7 @@ func (mysqld *Mysqld) getMycnfTemplate() string {
 	if mysqlCloneEnabled && f == FlavorMySQL {
 		v := mysqld.capabilities.version
 		if v.Major < 8 || (v.Major == 8 && v.Minor == 0 && v.Patch < 17) {
-			log.Warningf("--mysql-clone-enabled is set but MySQL version %d.%d.%d does not support CLONE (requires 8.0.17+); flag will be ignored",
-				v.Major, v.Minor, v.Patch)
+			log.Warn(fmt.Sprintf("--mysql-clone-enabled is set but MySQL version %d.%d.%d does not support CLONE (requires 8.0.17+); flag will be ignored", v.Major, v.Minor, v.Patch))
 		} else {
 			myTemplateSource.WriteString("\n## Clone plugin (--mysql-clone-enabled)\n")
 			myTemplateSource.WriteString(config.MycnfClone)
@@ -1001,14 +1085,14 @@ func (mysqld *Mysqld) getMycnfTemplate() string {
 	}
 
 	if extraCnf := os.Getenv("EXTRA_MY_CNF"); extraCnf != "" {
-		parts := strings.Split(extraCnf, ":")
-		for _, path := range parts {
+		parts := strings.SplitSeq(extraCnf, ":")
+		for path := range parts {
 			data, dataErr := os.ReadFile(path)
 			if dataErr != nil {
-				log.Infof("could not open config file for mycnf: %v", path)
+				log.Info(fmt.Sprintf("could not open config file for mycnf: %v", path))
 				continue
 			}
-			log.Infof("loaded extra MySQL config from: %s", path)
+			log.Info("loaded extra MySQL config from: " + path)
 			myTemplateSource.WriteString("## " + path + "\n")
 			myTemplateSource.Write(data)
 		}
@@ -1022,7 +1106,7 @@ func (mysqld *Mysqld) getMycnfTemplate() string {
 func (mysqld *Mysqld) RefreshConfig(ctx context.Context, cnf *Mycnf) error {
 	// Execute as remote action on mysqlctld if requested.
 	if socketFile != "" {
-		log.Infof("executing Mysqld.RefreshConfig() remotely via mysqlctld server: %v", socketFile)
+		log.Info(fmt.Sprintf("executing Mysqld.RefreshConfig() remotely via mysqlctld server: %v", socketFile))
 		client, err := mysqlctlclient.New(ctx, "unix", socketFile)
 		if err != nil {
 			return fmt.Errorf("can't dial mysqlctld: %v", err)
@@ -1053,7 +1137,7 @@ func (mysqld *Mysqld) RefreshConfig(ctx context.Context, cnf *Mycnf) error {
 	}
 
 	if bytes.Equal(existing, updated) {
-		log.Infof("No changes to my.cnf. Continuing.")
+		log.Info("No changes to my.cnf. Continuing.")
 		return nil
 	}
 
@@ -1066,7 +1150,7 @@ func (mysqld *Mysqld) RefreshConfig(ctx context.Context, cnf *Mycnf) error {
 	if err != nil {
 		return fmt.Errorf("could not move %v to %v: %v", f.Name(), cnf.Path, err)
 	}
-	log.Infof("Updated my.cnf. Backup of previous version available in %v", backupPath)
+	log.Info(fmt.Sprintf("Updated my.cnf. Backup of previous version available in %v", backupPath))
 
 	return nil
 }
@@ -1076,11 +1160,11 @@ func (mysqld *Mysqld) RefreshConfig(ctx context.Context, cnf *Mycnf) error {
 // from a backup and then give it the same ServerID as before, MySQL can then
 // skip transactions in the replication stream with the same server_id.
 func (mysqld *Mysqld) ReinitConfig(ctx context.Context, cnf *Mycnf) error {
-	log.Infof("Mysqld.ReinitConfig")
+	log.Info("Mysqld.ReinitConfig")
 
 	// Execute as remote action on mysqlctld if requested.
 	if socketFile != "" {
-		log.Infof("executing Mysqld.ReinitConfig() remotely via mysqlctld server: %v", socketFile)
+		log.Info(fmt.Sprintf("executing Mysqld.ReinitConfig() remotely via mysqlctld server: %v", socketFile))
 		client, err := mysqlctlclient.New(ctx, "unix", socketFile)
 		if err != nil {
 			return fmt.Errorf("can't dial mysqlctld: %v", err)
@@ -1097,7 +1181,7 @@ func (mysqld *Mysqld) ReinitConfig(ctx context.Context, cnf *Mycnf) error {
 
 func (mysqld *Mysqld) createDirs(cnf *Mycnf) error {
 	tabletDir := cnf.TabletDir()
-	log.Infof("creating directory %s", tabletDir)
+	log.Info("creating directory " + tabletDir)
 	if err := os2.MkdirAll(tabletDir); err != nil {
 		return err
 	}
@@ -1107,7 +1191,7 @@ func (mysqld *Mysqld) createDirs(cnf *Mycnf) error {
 		}
 	}
 	for _, dir := range cnf.directoryList() {
-		log.Infof("creating directory %s", dir)
+		log.Info("creating directory " + dir)
 		if err := os2.MkdirAll(dir); err != nil {
 			return err
 		}
@@ -1131,27 +1215,27 @@ func (mysqld *Mysqld) createTopDir(cnf *Mycnf, dir string) error {
 	if err != nil {
 		if os.IsNotExist(err) {
 			topdir := path.Join(tabletDir, dir)
-			log.Infof("creating directory %s", topdir)
+			log.Info("creating directory " + topdir)
 			return os2.MkdirAll(topdir)
 		}
 		return err
 	}
 	linkto := path.Join(target, vtname)
 	source := path.Join(tabletDir, dir)
-	log.Infof("creating directory %s", linkto)
+	log.Info("creating directory " + linkto)
 	err = os2.MkdirAll(linkto)
 	if err != nil {
 		return err
 	}
-	log.Infof("creating symlink %s -> %s", source, linkto)
+	log.Info(fmt.Sprintf("creating symlink %s -> %s", source, linkto))
 	return os.Symlink(linkto, source)
 }
 
 // Teardown will shutdown the running daemon, and delete the root directory.
 func (mysqld *Mysqld) Teardown(ctx context.Context, cnf *Mycnf, force bool, shutdownTimeout time.Duration) error {
-	log.Infof("mysqlctl.Teardown")
+	log.Info("mysqlctl.Teardown")
 	if err := mysqld.Shutdown(ctx, cnf, true, shutdownTimeout); err != nil {
-		log.Warningf("failed mysqld shutdown: %v", err.Error())
+		log.Warn(fmt.Sprintf("failed mysqld shutdown: %v", err.Error()))
 		if !force {
 			return err
 		}
@@ -1169,23 +1253,23 @@ func (mysqld *Mysqld) Teardown(ctx context.Context, cnf *Mycnf, force bool, shut
 func deleteTopDir(dir string) (removalErr error) {
 	fi, err := os.Lstat(dir)
 	if err != nil {
-		log.Errorf("error deleting dir %v: %v", dir, err.Error())
+		log.Error(fmt.Sprintf("error deleting dir %v: %v", dir, err.Error()))
 		removalErr = err
 	} else if fi.Mode()&os.ModeSymlink != 0 {
 		target, err := filepath.EvalSymlinks(dir)
 		if err != nil {
-			log.Errorf("could not resolve symlink %v: %v", dir, err.Error())
+			log.Error(fmt.Sprintf("could not resolve symlink %v: %v", dir, err.Error()))
 			removalErr = err
 		}
-		log.Infof("remove data dir (symlinked) %v", target)
+		log.Info(fmt.Sprintf("remove data dir (symlinked) %v", target))
 		if err = os.RemoveAll(target); err != nil {
-			log.Errorf("failed removing %v: %v", target, err.Error())
+			log.Error(fmt.Sprintf("failed removing %v: %v", target, err.Error()))
 			removalErr = err
 		}
 	}
-	log.Infof("remove data dir %v", dir)
+	log.Info(fmt.Sprintf("remove data dir %v", dir))
 	if err = os.RemoveAll(dir); err != nil {
-		log.Errorf("failed removing %v: %v", dir, err.Error())
+		log.Error(fmt.Sprintf("failed removing %v: %v", dir, err.Error()))
 		removalErr = err
 	}
 	return
@@ -1403,11 +1487,34 @@ func (mysqld *Mysqld) HostMetrics(ctx context.Context, cnf *Mycnf) (*mysqlctlpb.
 	return hostMetrics(ctx, cnf)
 }
 
+// mysqlbinlogEnviron returns the environment to use when running mysqlbinlog.
+// mysqlbinlog interprets --stop-datetime (and --start-datetime) in its own
+// process time zone. ApplyBinlogFile formats the restore timestamp in UTC, and
+// Vitess clears the host environment before invoking mysqlbinlog, so we force
+// TZ=UTC here to make mysqlbinlog read that timestamp as UTC too. Without this,
+// on a host whose time zone is not UTC, mysqlbinlog stops at the wrong point and
+// the wrong point in time is restored.
+// See https://github.com/vitessio/vitess/issues/20373.
+func mysqlbinlogEnviron(baseEnv []string) []string {
+	// baseEnv can already carry a TZ entry (e.g. from os.Environ() via
+	// buildLdPaths()). Drop it so mysqlbinlog only ever sees one TZ entry;
+	// otherwise the effective time zone would depend on how the child
+	// process resolves duplicate environment variables.
+	env := make([]string, 0, len(baseEnv)+1)
+	for _, e := range baseEnv {
+		if strings.HasPrefix(e, "TZ=") {
+			continue
+		}
+		env = append(env, e)
+	}
+	return append(env, "TZ=UTC")
+}
+
 // ApplyBinlogFile extracts a binary log file and applies it to MySQL. It is the equivalent of:
 // $ mysqlbinlog --include-gtids binlog.file | mysql
 func (mysqld *Mysqld) ApplyBinlogFile(ctx context.Context, req *mysqlctlpb.ApplyBinlogFileRequest) error {
 	if socketFile != "" {
-		log.Infof("executing Mysqld.ApplyBinlogFile() remotely via mysqlctld server: %v", socketFile)
+		log.Info(fmt.Sprintf("executing Mysqld.ApplyBinlogFile() remotely via mysqlctld server: %v", socketFile))
 		client, err := mysqlctlclient.New(ctx, "unix", socketFile)
 		if err != nil {
 			return fmt.Errorf("can't dial mysqlctld: %v", err)
@@ -1441,13 +1548,15 @@ func (mysqld *Mysqld) ApplyBinlogFile(ctx context.Context, req *mysqlctlpb.Apply
 
 		args := []string{}
 		if gtids := req.BinlogRestorePosition; gtids != "" {
-			args = append(args,
+			args = append(
+				args,
 				"--include-gtids",
 				gtids,
 			)
 		}
 		if restoreToTimestamp := protoutil.TimeFromProto(req.BinlogRestoreDatetime).UTC(); !restoreToTimestamp.IsZero() {
-			args = append(args,
+			args = append(
+				args,
 				"--stop-datetime",
 				restoreToTimestamp.Format(sqltypes.TimestampFormat),
 			)
@@ -1457,9 +1566,9 @@ func (mysqld *Mysqld) ApplyBinlogFile(ctx context.Context, req *mysqlctlpb.Apply
 
 		mysqlbinlogCmd = exec.Command(name, args...)
 		mysqlbinlogCmd.Dir = dir
-		mysqlbinlogCmd.Env = env
+		mysqlbinlogCmd.Env = mysqlbinlogEnviron(env)
 		mysqlbinlogCmd.Stderr = mysqlbinlogErrFile
-		log.Infof("ApplyBinlogFile: running mysqlbinlog command: %#v with errfile=%v", mysqlbinlogCmd, mysqlbinlogErrFile.Name())
+		log.Info(fmt.Sprintf("ApplyBinlogFile: running mysqlbinlog command: %#v with errfile=%v", mysqlbinlogCmd, mysqlbinlogErrFile.Name()))
 		pipe, err = mysqlbinlogCmd.StdoutPipe() // to be piped into mysql
 		if err != nil {
 			return err
@@ -1493,13 +1602,13 @@ func (mysqld *Mysqld) ApplyBinlogFile(ctx context.Context, req *mysqlctlpb.Apply
 		// We disable super_read_only, in case it is in the default MySQL startup
 		// parameters.  We do it blindly, since this will fail on MariaDB, which doesn't
 		// have super_read_only This is safe, since we're restarting MySQL after the restore anyway
-		log.Infof("ApplyBinlogFile: disabling super_read_only")
+		log.Info("ApplyBinlogFile: disabling super_read_only")
 		resetFunc, err := mysqld.SetSuperReadOnly(ctx, false)
 		if err != nil {
-			if sqlErr, ok := err.(*sqlerror.SQLError); ok && sqlErr.Number() == sqlerror.ERUnknownSystemVariable {
-				log.Warningf("ApplyBinlogFile: server does not know about super_read_only, continuing anyway...")
+			if sqlErr, ok := errors.AsType[*sqlerror.SQLError](err); ok && sqlErr.Number() == sqlerror.ERUnknownSystemVariable {
+				log.Warn("ApplyBinlogFile: server does not know about super_read_only, continuing anyway...")
 			} else {
-				log.Errorf("ApplyBinlogFile: unexpected error while trying to set super_read_only: %v", err)
+				log.Error(fmt.Sprintf("ApplyBinlogFile: unexpected error while trying to set super_read_only: %v", err))
 				return err
 			}
 		}
@@ -1518,7 +1627,7 @@ func (mysqld *Mysqld) ApplyBinlogFile(ctx context.Context, req *mysqlctlpb.Apply
 		mysqlCmd.Stdin = pipe // piped from mysqlbinlog
 
 		mysqlCmd.Stderr = mysqlErrFile
-		log.Infof("ApplyBinlogFile: running mysql command: %#v with errfile=%v", mysqlCmd, mysqlErrFile.Name())
+		log.Info(fmt.Sprintf("ApplyBinlogFile: running mysql command: %#v with errfile=%v", mysqlCmd, mysqlErrFile.Name()))
 	}
 	// Run both processes, piped:
 	if err := mysqlbinlogCmd.Start(); err != nil {
@@ -1594,7 +1703,7 @@ func (mysqld *Mysqld) scanBinlogTimestamp(
 	mysqlbinlogCmd := exec.Command(mysqlbinlogName, args...)
 	mysqlbinlogCmd.Dir = mysqlbinlogDir
 	mysqlbinlogCmd.Env = mysqlbinlogEnv
-	log.Infof("ApplyBinlogFile: running mysqlbinlog command: %#v", mysqlbinlogCmd)
+	log.Info(fmt.Sprintf("ApplyBinlogFile: running mysqlbinlog command: %#v", mysqlbinlogCmd))
 	pipe, err := mysqlbinlogCmd.StdoutPipe() // to be piped into mysql
 	if err != nil {
 		return firstMatchedTime, lastMatchedTime, err
@@ -1638,7 +1747,7 @@ func (mysqld *Mysqld) ReadBinlogFilesTimestamps(ctx context.Context, req *mysqlc
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "empty binlog list in ReadBinlogFilesTimestampsRequest")
 	}
 	if socketFile != "" {
-		log.Infof("executing Mysqld.ReadBinlogFilesTimestamps() remotely via mysqlctld server: %v", socketFile)
+		log.Info(fmt.Sprintf("executing Mysqld.ReadBinlogFilesTimestamps() remotely via mysqlctld server: %v", socketFile))
 		client, err := mysqlctlclient.New(ctx, "unix", socketFile)
 		if err != nil {
 			return nil, fmt.Errorf("can't dial mysqlctld: %v", err)
@@ -1658,6 +1767,12 @@ func (mysqld *Mysqld) ReadBinlogFilesTimestamps(ctx context.Context, req *mysqlc
 	if err != nil {
 		return nil, err
 	}
+	// mysqlbinlog prints event timestamps in its own process time zone, and the
+	// MySQL 5.7 fallback in parseBinlogEntryTimestamp parses the zone-less value
+	// as UTC. Force TZ=UTC so the recorded First/LastTimestamp match that
+	// assumption on non-UTC hosts, the same way ApplyBinlogFile does for
+	// --stop-datetime. See https://github.com/vitessio/vitess/issues/20373.
+	mysqlbinlogEnv := mysqlbinlogEnviron(env)
 
 	lastMatchedTimeMap := map[string]time.Time{} // a simple cache to avoid rescanning same files. Key=binlog file name
 
@@ -1665,7 +1780,7 @@ func (mysqld *Mysqld) ReadBinlogFilesTimestamps(ctx context.Context, req *mysqlc
 	// Find first timestamp
 	err = func() error {
 		for _, binlogFile := range req.BinlogFileNames {
-			firstMatchedTime, lastMatchedTime, err := mysqld.scanBinlogTimestamp(dir, env, mysqlbinlogName, binlogFile, true)
+			firstMatchedTime, lastMatchedTime, err := mysqld.scanBinlogTimestamp(dir, mysqlbinlogEnv, mysqlbinlogName, binlogFile, true)
 			if err != nil {
 				return vterrors.Wrapf(err, "while scanning for first binlog timestamp in %v", binlogFile)
 			}
@@ -1688,15 +1803,13 @@ func (mysqld *Mysqld) ReadBinlogFilesTimestamps(ctx context.Context, req *mysqlc
 	}
 	// Find last timestamp
 	err = func() error {
-		for i := len(req.BinlogFileNames) - 1; i >= 0; i-- {
-			binlogFile := req.BinlogFileNames[i]
-
+		for _, binlogFile := range slices.Backward(req.BinlogFileNames) {
 			// See if we have a cached value for this file. This is certainly be the situation if there's a single binary log file in req.BinlogFileNames,
 			// which means the first file and last file are the same, and so we have already parsed the file while searching for the first timestamp.
 			lastMatchedTime, ok := lastMatchedTimeMap[binlogFile]
 			if !ok {
 				var err error
-				_, lastMatchedTime, err = mysqld.scanBinlogTimestamp(dir, env, mysqlbinlogName, binlogFile, false)
+				_, lastMatchedTime, err = mysqld.scanBinlogTimestamp(dir, mysqlbinlogEnv, mysqlbinlogName, binlogFile, false)
 				if err != nil {
 					return vterrors.Wrapf(err, "while scanning for last binlog timestamp in %v", binlogFile)
 				}
@@ -1725,7 +1838,7 @@ func noSocketFile() {
 		// We log an error for now until we fix the issue with ApplySchema surfacing in MoveTables.
 		// See https://github.com/vitessio/vitess/issues/13203 and https://github.com/vitessio/vitess/pull/13178
 		// panic("Running remotely through mysqlctl, socketFile must not be set")
-		log.Warning("Running remotely through mysqlctl and thus socketFile should not be set")
+		log.Warn("Running remotely through mysqlctl and thus socketFile should not be set")
 	}
 }
 

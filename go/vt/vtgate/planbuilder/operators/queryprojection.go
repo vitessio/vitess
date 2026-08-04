@@ -657,6 +657,9 @@ func (qp *QueryProjection) orderByOverlapWithSelectExpr(ctx *plancontext.Plannin
 }
 
 func (qp *QueryProjection) useGroupingOverDistinct(ctx *plancontext.PlanningContext) bool {
+	if qp.HasWindow {
+		return false
+	}
 	if !qp.orderByOverlapWithSelectExpr(ctx) {
 		return false
 	}

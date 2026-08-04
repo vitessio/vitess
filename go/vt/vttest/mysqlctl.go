@@ -18,6 +18,7 @@ package vttest
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"os/exec"
 	"path"
@@ -63,7 +64,6 @@ func (ctl *Mysqlctl) Setup() error {
 
 	cmd := exec.CommandContext(ctx,
 		ctl.Binary,
-		"--alsologtostderr",
 		"--tablet-uid", strconv.FormatUint(uint64(ctl.UID), 10),
 		"--mysql-port", strconv.Itoa(ctl.Port),
 		"init",
@@ -88,7 +88,6 @@ func (ctl *Mysqlctl) Start() error {
 
 	cmd := exec.CommandContext(ctx,
 		ctl.Binary,
-		"--alsologtostderr",
 		"--tablet-uid", strconv.FormatUint(uint64(ctl.UID), 10),
 		"--mysql-port", strconv.Itoa(ctl.Port),
 		"start",
@@ -99,7 +98,7 @@ func (ctl *Mysqlctl) Start() error {
 	cmd.Env = append(cmd.Env, os.Environ()...)
 	cmd.Env = append(cmd.Env, ctl.Env...)
 	cmd.Env = append(cmd.Env, "EXTRA_MY_CNF="+myCnf)
-	log.Infof("Starting MySQL using: %+v", cmd.Env)
+	log.Info(fmt.Sprintf("Starting MySQL using: %+v", cmd.Env))
 	_, err := cmd.Output()
 	return err
 }
@@ -111,7 +110,6 @@ func (ctl *Mysqlctl) TearDown() error {
 
 	cmd := exec.CommandContext(ctx,
 		ctl.Binary,
-		"--alsologtostderr",
 		"--tablet-uid", strconv.FormatUint(uint64(ctl.UID), 10),
 		"--mysql-port", strconv.Itoa(ctl.Port),
 		"shutdown",

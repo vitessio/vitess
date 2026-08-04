@@ -33,31 +33,39 @@ type Charset = types.Charset
 
 // 8-bit encodings
 
-type Charset_8bit = eightbit.Charset_8bit
-type Charset_binary = eightbit.Charset_binary
-type Charset_latin1 = eightbit.Charset_latin1
-type UnicodeMapping = eightbit.UnicodeMapping
+type (
+	Charset_8bit   = eightbit.Charset_8bit
+	Charset_binary = eightbit.Charset_binary
+	Charset_latin1 = eightbit.Charset_latin1
+	UnicodeMapping = eightbit.UnicodeMapping
+)
 
 // Unicode encodings
 
-type Charset_utf8mb3 = unicode.Charset_utf8mb3
-type Charset_utf8mb4 = unicode.Charset_utf8mb4
-type Charset_utf16 = unicode.Charset_utf16be
-type Charset_utf16le = unicode.Charset_utf16le
-type Charset_ucs2 = unicode.Charset_ucs2
-type Charset_utf32 = unicode.Charset_utf32
+type (
+	Charset_utf8mb3 = unicode.Charset_utf8mb3
+	Charset_utf8mb4 = unicode.Charset_utf8mb4
+	Charset_utf16   = unicode.Charset_utf16be
+	Charset_utf16le = unicode.Charset_utf16le
+	Charset_ucs2    = unicode.Charset_ucs2
+	Charset_utf32   = unicode.Charset_utf32
+)
 
 // Simplified Chinese encodings
 
-type Charset_gb18030 = simplifiedchinese.Charset_gb18030
-type Charset_gb2312 = simplifiedchinese.Charset_gb2312
+type (
+	Charset_gb18030 = simplifiedchinese.Charset_gb18030
+	Charset_gb2312  = simplifiedchinese.Charset_gb2312
+)
 
 // Japanese encodings
 
-type Charset_ujis = japanese.Charset_ujis
-type Charset_sjis = japanese.Charset_sjis
-type Charset_cp932 = japanese.Charset_cp932
-type Charset_eucjpms = japanese.Charset_eucjpms
+type (
+	Charset_ujis    = japanese.Charset_ujis
+	Charset_sjis    = japanese.Charset_sjis
+	Charset_cp932   = japanese.Charset_cp932
+	Charset_eucjpms = japanese.Charset_eucjpms
+)
 
 // Korean encodings
 

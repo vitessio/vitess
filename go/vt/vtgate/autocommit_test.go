@@ -81,10 +81,11 @@ func TestAutocommitUpdateLookup(t *testing.T) {
 // TestAutocommitUpdateVindexChange: transaction: select & update before final update.
 func TestAutocommitUpdateVindexChange(t *testing.T) {
 	executor, sbc, _, sbclookup, _ := createExecutorEnv(t)
-	sbc.SetResults([]*sqltypes.Result{sqltypes.MakeTestResult(
-		sqltypes.MakeTestFields("id|name|lastname|name_lastname_keyspace_id_map", "int64|int32|varchar|int64"),
-		"1|1|foo|0",
-	),
+	sbc.SetResults([]*sqltypes.Result{
+		sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields("id|name|lastname|name_lastname_keyspace_id_map", "int64|int32|varchar|int64"),
+			"1|1|foo|0",
+		),
 	})
 
 	_, err := autocommitExec(executor, "update user2 set name='myname', lastname='mylastname' where id = 1")
@@ -137,10 +138,11 @@ func TestAutocommitDeleteSharded(t *testing.T) {
 // TestAutocommitDeleteLookup: transaction: select before update.
 func TestAutocommitDeleteLookup(t *testing.T) {
 	executor, sbc1, _, sbclookup, _ := createExecutorEnv(t)
-	sbc1.SetResults([]*sqltypes.Result{sqltypes.MakeTestResult(
-		sqltypes.MakeTestFields("id|name|lastname", "int64|int32|varchar"),
-		"1|1|foo",
-	),
+	sbc1.SetResults([]*sqltypes.Result{
+		sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields("id|name|lastname", "int64|int32|varchar"),
+			"1|1|foo",
+		),
 	})
 	sbclookup.SetResults([]*sqltypes.Result{sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields("b|a", "int64|varbinary"),
@@ -381,7 +383,7 @@ func TestAutocommitTransactionStarted(t *testing.T) {
 
 	// single shard query - no savepoint needed
 	sql := "update `user` set a = 2 where id = 1"
-	_, err := executorExec(context.Background(), executor, session, sql, map[string]*querypb.BindVariable{})
+	_, err := executorExec(t.Context(), executor, session, sql, map[string]*querypb.BindVariable{})
 	require.NoError(t, err)
 	require.Len(t, sbc1.Queries, 1)
 	require.Equal(t, sql, sbc1.Queries[0].Sql)
@@ -393,7 +395,7 @@ func TestAutocommitTransactionStarted(t *testing.T) {
 	// multi shard query - savepoint needed
 	sql = "update `user` set a = 2 where id in (1, 4)"
 	expectedSql := "update `user` set a = 2 where id in ::__vals"
-	_, err = executorExec(context.Background(), executor, session, sql, map[string]*querypb.BindVariable{})
+	_, err = executorExec(t.Context(), executor, session, sql, map[string]*querypb.BindVariable{})
 	require.NoError(t, err)
 	require.Len(t, sbc1.Queries, 2)
 	require.Contains(t, sbc1.Queries[0].Sql, "savepoint")
@@ -412,7 +414,7 @@ func TestAutocommitDirectTarget(t *testing.T) {
 	}
 	sql := "insert into `simple`(val) values ('val')"
 
-	_, err := executorExec(context.Background(), executor, session, sql, map[string]*querypb.BindVariable{})
+	_, err := executorExec(t.Context(), executor, session, sql, map[string]*querypb.BindVariable{})
 	require.NoError(t, err)
 
 	assertQueries(t, sbclookup, []*querypb.BoundQuery{{
@@ -433,7 +435,7 @@ func TestAutocommitDirectRangeTarget(t *testing.T) {
 	}
 	sql := "delete from sharded_user_msgs limit 1000"
 
-	_, err := executorExec(context.Background(), executor, session, sql, map[string]*querypb.BindVariable{})
+	_, err := executorExec(t.Context(), executor, session, sql, map[string]*querypb.BindVariable{})
 	require.NoError(t, err)
 
 	assertQueries(t, sbc1, []*querypb.BoundQuery{{

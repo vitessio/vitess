@@ -17,7 +17,6 @@ limitations under the License.
 package callinfo
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -29,7 +28,7 @@ func TestGRPCCallInfo(t *testing.T) {
 		remoteAddr: "localhost",
 	}
 
-	require.Equal(t, context.Background(), GRPCCallInfo(context.Background()))
+	require.Equal(t, t.Context(), GRPCCallInfo(t.Context()))
 	require.Equal(t, grpcCi.remoteAddr, grpcCi.RemoteAddr())
 	require.Equal(t, "gRPC", grpcCi.Username())
 	require.Equal(t, "localhost:tcp(gRPC)", grpcCi.Text())

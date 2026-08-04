@@ -20,18 +20,16 @@ import "fmt"
 
 const (
 	// Defaults used for all tests.
-	defaultSourceKs          = "test-product"
-	defaultTargetKs          = "test-customer"
-	defaultWorkflowName      = "wf1"
-	defaultKsWorkflow        = defaultTargetKs + "." + defaultWorkflowName
-	defaultReverseKsWorkflow = defaultSourceKs + "." + defaultWorkflowName + "_reverse"
-	defaultCellName          = "zone1"
+	defaultSourceKs     = "test-product"
+	defaultTargetKs     = "test-customer"
+	defaultWorkflowName = "wf1"
+	defaultKsWorkflow   = defaultTargetKs + "." + defaultWorkflowName
+	defaultCellName     = "zone1"
 )
 
 var dryRunResultsSwitchWritesCustomerShard = []string{
 	"Lock keyspace " + defaultSourceKs,
 	"Lock keyspace " + defaultTargetKs,
-	fmt.Sprintf("Mirroring 0.00 percent of traffic from keyspace %s to keyspace %s for tablet types [PRIMARY]", defaultSourceKs, defaultTargetKs),
 	fmt.Sprintf("/Stop writes on keyspace %s for tables [Lead,Lead-1,blüb_tbl,customer,db_order_test,geom_tbl,json_tbl,loadtest,reftable,vdiff_order]: [keyspace:%s;shard:0;position:", defaultSourceKs, defaultSourceKs),
 	"Wait for vreplication on stopped streams to catchup for up to 30s",
 	"Create reverse vreplication workflow p2c_reverse",
@@ -49,10 +47,11 @@ var dryRunResultsSwitchWritesCustomerShard = []string{
 
 var dryRunResultsReadCustomerShard = []string{
 	"Lock keyspace " + defaultSourceKs,
-	fmt.Sprintf("Mirroring 0.00 percent of traffic from keyspace %s to keyspace %s for tablet types [RDONLY,REPLICA]", defaultSourceKs, defaultTargetKs),
+	"Lock keyspace " + defaultTargetKs,
 	fmt.Sprintf("Switch reads for tables [Lead,Lead-1,blüb_tbl,customer,db_order_test,geom_tbl,json_tbl,loadtest,reftable,vdiff_order] to keyspace %s for tablet types [RDONLY,REPLICA]", defaultTargetKs),
 	"Routing rules for tables [Lead,Lead-1,blüb_tbl,customer,db_order_test,geom_tbl,json_tbl,loadtest,reftable,vdiff_order] will be updated",
 	fmt.Sprintf("Serving VSchema will be rebuilt for the %s keyspace", defaultTargetKs),
+	"Unlock keyspace " + defaultTargetKs,
 	"Unlock keyspace " + defaultSourceKs,
 	"", // Additional empty newline in the output
 }

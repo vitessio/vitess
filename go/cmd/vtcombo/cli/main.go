@@ -173,7 +173,7 @@ func run(cmd *cobra.Command, args []string) (err error) {
 		tpb.Cells = append(tpb.Cells, "test")
 	}
 
-	cmd.Flags().Set("cells_to_watch", strings.Join(tpb.Cells, ","))
+	cmd.Flags().Set("cells-to-watch", strings.Join(tpb.Cells, ","))
 
 	// vtctld UI requires the cell flag
 	cmd.Flags().Set("cell", tpb.Cells[0])
@@ -187,7 +187,8 @@ func run(cmd *cobra.Command, args []string) (err error) {
 		TruncateErrLen:     servenv.TruncateErrLen,
 	})
 	if err != nil {
-		log.Fatalf("unable to initialize env: %v", err)
+		log.Error(fmt.Sprintf("unable to initialize env: %v", err))
+		os.Exit(1)
 	}
 
 	ctx, cancel := context.WithCancel(cmd.Context())
@@ -226,7 +227,7 @@ func run(cmd *cobra.Command, args []string) (err error) {
 			return err
 		}
 		servenv.OnClose(func() {
-			shutdownCtx, shutdownCancel := context.WithTimeout(cmd.Context(), mysqlctl.DefaultShutdownTimeout+10*time.Second)
+			shutdownCtx, shutdownCancel := context.WithTimeout(cmd.Context(), mysqlctl.DefaultShutdownTimeout+mysqlctl.MysqldShutdownGracePeriod)
 			defer shutdownCancel()
 			mysqld.Shutdown(shutdownCtx, cnf, true, mysqlctl.DefaultShutdownTimeout)
 		})
@@ -250,7 +251,7 @@ func run(cmd *cobra.Command, args []string) (err error) {
 	if err != nil {
 		// ensure we start mysql in the event we fail here
 		if startMysql {
-			startCtx, startCancel := context.WithTimeout(ctx, mysqlctl.DefaultShutdownTimeout+10*time.Second)
+			startCtx, startCancel := context.WithTimeout(ctx, mysqlctl.DefaultShutdownTimeout+mysqlctl.MysqldShutdownGracePeriod)
 			defer startCancel()
 			mysqld.Shutdown(startCtx, cnf, true, mysqlctl.DefaultShutdownTimeout)
 		}
@@ -299,7 +300,7 @@ func run(cmd *cobra.Command, args []string) (err error) {
 		err := topotools.RebuildKeyspace(cmd.Context(), logutil.NewConsoleLogger(), ts, ks.GetName(), tpb.Cells, false)
 		if err != nil {
 			if startMysql {
-				shutdownCtx, shutdownCancel := context.WithTimeout(cmd.Context(), mysqlctl.DefaultShutdownTimeout+10*time.Second)
+				shutdownCtx, shutdownCancel := context.WithTimeout(cmd.Context(), mysqlctl.DefaultShutdownTimeout+mysqlctl.MysqldShutdownGracePeriod)
 				defer shutdownCancel()
 				mysqld.Shutdown(shutdownCtx, cnf, true, mysqlctl.DefaultShutdownTimeout)
 			}
@@ -321,7 +322,8 @@ func run(cmd *cobra.Command, args []string) (err error) {
 		}
 
 		if len(tabletTypes) == 0 {
-			log.Exitf("tablet-types-to-wait should contain at least one serving tablet type")
+			log.Error("tablet-types-to-wait should contain at least one serving tablet type")
+			os.Exit(1)
 		}
 	} else {
 		tabletTypes = append(tabletTypes, topodatapb.TabletType_PRIMARY, topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY)

@@ -17,11 +17,10 @@ limitations under the License.
 package zk2topo
 
 import (
+	"context"
 	"path"
 	"sort"
 	"sync"
-
-	"context"
 
 	"vitess.io/vitess/go/vt/topo"
 )

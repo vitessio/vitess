@@ -17,7 +17,6 @@ limitations under the License.
 package engine
 
 import (
-	"context"
 	"fmt"
 	"testing"
 
@@ -81,7 +80,7 @@ func TestFilterPass(t *testing.T) {
 				Predicate: pred,
 				Input:     &fakePrimitive{results: []*sqltypes.Result{tc.res}},
 			}
-			qr, err := filter.TryExecute(context.Background(), &noopVCursor{}, nil, false)
+			qr, err := filter.TryExecute(t.Context(), &noopVCursor{}, nil, false)
 			require.NoError(t, err)
 			require.Equal(t, tc.expRes, fmt.Sprintf("%v", qr.Rows))
 		})
@@ -125,6 +124,10 @@ func TestFilterStreaming(t *testing.T) {
 		name:   "uint64_int32",
 		res:    sqltypes.MakeTestStreamingResults(sqltypes.MakeTestFields("left|right", "uint64|int32"), "0|1", "1|0", "2|3", "---", "0|1", "1|3", "5|3"),
 		expRes: `[[UINT64(1) INT32(0)] [UINT64(5) INT32(3)]]`,
+	}, {
+		name:   "null_predicate",
+		res:    sqltypes.MakeTestStreamingResults(sqltypes.MakeTestFields("left|right", "int32|int32"), "null|0", "---", "1|0"),
+		expRes: `[[INT32(1) INT32(0)]]`,
 	}}
 	for _, tc := range tcases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -140,7 +143,7 @@ func TestFilterStreaming(t *testing.T) {
 				Input:     &fakePrimitive{results: tc.res, async: true},
 			}
 			qr := &sqltypes.Result{}
-			err = filter.TryStreamExecute(context.Background(), &noopVCursor{}, nil, false, func(result *sqltypes.Result) error {
+			err = filter.TryStreamExecute(t.Context(), &noopVCursor{}, nil, false, func(result *sqltypes.Result) error {
 				qr.Rows = append(qr.Rows, result.Rows...)
 				return nil
 			})

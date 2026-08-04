@@ -25,13 +25,14 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestStaticSetContents(t *testing.T) {
 	// These are the number of codepoints contained in each of the static sets as of ICU73-2,
 	// as to sanity check that we're re-creating the sets properly.
 	// This table must be re-created when updating Unicode versions.
-	var ExpectedSetSizes = map[int]int{
+	ExpectedSetSizes := map[int]int{
 		1:  139612,
 		4:  25,
 		5:  1102442,
@@ -51,16 +52,10 @@ func TestStaticSetContents(t *testing.T) {
 
 func TestStaticFreeze(t *testing.T) {
 	for _, s := range staticPropertySets {
-		if err := s.FreezeCheck_(); err != nil {
-			t.Error(err)
-		}
+		require.NoError(t, s.FreezeCheck_())
 	}
 	for _, s := range staticRuleSet {
-		if err := s.FreezeCheck_(); err != nil {
-			t.Error(err)
-		}
+		require.NoError(t, s.FreezeCheck_())
 	}
-	if err := staticSetUnescape.FreezeCheck_(); err != nil {
-		t.Error(err)
-	}
+	assert.NoError(t, staticSetUnescape.FreezeCheck_())
 }

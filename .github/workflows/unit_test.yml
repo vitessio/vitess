@@ -1,0 +1,210 @@
+name: Unit Test
+
+on:
+  push:
+    branches:
+      - "main"
+      - "release-[0-9]+.[0-9]"
+    tags: "**"
+  pull_request:
+    branches: "**"
+
+concurrency:
+  group: format('{0}-{1}', ${{ github.ref }}, 'Unit Test')
+  cancel-in-progress: true
+
+permissions: read-all
+
+env:
+  LAUNCHABLE_ORGANIZATION: "vitess"
+  LAUNCHABLE_WORKSPACE: "vitess-app"
+  GITHUB_PR_HEAD_SHA: "${{ github.event.pull_request.head.sha }}"
+
+jobs:
+  test:
+    timeout-minutes: ${{ matrix.race && 45 || 30 }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # mysql57 tests
+          - platform: mysql57
+            evalengine: "0"
+            flavor: mysql-5.7
+            java: true
+
+          - platform: mysql57
+            evalengine: "1"
+            flavor: mysql-5.7
+
+          # mysql80 tests
+          - platform: mysql80
+            evalengine: "0"
+            flavor: mysql-8.0
+            java: true
+
+          - platform: mysql80
+            evalengine: "1"
+            flavor: mysql-8.0
+
+          # mysql84 tests
+          - platform: mysql84
+            evalengine: "0"
+            flavor: mysql-8.4
+            java: true
+
+          - platform: mysql84
+            evalengine: "1"
+            flavor: mysql-8.4
+
+          # arm64 tests (mysql80 only — Oracle's apt repo has no arm64
+          # packages and Ubuntu's archive only ships MySQL 8.0 on arm64)
+          - platform: mysql80
+            evalengine: "0"
+            flavor: mysql-8.0
+            arch: arm64
+
+          - platform: mysql80
+            evalengine: "1"
+            flavor: mysql-8.0
+            arch: arm64
+
+          # Race tests (mysql80 only)
+          - platform: mysql80
+            evalengine: "0"
+            flavor: mysql-8.0
+            java: true
+            race: true
+
+          - platform: mysql80
+            evalengine: "1"
+            flavor: mysql-8.0
+            race: true
+
+    name: "Unit Test (${{ matrix.race && (matrix.evalengine == '1' && 'Evalengine_' || '') || (matrix.evalengine == '1' && 'evalengine_' || '') }}${{ matrix.race && 'Race' || matrix.platform }}${{ matrix.arch && format('_{0}', matrix.arch) || '' }})"
+    runs-on: ${{ github.repository == 'vitessio/vitess' && (matrix.arch == 'arm64' && 'oracle-vm-16cpu-64gb-arm64' || 'oracle-vm-16cpu-64gb-x86-64') || (matrix.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04') }}
+
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
+        with:
+          egress-policy: audit
+
+      - name: Skip CI
+        run: |
+          if [[ "${{ contains(github.event.pull_request.labels.*.name, 'Skip CI') }}" == "true" ]]; then
+            echo "skipping CI due to the 'Skip CI' label"
+            exit 1
+          fi
+
+      - name: Check out code
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: "false"
+
+      - name: Check for changes in relevant files
+        uses: dorny/paths-filter@7b450fff21473bca461d4b92ce414b9d0420d706 # v4.0.2
+        id: changes
+        with:
+          token: ""
+          # With 'every', a file is relevant only if it matches all patterns: any
+          # path from the brace-list, and not a test file in one of the endtoend
+          # test packages, which the unit test runner never runs and which cannot
+          # be imported by unit tests. The endtoend trees are enumerated explicitly
+          # so that testdata fixtures whose paths merely contain an endtoend
+          # directory (e.g. under go/tools/ci-config) still count as relevant.
+          predicate-quantifier: 'every'
+          filters: |
+            unit_tests:
+              - '{test/config.json,go/**,test.go,Makefile,build.env,go.sum,go.mod,proto/*.proto,tools/**,config/**,bootstrap.sh,.github/workflows/unit_test.yml,.github/actions/setup-mysql/action.yml,.github/actions/setup-go/action.yml}'
+              - '!{go/test/endtoend,go/flags/endtoend,go/mysql/endtoend,go/vt/vtctl/endtoend,go/vt/vtctl/grpcvtctldserver/endtoend,go/vt/vtgate/endtoend,go/vt/vttablet/endtoend}/**/*_test.go'
+
+      - name: Set up Go
+        if: steps.changes.outputs.unit_tests == 'true'
+        uses: ./.github/actions/setup-go
+
+      - name: Set up python
+        if: steps.changes.outputs.unit_tests == 'true'
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+
+      - name: Avoid the Oracle Cloud apt mirror
+        if: steps.changes.outputs.unit_tests == 'true' && matrix.arch == 'arm64'
+        run: |
+          # The Oracle Cloud regional apt mirror (e.g. us-sanjose-1-ad-1.clouds.ports.ubuntu.com)
+          # is extremely slow; point apt at the default Ubuntu ports archive instead.
+          sudo grep -rl '\.clouds\.ports\.ubuntu\.com' /etc/apt --include='*.list' --include='*.sources' \
+            | xargs -r sudo sed -i 's|https\?://[^/ ]*\.clouds\.ports\.ubuntu\.com|http://ports.ubuntu.com|g'
+
+      - name: Tune the OS
+        if: steps.changes.outputs.unit_tests == 'true'
+        timeout-minutes: 5
+        uses: ./.github/actions/tune-os
+
+      - name: Setup MySQL
+        if: steps.changes.outputs.unit_tests == 'true'
+        timeout-minutes: 8
+        uses: ./.github/actions/setup-mysql
+        with:
+          flavor: ${{ matrix.flavor }}
+
+      - name: Get dependencies
+        if: steps.changes.outputs.unit_tests == 'true'
+        timeout-minutes: 5
+        run: |
+          export DEBIAN_FRONTEND="noninteractive"
+          sudo apt-get install -y make unzip g++ curl git wget ${{ matrix.java && 'ant default-jre-headless' || '' }}
+
+      - name: Run make tools
+        if: steps.changes.outputs.unit_tests == 'true'
+        timeout-minutes: 10
+        run: |
+          make BUILD_JAVA=${{ matrix.java && '1' || '0' }} BUILD_PROTOC=0 tools
+
+      - name: Setup launchable dependencies
+        if: |
+          github.event_name == 'pull_request' &&
+          github.event.pull_request.draft == false &&
+          steps.changes.outputs.unit_tests == 'true' &&
+          github.base_ref == 'main'
+        run: |
+          pip3 install --user launchable~=1.0 > /dev/null
+          launchable verify || true
+          launchable record build --name "$GITHUB_RUN_ID" --no-commit-collection --source .
+
+      - name: Run test
+        if: steps.changes.outputs.unit_tests == 'true'
+        run: |
+          set -exo pipefail
+
+          export VTDATAROOT="/tmp/"
+          export NOVTADMINBUILD=1
+          export VT_GO_PARALLEL_VALUE=$(nproc)
+          export VTEVALENGINETEST="${{ matrix.evalengine }}"
+          export CI_DB_PLATFORM="${{ matrix.platform }}"
+
+          JUNIT_OUTPUT=report.xml JSON_OUTPUT=report.json make ${{ matrix.race && 'unit_test_race' || 'unit_test' }}
+
+      - name: Record test results in launchable
+        if: |
+          github.event_name == 'pull_request' &&
+          github.event.pull_request.draft == false &&
+          steps.changes.outputs.unit_tests == 'true' &&
+          github.base_ref == 'main' &&
+          !cancelled()
+        run: |
+          launchable record tests --build "$GITHUB_RUN_ID" go-test . || true
+
+      - name: Test Summary
+        if: steps.changes.outputs.unit_tests == 'true' && failure()
+        uses: test-summary/action@37b508cfee6d4d080eedd00b5bb240a6a784a6a5 # v2.6
+        with:
+          paths: "report.xml"
+          show: "fail"
+
+      - name: Slowest Tests
+        if: steps.changes.outputs.unit_tests == 'true' && !cancelled()
+        run: |
+          echo '## Slowest Tests' >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          go tool -modfile=tools/gotestsum/go.mod gotestsum tool slowest --num 20 --jsonfile report.json | tee -a "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"

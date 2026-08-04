@@ -17,12 +17,13 @@ limitations under the License.
 package topotests
 
 import (
-	"context"
 	"testing"
 
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/vt/topo/memorytopo"
+
+	"github.com/stretchr/testify/require"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
@@ -34,8 +35,7 @@ func TestCreateTablet(t *testing.T) {
 	cell := "cell1"
 	keyspace := "ks1"
 	shard := "shard1"
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, cell)
 	defer ts.Close()
 
@@ -50,16 +50,16 @@ func TestCreateTablet(t *testing.T) {
 		Alias:    alias,
 	}
 	if err := ts.CreateTablet(ctx, tablet); err != nil {
-		t.Fatalf("CreateTablet failed: %v", err)
+		require.NoError(t, err)
 	}
 
 	// Get the tablet, make sure it's good. Also check ShardReplication.
 	ti, err := ts.GetTablet(ctx, alias)
 	if err != nil || !proto.Equal(ti.Tablet, tablet) {
-		t.Fatalf("Created Tablet doesn't match: %v %v", ti, err)
+		require.Failf(t, "Created Tablet doesn't match", "%v %v", ti, err)
 	}
 	sri, err := ts.GetShardReplication(ctx, cell, keyspace, shard)
 	if err != nil || len(sri.Nodes) != 1 || !proto.Equal(sri.Nodes[0].TabletAlias, alias) {
-		t.Fatalf("Created ShardReplication doesn't match: %v %v", sri, err)
+		require.Failf(t, "Created ShardReplication doesn't match", "%v %v", sri, err)
 	}
 }

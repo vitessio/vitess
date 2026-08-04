@@ -71,8 +71,8 @@ func TestExecuteBackupWithFailureOnLastFile(t *testing.T) {
 	// backupFiles() method (https://github.com/vitessio/vitess/blob/main/go/vt/mysqlctl/builtinbackupengine.go#L483).
 	require.NoError(t, createBackupDir(dataDir, "test1"))
 	require.NoError(t, createBackupDir(dataDir, "test2"))
-	require.NoError(t, createBackupFiles(path.Join(dataDir, "test1"), 2, "ibd"))
-	require.NoError(t, createBackupFiles(path.Join(dataDir, "test2"), 2, "ibd"))
+	require.NoError(t, createBackupFiles(path.Join(dataDir, "test1"), 2, "ibd", 13))
+	require.NoError(t, createBackupFiles(path.Join(dataDir, "test2"), 2, "ibd", 13))
 	defer os.RemoveAll(backupRoot)
 
 	needIt, err := NeedInnoDBRedoLogSubdir()
@@ -127,7 +127,7 @@ func TestExecuteBackupWithFailureOnLastFile(t *testing.T) {
 	require.NoError(t, err)
 	_, err = f.Write(make([]byte, 1024))
 	require.NoError(t, err)
-	require.NoError(t, f.Chmod(0444))
+	require.NoError(t, f.Chmod(0o444))
 	require.NoError(t, f.Close())
 
 	backupResult, err := be.ExecuteBackup(ctx, mysqlctl.BackupParams{

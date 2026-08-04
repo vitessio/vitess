@@ -29,7 +29,7 @@ import (
 
 func TestCheckAllAggrOpCodes(t *testing.T) {
 	// This test is just checking that we never reach the panic when using Type() on valid opcodes
-	for i := AggregateOpcode(0); i < _NumOfOpCodes; i++ {
+	for i := range _NumOfOpCodes {
 		i.SQLType(sqltypes.Null)
 	}
 }
@@ -143,7 +143,7 @@ func TestAggregateOpcode_MarshalJSON(t *testing.T) {
 }
 
 func TestNeedsComparableValues(t *testing.T) {
-	for i := AggregateOpcode(0); i < _NumOfOpCodes; i++ {
+	for i := range _NumOfOpCodes {
 		if i == AggregateCountDistinct || i == AggregateSumDistinct || i == AggregateMin || i == AggregateMax {
 			assert.True(t, i.NeedsComparableValues())
 		} else {
@@ -153,7 +153,7 @@ func TestNeedsComparableValues(t *testing.T) {
 }
 
 func TestIsDistinct(t *testing.T) {
-	for i := AggregateOpcode(0); i < _NumOfOpCodes; i++ {
+	for i := range _NumOfOpCodes {
 		if i == AggregateCountDistinct || i == AggregateSumDistinct {
 			assert.True(t, i.IsDistinct())
 		} else {
@@ -164,7 +164,7 @@ func TestIsDistinct(t *testing.T) {
 
 func TestCheckAllWindowOpCodes(t *testing.T) {
 	// This test is just checking that we never reach the panic when using Type() on valid opcodes
-	for i := WindowOpcode(0); i < _NumOfWindowOpCodes; i++ {
+	for i := range _NumOfWindowOpCodes {
 		i.SQLType(sqltypes.Null)
 	}
 }

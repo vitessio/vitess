@@ -262,10 +262,12 @@ func (th *testHandler) ComStmtExecute(c *Conn, prepare *PrepareData, callback fu
 func (th *testHandler) ComRegisterReplica(c *Conn, replicaHost string, replicaPort uint16, replicaUser string, replicaPassword string) error {
 	return nil
 }
+
 func (th *testHandler) ComBinlogDump(c *Conn, logFile string, binlogPos uint32) error {
 	return nil
 }
-func (th *testHandler) ComBinlogDumpGTID(c *Conn, logFile string, logPos uint64, gtidSet replication.GTIDSet) error {
+
+func (th *testHandler) ComBinlogDumpGTID(c *Conn, logFile string, logPos uint64, gtidSet replication.GTIDSet, flags uint16) error {
 	return nil
 }
 
@@ -301,7 +303,7 @@ func TestConnectionFromListener(t *testing.T) {
 	listener, err := net.Listen("tcp", "127.0.0.1:")
 	require.NoError(t, err, "net.Listener failed")
 
-	l, err := NewFromListener(listener, authServer, th, 0, 0, false, 0, 0, false)
+	l, err := NewFromListener(listener, authServer, th, 0, 0, false, false, 0, 0, false)
 	require.NoError(t, err, "NewListener failed")
 	host, port := getHostPort(t, l.Addr())
 	fmt.Printf("host: %s, port: %d\n", host, port)
@@ -347,6 +349,55 @@ func TestConnectionWithoutSourceHost(t *testing.T) {
 	c, err := Connect(ctx, params)
 	require.NoError(t, err, "Should be able to connect to server")
 	c.Close()
+}
+
+// TestConnectionWithProxyProtocol covers the MySQL listener with proxy protocol
+// support enabled: connections that open with a PROXY protocol header must have
+// their advertised source address honored, and connections without a header must
+// still complete the regular MySQL handshake, since deployments may mix proxied
+// and direct traffic (e.g. load balancer traffic alongside direct health checks).
+func TestConnectionWithProxyProtocol(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+	th := &testHandler{}
+
+	authServer := NewAuthServerStatic("", "", 0)
+	authServer.entries["user1"] = []*AuthServerStaticEntry{{
+		Password: "password1",
+		UserData: "userData1",
+	}}
+	t.Cleanup(authServer.close)
+
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, true, false, 0, 0, false)
+	require.NoError(t, err, "NewListener failed")
+	host, port := getHostPort(t, l.Addr())
+	params := &ConnParams{
+		Host:  host,
+		Port:  port,
+		Uname: "user1",
+		Pass:  "password1",
+	}
+	go l.Accept()
+	t.Cleanup(func() { cleanupListener(ctx, l, params) })
+
+	t.Run("with PROXY header", func(t *testing.T) {
+		conn, err := net.Dial("tcp", net.JoinHostPort(host, strconv.Itoa(port)))
+		require.NoError(t, err, "net.Dial failed")
+		t.Cleanup(func() { conn.Close() })
+
+		_, err = conn.Write([]byte("PROXY TCP4 10.9.8.7 127.0.0.1 1234 5678\r\n"))
+		require.NoError(t, err, "writing PROXY header failed")
+
+		c := newConn(conn, 0, 0)
+		require.NoError(t, c.clientHandshake(params, ConnectionAttributes{}), "handshake after a PROXY header should succeed")
+		require.Equal(t, "10.9.8.7:1234", th.LastConn().RemoteAddr().String(), "server should report the source address from the PROXY header")
+		c.Close()
+	})
+
+	t.Run("without PROXY header", func(t *testing.T) {
+		c, err := Connect(ctx, params)
+		require.NoError(t, err, "a connection without a PROXY header should complete the regular MySQL handshake")
+		c.Close()
+	})
 }
 
 func TestConnectionWithSourceHost(t *testing.T) {
@@ -543,7 +594,7 @@ func TestConnAttrs(t *testing.T) {
 
 	serverConn = th.LastConn()
 	assert.Equal(t, uint32(0), clientConn.Capabilities&CapabilityClientConnAttr, "ConnAttr flag: %x, bit must not be set", th.LastConn().Capabilities)
-	assert.Equal(t, 0, len(serverConn.Attributes), "attributes should be empty")
+	assert.Empty(t, serverConn.Attributes, "attributes should be empty")
 
 	clientConn.Close()
 	assert.True(t, clientConn.IsClosed(), "IsClosed should be true on Close-d connection.")
@@ -674,14 +725,15 @@ func TestServer(t *testing.T) {
 	assert.Contains(t, output, "13 warnings", "Unexpected output for 'select rows'")
 	th.SetWarnings(0)
 
-	// If there's an error after streaming has started,
-	// we should get a 2013
+	// If there's an error after streaming has started, the server now
+	// sends an ERR packet in place of the result-set terminator instead
+	// of dropping the connection. The client should see the real error.
 	th.SetErr(sqlerror.NewSQLError(sqlerror.ERUnknownComError, sqlerror.SSNetError, "forced error after send"))
 	output, err = runMysqlWithErr(t, params, "error after send")
 	require.Error(t, err)
-	assert.Contains(t, output, "ERROR 2013 (HY000)", "Unexpected output for 'panic'")
-	// MariaDB might not print the MySQL bit here
-	assert.Regexp(t, `Lost connection to( MySQL)? server during query`, output, "Unexpected output for 'panic': %v", output)
+	assert.Contains(t, output, fmt.Sprintf("ERROR %d", sqlerror.ERUnknownComError), "Unexpected output for 'error after send': %v", output)
+	assert.Contains(t, output, "forced error after send", "Unexpected output for 'error after send': %v", output)
+	assert.NotContains(t, output, "ERROR 2013", "mid-stream error must not surface as connection loss: %v", output)
 
 	// Run an 'insert' command, no rows, but rows affected.
 	output, err = runMysqlWithErr(t, params, "insert")
@@ -855,7 +907,7 @@ func TestClearTextServer(t *testing.T) {
 		if isMariaDB {
 			t.Logf("mysql should have failed but returned: %v\nbut letting it go on MariaDB", output)
 		} else {
-			require.Fail(t, "mysql should have failed but returned: %v", output)
+			require.Failf(t, "mysql should have failed but returned", "%v", output)
 		}
 	} else {
 		if strings.Contains(output, "No such file or directory") {
@@ -1000,7 +1052,7 @@ func TestTLSServer(t *testing.T) {
 
 	assert.Equal(t, "nice name", results.Rows[0][1].ToString())
 	assert.Equal(t, "nicer name", results.Rows[1][1].ToString())
-	assert.Equal(t, 2, len(results.Rows))
+	assert.Len(t, results.Rows, 2)
 
 	// make sure this went through SSL
 	results, err = conn.ExecuteFetch("ssl echo", 1000, true)
@@ -1291,9 +1343,7 @@ func TestCachingSha2PasswordAuthWithoutTLS(t *testing.T) {
 
 	// Connection should fail, as server requires SSL for caching_sha2_password.
 	_, err = Connect(ctx, params)
-	if err == nil || !strings.Contains(err.Error(), "No authentication methods available for authentication") {
-		t.Fatalf("unexpected connection error: %v", err)
-	}
+	require.ErrorContains(t, err, "No authentication methods available for authentication")
 }
 
 func checkCountForTLSVer(t *testing.T, version string, expected int64) {
@@ -1329,6 +1379,7 @@ func TestErrorCodes(t *testing.T) {
 
 	client, err := Connect(ctx, params)
 	require.NoError(t, err)
+	defer client.Close()
 
 	// Test that the right mysql errno/sqlstate are returned for various
 	// internal vitess errors
@@ -1403,6 +1454,7 @@ func runMysql(t *testing.T, params *ConnParams, command string) (string, bool) {
 	}
 	return output, true
 }
+
 func runMysqlWithErr(t *testing.T, params *ConnParams, command string) (string, error) {
 	dir, err := venv.VtMysqlRoot()
 	require.NoError(t, err)
@@ -1510,6 +1562,7 @@ func TestListenerShutdown(t *testing.T) {
 
 	conn, err := Connect(ctx, params)
 	require.NoError(t, err)
+	defer conn.Close()
 
 	err = conn.Ping()
 	require.NoError(t, err)
@@ -1540,13 +1593,15 @@ func TestParseConnAttrs(t *testing.T) {
 		"_client_name":    "libmysql",
 	}
 
-	data := []byte{0x70, 0x04, 0x5f, 0x70, 0x69, 0x64, 0x05, 0x32, 0x32, 0x38, 0x35, 0x30, 0x09, 0x5f, 0x70, 0x6c,
+	data := []byte{
+		0x70, 0x04, 0x5f, 0x70, 0x69, 0x64, 0x05, 0x32, 0x32, 0x38, 0x35, 0x30, 0x09, 0x5f, 0x70, 0x6c,
 		0x61, 0x74, 0x66, 0x6f, 0x72, 0x6d, 0x06, 0x78, 0x38, 0x36, 0x5f, 0x36, 0x34, 0x03, 0x5f, 0x6f,
 		0x73, 0x0f, 0x6c, 0x69, 0x6e, 0x75, 0x78, 0x2d, 0x67, 0x6c, 0x69, 0x62, 0x63, 0x32, 0x2e, 0x31,
 		0x32, 0x0c, 0x5f, 0x63, 0x6c, 0x69, 0x65, 0x6e, 0x74, 0x5f, 0x6e, 0x61, 0x6d, 0x65, 0x08, 0x6c,
 		0x69, 0x62, 0x6d, 0x79, 0x73, 0x71, 0x6c, 0x0f, 0x5f, 0x63, 0x6c, 0x69, 0x65, 0x6e, 0x74, 0x5f,
 		0x76, 0x65, 0x72, 0x73, 0x69, 0x6f, 0x6e, 0x06, 0x38, 0x2e, 0x30, 0x2e, 0x31, 0x31, 0x0c, 0x70,
-		0x72, 0x6f, 0x67, 0x72, 0x61, 0x6d, 0x5f, 0x6e, 0x61, 0x6d, 0x65, 0x05, 0x6d, 0x79, 0x73, 0x71, 0x6c}
+		0x72, 0x6f, 0x67, 0x72, 0x61, 0x6d, 0x5f, 0x6e, 0x61, 0x6d, 0x65, 0x05, 0x6d, 0x79, 0x73, 0x71, 0x6c,
+	}
 
 	attrs, pos, err := parseConnAttrs(data, 0)
 	require.NoError(t, err)

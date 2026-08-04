@@ -27,6 +27,9 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestDecimalAdd(t *testing.T) {
@@ -51,10 +54,9 @@ func TestDecimalAdd(t *testing.T) {
 		left := RequireFromString(tc.lhs)
 		right := RequireFromString(tc.rhs)
 		out := left.Add(right)
-		if out.StringMySQL() != tc.expected {
-			t.Errorf("expected %q + %q = %q\nprocessed: %q + %q = %q",
-				tc.lhs, tc.rhs, tc.expected, left.StringMySQL(), right.StringMySQL(), out.StringMySQL())
-		}
+		assert.Equalf(t, tc.expected, out.StringMySQL(),
+			"expected %q + %q = %q\nprocessed: %q + %q = %q",
+			tc.lhs, tc.rhs, tc.expected, left.StringMySQL(), right.StringMySQL(), out.StringMySQL())
 	}
 }
 
@@ -80,10 +82,9 @@ func TestDecimalSub(t *testing.T) {
 		left := RequireFromString(tc.lhs)
 		right := RequireFromString(tc.rhs)
 		out := left.Sub(right)
-		if out.StringMySQL() != tc.expected {
-			t.Errorf("expected %q - %q = %q\nprocessed: %q - %q = %q",
-				tc.lhs, tc.rhs, tc.expected, left.StringMySQL(), right.StringMySQL(), out.StringMySQL())
-		}
+		assert.Equalf(t, tc.expected, out.StringMySQL(),
+			"expected %q - %q = %q\nprocessed: %q - %q = %q",
+			tc.lhs, tc.rhs, tc.expected, left.StringMySQL(), right.StringMySQL(), out.StringMySQL())
 	}
 }
 
@@ -102,10 +103,9 @@ func TestDecimalMul(t *testing.T) {
 		left := RequireFromString(tc.lhs)
 		right := RequireFromString(tc.rhs)
 		out := left.Mul(right)
-		if out.StringMySQL() != tc.expected {
-			t.Errorf("expected %q * %q = %q\nprocessed: %q * %q = %q",
-				tc.lhs, tc.rhs, tc.expected, left.StringMySQL(), right.StringMySQL(), out.StringMySQL())
-		}
+		assert.Equalf(t, tc.expected, out.StringMySQL(),
+			"expected %q * %q = %q\nprocessed: %q * %q = %q",
+			tc.lhs, tc.rhs, tc.expected, left.StringMySQL(), right.StringMySQL(), out.StringMySQL())
 	}
 }
 
@@ -130,10 +130,9 @@ func TestDecimalDiv(t *testing.T) {
 		left := RequireFromString(tc.lhs)
 		right := RequireFromString(tc.rhs)
 		out := left.Div(right, tc.scaleIncr)
-		if out.StringMySQL() != tc.expected {
-			t.Errorf("expected %q / %q = %q\nprocessed: %q / %q = %q",
-				tc.lhs, tc.rhs, tc.expected, left.StringMySQL(), right.StringMySQL(), out.StringMySQL())
-		}
+		assert.Equalf(t, tc.expected, out.StringMySQL(),
+			"expected %q / %q = %q\nprocessed: %q / %q = %q",
+			tc.lhs, tc.rhs, tc.expected, left.StringMySQL(), right.StringMySQL(), out.StringMySQL())
 	}
 }
 
@@ -151,9 +150,7 @@ func TestOpRoundings(t *testing.T) {
 		zz := xx.Div(yy, 4)
 		got := string(zz.FormatMySQL(8))
 
-		if got != Expected {
-			t.Fatalf("expected %s got %s", Expected, got)
-		}
+		require.Equalf(t, Expected, got, "expected %s got %s", Expected, got)
 	})
 
 	t.Run("HighPrecision", func(t *testing.T) {
@@ -164,14 +161,12 @@ func TestOpRoundings(t *testing.T) {
 		bb := RequireFromString("12.34500")
 		xx := aa.Div(bb, 5)
 		got := xx.StringMySQL()
-		if got != Expected {
-			t.Fatalf("expected %s got %s", Expected, got)
-		}
+		require.Equalf(t, Expected, got, "expected %s got %s", Expected, got)
 	})
 }
 
 func TestLargestForm(t *testing.T) {
-	var cases = []struct {
+	cases := []struct {
 		integral, fractional int32
 		result               string
 	}{
@@ -184,21 +179,17 @@ func TestLargestForm(t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		var b = largestForm(tc.integral, tc.fractional, false)
-		if b.String() != tc.result {
-			t.Errorf("LargestForm(%d, %d) = %q (expected %q)", tc.integral, tc.fractional, b.String(), tc.result)
-		}
+		b := largestForm(tc.integral, tc.fractional, false)
+		assert.Equalf(t, tc.result, b.String(), "LargestForm(%d, %d)", tc.integral, tc.fractional)
 	}
 }
 
 func testfile(t *testing.T, name string, out any) {
 	tf, err := os.Open(path.Join("testdata", name))
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer tf.Close()
 	if err := json.NewDecoder(tf).Decode(out); err != nil {
-		t.Fatalf("failed to decode testdata: %v", err)
+		require.NoError(t, err)
 	}
 }
 
@@ -218,15 +209,14 @@ func TestLargeDecimals(t *testing.T) {
 		expected := tc[1]
 
 		d, err := NewFromMySQL([]byte(input))
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
 
 		got := d.StringMySQL()
 		if got != expected {
 			p1, i1, f1 := decompose(got)
 			p2, i2, f2 := decompose(expected)
-			t.Errorf("failed to parse decimal in MySQL format\ngot:  %s\nwant: %s\ngot:  prec=%d integral=%d fractional=%d\nwant: prec=%d integral=%d fractional=%d",
+			assert.Equalf(t, expected, got,
+				"failed to parse decimal in MySQL format\ngot:  %s\nwant: %s\ngot:  prec=%d integral=%d fractional=%d\nwant: prec=%d integral=%d fractional=%d",
 				got, expected, p1, i1, f1, p2, i2, f2,
 			)
 		}
@@ -240,9 +230,7 @@ func TestVeryLargeDecimals(t *testing.T) {
 		for j := range 66 {
 			decimal := append(integral, bytes.Repeat([]byte{'9'}, j)...)
 			_, err := NewFromMySQL(decimal)
-			if err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, err)
 		}
 	}
 }
@@ -315,7 +303,7 @@ func BenchmarkDecimalParsing(b *testing.B) {
 		}
 	})
 
-	var decimalBytes = make([][]byte, 0, len(decimals))
+	decimalBytes := make([][]byte, 0, len(decimals))
 	for _, dec := range decimals {
 		decimalBytes = append(decimalBytes, []byte(dec))
 	}
@@ -331,8 +319,8 @@ func BenchmarkDecimalParsing(b *testing.B) {
 }
 
 func TestRoundtrip(t *testing.T) {
-	var bad = []string{"", "+", "-"}
-	var cases = append(decimals, bad...)
+	bad := []string{"", "+", "-"}
+	cases := append(decimals, bad...)
 
 	for _, in := range cases {
 		d, err1 := NewFromString(in)
@@ -342,7 +330,7 @@ func TestRoundtrip(t *testing.T) {
 			if err1 != nil && err2 != nil {
 				continue
 			}
-			t.Fatalf("mismatch in errors: %v vs %v", err1, err2)
+			require.Failf(t, "mismatch in errors", "%v vs %v", err1, err2)
 		}
 
 		expected := in
@@ -350,17 +338,13 @@ func TestRoundtrip(t *testing.T) {
 			expected = "0" + expected
 		}
 		expected = strings.TrimSuffix(expected, ".")
-		if d.StringMySQL() != expected {
-			t.Errorf("roundtrip(1) %q -> %q", expected, d.StringMySQL())
-		}
-		if d2.StringMySQL() != expected {
-			t.Errorf("roundtrip(2) %q -> %q", expected, d2.StringMySQL())
-		}
+		assert.Equalf(t, expected, d.StringMySQL(), "roundtrip(1) %q -> %q", expected, d.StringMySQL())
+		assert.Equalf(t, expected, d2.StringMySQL(), "roundtrip(2) %q -> %q", expected, d2.StringMySQL())
 	}
 }
 
 func TestRoundtripStress(t *testing.T) {
-	var count = 1000000
+	count := 1000000
 	if testing.Short() {
 		count = 100
 	}
@@ -368,19 +352,15 @@ func TestRoundtripStress(t *testing.T) {
 	for range count {
 		fb := strconv.AppendFloat(nil, rand.NormFloat64(), 'f', -1, 64)
 		d, err := NewFromMySQL(fb)
-		if err != nil {
-			t.Fatalf("failed to parse %q: %v", fb, err)
-		}
+		require.NoErrorf(t, err, "failed to parse %q", fb)
 		str := d.String()
-		if str != string(fb) {
-			t.Fatalf("bad roundtrip: %q -> %q", fb, str)
-		}
+		require.Equalf(t, string(fb), str, "bad roundtrip: %q -> %q", fb, str)
 	}
 }
 
 func BenchmarkFormatting(b *testing.B) {
 	const Count = 10000
-	var parsed = make([]Decimal, 0, Count)
+	parsed := make([]Decimal, 0, Count)
 	for range Count {
 		parsed = append(parsed, NewFromFloat(rand.NormFloat64()))
 	}
@@ -438,14 +418,12 @@ func TestFormatFast(t *testing.T) {
 				b = b.Neg(b)
 			}
 			for exp := -100; exp <= 100; exp++ {
-				var d = Decimal{value: b, exp: int32(exp)}
+				d := Decimal{value: b, exp: int32(exp)}
 
 				expect := d.formatSlow(false)
 				got := d.formatFast(0, false, false)
 
-				if !bytes.Equal(expect, got) {
-					t.Errorf("base: %de%d\nwant: %q\ngot:  %q", base, exp, expect, got)
-				}
+				assert.Truef(t, bytes.Equal(expect, got), "base: %de%d\nwant: %q\ngot:  %q", base, exp, expect, got)
 			}
 		}
 	}
@@ -460,14 +438,12 @@ func TestFormatAndRound(t *testing.T) {
 			}
 			for prec := int32(1); prec < 32; prec++ {
 				for exp := -100; exp <= 100; exp++ {
-					var d = Decimal{value: b, exp: int32(exp)}
+					d := Decimal{value: b, exp: int32(exp)}
 
 					expect := d.StringFixed(prec)
 					got := string(d.formatFast(int(prec), true, false))
 
-					if expect != got {
-						t.Errorf("base: %de%d prec %d\nwant: %q\ngot:  %q", b, exp, prec, expect, got)
-					}
+					assert.Equalf(t, expect, got, "base: %de%d prec %d\nwant: %q\ngot:  %q", b, exp, prec, expect, got)
 				}
 			}
 		}

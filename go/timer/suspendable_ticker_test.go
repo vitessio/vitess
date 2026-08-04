@@ -30,7 +30,7 @@ const (
 )
 
 func TestInitiallySuspended(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	t.Run("true", func(t *testing.T) {
 		ctx, cancel := context.WithTimeout(ctx, time.Second)
 		defer cancel()
@@ -58,8 +58,7 @@ func TestInitiallySuspended(t *testing.T) {
 }
 
 func TestSuspendableTicker(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ticker := NewSuspendableTicker(fastTickerInterval, false)
 	defer ticker.Stop()
 
@@ -103,8 +102,7 @@ func TestSuspendableTicker(t *testing.T) {
 }
 
 func TestSuspendableTickerTick(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ticker := NewSuspendableTicker(time.Hour, false)
 	defer ticker.Stop()
 

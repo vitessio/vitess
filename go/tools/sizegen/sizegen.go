@@ -93,8 +93,8 @@ func newSizegen(mod *packages.Module, sizes types.Sizes) *sizegen {
 func isPod(tt types.Type) bool {
 	switch tt := tt.(type) {
 	case *types.Struct:
-		for i := 0; i < tt.NumFields(); i++ {
-			if !isPod(tt.Field(i).Type()) {
+		for field := range tt.Fields() {
+			if !isPod(field.Type()) {
 				return false
 			}
 		}
@@ -285,8 +285,7 @@ func (sizegen *sizegen) sizeImplForStruct(name *types.TypeName, st *types.Struct
 
 	var stmt []jen.Code
 	var funcFlags codeFlag
-	for i := 0; i < st.NumFields(); i++ {
-		field := st.Field(i)
+	for field := range st.Fields() {
 		fieldType := field.Type()
 		fieldName := jen.Id("cached").Dot(field.Name())
 
@@ -508,6 +507,15 @@ func (sizegen *sizegen) sizeStmtForType(fieldName *jen.Statement, field types.Ty
 		}), codeWithUnsafe | keyFlag | valFlag
 
 	case *types.Pointer:
+		if basic, ok := node.Elem().(*types.Basic); ok {
+			stmts := []jen.Code{
+				jen.Id("size").Op("+=").Do(mallocsize(jen.Lit(sizegen.sizes.Sizeof(basic)))),
+			}
+			if inner, _ := sizegen.sizeStmtForType(jen.Op("*").Add(fieldName.Clone()), basic, false); inner != nil {
+				stmts = append(stmts, inner)
+			}
+			return jen.If(fieldName.Clone().Op("!=").Nil()).Block(stmts...), 0
+		}
 		return sizegen.sizeStmtForType(fieldName, node.Elem(), true)
 
 	case *types.Named:
@@ -645,7 +653,6 @@ func GenerateSizeHelpers(packagePatterns []string, typePatterns []string) (map[s
 	loaded, err := packages.Load(&packages.Config{
 		Mode: packages.NeedName | packages.NeedTypes | packages.NeedTypesSizes | packages.NeedTypesInfo | packages.NeedDeps | packages.NeedImports | packages.NeedModule,
 	}, packagePatterns...)
-
 	if err != nil {
 		return nil, err
 	}

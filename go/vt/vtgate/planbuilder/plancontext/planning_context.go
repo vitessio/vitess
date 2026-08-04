@@ -45,8 +45,9 @@ type PlanningContext struct {
 	// This is required for queries we are running with /*+ SET_VAR(foreign_key_checks=OFF) */
 	VerifyAllFKs bool
 
-	// Projected subqueries that have been merged
-	MergedSubqueries []*sqlparser.Subquery
+	// MergedSubqueries tracks subqueries that have been merged into routes,
+	// keyed by their arg name.
+	MergedSubqueries map[string]*sqlparser.Subquery
 
 	// CurrentPhase keeps track of how far we've gone in the planning process
 	// The type should be operators.Phase, but depending on that would lead to circular dependencies
@@ -105,6 +106,7 @@ func CreatePlanningContext(stmt sqlparser.Statement,
 		VSchema:           vschema,
 		PlannerVersion:    version,
 		ReservedArguments: map[sqlparser.Expr]string{},
+		MergedSubqueries:  map[string]*sqlparser.Subquery{},
 		Statement:         stmt,
 		PredTracker:       predicates.NewTracker(),
 	}, nil
@@ -123,8 +125,6 @@ func (ctx *PlanningContext) GetReservedArgumentFor(expr sqlparser.Expr) string {
 	switch expr := expr.(type) {
 	case *sqlparser.ColName:
 		bvName = ctx.ReservedVars.ReserveColName(expr)
-	case *sqlparser.Subquery:
-		bvName = ctx.ReservedVars.ReserveSubQuery()
 	default:
 		bvName = ctx.ReservedVars.ReserveVariable(sqlparser.CompliantString(expr))
 	}

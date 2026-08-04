@@ -19,14 +19,16 @@ package executorcontext
 import (
 	"context"
 	"fmt"
+	"maps"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/google/uuid"
-	"golang.org/x/exp/maps"
+	"golang.org/x/sync/semaphore"
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/config"
@@ -88,9 +90,17 @@ type (
 		WarnShardedOnly    bool
 		PlannerVersion     plancontext.PlannerVersion
 
-		WarmingReadsPercent int
-		WarmingReadsTimeout time.Duration
-		WarmingReadsChannel chan bool
+		PreventCrossKeyspaceReads bool
+
+		// DeniedSystemVariables is the set of system variable names (lowercased)
+		// that clients are not allowed to SET via this VTGate. Attempts return
+		// an UNIMPLEMENTED error at plan time. A nil or empty map disables the
+		// denylist entirely, preserving the historical behavior.
+		DeniedSystemVariables map[string]struct{}
+
+		WarmingReadsPercent   int
+		WarmingReadsTimeout   time.Duration
+		WarmingReadsSemaphore *semaphore.Weighted
 	}
 
 	// vcursor_impl needs these facilities to be able to be able to execute queries for vindexes
@@ -188,6 +198,11 @@ type (
 
 		// For specializing plans for the current query
 		bindVars map[string]*querypb.BindVariable
+
+		// executedPrimitive records the branch chosen by a PlanSwitcher at
+		// execution time, so that downstream consumers (e.g. GetRoutingIndexes)
+		// don't have to re-evaluate PlanSwitcher conditions.
+		executedPrimitive engine.Primitive
 	}
 )
 
@@ -208,10 +223,14 @@ func NewVCursorImpl(
 	cfg VCursorConfig,
 	metrics Metrics,
 ) (*VCursorImpl, error) {
-	keyspace, tabletType, destination, err := ParseDestinationTarget(safeSession.TargetString, cfg.DefaultTabletType, vschema)
+	keyspace, tabletType, destination, tabletAlias, err := ParseDestinationTarget(safeSession.TargetString, cfg.DefaultTabletType, vschema)
 	if err != nil {
 		return nil, err
 	}
+
+	// Store tablet alias from target string into session
+	// This ensures tablet-specific routing persists across queries
+	safeSession.SetTargetTabletAlias(tabletAlias)
 
 	var ts *topo.Server
 	// We don't have access to the underlying TopoServer if this vtgate is
@@ -295,12 +314,6 @@ func (vc *VCursorImpl) CloneForMirroring(ctx context.Context) engine.VCursor {
 }
 
 func (vc *VCursorImpl) CloneForReplicaWarming(ctx context.Context) engine.VCursor {
-	callerId := callerid.EffectiveCallerIDFromContext(ctx)
-	immediateCallerId := callerid.ImmediateCallerIDFromContext(ctx)
-
-	timedCtx, _ := context.WithTimeout(context.Background(), vc.config.WarmingReadsTimeout) //nolint
-	clonedCtx := callerid.NewContext(timedCtx, callerId, immediateCallerId)
-
 	v := &VCursorImpl{
 		config:         vc.config,
 		SafeSession:    NewAutocommitSession(vc.SafeSession.Session),
@@ -311,7 +324,7 @@ func (vc *VCursorImpl) CloneForReplicaWarming(ctx context.Context) engine.VCurso
 		executor:       vc.executor,
 		resolver:       vc.resolver,
 		topoServer:     vc.topoServer,
-		logStats:       &logstats.LogStats{Ctx: clonedCtx},
+		logStats:       &logstats.LogStats{},
 		metrics:        vc.metrics,
 
 		ignoreMaxMemoryRows: vc.ignoreMaxMemoryRows,
@@ -323,8 +336,22 @@ func (vc *VCursorImpl) CloneForReplicaWarming(ctx context.Context) engine.VCurso
 	}
 
 	v.marginComments.Trailing += "/* warming read */"
+	v.SafeSession.GetOrCreateOptions().NoResult = true
 
 	return v
+}
+
+func (vc *VCursorImpl) WarmingReadsContext(ctx context.Context) (context.Context, context.CancelFunc) {
+	callerId := callerid.EffectiveCallerIDFromContext(ctx)
+	immediateCallerId := callerid.ImmediateCallerIDFromContext(ctx)
+
+	baseCtx := context.WithoutCancel(ctx)
+	timedCtx, cancel := context.WithTimeout(baseCtx, vc.config.WarmingReadsTimeout)
+	clonedCtx := callerid.NewContext(timedCtx, callerId, immediateCallerId)
+
+	vc.logStats = &logstats.LogStats{Ctx: clonedCtx}
+
+	return clonedCtx, cancel
 }
 
 func (vc *VCursorImpl) cloneWithAutocommitSession() *VCursorImpl {
@@ -346,6 +373,18 @@ func (vc *VCursorImpl) cloneWithAutocommitSession() *VCursorImpl {
 		topoServer: vc.topoServer,
 		observer:   vc.observer,
 	}
+}
+
+// SetExecutedPrimitive records the post-PlanSwitcher root primitive that
+// was actually executed for this query.
+func (vc *VCursorImpl) SetExecutedPrimitive(p engine.Primitive) {
+	vc.executedPrimitive = p
+}
+
+// ExecutedPrimitive returns the value previously recorded by
+// SetExecutedPrimitive, or nil if none was recorded.
+func (vc *VCursorImpl) ExecutedPrimitive() engine.Primitive {
+	return vc.executedPrimitive
 }
 
 // GetExecutionMetrics provides the execution metrics object.
@@ -465,15 +504,15 @@ func (vc *VCursorImpl) FindTable(name sqlparser.TableName) (*vindexes.BaseTable,
 	return table, destKeyspace, destTabletType, dest, err
 }
 
-func (vc *VCursorImpl) FindView(name sqlparser.TableName) sqlparser.TableStatement {
+func (vc *VCursorImpl) FindView(name sqlparser.TableName) (sqlparser.TableStatement, *sqlparser.TableName) {
 	ks, _, _, err := vc.parseDestinationTarget(name.Qualifier.String())
 	if err != nil {
-		return nil
+		return nil, nil
 	}
 	if ks == "" {
 		ks = vc.keyspace
 	}
-	return vc.vschema.FindView(ks, name.Name.String())
+	return vc.vschema.FindRoutedView(ks, name.Name.String(), vc.tabletType)
 }
 
 func (vc *VCursorImpl) FindRoutedTable(name sqlparser.TableName) (*vindexes.BaseTable, error) {
@@ -495,12 +534,6 @@ func (vc *VCursorImpl) FindRoutedTable(name sqlparser.TableName) (*vindexes.Base
 
 // FindTableOrVindex finds the specified table or vindex.
 func (vc *VCursorImpl) FindTableOrVindex(name sqlparser.TableName) (*vindexes.BaseTable, vindexes.Vindex, string, topodatapb.TabletType, key.ShardDestination, error) {
-	if name.Qualifier.IsEmpty() && name.Name.String() == "dual" {
-		// The magical MySQL dual table should only be resolved
-		// when it is not qualified by a database name.
-		return vc.getDualTable()
-	}
-
 	destKeyspace, destTabletType, dest, err := vc.parseDestinationTarget(name.Qualifier.String())
 	if err != nil {
 		return nil, nil, "", destTabletType, nil, err
@@ -533,36 +566,20 @@ func (vc *VCursorImpl) FindViewTarget(name sqlparser.TableName) (*vindexes.Keysp
 }
 
 func (vc *VCursorImpl) parseDestinationTarget(targetString string) (string, topodatapb.TabletType, key.ShardDestination, error) {
-	return ParseDestinationTarget(targetString, vc.tabletType, vc.vschema)
+	keyspace, tabletType, dest, _, err := ParseDestinationTarget(targetString, vc.tabletType, vc.vschema)
+	return keyspace, tabletType, dest, err
 }
 
 // ParseDestinationTarget parses destination target string and provides a keyspace if possible.
-func ParseDestinationTarget(targetString string, tablet topodatapb.TabletType, vschema *vindexes.VSchema) (string, topodatapb.TabletType, key.ShardDestination, error) {
-	destKeyspace, destTabletType, dest, err := topoprotopb.ParseDestination(targetString, tablet)
+func ParseDestinationTarget(targetString string, tablet topodatapb.TabletType, vschema *vindexes.VSchema) (string, topodatapb.TabletType, key.ShardDestination, *topodatapb.TabletAlias, error) {
+	destKeyspace, destTabletType, dest, tabletAlias, err := topoprotopb.ParseDestination(targetString, tablet)
 	// If the keyspace is not specified, and there is only one keyspace in the VSchema, use that.
 	if destKeyspace == "" && len(vschema.Keyspaces) == 1 {
 		for k := range vschema.Keyspaces {
 			destKeyspace = k
 		}
 	}
-	return destKeyspace, destTabletType, dest, err
-}
-
-func (vc *VCursorImpl) getDualTable() (*vindexes.BaseTable, vindexes.Vindex, string, topodatapb.TabletType, key.ShardDestination, error) {
-	ksName := vc.getActualKeyspace()
-	var ks *vindexes.Keyspace
-	if ksName == "" {
-		ks = vc.vschema.FirstKeyspace()
-		ksName = ks.Name
-	} else {
-		ks = vc.vschema.Keyspaces[ksName].Keyspace
-	}
-	tbl := &vindexes.BaseTable{
-		Name:     sqlparser.NewIdentifierCS("dual"),
-		Keyspace: ks,
-		Type:     vindexes.TypeReference,
-	}
-	return tbl, nil, ksName, topodatapb.TabletType_PRIMARY, nil, nil
+	return destKeyspace, destTabletType, dest, tabletAlias, err
 }
 
 func (vc *VCursorImpl) getActualKeyspace() string {
@@ -656,6 +673,20 @@ func (vc *VCursorImpl) SysVarSetEnabled() bool {
 	return vc.GetSessionEnableSystemSettings()
 }
 
+// IsSystemVariableDenied implements the plancontext.VSchema interface.
+func (vc *VCursorImpl) IsSystemVariableDenied(name string) bool {
+	if len(vc.config.DeniedSystemVariables) == 0 {
+		return false
+	}
+	_, denied := vc.config.DeniedSystemVariables[strings.ToLower(name)]
+	return denied
+}
+
+// HasDeniedSystemVariables implements the plancontext.VSchema interface.
+func (vc *VCursorImpl) HasDeniedSystemVariables() bool {
+	return len(vc.config.DeniedSystemVariables) > 0
+}
+
 // KeyspaceExists provides whether the keyspace exists or not.
 func (vc *VCursorImpl) KeyspaceExists(ks string) bool {
 	return vc.vschema.Keyspaces[ks] != nil
@@ -709,7 +740,7 @@ func (vc *VCursorImpl) TargetString() string {
 const MaxBufferingRetries = 3
 
 func (vc *VCursorImpl) ExecutePrimitive(ctx context.Context, primitive engine.Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	for try := 0; try < MaxBufferingRetries; try++ {
+	for range MaxBufferingRetries {
 		res, err := primitive.TryExecute(ctx, vc, bindVars, wantfields)
 		if err != nil && vterrors.RootCause(err) == buffer.ShardMissingError {
 			continue
@@ -752,7 +783,7 @@ func (vc *VCursorImpl) logShardsQueried(primitive engine.Primitive, shardsNb int
 func (vc *VCursorImpl) ExecutePrimitiveStandalone(ctx context.Context, primitive engine.Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	// clone the VCursorImpl with a new session.
 	newVC := vc.cloneWithAutocommitSession()
-	for try := 0; try < MaxBufferingRetries; try++ {
+	for range MaxBufferingRetries {
 		res, err := primitive.TryExecute(ctx, newVC, bindVars, wantfields)
 		if err != nil && vterrors.RootCause(err) == buffer.ShardMissingError {
 			continue
@@ -785,7 +816,7 @@ func (vc *VCursorImpl) wrapCallback(callback func(*sqltypes.Result) error, primi
 func (vc *VCursorImpl) StreamExecutePrimitive(ctx context.Context, primitive engine.Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	callback = vc.wrapCallback(callback, primitive)
 
-	for try := 0; try < MaxBufferingRetries; try++ {
+	for range MaxBufferingRetries {
 		err := primitive.TryStreamExecute(ctx, vc, bindVars, wantfields, callback)
 		if err != nil && vterrors.RootCause(err) == buffer.ShardMissingError {
 			continue
@@ -800,7 +831,7 @@ func (vc *VCursorImpl) StreamExecutePrimitiveStandalone(ctx context.Context, pri
 
 	// clone the VCursorImpl with a new session.
 	newVC := vc.cloneWithAutocommitSession()
-	for try := 0; try < MaxBufferingRetries; try++ {
+	for range MaxBufferingRetries {
 		err := primitive.TryStreamExecute(ctx, newVC, bindVars, wantfields, callback)
 		if err != nil && vterrors.RootCause(err) == buffer.ShardMissingError {
 			continue
@@ -1027,10 +1058,17 @@ func (vc *VCursorImpl) Session() engine.SessionActions {
 }
 
 func (vc *VCursorImpl) SetTarget(target string) error {
-	keyspace, tabletType, _, err := topoprotopb.ParseDestination(target, vc.config.DefaultTabletType)
+	keyspace, tabletType, destination, tabletAlias, err := topoprotopb.ParseDestination(target, vc.config.DefaultTabletType)
 	if err != nil {
 		return err
 	}
+
+	// Tablet targeting must be set before starting a transaction, not during.
+	if tabletAlias != nil && vc.SafeSession.InTransaction() {
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
+			"cannot set tablet target while in a transaction")
+	}
+
 	if _, ok := vc.vschema.Keyspaces[keyspace]; !ignoreKeyspace(keyspace) && !ok {
 		return vterrors.VT05003(keyspace)
 	}
@@ -1040,6 +1078,7 @@ func (vc *VCursorImpl) SetTarget(target string) error {
 	}
 	vc.SafeSession.SetTargetString(target)
 	vc.keyspace = keyspace
+	vc.destination = destination
 	vc.tabletType = tabletType
 	return nil
 }
@@ -1196,7 +1235,17 @@ func (vc *VCursorImpl) SetPlannerVersion(v plancontext.PlannerVersion) {
 
 func (vc *VCursorImpl) SetPriority(priority string) {
 	if priority != "" {
-		vc.SafeSession.GetOrCreateOptions().Priority = priority
+		intPriority, err := strconv.Atoi(priority)
+		if err != nil {
+			// On invalid priority input, clear any existing priority to avoid
+			// unintentionally reusing a previous valid priority.
+			if vc.SafeSession.Options != nil && vc.SafeSession.Options.Priority != "" {
+				vc.SafeSession.Options.Priority = ""
+			}
+			return
+		}
+		intPriority = max(0, min(intPriority, sqlparser.MaxPriorityValue))
+		vc.SafeSession.GetOrCreateOptions().Priority = strconv.Itoa(intPriority)
 	} else if vc.SafeSession.Options != nil && vc.SafeSession.Options.Priority != "" {
 		vc.SafeSession.Options.Priority = ""
 	}
@@ -1338,6 +1387,7 @@ func (vc *VCursorImpl) AddAdvisoryLock(name string) {
 func (vc *VCursorImpl) GetBindVars() map[string]*querypb.BindVariable {
 	return vc.bindVars
 }
+
 func (vc *VCursorImpl) SetBindVars(m map[string]*querypb.BindVariable) {
 	vc.bindVars = m
 }
@@ -1418,6 +1468,22 @@ func (vc *VCursorImpl) ForeignKeyMode(keyspace string) (vschemapb.Keyspace_Forei
 		return 0, vterrors.VT14004(keyspace)
 	}
 	return ks.ForeignKeyMode, nil
+}
+
+// AllowCrossKeyspaceReads returns true if cross-keyspace reads are allowed for the given keyspace.
+// Returns false if denied by the vtgate flag or the keyspace-level vschema setting.
+func (vc *VCursorImpl) AllowCrossKeyspaceReads(keyspace string) (bool, error) {
+	if vc.config.PreventCrossKeyspaceReads {
+		return false, nil
+	}
+	if keyspace == "" {
+		return false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "AllowCrossKeyspaceReads called with empty keyspace")
+	}
+	ks := vc.vschema.Keyspaces[keyspace]
+	if ks == nil {
+		return false, vterrors.VT14004(keyspace)
+	}
+	return !ks.PreventCrossKeyspaceReads, nil
 }
 
 func (vc *VCursorImpl) KeyspaceError(keyspace string) error {
@@ -1615,7 +1681,7 @@ func (vc *VCursorImpl) PlanPrepareStatement(ctx context.Context, query string) (
 }
 
 func (vc *VCursorImpl) ClearPrepareData(name string) {
-	delete(vc.SafeSession.PrepareStatement, name)
+	vc.SafeSession.ClearPrepareData(name)
 }
 
 func (vc *VCursorImpl) StorePrepareData(stmtName string, prepareData *vtgatepb.PrepareData) {
@@ -1630,8 +1696,19 @@ func (vc *VCursorImpl) GetWarmingReadsPercent() int {
 	return vc.config.WarmingReadsPercent
 }
 
-func (vc *VCursorImpl) GetWarmingReadsChannel() chan bool {
-	return vc.config.WarmingReadsChannel
+func (vc *VCursorImpl) GetWarmingReadsSemaphore() *semaphore.Weighted {
+	return vc.config.WarmingReadsSemaphore
+}
+
+func (vc *VCursorImpl) GetQueryPriority() (int, error) {
+	if vc.SafeSession.Options != nil && vc.SafeSession.Options.Priority != "" {
+		priority, err := strconv.Atoi(vc.SafeSession.Options.Priority)
+		if err != nil {
+			return 0, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid query priority %q: %v", vc.SafeSession.Options.Priority, err)
+		}
+		return max(0, min(priority, sqlparser.MaxPriorityValue)), nil
+	}
+	return 0, nil
 }
 
 // SetForeignKeyCheckState updates the foreign key checks state of the vcursor.

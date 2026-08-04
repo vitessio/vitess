@@ -266,8 +266,10 @@ func (tsv *TabletServer) AddStatusPart() {
 	})
 }
 
-var degradedThreshold atomic.Int64
-var unhealthyThreshold atomic.Int64
+var (
+	degradedThreshold  atomic.Int64
+	unhealthyThreshold atomic.Int64
+)
 
 type historyRecord struct {
 	Time       time.Time

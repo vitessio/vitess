@@ -33,7 +33,6 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/utils"
 )
 
 // VTOrcProcess is a test struct for running
@@ -54,7 +53,6 @@ type VTOrcProcess struct {
 
 type VTOrcConfiguration struct {
 	InstancePollTime                     string `json:"instance-poll-time,omitempty"`
-	SnapshotTopologyInterval             string `json:"snapshot-topology-interval,omitempty"`
 	PreventCrossCellFailover             bool   `json:"prevent-cross-cell-failover,omitempty"`
 	ReasonableReplicationLag             string `json:"reasonable-replication-lag,omitempty"`
 	AuditToBackend                       bool   `json:"audit-to-backend,omitempty"`
@@ -82,7 +80,7 @@ func (config *VTOrcConfiguration) addValuesToCheckOverride() {
 }
 
 func (orc *VTOrcProcess) RewriteConfiguration() error {
-	return os.WriteFile(orc.ConfigPath, []byte(orc.Config.ToJSONString()), 0644)
+	return os.WriteFile(orc.ConfigPath, []byte(orc.Config.ToJSONString()), 0o644)
 }
 
 // Setup starts orc process with required arguements
@@ -94,14 +92,14 @@ func (orc *VTOrcProcess) Setup() (err error) {
 
 	// create the configuration file
 	timeNow := time.Now().UnixNano()
-	err = os.MkdirAll(orc.LogDir, 0755)
+	err = os.MkdirAll(orc.LogDir, 0o755)
 	if err != nil {
-		log.Errorf("cannot create log directory for vtorc: %v", err)
+		log.Error(fmt.Sprintf("cannot create log directory for vtorc: %v", err))
 		return err
 	}
 	configFile, err := os.Create(path.Join(orc.LogDir, fmt.Sprintf("orc-config-%d.json", timeNow)))
 	if err != nil {
-		log.Errorf("cannot create config file for vtorc: %v", err)
+		log.Error(fmt.Sprintf("cannot create config file for vtorc: %v", err))
 		return err
 	}
 	orc.ConfigPath = configFile.Name()
@@ -110,7 +108,7 @@ func (orc *VTOrcProcess) Setup() (err error) {
 	if !orc.NoOverride {
 		orc.Config.addValuesToCheckOverride()
 	}
-	log.Errorf("configuration - %v", orc.Config.ToJSONString())
+	log.Error(fmt.Sprintf("configuration - %v", orc.Config.ToJSONString()))
 	_, err = configFile.WriteString(orc.Config.ToJSONString())
 	if err != nil {
 		return err
@@ -122,7 +120,7 @@ func (orc *VTOrcProcess) Setup() (err error) {
 
 	/* minimal command line arguments:
 	$ vtorc --topo-implementation etcd2 --topo-global-server-address localhost:2379 --topo-global-root /vitess/global
-	--config config/vtorc/default.json --alsologtostderr
+	--config config/vtorc/default.json
 	*/
 	flags := map[string]string{
 		"--cell":                       orc.Cell,
@@ -134,9 +132,7 @@ func (orc *VTOrcProcess) Setup() (err error) {
 		"--bind-address":               "127.0.0.1",
 	}
 
-	utils.SetFlagVariantsForTests(flags, "--topo-implementation", orc.TopoImplementation)
-	utils.SetFlagVariantsForTests(flags, "--topo-global-server-address", orc.TopoGlobalAddress)
-	utils.SetFlagVariantsForTests(flags, "--topo-global-root", orc.TopoGlobalRoot)
+	flags["--log-format"] = "text"
 
 	orc.proc = exec.Command(orc.Binary)
 	for flag, value := range flags {
@@ -157,14 +153,13 @@ func (orc *VTOrcProcess) Setup() (err error) {
 	}
 
 	orc.proc.Args = append(orc.proc.Args, orc.ExtraArgs...)
-	orc.proc.Args = append(orc.proc.Args, "--alsologtostderr")
 
 	if orc.LogFileName == "" {
 		orc.LogFileName = fmt.Sprintf("vtorc-stderr-%d.txt", timeNow)
 	}
 	errFile, err := os.Create(path.Join(orc.LogDir, orc.LogFileName))
 	if err != nil {
-		log.Errorf("cannot create error log file for vtorc: %v", err)
+		log.Error(fmt.Sprintf("cannot create error log file for vtorc: %v", err))
 		return err
 	}
 	orc.proc.Stderr = errFile
@@ -172,7 +167,7 @@ func (orc *VTOrcProcess) Setup() (err error) {
 	orc.proc.Env = append(orc.proc.Env, os.Environ()...)
 	orc.proc.Env = append(orc.proc.Env, DefaultVttestEnv)
 
-	log.Infof("Running vtorc with command: %v", strings.Join(orc.proc.Args, " "))
+	log.Info(fmt.Sprintf("Running vtorc with command: %v", strings.Join(orc.proc.Args, " ")))
 
 	err = orc.proc.Start()
 	if err != nil {

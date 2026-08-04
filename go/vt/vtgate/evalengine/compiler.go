@@ -585,6 +585,8 @@ func (c *compiler) compileParseJSON(fn string, doct ctype, offset int) (ctype, e
 	case sqltypes.TypeJSON:
 	case sqltypes.VarChar, sqltypes.VarBinary:
 		c.asm.Parse_j(offset)
+	case sqltypes.Null:
+		return ctype{Type: sqltypes.Null, Flag: flagNull | flagNullable, Col: collationNull}, nil
 	default:
 		return ctype{}, errJSONType(fn)
 	}

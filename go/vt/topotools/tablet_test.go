@@ -19,6 +19,8 @@ package topotools
 import (
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
@@ -92,9 +94,7 @@ func TestCheckOwnership(t *testing.T) {
 
 	for i, tc := range table {
 		gotError := CheckOwnership(tc.oldTablet, tc.newTablet) != nil
-		if gotError != tc.wantError {
-			t.Errorf("[%v]: got error = %v, want error = %v", i, gotError, tc.wantError)
-		}
+		assert.Equalf(t, tc.wantError, gotError, "[%v]: got error = %v, want error = %v", i, gotError, tc.wantError)
 	}
 }
 
@@ -134,8 +134,6 @@ func TestIdent(t *testing.T) {
 
 	for _, test := range tests {
 		got := TabletIdent(test.tablet)
-		if got != test.ident {
-			t.Errorf("TabletIdent mismatch: got %s want %s", got, test.ident)
-		}
+		assert.Equalf(t, test.ident, got, "TabletIdent mismatch: got %s want %s", got, test.ident)
 	}
 }

@@ -227,8 +227,10 @@ func (sq *SubQuery) settle(ctx *plancontext.PlanningContext, outer Operator) Ope
 	return sq.settleFilter(ctx, outer)
 }
 
-var correlatedSubqueryErr = vterrors.VT12001("correlated subquery is only supported for EXISTS")
-var subqueryNotAtTopErr = vterrors.VT12001("unmergable subquery can not be inside complex expression")
+var (
+	correlatedSubqueryErr = vterrors.VT12001("correlated subquery is only supported for EXISTS")
+	subqueryNotAtTopErr   = vterrors.VT12001("unmergable subquery can not be inside complex expression")
+)
 
 func (sq *SubQuery) addLimit() {
 	// for a correlated subquery, we can add a limit 1 to the subquery
@@ -317,7 +319,8 @@ func dontEnterSubqueries(node, _ sqlparser.SQLNode) bool {
 }
 
 func (sq *SubQuery) isMerged(ctx *plancontext.PlanningContext) bool {
-	return slices.Index(ctx.MergedSubqueries, sq.originalSubquery) >= 0
+	_, ok := ctx.MergedSubqueries[sq.ArgName]
+	return ok
 }
 
 // mapExpr rewrites all expressions according to the provided function

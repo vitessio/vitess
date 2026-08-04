@@ -17,7 +17,6 @@ limitations under the License.
 package vreplication
 
 import (
-	"context"
 	_ "embed"
 	"fmt"
 	"strings"
@@ -28,7 +27,6 @@ import (
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/utils"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
@@ -88,10 +86,10 @@ func TestFKExt(t *testing.T) {
 
 	// Ensure that there are multiple copy phase cycles per table.
 	extraVTTabletArgs = append(extraVTTabletArgs,
-		"--vstream_packet_size=256",
+		"--vstream-packet-size=256",
 		"--queryserver-config-schema-change-signal",
 		parallelInsertWorkers)
-	extraVTGateArgs = append(extraVTGateArgs, utils.GetFlagVariantForTests("--schema-change-signal")+"=true", "--planner-version", "Gen4")
+	extraVTGateArgs = append(extraVTGateArgs, "--schema-change-signal"+"=true", "--planner-version", "Gen4")
 	defer func() { extraVTTabletArgs = nil }()
 	initFKExtConfig(t)
 
@@ -112,14 +110,10 @@ func TestFKExt(t *testing.T) {
 	verifyClusterHealth(t, vc)
 
 	lg = &SimpleLoadGenerator{}
-	lg.Init(context.Background(), vc)
+	lg.Init(t.Context(), vc)
 	lg.SetDBStrategy("vtgate", fkextConfig.sourceKeyspaceName)
-	if lg.Load() != nil {
-		t.Fatal("Load failed")
-	}
-	if lg.Start() != nil {
-		t.Fatal("Start failed")
-	}
+	require.NoError(t, lg.Load(), "Load failed")
+	require.NoError(t, lg.Start(), "Start failed")
 	t.Run("Import from external db", func(t *testing.T) {
 		// Import data into vitess from sourceKeyspace to target1Keyspace, both unsharded.
 		importIntoVitess(t)
@@ -138,9 +132,7 @@ func TestFKExt(t *testing.T) {
 		materializeTables(t)
 	})
 	lg.SetDBStrategy("vtgate", fkextConfig.target2KeyspaceName)
-	if lg.Start() != nil {
-		t.Fatal("Start failed")
-	}
+	require.NoError(t, lg.Start(), "Start failed")
 	threeShards := "-40,40-c0,c0-"
 	keyspaceName := fkextConfig.target2KeyspaceName
 	ks := vc.Cells[fkextConfig.cell].Keyspaces[keyspaceName]
@@ -153,9 +145,9 @@ func TestFKExt(t *testing.T) {
 		for i, shard := range strings.Split(threeShards, ",") {
 			tablets[shard] = vc.Cells[cellName].Keyspaces[keyspaceName].Shards[shard].Tablets[fmt.Sprintf("%s-%d", cellName, tabletID+i*100)].Vttablet
 		}
-		sqls := strings.Split(FKExtSourceSchema, "\n")
-		for _, sql := range sqls {
-			output, err := vc.VtctldClient.ExecuteCommandWithOutput("ApplySchema", utils.GetFlagVariantForTests("--ddl-strategy")+"=direct", "--sql", sql, keyspaceName)
+		sqls := strings.SplitSeq(FKExtSourceSchema, "\n")
+		for sql := range sqls {
+			output, err := vc.VtctldClient.ExecuteCommandWithOutput("ApplySchema", "--ddl-strategy"+"=direct", "--sql", sql, keyspaceName)
 			require.NoErrorf(t, err, output)
 		}
 		doReshard(t, fkextConfig.target2KeyspaceName, "reshard2to3", "-80,80-", threeShards, tablets)
@@ -166,9 +158,9 @@ func TestFKExt(t *testing.T) {
 		require.NoError(t, vc.AddShards(t, []*Cell{defaultCell}, ks, shard, numReplicas, 0, tabletID, nil))
 		tablets := make(map[string]*cluster.VttabletProcess)
 		tablets[shard] = vc.Cells[cellName].Keyspaces[keyspaceName].Shards[shard].Tablets[fmt.Sprintf("%s-%d", cellName, tabletID)].Vttablet
-		sqls := strings.Split(FKExtSourceSchema, "\n")
-		for _, sql := range sqls {
-			output, err := vc.VtctldClient.ExecuteCommandWithOutput("ApplySchema", utils.GetFlagVariantForTests("--ddl-strategy")+"=direct", "--sql", sql, keyspaceName)
+		sqls := strings.SplitSeq(FKExtSourceSchema, "\n")
+		for sql := range sqls {
+			output, err := vc.VtctldClient.ExecuteCommandWithOutput("ApplySchema", "--ddl-strategy"+"=direct", "--sql", sql, keyspaceName)
 			require.NoErrorf(t, err, output)
 		}
 		doReshard(t, fkextConfig.target2KeyspaceName, "reshard3to1", threeShards, "0", tablets)
@@ -213,10 +205,9 @@ func checkRowCounts(t *testing.T, keyspace string, sourceShards, targetShards []
 		count, _ = getCount(tab, "child")
 		targetChildCount += count
 	}
-	log.Infof("Source parent count: %d, child count: %d, target parent count: %d, child count: %d.",
-		sourceParentCount, sourceChildCount, targetParentCount, targetChildCount)
+	log.Info(fmt.Sprintf("Source parent count: %d, child count: %d, target parent count: %d, child count: %d.", sourceParentCount, sourceChildCount, targetParentCount, targetChildCount))
 	if sourceParentCount != targetParentCount || sourceChildCount != targetChildCount {
-		log.Infof("Row counts do not match for keyspace %s, source shards: %v, target shards: %v", keyspace, sourceShards, targetShards)
+		log.Info(fmt.Sprintf("Row counts do not match for keyspace %s, source shards: %v, target shards: %v", keyspace, sourceShards, targetShards))
 		return false
 	}
 	return true
@@ -226,7 +217,7 @@ func checkRowCounts(t *testing.T, keyspace string, sourceShards, targetShards []
 // it is another check to ensure that both tables have the same number of rows in the source and target shards after load generation
 // has stopped.
 func compareRowCounts(t *testing.T, keyspace string, sourceShards, targetShards []string) error {
-	log.Infof("Comparing row counts for keyspace %s, source shards: %v, target shards: %v", keyspace, sourceShards, targetShards)
+	log.Info(fmt.Sprintf("Comparing row counts for keyspace %s, source shards: %v, target shards: %v", keyspace, sourceShards, targetShards))
 	lg.Stop()
 	defer lg.Start()
 	if err := waitForCondition("load generator to stop", func() bool { return lg.State() == LoadGeneratorStateStopped }, 10*time.Second); err != nil {
@@ -251,7 +242,7 @@ func doReshard(t *testing.T, keyspace, workflowName, sourceShards, targetShards 
 		skipSchemaCopy: true,
 	}, workflowFlavorVtctld)
 	rs.Create()
-	waitForWorkflowState(t, vc, fmt.Sprintf("%s.%s", keyspace, workflowName), binlogdatapb.VReplicationWorkflowState_Running.String())
+	require.NoError(t, waitForWorkflowState(vc, fmt.Sprintf("%s.%s", keyspace, workflowName), binlogdatapb.VReplicationWorkflowState_Running.String()))
 	for _, targetTab := range targetTabs {
 		catchup(t, targetTab, workflowName, "Reshard")
 	}
@@ -261,9 +252,7 @@ func doReshard(t *testing.T, keyspace, workflowName, sourceShards, targetShards 
 	//	t.Fatal("WaitForAdditionalRows failed")
 	//}
 	waitForLowLag(t, keyspace, workflowName+"_reverse")
-	if compareRowCounts(t, keyspace, strings.Split(sourceShards, ","), strings.Split(targetShards, ",")) != nil {
-		t.Fatal("Row counts do not match")
-	}
+	require.NoError(t, compareRowCounts(t, keyspace, strings.Split(sourceShards, ","), strings.Split(targetShards, ",")), "Row counts do not match")
 	vdiff(t, keyspace, workflowName+"_reverse", fkextConfig.cell, nil)
 
 	rs.ReverseReadsAndWrites()
@@ -271,9 +260,7 @@ func doReshard(t *testing.T, keyspace, workflowName, sourceShards, targetShards 
 	//	t.Fatal("WaitForAdditionalRows failed")
 	//}
 	waitForLowLag(t, keyspace, workflowName)
-	if compareRowCounts(t, keyspace, strings.Split(targetShards, ","), strings.Split(sourceShards, ",")) != nil {
-		t.Fatal("Row counts do not match")
-	}
+	require.NoError(t, compareRowCounts(t, keyspace, strings.Split(targetShards, ","), strings.Split(sourceShards, ",")), "Row counts do not match")
 	vdiff(t, keyspace, workflowName, fkextConfig.cell, nil)
 	lg.Stop()
 
@@ -288,8 +275,7 @@ func areRowCountsEqual(t *testing.T) bool {
 	childRowCount := getRowCount(t, vtgateConn, "target2.child")
 	parentCopyRowCount := getRowCount(t, vtgateConn, "target1.parent_copy")
 	childCopyRowCount := getRowCount(t, vtgateConn, "target1.child_copy")
-	log.Infof("Post-materialize row counts are parent: %d, child: %d, parent_copy: %d, child_copy: %d",
-		parentRowCount, childRowCount, parentCopyRowCount, childCopyRowCount)
+	log.Info(fmt.Sprintf("Post-materialize row counts are parent: %d, child: %d, parent_copy: %d, child_copy: %d", parentRowCount, childRowCount, parentCopyRowCount, childCopyRowCount))
 	if parentRowCount != parentCopyRowCount || childRowCount != childCopyRowCount {
 		return false
 	}
@@ -298,9 +284,7 @@ func areRowCountsEqual(t *testing.T) bool {
 
 // validateMaterializeRowCounts expects the Load generator to be stopped before calling it.
 func validateMaterializeRowCounts(t *testing.T) {
-	if lg.State() != LoadGeneratorStateStopped {
-		t.Fatal("Load generator was unexpectedly still running when validateMaterializeRowCounts was called -- this will produce unreliable results.")
-	}
+	require.Equal(t, LoadGeneratorStateStopped, lg.State(), "Load generator was unexpectedly still running when validateMaterializeRowCounts was called -- this will produce unreliable results.")
 	areRowCountsEqual2 := func() bool {
 		return areRowCountsEqual(t)
 	}
@@ -314,8 +298,8 @@ const fkExtMaterializeSpec = `
 
 func materializeTables(t *testing.T) {
 	wfName := "mat"
-	err := vc.VtctldClient.ExecuteCommand("ApplySchema", utils.GetFlagVariantForTests("--ddl-strategy")+"=direct", "--sql", FKExtMaterializeSchema, fkextConfig.target1KeyspaceName)
-	require.NoError(t, err, fmt.Sprintf("ApplySchema Error: %s", err))
+	err := vc.VtctldClient.ExecuteCommand("ApplySchema", "--ddl-strategy"+"=direct", "--sql", FKExtMaterializeSchema, fkextConfig.target1KeyspaceName)
+	require.NoError(t, err, "ApplySchema Error: %s", err)
 	materializeSpec := fmt.Sprintf(fkExtMaterializeSpec, "mat", fkextConfig.target2KeyspaceName, fkextConfig.target1KeyspaceName)
 	materialize(t, materializeSpec)
 	tab := vc.getPrimaryTablet(t, fkextConfig.target1KeyspaceName, "0")
@@ -357,7 +341,7 @@ func doMoveTables(t *testing.T, sourceKeyspace, targetKeyspace, workflowName, ta
 	}, workflowFlavorVtctld)
 	mt.Create()
 
-	waitForWorkflowState(t, vc, fmt.Sprintf("%s.%s", targetKeyspace, workflowName), binlogdatapb.VReplicationWorkflowState_Running.String())
+	require.NoError(t, waitForWorkflowState(vc, fmt.Sprintf("%s.%s", targetKeyspace, workflowName), binlogdatapb.VReplicationWorkflowState_Running.String()))
 
 	for _, targetTab := range targetTabs {
 		catchup(t, targetTab, workflowName, "MoveTables")
@@ -365,35 +349,25 @@ func doMoveTables(t *testing.T, sourceKeyspace, targetKeyspace, workflowName, ta
 	vdiff(t, targetKeyspace, workflowName, fkextConfig.cell, nil)
 	lg.Stop()
 	lg.SetDBStrategy("vtgate", targetKeyspace)
-	if lg.Start() != nil {
-		t.Fatal("Start failed")
-	}
+	require.NoError(t, lg.Start(), "Start failed")
 
 	mt.SwitchReadsAndWrites()
 
-	if lg.WaitForAdditionalRows(100) != nil {
-		t.Fatal("WaitForAdditionalRows failed")
-	}
+	require.NoError(t, lg.WaitForAdditionalRows(100), "WaitForAdditionalRows failed")
 
 	waitForLowLag(t, sourceKeyspace, workflowName+"_reverse")
 	vdiff(t, sourceKeyspace, workflowName+"_reverse", fkextConfig.cell, nil)
-	if lg.WaitForAdditionalRows(100) != nil {
-		t.Fatal("WaitForAdditionalRows failed")
-	}
+	require.NoError(t, lg.WaitForAdditionalRows(100), "WaitForAdditionalRows failed")
 
 	mt.ReverseReadsAndWrites()
-	if lg.WaitForAdditionalRows(100) != nil {
-		t.Fatal("WaitForAdditionalRows failed")
-	}
+	require.NoError(t, lg.WaitForAdditionalRows(100), "WaitForAdditionalRows failed")
 	waitForLowLag(t, targetKeyspace, workflowName)
 	time.Sleep(5 * time.Second)
 	vdiff(t, targetKeyspace, workflowName, fkextConfig.cell, nil)
 	lg.Stop()
 	mt.SwitchReadsAndWrites()
 	mt.Complete()
-	if err := vc.VtctldClient.ExecuteCommand("ApplyRoutingRules", "--rules={}"); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, vc.VtctldClient.ExecuteCommand("ApplyRoutingRules", "--rules={}"))
 }
 
 func importIntoVitess(t *testing.T) {
@@ -415,9 +389,7 @@ func dropReplicaConstraints(t *testing.T, keyspaceName string, tablet *cluster.V
 	require.Equal(t, "replica", strings.ToLower(tablet.TabletType))
 	dbName := "vt_" + keyspaceName
 	qr, err := tablet.QueryTablet(fmt.Sprintf(getConstraintsQuery, dbName), keyspaceName, true)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	for _, row := range qr.Rows {
 		constraintName := row[0].ToString()
 		tableName := row[1].ToString()

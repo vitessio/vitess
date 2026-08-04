@@ -76,7 +76,7 @@ type (
 		duration time.Duration
 		start    time.Time
 		t        *testing.T
-		finish   uint32
+		finish   atomic.Uint32
 		cfgMu    sync.Mutex
 	}
 
@@ -192,7 +192,7 @@ func (s *Stresser) StopAfter(after time.Duration) {
 			s.t.Errorf("Requires no failed queries")
 		}
 	case <-timeoutCh:
-		atomic.StoreUint32(&s.finish, 1)
+		s.finish.Store(1)
 		res := <-s.doneCh
 		if s.cfg.PrintLogs {
 			res.print(s.t.Logf, s.duration.Seconds())
@@ -236,7 +236,7 @@ func (s *Stresser) Start() *Stresser {
 
 func generateNewTables(prefix string, nb int) []*table {
 	tbls := make([]*table, 0, nb)
-	for i := 0; i < nb; i++ {
+	for i := range nb {
 		tbls = append(tbls, &table{
 			name: fmt.Sprintf("%s%d", prefix, i),
 		})
@@ -263,13 +263,13 @@ func (s *Stresser) startClients() {
 	resultCh := make(chan result, maxClient)
 
 	// Start the concurrent clients.
-	for i := 0; i < maxClient; i++ {
+	for range maxClient {
 		go s.startStressClient(resultCh)
 	}
 
 	// Wait for the different clients to publish their results.
 	perClientResults := make([]result, 0, maxClient)
-	for i := 0; i < maxClient; i++ {
+	for range maxClient {
 		newResult := <-resultCh
 		perClientResults = append(perClientResults, newResult)
 	}
@@ -336,7 +336,7 @@ outer:
 }
 
 func (s *Stresser) finished() bool {
-	return atomic.LoadUint32(&s.finish) == 1
+	return s.finish.Load() == 1
 }
 
 // deleteFromRandomTable will delete the last row of a random table.
@@ -400,10 +400,7 @@ func (s *Stresser) selectFromRandomTable(conn *mysql.Conn, r *result) {
 	}
 
 	query := fmt.Sprintf("select * from %s limit %d", s.tbls[tblI].name, s.cfg.SelectLimit)
-	expLength := s.tbls[tblI].rows
-	if expLength > s.cfg.SelectLimit {
-		expLength = s.cfg.SelectLimit
-	}
+	expLength := min(s.tbls[tblI].rows, s.cfg.SelectLimit)
 	if s.assertLength(conn, query, expLength) {
 		r.selects.success++
 	} else {

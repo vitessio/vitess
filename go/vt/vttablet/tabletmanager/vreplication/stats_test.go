@@ -18,11 +18,11 @@ package vreplication
 
 import (
 	"bytes"
-	"strings"
 	"testing"
 	"time"
 
 	"github.com/google/safehtml/template"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/replication"
@@ -76,9 +76,7 @@ VReplication state: Open</br>
 
 func TestStatusHtml(t *testing.T) {
 	pos, err := replication.DecodePosition("MariaDB/1-2-3")
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	blpStats := binlogplayer.NewStats()
 	defer blpStats.Stop()
@@ -113,20 +111,18 @@ func TestStatusHtml(t *testing.T) {
 	}
 	testStats.controllers[1].sourceTablet.Store(&topodatapb.TabletAlias{
 		Cell: "zone1",
-		Uid:  01,
+		Uid:  0o1,
 	})
 	testStats.controllers[2].sourceTablet.Store(&topodatapb.TabletAlias{
 		Cell: "zone1",
-		Uid:  02,
+		Uid:  0o2,
 	})
 	close(testStats.controllers[2].done)
 
 	tpl := template.Must(template.New("test").Parse(vreplicationTemplate))
 	buf := bytes.NewBuffer(nil)
 	require.NoError(t, tpl.Execute(buf, testStats.status()))
-	if strings.Contains(buf.String(), wantOut) {
-		t.Errorf("output: %v, want %v", buf, wantOut)
-	}
+	assert.NotContainsf(t, buf.String(), wantOut, "output: %v, want %v", buf, wantOut)
 }
 
 func TestVReplicationStats(t *testing.T) {
@@ -149,7 +145,7 @@ func TestVReplicationStats(t *testing.T) {
 	}
 	testStats.controllers[1].sourceTablet.Store(&topodatapb.TabletAlias{
 		Cell: "zone1",
-		Uid:  01,
+		Uid:  0o1,
 	})
 
 	sleepTime := 1 * time.Millisecond
@@ -157,7 +153,7 @@ func TestVReplicationStats(t *testing.T) {
 		defer blpStats.PhaseTimings.Record(phase, time.Now())
 		time.Sleep(sleepTime)
 	}
-	want := int64(1.2 * float64(sleepTime)) //allow 10% overhead for recording timing
+	want := int64(1.2 * float64(sleepTime)) // allow 10% overhead for recording timing
 
 	record("fastforward")
 	require.Greater(t, want, testStats.status().Controllers[0].PhaseTimings["fastforward"])
@@ -200,7 +196,7 @@ func TestVReplicationStats(t *testing.T) {
 	require.Eventually(t, func() bool { return len(blpStats.VReplicationLagGauges.Get()["1"]) > 0 }, 10*time.Second, 500*time.Millisecond)
 	vals := blpStats.VReplicationLagGauges.Get()["1"]
 	require.Len(t, vals, 1)
-	require.Equal(t, int(vals[0]), 10)
+	require.Equal(t, 10, int(vals[0]))
 
 	blpStats.DDLEventActions.Add(binlogdatapb.OnDDLAction_IGNORE.String(), 4)
 	blpStats.DDLEventActions.Add(binlogdatapb.OnDDLAction_EXEC.String(), 3)

@@ -17,7 +17,6 @@ limitations under the License.
 package srvtopo
 
 import (
-	"context"
 	"errors"
 	"sync/atomic"
 	"testing"
@@ -44,8 +43,7 @@ func TestWatcherOutageBehavior(t *testing.T) {
 		srvTopoCacheRefresh = originalCacheRefresh
 	}()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts, factory := memorytopo.NewServerAndFactory(ctx, "test_cell")
 	counts := stats.NewCountersWithSingleLabel("", "Watcher outage test", "type")
 	rs := NewResilientServer(ctx, ts, counts)
@@ -94,7 +92,7 @@ func TestWatcherOutageBehavior(t *testing.T) {
 
 	// Get should still work from cache during outage
 	vschema, err = rs.GetSrvVSchema(ctx, "test_cell")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotNil(t, vschema)
 
 	// Wait during outage period
@@ -107,7 +105,7 @@ func TestWatcherOutageBehavior(t *testing.T) {
 
 	// Get operations should continue working from cache
 	vschema, err = rs.GetSrvVSchema(ctx, "test_cell")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotNil(t, vschema)
 
 	// Clear the error and update VSchema
@@ -130,7 +128,7 @@ func TestWatcherOutageBehavior(t *testing.T) {
 
 	// Verify recovery worked
 	vschema, err = rs.GetSrvVSchema(ctx, "test_cell")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotNil(t, vschema)
 }
 
@@ -145,8 +143,7 @@ func TestVSchemaWatcherCacheExpiryBehavior(t *testing.T) {
 		srvTopoCacheRefresh = originalCacheRefresh
 	}()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts, factory := memorytopo.NewServerAndFactory(ctx, "test_cell")
 	counts := stats.NewCountersWithSingleLabel("", "Cache expiry test", "type")
 	rs := NewResilientServer(ctx, ts, counts)
@@ -175,7 +172,7 @@ func TestVSchemaWatcherCacheExpiryBehavior(t *testing.T) {
 	// Get VSchema after TTL expiry with non-topo error
 	// Should still serve cached value (not the error)
 	vschema, err = rs.GetSrvVSchema(ctx, "test_cell")
-	assert.NoError(t, err, "Should serve cached value for non-topo errors even after TTL")
+	require.NoError(t, err, "Should serve cached value for non-topo errors even after TTL")
 	assert.NotNil(t, vschema, "Should return cached VSchema")
 
 	// Now test with a topo error
@@ -184,15 +181,14 @@ func TestVSchemaWatcherCacheExpiryBehavior(t *testing.T) {
 
 	// With topo error after TTL expiry, cache should be cleared
 	vschema, err = rs.GetSrvVSchema(ctx, "test_cell")
-	assert.Error(t, err, "Should return error for topo errors after TTL expiry")
+	require.Error(t, err, "Should return error for topo errors after TTL expiry")
 	assert.True(t, topo.IsErrType(err, topo.Timeout), "Should return the topo error")
 	assert.Nil(t, vschema, "Should not return vschema when error occurs")
 }
 
 // TestWatcherShouldOnlyNotifyOnActualChanges tests that watchers are called when VSchema content changes.
 func TestWatcherShouldOnlyNotifyOnActualChanges(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "test_cell")
 	counts := stats.NewCountersWithSingleLabel("", "Change detection test", "type")
 	rs := NewResilientServer(ctx, ts, counts)

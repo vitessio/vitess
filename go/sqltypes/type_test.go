@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
@@ -133,7 +134,7 @@ func TestTypeValues(t *testing.T) {
 		expected: 34 | flagIsText,
 	}}
 	for _, tcase := range testcases {
-		assert.EqualValues(t, tcase.expected, int(tcase.defined))
+		assert.Equal(t, tcase.expected, int(tcase.defined))
 	}
 }
 
@@ -358,7 +359,7 @@ func TestMySQLToType(t *testing.T) {
 	}}
 	for _, tcase := range testcases {
 		got, err := MySQLToType(tcase.intype, tcase.inflags)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Equal(t, tcase.outtype, got)
 	}
 }
@@ -379,7 +380,7 @@ func TestTypeEquivalenceCheck(t *testing.T) {
 }
 
 func TestPrintTypeChecks(t *testing.T) {
-	var funcs = []struct {
+	funcs := []struct {
 		name string
 		f    func(p Type) bool
 	}{
@@ -394,7 +395,7 @@ func TestPrintTypeChecks(t *testing.T) {
 		{"IsDate", IsDate},
 		{"IsNull", IsNull},
 	}
-	var types = []Type{
+	types := []Type{
 		Null,
 		Int8,
 		Uint8,

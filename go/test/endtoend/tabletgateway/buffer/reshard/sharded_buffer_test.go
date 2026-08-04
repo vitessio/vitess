@@ -48,22 +48,22 @@ func waitForLowLag(t *testing.T, clusterInstance *cluster.LocalProcessCluster, k
 		var resp vtctldatapb.GetWorkflowsResponse
 		err = json2.UnmarshalPB([]byte(output), &resp)
 		require.NoError(t, err)
-		require.GreaterOrEqual(t, len(resp.Workflows), 1, "responce should have at least one workflow")
+		require.GreaterOrEqual(t, len(resp.Workflows), 1, "response should have at least one workflow")
 		lagSeconds := resp.Workflows[0].MaxVReplicationTransactionLag
 
 		require.NoError(t, err, output)
 		if lagSeconds <= acceptableLagSeconds {
-			log.Infof("waitForLowLag acceptable for workflow %s, keyspace %s, current lag is %d", workflow, keyspace, lagSeconds)
+			log.Info(fmt.Sprintf("waitForLowLag acceptable for workflow %s, keyspace %s, current lag is %d", workflow, keyspace, lagSeconds))
 			break
 		} else {
-			log.Infof("waitForLowLag too high for workflow %s, keyspace %s, current lag is %d", workflow, keyspace, lagSeconds)
+			log.Info(fmt.Sprintf("waitForLowLag too high for workflow %s, keyspace %s, current lag is %d", workflow, keyspace, lagSeconds))
 		}
 		time.Sleep(waitDuration)
 		duration -= waitDuration
 	}
 
 	if duration <= 0 {
-		t.Fatalf("waitForLowLag timed out for workflow %s, keyspace %s, current lag is %d", workflow, keyspace, lagSeconds)
+		require.Failf(t, "lag timeout", "waitForLowLag timed out for workflow %s, keyspace %s, current lag is %d", workflow, keyspace, lagSeconds)
 	}
 }
 
@@ -113,9 +113,9 @@ const vschema = `{
 func assertResharding(t *testing.T, shard string, stats *buffer.VTGateBufferingStats) {
 	stopLabel := fmt.Sprintf("%s.%s", shard, "ReshardingComplete")
 
-	assert.Greater(t, stats.BufferFailoverDurationSumMs[shard], 0)
-	assert.Greater(t, stats.BufferRequestsBuffered[shard], 0)
-	assert.Greater(t, stats.BufferStops[stopLabel], 0)
+	assert.Positive(t, stats.BufferFailoverDurationSumMs[shard])
+	assert.Positive(t, stats.BufferRequestsBuffered[shard])
+	assert.Positive(t, stats.BufferStops[stopLabel])
 }
 
 func TestBufferResharding(t *testing.T) {

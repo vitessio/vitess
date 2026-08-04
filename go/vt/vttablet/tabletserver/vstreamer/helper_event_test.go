@@ -68,10 +68,8 @@ const (
 	lengthJSON      = 4294967295
 )
 
-var (
-	// noEvents is used to indicate that a query is expected to generate no events.
-	noEvents = []TestRowEvent{}
-)
+// noEvents is used to indicate that a query is expected to generate no events.
+var noEvents = []TestRowEvent{}
 
 // TestColumn has all the attributes of a column required for the test cases.
 type TestColumn struct {
@@ -301,7 +299,7 @@ func (ts *TestSpec) Init() {
 	ts.metadata = make(map[string][]string)
 	ts.pkColumns = make(map[string][]string)
 	// create tables
-	require.Equal(ts.t, len(ts.ddls), len(ts.schema.Tables()), "number of tables in ddls and schema do not match")
+	require.Len(ts.t, ts.schema.Tables(), len(ts.ddls), "number of tables in ddls and schema do not match")
 	for i, t := range ts.schema.Tables() {
 		execStatement(ts.t, ts.ddls[i])
 		fe := ts.getFieldEvent(t)
@@ -329,6 +327,9 @@ func (ts *TestSpec) Init() {
 
 // Close() should be called (via defer) at the end of the test to clean up the tables created in the test.
 func (ts *TestSpec) Close() {
+	if ts.schema == nil {
+		return
+	}
 	dropStatement := "drop table if exists " + strings.Join(ts.schema.TableNames(), ", ")
 	execStatement(ts.t, dropStatement)
 }
@@ -441,9 +442,7 @@ func (ts *TestSpec) Run() {
 				case *sqlparser.Set:
 				default:
 					_, ok := stmt.(sqlparser.DDLStatement)
-					if !ok {
-						require.FailNowf(ts.t, "unsupported statement type", "stmt: %s", stmt)
-					}
+					require.True(ts.t, ok, "stmt: %s", stmt)
 					output = append(output, "gtid")
 					output = append(output, ts.getDDLEvent(tq.query))
 				}
@@ -648,13 +647,7 @@ func (ts *TestSpec) getRowChangeForUpdate(table string, newState *query.Row) *bi
 	var hasSkip bool
 	for i, l := range currentState.Lengths {
 		skip := false
-		isPKColumn := false
-		for _, pkColumn := range ts.pkColumns[table] {
-			if pkColumn == ts.fieldEvents[table].cols[i].name {
-				isPKColumn = true
-				break
-			}
-		}
+		isPKColumn := slices.Contains(ts.pkColumns[table], ts.fieldEvents[table].cols[i].name)
 		if ts.options.noblob {
 			switch ts.fieldEvents[table].cols[i].dataTypeLowered {
 			case "blob", "text":
@@ -741,9 +734,11 @@ func getRowEvent(ts *TestSpec, fe *TestFieldEvent, query string) string {
 }
 
 func getLastPKEvent(table, colName string, colType query.Type, colValue []sqltypes.Value, collationId, flags uint32) string {
-	lastPK := getQRFromLastPK([]*query.Field{{Name: colName,
+	lastPK := getQRFromLastPK([]*query.Field{{
+		Name: colName,
 		Type: colType, Charset: collationId,
-		Flags: flags}}, colValue)
+		Flags: flags,
+	}}, colValue)
 	ev := &binlogdatapb.VEvent{
 		Type: binlogdatapb.VEventType_LASTPK,
 		LastPKEvent: &binlogdatapb.LastPKEvent{

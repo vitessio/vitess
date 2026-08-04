@@ -17,7 +17,6 @@ limitations under the License.
 package engine
 
 import (
-	"context"
 	"errors"
 	"testing"
 
@@ -60,7 +59,7 @@ func TestSetSystemVariableAsString(t *testing.T) {
 		)},
 		shardSession: []*srvtopo.ResolvedShard{{Target: &querypb.Target{Keyspace: "ks", Shard: "-20"}}},
 	}
-	_, err := set.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+	_, err := set.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 
 	vc.ExpectLog(t, []string{
@@ -242,7 +241,8 @@ func TestSetTable(t *testing.T) {
 		expectedQueryLog: []string{
 			`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
 			`Needs Reserved Conn`,
-			`ExecuteMultiShard ks.-20: set @@x = dummy_expr {} false false`,
+			`SysVar set with (x,dummy_expr)`,
+			`ExecuteMultiShard ks.-20: set x = dummy_expr {} false false`,
 		},
 	}, {
 		testName: "sysvar set not modifying setting",
@@ -579,7 +579,7 @@ func TestSetTable(t *testing.T) {
 				disableSetVar:  tc.disableSetVar,
 				parser:         parser,
 			}
-			_, err = set.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+			_, err = set.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 			if tc.expectedError == "" {
 				require.NoError(t, err)
 			} else {
@@ -608,7 +608,8 @@ func TestSysVarSetErr(t *testing.T) {
 	expectedQueryLog := []string{
 		`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
 		"Needs Reserved Conn",
-		`ExecuteMultiShard ks.-20: set @@x = dummy_expr {} false false`,
+		"SysVar set with (x,dummy_expr)",
+		`ExecuteMultiShard ks.-20: set x = dummy_expr {} false false`,
 	}
 
 	set := &Set{
@@ -619,7 +620,7 @@ func TestSysVarSetErr(t *testing.T) {
 		shards:         []string{"-20", "20-"},
 		multiShardErrs: []error{errors.New("error")},
 	}
-	_, err := set.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+	_, err := set.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 	require.EqualError(t, err, "error")
 	vc.ExpectLog(t, expectedQueryLog)
 }

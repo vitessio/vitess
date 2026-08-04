@@ -19,9 +19,11 @@ package srvtopo
 import (
 	"context"
 	"errors"
-	"reflect"
 	"sync"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
@@ -62,31 +64,20 @@ func newFiltering(ctx context.Context, filter []string) (*topo.Server, *srvtopot
 
 func TestFilteringServerHandlesNilUnderlying(t *testing.T) {
 	got, gotErr := NewKeyspaceFilteringServer(nil, []string{})
-	if got != nil {
-		t.Errorf("got: %v, wanted: nil server", got)
-	}
-	if gotErr != ErrNilUnderlyingServer {
-		t.Errorf("Bad error returned: got %v wanted %v", gotErr, ErrNilUnderlyingServer)
-	}
+	assert.Nilf(t, got, "got: %v, wanted: nil server", got)
+	assert.Equalf(t, ErrNilUnderlyingServer, gotErr, "Bad error returned: got %v wanted %v", gotErr, ErrNilUnderlyingServer)
 }
 
 func TestFilteringServerReturnsUnderlyingServer(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	_, _, f := newFiltering(ctx, nil)
 	got, gotErr := f.GetTopoServer()
-	if gotErr != nil {
-		t.Errorf("Got error getting topo.Server from FilteringServer")
-	}
+	require.NoError(t, gotErr, "Got error getting topo.Server from FilteringServer")
 
 	readOnly, err := got.IsReadOnly()
-	if err != nil || !readOnly {
-		t.Errorf("Got read-write topo.Server from FilteringServer -- must be read-only")
-	}
+	assert.Truef(t, err == nil && readOnly, "Got read-write topo.Server from FilteringServer -- must be read-only")
 	gotErr = got.CreateCellsAlias(stockCtx, "should_fail", &topodatapb.CellsAlias{Cells: []string{stockCell}})
-	if gotErr == nil {
-		t.Errorf("Were able to perform a write against the topo.Server from a FilteringServer -- it must be read-only")
-	}
+	assert.Error(t, gotErr, "Were able to perform a write against the topo.Server from a FilteringServer -- it must be read-only")
 }
 
 func doTestGetSrvKeyspaceNames(
@@ -98,34 +89,25 @@ func doTestGetSrvKeyspaceNames(
 ) {
 	got, gotErr := f.GetSrvKeyspaceNames(stockCtx, cell, false)
 
-	if got == nil {
-		t.Errorf("GetSrvKeyspaceNames failed: should not return nil")
-	}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("GetSrvKeyspaceNames failed: want %v, got %v", want, got)
-	}
-	if wantErr != gotErr {
-		t.Errorf("GetSrvKeyspaceNames returned incorrect error: want %v, got %v", wantErr, gotErr)
-	}
+	assert.NotNil(t, got, "GetSrvKeyspaceNames failed: should not return nil")
+	assert.Equalf(t, want, got, "GetSrvKeyspaceNames failed: want %v, got %v", want, got)
+	assert.Equalf(t, wantErr, gotErr, "GetSrvKeyspaceNames returned incorrect error: want %v, got %v", wantErr, gotErr)
 }
 
 func TestFilteringServerGetSrvKeyspameNamesFiltersEverythingOut(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	_, _, f := newFiltering(ctx, nil)
 	doTestGetSrvKeyspaceNames(t, f, stockCell, []string{}, nil)
 }
 
 func TestFilteringServerGetSrvKeyspaceNamesFiltersKeyspaces(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	_, _, f := newFiltering(ctx, stockFilters)
 	doTestGetSrvKeyspaceNames(t, f, stockCell, stockFilters, nil)
 }
 
 func TestFilteringServerGetSrvKeyspaceNamesPassesThroughErrors(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	_, mock, f := newFiltering(ctx, stockFilters)
 	wantErr := errors.New("some badcell error")
 	mock.SrvKeyspaceNamesError = wantErr
@@ -142,22 +124,18 @@ func doTestGetSrvKeyspace(
 ) {
 	_, gotErr := f.GetSrvKeyspace(stockCtx, cell, ksName)
 
-	if wantErr != gotErr {
-		t.Errorf("returned error incorrect: got %v, want %v", gotErr, wantErr)
-	}
+	assert.Equalf(t, wantErr, gotErr, "returned error incorrect: got %v, want %v", gotErr, wantErr)
 }
 
 func TestFilteringServerGetSrvKeyspaceReturnsSelectedKeyspaces(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	_, mock, f := newFiltering(ctx, stockFilters)
 	mock.SrvKeyspace = stockKeyspaces["bar"]
 	doTestGetSrvKeyspace(t, f, stockCell, "bar", stockKeyspaces["bar"], nil)
 }
 
 func TestFilteringServerGetSrvKeyspaceErrorPassthrough(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	wantErr := errors.New("some error")
 	_, mock, f := newFiltering(ctx, stockFilters)
 	mock.SrvKeyspace = stockKeyspaces["bar"]
@@ -166,8 +144,7 @@ func TestFilteringServerGetSrvKeyspaceErrorPassthrough(t *testing.T) {
 }
 
 func TestFilteringServerGetSrvKeyspaceFilters(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	wantErr := topo.NewError(topo.NoNode, "foo")
 	_, mock, f := newFiltering(ctx, stockFilters)
 	mock.SrvKeyspaceError = wantErr
@@ -175,8 +152,7 @@ func TestFilteringServerGetSrvKeyspaceFilters(t *testing.T) {
 }
 
 func TestFilteringServerWatchSrvVSchemaFiltersPassthroughSrvVSchema(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	_, mock, f := newFiltering(ctx, stockFilters)
 
 	allowed := map[string]bool{}
@@ -191,17 +167,9 @@ func TestFilteringServerWatchSrvVSchemaFiltersPassthroughSrvVSchema(t *testing.T
 	cb := func(gotSchema *vschemapb.SrvVSchema, gotErr error) bool {
 		// ensure that only selected keyspaces made it into the callback
 		for name, ks := range gotSchema.Keyspaces {
-			if !allowed[name] {
-				t.Errorf("Unexpected keyspace found in callback: %v", ks)
-			}
+			assert.Truef(t, allowed[name], "Unexpected keyspace found in callback: %v", ks)
 			wantKS := mock.WatchedSrvVSchema.Keyspaces[name]
-			if !reflect.DeepEqual(ks, wantKS) {
-				t.Errorf(
-					"Expected keyspace to be passed through unmodified: want %#v got %#v",
-					wantKS,
-					ks,
-				)
-			}
+			assert.Equalf(t, wantKS, ks, "Expected keyspace to be passed through unmodified: want %#v got %#v", wantKS, ks)
 		}
 		wg.Done()
 		return true
@@ -212,8 +180,7 @@ func TestFilteringServerWatchSrvVSchemaFiltersPassthroughSrvVSchema(t *testing.T
 }
 
 func TestFilteringServerWatchSrvVSchemaHandlesNilSchema(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	wantErr := errors.New("some err")
 	_, mock, f := newFiltering(ctx, stockFilters)
@@ -225,12 +192,8 @@ func TestFilteringServerWatchSrvVSchemaHandlesNilSchema(t *testing.T) {
 	wg.Add(1)
 
 	cb := func(gotSchema *vschemapb.SrvVSchema, gotErr error) bool {
-		if gotSchema != nil {
-			t.Errorf("Expected nil gotSchema: got %#v", gotSchema)
-		}
-		if gotErr != wantErr {
-			t.Errorf("Unexpected error: want %v got %v", wantErr, gotErr)
-		}
+		assert.Nilf(t, gotSchema, "Expected nil gotSchema: got %#v", gotSchema)
+		assert.Equalf(t, wantErr, gotErr, "Unexpected error: want %v got %v", wantErr, gotErr)
 		wg.Done()
 		return true
 	}

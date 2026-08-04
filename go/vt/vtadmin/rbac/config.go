@@ -119,7 +119,7 @@ func (c *Config) Reify() error {
 		return rec.Error()
 	}
 
-	log.Infof("[rbac]: loaded authorizer with %d rules", len(c.Rules))
+	log.Info(fmt.Sprintf("[rbac]: loaded authorizer with %d rules", len(c.Rules)))
 
 	c.cfg = byResource
 	c.authorizer = &Authorizer{

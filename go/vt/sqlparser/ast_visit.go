@@ -480,14 +480,30 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfShow(in, f)
 	case *ShowBasic:
 		return VisitRefOfShowBasic(in, f)
+	case *ShowBinaryLogs:
+		return VisitRefOfShowBinaryLogs(in, f)
+	case *ShowBinlogEvents:
+		return VisitRefOfShowBinlogEvents(in, f)
 	case *ShowCreate:
 		return VisitRefOfShowCreate(in, f)
+	case *ShowCreateUser:
+		return VisitRefOfShowCreateUser(in, f)
+	case *ShowEngine:
+		return VisitRefOfShowEngine(in, f)
 	case *ShowFilter:
 		return VisitRefOfShowFilter(in, f)
+	case *ShowGrants:
+		return VisitRefOfShowGrants(in, f)
 	case *ShowMigrationLogs:
 		return VisitRefOfShowMigrationLogs(in, f)
-	case *ShowOther:
-		return VisitRefOfShowOther(in, f)
+	case *ShowProfile:
+		return VisitRefOfShowProfile(in, f)
+	case *ShowReplicas:
+		return VisitRefOfShowReplicas(in, f)
+	case *ShowReplicationSourceStatus:
+		return VisitRefOfShowReplicationSourceStatus(in, f)
+	case *ShowReplicationStatus:
+		return VisitRefOfShowReplicationStatus(in, f)
 	case *ShowThrottledApps:
 		return VisitRefOfShowThrottledApps(in, f)
 	case *ShowThrottlerStatus:
@@ -609,6 +625,7 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return nil
 	}
 }
+
 func VisitRefOfAddColumns(in *AddColumns, f Visit) error {
 	if in == nil {
 		return nil
@@ -626,6 +643,7 @@ func VisitRefOfAddColumns(in *AddColumns, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfAddConstraintDefinition(in *AddConstraintDefinition, f Visit) error {
 	if in == nil {
 		return nil
@@ -638,6 +656,7 @@ func VisitRefOfAddConstraintDefinition(in *AddConstraintDefinition, f Visit) err
 	}
 	return nil
 }
+
 func VisitRefOfAddIndexDefinition(in *AddIndexDefinition, f Visit) error {
 	if in == nil {
 		return nil
@@ -650,6 +669,7 @@ func VisitRefOfAddIndexDefinition(in *AddIndexDefinition, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfAliasedExpr(in *AliasedExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -665,6 +685,7 @@ func VisitRefOfAliasedExpr(in *AliasedExpr, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfAliasedTableExpr(in *AliasedTableExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -689,6 +710,7 @@ func VisitRefOfAliasedTableExpr(in *AliasedTableExpr, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfAlterCharset(in *AlterCharset, f Visit) error {
 	if in == nil {
 		return nil
@@ -698,6 +720,7 @@ func VisitRefOfAlterCharset(in *AlterCharset, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfAlterCheck(in *AlterCheck, f Visit) error {
 	if in == nil {
 		return nil
@@ -710,6 +733,7 @@ func VisitRefOfAlterCheck(in *AlterCheck, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfAlterColumn(in *AlterColumn, f Visit) error {
 	if in == nil {
 		return nil
@@ -725,6 +749,7 @@ func VisitRefOfAlterColumn(in *AlterColumn, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfAlterDatabase(in *AlterDatabase, f Visit) error {
 	if in == nil {
 		return nil
@@ -740,6 +765,7 @@ func VisitRefOfAlterDatabase(in *AlterDatabase, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfAlterIndex(in *AlterIndex, f Visit) error {
 	if in == nil {
 		return nil
@@ -752,6 +778,7 @@ func VisitRefOfAlterIndex(in *AlterIndex, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfAlterMigration(in *AlterMigration, f Visit) error {
 	if in == nil {
 		return nil
@@ -764,6 +791,7 @@ func VisitRefOfAlterMigration(in *AlterMigration, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfAlterTable(in *AlterTable, f Visit) error {
 	if in == nil {
 		return nil
@@ -790,6 +818,7 @@ func VisitRefOfAlterTable(in *AlterTable, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfAlterView(in *AlterView, f Visit) error {
 	if in == nil {
 		return nil
@@ -814,6 +843,7 @@ func VisitRefOfAlterView(in *AlterView, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfAlterVschema(in *AlterVschema, f Visit) error {
 	if in == nil {
 		return nil
@@ -837,6 +867,7 @@ func VisitRefOfAlterVschema(in *AlterVschema, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfAnalyze(in *Analyze, f Visit) error {
 	if in == nil {
 		return nil
@@ -849,6 +880,7 @@ func VisitRefOfAnalyze(in *Analyze, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfAndExpr(in *AndExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -864,6 +896,7 @@ func VisitRefOfAndExpr(in *AndExpr, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfAnyValue(in *AnyValue, f Visit) error {
 	if in == nil {
 		return nil
@@ -876,6 +909,7 @@ func VisitRefOfAnyValue(in *AnyValue, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfArgument(in *Argument, f Visit) error {
 	if in == nil {
 		return nil
@@ -885,6 +919,7 @@ func VisitRefOfArgument(in *Argument, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfArgumentLessWindowExpr(in *ArgumentLessWindowExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -897,6 +932,7 @@ func VisitRefOfArgumentLessWindowExpr(in *ArgumentLessWindowExpr, f Visit) error
 	}
 	return nil
 }
+
 func VisitRefOfAssignmentExpr(in *AssignmentExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -912,6 +948,7 @@ func VisitRefOfAssignmentExpr(in *AssignmentExpr, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfAutoIncSpec(in *AutoIncSpec, f Visit) error {
 	if in == nil {
 		return nil
@@ -927,6 +964,7 @@ func VisitRefOfAutoIncSpec(in *AutoIncSpec, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfAvg(in *Avg, f Visit) error {
 	if in == nil {
 		return nil
@@ -942,6 +980,7 @@ func VisitRefOfAvg(in *Avg, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfBegin(in *Begin, f Visit) error {
 	if in == nil {
 		return nil
@@ -951,6 +990,7 @@ func VisitRefOfBegin(in *Begin, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfBeginEndStatement(in *BeginEndStatement, f Visit) error {
 	if in == nil {
 		return nil
@@ -963,6 +1003,7 @@ func VisitRefOfBeginEndStatement(in *BeginEndStatement, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfBetweenExpr(in *BetweenExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -981,6 +1022,7 @@ func VisitRefOfBetweenExpr(in *BetweenExpr, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfBinaryExpr(in *BinaryExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -996,6 +1038,7 @@ func VisitRefOfBinaryExpr(in *BinaryExpr, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfBitAnd(in *BitAnd, f Visit) error {
 	if in == nil {
 		return nil
@@ -1011,6 +1054,7 @@ func VisitRefOfBitAnd(in *BitAnd, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfBitOr(in *BitOr, f Visit) error {
 	if in == nil {
 		return nil
@@ -1026,6 +1070,7 @@ func VisitRefOfBitOr(in *BitOr, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfBitXor(in *BitXor, f Visit) error {
 	if in == nil {
 		return nil
@@ -1041,6 +1086,7 @@ func VisitRefOfBitXor(in *BitXor, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfCallProc(in *CallProc, f Visit) error {
 	if in == nil {
 		return nil
@@ -1058,6 +1104,7 @@ func VisitRefOfCallProc(in *CallProc, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfCaseExpr(in *CaseExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -1078,6 +1125,7 @@ func VisitRefOfCaseExpr(in *CaseExpr, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfCastExpr(in *CastExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -1093,6 +1141,7 @@ func VisitRefOfCastExpr(in *CastExpr, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfChangeColumn(in *ChangeColumn, f Visit) error {
 	if in == nil {
 		return nil
@@ -1111,6 +1160,7 @@ func VisitRefOfChangeColumn(in *ChangeColumn, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfCharExpr(in *CharExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -1125,6 +1175,7 @@ func VisitRefOfCharExpr(in *CharExpr, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfCheckConstraintDefinition(in *CheckConstraintDefinition, f Visit) error {
 	if in == nil {
 		return nil
@@ -1137,6 +1188,7 @@ func VisitRefOfCheckConstraintDefinition(in *CheckConstraintDefinition, f Visit)
 	}
 	return nil
 }
+
 func VisitRefOfColName(in *ColName, f Visit) error {
 	if in == nil {
 		return nil
@@ -1152,6 +1204,7 @@ func VisitRefOfColName(in *ColName, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfCollateExpr(in *CollateExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -1164,6 +1217,7 @@ func VisitRefOfCollateExpr(in *CollateExpr, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfColumnDefinition(in *ColumnDefinition, f Visit) error {
 	if in == nil {
 		return nil
@@ -1179,6 +1233,7 @@ func VisitRefOfColumnDefinition(in *ColumnDefinition, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfColumnType(in *ColumnType, f Visit) error {
 	if in == nil {
 		return nil
@@ -1188,6 +1243,7 @@ func VisitRefOfColumnType(in *ColumnType, f Visit) error {
 	}
 	return nil
 }
+
 func VisitColumns(in Columns, f Visit) error {
 	if in == nil {
 		return nil
@@ -1202,6 +1258,7 @@ func VisitColumns(in Columns, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfCommentOnly(in *CommentOnly, f Visit) error {
 	if in == nil {
 		return nil
@@ -1211,6 +1268,7 @@ func VisitRefOfCommentOnly(in *CommentOnly, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfCommit(in *Commit, f Visit) error {
 	if in == nil {
 		return nil
@@ -1220,6 +1278,7 @@ func VisitRefOfCommit(in *Commit, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfCommonTableExpr(in *CommonTableExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -1238,6 +1297,7 @@ func VisitRefOfCommonTableExpr(in *CommonTableExpr, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfComparisonExpr(in *ComparisonExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -1256,6 +1316,7 @@ func VisitRefOfComparisonExpr(in *ComparisonExpr, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfCompoundStatements(in *CompoundStatements, f Visit) error {
 	if in == nil {
 		return nil
@@ -1270,6 +1331,7 @@ func VisitRefOfCompoundStatements(in *CompoundStatements, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfConstraintDefinition(in *ConstraintDefinition, f Visit) error {
 	if in == nil {
 		return nil
@@ -1285,6 +1347,7 @@ func VisitRefOfConstraintDefinition(in *ConstraintDefinition, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfConvertExpr(in *ConvertExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -1300,6 +1363,7 @@ func VisitRefOfConvertExpr(in *ConvertExpr, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfConvertType(in *ConvertType, f Visit) error {
 	if in == nil {
 		return nil
@@ -1309,6 +1373,7 @@ func VisitRefOfConvertType(in *ConvertType, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfConvertUsingExpr(in *ConvertUsingExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -1321,6 +1386,7 @@ func VisitRefOfConvertUsingExpr(in *ConvertUsingExpr, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfCount(in *Count, f Visit) error {
 	if in == nil {
 		return nil
@@ -1338,6 +1404,7 @@ func VisitRefOfCount(in *Count, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfCountStar(in *CountStar, f Visit) error {
 	if in == nil {
 		return nil
@@ -1350,6 +1417,7 @@ func VisitRefOfCountStar(in *CountStar, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfCreateDatabase(in *CreateDatabase, f Visit) error {
 	if in == nil {
 		return nil
@@ -1365,6 +1433,7 @@ func VisitRefOfCreateDatabase(in *CreateDatabase, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfCreateProcedure(in *CreateProcedure, f Visit) error {
 	if in == nil {
 		return nil
@@ -1391,6 +1460,7 @@ func VisitRefOfCreateProcedure(in *CreateProcedure, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfCreateTable(in *CreateTable, f Visit) error {
 	if in == nil {
 		return nil
@@ -1415,6 +1485,7 @@ func VisitRefOfCreateTable(in *CreateTable, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfCreateView(in *CreateView, f Visit) error {
 	if in == nil {
 		return nil
@@ -1439,6 +1510,7 @@ func VisitRefOfCreateView(in *CreateView, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfCurTimeFuncExpr(in *CurTimeFuncExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -1451,6 +1523,7 @@ func VisitRefOfCurTimeFuncExpr(in *CurTimeFuncExpr, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfDeallocateStmt(in *DeallocateStmt, f Visit) error {
 	if in == nil {
 		return nil
@@ -1466,6 +1539,7 @@ func VisitRefOfDeallocateStmt(in *DeallocateStmt, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfDeclareCondition(in *DeclareCondition, f Visit) error {
 	if in == nil {
 		return nil
@@ -1481,6 +1555,7 @@ func VisitRefOfDeclareCondition(in *DeclareCondition, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfDeclareHandler(in *DeclareHandler, f Visit) error {
 	if in == nil {
 		return nil
@@ -1498,6 +1573,7 @@ func VisitRefOfDeclareHandler(in *DeclareHandler, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfDeclareVar(in *DeclareVar, f Visit) error {
 	if in == nil {
 		return nil
@@ -1515,6 +1591,7 @@ func VisitRefOfDeclareVar(in *DeclareVar, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfDefault(in *Default, f Visit) error {
 	if in == nil {
 		return nil
@@ -1524,6 +1601,7 @@ func VisitRefOfDefault(in *Default, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfDefiner(in *Definer, f Visit) error {
 	if in == nil {
 		return nil
@@ -1533,6 +1611,7 @@ func VisitRefOfDefiner(in *Definer, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfDelete(in *Delete, f Visit) error {
 	if in == nil {
 		return nil
@@ -1568,6 +1647,7 @@ func VisitRefOfDelete(in *Delete, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfDerivedTable(in *DerivedTable, f Visit) error {
 	if in == nil {
 		return nil
@@ -1580,6 +1660,7 @@ func VisitRefOfDerivedTable(in *DerivedTable, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfDropColumn(in *DropColumn, f Visit) error {
 	if in == nil {
 		return nil
@@ -1592,6 +1673,7 @@ func VisitRefOfDropColumn(in *DropColumn, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfDropDatabase(in *DropDatabase, f Visit) error {
 	if in == nil {
 		return nil
@@ -1607,6 +1689,7 @@ func VisitRefOfDropDatabase(in *DropDatabase, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfDropKey(in *DropKey, f Visit) error {
 	if in == nil {
 		return nil
@@ -1619,6 +1702,7 @@ func VisitRefOfDropKey(in *DropKey, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfDropProcedure(in *DropProcedure, f Visit) error {
 	if in == nil {
 		return nil
@@ -1634,6 +1718,7 @@ func VisitRefOfDropProcedure(in *DropProcedure, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfDropTable(in *DropTable, f Visit) error {
 	if in == nil {
 		return nil
@@ -1649,6 +1734,7 @@ func VisitRefOfDropTable(in *DropTable, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfDropView(in *DropView, f Visit) error {
 	if in == nil {
 		return nil
@@ -1664,6 +1750,7 @@ func VisitRefOfDropView(in *DropView, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfElseIfBlock(in *ElseIfBlock, f Visit) error {
 	if in == nil {
 		return nil
@@ -1679,6 +1766,7 @@ func VisitRefOfElseIfBlock(in *ElseIfBlock, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfExecuteStmt(in *ExecuteStmt, f Visit) error {
 	if in == nil {
 		return nil
@@ -1699,6 +1787,7 @@ func VisitRefOfExecuteStmt(in *ExecuteStmt, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfExistsExpr(in *ExistsExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -1711,6 +1800,7 @@ func VisitRefOfExistsExpr(in *ExistsExpr, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfExplainStmt(in *ExplainStmt, f Visit) error {
 	if in == nil {
 		return nil
@@ -1726,6 +1816,7 @@ func VisitRefOfExplainStmt(in *ExplainStmt, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfExplainTab(in *ExplainTab, f Visit) error {
 	if in == nil {
 		return nil
@@ -1738,6 +1829,7 @@ func VisitRefOfExplainTab(in *ExplainTab, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfExprs(in *Exprs, f Visit) error {
 	if in == nil {
 		return nil
@@ -1752,6 +1844,7 @@ func VisitRefOfExprs(in *Exprs, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfExtractFuncExpr(in *ExtractFuncExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -1764,6 +1857,7 @@ func VisitRefOfExtractFuncExpr(in *ExtractFuncExpr, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfExtractValueExpr(in *ExtractValueExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -1779,6 +1873,7 @@ func VisitRefOfExtractValueExpr(in *ExtractValueExpr, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfFirstOrLastValueExpr(in *FirstOrLastValueExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -1797,6 +1892,7 @@ func VisitRefOfFirstOrLastValueExpr(in *FirstOrLastValueExpr, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfFlush(in *Flush, f Visit) error {
 	if in == nil {
 		return nil
@@ -1809,6 +1905,7 @@ func VisitRefOfFlush(in *Flush, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfForce(in *Force, f Visit) error {
 	if in == nil {
 		return nil
@@ -1818,6 +1915,7 @@ func VisitRefOfForce(in *Force, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfForeignKeyDefinition(in *ForeignKeyDefinition, f Visit) error {
 	if in == nil {
 		return nil
@@ -1836,6 +1934,7 @@ func VisitRefOfForeignKeyDefinition(in *ForeignKeyDefinition, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfFrameClause(in *FrameClause, f Visit) error {
 	if in == nil {
 		return nil
@@ -1851,6 +1950,7 @@ func VisitRefOfFrameClause(in *FrameClause, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfFramePoint(in *FramePoint, f Visit) error {
 	if in == nil {
 		return nil
@@ -1863,6 +1963,7 @@ func VisitRefOfFramePoint(in *FramePoint, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfFromFirstLastClause(in *FromFirstLastClause, f Visit) error {
 	if in == nil {
 		return nil
@@ -1872,6 +1973,7 @@ func VisitRefOfFromFirstLastClause(in *FromFirstLastClause, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfFuncExpr(in *FuncExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -1892,6 +1994,7 @@ func VisitRefOfFuncExpr(in *FuncExpr, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfGTIDFuncExpr(in *GTIDFuncExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -1913,6 +2016,7 @@ func VisitRefOfGTIDFuncExpr(in *GTIDFuncExpr, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfGeoHashFromLatLongExpr(in *GeoHashFromLatLongExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -1931,6 +2035,7 @@ func VisitRefOfGeoHashFromLatLongExpr(in *GeoHashFromLatLongExpr, f Visit) error
 	}
 	return nil
 }
+
 func VisitRefOfGeoHashFromPointExpr(in *GeoHashFromPointExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -1946,6 +2051,7 @@ func VisitRefOfGeoHashFromPointExpr(in *GeoHashFromPointExpr, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfGeoJSONFromGeomExpr(in *GeoJSONFromGeomExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -1964,6 +2070,7 @@ func VisitRefOfGeoJSONFromGeomExpr(in *GeoJSONFromGeomExpr, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfGeomCollPropertyFuncExpr(in *GeomCollPropertyFuncExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -1979,6 +2086,7 @@ func VisitRefOfGeomCollPropertyFuncExpr(in *GeomCollPropertyFuncExpr, f Visit) e
 	}
 	return nil
 }
+
 func VisitRefOfGeomFormatExpr(in *GeomFormatExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -1994,6 +2102,7 @@ func VisitRefOfGeomFormatExpr(in *GeomFormatExpr, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfGeomFromGeoHashExpr(in *GeomFromGeoHashExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -2009,6 +2118,7 @@ func VisitRefOfGeomFromGeoHashExpr(in *GeomFromGeoHashExpr, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfGeomFromGeoJSONExpr(in *GeomFromGeoJSONExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -2027,6 +2137,7 @@ func VisitRefOfGeomFromGeoJSONExpr(in *GeomFromGeoJSONExpr, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfGeomFromTextExpr(in *GeomFromTextExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -2045,6 +2156,7 @@ func VisitRefOfGeomFromTextExpr(in *GeomFromTextExpr, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfGeomFromWKBExpr(in *GeomFromWKBExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -2063,6 +2175,7 @@ func VisitRefOfGeomFromWKBExpr(in *GeomFromWKBExpr, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfGeomPropertyFuncExpr(in *GeomPropertyFuncExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -2075,6 +2188,7 @@ func VisitRefOfGeomPropertyFuncExpr(in *GeomPropertyFuncExpr, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfGroupBy(in *GroupBy, f Visit) error {
 	if in == nil {
 		return nil
@@ -2089,6 +2203,7 @@ func VisitRefOfGroupBy(in *GroupBy, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfGroupConcatExpr(in *GroupConcatExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -2109,6 +2224,7 @@ func VisitRefOfGroupConcatExpr(in *GroupConcatExpr, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfHandlerConditionErrorCode(in *HandlerConditionErrorCode, f Visit) error {
 	if in == nil {
 		return nil
@@ -2118,6 +2234,7 @@ func VisitRefOfHandlerConditionErrorCode(in *HandlerConditionErrorCode, f Visit)
 	}
 	return nil
 }
+
 func VisitRefOfHandlerConditionNamed(in *HandlerConditionNamed, f Visit) error {
 	if in == nil {
 		return nil
@@ -2130,6 +2247,7 @@ func VisitRefOfHandlerConditionNamed(in *HandlerConditionNamed, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfHandlerConditionNotFound(in *HandlerConditionNotFound, f Visit) error {
 	if in == nil {
 		return nil
@@ -2139,6 +2257,7 @@ func VisitRefOfHandlerConditionNotFound(in *HandlerConditionNotFound, f Visit) e
 	}
 	return nil
 }
+
 func VisitRefOfHandlerConditionSQLException(in *HandlerConditionSQLException, f Visit) error {
 	if in == nil {
 		return nil
@@ -2148,6 +2267,7 @@ func VisitRefOfHandlerConditionSQLException(in *HandlerConditionSQLException, f 
 	}
 	return nil
 }
+
 func VisitRefOfHandlerConditionSQLState(in *HandlerConditionSQLState, f Visit) error {
 	if in == nil {
 		return nil
@@ -2160,6 +2280,7 @@ func VisitRefOfHandlerConditionSQLState(in *HandlerConditionSQLState, f Visit) e
 	}
 	return nil
 }
+
 func VisitRefOfHandlerConditionSQLWarning(in *HandlerConditionSQLWarning, f Visit) error {
 	if in == nil {
 		return nil
@@ -2169,18 +2290,21 @@ func VisitRefOfHandlerConditionSQLWarning(in *HandlerConditionSQLWarning, f Visi
 	}
 	return nil
 }
+
 func VisitIdentifierCI(in IdentifierCI, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
 	return nil
 }
+
 func VisitIdentifierCS(in IdentifierCS, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
 	return nil
 }
+
 func VisitRefOfIfStatement(in *IfStatement, f Visit) error {
 	if in == nil {
 		return nil
@@ -2204,6 +2328,7 @@ func VisitRefOfIfStatement(in *IfStatement, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfIndexDefinition(in *IndexDefinition, f Visit) error {
 	if in == nil {
 		return nil
@@ -2216,6 +2341,7 @@ func VisitRefOfIndexDefinition(in *IndexDefinition, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfIndexHint(in *IndexHint, f Visit) error {
 	if in == nil {
 		return nil
@@ -2230,6 +2356,7 @@ func VisitRefOfIndexHint(in *IndexHint, f Visit) error {
 	}
 	return nil
 }
+
 func VisitIndexHints(in IndexHints, f Visit) error {
 	if in == nil {
 		return nil
@@ -2244,6 +2371,7 @@ func VisitIndexHints(in IndexHints, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfIndexInfo(in *IndexInfo, f Visit) error {
 	if in == nil {
 		return nil
@@ -2259,6 +2387,7 @@ func VisitRefOfIndexInfo(in *IndexInfo, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfInsert(in *Insert, f Visit) error {
 	if in == nil {
 		return nil
@@ -2289,6 +2418,7 @@ func VisitRefOfInsert(in *Insert, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfInsertExpr(in *InsertExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -2310,6 +2440,7 @@ func VisitRefOfInsertExpr(in *InsertExpr, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfIntervalDateExpr(in *IntervalDateExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -2325,6 +2456,7 @@ func VisitRefOfIntervalDateExpr(in *IntervalDateExpr, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfIntervalFuncExpr(in *IntervalFuncExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -2342,6 +2474,7 @@ func VisitRefOfIntervalFuncExpr(in *IntervalFuncExpr, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfIntroducerExpr(in *IntroducerExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -2354,6 +2487,7 @@ func VisitRefOfIntroducerExpr(in *IntroducerExpr, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfIsExpr(in *IsExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -2366,6 +2500,7 @@ func VisitRefOfIsExpr(in *IsExpr, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfJSONArrayAgg(in *JSONArrayAgg, f Visit) error {
 	if in == nil {
 		return nil
@@ -2381,6 +2516,7 @@ func VisitRefOfJSONArrayAgg(in *JSONArrayAgg, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfJSONArrayExpr(in *JSONArrayExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -2395,6 +2531,7 @@ func VisitRefOfJSONArrayExpr(in *JSONArrayExpr, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfJSONAttributesExpr(in *JSONAttributesExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -2410,6 +2547,7 @@ func VisitRefOfJSONAttributesExpr(in *JSONAttributesExpr, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfJSONContainsExpr(in *JSONContainsExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -2430,6 +2568,7 @@ func VisitRefOfJSONContainsExpr(in *JSONContainsExpr, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfJSONContainsPathExpr(in *JSONContainsPathExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -2450,6 +2589,7 @@ func VisitRefOfJSONContainsPathExpr(in *JSONContainsPathExpr, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfJSONExtractExpr(in *JSONExtractExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -2467,6 +2607,7 @@ func VisitRefOfJSONExtractExpr(in *JSONExtractExpr, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfJSONKeysExpr(in *JSONKeysExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -2482,6 +2623,7 @@ func VisitRefOfJSONKeysExpr(in *JSONKeysExpr, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfJSONObjectAgg(in *JSONObjectAgg, f Visit) error {
 	if in == nil {
 		return nil
@@ -2500,6 +2642,7 @@ func VisitRefOfJSONObjectAgg(in *JSONObjectAgg, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfJSONObjectExpr(in *JSONObjectExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -2514,6 +2657,7 @@ func VisitRefOfJSONObjectExpr(in *JSONObjectExpr, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfJSONObjectParam(in *JSONObjectParam, f Visit) error {
 	if in == nil {
 		return nil
@@ -2529,6 +2673,7 @@ func VisitRefOfJSONObjectParam(in *JSONObjectParam, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfJSONOverlapsExpr(in *JSONOverlapsExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -2544,6 +2689,7 @@ func VisitRefOfJSONOverlapsExpr(in *JSONOverlapsExpr, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfJSONPrettyExpr(in *JSONPrettyExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -2556,6 +2702,7 @@ func VisitRefOfJSONPrettyExpr(in *JSONPrettyExpr, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfJSONQuoteExpr(in *JSONQuoteExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -2568,6 +2715,7 @@ func VisitRefOfJSONQuoteExpr(in *JSONQuoteExpr, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfJSONRemoveExpr(in *JSONRemoveExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -2585,6 +2733,7 @@ func VisitRefOfJSONRemoveExpr(in *JSONRemoveExpr, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfJSONSchemaValidFuncExpr(in *JSONSchemaValidFuncExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -2600,6 +2749,7 @@ func VisitRefOfJSONSchemaValidFuncExpr(in *JSONSchemaValidFuncExpr, f Visit) err
 	}
 	return nil
 }
+
 func VisitRefOfJSONSchemaValidationReportFuncExpr(in *JSONSchemaValidationReportFuncExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -2615,6 +2765,7 @@ func VisitRefOfJSONSchemaValidationReportFuncExpr(in *JSONSchemaValidationReport
 	}
 	return nil
 }
+
 func VisitRefOfJSONSearchExpr(in *JSONSearchExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -2641,6 +2792,7 @@ func VisitRefOfJSONSearchExpr(in *JSONSearchExpr, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfJSONStorageFreeExpr(in *JSONStorageFreeExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -2653,6 +2805,7 @@ func VisitRefOfJSONStorageFreeExpr(in *JSONStorageFreeExpr, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfJSONStorageSizeExpr(in *JSONStorageSizeExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -2665,6 +2818,7 @@ func VisitRefOfJSONStorageSizeExpr(in *JSONStorageSizeExpr, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfJSONTableExpr(in *JSONTableExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -2688,6 +2842,7 @@ func VisitRefOfJSONTableExpr(in *JSONTableExpr, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfJSONUnquoteExpr(in *JSONUnquoteExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -2700,6 +2855,7 @@ func VisitRefOfJSONUnquoteExpr(in *JSONUnquoteExpr, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfJSONValueExpr(in *JSONValueExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -2724,6 +2880,7 @@ func VisitRefOfJSONValueExpr(in *JSONValueExpr, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfJSONValueMergeExpr(in *JSONValueMergeExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -2741,6 +2898,7 @@ func VisitRefOfJSONValueMergeExpr(in *JSONValueMergeExpr, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfJSONValueModifierExpr(in *JSONValueModifierExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -2758,6 +2916,7 @@ func VisitRefOfJSONValueModifierExpr(in *JSONValueModifierExpr, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfJoinCondition(in *JoinCondition, f Visit) error {
 	if in == nil {
 		return nil
@@ -2773,6 +2932,7 @@ func VisitRefOfJoinCondition(in *JoinCondition, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfJoinTableExpr(in *JoinTableExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -2791,6 +2951,7 @@ func VisitRefOfJoinTableExpr(in *JoinTableExpr, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfJtColumnDefinition(in *JtColumnDefinition, f Visit) error {
 	if in == nil {
 		return nil
@@ -2800,6 +2961,7 @@ func VisitRefOfJtColumnDefinition(in *JtColumnDefinition, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfJtOnResponse(in *JtOnResponse, f Visit) error {
 	if in == nil {
 		return nil
@@ -2812,6 +2974,7 @@ func VisitRefOfJtOnResponse(in *JtOnResponse, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfKeyState(in *KeyState, f Visit) error {
 	if in == nil {
 		return nil
@@ -2821,6 +2984,7 @@ func VisitRefOfKeyState(in *KeyState, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfKill(in *Kill, f Visit) error {
 	if in == nil {
 		return nil
@@ -2830,6 +2994,7 @@ func VisitRefOfKill(in *Kill, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfLagLeadExpr(in *LagLeadExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -2854,6 +3019,7 @@ func VisitRefOfLagLeadExpr(in *LagLeadExpr, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfLimit(in *Limit, f Visit) error {
 	if in == nil {
 		return nil
@@ -2869,6 +3035,7 @@ func VisitRefOfLimit(in *Limit, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfLineStringExpr(in *LineStringExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -2883,6 +3050,7 @@ func VisitRefOfLineStringExpr(in *LineStringExpr, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfLinestrPropertyFuncExpr(in *LinestrPropertyFuncExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -2898,6 +3066,7 @@ func VisitRefOfLinestrPropertyFuncExpr(in *LinestrPropertyFuncExpr, f Visit) err
 	}
 	return nil
 }
+
 func VisitRefOfLiteral(in *Literal, f Visit) error {
 	if in == nil {
 		return nil
@@ -2907,6 +3076,7 @@ func VisitRefOfLiteral(in *Literal, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfLoad(in *Load, f Visit) error {
 	if in == nil {
 		return nil
@@ -2916,6 +3086,7 @@ func VisitRefOfLoad(in *Load, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfLocateExpr(in *LocateExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -2934,6 +3105,7 @@ func VisitRefOfLocateExpr(in *LocateExpr, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfLockOption(in *LockOption, f Visit) error {
 	if in == nil {
 		return nil
@@ -2943,6 +3115,7 @@ func VisitRefOfLockOption(in *LockOption, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfLockTables(in *LockTables, f Visit) error {
 	if in == nil {
 		return nil
@@ -2952,6 +3125,7 @@ func VisitRefOfLockTables(in *LockTables, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfLockingFunc(in *LockingFunc, f Visit) error {
 	if in == nil {
 		return nil
@@ -2967,6 +3141,7 @@ func VisitRefOfLockingFunc(in *LockingFunc, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfMatchExpr(in *MatchExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -2984,6 +3159,7 @@ func VisitRefOfMatchExpr(in *MatchExpr, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfMax(in *Max, f Visit) error {
 	if in == nil {
 		return nil
@@ -2999,6 +3175,7 @@ func VisitRefOfMax(in *Max, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfMemberOfExpr(in *MemberOfExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -3014,6 +3191,7 @@ func VisitRefOfMemberOfExpr(in *MemberOfExpr, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfMin(in *Min, f Visit) error {
 	if in == nil {
 		return nil
@@ -3029,6 +3207,7 @@ func VisitRefOfMin(in *Min, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfModifyColumn(in *ModifyColumn, f Visit) error {
 	if in == nil {
 		return nil
@@ -3044,6 +3223,7 @@ func VisitRefOfModifyColumn(in *ModifyColumn, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfMultiLinestringExpr(in *MultiLinestringExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -3058,6 +3238,7 @@ func VisitRefOfMultiLinestringExpr(in *MultiLinestringExpr, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfMultiPointExpr(in *MultiPointExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -3072,6 +3253,7 @@ func VisitRefOfMultiPointExpr(in *MultiPointExpr, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfMultiPolygonExpr(in *MultiPolygonExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -3086,6 +3268,7 @@ func VisitRefOfMultiPolygonExpr(in *MultiPolygonExpr, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfNTHValueExpr(in *NTHValueExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -3110,6 +3293,7 @@ func VisitRefOfNTHValueExpr(in *NTHValueExpr, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfNamedWindow(in *NamedWindow, f Visit) error {
 	if in == nil {
 		return nil
@@ -3122,6 +3306,7 @@ func VisitRefOfNamedWindow(in *NamedWindow, f Visit) error {
 	}
 	return nil
 }
+
 func VisitNamedWindows(in NamedWindows, f Visit) error {
 	if in == nil {
 		return nil
@@ -3136,6 +3321,7 @@ func VisitNamedWindows(in NamedWindows, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfNextval(in *Nextval, f Visit) error {
 	if in == nil {
 		return nil
@@ -3148,6 +3334,7 @@ func VisitRefOfNextval(in *Nextval, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfNotExpr(in *NotExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -3160,6 +3347,7 @@ func VisitRefOfNotExpr(in *NotExpr, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfNtileExpr(in *NtileExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -3175,6 +3363,7 @@ func VisitRefOfNtileExpr(in *NtileExpr, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfNullTreatmentClause(in *NullTreatmentClause, f Visit) error {
 	if in == nil {
 		return nil
@@ -3184,6 +3373,7 @@ func VisitRefOfNullTreatmentClause(in *NullTreatmentClause, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfNullVal(in *NullVal, f Visit) error {
 	if in == nil {
 		return nil
@@ -3193,6 +3383,7 @@ func VisitRefOfNullVal(in *NullVal, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfOffset(in *Offset, f Visit) error {
 	if in == nil {
 		return nil
@@ -3205,6 +3396,7 @@ func VisitRefOfOffset(in *Offset, f Visit) error {
 	}
 	return nil
 }
+
 func VisitOnDup(in OnDup, f Visit) error {
 	if in == nil {
 		return nil
@@ -3219,6 +3411,7 @@ func VisitOnDup(in OnDup, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfOptLike(in *OptLike, f Visit) error {
 	if in == nil {
 		return nil
@@ -3231,6 +3424,7 @@ func VisitRefOfOptLike(in *OptLike, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfOrExpr(in *OrExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -3246,6 +3440,7 @@ func VisitRefOfOrExpr(in *OrExpr, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfOrder(in *Order, f Visit) error {
 	if in == nil {
 		return nil
@@ -3258,6 +3453,7 @@ func VisitRefOfOrder(in *Order, f Visit) error {
 	}
 	return nil
 }
+
 func VisitOrderBy(in OrderBy, f Visit) error {
 	if in == nil {
 		return nil
@@ -3272,6 +3468,7 @@ func VisitOrderBy(in OrderBy, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfOrderByOption(in *OrderByOption, f Visit) error {
 	if in == nil {
 		return nil
@@ -3284,6 +3481,7 @@ func VisitRefOfOrderByOption(in *OrderByOption, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfOtherAdmin(in *OtherAdmin, f Visit) error {
 	if in == nil {
 		return nil
@@ -3293,6 +3491,7 @@ func VisitRefOfOtherAdmin(in *OtherAdmin, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfOverClause(in *OverClause, f Visit) error {
 	if in == nil {
 		return nil
@@ -3308,6 +3507,7 @@ func VisitRefOfOverClause(in *OverClause, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfParenTableExpr(in *ParenTableExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -3320,6 +3520,7 @@ func VisitRefOfParenTableExpr(in *ParenTableExpr, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfParsedComments(in *ParsedComments, f Visit) error {
 	if in == nil {
 		return nil
@@ -3329,6 +3530,7 @@ func VisitRefOfParsedComments(in *ParsedComments, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfPartitionDefinition(in *PartitionDefinition, f Visit) error {
 	if in == nil {
 		return nil
@@ -3344,6 +3546,7 @@ func VisitRefOfPartitionDefinition(in *PartitionDefinition, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfPartitionDefinitionOptions(in *PartitionDefinitionOptions, f Visit) error {
 	if in == nil {
 		return nil
@@ -3371,6 +3574,7 @@ func VisitRefOfPartitionDefinitionOptions(in *PartitionDefinitionOptions, f Visi
 	}
 	return nil
 }
+
 func VisitRefOfPartitionEngine(in *PartitionEngine, f Visit) error {
 	if in == nil {
 		return nil
@@ -3380,6 +3584,7 @@ func VisitRefOfPartitionEngine(in *PartitionEngine, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfPartitionOption(in *PartitionOption, f Visit) error {
 	if in == nil {
 		return nil
@@ -3403,6 +3608,7 @@ func VisitRefOfPartitionOption(in *PartitionOption, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfPartitionSpec(in *PartitionSpec, f Visit) error {
 	if in == nil {
 		return nil
@@ -3426,6 +3632,7 @@ func VisitRefOfPartitionSpec(in *PartitionSpec, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfPartitionValueRange(in *PartitionValueRange, f Visit) error {
 	if in == nil {
 		return nil
@@ -3438,6 +3645,7 @@ func VisitRefOfPartitionValueRange(in *PartitionValueRange, f Visit) error {
 	}
 	return nil
 }
+
 func VisitPartitions(in Partitions, f Visit) error {
 	if in == nil {
 		return nil
@@ -3452,6 +3660,7 @@ func VisitPartitions(in Partitions, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfPerformanceSchemaFuncExpr(in *PerformanceSchemaFuncExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -3464,6 +3673,7 @@ func VisitRefOfPerformanceSchemaFuncExpr(in *PerformanceSchemaFuncExpr, f Visit)
 	}
 	return nil
 }
+
 func VisitRefOfPointExpr(in *PointExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -3479,6 +3689,7 @@ func VisitRefOfPointExpr(in *PointExpr, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfPointPropertyFuncExpr(in *PointPropertyFuncExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -3494,6 +3705,7 @@ func VisitRefOfPointPropertyFuncExpr(in *PointPropertyFuncExpr, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfPolygonExpr(in *PolygonExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -3508,6 +3720,7 @@ func VisitRefOfPolygonExpr(in *PolygonExpr, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfPolygonPropertyFuncExpr(in *PolygonPropertyFuncExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -3523,6 +3736,7 @@ func VisitRefOfPolygonPropertyFuncExpr(in *PolygonPropertyFuncExpr, f Visit) err
 	}
 	return nil
 }
+
 func VisitRefOfPrepareStmt(in *PrepareStmt, f Visit) error {
 	if in == nil {
 		return nil
@@ -3541,6 +3755,7 @@ func VisitRefOfPrepareStmt(in *PrepareStmt, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfProcParameter(in *ProcParameter, f Visit) error {
 	if in == nil {
 		return nil
@@ -3556,6 +3771,7 @@ func VisitRefOfProcParameter(in *ProcParameter, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfPurgeBinaryLogs(in *PurgeBinaryLogs, f Visit) error {
 	if in == nil {
 		return nil
@@ -3565,6 +3781,7 @@ func VisitRefOfPurgeBinaryLogs(in *PurgeBinaryLogs, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfReferenceDefinition(in *ReferenceDefinition, f Visit) error {
 	if in == nil {
 		return nil
@@ -3589,6 +3806,7 @@ func VisitRefOfReferenceDefinition(in *ReferenceDefinition, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfRegexpInstrExpr(in *RegexpInstrExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -3616,6 +3834,7 @@ func VisitRefOfRegexpInstrExpr(in *RegexpInstrExpr, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfRegexpLikeExpr(in *RegexpLikeExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -3634,6 +3853,7 @@ func VisitRefOfRegexpLikeExpr(in *RegexpLikeExpr, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfRegexpReplaceExpr(in *RegexpReplaceExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -3661,6 +3881,7 @@ func VisitRefOfRegexpReplaceExpr(in *RegexpReplaceExpr, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfRegexpSubstrExpr(in *RegexpSubstrExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -3685,6 +3906,7 @@ func VisitRefOfRegexpSubstrExpr(in *RegexpSubstrExpr, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfRelease(in *Release, f Visit) error {
 	if in == nil {
 		return nil
@@ -3697,6 +3919,7 @@ func VisitRefOfRelease(in *Release, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfRenameColumn(in *RenameColumn, f Visit) error {
 	if in == nil {
 		return nil
@@ -3712,6 +3935,7 @@ func VisitRefOfRenameColumn(in *RenameColumn, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfRenameIndex(in *RenameIndex, f Visit) error {
 	if in == nil {
 		return nil
@@ -3727,6 +3951,7 @@ func VisitRefOfRenameIndex(in *RenameIndex, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfRenameTable(in *RenameTable, f Visit) error {
 	if in == nil {
 		return nil
@@ -3736,6 +3961,7 @@ func VisitRefOfRenameTable(in *RenameTable, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfRenameTableName(in *RenameTableName, f Visit) error {
 	if in == nil {
 		return nil
@@ -3748,6 +3974,7 @@ func VisitRefOfRenameTableName(in *RenameTableName, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfRevertMigration(in *RevertMigration, f Visit) error {
 	if in == nil {
 		return nil
@@ -3760,6 +3987,7 @@ func VisitRefOfRevertMigration(in *RevertMigration, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfRollback(in *Rollback, f Visit) error {
 	if in == nil {
 		return nil
@@ -3769,6 +3997,7 @@ func VisitRefOfRollback(in *Rollback, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRootNode(in RootNode, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
@@ -3778,6 +4007,7 @@ func VisitRootNode(in RootNode, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfRowAlias(in *RowAlias, f Visit) error {
 	if in == nil {
 		return nil
@@ -3793,6 +4023,7 @@ func VisitRefOfRowAlias(in *RowAlias, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfSRollback(in *SRollback, f Visit) error {
 	if in == nil {
 		return nil
@@ -3805,6 +4036,7 @@ func VisitRefOfSRollback(in *SRollback, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfSavepoint(in *Savepoint, f Visit) error {
 	if in == nil {
 		return nil
@@ -3817,6 +4049,7 @@ func VisitRefOfSavepoint(in *Savepoint, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfSelect(in *Select, f Visit) error {
 	if in == nil {
 		return nil
@@ -3861,6 +4094,7 @@ func VisitRefOfSelect(in *Select, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfSelectExprs(in *SelectExprs, f Visit) error {
 	if in == nil {
 		return nil
@@ -3875,6 +4109,7 @@ func VisitRefOfSelectExprs(in *SelectExprs, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfSelectInto(in *SelectInto, f Visit) error {
 	if in == nil {
 		return nil
@@ -3889,6 +4124,7 @@ func VisitRefOfSelectInto(in *SelectInto, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfSet(in *Set, f Visit) error {
 	if in == nil {
 		return nil
@@ -3904,6 +4140,7 @@ func VisitRefOfSet(in *Set, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfSetExpr(in *SetExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -3919,6 +4156,7 @@ func VisitRefOfSetExpr(in *SetExpr, f Visit) error {
 	}
 	return nil
 }
+
 func VisitSetExprs(in SetExprs, f Visit) error {
 	if in == nil {
 		return nil
@@ -3933,6 +4171,7 @@ func VisitSetExprs(in SetExprs, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfShow(in *Show, f Visit) error {
 	if in == nil {
 		return nil
@@ -3945,6 +4184,7 @@ func VisitRefOfShow(in *Show, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfShowBasic(in *ShowBasic, f Visit) error {
 	if in == nil {
 		return nil
@@ -3961,8 +4201,38 @@ func VisitRefOfShowBasic(in *ShowBasic, f Visit) error {
 	if err := VisitRefOfShowFilter(in.Filter, f); err != nil {
 		return err
 	}
+	if err := VisitRefOfLimit(in.Limit, f); err != nil {
+		return err
+	}
 	return nil
 }
+
+func VisitRefOfShowBinaryLogs(in *ShowBinaryLogs, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	return nil
+}
+
+func VisitRefOfShowBinlogEvents(in *ShowBinlogEvents, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.Position, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfLimit(in.Limit, f); err != nil {
+		return err
+	}
+	return nil
+}
+
 func VisitRefOfShowCreate(in *ShowCreate, f Visit) error {
 	if in == nil {
 		return nil
@@ -3975,6 +4245,27 @@ func VisitRefOfShowCreate(in *ShowCreate, f Visit) error {
 	}
 	return nil
 }
+
+func VisitRefOfShowCreateUser(in *ShowCreateUser, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	return nil
+}
+
+func VisitRefOfShowEngine(in *ShowEngine, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	return nil
+}
+
 func VisitRefOfShowFilter(in *ShowFilter, f Visit) error {
 	if in == nil {
 		return nil
@@ -3987,6 +4278,17 @@ func VisitRefOfShowFilter(in *ShowFilter, f Visit) error {
 	}
 	return nil
 }
+
+func VisitRefOfShowGrants(in *ShowGrants, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	return nil
+}
+
 func VisitRefOfShowMigrationLogs(in *ShowMigrationLogs, f Visit) error {
 	if in == nil {
 		return nil
@@ -3999,7 +4301,24 @@ func VisitRefOfShowMigrationLogs(in *ShowMigrationLogs, f Visit) error {
 	}
 	return nil
 }
-func VisitRefOfShowOther(in *ShowOther, f Visit) error {
+
+func VisitRefOfShowProfile(in *ShowProfile, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitRefOfLiteral(in.ForQuery, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfLimit(in.Limit, f); err != nil {
+		return err
+	}
+	return nil
+}
+
+func VisitRefOfShowReplicas(in *ShowReplicas, f Visit) error {
 	if in == nil {
 		return nil
 	}
@@ -4008,6 +4327,27 @@ func VisitRefOfShowOther(in *ShowOther, f Visit) error {
 	}
 	return nil
 }
+
+func VisitRefOfShowReplicationSourceStatus(in *ShowReplicationSourceStatus, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	return nil
+}
+
+func VisitRefOfShowReplicationStatus(in *ShowReplicationStatus, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	return nil
+}
+
 func VisitRefOfShowThrottledApps(in *ShowThrottledApps, f Visit) error {
 	if in == nil {
 		return nil
@@ -4017,6 +4357,7 @@ func VisitRefOfShowThrottledApps(in *ShowThrottledApps, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfShowThrottlerStatus(in *ShowThrottlerStatus, f Visit) error {
 	if in == nil {
 		return nil
@@ -4026,6 +4367,7 @@ func VisitRefOfShowThrottlerStatus(in *ShowThrottlerStatus, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfShowTransactionStatus(in *ShowTransactionStatus, f Visit) error {
 	if in == nil {
 		return nil
@@ -4035,6 +4377,7 @@ func VisitRefOfShowTransactionStatus(in *ShowTransactionStatus, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfSignal(in *Signal, f Visit) error {
 	if in == nil {
 		return nil
@@ -4052,6 +4395,7 @@ func VisitRefOfSignal(in *Signal, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfSignalSet(in *SignalSet, f Visit) error {
 	if in == nil {
 		return nil
@@ -4064,6 +4408,7 @@ func VisitRefOfSignalSet(in *SignalSet, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfSingleStatement(in *SingleStatement, f Visit) error {
 	if in == nil {
 		return nil
@@ -4076,6 +4421,7 @@ func VisitRefOfSingleStatement(in *SingleStatement, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfStarExpr(in *StarExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -4088,6 +4434,7 @@ func VisitRefOfStarExpr(in *StarExpr, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfStd(in *Std, f Visit) error {
 	if in == nil {
 		return nil
@@ -4103,6 +4450,7 @@ func VisitRefOfStd(in *Std, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfStdDev(in *StdDev, f Visit) error {
 	if in == nil {
 		return nil
@@ -4118,6 +4466,7 @@ func VisitRefOfStdDev(in *StdDev, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfStdPop(in *StdPop, f Visit) error {
 	if in == nil {
 		return nil
@@ -4133,6 +4482,7 @@ func VisitRefOfStdPop(in *StdPop, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfStdSamp(in *StdSamp, f Visit) error {
 	if in == nil {
 		return nil
@@ -4148,6 +4498,7 @@ func VisitRefOfStdSamp(in *StdSamp, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfStream(in *Stream, f Visit) error {
 	if in == nil {
 		return nil
@@ -4166,6 +4517,7 @@ func VisitRefOfStream(in *Stream, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfSubPartition(in *SubPartition, f Visit) error {
 	if in == nil {
 		return nil
@@ -4181,6 +4533,7 @@ func VisitRefOfSubPartition(in *SubPartition, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfSubPartitionDefinition(in *SubPartitionDefinition, f Visit) error {
 	if in == nil {
 		return nil
@@ -4196,6 +4549,7 @@ func VisitRefOfSubPartitionDefinition(in *SubPartitionDefinition, f Visit) error
 	}
 	return nil
 }
+
 func VisitRefOfSubPartitionDefinitionOptions(in *SubPartitionDefinitionOptions, f Visit) error {
 	if in == nil {
 		return nil
@@ -4217,6 +4571,7 @@ func VisitRefOfSubPartitionDefinitionOptions(in *SubPartitionDefinitionOptions, 
 	}
 	return nil
 }
+
 func VisitSubPartitionDefinitions(in SubPartitionDefinitions, f Visit) error {
 	if in == nil {
 		return nil
@@ -4231,6 +4586,7 @@ func VisitSubPartitionDefinitions(in SubPartitionDefinitions, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfSubquery(in *Subquery, f Visit) error {
 	if in == nil {
 		return nil
@@ -4243,6 +4599,7 @@ func VisitRefOfSubquery(in *Subquery, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfSubstrExpr(in *SubstrExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -4261,6 +4618,7 @@ func VisitRefOfSubstrExpr(in *SubstrExpr, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfSum(in *Sum, f Visit) error {
 	if in == nil {
 		return nil
@@ -4276,6 +4634,7 @@ func VisitRefOfSum(in *Sum, f Visit) error {
 	}
 	return nil
 }
+
 func VisitTableExprs(in TableExprs, f Visit) error {
 	if in == nil {
 		return nil
@@ -4290,6 +4649,7 @@ func VisitTableExprs(in TableExprs, f Visit) error {
 	}
 	return nil
 }
+
 func VisitTableName(in TableName, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
@@ -4302,6 +4662,7 @@ func VisitTableName(in TableName, f Visit) error {
 	}
 	return nil
 }
+
 func VisitTableNames(in TableNames, f Visit) error {
 	if in == nil {
 		return nil
@@ -4316,10 +4677,12 @@ func VisitTableNames(in TableNames, f Visit) error {
 	}
 	return nil
 }
+
 func VisitTableOptions(in TableOptions, f Visit) error {
 	_, err := f(in)
 	return err
 }
+
 func VisitRefOfTableSpec(in *TableSpec, f Visit) error {
 	if in == nil {
 		return nil
@@ -4350,6 +4713,7 @@ func VisitRefOfTableSpec(in *TableSpec, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfTablespaceOperation(in *TablespaceOperation, f Visit) error {
 	if in == nil {
 		return nil
@@ -4359,6 +4723,7 @@ func VisitRefOfTablespaceOperation(in *TablespaceOperation, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfTimestampDiffExpr(in *TimestampDiffExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -4374,6 +4739,7 @@ func VisitRefOfTimestampDiffExpr(in *TimestampDiffExpr, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfTrimFuncExpr(in *TrimFuncExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -4389,6 +4755,7 @@ func VisitRefOfTrimFuncExpr(in *TrimFuncExpr, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfTruncateTable(in *TruncateTable, f Visit) error {
 	if in == nil {
 		return nil
@@ -4401,6 +4768,7 @@ func VisitRefOfTruncateTable(in *TruncateTable, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfUnaryExpr(in *UnaryExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -4413,6 +4781,7 @@ func VisitRefOfUnaryExpr(in *UnaryExpr, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfUnion(in *Union, f Visit) error {
 	if in == nil {
 		return nil
@@ -4440,6 +4809,7 @@ func VisitRefOfUnion(in *Union, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfUnlockTables(in *UnlockTables, f Visit) error {
 	if in == nil {
 		return nil
@@ -4449,6 +4819,7 @@ func VisitRefOfUnlockTables(in *UnlockTables, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfUpdate(in *Update, f Visit) error {
 	if in == nil {
 		return nil
@@ -4481,6 +4852,7 @@ func VisitRefOfUpdate(in *Update, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfUpdateExpr(in *UpdateExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -4496,6 +4868,7 @@ func VisitRefOfUpdateExpr(in *UpdateExpr, f Visit) error {
 	}
 	return nil
 }
+
 func VisitUpdateExprs(in UpdateExprs, f Visit) error {
 	if in == nil {
 		return nil
@@ -4510,6 +4883,7 @@ func VisitUpdateExprs(in UpdateExprs, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfUpdateXMLExpr(in *UpdateXMLExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -4528,6 +4902,7 @@ func VisitRefOfUpdateXMLExpr(in *UpdateXMLExpr, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfUse(in *Use, f Visit) error {
 	if in == nil {
 		return nil
@@ -4540,6 +4915,7 @@ func VisitRefOfUse(in *Use, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfVExplainStmt(in *VExplainStmt, f Visit) error {
 	if in == nil {
 		return nil
@@ -4555,6 +4931,7 @@ func VisitRefOfVExplainStmt(in *VExplainStmt, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfVStream(in *VStream, f Visit) error {
 	if in == nil {
 		return nil
@@ -4579,6 +4956,7 @@ func VisitRefOfVStream(in *VStream, f Visit) error {
 	}
 	return nil
 }
+
 func VisitValTuple(in ValTuple, f Visit) error {
 	if in == nil {
 		return nil
@@ -4593,6 +4971,7 @@ func VisitValTuple(in ValTuple, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfValidation(in *Validation, f Visit) error {
 	if in == nil {
 		return nil
@@ -4602,6 +4981,7 @@ func VisitRefOfValidation(in *Validation, f Visit) error {
 	}
 	return nil
 }
+
 func VisitValues(in Values, f Visit) error {
 	if in == nil {
 		return nil
@@ -4616,6 +4996,7 @@ func VisitValues(in Values, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfValuesFuncExpr(in *ValuesFuncExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -4628,6 +5009,7 @@ func VisitRefOfValuesFuncExpr(in *ValuesFuncExpr, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfValuesStatement(in *ValuesStatement, f Visit) error {
 	if in == nil {
 		return nil
@@ -4655,6 +5037,7 @@ func VisitRefOfValuesStatement(in *ValuesStatement, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfVarPop(in *VarPop, f Visit) error {
 	if in == nil {
 		return nil
@@ -4670,6 +5053,7 @@ func VisitRefOfVarPop(in *VarPop, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfVarSamp(in *VarSamp, f Visit) error {
 	if in == nil {
 		return nil
@@ -4685,6 +5069,7 @@ func VisitRefOfVarSamp(in *VarSamp, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfVariable(in *Variable, f Visit) error {
 	if in == nil {
 		return nil
@@ -4697,6 +5082,7 @@ func VisitRefOfVariable(in *Variable, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfVariance(in *Variance, f Visit) error {
 	if in == nil {
 		return nil
@@ -4712,6 +5098,7 @@ func VisitRefOfVariance(in *Variance, f Visit) error {
 	}
 	return nil
 }
+
 func VisitVindexParam(in VindexParam, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
@@ -4721,6 +5108,7 @@ func VisitVindexParam(in VindexParam, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfVindexSpec(in *VindexSpec, f Visit) error {
 	if in == nil {
 		return nil
@@ -4741,6 +5129,7 @@ func VisitRefOfVindexSpec(in *VindexSpec, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfWeightStringFuncExpr(in *WeightStringFuncExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -4756,6 +5145,7 @@ func VisitRefOfWeightStringFuncExpr(in *WeightStringFuncExpr, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfWhen(in *When, f Visit) error {
 	if in == nil {
 		return nil
@@ -4771,6 +5161,7 @@ func VisitRefOfWhen(in *When, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfWhere(in *Where, f Visit) error {
 	if in == nil {
 		return nil
@@ -4783,6 +5174,7 @@ func VisitRefOfWhere(in *Where, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfWindowDefinition(in *WindowDefinition, f Visit) error {
 	if in == nil {
 		return nil
@@ -4798,6 +5190,7 @@ func VisitRefOfWindowDefinition(in *WindowDefinition, f Visit) error {
 	}
 	return nil
 }
+
 func VisitWindowDefinitions(in WindowDefinitions, f Visit) error {
 	if in == nil {
 		return nil
@@ -4812,6 +5205,7 @@ func VisitWindowDefinitions(in WindowDefinitions, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfWindowSpecification(in *WindowSpecification, f Visit) error {
 	if in == nil {
 		return nil
@@ -4835,6 +5229,7 @@ func VisitRefOfWindowSpecification(in *WindowSpecification, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfWith(in *With, f Visit) error {
 	if in == nil {
 		return nil
@@ -4849,6 +5244,7 @@ func VisitRefOfWith(in *With, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfXorExpr(in *XorExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -4864,6 +5260,7 @@ func VisitRefOfXorExpr(in *XorExpr, f Visit) error {
 	}
 	return nil
 }
+
 func VisitAggrFunc(in AggrFunc, f Visit) error {
 	if in == nil {
 		return nil
@@ -4916,6 +5313,7 @@ func VisitAggrFunc(in AggrFunc, f Visit) error {
 		return nil
 	}
 }
+
 func VisitAlterOption(in AlterOption, f Visit) error {
 	if in == nil {
 		return nil
@@ -4972,6 +5370,7 @@ func VisitAlterOption(in AlterOption, f Visit) error {
 		return nil
 	}
 }
+
 func VisitCallable(in Callable, f Visit) error {
 	if in == nil {
 		return nil
@@ -5140,6 +5539,7 @@ func VisitCallable(in Callable, f Visit) error {
 		return nil
 	}
 }
+
 func VisitColTuple(in ColTuple, f Visit) error {
 	if in == nil {
 		return nil
@@ -5158,6 +5558,7 @@ func VisitColTuple(in ColTuple, f Visit) error {
 		return nil
 	}
 }
+
 func VisitCompoundStatement(in CompoundStatement, f Visit) error {
 	if in == nil {
 		return nil
@@ -5184,6 +5585,7 @@ func VisitCompoundStatement(in CompoundStatement, f Visit) error {
 		return nil
 	}
 }
+
 func VisitConstraintInfo(in ConstraintInfo, f Visit) error {
 	if in == nil {
 		return nil
@@ -5200,6 +5602,7 @@ func VisitConstraintInfo(in ConstraintInfo, f Visit) error {
 		return nil
 	}
 }
+
 func VisitDBDDLStatement(in DBDDLStatement, f Visit) error {
 	if in == nil {
 		return nil
@@ -5218,6 +5621,7 @@ func VisitDBDDLStatement(in DBDDLStatement, f Visit) error {
 		return nil
 	}
 }
+
 func VisitDDLStatement(in DDLStatement, f Visit) error {
 	if in == nil {
 		return nil
@@ -5250,6 +5654,7 @@ func VisitDDLStatement(in DDLStatement, f Visit) error {
 		return nil
 	}
 }
+
 func VisitExplain(in Explain, f Visit) error {
 	if in == nil {
 		return nil
@@ -5266,6 +5671,7 @@ func VisitExplain(in Explain, f Visit) error {
 		return nil
 	}
 }
+
 func VisitExpr(in Expr, f Visit) error {
 	if in == nil {
 		return nil
@@ -5512,6 +5918,7 @@ func VisitExpr(in Expr, f Visit) error {
 		return nil
 	}
 }
+
 func VisitHandlerCondition(in HandlerCondition, f Visit) error {
 	if in == nil {
 		return nil
@@ -5536,6 +5943,7 @@ func VisitHandlerCondition(in HandlerCondition, f Visit) error {
 		return nil
 	}
 }
+
 func VisitInsertRows(in InsertRows, f Visit) error {
 	if in == nil {
 		return nil
@@ -5556,6 +5964,7 @@ func VisitInsertRows(in InsertRows, f Visit) error {
 		return nil
 	}
 }
+
 func VisitSelectExpr(in SelectExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -5574,6 +5983,7 @@ func VisitSelectExpr(in SelectExpr, f Visit) error {
 		return nil
 	}
 }
+
 func VisitSelectStatement(in SelectStatement, f Visit) error {
 	if in == nil {
 		return nil
@@ -5590,6 +6000,7 @@ func VisitSelectStatement(in SelectStatement, f Visit) error {
 		return nil
 	}
 }
+
 func VisitShowInternal(in ShowInternal, f Visit) error {
 	if in == nil {
 		return nil
@@ -5597,10 +6008,26 @@ func VisitShowInternal(in ShowInternal, f Visit) error {
 	switch in := in.(type) {
 	case *ShowBasic:
 		return VisitRefOfShowBasic(in, f)
+	case *ShowBinaryLogs:
+		return VisitRefOfShowBinaryLogs(in, f)
+	case *ShowBinlogEvents:
+		return VisitRefOfShowBinlogEvents(in, f)
 	case *ShowCreate:
 		return VisitRefOfShowCreate(in, f)
-	case *ShowOther:
-		return VisitRefOfShowOther(in, f)
+	case *ShowCreateUser:
+		return VisitRefOfShowCreateUser(in, f)
+	case *ShowEngine:
+		return VisitRefOfShowEngine(in, f)
+	case *ShowGrants:
+		return VisitRefOfShowGrants(in, f)
+	case *ShowProfile:
+		return VisitRefOfShowProfile(in, f)
+	case *ShowReplicas:
+		return VisitRefOfShowReplicas(in, f)
+	case *ShowReplicationSourceStatus:
+		return VisitRefOfShowReplicationSourceStatus(in, f)
+	case *ShowReplicationStatus:
+		return VisitRefOfShowReplicationStatus(in, f)
 	case *ShowTransactionStatus:
 		return VisitRefOfShowTransactionStatus(in, f)
 	case Visitable:
@@ -5610,6 +6037,7 @@ func VisitShowInternal(in ShowInternal, f Visit) error {
 		return nil
 	}
 }
+
 func VisitSimpleTableExpr(in SimpleTableExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -5626,6 +6054,7 @@ func VisitSimpleTableExpr(in SimpleTableExpr, f Visit) error {
 		return nil
 	}
 }
+
 func VisitStatement(in Statement, f Visit) error {
 	if in == nil {
 		return nil
@@ -5742,6 +6171,7 @@ func VisitStatement(in Statement, f Visit) error {
 		return nil
 	}
 }
+
 func VisitTableExpr(in TableExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -5762,6 +6192,7 @@ func VisitTableExpr(in TableExpr, f Visit) error {
 		return nil
 	}
 }
+
 func VisitTableStatement(in TableStatement, f Visit) error {
 	if in == nil {
 		return nil
@@ -5780,6 +6211,7 @@ func VisitTableStatement(in TableStatement, f Visit) error {
 		return nil
 	}
 }
+
 func VisitWindowFunc(in WindowFunc, f Visit) error {
 	if in == nil {
 		return nil
@@ -5838,26 +6270,32 @@ func VisitWindowFunc(in WindowFunc, f Visit) error {
 		return nil
 	}
 }
+
 func VisitAlgorithmValue(in AlgorithmValue, f Visit) error {
 	_, err := f(in)
 	return err
 }
+
 func VisitBoolVal(in BoolVal, f Visit) error {
 	_, err := f(in)
 	return err
 }
+
 func VisitListArg(in ListArg, f Visit) error {
 	_, err := f(in)
 	return err
 }
+
 func VisitMatchAction(in MatchAction, f Visit) error {
 	_, err := f(in)
 	return err
 }
+
 func VisitReferenceAction(in ReferenceAction, f Visit) error {
 	_, err := f(in)
 	return err
 }
+
 func VisitRefOfIdentifierCI(in *IdentifierCI, f Visit) error {
 	if in == nil {
 		return nil
@@ -5867,6 +6305,7 @@ func VisitRefOfIdentifierCI(in *IdentifierCI, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfIdentifierCS(in *IdentifierCS, f Visit) error {
 	if in == nil {
 		return nil
@@ -5876,6 +6315,7 @@ func VisitRefOfIdentifierCS(in *IdentifierCS, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfRootNode(in *RootNode, f Visit) error {
 	if in == nil {
 		return nil
@@ -5888,6 +6328,7 @@ func VisitRefOfRootNode(in *RootNode, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfTableName(in *TableName, f Visit) error {
 	if in == nil {
 		return nil
@@ -5903,6 +6344,7 @@ func VisitRefOfTableName(in *TableName, f Visit) error {
 	}
 	return nil
 }
+
 func VisitRefOfVindexParam(in *VindexParam, f Visit) error {
 	if in == nil {
 		return nil
@@ -5915,6 +6357,7 @@ func VisitRefOfVindexParam(in *VindexParam, f Visit) error {
 	}
 	return nil
 }
+
 func VisitVisitable(in Visitable, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err

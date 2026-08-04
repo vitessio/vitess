@@ -19,6 +19,7 @@ package fuzz
 import (
 	"context"
 	"fmt"
+	"math/rand/v2"
 	"os"
 	"path"
 	"slices"
@@ -32,8 +33,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"math/rand/v2"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/syscallutil"
@@ -60,6 +59,7 @@ var (
 	insertIntoFuzzInsert   = "INSERT INTO twopc_fuzzer_insert (id, updateSet, threadId) VALUES (%d, %d, %d)"
 	selectFromFuzzUpdate   = "SELECT col FROM twopc_fuzzer_update WHERE id = %d"
 	selectIdFromFuzzInsert = "SELECT threadId FROM twopc_fuzzer_insert WHERE updateSet = %d AND id = %d ORDER BY col"
+	vtgateQueryTimeout     = 5 * time.Second
 )
 
 // TestTwoPCFuzzTest tests 2PC transactions in a fuzzer environment.
@@ -151,7 +151,7 @@ func TestTwoPCFuzzTest(t *testing.T) {
 			// Verify that all the transactions run were actually atomic and no data issues have occurred.
 			fz.verifyTransactionsWereAtomic(t)
 
-			log.Errorf("Verification complete. All good!")
+			log.Error("Verification complete. All good!")
 		})
 	}
 }
@@ -159,22 +159,22 @@ func TestTwoPCFuzzTest(t *testing.T) {
 // verifyTransactionsWereAtomic verifies that the invariants of test are held.
 // It checks the heuristics to ensure that the transactions run were atomic.
 func (fz *fuzzer) verifyTransactionsWereAtomic(t *testing.T) {
-	conn, err := mysql.Connect(context.Background(), &vtParams)
+	conn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	for updateSetIdx, updateSet := range fz.updateRowsVals {
 		// All the three values of the update set must be equal.
 		shard1Val := getColValueForIdFromFuzzUpdate(t, conn, updateSet[0])
 		shard2Val := getColValueForIdFromFuzzUpdate(t, conn, updateSet[1])
 		shard3Val := getColValueForIdFromFuzzUpdate(t, conn, updateSet[2])
-		require.EqualValues(t, shard1Val, shard2Val)
-		require.EqualValues(t, shard3Val, shard2Val)
+		require.Equal(t, shard1Val, shard2Val)
+		require.Equal(t, shard3Val, shard2Val)
 
 		// Next we get the IDs from all the three shards for the given update set index.
 		shard1IDs := getThreadIDsForUpdateSetFromFuzzInsert(t, conn, updateSetIdx, 1)
 		shard2IDs := getThreadIDsForUpdateSetFromFuzzInsert(t, conn, updateSetIdx, 2)
 		shard3IDs := getThreadIDsForUpdateSetFromFuzzInsert(t, conn, updateSetIdx, 3)
-		require.EqualValues(t, shard1IDs, shard2IDs)
-		require.EqualValues(t, shard3IDs, shard2IDs)
+		require.Equal(t, shard1IDs, shard2IDs)
+		require.Equal(t, shard3IDs, shard2IDs)
 	}
 }
 
@@ -223,6 +223,23 @@ type fuzzer struct {
 	clusterDisruptions []func(t *testing.T)
 	// disruptionProbability is the chance for the disruption to happen. We check this every 100 milliseconds.
 	disruptionProbability []int
+
+	// mu guards err, the first error encountered by a fuzzer thread. Threads
+	// run in goroutines, so they record errors here instead of asserting; stop(),
+	// which runs on the test goroutine, asserts on the recorded error.
+	mu  sync.Mutex
+	err error
+}
+
+// recordError stores the first error encountered by a fuzzer thread and signals
+// all threads to stop.
+func (fz *fuzzer) recordError(err error) {
+	fz.mu.Lock()
+	if fz.err == nil {
+		fz.err = err
+	}
+	fz.mu.Unlock()
+	fz.shouldStop.Store(true)
 }
 
 // newFuzzer creates a new fuzzer struct.
@@ -246,6 +263,8 @@ func (fz *fuzzer) stop() {
 	fz.shouldStop.Store(true)
 	// Wait for the fuzzer thread to stop.
 	fz.wg.Wait()
+	// Surface any error a fuzzer thread recorded while running in its goroutine.
+	require.NoError(fz.t, fz.err)
 }
 
 // start starts running the fuzzer.
@@ -277,7 +296,10 @@ func (fz *fuzzer) runFuzzerThread(t *testing.T, threadId int) {
 			return
 		}
 		// Run an atomic transaction
-		fz.generateAndExecuteTransaction(threadId)
+		if err := fz.generateAndExecuteTransaction(t, threadId); err != nil {
+			fz.recordError(err)
+			return
+		}
 	}
 }
 
@@ -305,13 +327,18 @@ func (fz *fuzzer) initialize(t *testing.T, conn *mysql.Conn) {
 }
 
 // generateAndExecuteTransaction generates the queries of the transaction and then executes them.
-func (fz *fuzzer) generateAndExecuteTransaction(threadId int) {
+func (fz *fuzzer) generateAndExecuteTransaction(t *testing.T, threadId int) error {
 	// Create a connection to the vtgate to run transactions.
-	conn, err := mysql.Connect(context.Background(), &vtParams)
+	ctx, cancel := context.WithTimeout(t.Context(), vtgateQueryTimeout)
+	defer cancel()
+	conn, err := mysql.Connect(ctx, &vtParams)
 	if err != nil {
-		return
+		return err
 	}
 	defer conn.Close()
+	if _, err := conn.ExecuteFetch(fmt.Sprintf("set @@query_timeout = %d", vtgateQueryTimeout.Milliseconds()), 0, false); err != nil {
+		return err
+	}
 	// randomly generate an update set to use and the value to increment it by.
 	updateSetVal := rand.IntN(fz.updateSets)
 	incrementVal := rand.Int32()
@@ -334,7 +361,13 @@ func (fz *fuzzer) generateAndExecuteTransaction(threadId int) {
 			break
 		}
 	}
-	_, _ = conn.ExecuteFetch(finalCommand, 0, false)
+	_, err = conn.ExecuteFetch(finalCommand, 0, false)
+	// We don't care about the following case of errors here as the transaction is aborted, which is what we ultimately wanted:
+	// target: ks.80-.primary: vttablet: rpc error: code = Aborted desc = transaction 1771351525769549550: in use: for query (CallerID: userData1) (errno 1317) (sqlstate 70100) during query: rollback
+	if finalCommand != "rollback" {
+		assert.NoError(t, err)
+	}
+	return nil
 }
 
 func getUpdateQuery(incrementVal int32, id int) string {
@@ -417,7 +450,7 @@ func (fz *fuzzer) addRandomSavePoints(queries []string) []string {
 
 		savePointQueries := []string{"SAVEPOINT sp" + strconv.Itoa(savePointCount)}
 		randomDmlCount := rand.IntN(2) + 1
-		for i := 0; i < randomDmlCount; i++ {
+		for range randomDmlCount {
 			savePointQueries = append(savePointQueries, fz.randomDML())
 		}
 		savePointQueries = append(savePointQueries, "ROLLBACK TO sp"+strconv.Itoa(savePointCount))
@@ -452,10 +485,10 @@ func prs(t *testing.T) {
 	shard := shards[rand.IntN(len(shards))]
 	vttablets := shard.Vttablets
 	newPrimary := vttablets[rand.IntN(len(vttablets))]
-	log.Errorf("Running PRS for - %v/%v with new primary - %v", keyspaceName, shard.Name, newPrimary.Alias)
+	log.Error(fmt.Sprintf("Running PRS for - %v/%v with new primary - %v", keyspaceName, shard.Name, newPrimary.Alias))
 	err := clusterInstance.VtctldClientProcess.PlannedReparentShard(keyspaceName, shard.Name, newPrimary.Alias)
 	if err != nil {
-		log.Errorf("error running PRS - %v", err)
+		log.Error(fmt.Sprintf("error running PRS - %v", err))
 	}
 }
 
@@ -464,10 +497,10 @@ func ers(t *testing.T) {
 	shard := shards[rand.IntN(len(shards))]
 	vttablets := shard.Vttablets
 	newPrimary := vttablets[rand.IntN(len(vttablets))]
-	log.Errorf("Running ERS for - %v/%v with new primary - %v", keyspaceName, shard.Name, newPrimary.Alias)
+	log.Error(fmt.Sprintf("Running ERS for - %v/%v with new primary - %v", keyspaceName, shard.Name, newPrimary.Alias))
 	_, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("EmergencyReparentShard", fmt.Sprintf("%s/%s", keyspaceName, shard.Name), "--new-primary", newPrimary.Alias)
 	if err != nil {
-		log.Errorf("error running ERS - %v", err)
+		log.Error(fmt.Sprintf("error running ERS - %v", err))
 	}
 }
 
@@ -476,13 +509,14 @@ func vttabletRestarts(t *testing.T) {
 	shard := shards[rand.IntN(len(shards))]
 	vttablets := shard.Vttablets
 	tablet := vttablets[rand.IntN(len(vttablets))]
-	log.Errorf("Restarting vttablet for - %v/%v - %v", keyspaceName, shard.Name, tablet.Alias)
+	log.Error(fmt.Sprintf("Restarting vttablet for - %v/%v - %v", keyspaceName, shard.Name, tablet.Alias))
 	err := tablet.VttabletProcess.TearDown()
 	if err != nil {
-		log.Errorf("error stopping vttablet - %v", err)
+		log.Error(fmt.Sprintf("error stopping vttablet - %v", err))
 		return
 	}
 	tablet.VttabletProcess.ServingStatus = "SERVING"
+	deadline := time.Now().Add(2 * time.Minute)
 	for {
 		err = tablet.VttabletProcess.Setup()
 		if err == nil {
@@ -490,7 +524,11 @@ func vttabletRestarts(t *testing.T) {
 		}
 		// Sometimes vttablets fail to connect to the topo server due to a minor blip there.
 		// We don't want to fail the test, so we retry setting up the vttablet.
-		log.Errorf("error restarting vttablet - %v", err)
+		log.Error(fmt.Sprintf("error restarting vttablet - %v", err))
+		if time.Now().After(deadline) {
+			log.Error(fmt.Sprintf("giving up restarting vttablet after timeout: %v", tablet.Alias))
+			return
+		}
 		time.Sleep(1 * time.Second)
 	}
 }
@@ -534,12 +572,12 @@ func moveTablesFuzzer(t *testing.T) {
 		err := clusterInstance.VtctldClientProcess.ApplyVSchema(keyspaceName, VSchema)
 		require.NoError(t, err)
 	}
-	log.Errorf("MoveTables from - %v to %v", srcKeyspace, targetKeyspace)
+	log.Error(fmt.Sprintf("MoveTables from - %v to %v", srcKeyspace, targetKeyspace))
 	mtw := cluster.NewMoveTables(t, clusterInstance, workflow, targetKeyspace, srcKeyspace, "twopc_fuzzer_update", []string{topodatapb.TabletType_REPLICA.String()})
 	// Initiate MoveTables for twopc_fuzzer_update.
 	output, err := mtw.Create()
 	if err != nil {
-		log.Errorf("error creating MoveTables - %v, output - %v", err, output)
+		log.Error(fmt.Sprintf("error creating MoveTables - %v, output - %v", err, output))
 		return
 	}
 	moveTablesCount++
@@ -547,7 +585,7 @@ func moveTablesFuzzer(t *testing.T) {
 	mtw.WaitForVreplCatchup(1 * time.Minute)
 	// SwitchTraffic
 	output, err = mtw.SwitchReadsAndWrites()
-	assert.NoError(t, err, output)
+	require.NoError(t, err, output)
 	output, err = mtw.Complete()
 	assert.NoError(t, err, output)
 }
@@ -563,7 +601,7 @@ func reshardFuzzer(t *testing.T) {
 		srcShards = "40-80,80-"
 		targetShards = "40-"
 	}
-	log.Errorf("Reshard from - \"%v\" to \"%v\"", srcShards, targetShards)
+	log.Error(fmt.Sprintf("Reshard from - \"%v\" to \"%v\"", srcShards, targetShards))
 	twopcutil.AddShards(t, clusterInstance, keyspaceName, strings.Split(targetShards, ","))
 	err := twopcutil.RunReshard(t, clusterInstance, "TestTwoPCFuzzTest", keyspaceName, srcShards, targetShards)
 	require.NoError(t, err)
@@ -574,7 +612,7 @@ func mysqlRestarts(t *testing.T) {
 	shard := shards[rand.IntN(len(shards))]
 	vttablets := shard.Vttablets
 	tablet := vttablets[rand.IntN(len(vttablets))]
-	log.Errorf("Restarting MySQL for - %v/%v tablet - %v", keyspaceName, shard.Name, tablet.Alias)
+	log.Error(fmt.Sprintf("Restarting MySQL for - %v/%v tablet - %v", keyspaceName, shard.Name, tablet.Alias))
 	pidFile := path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d/mysql.pid", tablet.TabletUID))
 	pidBytes, err := os.ReadFile(pidFile)
 	if err != nil {
@@ -584,11 +622,11 @@ func mysqlRestarts(t *testing.T) {
 	}
 	pid, err := strconv.Atoi(strings.TrimSpace(string(pidBytes)))
 	if err != nil {
-		log.Errorf("Error in conversion to integer: %v", err)
+		log.Error(fmt.Sprintf("Error in conversion to integer: %v", err))
 		return
 	}
 	err = syscallutil.Kill(pid, syscall.SIGKILL)
 	if err != nil {
-		log.Errorf("Error in killing process: %v", err)
+		log.Error(fmt.Sprintf("Error in killing process: %v", err))
 	}
 }

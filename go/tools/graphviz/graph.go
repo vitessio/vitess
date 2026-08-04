@@ -56,6 +56,7 @@ func escape(s string) string {
 func (n *Node) AddAttribute(s string) {
 	n.attrs = append(n.attrs, escape(s))
 }
+
 func (n *Node) AddTooltip(s string) {
 	n.tooltip = escape(s)
 }
@@ -67,23 +68,25 @@ node [shape=record, fontsize=10]
 `)
 	for _, node := range g.nodes {
 		labels := node.Name
+		var labelsSb71 strings.Builder
 		for i, attr := range node.attrs {
 			if i == 0 {
-				labels += "|{" + attr
+				labelsSb71.WriteString("|{" + attr)
 			} else {
-				labels += "|" + attr
+				labelsSb71.WriteString("|" + attr)
 			}
 		}
+		labels += labelsSb71.String()
 		labels += "}"
 		if node.tooltip != "" {
-			dot.WriteString(fmt.Sprintf(`n%d [label="%s", tooltip="%s"]`, node.id, labels, node.tooltip))
+			fmt.Fprintf(&dot, `n%d [label="%s", tooltip="%s"]`, node.id, labels, node.tooltip)
 		} else {
-			dot.WriteString(fmt.Sprintf(`n%d [label="%s"]`, node.id, labels))
+			fmt.Fprintf(&dot, `n%d [label="%s"]`, node.id, labels)
 		}
 		dot.WriteString(";\n")
 	}
 	for _, edge := range g.edges {
-		dot.WriteString(fmt.Sprintf(`n%d -> n%d`, edge.From.id, edge.To.id))
+		fmt.Fprintf(&dot, `n%d -> n%d`, edge.From.id, edge.To.id)
 		dot.WriteString(";\n")
 	}
 	dot.WriteString("}")

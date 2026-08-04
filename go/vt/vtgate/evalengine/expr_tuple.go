@@ -25,8 +25,10 @@ type (
 	TupleExpr []IR
 )
 
-var _ IR = (TupleExpr)(nil)
-var _ Expr = (TupleExpr)(nil)
+var (
+	_ IR   = (TupleExpr)(nil)
+	_ Expr = (TupleExpr)(nil)
+)
 
 func (tuple TupleExpr) IR() IR {
 	return tuple

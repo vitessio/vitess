@@ -98,7 +98,7 @@ func TestTxKillerKillsTransactionThreeSecondsAfterCreation(t *testing.T) {
 }
 
 func assertIsNotKilledOver5Second(t *testing.T, client *framework.QueryClient) {
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		_, err := client.Execute("select 43", nil)
 		require.NoError(t, err)
 		time.Sleep(1 * time.Second)
@@ -125,7 +125,7 @@ func assertIsKilledWithin(t testing.TB, client *framework.QueryClient, opts quer
 		}
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), opts.StopAfter)
+	ctx, cancel := context.WithTimeout(t.Context(), opts.StopAfter)
 	defer cancel()
 
 	defer func() {

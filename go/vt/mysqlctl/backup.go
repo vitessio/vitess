@@ -29,6 +29,7 @@ import (
 
 	"github.com/spf13/pflag"
 
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/log"
@@ -227,14 +228,14 @@ func ParseBackupName(dir string, name string) (backupTime *time.Time, alias *top
 
 	btime, err := time.Parse(BackupTimestampFormat, timestamp)
 	if err != nil {
-		log.Errorf("error parsing backup time for %s/%s: %s", dir, name, err)
+		log.Error(fmt.Sprintf("error parsing backup time for %s/%s: %s", dir, name, err))
 	} else {
 		backupTime = &btime
 	}
 
 	alias, err = topoproto.ParseTabletAlias(aliasStr)
 	if err != nil {
-		log.Errorf("error parsing tablet alias for %s/%s: %s", dir, name, err)
+		log.Error(fmt.Sprintf("error parsing tablet alias for %s/%s: %s", dir, name, err))
 		alias = nil
 	}
 
@@ -257,7 +258,7 @@ func checkNoDB(ctx context.Context, mysqld MysqlDaemon, dbName string) (bool, er
 	for _, row := range qr.Rows {
 		if row[0].ToString() == dbName {
 			// found active db
-			log.Warningf("checkNoDB failed, found active db %v", dbName)
+			log.Warn(fmt.Sprintf("checkNoDB failed, found active db %v", dbName))
 			return false, nil
 		}
 	}
@@ -287,7 +288,7 @@ func removeExistingFiles(cnf *Mycnf) error {
 			// These paths are actually filename prefixes, not directories.
 			// An extension of the form ".###" is appended by mysqld.
 			path += ".*"
-			log.Infof("Restore: removing files in %v (%v)", name, path)
+			log.Info(fmt.Sprintf("Restore: removing files in %v (%v)", name, path))
 			matches, err := filepath.Glob(path)
 			if err != nil {
 				return vterrors.Wrapf(err, "can't expand path glob %q", path)
@@ -302,10 +303,10 @@ func removeExistingFiles(cnf *Mycnf) error {
 
 		// Regular directory: delete recursively.
 		if _, err := os.Stat(path); os.IsNotExist(err) {
-			log.Infof("Restore: skipping removal of nonexistent %v (%v)", name, path)
+			log.Info(fmt.Sprintf("Restore: skipping removal of nonexistent %v (%v)", name, path))
 			continue
 		}
-		log.Infof("Restore: removing files in %v (%v)", name, path)
+		log.Info(fmt.Sprintf("Restore: removing files in %v (%v)", name, path))
 		if err := os.RemoveAll(path); err != nil {
 			return vterrors.Wrapf(err, "can't remove existing files in %v (%v)", name, path)
 		}
@@ -315,21 +316,23 @@ func removeExistingFiles(cnf *Mycnf) error {
 
 // ShouldRestore checks whether a database with tables already exists
 // and returns whether a restore action should be performed
-func ShouldRestore(ctx context.Context, params RestoreParams) (bool, error) {
-	if params.DeleteBeforeRestore || RestoreWasInterrupted(params.Cnf) {
+func ShouldRestore(ctx context.Context, logger logutil.Logger, cnf *Mycnf, mysqld MysqlDaemon,
+	dbName string, deleteBeforeRestore bool,
+) (bool, error) {
+	if deleteBeforeRestore || RestoreWasInterrupted(cnf) {
 		return true, nil
 	}
-	params.Logger.Infof("Restore: No %v file found, checking no existing data is present", RestoreState)
+	logger.Infof("Restore: No %v file found, checking no existing data is present", RestoreState)
 	// Wait for mysqld to be ready, in case it was launched in parallel with us.
 	// If this doesn't succeed, we should not attempt a restore
-	if err := params.Mysqld.Wait(ctx, params.Cnf); err != nil {
+	if err := mysqld.Wait(ctx, cnf); err != nil {
 		return false, err
 	}
-	if err := params.Mysqld.WaitForDBAGrants(ctx, DbaGrantWaitTime); err != nil {
-		params.Logger.Errorf("error waiting for the grants: %v", err)
+	if err := mysqld.WaitForDBAGrants(ctx, DbaGrantWaitTime); err != nil {
+		logger.Errorf("error waiting for the grants: %v", err)
 		return false, err
 	}
-	return checkNoDB(ctx, params.Mysqld, params.DbName)
+	return checkNoDB(ctx, mysqld, dbName)
 }
 
 // ensureRestoredGTIDPurgedMatchesManifest sees the following: when you restore a full backup, you want the MySQL server to have
@@ -432,7 +435,7 @@ func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error)
 		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "empty restore path")
 	}
 	bh := restorePath.FullBackupHandle()
-	re, err := GetRestoreEngine(ctx, bh)
+	re, backupManifest, err := GetRestoreEngineAndManifest(ctx, bh)
 	if err != nil {
 		return nil, vterrors.Wrap(err, "Failed to find restore engine")
 	}
@@ -446,9 +449,10 @@ func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error)
 		backupstats.Component(backupstats.BackupEngine),
 		backupstats.Implementation(textutil.Title(backupEngineImplementation)),
 	)
+
 	manifest, err := re.ExecuteRestore(ctx, reParams, bh)
 	if err != nil {
-		return nil, err
+		return backupManifest, err
 	}
 
 	if re.ShouldStartMySQLAfterRestore() { // all engines except mysqlshell since MySQL is always running there
@@ -462,26 +466,26 @@ func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error)
 		params.Logger.Infof("Restore: starting mysqld for mysql_upgrade")
 		// Note Start will use dba user for waiting, this is fine, it will be allowed.
 		if err := params.Mysqld.Start(context.Background(), params.Cnf, "--skip-grant-tables", "--skip-networking"); err != nil {
-			return nil, err
+			return backupManifest, err
 		}
 	}
 
 	params.Logger.Infof("Restore: running mysql_upgrade")
 	if err := params.Mysqld.RunMysqlUpgrade(ctx); err != nil {
-		return nil, vterrors.Wrap(err, "mysql_upgrade failed")
+		return backupManifest, vterrors.Wrap(err, "mysql_upgrade failed")
 	}
 
 	// The MySQL manual recommends restarting mysqld after running mysql_upgrade,
 	// so that any changes made to system tables take effect.
 	params.Logger.Infof("Restore: restarting mysqld after mysql_upgrade")
 	if err := params.Mysqld.Shutdown(context.Background(), params.Cnf, true, params.MysqlShutdownTimeout); err != nil {
-		return nil, err
+		return backupManifest, err
 	}
 	if err := params.Mysqld.Start(context.Background(), params.Cnf); err != nil {
-		return nil, err
+		return backupManifest, err
 	}
 	if err = ensureRestoredGTIDPurgedMatchesManifest(ctx, manifest, &params); err != nil {
-		return nil, err
+		return backupManifest, err
 	}
 
 	if handles := restorePath.IncrementalBackupHandles(); len(handles) > 0 {
@@ -492,7 +496,7 @@ func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error)
 		for _, bh := range handles {
 			manifest, err := builtInRE.ExecuteRestore(ctx, params, bh)
 			if err != nil {
-				return nil, err
+				return backupManifest, err
 			}
 			params.Logger.Infof("Restore: applied incremental backup: %v", manifest.Position)
 		}
@@ -501,7 +505,7 @@ func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error)
 
 	params.Logger.Infof("Restore: removing state file")
 	if err = removeStateFile(params.Cnf); err != nil {
-		return nil, err
+		return backupManifest, err
 	}
 
 	backupstats.DeprecatedRestoreDurationS.Set(int64(time.Since(startTs).Seconds()))
@@ -549,6 +553,25 @@ func ExecuteBackupInitSQL(ctx context.Context, params *BackupParams) error {
 	params.Logger.Infof("Executing init SQL queries %q, with a timeout of %v and fail backup on error set to %t", queriesCSV, initTimeout, params.InitSQL.FailOnError)
 	initCtx, cancel := context.WithTimeout(ctx, initTimeout)
 	defer cancel()
+	// Disable super_read_only before executing init SQL queries, because MySQL
+	// may have been started with super-read-only enabled via my.cnf.
+	resetFunc, err := params.Mysqld.SetSuperReadOnly(initCtx, false)
+	if err != nil {
+		if sqlErr, ok := errors.AsType[*sqlerror.SQLError](err); ok && sqlErr.Number() == sqlerror.ERUnknownSystemVariable {
+			params.Logger.Infof("Server does not support super_read_only, continuing with init SQL queries: %v", err)
+		} else if params.InitSQL.FailOnError {
+			return vterrors.Wrap(err, "failed to disable super_read_only for init SQL queries")
+		} else {
+			params.Logger.Infof("Failed to disable super_read_only for init SQL queries: %v. Will still attempt init SQL queries as fail-on-error is false", err)
+		}
+	}
+	if resetFunc != nil {
+		defer func() {
+			if err := resetFunc(); err != nil {
+				params.Logger.Errorf("Failed to reset super_read_only after init SQL queries: %v", err)
+			}
+		}()
+	}
 	if err := params.Mysqld.ExecuteSuperQueryList(initCtx, params.InitSQL.Queries); err != nil {
 		if params.InitSQL.FailOnError {
 			return vterrors.Wrapf(err, "failed to execute init SQL queries %q and instructed to fail backup in this case", queriesCSV)

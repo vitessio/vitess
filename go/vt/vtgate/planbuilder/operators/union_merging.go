@@ -110,6 +110,7 @@ func mergeUnionInputs(
 ) (Operator, []sqlparser.SelectExpr) {
 	lhsRoute, rhsRoute, routingA, routingB, a, b, sameKeyspace := prepareInputRoutes(ctx, lhs, rhs)
 	if lhsRoute == nil {
+		checkCrossKeyspaceOp(ctx, lhs, rhs, "UNION")
 		return nil, nil
 	}
 
@@ -132,6 +133,10 @@ func mergeUnionInputs(
 			return res, exprs
 		}
 	}
+
+	// Check cross-keyspace restrictions for UNIONs that cannot be merged.
+	checkCrossKeyspaceOp(ctx, lhs, rhs, "UNION")
+
 	return nil, nil
 }
 
@@ -182,7 +187,8 @@ func createMergedUnion(
 	lhsExprs, rhsExprs []sqlparser.SelectExpr,
 	distinct bool,
 	routing Routing,
-	conditions []engine.Condition) (Operator, []sqlparser.SelectExpr) {
+	conditions []engine.Condition,
+) (Operator, []sqlparser.SelectExpr) {
 	// if there are `*` on either side, or a different number of SelectExpr items,
 	// we give up aligning the expressions and trust that we can push everything down
 	cols := make([]sqlparser.SelectExpr, len(lhsExprs))

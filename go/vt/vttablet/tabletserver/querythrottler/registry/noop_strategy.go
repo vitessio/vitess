@@ -23,6 +23,7 @@ import (
 
 	"vitess.io/vitess/go/vt/sqlparser"
 
+	querythrottlerpb "vitess.io/vitess/go/vt/proto/querythrottler"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
@@ -54,5 +55,5 @@ func (s *NoOpStrategy) Stop() {
 
 // GetStrategyName returns the name of the strategy.
 func (s *NoOpStrategy) GetStrategyName() string {
-	return string(ThrottlingStrategyUnknown)
+	return querythrottlerpb.ThrottlingStrategy_UNKNOWN.String()
 }

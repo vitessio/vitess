@@ -237,8 +237,7 @@ func (c *cloneGen) ptrToStructMethod(t types.Type, strct *types.Struct, spi gene
 	}
 
 	var fields []jen.Code
-	for i := 0; i < strct.NumFields(); i++ {
-		field := strct.Field(i)
+	for field := range strct.Fields() {
 		if isBasic(field.Type()) || strings.HasPrefix(field.Name(), "_") {
 			continue
 		}

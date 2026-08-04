@@ -35,7 +35,7 @@ func NewLogRecorder() *LogRecorder {
 // Log records a new log message
 func (lr *LogRecorder) Log(log string) {
 	lr.logs = append(lr.logs, log)
-	//fmt.Printf("DR: %s\n", log)
+	// fmt.Printf("DR: %s\n", log)
 }
 
 // LogSlice sorts a given slice using natural sort, so that the result is predictable.

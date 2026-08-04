@@ -24,7 +24,6 @@ import (
 	"strings"
 
 	"vitess.io/vitess/go/mysql/collations"
-	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -52,6 +51,7 @@ type VSchemaWrapper struct {
 	TabletType_           topodatapb.TabletType
 	Dest                  key.ShardDestination
 	SysVarEnabled         bool
+	DeniedSysVars         map[string]struct{}
 	ForeignKeyChecksState *bool
 	Version               plancontext.PlannerVersion
 	EnableViews           bool
@@ -117,17 +117,6 @@ func (vw *VSchemaWrapper) PlanPrepareStatement(ctx context.Context, query string
 	return plan, nil
 }
 
-func (vw *VSchemaWrapper) ClearPrepareData(string) {}
-
-func (vw *VSchemaWrapper) StorePrepareData(string, *vtgatepb.PrepareData) {}
-
-func (vw *VSchemaWrapper) GetUDV(name string) *querypb.BindVariable {
-	if strings.EqualFold(name, "prep_stmt") {
-		return sqltypes.StringBindVariable("select * from user where id in (?, ?, ?)")
-	}
-	return nil
-}
-
 func (vw *VSchemaWrapper) IsShardRoutingEnabled() bool {
 	return false
 }
@@ -167,6 +156,13 @@ func (vw *VSchemaWrapper) ForeignKeyMode(keyspace string) (vschemapb.Keyspace_Fo
 		return vw.V.Keyspaces[keyspace].ForeignKeyMode, nil
 	}
 	return defaultFkMode, nil
+}
+
+func (vw *VSchemaWrapper) AllowCrossKeyspaceReads(keyspace string) (bool, error) {
+	if vw.V.Keyspaces[keyspace] != nil {
+		return !vw.V.Keyspaces[keyspace].PreventCrossKeyspaceReads, nil
+	}
+	return true, nil
 }
 
 func (vw *VSchemaWrapper) KeyspaceError(keyspace string) error {
@@ -223,6 +219,18 @@ func (vw *VSchemaWrapper) SysVarSetEnabled() bool {
 	return vw.SysVarEnabled
 }
 
+func (vw *VSchemaWrapper) IsSystemVariableDenied(name string) bool {
+	if len(vw.DeniedSysVars) == 0 {
+		return false
+	}
+	_, denied := vw.DeniedSysVars[strings.ToLower(name)]
+	return denied
+}
+
+func (vw *VSchemaWrapper) HasDeniedSystemVariables() bool {
+	return len(vw.DeniedSysVars) > 0
+}
+
 func (vw *VSchemaWrapper) TargetDestination(qualifier string) (key.ShardDestination, *vindexes.Keyspace, topodatapb.TabletType, error) {
 	return vw.Vcursor.TargetDestination(qualifier)
 }
@@ -236,7 +244,7 @@ func (vw *VSchemaWrapper) ShardDestination() key.ShardDestination {
 }
 
 func (vw *VSchemaWrapper) FindTable(tab sqlparser.TableName) (*vindexes.BaseTable, string, topodatapb.TabletType, key.ShardDestination, error) {
-	destKeyspace, destTabletType, destTarget, err := topoproto.ParseDestination(tab.Qualifier.String(), topodatapb.TabletType_PRIMARY)
+	destKeyspace, destTabletType, destTarget, _, err := topoproto.ParseDestination(tab.Qualifier.String(), topodatapb.TabletType_PRIMARY)
 	if err != nil {
 		return nil, destKeyspace, destTabletType, destTarget, err
 	}
@@ -247,16 +255,16 @@ func (vw *VSchemaWrapper) FindTable(tab sqlparser.TableName) (*vindexes.BaseTabl
 	return table, destKeyspace, destTabletType, destTarget, nil
 }
 
-func (vw *VSchemaWrapper) FindView(tab sqlparser.TableName) sqlparser.TableStatement {
-	destKeyspace, _, _, err := topoproto.ParseDestination(tab.Qualifier.String(), topodatapb.TabletType_PRIMARY)
+func (vw *VSchemaWrapper) FindView(tab sqlparser.TableName) (sqlparser.TableStatement, *sqlparser.TableName) {
+	destKeyspace, _, _, _, err := topoproto.ParseDestination(tab.Qualifier.String(), topodatapb.TabletType_PRIMARY)
 	if err != nil {
-		return nil
+		return nil, nil
 	}
-	return vw.V.FindView(destKeyspace, tab.Name.String())
+	return vw.V.FindView(destKeyspace, tab.Name.String()), nil
 }
 
 func (vw *VSchemaWrapper) FindViewTarget(name sqlparser.TableName) (*vindexes.Keyspace, error) {
-	destKeyspace, _, _, err := topoproto.ParseDestination(name.Qualifier.String(), topodatapb.TabletType_PRIMARY)
+	destKeyspace, _, _, _, err := topoproto.ParseDestination(name.Qualifier.String(), topodatapb.TabletType_PRIMARY)
 	if err != nil {
 		return nil, err
 	}
@@ -336,7 +344,7 @@ func (vw *VSchemaWrapper) IsViewsEnabled() bool {
 // FindMirrorRule finds the mirror rule for the requested keyspace, table
 // name, and the tablet type in the VSchema.
 func (vw *VSchemaWrapper) FindMirrorRule(tab sqlparser.TableName) (*vindexes.MirrorRule, error) {
-	destKeyspace, destTabletType, _, err := topoproto.ParseDestination(tab.Qualifier.String(), topodatapb.TabletType_PRIMARY)
+	destKeyspace, destTabletType, _, _, err := topoproto.ParseDestination(tab.Qualifier.String(), topodatapb.TabletType_PRIMARY)
 	if err != nil {
 		return nil, err
 	}

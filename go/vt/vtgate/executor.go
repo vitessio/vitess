@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"sort"
 	"strconv"
@@ -31,6 +32,7 @@ import (
 	"time"
 
 	"github.com/spf13/pflag"
+	"golang.org/x/sync/semaphore"
 
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/cache/theine"
@@ -78,6 +80,7 @@ var (
 	queryExecutions        = stats.NewCountersWithMultiLabels("QueryExecutions", "Counts queries executed at VTGate by query type, plan type, and tablet type.", []string{"Query", "Plan", "Tablet"})
 	queryRoutes            = stats.NewCountersWithMultiLabels("QueryRoutes", "Counts queries routed from VTGate to VTTablet by query type, plan type, and tablet type.", []string{"Query", "Plan", "Tablet"})
 	queryExecutionsByTable = stats.NewCountersWithMultiLabels("QueryExecutionsByTable", "Counts queries executed at VTGate per table by query type and table.", []string{"Query", "Table"})
+	slowQueries            = stats.NewCountersWithMultiLabels("SlowQueries", "Counts vtgate queries classified as slow by query type, plan type, and tablet type.", []string{"Query", "Plan", "Tablet"})
 	txProcessed            = stats.NewCountersWithMultiLabels("TransactionsProcessed", "Counts transactions processed at VTGate by shard distribution (single or cross), transaction type (read write or read only)", []string{"Shard", "Type"})
 
 	// commitMode records the timing of the commit phase of a transaction.
@@ -113,9 +116,12 @@ type (
 		Normalize  bool
 		StreamSize int
 		// AllowScatter will fail planning if set to false and a plan contains any scatter queries
-		AllowScatter        bool
-		WarmingReadsPercent int
-		QueryLogToFile      string
+		AllowScatter bool
+		// PreventCrossKeyspaceReads will fail planning if set to true and a plan contains any cross-keyspace joins or UNIONs.
+		// The zero value (false) preserves the historical behavior of allowing cross-keyspace reads by default.
+		PreventCrossKeyspaceReads bool
+		WarmingReadsPercent       int
+		QueryLogToFile            string
 	}
 
 	Executor struct {
@@ -143,7 +149,7 @@ type (
 		// queryLogger is passed in for logging from this vtgate executor.
 		queryLogger *streamlog.StreamLogger[*logstats.LogStats]
 
-		warmingReadsChannel chan bool
+		warmingReadsSemaphore *semaphore.Weighted
 
 		vConfig   econtext.VCursorConfig
 		ddlConfig dynamicconfig.DDL
@@ -197,10 +203,10 @@ func NewExecutor(
 		scatterConn: resolver.scatterConn,
 		txConn:      resolver.scatterConn.txConn,
 
-		schemaTracker:       schemaTracker,
-		plans:               plans,
-		warmingReadsChannel: make(chan bool, warmingReadsConcurrency),
-		ddlConfig:           ddlConfig,
+		schemaTracker:         schemaTracker,
+		plans:                 plans,
+		warmingReadsSemaphore: newWarmingReadsSemaphore(warmingReadsConcurrency),
+		ddlConfig:             ddlConfig,
 	}
 	// setting the vcursor config.
 	e.initVConfig(warnOnShardedOnly, pv)
@@ -281,8 +287,7 @@ func (e *Executor) Execute(
 		})
 	}
 
-	logStats.SaveEndTime()
-	e.queryLogger.Send(logStats)
+	e.finalizeLogStats(logStats, mysqlCtx)
 
 	err = errorTransform.TransformError(err)
 	err = vterrors.TruncateError(err, truncateErrorLen)
@@ -315,6 +320,7 @@ func (e *Executor) StreamExecute(
 	safeSession *econtext.SafeSession,
 	sql string,
 	bindVars map[string]*querypb.BindVariable,
+	prepared bool,
 	callback func(*sqltypes.Result) error,
 ) error {
 	span, ctx := trace.NewSpan(ctx, "executor.StreamExecute")
@@ -334,12 +340,32 @@ func (e *Executor) StreamExecute(
 			srr.callback = func(qr *sqltypes.Result) error {
 				resultMu.Lock()
 				defer resultMu.Unlock()
+				// Carry over the OK-packet data (affected rows, last insert id, info,
+				// session state changes) so statements that return an OK packet (e.g.
+				// CALL of a procedure that performs DML) report it to the client,
+				// matching the buffered Execute path.
+				result.RowsAffected += qr.RowsAffected
+				if qr.InsertIDUpdated() {
+					result.InsertID = qr.InsertID
+					result.InsertIDChanged = true
+				}
+				if qr.SessionStateChanges != "" {
+					result.SessionStateChanges = qr.SessionStateChanges
+				}
+				if qr.Info != "" {
+					result.Info = qr.Info
+				}
 				// If the row has field info, send it separately.
 				// TODO(sougou): this behavior is for handling tests because
 				// the framework currently sends all results as one packet.
 				byteCount := 0
 				if len(qr.Fields) > 0 {
-					if err := callback(qr.Metadata()); err != nil {
+					result.Fields = qr.Fields
+					// Send only the fields here: any OK-packet data on qr was
+					// accumulated into result above and goes to the client with
+					// the left-over result, so repeating it in this packet would
+					// deliver it twice to clients that sum across packets.
+					if err := callback(&sqltypes.Result{Fields: qr.Fields}); err != nil {
 						return err
 					}
 					seenResults.Store(true)
@@ -370,8 +396,47 @@ func (e *Executor) StreamExecute(
 		err := vc.StreamExecutePrimitive(ctx, plan.Instructions, bindVars, true, func(qr *sqltypes.Result) error {
 			return srr.storeResultStats(plan.QueryType, qr)
 		})
+
+		updateLogStats := func(err error) {
+			logStats.StmtType = plan.QueryType.String()
+			logStats.PlanType = plan.Type.String()
+			logStats.TabletType = vc.TabletType().String()
+			logStats.ExecuteTime = time.Since(execStart)
+			logStats.ActiveKeyspace = vc.GetKeyspace()
+
+			// On error, leave the tables, routing indexes and row counts unset so the
+			// per-table counters are not incremented, matching the buffered Execute path.
+			var tablesUsed []string
+			var errCount uint64
+			if err != nil {
+				logStats.Error = err
+				errCount = 1
+			} else {
+				srr.mu.Lock()
+				logStats.RowsAffected = srr.rowsAffected
+				logStats.RowsReturned = uint64(srr.rowsReturned)
+				srr.mu.Unlock()
+				logStats.TablesUsed = plan.TablesUsed
+				tablesUsed = plan.TablesUsed
+				executedRoot := vc.ExecutedPrimitive()
+				if executedRoot == nil {
+					executedRoot = plan.Instructions
+				}
+				logStats.RoutingIndexesUsed = engine.GetRoutingIndexes(executedRoot)
+			}
+
+			e.updateQueryStats(plan.QueryType.String(), plan.Type.String(), vc.TabletType().String(), int64(logStats.ShardQueries), tablesUsed)
+			plan.AddStats(1, time.Since(logStats.StartTime), logStats.ShardQueries, logStats.RowsAffected, logStats.RowsReturned, errCount)
+		}
+
 		// Check if there was partial DML execution. If so, rollback the effect of the partially executed query.
 		if err != nil {
+			// Record query stats for a failed row-returning query before any
+			// rollback handling, matching the buffered Execute path which always
+			// records them ahead of its own rollback handling.
+			if canReturnRows(plan.QueryType) {
+				updateLogStats(err)
+			}
 			if safeSession.InTransaction() && e.rollbackOnFatalTxError(ctx, safeSession, err) {
 				return err
 			}
@@ -382,28 +447,33 @@ func (e *Executor) StreamExecute(
 		}
 
 		if !canReturnRows(plan.QueryType) {
+			updateLogStats(nil)
 			return nil
 		}
 
-		// Send left-over rows if there is no error on execution.
-		if len(result.Rows) > 0 || !seenResults.Load() {
+		// Send left-over rows if there is no error on execution. The left-over
+		// result must also go out when it carries OK-packet data with no rows —
+		// e.g. an affected-row count that arrived after a result set was already
+		// sent — so that data is not dropped.
+		hasOKData := result.RowsAffected > 0 || result.InsertIDUpdated() ||
+			result.SessionStateChanges != "" || result.Info != ""
+		if len(result.Rows) > 0 || hasOKData || !seenResults.Load() {
 			if err := callback(result); err != nil {
+				// The query executed; only the delivery to the client failed.
+				// Record it as an error, like a mid-stream send failure that
+				// surfaces through the execution error above.
+				updateLogStats(err)
 				return err
 			}
 		}
 
 		// 5: Log and add statistics
-		logStats.TablesUsed = plan.TablesUsed
-		logStats.TabletType = vc.TabletType().String()
-		logStats.ExecuteTime = time.Since(execStart)
-		logStats.ActiveKeyspace = vc.GetKeyspace()
-
-		e.updateQueryStats(plan.QueryType.String(), plan.Type.String(), vc.TabletType().String(), int64(logStats.ShardQueries), plan.TablesUsed)
+		updateLogStats(nil)
 
 		return err
 	}
 
-	err = e.newExecute(ctx, mysqlCtx, safeSession, sql, bindVars, false, logStats, resultHandler, srr.storeResultStats)
+	err = e.newExecute(ctx, mysqlCtx, safeSession, sql, bindVars, prepared, logStats, resultHandler, srr.storeResultStats)
 
 	logStats.Error = err
 	saveSessionStats(safeSession, srr.stmtType, srr.rowsAffected, srr.rowsReturned, err)
@@ -421,8 +491,7 @@ func (e *Executor) StreamExecute(
 		})
 	}
 
-	logStats.SaveEndTime()
-	e.queryLogger.Send(logStats)
+	e.finalizeLogStats(logStats, mysqlCtx)
 
 	err = errorTransform.TransformError(err)
 	err = vterrors.TruncateError(err, truncateErrorLen)
@@ -453,6 +522,23 @@ func saveSessionStats(safeSession *econtext.SafeSession, stmtType sqlparser.Stat
 	case sqlparser.StmtDDL, sqlparser.StmtSet, sqlparser.StmtBegin, sqlparser.StmtCommit, sqlparser.StmtRollback, sqlparser.StmtFlush:
 		safeSession.RowCount = 0
 	}
+}
+
+func (e *Executor) finalizeLogStats(logStats *logstats.LogStats, mysqlCtx vtgateservice.MySQLConnection) {
+	logStats.SaveEndTime()
+	logStats.MarkSlowQuery(slowQueryThreshold)
+	if mysqlCtx != nil {
+		mysqlCtx.SetQueryWasSlow(logStats.SlowQuery)
+	}
+	if ingressBytes, ok := vtgateservice.IngressBytesFromContext(logStats.Ctx); ok {
+		logStats.IngressBytes = ingressBytes
+	} else if mysqlCtx != nil {
+		logStats.IngressBytes = mysqlCtx.IngressBytes()
+	}
+	if logStats.SlowQuery && logStats.StmtType != "" && logStats.PlanType != "" && logStats.TabletType != "" {
+		slowQueries.Add([]string{logStats.StmtType, logStats.PlanType, logStats.TabletType}, 1)
+	}
+	e.queryLogger.Send(logStats)
 }
 
 func (e *Executor) execute(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, safeSession *econtext.SafeSession, sql string, bindVars map[string]*querypb.BindVariable, prepared bool, logStats *logstats.LogStats) (sqlparser.StatementType, *sqltypes.Result, error) {
@@ -620,6 +706,10 @@ func ifReadAfterWriteExist(session *econtext.SafeSession, f func(*vtgatepb.ReadA
 func (e *Executor) handleBegin(ctx context.Context, vcursor *econtext.VCursorImpl, safeSession *econtext.SafeSession, logStats *logstats.LogStats, stmt sqlparser.Statement) (*sqltypes.Result, error) {
 	execStart := time.Now()
 	logStats.PlanTime = execStart.Sub(logStats.StartTime)
+	logStats.StmtType = sqlparser.StmtBegin.String()
+	logStats.PlanType = engine.PlanTransaction.String()
+	logStats.TabletType = vcursor.TabletType().String()
+	logStats.ActiveKeyspace = vcursor.GetKeyspace()
 	e.updateQueryStats(sqlparser.StmtBegin.String(), engine.PlanTransaction.String(), vcursor.TabletType().String(), 0, nil)
 
 	begin := stmt.(*sqlparser.Begin)
@@ -631,6 +721,10 @@ func (e *Executor) handleBegin(ctx context.Context, vcursor *econtext.VCursorImp
 func (e *Executor) handleCommit(ctx context.Context, vcursor *econtext.VCursorImpl, safeSession *econtext.SafeSession, logStats *logstats.LogStats) (*sqltypes.Result, error) {
 	execStart := time.Now()
 	logStats.PlanTime = execStart.Sub(logStats.StartTime)
+	logStats.StmtType = sqlparser.StmtCommit.String()
+	logStats.PlanType = engine.PlanTransaction.String()
+	logStats.TabletType = vcursor.TabletType().String()
+	logStats.ActiveKeyspace = vcursor.GetKeyspace()
 	logStats.ShardQueries = uint64(len(safeSession.ShardSessions))
 	e.updateQueryStats(sqlparser.StmtCommit.String(), engine.PlanTransaction.String(), vcursor.TabletType().String(), int64(logStats.ShardQueries), nil)
 
@@ -647,6 +741,10 @@ func (e *Executor) Commit(ctx context.Context, safeSession *econtext.SafeSession
 func (e *Executor) handleRollback(ctx context.Context, vcursor *econtext.VCursorImpl, safeSession *econtext.SafeSession, logStats *logstats.LogStats) (*sqltypes.Result, error) {
 	execStart := time.Now()
 	logStats.PlanTime = execStart.Sub(logStats.StartTime)
+	logStats.StmtType = sqlparser.StmtRollback.String()
+	logStats.PlanType = engine.PlanTransaction.String()
+	logStats.TabletType = vcursor.TabletType().String()
+	logStats.ActiveKeyspace = vcursor.GetKeyspace()
 	logStats.ShardQueries = uint64(len(safeSession.ShardSessions))
 	e.updateQueryStats(sqlparser.StmtRollback.String(), engine.PlanTransaction.String(), vcursor.TabletType().String(), int64(logStats.ShardQueries), nil)
 
@@ -658,6 +756,10 @@ func (e *Executor) handleRollback(ctx context.Context, vcursor *econtext.VCursor
 func (e *Executor) handleSavepoint(ctx context.Context, vcursor *econtext.VCursorImpl, safeSession *econtext.SafeSession, sql string, queryType string, logStats *logstats.LogStats, nonTxResponse func(query string) (*sqltypes.Result, error), ignoreMaxMemoryRows bool) (*sqltypes.Result, error) {
 	execStart := time.Now()
 	logStats.PlanTime = execStart.Sub(logStats.StartTime)
+	logStats.StmtType = queryType
+	logStats.PlanType = engine.PlanTransaction.String()
+	logStats.TabletType = vcursor.TabletType().String()
+	logStats.ActiveKeyspace = vcursor.GetKeyspace()
 	logStats.ShardQueries = uint64(len(safeSession.ShardSessions))
 	e.updateQueryStats(queryType, engine.PlanTransaction.String(), vcursor.TabletType().String(), int64(logStats.ShardQueries), nil)
 
@@ -721,6 +823,10 @@ func (e *Executor) executeSPInAllSessions(ctx context.Context, safeSession *econ
 func (e *Executor) handleKill(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, vcursor *econtext.VCursorImpl, stmt sqlparser.Statement, logStats *logstats.LogStats) (result *sqltypes.Result, err error) {
 	execStart := time.Now()
 	logStats.PlanTime = execStart.Sub(logStats.StartTime)
+	logStats.StmtType = "Kill"
+	logStats.PlanType = engine.PlanLocal.String()
+	logStats.TabletType = vcursor.TabletType().String()
+	logStats.ActiveKeyspace = vcursor.GetKeyspace()
 	e.updateQueryStats("Kill", engine.PlanLocal.String(), vcursor.TabletType().String(), 0, nil)
 
 	defer func() {
@@ -833,7 +939,7 @@ func (e *Executor) ShowShards(ctx context.Context, filter *sqlparser.ShowFilter,
 
 		if filter.Filter != nil {
 			// TODO build a query planner I guess? lol that should be fun
-			log.Infof("SHOW VITESS_SHARDS where clause %+v. Ignoring this (for now).", filter.Filter)
+			log.Info(fmt.Sprintf("SHOW VITESS_SHARDS where clause %+v. Ignoring this (for now).", filter.Filter))
 		}
 
 		return keyspaceFilters, shardFilters
@@ -917,7 +1023,7 @@ func (e *Executor) ShowTablets(filter *sqlparser.ShowFilter) (*sqltypes.Result, 
 		}
 
 		if filter.Filter != nil {
-			log.Infof("SHOW VITESS_TABLETS where clause: %+v. Ignoring this (for now).", filter.Filter)
+			log.Info(fmt.Sprintf("SHOW VITESS_TABLETS where clause: %+v. Ignoring this (for now).", filter.Filter))
 		}
 
 		return filters
@@ -996,7 +1102,7 @@ func (e *Executor) ShowVitessReplicationStatus(ctx context.Context, filter *sqlp
 			tabletHostPort := ts.GetTabletHostPort()
 			throttlerStatus, err := getTabletThrottlerStatus(tabletHostPort)
 			if err != nil {
-				log.Warningf("Could not get throttler status from %s: %v", topoproto.TabletAliasString(ts.Tablet.Alias), err)
+				log.Warn(fmt.Sprintf("Could not get throttler status from %s: %v", topoproto.TabletAliasString(ts.Tablet.Alias), err))
 			}
 
 			replSourceHost := ""
@@ -1022,7 +1128,7 @@ func (e *Executor) ShowVitessReplicationStatus(ctx context.Context, filter *sqlp
 			}
 			results, err := e.txConn.tabletGateway.Execute(ctx, nil, ts.Target, sql, nil, 0, 0, nil)
 			if err != nil || results == nil {
-				log.Warningf("Could not get replication status from %s: %v", tabletHostPort, err)
+				log.Warn(fmt.Sprintf("Could not get replication status from %s: %v", tabletHostPort, err))
 			} else if row := results.Named().Row(); row != nil {
 				replSourceHost = row[sourceHostField].ToString()
 				replSourcePort, _ = row[sourcePortField].ToInt64()
@@ -1116,7 +1222,7 @@ func (e *Executor) SaveVSchema(vschema *vindexes.VSchema, stats *VSchemaStats) {
 }
 
 // ParseDestinationTarget parses destination target string and sets default keyspace if possible.
-func (e *Executor) ParseDestinationTarget(targetString string) (string, topodatapb.TabletType, key.ShardDestination, error) {
+func (e *Executor) ParseDestinationTarget(targetString string) (string, topodatapb.TabletType, key.ShardDestination, *topodatapb.TabletAlias, error) {
 	return econtext.ParseDestinationTarget(targetString, defaultTabletType, e.VSchema())
 }
 
@@ -1249,6 +1355,23 @@ func (e *Executor) getCachedOrBuildPlan(
 		return nil, false, nil, err
 	}
 
+	preparedPlan := planKey.Query != ""
+	if preparedPlan {
+		// MySQL rejects statement text that itself manages prepared
+		// statements with ER_UNSUPPORTED_PS. The check must run before the
+		// statement is planned: planning an EXECUTE plans its stored
+		// statement text, and the gRPC API lets clients store arbitrary
+		// text in the session's prepared-statement map, so nested EXECUTE
+		// text would otherwise recurse through the planner without bound.
+		// No statement is returned with the error so that a failed
+		// binary-protocol prepare does not fall back to accepting the
+		// statement with NULL field types.
+		switch stmt.(type) {
+		case *sqlparser.PrepareStmt, *sqlparser.ExecuteStmt, *sqlparser.DeallocateStmt:
+			return nil, false, nil, vterrors.NewErrorf(vtrpcpb.Code_UNIMPLEMENTED, vterrors.UnsupportedPS, "This command is not supported in the prepared statement protocol yet")
+		}
+	}
+
 	defer func() {
 		if err == nil {
 			vcursor.CheckForReservedConnection(setVarComment, stmt)
@@ -1266,7 +1389,6 @@ func (e *Executor) getCachedOrBuildPlan(
 	vcursor.SetForeignKeyCheckState(qh.ForeignKeyChecks)
 
 	paramsCount := uint16(0)
-	preparedPlan := planKey.Query != ""
 	if preparedPlan {
 		// We need to count the number of arguments in the statement before we plan the query.
 		// Planning could add additional arguments to the statement.
@@ -1344,7 +1466,7 @@ func getDestinations(ctx context.Context, vcursor *econtext.VCursorImpl) []strin
 	}
 
 	shards := make([]string, len(resolved))
-	for i := 0; i < len(shards); i++ {
+	for i := range shards {
 		shards[i] = resolved[i].Target.GetShard()
 	}
 	sort.Strings(shards)
@@ -1496,8 +1618,7 @@ func (e *Executor) Prepare(ctx context.Context, method string, safeSession *econ
 	// To avoid spamming the log with no-op rollback records, ignore it if
 	// it was a no-op record (i.e. didn't issue any queries)
 	if logStats.StmtType != "ROLLBACK" || logStats.ShardQueries != 0 {
-		logStats.SaveEndTime()
-		e.queryLogger.Send(logStats)
+		e.finalizeLogStats(logStats, nil)
 	}
 
 	err = errorTransform.TransformError(err)
@@ -1507,13 +1628,29 @@ func (e *Executor) Prepare(ctx context.Context, method string, safeSession *econ
 }
 
 func (e *Executor) prepare(ctx context.Context, safeSession *econtext.SafeSession, sql string, logStats *logstats.LogStats) ([]*querypb.Field, uint16, error) {
-	// Start an implicit transaction if necessary.
-	if !safeSession.Autocommit && !safeSession.InTransaction() {
-		if err := e.txConn.Begin(ctx, safeSession, nil); err != nil {
+	stmtType := sqlparser.Preview(sql)
+	if stmtType == sqlparser.StmtUnknown {
+		// Preview only looks at the first keyword, so statements starting with
+		// a WITH clause come back as unknown. Classify those from the AST, but
+		// only rescue the statements handlePrepare can count parameters for
+		// (WITH ... SELECT/INSERT/REPLACE/UPDATE/DELETE). Anything else stays
+		// unknown and is rejected below, rather than being reported to the
+		// client as a zero-parameter success.
+		stmt, err := e.env.Parser().Parse(sql)
+		if err != nil {
+			// The statement stays unknown, and an unparseable statement is
+			// never SHOW, so record the type and clear warnings the way the
+			// code below does before returning the syntax error.
+			logStats.StmtType = stmtType.String()
+			safeSession.ClearWarnings()
 			return nil, 0, err
 		}
+		switch astType := sqlparser.ASTToStatementType(stmt); astType {
+		case sqlparser.StmtSelect, sqlparser.StmtInsert, sqlparser.StmtReplace,
+			sqlparser.StmtUpdate, sqlparser.StmtDelete:
+			stmtType = astType
+		}
 	}
-	stmtType := sqlparser.Preview(sql)
 	logStats.StmtType = stmtType.String()
 
 	// Mysql warnings are scoped to the current session, but are
@@ -1555,18 +1692,52 @@ func (e *Executor) initVConfig(warnOnShardedOnly bool, pv plancontext.PlannerVer
 		QueryTimeout:  queryTimeout,
 		MaxMemoryRows: maxMemoryRows,
 
-		SetVarEnabled:      sysVarSetEnabled,
-		EnableViews:        enableViews,
-		ForeignKeyMode:     fkMode(foreignKeyMode),
-		EnableShardRouting: enableShardRouting,
-		WarnShardedOnly:    warnOnShardedOnly,
+		SetVarEnabled:         setVarEnabled,
+		DeniedSystemVariables: buildDeniedSystemVariables(deniedSystemVariables),
+		EnableViews:           enableViews,
+		ForeignKeyMode:        fkMode(foreignKeyMode),
+		EnableShardRouting:    enableShardRouting,
+		WarnShardedOnly:       warnOnShardedOnly,
 
 		DBDDLPlugin: dbDDLPlugin,
 
-		WarmingReadsPercent: e.config.WarmingReadsPercent,
-		WarmingReadsTimeout: warmingReadsQueryTimeout,
-		WarmingReadsChannel: e.warmingReadsChannel,
+		PreventCrossKeyspaceReads: e.config.PreventCrossKeyspaceReads,
+		WarmingReadsPercent:       e.config.WarmingReadsPercent,
+		WarmingReadsTimeout:       warmingReadsQueryTimeout,
+		WarmingReadsSemaphore:     e.warmingReadsSemaphore,
 	}
+}
+
+// buildDeniedSystemVariables normalizes the --denied-system-variables flag
+// slice into the lowercased set form used by VCursorConfig. Returns nil for
+// an empty input so VCursorImpl.IsSystemVariableDenied can short-circuit.
+func buildDeniedSystemVariables(names []string) map[string]struct{} {
+	if len(names) == 0 {
+		return nil
+	}
+	denied := make(map[string]struct{}, len(names))
+	for _, n := range names {
+		n = strings.TrimSpace(n)
+		if n == "" {
+			continue
+		}
+		n = strings.ToLower(n)
+		if _, ok := sysvars.AllSystemVariables[n]; !ok {
+			log.Warn("unknown system variable in --denied-system-variables", slog.String("name", n))
+		}
+		denied[n] = struct{}{}
+	}
+	if len(denied) == 0 {
+		return nil
+	}
+	return denied
+}
+
+func newWarmingReadsSemaphore(concurrency int) *semaphore.Weighted {
+	if concurrency <= 0 {
+		return semaphore.NewWeighted(0)
+	}
+	return semaphore.NewWeighted(int64(concurrency) * engine.WarmingReadsBaseWeight)
 }
 
 func countArguments(statement sqlparser.Statement) (paramsCount uint16) {
@@ -1689,7 +1860,7 @@ func (e *Executor) ExecuteVStream(ctx context.Context, rss []*srvtopo.ResolvedSh
 }
 
 func (e *Executor) startVStream(ctx context.Context, rss []*srvtopo.ResolvedShard, filter *binlogdatapb.Filter, gtid string, callback func(evs []*binlogdatapb.VEvent) error) error {
-	var shardGtids []*binlogdatapb.ShardGtid
+	shardGtids := make([]*binlogdatapb.ShardGtid, 0, len(rss))
 	for _, rs := range rss {
 		shardGtid := &binlogdatapb.ShardGtid{
 			Keyspace: rs.Target.Keyspace,
@@ -1794,7 +1965,10 @@ func (e *Executor) PlanPrepareStmt(ctx context.Context, safeSession *econtext.Sa
 	// creating this log stats to not interfere with the original log stats.
 	lStats := logstats.NewLogStats(ctx, "prepare", query, safeSession.GetSessionUUID(), nil, streamlog.GetQueryLogConfig())
 	plan, _, _, err := e.fetchOrCreatePlan(ctx, safeSession, query, nil, false, true, lStats, false)
-	return plan, err
+	if err != nil {
+		return nil, err
+	}
+	return plan, nil
 }
 
 func (e *Executor) Close() {

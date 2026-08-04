@@ -255,7 +255,7 @@ func CellValue(data []byte, pos int, typ byte, metadata uint16, field *querypb.F
 		month := val >> 5 & 15
 		year := val >> 9
 		return sqltypes.MakeTrusted(querypb.Type_DATE,
-			[]byte(fmt.Sprintf("%04d-%02d-%02d", year, month, day))), 3, nil
+			fmt.Appendf(nil, "%04d-%02d-%02d", year, month, day)), 3, nil
 	case TypeTime:
 		var hour, minute, second int32
 		if data[pos+2]&128 > 0 {
@@ -276,7 +276,7 @@ func CellValue(data []byte, pos int, typ byte, metadata uint16, field *querypb.F
 			second = val % 100
 		}
 		return sqltypes.MakeTrusted(querypb.Type_TIME,
-			[]byte(fmt.Sprintf("%02d:%02d:%02d", hour, minute, second))), 3, nil
+			fmt.Appendf(nil, "%02d:%02d:%02d", hour, minute, second)), 3, nil
 	case TypeDateTime:
 		val := binary.LittleEndian.Uint64(data[pos : pos+8])
 		d := val / 1000000
@@ -288,7 +288,7 @@ func CellValue(data []byte, pos int, typ byte, metadata uint16, field *querypb.F
 		minute := (t % 10000) / 100
 		second := t % 100
 		return sqltypes.MakeTrusted(querypb.Type_DATETIME,
-			[]byte(fmt.Sprintf("%04d-%02d-%02d %02d:%02d:%02d", year, month, day, hour, minute, second))), 8, nil
+			fmt.Appendf(nil, "%04d-%02d-%02d %02d:%02d:%02d", year, month, day, hour, minute, second)), 8, nil
 	case TypeVarchar, TypeVarString:
 		// We trust that typ is compatible with the field.Type
 		// Length is encoded in 1 or 2 bytes.
@@ -481,7 +481,7 @@ func CellValue(data []byte, pos int, typ byte, metadata uint16, field *querypb.F
 		minute := (hms >> 6) % (1 << 6)
 		second := hms % (1 << 6)
 		return sqltypes.MakeTrusted(querypb.Type_TIME,
-			[]byte(fmt.Sprintf("%v%02d:%02d:%02d%v", sign, hour, minute, second, fracStr))), 3 + (int(metadata)+1)/2, nil
+			fmt.Appendf(nil, "%v%02d:%02d:%02d%v", sign, hour, minute, second, fracStr)), 3 + (int(metadata)+1)/2, nil
 
 	case TypeNewDecimal:
 		precision := int(metadata >> 8) // total digits number
@@ -547,6 +547,40 @@ func CellValue(data []byte, pos int, typ byte, metadata uint16, field *querypb.F
 			pos += 4
 		}
 
+		// remove preceding 0s from the integral part, otherwise we get "000000000001.23" instead of "1.23"
+		trimPrecedingZeroes := func(b []byte) []byte {
+			isNegative := b[0] == '-'
+			if isNegative {
+				b = b[1:]
+			}
+			i := 0
+			for i < len(b) && b[i] == '0' {
+				i++
+			}
+			b = b[i:]
+			// Ensure at least one digit precedes the decimal point so values
+			// like 0.1 round-trip as "0.1" instead of ".1" (invalid JSON when
+			// the decimal appears inside a JSON column), and so a fully zero
+			// integral part collapses to "0" rather than "" or a run of zeroes.
+			needLeadingZero := len(b) == 0 || b[0] == '.'
+
+			size := len(b)
+			if isNegative {
+				size++
+			}
+			if needLeadingZero {
+				size++
+			}
+			out := make([]byte, 0, size)
+			if isNegative {
+				out = append(out, '-')
+			}
+			if needLeadingZero {
+				out = append(out, '0')
+			}
+			return append(out, b...)
+		}
+
 		// now see if we have a fraction
 		if scale == 0 {
 			// When the field is a DECIMAL using a scale of 0, e.g.
@@ -558,7 +592,7 @@ func CellValue(data []byte, pos int, typ byte, metadata uint16, field *querypb.F
 			}
 
 			return sqltypes.MakeTrusted(querypb.Type_DECIMAL,
-				txt.Bytes()), l, nil
+				trimPrecedingZeroes(txt.Bytes())), l, nil
 		}
 		txt.WriteByte('.')
 
@@ -573,8 +607,6 @@ func CellValue(data []byte, pos int, typ byte, metadata uint16, field *querypb.F
 		switch dig2bytes[frac0x] {
 		case 0:
 			// Nothing to do
-			return sqltypes.MakeTrusted(querypb.Type_DECIMAL,
-				txt.Bytes()), l, nil
 		case 1:
 			// one byte, 1 or 2 digits
 			val = uint32(d[pos])
@@ -615,20 +647,6 @@ func CellValue(data []byte, pos int, typ byte, metadata uint16, field *querypb.F
 			}
 		}
 
-		// remove preceding 0s from the integral part, otherwise we get "000000000001.23" instead of "1.23"
-		trimPrecedingZeroes := func(b []byte) []byte {
-			s := string(b)
-			isNegative := false
-			if s[0] == '-' {
-				isNegative = true
-				s = s[1:]
-			}
-			s = strings.TrimLeft(s, "0")
-			if isNegative {
-				s = "-" + s
-			}
-			return []byte(s)
-		}
 		return sqltypes.MakeTrusted(querypb.Type_DECIMAL, trimPrecedingZeroes(txt.Bytes())), l, nil
 
 	case TypeEnum:

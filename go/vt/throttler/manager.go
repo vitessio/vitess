@@ -89,7 +89,7 @@ func (m *managerImpl) unregisterThrottler(name string) {
 	defer m.mu.Unlock()
 
 	if _, ok := m.throttlers[name]; !ok {
-		log.Errorf("unregisterThrottler(): throttler with name '%v' is not registered", name)
+		log.Error(fmt.Sprintf("unregisterThrottler(): throttler with name '%v' is not registered", name))
 		return
 	}
 	delete(m.throttlers, name)
@@ -197,7 +197,7 @@ func (m *managerImpl) Throttlers() []string {
 }
 
 func (m *managerImpl) throttlerNamesLocked() []string {
-	var names []string
+	names := make([]string, 0, len(m.throttlers))
 	for k := range m.throttlers {
 		names = append(names, k)
 	}

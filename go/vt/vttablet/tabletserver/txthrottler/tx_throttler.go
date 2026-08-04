@@ -18,6 +18,7 @@ package txthrottler
 
 import (
 	"context"
+	"fmt"
 	"math/rand/v2"
 	"slices"
 	"strings"
@@ -40,8 +41,10 @@ import (
 // These vars store the functions used to create the topo server, healthcheck,
 // and go/vt/throttler. These are provided here so that they can be overridden
 // in tests to generate mocks.
-type healthCheckFactoryFunc func(ctx context.Context, topoServer *topo.Server, cell, keyspace, shard string, cellsToWatch []string) (discovery.HealthCheck, error)
-type throttlerFactoryFunc func(name, unit string, threadCount int, maxRate int64, maxReplicationLagConfig throttler.MaxReplicationLagModuleConfig) (throttler.Throttler, error)
+type (
+	healthCheckFactoryFunc func(ctx context.Context, topoServer *topo.Server, cell, keyspace, shard string, cellsToWatch []string) (discovery.HealthCheck, error)
+	throttlerFactoryFunc   func(name, unit string, threadCount int, maxRate int64, maxReplicationLagConfig throttler.MaxReplicationLagModuleConfig) (throttler.Throttler, error)
+)
 
 var (
 	healthCheckFactory healthCheckFactoryFunc
@@ -84,7 +87,7 @@ const TxThrottlerName = "TransactionThrottler"
 func fetchKnownCells(ctx context.Context, topoServer *topo.Server, target *querypb.Target) []string {
 	cells, err := topoServer.GetKnownCells(ctx)
 	if err != nil {
-		log.Errorf("txThrottler: falling back to local cell due to error fetching cells from topology: %+v", err)
+		log.Error(fmt.Sprintf("txThrottler: falling back to local cell due to error fetching cells from topology: %+v", err))
 		cells = []string{target.Cell}
 	}
 	return cells
@@ -162,7 +165,7 @@ type txThrottlerStateImpl struct {
 	// tabletTypes stores the tablet types for throttling
 	tabletTypes map[topodatapb.TabletType]bool
 
-	maxLag             int64
+	maxLag             atomic.Int64
 	done               chan bool
 	waitForTermination sync.WaitGroup
 }
@@ -173,13 +176,9 @@ func NewTxThrottler(env tabletenv.Env, topoServer *topo.Server) TxThrottler {
 	config := env.Config()
 	if config.EnableTxThrottler {
 		if len(config.TxThrottlerHealthCheckCells) == 0 {
-			defer log.Infof("Initialized transaction throttler using tabletTypes: %+v, cellsFromTopo: true, topoRefreshInterval: %s, throttlerConfig: %q",
-				config.TxThrottlerTabletTypes, config.TxThrottlerTopoRefreshInterval, config.TxThrottlerConfig.Get(),
-			)
+			defer log.Info(fmt.Sprintf("Initialized transaction throttler using tabletTypes: %+v, cellsFromTopo: true, topoRefreshInterval: %s, throttlerConfig: %q", config.TxThrottlerTabletTypes, config.TxThrottlerTopoRefreshInterval, config.TxThrottlerConfig.Get()))
 		} else {
-			defer log.Infof("Initialized transaction throttler using tabletTypes: %+v, healthCheckCells: %+v, throttlerConfig: %q",
-				config.TxThrottlerTabletTypes, config.TxThrottlerHealthCheckCells, config.TxThrottlerConfig.Get(),
-			)
+			defer log.Info(fmt.Sprintf("Initialized transaction throttler using tabletTypes: %+v, healthCheckCells: %+v, throttlerConfig: %q", config.TxThrottlerTabletTypes, config.TxThrottlerHealthCheckCells, config.TxThrottlerConfig.Get()))
 		}
 	}
 
@@ -351,7 +350,7 @@ func (ts *txThrottlerStateImpl) healthChecksProcessor(topoServer *topo.Server, t
 			return
 		case <-cellsUpdateTicks:
 			if err := ts.updateHealthCheckCells(topoServer, target); err != nil {
-				log.Errorf("txThrottler: failed to update cell list: %+v", err)
+				log.Error(fmt.Sprintf("txThrottler: failed to update cell list: %+v", err))
 			}
 		case th := <-ts.healthCheckChan:
 			ts.StatsUpdate(th)
@@ -368,16 +367,14 @@ func (ts *txThrottlerStateImpl) throttle() bool {
 	ts.throttleMu.Lock()
 	defer ts.throttleMu.Unlock()
 
-	maxLag := atomic.LoadInt64(&ts.maxLag)
-
-	return maxLag > ts.config.TxThrottlerConfig.TargetReplicationLagSec &&
+	return ts.maxLag.Load() > ts.config.TxThrottlerConfig.TargetReplicationLagSec &&
 		ts.throttler.Throttle(0 /* threadId */) > 0
 }
 
 func (ts *txThrottlerStateImpl) updateMaxLag() {
 	defer ts.waitForTermination.Done()
 	// We use half of the target lag to ensure we have enough resolution to see changes in lag below that value
-	ticker := time.NewTicker(time.Duration(ts.config.TxThrottlerConfig.TargetReplicationLagSec/2) * time.Second)
+	ticker := time.NewTicker(time.Duration(ts.config.TxThrottlerConfig.TargetReplicationLagSec) * time.Second / 2)
 	defer ticker.Stop()
 outerloop:
 	for {
@@ -391,7 +388,7 @@ outerloop:
 					maxLag = maxLagPerTabletType
 				}
 			}
-			atomic.StoreInt64(&ts.maxLag, int64(maxLag))
+			ts.maxLag.Store(int64(maxLag))
 		case <-ts.done:
 			break outerloop
 		}

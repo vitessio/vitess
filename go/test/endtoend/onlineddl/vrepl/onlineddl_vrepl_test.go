@@ -35,7 +35,6 @@ import (
 	"vitess.io/vitess/go/test/endtoend/onlineddl"
 	"vitess.io/vitess/go/test/endtoend/throttler"
 	"vitess.io/vitess/go/vt/schema"
-	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -170,7 +169,7 @@ func TestMain(m *testing.M) {
 		defer clusterInstance.Teardown()
 
 		if _, err := os.Stat(schemaChangeDirectory); os.IsNotExist(err) {
-			_ = os.Mkdir(schemaChangeDirectory, 0700)
+			_ = os.Mkdir(schemaChangeDirectory, 0o700)
 		}
 
 		clusterInstance.VtctldExtraArgs = []string{
@@ -180,12 +179,11 @@ func TestMain(m *testing.M) {
 		}
 
 		clusterInstance.VtTabletExtraArgs = []string{
-			utils.GetFlagVariantForTests("--heartbeat-interval"), "250ms",
-			utils.GetFlagVariantForTests("--migration-check-interval"), "5s",
-			utils.GetFlagVariantForTests("--watch-replication-stream"),
+			"--heartbeat-interval", "250ms",
+			"--migration-check-interval", "5s",
 		}
 		clusterInstance.VtGateExtraArgs = []string{
-			utils.GetFlagVariantForTests("--ddl-strategy"), "online",
+			"--ddl-strategy", "online",
 		}
 
 		if err := clusterInstance.StartTopo(); err != nil {
@@ -224,9 +222,9 @@ func TestMain(m *testing.M) {
 
 func TestVreplSchemaChanges(t *testing.T) {
 	shards = clusterInstance.Keyspaces[0].Shards
-	require.Equal(t, 2, len(shards))
+	require.Len(t, shards, 2)
 	for _, shard := range shards {
-		require.Equal(t, 2, len(shard.Vttablets))
+		require.Len(t, shard.Vttablets, 2)
 	}
 
 	providedUUID := ""
@@ -284,7 +282,8 @@ func TestVreplSchemaChanges(t *testing.T) {
 		onlineddl.CheckRetryMigration(t, &vtParams, shards, uuid, false)
 		onlineddl.CheckMigrationArtifacts(t, &vtParams, shards, uuid, true)
 
-		rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
+		rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, uuid)
+		require.NoError(t, err)
 		require.NotNil(t, rs)
 		for _, row := range rs.Named().Rows {
 			retainArtifactSeconds := row.AsInt64("retain_artifacts_seconds", 0)
@@ -296,7 +295,8 @@ func TestVreplSchemaChanges(t *testing.T) {
 
 		onlineddl.CheckCleanupMigration(t, &vtParams, shards, uuid)
 
-		rs = onlineddl.ReadMigrations(t, &vtParams, uuid)
+		rs, err = onlineddl.ReadMigrations(t.Context(), &vtParams, uuid)
+		require.NoError(t, err)
 		require.NotNil(t, rs)
 		for _, row := range rs.Named().Rows {
 			retainArtifactSeconds := row.AsInt64("retain_artifacts_seconds", 0)
@@ -463,7 +463,8 @@ func TestVreplSchemaChanges(t *testing.T) {
 		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, normalMigrationWait, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusFailed)
 
-		rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
+		rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, uuid)
+		require.NoError(t, err)
 		require.NotNil(t, rs)
 		for _, row := range rs.Named().Rows {
 			message := row["message"].ToString()
@@ -486,12 +487,10 @@ func TestVreplSchemaChanges(t *testing.T) {
 		// spawn n migrations; cancel them via cancel-all
 		var wg sync.WaitGroup
 		count := 4
-		for i := 0; i < count; i++ {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
+		for range count {
+			wg.Go(func() {
 				_ = testOnlineDDLStatement(t, alterTableThrottlingStatement, "vitess", providedUUID, providedMigrationContext, "vtgate", "vrepl_col", "", false)
-			}()
+			})
 		}
 		wg.Wait()
 		onlineddl.CheckCancelAllMigrations(t, &vtParams, len(shards)*count)
@@ -505,12 +504,10 @@ func TestVreplSchemaChanges(t *testing.T) {
 		// spawn n migrations; cancel them via cancel-all
 		var wg sync.WaitGroup
 		count := 4
-		for i := 0; i < count; i++ {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
+		for range count {
+			wg.Go(func() {
 				_ = testOnlineDDLStatement(t, alterTableThrottlingStatement, "online", providedUUID, providedMigrationContext, "vtgate", "vrepl_col", "", false)
-			}()
+			})
 		}
 		wg.Wait()
 		// cancelling via vtctl does not return values. We CANCEL ALL via vtctl, then validate via VTGate that nothing remains to be cancelled.
@@ -527,7 +524,7 @@ func TestVreplSchemaChanges(t *testing.T) {
 		t.Run(fmt.Sprintf("PlannedReparentShard via throttling %d/2", (currentPrimaryTabletIndex+1)), func(t *testing.T) {
 			insertRows(t, 2)
 			_, err = throttler.ThrottleAppAndWaitUntilTabletsConfirm(t, clusterInstance, throttlerapp.OnlineDDLName)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			defer throttler.UnthrottleAppAndWaitUntilTabletsConfirm(t, clusterInstance, throttlerapp.OnlineDDLName)
 
 			uuid := testOnlineDDLStatement(t, alterTableTrivialStatement, "vitess", providedUUID, providedMigrationContext, "vtgate", "test_val", "", true)
@@ -553,7 +550,8 @@ func TestVreplSchemaChanges(t *testing.T) {
 			t.Run("Check tablet", func(t *testing.T) {
 				// onlineddl.Executor marks this migration with its tablet alias
 				// reminder that onlineddl.Executor runs on the primary tablet.
-				rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
+				rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, uuid)
+				require.NoError(t, err)
 				require.NotNil(t, rs)
 				for _, row := range rs.Named().Rows {
 					shard := row["shard"].ToString()
@@ -573,7 +571,8 @@ func TestVreplSchemaChanges(t *testing.T) {
 				// migration has started and is throttled. We now run PRS
 				err := clusterInstance.VtctldClientProcess.ExecuteCommand("PlannedReparentShard", keyspaceName+"/-80", "--new-primary", reparentTablet.Alias)
 				require.NoError(t, err, "failed PRS: %v", err)
-				rs := onlineddl.VtgateExecQuery(t, &vtParams, "show vitess_tablets", "")
+				rs, err := onlineddl.VtgateExecQuery(t.Context(), &vtParams, "show vitess_tablets")
+				require.NoError(t, err)
 				onlineddl.PrintQueryResult(os.Stdout, rs)
 			})
 			t.Run("unthrottle", func(t *testing.T) {
@@ -589,7 +588,8 @@ func TestVreplSchemaChanges(t *testing.T) {
 				// onlineddl.Executor will find that a vrepl migration started in a different tablet.
 				// it will own the tablet and will update 'tablet' column in _vt.schema_migrations with its own
 				// (promoted primary) tablet alias.
-				rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
+				rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, uuid)
+				require.NoError(t, err)
 				require.NotNil(t, rs)
 				for _, row := range rs.Named().Rows {
 					shard := row["shard"].ToString()
@@ -647,7 +647,8 @@ func TestVreplSchemaChanges(t *testing.T) {
 			t.Run("Check tablet", func(t *testing.T) {
 				// onlineddl.Executor marks this migration with its tablet alias
 				// reminder that onlineddl.Executor runs on the primary tablet.
-				rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
+				rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, uuid)
+				require.NoError(t, err)
 				require.NotNil(t, rs)
 				for _, row := range rs.Named().Rows {
 					shard := row["shard"].ToString()
@@ -667,13 +668,14 @@ func TestVreplSchemaChanges(t *testing.T) {
 				// migration has started and completion is postponed. We now PRS
 				err := clusterInstance.VtctldClientProcess.ExecuteCommand("PlannedReparentShard", keyspaceName+"/-80", "--new-primary", reparentTablet.Alias)
 				require.NoError(t, err, "failed PRS: %v", err)
-				rs := onlineddl.VtgateExecQuery(t, &vtParams, "show vitess_tablets", "")
+				rs, err := onlineddl.VtgateExecQuery(t.Context(), &vtParams, "show vitess_tablets")
+				require.NoError(t, err)
 				onlineddl.PrintQueryResult(os.Stdout, rs)
 			})
 			t.Run("complete and expect completion", func(t *testing.T) {
 				query := fmt.Sprintf("select * from _vt.vreplication where workflow ='%s'", uuid)
 				rs, err := reparentTablet.VttabletProcess.QueryTablet(query, "", true)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				onlineddl.PrintQueryResult(os.Stdout, rs)
 
 				onlineddl.CheckCompleteAllMigrations(t, &vtParams, len(shards))
@@ -686,7 +688,8 @@ func TestVreplSchemaChanges(t *testing.T) {
 				// onlineddl.Executor will find that a vrepl migration started in a different tablet.
 				// it will own the tablet and will update 'tablet' column in _vt.schema_migrations with its own
 				// (promoted primary) tablet alias.
-				rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
+				rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, uuid)
+				require.NoError(t, err)
 				require.NotNil(t, rs)
 				for _, row := range rs.Named().Rows {
 					shard := row["shard"].ToString()
@@ -714,7 +717,8 @@ func TestVreplSchemaChanges(t *testing.T) {
 	t.Run("Online DROP, vtctl", func(t *testing.T) {
 		uuid := testOnlineDDLStatement(t, onlineDDLDropTableStatement, "online", providedUUID, providedMigrationContext, "vtctl", "", "", false)
 		t.Run("test ready to complete", func(t *testing.T) {
-			rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
+			rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, uuid)
+			require.NoError(t, err)
 			require.NotNil(t, rs)
 			for _, row := range rs.Named().Rows {
 				readyToComplete := row.AsInt64("ready_to_complete", 0)
@@ -821,7 +825,8 @@ func TestVreplSchemaChanges(t *testing.T) {
 		var revertUUID string
 		t.Run("issue revert migration", func(t *testing.T) {
 			revertQuery := fmt.Sprintf("revert vitess_migration '%s'", uuid)
-			rs := onlineddl.VtgateExecQuery(t, &vtParams, revertQuery, "")
+			rs, err := onlineddl.VtgateExecQuery(t.Context(), &vtParams, revertQuery)
+			require.NoError(t, err)
 			require.NotNil(t, rs)
 			row := rs.Named().Row()
 			require.NotNil(t, row)
@@ -844,9 +849,10 @@ func TestVreplSchemaChanges(t *testing.T) {
 		})
 		t.Run("expect two rows in SHOW VITESS_MIGRATIONS", func(t *testing.T) {
 			// This validates that the shards are reflected correctly in output of SHOW VITESS_MIGRATIONS
-			rs := onlineddl.ReadMigrations(t, &vtParams, revertUUID)
+			rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, revertUUID)
+			require.NoError(t, err)
 			require.NotNil(t, rs)
-			require.Equal(t, 2, len(rs.Rows))
+			require.Len(t, rs.Rows, 2)
 			for _, row := range rs.Named().Rows {
 				shard := row["shard"].ToString()
 				status := row["migration_status"].ToString()
@@ -859,6 +865,36 @@ func TestVreplSchemaChanges(t *testing.T) {
 				default:
 					require.NoError(t, fmt.Errorf("unexpected shard name: %s", shard))
 				}
+			}
+		})
+	})
+	t.Run("Revert a migration completed on both shards", func(t *testing.T) {
+		var uuid string
+		t.Run("run migration, expect completion on both shards", func(t *testing.T) {
+			uuid = testOnlineDDLStatement(t, alterTableTrivialStatement, "vitess", providedUUID, providedMigrationContext, "vtgate", "test_val", "", false)
+			onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		})
+		var revertUUID string
+		t.Run("issue revert migration", func(t *testing.T) {
+			revertQuery := fmt.Sprintf("revert vitess_migration '%s'", uuid)
+			output, err := clusterInstance.VtctldClientProcess.ApplySchemaWithOutput(keyspaceName, revertQuery, cluster.ApplySchemaParams{DDLStrategy: "vitess"})
+			require.NoError(t, err)
+			revertUUID = strings.TrimSpace(output)
+			assert.NotEmpty(t, revertUUID)
+		})
+		t.Run("revert completes on both shards", func(t *testing.T) {
+			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, revertUUID, normalMigrationWait, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
+			onlineddl.CheckMigrationStatus(t, &vtParams, shards, revertUUID, schema.OnlineDDLStatusComplete)
+		})
+		t.Run("validate both shards show complete in SHOW VITESS_MIGRATIONS", func(t *testing.T) {
+			rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, revertUUID)
+			require.NoError(t, err)
+			require.NotNil(t, rs)
+			require.Len(t, rs.Rows, 2)
+			for _, row := range rs.Named().Rows {
+				status := row["migration_status"].ToString()
+				assert.Equal(t, string(schema.OnlineDDLStatusComplete), status, "shard %s", row["shard"].ToString())
 			}
 		})
 	})
@@ -876,13 +912,14 @@ func insertRow(t *testing.T) {
 
 	tableName := fmt.Sprintf("vt_onlineddl_test_%02d", 3)
 	sqlQuery := fmt.Sprintf(insertRowStatement, tableName, countInserts)
-	r := onlineddl.VtgateExecQuery(t, &vtParams, sqlQuery, "")
+	r, err := onlineddl.VtgateExecQuery(t.Context(), &vtParams, sqlQuery)
+	require.NoError(t, err)
 	require.NotNil(t, r)
 	countInserts++
 }
 
 func insertRows(t *testing.T, count int) {
-	for i := 0; i < count; i++ {
+	for range count {
 		insertRow(t)
 	}
 }
@@ -893,7 +930,8 @@ func testRows(t *testing.T) {
 
 	tableName := fmt.Sprintf("vt_onlineddl_test_%02d", 3)
 	sqlQuery := fmt.Sprintf(selectCountRowsStatement, tableName)
-	r := onlineddl.VtgateExecQuery(t, &vtParams, sqlQuery, "")
+	r, err := onlineddl.VtgateExecQuery(t.Context(), &vtParams, sqlQuery)
+	require.NoError(t, err)
 	require.NotNil(t, r)
 	row := r.Named().Row()
 	require.NotNil(t, row)
@@ -906,7 +944,8 @@ func testMigrationRowCount(t *testing.T, uuid string) {
 
 	var totalRowsCopied uint64
 	// count sum of rows copied in all shards, that should be the total number of rows inserted to the table
-	rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
+	rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, uuid)
+	require.NoError(t, err)
 	require.NotNil(t, rs)
 	for _, row := range rs.Named().Rows {
 		rowsCopied := row.AsUint64("rows_copied", 0)
@@ -917,11 +956,11 @@ func testMigrationRowCount(t *testing.T, uuid string) {
 
 func testWithInitialSchema(t *testing.T) {
 	// Create 4 tables
-	var sqlQuery = "" //nolint
-	for i := 0; i < totalTableCount; i++ {
+	sqlQuery := ""
+	for i := range totalTableCount {
 		sqlQuery = fmt.Sprintf(createTable, fmt.Sprintf("vt_onlineddl_test_%02d", i))
 		err := clusterInstance.VtctldClientProcess.ApplySchema(keyspaceName, sqlQuery)
-		require.Nil(t, err)
+		require.NoError(t, err)
 	}
 
 	// Check if 4 tables are created
@@ -941,10 +980,10 @@ func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy str
 		params := cluster.ApplySchemaParams{DDLStrategy: ddlStrategy, UUIDs: providedUUIDList, MigrationContext: providedMigrationContext}
 		output, err := clusterInstance.VtctldClientProcess.ApplySchemaWithOutput(keyspaceName, sqlQuery, params)
 		if expectError == "" {
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			uuid = output
 		} else {
-			assert.Error(t, err)
+			require.Error(t, err)
 			assert.Contains(t, output, expectError)
 		}
 	}
@@ -953,7 +992,7 @@ func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy str
 	fmt.Printf("<%s>\n", uuid)
 
 	strategySetting, err := schema.ParseDDLStrategy(ddlStrategy)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	if strategySetting.Strategy.IsDirect() {
 		skipWait = true
@@ -980,8 +1019,8 @@ func checkTables(t *testing.T, showTableName string, expectCount int) {
 func checkTablesCount(t *testing.T, tablet *cluster.Vttablet, showTableName string, expectCount int) {
 	query := fmt.Sprintf(`show tables like '%%%s%%';`, showTableName)
 	queryResult, err := tablet.VttabletProcess.QueryTablet(query, keyspaceName, true)
-	require.Nil(t, err)
-	assert.Equal(t, expectCount, len(queryResult.Rows))
+	require.NoError(t, err)
+	assert.Len(t, queryResult.Rows, expectCount)
 }
 
 // checkMigratedTables checks the CREATE STATEMENT of a table after migration
@@ -995,10 +1034,10 @@ func checkMigratedTable(t *testing.T, tableName, expectColumn string) {
 // getCreateTableStatement returns the CREATE TABLE statement for a given table
 func getCreateTableStatement(t *testing.T, tablet *cluster.Vttablet, tableName string) (statement string) {
 	queryResult, err := tablet.VttabletProcess.QueryTablet(fmt.Sprintf("show create table %s;", tableName), keyspaceName, true)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
-	assert.Equal(t, len(queryResult.Rows), 1)
-	assert.Equal(t, len(queryResult.Rows[0]), 2) // table name, create statement
+	assert.Len(t, queryResult.Rows, 1)
+	assert.Len(t, queryResult.Rows[0], 2) // table name, create statement
 	statement = queryResult.Rows[0][1].ToString()
 	return statement
 }

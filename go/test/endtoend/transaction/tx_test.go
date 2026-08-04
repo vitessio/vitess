@@ -17,7 +17,6 @@ limitations under the License.
 package transaction
 
 import (
-	"context"
 	_ "embed"
 	"flag"
 	"fmt"
@@ -29,7 +28,6 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/utils"
-	vtutils "vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 )
 
@@ -58,7 +56,7 @@ func TestMain(m *testing.M) {
 		clusterInstance.VtgateGrpcPort = clusterInstance.GetAndReservePort()
 		// Set extra tablet args for twopc
 		clusterInstance.VtTabletExtraArgs = []string{
-			vtutils.GetFlagVariantForTests("--twopc-abandon-age"), "3600",
+			"--twopc-abandon-age", "3600",
 		}
 
 		// Start topo server
@@ -232,7 +230,7 @@ func TestTransactionIsolationInTx(t *testing.T) {
 
 func start(t *testing.T) func() {
 	deleteAll := func() {
-		conn, err := mysql.Connect(context.Background(), &vtParams)
+		conn, err := mysql.Connect(t.Context(), &vtParams)
 		require.NoError(t, err)
 		tables := []string{"test", "twopc_user"}
 		for _, table := range tables {

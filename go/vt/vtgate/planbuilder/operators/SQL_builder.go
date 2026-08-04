@@ -42,6 +42,7 @@ type (
 func (qb *queryBuilder) asSelectStatement() sqlparser.TableStatement {
 	return qb.stmt.(sqlparser.TableStatement)
 }
+
 func (qb *queryBuilder) asOrderAndLimit() sqlparser.OrderAndLimit {
 	return qb.stmt.(sqlparser.OrderAndLimit)
 }
@@ -279,9 +280,11 @@ type FromStatement interface {
 	SetWherePredicate(sqlparser.Expr)
 }
 
-var _ FromStatement = (*sqlparser.Select)(nil)
-var _ FromStatement = (*sqlparser.Update)(nil)
-var _ FromStatement = (*sqlparser.Delete)(nil)
+var (
+	_ FromStatement = (*sqlparser.Select)(nil)
+	_ FromStatement = (*sqlparser.Update)(nil)
+	_ FromStatement = (*sqlparser.Delete)(nil)
+)
 
 func (qb *queryBuilder) joinWith(other *queryBuilder, onCondition sqlparser.Expr, joinType sqlparser.JoinType) {
 	stmt := qb.stmt.(FromStatement)
@@ -554,6 +557,15 @@ func buildLimit(op *Limit, qb *queryBuilder) {
 }
 
 func buildTable(op *Table, qb *queryBuilder) {
+	// Virtual dual tables (nil QTable) should not add a table to the
+	// FROM clause. The Select formatter outputs "from dual" when From is nil.
+	if op.QTable == nil {
+		if qb.stmt == nil {
+			qb.stmt = &sqlparser.Select{}
+		}
+		return
+	}
+
 	if !qb.includeTable(op) {
 		return
 	}

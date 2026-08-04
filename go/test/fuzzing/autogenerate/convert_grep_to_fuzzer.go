@@ -32,6 +32,7 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 )
 
@@ -82,12 +83,7 @@ var pathToImportPath = map[string]string{
 
 // contains checks if a string is present in a string slice
 func contains(s []string, e string) bool {
-	for _, a := range s {
-		if a == e {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(s, e)
 }
 
 /*
@@ -143,9 +139,9 @@ An example of a generated harness:
 */
 func createHarness(shortName, structName string) string {
 	var harnessString strings.Builder
-	harnessString.WriteString(fmt.Sprintf("\n\nfunc Fuzz%s%s(data []byte) error {\n", shortName, structName))
+	fmt.Fprintf(&harnessString, "\n\nfunc Fuzz%s%s(data []byte) error {\n", shortName, structName)
 	harnessString.WriteString("\tf := fuzz.NewConsumer(data)\n")
-	harnessString.WriteString(fmt.Sprintf("\ts := &%s.%s{}\n", shortName, structName))
+	fmt.Fprintf(&harnessString, "\ts := &%s.%s{}\n", shortName, structName)
 	harnessString.WriteString("\terr := f.GenerateStruct(s)\n")
 	harnessString.WriteString("\tif err != nil {\n")
 	harnessString.WriteString("\t\treturn err\n")
@@ -154,7 +150,7 @@ func createHarness(shortName, structName string) string {
 	harnessString.WriteString("\tif err != nil {\n")
 	harnessString.WriteString("\t\treturn err\n")
 	harnessString.WriteString("\t}\n")
-	harnessString.WriteString(fmt.Sprintf("\ts2 := &%s.%s{}\n", shortName, structName))
+	fmt.Fprintf(&harnessString, "\ts2 := &%s.%s{}\n", shortName, structName)
 	harnessString.WriteString("\terr = s2.UnmarshalVT(b)\n")
 	harnessString.WriteString("\tif err != nil {\n")
 	harnessString.WriteString("\t\treturn err\n")
@@ -163,7 +159,7 @@ func createHarness(shortName, structName string) string {
 	harnessString.WriteString("\tif err != nil {\n")
 	harnessString.WriteString("\t\treturn err\n")
 	harnessString.WriteString("\t}\n")
-	harnessString.WriteString(fmt.Sprintf("\ts3 := &%s.%s{}\n", shortName, structName))
+	fmt.Fprintf(&harnessString, "\ts3 := &%s.%s{}\n", shortName, structName)
 	harnessString.WriteString("\terr = s3.UnmarshalVT(newBytes)\n")
 	harnessString.WriteString("\treturn err\n")
 	harnessString.WriteString("}\n")
@@ -180,7 +176,7 @@ func createMainFuzzer(functionList, harnesses []string) {
 	mainFuzzer.WriteString("package fuzzing\n\n")
 	mainFuzzer.WriteString("import (\n")
 	for k, v := range importPathShort {
-		mainFuzzer.WriteString(fmt.Sprintf("\t%s \"%s\"\n", v, k))
+		fmt.Fprintf(&mainFuzzer, "\t%s \"%s\"\n", v, k)
 	}
 	mainFuzzer.WriteString("\tfuzz \"github.com/AdaLogics/go-fuzz-headers\"\n")
 	mainFuzzer.WriteString(")\n\n")
@@ -191,19 +187,19 @@ func createMainFuzzer(functionList, harnesses []string) {
 
 	// calls to each internal harness
 	maxOps := len(functionList)
-	mainFuzzer.WriteString(fmt.Sprintf("\tfuncOp := int(data[0])%%%d\n", maxOps))
+	fmt.Fprintf(&mainFuzzer, "\tfuncOp := int(data[0])%%%d\n", maxOps)
 	mainFuzzer.WriteString("\tdata2 := data[1:]\n")
 	mainFuzzer.WriteString("\tswitch funcOp {\n")
-	for i := 0; i < len(functionList); i++ {
-		mainFuzzer.WriteString(fmt.Sprintf("\tcase %d:\n", i))
-		mainFuzzer.WriteString(fmt.Sprintf("\t%s\n", functionList[i]))
+	for i := range functionList {
+		fmt.Fprintf(&mainFuzzer, "\tcase %d:\n", i)
+		fmt.Fprintf(&mainFuzzer, "\t%s\n", functionList[i])
 	}
 	mainFuzzer.WriteString("\t}\n")
 	mainFuzzer.WriteString("\treturn 1\n")
 	mainFuzzer.WriteString("}")
 
 	// add all the internal harnesses
-	for i := 0; i < len(harnesses); i++ {
+	for i := range harnesses {
 		mainFuzzer.WriteString(harnesses[i])
 	}
 
@@ -249,7 +245,7 @@ func getGrepData() ([]string, []string) {
 			// get import path and short name
 			importPath := pathToImportPath[thePath]
 			shortName := importPathShort[importPath]
-			//fmt.Println(createHarness(shortName, structName))
+			// fmt.Println(createHarness(shortName, structName))
 
 			// create harness
 			harness := createHarness(shortName, structName)

@@ -22,6 +22,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/callerid"
@@ -38,22 +39,28 @@ func TestCreateViewDDL(t *testing.T) {
 	client := framework.NewClient()
 
 	client.UpdateContext(callerid.NewContext(
-		context.Background(),
+		t.Context(),
 		&vtrpcpb.CallerID{},
 		&querypb.VTGateCallerID{Username: "dev"}))
 
 	ch := make(chan any)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx, cancel := context.WithCancel(t.Context())
+	streamErrCh := make(chan error, 1)
+	defer func() {
+		cancel()
+		require.NoError(t, <-streamErrCh)
+	}()
 	go func() {
-		err := client.StreamHealthWithContext(ctx, func(shr *querypb.StreamHealthResponse) error {
+		streamErrCh <- client.StreamHealthWithContext(ctx, func(shr *querypb.StreamHealthResponse) error {
 			views := shr.RealtimeStats.ViewSchemaChanged
 			if len(views) != 0 && views[0] == "vitess_view" {
-				ch <- true
+				select {
+				case ch <- true:
+				case <-ctx.Done():
+				}
 			}
 			return nil
 		})
-		require.NoError(t, err)
 	}()
 
 	defer func() {
@@ -95,22 +102,28 @@ func TestAlterViewDDL(t *testing.T) {
 	client := framework.NewClient()
 
 	client.UpdateContext(callerid.NewContext(
-		context.Background(),
+		t.Context(),
 		&vtrpcpb.CallerID{},
 		&querypb.VTGateCallerID{Username: "dev"}))
 
 	ch := make(chan any)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx, cancel := context.WithCancel(t.Context())
+	streamErrCh := make(chan error, 1)
+	defer func() {
+		cancel()
+		require.NoError(t, <-streamErrCh)
+	}()
 	go func() {
-		err := client.StreamHealthWithContext(ctx, func(shr *querypb.StreamHealthResponse) error {
+		streamErrCh <- client.StreamHealthWithContext(ctx, func(shr *querypb.StreamHealthResponse) error {
 			views := shr.RealtimeStats.ViewSchemaChanged
 			if len(views) != 0 && views[0] == "vitess_view" {
-				ch <- true
+				select {
+				case ch <- true:
+				case <-ctx.Done():
+				}
 			}
 			return nil
 		})
-		require.NoError(t, err)
 	}()
 
 	defer func() {
@@ -153,7 +166,7 @@ func TestDropViewDDL(t *testing.T) {
 	client := framework.NewClient()
 
 	client.UpdateContext(callerid.NewContext(
-		context.Background(),
+		t.Context(),
 		&vtrpcpb.CallerID{},
 		&querypb.VTGateCallerID{Username: "dev"}))
 
@@ -205,7 +218,7 @@ func TestViewDDLWithInfrSchema(t *testing.T) {
 	client := framework.NewClient()
 
 	client.UpdateContext(callerid.NewContext(
-		context.Background(),
+		t.Context(),
 		&vtrpcpb.CallerID{},
 		&querypb.VTGateCallerID{Username: "dev"}))
 
@@ -241,7 +254,7 @@ func TestViewAndTableUnique(t *testing.T) {
 	client := framework.NewClient()
 
 	client.UpdateContext(callerid.NewContext(
-		context.Background(),
+		t.Context(),
 		&vtrpcpb.CallerID{},
 		&querypb.VTGateCallerID{Username: "dev"}))
 
@@ -278,7 +291,7 @@ func waitForResult(t *testing.T, client *framework.QueryClient, rowCount int, ti
 	for {
 		select {
 		case <-wait:
-			t.Errorf("all views are not dropped within the time")
+			assert.Fail(t, "all views are not dropped within the time")
 			return
 		case <-time.After(1 * time.Second):
 			qr, err := client.Execute(qSelAllRows, nil)

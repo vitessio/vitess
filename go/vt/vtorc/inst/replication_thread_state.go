@@ -47,9 +47,11 @@ func ReplicationThreadStateFromReplicationState(state replication.ReplicationSta
 func (replicationThreadState *ReplicationThreadState) IsRunning() bool {
 	return *replicationThreadState == ReplicationThreadStateRunning
 }
+
 func (replicationThreadState *ReplicationThreadState) IsStopped() bool {
 	return *replicationThreadState == ReplicationThreadStateStopped
 }
+
 func (replicationThreadState *ReplicationThreadState) Exists() bool {
 	return *replicationThreadState != ReplicationThreadStateNoThread
 }

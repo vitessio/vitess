@@ -17,10 +17,8 @@ limitations under the License.
 package cli
 
 import (
-	"context"
 	"fmt"
 	"os"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -69,16 +67,12 @@ func TestVtclient(t *testing.T) {
 			},
 		},
 	}
-	if err := cfg.InitSchemas("test_keyspace", schema, vschema); err != nil {
-		t.Fatalf("InitSchemas failed: %v", err)
-	}
+	require.NoError(t, cfg.InitSchemas("test_keyspace", schema, vschema))
 	defer os.RemoveAll(cfg.SchemaDir)
 	cluster := vttest.LocalCluster{
 		Config: cfg,
 	}
-	if err := cluster.Setup(); err != nil {
-		t.Fatalf("InitSchemas failed: %v", err)
-	}
+	require.NoError(t, cluster.Setup())
 	defer cluster.TearDown()
 
 	vtgateAddr := fmt.Sprintf("localhost:%v", cluster.Env.PortForProtocol("vtcombo", "grpc"))
@@ -91,28 +85,38 @@ func TestVtclient(t *testing.T) {
 			args: []string{"SELECT * FROM table1"},
 		},
 		{
-			args: []string{"--target", "@primary", "--bind-variables", `[ 1, 100 ]`,
-				"INSERT INTO table1 (id, i) VALUES (:v1, :v2)"},
+			args: []string{
+				"--target", "@primary", "--bind-variables", `[ 1, 100 ]`,
+				"INSERT INTO table1 (id, i) VALUES (:v1, :v2)",
+			},
 			rowsAffected: 1,
 		},
 		{
-			args: []string{"--target", "@primary",
-				"UPDATE table1 SET i = (i + 1)"},
+			args: []string{
+				"--target", "@primary",
+				"UPDATE table1 SET i = (i + 1)",
+			},
 			rowsAffected: 1,
 		},
 		{
-			args: []string{"--target", "@primary",
-				"SELECT * FROM table1"},
+			args: []string{
+				"--target", "@primary",
+				"SELECT * FROM table1",
+			},
 			rowsAffected: 1,
 		},
 		{
-			args: []string{"--target", "@primary", "--bind-variables", `[ 1 ]`,
-				"DELETE FROM table1 WHERE id = :v1"},
+			args: []string{
+				"--target", "@primary", "--bind-variables", `[ 1 ]`,
+				"DELETE FROM table1 WHERE id = :v1",
+			},
 			rowsAffected: 1,
 		},
 		{
-			args: []string{"--target", "@primary",
-				"SELECT * FROM table1"},
+			args: []string{
+				"--target", "@primary",
+				"SELECT * FROM table1",
+			},
 			rowsAffected: 0,
 		},
 		{
@@ -132,20 +136,14 @@ func TestVtclient(t *testing.T) {
 		err := Main.ParseFlags(args)
 		require.NoError(t, err)
 
-		Main.SetContext(context.Background())
+		Main.SetContext(t.Context())
 		results, err := _run(Main, args)
 		if q.errMsg != "" {
-			if got, want := err.Error(), q.errMsg; !strings.Contains(got, want) {
-				t.Fatalf("vtclient %v returned wrong error: got = %v, want contains = %v", os.Args[1:], got, want)
-			}
+			require.ErrorContainsf(t, err, q.errMsg, "vtclient %v returned wrong error", os.Args[1:])
 			return
 		}
 
-		if err != nil {
-			t.Fatalf("vtclient %v failed: %v", args[1:], err)
-		}
-		if got, want := results.rowsAffected, q.rowsAffected; got != want {
-			t.Fatalf("wrong rows affected for query: %v got = %v, want = %v", os.Args[1:], got, want)
-		}
+		require.NoErrorf(t, err, "vtclient %v failed", args[1:])
+		require.Equalf(t, q.rowsAffected, results.rowsAffected, "wrong rows affected for query: %v", os.Args[1:])
 	}
 }

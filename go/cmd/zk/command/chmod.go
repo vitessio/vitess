@@ -66,7 +66,7 @@ func commandChmod(cmd *cobra.Command, args []string) error {
 		aclv, _, err := fs.Conn.GetACL(cmd.Context(), zkPath)
 		if err != nil {
 			hasError = true
-			log.Warningf("chmod: cannot set access %v: %v", zkPath, err)
+			log.Warn(fmt.Sprintf("chmod: cannot set access %v: %v", zkPath, err))
 			continue
 		}
 		if addPerms {
@@ -77,7 +77,7 @@ func commandChmod(cmd *cobra.Command, args []string) error {
 		err = fs.Conn.SetACL(cmd.Context(), zkPath, aclv, -1)
 		if err != nil {
 			hasError = true
-			log.Warningf("chmod: cannot set access %v: %v", zkPath, err)
+			log.Warn(fmt.Sprintf("chmod: cannot set access %v: %v", zkPath, err))
 			continue
 		}
 	}

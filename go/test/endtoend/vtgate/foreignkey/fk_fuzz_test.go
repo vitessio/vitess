@@ -63,6 +63,23 @@ type fuzzer struct {
 	wg sync.WaitGroup
 	// firstFailureInfo stores the information about the database state after the first failure occurs.
 	firstFailureInfo *debugInfo
+
+	// mu guards err, the first error encountered by a fuzzer thread. Threads run
+	// in goroutines, so they record errors here instead of asserting; the test
+	// goroutine asserts on the recorded error after stop().
+	mu  sync.Mutex
+	err error
+}
+
+// recordError stores the first error encountered by a fuzzer thread and signals
+// all threads to stop.
+func (fz *fuzzer) recordError(err error) {
+	fz.mu.Lock()
+	if fz.err == nil {
+		fz.err = err
+	}
+	fz.mu.Unlock()
+	fz.shouldStop.Store(true)
 }
 
 // debugInfo stores the debugging information we can collect after a failure happens.
@@ -277,7 +294,10 @@ func (fz *fuzzer) runFuzzerThread(t *testing.T, keyspace string, fuzzerThreadId 
 	}()
 	// Create a MySQL Compare that connects to both Vitess and MySQL and runs the queries against both.
 	mcmp, err := utils.NewMySQLCompare(t, vtParams, mysqlParams)
-	require.NoError(t, err)
+	if err != nil {
+		fz.recordError(err)
+		return
+	}
 	if fz.fkState != nil {
 		mcmp.Exec(fmt.Sprintf("SET FOREIGN_KEY_CHECKS=%v", sqlparser.FkChecksStateString(fz.fkState)))
 	}
@@ -285,11 +305,17 @@ func (fz *fuzzer) runFuzzerThread(t *testing.T, keyspace string, fuzzerThreadId 
 	if fz.queryFormat == PreparedStatementPacket {
 		// Open another connection to Vitess using the go-sql-driver so that we can send prepared statements as COM_STMT_PREPARE packets.
 		vitessDb, err = sql.Open("mysql", fmt.Sprintf("@tcp(%s:%v)/%s", vtParams.Host, vtParams.Port, vtParams.DbName))
-		require.NoError(t, err)
+		if err != nil {
+			fz.recordError(err)
+			return
+		}
 		defer vitessDb.Close()
 		// Open a similar connection to MySQL
 		mysqlDb, err = sql.Open("mysql", fmt.Sprintf("%v:%v@unix(%s)/%s", mysqlParams.Uname, mysqlParams.Pass, mysqlParams.UnixSocket, mysqlParams.DbName))
-		require.NoError(t, err)
+		if err != nil {
+			fz.recordError(err)
+			return
+		}
 		defer mysqlDb.Close()
 	}
 	// Set the correct keyspace to use from VtGates.
@@ -653,7 +679,8 @@ func TestFkFuzzTest(t *testing.T) {
 			insertShare:    100,
 			deleteShare:    0,
 			updateShare:    0,
-		}, {
+		},
+		{
 			name:           "Single Thread - Balanced Inserts and Deletes",
 			concurrency:    1,
 			timeForTesting: 5 * time.Second,
@@ -662,7 +689,8 @@ func TestFkFuzzTest(t *testing.T) {
 			insertShare:    50,
 			deleteShare:    50,
 			updateShare:    0,
-		}, {
+		},
+		{
 			name:           "Single Thread - Balanced Inserts and Updates",
 			concurrency:    1,
 			timeForTesting: 5 * time.Second,
@@ -691,7 +719,8 @@ func TestFkFuzzTest(t *testing.T) {
 			insertShare:    100,
 			deleteShare:    0,
 			updateShare:    0,
-		}, {
+		},
+		{
 			name:           "Multi Thread - Balanced Inserts, Updates and Deletes",
 			concurrency:    30,
 			timeForTesting: 5 * time.Second,
@@ -744,13 +773,14 @@ func TestFkFuzzTest(t *testing.T) {
 						}
 
 						fz.stop()
+						require.NoError(t, fz.err)
 
 						// We encountered an error while running the fuzzer. Let's print out the information!
 						if fz.firstFailureInfo != nil {
-							log.Errorf("Failing query - %v", fz.firstFailureInfo.queryToFail)
+							log.Error(fmt.Sprintf("Failing query - %v", fz.firstFailureInfo.queryToFail))
 							for idx, table := range fkTables {
-								log.Errorf("MySQL data for %v -\n%v", table, fz.firstFailureInfo.mysqlState[idx].Rows)
-								log.Errorf("Vitess data for %v -\n%v", table, fz.firstFailureInfo.vitessState[idx].Rows)
+								log.Error(fmt.Sprintf("MySQL data for %v -\n%v", table, fz.firstFailureInfo.mysqlState[idx].Rows))
+								log.Error(fmt.Sprintf("Vitess data for %v -\n%v", table, fz.firstFailureInfo.vitessState[idx].Rows))
 							}
 						}
 
@@ -775,7 +805,7 @@ func BenchmarkFkFuzz(b *testing.B) {
 	numQueries := 1000
 	// Wait for schema-tracking to be complete.
 	waitForSchemaTrackingForFkTables(b)
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		queries, mysqlConn, vtConn, vtUnmanagedConn := setupBenchmark(b, maxValForId, maxValForCol, insertShare, deleteShare, updateShare, numQueries)
 
 		// Now we run the benchmarks!

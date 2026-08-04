@@ -124,8 +124,10 @@ const (
 	valueBits8
 )
 
-const ucpTrieSig = 0x54726933
-const ucpTrieOESig = 0x33697254
+const (
+	ucpTrieSig   = 0x54726933
+	ucpTrieOESig = 0x33697254
+)
 
 /**
  * Constants for use with UCPTrieHeader.options.

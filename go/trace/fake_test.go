@@ -27,7 +27,8 @@ func TestNoopTracingServer(t *testing.T) {
 	tracingSvc, closer, err := factoryFunc("value")
 	require.NoError(t, err)
 	require.NoError(t, closer.Close())
-	span, err := tracingSvc.NewFromString("parent", "label")
+	span, ctx, err := tracingSvc.NewFromString(t.Context(), "parent", "label")
 	require.NoError(t, err)
 	require.Empty(t, span)
+	require.Equal(t, t.Context(), ctx)
 }

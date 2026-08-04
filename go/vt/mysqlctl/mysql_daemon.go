@@ -42,6 +42,7 @@ type MysqlDaemon interface {
 	ReadBinlogFilesTimestamps(ctx context.Context, req *mysqlctlpb.ReadBinlogFilesTimestampsRequest) (*mysqlctlpb.ReadBinlogFilesTimestampsResponse, error)
 	ReinitConfig(ctx context.Context, cnf *Mycnf) error
 	Wait(ctx context.Context, cnf *Mycnf) error
+	StartAfterExit(ctx context.Context, cnf *Mycnf) error
 	WaitForDBAGrants(ctx context.Context, waitTime time.Duration) (err error)
 
 	// GetMysqlPort returns the current port mysql is listening on.
@@ -88,7 +89,7 @@ type MysqlDaemon interface {
 	IsReadOnly(ctx context.Context) (bool, error)
 	IsSuperReadOnly(ctx context.Context) (bool, error)
 	SetReadOnly(ctx context.Context, on bool) error
-	SetSuperReadOnly(ctx context.Context, on bool) (ResetSuperReadOnlyFunc, error)
+	SetSuperReadOnly(ctx context.Context, on bool, opts ...SetSuperReadOnlyOption) (ResetSuperReadOnlyFunc, error)
 	SetReplicationPosition(ctx context.Context, pos replication.Position) error
 	SetReplicationSource(ctx context.Context, host string, port int32, heartbeatInterval float64, stopReplicationBefore bool, startReplicationAfter bool) error
 	WaitForReparentJournal(ctx context.Context, timeCreatedNS int64) error

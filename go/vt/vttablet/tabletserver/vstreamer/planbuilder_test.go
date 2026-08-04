@@ -166,9 +166,7 @@ func TestMustSendDDL(t *testing.T) {
 	for _, tcase := range testcases {
 		q := mysql.Query{SQL: tcase.sql, Database: tcase.db}
 		got := mustSendDDL(q, "mydb", filter, sqlparser.NewTestParser())
-		if got != tcase.output {
-			t.Errorf("%v: %v, want %v", q, got, tcase.output)
-		}
+		assert.Equalf(t, tcase.output, got, "%v: %v, want %v", q, got, tcase.output)
 	}
 }
 
@@ -688,6 +686,14 @@ func TestPlanBuilder(t *testing.T) {
 		outErr:  `unsupported: select * from t1, t2`,
 	}, {
 		inTable: t1,
+		inRule:  &binlogdatapb.Rule{Match: "t1", Filter: "select 1"},
+		outErr:  `unsupported select from dual: select 1 from dual`,
+	}, {
+		inTable: t1,
+		inRule:  &binlogdatapb.Rule{Match: "t1", Filter: "select 1 from dual"},
+		outErr:  `unsupported select from dual: select 1 from dual`,
+	}, {
+		inTable: t1,
 		inRule:  &binlogdatapb.Rule{Match: "t1", Filter: "select * from t1 join t2"},
 		outErr:  `unsupported: select * from t1 join t2`,
 	}, {
@@ -730,7 +736,7 @@ func TestPlanBuilder(t *testing.T) {
 		// analyzeExpr tests.
 		inTable: t1,
 		inRule:  &binlogdatapb.Rule{Match: "t1", Filter: "select id, * from t1"},
-		outErr:  `unsupported: *`,
+		outErr:  `syntax error at position 13`,
 	}, {
 		inTable: t1,
 		inRule:  &binlogdatapb.Rule{Match: "t1", Filter: "select none from t1"},
@@ -780,7 +786,7 @@ func TestPlanBuilder(t *testing.T) {
 				plan.Filters[ind].Vindex = nil
 				plan.Filters[ind].Vindex = nil
 			}
-			require.EqualValues(t, tcase.outPlan, plan)
+			require.Equal(t, tcase.outPlan, plan)
 		})
 	}
 }
@@ -826,7 +832,8 @@ func TestPlanBuilderFilterComparison(t *testing.T) {
 	}, {
 		name:     "less-than-with-and",
 		inFilter: "select * from t1 where id < 2 and val <= 'xyz'",
-		outFilters: []Filter{{Opcode: LessThan, ColNum: 0, Value: sqltypes.NewInt64(2)},
+		outFilters: []Filter{
+			{Opcode: LessThan, ColNum: 0, Value: sqltypes.NewInt64(2)},
 			{Opcode: LessThanEqual, ColNum: 1, Value: sqltypes.NewVarChar("xyz")},
 		},
 	}, {

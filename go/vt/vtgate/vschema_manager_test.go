@@ -1,3 +1,19 @@
+/*
+Copyright 2026 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package vtgate
 
 import (
@@ -235,8 +251,9 @@ func TestVSchemaUpdate(t *testing.T) {
 			},
 		},
 		expected: &vindexes.VSchema{
-			MirrorRules:  map[string]*vindexes.MirrorRule{},
-			RoutingRules: map[string]*vindexes.RoutingRule{},
+			MirrorRules:      map[string]*vindexes.MirrorRule{},
+			RoutingRules:     map[string]*vindexes.RoutingRule{},
+			ViewRoutingRules: map[string]*vindexes.ViewRoutingRule{},
 			Keyspaces: map[string]*vindexes.KeyspaceSchema{
 				"ks": {
 					Keyspace:       ks,
@@ -501,8 +518,9 @@ func TestVSchemaUDFsUpdate(t *testing.T) {
 	}, nil)
 
 	utils.MustMatchFn(".globalTables", ".uniqueVindexes")(t, &vindexes.VSchema{
-		MirrorRules:  map[string]*vindexes.MirrorRule{},
-		RoutingRules: map[string]*vindexes.RoutingRule{},
+		MirrorRules:      map[string]*vindexes.MirrorRule{},
+		ViewRoutingRules: map[string]*vindexes.ViewRoutingRule{},
+		RoutingRules:     map[string]*vindexes.RoutingRule{},
 		Keyspaces: map[string]*vindexes.KeyspaceSchema{
 			"ks": {
 				Keyspace:       ks,
@@ -655,7 +673,8 @@ func TestMarkErrorIfCyclesInFk(t *testing.T) {
 				return vschema
 			},
 			errWanted: "",
-		}, {
+		},
+		{
 			name: "Self-referencing foreign key with delete cascade",
 			getVschema: func() *vindexes.VSchema {
 				vschema := &vindexes.VSchema{
@@ -683,7 +702,8 @@ func TestMarkErrorIfCyclesInFk(t *testing.T) {
 				return vschema
 			},
 			errWanted: "VT09019: keyspace 'ks' has cyclic foreign keys. Cycle exists between [ks.t1.id ks.t1.id]",
-		}, {
+		},
+		{
 			name: "Self-referencing foreign key without delete cascade",
 			getVschema: func() *vindexes.VSchema {
 				vschema := &vindexes.VSchema{
@@ -711,7 +731,8 @@ func TestMarkErrorIfCyclesInFk(t *testing.T) {
 				return vschema
 			},
 			errWanted: "",
-		}, {
+		},
+		{
 			name: "Has an indirect cycle because of cascades",
 			getVschema: func() *vindexes.VSchema {
 				vschema := &vindexes.VSchema{
@@ -758,7 +779,8 @@ func TestMarkErrorIfCyclesInFk(t *testing.T) {
 				return vschema
 			},
 			errWanted: "VT09019: keyspace 'ks' has cyclic foreign keys",
-		}, {
+		},
+		{
 			name: "Cycle part of a multi-column foreign key",
 			getVschema: func() *vindexes.VSchema {
 				vschema := &vindexes.VSchema{
@@ -862,8 +884,9 @@ func TestVSchemaUpdateWithFKReferenceToInternalTables(t *testing.T) {
 	}, nil)
 
 	utils.MustMatchFn(".globalTables", ".uniqueVindexes")(t, &vindexes.VSchema{
-		MirrorRules:  map[string]*vindexes.MirrorRule{},
-		RoutingRules: map[string]*vindexes.RoutingRule{},
+		MirrorRules:      map[string]*vindexes.MirrorRule{},
+		RoutingRules:     map[string]*vindexes.RoutingRule{},
+		ViewRoutingRules: map[string]*vindexes.ViewRoutingRule{},
 		Keyspaces: map[string]*vindexes.KeyspaceSchema{
 			"ks": {
 				Keyspace:       ks,
@@ -976,9 +999,10 @@ func makeTestVSchema(ks string, sharded bool, tbls map[string]*vindexes.BaseTabl
 
 func makeTestEmptyVSchema() *vindexes.VSchema {
 	return &vindexes.VSchema{
-		MirrorRules:  map[string]*vindexes.MirrorRule{},
-		RoutingRules: map[string]*vindexes.RoutingRule{},
-		Keyspaces:    map[string]*vindexes.KeyspaceSchema{},
+		MirrorRules:      map[string]*vindexes.MirrorRule{},
+		RoutingRules:     map[string]*vindexes.RoutingRule{},
+		ViewRoutingRules: map[string]*vindexes.ViewRoutingRule{},
+		Keyspaces:        map[string]*vindexes.KeyspaceSchema{},
 	}
 }
 
@@ -991,6 +1015,197 @@ func makeTestSrvVSchema(ks string, sharded bool, tbls map[string]*vschemapb.Tabl
 	}
 	return &vschemapb.SrvVSchema{
 		Keyspaces: map[string]*vschemapb.Keyspace{ks: keyspaceSchema},
+	}
+}
+
+// TestViewRoutingRules tests that routing rules targeting views are created as view routing rules.
+func TestViewRoutingRules(t *testing.T) {
+	vm := &VSchemaManager{}
+	var vs *vindexes.VSchema
+	vm.subscriber = func(vschema *vindexes.VSchema, _ *VSchemaStats) {
+		vs = vschema
+		vs.ResetCreated()
+	}
+	vm.schema = &fakeSchema{
+		views: map[string]map[string]sqlparser.TableStatement{
+			"source_ks": {"v1": testView("t1")},
+			"target_ks": {"v1": testView("t2")},
+		},
+	}
+
+	vm.VSchemaUpdate(&vschemapb.SrvVSchema{
+		Keyspaces: map[string]*vschemapb.Keyspace{
+			"source_ks": {},
+			"target_ks": {},
+		},
+		RoutingRules: &vschemapb.RoutingRules{
+			Rules: []*vschemapb.RoutingRule{
+				{FromTable: "source_ks.v1", ToTables: []string{"target_ks.v1"}},
+			},
+		},
+	}, nil)
+
+	require.NotNil(t, vs)
+	require.Contains(t, vs.ViewRoutingRules, "source_ks.v1")
+	assert.Equal(t, "target_ks", vs.ViewRoutingRules["source_ks.v1"].TargetKeyspace)
+	assert.Equal(t, "v1", vs.ViewRoutingRules["source_ks.v1"].TargetViewName)
+}
+
+// TestViewRoutingRulesRebuild tests that view routing rules are correctly created when views
+// are added after the initial vschema is built.
+func TestViewRoutingRulesRebuild(t *testing.T) {
+	vm := &VSchemaManager{}
+	var vs *vindexes.VSchema
+	vm.subscriber = func(vschema *vindexes.VSchema, _ *VSchemaStats) {
+		vs = vschema
+		vs.ResetCreated()
+	}
+
+	srvVSchema := &vschemapb.SrvVSchema{
+		Keyspaces: map[string]*vschemapb.Keyspace{
+			"source_ks": {},
+			"target_ks": {},
+		},
+		RoutingRules: &vschemapb.RoutingRules{
+			Rules: []*vschemapb.RoutingRule{
+				{FromTable: "source_ks.v1", ToTables: []string{"target_ks.v1"}},
+			},
+		},
+	}
+
+	fs := &fakeSchema{}
+	vm.schema = fs
+
+	vm.VSchemaUpdate(srvVSchema, nil)
+	require.NotNil(t, vs)
+	assert.NotContains(t, vs.ViewRoutingRules, "source_ks.v1")
+
+	fs.views = map[string]map[string]sqlparser.TableStatement{
+		"source_ks": {"v1": testView("t1")},
+		"target_ks": {"v1": testView("t2")},
+	}
+
+	vm.Rebuild()
+
+	require.Contains(t, vs.ViewRoutingRules, "source_ks.v1")
+	assert.Equal(t, "target_ks", vs.ViewRoutingRules["source_ks.v1"].TargetKeyspace)
+	assert.Equal(t, "v1", vs.ViewRoutingRules["source_ks.v1"].TargetViewName)
+}
+
+// TestRoutingRulesAuthoritativeAfterSchemaTracker pins down the invariant
+// the planner relies on for routing-rule-only setups: once the schema
+// tracker has reported columns for a routed table, the routing rule's
+// BaseTable has `ColumnListAuthoritative=true` and carries the tracked
+// columns, so the planner can expand `t.*` against it. Two shapes:
+//
+//   - tracker has data for every keyspace at `VSchemaUpdate` time: every
+//     rule is authoritative right after the first build.
+//   - tracker is initially empty and fills in keyspace-by-keyspace across
+//     successive `Rebuild` calls: each rule flips to authoritative the
+//     first time the rebuild sees columns for its target keyspace, and
+//     rules whose target keyspace is still untracked remain non-
+//     authoritative.
+func TestRoutingRulesAuthoritativeAfterSchemaTracker(t *testing.T) {
+	colsA := []vindexes.Column{
+		{Name: sqlparser.NewIdentifierCI("id"), Type: querypb.Type_INT64},
+		{Name: sqlparser.NewIdentifierCI("fk"), Type: querypb.Type_INT64},
+	}
+	colsB := []vindexes.Column{
+		{Name: sqlparser.NewIdentifierCI("id"), Type: querypb.Type_INT64},
+		{Name: sqlparser.NewIdentifierCI("label"), Type: querypb.Type_VARCHAR},
+	}
+
+	srvVSchema := &vschemapb.SrvVSchema{
+		Keyspaces: map[string]*vschemapb.Keyspace{
+			"ks_a": {Sharded: false},
+			"ks_b": {Sharded: false},
+		},
+		RoutingRules: &vschemapb.RoutingRules{
+			Rules: []*vschemapb.RoutingRule{
+				{FromTable: "table_a", ToTables: []string{"ks_a.table_a"}},
+				{FromTable: "table_b", ToTables: []string{"ks_b.table_b"}},
+			},
+		},
+	}
+
+	checkRule := func(t *testing.T, rr *vindexes.RoutingRule, wantAuthoritative bool, wantCols []vindexes.Column, label string) {
+		t.Helper()
+		require.NotNil(t, rr, label)
+		require.Len(t, rr.Tables, 1, label)
+		tbl := rr.Tables[0]
+		assert.Equal(t, wantAuthoritative, tbl.ColumnListAuthoritative, "%s authoritative state", label)
+		if !wantAuthoritative {
+			// When the rule is non-authoritative the routing rule's BaseTable is
+			// still a placeholder; columns aren't expected.
+			return
+		}
+		require.Len(t, tbl.Columns, len(wantCols), "%s column count", label)
+		for i, want := range wantCols {
+			assert.Equal(t, want.Name.String(), tbl.Columns[i].Name.String(),
+				"%s column[%d] name", label, i)
+		}
+	}
+	check := func(t *testing.T, vs *vindexes.VSchema, wantAColAuthoritative, wantBColAuthoritative bool) {
+		t.Helper()
+		checkRule(t, vs.RoutingRules["table_a"], wantAColAuthoritative, colsA, "routing rule for table_a")
+		checkRule(t, vs.RoutingRules["table_b"], wantBColAuthoritative, colsB, "routing rule for table_b")
+	}
+
+	t.Run("tracker populated when VSchemaUpdate fires", func(t *testing.T) {
+		vm := &VSchemaManager{}
+		var vs *vindexes.VSchema
+		vm.subscriber = func(vschema *vindexes.VSchema, _ *VSchemaStats) {
+			vs = vschema
+			vs.ResetCreated()
+		}
+		vm.schema = &fakeSchema{
+			tables: map[string]map[string]*vindexes.TableInfo{
+				"ks_a": {"table_a": {Columns: colsA}},
+				"ks_b": {"table_b": {Columns: colsB}},
+			},
+		}
+
+		vm.VSchemaUpdate(srvVSchema, nil)
+		check(t, vs, true, true)
+	})
+
+	t.Run("tracker populates one keyspace late via Rebuild", func(t *testing.T) {
+		vm := &VSchemaManager{}
+		var vs *vindexes.VSchema
+		vm.subscriber = func(vschema *vindexes.VSchema, _ *VSchemaStats) {
+			vs = vschema
+			vs.ResetCreated()
+		}
+
+		// Tracker is empty when SrvVSchema first arrives (e.g. tablets not
+		// yet healthy at startup). Both routing rules synthesize placeholder
+		// BaseTables; neither is authoritative.
+		tracker := &fakeSchema{}
+		vm.schema = tracker
+		vm.VSchemaUpdate(srvVSchema, nil)
+		check(t, vs, false, false)
+
+		// Tracker subsequently picks up ks_a only; ks_b stays unknown.
+		tracker.tables = map[string]map[string]*vindexes.TableInfo{
+			"ks_a": {"table_a": {Columns: colsA}},
+		}
+		vm.Rebuild()
+		check(t, vs, true, false)
+
+		// Then ks_b is also tracked.
+		tracker.tables["ks_b"] = map[string]*vindexes.TableInfo{
+			"table_b": {Columns: colsB},
+		}
+		vm.Rebuild()
+		check(t, vs, true, true)
+	})
+}
+
+// testView creates a simple view selecting from the given table.
+func testView(tableName string) *sqlparser.Select {
+	return &sqlparser.Select{
+		SelectExprs: &sqlparser.SelectExprs{Exprs: []sqlparser.SelectExpr{sqlparser.NewAliasedExpr(sqlparser.NewIntLiteral("1"), "")}},
+		From:        []sqlparser.TableExpr{sqlparser.NewAliasedTableExpr(sqlparser.NewTableName(tableName), "")},
 	}
 }
 

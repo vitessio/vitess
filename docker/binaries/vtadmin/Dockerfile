@@ -12,12 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-ARG VT_BASE_VER=latest
+ARG VT_BASE_VER=latest@sha256:06084c171907baf470d80729c6ef6dbefaad6356777689577e9f6aada1279128
 ARG DEBIAN_VER=bookworm-slim
+ARG NODE_DIGEST=sha256:f86be15afa9a8277608e141ce2a8aa55d3d9c40845921b8511f4fb7897be2554
+ARG NGINX_DIGEST=sha256:5366aa1ef633415d3fb30f8b5b2d824c4ae1c231a0f63358e7f39734fa5894c0
 
 FROM vitess/lite:${VT_BASE_VER} AS lite
 
-FROM node:22-${DEBIAN_VER} as node
+FROM node:22-${DEBIAN_VER}@${NODE_DIGEST} as node
 
 # Prepare directory structure.
 RUN mkdir -p /vt/web
@@ -29,7 +31,16 @@ COPY --from=lite /vt/web/vtadmin /vt/web/vtadmin
 RUN npm --prefix /vt/web/vtadmin ci && \
     npm run --prefix /vt/web/vtadmin build
 
-FROM nginxinc/nginx-unprivileged:1.22 AS nginx
+FROM nginxinc/nginx-unprivileged:1.29@${NGINX_DIGEST} AS nginx
+
+USER root
+
+RUN apt-get update && \
+    apt-get upgrade -qq && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+USER nginx
 
 ENV VTADMIN_WEB_PORT=14201
 

@@ -17,7 +17,6 @@ limitations under the License.
 package consultopo
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -27,7 +26,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hashicorp/consul/api"
+	"github.com/hashicorp/consul/api/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -51,19 +50,16 @@ func startConsul(t *testing.T, authToken string) (*exec.Cmd, string, string) {
 	configDir := t.TempDir()
 
 	configFilename := path.Join(configDir, "consul.json")
-	configFile, err := os.OpenFile(configFilename, os.O_RDWR|os.O_CREATE, 0600)
-	if err != nil {
-		t.Fatalf("cannot create tempfile: %v", err)
-	}
+	configFile, err := os.OpenFile(configFilename, os.O_RDWR|os.O_CREATE, 0o600)
+	require.NoError(t, err)
 
 	// Create the JSON config, save it.
-	port := testfiles.GoVtTopoConsultopoPort
 	config := map[string]any{
 		"ports": map[string]int{
-			"dns":      port,
-			"http":     port + 1,
-			"serf_lan": port + 2,
-			"serf_wan": port + 3,
+			"dns":      testfiles.GoVtTopoConsultopoDNSPort,
+			"http":     testfiles.GoVtTopoConsultopoHTTPPort,
+			"serf_lan": testfiles.GoVtTopoConsultopoSerfLANPort,
+			"serf_wan": testfiles.GoVtTopoConsultopoSerfWANPort,
 		},
 	}
 
@@ -79,14 +75,12 @@ func startConsul(t *testing.T, authToken string) (*exec.Cmd, string, string) {
 	}
 
 	data, err := json.Marshal(config)
-	if err != nil {
-		t.Fatalf("cannot json-encode config: %v", err)
-	}
+	require.NoError(t, err)
 	if _, err := configFile.Write(data); err != nil {
-		t.Fatalf("cannot write config: %v", err)
+		require.NoError(t, err)
 	}
 	if err := configFile.Close(); err != nil {
-		t.Fatalf("cannot close config: %v", err)
+		require.NoError(t, err)
 	}
 
 	cmd := exec.Command("consul",
@@ -94,21 +88,17 @@ func startConsul(t *testing.T, authToken string) (*exec.Cmd, string, string) {
 		"-dev",
 		"-config-file", configFilename)
 	err = cmd.Start()
-	if err != nil {
-		t.Fatalf("failed to start consul: %v", err)
-	}
+	require.NoError(t, err)
 
 	// Create a client to connect to the created consul.
-	serverAddr := fmt.Sprintf("localhost:%v", port+1)
+	serverAddr := fmt.Sprintf("localhost:%v", testfiles.GoVtTopoConsultopoHTTPPort)
 	cfg := api.DefaultConfig()
 	cfg.Address = serverAddr
 	if authToken != "" {
 		cfg.Token = authToken
 	}
 	c, err := api.NewClient(cfg)
-	if err != nil {
-		t.Fatalf("api.NewClient(%v) failed: %v", serverAddr, err)
-	}
+	require.NoErrorf(t, err, "api.NewClient(%v) failed", serverAddr)
 
 	// Wait until we can list "/", or timeout.
 	start := time.Now()
@@ -119,7 +109,7 @@ func startConsul(t *testing.T, authToken string) (*exec.Cmd, string, string) {
 			break
 		}
 		if time.Since(start) > 10*time.Second {
-			t.Fatalf("Failed to start consul daemon in time. Consul is returning error: %v", err)
+			require.FailNowf(t, "timed out waiting for Consul to become ready", "last error: %v", err)
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
@@ -141,11 +131,11 @@ func TestConsulTopo(t *testing.T) {
 	defer func() {
 		// Alerts command did not run successful
 		if err := cmd.Process.Kill(); err != nil {
-			log.Errorf("cmd process kill has an error: %v", err)
+			log.Error(fmt.Sprintf("cmd process kill has an error: %v", err))
 		}
 		// Alerts command did not run successful
 		if err := cmd.Wait(); err != nil {
-			log.Errorf("cmd wait has an error: %v", err)
+			log.Error(fmt.Sprintf("cmd wait has an error: %v", err))
 		}
 
 		os.Remove(configFilename)
@@ -153,8 +143,7 @@ func TestConsulTopo(t *testing.T) {
 
 	// Run the TopoServerTestSuite tests.
 	testIndex := 0
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	test.TopoServerTestSuite(t, ctx, func() *topo.Server {
 		// Each test will use its own sub-directories.
@@ -163,16 +152,14 @@ func TestConsulTopo(t *testing.T) {
 
 		// Create the server on the new root.
 		ts, err := topo.OpenServer("consul", serverAddr, path.Join(testRoot, topo.GlobalCell))
-		if err != nil {
-			t.Fatalf("OpenServer() failed: %v", err)
-		}
+		require.NoError(t, err)
 
 		// Create the CellInfo.
-		if err := ts.CreateCellInfo(context.Background(), test.LocalCellName, &topodatapb.CellInfo{
+		if err := ts.CreateCellInfo(t.Context(), test.LocalCellName, &topodatapb.CellInfo{
 			ServerAddress: serverAddr,
 			Root:          path.Join(testRoot, test.LocalCellName),
 		}); err != nil {
-			t.Fatalf("CreateCellInfo() failed: %v", err)
+			require.NoError(t, err)
 		}
 
 		return ts
@@ -200,11 +187,11 @@ func TestConsulTopoWithChecks(t *testing.T) {
 	defer func() {
 		// Alerts command did not run successful
 		if err := cmd.Process.Kill(); err != nil {
-			log.Errorf("cmd process kill has an error: %v", err)
+			log.Error(fmt.Sprintf("cmd process kill has an error: %v", err))
 		}
 		// Alerts command did not run successful
 		if err := cmd.Wait(); err != nil {
-			log.Errorf("cmd wait has an error: %v", err)
+			log.Error(fmt.Sprintf("cmd wait has an error: %v", err))
 		}
 
 		os.Remove(configFilename)
@@ -212,8 +199,7 @@ func TestConsulTopoWithChecks(t *testing.T) {
 
 	// Run the TopoServerTestSuite tests.
 	testIndex := 0
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	test.TopoServerTestSuite(t, ctx, func() *topo.Server {
 		// Each test will use its own sub-directories.
 		testRoot := fmt.Sprintf("test-%v", testIndex)
@@ -221,16 +207,14 @@ func TestConsulTopoWithChecks(t *testing.T) {
 
 		// Create the server on the new root.
 		ts, err := topo.OpenServer("consul", serverAddr, path.Join(testRoot, topo.GlobalCell))
-		if err != nil {
-			t.Fatalf("OpenServer() failed: %v", err)
-		}
+		require.NoError(t, err)
 
 		// Create the CellInfo.
-		if err := ts.CreateCellInfo(context.Background(), test.LocalCellName, &topodatapb.CellInfo{
+		if err := ts.CreateCellInfo(t.Context(), test.LocalCellName, &topodatapb.CellInfo{
 			ServerAddress: serverAddr,
 			Root:          path.Join(testRoot, test.LocalCellName),
 		}); err != nil {
-			t.Fatalf("CreateCellInfo() failed: %v", err)
+			require.NoError(t, err)
 		}
 
 		return ts
@@ -246,11 +230,11 @@ func TestConsulTopoWithAuth(t *testing.T) {
 	defer func() {
 		// Alerts command did not run successful
 		if err := cmd.Process.Kill(); err != nil {
-			log.Errorf("cmd process kill has an error: %v", err)
+			log.Error(fmt.Sprintf("cmd process kill has an error: %v", err))
 		}
 		// Alerts command did not run successful
 		if err := cmd.Wait(); err != nil {
-			log.Errorf("cmd process wait has an error: %v", err)
+			log.Error(fmt.Sprintf("cmd process wait has an error: %v", err))
 		}
 		os.Remove(configFilename)
 	}()
@@ -258,10 +242,7 @@ func TestConsulTopoWithAuth(t *testing.T) {
 	// Run the TopoServerTestSuite tests.
 	testIndex := 0
 	tmpFile, err := os.CreateTemp("", "consul_auth_client_static_file.json")
-
-	if err != nil {
-		t.Fatalf("couldn't create temp file: %v", err)
-	}
+	require.NoError(t, err)
 	defer os.Remove(tmpFile.Name())
 
 	originalConsulAuthClientStaticFile := consulAuthClientStaticFile
@@ -272,12 +253,11 @@ func TestConsulTopoWithAuth(t *testing.T) {
 	consulAuthClientStaticFile = tmpFile.Name()
 
 	jsonConfig := "{\"global\":{\"acl_token\":\"123456\"}, \"test\":{\"acl_token\":\"123456\"}}"
-	if err := os.WriteFile(tmpFile.Name(), []byte(jsonConfig), 0600); err != nil {
-		t.Fatalf("couldn't write temp file: %v", err)
+	if err := os.WriteFile(tmpFile.Name(), []byte(jsonConfig), 0o600); err != nil {
+		require.NoError(t, err)
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	test.TopoServerTestSuite(t, ctx, func() *topo.Server {
 		// Each test will use its own sub-directories.
 		testRoot := fmt.Sprintf("test-%v", testIndex)
@@ -285,16 +265,14 @@ func TestConsulTopoWithAuth(t *testing.T) {
 
 		// Create the server on the new root.
 		ts, err := topo.OpenServer("consul", serverAddr, path.Join(testRoot, topo.GlobalCell))
-		if err != nil {
-			t.Fatalf("OpenServer() failed: %v", err)
-		}
+		require.NoError(t, err)
 
 		// Create the CellInfo.
-		if err := ts.CreateCellInfo(context.Background(), test.LocalCellName, &topodatapb.CellInfo{
+		if err := ts.CreateCellInfo(t.Context(), test.LocalCellName, &topodatapb.CellInfo{
 			ServerAddress: serverAddr,
 			Root:          path.Join(testRoot, test.LocalCellName),
 		}); err != nil {
-			t.Fatalf("CreateCellInfo() failed: %v", err)
+			require.NoError(t, err)
 		}
 
 		return ts
@@ -314,10 +292,7 @@ func TestConsulTopoWithAuthFailure(t *testing.T) {
 	}()
 
 	tmpFile, err := os.CreateTemp("", "consul_auth_client_static_file.json")
-
-	if err != nil {
-		t.Fatalf("couldn't create temp file: %v", err)
-	}
+	require.NoError(t, err)
 	defer os.Remove(tmpFile.Name())
 
 	originalConsulAuthClientStaticFile := consulAuthClientStaticFile
@@ -330,40 +305,34 @@ func TestConsulTopoWithAuthFailure(t *testing.T) {
 	// check valid, empty json causes error
 	{
 		jsonConfig := "{}"
-		if err := os.WriteFile(tmpFile.Name(), []byte(jsonConfig), 0600); err != nil {
-			t.Fatalf("couldn't write temp file: %v", err)
+		if err := os.WriteFile(tmpFile.Name(), []byte(jsonConfig), 0o600); err != nil {
+			require.NoError(t, err)
 		}
 
 		// Create the server on the new root.
 		_, err := topo.OpenServer("consul", serverAddr, path.Join("globalRoot", topo.GlobalCell))
-		if err == nil {
-			t.Fatal("Expected OpenServer() to return an error due to bad config, got nil")
-		}
+		require.Error(t, err, "Expected OpenServer() to return an error due to bad config, got nil")
 	}
 
 	// check bad token causes error
 	{
 		jsonConfig := "{\"global\":{\"acl_token\":\"badtoken\"}}"
-		if err := os.WriteFile(tmpFile.Name(), []byte(jsonConfig), 0600); err != nil {
-			t.Fatalf("couldn't write temp file: %v", err)
+		if err := os.WriteFile(tmpFile.Name(), []byte(jsonConfig), 0o600); err != nil {
+			require.NoError(t, err)
 		}
 
 		// Create the server on the new root.
 		ts, err := topo.OpenServer("consul", serverAddr, path.Join("globalRoot", topo.GlobalCell))
-		if err != nil {
-			t.Fatalf("OpenServer() failed: %v", err)
-		}
+		require.NoError(t, err)
 
 		// Attempt to Create the CellInfo.
-		err = ts.CreateCellInfo(context.Background(), test.LocalCellName, &topodatapb.CellInfo{
+		err = ts.CreateCellInfo(t.Context(), test.LocalCellName, &topodatapb.CellInfo{
 			ServerAddress: serverAddr,
 			Root:          path.Join("globalRoot", test.LocalCellName),
 		})
 
 		want := "Failed request: ACL not found"
-		if err == nil || err.Error() != want {
-			t.Errorf("Expected CreateCellInfo to fail: got  %v, want %s", err, want)
-		}
+		require.EqualErrorf(t, err, want, "Expected CreateCellInfo to fail: got  %v, want %s", err, want)
 	}
 }
 
@@ -386,16 +355,15 @@ func TestConsulWatcherStormPrevention(t *testing.T) {
 	cmd, configFilename, serverAddr := startConsul(t, "")
 	defer func() {
 		if err := cmd.Process.Kill(); err != nil {
-			log.Errorf("cmd process kill has an error: %v", err)
+			log.Error(fmt.Sprintf("cmd process kill has an error: %v", err))
 		}
 		if err := cmd.Wait(); err != nil {
-			log.Errorf("cmd wait has an error: %v", err)
+			log.Error(fmt.Sprintf("cmd wait has an error: %v", err))
 		}
 		os.Remove(configFilename)
 	}()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	testRoot := "storm-test"
 
@@ -462,7 +430,7 @@ func TestConsulWatcherStormPrevention(t *testing.T) {
 
 	// Get should still work from cache during outage
 	vschema, err = rs.GetSrvVSchema(ctx, cellName)
-	assert.NoError(t, err, "GetSrvVSchema() should work from cache during outage")
+	require.NoError(t, err, "GetSrvVSchema() should work from cache during outage")
 	assert.NotNil(t, vschema, "GetSrvVSchema() should return cached value during outage")
 
 	// Wait during outage period - this is when storms would occur without our fix
@@ -480,7 +448,7 @@ func TestConsulWatcherStormPrevention(t *testing.T) {
 
 	// Get operations should continue working from cache
 	vschema, err = rs.GetSrvVSchema(ctx, cellName)
-	assert.NoError(t, err, "GetSrvVSchema() should continue working from cache")
+	require.NoError(t, err, "GetSrvVSchema() should continue working from cache")
 	assert.NotNil(t, vschema, "GetSrvVSchema() should continue returning cached value")
 
 	t.Log("Consul storm prevention test completed - watchers remained quiet during outage")

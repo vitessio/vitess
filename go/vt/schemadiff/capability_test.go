@@ -1,3 +1,19 @@
+/*
+Copyright 2026 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package schemadiff
 
 import (
@@ -362,6 +378,36 @@ func TestAlterTableCapableOfInstantDDL(t *testing.T) {
 			create:                    "create table t1 (id int, i1 int)",
 			alter:                     "alter table t1 add column i2 int, algorithm=COPY",
 			expectCapableOfInstantDDL: false,
+		},
+		{
+			name:                      "enum append on table with table-level collate",
+			create:                    "create table t(id int, c1 enum('a', 'b', 'c') collate utf8mb4_unicode_ci, primary key(id)) collate utf8mb4_unicode_ci",
+			alter:                     "alter table t modify column c1 enum('a', 'b', 'c', 'd')",
+			expectCapableOfInstantDDL: true,
+		},
+		{
+			name:                      "change enum default on table with table-level collate",
+			create:                    "create table t(id int, c1 enum('a', 'b', 'c') collate utf8mb4_unicode_ci default 'a', primary key(id)) collate utf8mb4_unicode_ci",
+			alter:                     "alter table t modify column c1 enum('a', 'b', 'c') default 'b'",
+			expectCapableOfInstantDDL: true,
+		},
+		{
+			name:                      "enum append while also changing collation is not instant",
+			create:                    "create table t(id int, c1 enum('a', 'b', 'c') collate utf8mb4_unicode_ci, primary key(id))",
+			alter:                     "alter table t modify column c1 enum('a', 'b', 'c', 'd') collate utf8mb4_general_ci",
+			expectCapableOfInstantDDL: false,
+		},
+		{
+			name:                      "enum append on nullable column with explicit NULL",
+			create:                    "create table t(id int, c1 enum('a', 'b', 'c') null, primary key(id))",
+			alter:                     "alter table t modify column c1 enum('a', 'b', 'c', 'd')",
+			expectCapableOfInstantDDL: true,
+		},
+		{
+			name:                      "enum append with different type casing in alter",
+			create:                    "create table t(id int, c1 enum('a', 'b', 'c'), primary key(id))",
+			alter:                     "alter table t modify column c1 ENUM('a', 'b', 'c', 'd')",
+			expectCapableOfInstantDDL: true,
 		},
 	}
 	for _, tcase := range tcases {

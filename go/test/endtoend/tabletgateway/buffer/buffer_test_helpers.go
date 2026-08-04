@@ -48,7 +48,6 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
-	vtutils "vitess.io/vitess/go/vt/utils"
 )
 
 const (
@@ -91,21 +90,21 @@ func (c *threadParams) threadRun(wg *sync.WaitGroup, vtParams *mysql.ConnParams)
 
 	conn, err := mysql.Connect(context.Background(), vtParams)
 	if err != nil {
-		log.Errorf("error connecting to mysql with params %v: %v", vtParams, err)
+		log.Error(fmt.Sprintf("error connecting to mysql with params %v: %v", vtParams, err))
 	}
 	defer conn.Close()
 	if c.reservedConn {
 		_, err = conn.ExecuteFetch("set default_week_format = 1", 1000, true)
 		if err != nil {
 			c.errors = append(c.errors, err)
-			log.Errorf("error setting default_week_format: %v", err)
+			log.Error(fmt.Sprintf("error setting default_week_format: %v", err))
 		}
 	}
 	for !c.quit {
 		err = c.executeFunction(c, conn)
 		if err != nil {
 			c.errors = append(c.errors, err)
-			log.Errorf("error executing function %s: %v", c.typ, err)
+			log.Error(fmt.Sprintf("error executing function %s: %v", c.typ, err))
 		}
 		c.rpcs++
 		// If notifications are requested, check if we already executed the
@@ -143,15 +142,14 @@ func readExecute(c *threadParams, conn *mysql.Conn) error {
 		sel = "*, SLEEP(1)"
 	}
 	qr, err := conn.ExecuteFetch(fmt.Sprintf("SELECT %s FROM buffer WHERE id = %d", sel, criticalReadRowID), 1000, true)
-
 	if err != nil {
-		log.Errorf("select attempt #%d, failed with err: %v", attempt, err)
+		log.Error(fmt.Sprintf("select attempt #%d, failed with err: %v", attempt, err))
 		// For a reserved connection, read query can fail as it does not go through the gateway and
 		// goes to tablet directly and later is directed to use Gateway if the error is caused due to cluster failover operation.
 		if c.reservedConn {
 			c.internalErrs++
 			if c.internalErrs > 1 {
-				log.Errorf("More Read Errors: %d", c.internalErrs)
+				log.Error(fmt.Sprintf("More Read Errors: %d", c.internalErrs))
 				return err
 			}
 			log.Error("This is okay once because we do not support buffering it.")
@@ -160,7 +158,7 @@ func readExecute(c *threadParams, conn *mysql.Conn) error {
 		return err
 	}
 
-	log.Infof("select attempt #%d, rows: %d", attempt, len(qr.Rows))
+	log.Info(fmt.Sprintf("select attempt #%d, rows: %d", attempt, len(qr.Rows)))
 	return nil
 }
 
@@ -182,31 +180,31 @@ func updateExecute(c *threadParams, conn *mysql.Conn) error {
 	time.Sleep(dur)
 
 	if err == nil {
-		log.Infof("update attempt #%d affected %v rows", attempt, result.RowsAffected)
+		log.Info(fmt.Sprintf("update attempt #%d affected %v rows", attempt, result.RowsAffected))
 		_, err = conn.ExecuteFetch("commit", 1000, true)
 		if err != nil {
-			log.Errorf("UPDATE #%d failed during COMMIT, err: %v", attempt, err)
+			log.Error(fmt.Sprintf("UPDATE #%d failed during COMMIT, err: %v", attempt, err))
 			_, errRollback := conn.ExecuteFetch("rollback", 1000, true)
 			if errRollback != nil {
-				log.Errorf("Error in rollback #%d: %v", attempt, errRollback)
+				log.Error(fmt.Sprintf("Error in rollback #%d: %v", attempt, errRollback))
 			}
 			c.internalErrs++
 			if c.internalErrs > 1 {
-				log.Errorf("More Commit Errors: %d", c.internalErrs)
+				log.Error(fmt.Sprintf("More Commit Errors: %d", c.internalErrs))
 				return err
 			}
 			log.Error("This is okay once because we do not support buffering it.")
 		}
 		return nil
 	}
-	log.Errorf("UPDATE #%d failed with err: %v", attempt, err)
+	log.Error(fmt.Sprintf("UPDATE #%d failed with err: %v", attempt, err))
 	_, errRollback := conn.ExecuteFetch("rollback", 1000, true)
 	if errRollback != nil {
-		log.Errorf("Error in rollback #%d: %v", attempt, errRollback)
+		log.Error(fmt.Sprintf("Error in rollback #%d: %v", attempt, errRollback))
 	}
 	c.internalErrs++
 	if c.internalErrs > 1 {
-		log.Errorf("More Rollback Errors: %d", c.internalErrs)
+		log.Error(fmt.Sprintf("More Rollback Errors: %d", c.internalErrs))
 		return err
 	}
 	log.Error("This is okay once because we do not support buffering it.")
@@ -217,7 +215,7 @@ func (bt *BufferingTest) createCluster() (*cluster.LocalProcessCluster, int) {
 	clusterInstance := cluster.NewCluster(cell, hostname)
 
 	// Start topo server
-	clusterInstance.VtctldExtraArgs = []string{vtutils.GetFlagVariantForTests("--remote-operation-timeout"), "30s", "--topo-etcd-lease-ttl", "40"}
+	clusterInstance.VtctldExtraArgs = []string{"--remote-operation-timeout", "30s", "--topo-etcd-lease-ttl", "40"}
 	if err := clusterInstance.StartTopo(); err != nil {
 		return nil, 1
 	}
@@ -229,7 +227,7 @@ func (bt *BufferingTest) createCluster() (*cluster.LocalProcessCluster, int) {
 		VSchema:   bt.VSchema,
 	}
 	clusterInstance.VtTabletExtraArgs = []string{
-		vtutils.GetFlagVariantForTests("--health-check-interval"), "1s",
+		"--health-check-interval", "1s",
 		"--queryserver-config-transaction-timeout", "20s",
 	}
 	if err := clusterInstance.StartUnshardedKeyspace(*keyspace, 1, false, clusterInstance.Cell); err != nil {
@@ -237,13 +235,13 @@ func (bt *BufferingTest) createCluster() (*cluster.LocalProcessCluster, int) {
 	}
 
 	clusterInstance.VtGateExtraArgs = []string{
-		"--enable_buffer",
+		"--enable-buffer",
 		// Long timeout in case failover is slow.
-		vtutils.GetFlagVariantForTests("--buffer-window"), "10m",
-		vtutils.GetFlagVariantForTests("--buffer-max-failover-duration"), "10m",
-		vtutils.GetFlagVariantForTests("--buffer-min-time-between-failovers"), "20m",
-		vtutils.GetFlagVariantForTests("--tablet-refresh-interval"), "1s",
-		vtutils.GetFlagVariantForTests("--buffer-drain-concurrency"), "4",
+		"--buffer-window", "10m",
+		"--buffer-max-failover-duration", "10m",
+		"--buffer-min-time-between-failovers", "20m",
+		"--tablet-refresh-interval", "1s",
+		"--buffer-drain-concurrency", "4",
 	}
 	clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, bt.VtGateExtraArgs...)
 
@@ -346,8 +344,8 @@ func (bt *BufferingTest) Test(t *testing.T) {
 	assert.Empty(t, readThreadInstance.errors, "found errors in read queries")
 	assert.Empty(t, updateThreadInstance.errors, "found errors in tx queries")
 
-	//At least one thread should have been buffered.
-	//This may fail if a failover is too fast. Add retries then.
+	// At least one thread should have been buffered.
+	// This may fail if a failover is too fast. Add retries then.
 	resp, err := http.Get(clusterInstance.VtgateProcess.VerifyURL)
 	require.NoError(t, err)
 	defer resp.Body.Close()
@@ -364,7 +362,7 @@ func (bt *BufferingTest) Test(t *testing.T) {
 	if metadata.BufferLastRequestsInFlightMax[label] == 0 {
 		// Missed buffering is okay when we observed the failover during the
 		// COMMIT (which cannot trigger the buffering).
-		assert.Greater(t, updateThreadInstance.internalErrs, 0, "No buffering took place and the update thread saw no error during COMMIT. But one of it must happen.")
+		assert.Positive(t, updateThreadInstance.internalErrs, "No buffering took place and the update thread saw no error during COMMIT. But one of it must happen.")
 	} else {
 		bt.Assert(t, label, &metadata)
 	}

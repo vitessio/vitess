@@ -47,7 +47,7 @@ export const vtfetch = async (endpoint: string, options: RequestInit = {}): Prom
         let response = null;
         try {
             response = await global.fetch(url, opts);
-        } catch (error) {
+        } catch {
             // Capture fetch() promise rejections and rethrow as HttpFetchError.
             // fetch() promises will reject with a TypeError when a network error is
             // encountered or CORS is misconfigured, in which case the request never

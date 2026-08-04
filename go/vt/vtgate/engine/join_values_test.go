@@ -17,7 +17,6 @@ limitations under the License.
 package engine
 
 import (
-	"context"
 	"fmt"
 	"testing"
 
@@ -78,7 +77,7 @@ func TestJoinValuesExecute(t *testing.T) {
 		ColNames:          []string{"col1", "col2", "col3", "col4", "col5", "col6"},
 	}
 
-	r, err := vjn.TryExecute(context.Background(), &noopVCursor{}, bv, true)
+	r, err := vjn.TryExecute(t.Context(), &noopVCursor{}, bv, true)
 	require.NoError(t, err)
 	leftPrim.ExpectLog(t, []string{
 		fmt.Sprintf(`Execute a: %v true`, sqltypes.Int64BindVariable(10)),

@@ -19,6 +19,7 @@ package evalengine
 import (
 	"bytes"
 	"math"
+	"slices"
 
 	"vitess.io/vitess/go/mysql/capabilities"
 	"vitess.io/vitess/go/mysql/collations"
@@ -152,30 +153,32 @@ type (
 	}
 )
 
-var _ IR = (*builtinField)(nil)
-var _ IR = (*builtinElt)(nil)
-var _ IR = (*builtinInsert)(nil)
-var _ IR = (*builtinChangeCase)(nil)
-var _ IR = (*builtinCharLength)(nil)
-var _ IR = (*builtinLength)(nil)
-var _ IR = (*builtinASCII)(nil)
-var _ IR = (*builtinReverse)(nil)
-var _ IR = (*builtinSpace)(nil)
-var _ IR = (*builtinOrd)(nil)
-var _ IR = (*builtinBitLength)(nil)
-var _ IR = (*builtinCollation)(nil)
-var _ IR = (*builtinWeightString)(nil)
-var _ IR = (*builtinLeftRight)(nil)
-var _ IR = (*builtinPad)(nil)
-var _ IR = (*builtinStrcmp)(nil)
-var _ IR = (*builtinTrim)(nil)
-var _ IR = (*builtinSubstring)(nil)
-var _ IR = (*builtinLocate)(nil)
-var _ IR = (*builtinChar)(nil)
-var _ IR = (*builtinRepeat)(nil)
-var _ IR = (*builtinConcat)(nil)
-var _ IR = (*builtinConcatWs)(nil)
-var _ IR = (*builtinReplace)(nil)
+var (
+	_ IR = (*builtinField)(nil)
+	_ IR = (*builtinElt)(nil)
+	_ IR = (*builtinInsert)(nil)
+	_ IR = (*builtinChangeCase)(nil)
+	_ IR = (*builtinCharLength)(nil)
+	_ IR = (*builtinLength)(nil)
+	_ IR = (*builtinASCII)(nil)
+	_ IR = (*builtinReverse)(nil)
+	_ IR = (*builtinSpace)(nil)
+	_ IR = (*builtinOrd)(nil)
+	_ IR = (*builtinBitLength)(nil)
+	_ IR = (*builtinCollation)(nil)
+	_ IR = (*builtinWeightString)(nil)
+	_ IR = (*builtinLeftRight)(nil)
+	_ IR = (*builtinPad)(nil)
+	_ IR = (*builtinStrcmp)(nil)
+	_ IR = (*builtinTrim)(nil)
+	_ IR = (*builtinSubstring)(nil)
+	_ IR = (*builtinLocate)(nil)
+	_ IR = (*builtinChar)(nil)
+	_ IR = (*builtinRepeat)(nil)
+	_ IR = (*builtinConcat)(nil)
+	_ IR = (*builtinConcatWs)(nil)
+	_ IR = (*builtinReplace)(nil)
+)
 
 func fieldSQLType(arg sqltypes.Type, tt sqltypes.Type) sqltypes.Type {
 	if sqltypes.IsNull(arg) {
@@ -735,7 +738,7 @@ func reverse(in *evalBytes) []byte {
 
 	out, end := make([]byte, len(b)), len(b)
 	for len(b) > 0 {
-		_, size := cs.DecodeRune(b)
+		_, size, _ := cs.DecodeRune(b)
 		copy(out[end-size:end], b[:size])
 		b = b[size:]
 		end -= size
@@ -828,9 +831,9 @@ func charOrd(b []byte, coll collations.ID) int64 {
 		return 0
 	}
 	cs := colldata.Lookup(coll).Charset()
-	_, l := cs.DecodeRune(b)
+	_, l, _ := cs.DecodeRune(b)
 	var r int64
-	for i := 0; i < l; i++ {
+	for i := range l {
 		r = (r << 8) | int64(b[i])
 	}
 	return r
@@ -890,8 +893,10 @@ func (call *builtinOrd) compile(c *compiler) (ctype, error) {
 //   - `<= max_allowed_packet` but the actual packet generated is `> max_allowed_packet` so it fails with an
 //     error: `ERROR 2020 (HY000): Got packet bigger than 'max_allowed_packet' bytes` and the client gets disconnected.
 //   - `> max_allowed_packet`, no error and returns `NULL`.
-const maxRepeatLength = 1073741824
-const repeatTypeChangeLength = 16384
+const (
+	maxRepeatLength        = 1073741824
+	repeatTypeChangeLength = 16384
+)
 
 // repeatType returns the type for the REPEAT result.
 // MySQL 8.1.x and later has changed this to return TEXT instead of VARCHAR.
@@ -1261,18 +1266,19 @@ func (call *builtinPad) eval(env *ExpressionEnv) (eval, error) {
 	repeat := (int(length) - strLen) / runeLen
 	remainder := (int(length) - strLen) % runeLen
 
-	var res []byte
-	if !call.left {
-		res = text.bytes
-	}
-
-	res = append(res, bytes.Repeat(pad.bytes, repeat)...)
+	padding := bytes.Repeat(pad.bytes, repeat)
 	if remainder > 0 {
-		res = append(res, charset.Slice(cs, pad.bytes, 0, remainder)...)
+		padding = append(padding, charset.Slice(cs, pad.bytes, 0, remainder)...)
 	}
 
+	var res []byte
 	if call.left {
-		res = append(res, text.bytes...)
+		res = append(padding, text.bytes...)
+	} else {
+		// The result needs its own buffer: text.bytes is borrowed from the
+		// input row or a bind variable, where the next value follows it in
+		// memory.
+		res = slices.Concat(text.bytes, padding)
 	}
 
 	return newEvalText(res, text.col), nil
@@ -1623,7 +1629,7 @@ func (call *builtinSubstring) compile(c *compiler) (ctype, error) {
 		if err != nil {
 			return ctype{}, err
 		}
-		skip2 = c.compileNullCheck2(str, l)
+		skip2 = c.compileNullCheckArg(l, 2)
 		_ = c.compileToInt64(l, 1)
 		c.asm.Fn_SUBSTRING3(tt, cs, col)
 	} else {
@@ -1692,7 +1698,7 @@ func (call *builtinLocate) compile(c *compiler) (ctype, error) {
 		return ctype{}, err
 	}
 
-	skip2 := c.compileNullCheck1(str)
+	skip2 := c.compileNullCheck1r(str)
 	var skip3 *jump
 
 	if !str.isTextual() {
@@ -1720,7 +1726,7 @@ func (call *builtinLocate) compile(c *compiler) (ctype, error) {
 		if err != nil {
 			return ctype{}, err
 		}
-		skip3 = c.compileNullCheck1(l)
+		skip3 = c.compileNullCheckArg(l, 2)
 		_ = c.compileToInt64(l, 1)
 	}
 
@@ -2183,7 +2189,7 @@ func replace(str, from, to []byte) []byte {
 	out := make([]byte, len(str)+n*(len(to)-len(from)))
 	end := 0
 	start := 0
-	for i := 0; i < n; i++ {
+	for range n {
 		pos := start + bytes.Index(str[start:], from)
 		end += copy(out[end:], str[start:pos])
 		end += copy(out[end:], to)

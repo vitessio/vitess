@@ -39,20 +39,20 @@ func TestGCStates(t *testing.T) {
 	require.False(t, ok)
 	_, ok = gcStates["vrp"]
 	require.False(t, ok)
-	require.Equal(t, 2*4, len(gcStates)) // 4 states, 2 forms each
+	require.Len(t, gcStates, 2*4) // 4 states, 2 forms each
 }
 
 func TestIsGCTableName(t *testing.T) {
 	tm := time.Now()
 	states := []TableGCState{HoldTableGCState, PurgeTableGCState, EvacTableGCState, DropTableGCState}
 	for _, state := range states {
-		for i := 0; i < 10; i++ {
+		for range 10 {
 			tableName, err := generateGCTableName(state, "6ace8bcef73211ea87e9f875a4d24e90", tm)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.Truef(t, IsGCTableName(tableName), "table name: %s", tableName)
 
 			tableName, err = GenerateGCTableName(state, tm)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.Truef(t, IsGCTableName(tableName), "table name: %s", tableName)
 		}
 	}
@@ -123,7 +123,7 @@ func TestIsGCTableName(t *testing.T) {
 
 func TestAnalyzeGCTableName(t *testing.T) {
 	baseTime, err := time.Parse(time.RFC1123, "Tue, 15 Sep 2020 12:04:10 UTC")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	tt := []struct {
 		tableName string
 		state     TableGCState
@@ -180,7 +180,7 @@ func TestAnalyzeGCTableName(t *testing.T) {
 			isGC, state, uuid, tm, err := AnalyzeGCTableName(ts.tableName)
 			assert.Equal(t, ts.isGC, isGC)
 			if ts.isGC {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.True(t, isCondensedUUID(uuid))
 				assert.Equal(t, ts.state, state)
 				assert.Equal(t, ts.t, tm)
@@ -249,7 +249,7 @@ func TestParseGCLifecycle(t *testing.T) {
 			if ts.expectErr {
 				assert.Error(t, err)
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.Equal(t, ts.states, states)
 			}
 		})
@@ -261,10 +261,10 @@ func TestGenerateRenameStatementWithUUID(t *testing.T) {
 	tableName := "mytbl"
 	countIterations := 5
 	toTableNames := map[string]bool{}
-	for i := 0; i < countIterations; i++ {
+	for i := range countIterations {
 		_, toTableName, err := GenerateRenameStatementWithUUID(tableName, PurgeTableGCState, OnlineDDLToGCUUID(uuid), time.Now().Add(time.Duration(i)*time.Second).UTC())
 		require.NoError(t, err)
 		toTableNames[toTableName] = true
 	}
-	assert.Equal(t, countIterations, len(toTableNames))
+	assert.Len(t, toTableNames, countIterations)
 }

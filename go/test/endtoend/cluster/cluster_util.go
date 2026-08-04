@@ -90,7 +90,7 @@ func (tablet *Vttablet) RestartOnlyTablet() error {
 
 // ValidateTabletRestart restarts the tablet and validate error if there is any.
 func (tablet *Vttablet) ValidateTabletRestart(t *testing.T) {
-	require.Nilf(t, tablet.Restart(), "tablet restart failed")
+	require.NoErrorf(t, tablet.Restart(), "tablet restart failed")
 }
 
 // GetPrimaryPosition gets the executed replication position of given vttablet
@@ -98,7 +98,7 @@ func GetPrimaryPosition(t *testing.T, vttablet Vttablet, hostname string) (strin
 	ctx := t.Context()
 	vtablet := getTablet(vttablet.GrpcPort, hostname)
 	pos, err := tmClient.PrimaryPosition(ctx, vtablet)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	gtID := strings.SplitAfter(pos, "/")[1]
 	return pos, gtID
 }
@@ -156,15 +156,15 @@ func (cluster LocalProcessCluster) ListBackups(shardKsName string) ([]string, er
 // VerifyBackupCount compares the backup count with expected count.
 func (cluster LocalProcessCluster) VerifyBackupCount(t *testing.T, shardKsName string, expected int) []string {
 	backups, err := cluster.ListBackups(shardKsName)
-	require.Nil(t, err)
-	assert.Equalf(t, expected, len(backups), "invalid number of backups")
+	require.NoError(t, err)
+	assert.Lenf(t, backups, expected, "invalid number of backups")
 	return backups
 }
 
 // RemoveAllBackups removes all the backup corresponds to list backup.
 func (cluster LocalProcessCluster) RemoveAllBackups(t *testing.T, shardKsName string) {
 	backups, err := cluster.ListBackups(shardKsName)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	for _, backup := range backups {
 		cluster.VtctldClientProcess.ExecuteCommand("RemoveBackup", shardKsName, backup)
 	}
@@ -188,6 +188,7 @@ func getTablet(tabletGrpcPort int, hostname string) *topodatapb.Tablet {
 func filterResultForWarning(input string) string {
 	lines := strings.Split(input, "\n")
 	var result string
+	var resultSb191 strings.Builder
 	for i, line := range lines {
 		if strings.Contains(line, "WARNING: vtctl should only be used for VDiff v1 workflows. Please use VDiff v2 and consider using vtctldclient for all other commands.") {
 			continue
@@ -197,12 +198,13 @@ func filterResultForWarning(input string) string {
 			continue
 		}
 
-		result += line
+		resultSb191.WriteString(line)
 
 		if i < len(lines)-1 {
-			result += "\n"
+			resultSb191.WriteString("\n")
 		}
 	}
+	result += resultSb191.String()
 
 	return result
 }
@@ -226,9 +228,10 @@ func filterResultWhenRunsForCoverage(input string) string {
 }
 
 func ValidateReplicationIsHealthy(t *testing.T, tablet *Vttablet) bool {
+	require.NotNil(t, tablet)
 	query := "show replica status"
 	rs, err := tablet.VttabletProcess.QueryTablet(query, "", true)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	row := rs.Named().Row()
 	require.NotNil(t, row)
 
@@ -287,7 +290,7 @@ func positionAtLeast(t *testing.T, tablet *Vttablet, a string, b string) bool {
 // ExecuteQueriesUsingVtgate sends query to vtgate using vtgate session.
 func ExecuteQueriesUsingVtgate(t *testing.T, session *vtgateconn.VTGateSession, query string) {
 	_, err := session.Execute(context.Background(), query, nil, false)
-	require.Nil(t, err)
+	require.NoError(t, err)
 }
 
 // NewConnParams creates ConnParams corresponds to given arguments.
@@ -320,7 +323,7 @@ func WriteDbCredentialToTmp(tmpDir string) string {
         "vt_filtered": ["VtFilteredPass"]
 	}`)
 	dbCredentialFile = path.Join(tmpDir, "db_credentials.json")
-	os.WriteFile(dbCredentialFile, data, 0666)
+	os.WriteFile(dbCredentialFile, data, 0o666)
 	return dbCredentialFile
 }
 
@@ -369,7 +372,7 @@ func ExecuteOnTablet(t *testing.T, query string, vttablet Vttablet, ks string, e
 	if expectFail {
 		require.Error(t, err)
 	} else {
-		require.Nil(t, err)
+		require.NoError(t, err)
 	}
 	_, _ = vttablet.VttabletProcess.QueryTablet("commit", ks, true)
 }
@@ -488,7 +491,7 @@ func PrintFiles(t *testing.T, dir string, files ...string) {
 		directories = directories[1:]
 		entries, err := os.ReadDir(dir)
 		if err != nil {
-			log.Errorf("Couldn't read directory - %v", dir)
+			log.Error(fmt.Sprintf("Couldn't read directory - %v", dir))
 			continue
 		}
 		for _, entry := range entries {
@@ -514,8 +517,8 @@ func PrintFiles(t *testing.T, dir string, files ...string) {
 			// Read and print the file.
 			res, err := os.ReadFile(name)
 			require.NoError(t, err)
-			log.Errorf("READING FILE - %v", name)
-			log.Errorf("%v", string(res))
+			log.Error(fmt.Sprintf("READING FILE - %v", name))
+			log.Error(string(res))
 		}
 	}
 }

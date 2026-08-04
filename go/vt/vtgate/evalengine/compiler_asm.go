@@ -30,6 +30,7 @@ import (
 	"math"
 	"math/bits"
 	"net/netip"
+	"slices"
 	"strconv"
 	"time"
 
@@ -204,9 +205,14 @@ func (asm *assembler) BitOp_and_bb() {
 			env.vm.err = errBitwiseOperandsLength
 			return 0
 		}
-		for i := range l.bytes {
-			l.bytes[i] = l.bytes[i] & r.bytes[i]
+		// The result is a plain binary string of its own: the operands' bytes
+		// are borrowed from a literal, a bind variable or the input row, and
+		// their hex or bit literal markers do not carry over to the result.
+		out := make([]byte, len(l.bytes))
+		for i := range out {
+			out[i] = l.bytes[i] & r.bytes[i]
 		}
+		env.vm.stack[env.vm.sp-2] = env.vm.arena.newEvalBinary(out)
 		env.vm.sp--
 		return 1
 	}, "AND BINARY(SP-2), BINARY(SP-1)")
@@ -221,9 +227,14 @@ func (asm *assembler) BitOp_or_bb() {
 			env.vm.err = errBitwiseOperandsLength
 			return 0
 		}
-		for i := range l.bytes {
-			l.bytes[i] = l.bytes[i] | r.bytes[i]
+		// The result is a plain binary string of its own: the operands' bytes
+		// are borrowed from a literal, a bind variable or the input row, and
+		// their hex or bit literal markers do not carry over to the result.
+		out := make([]byte, len(l.bytes))
+		for i := range out {
+			out[i] = l.bytes[i] | r.bytes[i]
 		}
+		env.vm.stack[env.vm.sp-2] = env.vm.arena.newEvalBinary(out)
 		env.vm.sp--
 		return 1
 	}, "OR BINARY(SP-2), BINARY(SP-1)")
@@ -238,9 +249,14 @@ func (asm *assembler) BitOp_xor_bb() {
 			env.vm.err = errBitwiseOperandsLength
 			return 0
 		}
-		for i := range l.bytes {
-			l.bytes[i] = l.bytes[i] ^ r.bytes[i]
+		// The result is a plain binary string of its own: the operands' bytes
+		// are borrowed from a literal, a bind variable or the input row, and
+		// their hex or bit literal markers do not carry over to the result.
+		out := make([]byte, len(l.bytes))
+		for i := range out {
+			out[i] = l.bytes[i] ^ r.bytes[i]
 		}
+		env.vm.stack[env.vm.sp-2] = env.vm.arena.newEvalBinary(out)
 		env.vm.sp--
 		return 1
 	}, "XOR BINARY(SP-2), BINARY(SP-1)")
@@ -293,7 +309,7 @@ func (asm *assembler) BitShiftLeft_bu() {
 			out    = make([]byte, length)
 		)
 
-		for i := int64(0); i < length; i++ {
+		for i := range length {
 			pos := i + bytes + 1
 			switch {
 			case pos < length:
@@ -369,9 +385,13 @@ func (asm *assembler) BitShiftRight_uu() {
 func (asm *assembler) BitwiseNot_b() {
 	asm.emit(func(env *ExpressionEnv) int {
 		a := env.vm.stack[env.vm.sp-1].(*evalBytes)
-		for i := range a.bytes {
-			a.bytes[i] = ^a.bytes[i]
+		// The result needs its own buffer: the operand's bytes are borrowed
+		// from a literal, a bind variable or the input row.
+		out := make([]byte, len(a.bytes))
+		for i := range out {
+			out[i] = ^a.bytes[i]
 		}
+		a.bytes = out
 		return 1
 	}, "BIT_NOT BINARY(SP-1)")
 }
@@ -493,6 +513,7 @@ func (asm *assembler) Cmp_lt_n() {
 		return 1
 	}, "CMPFLAG LT [NULL]")
 }
+
 func (asm *assembler) Cmp_ne() {
 	asm.adjustStack(1)
 	asm.emit(func(env *ExpressionEnv) int {
@@ -1795,7 +1816,7 @@ func (asm *assembler) Fn_SQRT() {
 func (asm *assembler) Fn_ROUND1_f() {
 	asm.emit(func(env *ExpressionEnv) int {
 		f := env.vm.stack[env.vm.sp-1].(*evalFloat)
-		f.f = math.Round(f.f)
+		f.f = math.RoundToEven(f.f)
 		return 1
 	}, "FN ROUND FLOAT64(SP-1)")
 }
@@ -1839,7 +1860,7 @@ func (asm *assembler) Fn_ROUND2_f() {
 		f := env.vm.stack[env.vm.sp-2].(*evalFloat)
 		r := env.vm.stack[env.vm.sp-1].(*evalInt64)
 		if r.i == 0 {
-			f.f = math.Round(f.f)
+			f.f = math.RoundToEven(f.f)
 			env.vm.sp--
 			return 1
 		}
@@ -1851,7 +1872,7 @@ func (asm *assembler) Fn_ROUND2_f() {
 			env.vm.sp--
 			return 1
 		}
-		f.f = math.Round(f.f*factor) / factor
+		f.f = math.RoundToEven(f.f*factor) / factor
 		env.vm.sp--
 		return 1
 	}, "FN ROUND FLOAT64(SP-2) INT64(SP-1)")
@@ -1876,13 +1897,7 @@ func (asm *assembler) Fn_ROUND2_d() {
 		}
 
 		r.i = clampRounding(r.i)
-		digit := int32(r.i)
-		if digit < 0 {
-			digit = 0
-		}
-		if digit > d.length {
-			digit = d.length
-		}
+		digit := min(max(int32(r.i), 0), d.length)
 		rounded := d.dec.Round(int32(r.i))
 		if rounded.IsZero() {
 			d.dec = decimal.Zero
@@ -1963,13 +1978,7 @@ func (asm *assembler) Fn_TRUNCATE_d() {
 		}
 
 		r.i = clampRounding(r.i)
-		digit := int32(r.i)
-		if digit < 0 {
-			digit = 0
-		}
-		if digit > d.length {
-			digit = d.length
-		}
+		digit := min(max(int32(r.i), 0), d.length)
 		rounded := d.dec.Truncate(int32(r.i))
 		if rounded.IsZero() {
 			d.dec = decimal.Zero
@@ -2319,6 +2328,15 @@ func (asm *assembler) Fn_JSON_KEYS(jp *json.Path) {
 			return 1
 		}, "FN JSON_KEYS (SP-1)")
 	} else {
+		if jp.ContainsWildcards() {
+			asm.emit(func(env *ExpressionEnv) int {
+				env.vm.err = errInvalidPathForTransform
+				return 1
+			}, "FN JSON_KEYS (SP-1), %q", jp.String())
+
+			return
+		}
+
 		asm.emit(func(env *ExpressionEnv) int {
 			doc := env.vm.stack[env.vm.sp-1]
 			if doc == nil {
@@ -3022,10 +3040,13 @@ func (asm *assembler) Fn_RPAD(col collations.TypedCollation) {
 		repeat := (l - strLen) / runeLen
 		remainder := (l - strLen) % runeLen
 
-		str.bytes = append(str.bytes, bytes.Repeat(pad.bytes, repeat)...)
+		padding := bytes.Repeat(pad.bytes, repeat)
 		if remainder > 0 {
-			str.bytes = append(str.bytes, charset.Slice(cs, pad.bytes, 0, remainder)...)
+			padding = append(padding, charset.Slice(cs, pad.bytes, 0, remainder)...)
 		}
+		// The result needs its own buffer: str.bytes is borrowed from the input
+		// row or a bind variable, where the next value follows it in memory.
+		str.bytes = slices.Concat(str.bytes, padding)
 
 		env.vm.sp -= 2
 		return 1
@@ -4617,8 +4638,12 @@ func (asm *assembler) Fn_IS_IPV6() {
 func (asm *assembler) Fn_CONCAT(tt querypb.Type, tc collations.TypedCollation, args int) {
 	asm.adjustStack(-args + 1)
 	asm.emit(func(env *ExpressionEnv) int {
-		var buf []byte
-		for i := 0; i < args; i++ {
+		total := 0
+		for i := range args {
+			total += len(env.vm.stack[env.vm.sp-args+i].(*evalBytes).bytes)
+		}
+		buf := make([]byte, 0, total)
+		for i := range args {
 			arg := env.vm.stack[env.vm.sp-args+i].(*evalBytes)
 			buf = append(buf, arg.bytes...)
 		}
@@ -4639,7 +4664,7 @@ func (asm *assembler) Fn_CONCAT_WS(tt querypb.Type, tc collations.TypedCollation
 		sep := env.vm.stack[env.vm.sp-args-1].(*evalBytes).bytes
 
 		first := true
-		for i := 0; i < args; i++ {
+		for i := range args {
 			if env.vm.stack[env.vm.sp-args+i] == nil {
 				continue
 			}
@@ -4665,7 +4690,7 @@ func (asm *assembler) Fn_CHAR(tt querypb.Type, tc collations.TypedCollation, arg
 	asm.adjustStack(-(args - 1))
 	asm.emit(func(env *ExpressionEnv) int {
 		buf := make([]byte, 0, args)
-		for i := 0; i < args; i++ {
+		for i := range args {
 			if env.vm.stack[env.vm.sp-args+i] == nil {
 				continue
 			}

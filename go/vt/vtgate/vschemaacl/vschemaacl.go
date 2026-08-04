@@ -42,7 +42,7 @@ func NewAuthorizedDDLUsers(users string) *authorizedDDLUsers {
 	case "%":
 		allowAll = true
 	default:
-		for _, user := range strings.Split(users, ",") {
+		for user := range strings.SplitSeq(users, ",") {
 			user = strings.TrimSpace(user)
 			acl[user] = struct{}{}
 		}
@@ -59,26 +59,24 @@ func (a *authorizedDDLUsers) String() string {
 	return a.source
 }
 
-var (
-	// AuthorizedDDLUsers specifies the users that can perform ddl operations
-	AuthorizedDDLUsers = viperutil.Configure(
-		"vschema_ddl_authorized_users",
-		viperutil.Options[*authorizedDDLUsers]{
-			FlagName: "vschema-ddl-authorized-users",
-			Default:  &authorizedDDLUsers{},
-			Dynamic:  true,
-			GetFunc: func(v *viper.Viper) func(key string) *authorizedDDLUsers {
-				return func(key string) *authorizedDDLUsers {
-					newVal := v.GetString(key)
-					curVal, ok := v.Get(key).(*authorizedDDLUsers)
-					if ok && newVal == curVal.source {
-						return curVal
-					}
-					return NewAuthorizedDDLUsers(newVal)
+// AuthorizedDDLUsers specifies the users that can perform ddl operations
+var AuthorizedDDLUsers = viperutil.Configure(
+	"vschema_ddl_authorized_users",
+	viperutil.Options[*authorizedDDLUsers]{
+		FlagName: "vschema-ddl-authorized-users",
+		Default:  &authorizedDDLUsers{},
+		Dynamic:  true,
+		GetFunc: func(v *viper.Viper) func(key string) *authorizedDDLUsers {
+			return func(key string) *authorizedDDLUsers {
+				newVal := v.GetString(key)
+				curVal, ok := v.Get(key).(*authorizedDDLUsers)
+				if ok && newVal == curVal.source {
+					return curVal
 				}
-			},
+				return NewAuthorizedDDLUsers(newVal)
+			}
 		},
-	)
+	},
 )
 
 // RegisterSchemaACLFlags installs log flags on the given FlagSet.

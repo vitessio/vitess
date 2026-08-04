@@ -63,7 +63,8 @@ type Tracker struct {
 
 func NewTracker() *Tracker {
 	track := &Tracker{}
-	track.tbl = tablewriter.NewTable(&track.buf,
+	track.tbl = tablewriter.NewTable(
+		&track.buf,
 		tablewriter.WithAlignment(tw.Alignment{
 			tw.AlignLeft,
 			tw.AlignRight,
@@ -179,16 +180,16 @@ func testCompilerCase(t *testing.T, query string, venv *vtenv.Environment, schem
 		assert.Equalf(t, eval, comp, "bad evaluation from compiler:\nSQL:  %s\nEval: %s\nComp: %s", query, eval, comp)
 		assert.Equalf(t, expected.Collation(), res.Collation(), "bad collation from compiler:\nSQL:  %s\nEval: %s\nComp: %s", query, colldata.Lookup(expected.Collation()).Name(), colldata.Lookup(res.Collation()).Name())
 	case vmErr == nil:
-		t.Errorf("failed evaluation from evalengine:\nSQL:  %s\nError: %s", query, evalErr)
+		assert.Failf(t, "failed evaluation from evalengine", "failed evaluation from evalengine:\nSQL:  %s\nError: %s", query, evalErr)
 	case evalErr == nil:
-		t.Errorf("failed evaluation from compiler:\nSQL:  %s\nError: %s", query, vmErr)
+		assert.Failf(t, "failed evaluation from compiler", "failed evaluation from compiler:\nSQL:  %s\nError: %s", query, vmErr)
 	case evalErr.Error() != vmErr.Error():
-		t.Errorf("error mismatch:\nSQL:  %s\nError eval: %s\nError comp: %s", query, evalErr, vmErr)
+		assert.Failf(t, "error mismatch", "error mismatch:\nSQL:  %s\nError eval: %s\nError comp: %s", query, evalErr, vmErr)
 	}
 }
 
 func TestCompilerSingle(t *testing.T) {
-	var testCases = []struct {
+	testCases := []struct {
 		expression string
 		values     []sqltypes.Value
 		result     string
@@ -199,6 +200,36 @@ func TestCompilerSingle(t *testing.T) {
 			expression: "1 + column0",
 			values:     []sqltypes.Value{sqltypes.NewInt64(1)},
 			result:     "INT64(2)",
+		},
+		{
+			// A NULL string operand must collapse both LOCATE operands before outer
+			// expressions consume the result.
+			expression: "null <=> locate('foo', column0)",
+			values:     []sqltypes.Value{sqltypes.NULL},
+			result:     "INT64(1)",
+		},
+		{
+			// A leftover operand would make IFNULL overflow the VM stack.
+			expression: "ifnull(locate('foo', column0), 7)",
+			values:     []sqltypes.Value{sqltypes.NULL},
+			result:     "INT64(7)",
+		},
+		{
+			// A NULL position must collapse all three LOCATE operands.
+			expression: "ifnull(locate('foo', 'foobar', column0), 7)",
+			values:     []sqltypes.Value{sqltypes.NULL},
+			result:     "INT64(7)",
+		},
+		{
+			// A NULL length must collapse all three SUBSTRING operands.
+			expression: "null <=> substring('abc', 1, column0)",
+			values:     []sqltypes.Value{sqltypes.NULL},
+			result:     "INT64(1)",
+		},
+		{
+			expression: "ifnull(substring('abc', 1, column0), 'x')",
+			values:     []sqltypes.Value{sqltypes.NULL},
+			result:     `VARCHAR("x")`,
 		},
 		{
 			expression: "1 + column0",
@@ -219,6 +250,39 @@ func TestCompilerSingle(t *testing.T) {
 			expression: "(128 - column0) * 3",
 			values:     []sqltypes.Value{sqltypes.NewFloat64(1)},
 			result:     "FLOAT64(381)",
+		},
+		{
+			expression: "ROUND(column0)",
+			values:     []sqltypes.Value{sqltypes.NewFloat64(2.5)},
+			result:     "FLOAT64(2)",
+		},
+		{
+			expression: "ROUND(column0)",
+			values:     []sqltypes.Value{sqltypes.NewFloat64(3.5)},
+			result:     "FLOAT64(4)",
+		},
+		{
+			expression: "ROUND(column0)",
+			values:     []sqltypes.Value{sqltypes.NewFloat64(-2.5)},
+			result:     "FLOAT64(-2)",
+		},
+		{
+			expression: "ROUND(column0, 2)",
+			values:     []sqltypes.Value{sqltypes.NewFloat64(0.125)},
+			result:     "FLOAT64(0.12)",
+		},
+		{
+			expression: "ROUND(column0, -1)",
+			values:     []sqltypes.Value{sqltypes.NewFloat64(25)},
+			result:     "FLOAT64(20)",
+		},
+		{
+			expression: "ROUND(2.5)",
+			result:     "DECIMAL(3)",
+		},
+		{
+			expression: "ROUND(-2.5)",
+			result:     "DECIMAL(-3)",
 		},
 		{
 			expression: "1.0e0 < column0",
@@ -814,9 +878,7 @@ func TestCompilerSingle(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.expression, func(t *testing.T) {
 			expr, err := venv.Parser().ParseExpr(tc.expression)
-			if err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, err)
 
 			fields := evalengine.FieldResolver(makeFields(tc.values))
 			cfg := &evalengine.Config{
@@ -828,23 +890,17 @@ func TestCompilerSingle(t *testing.T) {
 			}
 
 			converted, err := evalengine.Translate(expr, cfg)
-			if err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, err)
 
-			env := evalengine.NewExpressionEnv(context.Background(), nil, evalengine.NewEmptyVCursor(venv, tz))
+			env := evalengine.NewExpressionEnv(t.Context(), nil, evalengine.NewEmptyVCursor(venv, tz))
 			env.SetTime(time.Date(2023, 10, 24, 12, 0, 0, 123456000, tz))
 			env.Row = tc.values
 
 			expected, err := env.EvaluateAST(converted)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if expected.String() != tc.result {
-				t.Fatalf("bad evaluation from eval engine: got %s, want %s", expected.String(), tc.result)
-			}
-			if tc.collation != collations.Unknown && tc.collation != expected.Collation() {
-				t.Fatalf("bad collation evaluation from eval engine: got %d, want %d", expected.Collation(), tc.collation)
+			require.NoError(t, err)
+			require.Equalf(t, tc.result, expected.String(), "bad evaluation from eval engine: got %s, want %s", expected.String(), tc.result)
+			if tc.collation != collations.Unknown {
+				require.Equalf(t, tc.collation, expected.Collation(), "bad collation evaluation from eval engine: got %d, want %d", expected.Collation(), tc.collation)
 			}
 
 			if tc.typeWanted.Type() != sqltypes.Unknown {
@@ -854,17 +910,13 @@ func TestCompilerSingle(t *testing.T) {
 			}
 
 			// re-run the same evaluation multiple times to ensure results are always consistent
-			for i := 0; i < 8; i++ {
+			for i := range 8 {
 				res, err := env.Evaluate(converted)
-				if err != nil {
-					t.Fatal(err)
-				}
+				require.NoError(t, err)
 
-				if res.String() != tc.result {
-					t.Errorf("bad evaluation from compiler: got %s, want %s (iteration %d)", res, tc.result, i)
-				}
-				if tc.collation != collations.Unknown && tc.collation != res.Collation() {
-					t.Fatalf("bad collation evaluation from compiler: got %d, want %d", res.Collation(), tc.collation)
+				assert.Equalf(t, tc.result, res.String(), "bad evaluation from compiler: got %s, want %s (iteration %d)", res, tc.result, i)
+				if tc.collation != collations.Unknown {
+					require.Equalf(t, tc.collation, res.Collation(), "bad collation evaluation from compiler: got %d, want %d", res.Collation(), tc.collation)
 				}
 			}
 		})
@@ -872,7 +924,7 @@ func TestCompilerSingle(t *testing.T) {
 }
 
 func TestBindVarLiteral(t *testing.T) {
-	var testCases = []struct {
+	testCases := []struct {
 		expression string
 		bindType   func(expr sqlparser.Expr)
 		bindVar    *querypb.BindVariable
@@ -900,9 +952,7 @@ func TestBindVarLiteral(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.expression, func(t *testing.T) {
 			expr, err := venv.Parser().ParseExpr(tc.expression)
-			if err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, err)
 
 			tc.bindType(expr)
 
@@ -916,9 +966,7 @@ func TestBindVarLiteral(t *testing.T) {
 			}
 
 			converted, err := evalengine.Translate(expr, cfg)
-			if err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, err)
 
 			result := `VARCHAR("ÿ")`
 
@@ -928,23 +976,14 @@ func TestBindVarLiteral(t *testing.T) {
 			}
 
 			expected, err := env.EvaluateAST(converted)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if expected.String() != result {
-				t.Fatalf("bad evaluation from eval engine: got %s, want %s", expected.String(), result)
-			}
+			require.NoError(t, err)
+			require.Equalf(t, result, expected.String(), "bad evaluation from eval engine: got %s, want %s", expected.String(), result)
 
 			// re-run the same evaluation multiple times to ensure results are always consistent
-			for i := 0; i < 8; i++ {
+			for i := range 8 {
 				res, err := env.EvaluateVM(converted.(*evalengine.CompiledExpr))
-				if err != nil {
-					t.Fatal(err)
-				}
-
-				if res.String() != result {
-					t.Errorf("bad evaluation from compiler: got %s, want %s (iteration %d)", res, result, i)
-				}
+				require.NoError(t, err)
+				assert.Equalf(t, result, res.String(), "bad evaluation from compiler: got %s, want %s (iteration %d)", res, result, i)
 			}
 		})
 	}
@@ -978,7 +1017,7 @@ func (t *testVcursor) SetLastInsertID(id uint64) {
 var _ evalengine.VCursor = (*testVcursor)(nil)
 
 func TestLastInsertID(t *testing.T) {
-	var testCases = []struct {
+	testCases := []struct {
 		expression string
 		result     uint64
 		missing    bool
@@ -1026,7 +1065,8 @@ func runTest(t *testing.T, expr sqlparser.Expr, cfg *evalengine.Config, tc struc
 	expression string
 	result     uint64
 	missing    bool
-}) {
+},
+) {
 	converted, err := evalengine.Translate(expr, cfg)
 	require.NoError(t, err)
 
@@ -1044,7 +1084,7 @@ func runTest(t *testing.T, expr sqlparser.Expr, cfg *evalengine.Config, tc struc
 }
 
 func TestCompilerNonConstant(t *testing.T) {
-	var testCases = []struct {
+	testCases := []struct {
 		expression string
 	}{
 		{
@@ -1059,9 +1099,7 @@ func TestCompilerNonConstant(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.expression, func(t *testing.T) {
 			expr, err := venv.Parser().ParseExpr(tc.expression)
-			if err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, err)
 
 			cfg := &evalengine.Config{
 				Collation:         collations.CollationUtf8mb4ID,
@@ -1070,33 +1108,22 @@ func TestCompilerNonConstant(t *testing.T) {
 			}
 
 			converted, err := evalengine.Translate(expr, cfg)
-			if err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, err)
 
 			env := evalengine.EmptyExpressionEnv(venv)
 			var prev string
-			for i := 0; i < 1000; i++ {
+			for range 1000 {
 				expected, err := env.EvaluateAST(converted)
-				if err != nil {
-					t.Fatal(err)
-				}
-				if expected.String() == prev {
-					t.Fatalf("constant evaluation from eval engine: got %s multiple times", expected.String())
-				}
+				require.NoError(t, err)
+				require.NotEqualf(t, prev, expected.String(), "constant evaluation from eval engine: got %s multiple times", expected.String())
 				prev = expected.String()
 			}
 
 			// re-run the same evaluation multiple times to ensure results are always consistent
-			for i := 0; i < 1000; i++ {
+			for range 1000 {
 				res, err := env.EvaluateVM(converted.(*evalengine.CompiledExpr))
-				if err != nil {
-					t.Fatal(err)
-				}
-
-				if res.String() == prev {
-					t.Fatalf("constant evaluation from eval engine: got %s multiple times", res.String())
-				}
+				require.NoError(t, err)
+				require.NotEqualf(t, prev, res.String(), "constant evaluation from eval engine: got %s multiple times", res.String())
 				prev = res.String()
 			}
 		})

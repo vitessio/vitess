@@ -17,7 +17,6 @@ limitations under the License.
 package vtgate
 
 import (
-	"context"
 	_ "embed"
 	"flag"
 	"fmt"
@@ -84,7 +83,7 @@ func TestMain(m *testing.M) {
 }
 
 func TestSingleOneWay(t *testing.T) {
-	conn, err := mysql.Connect(context.Background(), &vtParams)
+	conn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
 	defer func() {
@@ -105,7 +104,7 @@ func TestSingleOneWay(t *testing.T) {
 }
 
 func TestSingleReverseWay(t *testing.T) {
-	conn, err := mysql.Connect(context.Background(), &vtParams)
+	conn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
 	defer func() {
@@ -126,7 +125,7 @@ func TestSingleReverseWay(t *testing.T) {
 }
 
 func TestSingleLookupDangleRow(t *testing.T) {
-	conn, err := mysql.Connect(context.Background(), &vtParams)
+	conn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
 	defer func() {
@@ -145,7 +144,7 @@ func TestSingleLookupDangleRow(t *testing.T) {
 }
 
 func TestLookupDangleRowLaterMultiDB(t *testing.T) {
-	conn, err := mysql.Connect(context.Background(), &vtParams)
+	conn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
 	defer func() {
@@ -225,7 +224,7 @@ func TestNoRecordInTableNotFail(t *testing.T) {
 	utils.AssertMatches(t, conn, `select @@transaction_mode`, `[[VARCHAR("SINGLE")]]`)
 	// Need to run this test multiple times as shards are picked randomly for Impossible query.
 	// After the fix it is not random if a shard session already exists then it reuses that same shard session.
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		utils.Exec(t, conn, `begin`)
 		utils.Exec(t, conn, `INSERT INTO t1(id, txn_id) VALUES (1, "t1")`)
 		utils.Exec(t, conn, `SELECT * FROM t2 WHERE id = 1`)
@@ -273,7 +272,7 @@ func TestOnlyMultiShardWriteFail(t *testing.T) {
 
 func setup(t *testing.T) (*mysql.Conn, func()) {
 	t.Helper()
-	conn, err := mysql.Connect(context.Background(), &vtParams)
+	conn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 
 	tables := []string{

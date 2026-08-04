@@ -18,7 +18,6 @@ package io.vitess.client.grpc;
 
 import io.grpc.stub.StreamObserver;
 import io.vitess.client.StreamIterator;
-
 import java.sql.SQLDataException;
 import java.sql.SQLException;
 import java.util.NoSuchElementException;

@@ -22,9 +22,11 @@ import (
 	"io"
 	"regexp"
 	"sort"
+	"strings"
 	"sync"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
@@ -42,17 +44,11 @@ import (
 
 func initialize(ctx context.Context, t *testing.T) (*vtgateconn.VTGateConn, *mysql.Conn, *mysql.Conn, func()) {
 	gconn, err := vtgateconn.Dial(ctx, grpcAddress)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	conn, err := mysql.Connect(ctx, &vtParams)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	mconn, err := mysql.Connect(ctx, &mysqlParams)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	close := func() {
 		gconn.Close()
 		conn.Close()
@@ -62,16 +58,14 @@ func initialize(ctx context.Context, t *testing.T) (*vtgateconn.VTGateConn, *mys
 }
 
 func TestVStream(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
 	gconn, conn, mconn, closeConnections := initialize(ctx, t)
 	defer closeConnections()
 
 	mpos, err := mconn.PrimaryPosition()
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	vgtid := &binlogdatapb.VGtid{
 		ShardGtids: []*binlogdatapb.ShardGtid{{
 			Keyspace: "ks",
@@ -86,14 +80,10 @@ func TestVStream(t *testing.T) {
 	}
 	flags := &vtgatepb.VStreamFlags{}
 	reader, err := gconn.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, filter, flags)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	_, err = conn.ExecuteFetch("insert into vstream_test(id,val) values(1,1), (4,4)", 1, false)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	// We expect two events because the insert goes to two shards (-80 and 80-),
 	// and both of them are in the same mysql server.
 	// The row that goes to 80- will have events.
@@ -102,11 +92,9 @@ func TestVStream(t *testing.T) {
 	// keyspace/shard, we should expect only a single event.
 	// The events could come in any order as the scatter insert runs in parallel.
 	emptyEventSkipped := false
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		events, err := reader.Recv()
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
 		fmt.Printf("events: %v\n", events)
 		// An empty transaction has three events: begin, gtid and commit.
 		if len(events) == 3 && !emptyEventSkipped {
@@ -114,7 +102,7 @@ func TestVStream(t *testing.T) {
 			continue
 		}
 		if len(events) != 5 {
-			t.Errorf("Unexpected event length: %v", events)
+			assert.Failf(t, "Unexpected event length", "%v", events)
 			continue
 		}
 		wantFields := &binlogdatapb.FieldEvent{
@@ -143,9 +131,7 @@ func TestVStream(t *testing.T) {
 				Type: field.Type,
 			})
 		}
-		if !proto.Equal(filteredFields, wantFields) {
-			t.Errorf("FieldEvent:\n%v, want\n%v", filteredFields, wantFields)
-		}
+		assert.True(t, proto.Equal(filteredFields, wantFields), "%v, want\n%v", filteredFields, wantFields)
 		wantRows := &binlogdatapb.RowEvent{
 			TableName: "ks.vstream_test",
 			Keyspace:  "ks",
@@ -159,23 +145,19 @@ func TestVStream(t *testing.T) {
 			Flags: 1, // foreign_key_checks are enabled by default.
 		}
 		gotRows := events[2].RowEvent
-		if !proto.Equal(gotRows, wantRows) {
-			t.Errorf("RowEvent:\n%v, want\n%v", gotRows, wantRows)
-		}
+		assert.True(t, proto.Equal(gotRows, wantRows), "%v, want\n%v", gotRows, wantRows)
 	}
 	cancel()
 }
 
 func TestVStreamCopyBasic(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	gconn, conn, mconn, closeConnections := initialize(ctx, t)
 	defer closeConnections()
 
 	_, err := conn.ExecuteFetch("insert into t1_copy_basic(id1,id2) values(1,1), (2,2), (3,3), (4,4), (5,5), (6,6), (7,7), (8,8)", 1, false)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	lastPK := sqltypes.Result{
 		Fields: []*querypb.Field{{Name: "id1", Type: querypb.Type_INT32}},
@@ -210,9 +192,7 @@ func TestVStreamCopyBasic(t *testing.T) {
 	flags := &vtgatepb.VStreamFlags{}
 	reader, err := gconn.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, filter, flags)
 	_, _ = conn, mconn
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	numExpectedEvents := 2 /* num shards */ *(7 /* begin/field/vgtid:pos/2 rowevents avg/vgitd: lastpk/commit) */ +3 /* begin/vgtid/commit for completed table */ +1 /* copy operation completed */) + 1 /* fully copy operation completed */
 
 	expectedCompletedEvents := []*binlogdatapb.VEvent{
@@ -246,14 +226,14 @@ func TestVStreamCopyBasic(t *testing.T) {
 				t.Logf("TestVStreamCopyBasic was successful")
 				return
 			} else if numExpectedEvents < len(evs) {
-				t.Fatalf("len(events)=%v are not expected\n", len(evs))
+				require.Failf(t, "unexpected number of events", "len(events)=%v are not expected\n", len(evs))
 			}
 		case io.EOF:
-			log.Infof("stream ended\n")
+			log.Info("stream ended\n")
 			cancel()
 		default:
-			log.Errorf("Returned err %v", err)
-			t.Fatalf("remote error: %v\n", err)
+			log.Error(fmt.Sprintf("Returned err %v", err))
+			require.NoError(t, err)
 		}
 	}
 }
@@ -263,7 +243,7 @@ func TestVStreamCopyBasic(t *testing.T) {
 // - If the keyspace contains wildcards and the shard is not specified, the copy operation should be performed on all shards of all matching keyspaces.
 // - If the keyspace is specified and the shard is not specified, the copy operation should be performed on all shards of the specified keyspace.
 func TestVStreamCopyUnspecifiedShardGtid(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
 	conn, err := mysql.Connect(ctx, &vtParams)
@@ -372,11 +352,11 @@ func TestVStreamCopyUnspecifiedShardGtid(t *testing.T) {
 						require.FailNow(t, fmt.Sprintf("len(events)=%d are not expected\n", len(evs)))
 					}
 				case io.EOF:
-					log.Infof("stream ended\n")
+					log.Info("stream ended\n")
 					cancel()
 				default:
-					log.Errorf("Returned err %v", err)
-					require.FailNow(t, "remote error: %v\n", err)
+					log.Error(fmt.Sprintf("Returned err %v", err))
+					require.FailNowf(t, "remote error", "%v\n", err)
 				}
 			}
 		})
@@ -384,15 +364,13 @@ func TestVStreamCopyUnspecifiedShardGtid(t *testing.T) {
 }
 
 func TestVStreamCopyResume(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	gconn, conn, mconn, closeConnections := initialize(ctx, t)
 	defer closeConnections()
 
 	_, err := conn.ExecuteFetch("insert into t1_copy_resume(id1,id2) values(1,1), (2,2), (3,3), (4,4), (5,5), (6,6), (7,7), (8,8)", 1, false)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	// Any subsequent GTIDs will be part of the stream
 	mpos, err := mconn.PrimaryPosition()
@@ -443,9 +421,7 @@ func TestVStreamCopyResume(t *testing.T) {
 	}
 	flags := &vtgatepb.VStreamFlags{}
 	reader, err := gconn.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, filter, flags)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	require.NotNil(t, reader)
 
 	expectedRowCopyEvents := 5                       // id1 and id2 IN(5,6,7,8,9)
@@ -604,17 +580,17 @@ func TestVStreamCopyResume(t *testing.T) {
 				return
 			}
 		case io.EOF:
-			log.Infof("stream ended\n")
+			log.Info("stream ended\n")
 			cancel()
 		default:
-			log.Errorf("Returned err %v", err)
-			t.Fatalf("remote error: %v\n", err)
+			log.Error(fmt.Sprintf("Returned err %v", err))
+			require.NoError(t, err)
 		}
 	}
 }
 
 func TestVStreamCurrent(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	gconn, conn, mconn, closeConnections := initialize(ctx, t)
 	defer closeConnections()
@@ -641,9 +617,7 @@ func TestVStreamCurrent(t *testing.T) {
 	flags := &vtgatepb.VStreamFlags{}
 	reader, err := gconn.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, filter, flags)
 	_, _ = conn, mconn
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	numExpectedEvents := 4 // vgtid+other per shard for "current"
 	require.NotNil(t, reader)
 	var evs []*binlogdatapb.VEvent
@@ -658,17 +632,17 @@ func TestVStreamCurrent(t *testing.T) {
 				return
 			}
 		case io.EOF:
-			log.Infof("stream ended\n")
+			log.Info("stream ended\n")
 			cancel()
 		default:
-			log.Errorf("Returned err %v", err)
-			t.Fatalf("remote error: %v\n", err)
+			log.Error(fmt.Sprintf("Returned err %v", err))
+			require.NoError(t, err)
 		}
 	}
 }
 
 func TestVStreamSharded(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	gconn, conn, mconn, closeConnections := initialize(ctx, t)
 	defer closeConnections()
@@ -693,15 +667,11 @@ func TestVStreamSharded(t *testing.T) {
 		}},
 	}
 	_, err := conn.ExecuteFetch("insert into t1_sharded(id1,id2) values(1,1), (4,4)", 1, false)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	flags := &vtgatepb.VStreamFlags{}
 	reader, err := gconn.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, filter, flags)
 	_, _ = conn, mconn
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	numExpectedEvents := 4
 	require.NotNil(t, reader)
 	var evs []*binlogdatapb.VEvent
@@ -760,11 +730,11 @@ func TestVStreamSharded(t *testing.T) {
 				return
 			}
 		case io.EOF:
-			log.Infof("stream ended\n")
+			log.Info("stream ended\n")
 			cancel()
 		default:
-			log.Errorf("Returned err %v", err)
-			t.Fatalf("remote error: %v\n", err)
+			log.Error(fmt.Sprintf("Returned err %v", err))
+			require.NoError(t, err)
 		}
 	}
 }
@@ -772,7 +742,7 @@ func TestVStreamSharded(t *testing.T) {
 // TestVStreamCopyTransactions tests that we are properly wrapping
 // ROW events in the stream with BEGIN and COMMIT events.
 func TestVStreamCopyTransactions(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	keyspace := "ks"
 	shards := []string{"-80", "80-"}
@@ -908,11 +878,13 @@ func printEvents(evs []*binlogdatapb.VEvent) {
 		return
 	}
 	s := "\n===START===" + "\n"
+	var sSb911 strings.Builder
 	for i, ev := range evs {
-		s += fmt.Sprintf("Event %d; %v\n", i, ev)
+		fmt.Fprintf(&sSb911, "Event %d; %v\n", i, ev)
 	}
+	s += sSb911.String()
 	s += "===END===" + "\n"
-	log.Infof("%s", s)
+	log.Info(s)
 }
 
 // Sort the VEvents by the first row change's after value bytes primarily, with

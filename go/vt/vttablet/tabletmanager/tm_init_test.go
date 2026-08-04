@@ -24,10 +24,12 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/sync/semaphore"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/fakesqldb"
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
@@ -40,6 +42,8 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topotools"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/reparenttestutil"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/semisyncmonitor"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletservermock"
@@ -93,7 +97,7 @@ func TestStartBuildTabletFromInput(t *testing.T) {
 	tabletHostname = ""
 	gotTablet, err = BuildTabletFromInput(alias, port, grpcport, nil, collations.MySQL8())
 	require.NoError(t, err)
-	assert.NotEqual(t, "", gotTablet.Hostname)
+	assert.NotEmpty(t, gotTablet.Hostname)
 
 	// Canonicalize shard name and compute keyrange.
 	tabletHostname = "foo"
@@ -134,9 +138,19 @@ func TestStartBuildTabletFromInput(t *testing.T) {
 	_, err = BuildTabletFromInput(alias, port, grpcport, nil, collations.MySQL8())
 	assert.Contains(t, err.Error(), "unknown TabletType bad")
 
-	initTabletType = "primary"
-	_, err = BuildTabletFromInput(alias, port, grpcport, nil, collations.MySQL8())
-	assert.Contains(t, err.Error(), "invalid init-tablet-type PRIMARY")
+	for _, invalidType := range []string{"primary", "backup", "restore", "drained"} {
+		initTabletType = invalidType
+		_, err = BuildTabletFromInput(alias, port, grpcport, nil, collations.MySQL8())
+		require.Error(t, err, "expected tablet type %q to be invalid", invalidType)
+		assert.Contains(t, err.Error(), "invalid init-tablet-type")
+	}
+
+	for _, validType := range []string{"replica", "rdonly", "spare", "experimental"} {
+		initTabletType = validType
+		gotTablet, err = BuildTabletFromInput(alias, port, grpcport, nil, collations.MySQL8())
+		require.NoError(t, err, "expected tablet type %q to be valid", validType)
+		assert.NotNil(t, gotTablet)
+	}
 }
 
 func TestBuildTabletFromInputWithBuildTags(t *testing.T) {
@@ -185,8 +199,7 @@ func TestStartCreateKeyspaceShard(t *testing.T) {
 	defer func(saved time.Duration) { rebuildKeyspaceRetryInterval = saved }(rebuildKeyspaceRetryInterval)
 	rebuildKeyspaceRetryInterval = 10 * time.Millisecond
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	statsTabletTypeCount.ResetAll()
 	cell := "cell1"
 	ts := memorytopo.NewServer(ctx, cell)
@@ -194,7 +207,7 @@ func TestStartCreateKeyspaceShard(t *testing.T) {
 	defer tm.Stop()
 
 	assert.Equal(t, "replica", statsTabletType.Get())
-	assert.Equal(t, 1, len(statsTabletTypeCount.Counts()))
+	assert.Len(t, statsTabletTypeCount.Counts(), 1)
 	assert.Equal(t, int64(1), statsTabletTypeCount.Counts()["replica"])
 
 	_, err := ts.GetShard(ctx, "ks", "0")
@@ -202,7 +215,7 @@ func TestStartCreateKeyspaceShard(t *testing.T) {
 
 	ensureSrvKeyspace(t, ctx, ts, cell, "ks")
 
-	srvVSchema, err := ts.GetSrvVSchema(context.Background(), cell)
+	srvVSchema, err := ts.GetSrvVSchema(t.Context(), cell)
 	require.NoError(t, err)
 	wantVSchema := &vschemapb.Keyspace{}
 	assert.Equal(t, wantVSchema, srvVSchema.Keyspaces["ks"])
@@ -215,7 +228,7 @@ func TestStartCreateKeyspaceShard(t *testing.T) {
 	_, err = ts.GetShard(ctx, "ks1", "0")
 	require.NoError(t, err)
 	ensureSrvKeyspace(t, ctx, ts, cell, "ks1")
-	srvVSchema, err = ts.GetSrvVSchema(context.Background(), cell)
+	srvVSchema, err = ts.GetSrvVSchema(t.Context(), cell)
 	require.NoError(t, err)
 	assert.Equal(t, wantVSchema, srvVSchema.Keyspaces["ks1"])
 
@@ -228,9 +241,9 @@ func TestStartCreateKeyspaceShard(t *testing.T) {
 	defer tm.Stop()
 	_, err = ts.GetShard(ctx, "ks2", "0")
 	require.NoError(t, err)
-	_, err = ts.GetSrvKeyspace(context.Background(), cell, "ks2")
+	_, err = ts.GetSrvKeyspace(t.Context(), cell, "ks2")
 	require.NoError(t, err)
-	srvVSchema, err = ts.GetSrvVSchema(context.Background(), cell)
+	srvVSchema, err = ts.GetSrvVSchema(t.Context(), cell)
 	require.NoError(t, err)
 	assert.Equal(t, wantVSchema, srvVSchema.Keyspaces["ks2"])
 
@@ -245,9 +258,9 @@ func TestStartCreateKeyspaceShard(t *testing.T) {
 	defer tm.Stop()
 	_, err = ts.GetShard(ctx, "ks3", "0")
 	require.NoError(t, err)
-	_, err = ts.GetSrvKeyspace(context.Background(), cell, "ks3")
+	_, err = ts.GetSrvKeyspace(t.Context(), cell, "ks3")
 	require.NoError(t, err)
-	srvVSchema, err = ts.GetSrvVSchema(context.Background(), cell)
+	srvVSchema, err = ts.GetSrvVSchema(t.Context(), cell)
 	require.NoError(t, err)
 	assert.Equal(t, wantVSchema, srvVSchema.Keyspaces["ks3"])
 
@@ -257,7 +270,7 @@ func TestStartCreateKeyspaceShard(t *testing.T) {
 
 	// Wait a bit and make sure that srvKeyspace is still not created.
 	time.Sleep(100 * time.Millisecond)
-	_, err = ts.GetSrvKeyspace(context.Background(), cell, "ks4")
+	_, err = ts.GetSrvKeyspace(t.Context(), cell, "ks4")
 	require.True(t, topo.IsErrType(err, topo.NoNode), err)
 
 	tm2 := newTestTM(t, ts, 6, "ks4", "80-", nil)
@@ -270,8 +283,7 @@ func TestCheckPrimaryShip(t *testing.T) {
 	defer func(saved time.Duration) { rebuildKeyspaceRetryInterval = saved }(rebuildKeyspaceRetryInterval)
 	rebuildKeyspaceRetryInterval = 10 * time.Millisecond
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	cell := "cell1"
 	ts := memorytopo.NewServer(ctx, cell)
 	alias := &topodatapb.TabletAlias{
@@ -411,8 +423,7 @@ func TestCheckPrimaryShip(t *testing.T) {
 }
 
 func TestStartCheckMysql(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	cell := "cell1"
 	ts := memorytopo.NewServer(ctx, cell)
 	tablet := newTestTablet(t, 1, "ks", "0", nil)
@@ -421,7 +432,7 @@ func TestStartCheckMysql(t *testing.T) {
 		Port: 1,
 	}
 	tm := &TabletManager{
-		BatchCtx:            context.Background(),
+		BatchCtx:            t.Context(),
 		TopoServer:          ts,
 		MysqlDaemon:         newTestMysqlDaemon(t, 1),
 		DBConfigs:           dbconfigs.NewTestDBConfigs(cp, cp, ""),
@@ -442,14 +453,13 @@ func TestStartFindMysqlPort(t *testing.T) {
 	defer func(saved time.Duration) { mysqlPortRetryInterval = saved }(mysqlPortRetryInterval)
 	mysqlPortRetryInterval = 50 * time.Millisecond
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	cell := "cell1"
 	ts := memorytopo.NewServer(ctx, cell)
 	tablet := newTestTablet(t, 1, "ks", "0", nil)
 	fmd := newTestMysqlDaemon(t, -1)
 	tm := &TabletManager{
-		BatchCtx:            context.Background(),
+		BatchCtx:            t.Context(),
 		TopoServer:          ts,
 		MysqlDaemon:         fmd,
 		DBConfigs:           &dbconfigs.DBConfigs{},
@@ -472,7 +482,7 @@ func TestStartFindMysqlPort(t *testing.T) {
 		time.Sleep(200 * time.Millisecond)
 		fmd.MysqlPort.Store(3306)
 	}()
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		ti, err := ts.GetTablet(ctx, tm.tabletAlias)
 		require.NoError(t, err)
 		if ti.MysqlPort == 3306 {
@@ -485,8 +495,7 @@ func TestStartFindMysqlPort(t *testing.T) {
 
 // Init tablet fixes replication data when safe
 func TestStartFixesReplicationData(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	cell := "cell1"
 	ts := memorytopo.NewServer(ctx, cell, "cell2")
 	tm := newTestTM(t, ts, 1, "ks", "0", nil)
@@ -503,10 +512,10 @@ func TestStartFixesReplicationData(t *testing.T) {
 	require.NoError(t, err)
 	sri, err = ts.GetShardReplication(ctx, cell, "ks", "0")
 	require.NoError(t, err)
-	assert.Equal(t, 0, len(sri.Nodes))
+	assert.Empty(t, sri.Nodes)
 
 	// An initTablet will recreate the shard replication data.
-	err = tm.initTablet(context.Background())
+	err = tm.initTablet(t.Context())
 	require.NoError(t, err)
 
 	sri, err = ts.GetShardReplication(ctx, cell, "ks", "0")
@@ -519,8 +528,7 @@ func TestStartFixesReplicationData(t *testing.T) {
 // to be created due to a NodeExists error. During this particular error we were not doing
 // the sanity checks that the provided tablet was the same in the topo.
 func TestStartDoesNotUpdateReplicationDataForTabletInWrongShard(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "cell1", "cell2")
 	tm := newTestTM(t, ts, 1, "ks", "0", nil)
 	tm.Stop()
@@ -536,15 +544,14 @@ func TestStartDoesNotUpdateReplicationDataForTabletInWrongShard(t *testing.T) {
 
 	tablets, err := ts.FindAllTabletAliasesInShard(ctx, "ks", "-d0")
 	require.NoError(t, err)
-	assert.Equal(t, 0, len(tablets))
+	assert.Empty(t, tablets)
 }
 
 func TestCheckTabletTypeResets(t *testing.T) {
 	defer func(saved time.Duration) { rebuildKeyspaceRetryInterval = saved }(rebuildKeyspaceRetryInterval)
 	rebuildKeyspaceRetryInterval = 10 * time.Millisecond
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	cell := "cell1"
 	ts := memorytopo.NewServer(ctx, cell)
 	alias := &topodatapb.TabletAlias{
@@ -666,8 +673,7 @@ func TestGetBuildTags(t *testing.T) {
 }
 
 func TestStartExportStats(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	ts := memorytopo.NewServer(ctx, "cell1")
 	_ = newTestTM(t, ts, 1, "ks", "0", map[string]string{
@@ -700,9 +706,7 @@ func newTestMysqlDaemon(t *testing.T, port int32) *mysqlctl.FakeMysqlDaemon {
 	return mysqld
 }
 
-var (
-	exporter = servenv.NewExporter("TestTabletManager", "")
-)
+var exporter = servenv.NewExporter("TestTabletManager", "")
 
 func newTestTM(t *testing.T, ts *topo.Server, uid int, keyspace, shard string, tags map[string]string) *TabletManager {
 	// reset stats
@@ -710,7 +714,7 @@ func newTestTM(t *testing.T, ts *topo.Server, uid int, keyspace, shard string, t
 	statsTabletTypeCount.ResetAll()
 
 	t.Helper()
-	ctx := context.Background()
+	ctx := t.Context()
 	tablet := newTestTablet(t, uid, keyspace, shard, tags)
 	fakeDb := newTestMysqlDaemon(t, 1)
 	tm := &TabletManager{
@@ -773,7 +777,7 @@ func newTestTablet(t *testing.T, uid int, keyspace, shard string, tags map[strin
 func ensureSrvKeyspace(t *testing.T, ctx context.Context, ts *topo.Server, cell, keyspace string) {
 	t.Helper()
 	found := false
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		_, err := ts.GetSrvKeyspace(ctx, cell, keyspace)
 		if err == nil {
 			found = true
@@ -802,7 +806,7 @@ func TestWaitForDBAGrants(t *testing.T) {
 				testUser := "vt_test_dba"
 				cluster, err := startMySQLAndCreateUser(t, testUser)
 				require.NoError(t, err)
-				grantAllPrivilegesToUser(t, cluster.MySQLConnParams(), testUser)
+				require.NoError(t, grantAllPrivilegesToUser(t, cluster.MySQLConnParams(), testUser))
 				tc := &tabletenv.TabletConfig{
 					DB: &dbconfigs.DBConfigs{},
 				}
@@ -827,7 +831,11 @@ func TestWaitForDBAGrants(t *testing.T) {
 
 				go func() {
 					time.Sleep(500 * time.Millisecond)
-					grantAllPrivilegesToUser(t, cluster.MySQLConnParams(), testUser)
+					err := grantAllPrivilegesToUser(t, cluster.MySQLConnParams(), testUser)
+					if t.Context().Err() != nil {
+						return
+					}
+					assert.NoError(t, err)
 				}()
 
 				tc := &tabletenv.TabletConfig{
@@ -840,7 +848,8 @@ func TestWaitForDBAGrants(t *testing.T) {
 					cluster.TearDown()
 				}
 			},
-		}, {
+		},
+		{
 			name:      "Failure due to timeout",
 			waitTime:  300 * time.Millisecond,
 			errWanted: "timed out after 300ms waiting for the dba user to have the required permissions",
@@ -861,7 +870,8 @@ func TestWaitForDBAGrants(t *testing.T) {
 					cluster.TearDown()
 				}
 			},
-		}, {
+		},
+		{
 			name:      "Success for externally managed tablet",
 			waitTime:  300 * time.Millisecond,
 			errWanted: "",
@@ -884,7 +894,8 @@ func TestWaitForDBAGrants(t *testing.T) {
 					cluster.TearDown()
 				}
 			},
-		}, {
+		},
+		{
 			name:      "Empty timeout",
 			waitTime:  0,
 			errWanted: "",
@@ -894,7 +905,8 @@ func TestWaitForDBAGrants(t *testing.T) {
 				}
 				return tc, func() {}
 			},
-		}, {
+		},
+		{
 			name:      "Empty config",
 			waitTime:  300 * time.Millisecond,
 			errWanted: "",
@@ -959,7 +971,7 @@ func startMySQLAndCreateUser(t *testing.T, testUser string) (vttest.LocalCluster
 	}
 
 	connParams := cluster.MySQLConnParams()
-	conn, err := mysql.Connect(context.Background(), &connParams)
+	conn, err := mysql.Connect(t.Context(), &connParams)
 	require.NoError(t, err)
 	_, err = conn.ExecuteFetch(fmt.Sprintf(`CREATE USER '%v'@'localhost'`, testUser), 1000, false)
 	conn.Close()
@@ -968,14 +980,19 @@ func startMySQLAndCreateUser(t *testing.T, testUser string) (vttest.LocalCluster
 }
 
 // grantAllPrivilegesToUser grants all the privileges to the user specified.
-func grantAllPrivilegesToUser(t *testing.T, connParams mysql.ConnParams, testUser string) {
-	conn, err := mysql.Connect(context.Background(), &connParams)
-	require.NoError(t, err)
-	_, err = conn.ExecuteFetch(fmt.Sprintf(`GRANT ALL ON *.* TO '%v'@'localhost'`, testUser), 1000, false)
-	require.NoError(t, err)
-	_, err = conn.ExecuteFetch(fmt.Sprintf(`GRANT GRANT OPTION ON *.* TO '%v'@'localhost'`, testUser), 1000, false)
-	require.NoError(t, err)
-	conn.Close()
+func grantAllPrivilegesToUser(t *testing.T, connParams mysql.ConnParams, testUser string) error {
+	conn, err := mysql.Connect(t.Context(), &connParams)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+	if _, err := conn.ExecuteFetch(fmt.Sprintf(`GRANT ALL ON *.* TO '%v'@'localhost'`, testUser), 1000, false); err != nil {
+		return err
+	}
+	if _, err := conn.ExecuteFetch(fmt.Sprintf(`GRANT GRANT OPTION ON *.* TO '%v'@'localhost'`, testUser), 1000, false); err != nil {
+		return err
+	}
+	return nil
 }
 
 func TestInitTabletTypeLookup_PreservesTabletTypes(t *testing.T) {
@@ -1253,4 +1270,97 @@ func TestInitTabletTypeLookup_InteractionWithCheckPrimaryShip(t *testing.T) {
 	require.NoError(t, err)
 	// Should be PRIMARY due to checkPrimaryShip logic
 	assert.Equal(t, topodatapb.TabletType_PRIMARY, ti.Type)
+}
+
+// TestInitReplicationRecovery verifies replica startup initialization self-heals recoverable
+// init failures returned from SetReplicationSource.
+func TestInitReplicationRecovery(t *testing.T) {
+	ctx := t.Context()
+	ts := memorytopo.NewServer(ctx, "cell1")
+	tablet := newTestTablet(t, 1, "ks", "0", nil)
+	fakeMysqlDaemon := newTestMysqlDaemon(t, 1)
+
+	tm := &TabletManager{
+		actionSema:             semaphore.NewWeighted(1),
+		BatchCtx:               ctx,
+		TopoServer:             ts,
+		MysqlDaemon:            fakeMysqlDaemon,
+		tmc:                    newFakeTMClient(),
+		tabletAlias:            tablet.Alias,
+		_waitForGrantsComplete: make(chan struct{}),
+		tmState: &tmState{
+			displayState: displayState{
+				tablet: tablet,
+			},
+		},
+	}
+	close(tm._waitForGrantsComplete)
+
+	_, err := ts.GetOrCreateShard(ctx, "ks", "0")
+	require.NoError(t, err)
+	require.NoError(t, ts.CreateTablet(ctx, tablet))
+
+	reparenttestutil.SetKeyspaceDurability(ctx, t, ts, "ks", policy.DurabilityNone)
+
+	primary := &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Cell: "cell1",
+			Uid:  2,
+		},
+		Hostname: "primary-host",
+		PortMap: map[string]int32{
+			"vt":   1234,
+			"grpc": 3456,
+		},
+		Keyspace:      "ks",
+		Shard:         "0",
+		Type:          topodatapb.TabletType_PRIMARY,
+		MysqlHostname: "mysql-primary",
+		MysqlPort:     3306,
+	}
+	require.NoError(t, ts.CreateTablet(ctx, primary))
+	_, err = ts.UpdateShardFields(ctx, "ks", "0", func(si *topo.ShardInfo) error {
+		si.PrimaryAlias = primary.Alias
+		return nil
+	})
+	require.NoError(t, err)
+
+	pos, err := replication.ParsePosition(gtidFlavor, gtidPosition)
+	require.NoError(t, err)
+
+	// Make StartReplication return a recoverable init error and expect the
+	// startup path to self-heal by restarting replication. SetReplicationSource
+	// is called with startReplicationAfter=false so recovery only applies to
+	// the separate StartReplication call.
+	fakeMysqlDaemon.SetPrimaryPositionLocked(pos)
+	fakeMysqlDaemon.SetReplicationSourceInputs = []string{"mysql-primary:3306"}
+	fakeMysqlDaemon.StartReplicationError = recoverableReplicationInitError()
+	fakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+		"STOP REPLICA",
+		"FAKE SET SOURCE",
+		"STOP REPLICA",
+		"RESET REPLICA",
+		"START REPLICA",
+	}
+
+	// initializeReplication should now succeed and return the primary position
+	// after routing the recoverable error through RestartReplication.
+	gotPosition, err := tm.initializeReplication(ctx, topodatapb.TabletType_REPLICA)
+	require.NoError(t, err)
+	require.Equal(t, fmt.Sprintf("%s/%s", gtidFlavor, gtidPosition), gotPosition)
+	require.NoError(t, fakeMysqlDaemon.CheckSuperQueryList())
+}
+
+func TestValidateFlags(t *testing.T) {
+	oldTimeout := demotePrimaryLockWaitTimeout
+	t.Cleanup(func() { demotePrimaryLockWaitTimeout = oldTimeout })
+
+	demotePrimaryLockWaitTimeout = -1 * time.Second
+	require.ErrorContains(t, validateFlags(), "--demote-primary-lock-wait-timeout cannot be negative")
+
+	demotePrimaryLockWaitTimeout = 0
+	require.NoError(t, validateFlags())
+
+	demotePrimaryLockWaitTimeout = time.Second
+	require.NoError(t, validateFlags())
 }

@@ -22,6 +22,7 @@ import (
 	stderrors "errors"
 	"fmt"
 	"io"
+	"maps"
 	"strconv"
 	"time"
 
@@ -134,7 +135,7 @@ var ErrNoConfigID = stderrors.New("loaded config has no id")
 func LoadConfig(r io.Reader, configType string) (cfg *Config, id string, err error) {
 	v := viper.New()
 	if configType == "" {
-		log.Warning("no configType specified, defaulting to 'json'")
+		log.Warn("no configType specified, defaulting to 'json'")
 		configType = "json"
 	}
 
@@ -285,9 +286,7 @@ func (cfg Config) Merge(override Config) Config {
 }
 
 func mergeStringMap(base map[string]string, override map[string]string) {
-	for k, v := range override {
-		base[k] = v
-	}
+	maps.Copy(base, override)
 }
 
 func mergeCacheConfigs(base, override *cache.Config) *cache.Config {

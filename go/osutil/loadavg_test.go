@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestLoadAvgValue(t *testing.T) {
@@ -63,7 +64,7 @@ func TestLoadAvgValue(t *testing.T) {
 			if tcase.isError {
 				assert.Error(t, err)
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.Equal(t, tcase.loadavg, loadavg)
 			}
 		})
@@ -72,6 +73,6 @@ func TestLoadAvgValue(t *testing.T) {
 
 func TestLoadAvg(t *testing.T) {
 	loadavg, err := LoadAvg()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.GreaterOrEqual(t, loadavg, 0.0)
 }

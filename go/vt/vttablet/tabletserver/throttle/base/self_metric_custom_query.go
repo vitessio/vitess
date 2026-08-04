@@ -22,8 +22,7 @@ import (
 
 var _ SelfMetric = registerSelfMetric(&CustomQuerySelfMetric{})
 
-type CustomQuerySelfMetric struct {
-}
+type CustomQuerySelfMetric struct{}
 
 func (m *CustomQuerySelfMetric) Name() MetricName {
 	return CustomMetricName

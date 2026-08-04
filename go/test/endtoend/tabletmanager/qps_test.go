@@ -34,11 +34,11 @@ func TestQPS(t *testing.T) {
 		Port: clusterInstance.VtgateMySQLPort,
 	}
 	vtGateConn, err := mysql.Connect(ctx, &vtParams)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	defer vtGateConn.Close()
 
 	replicaConn, err := mysql.Connect(ctx, &replicaTabletParams)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	defer replicaConn.Close()
 
 	// Sanity Check
@@ -53,7 +53,7 @@ func TestQPS(t *testing.T) {
 	//       after that we'll see 0.0 QPS rates again. If this becomes actually
 	//       flaky, we need to read continuously in a separate thread.
 
-	for n := 0; n < 15; n++ {
+	for range 15 {
 		// Run queries via vtGate so that they are counted.
 		utils.Exec(t, vtGateConn, "select * from t1")
 	}
@@ -65,7 +65,7 @@ func TestQPS(t *testing.T) {
 	timeout := time.Now().Add(12 * time.Second)
 	for time.Now().Before(timeout) {
 		shrs, err := clusterInstance.StreamTabletHealth(ctx, &primaryTablet, 1)
-		require.Nil(t, err)
+		require.NoError(t, err)
 
 		streamHealthResponse := shrs[0]
 		realTimeStats := streamHealthResponse.GetRealtimeStats()

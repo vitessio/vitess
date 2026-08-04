@@ -27,8 +27,6 @@ import (
 	"syscall"
 	"time"
 
-	vtutils "vitess.io/vitess/go/vt/utils"
-
 	"vitess.io/vitess/go/vt/log"
 )
 
@@ -52,42 +50,38 @@ type VtctldProcess struct {
 
 // Setup starts vtctld process with required arguements
 func (vtctld *VtctldProcess) Setup(cell string, extraArgs ...string) (err error) {
-	vtctldVer, err := GetMajorVersion(vtctld.Binary)
-	if err != nil {
-		return err
-	}
-	_ = createDirectory(vtctld.LogDir, 0700)
-	_ = createDirectory(path.Join(vtctld.Directory, "backups"), 0700)
+	_ = createDirectory(vtctld.LogDir, 0o700)
+	_ = createDirectory(path.Join(vtctld.Directory, "backups"), 0o700)
 	vtctld.proc = exec.Command(
 		vtctld.Binary,
-		//TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
-		"--topo_implementation", vtctld.TopoImplementation,
-		"--topo_global_server_address", vtctld.TopoGlobalAddress,
-		"--topo_global_root", vtctld.TopoGlobalRoot,
+		"--topo-implementation", vtctld.TopoImplementation,
+		"--topo-global-server-address", vtctld.TopoGlobalAddress,
+		"--topo-global-root", vtctld.TopoGlobalRoot,
 		"--cell", cell,
-		"--service_map", vtctld.ServiceMap,
-		"--backup_storage_implementation", vtctld.BackupStorageImplementation,
-		vtutils.GetFlagVariantForTestsByVersion("--file-backup-storage-root", vtctldVer), vtctld.FileBackupStorageRoot,
-		"--log_dir", vtctld.LogDir,
+		"--service-map", vtctld.ServiceMap,
+		"--backup-storage-implementation", vtctld.BackupStorageImplementation,
+		"--file-backup-storage-root", vtctld.FileBackupStorageRoot,
 		"--port", strconv.Itoa(vtctld.Port),
-		"--grpc_port", strconv.Itoa(vtctld.GrpcPort),
+		"--grpc-port", strconv.Itoa(vtctld.GrpcPort),
 		"--bind-address", "127.0.0.1",
-		"--grpc_bind_address", "127.0.0.1",
+		"--grpc-bind-address", "127.0.0.1",
 	)
+
+	vtctld.proc.Args = append(vtctld.proc.Args, "--log-format", "text")
 
 	if *isCoverage {
 		vtctld.proc.Args = append(vtctld.proc.Args, "--test.coverprofile="+getCoveragePath("vtctld.out"))
 	}
 	vtctld.proc.Args = append(vtctld.proc.Args, extraArgs...)
 
-	err = os.MkdirAll(vtctld.LogDir, 0755)
+	err = os.MkdirAll(vtctld.LogDir, 0o755)
 	if err != nil {
-		log.Errorf("cannot create log directory for vtctld: %v", err)
+		log.Error(fmt.Sprintf("cannot create log directory for vtctld: %v", err))
 		return err
 	}
 	errFile, err := os.Create(path.Join(vtctld.LogDir, "vtctld-stderr.txt"))
 	if err != nil {
-		log.Errorf("cannot create error log file for vtctld: %v", err)
+		log.Error(fmt.Sprintf("cannot create error log file for vtctld: %v", err))
 		return err
 	}
 	vtctld.proc.Stderr = errFile
@@ -96,7 +90,7 @@ func (vtctld *VtctldProcess) Setup(cell string, extraArgs ...string) (err error)
 	vtctld.proc.Env = append(vtctld.proc.Env, os.Environ()...)
 	vtctld.proc.Env = append(vtctld.proc.Env, DefaultVttestEnv)
 
-	log.Infof("Starting vtctld with command: %v", strings.Join(vtctld.proc.Args, " "))
+	log.Info(fmt.Sprintf("Starting vtctld with command: %v", strings.Join(vtctld.proc.Args, " ")))
 
 	err = vtctld.proc.Start()
 	if err != nil {
@@ -118,9 +112,9 @@ func (vtctld *VtctldProcess) Setup(cell string, extraArgs ...string) (err error)
 		case err := <-vtctld.exit:
 			errBytes, ferr := os.ReadFile(vtctld.ErrorLog)
 			if ferr == nil {
-				log.Errorf("vtctld error log contents:\n%s", string(errBytes))
+				log.Error("vtctld error log contents:\n" + string(errBytes))
 			} else {
-				log.Errorf("Failed to read the vtctld error log file %q: %v", vtctld.ErrorLog, ferr)
+				log.Error(fmt.Sprintf("Failed to read the vtctld error log file %q: %v", vtctld.ErrorLog, ferr))
 			}
 			return fmt.Errorf("process '%s' exited prematurely (err: %s)", vtctld.Name, err)
 		default:

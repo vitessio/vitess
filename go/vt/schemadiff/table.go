@@ -26,7 +26,6 @@ import (
 
 	golcs "github.com/yudai/golcs"
 
-	"vitess.io/vitess/go/ptr"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
@@ -692,7 +691,7 @@ func (c *CreateTableEntity) normalizeColumnOptions() {
 		// "show create table" reports it as a tinyint(1).
 		if col.Type.Type == "boolean" {
 			col.Type.Type = "tinyint"
-			col.Type.Length = ptr.Of(1)
+			col.Type.Length = new(1)
 
 			if col.Type.Options.Default != nil {
 				val, ok := col.Type.Options.Default.(sqlparser.BoolVal)
@@ -1385,8 +1384,7 @@ func (c *CreateTableEntity) isRangePartitionsRotation(
 	}
 	// Find dropped partitions:
 	var droppedPartitions1 []*sqlparser.PartitionDefinition
-	for i := len(definitions1) - 1; i >= 0; i-- {
-		definition := definitions1[i]
+	for i, definition := range slices.Backward(definitions1) {
 		if _, ok := definitions2map[sqlparser.CanonicalString(definition)]; !ok {
 			// In range partitioning, it's allowed to drop any partition, whether it's the first, somewhere in the middle, or last.
 			droppedPartitions1 = append(droppedPartitions1, definition)
@@ -1789,11 +1787,11 @@ func indexOnlyVisibilityChange(t1Key, t2Key *sqlparser.IndexDefinition) (bool, b
 func evaluateColumnReordering(t1SharedColumns, t2SharedColumns []*sqlparser.ColumnDefinition) map[string]int {
 	minimalColumnReordering := map[string]int{}
 
-	t1SharedColNames := make([]interface{}, 0, len(t1SharedColumns))
+	t1SharedColNames := make([]any, 0, len(t1SharedColumns))
 	for _, col := range t1SharedColumns {
 		t1SharedColNames = append(t1SharedColNames, col.Name.Lowered())
 	}
-	t2SharedColNames := make([]interface{}, 0, len(t2SharedColumns))
+	t2SharedColNames := make([]any, 0, len(t2SharedColumns))
 	for _, col := range t2SharedColumns {
 		t2SharedColNames = append(t2SharedColNames, col.Name.Lowered())
 	}
@@ -2107,7 +2105,7 @@ func sortAlterOptions(diff *AlterTableEntityDiff) {
 	optionOrder := func(opt sqlparser.AlterOption) int {
 		switch opt := opt.(type) {
 		case *sqlparser.DropKey:
-			if opt.Type == sqlparser.ForeignKeyType {
+			if opt.Type == sqlparser.ForeignKeyType || opt.Type == sqlparser.ConstraintType {
 				return 1
 			}
 			return 2
@@ -2267,13 +2265,25 @@ func (c *CreateTableEntity) apply(diff *AlterTableEntityDiff) error {
 						break
 					}
 				}
-			case sqlparser.ForeignKeyType, sqlparser.CheckKeyType:
+			case sqlparser.ForeignKeyType, sqlparser.CheckKeyType, sqlparser.ConstraintType:
 				for i, constraint := range c.TableSpec.Constraints {
-					if strings.EqualFold(constraint.Name.String(), opt.Name.String()) {
-						found = true
-						c.TableSpec.Constraints = append(c.TableSpec.Constraints[0:i], c.TableSpec.Constraints[i+1:]...)
-						break
+					if !strings.EqualFold(constraint.Name.String(), opt.Name.String()) {
+						continue
 					}
+					switch opt.Type {
+					case sqlparser.ForeignKeyType:
+						if _, ok := constraint.Details.(*sqlparser.ForeignKeyDefinition); !ok {
+							continue
+						}
+					case sqlparser.CheckKeyType:
+						if _, ok := constraint.Details.(*sqlparser.CheckConstraintDefinition); !ok {
+							continue
+						}
+					case sqlparser.ConstraintType:
+					}
+					found = true
+					c.TableSpec.Constraints = append(c.TableSpec.Constraints[0:i], c.TableSpec.Constraints[i+1:]...)
+					break
 				}
 			default:
 				return &UnsupportedApplyOperationError{Statement: sqlparser.CanonicalString(opt)}

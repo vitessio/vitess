@@ -17,7 +17,6 @@ vtorc \
 Flags:
       --allow-emergency-reparent                                    Whether VTOrc should be allowed to run emergency reparent operation when it detects a dead primary (default true)
       --allow-recovery                                              Whether VTOrc should be allowed to run recovery actions (default true)
-      --alsologtostderr                                             log to standard error as well as files
       --audit-file-location string                                  File location where the audit logs are to be stored
       --audit-purge-duration duration                               Duration for which audit logs are held before being purged. Should be in multiples of days (default 168h0m0s)
       --audit-to-backend                                            Whether to store the audit log in the VTOrc database
@@ -26,7 +25,8 @@ Flags:
       --backend-write-concurrency int                               Maximum concurrency for writes to the backend (default 24)
       --bind-address string                                         Bind address for the server. If empty, the server will listen on all available unicast and anycast IP addresses of the local system.
       --catch-sigpipe                                               catch and ignore SIGPIPE on stdout and stderr if specified
-      --cell string                                                 cell to use (required in v25+)
+      --cell string                                                 cell to use (required)
+      --cells-to-watch strings                                      Comma-separated list of cells that this instance will monitor and repair. Defaults to all cells in the topology. Example: "cell1,cell2"
       --change-tablets-with-errant-gtid-to-drained                  Whether VTOrc should be changing the type of tablets with errant GTIDs to DRAINED
       --clusters-to-watch strings                                   Comma-separated list of keyspaces or keyspace/keyranges that this instance will monitor and repair. Defaults to all clusters in the topology. Example: "ks1,ks2/-80"
       --config-file string                                          Full path of the config file (with extension) to use. If set, --config-path, --config-type, and --config-name are ignored.
@@ -37,6 +37,7 @@ Flags:
       --config-type string                                          Config file type (omit to infer config type from file extension).
       --consul-auth-static-file string                              JSON File to read the topos/tokens from.
       --discovery-workers int                                       Number of workers used for tablet discovery (default 300)
+      --emergency-reparent-on-primary-tablet-unreachable            Whether VTOrc should run an emergency reparent when the primary vttablet is unreachable by VTOrc and confirmed down by a quorum of the shard's replicas
       --emit-stats                                                  If set, emit stats to push-based monitoring and stats backends
       --enable-primary-disk-stalled-recovery                        Whether VTOrc should detect a stalled disk on the primary and failover
       --grpc-auth-static-client-creds string                        When using grpc_static_auth in the server, this file provides the credentials to use to authenticate with server.
@@ -56,10 +57,10 @@ Flags:
       --lameduck-period duration                                    keep running at least this long after SIGTERM before stopping (default 50ms)
       --lock-timeout duration                                       Maximum time to wait when attempting to acquire a lock from the topo server (default 45s)
       --log-err-stacks                                              log stack traces for errors
+      --log-format string                                           log output format: json for machine-readable JSON, text for human-readable colored output (default "json")
+      --log-level string                                            minimum log level when structured logging is enabled (debug, info, warn, error) (default "info")
       --log-rotate-max-size uint                                    size in bytes at which logs are rotated (glog.MaxSize) (default 1887436800)
-      --log_backtrace_at traceLocations                             when logging hits line file:N, emit a stack trace
-      --log_dir string                                              If non-empty, write log files in this directory
-      --logtostderr                                                 log to standard error instead of files
+      --log-structured                                              enable structured JSON logging (default true)
       --max-stack-size int                                          configure the maximum stack size in bytes (default 67108864)
       --onclose-timeout duration                                    wait no more than this for OnClose handlers before stopping (default 10s)
       --onterm-timeout duration                                     wait no more than this for OnTermSync handlers before stopping (default 10s)
@@ -73,15 +74,17 @@ Flags:
       --recovery-poll-duration duration                             Timer duration on which VTOrc polls its database to run a recovery (default 1s)
       --remote-operation-timeout duration                           time to wait for a remote operation (default 15s)
       --security-policy string                                      the name of a registered security policy to use for controlling access to URLs - empty means allow all for anyone (built-in policies: deny-all, read-only)
+      --shard-tablet-health-failure-threshold int                   Consecutive shard-peer ping failures before an observer considers a peer down (default 3)
+      --shard-tablet-health-freshness duration                      Maximum age of an observer's shard-peer report for it to count toward quorum. Must exceed --instance-poll-time (ideally 2-3x), since reports only refresh when VTOrc polls each observer (default 15s)
+      --shard-tablet-health-quorum-fraction float                   Required fraction of 'down' votes among eligible observers to declare the primary unreachable (1.0 = unanimous). Values below 1.0 make detection more tolerant of partial agreement, but give up the guarantee that a single fresh 'up' report vetoes the failover (default 1)
+      --shard-tablet-health-quorum-min-observers int                Minimum number of eligible observers required before a quorum-based emergency reparent may run; at 1, a single-observer shard relies on that observer plus VTOrc's own check (default 1)
       --shutdown-wait-time duration                                 Maximum time to wait for VTOrc to release all the locks that it is holding before shutting down on SIGTERM (default 30s)
-      --snapshot-topology-interval duration                         Timer duration on which VTOrc takes a snapshot of the current MySQL information it has in the database. Should be in multiple of hours
       --sqlite-data-file string                                     SQLite Datafile to use as VTOrc's database (default "file::memory:?mode=memory&cache=shared")
       --stats-backend string                                        The name of the registered push-based monitoring/stats backend to use
       --stats-combine-dimensions string                             List of dimensions to be combined into a single "all" value in exported stats vars
       --stats-common-tags strings                                   Comma-separated list of common tags for the stats backend. It provides both label and values. Example: label1:value1,label2:value2
       --stats-drop-variables string                                 Variables to be dropped from the list of exported variables.
       --stats-emit-period duration                                  Interval between emitting stats to all registered backends (default 1m0s)
-      --stderrthreshold severityFlag                                logs at or above this threshold go to stderr (default 1)
       --table-refresh-interval int                                  interval in milliseconds to refresh tables in status page with refreshRequired class
       --tablet-manager-grpc-ca string                               the server ca to use to validate servers when connecting
       --tablet-manager-grpc-cert string                             the cert to use to connect
@@ -111,7 +114,5 @@ Flags:
       --topo-zk-tls-ca string                                       the server ca to use to validate servers when connecting to the zk topo server
       --topo-zk-tls-cert string                                     the cert to use to connect to the zk topo server, requires topo-zk-tls-key, enables TLS
       --topo-zk-tls-key string                                      the key to use to connect to the zk topo server, enables TLS
-      --v Level                                                     log level for V logs
   -v, --version                                                     print binary version
-      --vmodule vModuleFlag                                         comma-separated list of pattern=N settings for file-filtered logging
       --wait-replicas-timeout duration                              Duration for which to wait for replica's to respond when issuing RPCs (default 30s)

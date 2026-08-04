@@ -33,6 +33,7 @@ var basicTable1 = &tabletmanagerdatapb.TableDefinition{
 	Schema: "table schema 1",
 	Type:   TableBaseTable,
 }
+
 var basicTable2 = &tabletmanagerdatapb.TableDefinition{
 	Name:   "table2",
 	Schema: "table schema 2",
@@ -60,7 +61,7 @@ var view2 = &tabletmanagerdatapb.TableDefinition{
 }
 
 func TestToSQLStrings(t *testing.T) {
-	var testcases = []struct {
+	testcases := []struct {
 		input *tabletmanagerdatapb.SchemaDefinition
 		want  []string
 	}{
@@ -468,7 +469,7 @@ func TestTableFilter(t *testing.T) {
 				assert.Error(t, err)
 				return
 			}
-			assert.NoError(t, err)
+			require.NoError(t, err)
 
 			assert.Equal(t, len(tc.tables), len(f.tableNames)+len(f.tableREs))
 			assert.Equal(t, len(tc.excludeTables), len(f.excludeTableNames)+len(f.excludeTableREs))
@@ -479,7 +480,7 @@ func TestTableFilter(t *testing.T) {
 }
 
 func TestFilterTables(t *testing.T) {
-	var testcases = []struct {
+	testcases := []struct {
 		desc          string
 		input         *tabletmanagerdatapb.SchemaDefinition
 		tables        []string
@@ -639,7 +640,7 @@ func TestFilterTables(t *testing.T) {
 				require.Error(t, err)
 				require.Equal(t, tc.wantError, err)
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.Truef(t, proto.Equal(tc.want, got), "wanted: %v, got: %v", tc.want, got)
 			}
 		})

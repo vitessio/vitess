@@ -72,17 +72,18 @@ func setSidecarDBName(dbName string) {
 }
 
 func execMultipleQueries(t *testing.T, conn *mysql.Conn, database string, lines string) {
-	queries := strings.Split(lines, "\n")
-	for _, query := range queries {
+	queries := strings.SplitSeq(lines, "\n")
+	for query := range queries {
 		if strings.HasPrefix(query, "--") {
 			continue
 		}
-		execVtgateQuery(t, conn, database, string(query))
+		_, err := execVtgateQuery(conn, database, string(query))
+		require.NoError(t, err)
 	}
 }
 
 func execQueryWithRetry(t *testing.T, conn *mysql.Conn, query string, timeout time.Duration) *sqltypes.Result {
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	ctx, cancel := context.WithTimeout(t.Context(), timeout)
 	defer cancel()
 	ticker := time.NewTicker(defaultTick)
 	defer ticker.Stop()
@@ -99,7 +100,7 @@ func execQueryWithRetry(t *testing.T, conn *mysql.Conn, query string, timeout ti
 			require.FailNow(t, fmt.Sprintf("query %q did not succeed before the timeout of %s; last seen result: %v",
 				query, timeout, qr))
 		case <-ticker.C:
-			log.Infof("query %q failed with error %v, retrying in %ds", query, err, defaultTick)
+			log.Info(fmt.Sprintf("query %q failed with error %v, retrying in %ds", query, err, defaultTick))
 		}
 	}
 }
@@ -107,11 +108,12 @@ func execQueryWithRetry(t *testing.T, conn *mysql.Conn, query string, timeout ti
 func execQuery(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
 	qr, err := conn.ExecuteFetch(query, 1000, false)
 	if err != nil {
-		log.Errorf("Error executing query: %s: %v", query, err)
+		log.Error(fmt.Sprintf("Error executing query: %s: %v", query, err))
 	}
 	require.NoError(t, err)
 	return qr
 }
+
 func getConnectionNoError(t *testing.T, hostname string, port int) *mysql.Conn {
 	vtParams := mysql.ConnParams{
 		Host:  hostname,
@@ -139,17 +141,26 @@ func getConnection(t *testing.T, hostname string, port int) *mysql.Conn {
 	return conn
 }
 
-func execVtgateQuery(t *testing.T, conn *mysql.Conn, database string, query string) *sqltypes.Result {
+func execVtgateQuery(conn *mysql.Conn, database, query string) (*sqltypes.Result, error) {
 	if strings.TrimSpace(query) == "" {
-		return nil
+		return nil, nil
 	}
 	if database != "" {
-		execQuery(t, conn, "use `"+database+"`;")
+		if _, err := conn.ExecuteFetch("use `"+database+"`;", 1000, false); err != nil {
+			return nil, err
+		}
 	}
-	execQuery(t, conn, "begin")
-	qr := execQuery(t, conn, query)
-	execQuery(t, conn, "commit")
-	return qr
+	if _, err := conn.ExecuteFetch("begin", 1000, false); err != nil {
+		return nil, err
+	}
+	qr, err := conn.ExecuteFetch(query, 1000, false)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := conn.ExecuteFetch("commit", 1000, false); err != nil {
+		return nil, err
+	}
+	return qr, nil
 }
 
 func checkHealth(t *testing.T, url string) bool {
@@ -163,7 +174,8 @@ func waitForQueryResult(t *testing.T, conn *mysql.Conn, database string, query s
 	timer := time.NewTimer(defaultTimeout)
 	defer timer.Stop()
 	for {
-		qr := execVtgateQuery(t, conn, database, query)
+		qr, err := execVtgateQuery(conn, database, query)
+		require.NoError(t, err)
 		require.NotNil(t, qr)
 		if want == fmt.Sprintf("%v", qr.Rows) {
 			return
@@ -197,8 +209,8 @@ func waitForNoWorkflowLag(t *testing.T, vc *VitessCluster, keyspace, worfklow st
 		output, err := vc.VtctldClient.ExecuteCommandWithOutput("workflow", "--keyspace", keyspace, "show", "--workflow", worfklow, "--include-logs=false")
 		require.NoError(t, err)
 		// Confirm that we got no log records back.
-		require.NotEmpty(t, len(gjson.Get(output, "workflows.0.shard_streams.*.streams.0").String()), "workflow %q had no streams listed in the output: %s", ksWorkflow, output)
-		require.Equal(t, 0, len(gjson.Get(output, "workflows.0.shard_streams.*.streams.0.logs").Array()), "workflow %q returned log records when we expected none", ksWorkflow)
+		require.NotEmpty(t, gjson.Get(output, "workflows.0.shard_streams.*.streams.0").String(), "workflow %q had no streams listed in the output: %s", ksWorkflow, output)
+		require.Empty(t, gjson.Get(output, "workflows.0.shard_streams.*.streams.0.logs").Array(), "workflow %q returned log records when we expected none", ksWorkflow)
 		lag = gjson.Get(output, "workflows.0.max_v_replication_lag").Int()
 		if lag == 0 {
 			return
@@ -216,7 +228,8 @@ func waitForNoWorkflowLag(t *testing.T, vc *VitessCluster, keyspace, worfklow st
 // verifyNoInternalTables can e.g. be used to confirm that no internal tables were
 // copied from a source to a target during a MoveTables or Reshard operation.
 func verifyNoInternalTables(t *testing.T, conn *mysql.Conn, keyspaceShard string) {
-	qr := execVtgateQuery(t, conn, keyspaceShard, "show tables")
+	qr, err := execVtgateQuery(conn, keyspaceShard, "show tables")
+	require.NoError(t, err)
 	require.NotNil(t, qr)
 	require.NotNil(t, qr.Rows)
 	for _, row := range qr.Rows {
@@ -231,7 +244,8 @@ func waitForRowCount(t *testing.T, conn *mysql.Conn, database string, table stri
 	timer := time.NewTimer(defaultTimeout)
 	defer timer.Stop()
 	for {
-		qr := execVtgateQuery(t, conn, database, query)
+		qr, err := execVtgateQuery(conn, database, query)
+		require.NoError(t, err)
 		require.NotNil(t, qr)
 		if wantRes == fmt.Sprintf("%v", qr.Rows) {
 			return
@@ -247,7 +261,7 @@ func waitForRowCount(t *testing.T, conn *mysql.Conn, database string, table stri
 }
 
 func waitForRowCountInTablet(t *testing.T, vttablet *cluster.VttabletProcess, database string, table string, want int64) {
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
+	ctx, cancel := context.WithTimeout(t.Context(), defaultTimeout)
 	defer cancel()
 	ticker := time.NewTicker(defaultTick)
 	defer ticker.Stop()
@@ -264,7 +278,7 @@ func waitForRowCountInTablet(t *testing.T, vttablet *cluster.VttabletProcess, da
 		got := row.AsInt64("c", 0)
 		require.LessOrEqual(t, got, want)
 		if got == want {
-			log.Infof("waitForRowCountInTablet: found %d rows in table %s on tablet %s", want, table, vttablet.Name)
+			log.Info(fmt.Sprintf("waitForRowCountInTablet: found %d rows in table %s on tablet %s", want, table, vttablet.Name))
 			return
 		}
 		select {
@@ -317,7 +331,8 @@ func executeOnTablet(t *testing.T, conn *mysql.Conn, tablet *cluster.VttabletPro
 
 	count0, body0 := getQueryCount(t, queryStatsURL, matchQuery)
 
-	qr := execVtgateQuery(t, conn, ksName, query)
+	qr, err := execVtgateQuery(conn, ksName, query)
+	require.NoError(t, err)
 	require.NotNil(t, qr)
 
 	count1, body1 := getQueryCount(t, queryStatsURL, matchQuery)
@@ -352,15 +367,20 @@ func waitForWorkflowToBeCreated(t *testing.T, vc *VitessCluster, ksWorkflow stri
 // key value pairs of the form "key==value" to also wait for
 // additional stream sub-state such as "message==for vdiff".
 // Invalid checks are ignored.
-func waitForWorkflowState(t *testing.T, vc *VitessCluster, ksWorkflow string, wantState string, fieldEqualityChecks ...string) {
-	keyspace, workflow := parseKeyspaceWorkflow(t, ksWorkflow)
+func waitForWorkflowState(vc *VitessCluster, ksWorkflow string, wantState string, fieldEqualityChecks ...string) error {
+	keyspace, workflow, ok := strings.Cut(ksWorkflow, ".")
+	if !ok {
+		return fmt.Errorf("invalid keyspace.workflow value: %s", ksWorkflow)
+	}
 	done := false
 	timer := time.NewTimer(workflowStateTimeout)
 	defer timer.Stop()
-	log.Infof("Waiting for workflow %q to fully reach %q state", ksWorkflow, wantState)
+	log.Info(fmt.Sprintf("Waiting for workflow %q to fully reach %q state", ksWorkflow, wantState))
 	for {
 		output, err := vc.VtctldClient.ExecuteCommandWithOutput("Workflow", "--keyspace", keyspace, "show", "--workflow", workflow, "--compact", "--include-logs=false")
-		require.NoError(t, err, output)
+		if err != nil {
+			return fmt.Errorf("failed to get workflow state for %s: %w (output: %s)", ksWorkflow, err, output)
+		}
 		done = true
 		state := ""
 		shardStreams := gjson.Get(output, "workflows.0.shard_streams")
@@ -371,7 +391,7 @@ func waitForWorkflowState(t *testing.T, vc *VitessCluster, ksWorkflow string, wa
 				info := stream.Map()
 				state = info["state"].String()
 				if state == wantState {
-					for i := 0; i < len(fieldEqualityChecks); i++ {
+					for i := range fieldEqualityChecks {
 						if kvparts := strings.Split(fieldEqualityChecks[i], "=="); len(kvparts) == 2 {
 							key := kvparts[0]
 							val := kvparts[1]
@@ -393,8 +413,8 @@ func waitForWorkflowState(t *testing.T, vc *VitessCluster, ksWorkflow string, wa
 			return true
 		})
 		if done {
-			log.Infof("Workflow %q has fully reached the desired state of %q", ksWorkflow, wantState)
-			return
+			log.Info(fmt.Sprintf("Workflow %q has fully reached the desired state of %q", ksWorkflow, wantState))
+			return nil
 		}
 		select {
 		case <-timer.C:
@@ -402,8 +422,7 @@ func waitForWorkflowState(t *testing.T, vc *VitessCluster, ksWorkflow string, wa
 			if len(fieldEqualityChecks) > 0 {
 				extraRequirements = fmt.Sprintf(" with the additional requirements of \"%v\"", fieldEqualityChecks)
 			}
-			require.FailNowf(t, "workflow state not reached",
-				"Workflow %q did not fully reach the expected state of %q%s before the timeout of %s; last seen output: %s",
+			return fmt.Errorf("workflow %q did not fully reach the expected state of %q%s before the timeout of %s; last seen output: %s",
 				ksWorkflow, wantState, extraRequirements, workflowStateTimeout, output)
 		default:
 			time.Sleep(defaultTick)
@@ -522,7 +541,7 @@ func validateDryRunResults(t *testing.T, output string, want []string) {
 	t.Helper()
 	require.NotEmpty(t, output)
 	gotDryRun := strings.Split(output, "\n")
-	require.True(t, len(gotDryRun) > 3)
+	require.Greater(t, len(gotDryRun), 3)
 	var startRow int
 	if strings.HasPrefix(gotDryRun[1], "Parameters:") { // vtctldclient
 		startRow = 3
@@ -643,7 +662,7 @@ func getDebugVar(t *testing.T, port int, varPath []string) (string, error) {
 	var val []byte
 	var err error
 	url := fmt.Sprintf("http://localhost:%d/debug/vars", port)
-	log.Infof("url: %s, varPath: %s", url, strings.Join(varPath, ":"))
+	log.Info(fmt.Sprintf("url: %s, varPath: %s", url, strings.Join(varPath, ":")))
 	body := getHTTPBody(t, url)
 	val, _, _, err = jsonparser.Get(body, varPath...)
 	require.NoError(t, err)
@@ -685,8 +704,8 @@ func confirmWorkflowHasCopiedNoData(t *testing.T, defaultTargetKs, workflow stri
 // compact, and easy to compare results for tests.
 func getShardRoutingRules(t *testing.T) string {
 	output, err := osExec(t, "vtctldclient", []string{"--server", getVtctldGRPCURL(), "GetShardRoutingRules"})
-	log.Infof("GetShardRoutingRules err: %+v, output: %+v", err, output)
-	require.Nilf(t, err, output)
+	log.Info(fmt.Sprintf("GetShardRoutingRules err: %+v, output: %+v", err, output))
+	require.NoErrorf(t, err, output)
 	require.NotNil(t, output)
 
 	// Sort the rules by shard,to_keyspace
@@ -701,7 +720,7 @@ func getShardRoutingRules(t *testing.T) string {
 		return shardI < shardJ
 	})
 	sb := strings.Builder{}
-	for i := 0; i < len(rules); i++ {
+	for i := range rules {
 		if i > 0 {
 			sb.WriteString(",")
 		}
@@ -731,7 +750,7 @@ func verifyCopyStateIsOptimized(t *testing.T, tablet *cluster.VttabletProcess) {
 		res, err := tablet.QueryTablet(query, "", false)
 		require.NoError(t, err)
 		require.NotNil(t, res)
-		require.Equal(t, 1, len(res.Rows))
+		require.Len(t, res.Rows, 1)
 		dataFree, err = res.Rows[0][0].ToInt64()
 		require.NoError(t, err)
 		autoIncrement, err = res.Rows[0][1].ToInt64()
@@ -762,7 +781,7 @@ func randHex(n int) (string, error) {
 	return hex.EncodeToString(bytes), nil
 }
 
-func getIntVal(t *testing.T, vars map[string]interface{}, key string) int {
+func getIntVal(t *testing.T, vars map[string]any, key string) int {
 	i, ok := vars[key].(float64)
 	require.True(t, ok)
 	return int(i)
@@ -772,8 +791,8 @@ func getPartialMetrics(t *testing.T, key string, tab *cluster.VttabletProcess) (
 	vars := tab.GetVars()
 	insertKey := key + ".insert"
 	updateKey := key + ".insert"
-	cacheSizes := vars["VReplicationPartialQueryCacheSize"].(map[string]interface{})
-	queryCounts := vars["VReplicationPartialQueryCount"].(map[string]interface{})
+	cacheSizes := vars["VReplicationPartialQueryCacheSize"].(map[string]any)
+	queryCounts := vars["VReplicationPartialQueryCount"].(map[string]any)
 	if cacheSizes[insertKey] == nil || cacheSizes[updateKey] == nil ||
 		queryCounts[insertKey] == nil || queryCounts[updateKey] == nil {
 		return 0, 0, 0, 0
@@ -789,7 +808,7 @@ func getPartialMetrics(t *testing.T, key string, tab *cluster.VttabletProcess) (
 func isBinlogRowImageNoBlob(t *testing.T, tablet *cluster.VttabletProcess) bool {
 	rs, err := tablet.QueryTablet("select @@global.binlog_row_image", "", false)
 	require.NoError(t, err)
-	require.Equal(t, 1, len(rs.Rows))
+	require.Len(t, rs.Rows, 1)
 	mode := strings.ToLower(rs.Rows[0][0].ToString())
 	return mode == "noblob"
 }
@@ -828,7 +847,7 @@ func (lg *loadGenerator) stop() {
 	// Wait for buffering to stop and additional records to be inserted by start
 	// after traffic is switched.
 	time.Sleep(loadTestBufferingWindowDuration * 2)
-	log.Infof("Canceling load")
+	log.Info("Canceling load")
 	lg.cancel()
 	lg.wg.Wait()
 }
@@ -838,23 +857,21 @@ func (lg *loadGenerator) start() {
 	lg.ctx, lg.cancel = context.WithCancel(context.Background())
 	var connectionCount atomic.Int64
 
-	var id int64
-	log.Infof("loadGenerator: starting")
+	var id atomic.Int64
+	log.Info("loadGenerator: starting")
 	queryTemplate := "insert into loadtest(id, name) values (%d, 'name-%d')"
 	var totalQueries, successfulQueries int64
 	var deniedErrors, ambiguousErrors, reshardedErrors, tableNotFoundErrors, otherErrors int64
 	lg.wg.Add(1)
 	defer func() {
 		defer lg.wg.Done()
-		log.Infof("loadGenerator: totalQueries: %d, successfulQueries: %d, deniedErrors: %d, ambiguousErrors: %d, reshardedErrors: %d, tableNotFoundErrors: %d, otherErrors: %d",
-			totalQueries, successfulQueries, deniedErrors, ambiguousErrors, reshardedErrors, tableNotFoundErrors, otherErrors)
+		log.Info(fmt.Sprintf("loadGenerator: totalQueries: %d, successfulQueries: %d, deniedErrors: %d, ambiguousErrors: %d, reshardedErrors: %d, tableNotFoundErrors: %d, otherErrors: %d", totalQueries, successfulQueries, deniedErrors, ambiguousErrors, reshardedErrors, tableNotFoundErrors, otherErrors))
 	}()
 	for {
 		select {
 		case <-lg.ctx.Done():
-			log.Infof("loadGenerator: context cancelled")
-			log.Infof("loadGenerator: deniedErrors: %d, ambiguousErrors: %d, reshardedErrors: %d, tableNotFoundErrors: %d, otherErrors: %d",
-				deniedErrors, ambiguousErrors, reshardedErrors, tableNotFoundErrors, otherErrors)
+			log.Info("loadGenerator: context cancelled")
+			log.Info(fmt.Sprintf("loadGenerator: deniedErrors: %d, ambiguousErrors: %d, reshardedErrors: %d, tableNotFoundErrors: %d, otherErrors: %d", deniedErrors, ambiguousErrors, reshardedErrors, tableNotFoundErrors, otherErrors))
 			require.Equal(t, int64(0), deniedErrors)
 			require.Equal(t, int64(0), otherErrors)
 			require.Equal(t, int64(0), reshardedErrors)
@@ -863,9 +880,7 @@ func (lg *loadGenerator) start() {
 		default:
 			if int(connectionCount.Load()) < lg.connections {
 				connectionCount.Add(1)
-				lg.wg.Add(1)
-				go func() {
-					defer lg.wg.Done()
+				lg.wg.Go(func() {
 					defer connectionCount.Add(-1)
 					conn := vc.GetVTGateConn(t)
 					defer conn.Close()
@@ -875,7 +890,7 @@ func (lg *loadGenerator) start() {
 							return
 						default:
 						}
-						newID := atomic.AddInt64(&id, 1)
+						newID := id.Add(1)
 						query := fmt.Sprintf(queryTemplate, newID, newID)
 						_, err := conn.ExecuteFetch(query, 1, false)
 						atomic.AddInt64(&totalQueries, 1)
@@ -905,7 +920,7 @@ func (lg *loadGenerator) start() {
 						}
 						time.Sleep(time.Duration(int64(float64(loadTestAvgWaitBetweenQueries.Microseconds()) * rand.Float64())))
 					}
-				}()
+				})
 			}
 		}
 	}
@@ -938,14 +953,14 @@ func (lg *loadGenerator) waitForCount(want int64) {
 
 // appendToQueryLog is useful when debugging tests.
 func appendToQueryLog(msg string) {
-	file, err := os.OpenFile(queryLog, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	file, err := os.OpenFile(queryLog, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
 	if err != nil {
-		log.Errorf("Error opening query log file: %v", err)
+		log.Error(fmt.Sprintf("Error opening query log file: %v", err))
 		return
 	}
 	defer file.Close()
 	if _, err := file.WriteString(msg + "\n"); err != nil {
-		log.Errorf("Error writing to query log file: %v", err)
+		log.Error(fmt.Sprintf("Error writing to query log file: %v", err))
 	}
 }
 
@@ -1004,9 +1019,10 @@ func vexplain(t *testing.T, database, query string) *VExplainPlan {
 	vtgateConn := vc.GetVTGateConn(t)
 	defer vtgateConn.Close()
 
-	qr := execVtgateQuery(t, vtgateConn, database, "vexplain "+query)
+	qr, err := execVtgateQuery(vtgateConn, database, "vexplain "+query)
+	require.NoError(t, err)
 	require.NotNil(t, qr)
-	require.Equal(t, 1, len(qr.Rows))
+	require.Len(t, qr.Rows, 1)
 	json := qr.Rows[0][0].ToString()
 
 	var plan VExplainPlan
@@ -1042,7 +1058,7 @@ func getVReplicationConfig(t *testing.T, tab *cluster.VttabletProcess) map[strin
 	var config map[string]string
 	err = json2.Unmarshal([]byte(configJson), &config)
 	require.NoError(t, err)
-	require.Equal(t, 1, len(config))
+	require.Len(t, config, 1)
 
 	configJson = config[maps.Keys(config)[0]]
 	config = nil
@@ -1058,9 +1074,11 @@ func mapToCSV(m map[string]string) string {
 	if len(m) == 0 {
 		return csv
 	}
+	var csvSb1062 strings.Builder
 	for k, v := range m {
-		csv += fmt.Sprintf("%s=%s,", k, v)
+		fmt.Fprintf(&csvSb1062, "%s=%s,", k, v)
 	}
+	csv += csvSb1062.String()
 	if len(csv) == 0 {
 		return csv
 	}
@@ -1072,7 +1090,7 @@ func validateOverrides(t *testing.T, tabs map[string]*cluster.VttabletProcess, w
 	for _, tab := range tabs {
 		config := getVReplicationConfig(t, tab)
 		for k, v := range want {
-			require.EqualValues(t, v, config[k])
+			require.Equal(t, v, config[k])
 		}
 	}
 }

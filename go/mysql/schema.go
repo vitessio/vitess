@@ -34,9 +34,6 @@ const (
 		ORDER BY table_name, SEQ_IN_INDEX`
 	// ShowRowsRead is the query used to find the number of rows read.
 	ShowRowsRead = "show status like 'Innodb_rows_read'"
-
-	// GetColumnNamesQueryPatternForTable is used for mocking queries in unit tests
-	GetColumnNamesQueryPatternForTable = `SELECT COLUMN_NAME.*TABLE_NAME.*%s.*`
 )
 
 // BaseShowTablesFields contains the fields returned by a BaseShowTables or a BaseShowTablesForTable command.
@@ -93,6 +90,7 @@ var BaseShowTablesWithSizesFields = append(BaseShowTablesFields, &querypb.Field{
 	Charset:      collations.CollationBinaryID,
 	Flags:        uint32(querypb.MySqlFlag_BINARY_FLAG | querypb.MySqlFlag_NUM_FLAG),
 })
+
 var BaseInnoDBTableSizesFields = []*querypb.Field{{
 	Name:         "it.name",
 	Type:         querypb.Type_VARCHAR,

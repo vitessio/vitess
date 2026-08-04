@@ -138,8 +138,10 @@ func Usage() {
 
 // filterTestFlags returns two slices: the second one has just the flags for `go test` and the first one contains
 // the rest of the flags.
-const goTestFlagSuffix = "-test"
-const goTestRunFlag = "-test.run"
+const (
+	goTestFlagSuffix = "-test"
+	goTestRunFlag    = "-test.run"
+)
 
 func filterTestFlags() ([]string, []string) {
 	args := os.Args
@@ -261,7 +263,7 @@ type maybeBoolFlag interface {
 func isZeroValue(f *goflag.Flag, value string) bool {
 	typ := reflect.TypeOf(f.Value)
 	var z reflect.Value
-	if typ.Kind() == reflect.Ptr {
+	if typ.Kind() == reflect.Pointer {
 		z = reflect.New(typ.Elem())
 	} else {
 		z = reflect.Zero(typ)

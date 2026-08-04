@@ -17,7 +17,6 @@ limitations under the License.
 package ectd2
 
 import (
-	"context"
 	"flag"
 	"fmt"
 	"os"
@@ -30,6 +29,7 @@ import (
 
 	"vitess.io/vitess/go/vt/log"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
@@ -82,13 +82,15 @@ func TestMain(m *testing.M) {
 			VSchema:   VSchema,
 		}
 		if err := clusterInstance.StartUnshardedKeyspace(*Keyspace, 0, false, clusterInstance.Cell); err != nil {
-			log.Fatal(err.Error())
+			log.Error(err.Error())
+			os.Exit(1)
 			return 1
 		}
 
 		// Start vtgate
 		if err := clusterInstance.StartVtgate(); err != nil {
-			log.Fatal(err.Error())
+			log.Error(err.Error())
+			os.Exit(1)
 			return 1
 		}
 
@@ -104,7 +106,7 @@ func TestTopoDownServingQuery(t *testing.T) {
 		Port: clusterInstance.VtgateMySQLPort,
 	}
 	conn, err := mysql.Connect(ctx, &vtParams)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	defer conn.Close()
 
 	defer utils.Exec(t, conn, `delete from t1`)
@@ -126,13 +128,13 @@ func TestShardLocking(t *testing.T) {
 	require.NoError(t, err)
 
 	// Acquire a shard lock.
-	ctx, unlock, err := ts.LockShard(context.Background(), KeyspaceName, "0", "TestShardLocking")
+	ctx, unlock, err := ts.LockShard(t.Context(), KeyspaceName, "0", "TestShardLocking")
 	require.NoError(t, err)
 	// Check that we can't reacquire it from the same context.
 	_, _, err = ts.LockShard(ctx, KeyspaceName, "0", "TestShardLocking")
 	require.ErrorContains(t, err, "lock for shard customer/0 is already held")
 	// Also check that TryLockShard is non-blocking and returns an error.
-	_, _, err = ts.TryLockShard(context.Background(), KeyspaceName, "0", "TestShardLocking")
+	_, _, err = ts.TryLockShard(t.Context(), KeyspaceName, "0", "TestShardLocking")
 	require.ErrorContains(t, err, "node already exists: lock already exists at path keyspaces/customer/shards/0")
 	// Check that CheckShardLocked doesn't return an error.
 	err = topo.CheckShardLocked(ctx, KeyspaceName, "0")
@@ -141,9 +143,11 @@ func TestShardLocking(t *testing.T) {
 	// We'll now try to acquire the lock from a different thread.
 	secondThreadLockAcquired := false
 	go func() {
-		_, unlock, err := ts.LockShard(context.Background(), KeyspaceName, "0", "TestShardLocking")
+		_, unlock, err := ts.LockShard(t.Context(), KeyspaceName, "0", "TestShardLocking")
+		if !assert.NoError(t, err) {
+			return
+		}
 		defer unlock(&err)
-		require.NoError(t, err)
 		secondThreadLockAcquired = true
 	}()
 
@@ -168,7 +172,7 @@ func TestKeyspaceLocking(t *testing.T) {
 	require.NoError(t, err)
 
 	// Acquire a keyspace lock.
-	ctx, unlock, err := ts.LockKeyspace(context.Background(), KeyspaceName, "TestKeyspaceLocking")
+	ctx, unlock, err := ts.LockKeyspace(t.Context(), KeyspaceName, "TestKeyspaceLocking")
 	require.NoError(t, err)
 	// Check that we can't reacquire it from the same context.
 	_, _, err = ts.LockKeyspace(ctx, KeyspaceName, "TestKeyspaceLocking")
@@ -180,9 +184,11 @@ func TestKeyspaceLocking(t *testing.T) {
 	// We'll now try to acquire the lock from a different thread.
 	secondThreadLockAcquired := false
 	go func() {
-		_, unlock, err := ts.LockKeyspace(context.Background(), KeyspaceName, "TestKeyspaceLocking")
+		_, unlock, err := ts.LockKeyspace(t.Context(), KeyspaceName, "TestKeyspaceLocking")
+		if !assert.NoError(t, err) {
+			return
+		}
 		defer unlock(&err)
-		require.NoError(t, err)
 		secondThreadLockAcquired = true
 	}()
 
@@ -247,9 +253,11 @@ func TestNamedLocking(t *testing.T) {
 	// We'll now try to acquire the lock from a different goroutine.
 	secondCallerAcquired := false
 	go func() {
-		_, unlock, err := ts.LockName(context.Background(), lockName, action)
+		_, unlock, err := ts.LockName(t.Context(), lockName, action)
+		if !assert.NoError(t, err) {
+			return
+		}
 		defer unlock(&err)
-		require.NoError(t, err)
 		secondCallerAcquired = true
 	}()
 

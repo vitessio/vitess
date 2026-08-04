@@ -34,19 +34,17 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/stats/opentsdb"
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/endtoend/utils"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
-	"vitess.io/vitess/go/vt/utils"
 )
 
-var (
-	vtInsertTest = `
+var vtInsertTest = `
 		create table if not exists vt_insert_test (
 		id bigint auto_increment,
 		msg varchar(64),
 		primary key (id)
 		) Engine=InnoDB;`
-)
 
 func TestFailingReplication(t *testing.T) {
 	prepareCluster(t)
@@ -77,9 +75,13 @@ func TestFailingReplication(t *testing.T) {
 	go func() {
 		<-time.After(30 * time.Second)
 		_, err = primary.VttabletProcess.QueryTablet("GRANT REPLICATION SLAVE ON *.* TO 'vt_repl'@'%';", keyspaceName, true)
-		require.NoError(t, err)
+		if !assert.NoError(t, err) {
+			return
+		}
 		_, err = primary.VttabletProcess.QueryTablet("FLUSH PRIVILEGES;", keyspaceName, true)
-		require.NoError(t, err)
+		if !assert.NoError(t, err) {
+			return
+		}
 	}()
 
 	startTime := time.Now()
@@ -134,13 +136,20 @@ func prepareCluster(t *testing.T) {
 
 	// Restore the Tablet
 	restore(t, primary, "replica", "NOT_SERVING")
+	// restore() returns as soon as the vttablet's HTTP endpoint is responsive,
+	// but RestoreData runs in the background and holds the actionSema for the
+	// entire duration of the restore. We need to wait for it to finish before
+	// issuing RPCs like SetWritable that also need the actionSema.
+	waitForRestoreComplete(t, primary.VttabletProcess, 180*time.Second)
 	// Vitess expects that the user has set the database into ReadWrite mode before calling
 	// TabletExternallyReparented
 	err = localCluster.VtctldClientProcess.ExecuteCommand(
-		"SetWritable", primary.Alias, "true")
+		"SetWritable", primary.Alias, "true",
+	)
 	require.NoError(t, err)
 	err = localCluster.VtctldClientProcess.ExecuteCommand(
-		"TabletExternallyReparented", primary.Alias)
+		"TabletExternallyReparented", primary.Alias,
+	)
 	require.NoError(t, err)
 	restore(t, replica1, "replica", "SERVING")
 }
@@ -194,9 +203,9 @@ func firstBackupTest(t *testing.T, removeBackup bool) {
 	cluster.VerifyRowsInTablet(t, replica1, keyspaceName, 1)
 
 	// backup the replica
-	log.Infof("taking backup %s", time.Now())
+	log.Info(fmt.Sprintf("taking backup %s", time.Now()))
 	dataPointReader := vtBackup(t, false, true, true)
-	log.Infof("done taking backup %s", time.Now())
+	log.Info(fmt.Sprintf("done taking backup %s", time.Now()))
 
 	// check that the backup shows up in the listing
 	verifyBackupCount(t, shardKsName, len(backups)+1)
@@ -228,7 +237,7 @@ func firstBackupTest(t *testing.T, removeBackup bool) {
 	}
 }
 
-func startVtBackup(t *testing.T, initialBackup bool, restartBeforeBackup, disableRedoLog bool) (*os.File, error) {
+func startVtBackup(t *testing.T, initialBackup bool, restartBeforeBackup, disableRedoLog bool, additionalArgs ...string) (*os.File, error) {
 	mysqlSocket, err := os.CreateTemp("", "vtbackup_test_mysql.sock")
 	require.NoError(t, err)
 	defer os.Remove(mysqlSocket.Name())
@@ -238,33 +247,45 @@ func startVtBackup(t *testing.T, initialBackup bool, restartBeforeBackup, disabl
 
 	// Take the back using vtbackup executable
 	extraArgs := []string{
-		"--allow_first_backup",
+		"--allow-first-backup",
 		"--db-credentials-file", dbCredentialFile,
-		utils.GetFlagVariantForTests("--mysql-socket"), mysqlSocket.Name(),
+		"--mysql-socket", mysqlSocket.Name(),
 
 		// Use opentsdb for stats.
-		utils.GetFlagVariantForTests("--stats-backend"), "opentsdb",
+		"--stats-backend", "opentsdb",
 		// Write stats to file for reading afterwards.
-		utils.GetFlagVariantForTests("--opentsdb-uri"), "file://" + statsPath,
+		"--opentsdb-uri", "file://" + statsPath,
 	}
 	if restartBeforeBackup {
-		extraArgs = append(extraArgs, "--restart_before_backup")
+		extraArgs = append(extraArgs, "--restart-before-backup")
 	}
 	if disableRedoLog {
 		extraArgs = append(extraArgs, "--disable-redo-log")
 	}
+	extraArgs = append(extraArgs, additionalArgs...)
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
+	verifyErrCh := make(chan error, 1)
 	if !initialBackup && disableRedoLog {
-		go verifyDisableEnableRedoLogs(ctx, t, mysqlSocket.Name())
+		go func() {
+			verifyErrCh <- verifyDisableEnableRedoLogs(ctx, mysqlSocket.Name())
+		}()
+	} else {
+		verifyErrCh <- nil
 	}
 
-	log.Infof("starting backup tablet %s", time.Now())
+	log.Info(fmt.Sprintf("starting backup tablet %s", time.Now()))
 	err = localCluster.StartVtbackup(newInitDBFile, initialBackup, keyspaceName, shardName, cell, extraArgs...)
+	// The backup is done (or failed); stop the redo-log monitor and collect its result.
+	cancel()
+	verifyErr := <-verifyErrCh
 	if err != nil {
 		return nil, err
+	}
+	if verifyErr != nil {
+		return nil, verifyErr
 	}
 
 	f, err := os.OpenFile(statsPath, os.O_RDONLY, 0)
@@ -283,7 +304,7 @@ func vtBackup(t *testing.T, initialBackup bool, restartBeforeBackup, disableRedo
 func verifyBackupCount(t *testing.T, shardKsName string, expected int) []string {
 	backups, err := listBackups(shardKsName)
 	require.NoError(t, err)
-	assert.Equalf(t, expected, len(backups), "invalid number of backups")
+	assert.Lenf(t, backups, expected, "invalid number of backups")
 	return backups
 }
 
@@ -337,7 +358,7 @@ func initTablets(t *testing.T, startTablet bool, initShardPrimary bool) {
 
 func restore(t *testing.T, tablet *cluster.Vttablet, tabletType string, waitForState string) {
 	// Erase mysql/tablet dir, then start tablet with restore enabled.
-	log.Infof("restoring tablet %s", time.Now())
+	log.Info(fmt.Sprintf("restoring tablet %s", time.Now()))
 	resetTabletDirectory(t, *tablet, true)
 
 	// Start tablets
@@ -347,6 +368,28 @@ func restore(t *testing.T, tablet *cluster.Vttablet, tabletType string, waitForS
 	tablet.VttabletProcess.SupportsBackup = true
 	err := tablet.VttabletProcess.Setup()
 	require.NoError(t, err)
+}
+
+// waitForRestoreComplete waits for a vttablet's background restore to finish.
+// The tablet type transitions replica -> restore -> replica during a restore.
+// This function polls until it observes "restore" and then sees "replica" again.
+// If the restore completes faster than the polling interval and "restore" is
+// never observed, the function returns since the restore is already done.
+func waitForRestoreComplete(t *testing.T, vttablet *cluster.VttabletProcess, timeout time.Duration) {
+	t.Helper()
+	sawRestore := false
+	assert.Eventually(t, func() bool {
+		tabletType := vttablet.GetTabletType()
+		if tabletType == "restore" {
+			sawRestore = true
+		}
+		return sawRestore && tabletType == "replica"
+	}, timeout, 300*time.Millisecond)
+	if sawRestore {
+		require.Equal(t, "replica", vttablet.GetTabletType(), "timed out waiting for tablet restore to complete")
+	}
+	// If we never observed "restore" type, the restore likely completed
+	// before we started polling. Nothing to wait for.
 }
 
 func resetTabletDirectory(t *testing.T, tablet cluster.Vttablet, initMysql bool) {
@@ -413,7 +456,7 @@ func tearDown(t *testing.T, initMysql bool) {
 	}
 }
 
-func verifyDisableEnableRedoLogs(ctx context.Context, t *testing.T, mysqlSocket string) {
+func verifyDisableEnableRedoLogs(ctx context.Context, mysqlSocket string) error {
 	params := cluster.NewConnParams(0, dbPassword, mysqlSocket, keyspaceName)
 
 	for {
@@ -428,16 +471,20 @@ func verifyDisableEnableRedoLogs(ctx context.Context, t *testing.T, mysqlSocket 
 
 			// Check if server supports disable/enable redo log.
 			qr, err := conn.ExecuteFetch("SELECT 1 FROM performance_schema.global_status WHERE variable_name = 'innodb_redo_log_enabled'", 1, false)
-			require.NoError(t, err)
+			if err != nil {
+				return err
+			}
 			// If not, there's nothing to test.
 			if len(qr.Rows) == 0 {
-				return
+				return nil
 			}
 
 			// MY-013600
 			// https://dev.mysql.com/doc/mysql-errors/8.0/en/server-error-reference.html#error_er_ib_wrn_redo_disabled
-			qr, err = conn.ExecuteFetch("SELECT 1 FROM performance_schema.error_log WHERE error_code = 'MY-013600'", 1, false)
-			require.NoError(t, err)
+			qr, err = conn.ExecuteFetch("SELECT 1 FROM performance_schema.error_log WHERE data like '%InnoDB redo logging is disabled%'", 1, false)
+			if err != nil {
+				return err
+			}
 			if len(qr.Rows) != 1 {
 				// Keep trying, possible we haven't disabled yet.
 				continue
@@ -445,19 +492,76 @@ func verifyDisableEnableRedoLogs(ctx context.Context, t *testing.T, mysqlSocket 
 
 			// MY-013601
 			// https://dev.mysql.com/doc/mysql-errors/8.0/en/server-error-reference.html#error_er_ib_wrn_redo_enabled
-			qr, err = conn.ExecuteFetch("SELECT 1 FROM performance_schema.error_log WHERE error_code = 'MY-013601'", 1, false)
-			require.NoError(t, err)
+			qr, err = conn.ExecuteFetch("SELECT 1 FROM performance_schema.error_log WHERE data like '%InnoDB redo logging is enabled%'", 1, false)
+			if err != nil {
+				return err
+			}
 			if len(qr.Rows) != 1 {
 				// Keep trying, possible we haven't disabled yet.
 				continue
 			}
 
 			// Success
-			return
+			return nil
 		case <-ctx.Done():
-			require.Fail(t, "Failed to verify disable/enable redo log.")
+			return errors.New("failed to verify disable/enable redo log")
 		}
 	}
+}
+
+// TestVtBackupWithChunking verifies that the vtbackup binary accepts chunking
+// flags and produces a chunked backup. It then restores the chunked backup on
+// replica2 and verifies the data is intact.
+func TestVtBackupWithChunking(t *testing.T) {
+	// Chunked backups are a v25 feature; older vttablets can't restore them.
+	utils.SkipIfBinaryIsBelowVersion(t, 25, "vttablet")
+	prepareCluster(t)
+
+	_, err := primary.VttabletProcess.QueryTablet(vtInsertTest, keyspaceName, true)
+	require.NoError(t, err)
+	_, err = primary.VttabletProcess.QueryTablet("insert into vt_insert_test (msg) values ('test1')", keyspaceName, true)
+	require.NoError(t, err)
+
+	cluster.VerifyRowsInTablet(t, replica1, keyspaceName, 1)
+
+	_, err = startVtBackup(
+		t, false, true, false,
+		"--builtinbackup-file-chunk-threshold", "4194304",
+		"--builtinbackup-file-chunk-size", "4194304",
+	)
+	require.NoError(t, err)
+
+	backups, err := listBackups(shardKsName)
+	require.NoError(t, err)
+	require.NotEmpty(t, backups)
+
+	backupLocation := path.Join(localCluster.VtbackupProcess.FileBackupStorageRoot, keyspaceName, shardName, backups[len(backups)-1])
+	manifestData, err := os.ReadFile(path.Join(backupLocation, "MANIFEST"))
+	require.NoError(t, err)
+
+	var manifest struct {
+		FileEntries []mysqlctl.FileEntry
+	}
+	require.NoError(t, json.Unmarshal(manifestData, &manifest))
+
+	chunkedFiles := 0
+	for _, fe := range manifest.FileEntries {
+		if len(fe.Chunks) > 0 {
+			chunkedFiles++
+			t.Logf("File %s: %d chunks", fe.Name, len(fe.Chunks))
+		}
+	}
+	assert.Positive(t, chunkedFiles, "expected at least one file with chunks in MANIFEST")
+
+	err = localCluster.InitTablet(replica2, keyspaceName, shardName)
+	require.NoError(t, err)
+	restore(t, replica2, "replica", "SERVING")
+	waitForRestoreComplete(t, replica2.VttabletProcess, 180*time.Second)
+	waitForReplicationToCatchup([]cluster.Vttablet{*replica2})
+	cluster.VerifyRowsInTablet(t, replica2, keyspaceName, 1)
+
+	removeBackups(t)
+	tearDown(t, true)
 }
 
 // This helper function wait for all replicas to catch-up the replication.
@@ -478,7 +582,7 @@ func waitForReplicationToCatchup(tablets []cluster.Vttablet) bool {
 		case <-timeout:
 			return false
 		default:
-			var replicaCount = 0
+			replicaCount := 0
 			for _, tablet := range tablets {
 				status := tablet.VttabletProcess.GetStatusDetails()
 				json.Unmarshal([]byte(status), &statuslst)

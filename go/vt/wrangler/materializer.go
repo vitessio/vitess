@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"hash/fnv"
 	"math"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -122,19 +123,15 @@ func shouldInclude(table string, excludes []string) bool {
 	if schema.IsInternalOperationTableName(table) {
 		return false
 	}
-	for _, t := range excludes {
-		if t == table {
-			return false
-		}
-	}
-	return true
+	return !slices.Contains(excludes, table)
 }
 
 // MoveTables initiates moving table(s) over to another keyspace
 func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, targetKeyspace, tableSpecs,
 	cell, tabletTypesStr string, allTables bool, excludeTables string, autoStart, stopAfterCopy bool,
 	externalCluster string, dropForeignKeys, deferSecondaryKeys bool, sourceTimeZone, onDDL string,
-	sourceShards []string, noRoutingRules bool, atomicCopy bool) (err error) {
+	sourceShards []string, noRoutingRules bool, atomicCopy bool,
+) (err error) {
 	// FIXME validate tableSpecs, allTables, excludeTables
 	var tables []string
 	var externalTopo *topo.Server
@@ -145,7 +142,7 @@ func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, ta
 			return err
 		}
 		wr.sourceTs = externalTopo
-		log.Infof("Successfully opened external topo: %+v", externalTopo)
+		log.Info(fmt.Sprintf("Successfully opened external topo: %+v", externalTopo))
 	}
 
 	var (
@@ -211,7 +208,7 @@ func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, ta
 		if len(tables) == 0 {
 			return errors.New("no tables to move")
 		}
-		log.Infof("Found tables to move: %s", strings.Join(tables, ","))
+		log.Info("Found tables to move: " + strings.Join(tables, ","))
 
 		if !vschema.Sharded {
 			// Save the original in case we need to restore it for a late failure
@@ -292,7 +289,7 @@ func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, ta
 	// routing rules in place.
 	if externalTopo == nil {
 		if noRoutingRules {
-			log.Warningf("Found --no-routing-rules flag, not creating routing rules for workflow %s.%s", targetKeyspace, workflow)
+			log.Warn(fmt.Sprintf("Found --no-routing-rules flag, not creating routing rules for workflow %s.%s", targetKeyspace, workflow))
 		} else {
 			// Save routing rules before vschema. If we save vschema first, and routing rules
 			// fails to save, we may generate duplicate table errors.
@@ -376,14 +373,7 @@ func (wr *Wrangler) validateSourceTablesExist(sourceKeyspace string, ksTables, t
 		if schema.IsInternalOperationTableName(table) {
 			continue
 		}
-		found := false
-
-		for _, ksTable := range ksTables {
-			if table == ksTable {
-				found = true
-				break
-			}
-		}
+		found := slices.Contains(ksTables, table)
 		if !found {
 			missingTables = append(missingTables, table)
 		}
@@ -417,7 +407,7 @@ func (wr *Wrangler) getKeyspaceTables(ctx context.Context, ks string, ts *topo.S
 	if err != nil {
 		return nil, err
 	}
-	log.Infof("got table schemas from source primary %v.", primary)
+	log.Info(fmt.Sprintf("got table schemas from source primary %v.", primary))
 
 	var sourceTables []string
 	for _, td := range schema.TableDefinitions {
@@ -1085,11 +1075,8 @@ func (wr *Wrangler) buildMaterializer(ctx context.Context, ms *vtctldatapb.Mater
 		isPartial = true
 		var sourceShards2 []*topo.ShardInfo
 		for _, shard := range sourceShards {
-			for _, shard2 := range ms.SourceShards {
-				if shard.ShardName() == shard2 {
-					sourceShards2 = append(sourceShards2, shard)
-					break
-				}
+			if slices.Contains(ms.SourceShards, shard.ShardName()) {
+				sourceShards2 = append(sourceShards2, shard)
 			}
 		}
 		sourceShards = sourceShards2
@@ -1105,11 +1092,8 @@ func (wr *Wrangler) buildMaterializer(ctx context.Context, ms *vtctldatapb.Mater
 	if len(ms.SourceShards) > 0 {
 		var targetShards2 []*topo.ShardInfo
 		for _, shard := range targetShards {
-			for _, shard2 := range ms.SourceShards {
-				if shard.ShardName() == shard2 {
-					targetShards2 = append(targetShards2, shard)
-					break
-				}
+			if slices.Contains(ms.SourceShards, shard.ShardName()) {
+				targetShards2 = append(targetShards2, shard)
 			}
 		}
 		targetShards = targetShards2
@@ -1212,7 +1196,7 @@ func (mz *materializer) deploySchema(ctx context.Context) error {
 			}
 			mu.Unlock()
 			if err != nil {
-				log.Errorf("Error getting DDLs of source tables: %s", err.Error())
+				log.Error("Error getting DDLs of source tables: " + err.Error())
 				return err
 			}
 
@@ -1267,12 +1251,12 @@ func (mz *materializer) deploySchema(ctx context.Context) error {
 				// reading the source schema.
 				env := schemadiff.NewEnv(mz.wr.env, mz.wr.env.CollationEnv().DefaultConnectionCharset())
 				schema, err := schemadiff.NewSchemaFromQueries(env, applyDDLs)
-				log.Infof("AtomicCopy schema:\n %v", applyDDLs)
+				log.Info(fmt.Sprintf("AtomicCopy schema:\n %v", applyDDLs))
 				if err != nil {
-					log.Error(vterrors.Wrapf(err, "AtomicCopy: failed to normalize schema via schemadiff"))
+					log.Error(fmt.Sprint(vterrors.Wrapf(err, "AtomicCopy: failed to normalize schema via schemadiff")))
 				} else {
 					applyDDLs = schema.ToQueries()
-					log.Infof("AtomicCopy used, and schema was normalized via schemadiff. %v queries normalized", len(applyDDLs))
+					log.Info(fmt.Sprintf("AtomicCopy used, and schema was normalized via schemadiff. %v queries normalized", len(applyDDLs)))
 				}
 			}
 

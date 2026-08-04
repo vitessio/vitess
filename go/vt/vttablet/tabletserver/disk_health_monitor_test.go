@@ -17,64 +17,56 @@ limitations under the License.
 package tabletserver
 
 import (
-	"context"
 	"errors"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestDiskHealthMonitor_noStall(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	mockFileWriter := &sequencedMockWriter{}
 	diskHealthMonitor := newPollingDiskHealthMonitor(ctx, mockFileWriter.mockWriteFunction, 50*time.Millisecond, 25*time.Millisecond)
 
-	time.Sleep(300 * time.Millisecond)
-	if totalCreateCalls := mockFileWriter.getTotalCreateCalls(); totalCreateCalls != 5 {
-		t.Fatalf("expected 5 calls to createFile, got %d", totalCreateCalls)
-	}
-	if isStalled := diskHealthMonitor.IsDiskStalled(); isStalled {
-		t.Fatalf("expected isStalled to be false")
-	}
+	// The monitor keeps polling. The exact number of polls in a fixed window is
+	// timing-dependent (each cycle spans the polling interval plus the write
+	// duration), so wait for repeated polls rather than asserting an exact count.
+	require.Eventually(t, func() bool {
+		return mockFileWriter.getTotalCreateCalls() >= 5
+	}, 30*time.Second, 10*time.Millisecond, "expected the monitor to keep polling")
+	// A fast, error-free write is never treated as a stall.
+	require.False(t, diskHealthMonitor.IsDiskStalled(), "expected isStalled to be false")
 }
 
 func TestDiskHealthMonitor_stallAndRecover(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	mockFileWriter := &sequencedMockWriter{sequencedWriteFunctions: []writeFunction{delayedWriteFunction(10*time.Millisecond, nil), delayedWriteFunction(300*time.Millisecond, nil)}}
 	diskHealthMonitor := newPollingDiskHealthMonitor(ctx, mockFileWriter.mockWriteFunction, 50*time.Millisecond, 25*time.Millisecond)
 
 	time.Sleep(300 * time.Millisecond)
-	if totalCreateCalls := mockFileWriter.getTotalCreateCalls(); totalCreateCalls != 2 {
-		t.Fatalf("expected 2 calls to createFile, got %d", totalCreateCalls)
-	}
-	if isStalled := diskHealthMonitor.IsDiskStalled(); !isStalled {
-		t.Fatalf("expected isStalled to be true")
-	}
+	totalCreateCalls := mockFileWriter.getTotalCreateCalls()
+	require.Equalf(t, 2, totalCreateCalls, "expected 2 calls to createFile, got %d", totalCreateCalls)
+	require.True(t, diskHealthMonitor.IsDiskStalled(), "expected isStalled to be true")
 
 	time.Sleep(300 * time.Millisecond)
-	if totalCreateCalls := mockFileWriter.getTotalCreateCalls(); totalCreateCalls < 5 {
-		t.Fatalf("expected at least 5 calls to createFile, got %d", totalCreateCalls)
-	}
-	if isStalled := diskHealthMonitor.IsDiskStalled(); isStalled {
-		t.Fatalf("expected isStalled to be false")
-	}
+	totalCreateCalls = mockFileWriter.getTotalCreateCalls()
+	require.GreaterOrEqualf(t, totalCreateCalls, 5, "expected at least 5 calls to createFile, got %d", totalCreateCalls)
+	require.False(t, diskHealthMonitor.IsDiskStalled(), "expected isStalled to be false")
 }
 
 func TestDiskHealthMonitor_stallDetected(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	mockFileWriter := &sequencedMockWriter{defaultWriteFunction: delayedWriteFunction(10*time.Millisecond, errors.New("test error"))}
 	diskHealthMonitor := newPollingDiskHealthMonitor(ctx, mockFileWriter.mockWriteFunction, 50*time.Millisecond, 25*time.Millisecond)
 
-	time.Sleep(300 * time.Millisecond)
-	if totalCreateCalls := mockFileWriter.getTotalCreateCalls(); totalCreateCalls != 5 {
-		t.Fatalf("expected 5 calls to createFile, got %d", totalCreateCalls)
-	}
-	if isStalled := diskHealthMonitor.IsDiskStalled(); !isStalled {
-		t.Fatalf("expected isStalled to be true")
-	}
+	// A write function that always errors is reported as a stall once the monitor
+	// has polled. The exact number of polls in a fixed window is timing-dependent,
+	// so wait for repeated polls and a stall rather than asserting an exact count.
+	require.Eventually(t, func() bool {
+		return mockFileWriter.getTotalCreateCalls() >= 5 && diskHealthMonitor.IsDiskStalled()
+	}, 30*time.Second, 10*time.Millisecond, "expected the monitor to report a stall")
 }
 
 type sequencedMockWriter struct {

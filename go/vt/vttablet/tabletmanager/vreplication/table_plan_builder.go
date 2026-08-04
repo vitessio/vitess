@@ -204,7 +204,8 @@ func MatchTable(tableName string, filter *binlogdatapb.Filter) (*binlogdatapb.Ru
 
 func buildTablePlan(tableName string, rule *binlogdatapb.Rule, colInfos []*ColumnInfo, lastpk *sqltypes.Result,
 	stats *binlogplayer.Stats, source *binlogdatapb.BinlogSource, collationEnv *collations.Environment,
-	parser *sqlparser.Parser, workflowConfig *vttablet.VReplicationConfig) (*TablePlan, error) {
+	parser *sqlparser.Parser, workflowConfig *vttablet.VReplicationConfig,
+) (*TablePlan, error) {
 	planError := func(err error, query string) error {
 		// Use the error string here to ensure things are uniform across
 		// vterrors (from parse) and errors (all others).
@@ -396,6 +397,9 @@ func analyzeSelectFrom(query string, parser *sqlparser.Parser) (sel *sqlparser.S
 	}
 	if sel.Distinct {
 		return nil, "", errors.New("unsupported distinct clause")
+	}
+	if len(sel.From) == 0 {
+		return nil, "", errors.New("unsupported select from dual")
 	}
 	if len(sel.From) > 1 {
 		return nil, "", errors.New("unsupported multi-table usage")

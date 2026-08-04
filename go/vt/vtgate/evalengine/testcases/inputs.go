@@ -24,13 +24,14 @@ import (
 )
 
 var inputJSONObjects = []string{
-	`[ { "a": 1 }, { "a": 2 } ]`,
-	`{ "a" : "foo", "b" : [ true, { "c" : 123, "c" : 456 } ] }`,
-	`{ "a" : "foo", "b" : [ true, { "c" : "123" } ] }`,
-	`{ "a" : "foo", "b" : [ true, { "c" : 123 } ] }`,
-	`{"a": 1, "b": 2, "c": {"d": 4}}`,
-	`["a", {"b": [true, false]}, [10, 20]]`,
-	`[10, 20, [30, 40]]`,
+	`'[ { "a": 1 }, { "a": 2 } ]'`,
+	`'{ "a" : "foo", "b" : [ true, { "c" : 123, "c" : 456 } ] }'`,
+	`'{ "a" : "foo", "b" : [ true, { "c" : "123" } ] }'`,
+	`'{ "a" : "foo", "b" : [ true, { "c" : 123 } ] }'`,
+	`'{"a": 1, "b": 2, "c": {"d": 4}}'`,
+	`'["a", {"b": [true, false]}, [10, 20]]'`,
+	`'[10, 20, [30, 40]]'`,
+	`NULL`,
 }
 
 var inputJSONPaths = []string{
@@ -43,6 +44,13 @@ var inputJSONPrimitives = []string{
 	`true`, `false`, `"true"`, `'false'`,
 	`1`, `1.0`, `'1'`, `'1.0'`, `NULL`, `'NULL'`,
 	`'foobar'`, `'foo\nbar'`, `'a'`, `JSON_OBJECT()`,
+}
+
+// inputJSONBinaryValues are JSON-able values that MySQL stores as opaque
+// binary values inside a JSON document. They are only valid in value
+// position: MySQL rejects binary-charset strings as JSON object keys.
+var inputJSONBinaryValues = []string{
+	`CAST('foo' AS BINARY)`, `b'1010'`,
 }
 
 var inputBitwise = []string{
@@ -396,7 +404,8 @@ var uuidInputs = []string{
 	"0x11EDF26609DB81F6A6F920FC8FD6830E",
 }
 
-var inputIntervals = []string{"day",
+var inputIntervals = []string{
+	"day",
 	"week",
 	"month",
 	"year",

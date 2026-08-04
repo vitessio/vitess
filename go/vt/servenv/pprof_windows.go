@@ -23,5 +23,5 @@ import (
 )
 
 func pprofInit() {
-	log.Warningf("pprof is not supported on Windows")
+	log.Warn("pprof is not supported on Windows")
 }

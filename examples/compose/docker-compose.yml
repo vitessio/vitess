@@ -1,412 +1,329 @@
+name: vitess-example
+
 services:
-  consul1:
-    command: agent -server -bootstrap-expect 3 -ui -disable-host-node-id -client 0.0.0.0
-    hostname: consul1
-    image: hashicorp/consul:latest
-    ports:
-    - 8400:8400
-    - 8500:8500
-    - 8600:8600
-  consul2:
-    command: agent -server -retry-join consul1 -disable-host-node-id
-    depends_on:
-    - consul1
-    expose:
-    - "8400"
-    - "8500"
-    - "8600"
-    hostname: consul2
-    image: hashicorp/consul:latest
-  consul3:
-    command: agent -server -retry-join consul1 -disable-host-node-id
-    depends_on:
-    - consul1
-    expose:
-    - "8400"
-    - "8500"
-    - "8600"
-    hostname: consul3
-    image: hashicorp/consul:latest
-  external_db_host:
+  vitess-lite:
     build:
-      context: ./external_db/mysql
-      dockerfile: Dockerfile
+      context: ../..
+      dockerfile: docker/lite/Dockerfile
+    image: vitess-lite:local
+    profiles: [build]
+
+  etcd:
+    image: quay.io/coreos/etcd:v3.5.21
     command:
-    - --server-id=1
-    - --log-bin=mysql-bin
-    - --gtid_mode=ON
-    - --enforce_gtid_consistency
-    - --general_log=1
-    - --slow_query_log=1
-    environment:
-      MYSQL_DATABASE: ${DB:-commerce}
-      MYSQL_PASSWORD: ${DB_PASS:-external_db_password}
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-pass}
-      MYSQL_USER: ${DB_USER:-external_db_user}
+      - etcd
+      - --data-dir=/etcd-data
+      - --listen-client-urls=http://0.0.0.0:2379
+      - --advertise-client-urls=http://etcd:2379
     healthcheck:
-      retries: 10
-      test: /usr/bin/mysql --user=root --password=$${MYSQL_ROOT_PASSWORD} --execute
-        "SHOW DATABASES;"
-      timeout: 10s
-    ports:
-    - "3306"
-    restart: always
-    volumes:
-    - ./external_db/mysql/:/docker-entrypoint-initdb.d/
-    - ./external_db/mysql/log:/var/log/mysql
-  schemaload_lookup_keyspace:
-    command:
-    - sh
-    - -c
-    - /script/schemaload.sh
-    depends_on:
-      vttablet301:
-        condition: service_healthy
-    environment:
-    - TOPOLOGY_FLAGS=--topo-implementation consul --topo-global-server-address consul1:8500
-      --topo-global-root vitess/global
-    - WEB_PORT=8080
-    - GRPC_PORT=15999
-    - CELL=test
-    - KEYSPACE=lookup_keyspace
-    - TARGETTAB=test-0000000301
-    - SLEEPTIME=15
-    - VSCHEMA_FILE=lookup_keyspace_vschema.json
-    - SCHEMA_FILES=lookup_keyspace_schema_file.sql
-    - POST_LOAD_FILE=
-    - EXTERNAL_DB=0
-    image: vitess/lite:${VITESS_TAG:-latest}
-    volumes:
-    - .:/script
-  schemaload_test_keyspace:
-    command:
-    - sh
-    - -c
-    - /script/schemaload.sh
-    depends_on:
-      vttablet101:
-        condition: service_healthy
-      vttablet201:
-        condition: service_healthy
-    environment:
-    - TOPOLOGY_FLAGS=--topo-implementation consul --topo-global-server-address consul1:8500
-      --topo-global-root vitess/global
-    - WEB_PORT=8080
-    - GRPC_PORT=15999
-    - CELL=test
-    - KEYSPACE=test_keyspace
-    - TARGETTAB=test-0000000101
-    - SLEEPTIME=15
-    - VSCHEMA_FILE=test_keyspace_vschema.json
-    - SCHEMA_FILES=test_keyspace_schema_file.sql
-    - POST_LOAD_FILE=
-    - EXTERNAL_DB=0
-    image: vitess/lite:${VITESS_TAG:-latest}
-    volumes:
-    - .:/script
-  set_keyspace_durability_policy:
-    command:
-      - sh
-      - -c
-      - /script/set_keyspace_durability_policy.sh
-    depends_on:
-      - vttablet101
-      - vttablet301
-    environment:
-      - KEYSPACES=test_keyspace lookup_keyspace
-      - GRPC_PORT=15999
-    image: vitess/lite:${VITESS_TAG:-latest}
-    volumes:
-      - .:/script
-  vreplication:
-    command:
-    - sh
-    - -c
-    - '[ $$EXTERNAL_DB -eq 1 ] && /script/externaldb_vreplication.sh || exit 0'
-    depends_on:
-    - vtctld
-    environment:
-    - TOPOLOGY_FLAGS=--topo-implementation consul --topo-global-server-address consul1:8500
-      --topo-global-root vitess/global
-    - EXTERNAL_DB=0
-    image: vitess/lite:${VITESS_TAG:-latest}
-    volumes:
-    - .:/script
+      test: ["CMD", "etcdctl", "endpoint", "health"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
   vtctld:
-    command:
-    - sh
-    - -c
-    - ' /vt/bin/vtctld --topo-implementation consul --topo-global-server-address consul1:8500
-      --topo-global-root vitess/global --cell test
-      --service-map ''grpc-vtctl,grpc-vtctld'' --backup-storage-implementation file --file-backup-storage-root
-      /vt/vtdataroot/backups --logtostderr=true --port 8080 --grpc-port 15999 '
+    image: vitess-lite:local
+    command: ["/vt/scripts/vtctld-up.sh"]
+    environment:
+      - CELL=${CELL}
+      - TOPOLOGY_FLAGS=${TOPOLOGY_FLAGS}
+    ports:
+      - "15000:15000"
+      - "15999:15999"
+    volumes:
+      - ./scripts:/vt/scripts:ro
     depends_on:
-      external_db_host:
+      etcd:
         condition: service_healthy
-    image: vitess/lite:${VITESS_TAG:-latest}
-    ports:
-    - 15000:8080
-    - "15999"
-    volumes:
-    - .:/script
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:15000/debug/status"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
   vtgate:
-    command:
-    - sh
-    - -c
-    - '/script/run-forever.sh /vt/bin/vtgate --topo-implementation consul --topo-global-server-address
-      consul1:8500 --topo-global-root vitess/global --logtostderr=true --port 8080 --grpc-port
-      15999 --mysql-server-port 15306 --mysql-auth-server-impl none --cell test --cells-to-watch
-      test --tablet-types-to-wait PRIMARY,REPLICA,RDONLY --service-map ''grpc-vtgateservice''
-      --normalize-queries=true '
-    depends_on:
-    - vtctld
-    image: vitess/lite:${VITESS_TAG:-latest}
+    image: vitess-lite:local
+    command: ["/vt/scripts/vtgate-up.sh"]
+    environment:
+      - CELL=${CELL}
+      - TOPOLOGY_FLAGS=${TOPOLOGY_FLAGS}
     ports:
-    - 15099:8080
-    - "15999"
-    - 15306:15306
+      - "15001:15001"
+      - "15306:15306"
+      - "15991:15991"
     volumes:
-    - .:/script
+      - ./scripts:/vt/scripts:ro
+    depends_on:
+      vtctld:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:15001/debug/status"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
   vtorc:
-    command:
-    - sh
-    - -c
-    - /script/vtorc-up.sh
-    depends_on:
-    - vtctld
-    - set_keyspace_durability_policy
+    image: vitess-lite:local
+    command: ["/vt/scripts/vtorc-up.sh"]
     environment:
-    - TOPOLOGY_FLAGS=--topo-implementation consul --topo-global-server-address consul1:8500
-      --topo-global-root vitess/global
-    - WEB_PORT=8080
-    - EXTERNAL_DB=0
-    - DB_USER=
-    - DB_PASS=
-    image: vitess/lite:${VITESS_TAG:-latest}
+      - CELL=${CELL}
+      - TOPOLOGY_FLAGS=${TOPOLOGY_FLAGS}
     ports:
-    - 13000:8080
+      - "16000:16000"
     volumes:
-    - .:/script
+      - ./scripts:/vt/scripts:ro
+      - ../common/vtorc:/vt/config/vtorc:ro
+    depends_on:
+      vtctld:
+        condition: service_healthy
+
+  vtadmin:
+    image: vitess-lite:local
+    command: ["/vt/scripts/vtadmin-up.sh"]
+    ports:
+      - "14200:14200"
+    volumes:
+      - ./scripts:/vt/scripts:ro
+      - ./vtadmin:/vt/config/vtadmin:ro
+      - vtadmin-web-build:/vt/web/vtadmin/build
+    depends_on:
+      vtctld:
+        condition: service_healthy
+
+  vtadmin-web:
+    image: nginx@sha256:e7257f1ef28ba17cf7c248cb8ccf6f0c6e0228ab9c315c152f9c203cd34cf6d1
+    ports:
+      - "14201:80"
+    volumes:
+      - vtadmin-web-build:/usr/share/nginx/html:ro
+      - ./vtadmin-web.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - vtadmin
+
+  # Commerce keyspace tablets (profile: commerce)
+  vttablet100:
+    image: vitess-lite:local
+    command: ["/vt/scripts/vttablet-up.sh"]
+    profiles: [commerce]
+    environment:
+      - CELL=${CELL}
+      - TOPOLOGY_FLAGS=${TOPOLOGY_FLAGS}
+      - TABLET_UID=100
+      - KEYSPACE=commerce
+    ports:
+      - "15100:15000"
+      - "16100:16000"
+    volumes:
+      - ./scripts:/vt/scripts:ro
+    depends_on:
+      vtctld:
+        condition: service_healthy
+
   vttablet101:
-    command:
-    - sh
-    - -c
-    - /script/vttablet-up.sh 101
-    depends_on:
-    - vtctld
+    image: vitess-lite:local
+    command: ["/vt/scripts/vttablet-up.sh"]
+    profiles: [commerce]
     environment:
-    - TOPOLOGY_FLAGS=--topo-implementation consul --topo-global-server-address consul1:8500
-      --topo-global-root vitess/global
-    - WEB_PORT=8080
-    - GRPC_PORT=15999
-    - CELL=test
-    - KEYSPACE=test_keyspace
-    - SHARD=-80
-    - ROLE=primary
-    - VTHOST=vttablet101
-    - EXTERNAL_DB=0
-    - DB_PORT=
-    - DB_HOST=
-    - DB_USER=
-    - DB_PASS=
-    - DB_CHARSET=
-    healthcheck:
-      interval: 30s
-      retries: 15
-      test:
-      - CMD-SHELL
-      - curl -s --fail --show-error localhost:8080/debug/health
-      timeout: 10s
-    image: vitess/lite:${VITESS_TAG:-latest}
+      - CELL=${CELL}
+      - TOPOLOGY_FLAGS=${TOPOLOGY_FLAGS}
+      - TABLET_UID=101
+      - KEYSPACE=commerce
     ports:
-    - 15101:8080
-    - "15999"
-    - "3306"
+      - "15101:15000"
+      - "16101:16000"
     volumes:
-    - .:/script
+      - ./scripts:/vt/scripts:ro
+    depends_on:
+      vtctld:
+        condition: service_healthy
+
   vttablet102:
-    command:
-    - sh
-    - -c
-    - /script/vttablet-up.sh 102
-    depends_on:
-    - vtctld
+    image: vitess-lite:local
+    command: ["/vt/scripts/vttablet-up.sh"]
+    profiles: [commerce]
     environment:
-    - TOPOLOGY_FLAGS=--topo-implementation consul --topo-global-server-address consul1:8500
-      --topo-global-root vitess/global
-    - WEB_PORT=8080
-    - GRPC_PORT=15999
-    - CELL=test
-    - KEYSPACE=test_keyspace
-    - SHARD=-80
-    - ROLE=replica
-    - VTHOST=vttablet102
-    - EXTERNAL_DB=0
-    - DB_PORT=
-    - DB_HOST=
-    - DB_USER=
-    - DB_PASS=
-    - DB_CHARSET=
-    healthcheck:
-      interval: 30s
-      retries: 15
-      test:
-      - CMD-SHELL
-      - curl -s --fail --show-error localhost:8080/debug/health
-      timeout: 10s
-    image: vitess/lite:${VITESS_TAG:-latest}
+      - CELL=${CELL}
+      - TOPOLOGY_FLAGS=${TOPOLOGY_FLAGS}
+      - TABLET_UID=102
+      - KEYSPACE=commerce
     ports:
-    - 15102:8080
-    - "15999"
-    - "3306"
+      - "15102:15000"
+      - "16102:16000"
     volumes:
-    - .:/script
+      - ./scripts:/vt/scripts:ro
+    depends_on:
+      vtctld:
+        condition: service_healthy
+
+  # Customer keyspace tablets (profile: customer)
+  vttablet200:
+    image: vitess-lite:local
+    command: ["/vt/scripts/vttablet-up.sh"]
+    profiles: [customer]
+    environment:
+      - CELL=${CELL}
+      - TOPOLOGY_FLAGS=${TOPOLOGY_FLAGS}
+      - TABLET_UID=200
+      - KEYSPACE=customer
+    ports:
+      - "15200:15000"
+      - "16200:16000"
+    volumes:
+      - ./scripts:/vt/scripts:ro
+    depends_on:
+      vtctld:
+        condition: service_healthy
+
   vttablet201:
-    command:
-    - sh
-    - -c
-    - /script/vttablet-up.sh 201
-    depends_on:
-    - vtctld
+    image: vitess-lite:local
+    command: ["/vt/scripts/vttablet-up.sh"]
+    profiles: [customer]
     environment:
-    - TOPOLOGY_FLAGS=--topo-implementation consul --topo-global-server-address consul1:8500
-      --topo-global-root vitess/global
-    - WEB_PORT=8080
-    - GRPC_PORT=15999
-    - CELL=test
-    - KEYSPACE=test_keyspace
-    - SHARD=80-
-    - ROLE=primary
-    - VTHOST=vttablet201
-    - EXTERNAL_DB=0
-    - DB_PORT=
-    - DB_HOST=
-    - DB_USER=
-    - DB_PASS=
-    - DB_CHARSET=
-    healthcheck:
-      interval: 30s
-      retries: 15
-      test:
-      - CMD-SHELL
-      - curl -s --fail --show-error localhost:8080/debug/health
-      timeout: 10s
-    image: vitess/lite:${VITESS_TAG:-latest}
+      - CELL=${CELL}
+      - TOPOLOGY_FLAGS=${TOPOLOGY_FLAGS}
+      - TABLET_UID=201
+      - KEYSPACE=customer
     ports:
-    - 15201:8080
-    - "15999"
-    - "3306"
+      - "15201:15000"
+      - "16201:16000"
     volumes:
-    - .:/script
+      - ./scripts:/vt/scripts:ro
+    depends_on:
+      vtctld:
+        condition: service_healthy
+
   vttablet202:
-    command:
-    - sh
-    - -c
-    - /script/vttablet-up.sh 202
-    depends_on:
-    - vtctld
+    image: vitess-lite:local
+    command: ["/vt/scripts/vttablet-up.sh"]
+    profiles: [customer]
     environment:
-    - TOPOLOGY_FLAGS=--topo-implementation consul --topo-global-server-address consul1:8500
-      --topo-global-root vitess/global
-    - WEB_PORT=8080
-    - GRPC_PORT=15999
-    - CELL=test
-    - KEYSPACE=test_keyspace
-    - SHARD=80-
-    - ROLE=replica
-    - VTHOST=vttablet202
-    - EXTERNAL_DB=0
-    - DB_PORT=
-    - DB_HOST=
-    - DB_USER=
-    - DB_PASS=
-    - DB_CHARSET=
-    healthcheck:
-      interval: 30s
-      retries: 15
-      test:
-      - CMD-SHELL
-      - curl -s --fail --show-error localhost:8080/debug/health
-      timeout: 10s
-    image: vitess/lite:${VITESS_TAG:-latest}
+      - CELL=${CELL}
+      - TOPOLOGY_FLAGS=${TOPOLOGY_FLAGS}
+      - TABLET_UID=202
+      - KEYSPACE=customer
     ports:
-    - 15202:8080
-    - "15999"
-    - "3306"
+      - "15202:15000"
+      - "16202:16000"
     volumes:
-    - .:/script
+      - ./scripts:/vt/scripts:ro
+    depends_on:
+      vtctld:
+        condition: service_healthy
+
+  # Sharded customer keyspace tablets (profile: sharded)
+  vttablet300:
+    image: vitess-lite:local
+    command: ["/vt/scripts/vttablet-up.sh"]
+    profiles: [sharded]
+    environment:
+      - CELL=${CELL}
+      - TOPOLOGY_FLAGS=${TOPOLOGY_FLAGS}
+      - TABLET_UID=300
+      - KEYSPACE=customer
+      - SHARD=-80
+    ports:
+      - "15300:15000"
+      - "16300:16000"
+    volumes:
+      - ./scripts:/vt/scripts:ro
+    depends_on:
+      vtctld:
+        condition: service_healthy
+
   vttablet301:
-    command:
-    - sh
-    - -c
-    - /script/vttablet-up.sh 301
-    depends_on:
-    - vtctld
+    image: vitess-lite:local
+    command: ["/vt/scripts/vttablet-up.sh"]
+    profiles: [sharded]
     environment:
-    - TOPOLOGY_FLAGS=--topo-implementation consul --topo-global-server-address consul1:8500
-      --topo-global-root vitess/global
-    - WEB_PORT=8080
-    - GRPC_PORT=15999
-    - CELL=test
-    - KEYSPACE=lookup_keyspace
-    - SHARD=-
-    - ROLE=primary
-    - VTHOST=vttablet301
-    - EXTERNAL_DB=0
-    - DB_PORT=
-    - DB_HOST=
-    - DB_USER=
-    - DB_PASS=
-    - DB_CHARSET=
-    healthcheck:
-      interval: 30s
-      retries: 15
-      test:
-      - CMD-SHELL
-      - curl -s --fail --show-error localhost:8080/debug/health
-      timeout: 10s
-    image: vitess/lite:${VITESS_TAG:-latest}
+      - CELL=${CELL}
+      - TOPOLOGY_FLAGS=${TOPOLOGY_FLAGS}
+      - TABLET_UID=301
+      - KEYSPACE=customer
+      - SHARD=-80
     ports:
-    - 15301:8080
-    - "15999"
-    - "3306"
+      - "15301:15000"
+      - "16301:16000"
     volumes:
-    - .:/script
+      - ./scripts:/vt/scripts:ro
+    depends_on:
+      vtctld:
+        condition: service_healthy
+
   vttablet302:
-    command:
-    - sh
-    - -c
-    - /script/vttablet-up.sh 302
-    depends_on:
-    - vtctld
+    image: vitess-lite:local
+    command: ["/vt/scripts/vttablet-up.sh"]
+    profiles: [sharded]
     environment:
-    - TOPOLOGY_FLAGS=--topo-implementation consul --topo-global-server-address consul1:8500
-      --topo-global-root vitess/global
-    - WEB_PORT=8080
-    - GRPC_PORT=15999
-    - CELL=test
-    - KEYSPACE=lookup_keyspace
-    - SHARD=-
-    - ROLE=replica
-    - VTHOST=vttablet302
-    - EXTERNAL_DB=0
-    - DB_PORT=
-    - DB_HOST=
-    - DB_USER=
-    - DB_PASS=
-    - DB_CHARSET=
-    healthcheck:
-      interval: 30s
-      retries: 15
-      test:
-      - CMD-SHELL
-      - curl -s --fail --show-error localhost:8080/debug/health
-      timeout: 10s
-    image: vitess/lite:${VITESS_TAG:-latest}
+      - CELL=${CELL}
+      - TOPOLOGY_FLAGS=${TOPOLOGY_FLAGS}
+      - TABLET_UID=302
+      - KEYSPACE=customer
+      - SHARD=-80
     ports:
-    - 15302:8080
-    - "15999"
-    - "3306"
+      - "15302:15000"
+      - "16302:16000"
     volumes:
-    - .:/script
-version: "2.1"
+      - ./scripts:/vt/scripts:ro
+    depends_on:
+      vtctld:
+        condition: service_healthy
+
+  vttablet400:
+    image: vitess-lite:local
+    command: ["/vt/scripts/vttablet-up.sh"]
+    profiles: [sharded]
+    environment:
+      - CELL=${CELL}
+      - TOPOLOGY_FLAGS=${TOPOLOGY_FLAGS}
+      - TABLET_UID=400
+      - KEYSPACE=customer
+      - SHARD=80-
+    ports:
+      - "15400:15000"
+      - "16400:16000"
+    volumes:
+      - ./scripts:/vt/scripts:ro
+    depends_on:
+      vtctld:
+        condition: service_healthy
+
+  vttablet401:
+    image: vitess-lite:local
+    command: ["/vt/scripts/vttablet-up.sh"]
+    profiles: [sharded]
+    environment:
+      - CELL=${CELL}
+      - TOPOLOGY_FLAGS=${TOPOLOGY_FLAGS}
+      - TABLET_UID=401
+      - KEYSPACE=customer
+      - SHARD=80-
+    ports:
+      - "15401:15000"
+      - "16401:16000"
+    volumes:
+      - ./scripts:/vt/scripts:ro
+    depends_on:
+      vtctld:
+        condition: service_healthy
+
+  vttablet402:
+    image: vitess-lite:local
+    command: ["/vt/scripts/vttablet-up.sh"]
+    profiles: [sharded]
+    environment:
+      - CELL=${CELL}
+      - TOPOLOGY_FLAGS=${TOPOLOGY_FLAGS}
+      - TABLET_UID=402
+      - KEYSPACE=customer
+      - SHARD=80-
+    ports:
+      - "15402:15000"
+      - "16402:16000"
+    volumes:
+      - ./scripts:/vt/scripts:ro
+    depends_on:
+      vtctld:
+        condition: service_healthy
+
+volumes:
+  vtadmin-web-build:

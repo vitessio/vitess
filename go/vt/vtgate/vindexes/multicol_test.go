@@ -17,7 +17,6 @@ limitations under the License.
 package vindexes
 
 import (
-	"context"
 	"testing"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -221,7 +220,7 @@ func TestMultiColMap(t *testing.T) {
 	require.NoError(t, err)
 	mutiCol := vindex.(MultiColumn)
 
-	got, err := mutiCol.Map(context.Background(), nil, [][]sqltypes.Value{{
+	got, err := mutiCol.Map(t.Context(), nil, [][]sqltypes.Value{{
 		sqltypes.NewInt64(1), sqltypes.NewInt64(1), sqltypes.NewInt64(1),
 	}, {
 		sqltypes.NewInt64(255), sqltypes.NewInt64(1), sqltypes.NewInt64(1),
@@ -240,7 +239,7 @@ func TestMultiColMap(t *testing.T) {
 		// Invalid column value type.
 		sqltypes.NewInt64(256), sqltypes.NewInt64(256), sqltypes.NewVarBinary("abcd"),
 	}})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	want := []key.ShardDestination{
 		key.DestinationKeyspaceID("\x16\x6b\x40\x16\x6b\x40\x16\x6b"),

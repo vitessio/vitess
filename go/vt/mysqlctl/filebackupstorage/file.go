@@ -24,7 +24,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path"
 
 	"github.com/spf13/pflag"
 
@@ -98,7 +97,10 @@ func (fbh *FileBackupHandle) AddFile(ctx context.Context, filename string, files
 	if fbh.readOnly {
 		return nil, errors.New("AddFile cannot be called on read-only backup")
 	}
-	p := path.Join(FileBackupStorageRoot, fbh.dir, fbh.name, filename)
+	p, err := fileutil.SafePathJoin(FileBackupStorageRoot, fbh.dir, fbh.name, filename)
+	if err != nil {
+		return nil, err
+	}
 	f, err := os2.Create(p)
 	if err != nil {
 		return nil, err
@@ -107,7 +109,10 @@ func (fbh *FileBackupHandle) AddFile(ctx context.Context, filename string, files
 	return ioutil.NewMeteredWriteCloser(f, stat.TimedIncrementBytes), nil
 }
 
-// EndBackup is part of the BackupHandle interface
+// Wait is part of the BackupHandle interface.
+func (fbh *FileBackupHandle) Wait() {}
+
+// EndBackup is part of the BackupHandle interface.
 func (fbh *FileBackupHandle) EndBackup(ctx context.Context) error {
 	if fbh.readOnly {
 		return errors.New("EndBackup cannot be called on read-only backup")
@@ -190,7 +195,10 @@ func (fbs *FileBackupStorage) StartBackup(ctx context.Context, dir, name string)
 	}
 
 	// Create the subdirectory for this named backup.
-	p = path.Join(p, name)
+	p, err = fileutil.SafePathJoin(p, name)
+	if err != nil {
+		return nil, err
+	}
 	if err = os2.Mkdir(p); err != nil {
 		return nil, err
 	}

@@ -26,6 +26,8 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	_flag "vitess.io/vitess/go/internal/flag"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -60,7 +62,7 @@ type testMaterializerEnv struct {
 
 func newTestMaterializerEnv(t *testing.T, ms *vtctldatapb.MaterializeSettings, sources, targets []string) (*testMaterializerEnv, context.Context) {
 	t.Helper()
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	env := &testMaterializerEnv{
 		ms:       ms,
 		sources:  sources,
@@ -280,16 +282,16 @@ func (tmc *testMaterializerTMClient) verifyQueries(t *testing.T) {
 			for _, qr := range qrs {
 				list = append(list, qr.query)
 			}
-			t.Errorf("tablet %v: found queries that were expected but never got executed by the test: %v", tabletID, list)
+			assert.Failf(t, "unexecuted queries", "tablet %v: found queries that were expected but never got executed by the test: %v", tabletID, list)
 		}
 	}
 }
 
 // Note: ONLY breaks up change.SQL into individual statements and executes it. Does NOT fully implement ApplySchema.
 func (tmc *testMaterializerTMClient) ApplySchema(ctx context.Context, tablet *topodatapb.Tablet, change *tmutils.SchemaChange) (*tabletmanagerdatapb.SchemaChangeResult, error) {
-	stmts := strings.Split(change.SQL, ";")
+	stmts := strings.SplitSeq(change.SQL, ";")
 
-	for _, stmt := range stmts {
+	for stmt := range stmts {
 		_, err := tmc.ExecuteFetchAsDba(ctx, tablet, false, &tabletmanagerdatapb.ExecuteFetchAsDbaRequest{
 			Query:        []byte(stmt),
 			MaxRows:      0,

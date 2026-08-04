@@ -20,6 +20,7 @@ package blackbox
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"os"
@@ -46,6 +47,7 @@ import (
 	"vitess.io/vitess/go/vt/mysqlctl/filebackupstorage"
 	"vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/proto/vttime"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 )
@@ -61,8 +63,8 @@ func TestExecuteBackup(t *testing.T) {
 	// Add some files under data directory to force backup to actually backup files.
 	require.NoError(t, createBackupDir(dataDir, "test1"))
 	require.NoError(t, createBackupDir(dataDir, "test2"))
-	require.NoError(t, createBackupFiles(path.Join(dataDir, "test1"), 2, "ibd"))
-	require.NoError(t, createBackupFiles(path.Join(dataDir, "test2"), 2, "ibd"))
+	require.NoError(t, createBackupFiles(path.Join(dataDir, "test1"), 2, "ibd", 13))
+	require.NoError(t, createBackupFiles(path.Join(dataDir, "test2"), 2, "ibd", 13))
 	defer os.RemoveAll(backupRoot)
 
 	needIt, err := NeedInnoDBRedoLogSubdir()
@@ -174,10 +176,43 @@ func TestExecuteBackup(t *testing.T) {
 	require.Equal(t, 4, sourceOpenStats)
 	require.Equal(t, 4, sourceReadStats)
 
+	// A shutdown that outlives BuiltinBackupMysqldTimeout (1s here) but
+	// completes within MysqlShutdownTimeout plus the grace period must not
+	// fail the backup: the engine deadline is the larger of the two.
 	mysqld.ExpectedExecuteSuperQueryCurrent = 0 // resest the index of what queries we've run
-	mysqld.ShutdownTime = time.Minute           // reminder that shutdownDeadline is 1s
+	mysqld.ShutdownTime = 3 * time.Second
 
 	backupResult, err = be.ExecuteBackup(ctx, mysqlctl.BackupParams{
+		Logger: logutil.NewConsoleLogger(),
+		Mysqld: mysqld,
+		Cnf: &mysqlctl.Mycnf{
+			InnodbDataHomeDir:     path.Join(backupRoot, "innodb"),
+			InnodbLogGroupHomeDir: path.Join(backupRoot, "log"),
+			DataDir:               path.Join(backupRoot, "datadir"),
+		},
+		Concurrency:          2,
+		HookExtraEnv:         map[string]string{},
+		TopoServer:           ts,
+		Keyspace:             keyspace,
+		Shard:                shard,
+		Stats:                backupstats.NewFakeStats(),
+		MysqlShutdownTimeout: MysqlShutdownTimeout,
+	}, filebackupstorage.NewBackupHandle(nil, "", "", false))
+
+	require.NoError(t, err)
+	assert.Equal(t, mysqlctl.BackupUsable, backupResult)
+
+	mysqld.ExpectedExecuteSuperQueryCurrent = 0 // resest the index of what queries we've run
+	mysqld.ShutdownTime = time.Minute           // longer than the shutdown deadline below
+
+	// The engine's shutdown deadline is the larger of
+	// BuiltinBackupMysqldTimeout (1s here) and MysqlShutdownTimeout plus
+	// MysqldShutdownGracePeriod, so a short parent context bounds the
+	// shutdown instead; the engine's child timeout cannot extend it.
+	shortCtx, shortCancel := context.WithTimeout(ctx, 2*time.Second)
+	defer shortCancel()
+
+	backupResult, err = be.ExecuteBackup(shortCtx, mysqlctl.BackupParams{
 		Logger: logutil.NewConsoleLogger(),
 		Mysqld: mysqld,
 		Cnf: &mysqlctl.Mycnf{
@@ -189,10 +224,10 @@ func TestExecuteBackup(t *testing.T) {
 		TopoServer:           ts,
 		Keyspace:             keyspace,
 		Shard:                shard,
-		MysqlShutdownTimeout: MysqlShutdownTimeout,
+		MysqlShutdownTimeout: time.Second,
 	}, bh)
 
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Equal(t, mysqlctl.BackupUnusable, backupResult)
 }
 
@@ -207,8 +242,8 @@ func TestExecuteBackupWithSafeUpgrade(t *testing.T) {
 	// Add some files under data directory to force backup to actually backup files.
 	require.NoError(t, createBackupDir(dataDir, "test1"))
 	require.NoError(t, createBackupDir(dataDir, "test2"))
-	require.NoError(t, createBackupFiles(path.Join(dataDir, "test1"), 2, "ibd"))
-	require.NoError(t, createBackupFiles(path.Join(dataDir, "test2"), 2, "ibd"))
+	require.NoError(t, createBackupFiles(path.Join(dataDir, "test1"), 2, "ibd", 13))
+	require.NoError(t, createBackupFiles(path.Join(dataDir, "test2"), 2, "ibd", 13))
 	defer os.RemoveAll(backupRoot)
 
 	needIt, err := NeedInnoDBRedoLogSubdir()
@@ -300,8 +335,8 @@ func TestExecuteBackupWithCanceledContext(t *testing.T) {
 	// backupFiles() method (https://github.com/vitessio/vitess/blob/main/go/vt/mysqlctl/builtinbackupengine.go#L483).
 	require.NoError(t, createBackupDir(dataDir, "test1"))
 	require.NoError(t, createBackupDir(dataDir, "test2"))
-	require.NoError(t, createBackupFiles(path.Join(dataDir, "test1"), 2, "ibd"))
-	require.NoError(t, createBackupFiles(path.Join(dataDir, "test2"), 2, "ibd"))
+	require.NoError(t, createBackupFiles(path.Join(dataDir, "test1"), 2, "ibd", 13))
+	require.NoError(t, createBackupFiles(path.Join(dataDir, "test2"), 2, "ibd", 13))
 	defer os.RemoveAll(backupRoot)
 
 	needIt, err := NeedInnoDBRedoLogSubdir()
@@ -348,7 +383,7 @@ func TestExecuteBackupWithCanceledContext(t *testing.T) {
 	mysqld.ExpectedExecuteSuperQueryList = []string{"STOP REPLICA", "START REPLICA"}
 
 	// Cancel the context deliberately
-	cancelledCtx, cancelCtx := context.WithCancel(context.Background())
+	cancelledCtx, cancelCtx := context.WithCancel(t.Context())
 	cancelCtx()
 
 	backupResult, err := be.ExecuteBackup(cancelledCtx, mysqlctl.BackupParams{
@@ -369,8 +404,9 @@ func TestExecuteBackupWithCanceledContext(t *testing.T) {
 	}, bh)
 
 	require.Error(t, err)
-	// all four files will fail
-	require.ErrorContains(t, err, "context canceled; context canceled; context canceled; context canceled")
+	// No work is scheduled when the context is already cancelled; we expect a
+	// single context error rather than one per file.
+	require.ErrorContains(t, err, "context canceled")
 	assert.Equal(t, mysqlctl.BackupUnusable, backupResult)
 }
 
@@ -389,8 +425,8 @@ func TestExecuteRestoreWithTimedOutContext(t *testing.T) {
 	// backupFiles() method (https://github.com/vitessio/vitess/blob/main/go/vt/mysqlctl/builtinbackupengine.go#L483).
 	require.NoError(t, createBackupDir(dataDir, "test1"))
 	require.NoError(t, createBackupDir(dataDir, "test2"))
-	require.NoError(t, createBackupFiles(path.Join(dataDir, "test1"), 2, "ibd"))
-	require.NoError(t, createBackupFiles(path.Join(dataDir, "test2"), 2, "ibd"))
+	require.NoError(t, createBackupFiles(path.Join(dataDir, "test1"), 2, "ibd", 13))
+	require.NoError(t, createBackupFiles(path.Join(dataDir, "test2"), 2, "ibd", 13))
 	defer os.RemoveAll(backupRoot)
 
 	needIt, err := NeedInnoDBRedoLogSubdir()
@@ -494,7 +530,7 @@ func TestExecuteRestoreWithTimedOutContext(t *testing.T) {
 
 	// Successful restore.
 	bm, err := be.ExecuteRestore(ctx, restoreParams, bh)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotNil(t, bm)
 
 	var destinationCloseStats int
@@ -547,12 +583,11 @@ func TestExecuteRestoreWithTimedOutContext(t *testing.T) {
 	time.Sleep(1 * time.Second)
 	bm, err = be.ExecuteRestore(timedOutCtx, restoreParams, bh)
 	// ExecuteRestore should fail.
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Nil(t, bm)
 	// error message can contain any combination of "context deadline exceeded" or "context canceled"
-	if !strings.Contains(err.Error(), "context canceled") && !strings.Contains(err.Error(), "context deadline exceeded") {
-		assert.Fail(t, "Test should fail with either `context canceled` or `context deadline exceeded`")
-	}
+	assert.True(t, strings.Contains(err.Error(), "context canceled") || strings.Contains(err.Error(), "context deadline exceeded"),
+		"Test should fail with either `context canceled` or `context deadline exceeded`")
 }
 
 type rwCloseFailFirstCall struct {
@@ -589,7 +624,7 @@ func newWriteCloseFailFirstWrite(firstWriteDone bool) *rwCloseFailFirstCall {
 
 func TestExecuteBackupFailToWriteEachFileOnlyOnce(t *testing.T) {
 	ctx := utils.LeakCheckContext(t)
-	backupRoot, keyspace, shard, ts := SetupCluster(ctx, t, 2, 2)
+	backupRoot, keyspace, shard, ts := SetupCluster(ctx, t, 2, 2, 13)
 
 	bufferPerFiles := make(map[string]*rwCloseFailFirstCall)
 	be := &mysqlctl.BuiltinBackupEngine{}
@@ -660,7 +695,7 @@ func TestExecuteBackupFailToWriteEachFileOnlyOnce(t *testing.T) {
 
 func TestExecuteBackupFailToWriteFileTwice(t *testing.T) {
 	ctx := utils.LeakCheckContext(t)
-	backupRoot, keyspace, shard, ts := SetupCluster(ctx, t, 1, 1)
+	backupRoot, keyspace, shard, ts := SetupCluster(ctx, t, 1, 1, 13)
 
 	bufferPerFiles := make(map[string]*rwCloseFailFirstCall)
 	be := &mysqlctl.BuiltinBackupEngine{}
@@ -725,7 +760,7 @@ func TestExecuteBackupFailToWriteFileTwice(t *testing.T) {
 
 func TestExecuteRestoreFailToReadEachFileOnlyOnce(t *testing.T) {
 	ctx := utils.LeakCheckContext(t)
-	backupRoot, keyspace, shard, ts := SetupCluster(ctx, t, 2, 2)
+	backupRoot, keyspace, shard, ts := SetupCluster(ctx, t, 2, 2, 13)
 
 	be := &mysqlctl.BuiltinBackupEngine{}
 	bufferPerFiles := make(map[string]*rwCloseFailFirstCall)
@@ -813,7 +848,7 @@ func TestExecuteRestoreFailToReadEachFileOnlyOnce(t *testing.T) {
 
 	// Successful restore.
 	bm, err := be.ExecuteRestore(ctx, restoreParams, fakeBh)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotNil(t, bm)
 
 	ss := GetStats(fakeStats)
@@ -827,7 +862,7 @@ func TestExecuteRestoreFailToReadEachFileOnlyOnce(t *testing.T) {
 
 func TestExecuteRestoreFailToReadEachFileTwice(t *testing.T) {
 	ctx := utils.LeakCheckContext(t)
-	backupRoot, keyspace, shard, ts := SetupCluster(ctx, t, 2, 2)
+	backupRoot, keyspace, shard, ts := SetupCluster(ctx, t, 2, 2, 13)
 
 	be := &mysqlctl.BuiltinBackupEngine{}
 	bufferPerFiles := make(map[string]*rwCloseFailFirstCall)
@@ -915,7 +950,7 @@ func TestExecuteRestoreFailToReadEachFileTwice(t *testing.T) {
 
 	// Successful restore.
 	bm, err := be.ExecuteRestore(ctx, restoreParams, fakeBh)
-	assert.ErrorContains(t, err, "failing first read")
+	require.ErrorContains(t, err, "failing first read")
 	assert.Nil(t, bm)
 
 	ss := GetStats(fakeStats)
@@ -925,4 +960,206 @@ func TestExecuteRestoreFailToReadEachFileTwice(t *testing.T) {
 	require.Equal(t, 5, ss.SourceCloseStats)
 	require.Equal(t, 5, ss.SourceOpenStats)
 	require.Equal(t, 5, ss.SourceReadStats)
+}
+
+func TestBackupRetryPropagatesHashToManifest(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+	backupRoot, keyspace, shard, ts := SetupCluster(ctx, t, 2, 2, 13)
+
+	bufferPerFiles := make(map[string]*rwCloseFailFirstCall)
+	be := &mysqlctl.BuiltinBackupEngine{}
+	bh := &mysqlctl.FakeBackupHandle{}
+	bh.AddFileReturnF = func(filename string) mysqlctl.FakeBackupHandleAddFileReturn {
+		_, isRetry := bufferPerFiles[filename]
+		newBuffer := newWriteCloseFailFirstWrite(isRetry)
+		bufferPerFiles[filename] = newBuffer
+		return mysqlctl.FakeBackupHandleAddFileReturn{WriteCloser: newBuffer}
+	}
+
+	fakedb := fakesqldb.New(t)
+	defer fakedb.Close()
+	mysqld := mysqlctl.NewFakeMysqlDaemon(fakedb)
+	defer mysqld.Close()
+	mysqld.ExpectedExecuteSuperQueryList = []string{"STOP REPLICA", "START REPLICA"}
+
+	ctx, cancel := context.WithCancel(ctx)
+	backupResult, err := be.ExecuteBackup(ctx, mysqlctl.BackupParams{
+		Logger: logutil.NewMemoryLogger(),
+		Mysqld: mysqld,
+		Cnf: &mysqlctl.Mycnf{
+			InnodbDataHomeDir:     path.Join(backupRoot, "innodb"),
+			InnodbLogGroupHomeDir: path.Join(backupRoot, "log"),
+			DataDir:               path.Join(backupRoot, "datadir"),
+		},
+		Stats:                backupstats.NewFakeStats(),
+		Concurrency:          1,
+		HookExtraEnv:         map[string]string{},
+		TopoServer:           ts,
+		Keyspace:             keyspace,
+		Shard:                shard,
+		MysqlShutdownTimeout: MysqlShutdownTimeout,
+	}, bh)
+	cancel()
+
+	require.NoError(t, err)
+	require.Equal(t, mysqlctl.BackupUsable, backupResult)
+
+	// Parse the MANIFEST and verify all file entries have non-empty hashes.
+	manifestBuf, ok := bufferPerFiles["MANIFEST"]
+	require.True(t, ok, "MANIFEST should have been written")
+
+	var manifest struct {
+		FileEntries []mysqlctl.FileEntry
+	}
+	require.NoError(t, json.Unmarshal(manifestBuf.Bytes(), &manifest))
+
+	require.NotEmpty(t, manifest.FileEntries, "manifest should contain file entries")
+	for _, fe := range manifest.FileEntries {
+		assert.NotEmptyf(t, fe.Hash, "file %s should have a non-empty hash in the manifest", fe.Name)
+	}
+}
+
+func TestRestoreChunkedCorruptedBackup(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+
+	const chunkSize = 4 * 1024 * 1024 // 4MiB (minimum allowed)
+	const fileSize = 12 * 1024 * 1024 // 12MiB → 3 chunks per file
+
+	fs := servenv.GetFlagSetFor("vtbackup")
+	oldThreshold := fs.Lookup("builtinbackup-file-chunk-threshold").Value.String()
+	oldSize := fs.Lookup("builtinbackup-file-chunk-size").Value.String()
+	require.NoError(t, fs.Set("builtinbackup-file-chunk-threshold", strconv.Itoa(chunkSize)))
+	require.NoError(t, fs.Set("builtinbackup-file-chunk-size", strconv.Itoa(chunkSize)))
+	t.Cleanup(func() {
+		fs.Set("builtinbackup-file-chunk-threshold", oldThreshold)
+		fs.Set("builtinbackup-file-chunk-size", oldSize)
+	})
+
+	backupRoot, keyspace, shard, ts := SetupCluster(ctx, t, 1, 1, fileSize)
+
+	be := &mysqlctl.BuiltinBackupEngine{}
+
+	oldDeadline := SetBuiltinBackupMysqldDeadline(time.Second)
+	defer SetBuiltinBackupMysqldDeadline(oldDeadline)
+
+	bh := filebackupstorage.NewBackupHandle(nil, "", "", false)
+
+	fakedb := fakesqldb.New(t)
+	defer fakedb.Close()
+	mysqld := mysqlctl.NewFakeMysqlDaemon(fakedb)
+	defer mysqld.Close()
+	mysqld.ExpectedExecuteSuperQueryList = []string{"STOP REPLICA", "START REPLICA"}
+
+	backupResult, err := be.ExecuteBackup(ctx, mysqlctl.BackupParams{
+		Logger: logutil.NewConsoleLogger(),
+		Mysqld: mysqld,
+		Cnf: &mysqlctl.Mycnf{
+			InnodbDataHomeDir:     path.Join(backupRoot, "innodb"),
+			InnodbLogGroupHomeDir: path.Join(backupRoot, "log"),
+			DataDir:               path.Join(backupRoot, "datadir"),
+		},
+		Stats:                backupstats.NewFakeStats(),
+		Concurrency:          1,
+		HookExtraEnv:         map[string]string{},
+		TopoServer:           ts,
+		Keyspace:             keyspace,
+		Shard:                shard,
+		MysqlShutdownTimeout: MysqlShutdownTimeout,
+	}, bh)
+
+	require.NoError(t, err)
+	require.Equal(t, mysqlctl.BackupUsable, backupResult)
+
+	// Find a chunk file to tamper with.
+	tamperedChunkPath := path.Join(filebackupstorage.FileBackupStorageRoot, "0-1")
+	originalData, err := os.ReadFile(tamperedChunkPath)
+	require.NoError(t, err)
+	require.NotEmpty(t, originalData)
+
+	restoreParams := mysqlctl.RestoreParams{
+		Cnf: &mysqlctl.Mycnf{
+			InnodbDataHomeDir:     path.Join(backupRoot, "innodb"),
+			InnodbLogGroupHomeDir: path.Join(backupRoot, "log"),
+			DataDir:               path.Join(backupRoot, "datadir"),
+			BinLogPath:            path.Join(backupRoot, "binlog"),
+			RelayLogPath:          path.Join(backupRoot, "relaylog"),
+			RelayLogIndexPath:     path.Join(backupRoot, "relaylogindex"),
+			RelayLogInfoPath:      path.Join(backupRoot, "relayloginfo"),
+		},
+		Logger:               logutil.NewConsoleLogger(),
+		Concurrency:          1,
+		HookExtraEnv:         map[string]string{},
+		DeleteBeforeRestore:  false,
+		DbName:               "test",
+		Keyspace:             "test",
+		Shard:                "-",
+		StartTime:            time.Now(),
+		RestoreToPos:         replication.Position{},
+		RestoreToTimestamp:   time.Time{},
+		DryRun:               false,
+		Stats:                backupstats.NewFakeStats(),
+		MysqlShutdownTimeout: MysqlShutdownTimeout,
+	}
+
+	t.Run("TruncatedChunk", func(t *testing.T) {
+		// Truncate chunk to half its size — decompression encounters unexpected EOF.
+		truncated := originalData[:len(originalData)/2]
+		require.NoError(t, os.WriteFile(tamperedChunkPath, truncated, 0o644))
+		defer os.WriteFile(tamperedChunkPath, originalData, 0o644)
+
+		fakedb := fakesqldb.New(t)
+		defer fakedb.Close()
+		mysqld := mysqlctl.NewFakeMysqlDaemon(fakedb)
+		defer mysqld.Close()
+		mysqld.ExpectedExecuteSuperQueryList = []string{"STOP REPLICA", "START REPLICA"}
+
+		restoreParams.Mysqld = mysqld
+		restoreParams.Stats = backupstats.NewFakeStats()
+
+		bh := filebackupstorage.NewBackupHandle(nil, "", "", true)
+		_, err := be.ExecuteRestore(ctx, restoreParams, bh)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to copy chunk 0-1: unexpected EOF")
+	})
+
+	t.Run("CorruptedData", func(t *testing.T) {
+		// Overwrite chunk with garbage at the original size — decompression fails.
+		garbage := bytes.Repeat([]byte("X"), len(originalData))
+		require.NoError(t, os.WriteFile(tamperedChunkPath, garbage, 0o644))
+		defer os.WriteFile(tamperedChunkPath, originalData, 0o644)
+
+		fakedb := fakesqldb.New(t)
+		defer fakedb.Close()
+		mysqld := mysqlctl.NewFakeMysqlDaemon(fakedb)
+		defer mysqld.Close()
+		mysqld.ExpectedExecuteSuperQueryList = []string{"STOP REPLICA", "START REPLICA"}
+
+		restoreParams.Mysqld = mysqld
+		restoreParams.Stats = backupstats.NewFakeStats()
+
+		bh := filebackupstorage.NewBackupHandle(nil, "", "", true)
+		_, err := be.ExecuteRestore(ctx, restoreParams, bh)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "can't create decompressor: gzip: invalid header")
+	})
+
+	t.Run("MissingChunk", func(t *testing.T) {
+		// Delete the chunk file entirely.
+		require.NoError(t, os.Remove(tamperedChunkPath))
+		defer os.WriteFile(tamperedChunkPath, originalData, 0o644)
+
+		fakedb := fakesqldb.New(t)
+		defer fakedb.Close()
+		mysqld := mysqlctl.NewFakeMysqlDaemon(fakedb)
+		defer mysqld.Close()
+		mysqld.ExpectedExecuteSuperQueryList = []string{"STOP REPLICA", "START REPLICA"}
+
+		restoreParams.Mysqld = mysqld
+		restoreParams.Stats = backupstats.NewFakeStats()
+
+		bh := filebackupstorage.NewBackupHandle(nil, "", "", true)
+		_, err := be.ExecuteRestore(ctx, restoreParams, bh)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "can't open source chunk 0-1 for reading")
+	})
 }

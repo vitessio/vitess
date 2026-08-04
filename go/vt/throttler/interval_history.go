@@ -18,6 +18,7 @@ package throttler
 
 import (
 	"fmt"
+	"slices"
 	"time"
 )
 
@@ -70,8 +71,8 @@ func (h *intervalHistory) average(from, to time.Time) float64 {
 	sum := 0.0
 	count := 0.0
 	var nextIntervalStart time.Time
-	for i := len(h.records) - 1; i >= 0; i-- {
-		t := h.records[i].time
+	for _, record := range slices.Backward(h.records) {
+		t := record.time
 
 		if t.After(end) {
 			continue
@@ -87,17 +88,11 @@ func (h *intervalHistory) average(from, to time.Time) float64 {
 		}
 
 		// If an interval is only partially included, count only that fraction.
-		durationAfterTo := t.Add(h.interval).Sub(to)
-		if durationAfterTo < 0 {
-			durationAfterTo = 0
-		}
-		durationBeforeFrom := from.Sub(t)
-		if durationBeforeFrom < 0 {
-			durationBeforeFrom = 0
-		}
+		durationAfterTo := max(t.Add(h.interval).Sub(to), 0)
+		durationBeforeFrom := max(from.Sub(t), 0)
 		weight := float64((h.interval - durationBeforeFrom - durationAfterTo).Nanoseconds()) / float64(h.interval.Nanoseconds())
 
-		sum += weight * float64(h.records[i].value)
+		sum += weight * float64(record.value)
 		count += weight
 		nextIntervalStart = t.Add(-1 * h.interval)
 	}

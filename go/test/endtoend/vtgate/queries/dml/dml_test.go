@@ -482,9 +482,7 @@ func TestDMLInUnique(t *testing.T) {
 		for i := range qr.Rows {
 			qr.Rows[i] = qr.Rows[i][1:]
 		}
-		if err := sqltypes.RowsEqualsStr(expected, qr.Rows); err != nil {
-			t.Error(err)
-		}
+		assert.NoError(t, sqltypes.RowsEqualsStr(expected, qr.Rows))
 	}
 	expected := `[
 		[VARCHAR("sks") VARCHAR("-80") VARCHAR("begin")] 
@@ -509,7 +507,7 @@ func TestUpdateWithLargeRowsAsInput(t *testing.T) {
 	defer closer()
 
 	// Insert initial rows
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		mcmp.Exec(fmt.Sprintf("insert into t1(id, col) values (%d, %d)", i, i))
 		mcmp.Exec(fmt.Sprintf("insert into t2(id, col) values (%d, %d)", i, i))
 	}
@@ -544,7 +542,7 @@ func TestDeleteWithLargeRowsAsInput(t *testing.T) {
 	defer closer()
 
 	// Insert initial rows
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		mcmp.Exec(fmt.Sprintf("insert into t1(id, col) values (%d, %d)", i, i))
 		mcmp.Exec(fmt.Sprintf("insert into t2(id, col) values (%d, %d)", i, i))
 	}
