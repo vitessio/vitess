@@ -248,7 +248,7 @@ func TestCloseBackupFilesCancelsOnRealTimeout(t *testing.T) {
 		}
 	}, 30*time.Second, 10*time.Millisecond)
 
-	assert.ErrorIs(t, finalErr, context.Canceled)
+	require.ErrorIs(t, finalErr, context.Canceled)
 	assert.Contains(t, logger.String(), "Timed out waiting for Close()")
 	assert.Error(t, ctx.Err())
 }
