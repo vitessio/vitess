@@ -23,6 +23,7 @@ import (
 	"vitess.io/vitess/go/mysql/replication"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vttls"
 )
 
 // mysqlFlavorLegacy implements the Flavor interface for Mysql for
@@ -233,7 +234,8 @@ func (mysqlFlavorLegacy) setReplicationSourceCommand(params *ConnParams, host st
 		fmt.Sprintf("MASTER_PASSWORD = '%s'", params.Pass),
 		fmt.Sprintf("MASTER_CONNECT_RETRY = %d", connectRetry),
 	}
-	if params.SslEnabled() {
+	// Replication connects to the source over TCP, not params.UnixSocket.
+	if params.EffectiveSslMode() != vttls.Disabled {
 		args = append(args, "MASTER_SSL = 1")
 	} else {
 		args = append(args, "GET_MASTER_PUBLIC_KEY = 1")
