@@ -2129,10 +2129,12 @@ func TestShutdownProceedsWhenFlockSetupFails(t *testing.T) {
 // own Mysqld object, so the in-process gate cannot serialize them, and one
 // failed attempt's background restoration could reset the durability fence
 // beneath another process's shutdown. The interprocess lock must make a
-// second instance wait the first out -- including its pending restoration,
-// which the first instance holds the lock across until Close. flock
-// contention is per open file description, so a second Mysqld in this
-// process contends exactly as a second process would.
+// second instance wait the first out -- including its pending restoration --
+// and must be released when that restoration completes rather than held for
+// the first object's lifetime (Copilot review): a long-lived owner such as
+// mysqlctld would otherwise block every other process's shutdown until the
+// daemon exits. flock contention is per open file description, so a second
+// Mysqld in this process contends exactly as a second process would.
 func TestShutdownSerializesAcrossMysqldInstances(t *testing.T) {
 	const (
 		readDurability      = "SELECT @@global.innodb_flush_log_at_trx_commit, @@global.sync_binlog, @@global.sync_relay_log"
@@ -2163,9 +2165,12 @@ func TestShutdownSerializesAcrossMysqldInstances(t *testing.T) {
 		),
 		"2|0|10000",
 	))
+	// restoreFlushLog is deliberately not registered yet: A's restoration
+	// fails on it every pass and so stays deterministically in progress until
+	// the test registers it below.
 	for _, query := range []string{
 		setFlushLog, setSyncBinlog, setSyncRelayLog, flushEngineLogs, flushBinaryLogs, flushRelayLogs,
-		stopIOThread, stopSQLThread, restoreFlushLog, restoreSyncBinlog, restoreSyncRelayLog,
+		stopIOThread, stopSQLThread, restoreSyncBinlog, restoreSyncRelayLog,
 	} {
 		db.AddQuery(query, &sqltypes.Result{})
 	}
@@ -2185,15 +2190,16 @@ func TestShutdownSerializesAcrossMysqldInstances(t *testing.T) {
 	cp := *params
 	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb")
 
-	// Instance A's shutdown fails, arming a restoration; A holds the
-	// interprocess lock until Close.
+	// Instance A's shutdown fails, arming a restoration that cannot converge
+	// yet; A holds the interprocess lock across it.
 	mysqldA := NewMysqld(dbc)
+	defer mysqldA.Close()
 	err := mysqldA.Shutdown(t.Context(), cnf, false, 30*time.Second)
 	require.Error(t, err)
 	require.NotContains(t, err.Error(), "concurrent mysqld shutdown")
 
 	// Instance B (a separate "process") must wait behind A rather than
-	// interleave with A's restoration.
+	// interleave with A's in-progress restoration.
 	mysqldB := NewMysqld(dbc)
 	defer mysqldB.Close()
 	bCtx, bCancel := context.WithTimeout(t.Context(), 2*time.Second)
@@ -2201,13 +2207,97 @@ func TestShutdownSerializesAcrossMysqldInstances(t *testing.T) {
 	err = mysqldB.Shutdown(bCtx, cnf, false, 30*time.Second)
 	require.ErrorContains(t, err, "waiting for a concurrent mysqld shutdown in another process")
 
-	// A closes -- after its restoration finished -- releasing the lock: B's
-	// retry now proceeds to its own attempt and fails on the shutdown itself,
-	// not on the lock.
-	mysqldA.Close()
-	err = mysqldB.Shutdown(t.Context(), cnf, false, 30*time.Second)
+	// Let A's restoration converge: completing releases the lock -- with A
+	// never Closed, as a long-lived mysqlctld would be -- and B's retry
+	// proceeds to its own attempt, failing on the shutdown itself, not on
+	// the lock.
+	db.AddQuery(restoreFlushLog, &sqltypes.Result{})
+	bCtx2, bCancel2 := context.WithTimeout(t.Context(), 30*time.Second)
+	defer bCancel2()
+	err = mysqldB.Shutdown(bCtx2, cnf, false, 30*time.Second)
 	require.Error(t, err)
 	require.NotContains(t, err.Error(), "concurrent mysqld shutdown")
+}
+
+// TestShutdownReleasesFlockWhenNothingPending covers the long-lived owner
+// case (Copilot review): mysqlctld keeps one Mysqld object alive across
+// shutdown/start cycles and only Closes it at daemon exit, so an attempt
+// that leaves nothing pending -- here a successful hook shutdown -- must
+// release the interprocess lock when it returns, not at Close, and the next
+// attempt must be able to reacquire it. Otherwise every shutdown from
+// another process would stay blocked until the daemon exits, even after
+// MySQL was restarted through the same daemon.
+func TestShutdownReleasesFlockWhenNothingPending(t *testing.T) {
+	const (
+		readDurability  = "SELECT @@global.innodb_flush_log_at_trx_commit, @@global.sync_binlog, @@global.sync_relay_log"
+		setFlushLog     = "SET GLOBAL innodb_flush_log_at_trx_commit = 1"
+		setSyncBinlog   = "SET GLOBAL sync_binlog = 1"
+		setSyncRelayLog = "SET GLOBAL sync_relay_log = 1"
+		flushEngineLogs = "FLUSH NO_WRITE_TO_BINLOG ENGINE LOGS"
+		flushBinaryLogs = "FLUSH NO_WRITE_TO_BINLOG BINARY LOGS"
+		flushRelayLogs  = "FLUSH NO_WRITE_TO_BINLOG RELAY LOGS"
+		stopIOThread    = "STOP REPLICA IO_THREAD"
+		stopSQLThread   = "STOP REPLICA SQL_THREAD"
+	)
+
+	db := fakesqldb.New(t)
+	defer db.Close()
+	db.AddQuery("SELECT 1", &sqltypes.Result{})
+	db.AddQuery("SHOW REPLICA STATUS", sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("Source_Host|Replica_IO_Running|Replica_SQL_Running", "varchar|varchar|varchar"),
+		"source|Yes|Yes",
+	))
+	db.AddQuery(readDurability, sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields(
+			"@@global.innodb_flush_log_at_trx_commit|@@global.sync_binlog|@@global.sync_relay_log",
+			"int64|int64|int64",
+		),
+		"2|0|10000",
+	))
+	for _, query := range []string{
+		setFlushLog, setSyncBinlog, setSyncRelayLog, flushEngineLogs, flushBinaryLogs, flushRelayLogs,
+		stopIOThread, stopSQLThread,
+	} {
+		db.AddQuery(query, &sqltypes.Result{})
+	}
+	db.AddQueryPattern("kill .*", &sqltypes.Result{})
+
+	// The mysqld_shutdown hook succeeds and the caller does not wait for
+	// mysqld to exit: the attempt succeeds and arms no restoration.
+	vtroot := t.TempDir()
+	t.Setenv("VTROOT", vtroot)
+	hookDir := filepath.Join(vtroot, "vthook")
+	require.NoError(t, os.MkdirAll(hookDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(hookDir, "mysqld_shutdown"), []byte("#!/bin/sh\nexit 0\n"), 0o755))
+	dir := t.TempDir()
+	cnf := &Mycnf{
+		SocketFile: filepath.Join(dir, "mysql.sock"),
+		PidFile:    filepath.Join(dir, "mysql.pid"),
+	}
+	require.NoError(t, os.WriteFile(cnf.PidFile, []byte("12345\n"), 0o600))
+
+	params := db.ConnParams()
+	cp := *params
+	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb")
+
+	mysqldA := NewMysqld(dbc)
+	defer mysqldA.Close()
+	err := mysqldA.Shutdown(t.Context(), cnf, false, 30*time.Second)
+	require.NoError(t, err)
+
+	// A stays alive, as mysqlctld would: instance B (a separate "process")
+	// must not block on A's lock.
+	mysqldB := NewMysqld(dbc)
+	defer mysqldB.Close()
+	bCtx, bCancel := context.WithTimeout(t.Context(), 30*time.Second)
+	defer bCancel()
+	err = mysqldB.Shutdown(bCtx, cnf, false, 30*time.Second)
+	require.NoError(t, err)
+
+	// And A itself can shut down again: the release must leave the lock
+	// reacquirable, not closed for good.
+	err = mysqldA.Shutdown(t.Context(), cnf, false, 30*time.Second)
+	require.NoError(t, err)
 }
 
 // TestConcurrentShutdownAttemptsSerialize covers two overlapping shutdown

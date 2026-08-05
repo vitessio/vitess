@@ -159,12 +159,14 @@ type Mysqld struct {
 
 	// shutdownFlock* hold the per-instance interprocess shutdown lock (see
 	// acquireShutdownFlock): the in-process gate above cannot serialize
-	// attempts from separate processes. Held from the first crash-safe
-	// shutdown attempt until Close so a pending restoration stays covered.
+	// attempts from separate processes. Reference-counted: held while a
+	// crash-safe shutdown attempt, or a pending restoration one armed, is in
+	// flight; Close force-releases it as a backstop.
 	shutdownFlockGateOnce sync.Once
 	shutdownFlockGateCh   chan struct{}
 	shutdownFlockMu       sync.Mutex
 	shutdownFlock         *os.File
+	shutdownFlockRefs     int
 
 	// pendingRestoreMu guards the pending-restore bookkeeping below, which
 	// tracks background replica-state restorations armed by a failed shutdown:
@@ -766,9 +768,11 @@ func (mysqld *Mysqld) Shutdown(ctx context.Context, cnf *Mycnf, waitForMysqld bo
 	// immediate, no-wait shutdown.
 	preparationBudget := replicaShutdownPreparationBudget(shutdownTimeout)
 	if preparationBudget > 0 {
-		if err := mysqld.acquireShutdownFlock(ctx, cnf); err != nil {
+		releaseFlock, err := mysqld.acquireShutdownFlock(ctx, cnf)
+		if err != nil {
 			return err
 		}
+		defer releaseFlock()
 	}
 
 	// possibly mysql is already shutdown, check for a few files first
@@ -1028,19 +1032,23 @@ func (mysqld *Mysqld) shutdownWithReplicaCrashSafety(ctx context.Context, prepar
 // armReplicaRestore arms the background restoration of the given replica
 // state after a failed shutdown. The restoration is tracked so Close waits for
 // it before the process exits, and registered so a retrying shutdown can take
-// it over -- cancel it and inherit its state -- instead of racing it. When
-// ready is non-nil, the restoration first waits for it (the preparation
-// resolving); a cancellation during that wait aborts the restoration outright,
-// leaving convergence to the new owner.
+// it over -- cancel it and inherit its state -- instead of racing it. It also
+// holds a reference to the interprocess shutdown lock until it completes, so
+// shutdown attempts from other processes wait it out. When ready is non-nil,
+// the restoration first waits for it (the preparation resolving); a
+// cancellation during that wait aborts the restoration outright, leaving
+// convergence to the new owner.
 func (mysqld *Mysqld) armReplicaRestore(ctx context.Context, state *replicaShutdownState, ready <-chan struct{}) {
 	restoreCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), replicaShutdownRestoreTimeout)
 	handle := &pendingRestoreHandle{state: state, cancel: cancel, done: make(chan struct{})}
 	mysqld.beginPendingRestore(handle)
+	releaseFlock := mysqld.retainShutdownFlock()
 	go func() {
 		defer func() {
 			cancel()
 			mysqld.endPendingRestore(handle)
 			close(handle.done)
+			releaseFlock()
 		}()
 		if ready != nil {
 			select {
@@ -1807,8 +1815,9 @@ func (mysqld *Mysqld) Close() {
 		}
 	}
 
-	// The pending restorations (if any) have finished: release the
-	// interprocess shutdown lock so another process's shutdown can proceed.
+	// Backstop: the interprocess shutdown lock is normally released when the
+	// last attempt and its restorations finish; force-release it in case a
+	// restoration never resolved within the bounded wait above.
 	mysqld.releaseShutdownFlock()
 
 	if mysqld.dbaPool != nil {
