@@ -42,7 +42,13 @@ jobs:
       - name: Tune the OS
         uses: ./.github/actions/tune-os
 
+<<<<<<< HEAD
       - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+||||||| parent of 74844882a2 (Add `zizmor` check to the static checks workflow (#19149))
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+=======
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0  # zizmor: ignore[cache-poisoning] this workflow publishes no artifacts
+>>>>>>> 74844882a2 (Add `zizmor` check to the static checks workflow (#19149))
         with:
           # node-version should match package.json
           node-version: '22.13.1'
