@@ -446,7 +446,6 @@ func (be *XtrabackupEngine) backupFiles(
 
 	destFiles, err := addStripeFiles(addFilesCtx, params, bh, backupFileName, numStripes)
 	if err != nil {
-		cancelAddFiles()
 		return replicationPosition, vterrors.Wrapf(err, "cannot create backup file %v", backupFileName)
 	}
 	defer closeBackupFiles(addFilesCtx, cancelAddFiles, closeTimeout, destFiles, backupFileName, numStripes, params.Logger, &finalErr)
