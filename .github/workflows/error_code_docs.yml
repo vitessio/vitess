@@ -31,7 +31,7 @@ jobs:
           egress-policy: audit
 
       - name: Checkout vitess
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: 'false'
 
@@ -44,15 +44,7 @@ jobs:
           echo "Error codes generated successfully"
 
       - name: Generate GitHub App token
-<<<<<<< HEAD:.github/workflows/error_code_docs_update.yml
-        if: steps.metadata.outputs.skip != 'true'
         uses: actions/create-github-app-token@f8d387b68d61c58ab83c6c016672934102569859 # v3.0.0
-||||||| parent of 1ca0213207 (CI: generate error code docs from trusted commits only (#20789)):.github/workflows/error_code_docs_update.yml
-        if: steps.metadata.outputs.skip != 'true'
-        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
-=======
-        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
->>>>>>> 1ca0213207 (CI: generate error code docs from trusted commits only (#20789)):.github/workflows/error_code_docs.yml
         id: app-token
         with:
           app-id: ${{ vars.APP_ID }}
