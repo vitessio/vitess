@@ -4528,6 +4528,43 @@ func TestSystemVariableNamesStillParse(t *testing.T) {
 	}
 }
 
+// TestVariableNamesWithBackticks pins the parser's handling of backtick-quoted
+// variable names that are empty or consist only of an escaped backtick: empty
+// names are syntax errors, while a name holding a single literal backtick
+// parses and prints back unchanged. Parse must return in both cases instead of
+// panicking.
+func TestVariableNamesWithBackticks(t *testing.T) {
+	parser := NewTestParser()
+	t.Run("empty names are syntax errors", func(t *testing.T) {
+		for _, sql := range []string{
+			"select @`` from t",
+			"select @@`` from t",
+			"set @@`` = 1",
+		} {
+			t.Run(sql, func(t *testing.T) {
+				require.NotPanics(t, func() {
+					_, err := parser.Parse(sql)
+					assert.Error(t, err)
+				})
+			})
+		}
+	})
+	t.Run("a name that is a single escaped backtick parses", func(t *testing.T) {
+		for _, sql := range []string{
+			"select @```` from t",
+			"select @@```` from t",
+		} {
+			t.Run(sql, func(t *testing.T) {
+				require.NotPanics(t, func() {
+					stmt, err := parser.Parse(sql)
+					require.NoError(t, err)
+					require.Equal(t, sql, String(stmt))
+				})
+			})
+		}
+	})
+}
+
 func TestIntroducers(t *testing.T) {
 	validSQL := []struct {
 		input  string
