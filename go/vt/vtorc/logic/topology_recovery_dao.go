@@ -284,9 +284,25 @@ func writeTopologyRecoveryStep(topologyRecoveryStep *TopologyRecoveryStep) error
 	return err
 }
 
-// ExpireRecoveryDetectionHistory removes old rows from the recovery_detection table
+// ExpireRecoveryDetectionHistory removes old rows from the recovery_detection table.
+// Rows whose (alias, analysis) still match an active analysis in
+// database_instance_last_analysis are preserved regardless of age so that a
+// continuously-active incident keeps a stable detection_id across the entire
+// incident lifetime.
 func ExpireRecoveryDetectionHistory() error {
-	return inst.ExpireTableData("recovery_detection", "detection_timestamp")
+	writeFunc := func() error {
+		_, err := db.ExecVTOrc(`DELETE FROM recovery_detection
+			WHERE detection_timestamp < DATETIME('now', PRINTF('-%d DAY', ?))
+			AND NOT EXISTS (
+				SELECT 1 FROM database_instance_last_analysis
+				WHERE alias = recovery_detection.alias
+				  AND analysis = recovery_detection.analysis
+			)`,
+			config.GetAuditPurgeDays(),
+		)
+		return err
+	}
+	return inst.ExecDBWriteFunc(writeFunc)
 }
 
 // ExpireTopologyRecoveryHistory removes old rows from the topology_recovery table

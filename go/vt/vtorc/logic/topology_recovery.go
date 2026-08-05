@@ -1026,7 +1026,7 @@ func executeCheckAndRecoverFunction(analysisEntry *inst.DetectionAnalysis) (err 
 				// whether the force refresh has run.
 				var shardTablets []*topo.TabletInfo
 				shardTablets, err = getShardTabletsByCell(ctx, analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard, nil)
-				if err != nil {
+				if err != nil && !topo.IsErrType(err, topo.PartialResult) {
 					logger.Error(fmt.Sprintf("CheckAndRecover: Tablet: %+v: error fetching shard tablets for --cells-no-recovery check, aborting recovery: %v", analyzedInstanceAliasString, err))
 					return err
 				}
@@ -1038,8 +1038,17 @@ func executeCheckAndRecoverFunction(analysisEntry *inst.DetectionAnalysis) (err 
 						shardCells = append(shardCells, cell)
 					}
 				}
-				if len(shardCells) > 0 && allCellsDenied(shardCells, cellsNoRecovery) {
-					logger.Info(fmt.Sprintf("CheckAndRecover: Tablet: %+v: NOT Recovering host (all shard cells are in --cells-no-recovery)", analyzedInstanceAliasString))
+				// Fail closed: if the partial (or full) result shows every
+				// reachable cell is denied, or no tablets were returned at all,
+				// suppress PRS. If any non-denied cell is present we
+				// conclusively know recovery is allowed and proceed.
+				if len(shardCells) == 0 {
+					logger.Info(fmt.Sprintf("CheckAndRecover: Tablet: %+v: NOT Recovering host (no shard tablets reachable; --cells-no-recovery fail-closed)", analyzedInstanceAliasString))
+					recoveriesSkippedCounter.Add(append(recoveryLabels, RecoverySkipCellNoRecovery.String()), 1)
+					return nil
+				}
+				if allCellsDenied(shardCells, cellsNoRecovery) {
+					logger.Info(fmt.Sprintf("CheckAndRecover: Tablet: %+v: NOT Recovering host (all reachable shard cells are in --cells-no-recovery)", analyzedInstanceAliasString))
 					recoveriesSkippedCounter.Add(append(recoveryLabels, RecoverySkipCellNoRecovery.String()), 1)
 					return nil
 				}

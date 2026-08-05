@@ -24,6 +24,7 @@ import (
 	"io"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"testing/synctest"
@@ -1690,7 +1691,16 @@ func TestCellsNoRecoveryGateSkip(t *testing.T) {
 			defer func() { cellsNoRecoveryValidated.Store(prevValidated) }()
 
 			analysis := tt.analysis
+
+			checkAndRecoverFunctionCode, _ := getCheckAndRecoverFunctionCode(&analysis)
+			recoveryName := getRecoverFunctionName(checkAndRecoverFunctionCode)
+			counterKey := strings.Join([]string{recoveryName, analysis.AnalyzedKeyspace, analysis.AnalyzedShard, RecoverySkipCellNoRecovery.String()}, ".")
+			skipsBefore := recoveriesSkippedCounter.Counts()[counterKey]
+
 			require.NoError(t, executeCheckAndRecoverFunction(&analysis))
+
+			skipsAfter := recoveriesSkippedCounter.Counts()[counterKey]
+			require.Equal(t, skipsBefore+1, skipsAfter, "CellNoRecovery skip counter must be incremented exactly once")
 
 			var recoveryRows int
 			require.NoError(t, orcDb.QueryRow("SELECT COUNT(*) FROM topology_recovery").Scan(&recoveryRows))
@@ -1786,4 +1796,52 @@ func TestInsertRecoveryDetectionNewIncident(t *testing.T) {
 		entry3.RecoveryId).Scan(&refreshedTimestamp))
 	require.NotEqual(t, firstTimestamp, refreshedTimestamp,
 		"recurring failure after analysis cleared should refresh detection_timestamp")
+}
+
+func TestExpireRecoveryDetectionPreservesActiveIncidents(t *testing.T) {
+	orcDb, fromCache, err := db.OpenVTOrcWithCache()
+	require.NoError(t, err)
+	defer func() {
+		if !fromCache {
+			require.NoError(t, orcDb.Close())
+		}
+	}()
+	defer func() {
+		_, err = orcDb.Exec("DELETE FROM recovery_detection")
+		require.NoError(t, err)
+		_, err = orcDb.Exec("DELETE FROM database_instance_last_analysis")
+		require.NoError(t, err)
+	}()
+
+	oldVal := config.GetAuditPurgeDays()
+	config.SetAuditPurgeDays(10)
+	defer config.SetAuditPurgeDays(oldVal)
+
+	// Three detection rows: one recent, one old-but-still-active, one old-and-resolved.
+	_, err = orcDb.Exec(`INSERT INTO recovery_detection
+		(detection_id, detection_timestamp, alias, analysis, keyspace, shard) VALUES
+		(1, DATETIME('now', '-3 DAY'),  'alias1', 'ReplicationStopped', 'ks', '0'),
+		(2, DATETIME('now', '-15 DAY'), 'alias2', 'ReplicationStopped', 'ks', '0'),
+		(3, DATETIME('now', '-15 DAY'), 'alias3', 'DeadPrimary',        'ks', '0')`)
+	require.NoError(t, err)
+
+	// alias2 still has an active ReplicationStopped analysis; alias3 has resolved.
+	_, err = orcDb.Exec(`INSERT INTO database_instance_last_analysis
+		(alias, analysis, analysis_timestamp) VALUES
+		('alias2', 'ReplicationStopped', DATETIME('now'))`)
+	require.NoError(t, err)
+
+	require.NoError(t, ExpireRecoveryDetectionHistory())
+
+	var remaining []int
+	require.NoError(t, db.QueryVTOrc(
+		`SELECT detection_id FROM recovery_detection ORDER BY detection_id`,
+		nil,
+		func(m sqlutils.RowMap) error {
+			remaining = append(remaining, m.GetInt("detection_id"))
+			return nil
+		}))
+	// Row 1 (recent) and row 2 (old but active) survive; row 3 (old and resolved) is purged.
+	require.Equal(t, []int{1, 2}, remaining,
+		"old detection with active analysis must be preserved; resolved detection must be purged")
 }
