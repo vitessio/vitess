@@ -36,6 +36,14 @@ jobs:
         with:
           app-id: ${{ vars.APP_ID }}
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          # contents to push the port branches, pull-requests to create the
+          # port PRs and request reviews, issues to apply labels and comment,
+          # workflows because GitHub rejects a push from an app that touches
+          # .github/workflows without it.
+          permission-contents: write
+          permission-issues: write
+          permission-pull-requests: write
+          permission-workflows: write
 
       - name: Get GitHub App User ID
         id: get-user-id
