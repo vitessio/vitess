@@ -323,6 +323,8 @@ func ParseFullStatusVariables(qr *sqltypes.Result) (*FullStatusVariables, error)
 	}, nil
 }
 
+// FullStatusVariablesQuery returns a query for the mandatory FullStatus
+// variables using the current flavor's terminology.
 func (c *Conn) FullStatusVariablesQuery() string {
 	return fmt.Sprintf(`SELECT @@global.server_id AS server_id,
 	@@global.server_uuid AS server_uuid,

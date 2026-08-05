@@ -210,6 +210,8 @@ func (tm *TabletManager) FullStatus(ctx context.Context) (*replicationdatapb.Ful
 	}, nil
 }
 
+// fullStatusFromResult validates collected data, logs soft errors, and adds the
+// fields owned by TabletManager.
 func (tm *TabletManager) fullStatusFromResult(result *mysqlctl.FullStatusResult) (*replicationdatapb.FullStatus, error) {
 	if result == nil || result.Status == nil {
 		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "FullStatus collector returned no data")

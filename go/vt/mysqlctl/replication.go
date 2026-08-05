@@ -657,6 +657,8 @@ func (mysqld *Mysqld) CollectFullStatusData(ctx context.Context) (*FullStatusRes
 	return result, nil
 }
 
+// runFullStatusQuery runs a FullStatus query and retries once after reconnecting
+// when MySQL drops the connection.
 func runFullStatusQuery(ctx context.Context, conn *dbconnpool.PooledDBConnection, queryName string, query func() error) error {
 	if err := ctx.Err(); err != nil {
 		return err
@@ -694,6 +696,7 @@ func runFullStatusQuery(ctx context.Context, conn *dbconnpool.PooledDBConnection
 	return err
 }
 
+// fetchFullStatusVariables reads and parses the mandatory FullStatus variables.
 func (mysqld *Mysqld) fetchFullStatusVariables(ctx context.Context, conn *dbconnpool.PooledDBConnection) (*mysql.FullStatusVariables, error) {
 	qr, err := mysqld.executeFetchContext(ctx, conn, conn.Conn.FullStatusVariablesQuery(), 1, true)
 	if err != nil {
@@ -702,6 +705,8 @@ func (mysqld *Mysqld) fetchFullStatusVariables(ctx context.Context, conn *dbconn
 	return mysql.ParseFullStatusVariables(qr)
 }
 
+// collectFullStatusSemiSync fills the optional semi-sync fields. Query and
+// parsing errors are retained as soft errors, while context cancellation is fatal.
 func (mysqld *Mysqld) collectFullStatusSemiSync(ctx context.Context, conn *dbconnpool.PooledDBConnection, result *FullStatusResult) error {
 	variables, err := mysqld.fetchFullStatusValues(ctx, conn, fullStatusGlobalVariablesQuery, fullStatusSemiSyncVariables)
 	if err != nil {
@@ -733,6 +738,8 @@ func (mysqld *Mysqld) collectFullStatusSemiSync(ctx context.Context, conn *dbcon
 	return nil
 }
 
+// fetchFullStatusValues reads the requested variables or status values from
+// performance_schema.
 func (mysqld *Mysqld) fetchFullStatusValues(ctx context.Context, conn *dbconnpool.PooledDBConnection, queryTemplate string, names []string) (map[string]string, error) {
 	bv, err := sqltypes.BuildBindVariable(names)
 	if err != nil {
@@ -756,6 +763,8 @@ func (mysqld *Mysqld) fetchFullStatusValues(ctx context.Context, conn *dbconnpoo
 	return values, nil
 }
 
+// parseSemiSyncVariables fills the semi-sync settings using either source/replica
+// or the legacy master/slave names.
 func (result *FullStatusResult) parseSemiSyncVariables(values map[string]string) {
 	status := result.Status
 	if _, ok := values["rpl_semi_sync_source_enabled"]; ok {
@@ -773,6 +782,8 @@ func (result *FullStatusResult) parseSemiSyncVariables(values map[string]string)
 	}
 }
 
+// parseSemiSyncStatuses fills the semi-sync status using either source/replica
+// or the legacy master/slave names.
 func (result *FullStatusResult) parseSemiSyncStatuses(values map[string]string) {
 	status := result.Status
 	if _, ok := values["Rpl_semi_sync_source_status"]; ok {
@@ -788,6 +799,8 @@ func (result *FullStatusResult) parseSemiSyncStatuses(values map[string]string) 
 	}
 }
 
+// parseOptionalUint returns zero for a missing value and records malformed
+// values as soft errors.
 func (result *FullStatusResult) parseOptionalUint(values map[string]string, name string, bitSize int) uint64 {
 	value, ok := values[name]
 	if !ok {
