@@ -249,14 +249,8 @@ func TestCloseBackupFilesCancelsOnRealTimeout(t *testing.T) {
 		}
 	}, 30*time.Second, 10*time.Millisecond)
 
-	require.ErrorIs(t, finalErr, context.Canceled) // pinned: proves bh.Error() sees the upload error before MANIFEST is written
+	require.ErrorIs(t, finalErr, context.Canceled)
 
-	// The drain-before-MANIFEST ordering (Wait() + bh.Error() check before
-	// the caller writes the MANIFEST) is not pinned by a unit test.  The
-	// existing tests cover closeBackupFiles and mergeCancel, but nothing
-	// proves backupFiles drains uploads and checks bh.Error() before the
-	// caller writes the MANIFEST.  That's understandable given
-	// backupFiles needs an xtrabackup binary
 	assert.Contains(t, logger.String(), "Timed out waiting for Close()")
 	assert.Error(t, ctx.Err())
 }
