@@ -274,13 +274,15 @@ func (bh *AZBlobBackupHandle) AddFile(ctx context.Context, filename string, file
 // mergeCancel returns a context derived from parent that is also cancelled when
 // other is cancelled, along with a cleanup function that must be called when
 // the work is done to release resources and stop watching other. Context values
-// come from parent only.
+// come from parent only. If other is cancelled with a cause, mergeCancel
+// preserves that cause so callers see why the context was cancelled rather
+// than a bare context.Canceled.
 func mergeCancel(parent, other context.Context) (context.Context, func()) {
-	ctx, cancel := context.WithCancel(parent)
-	stop := context.AfterFunc(other, cancel)
+	ctx, cancel := context.WithCancelCause(parent)
+	stop := context.AfterFunc(other, func() { cancel(context.Cause(other)) })
 	return ctx, func() {
 		stop()
-		cancel()
+		cancel(nil)
 	}
 }
 

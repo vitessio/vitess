@@ -41,7 +41,6 @@
     - **[Backup/Restore](#minor-changes-backup)**
         - [Chunked backup/restore for the builtinbackupengine](#backup-chunked-builtin)
         - [Slow clean mysqld shutdowns no longer fail backups](#backup-mysqld-shutdown-timeout)
-        - [xtrabackup waits for cloud uploads and surfaces their errors before the MANIFEST](#backup-xtrabackup-upload-completion)
     - **[General](#minor-changes-general)**
         - [Build version metadata now sourced from VCS stamping](#build-info-from-vcs)
 
@@ -362,12 +361,6 @@ See [#20167](https://github.com/vitessio/vitess/pull/20167) for details.
 The builtin backup engine's shutdown deadline (`--builtinbackup-mysqld-timeout`) is now raised to the backup request's mysqld shutdown timeout (e.g. vtbackup's `--mysql-shutdown-timeout`) plus a 30 second grace period whenever that is larger, so the two settings can no longer silently conflict. The same grace period now pads the shutdown contexts of `mysqlctl`, `mysqlctld` and `vtbackup`, which moves `mysqlctld`'s derived `--onterm-timeout` default from `5m10s` to `5m30s`.
 
 In addition, when `mysqladmin` gives up waiting for mysqld to stop, the shutdown is no longer failed immediately: the `SHUTDOWN` command has already been delivered at that point, so Vitess keeps waiting on the pid/socket files until the caller's deadline expires (or for a 30 second grace period, when the caller has no deadline). Slow-but-clean shutdowns, such as upgrade-safe backups running with `innodb_fast_shutdown=0` on large databases, previously failed with `Aborted waiting on pid file` even though mysqld was stopping normally.
-
-#### <a id="backup-xtrabackup-upload-completion"/>xtrabackup waits for cloud uploads and surfaces their errors before the MANIFEST</a>
-
-For backup storage backends that upload data files asynchronously (S3, Ceph, Azure Blob), the `xtrabackup` engine now waits for those uploads to finish and checks for upload errors **before** writing the backup `MANIFEST`. Previously the engine could write the `MANIFEST` and report the backup usable while data-file uploads were still in flight, so a data-file upload that failed after that point could leave a backup marked complete even though it was missing data.
-
-**Impact**: A data-file upload failure now fails the backup before the `MANIFEST` is written, so the incomplete backup is aborted rather than published. Backups that previously appeared to succeed under this race will now correctly report the failure; operators may see such backups fail (and be retried) instead of silently completing. There are no new flags and no configuration changes.
 
 ### <a id="minor-changes-general"/>General</a>
 
