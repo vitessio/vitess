@@ -408,6 +408,11 @@ func (fmd *FakeMysqlDaemon) PrimaryStatus(ctx context.Context) (replication.Prim
 	}, nil
 }
 
+// CollectFullStatusData is part of the MysqlDaemon interface.
+func (fmd *FakeMysqlDaemon) CollectFullStatusData(context.Context) (*FullStatusResult, error) {
+	return nil, nil
+}
+
 func (fmd *FakeMysqlDaemon) ReplicationConfiguration(ctx context.Context) (*replicationdata.Configuration, error) {
 	return nil, nil
 }

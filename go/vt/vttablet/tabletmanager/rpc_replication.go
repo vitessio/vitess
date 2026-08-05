@@ -75,16 +75,14 @@ func (tm *TabletManager) FullStatus(ctx context.Context) (*replicationdatapb.Ful
 		}, nil
 	}
 
-	if collector, ok := tm.MysqlDaemon.(interface {
-		TryCollectFullStatusData(context.Context) (*mysqlctl.FullStatusResult, error)
-	}); ok {
-		result, err := collector.TryCollectFullStatusData(ctx)
-		if err != nil {
-			return nil, err
-		}
-		if result != nil {
-			return tm.fullStatusFromResult(result)
-		}
+	// A nil result means optimized FullStatus collection is unavailable, so
+	// continue through the legacy per-field path below.
+	result, err := tm.MysqlDaemon.CollectFullStatusData(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if result != nil {
+		return tm.fullStatusFromResult(result)
 	}
 
 	// Server ID - "select @@global.server_id"

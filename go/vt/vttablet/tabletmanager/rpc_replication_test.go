@@ -99,7 +99,7 @@ type (
 		stopDelay                time.Duration
 	}
 
-	fullStatusCollectorMysqlDaemon struct {
+	fullStatusMysqlDaemon struct {
 		*mysqlctl.FakeMysqlDaemon
 		result *mysqlctl.FullStatusResult
 		err    error
@@ -140,15 +140,15 @@ func (rmd *restartReplicationMysqlDaemon) SemiSyncExtensionLoaded(ctx context.Co
 	return mysql.SemiSyncTypeOff, nil
 }
 
-func (fmd *fullStatusCollectorMysqlDaemon) TryCollectFullStatusData(context.Context) (*mysqlctl.FullStatusResult, error) {
+func (fmd *fullStatusMysqlDaemon) CollectFullStatusData(context.Context) (*mysqlctl.FullStatusResult, error) {
 	fmd.calls++
 	return fmd.result, fmd.err
 }
 
-func TestFullStatusUsesOptimizedCollector(t *testing.T) {
+func TestFullStatusUsesCollectedData(t *testing.T) {
 	fakeMysqlDaemon := newTestMysqlDaemon(t, 1)
 	t.Cleanup(fakeMysqlDaemon.DB().Close)
-	collector := &fullStatusCollectorMysqlDaemon{
+	mysqlDaemon := &fullStatusMysqlDaemon{
 		FakeMysqlDaemon: fakeMysqlDaemon,
 		result: &mysqlctl.FullStatusResult{
 			Status: &replicationdatapb.FullStatus{
@@ -169,7 +169,7 @@ func TestFullStatusUsesOptimizedCollector(t *testing.T) {
 		},
 	}
 	tablet := newTestTablet(t, 100, "ks", "0", nil)
-	tm := newTestReplicationTM(tablet, collector, nil)
+	tm := newTestReplicationTM(tablet, mysqlDaemon, nil)
 	tm.QueryServiceControl = tabletservermock.NewController()
 	tm.SemiSyncMonitor = semisyncmonitor.CreateTestSemiSyncMonitor(fakeMysqlDaemon.DB(), exporter)
 
@@ -177,7 +177,7 @@ func TestFullStatusUsesOptimizedCollector(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, status)
 
-	assert.Equal(t, 1, collector.calls)
+	assert.Equal(t, 1, mysqlDaemon.calls)
 	assert.Equal(t, uint32(42), status.ServerId)
 	assert.Equal(t, "test-uuid", status.ServerUuid)
 	assert.Equal(t, "8.0.35", status.Version)
@@ -194,7 +194,7 @@ func TestFullStatusUsesOptimizedCollector(t *testing.T) {
 	assert.Equal(t, topodatapb.TabletType_REPLICA, status.TabletType)
 }
 
-func TestFullStatusFallsBackWhenCollectorIsUnsupported(t *testing.T) {
+func TestFullStatusFallsBackWhenCollectedDataIsUnavailable(t *testing.T) {
 	fakeMysqlDaemon := newTestMysqlDaemon(t, 1)
 	t.Cleanup(fakeMysqlDaemon.DB().Close)
 	fakeMysqlDaemon.Version = "Ver 8.0.32"
@@ -202,39 +202,39 @@ func TestFullStatusFallsBackWhenCollectorIsUnsupported(t *testing.T) {
 		"FAKE select @@global",
 		"FAKE select @@global",
 	}
-	collector := &fullStatusCollectorMysqlDaemon{
+	mysqlDaemon := &fullStatusMysqlDaemon{
 		FakeMysqlDaemon: fakeMysqlDaemon,
 	}
 	tablet := newTestTablet(t, 100, "ks", "0", nil)
-	tm := newTestReplicationTM(tablet, collector, nil)
+	tm := newTestReplicationTM(tablet, mysqlDaemon, nil)
 	tm.QueryServiceControl = tabletservermock.NewController()
 	tm.SemiSyncMonitor = semisyncmonitor.CreateTestSemiSyncMonitor(fakeMysqlDaemon.DB(), exporter)
 
 	status, err := tm.FullStatus(t.Context())
+
 	require.NoError(t, err)
 	require.NotNil(t, status)
-
-	assert.Equal(t, 1, collector.calls)
+	assert.Equal(t, 1, mysqlDaemon.calls)
 	assert.Equal(t, uint32(1), status.ServerId)
 	assert.Equal(t, "8.0.32", status.Version)
 }
 
-func TestFullStatusReturnsOptimizedCollectorError(t *testing.T) {
+func TestFullStatusReturnsCollectorError(t *testing.T) {
 	fakeMysqlDaemon := newTestMysqlDaemon(t, 1)
 	t.Cleanup(fakeMysqlDaemon.DB().Close)
-	collector := &fullStatusCollectorMysqlDaemon{
+	mysqlDaemon := &fullStatusMysqlDaemon{
 		FakeMysqlDaemon: fakeMysqlDaemon,
 		err:             errors.New("collector failed"),
 	}
 	tablet := newTestTablet(t, 100, "ks", "0", nil)
-	tm := newTestReplicationTM(tablet, collector, nil)
+	tm := newTestReplicationTM(tablet, mysqlDaemon, nil)
 	tm.QueryServiceControl = tabletservermock.NewController()
 
 	status, err := tm.FullStatus(t.Context())
 
 	require.ErrorContains(t, err, "collector failed")
 	assert.Nil(t, status)
-	assert.Equal(t, 1, collector.calls)
+	assert.Equal(t, 1, mysqlDaemon.calls)
 }
 
 // TestDemotePrimaryStalled checks that if demote primary takes too long, then we mark it as stalled.

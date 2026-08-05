@@ -40,6 +40,7 @@ import (
 	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/log"
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
+	"vitess.io/vitess/go/vt/vtenv"
 )
 
 func testRedacted(t *testing.T, source, expected string) {
@@ -777,7 +778,7 @@ func TestSemiSyncExtensionLoaded(t *testing.T) {
 	assert.Equal(t, mysql.SemiSyncTypeOff, res)
 }
 
-func TestTryCollectFullStatusData(t *testing.T) {
+func TestCollectFullStatusData(t *testing.T) {
 	db := fakesqldb.New(t)
 	t.Cleanup(db.Close)
 
@@ -832,7 +833,7 @@ func TestTryCollectFullStatusData(t *testing.T) {
 	selectOneCalls := db.GetQueryCalledNum("SELECT 1")
 	db.ResetQueryLog()
 
-	result, err := testMysqld.TryCollectFullStatusData(t.Context())
+	result, err := testMysqld.CollectFullStatusData(t.Context())
 	require.NoError(t, err)
 	require.NotNil(t, result)
 	require.NotNil(t, result.Status)
@@ -873,7 +874,7 @@ func TestTryCollectFullStatusData(t *testing.T) {
 	netTimeoutCalls := db.GetQueryCalledNum("select @@global.replica_net_timeout")
 	db.ResetQueryLog()
 
-	result, err = testMysqld.TryCollectFullStatusData(t.Context())
+	result, err = testMysqld.CollectFullStatusData(t.Context())
 	require.NoError(t, err)
 	require.NotNil(t, result)
 	require.NotNil(t, result.Status)
@@ -883,7 +884,7 @@ func TestTryCollectFullStatusData(t *testing.T) {
 	assert.Len(t, strings.Split(db.QueryLog(), ";"), 8)
 }
 
-func newTryCollectFullStatusDataTestMysqld(t *testing.T) (*fakesqldb.DB, *Mysqld) {
+func newCollectFullStatusDataTestMysqld(t *testing.T) (*fakesqldb.DB, *Mysqld) {
 	t.Helper()
 
 	db := fakesqldb.New(t)
@@ -913,12 +914,12 @@ func newTryCollectFullStatusDataTestMysqld(t *testing.T) (*fakesqldb.DB, *Mysqld
 	return db, mysqld
 }
 
-func TestTryCollectFullStatusDataStopsAfterCancellation(t *testing.T) {
-	db, mysqld := newTryCollectFullStatusDataTestMysqld(t)
+func TestCollectFullStatusDataStopsAfterCancellation(t *testing.T) {
+	db, mysqld := newCollectFullStatusDataTestMysqld(t)
 	ctx, cancel := context.WithCancel(t.Context())
 	db.SetBeforeFunc("SHOW REPLICA STATUS", cancel)
 
-	result, err := mysqld.TryCollectFullStatusData(ctx)
+	result, err := mysqld.CollectFullStatusData(ctx)
 
 	require.ErrorIs(t, err, context.Canceled)
 	assert.Nil(t, result)
@@ -927,9 +928,9 @@ func TestTryCollectFullStatusDataStopsAfterCancellation(t *testing.T) {
 	assert.Zero(t, db.GetQueryCalledNum("SELECT * FROM performance_schema.replication_connection_configuration"))
 }
 
-func TestTryCollectFullStatusDataRetriesLostConnectionOnce(t *testing.T) {
+func TestCollectFullStatusDataRetriesLostConnectionOnce(t *testing.T) {
 	t.Run("successful retry", func(t *testing.T) {
-		db, mysqld := newTryCollectFullStatusDataTestMysqld(t)
+		db, mysqld := newCollectFullStatusDataTestMysqld(t)
 		var connectionClosed atomic.Bool
 		db.SetBeforeFunc("SHOW REPLICA STATUS", func() {
 			if connectionClosed.CompareAndSwap(false, true) {
@@ -937,7 +938,7 @@ func TestTryCollectFullStatusDataRetriesLostConnectionOnce(t *testing.T) {
 			}
 		})
 
-		result, err := mysqld.TryCollectFullStatusData(t.Context())
+		result, err := mysqld.CollectFullStatusData(t.Context())
 
 		require.NoError(t, err)
 		require.NotNil(t, result)
@@ -945,10 +946,10 @@ func TestTryCollectFullStatusDataRetriesLostConnectionOnce(t *testing.T) {
 	})
 
 	t.Run("retry failure", func(t *testing.T) {
-		db, mysqld := newTryCollectFullStatusDataTestMysqld(t)
+		db, mysqld := newCollectFullStatusDataTestMysqld(t)
 		db.SetBeforeFunc("SHOW REPLICA STATUS", db.CloseAllConnections)
 
-		result, err := mysqld.TryCollectFullStatusData(t.Context())
+		result, err := mysqld.CollectFullStatusData(t.Context())
 
 		require.Error(t, err)
 		assert.Nil(t, result)
@@ -956,7 +957,7 @@ func TestTryCollectFullStatusDataRetriesLostConnectionOnce(t *testing.T) {
 	})
 }
 
-func TestTryCollectFullStatusDataFallsBackWhenCoreBatchFails(t *testing.T) {
+func TestCollectFullStatusDataFallsBackWhenCoreBatchFails(t *testing.T) {
 	var logOutput bytes.Buffer
 	previousLogger := log.SwapLogger(slog.New(slog.NewTextHandler(&logOutput, nil)))
 	t.Cleanup(func() {
@@ -981,13 +982,38 @@ func TestTryCollectFullStatusDataFallsBackWhenCoreBatchFails(t *testing.T) {
 	testMysqld := NewMysqld(dbc)
 	t.Cleanup(testMysqld.Close)
 
-	result, err := testMysqld.TryCollectFullStatusData(t.Context())
+	result, err := testMysqld.CollectFullStatusData(t.Context())
 	require.NoError(t, err)
 	assert.Nil(t, result)
 	assert.Zero(t, db.GetQueryCalledNum("SHOW REPLICA STATUS"))
 	assert.Contains(t, logOutput.String(), "FullStatus optimized collection failed")
 	assert.Contains(t, logOutput.String(), "failed to read server_uuid")
 	assert.Contains(t, logOutput.String(), "legacy_full_status")
+}
+
+func TestFakeMysqlDaemonCollectFullStatusData(t *testing.T) {
+	mysqld := NewFakeMysqlDaemon(nil)
+
+	result, err := mysqld.CollectFullStatusData(t.Context())
+	require.NoError(t, err)
+	assert.Nil(t, result)
+}
+
+func TestCollectFullStatusDataIsUnavailableForMariaDB(t *testing.T) {
+	env, err := vtenv.New(vtenv.Options{MySQLServerVersion: "10.11.14-MariaDB"})
+	require.NoError(t, err)
+	db := fakesqldb.NewWithEnv(t, env)
+	t.Cleanup(db.Close)
+	db.AddQuery("SELECT 1", &sqltypes.Result{})
+
+	params := db.ConnParams()
+	cp := *params
+	mysqld := NewMysqld(dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb"))
+	t.Cleanup(mysqld.Close)
+
+	result, err := mysqld.CollectFullStatusData(t.Context())
+	require.NoError(t, err)
+	assert.Nil(t, result)
 }
 
 func TestFetchFullStatusVariablesHonorsCanceledContext(t *testing.T) {

@@ -60,7 +60,7 @@ type (
 	ResetSuperReadOnlyFunc func() error
 
 	// FullStatusResult contains the FullStatus proto assembled by
-	// TryCollectFullStatusData along with any non-fatal errors collected while
+	// CollectFullStatusData along with any non-fatal errors collected while
 	// reading semi-sync data.
 	FullStatusResult struct {
 		Status     *replicationdatapb.FullStatus
@@ -556,10 +556,10 @@ func (mysqld *Mysqld) ReplicationConfiguration(ctx context.Context) (*replicatio
 	return conn.Conn.ReplicationConfiguration()
 }
 
-// TryCollectFullStatusData collects FullStatus data on one connection for
+// CollectFullStatusData collects FullStatus data on one connection for
 // supported MySQL flavors. A nil result (with a nil error) means the caller
 // should use the existing collection path.
-func (mysqld *Mysqld) TryCollectFullStatusData(ctx context.Context) (*FullStatusResult, error) {
+func (mysqld *Mysqld) CollectFullStatusData(ctx context.Context) (*FullStatusResult, error) {
 	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
 	if err != nil {
 		return nil, err
