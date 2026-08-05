@@ -24,6 +24,7 @@ import (
 	"os"
 	"os/signal"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -55,7 +56,9 @@ import (
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/binlogacl"
+	econtext "vitess.io/vitess/go/vt/vtgate/executorcontext"
 	"vitess.io/vitess/go/vt/vtgate/vtgateservice"
+	"vitess.io/vitess/go/vt/vttablet/queryservice"
 	"vitess.io/vitess/go/vt/vttls"
 )
 
@@ -117,6 +120,74 @@ func registerPluginFlags(fs *pflag.FlagSet) {
 	utils.SetFlagBoolVar(fs, &mysqlServerMultiQuery, "mysql-server-multi-query-protocol", mysqlServerMultiQuery, "If set, the server will use the new implementation of handling queries where-in multiple queries are sent together.")
 }
 
+// tempTableHeartbeatTarget identifies one reserved connection that must be
+// kept alive because its session holds temporary tables. The targets map is
+// only read and written under tempTableConn.mu.
+type tempTableHeartbeatTarget struct {
+	target     *querypb.Target
+	alias      *topodatapb.TabletAlias
+	reservedID int64
+	// failures counts consecutive keepalive failures. It gates the transition
+	// logging (warn once when a target starts failing, note the recovery once
+	// when it stops) and routes a failing tablet through the bounded dispatch
+	// lane; failures never evict a target — only a confirmed connection-closed
+	// error does — or a few seconds of network trouble would silently disable
+	// the keepalives of a live connection. It resets only on a successful beat,
+	// and is carried across a command's target republish so client activity
+	// cannot reset a still-unavailable tablet.
+	failures int
+	// route caches tempTableRouteKey for this target, stamped at construction,
+	// so the sweeper's snapshots group and filter targets with plain string
+	// compares instead of rebuilding the key (an allocating fmt of the alias)
+	// per target per scan. Derived state: tempTableRouteKey computes it on the
+	// fly when empty, so a hand-built target still routes correctly.
+	route string
+}
+
+// tempTableTargetKey identifies a reserved connection by its tablet and
+// reserved id. A reserved id is only unique within one vttablet (each
+// generates its own), so the tablet alias is part of the key — otherwise a
+// session reserved on two tablets could collide on the same id.
+type tempTableTargetKey struct {
+	alias      string
+	reservedID int64
+}
+
+func newTempTableTargetKey(t tempTableHeartbeatTarget) tempTableTargetKey {
+	return tempTableTargetKey{alias: topoproto.TabletAliasString(t.alias), reservedID: t.reservedID}
+}
+
+// tempTableConn tracks the reserved connections the background heartbeat
+// sweeper keeps alive for one client connection. The connection's command
+// goroutine republishes the targets at the end of each command;
+// the sweeper snapshots them under mu and refreshes them (batched per tablet)
+// without holding mu across the RPC, so the sweeper's own lock never blocks a
+// foreground command and a long command never starves the keepalives.
+type tempTableConn struct {
+	// mu guards targets and closed. It is held only for the microseconds it
+	// takes to snapshot or replace the targets — never across a beat RPC — so a
+	// slow keepalive cannot delay foreground commands here, and keepalives are
+	// never starved by a long command. (On the tablet, a command colliding with
+	// a keepalive's own microseconds-long hold of the reserved connection waits
+	// it out; see TxPool.GetAndLock.)
+	mu sync.Mutex
+	// targets is keyed by (tablet, reserved id) so the sweeper can find,
+	// update, and evict a single reserved connection in O(1) rather than
+	// scanning — a session left in reserved mode after a scatter can hold
+	// many targets.
+	targets map[tempTableTargetKey]tempTableHeartbeatTarget
+	// closed marks the connection as shutting down so no further beats start.
+	// A beat already in flight is harmless: the tablet tolerates a beat racing
+	// the session's release in both directions (a keepalive hold is waited out
+	// by GetAndLock, and a beat that loses the race gets a gone result, which
+	// the apply step discards against the cleared targets).
+	closed bool
+}
+
+// The mysql server only delivers connection-activity notifications to
+// handlers that implement the optional observer interface.
+var _ mysql.ConnActivityObserver = (*vtgateHandler)(nil)
+
 // vtgateHandler implements the Listener interface.
 // It stores the Session in the ClientData of a Connection.
 type vtgateHandler struct {
@@ -125,6 +196,30 @@ type vtgateHandler struct {
 
 	vtg         *VTGate
 	connections map[uint32]*mysql.Conn
+
+	// tempTableConns maps *mysql.Conn to its *tempTableConn. An entry exists
+	// only while the connection's session holds temporary tables, so the
+	// background sweeper can keep its reserved connections (and their mysqld
+	// connections) alive. Entries are added and removed by the connection's
+	// own goroutine; the sweeper also evicts targets that no longer exist.
+	tempTableConns sync.Map
+
+	// tempTableBeatInFlight holds the tablet aliases that currently have a
+	// keepalive beat running (alias string -> struct{}). A tablet already in
+	// this set is skipped when the next tick dispatches, so a slow or
+	// unreachable tablet keeps at most one stuck beat rather than a growing
+	// backlog, and never delays a healthy tablet's beat. The zero value is
+	// ready to use.
+	tempTableBeatInFlight sync.Map
+
+	// tempTableFailingBeatSem bounds how many failing (unreachable) tablets are
+	// beaten at once. A failing tablet's beat blocks for the whole budget, so
+	// without a bound a broad outage would hold one stuck RPC and goroutine per
+	// affected tablet. Healthy tablets bypass this gate entirely, so they are
+	// never starved by the failing backlog. It is created lazily so a zero-value
+	// handler (as some tests construct) works without an initializer.
+	tempTableFailingBeatSemOnce sync.Once
+	tempTableFailingBeatSem     chan struct{}
 
 	busyConnections atomic.Int32
 }
@@ -159,6 +254,639 @@ func newVtgateHandler(vtg *VTGate) *vtgateHandler {
 	}
 }
 
+// tempTableHeartbeatTargets extracts the reserved connections that need
+// keepalives from a session that holds temporary tables.
+func tempTableHeartbeatTargets(session *vtgatepb.Session) map[tempTableTargetKey]tempTableHeartbeatTarget {
+	if !session.GetOptions().GetHasCreatedTempTables() {
+		return nil
+	}
+	targets := make(map[tempTableTargetKey]tempTableHeartbeatTarget)
+	for _, ss := range session.GetShardSessions() {
+		// Shard sessions with an open transaction are deliberately excluded:
+		// the tablet does not reset its transaction timer for activity on an
+		// in-transaction connection (idle transactions are supposed to be
+		// killed at the transaction timeout, temp tables or not), so a beat
+		// would not keep the connection alive — it would only inject a query
+		// into the user's open transaction. When the transaction commits, the
+		// command's end hook republishes the target and keepalives resume.
+		if ss.GetReservedId() != 0 && ss.GetTransactionId() == 0 {
+			t := tempTableHeartbeatTarget{
+				target:     ss.GetTarget(),
+				alias:      ss.GetTabletAlias(),
+				reservedID: ss.GetReservedId(),
+			}
+			t.route = tempTableRouteKey(t)
+			targets[newTempTableTargetKey(t)] = t
+		}
+	}
+	return targets
+}
+
+// tempTableCommandEnd must be called once a client command settles: it
+// republishes the session's keepalive targets, registering or deregistering
+// the connection as needed. A sweep in flight validates each reserved
+// connection by its target key, so a republish that keeps a key leaves that
+// beat valid and one that removes a key retires it.
+func (vh *vtgateHandler) tempTableCommandEnd(c *mysql.Conn) {
+	targets := tempTableHeartbeatTargets(vh.session(c))
+	v, ok := vh.tempTableConns.Load(c)
+	if !ok {
+		if len(targets) == 0 {
+			return
+		}
+		// A session-level transaction timeout that does not exceed the worst-case
+		// keepalive gap — the interval plus one RPC round-trip — reclaims the
+		// reserved connection between beats: the keepalive cannot protect this
+		// session's temp tables. This is intentional — an explicit session-level
+		// timeout is a per-session choice that wins over the keepalive, unlike
+		// the global default, which the feature deliberately outlives. Surface it
+		// once, at registration, where the session's current value is the one the
+		// reservation was just created with. The tablet applies the session value
+		// only when it reserves the connection and when a transaction begins on
+		// it, so a shorter timeout set after registration is not reflected here —
+		// nor on the existing reservation's timer until its next transaction.
+		session := vh.session(c)
+		if to := time.Duration(session.GetOptions().GetTransactionTimeout()) * time.Millisecond; to > 0 && to <= tempTableBeatWorstCaseGap(tempTableHeartbeatTime) {
+			log.Warn("session transaction timeout does not exceed the temp-table heartbeat interval plus one keepalive round-trip; its temporary tables may still be reclaimed between heartbeats",
+				slog.Duration("session_transaction_timeout", to),
+				slog.Duration("temp_table_heartbeat_time", tempTableHeartbeatTime),
+				slog.Duration("worst_case_keepalive_gap", tempTableBeatWorstCaseGap(tempTableHeartbeatTime)))
+		}
+		// The session acquired temporary tables during this command: register
+		// the connection so the background sweeper keeps it alive.
+		vh.tempTableConns.Store(c, &tempTableConn{targets: targets})
+		return
+	}
+	ttc := v.(*tempTableConn)
+	ttc.mu.Lock()
+	defer ttc.mu.Unlock()
+	if len(targets) == 0 {
+		// The temporary tables are gone (session reset or reserved
+		// connections released): deregister.
+		ttc.targets = nil
+		vh.tempTableConns.Delete(c)
+		return
+	}
+	// Carry each surviving target's failure count across the republish. A command
+	// republishes the targets every time it settles, but an unavailable tablet is
+	// still unavailable — resetting its count here would route it back through the
+	// unbounded healthy dispatch path on the next sweep, so unrelated client
+	// activity could keep an outage from ever being gated. Only a successful or
+	// gone beat clears the count.
+	for k, nt := range targets {
+		if ot, ok := ttc.targets[k]; ok && ot.failures > 0 {
+			nt.failures = ot.failures
+			targets[k] = nt
+		}
+	}
+	ttc.targets = targets
+	// Re-register in case the sweeper deregistered the entry after evicting
+	// its last target during the command.
+	vh.tempTableConns.Store(c, ttc)
+}
+
+// stopTempTableHeartbeats deregisters the connection so no further beats
+// start for it. It does not wait for a beat already in flight: a beat racing
+// the session's release is safe at the tablet in both directions (see
+// tempTableConn.closed), and waiting here would stall the client's disconnect
+// path for up to a whole beat budget when the beat's tablet is unreachable —
+// delaying the release of the session's reserved connections on healthy shards.
+func (vh *vtgateHandler) stopTempTableHeartbeats(c *mysql.Conn) {
+	v, ok := vh.tempTableConns.Load(c)
+	if !ok {
+		return
+	}
+	ttc := v.(*tempTableConn)
+	ttc.mu.Lock()
+	ttc.closed = true
+	ttc.targets = nil
+	vh.tempTableConns.Delete(c)
+	ttc.mu.Unlock()
+}
+
+// startTempTableHeartbeat launches the background sweeper that keeps reserved
+// connections holding temporary tables alive. It stops when ctx is cancelled.
+func (vh *vtgateHandler) startTempTableHeartbeat(ctx context.Context) {
+	if tempTableHeartbeatTime <= 0 {
+		log.Info("temp-table connection heartbeats are disabled",
+			slog.Duration("temp_table_heartbeat_time", tempTableHeartbeatTime))
+		return
+	}
+	// Each tick scans the registry once, groups reserved connections by tablet,
+	// and dispatches a beat for every tablet on its own goroutine — then returns
+	// without waiting. Because the tick never blocks on the beats, a slow or
+	// unreachable tablet can never delay the next tick's healthy beats, and a
+	// connection registered at any moment is beaten within one interval. Beats
+	// are batched (one cheap RPC per tablet vtgate already talks to). A broad
+	// outage is bounded two ways (see dispatchTempTableBeats): per-tablet
+	// in-flight suppression keeps a stuck tablet to a single beat, and beats to
+	// failing tablets are gated through a small semaphore that healthy tablets
+	// bypass — so the stuck retry work stays bounded without starving healthy
+	// tablets.
+	go func() {
+		ticker := time.NewTicker(tempTableHeartbeatTime)
+		defer ticker.Stop()
+		for {
+			vh.dispatchTempTableBeats(ctx)
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+			}
+		}
+	}()
+}
+
+// tempTableRouteKey identifies the beat a reserved connection belongs to: its
+// tablet alias plus the full routing target (keyspace, shard, tablet type). The
+// whole target is part of the key, not just the alias, so every id in one beat
+// shares a single routing target: the tablet validates that one target, and a
+// permanent rejection (the tablet changed type, or its alias was reused for a
+// different keyspace/shard) then condemns exactly the ids that are genuinely
+// orphaned. A beat mixing a tablet's pre- and post-transition reservations —
+// same alias and type but a different keyspace, say — could not be judged that
+// cleanly: the shared rejection would evict valid reservations too, and their
+// temp tables would expire at the tablet timeout. The computed key is cached on
+// the target at construction (see tempTableHeartbeatTarget.route); the fallback
+// computation here keeps a hand-built target routing correctly.
+func tempTableRouteKey(t tempTableHeartbeatTarget) string {
+	if t.route != "" {
+		return t.route
+	}
+	return topoproto.TabletAliasString(t.alias) + "/" + t.target.GetKeyspace() + "/" + t.target.GetShard() + "/" + t.target.GetTabletType().String()
+}
+
+// forEachTempTableBeatItem walks every beat item in the registry under each
+// connection's briefly-held lock, applying the snapshot rules (skip closing
+// connections) in one place for both the grouped sweep snapshot and the
+// single-route re-snapshot, so the two can never drift apart.
+func (vh *vtgateHandler) forEachTempTableBeatItem(fn func(item tempTableBeatItem)) {
+	vh.tempTableConns.Range(func(key, value any) bool {
+		c := key.(*mysql.Conn)
+		ttc := value.(*tempTableConn)
+		ttc.mu.Lock()
+		if !ttc.closed {
+			for _, t := range ttc.targets {
+				fn(tempTableBeatItem{c: c, ttc: ttc, target: t})
+			}
+		}
+		ttc.mu.Unlock()
+		return true
+	})
+}
+
+// snapshotTempTableBeats scans the registry once and groups every reserved
+// connection by its route (tablet + full target), so the whole registry is
+// locked once per interval and each route can then be refreshed with a single
+// batched touch RPC.
+func (vh *vtgateHandler) snapshotTempTableBeats() map[string][]tempTableBeatItem {
+	byRoute := make(map[string][]tempTableBeatItem)
+	vh.forEachTempTableBeatItem(func(item tempTableBeatItem) {
+		route := tempTableRouteKey(item.target)
+		byRoute[route] = append(byRoute[route], item)
+	})
+	return byRoute
+}
+
+// snapshotTempTableRoute re-collects the current beat items for a single route.
+// A failing route waits in the semaphore queue with a snapshot taken before the
+// wait; by the time it runs, a command may have added reservations to the route
+// that the original snapshot missed — and that in-flight suppression kept the
+// next sweep from picking up while this beat held the route. Re-collecting just
+// before the beat refreshes those too, so a reservation added while the route was
+// queued is not stranded (and left to time out) until this beat finishes. The
+// walk filters on the target's cached route key — a plain string compare — and
+// allocates only for the requested route, so a broad recovery, where many
+// failing routes re-snapshot as they clear the semaphore, costs one cheap pass
+// per route rather than rebuilding every route's slice each time.
+func (vh *vtgateHandler) snapshotTempTableRoute(route string) []tempTableBeatItem {
+	var items []tempTableBeatItem
+	vh.forEachTempTableBeatItem(func(item tempTableBeatItem) {
+		if tempTableRouteKey(item.target) == route {
+			items = append(items, item)
+		}
+	})
+	return items
+}
+
+// tempTableFailingBeatConcurrency bounds how many failing tablets are beaten at
+// once (see tempTableFailingBeatSem). Healthy tablets are not bounded — they
+// reply in well under a millisecond — so this only caps the stuck retry work a
+// broad outage produces.
+const tempTableFailingBeatConcurrency = 32
+
+// tempTableFailingBeatRecheckInterval is how often a beat queued for the
+// failing lane re-checks the tablet's healthcheck state while it waits for a
+// slot: a tablet that recovers behind a full backlog is promoted to the
+// healthy path instead of staying stuck until the still-failing routes ahead
+// of it burn their beat budgets.
+const tempTableFailingBeatRecheckInterval = 1 * time.Second
+
+// failingBeatSem returns the semaphore that bounds concurrent beats to failing
+// tablets, creating it on first use so a zero-value handler works.
+func (vh *vtgateHandler) failingBeatSem() chan struct{} {
+	vh.tempTableFailingBeatSemOnce.Do(func() {
+		vh.tempTableFailingBeatSem = make(chan struct{}, tempTableFailingBeatConcurrency)
+	})
+	return vh.tempTableFailingBeatSem
+}
+
+// tempTableBeatItemsFailing reports whether a tablet's last beat failed. All of
+// a tablet's reserved connections share one batched beat and so fail together; a
+// connection newly added to a failing tablet counts as failing too, which is
+// correct — the tablet is unreachable.
+func tempTableBeatItemsFailing(items []tempTableBeatItem) bool {
+	for _, item := range items {
+		if item.target.failures > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+// dispatchTempTableBeats snapshots the registry once and launches a beat for
+// every tablet that does not already have one in flight, each on its own
+// goroutine. It returns immediately without waiting for the beats to finish, so
+// a slow or unreachable tablet can never delay the caller (the ticker) or a
+// healthy tablet's beat. The returned WaitGroup completes when the beats this
+// call launched have finished; the background loop ignores it, while tests use
+// it to run a sweep synchronously.
+//
+// Two mechanisms bound a broad outage. Per-tablet in-flight suppression skips a
+// tablet whose previous beat is still running, so a stuck tablet keeps a single
+// beat rather than accumulating one every tick. And a tablet whose last beat
+// failed — which may block for the whole budget — queues behind a small
+// semaphore, so no more than tempTableFailingBeatConcurrency of them beat at
+// once; a slot freed by a completed beat is taken immediately, so a tablet that
+// has recovered (its beat returns fast) is contacted as soon as a slot opens
+// rather than dropped until the next tick. Healthy tablets bypass the semaphore,
+// so they are never starved by the failing backlog.
+//
+// One case is deliberately left unbounded: the first sweep of a sudden broad
+// outage. A tablet healthy until it went down still has failures == 0, so it
+// takes the healthy path and starts one beat before that beat's timeout marks it
+// failing; only from the next sweep on is it gated. Bounding this first sweep too
+// would mean capping the healthy path, which would delay healthy refreshes once a
+// deployment holds more tablets than the cap — the exact cost a keepalive must
+// avoid, and to spare work on connections a mass outage has already lost. The
+// burst is self-limiting: in-flight suppression holds it to one beat per tablet,
+// and it clears within one budget.
+func (vh *vtgateHandler) dispatchTempTableBeats(ctx context.Context) *sync.WaitGroup {
+	wg := &sync.WaitGroup{}
+	for route, items := range vh.snapshotTempTableBeats() {
+		if _, inFlight := vh.tempTableBeatInFlight.LoadOrStore(route, struct{}{}); inFlight {
+			continue
+		}
+		failing := tempTableBeatItemsFailing(items)
+		if failing && vh.vtg != nil && vh.vtg.gw != nil && vh.vtg.gw.TabletSeemsServing(items[0].target.alias) {
+			// The healthcheck already sees this tablet serving again, so its
+			// beat will resolve quickly whichever way it goes. Dispatch it on
+			// the healthy path instead of queueing it behind still-failing
+			// routes: with the lane full of budget-burning beats, a recovered
+			// tablet could otherwise wait through several beat budgets for a
+			// slot — long enough for the reserved connections the recovery
+			// was meant to save to expire at the tablet timeout.
+			failing = false
+		}
+		wg.Go(func() {
+			defer vh.tempTableBeatInFlight.Delete(route)
+			beatItems := items
+			if failing {
+				// Queue behind the bounded failing lane rather than dropping the
+				// tablet when the lane is full. A slot freed by a completed beat is
+				// taken right away, so a tablet that has recovered — its beat
+				// returns fast — is contacted the moment a slot opens instead of
+				// waiting a whole interval for the next tick, which matters when an
+				// outage has already eaten into the tablet timeout. In-flight
+				// suppression keeps this to one queued beat per tablet, so the
+				// backlog is bounded by the number of failing tablets, not growing.
+				// While queued, periodically re-check the healthcheck: the
+				// serving check before queueing is a one-shot, and this
+				// goroutine holds the route's in-flight marker, so later
+				// sweeps cannot reconsider a tablet that recovered while it
+				// waited. A tablet the healthcheck sees serving again is
+				// promoted out of the queue (no slot taken — the blockers
+				// keep theirs) and beaten immediately on the healthy path.
+				sem := vh.failingBeatSem()
+				recheck := time.NewTicker(tempTableFailingBeatRecheckInterval)
+			laneWait:
+				for {
+					select {
+					case sem <- struct{}{}:
+						defer func() { <-sem }()
+						break laneWait
+					case <-recheck.C:
+						if vh.vtg != nil && vh.vtg.gw != nil && vh.vtg.gw.TabletSeemsServing(items[0].target.alias) {
+							break laneWait
+						}
+					case <-ctx.Done():
+						recheck.Stop()
+						return
+					}
+				}
+				recheck.Stop()
+				// Re-snapshot after the wait: a reservation added to this route
+				// while it was queued is missed by the pre-wait snapshot, and
+				// in-flight suppression kept the next sweep from picking it up, so
+				// this beat is its only chance to be refreshed before it times out.
+				beatItems = vh.snapshotTempTableRoute(route)
+			}
+			vh.beatTempTableTablet(ctx, beatItems)
+		})
+	}
+	return wg
+}
+
+// tempTableBeatBudget returns how long a single tablet's batched touch may run
+// before it times out. It floors the budget at 2s so a momentarily slow but
+// healthy tablet is not cut off at short intervals, but it always stays below
+// the heartbeat interval: the loop touches every tablet once per interval, so a
+// per-tablet budget at or above the interval would let an unreachable tablet's
+// touch still be in flight when the next interval's touch for that same tablet
+// should start, piling one round on the next. The 3/4 cap keeps a margin below
+// the next tick.
+func tempTableBeatBudget(interval time.Duration) time.Duration {
+	budget := max(interval/2, 2*time.Second)
+	if capped := interval * 3 / 4; budget > capped {
+		budget = capped
+	}
+	return budget
+}
+
+// tempTableBeatWorstCaseGap is the longest a healthy reserved connection can go
+// between tablet-side refreshes: one interval to be seen by the next snapshot,
+// plus one per-tablet RPC round-trip, which the sweep bounds by the beat budget.
+// The tablet resets the connection's timer only when the touch reaches it and
+// runs (acquire the connection, PeerCheck, unlock), not when the sweep
+// dispatches, so this — not the interval alone — is the gap the workload timeout
+// must exceed.
+func tempTableBeatWorstCaseGap(interval time.Duration) time.Duration {
+	return interval + tempTableBeatBudget(interval)
+}
+
+// tempTableBeatItem is one reserved connection to keep alive: one target of
+// one client connection. Items are grouped by tablet so all of a tablet's
+// reserved connections are refreshed with a single batched touch RPC.
+type tempTableBeatItem struct {
+	c      *mysql.Conn
+	ttc    *tempTableConn
+	target tempTableHeartbeatTarget
+}
+
+// beatTempTableTablet refreshes all of one tablet's reserved connections with a
+// single batched touch RPC and applies the result to each connection.
+func (vh *vtgateHandler) beatTempTableTablet(ctx context.Context, items []tempTableBeatItem) {
+	// Filter each item under its connection's lock: skip it if the connection
+	// is closing or the target no longer exists. We validate the reserved
+	// connection by its target key, not by a connection-wide generation: a beat
+	// can wait behind the failing-lane semaphore while a command republishes
+	// this same reservation, and rejecting it on a stale generation would
+	// refresh nothing while the in-flight marker suppressed the intervening
+	// sweeps — letting the reserved connection time out.
+	valid := items[:0]
+	for _, item := range items {
+		ttc := item.ttc
+		ttc.mu.Lock()
+		if _, ok := ttc.targets[newTempTableTargetKey(item.target)]; !ttc.closed && ok {
+			valid = append(valid, item)
+		}
+		ttc.mu.Unlock()
+	}
+	if len(valid) == 0 {
+		return
+	}
+
+	// Every reserved id goes in the batch list and the RPC's reserved id is
+	// left zero; see sendTempTableBeat for how that keeps the touch safe on
+	// tablets that predate the option.
+	// The tablet rejects a keepalive carrying more than
+	// queryservice.ReservedConnKeepAliveMaxBatch ids, so split a tablet's reserved
+	// connections into chunks of at most that many rather than send one oversized
+	// touch that would refresh none of them.
+	const maxBatch = queryservice.ReservedConnKeepAliveMaxBatch
+	if len(valid) <= maxBatch {
+		vh.beatTempTableChunk(ctx, valid)
+		return
+	}
+	// Beat the chunks concurrently within this one round. Run serially, a stalled
+	// chunk would hold every later chunk for its whole budget, pushing their
+	// refreshes past the interval-plus-one-budget bound; and because the tablet's
+	// beat stays in flight until its last chunk finishes, the next sweep would be
+	// suppressed for the sum of the chunks' budgets rather than just one.
+	var wg sync.WaitGroup
+	for batch := range slices.Chunk(valid, maxBatch) {
+		wg.Go(func() {
+			vh.beatTempTableChunk(ctx, batch)
+		})
+	}
+	wg.Wait()
+}
+
+// beatTempTableChunk sends one batched touch for a single chunk of a tablet's
+// reserved connections (at most queryservice.ReservedConnKeepAliveMaxBatch ids)
+// and applies the outcome — the tablet's reported-gone ids and the whole-chunk
+// error — to each connection in the chunk.
+func (vh *vtgateHandler) beatTempTableChunk(ctx context.Context, batch []tempTableBeatItem) {
+	ids := make([]int64, 0, len(batch))
+	for _, item := range batch {
+		ids = append(ids, item.target.reservedID)
+	}
+	bctx, cancel := context.WithTimeout(mysqlConnCallerContext(ctx, batch[0].c), tempTableBeatBudget(tempTableHeartbeatTime))
+	gone, err := vh.sendTempTableBeat(bctx, batch[0].target, ids)
+	cancel()
+
+	goneSet := make(map[int64]struct{}, len(gone))
+	for _, id := range gone {
+		goneSet[id] = struct{}{}
+	}
+	for _, item := range batch {
+		_, isGone := goneSet[item.target.reservedID]
+		vh.applyTempTableBeatResult(item, isGone, err)
+	}
+}
+
+// isStaleTargetErr reports whether err is a tablet permanently rejecting the
+// beat's target, so the registration is stale and retrying can never succeed.
+// Two flavors, both from the tablet's target validation (VerifyTarget): a
+// tablet-type change (FAILED_PRECONDITION carrying the wrong-tablet message,
+// detected the same way the query path detects it — see requireNewQS), and a
+// keyspace/shard mismatch (INVALID_ARGUMENT "invalid keyspace/shard ... does
+// not match expected ..."), which happens when a tablet alias is reused by a
+// reprovisioned tablet serving a different keyspace or shard. The message is
+// matched specifically — the tablet returns INVALID_ARGUMENT for other
+// keepalive problems too (empty or oversized batches) and those must stay
+// transient. Both messages survive the gateway's error wrapping.
+func isStaleTargetErr(err error) bool {
+	if err == nil {
+		return false
+	}
+	switch vterrors.Code(err) {
+	case vtrpcpb.Code_FAILED_PRECONDITION:
+		return vterrors.RxWrongTablet.MatchString(err.Error())
+	case vtrpcpb.Code_INVALID_ARGUMENT:
+		return vterrors.RxWrongKeyspaceShard.MatchString(err.Error())
+	}
+	return false
+}
+
+// applyTempTableBeatResult applies one reserved connection's touch outcome to its
+// client connection's registration: evicting it if the tablet reported it gone or
+// rejected its target as a wrong tablet, resetting its failure count on success,
+// or counting a transient failure (whole-tablet RPC error) so it is retried on
+// the next sweep.
+func (vh *vtgateHandler) applyTempTableBeatResult(item tempTableBeatItem, gone bool, err error) {
+	key := newTempTableTargetKey(item.target)
+	ttc := item.ttc
+	ttc.mu.Lock()
+	defer ttc.mu.Unlock()
+	t, ok := ttc.targets[key]
+	if !ok {
+		// The target no longer exists: the reserved connection was released, or
+		// the client connection closed (which clears every target), while this
+		// beat was in flight — there is nothing to apply. We key on the target,
+		// not the snapshot generation: a command settling mid-beat republishes
+		// the targets (bumping the generation) but keeps this key, and its
+		// outcome still applies to the same physical connection. Discarding it on
+		// a generation change instead would drop a failure — letting unrelated
+		// activity keep resetting the count and route the unavailable tablet
+		// through the uncapped path — or drop a recovery, leaving a healed tablet
+		// marked failing.
+		return
+	}
+	if gone {
+		// The reserved connection is gone (e.g. reclaimed by the tablet, or
+		// its mysqld connection closed): stop beating it. The session
+		// self-heals by re-reserving on its next query.
+		log.Warn("temp-table connection is gone, stopping its keepalives",
+			slog.Int64("reserved_id", item.target.reservedID),
+			slog.String("tablet", topoproto.TabletAliasString(item.target.alias)))
+		delete(ttc.targets, key)
+		if len(ttc.targets) == 0 {
+			vh.tempTableConns.Delete(item.c)
+		}
+		return
+	}
+	if isStaleTargetErr(err) {
+		// The tablet permanently rejects this target — its type changed (e.g.
+		// REPLICA->RDONLY) or its alias was reused by a tablet serving a
+		// different keyspace/shard — so the session can no longer reach this
+		// reserved connection and retrying can never succeed. Stop refreshing
+		// it — otherwise the keepalive would retry forever, occupying a
+		// failing-lane slot — and let the tablet reclaim it; the session
+		// self-heals by re-reserving on its next query. All ids in a beat share
+		// one routing target, so a stale-target result condemns exactly this
+		// stale group.
+		log.Warn("temp-table connection target is no longer valid (tablet type or keyspace/shard changed), stopping its keepalives",
+			slog.Int64("reserved_id", item.target.reservedID),
+			slog.String("tablet", topoproto.TabletAliasString(item.target.alias)),
+			slog.String("tablet_type", item.target.target.GetTabletType().String()),
+			slog.Any("error", err))
+		delete(ttc.targets, key)
+		if len(ttc.targets) == 0 {
+			vh.tempTableConns.Delete(item.c)
+		}
+		return
+	}
+	if err == nil {
+		if t.failures > 0 {
+			log.Info("temp-table connection heartbeat recovered",
+				slog.Int64("reserved_id", item.target.reservedID),
+				slog.String("tablet", topoproto.TabletAliasString(item.target.alias)),
+				slog.Int("failed_beats", t.failures))
+		}
+		t.failures = 0
+		ttc.targets[key] = t
+		return
+	}
+	// Transient failure (the whole tablet was unreachable): keep the target and
+	// retry on the next sweep — for as long as it takes. Only a tablet-reported
+	// gone id may evict; a failure count must not, or a few seconds of network
+	// trouble would silently disable the keepalives of a live connection whose
+	// temp tables the tablet would then reclaim. To keep an unreachable tablet
+	// from producing a warning every sweep, log on state transitions only:
+	// once when a target starts failing, once when it recovers (above).
+	t.failures++
+	ttc.targets[key] = t
+	if t.failures == 1 {
+		log.Warn("temp-table connection heartbeat failed, will keep retrying",
+			slog.Int64("reserved_id", item.target.reservedID),
+			slog.String("tablet", topoproto.TabletAliasString(item.target.alias)),
+			slog.Any("error", err))
+	}
+}
+
+// mysqlConnCallerContext returns ctx carrying the connection's caller identity
+// (effective caller id from the authenticated user, immediate caller id from
+// its UserData). Every command path and the temp-table keepalive sweeper build
+// the identity through this one helper, so attribution cannot drift between
+// them. On an up-to-date tablet a keepalive touch short-circuits before the
+// ACL and query-log path, so the identity is not used there; it matters on a
+// not-yet-upgraded tablet, where the touch runs as a real "select 1" and the
+// batch carries the first connection's identity so that query is attributed to
+// a real user in the tablet's query log. The identity fields are set at
+// authentication time and immutable after, so reading them from any goroutine
+// is safe.
+func mysqlConnCallerContext(ctx context.Context, c *mysql.Conn) context.Context {
+	if c.UserData == nil {
+		return ctx
+	}
+	return callerid.NewContext(ctx,
+		callerid.NewEffectiveCallerID(
+			c.User,                  /* principal: who */
+			c.RemoteAddr().String(), /* component: running client process */
+			"VTGate MySQL Connector" /* subcomponent: part of the client */),
+		c.UserData.Get())
+}
+
+// sendTempTableBeat sends one batched keepalive touch to a tablet for all the
+// given reserved ids and returns the ids the tablet reports gone. The touch
+// carries reserved id zero (every id travels in the batch list), so the tablet
+// refreshes the connections' idle timers without executing anything on the
+// underlying MySQL connections; mysqld's wait_timeout keeps counting only real
+// user traffic and reclaims idle sessions exactly as MySQL would. On a tablet
+// predating the option the "select 1" runs on a throwaway pooled connection
+// (reserved id zero) rather than a reserved one, so it can never kill a
+// reserved connection; no reserved connection is kept alive there until the
+// tablet is upgraded.
+func (vh *vtgateHandler) sendTempTableBeat(ctx context.Context, routing tempTableHeartbeatTarget, ids []int64) (gone []int64, err error) {
+	qs, err := vh.vtg.gw.QueryServiceByAlias(ctx, routing.alias, routing.target)
+	if err != nil {
+		return nil, err
+	}
+	// The keepalive travels as a request-level signal (never in
+	// ExecuteOptions, which round-trip through client sessions and would let
+	// an older vtgate relay client-injected fields to the tablet). reservedID
+	// is left zero (all ids are in the batch list): an up-to-date tablet
+	// refreshes them all, while a tablet predating the request field runs the
+	// fallback query on a throwaway pooled connection rather than a reserved
+	// one — it can never kill a reserved connection.
+	ctx = queryservice.ContextWithReservedConnKeepAlive(ctx, ids)
+	result, err := qs.Execute(ctx, nil, routing.target, "/* temp-table keepalive */ select 1", nil, 0 /* transactionID */, 0 /* reservedID */, nil /* options */)
+	if err != nil {
+		return nil, err
+	}
+	// Only an up-to-date tablet returns the gone-id result. A tablet that ran
+	// the fallback query returns its own result, whose rows must not be parsed
+	// as gone reserved ids. A nil result with a nil error is not produced by
+	// any in-tree tablet, but the proto contract permits it (a third-party
+	// QueryService could send an empty response), and this runs on a bare
+	// sweeper goroutine where a nil deref would crash the whole vtgate.
+	if result == nil || len(result.Fields) != 1 || result.Fields[0].GetName() != queryservice.ReservedConnKeepAliveGoneField {
+		return nil, nil
+	}
+	for _, row := range result.Rows {
+		if len(row) == 0 {
+			continue
+		}
+		id, err := row[0].ToInt64()
+		if err != nil {
+			continue
+		}
+		gone = append(gone, id)
+	}
+	return gone, nil
+}
+
 func (vh *vtgateHandler) NewConnection(c *mysql.Conn) {
 	// Match VTGate's default session state (Autocommit: true) so the
 	// handshake packet reports correct status flags to the client.
@@ -176,6 +904,11 @@ func (vh *vtgateHandler) numConnections() int {
 }
 
 func (vh *vtgateHandler) ComResetConnection(c *mysql.Conn) {
+	// The command-end hook republishes the temp-table keepalive targets once
+	// the session is released: it deregisters the connection and supersedes
+	// any beat in flight.
+	defer vh.tempTableCommandEnd(c)
+
 	ctx := context.Background()
 	session := vh.session(c)
 	if session.InTransaction {
@@ -185,9 +918,34 @@ func (vh *vtgateHandler) ComResetConnection(c *mysql.Conn) {
 	if err != nil {
 		log.Error(fmt.Sprintf("Error happened in transaction rollback: %v", err))
 	}
+	// The reset released the reserved connections, and the temporary tables
+	// and applied session settings died with them — but the session object
+	// survives on the connection. MySQL's COM_RESET_CONNECTION returns the
+	// whole session to its just-connected state (transaction rolled back,
+	// temp tables dropped, session and user variables reset, LAST_INSERT_ID
+	// cleared, autocommit back to default), so rebuild the session as a
+	// fresh default rather than clearing fields piecemeal: the post-reset
+	// state is then identical to a new connection's by construction, future
+	// default fields included, and a pooled client cannot inherit any of the
+	// previous borrower's state. Only the default database survives a reset,
+	// so carry the target over, and return the status flags to the
+	// just-connected state the handshake advertises: assignment, not |=, so
+	// stale bits — e.g. in-transaction from a reset issued mid-transaction —
+	// are cleared along the way.
+	target := session.TargetString
+	c.ClientData = nil
+	vh.session(c).TargetString = target
+	c.StatusFlags = mysql.ServerStatusAutocommit
 }
 
 func (vh *vtgateHandler) ConnectionClosed(c *mysql.Conn) {
+	// Deregister the temp-table keepalives first so no further beats start for
+	// this connection. A beat already in flight is not waited out: it races
+	// the release of the reserved connections below safely in both directions
+	// (see tempTableConn.closed), and waiting here could stall the disconnect
+	// path for a whole beat budget when the beat's tablet is unreachable.
+	vh.stopTempTableHeartbeats(c)
+
 	// Rollback if there is an ongoing transaction. Ignore error.
 	defer func() {
 		vh.mu.Lock()
@@ -310,6 +1068,11 @@ func (vh *vtgateHandler) ComQuery(c *mysql.Conn, query string, callback func(*sq
 	}
 	defer span.Finish()
 
+	// Republish the session's temp-table heartbeat targets once the command
+	// settles. Beats run concurrently with commands; a collision on the
+	// reserved connection is resolved tablet-side (see TxPool.GetAndLock).
+	defer vh.tempTableCommandEnd(c)
+
 	ctx = callinfo.MysqlCallInfo(ctx, c)
 
 	// Fill in the ImmediateCallerID with the UserData returned by
@@ -317,12 +1080,7 @@ func (vh *vtgateHandler) ComQuery(c *mysql.Conn, query string, callback func(*sq
 	// returned, use the User. This lets the plugin map a MySQL
 	// user used for authentication to a Vitess User used for
 	// Table ACLs and Vitess authentication in general.
-	im := c.UserData.Get()
-	ef := callerid.NewEffectiveCallerID(
-		c.User,                  /* principal: who */
-		c.RemoteAddr().String(), /* component: running client process */
-		"VTGate MySQL Connector" /* subcomponent: part of the client */)
-	ctx = callerid.NewContext(ctx, ef, im)
+	ctx = mysqlConnCallerContext(ctx, c)
 	mysqlCtx := &vtgateMySQLConnection{handler: vh, conn: c}
 
 	if !session.InTransaction {
@@ -372,6 +1130,17 @@ func (vh *vtgateHandler) ComQueryMulti(c *mysql.Conn, sql string, callback func(
 	}
 	defer span.Finish()
 
+	// Republish the session's temp-table heartbeat targets once the command
+	// settles. Beats run concurrently with commands; a collision on the
+	// reserved connection is resolved tablet-side (see TxPool.GetAndLock).
+	// Known coverage gap: a temporary table created partway through this
+	// multi-statement batch has no heartbeat registration until the whole
+	// batch settles, so a later statement in the same batch that runs on a
+	// different shard for longer than the tablet's reserved-connection timeout
+	// can still lose the temp table mid-batch — the same exposure such a batch
+	// had before the keepalive existed.
+	defer vh.tempTableCommandEnd(c)
+
 	ctx = callinfo.MysqlCallInfo(ctx, c)
 
 	// Fill in the ImmediateCallerID with the UserData returned by
@@ -379,12 +1148,7 @@ func (vh *vtgateHandler) ComQueryMulti(c *mysql.Conn, sql string, callback func(
 	// returned, use the User. This lets the plugin map a MySQL
 	// user used for authentication to a Vitess User used for
 	// Table ACLs and Vitess authentication in general.
-	im := c.UserData.Get()
-	ef := callerid.NewEffectiveCallerID(
-		c.User,                  /* principal: who */
-		c.RemoteAddr().String(), /* component: running client process */
-		"VTGate MySQL Connector" /* subcomponent: part of the client */)
-	ctx = callerid.NewContext(ctx, ef, im)
+	ctx = mysqlConnCallerContext(ctx, c)
 	mysqlCtx := &vtgateMySQLConnection{handler: vh, conn: c}
 
 	if !session.InTransaction {
@@ -555,6 +1319,11 @@ func (vh *vtgateHandler) ComPrepare(c *mysql.Conn, query string) ([]*querypb.Fie
 		ctx = context.Background()
 	}
 
+	// Republish the session's temp-table heartbeat targets once the command
+	// settles. Beats run concurrently with commands; a collision on the
+	// reserved connection is resolved tablet-side (see TxPool.GetAndLock).
+	defer vh.tempTableCommandEnd(c)
+
 	ctx = callinfo.MysqlCallInfo(ctx, c)
 
 	// Fill in the ImmediateCallerID with the UserData returned by
@@ -562,12 +1331,7 @@ func (vh *vtgateHandler) ComPrepare(c *mysql.Conn, query string) ([]*querypb.Fie
 	// returned, use the User. This lets the plugin map a MySQL
 	// user used for authentication to a Vitess User used for
 	// Table ACLs and Vitess authentication in general.
-	im := c.UserData.Get()
-	ef := callerid.NewEffectiveCallerID(
-		c.User,                  /* principal: who */
-		c.RemoteAddr().String(), /* component: running client process */
-		"VTGate MySQL Connector" /* subcomponent: part of the client */)
-	ctx = callerid.NewContext(ctx, ef, im)
+	ctx = mysqlConnCallerContext(ctx, c)
 	ctx = vtgateservice.ContextWithIngressBytes(ctx, c.IngressBytes())
 
 	session := vh.session(c)
@@ -603,6 +1367,11 @@ func (vh *vtgateHandler) ComStmtExecute(c *mysql.Conn, prepare *mysql.PrepareDat
 	}
 	defer span.Finish()
 
+	// Republish the session's temp-table heartbeat targets once the command
+	// settles. Beats run concurrently with commands; a collision on the
+	// reserved connection is resolved tablet-side (see TxPool.GetAndLock).
+	defer vh.tempTableCommandEnd(c)
+
 	ctx = callinfo.MysqlCallInfo(ctx, c)
 
 	// Fill in the ImmediateCallerID with the UserData returned by
@@ -610,12 +1379,7 @@ func (vh *vtgateHandler) ComStmtExecute(c *mysql.Conn, prepare *mysql.PrepareDat
 	// returned, use the User. This lets the plugin map a MySQL
 	// user used for authentication to a Vitess User used for
 	// Table ACLs and Vitess authentication in general.
-	im := c.UserData.Get()
-	ef := callerid.NewEffectiveCallerID(
-		c.User,                  /* principal: who */
-		c.RemoteAddr().String(), /* component: running client process */
-		"VTGate MySQL Connector" /* subcomponent: part of the client */)
-	ctx = callerid.NewContext(ctx, ef, im)
+	ctx = mysqlConnCallerContext(ctx, c)
 	mysqlCtx := &vtgateMySQLConnection{handler: vh, conn: c}
 
 	session := vh.session(c)
@@ -668,6 +1432,26 @@ func deferFirstOKOnlyResult(callback func(*sqltypes.Result) error) (func(*sqltyp
 	}
 }
 
+// ConnActivity treats any client command — including the ones the mysql
+// server answers locally, like COM_PING and the prepared-statement
+// bookkeeping commands — as session activity, as mysqld does: the liveness
+// signal fans out to the session's temp-table reserved connections, so a
+// client that keeps its connection alive with periodic pings does not lose
+// its temporary tables at mysqld's wait_timeout. Non-blocking — the fanout
+// runs in the background while the server answers the command.
+func (vh *vtgateHandler) ConnActivity(c *mysql.Conn) {
+	// Read the session directly: activity on a connection that never ran a
+	// query has no session and nothing to refresh.
+	session, _ := c.ClientData.(*vtgatepb.Session)
+	if session == nil || !session.GetOptions().GetHasCreatedTempTables() {
+		return
+	}
+	ctx := mysqlConnCallerContext(callinfo.MysqlCallInfo(context.Background(), c), c)
+	// The per-connection goroutine serializes ConnActivity with the
+	// connection's other commands, so wrapping the live session here is safe.
+	vh.vtg.executor.tempTableRefresher.onSessionActivity(ctx, econtext.NewSafeSession(session))
+}
+
 func (vh *vtgateHandler) WarningCount(c *mysql.Conn) uint16 {
 	return uint16(len(vh.session(c).GetWarnings()))
 }
@@ -716,12 +1500,7 @@ func (vh *vtgateHandler) ComBinlogDumpGTID(c *mysql.Conn, logFile string, logPos
 	// returned, use the User. This lets the plugin map a MySQL
 	// user used for authentication to a Vitess User used for
 	// Table ACLs and Vitess authentication in general.
-	im := c.UserData.Get()
-	ef := callerid.NewEffectiveCallerID(
-		c.User,                  /* principal: who */
-		c.RemoteAddr().String(), /* component: running client process */
-		"VTGate MySQL Connector" /* subcomponent: part of the client */)
-	ctx = callerid.NewContext(ctx, ef, im)
+	ctx = mysqlConnCallerContext(ctx, c)
 
 	// Check if binlog dump is enabled globally
 	if !enableBinlogDump.Get() {
@@ -730,6 +1509,7 @@ func (vh *vtgateHandler) ComBinlogDumpGTID(c *mysql.Conn, logFile string, logPos
 	}
 
 	// Check user authorization for binlog dump
+	im := c.UserData.Get()
 	if !binlogacl.Authorized(im) {
 		binlogDumpRequests.Add("denied", 1)
 		return vterrors.NewErrorf(vtrpcpb.Code_PERMISSION_DENIED, vterrors.AccessDeniedError, "User '%s' is not authorized to perform binlog dump operations", im.GetUsername())
@@ -1018,10 +1798,11 @@ func (vh *vtgateHandler) session(c *mysql.Conn) *vtgatepb.Session {
 }
 
 type mysqlServer struct {
-	tcpListener  *mysql.Listener
-	unixListener *mysql.Listener
-	sigChan      chan os.Signal
-	vtgateHandle *vtgateHandler
+	tcpListener     *mysql.Listener
+	unixListener    *mysql.Listener
+	sigChan         chan os.Signal
+	vtgateHandle    *vtgateHandler
+	heartbeatCancel context.CancelFunc
 }
 
 // initTLSConfig inits tls config for the given mysql listener
@@ -1093,6 +1874,13 @@ func initMySQLProtocol(vtgate *VTGate) *mysqlServer {
 	var err error
 	srv := &mysqlServer{}
 	srv.vtgateHandle = newVtgateHandler(vtgate)
+
+	// Keep reserved connections that hold temporary tables alive with a
+	// low-frequency background heartbeat. Cancelled at shutdown.
+	var heartbeatCtx context.Context
+	heartbeatCtx, srv.heartbeatCancel = context.WithCancel(context.Background())
+	srv.vtgateHandle.startTempTableHeartbeat(heartbeatCtx)
+
 	if mysqlServerPort >= 0 {
 		listener, err := servenv.Listen(mysqlTCPVersion, net.JoinHostPort(mysqlServerBindAddress, strconv.Itoa(mysqlServerPort)))
 		if err != nil {
@@ -1201,6 +1989,14 @@ func newMysqlUnixSocket(address string, authServer mysql.AuthServer, handler mys
 }
 
 func (srv *mysqlServer) shutdownMysqlProtocolAndDrain() {
+	// Keep temp-table keepalives running until draining has finished. During
+	// the drain, existing client connections stay alive and serviceable, so
+	// cancelling the heartbeat any earlier could let their reserved
+	// connections — and temporary tables — be reclaimed by the tablet timeout
+	// before the clients disconnect.
+	if srv.heartbeatCancel != nil {
+		defer srv.heartbeatCancel()
+	}
 	if srv.sigChan != nil {
 		signal.Stop(srv.sigChan)
 	}

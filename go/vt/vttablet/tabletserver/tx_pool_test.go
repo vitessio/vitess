@@ -19,6 +19,8 @@ package tabletserver
 import (
 	"context"
 	"fmt"
+	"slices"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -55,13 +57,13 @@ func TestTxPoolExecuteCommit(t *testing.T) {
 	conn.Unlock()
 
 	// get the connection and execute a query on it
-	conn2, err := txPool.GetAndLock(id, "")
+	conn2, err := txPool.GetAndLock(ctx, id, "")
 	require.NoError(t, err)
-	_, _ = conn2.Exec(ctx, sql, 1, true)
+	_, _ = conn2.Exec(ctx, sql, 1, true, false /* keepConnOnTimeout */)
 	conn2.Unlock()
 
 	// get the connection again and now commit it
-	conn3, err := txPool.GetAndLock(id, "")
+	conn3, err := txPool.GetAndLock(ctx, id, "")
 	require.NoError(t, err)
 
 	_, err = txPool.Commit(ctx, conn3)
@@ -136,7 +138,7 @@ func TestTxPoolRollbackNonBusy(t *testing.T) {
 	require.NoError(t, err)
 
 	// Trying to get back to conn2 should not work since the transaction has been rolled back
-	_, err = txPool.GetAndLock(conn2.ReservedID(), "")
+	_, err = txPool.GetAndLock(ctx, conn2.ReservedID(), "")
 	require.Error(t, err)
 
 	conn1.Release(tx.TxCommit)
@@ -172,7 +174,7 @@ func TestTxPoolAutocommit(t *testing.T) {
 
 	// run a query to see it in the query log
 	query := "select 3"
-	conn1.Exec(ctx, query, 1, false)
+	conn1.Exec(ctx, query, 1, false, false /* keepConnOnTimeout */)
 
 	_, err = txPool.Commit(ctx, conn1)
 	require.NoError(t, err)
@@ -318,7 +320,7 @@ func TestTxPoolRollbackFailIsPassedThrough(t *testing.T) {
 	conn1, _, _, err := txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil)
 	require.NoError(t, err)
 
-	_, err = conn1.Exec(ctx, sql, 1, true)
+	_, err = conn1.Exec(ctx, sql, 1, true, false /* keepConnOnTimeout */)
 	require.NoError(t, err)
 
 	// rollback is refused by the underlying db and the error is passed on
@@ -340,7 +342,7 @@ func TestTxPoolGetConnRecentlyRemovedTransaction(t *testing.T) {
 	txPool.Close()
 
 	assertErrorMatch := func(id int64, reason string) {
-		conn, err := txPool.GetAndLock(id, "for query")
+		conn, err := txPool.GetAndLock(ctx, id, "for query")
 		if err == nil { //
 			conn.ReleaseString("fail")
 			assert.Fail(t, "expected to get an error")
@@ -887,5 +889,426 @@ func setupWithEnv(t *testing.T, env tabletenv.Env) (*fakesqldb.DB, *TxPool, *fak
 	return db, txPool, limiter, func() {
 		txPool.Close()
 		db.Close()
+	}
+}
+
+// TestStatefulConnExecTimeoutConnFate verifies that the caller decides a
+// timed-out statement's connection fate. A statement declared safe to keep
+// (reads, DML — a kill leaves no session state behind) keeps the connection on
+// a mid-statement deadline (KILL QUERY); an unsafe statement (SET, lock
+// functions — whose session-scope effects a kill does not roll back) loses the
+// whole connection, so state that vtgate never recorded cannot survive on a
+// connection the keepalive would then pin alive.
+func TestStatefulConnExecTimeoutConnFate(t *testing.T) {
+	ctx := t.Context()
+	db, txPool, _, closer := setup(t)
+	defer closer()
+
+	const slow = "select 1"
+	db.AddQuery(slow, &sqltypes.Result{})
+	db.SetBeforeFunc(slow, func() {
+		// Outlasts the context deadline so the statement is interrupted.
+		time.Sleep(1 * time.Second)
+	})
+
+	conn, err := txPool.scp.NewConn(ctx, &querypb.ExecuteOptions{}, nil)
+	require.NoError(t, err)
+	defer conn.Unlock()
+
+	// Safe statement: the deadline kills only the query; the connection (and
+	// with it the session's temp tables and settings) survives.
+	execCtx, cancel := context.WithTimeout(ctx, 100*time.Millisecond)
+	_, err = conn.Exec(execCtx, slow, 1, false, true /* keepConnOnTimeout */)
+	cancel()
+	require.Error(t, err)
+	require.False(t, conn.IsClosed(), "a timed-out safe statement must keep its connection")
+
+	// Unsafe statement: the deadline kills the whole connection, exactly as on
+	// main, so a half-applied SET or a racing lock grant cannot linger.
+	execCtx, cancel = context.WithTimeout(ctx, 100*time.Millisecond)
+	_, err = conn.Exec(execCtx, slow, 1, false, false /* keepConnOnTimeout */)
+	cancel()
+	require.Error(t, err)
+	require.True(t, conn.IsClosed(), "a timed-out unsafe statement must lose its connection")
+}
+
+// TestTxPoolKeepAliveReserved verifies the reserved-connection keepalive:
+// it refreshes the connection's tablet-side expiry without sending anything
+// to MySQL (mysqld's wait_timeout must keep counting only real user
+// traffic), treats a busy connection as alive, and reports a gone
+// connection with the same "transaction %d: ..." shape as GetAndLock so
+// vtgate stops beating it.
+func TestTxPoolKeepAliveReserved(t *testing.T) {
+	ctx := t.Context()
+	db, txPool, _, closer := setup(t)
+	defer closer()
+
+	conn, err := txPool.scp.NewConn(ctx, &querypb.ExecuteOptions{}, nil)
+	require.NoError(t, err)
+	id := conn.ReservedID()
+	conn.Unlock()
+
+	// The keepalive refreshes the last-used time and sends nothing to MySQL.
+	// The first touch also marks the connection as covered by the vtgate
+	// keepalive contract — sticky, so it never moves to the temp-table idle
+	// timeout.
+	require.False(t, conn.keepAliveManaged, "a fresh connection must not be keepalive-managed")
+	queryLogBefore := db.QueryLog()
+	lastUsedBefore := conn.lastUsed
+	time.Sleep(time.Millisecond)
+	require.NoError(t, txPool.KeepAliveReserved(id))
+	require.True(t, conn.lastUsed.After(lastUsedBefore), "keepalive must refresh the connection's last-used time")
+	require.Equal(t, queryLogBefore, db.QueryLog(), "keepalive must not execute anything on the MySQL connection")
+	require.True(t, conn.keepAliveManaged, "a keepalive touch must mark the connection keepalive-managed")
+
+	// A busy connection counts as alive.
+	relocked, err := txPool.GetAndLock(ctx, id, "for test")
+	require.NoError(t, err)
+	require.NoError(t, txPool.KeepAliveReserved(id))
+	relocked.Unlock()
+
+	// A connection whose MySQL side is gone (e.g. mysqld reclaimed it at
+	// wait_timeout) must be released — it occupies pool capacity — and the
+	// keepalive reports it with the gone shape so callers stop beating it,
+	// all without waiting for the session's next command.
+	db.CloseAllConnections()
+	require.Eventually(t, func() bool {
+		return txPool.KeepAliveReserved(id) != nil
+	}, 30*time.Second, 10*time.Millisecond, "keepalive must detect the peer-closed connection")
+	_, err = txPool.GetAndLock(ctx, id, "for test")
+	require.ErrorContains(t, err, fmt.Sprintf("transaction %d: ", id), "the dead connection must have been released")
+
+	// A connection that no longer exists reports the gone shape.
+	conn2, err := txPool.scp.NewConn(ctx, &querypb.ExecuteOptions{}, nil)
+	require.NoError(t, err)
+	id2 := conn2.ReservedID()
+	conn2.ReleaseString("test")
+	err = txPool.KeepAliveReserved(id2)
+	require.ErrorContains(t, err, fmt.Sprintf("transaction %d: ", id2))
+}
+
+// TestTxPoolGetAndLockWaitsOutKeepAlive verifies that a caller colliding
+// with an in-flight keepalive briefly waits it out instead of failing with
+// an in-use error — a keepalive holds the connection only for microseconds
+// and a client query or release must not fail because of it. Other in-use
+// holders still fail fast.
+func TestTxPoolGetAndLockWaitsOutKeepAlive(t *testing.T) {
+	ctx := t.Context()
+	_, txPool, _, closer := setup(t)
+	defer closer()
+
+	conn, err := txPool.scp.NewConn(ctx, &querypb.ExecuteOptions{}, nil)
+	require.NoError(t, err)
+	id := conn.ReservedID()
+	conn.Unlock()
+
+	// Hold the connection as a keepalive would, releasing shortly after: the
+	// foreground GetAndLock must wait it out and succeed.
+	held, err := txPool.scp.GetAndLock(id, reservedKeepAlivePurpose)
+	require.NoError(t, err)
+	go func() {
+		time.Sleep(20 * time.Millisecond)
+		held.Unlock()
+	}()
+	got, err := txPool.GetAndLock(ctx, id, "for query")
+	require.NoError(t, err, "a caller must wait out a keepalive hold, not fail")
+	got.Unlock()
+
+	// A refresh whose statement wedged holds the lock through its KILL QUERY
+	// cleanup — well past the refresh's own 1s context bound. The foreground
+	// caller must keep waiting under its own context until the hold actually
+	// releases, not race a fixed budget against the kill budgets: this hold
+	// outlives the old 2s wait budget, which failed the caller with an
+	// in-use error here.
+	held, err = txPool.scp.GetAndLock(id, reservedActivityRefreshPurpose)
+	require.NoError(t, err)
+	go func() {
+		time.Sleep(3 * time.Second)
+		held.Unlock()
+	}()
+	start := time.Now()
+	got, err = txPool.GetAndLock(ctx, id, "for query")
+	require.NoError(t, err, "a caller must outwait an activity-refresh hold for as long as its context allows, not fail at a fixed budget")
+	require.Greater(t, time.Since(start), 2*time.Second,
+		"the success must come from outwaiting the hold past the old 2s fixed budget, not from an early release")
+	got.Unlock()
+
+	// The caller's own deadline still bounds the wait: a short-deadline
+	// context colliding with a hold that never releases returns the in-use
+	// error naming the holder — under the context's own code, not ABORTED,
+	// because vtgate rolls a transaction back on ABORTED shard errors and a
+	// command that never acquired the connection must not force that. The
+	// hold is still in place when the caller gives up — proving the wait
+	// ended at the caller's deadline rather than at the hold's release,
+	// without racing a wall clock the CI runner may stall.
+	held, err = txPool.scp.GetAndLock(id, reservedActivityRefreshPurpose)
+	require.NoError(t, err)
+	shortCtx, cancel := context.WithTimeout(ctx, 300*time.Millisecond)
+	defer cancel()
+	_, err = txPool.GetAndLock(shortCtx, id, "for query")
+	require.ErrorContains(t, err, reservedActivityRefreshPurpose,
+		"a wait cut short by the caller's context reports the in-use holder")
+	require.Equal(t, vtrpcpb.Code_DEADLINE_EXCEEDED, vterrors.Code(err),
+		"a wait ended by the caller's deadline must carry the context's code, not ABORTED")
+	canceledCtx, cancelNow := context.WithCancel(ctx)
+	cancelNow()
+	_, err = txPool.GetAndLock(canceledCtx, id, "for query")
+	require.ErrorContains(t, err, reservedActivityRefreshPurpose)
+	require.Equal(t, vtrpcpb.Code_CANCELED, vterrors.Code(err),
+		"a wait ended by the caller's cancellation must carry CANCELED")
+	_, stillHeld := txPool.scp.GetAndLock(id, "probe")
+	require.ErrorContains(t, stillHeld, reservedActivityRefreshPurpose,
+		"the hold must still be in place when the caller's context gives up")
+	held.Unlock()
+
+	// Any other holder still fails fast with the in-use error, and keeps its
+	// ABORTED code even under a dead caller context: only a wait this
+	// function chose to run — a brief hold — reports the context's code.
+	held, err = txPool.scp.GetAndLock(id, "for query")
+	require.NoError(t, err)
+	_, rawErr := txPool.scp.GetAndLock(id, "probe")
+	require.False(t, isBriefHoldInUse(rawErr), "a client-query hold is not a brief hold")
+	_, err = txPool.GetAndLock(ctx, id, "for another query")
+	require.ErrorContains(t, err, "in use: for query")
+	require.Equal(t, vtrpcpb.Code_ABORTED, vterrors.Code(err))
+	_, err = txPool.GetAndLock(canceledCtx, id, "for another query")
+	require.ErrorContains(t, err, "in use: for query")
+	require.Equal(t, vtrpcpb.Code_ABORTED, vterrors.Code(err),
+		"a real client holder fails fast with ABORTED regardless of the caller's context")
+	held.Release(tx.ConnRelease)
+}
+
+// TestTxKillerTimeoutInterval pins the killer's tick derivation: the shortest
+// enabled timeout it enforces, including the temp-table idle timeout —
+// explicit or auto-published — so disabling both transaction timeouts does
+// not leave temp-table reservations without a reaper.
+func TestTxKillerTimeoutInterval(t *testing.T) {
+	cases := []struct {
+		name            string
+		oltp, olap      time.Duration
+		tempIdle        time.Duration
+		autoWaitTimeout time.Duration
+		want            time.Duration
+	}{
+		{name: "tx timeouts only", oltp: 30 * time.Second, olap: 30 * time.Second, tempIdle: 0, want: 3 * time.Second},
+		{name: "explicit temp idle with tx timeouts disabled", tempIdle: 100 * time.Second, want: 10 * time.Second},
+		{name: "auto temp idle with tx timeouts disabled", tempIdle: -1, autoWaitTimeout: 28800 * time.Second, want: 2880 * time.Second},
+		{name: "auto unknown keeps timer dormant", tempIdle: -1, want: 0},
+		{name: "everything disabled", tempIdle: 0, want: 0},
+		{name: "shorter temp idle tightens the tick", oltp: 30 * time.Second, olap: 30 * time.Second, tempIdle: 10 * time.Second, want: time.Second},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := tabletenv.NewDefaultConfig()
+			cfg.Oltp.TxTimeout = tc.oltp
+			cfg.Olap.TxTimeout = tc.olap
+			cfg.TempTableIdleTimeout = tc.tempIdle
+			assert.Equal(t, tc.want, txKillerTimeoutInterval(cfg, tc.autoWaitTimeout))
+		})
+	}
+}
+
+// TestTxPoolSetMysqlWaitTimeoutRetimesKiller verifies the auto-mode publisher
+// wakes a dormant killer (both transaction timeouts disabled) and tightens a
+// slower one, but never loosens the tick.
+func TestTxPoolSetMysqlWaitTimeoutRetimesKiller(t *testing.T) {
+	env := newEnv("TabletServerTest")
+	env.Config().Oltp.TxTimeout = 0
+	env.Config().Olap.TxTimeout = 0
+	env.Config().TempTableIdleTimeout = -1
+	txPool, _ := newTxPoolWithEnv(env)
+	require.Zero(t, txPool.ticks.Interval(), "with everything disabled the killer starts dormant")
+
+	txPool.SetMysqlWaitTimeout(600 * time.Second)
+	require.Equal(t, 60*time.Second, txPool.ticks.Interval(), "the auto publish must wake the dormant killer")
+
+	txPool.SetMysqlWaitTimeout(6000 * time.Second)
+	require.Equal(t, 60*time.Second, txPool.ticks.Interval(), "a raised wait_timeout must not loosen the tick")
+
+	txPool.SetMysqlWaitTimeout(60 * time.Second)
+	require.Equal(t, 6*time.Second, txPool.ticks.Interval(), "a lowered wait_timeout must tighten the tick")
+}
+
+// TestTxPoolBeginWaitsOutKeepAlive verifies that starting a transaction on a
+// reserved connection waits out an in-flight keepalive touch rather than
+// failing with an in-use error — Begin must go through the keepalive-aware
+// lock path, not the pool directly.
+func TestTxPoolBeginWaitsOutKeepAlive(t *testing.T) {
+	ctx := t.Context()
+	db, txPool, _, closer := setup(t)
+	defer closer()
+	db.AddQuery("begin", &sqltypes.Result{})
+
+	conn, err := txPool.scp.NewConn(ctx, &querypb.ExecuteOptions{}, nil)
+	require.NoError(t, err)
+	id := conn.ReservedID()
+	conn.Unlock()
+
+	// Hold the reserved connection as a keepalive would, releasing shortly
+	// after: BEGIN must wait it out and succeed.
+	held, err := txPool.scp.GetAndLock(id, reservedKeepAlivePurpose)
+	require.NoError(t, err)
+	go func() {
+		time.Sleep(20 * time.Millisecond)
+		held.Unlock()
+	}()
+	txConn, _, _, err := txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, id, nil)
+	require.NoError(t, err, "BEGIN must wait out a keepalive hold on the reserved connection, not fail")
+	txConn.Unlock()
+}
+
+// TestTempTableIdleTimeoutTimerSelection pins the timer-selection rule for
+// stateful connections: the temp-table idle timeout replaces the connection's
+// own timeout exactly when the flag is enabled (explicit value, or auto with a
+// known mysqld wait_timeout), the connection holds temporary tables, it is not
+// covered by the vtgate keepalive contract, and it is not in a transaction.
+// Every other combination keeps today's timer.
+func TestTempTableIdleTimeoutTimerSelection(t *testing.T) {
+	ctx := t.Context()
+
+	const txTimeout = 30 * time.Second
+	env := newEnv("TabletServerTest")
+	env.Config().Oltp.TxTimeout = txTimeout
+	_, txPool, _, closer := setupWithEnv(t, env)
+	defer closer()
+
+	// The connection stays locked (in use) for the whole test so the killer
+	// cannot touch it while the test flips its state.
+	conn, err := txPool.scp.NewConn(ctx, &querypb.ExecuteOptions{}, nil)
+	require.NoError(t, err)
+	defer conn.Release(tx.ConnRelease)
+
+	cases := []struct {
+		name        string
+		flag        time.Duration // --queryserver-config-temp-table-idle-timeout
+		waitTimeout time.Duration // cached mysqld @@global.wait_timeout (auto mode)
+		marked      bool          // holdsTempTables
+		managed     bool          // keepAliveManaged
+		inTx        bool
+		captured    time.Duration // @@session.wait_timeout captured on the conn
+		want        time.Duration
+	}{
+		{name: "flag off, unmarked", flag: 0, want: txTimeout},
+		{name: "flag off, marked unmanaged", flag: 0, marked: true, want: txTimeout},
+		{name: "flag off, marked managed", flag: 0, marked: true, managed: true, want: txTimeout},
+		{name: "explicit, marked unmanaged", flag: 5 * time.Minute, marked: true, want: 5 * time.Minute},
+		{name: "explicit below tx timeout still governs", flag: time.Second, marked: true, want: time.Second},
+		{name: "explicit, unmarked", flag: 5 * time.Minute, want: txTimeout},
+		{name: "explicit, unmarked managed", flag: 5 * time.Minute, managed: true, want: txTimeout},
+		{name: "explicit, marked managed", flag: 5 * time.Minute, marked: true, managed: true, want: txTimeout},
+		{name: "explicit, marked unmanaged in tx", flag: 5 * time.Minute, marked: true, inTx: true, want: txTimeout},
+		{name: "explicit, marked managed in tx", flag: 5 * time.Minute, marked: true, managed: true, inTx: true, want: txTimeout},
+		{name: "explicit, unmarked in tx", flag: 5 * time.Minute, inTx: true, want: txTimeout},
+		{name: "auto, marked unmanaged", flag: -1, waitTimeout: 8 * time.Hour, marked: true, want: 8 * time.Hour},
+		{name: "auto, unmarked", flag: -1, waitTimeout: 8 * time.Hour, want: txTimeout},
+		{name: "auto, marked managed", flag: -1, waitTimeout: 8 * time.Hour, marked: true, managed: true, want: txTimeout},
+		{name: "auto, marked unmanaged in tx", flag: -1, waitTimeout: 8 * time.Hour, marked: true, inTx: true, want: txTimeout},
+		{name: "auto with unknown wait_timeout is disabled", flag: -1, waitTimeout: 0, marked: true, want: txTimeout},
+		// The connection's captured @@session.wait_timeout is the deadline
+		// mysqld actually enforces, so auto prefers it over the global mirror
+		// and keeps it stable across a runtime SET GLOBAL.
+		{name: "auto prefers the captured session value", flag: -1, waitTimeout: 8 * time.Hour, captured: 111 * time.Second, marked: true, want: 111 * time.Second},
+		{name: "auto keeps the captured value when the global changes", flag: -1, waitTimeout: 600 * time.Second, captured: 111 * time.Second, marked: true, want: 111 * time.Second},
+		{name: "explicit ignores the captured session value", flag: 5 * time.Minute, captured: 111 * time.Second, marked: true, want: 5 * time.Minute},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			env.Config().TempTableIdleTimeout = tc.flag
+			txPool.scp.SetMysqlWaitTimeout(tc.waitTimeout)
+			conn.holdsTempTables = tc.marked
+			conn.sessionWaitTimeout = tc.captured
+			conn.keepAliveManaged = tc.managed
+			if tc.inTx {
+				conn.txProps = &tx.Properties{}
+			} else {
+				conn.txProps = nil
+			}
+			assert.Equal(t, tc.want, conn.effectiveTimeout())
+
+			// The selected timer is the one the killer enforces: idle just
+			// past the transaction timeout, the connection has elapsed exactly
+			// when the governing timer is no longer than that.
+			conn.lastUsed = time.Now().Add(-(txTimeout + time.Second))
+			assert.Equal(t, tc.want <= txTimeout, conn.ElapsedTimeout())
+		})
+	}
+}
+
+// TestTempTableIdleTimeoutReclaimsAbandonedConns verifies the temp-table idle
+// timer end to end through the connection killer: an unmanaged temp-table
+// reserved connection survives the transaction timeout (which reclaimed it
+// before this feature) and is reclaimed once the temp-table idle timeout
+// elapses, attributed to the dedicated kill counter.
+func TestTempTableIdleTimeoutReclaimsAbandonedConns(t *testing.T) {
+	ctx := t.Context()
+
+	env := newEnv("TabletServerTest")
+	env.Config().TxPool.Size = 1
+	env.Config().Oltp.TxTimeout = time.Second
+	env.Config().Olap.TxTimeout = time.Second
+	env.Config().TempTableIdleTimeout = 3 * time.Second
+	_, txPool, _, closer := setupWithEnv(t, env)
+	defer closer()
+
+	startingTempTableKills := txPool.tempTableIdleKills.Get()
+	startingRcKills := txPool.env.Stats().KillCounters.Counts()["ReservedConnection"]
+
+	conn, err := txPool.scp.NewConn(ctx, &querypb.ExecuteOptions{}, nil)
+	require.NoError(t, err)
+	id := conn.ReservedID()
+	require.NoError(t, conn.Taint(ctx, nil))
+	conn.markHoldsTempTables()
+	conn.Unlock()
+
+	// Past the transaction timeout the connection must still be alive: the
+	// temp-table idle timer governs it now.
+	time.Sleep(1500 * time.Millisecond)
+	relocked, err := txPool.GetAndLock(ctx, id, "for test")
+	require.NoError(t, err, "an unmanaged temp-table connection must survive the transaction timeout")
+	relocked.Unlock()
+	require.Equal(t, int64(0), txPool.tempTableIdleKills.Get()-startingTempTableKills)
+
+	// Once the temp-table idle timeout elapses, the killer reclaims the
+	// connection and attributes the kill to the dedicated counter.
+	assert.Eventually(t, func() bool {
+		return txPool.tempTableIdleKills.Get()-startingTempTableKills == 1
+	}, 30*time.Second, 100*time.Millisecond, "the temp-table idle timer must reclaim the connection")
+	assert.Equal(t, int64(1), txPool.env.Stats().KillCounters.Counts()["ReservedConnection"]-startingRcKills)
+	_, err = txPool.GetAndLock(ctx, id, "for test")
+	require.Error(t, err, "the reclaimed connection must be gone")
+}
+
+// TestTempTableIdleTimeoutStartupWarning verifies that an explicit
+// --queryserver-config-temp-table-idle-timeout below the transaction timeout
+// logs a startup warning (the flag replaces the transaction timeout for
+// temp-table connections, so a smaller value reclaims them sooner than
+// before), and that the disabled, auto, and at-or-above values do not.
+func TestTempTableIdleTimeoutStartupWarning(t *testing.T) {
+	const warning = "--queryserver-config-temp-table-idle-timeout is below the transaction timeout"
+	cases := []struct {
+		name     string
+		flag     time.Duration
+		wantWarn bool
+	}{
+		{name: "below transaction timeout warns", flag: time.Second, wantWarn: true},
+		{name: "equal to transaction timeout", flag: 30 * time.Second},
+		{name: "above transaction timeout", flag: time.Hour},
+		{name: "disabled", flag: 0},
+		{name: "auto", flag: -1},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			env := newEnv("TabletServerTest")
+			env.Config().Oltp.TxTimeout = 30 * time.Second
+			env.Config().TempTableIdleTimeout = tc.flag
+
+			tl := newTestLogger()
+			defer tl.Close()
+			newTxPoolWithEnv(env)
+			warned := slices.ContainsFunc(tl.getLogs(), func(msg string) bool {
+				return strings.Contains(msg, warning)
+			})
+			assert.Equal(t, tc.wantWarn, warned, "startup warning mismatch, logs: %v", tl.getLogs())
+		})
 	}
 }

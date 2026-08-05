@@ -65,9 +65,9 @@ func analyzeSelect(env *vtenv.Environment, sel *sqlparser.Select, tables map[str
 		plan.FullQuery = nil
 	}
 
-	if hasLockFunc(sel) {
+	if mutating, acquiring := lockFuncs(sel); mutating {
 		plan.PlanID = PlanSelectLockFunc
-		plan.NeedsReservedConn = true
+		plan.NeedsReservedConn = acquiring
 	}
 	return plan, nil
 }

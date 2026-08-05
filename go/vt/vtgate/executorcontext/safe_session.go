@@ -81,6 +81,20 @@ type (
 		parser  *sqlparser.Parser
 	}
 
+	// ShardSessionSnapshot is a point-in-time copy of one shard session's
+	// routing and state fields, taken under the session mutex. Unlike the
+	// live *vtgatepb.Session_ShardSession — whose TransactionId and
+	// ReservedId the executor mutates in place as queries run — a snapshot
+	// is safe to read from another goroutine. The Target and TabletAlias
+	// protos are shared by pointer: they are never mutated in place, only
+	// replaced wholesale.
+	ShardSessionSnapshot struct {
+		Target        *querypb.Target
+		TabletAlias   *topodatapb.TabletAlias
+		TransactionID int64
+		ReservedID    int64
+	}
+
 	// autocommitState keeps track of whether a single round-trip
 	// commit to vttablet is possible. It starts as autocommitable
 	// if we started a transaction because of the autocommit flag
@@ -427,6 +441,29 @@ func (session *SafeSession) ShardSessionsForCleanup() []*vtgatepb.Session_ShardS
 	session.mu.Lock()
 	defer session.mu.Unlock()
 	return slices.Concat(session.PreSessions, session.ShardSessions, session.PostSessions)
+}
+
+// ShardSessionSnapshots returns per-shard-session snapshots of PreSessions,
+// ShardSessions, and PostSessions, copied field by field under the session
+// mutex. Callers that read shard-session state from a goroutine running
+// concurrently with query execution (which updates TransactionId and
+// ReservedId on the live protos) must use this instead of the
+// ShardSessionsFor* accessors, whose returned protos are shared and racy.
+func (session *SafeSession) ShardSessionSnapshots() []ShardSessionSnapshot {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	snapshots := make([]ShardSessionSnapshot, 0, len(session.PreSessions)+len(session.ShardSessions)+len(session.PostSessions))
+	for _, sessions := range [][]*vtgatepb.Session_ShardSession{session.PreSessions, session.ShardSessions, session.PostSessions} {
+		for _, ss := range sessions {
+			snapshots = append(snapshots, ShardSessionSnapshot{
+				Target:        ss.GetTarget(),
+				TabletAlias:   ss.GetTabletAlias(),
+				TransactionID: ss.GetTransactionId(),
+				ReservedID:    ss.GetReservedId(),
+			})
+		}
+	}
+	return snapshots
 }
 
 // ShardSessionsForReleaseAll returns a snapshot of all shard sessions including LockSession for ReleaseAll.

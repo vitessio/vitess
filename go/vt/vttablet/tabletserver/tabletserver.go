@@ -201,6 +201,10 @@ func NewTabletServer(ctx context.Context, env *vtenv.Environment, name string, c
 	tsv.qe = NewQueryEngine(tsv, tsv.se)
 	tsv.txThrottler = txthrottler.NewTxThrottler(tsv, topoServer)
 	tsv.te = NewTxEngine(tsv, tsv.hs.sendUnresolvedTransactionSignal)
+	// The temp-table idle timeout's auto mode mirrors this mysqld's
+	// wait_timeout: the query engine reads it (dba pool, schema-reload
+	// cadence) and the stateful pool's connection killer consumes it.
+	tsv.qe.publishMysqlWaitTimeout = tsv.te.txPool.SetMysqlWaitTimeout
 	tsv.messager = messager.NewEngine(tsv, tsv.se, tsv.vstreamer)
 
 	tsv.tableGC = gc.NewTableGC(tsv, topoServer, tsv.lagThrottler)
@@ -916,7 +920,81 @@ func (tsv *TabletServer) Execute(ctx context.Context, session queryservice.Sessi
 		return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "[BUG] transactionID and reserveID must match if both are non-zero")
 	}
 
+	// A reserved-connection keepalive only touches the connections' tablet-side
+	// idle timers: nothing is executed, and nothing is sent to MySQL, so
+	// mysqld's wait_timeout keeps counting only real user traffic. reservedID
+	// plus all the ids in the batch are refreshed in this one RPC; the result
+	// reports which of them no longer exist so the caller can stop refreshing
+	// them. Callers pass the ids in the batch and leave reservedID zero, so
+	// that a tablet predating this request field runs the fallback query on a
+	// throwaway pooled connection instead of a reserved one. The signal
+	// arrives as a request-level field (via the context, see
+	// queryservice.ContextWithReservedConnKeepAlive), never in ExecuteOptions:
+	// options round-trip through client sessions, and a vtgate predating the
+	// feature would relay client-injected option fields here verbatim.
+	if ids, isKeepAlive := queryservice.ReservedConnKeepAliveIDs(ctx); isKeepAlive {
+		if reservedID == 0 && len(ids) == 0 {
+			return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "reserved connection keepalive requires at least one reserved ID")
+		}
+		// Bound the batch before allocating, capping a malformed or hostile
+		// call. vtgate splits its own touches at this same limit
+		// (queryservice.ReservedConnKeepAliveMaxBatch).
+		if len(ids) > queryservice.ReservedConnKeepAliveMaxBatch {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "reserved connection keepalive batch of %d exceeds the limit of %d", len(ids), queryservice.ReservedConnKeepAliveMaxBatch)
+		}
+		// Run through execRequest like every other stateful RPC, so the
+		// keepalive is subject to the same gates as a normal query: target
+		// validation (a tablet that changed type rejects it as a wrong tablet,
+		// letting vtgate drop the now-orphaned registration) and serving state
+		// (a tablet that rejects all queries — not serving, replication
+		// unhealthy, stalled demotion, shutting down — must not keep
+		// refreshing reserved connections it cannot serve; they die at the
+		// tablet timeout exactly as every other request-path resource on an
+		// unhealthy tablet does).
+		err = tsv.execRequest(
+			ctx, tsv.loadQueryTimeout(),
+			"KeepAliveReserved", "/* reserved-conn keepalive */", nil,
+			target, options, false, /* allowOnShutdown */
+			func(_ context.Context, _ *tabletenv.LogStats) error {
+				result = tsv.keepAliveReservedConns(reservedID, ids)
+				return nil
+			},
+		)
+		if err != nil {
+			return nil, err
+		}
+		return result, nil
+	}
+
 	return tsv.execute(ctx, target, sql, bindVariables, transactionID, reservedID, nil, options)
+}
+
+// keepAliveReservedConnsGoneField names the single column of the keepalive
+// result: each row is a reserved id that no longer exists on this tablet.
+var keepAliveReservedConnsGoneField = []*querypb.Field{{
+	Name: queryservice.ReservedConnKeepAliveGoneField,
+	Type: sqltypes.Int64,
+}}
+
+// keepAliveReservedConns refreshes the idle timers of the given reserved
+// connections without executing anything on them, and returns the ids that no
+// longer exist (each as a row) so the caller can stop refreshing them.
+func (tsv *TabletServer) keepAliveReservedConns(reservedID int64, additional []int64) *sqltypes.Result {
+	result := &sqltypes.Result{Fields: keepAliveReservedConnsGoneField}
+	seen := make(map[int64]struct{}, 1+len(additional))
+	for _, id := range append([]int64{reservedID}, additional...) {
+		if id == 0 {
+			continue
+		}
+		if _, dup := seen[id]; dup {
+			continue
+		}
+		seen[id] = struct{}{}
+		if err := tsv.te.txPool.KeepAliveReserved(id); err != nil {
+			result.Rows = append(result.Rows, sqltypes.Row{sqltypes.NewInt64(id)})
+		}
+	}
+	return result
 }
 
 func (tsv *TabletServer) execute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, reservedID int64, settings []string, options *querypb.ExecuteOptions) (result *sqltypes.Result, err error) {
@@ -1778,7 +1856,7 @@ func (tsv *TabletServer) Release(ctx context.Context, target *querypb.Target, tr
 			logStats.ReservedID = reservedID
 			if reservedID != 0 {
 				// Release to close the underlying connection.
-				return tsv.te.Release(reservedID)
+				return tsv.te.Release(ctx, reservedID)
 			}
 			// Rollback to cleanup the transaction before returning to the pool.
 			_, err = tsv.te.Rollback(ctx, transactionID)

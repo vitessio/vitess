@@ -140,6 +140,27 @@ type SandboxConn struct {
 	// this error will only happen once
 	EphemeralShardErr error
 
+	// KeepAliveGoneIDs, when set, makes a reserved-connection keepalive touch
+	// report the listed reserved ids as gone (as the real tablet would when a
+	// reserved connection no longer exists).
+	KeepAliveGoneIDs map[int64]bool
+
+	// KeepAliveBatches records the reserved ids of every keepalive touch this
+	// connection received, one entry per touch, so tests can assert on what
+	// the vtgate sweeper sent (the signal travels in the context, not in the
+	// recorded ExecuteOptions).
+	KeepAliveBatches [][]int64
+
+	// ExecuteReservedIDs records the reservedID parameter of every Execute
+	// call, in order, so tests can assert which calls ran on a reserved
+	// connection.
+	ExecuteReservedIDs []int64
+
+	// KeepAliveUnsupported, when set, makes the connection behave like a tablet
+	// that predates the keepalive option: it ignores the option and runs the
+	// query, returning an ordinary result instead of the gone-id result.
+	KeepAliveUnsupported bool
+
 	// if this is not nil, any calls will panic the tablet
 	panicThis any
 
@@ -280,6 +301,24 @@ func (sbc *SandboxConn) ClearOptions() {
 	sbc.Options = nil
 }
 
+// appendToExecuteReservedIDs appends to ExecuteReservedIDs in sandboxconn.
+func (sbc *SandboxConn) appendToExecuteReservedIDs(reservedID int64) {
+	if sbc.queriesRequireLocking {
+		sbc.queriesMu.Lock()
+		defer sbc.queriesMu.Unlock()
+	}
+	sbc.ExecuteReservedIDs = append(sbc.ExecuteReservedIDs, reservedID)
+}
+
+// GetExecuteReservedIDs returns the recorded Execute reservedID parameters.
+func (sbc *SandboxConn) GetExecuteReservedIDs() []int64 {
+	if sbc.queriesRequireLocking {
+		sbc.queriesMu.Lock()
+		defer sbc.queriesMu.Unlock()
+	}
+	return append([]int64(nil), sbc.ExecuteReservedIDs...)
+}
+
 // appendToOptions appends to the Options in sandboxconn.
 func (sbc *SandboxConn) appendToOptions(o *querypb.ExecuteOptions) {
 	if sbc.queriesRequireLocking {
@@ -334,11 +373,40 @@ func (sbc *SandboxConn) Execute(ctx context.Context, session queryservice.Sessio
 		BindVariables: bv,
 	})
 	sbc.appendToOptions(options)
+	sbc.appendToExecuteReservedIDs(reservedID)
 	if err := sbc.getError(); err != nil {
 		return nil, err
 	}
 	if err := sbc.waitForExecDelay(ctx); err != nil {
 		return nil, err
+	}
+
+	if keepAliveIDs, isKeepAlive := queryservice.ReservedConnKeepAliveIDs(ctx); isKeepAlive {
+		if sbc.queriesRequireLocking {
+			sbc.queriesMu.Lock()
+		}
+		sbc.KeepAliveBatches = append(sbc.KeepAliveBatches, append([]int64(nil), keepAliveIDs...))
+		if sbc.queriesRequireLocking {
+			sbc.queriesMu.Unlock()
+		}
+		if sbc.KeepAliveUnsupported {
+			// Simulate a tablet that predates the request field: it ignores it
+			// and runs the query, returning its own ordinary result (a row that
+			// must not be misparsed as a gone reserved id).
+			return &sqltypes.Result{
+				Fields: []*querypb.Field{{Name: "1", Type: sqltypes.Int64}},
+				Rows:   []sqltypes.Row{{sqltypes.NewInt64(1)}},
+			}, nil
+		}
+		// Simulate the tablet's batched keepalive touch: return which of the
+		// touched reserved ids are gone.
+		result := &sqltypes.Result{Fields: []*querypb.Field{{Name: queryservice.ReservedConnKeepAliveGoneField, Type: sqltypes.Int64}}}
+		for _, id := range append([]int64{reservedID}, keepAliveIDs...) {
+			if sbc.KeepAliveGoneIDs[id] {
+				result.Rows = append(result.Rows, sqltypes.Row{sqltypes.NewInt64(id)})
+			}
+		}
+		return result, nil
 	}
 
 	stmt, _ := sbc.parser.Parse(query) // knowingly ignoring the error
