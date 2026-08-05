@@ -67,8 +67,11 @@ jobs:
     - name: Set output with latest release branch
       if: steps.changes.outputs.end_to_end == 'true'
       id: output-previous-release-ref
+      env:
+        BASE_REF: ${{ github.base_ref }}
+        REF: ${{ github.ref }}
       run: |
-        previous_release_ref=$(./tools/get_previous_release.sh ${{github.base_ref}} ${{github.ref}})
+        previous_release_ref=$(./tools/get_previous_release.sh "$BASE_REF" "$REF")
         echo $previous_release_ref
         echo "previous_release_ref=${previous_release_ref}" >> $GITHUB_OUTPUT
 

@@ -48,14 +48,18 @@ jobs:
 
       - name: Get GitHub App User ID
         id: get-user-id
-        run: echo "user-id=$(gh api "/users/${{ steps.app-token.outputs.app-slug }}[bot]" --jq .id)" >> "$GITHUB_OUTPUT"
+        run: echo "user-id=$(gh api "/users/${APP_SLUG}[bot]" --jq .id)" >> "$GITHUB_OUTPUT"
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
 
       - name: Configure Git
+        env:
+          APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
+          USER_ID: ${{ steps.get-user-id.outputs.user-id }}
         run: |
-          git config --global user.name '${{ steps.app-token.outputs.app-slug }}[bot]'
-          git config --global user.email '${{ steps.get-user-id.outputs.user-id }}+${{ steps.app-token.outputs.app-slug }}[bot]@users.noreply.github.com'
+          git config --global user.name "${APP_SLUG}[bot]"
+          git config --global user.email "${USER_ID}+${APP_SLUG}[bot]@users.noreply.github.com"
           git config --global merge.conflictStyle zdiff3
 
       - name: Checkout repository
@@ -67,13 +71,22 @@ jobs:
       - name: Perform backport/forwardport
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
+          USER_ID: ${{ steps.get-user-id.outputs.user-id }}
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_PR_NUMBER: ${{ github.event.pull_request.number }}
+          INPUT_PR_NUMBER: ${{ inputs.pr_number }}
+          INPUT_DRY_RUN: ${{ inputs.dry_run }}
+          REPOSITORY: ${{ github.repository }}
+          REPO_OWNER: ${{ github.repository_owner }}
+          REPO_NAME: ${{ github.event.repository.name }}
         run: |
           # Determine PR number and dry-run mode based on trigger type
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            PR_NUMBER="${{ inputs.pr_number }}"
-            DRY_RUN="${{ inputs.dry_run }}"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            PR_NUMBER="$INPUT_PR_NUMBER"
+            DRY_RUN="$INPUT_DRY_RUN"
           else
-            PR_NUMBER="${{ github.event.pull_request.number }}"
+            PR_NUMBER="$EVENT_PR_NUMBER"
             DRY_RUN="false"
           fi
 
@@ -158,7 +171,7 @@ jobs:
                 git add .
 
                 # Commit with conflict message, setting bot as author
-                git commit --author='${{ steps.app-token.outputs.app-slug }}[bot] <${{ steps.get-user-id.outputs.user-id }}+${{ steps.app-token.outputs.app-slug }}[bot]@users.noreply.github.com>' -m "Cherry-pick $MERGE_COMMIT_SHA with conflicts" || {
+                git commit --author="${APP_SLUG}[bot] <${USER_ID}+${APP_SLUG}[bot]@users.noreply.github.com>" -m "Cherry-pick $MERGE_COMMIT_SHA with conflicts" || {
                   echo "Error: Failed to commit conflicts"
                   git checkout main
                   git branch -D "$NEW_BRANCH" 2>/dev/null || true
@@ -258,7 +271,7 @@ jobs:
               else
                 echo "  Draft: false"
               fi
-              echo "  Repository: ${{ github.repository }}"
+              echo "  Repository: ${REPOSITORY}"
               echo ""
               echo "  [DRY RUN] Would add labels:"
               echo "$LABELS_JSON" | jq -r '.[]' | while read -r label; do
@@ -270,7 +283,7 @@ jobs:
             if [ "$CONFLICT" = true ]; then
               CONFLICT_COMMENT="Hello @${PR_AUTHOR}, there are conflicts in this ${PORT_TYPE}."$'\n\n'
               CONFLICT_COMMENT+="Please address them in order to merge this Pull Request. You can execute the snippet below to reset your branch and resolve the conflict manually."$'\n\n'
-              CONFLICT_COMMENT+="Make sure you replace \`origin\` by the name of the ${{ github.repository_owner }}/${{ github.event.repository.name }} remote"$'\n'
+              CONFLICT_COMMENT+="Make sure you replace \`origin\` by the name of the ${REPO_OWNER}/${REPO_NAME} remote"$'\n'
               CONFLICT_COMMENT+="\`\`\`"$'\n'
               CONFLICT_COMMENT+="git fetch --all"$'\n'
               CONFLICT_COMMENT+="gh pr checkout ${NEW_PR_NUMBER}"$'\n'
@@ -292,7 +305,7 @@ jobs:
             fi
 
             # Get reviewers from original PR and build JSON array
-            REVIEWERS_JSON=$(gh api "repos/${{ github.repository }}/pulls/${PR_NUMBER}/requested_reviewers" \
+            REVIEWERS_JSON=$(gh api "repos/${REPOSITORY}/pulls/${PR_NUMBER}/requested_reviewers" \
               --jq '[.users[].login, .teams[].slug] + ["'"$PR_AUTHOR"'"]' 2>/dev/null || echo '["'"$PR_AUTHOR"'"]')
 
             if [ "$DRY_RUN" = "true" ]; then
@@ -354,7 +367,7 @@ jobs:
                 git add .
 
                 # Commit with conflict message, setting bot as author
-                git commit --author='${{ steps.app-token.outputs.app-slug }}[bot] <${{ steps.get-user-id.outputs.user-id }}+${{ steps.app-token.outputs.app-slug }}[bot]@users.noreply.github.com>' -m "Cherry-pick $MERGE_COMMIT_SHA with conflicts" || {
+                git commit --author="${APP_SLUG}[bot] <${USER_ID}+${APP_SLUG}[bot]@users.noreply.github.com>" -m "Cherry-pick $MERGE_COMMIT_SHA with conflicts" || {
                   echo "Error: Failed to commit conflicts"
                   git checkout main
                   git branch -D "$NEW_BRANCH" 2>/dev/null || true
@@ -454,7 +467,7 @@ jobs:
               else
                 echo "  Draft: false"
               fi
-              echo "  Repository: ${{ github.repository }}"
+              echo "  Repository: ${REPOSITORY}"
               echo ""
               echo "  [DRY RUN] Would add labels:"
               echo "$LABELS_JSON" | jq -r '.[]' | while read -r label; do
@@ -466,10 +479,10 @@ jobs:
             if [ "$CONFLICT" = true ]; then
               CONFLICT_COMMENT="Hello @${PR_AUTHOR}, there are conflicts in this ${PORT_TYPE}."$'\n\n'
               CONFLICT_COMMENT+="Please address them in order to merge this Pull Request. You can execute the snippet below to reset your branch and resolve the conflict manually."$'\n\n'
-              CONFLICT_COMMENT+="Make sure you replace \`origin\` by the name of the ${{ github.repository_owner }}/${{ github.event.repository.name }} remote"$'\n'
+              CONFLICT_COMMENT+="Make sure you replace \`origin\` by the name of the ${REPO_OWNER}/${REPO_NAME} remote"$'\n'
               CONFLICT_COMMENT+="\`\`\`"$'\n'
               CONFLICT_COMMENT+="git fetch --all"$'\n'
-              CONFLICT_COMMENT+="gh pr checkout ${NEW_PR_NUMBER} -R ${{ github.repository }}"$'\n'
+              CONFLICT_COMMENT+="gh pr checkout ${NEW_PR_NUMBER} -R ${REPOSITORY}"$'\n'
               CONFLICT_COMMENT+="git reset --hard origin/${BRANCH}"$'\n'
               CONFLICT_COMMENT+="git cherry-pick -m 1 ${MERGE_COMMIT_SHA}"$'\n'
               CONFLICT_COMMENT+="\`\`\`"
@@ -488,7 +501,7 @@ jobs:
             fi
 
             # Get reviewers from original PR and build JSON array
-            REVIEWERS_JSON=$(gh api "repos/${{ github.repository }}/pulls/${PR_NUMBER}/requested_reviewers" \
+            REVIEWERS_JSON=$(gh api "repos/${REPOSITORY}/pulls/${PR_NUMBER}/requested_reviewers" \
               --jq '[.users[].login, .teams[].slug] + ["'"$PR_AUTHOR"'"]' 2>/dev/null || echo '["'"$PR_AUTHOR"'"]')
 
             if [ "$DRY_RUN" = "true" ]; then
