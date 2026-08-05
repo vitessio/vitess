@@ -4431,6 +4431,39 @@ func TestInvalid(t *testing.T) {
 		}, {
 			input: "select _binary foo",
 			err:   "syntax error at position 19 near 'foo'",
+		}, {
+			input: "select @@session. from t",
+			err:   "syntax error at position 18 near 'session.'",
+		}, {
+			input: "select @@session.% from t",
+			err:   "syntax error at position 18 near 'session.'",
+		}, {
+			input: "select @@global.% from t",
+			err:   "syntax error at position 17 near 'global.'",
+		}, {
+			input: "select @@global.+ from t",
+			err:   "syntax error at position 17 near 'global.'",
+		}, {
+			input: "select @@local.% from t",
+			err:   "syntax error at position 16 near 'local.'",
+		}, {
+			input: "select @@vitess_metadata.% from t",
+			err:   "syntax error at position 26 near 'vitess_metadata.'",
+		}, {
+			input: "select 1 from t where a = @@global.%",
+			err:   "syntax error at position 36 near 'global.'",
+		}, {
+			input: "set @@session.% = 1",
+			err:   "syntax error at position 15 near 'session.'",
+		}, {
+			input: "set @@global. = 1",
+			err:   "syntax error at position 14 near 'global.'",
+		}, {
+			input: "select @@a. from t",
+			err:   "syntax error at position 12 near 'a.'",
+		}, {
+			input: "select @@`session.` from t",
+			err:   "syntax error at position 20 near 'session.'",
 		},
 	}
 
@@ -4440,6 +4473,57 @@ func TestInvalid(t *testing.T) {
 			_, err := parser.Parse(tcase.input)
 			require.Error(t, err)
 			require.Contains(t, err.Error(), tcase.err)
+		})
+	}
+}
+
+// TestSystemVariableNameMustNotEndInDot exists as a standalone test because a
+// table entry that expects an error would also be satisfied by a panic being
+// recovered somewhere upstream; this pins down that Parse returns instead of
+// panicking.
+func TestSystemVariableNameMustNotEndInDot(t *testing.T) {
+	parser := NewTestParser()
+	for _, sql := range []string{
+		"select @@session. from t",
+		"select @@session.% from t",
+		"select @@global.% from t",
+		"select @@global.+ from t",
+		"select @@local.% from t",
+		"select @@vitess_metadata.% from t",
+		"select 1 from t where a = @@global.%",
+		"set @@session.% = 1",
+		"set @@global. = 1",
+		"select @@a. from t",
+		"select @@`session.` from t",
+	} {
+		t.Run(sql, func(t *testing.T) {
+			require.NotPanics(t, func() {
+				_, err := parser.Parse(sql)
+				assert.Error(t, err)
+			})
+		})
+	}
+}
+
+// TestSystemVariableNamesStillParse guards the lexer's trailing-dot check
+// against over-rejecting well-formed variable references.
+func TestSystemVariableNamesStillParse(t *testing.T) {
+	parser := NewTestParser()
+	for _, sql := range []string{
+		"select @@autocommit from t",
+		"select @@global.autocommit from t",
+		"select @@session.autocommit from t",
+		"select @@local.x from t",
+		"select @@vitess_metadata.x from t",
+		"select @@`weird var` from t",
+		"select @@foo.bar from t",
+		"set @@global.autocommit = 1",
+		"set @@vitess_metadata.app_v1 = '1'",
+		"select @a.b from t",
+	} {
+		t.Run(sql, func(t *testing.T) {
+			_, err := parser.Parse(sql)
+			require.NoError(t, err)
 		})
 	}
 }
