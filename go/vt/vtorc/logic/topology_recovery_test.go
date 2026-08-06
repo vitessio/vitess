@@ -1724,19 +1724,10 @@ func TestInsertRecoveryDetectionNewIncident(t *testing.T) {
 	defer func() {
 		_, err = orcDb.Exec("DELETE FROM recovery_detection")
 		require.NoError(t, err)
-		_, err = orcDb.Exec("DELETE FROM database_instance_last_analysis")
-		require.NoError(t, err)
 	}()
 
 	alias := &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}
-	aliasStr := topoproto.TabletAliasString(alias)
 	analysis := inst.ReplicationStopped
-
-	_, err = orcDb.Exec(
-		`INSERT INTO database_instance_last_analysis (alias, analysis, analysis_timestamp)
-		 VALUES (?, ?, '2026-01-01 00:00:00')`,
-		aliasStr, string(analysis))
-	require.NoError(t, err)
 
 	entry1 := &inst.DetectionAnalysis{
 		AnalyzedInstanceAlias: alias,
@@ -1747,7 +1738,7 @@ func TestInsertRecoveryDetectionNewIncident(t *testing.T) {
 	require.NoError(t, InsertRecoveryDetection(entry1))
 	require.NotZero(t, entry1.RecoveryId)
 
-	// Same ongoing incident: should reuse detection_id.
+	// Same ongoing incident: should reuse detection_id and refresh timestamp.
 	entry2 := &inst.DetectionAnalysis{
 		AnalyzedInstanceAlias: alias,
 		Analysis:              analysis,
@@ -1763,24 +1754,12 @@ func TestInsertRecoveryDetectionNewIncident(t *testing.T) {
 		`UPDATE recovery_detection SET detection_timestamp = '2026-01-01 00:00:00'
 		 WHERE detection_id = ?`, entry1.RecoveryId)
 	require.NoError(t, err)
-	var firstTimestamp string
+	var pinnedTimestamp string
 	require.NoError(t, orcDb.QueryRow(
 		`SELECT detection_timestamp FROM recovery_detection WHERE detection_id = ?`,
-		entry1.RecoveryId).Scan(&firstTimestamp))
+		entry1.RecoveryId).Scan(&pinnedTimestamp))
 
-	// Simulate the analysis clearing (NoProblem) and then recurring.
-	_, err = orcDb.Exec(
-		`UPDATE database_instance_last_analysis
-		 SET analysis = 'NoProblem', analysis_timestamp = '2026-01-01 01:00:00'
-		 WHERE alias = ?`, aliasStr)
-	require.NoError(t, err)
-	_, err = orcDb.Exec(
-		`UPDATE database_instance_last_analysis
-		 SET analysis = ?, analysis_timestamp = '2026-01-01 02:00:00'
-		 WHERE alias = ?`, string(analysis), aliasStr)
-	require.NoError(t, err)
-
-	// Recurring failure: UPSERT refreshes detection_timestamp on the existing row.
+	// Recurring failure: UPSERT refreshes detection_timestamp on every poll.
 	entry3 := &inst.DetectionAnalysis{
 		AnalyzedInstanceAlias: alias,
 		Analysis:              analysis,
@@ -1794,11 +1773,11 @@ func TestInsertRecoveryDetectionNewIncident(t *testing.T) {
 	require.NoError(t, orcDb.QueryRow(
 		`SELECT detection_timestamp FROM recovery_detection WHERE detection_id = ?`,
 		entry3.RecoveryId).Scan(&refreshedTimestamp))
-	require.NotEqual(t, firstTimestamp, refreshedTimestamp,
-		"recurring failure after analysis cleared should refresh detection_timestamp")
+	require.NotEqual(t, pinnedTimestamp, refreshedTimestamp,
+		"each poll should refresh detection_timestamp")
 }
 
-func TestExpireRecoveryDetectionPreservesActiveIncidents(t *testing.T) {
+func TestExpireRecoveryDetectionActiveIncidentSurvives(t *testing.T) {
 	orcDb, fromCache, err := db.OpenVTOrcWithCache()
 	require.NoError(t, err)
 	defer func() {
@@ -1809,39 +1788,41 @@ func TestExpireRecoveryDetectionPreservesActiveIncidents(t *testing.T) {
 	defer func() {
 		_, err = orcDb.Exec("DELETE FROM recovery_detection")
 		require.NoError(t, err)
-		_, err = orcDb.Exec("DELETE FROM database_instance_last_analysis")
-		require.NoError(t, err)
 	}()
 
 	oldVal := config.GetAuditPurgeDays()
 	config.SetAuditPurgeDays(10)
 	defer config.SetAuditPurgeDays(oldVal)
 
-	// Three detection rows: one recent, one old-but-still-active, one old-and-resolved.
-	_, err = orcDb.Exec(`INSERT INTO recovery_detection
-		(detection_id, detection_timestamp, alias, analysis, keyspace, shard) VALUES
-		(1, DATETIME('now', '-3 DAY'),  'alias1', 'ReplicationStopped', 'ks', '0'),
-		(2, DATETIME('now', '-15 DAY'), 'alias2', 'ReplicationStopped', 'ks', '0'),
-		(3, DATETIME('now', '-15 DAY'), 'alias3', 'DeadPrimary',        'ks', '0')`)
-	require.NoError(t, err)
+	alias := &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}
+	entry := &inst.DetectionAnalysis{
+		AnalyzedInstanceAlias: alias,
+		Analysis:              inst.ReplicationStopped,
+		AnalyzedKeyspace:      "ks",
+		AnalyzedShard:         "0",
+	}
 
-	// alias2 still has an active ReplicationStopped analysis; alias3 has resolved.
-	_, err = orcDb.Exec(`INSERT INTO database_instance_last_analysis
-		(alias, analysis, analysis_timestamp) VALUES
-		('alias2', 'ReplicationStopped', DATETIME('now'))`)
-	require.NoError(t, err)
+	// Insert the initial detection.
+	require.NoError(t, InsertRecoveryDetection(entry))
+	firstID := entry.RecoveryId
+	require.NotZero(t, firstID)
 
+	// Simulate the UPSERT refreshing detection_timestamp on every poll,
+	// which keeps the row recent even across the retention window.
+	require.NoError(t, InsertRecoveryDetection(entry))
+	require.Equal(t, firstID, entry.RecoveryId, "detection_id must be stable across polls")
+
+	// Run expiry — the row's detection_timestamp is fresh (just updated),
+	// so it must survive even with a short retention period.
 	require.NoError(t, ExpireRecoveryDetectionHistory())
 
-	var remaining []int
-	require.NoError(t, db.QueryVTOrc(
-		`SELECT detection_id FROM recovery_detection ORDER BY detection_id`,
-		nil,
-		func(m sqlutils.RowMap) error {
-			remaining = append(remaining, m.GetInt("detection_id"))
-			return nil
-		}))
-	// Row 1 (recent) and row 2 (old but active) survive; row 3 (old and resolved) is purged.
-	require.Equal(t, []int{1, 2}, remaining,
-		"old detection with active analysis must be preserved; resolved detection must be purged")
+	var remaining int
+	require.NoError(t, orcDb.QueryRow("SELECT COUNT(*) FROM recovery_detection").Scan(&remaining))
+	require.Equal(t, 1, remaining, "actively-polled detection must survive expiry")
+
+	// Verify the detection_id is unchanged.
+	var survivingID int64
+	require.NoError(t, orcDb.QueryRow(
+		"SELECT detection_id FROM recovery_detection").Scan(&survivingID))
+	require.Equal(t, firstID, survivingID, "stable detection_id must be preserved")
 }

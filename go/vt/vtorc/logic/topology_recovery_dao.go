@@ -30,6 +30,10 @@ import (
 )
 
 // InsertRecoveryDetection inserts the recovery analysis that has been detected.
+// On a recurring (alias, analysis) pair, the existing row is reused (stable
+// detection_id) and detection_timestamp is refreshed to "now". This keeps the
+// row visible in audit queries and prevents ExpireRecoveryDetectionHistory from
+// deleting an actively-detected incident.
 func InsertRecoveryDetection(analysisEntry *inst.DetectionAnalysis) error {
 	aliasStr := topoproto.TabletAliasString(analysisEntry.AnalyzedInstanceAlias)
 	analysisStr := string(analysisEntry.Analysis)
@@ -47,11 +51,7 @@ func InsertRecoveryDetection(analysisEntry *inst.DetectionAnalysis) error {
 			DATETIME('now')
 		)
 		ON CONFLICT(alias, analysis) DO UPDATE
-		SET detection_timestamp = DATETIME('now')
-		WHERE recovery_detection.detection_timestamp < (
-			SELECT analysis_timestamp FROM database_instance_last_analysis
-			WHERE alias = excluded.alias AND analysis = excluded.analysis
-		)`,
+		SET detection_timestamp = DATETIME('now')`,
 		aliasStr,
 		analysisStr,
 		analysisEntry.AnalyzedKeyspace,
@@ -63,8 +63,7 @@ func InsertRecoveryDetection(analysisEntry *inst.DetectionAnalysis) error {
 	}
 	// Always SELECT the detection_id rather than relying on LastInsertId():
 	// SQLite's last_insert_rowid() behaviour for ON CONFLICT DO UPDATE varies
-	// by version (reliable only since 3.35.0) and is not updated at all when
-	// the DO UPDATE WHERE clause is false (ongoing-incident dedup).
+	// by version (reliable only since 3.35.0).
 	err = db.QueryVTOrc(
 		`SELECT detection_id FROM recovery_detection WHERE alias = ? AND analysis = ?`,
 		sqlutils.Args(aliasStr, analysisStr),
@@ -285,24 +284,10 @@ func writeTopologyRecoveryStep(topologyRecoveryStep *TopologyRecoveryStep) error
 }
 
 // ExpireRecoveryDetectionHistory removes old rows from the recovery_detection table.
-// Rows whose (alias, analysis) still match an active analysis in
-// database_instance_last_analysis are preserved regardless of age so that a
-// continuously-active incident keeps a stable detection_id across the entire
-// incident lifetime.
+// Actively-detected incidents are naturally preserved because the UPSERT in
+// InsertRecoveryDetection refreshes detection_timestamp on every poll cycle.
 func ExpireRecoveryDetectionHistory() error {
-	writeFunc := func() error {
-		_, err := db.ExecVTOrc(`DELETE FROM recovery_detection
-			WHERE detection_timestamp < DATETIME('now', PRINTF('-%d DAY', ?))
-			AND NOT EXISTS (
-				SELECT 1 FROM database_instance_last_analysis
-				WHERE alias = recovery_detection.alias
-				  AND analysis = recovery_detection.analysis
-			)`,
-			config.GetAuditPurgeDays(),
-		)
-		return err
-	}
-	return inst.ExecDBWriteFunc(writeFunc)
+	return inst.ExpireTableData("recovery_detection", "detection_timestamp")
 }
 
 // ExpireTopologyRecoveryHistory removes old rows from the topology_recovery table

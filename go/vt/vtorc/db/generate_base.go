@@ -180,9 +180,9 @@ CREATE TABLE recovery_detection (
 )`,
 	// The UNIQUE index on (alias, analysis) deduplicates repeated detections of the
 	// same analysis on the same tablet within an ongoing incident. When a failure
-	// clears and recurs, InsertRecoveryDetection refreshes detection_timestamp via
-	// an UPSERT conditioned on database_instance_last_analysis.analysis_timestamp,
-	// so the single row always reflects the current incident.
+	// clears and recurs, InsertRecoveryDetection unconditionally refreshes
+	// detection_timestamp via an UPSERT, so the single row always reflects the
+	// most recent detection.
 	`
 CREATE UNIQUE INDEX recovery_detection_alias_analysis_uniq ON recovery_detection (alias, analysis)`,
 	`
