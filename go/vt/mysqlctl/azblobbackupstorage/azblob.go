@@ -250,7 +250,15 @@ func (bh *AZBlobBackupHandle) AddFile(ctx context.Context, filename string, file
 	reader, writer := io.Pipe()
 
 	bh.waitGroup.Go(func() {
-		_, err := azblob.UploadStreamToBlockBlob(bh.ctx, reader, blockBlobURL, azblob.UploadStreamToBlockBlobOptions{
+		// The upload must honor both the per-file context and the handle-level
+		// abort context: callers cancel the per-file ctx to stop a failing
+		// backup promptly, while AbortBackup cancels bh.ctx. Waiting on this
+		// upload (via Wait) without honoring the per-file ctx would otherwise
+		// let a stalled upload block the caller from ever reaching AbortBackup.
+		uploadCtx, cleanup := mergeCancel(bh.ctx, ctx)
+		defer cleanup()
+
+		_, err := azblob.UploadStreamToBlockBlob(uploadCtx, reader, blockBlobURL, azblob.UploadStreamToBlockBlobOptions{
 			BufferSize: azBlobBufferSize.Get(),
 			MaxBuffers: azBlobParallelism.Get(),
 		})
@@ -261,6 +269,21 @@ func (bh *AZBlobBackupHandle) AddFile(ctx context.Context, filename string, file
 	})
 
 	return writer, nil
+}
+
+// mergeCancel returns a context derived from parent that is also cancelled when
+// other is cancelled, along with a cleanup function that must be called when
+// the work is done to release resources and stop watching other. Context values
+// come from parent only. If other is cancelled with a cause, mergeCancel
+// preserves that cause so callers see why the context was cancelled rather
+// than a bare context.Canceled.
+func mergeCancel(parent, other context.Context) (context.Context, func()) {
+	ctx, cancel := context.WithCancelCause(parent)
+	stop := context.AfterFunc(other, func() { cancel(context.Cause(other)) })
+	return ctx, func() {
+		stop()
+		cancel(nil)
+	}
 }
 
 // Wait implements BackupHandle.
