@@ -91,6 +91,9 @@ func createNonGroupingAggr(expr *sqlparser.AliasedExpr) Aggr {
 
 func (a *Aggregator) addColumnWithoutPushing(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, addToGroupBy bool) int {
 	offset := len(a.Columns)
+	defer func() {
+		a.checkOffset(offset)
+	}()
 	a.Columns = append(a.Columns, expr)
 
 	if addToGroupBy {
