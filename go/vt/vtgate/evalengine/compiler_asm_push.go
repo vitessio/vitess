@@ -589,6 +589,14 @@ func (asm *assembler) PushLiteral(lit eval) error {
 			env.vm.sp++
 			return 1
 		}, "PUSH TIME|DATETIME|DATE(%q)", lit.ToRawBytes())
+	case *evalJSON:
+		asm.emit(func(env *ExpressionEnv) int {
+			// JSON functions mutate documents in place; each execution
+			// of the compiled program must own its copy of the literal.
+			env.vm.stack[env.vm.sp] = lit.Clone()
+			env.vm.sp++
+			return 1
+		}, "PUSH JSON(%s)", lit.ToRawBytes())
 	default:
 		return vterrors.Errorf(vtrpc.Code_UNIMPLEMENTED, "unsupported literal kind '%T'", lit)
 	}
