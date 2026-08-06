@@ -2136,6 +2136,7 @@ func TestPlannedReparenter_performInitialPromotion(t *testing.T) {
 				tt.shard,
 				tt.primaryElect,
 				tt.tabletMap,
+				false, /* primaryElectExplicit */
 				PlannedReparentOptions{durability: durability},
 			)
 
@@ -2190,9 +2191,54 @@ func TestPlannedReparenter_performInitialPromotion_lostLock(t *testing.T) {
 	}
 
 	// Note: ctx does not hold the shard lock.
-	_, err = pr.performInitialPromotion(ctx, "testkeyspace", "-", primaryElect, tabletMap, PlannedReparentOptions{durability: durability})
+	_, err = pr.performInitialPromotion(ctx, "testkeyspace", "-", primaryElect, tabletMap, false /* primaryElectExplicit */, PlannedReparentOptions{durability: durability})
 	require.Error(t, err)
 	assert.ErrorContains(t, err, lostTopologyLockMsg)
+}
+
+// TestCheckPrimaryElectContainsAllPositions_FilePosExplicitPrimary verifies the
+// escape hatch: on a file-position shard, where cross-tablet positions can't be
+// compared, an operator who explicitly requested the primary (--new-primary) is
+// allowed to proceed. Without an explicit request the same input fails closed.
+//
+// Crucially, the elect's binlog filename sorts *below* the peer's
+// (000002 < 000009). File positions are not comparable across tablets, so this
+// ordering is arbitrary — the escape hatch must exclude file positions from the
+// dominance comparison entirely, not merely skip the dedicated rejection. If the
+// AtLeast comparison still ran on these positions, the explicit case would
+// wrongly fail on "contains transactions not found in primary-elect".
+func TestCheckPrimaryElectContainsAllPositions_FilePosExplicitPrimary(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	tmc := &testutil.TabletManagerClient{
+		PrimaryPositionResults: map[string]struct {
+			Position string
+			Error    error
+		}{
+			// Elect sorts below the peer by binlog filename, the unfavorable ordering.
+			"zone1-0000000200": {Position: "FilePos/vt-bin.000002:100"},
+			"zone1-0000000201": {Position: "FilePos/vt-bin.000009:5000"},
+		},
+	}
+	pr := NewPlannedReparenter(nil, tmc, logutil.NewMemoryLogger())
+
+	primaryElect := &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 200}}
+	tabletMap := map[string]*topo.TabletInfo{
+		"zone1-0000000200": {Tablet: primaryElect},
+		"zone1-0000000201": {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 201}}},
+	}
+
+	// Auto-election: file-position positions can't be compared across tablets, so
+	// fail closed.
+	err := pr.checkPrimaryElectContainsAllPositions(ctx, primaryElect, tabletMap, false /* primaryElectExplicit */)
+	require.ErrorContains(t, err, "file-position replication position")
+
+	// Explicit --new-primary: honor the operator's choice. This must pass despite
+	// the elect's file position sorting below the peer's, because file positions are
+	// excluded from the comparison, not compared with an arbitrary verdict.
+	err = pr.checkPrimaryElectContainsAllPositions(ctx, primaryElect, tabletMap, true /* primaryElectExplicit */)
+	require.NoError(t, err)
 }
 
 func TestPlannedReparenter_performPartialPromotionRecovery(t *testing.T) {
@@ -2358,10 +2404,11 @@ func TestPlannedReparenter_performPotentialPromotion(t *testing.T) {
 		timeout    time.Duration
 		unlockTopo bool
 
-		keyspace     string
-		shard        string
-		primaryElect *topodatapb.Tablet
-		tabletMap    map[string]*topo.TabletInfo
+		keyspace             string
+		shard                string
+		primaryElect         *topodatapb.Tablet
+		tabletMap            map[string]*topo.TabletInfo
+		primaryElectExplicit bool
 
 		shouldErr bool
 	}{
@@ -2800,6 +2847,56 @@ func TestPlannedReparenter_performPotentialPromotion(t *testing.T) {
 			},
 			shouldErr: false,
 		},
+		{
+			// File-position shard, no explicit primary: cross-tablet coordinates
+			// aren't comparable, so fail closed.
+			name: "file-position auto-election fails closed",
+			tmc: &testutil.TabletManagerClient{
+				DemotePrimaryResults: map[string]struct {
+					Status *replicationdatapb.PrimaryStatus
+					Error  error
+				}{
+					"zone1-0000000100": {Status: &replicationdatapb.PrimaryStatus{Position: "FilePos/vt-bin.000002:100"}},
+					"zone1-0000000101": {Status: &replicationdatapb.PrimaryStatus{Position: "FilePos/vt-bin.000009:5000"}},
+				},
+			},
+			keyspace: "testkeyspace",
+			shard:    "-",
+			primaryElect: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}}},
+				"zone1-0000000101": {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101}}},
+			},
+			shouldErr: true,
+		},
+		{
+			// Same file-position shard, but the operator explicitly chose the primary.
+			// The elect sorts below the peer by binlog filename; file positions must be
+			// excluded from the comparison entirely, so the explicit choice is honored.
+			name: "file-position explicit primary is honored",
+			tmc: &testutil.TabletManagerClient{
+				DemotePrimaryResults: map[string]struct {
+					Status *replicationdatapb.PrimaryStatus
+					Error  error
+				}{
+					"zone1-0000000100": {Status: &replicationdatapb.PrimaryStatus{Position: "FilePos/vt-bin.000002:100"}},
+					"zone1-0000000101": {Status: &replicationdatapb.PrimaryStatus{Position: "FilePos/vt-bin.000009:5000"}},
+				},
+			},
+			keyspace:             "testkeyspace",
+			shard:                "-",
+			primaryElectExplicit: true,
+			primaryElect: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}}},
+				"zone1-0000000101": {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101}}},
+			},
+			shouldErr: false,
+		},
 	}
 
 	logger := logutil.NewMemoryLogger()
@@ -2838,7 +2935,7 @@ func TestPlannedReparenter_performPotentialPromotion(t *testing.T) {
 				ctx = _ctx
 			}
 
-			err := pr.performPotentialPromotion(ctx, tt.keyspace, tt.shard, tt.primaryElect, tt.tabletMap)
+			err := pr.performPotentialPromotion(ctx, tt.keyspace, tt.shard, tt.primaryElect, tt.tabletMap, tt.primaryElectExplicit)
 			if tt.shouldErr {
 				assert.Error(t, err)
 

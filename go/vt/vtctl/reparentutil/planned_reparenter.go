@@ -322,6 +322,7 @@ func (pr *PlannedReparenter) performInitialPromotion(
 	shard string,
 	primaryElect *topodatapb.Tablet,
 	tabletMap map[string]*topo.TabletInfo,
+	primaryElectExplicit bool,
 	opts PlannedReparentOptions,
 ) (string, error) {
 	primaryElectAliasStr := topoproto.TabletAliasString(primaryElect.Alias)
@@ -335,7 +336,7 @@ func (pr *PlannedReparenter) performInitialPromotion(
 	// the peer holds. This mirrors the dominance check performPotentialPromotion runs
 	// on the no-clear-primary path. Position.AtLeast also rejects incomparable GTID
 	// sets, so a divergent peer fails the check rather than being silently dropped.
-	if err := pr.checkPrimaryElectContainsAllPositions(ctx, primaryElect, tabletMap); err != nil {
+	if err := pr.checkPrimaryElectContainsAllPositions(ctx, primaryElect, tabletMap, primaryElectExplicit); err != nil {
 		return "", err
 	}
 
@@ -380,6 +381,7 @@ func (pr *PlannedReparenter) checkPrimaryElectContainsAllPositions(
 	ctx context.Context,
 	primaryElect *topodatapb.Tablet,
 	tabletMap map[string]*topo.TabletInfo,
+	primaryElectExplicit bool,
 ) error {
 	primaryElectAliasStr := topoproto.TabletAliasString(primaryElect.Alias)
 
@@ -432,7 +434,7 @@ func (pr *PlannedReparenter) checkPrimaryElectContainsAllPositions(
 		return rec.Error()
 	}
 
-	return verifyPrimaryElectDominates(primaryElectAliasStr, positions)
+	return verifyPrimaryElectDominates(primaryElectAliasStr, positions, primaryElectExplicit)
 }
 
 // verifyPrimaryElectDominates returns an error unless the primary-elect's
@@ -450,7 +452,14 @@ func (pr *PlannedReparenter) checkPrimaryElectContainsAllPositions(
 // peer's transactions. An empty position (a genuinely fresh tablet on a
 // never-initialized shard) carries no FilePosGTID and is still safe to compare, so
 // GTID and fresh-init promotions are unaffected.
-func verifyPrimaryElectDominates(primaryElectAliasStr string, positions map[string]replication.Position) error {
+//
+// primaryElectExplicit reports whether the operator named this primary via
+// --new-primary. Because these paths can't compare file positions across tablets,
+// the file-position rejection is the operator's escape hatch: when they explicitly
+// chose the primary, we honor that choice and skip it (the standard PRS contract
+// for promoting a non-GTID shard). It does not relax the GTID dominance check,
+// which remains a real data-loss safeguard the explicit alias must still pass.
+func verifyPrimaryElectDominates(primaryElectAliasStr string, positions map[string]replication.Position, primaryElectExplicit bool) error {
 	electPos, ok := positions[primaryElectAliasStr]
 	if !ok {
 		return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "primary-elect tablet %v not found in tablet map", primaryElectAliasStr)
@@ -458,14 +467,23 @@ func verifyPrimaryElectDominates(primaryElectAliasStr string, positions map[stri
 
 	for alias, pos := range positions {
 		if _, isFilePos := pos.GTIDSet.(replication.FilePosGTID); isFilePos {
+			// File positions are each tablet's own binlog coordinates, not comparable
+			// across tablets, so a dominance verdict on them is meaningless. Without an
+			// explicit primary we fail closed; with one, the operator has taken
+			// responsibility for the choice, so we skip this tablet entirely — both the
+			// rejection and the (equally meaningless) AtLeast comparison below.
+			if primaryElectExplicit {
+				continue
+			}
 			return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "cannot verify primary-elect %v contains all transactions: tablet %v reports a file-position replication position (%v), which is not comparable across tablets; specify an explicit primary to promote", primaryElectAliasStr, alias, replication.EncodePosition(pos))
 		}
-	}
 
-	for alias, pos := range positions {
 		if alias == primaryElectAliasStr {
 			continue
 		}
+		// GTID positions are globally comparable: even with an explicit primary the
+		// elect must still contain every peer's transactions (the design doc forbids
+		// NewPrimaryAlias from bypassing this data-loss safeguard).
 		if !electPos.AtLeast(pos) {
 			return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "tablet %v (position: %v) contains transactions not found in primary-elect %v (position: %v)", alias, pos, primaryElectAliasStr, electPos)
 		}
@@ -505,6 +523,7 @@ func (pr *PlannedReparenter) performPotentialPromotion(
 	shard string,
 	primaryElect *topodatapb.Tablet,
 	tabletMap map[string]*topo.TabletInfo,
+	primaryElectExplicit bool,
 ) error {
 	primaryElectAliasStr := topoproto.TabletAliasString(primaryElect.Alias)
 
@@ -602,7 +621,7 @@ func (pr *PlannedReparenter) performPotentialPromotion(
 	// Make sure no tablet has a more advanced position than the candidate
 	// primary. It's up to the caller to choose a suitable candidate, and to
 	// choose another if this check fails.
-	if err := verifyPrimaryElectDominates(primaryElectAliasStr, positionMap); err != nil {
+	if err := verifyPrimaryElectDominates(primaryElectAliasStr, positionMap, primaryElectExplicit); err != nil {
 		return err
 	}
 
@@ -656,6 +675,13 @@ func (pr *PlannedReparenter) reparentShardLocked(
 	if err != nil {
 		return err
 	}
+
+	// Capture whether the operator explicitly requested a specific primary before
+	// preflightChecks overwrites opts.NewPrimaryAlias with the elected candidate.
+	// An explicit request is the operator's informed choice and is allowed to
+	// bypass the file-position "can't compare across tablets" fail-closed check
+	// below (it is not allowed to bypass real GTID dominance safety).
+	primaryElectExplicit := opts.NewPrimaryAlias != nil
 
 	// Check invariants that PlannedReparentShard depends on.
 	if isNoop, err := pr.preflightChecks(ctx, ev, tabletMap, innodbBufferPoolData, &opts); err != nil {
@@ -719,12 +745,12 @@ func (pr *PlannedReparenter) reparentShardLocked(
 	case currentPrimary == nil && ev.ShardInfo.PrimaryTermStartTime == nil:
 		// Case (1): no primary has been elected ever. Initialize
 		// the primary-elect tablet
-		reparentJournalPos, err = pr.performInitialPromotion(ctx, keyspace, shard, ev.NewPrimary, tabletMap, opts)
+		reparentJournalPos, err = pr.performInitialPromotion(ctx, keyspace, shard, ev.NewPrimary, tabletMap, primaryElectExplicit, opts)
 		needsRefresh = true
 	case currentPrimary == nil && ev.ShardInfo.PrimaryTermStartTime != nil:
 		// Case (2): no clear current primary. Try to find a safe promotion
 		// candidate, and promote to it.
-		err = pr.performPotentialPromotion(ctx, keyspace, shard, ev.NewPrimary, tabletMap)
+		err = pr.performPotentialPromotion(ctx, keyspace, shard, ev.NewPrimary, tabletMap, primaryElectExplicit)
 		// We need to call `PromoteReplica` when we reparent the tablets.
 		promoteReplicaRequired = true
 	case topoproto.TabletAliasEqual(currentPrimary.Alias, opts.NewPrimaryAlias):
