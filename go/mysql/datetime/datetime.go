@@ -141,13 +141,25 @@ func (t Time) Neg() bool {
 }
 
 func (t Time) Hash(h *vthash.Hasher) {
-	h.Write16(t.hour)
+	hour := t.hour
+	if t.IsZero() {
+		// Negative zero is zero, so the sign must not reach the fingerprint
+		// when there is no magnitude for it to apply to. Otherwise
+		// TIME '-00:00:00' and TIME '00:00:00' hash apart while comparing equal.
+		hour &= ^negMask
+	}
+	h.Write16(hour)
 	h.Write8(t.minute)
 	h.Write8(t.second)
 	h.Write32(t.nanosecond)
 }
 
 func (t Time) Compare(t2 Time) int {
+	if t.IsZero() && t2.IsZero() {
+		// Zero carries no sign: MySQL reads TIME '-00:00:00' and TIME '00:00:00'
+		// as the same value, so the sign test below must not separate them.
+		return 0
+	}
 	if t.Neg() != t2.Neg() {
 		if t.Neg() {
 			return -1
