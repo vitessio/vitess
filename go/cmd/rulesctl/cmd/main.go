@@ -55,6 +55,7 @@ func Main() *cobra.Command {
 	rootCmd.AddCommand(Remove())
 	rootCmd.AddCommand(Add())
 	rootCmd.AddCommand(Explain())
+	rootCmd.AddCommand(Validate())
 
 	return rootCmd
 }
