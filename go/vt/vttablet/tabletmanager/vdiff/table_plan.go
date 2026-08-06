@@ -19,13 +19,16 @@ package vdiff
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"strings"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
+	"vitess.io/vitess/go/vt/schemadiff"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -166,7 +169,8 @@ func (td *tableDiffer) buildTablePlan(dbClient binlogplayer.DBClient, dbName str
 
 	if len(tp.table.PrimaryKeyColumns) == 0 {
 		// We use the columns from a PKE if there is one.
-		pkeCols, err := tp.getPKEquivalentColumns(dbClient)
+		senv := schemadiff.NewEnvWithDefaults(td.wd.ct.vde.env)
+		pkeCols, err := tp.getPKEquivalentColumns(dbClient, senv)
 		if err != nil {
 			return nil, vterrors.Wrapf(err, "error getting PK equivalent columns for table %s", tp.table.Name)
 		}
@@ -298,16 +302,36 @@ func (tp *tablePlan) getPKColumnCollations(dbClient binlogplayer.DBClient, colla
 	return nil
 }
 
-func (tp *tablePlan) getPKEquivalentColumns(dbClient binlogplayer.DBClient) ([]string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), BackgroundOperationTimeout/2)
-	defer cancel()
-	executeFetch := func(query string, maxrows int, wantfields bool) (*sqltypes.Result, error) {
-		// This sets wantfields to true.
-		return dbClient.ExecuteFetch(query, maxrows)
-	}
-	pkeCols, _, err := mysqlctl.GetPrimaryKeyEquivalentColumns(ctx, executeFetch, tp.dbName, tp.table.Name)
+func (tp *tablePlan) getPKEquivalentColumns(dbClient binlogplayer.DBClient, env *schemadiff.Environment) ([]string, error) {
+	query := fmt.Sprintf("SHOW CREATE TABLE %s.%s", sqlescape.EscapeID(tp.dbName), sqlescape.EscapeID(tp.table.Name))
+	qr, err := dbClient.ExecuteFetch(query, 1)
 	if err != nil {
 		return nil, err
 	}
+	if len(qr.Rows) == 0 || len(qr.Rows[0]) < 2 {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected result for SHOW CREATE TABLE query for table %s.%s: %d rows",
+			tp.dbName, tp.table.Name, len(qr.Rows))
+	}
+	createTableSQL := qr.Rows[0][1].ToString()
+	createTableEntity, err := schemadiff.NewCreateTableEntityFromSQL(env, createTableSQL)
+	if err != nil {
+		// An unparseable schema is not the same as one with no PKE: fall back
+		// to the information_schema-based lookup rather than keying on all columns.
+		log.Warn("Failed to parse the CREATE TABLE schema to determine a primary key equivalent; falling back to the information_schema lookup",
+			slog.String("table", tp.table.Name),
+			slog.Any("error", err))
+		ctx, cancel := context.WithTimeout(context.Background(), BackgroundOperationTimeout/2)
+		defer cancel()
+		executeFetch := func(query string, maxrows int, wantfields bool) (*sqltypes.Result, error) {
+			// This sets wantfields to true.
+			return dbClient.ExecuteFetch(query, maxrows)
+		}
+		pkeCols, _, err := mysqlctl.GetPrimaryKeyEquivalentColumns(ctx, executeFetch, tp.dbName, tp.table.Name)
+		if err != nil {
+			return nil, err
+		}
+		return pkeCols, nil
+	}
+	pkeCols, _ := schemadiff.GetPrimaryKeyEquivalent(createTableEntity)
 	return pkeCols, nil
 }

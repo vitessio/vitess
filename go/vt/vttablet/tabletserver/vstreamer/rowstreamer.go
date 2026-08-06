@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"net/url"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -64,12 +65,13 @@ type rowStreamer struct {
 	ctx    context.Context
 	cancel func()
 
-	cp      dbconfigs.Connector
-	se      *schema.Engine
-	query   string
-	lastpk  []sqltypes.Value
-	send    func(*binlogdatapb.VStreamRowsResponse) error
-	vschema *localVSchema
+	cp           dbconfigs.Connector
+	se           *schema.Engine
+	query        string
+	lastpk       []sqltypes.Value
+	lastpkFields []*querypb.Field
+	send         func(*binlogdatapb.VStreamRowsResponse) error
+	vschema      *localVSchema
 
 	plan          *Plan
 	pkColumns     []int
@@ -85,29 +87,38 @@ type rowStreamer struct {
 }
 
 func newRowStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine, query string,
-	lastpk []sqltypes.Value, vschema *localVSchema, send func(*binlogdatapb.VStreamRowsResponse) error, vse *Engine,
+	lastpk *sqltypes.Result, vschema *localVSchema, send func(*binlogdatapb.VStreamRowsResponse) error, vse *Engine,
 	mode RowStreamerMode, conn *snapshotConn, options *binlogdatapb.VStreamOptions,
 ) *rowStreamer {
 	config, err := GetVReplicationConfig(options)
 	if err != nil {
 		return nil
 	}
+	var lastpkRow []sqltypes.Value
+	var lastpkFields []*querypb.Field
+	if lastpk != nil {
+		lastpkFields = lastpk.Fields
+		if len(lastpk.Rows) == 1 {
+			lastpkRow = lastpk.Rows[0]
+		}
+	}
 	ctx, cancel := context.WithCancel(ctx)
 	return &rowStreamer{
-		ctx:     ctx,
-		cancel:  cancel,
-		cp:      cp,
-		se:      se,
-		query:   query,
-		lastpk:  lastpk,
-		send:    send,
-		vschema: vschema,
-		vse:     vse,
-		pktsize: DefaultPacketSizer(config.VStreamDynamicPacketSize, config.VStreamPacketSize),
-		mode:    mode,
-		conn:    conn,
-		options: options,
-		config:  config,
+		ctx:          ctx,
+		cancel:       cancel,
+		cp:           cp,
+		se:           se,
+		query:        query,
+		lastpk:       lastpkRow,
+		lastpkFields: lastpkFields,
+		send:         send,
+		vschema:      vschema,
+		vse:          vse,
+		pktsize:      DefaultPacketSizer(config.VStreamDynamicPacketSize, config.VStreamPacketSize),
+		mode:         mode,
+		conn:         conn,
+		options:      options,
+		config:       config,
 	}
 }
 
@@ -244,6 +255,38 @@ func (rs *rowStreamer) buildPKColumns(st *binlogdatapb.MinimalTable) ([]int, err
 	return pkColumns, nil
 }
 
+// validateLastPKFields verifies that a resumed lastpk value was generated
+// using the same key columns the plan has selected now. The selected key can
+// change while a copy phase is paused, e.g. when the PK equivalent ranking
+// changes across an upgrade; binding the stored values to different columns
+// would silently skip rows. Older clients may not send the lastpk fields, in
+// which case there is nothing to validate.
+func (rs *rowStreamer) validateLastPKFields(st *binlogdatapb.MinimalTable) error {
+	if len(rs.lastpkFields) == 0 {
+		return nil
+	}
+	if len(rs.lastpkFields) != len(rs.lastpk) {
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected lastpk input for the %s table: %d fields provided for %d values",
+			st.Name, len(rs.lastpkFields), len(rs.lastpk))
+	}
+	currentNames := make([]string, len(rs.pkColumns))
+	for i, pk := range rs.pkColumns {
+		currentNames[i] = rs.plan.Table.Fields[pk].Name
+	}
+	storedNames := make([]string, len(rs.lastpkFields))
+	for i, field := range rs.lastpkFields {
+		storedNames[i] = field.Name
+	}
+	for i := range currentNames {
+		if !strings.EqualFold(storedNames[i], currentNames[i]) {
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
+				"cannot resume the copy phase of the %s table: the lastpk value (%v) was generated using the (%s) key columns, but the table's current key columns are (%s); the table copy must be restarted",
+				st.Name, rs.lastpk, strings.Join(storedNames, ", "), strings.Join(currentNames, ", "))
+		}
+	}
+	return nil
+}
+
 func (rs *rowStreamer) buildSelect(st *binlogdatapb.MinimalTable) (string, error) {
 	buf := sqlparser.NewTrackedBuffer(nil)
 	// We could have used select *, but being explicit is more predictable.
@@ -292,6 +335,9 @@ func (rs *rowStreamer) buildSelect(st *binlogdatapb.MinimalTable) (string, error
 		if len(rs.lastpk) != len(rs.pkColumns) {
 			return "", fmt.Errorf("cannot build a row streamer plan for the %s table as a lastpk value was provided and the number of primary key values within it (%v) does not match the number of primary key columns in the table (%d)",
 				st.Name, rs.lastpk, rs.pkColumns)
+		}
+		if err := rs.validateLastPKFields(st); err != nil {
+			return "", err
 		}
 		buf.WriteString(" where ")
 		// First we add any predicates that should be pushed down.

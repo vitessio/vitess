@@ -26,6 +26,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/fakesqldb"
+	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -162,6 +163,99 @@ func expectUpdateCount(t *testing.T, wantCount int64) int64 {
 		time.Sleep(10 * time.Millisecond)
 	}
 	panic("unreachable")
+}
+
+func TestMapPKEquivalentCols(t *testing.T) {
+	testDB := fakesqldb.New(t)
+	defer testDB.Close()
+
+	dbName := engine.env.Config().DB.DBName
+	query := "SHOW CREATE TABLE " + sqlescape.EscapeID(dbName) + "." + sqlescape.EscapeID("t1")
+	showCreateResult := sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("Table|Create Table", "varchar|varchar"),
+		"t1|CREATE TABLE `t1` (\n"+
+			"  `bigint_id` bigint NOT NULL,\n"+
+			"  `tinyint_col` tinyint NOT NULL,\n"+
+			"  PRIMARY KEY (`bigint_id`),\n"+
+			"  UNIQUE KEY `tiny_uid` (`tinyint_col`)\n"+
+			") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+	)
+	testDB.AddQuery(query, showCreateResult)
+
+	table := &binlogdatapb.MinimalTable{
+		Name:   "t1",
+		Fields: sqltypes.MakeTestFields("bigint_id|tinyint_col", "int64|int64"),
+	}
+	pkeCols, err := engine.mapPKEquivalentCols(t.Context(), dbconfigs.New(testDB.ConnParams()), table)
+	require.NoError(t, err)
+	require.Equal(t, []int{1}, pkeCols)
+	require.Equal(t, "tiny_uid", table.PKIndexName)
+}
+
+// TestMapPKEquivalentColsUnparseableSchemaFallsBack ensures a CREATE TABLE
+// statement the SQL parser cannot handle (e.g. one using the unknown
+// SECONDARY_ENGINE option) falls back to the information_schema-based PKE
+// lookup instead of being treated as having no PKE.
+func TestMapPKEquivalentColsUnparseableSchemaFallsBack(t *testing.T) {
+	testDB := fakesqldb.New(t)
+	defer testDB.Close()
+
+	dbName := engine.env.Config().DB.DBName
+	query := "SHOW CREATE TABLE " + sqlescape.EscapeID(dbName) + "." + sqlescape.EscapeID("t1")
+	showCreateResult := sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("Table|Create Table", "varchar|varchar"),
+		"t1|CREATE TABLE `t1` (\n"+
+			"  `payload` text,\n"+
+			"  `id` bigint NOT NULL,\n"+
+			"  UNIQUE KEY `uk_id` (`id`)\n"+
+			") ENGINE=InnoDB SECONDARY_ENGINE=RAPID",
+	)
+	testDB.AddQuery(query, showCreateResult)
+	testDB.AddQueryPattern("(?s).*information_schema.STATISTICS.*", sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("column_name|index_name", "varchar|varchar"),
+		"id|uk_id",
+	))
+
+	table := &binlogdatapb.MinimalTable{
+		Name:   "t1",
+		Fields: sqltypes.MakeTestFields("payload|id", "text|int64"),
+	}
+	pkeCols, err := engine.mapPKEquivalentCols(t.Context(), dbconfigs.New(testDB.ConnParams()), table)
+	require.NoError(t, err)
+	require.Equal(t, []int{1}, pkeCols)
+	require.Equal(t, "uk_id", table.PKIndexName)
+}
+
+// TestMapPKEquivalentColsStaleFields ensures that a PKE column missing from
+// the (possibly stale) MinimalTable fields yields no PKE, rather than a
+// column-index slice whose unmatched entries silently point at field 0.
+func TestMapPKEquivalentColsStaleFields(t *testing.T) {
+	testDB := fakesqldb.New(t)
+	defer testDB.Close()
+
+	dbName := engine.env.Config().DB.DBName
+	query := "SHOW CREATE TABLE " + sqlescape.EscapeID(dbName) + "." + sqlescape.EscapeID("t1")
+	showCreateResult := sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("Table|Create Table", "varchar|varchar"),
+		"t1|CREATE TABLE `t1` (\n"+
+			"  `bigint_id` bigint NOT NULL,\n"+
+			"  `tinyint_col` tinyint NOT NULL,\n"+
+			"  PRIMARY KEY (`bigint_id`),\n"+
+			"  UNIQUE KEY `tiny_uid` (`tinyint_col`)\n"+
+			") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+	)
+	testDB.AddQuery(query, showCreateResult)
+
+	// The fields snapshot predates the DDL that added tinyint_col, the
+	// column the selected PKE (tiny_uid) is defined on.
+	table := &binlogdatapb.MinimalTable{
+		Name:   "t1",
+		Fields: sqltypes.MakeTestFields("bigint_id", "int64"),
+	}
+	pkeCols, err := engine.mapPKEquivalentCols(t.Context(), dbconfigs.New(testDB.ConnParams()), table)
+	require.NoError(t, err)
+	require.Empty(t, pkeCols)
+	require.Empty(t, table.PKIndexName)
 }
 
 // TestVStreamerWaitForMySQL tests the wait for MySQL to catch-up
