@@ -24,6 +24,7 @@ import (
 	"io"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"testing/synctest"
@@ -31,6 +32,7 @@ import (
 
 	"golang.org/x/sys/unix"
 
+	cache "github.com/patrickmn/go-cache"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
@@ -1684,4 +1686,265 @@ func TestRestartDirectReplicasTimeout(t *testing.T) {
 		require.NoError(t, err)
 		require.Empty(t, activeRecoveries, "recovery row must be resolved after restartDirectReplicas returns")
 	})
+}
+
+func TestAllCellsDenied(t *testing.T) {
+	tests := []struct {
+		name          string
+		shardCells    []string
+		deniedCells   []string
+		wantAllDenied bool
+	}{
+		{"all cells denied", []string{"z1", "z2"}, []string{"z1", "z2"}, true},
+		{"superset denied", []string{"z1", "z2"}, []string{"z1", "z2", "z3"}, true},
+		{"partial denied", []string{"z1", "z2"}, []string{"z1"}, false},
+		{"none denied", []string{"z1", "z2"}, []string{"z3"}, false},
+		{"empty denied list", []string{"z1"}, []string{}, false},
+		{"empty shard cells", []string{}, []string{"z1"}, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			require.Equal(t, tt.wantAllDenied, allCellsDenied(tt.shardCells, tt.deniedCells))
+		})
+	}
+}
+
+// TestCellsNoRecoveryGateSkip verifies that executeCheckAndRecoverFunction returns
+// nil without attempting recovery when the cell gate fires. The skip cases are
+// distinguishable at the unit level because: (a) without a gate skip the function
+// proceeds to LockShard + actual recovery, (b) the skip path returns nil without
+// touching the topology_recovery table. The proceed path is covered by the e2e
+// test TestDownPrimary_CellsNoRecovery.
+func TestCellsNoRecoveryGateSkip(t *testing.T) {
+	tests := []struct {
+		name         string
+		analysis     inst.DetectionAnalysis
+		cellsToSet   []string
+		shardTablets []struct {
+			cell string
+			uid  uint32
+		}
+	}{
+		{
+			name: "tablet-level skip when analyzed cell is in deny list",
+			analysis: inst.DetectionAnalysis{
+				Analysis:              inst.ConnectedToWrongPrimary,
+				AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+				AnalyzedCell:          "zone1",
+				AnalyzedKeyspace:      "ks",
+				AnalyzedShard:         "0",
+			},
+			cellsToSet: []string{"zone1"},
+		},
+		{
+			name: "shard-level skip when all shard cells are in deny list",
+			analysis: inst.DetectionAnalysis{
+				Analysis:              inst.ClusterHasNoPrimary,
+				AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+				AnalyzedCell:          "zone1",
+				AnalyzedKeyspace:      "ks",
+				AnalyzedShard:         "0",
+			},
+			cellsToSet: []string{"zone1", "zone2"},
+			shardTablets: []struct {
+				cell string
+				uid  uint32
+			}{
+				{"zone1", 100},
+				{"zone2", 200},
+			},
+		},
+	}
+
+	db.ClearVTOrcDatabase()
+	defer db.ClearVTOrcDatabase()
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			orcDb, _, err := db.OpenVTOrcWithCache()
+			require.NoError(t, err)
+			for _, tbl := range []string{"topology_recovery_steps", "topology_recovery", "recovery_detection", "vitess_tablet", "global_recovery_disable"} {
+				_, err = orcDb.Exec("DELETE FROM " + tbl)
+				require.NoError(t, err)
+			}
+
+			for _, tab := range tt.shardTablets {
+				require.NoError(t, inst.SaveTablet(&topodatapb.Tablet{
+					Alias:    &topodatapb.TabletAlias{Cell: tab.cell, Uid: tab.uid},
+					Keyspace: tt.analysis.AnalyzedKeyspace,
+					Shard:    tt.analysis.AnalyzedShard,
+				}))
+			}
+
+			ctx := t.Context()
+			oldTs := ts
+			ts = memorytopo.NewServer(ctx, "zone1", "zone2")
+			require.NoError(t, ts.CreateKeyspace(ctx, tt.analysis.AnalyzedKeyspace, &topodatapb.Keyspace{DurabilityPolicy: policy.DurabilityNone}))
+			require.NoError(t, ts.CreateShard(ctx, tt.analysis.AnalyzedKeyspace, tt.analysis.AnalyzedShard))
+			// Also register tablets in the in-process topology so getShardTabletsByCell
+			// (used by the post-lock gate) can read them. inst.SaveTablet only writes to
+			// SQLite, which the gate no longer consults.
+			for _, tab := range tt.shardTablets {
+				require.NoError(t, ts.CreateTablet(ctx, &topodatapb.Tablet{
+					Alias:    &topodatapb.TabletAlias{Cell: tab.cell, Uid: tab.uid},
+					Keyspace: tt.analysis.AnalyzedKeyspace,
+					Shard:    tt.analysis.AnalyzedShard,
+					Type:     topodatapb.TabletType_REPLICA,
+				}))
+			}
+			defer func() { ts = oldTs }()
+
+			// forceRefreshAllTabletsInShard calls DiscoverInstance for each topo tablet,
+			// which requires recentDiscoveryOperationKeys to be non-nil. The var is
+			// normally set by OpenTabletDiscovery; initialize it here for sub-tests that
+			// register tablets in topo so DiscoverInstance exits cleanly (no MySQL in
+			// tests means it logs a discovery failure and returns, not crashes).
+			if len(tt.shardTablets) > 0 {
+				prevKeys := recentDiscoveryOperationKeys
+				recentDiscoveryOperationKeys = cache.New(config.GetInstancePollTime(), time.Second)
+				defer func() { recentDiscoveryOperationKeys = prevKeys }()
+			}
+
+			prev := cellsNoRecovery
+			cellsNoRecovery = tt.cellsToSet
+			defer func() { cellsNoRecovery = prev }()
+
+			prevValidated := cellsNoRecoveryValidated.Swap(true)
+			defer func() { cellsNoRecoveryValidated.Store(prevValidated) }()
+
+			analysis := tt.analysis
+
+			checkAndRecoverFunctionCode, _ := getCheckAndRecoverFunctionCode(&analysis)
+			recoveryName := getRecoverFunctionName(checkAndRecoverFunctionCode)
+			counterKey := strings.Join([]string{recoveryName, analysis.AnalyzedKeyspace, analysis.AnalyzedShard, RecoverySkipCellNoRecovery.String()}, ".")
+			skipsBefore := recoveriesSkippedCounter.Counts()[counterKey]
+
+			require.NoError(t, executeCheckAndRecoverFunction(&analysis))
+
+			skipsAfter := recoveriesSkippedCounter.Counts()[counterKey]
+			require.Equal(t, skipsBefore+1, skipsAfter, "CellNoRecovery skip counter must be incremented exactly once")
+
+			var recoveryRows int
+			require.NoError(t, orcDb.QueryRow("SELECT COUNT(*) FROM topology_recovery").Scan(&recoveryRows))
+			require.Zero(t, recoveryRows, "no topology_recovery row should exist when recovery is skipped by the cell gate")
+
+			var detectionRows int
+			require.NoError(t, orcDb.QueryRow("SELECT COUNT(*) FROM recovery_detection").Scan(&detectionRows))
+			require.Equal(t, 1, detectionRows, "detection must be recorded even when recovery is skipped")
+		})
+	}
+}
+
+func TestInsertRecoveryDetectionNewIncident(t *testing.T) {
+	orcDb, fromCache, err := db.OpenVTOrcWithCache()
+	require.NoError(t, err)
+	defer func() {
+		if !fromCache {
+			require.NoError(t, orcDb.Close())
+		}
+	}()
+	defer func() {
+		_, err = orcDb.Exec("DELETE FROM recovery_detection")
+		require.NoError(t, err)
+	}()
+
+	alias := &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}
+	analysis := inst.ReplicationStopped
+
+	entry1 := &inst.DetectionAnalysis{
+		AnalyzedInstanceAlias: alias,
+		Analysis:              analysis,
+		AnalyzedKeyspace:      "ks",
+		AnalyzedShard:         "0",
+	}
+	require.NoError(t, InsertRecoveryDetection(entry1))
+	require.NotZero(t, entry1.RecoveryId)
+
+	// Same ongoing incident: should reuse detection_id and refresh timestamp.
+	entry2 := &inst.DetectionAnalysis{
+		AnalyzedInstanceAlias: alias,
+		Analysis:              analysis,
+		AnalyzedKeyspace:      "ks",
+		AnalyzedShard:         "0",
+	}
+	require.NoError(t, InsertRecoveryDetection(entry2))
+	require.Equal(t, entry1.RecoveryId, entry2.RecoveryId, "same ongoing incident should reuse detection_id")
+
+	// Pin the detection_timestamp to a known past value so the UPSERT's
+	// DATETIME('now') is distinguishable even when the test runs sub-second.
+	_, err = orcDb.Exec(
+		`UPDATE recovery_detection SET detection_timestamp = '2026-01-01 00:00:00'
+		 WHERE detection_id = ?`, entry1.RecoveryId)
+	require.NoError(t, err)
+	var pinnedTimestamp string
+	require.NoError(t, orcDb.QueryRow(
+		`SELECT detection_timestamp FROM recovery_detection WHERE detection_id = ?`,
+		entry1.RecoveryId).Scan(&pinnedTimestamp))
+
+	// Recurring failure: UPSERT refreshes detection_timestamp on every poll.
+	entry3 := &inst.DetectionAnalysis{
+		AnalyzedInstanceAlias: alias,
+		Analysis:              analysis,
+		AnalyzedKeyspace:      "ks",
+		AnalyzedShard:         "0",
+	}
+	require.NoError(t, InsertRecoveryDetection(entry3))
+	require.Equal(t, entry1.RecoveryId, entry3.RecoveryId, "UPSERT reuses the same detection_id")
+
+	var refreshedTimestamp string
+	require.NoError(t, orcDb.QueryRow(
+		`SELECT detection_timestamp FROM recovery_detection WHERE detection_id = ?`,
+		entry3.RecoveryId).Scan(&refreshedTimestamp))
+	require.NotEqual(t, pinnedTimestamp, refreshedTimestamp,
+		"each poll should refresh detection_timestamp")
+}
+
+func TestExpireRecoveryDetectionActiveIncidentSurvives(t *testing.T) {
+	orcDb, fromCache, err := db.OpenVTOrcWithCache()
+	require.NoError(t, err)
+	defer func() {
+		if !fromCache {
+			require.NoError(t, orcDb.Close())
+		}
+	}()
+	defer func() {
+		_, err = orcDb.Exec("DELETE FROM recovery_detection")
+		require.NoError(t, err)
+	}()
+
+	oldVal := config.GetAuditPurgeDays()
+	config.SetAuditPurgeDays(10)
+	defer config.SetAuditPurgeDays(oldVal)
+
+	alias := &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}
+	entry := &inst.DetectionAnalysis{
+		AnalyzedInstanceAlias: alias,
+		Analysis:              inst.ReplicationStopped,
+		AnalyzedKeyspace:      "ks",
+		AnalyzedShard:         "0",
+	}
+
+	// Insert the initial detection.
+	require.NoError(t, InsertRecoveryDetection(entry))
+	firstID := entry.RecoveryId
+	require.NotZero(t, firstID)
+
+	// Simulate the UPSERT refreshing detection_timestamp on every poll,
+	// which keeps the row recent even across the retention window.
+	require.NoError(t, InsertRecoveryDetection(entry))
+	require.Equal(t, firstID, entry.RecoveryId, "detection_id must be stable across polls")
+
+	// Run expiry — the row's detection_timestamp is fresh (just updated),
+	// so it must survive even with a short retention period.
+	require.NoError(t, ExpireRecoveryDetectionHistory())
+
+	var remaining int
+	require.NoError(t, orcDb.QueryRow("SELECT COUNT(*) FROM recovery_detection").Scan(&remaining))
+	require.Equal(t, 1, remaining, "actively-polled detection must survive expiry")
+
+	// Verify the detection_id is unchanged.
+	var survivingID int64
+	require.NoError(t, orcDb.QueryRow(
+		"SELECT detection_id FROM recovery_detection").Scan(&survivingID))
+	require.Equal(t, firstID, survivingID, "stable detection_id must be preserved")
 }

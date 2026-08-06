@@ -79,6 +79,7 @@ const (
 	RecoverySkipERSDisabled
 	RecoverySkipStaleAnalysis
 	RecoverySkipPrimaryRecovery
+	RecoverySkipCellNoRecovery
 )
 
 // String represents a RecoverySkip as a string.
@@ -94,6 +95,8 @@ func (rsc RecoverySkipCode) String() string {
 		return "StaleAnalysis"
 	case RecoverySkipPrimaryRecovery:
 		return "PrimaryRecovery"
+	case RecoverySkipCellNoRecovery:
+		return "CellNoRecovery"
 	default:
 		return "None"
 	}
@@ -872,6 +875,20 @@ func isShardWideRecovery(recoveryFunctionCode recoveryFunction) bool {
 	}
 }
 
+// allCellsDenied returns true when every cell in shardCells appears in cellsNoRecovery.
+func allCellsDenied(shardCells, cellsNoRecovery []string) bool {
+	denied := make(map[string]bool, len(cellsNoRecovery))
+	for _, c := range cellsNoRecovery {
+		denied[c] = true
+	}
+	for _, c := range shardCells {
+		if !denied[c] {
+			return false
+		}
+	}
+	return true
+}
+
 // analysisEntriesHaveSameRecovery tells whether the two analysis entries have the same recovery function or not.
 func analysisEntriesHaveSameRecovery(prevAnalysis, newAnalysis *inst.DetectionAnalysis) bool {
 	prevRecoveryFunctionCode, prevSkipRecovery := getCheckAndRecoverFunctionCode(prevAnalysis)
@@ -935,6 +952,43 @@ func executeCheckAndRecoverFunction(analysisEntry *inst.DetectionAnalysis) (err 
 		return err
 	}
 
+	// Check for recovery being suppressed by --cells-no-recovery. The detection
+	// record has already been inserted above, so the suppressed incident remains
+	// visible in recovery_detection even though no action is taken.
+	// Global-disable is checked first so it takes precedence when both conditions
+	// apply, keeping SkippedRecoveries accurate.
+	if len(cellsNoRecovery) > 0 {
+		if !cellsNoRecoveryValidated.Load() {
+			// Startup validation was skipped because the topology was unreachable.
+			// Block recovery until a subsequent refresh cycle validates the deny-list;
+			// running with an unvalidated list could leave a misconfigured cell unprotected.
+			if util.ClearToLog("executeCheckAndRecoverFunction: cells-no-recovery-unvalidated", analyzedInstanceAliasString) {
+				logger.Warn("--cells-no-recovery not yet validated against topology; holding recovery until validation succeeds")
+			}
+			return nil
+		}
+		// Tablet-level cell check: skip recovery when the failed tablet's cell is denied.
+		// ClusterHasNoPrimary is handled separately below (post-lock, topo read) because it
+		// is shard-wide and AnalyzedCell is non-deterministic for that analysis.
+		if isActionableRecovery && analysisEntry.Analysis != inst.ClusterHasNoPrimary {
+			if analysisEntry.AnalyzedCell == "" {
+				// The failed tablet's cell is unknown (e.g. PrimaryTabletDeleted after
+				// DeleteTablets --allow-primary nils the shard's primary alias). Fail
+				// closed: we cannot determine whether the cell is denied.
+				logger.Info(fmt.Sprintf("CheckAndRecover: Tablet: %+v: NOT Recovering host (failed tablet's cell is unknown; --cells-no-recovery fail-closed)",
+					analyzedInstanceAliasString))
+				recoveriesSkippedCounter.Add(append(recoveryLabels, RecoverySkipCellNoRecovery.String()), 1)
+				return nil
+			}
+			if slices.Contains(cellsNoRecovery, analysisEntry.AnalyzedCell) {
+				logger.Info(fmt.Sprintf("CheckAndRecover: Tablet: %+v: NOT Recovering host (cell %v is in --cells-no-recovery)",
+					analyzedInstanceAliasString, analysisEntry.AnalyzedCell))
+				recoveriesSkippedCounter.Add(append(recoveryLabels, RecoverySkipCellNoRecovery.String()), 1)
+				return nil
+			}
+		}
+	}
+
 	// Prioritise primary recovery.
 	// If we are performing some other action, first ensure that it is not because of primary issues.
 	// This step is only meant to improve the time taken to detect and fix shard-wide recoveries, it does not impact correctness.
@@ -979,6 +1033,42 @@ func executeCheckAndRecoverFunction(analysisEntry *inst.DetectionAnalysis) (err 
 		// of a shard because a new tablet could have been promoted, and we need to have this visibility
 		// before we run a shard-wide operation of our own.
 		if isShardWideRecovery(checkAndRecoverFunctionCode) {
+			if analysisEntry.Analysis == inst.ClusterHasNoPrimary && len(cellsNoRecovery) > 0 {
+				// Check the cell gate before the expensive forceRefreshAllTabletsInShard.
+				// Recovery polls every second and this skip never registers an active
+				// recovery, so a persistent no-primary shard would repeatedly contend
+				// for the shard lock and force MySQL discovery on every tablet before
+				// doing nothing. Reading from topo is authoritative regardless of
+				// whether the force refresh has run.
+				var shardTablets []*topo.TabletInfo
+				shardTablets, err = getShardTabletsByCell(ctx, analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard, nil)
+				if err != nil && !topo.IsErrType(err, topo.PartialResult) {
+					logger.Error(fmt.Sprintf("CheckAndRecover: Tablet: %+v: error fetching shard tablets for --cells-no-recovery check, aborting recovery: %v", analyzedInstanceAliasString, err))
+					return err
+				}
+				seen := make(map[string]bool)
+				var shardCells []string
+				for _, ti := range shardTablets {
+					if cell := ti.Alias.Cell; !seen[cell] {
+						seen[cell] = true
+						shardCells = append(shardCells, cell)
+					}
+				}
+				// Fail closed: if the partial (or full) result shows every
+				// reachable cell is denied, or no tablets were returned at all,
+				// suppress PRS. If any non-denied cell is present we
+				// conclusively know recovery is allowed and proceed.
+				if len(shardCells) == 0 {
+					logger.Info(fmt.Sprintf("CheckAndRecover: Tablet: %+v: NOT Recovering host (no shard tablets reachable; --cells-no-recovery fail-closed)", analyzedInstanceAliasString))
+					recoveriesSkippedCounter.Add(append(recoveryLabels, RecoverySkipCellNoRecovery.String()), 1)
+					return nil
+				}
+				if allCellsDenied(shardCells, cellsNoRecovery) {
+					logger.Info(fmt.Sprintf("CheckAndRecover: Tablet: %+v: NOT Recovering host (all reachable shard cells are in --cells-no-recovery)", analyzedInstanceAliasString))
+					recoveriesSkippedCounter.Add(append(recoveryLabels, RecoverySkipCellNoRecovery.String()), 1)
+					return nil
+				}
+			}
 			tabletsToIgnore := shardWideRecoveryIgnoredTablets(checkAndRecoverFunctionCode, analysisEntry)
 			// We ignore dead primary tablets because they are going to be unreachable. If all the other tablets aren't able to reach this tablet either,
 			// we can proceed with the dead primary recovery. We don't need to refresh the information for this dead tablet.

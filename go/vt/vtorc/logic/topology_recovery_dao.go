@@ -30,9 +30,14 @@ import (
 )
 
 // InsertRecoveryDetection inserts the recovery analysis that has been detected.
+// On a recurring (alias, analysis) pair, the existing row is reused (stable
+// detection_id) and detection_timestamp is refreshed to "now". This keeps the
+// row visible in audit queries and prevents ExpireRecoveryDetectionHistory from
+// deleting an actively-detected incident.
 func InsertRecoveryDetection(analysisEntry *inst.DetectionAnalysis) error {
-	sqlResult, err := db.ExecVTOrc(`INSERT OR IGNORE
-		INTO recovery_detection (
+	aliasStr := topoproto.TabletAliasString(analysisEntry.AnalyzedInstanceAlias)
+	analysisStr := string(analysisEntry.Analysis)
+	_, err := db.ExecVTOrc(`INSERT INTO recovery_detection (
 			alias,
 			analysis,
 			keyspace,
@@ -44,9 +49,11 @@ func InsertRecoveryDetection(analysisEntry *inst.DetectionAnalysis) error {
 			?,
 			?,
 			DATETIME('now')
-		)`,
-		topoproto.TabletAliasString(analysisEntry.AnalyzedInstanceAlias),
-		string(analysisEntry.Analysis),
+		)
+		ON CONFLICT(alias, analysis) DO UPDATE
+		SET detection_timestamp = DATETIME('now')`,
+		aliasStr,
+		analysisStr,
 		analysisEntry.AnalyzedKeyspace,
 		analysisEntry.AnalyzedShard,
 	)
@@ -54,12 +61,20 @@ func InsertRecoveryDetection(analysisEntry *inst.DetectionAnalysis) error {
 		log.Error(err.Error())
 		return err
 	}
-	id, err := sqlResult.LastInsertId()
+	// Always SELECT the detection_id rather than relying on LastInsertId():
+	// SQLite's last_insert_rowid() behaviour for ON CONFLICT DO UPDATE varies
+	// by version (reliable only since 3.35.0).
+	err = db.QueryVTOrc(
+		`SELECT detection_id FROM recovery_detection WHERE alias = ? AND analysis = ?`,
+		sqlutils.Args(aliasStr, analysisStr),
+		func(m sqlutils.RowMap) error {
+			analysisEntry.RecoveryId = m.GetInt64("detection_id")
+			return nil
+		})
 	if err != nil {
 		log.Error(err.Error())
 		return err
 	}
-	analysisEntry.RecoveryId = id
 	return nil
 }
 
@@ -268,7 +283,9 @@ func writeTopologyRecoveryStep(topologyRecoveryStep *TopologyRecoveryStep) error
 	return err
 }
 
-// ExpireRecoveryDetectionHistory removes old rows from the recovery_detection table
+// ExpireRecoveryDetectionHistory removes old rows from the recovery_detection table.
+// Actively-detected incidents are naturally preserved because the UPSERT in
+// InsertRecoveryDetection refreshes detection_timestamp on every poll cycle.
 func ExpireRecoveryDetectionHistory() error {
 	return inst.ExpireTableData("recovery_detection", "detection_timestamp")
 }
