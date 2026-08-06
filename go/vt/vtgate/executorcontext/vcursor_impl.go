@@ -798,7 +798,7 @@ func (vc *VCursorImpl) wrapCallback(callback func(*sqltypes.Result) error, primi
 	if vc.interOpStats == nil {
 		return func(r *sqltypes.Result) error {
 			if r.InsertIDUpdated() {
-				vc.SafeSession.LastInsertId = r.InsertID
+				vc.SetLastInsertID(r.InsertID)
 			}
 			return callback(r)
 		}
@@ -806,7 +806,7 @@ func (vc *VCursorImpl) wrapCallback(callback func(*sqltypes.Result) error, primi
 
 	return func(r *sqltypes.Result) error {
 		if r.InsertIDUpdated() {
-			vc.SafeSession.LastInsertId = r.InsertID
+			vc.SetLastInsertID(r.InsertID)
 		}
 		vc.logOpTraffic(primitive, r)
 		return callback(r)

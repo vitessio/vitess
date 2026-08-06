@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"sync"
 	"testing"
 	"time"
 
@@ -623,4 +624,29 @@ func TestGetQueryPriority(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestWrapCallbackLastInsertIDRace verifies that concurrent callbacks through
+// wrapCallback do not race on SafeSession.LastInsertId (see GitHub #20487).
+// Run with -race to detect the race on unpatched code.
+func TestWrapCallbackLastInsertIDRace(t *testing.T) {
+	const goroutines = 32
+	vc := &VCursorImpl{
+		SafeSession: NewSafeSession(&vtgatepb.Session{}),
+	}
+	cb := vc.wrapCallback(func(r *sqltypes.Result) error { return nil }, nil)
+
+	var wg sync.WaitGroup
+	for i := range goroutines {
+		wg.Add(1)
+		go func(id uint64) {
+			defer wg.Done()
+			result := &sqltypes.Result{InsertID: id, InsertIDChanged: true}
+			_ = cb(result)
+		}(uint64(i + 1))
+	}
+	wg.Wait()
+
+	// Last-writer wins; the important guarantee is no data race, not a specific value.
+	require.NotZero(t, vc.SafeSession.GetLastInsertId())
 }
