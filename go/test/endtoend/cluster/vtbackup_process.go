@@ -17,7 +17,9 @@ limitations under the License.
 package cluster
 
 import (
+	"bytes"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path"
@@ -52,6 +54,16 @@ type VtbackupProcess struct {
 
 	proc *exec.Cmd
 	exit chan error
+
+	stderr *bytes.Buffer
+}
+
+// Output returns everything the process wrote to stderr.
+func (vtbackup *VtbackupProcess) Output() string {
+	if vtbackup.stderr == nil {
+		return ""
+	}
+	return vtbackup.stderr.String()
 }
 
 // Setup starts vtbackup process with required arguements
@@ -85,7 +97,8 @@ func (vtbackup *VtbackupProcess) Setup() (err error) {
 		vtbackup.proc.Args = append(vtbackup.proc.Args, vtbackup.ExtraArgs...)
 	}
 
-	vtbackup.proc.Stderr = os.Stderr
+	vtbackup.stderr = &bytes.Buffer{}
+	vtbackup.proc.Stderr = io.MultiWriter(os.Stderr, vtbackup.stderr)
 	vtbackup.proc.Stdout = os.Stdout
 
 	vtbackup.proc.Env = append(vtbackup.proc.Env, os.Environ()...)

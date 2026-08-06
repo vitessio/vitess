@@ -21,6 +21,7 @@ import (
 	"crypto/rand"
 	"errors"
 	"fmt"
+	"log/slog"
 	"math"
 	"math/big"
 	"os"
@@ -76,6 +77,23 @@ const (
 	timeoutWaitingForReplicationStatus = 60 * time.Second
 )
 
+type (
+	// restoreInfo holds information about the data loaded by vtbackup before taking a backup.
+	restoreInfo struct {
+		// position is the replication position of the loaded data.
+		position replication.Position
+
+		// restored reports whether vtbackup loaded existing data instead of starting empty.
+		restored bool
+
+		// donorAlias identifies the tablet the data was cloned from, if any.
+		donorAlias *topodatapb.TabletAlias
+
+		// backupName identifies the restored backup, if any.
+		backupName string
+	}
+)
+
 var (
 	minBackupInterval   time.Duration
 	minRetentionTime    time.Duration
@@ -88,6 +106,9 @@ var (
 	initSQLTabletTypes  []topodatapb.TabletType
 	initSQLTimeout      time.Duration
 	initSQLFailOnError  bool
+
+	// verifyBackupErrantGTIDs fails the backup when errant GTIDs are found. When false, they are only logged.
+	verifyBackupErrantGTIDs bool
 
 	// vttablet-like flags
 	initDbNameOverride string
@@ -222,6 +243,7 @@ func init() {
 	Main.Flags().Var((*topoproto.TabletTypeListFlag)(&initSQLTabletTypes), "init-backup-tablet-types", "Tablet types used for the backup where the init SQL queries (--init-backup-sql-queries) will be executed after catch-up replication, before initializing the backup")
 	Main.Flags().DurationVar(&initSQLTimeout, "init-backup-sql-timeout", initSQLTimeout, "At what point should we time out the init SQL query (--init-backup-sql-queries) work and either fail the backup job (--init-backup-sql-fail-on-error) or continue on with the backup")
 	Main.Flags().BoolVar(&initSQLFailOnError, "init-backup-sql-fail-on-error", false, "Whether or not to fail the backup if the init SQL queries (--init-backup-sql-queries) fail, which includes if they fail to complete before the specified timeout (--init-backup-sql-timeout)")
+	utils.SetFlagBoolVar(Main.Flags(), &verifyBackupErrantGTIDs, "verify-backup-errant-gtids", verifyBackupErrantGTIDs, "Fail the backup if errant GTIDs are detected relative to the current primary. When disabled, errant GTIDs are only logged as a warning. Requires MySQL GTID replication, and fails the backup on other flavors.")
 
 	// vttablet-like flags
 	utils.SetFlagStringVar(Main.Flags(), &initDbNameOverride, "init-db-name-override", initDbNameOverride, "(init parameter) override the name of the db used by vttablet")
@@ -481,12 +503,12 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 		restoreCtx = ctx
 	}
 
-	restorePos, err := restoreForBackup(restoreCtx, mysqlTermHandler, topoServer, mysqld, mycnf, dbName, extraEnv)
+	restored, err := restoreForBackup(restoreCtx, mysqlTermHandler, topoServer, mysqld, mycnf, dbName, extraEnv)
 	if err != nil {
 		return err
 	}
 
-	if err := runBackup(shutdownCtx, topoServer, mysqld, mycnf, restorePos, &backupParams); err != nil {
+	if err := runBackup(shutdownCtx, topoServer, mysqld, mycnf, restored, &backupParams); err != nil {
 		return err
 	}
 
@@ -494,11 +516,15 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 	return nil
 }
 
-// restoreForBackup runs the restore step and returns the position the rest of
-// the backup job should use.
-func restoreForBackup(ctx context.Context, mysqlTermHandler *mySQLTermHandler, topoServer *topo.Server, mysqld mysqlctl.MysqlDaemon, mycnf *mysqlctl.Mycnf, dbName string, extraEnv map[string]string) (replication.Position, error) {
+// restoreForBackup runs the restore step and returns information about the data restored.
+func restoreForBackup(ctx context.Context, mysqlTermHandler *mySQLTermHandler, topoServer *topo.Server,
+	mysqld mysqlctl.MysqlDaemon, mycnf *mysqlctl.Mycnf, dbName string, extraEnv map[string]string,
+) (restoreInfo, error) {
 	if restoreWithClone {
-		var restorePos replication.Position
+		var (
+			restorePos replication.Position
+			donorAlias *topodatapb.TabletAlias
+		)
 
 		// CLONE intentionally restarts mysqld. Suppress the resulting OnTerm
 		// cancellation and pass mycnf so CloneFromDonor can restart mysqld
@@ -506,15 +532,15 @@ func restoreForBackup(ctx context.Context, mysqlTermHandler *mySQLTermHandler, t
 		err := mysqlTermHandler.ignoreTermsFor(func() error {
 			var err error
 
-			restorePos, err = mysqlctl.CloneFromDonor(ctx, topoServer, mysqld, mycnf, initKeyspace, initShard)
+			restorePos, donorAlias, err = mysqlctl.CloneFromDonor(ctx, topoServer, mysqld, mycnf, initKeyspace, initShard)
 
 			return err
 		})
 		if err != nil {
-			return replication.Position{}, vterrors.Wrap(err, "restore with clone failed")
+			return restoreInfo{}, vterrors.Wrap(err, "restore with clone failed")
 		}
 
-		return restorePos, nil
+		return restoreInfo{position: restorePos, restored: true, donorAlias: donorAlias}, nil
 	}
 
 	phase.Set(phaseNameRestoreLastBackup, int64(1))
@@ -545,23 +571,55 @@ func restoreForBackup(ctx context.Context, mysqlTermHandler *mySQLTermHandler, t
 		// If err is nil, we expect backupManifest to be non-nil.
 		log.Info(fmt.Sprintf("Successfully restored from backup at replication position %v", backupManifest.Position))
 		deprecatedDurationByPhase.Set("RestoreLastBackup", int64(time.Since(restoreAt).Seconds()))
-		return backupManifest.Position, nil
+		return restoreInfo{position: backupManifest.Position, restored: true, backupName: backupManifest.BackupName}, nil
 	case mysqlctl.ErrNoBackup:
 		// There is no backup found, but we may be taking the initial backup of a shard.
 		if !allowFirstBackup {
-			return replication.Position{}, vterrors.New(vtrpc.Code_FAILED_PRECONDITION, "no backup found; not starting up empty since --initial_backup flag was not enabled")
+			return restoreInfo{}, vterrors.New(
+				vtrpc.Code_FAILED_PRECONDITION,
+				"no backup found; not starting up empty since --initial_backup flag was not enabled",
+			)
 		}
 
 		deprecatedDurationByPhase.Set("RestoreLastBackup", int64(time.Since(restoreAt).Seconds()))
-		return replication.Position{}, nil
+		return restoreInfo{}, nil
 	default:
-		return replication.Position{}, vterrors.Wrap(err, "can't restore from backup")
+		return restoreInfo{}, vterrors.Wrap(err, "can't restore from backup")
 	}
 }
 
 // runBackup starts replication from the restore position, catches up to the
 // current primary position, and takes a new backup.
-func runBackup(ctx context.Context, topoServer *topo.Server, mysqld *mysqlctl.Mysqld, mycnf *mysqlctl.Mycnf, restorePos replication.Position, backupParams *mysqlctl.BackupParams) error {
+func runBackup(ctx context.Context, topoServer *topo.Server, mysqld *mysqlctl.Mysqld,
+	mycnf *mysqlctl.Mycnf, restored restoreInfo, backupParams *mysqlctl.BackupParams,
+) error {
+	log.Info("fetching the current primary replication position")
+
+	tmc := tmclient.NewTabletManagerClient()
+
+	// Get the current primary replication position, and wait until we catch up to that point. We do this
+	// instead of looking at ReplicationLag because that value can sometimes lie and tell you there's 0
+	// lag when actually replication is stopped. Also, if replication is making progress but is too slow
+	// to ever catch up to live changes, we'd rather take a backup of something rather than timing out.
+	primaryPos, err := getPrimaryPositionWithRetry(ctx, tmc, topoServer)
+	if err != nil {
+		return err
+	}
+
+	// If we previously restored from a backup to begin, validate that it does not contain errant GTIDs
+	// before continuing.
+	if restored.restored {
+		if err := verifyNoErrantGTIDsInBaseBackup(restored, primaryPos); err != nil {
+			if verifyBackupErrantGTIDs {
+				return err
+			}
+
+			log.Warn("restored data failed errant GTID verification, taking a backup anyway because --verify-backup-errant-gtids is disabled", slog.Any("error", err))
+		}
+	}
+
+	log.Info("takeBackup: primary position is: " + primaryPos.String())
+
 	// As of MySQL 8.0.21, you can disable redo logging using the ALTER INSTANCE
 	// DISABLE INNODB REDO_LOG statement. This functionality is intended for
 	// loading data into a new MySQL instance. Disabling redo logging speeds up
@@ -576,46 +634,15 @@ func runBackup(ctx context.Context, topoServer *topo.Server, mysqld *mysqlctl.My
 	}
 
 	// We have restored a backup. Now start replication.
-	if err := resetReplication(ctx, restorePos, mysqld); err != nil {
+	if err := resetReplication(ctx, restored.position, mysqld); err != nil {
 		return fmt.Errorf("error resetting replication: %v", err)
 	}
+
 	if err := startReplication(ctx, mysqld, topoServer); err != nil {
 		return fmt.Errorf("error starting replication: %v", err)
 	}
 
-	log.Info("get the current primary replication position, and wait until we catch up")
-	// Get the current primary replication position, and wait until we catch up
-	// to that point. We do this instead of looking at ReplicationLag
-	// because that value can
-	// sometimes lie and tell you there's 0 lag when actually replication is
-	// stopped. Also, if replication is making progress but is too slow to ever
-	// catch up to live changes, we'd rather take a backup of something rather
-	// than timing out.
-	tmc := tmclient.NewTabletManagerClient()
-
-	// Keep retrying if we can't contact the primary. The primary might be
-	// changing, moving, or down temporarily.
-	var primaryPos replication.Position
-	err := retryOnError(ctx, func() error {
-		// Add a per-operation timeout so we re-read topo if the primary is unreachable.
-		opCtx, optCancel := context.WithTimeout(ctx, operationTimeout)
-		defer optCancel()
-
-		pos, err := getPrimaryPosition(opCtx, tmc, topoServer)
-		if err != nil {
-			return fmt.Errorf("can't get the primary replication position: %v", err)
-		}
-
-		primaryPos = pos
-		return nil
-	})
-	if err != nil {
-		return fmt.Errorf("can't get the primary replication position after all retries: %v", err)
-	}
-
-	log.Info("takeBackup: primary position is: " + primaryPos.String())
-
-	status, err := catchUpReplicationForBackup(ctx, topoServer, mysqld, restorePos, primaryPos)
+	status, err := catchUpReplicationForBackup(ctx, topoServer, mysqld, restored.position, primaryPos)
 	if err != nil {
 		return err
 	}
@@ -680,6 +707,49 @@ func runBackup(ctx context.Context, topoServer *topo.Server, mysqld *mysqlctl.My
 	}
 
 	return nil
+}
+
+// verifyNoErrantGTIDsInBaseBackup rejects restored or cloned data with transactions absent from the primary.
+func verifyNoErrantGTIDsInBaseBackup(ri restoreInfo, primaryPosition replication.Position) error {
+	errantGTIDs, err := findErrantGTIDs(ri.position, primaryPosition)
+	if err != nil {
+		return err
+	}
+
+	if errantGTIDs.Empty() {
+		return nil
+	}
+
+	source := fmt.Sprintf("base backup %q", ri.backupName)
+	if ri.donorAlias != nil {
+		source = "clone from donor tablet " + topoproto.TabletAliasString(ri.donorAlias)
+	}
+
+	return vterrors.Errorf(
+		vtrpc.Code_FAILED_PRECONDITION,
+		"%s has errant GTIDs %q relative to current primary position %q",
+		source,
+		errantGTIDs.String(),
+		primaryPosition.String(),
+	)
+}
+
+// findErrantGTIDs returns the set of transactions in the candidate position that are absent from the primary
+// position. It returns an error when the positions cannot be compared.
+func findErrantGTIDs(candidatePosition, primaryPosition replication.Position) (replication.Mysql56GTIDSet, error) {
+	candidateSet, candidateIsMySQL := candidatePosition.GTIDSet.(replication.Mysql56GTIDSet)
+	if !candidateIsMySQL {
+		return nil, vterrors.Errorf(vtrpc.Code_UNIMPLEMENTED,
+			"restored position %q is not a MySQL 56 GTID set", candidatePosition.String())
+	}
+
+	primarySet, primaryIsMySQL := primaryPosition.GTIDSet.(replication.Mysql56GTIDSet)
+	if !primaryIsMySQL {
+		return nil, vterrors.Errorf(vtrpc.Code_UNIMPLEMENTED,
+			"primary position %q is not a MySQL 56 GTID set", primaryPosition.String())
+	}
+
+	return candidateSet.Difference(primarySet), nil
 }
 
 // catchUpReplicationForBackup catches a restored mysqld up to the current
@@ -820,6 +890,7 @@ func startReplication(ctx context.Context, mysqld mysqlctl.MysqlDaemon, topoServ
 	return nil
 }
 
+// getPrimaryPosition fetches the current primary's replication position.
 func getPrimaryPosition(ctx context.Context, tmc tmclient.TabletManagerClient, ts *topo.Server) (replication.Position, error) {
 	si, err := ts.GetShard(ctx, initKeyspace, initShard)
 	if err != nil {
@@ -843,6 +914,32 @@ func getPrimaryPosition(ctx context.Context, tmc tmclient.TabletManagerClient, t
 		return replication.Position{}, fmt.Errorf("can't decode primary replication position %q: %v", posStr, err)
 	}
 	return pos, nil
+}
+
+// getPrimaryPositionWithRetry reads the current primary position until it succeeds or the context is canceled.
+func getPrimaryPositionWithRetry(ctx context.Context, tmc tmclient.TabletManagerClient, ts *topo.Server) (replication.Position, error) {
+	if si, err := ts.GetShard(ctx, initKeyspace, initShard); err == nil && topoproto.TabletAliasIsZero(si.PrimaryAlias) {
+		return replication.Position{}, fmt.Errorf("shard %v/%v has no primary", initKeyspace, initShard)
+	}
+
+	var primaryPosition replication.Position
+	err := retryOnError(ctx, func() error {
+		ctx, cancel := context.WithTimeout(ctx, operationTimeout)
+		defer cancel()
+
+		position, err := getPrimaryPosition(ctx, tmc, ts)
+		if err != nil {
+			return vterrors.Wrap(err, "can't get the primary replication position")
+		}
+
+		primaryPosition = position
+		return nil
+	})
+	if err != nil {
+		return replication.Position{}, vterrors.Wrap(err, "can't get the primary replication position after all retries")
+	}
+
+	return primaryPosition, nil
 }
 
 // retryOnError keeps calling the given function until it succeeds, or the given
