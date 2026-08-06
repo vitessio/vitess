@@ -18,6 +18,7 @@ limitations under the License.
 package clustertest
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -25,8 +26,14 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
+	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/vt/log"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/topotools"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -110,6 +117,50 @@ func testGetTablets(t *testing.T) {
 	// We don't count the final newline with nothing after it (it becomes an empty
 	// line at the end of the slice)
 	assert.Equal(t, len(clusterInstance.Keyspaces[0].Shards), len(tabletsFromCMD)-1)
+}
+
+func TestGetTabletsByStalePrimaryAlias(t *testing.T) {
+	keyspace := clusterInstance.Keyspaces[0]
+	shard := keyspace.Shards[0]
+	ts := clusterInstance.TopoProcess.Server
+
+	ctx, cancel := context.WithTimeout(t.Context(), topo.RemoteOperationTimeout)
+	defer cancel()
+
+	si, err := ts.GetShard(ctx, keyspace.Name, shard.Name)
+	require.NoError(t, err)
+
+	primaryTermStartTime := si.GetPrimaryTermStartTime()
+	require.False(t, primaryTermStartTime.IsZero())
+
+	staleTablet := &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Cell: clusterInstance.Cell,
+			Uid:  999999,
+		},
+		Keyspace:             keyspace.Name,
+		Shard:                shard.Name,
+		Type:                 topodatapb.TabletType_PRIMARY,
+		PrimaryTermStartTime: protoutil.TimeToProto(primaryTermStartTime.Add(-time.Minute)),
+	}
+	require.NoError(t, ts.CreateTablet(ctx, staleTablet))
+
+	t.Cleanup(func() {
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.WithoutCancel(t.Context()), topo.RemoteOperationTimeout)
+		defer cleanupCancel()
+		require.NoError(t, topotools.DeleteTablet(cleanupCtx, ts, staleTablet))
+	})
+
+	result, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput(
+		"GetTablets",
+		"--tablet-alias", topoproto.TabletAliasString(staleTablet.Alias),
+	)
+	require.NoError(t, err)
+
+	fields := strings.Fields(result)
+	require.GreaterOrEqual(t, len(fields), 4)
+	assert.Equal(t, topoproto.TabletAliasString(staleTablet.Alias), fields[0])
+	assert.Equal(t, strings.ToLower(topodatapb.TabletType_UNKNOWN.String()), fields[3])
 }
 
 func testTabletStatus(t *testing.T) {
