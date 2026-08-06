@@ -786,16 +786,23 @@ func (erp *EmergencyReparenter) applyRelayLogsAndReconcile(
 }
 
 // isEmptyMysqlGTIDShard reports whether every valid candidate is a MySQL/Percona
-// tablet with GTID enabled but no transactions yet (empty position). On such a
+// tablet with GTID replication but no transactions yet (empty position). On such a
 // shard FindPositionsOfAllCandidates sees only nil GTID sets and reports non-GTID,
 // even though it is really a MySQL-GTID shard that simply has nothing replicated
 // yet. This lets the caller keep version-aware election on for that case (where
 // positions are equal and version is the only safe differentiator) without
-// re-enabling the MySQL56-only wait/reconcile path. It requires every candidate to
-// be present in the status map (a former primary with no status can't confirm
-// GTID mode) and to report UsingGtid, and every flavor to be in the MySQL family
-// (excludes MariaDB-GTID, whose empty positions are indistinguishable from
-// MySQL's by position alone).
+// re-enabling the MySQL56-only wait/reconcile path.
+//
+// Every candidate must have an empty position and a MySQL-family flavor (which
+// excludes MariaDB-GTID, whose empty positions are indistinguishable from MySQL's
+// by position alone). GTID replication is then confirmed per candidate:
+//   - a replica reports it via status.After.UsingGtid;
+//   - a demoted former primary has no replica status (it lives in primaryStatusMap)
+//     and PrimaryStatus carries no UsingGtid, so it is accepted on empty-position +
+//     MySQL-family alone. That is safe here: the only effect of a false positive is
+//     keeping the version tiebreak on among equally-advanced candidates, which never
+//     costs availability or data — and a reachable old primary is exactly the
+//     equally-valid lower-version candidate this exception must not discard.
 func isEmptyMysqlGTIDShard(validCandidates map[string]*RelayLogPositions, snapshot *replicationSnapshot) bool {
 	if len(validCandidates) == 0 || len(snapshot.mysqlFlavors) == 0 {
 		return false
@@ -804,12 +811,17 @@ func isEmptyMysqlGTIDShard(validCandidates map[string]*RelayLogPositions, snapsh
 		if !pos.IsZero() {
 			return false
 		}
-		status, ok := snapshot.statusMap[alias]
-		if !ok || status.After == nil || !status.After.UsingGtid {
-			return false
-		}
 		flavor, ok := snapshot.mysqlFlavors[alias]
 		if !ok || flavor.ReplicationFamily() != mysqlctl.FlavorFamilyMySQL {
+			return false
+		}
+		if _, isPrimary := snapshot.primaryStatusMap[alias]; isPrimary {
+			// Former primary: no replica status to read UsingGtid from; empty position
+			// + MySQL family is enough (see doc comment).
+			continue
+		}
+		status, ok := snapshot.statusMap[alias]
+		if !ok || status.After == nil || !status.After.UsingGtid {
 			return false
 		}
 	}
