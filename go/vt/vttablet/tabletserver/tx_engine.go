@@ -95,6 +95,9 @@ type TxEngine struct {
 	preparedPool *TxPreparedPool
 	twoPC        *TwoPC
 	dxNotify     func()
+
+	// activeCommits tracks COMMIT statements that are executing in MySQL.
+	activeCommits *QueryList
 }
 
 // TwoPC can be disallowed for various reasons. These are the reasons we keep track off
@@ -112,7 +115,9 @@ func NewTxEngine(env tabletenv.Env, dxNotifier func()) *TxEngine {
 		env:                 env,
 		shutdownGracePeriod: config.GracePeriods.Shutdown,
 		reservedConnStats:   env.Exporter().NewTimings("ReservedConnections", "Reserved connections stats", "operation"),
+		activeCommits:       NewQueryList("active-commits", env.Environment().Parser()),
 	}
+
 	limiter := txlimiter.New(env)
 	te.txPool = NewTxPool(env, limiter)
 	// We initially allow twoPC (handles vttablet restarts).
@@ -146,6 +151,17 @@ func NewTxEngine(env tabletenv.Env, dxNotifier func()) *TxEngine {
 	te.dxNotify = dxNotifier
 	te.state = NotServing
 	return te
+}
+
+// SetClusterAction sets the cluster action on the active commits query list. When set to no-queries,
+// active commits are not allowed to be added.
+func (te *TxEngine) SetClusterAction(ca ClusterActionState) {
+	te.activeCommits.SetClusterAction(ca)
+}
+
+// TerminateActiveCommits terminates active COMMIT statements.
+func (te *TxEngine) TerminateActiveCommits() {
+	te.activeCommits.TerminateAll()
 }
 
 // AcceptReadWrite will start accepting all transactions.
@@ -297,14 +313,66 @@ func (te *TxEngine) Begin(ctx context.Context, reservedID int64, setting *smartc
 func (te *TxEngine) Commit(ctx context.Context, transactionID int64) (int64, string, error) {
 	span, ctx := trace.NewSpan(ctx, "TxEngine.Commit")
 	defer span.Finish()
+
 	var query string
-	var err error
 	connID, err := te.txFinish(transactionID, tx.TxCommit, func(conn *StatefulConnection) error {
-		query, err = te.txPool.Commit(ctx, conn)
+		var err error
+		query, err = te.commit(ctx, conn)
 		return err
 	})
 
 	return connID, query, err
+}
+
+// commit commits the transaction.
+func (te *TxEngine) commit(ctx context.Context, conn *StatefulConnection) (string, error) {
+	// An autocommit transaction never sends a COMMIT to MySQL: every statement
+	// was already durably committed. There is nothing to track or interrupt, and
+	// rejecting it during shutdown would report failure for applied writes.
+	if conn.IsInTransaction() && conn.TxProperties().Autocommit {
+		return te.txPool.Commit(ctx, conn)
+	}
+
+	remove, err := te.addActiveCommit(ctx, conn)
+	if err != nil {
+		return "", err
+	}
+	defer remove()
+
+	return te.txPool.Commit(ctx, conn)
+}
+
+// commitNotAttempted wraps a rejection from the active-commit gate. It marks
+// that no COMMIT was sent to MySQL, so the transaction is deterministically
+// not committed.
+type commitNotAttempted struct {
+	cause error
+}
+
+func (e *commitNotAttempted) Error() string { return e.cause.Error() }
+func (e *commitNotAttempted) Cause() error  { return e.cause }
+func (e *commitNotAttempted) Unwrap() error { return e.cause }
+
+// addActiveCommit adds a commit to the active commit list. Returns a function that should be deferred
+// by the caller to remove the query from the active commit list on completion.
+func (te *TxEngine) addActiveCommit(ctx context.Context, conn *StatefulConnection) (func(), error) {
+	qd := NewQueryDetail(ctx, conn)
+	if err := te.activeCommits.Add(qd); err != nil {
+		// If we've received an error here, it means a shutdown is in progress, and
+		// we should close the connection and its transaction before releasing it.
+		conn.Close()
+
+		// If we were in a transaction, also clean it up before releasing the connection.
+		if conn.IsInTransaction() {
+			te.txPool.txComplete(conn, tx.TxKill)
+		}
+
+		conn.Release(tx.TxKill)
+
+		return nil, &commitNotAttempted{cause: err}
+	}
+
+	return func() { te.activeCommits.Remove(qd) }, nil
 }
 
 // Rollback rolls back the specified transaction.
@@ -429,6 +497,21 @@ func (te *TxEngine) prepareFromRedo() error {
 		return readErr
 	}
 
+	// The durable redo metadata is the source of truth. Dtids absent from it
+	// are already resolved, so their leftover state is cleared. Durable dtids
+	// keep their reservations until replay resolves them, so a replay error
+	// cannot make CommitPrepared treat one as already committed.
+	durable := make(map[string]struct{}, len(prepared)+len(failed))
+	for _, preparedTx := range prepared {
+		durable[preparedTx.Dtid] = struct{}{}
+	}
+
+	for _, preparedTx := range failed {
+		durable[preparedTx.Dtid] = struct{}{}
+	}
+
+	te.preparedPool.ResetReservations(durable)
+
 	var (
 		maxID           = int64(0)
 		preparedCounter = 0
@@ -510,8 +593,14 @@ func (te *TxEngine) prepareTx(ctx context.Context, preparedTx *tx.PreparedTx) (f
 	}
 	// We should not use the external Prepare because
 	// we don't want to write again to the redo log.
-	err = te.preparedPool.Put(conn, preparedTx.Dtid)
-	return
+	err = te.preparedPool.PutRecovered(conn, preparedTx.Dtid)
+	if err != nil {
+		te.txPool.RollbackAndRelease(ctx, conn)
+		return failed, err
+	}
+
+	te.preparedPool.MarkRedoCommitStarted(preparedTx.Dtid)
+	return failed, nil
 }
 
 // checkErrorAndMarkFailed check that the error is retryable or non-retryable error.
@@ -543,7 +632,7 @@ func (te *TxEngine) checkErrorAndMarkFailed(ctx context.Context, dtid string, re
 		return
 	}
 
-	if _, err = te.txPool.Commit(ctx, conn); err != nil {
+	if _, err = te.commit(ctx, conn); err != nil {
 		log.Error(fmt.Sprintf("markFailed: Commit failed for dtid %s: %v", dtid, err))
 	}
 	return
@@ -561,6 +650,8 @@ func isRetryableError(err error) bool {
 		sqlErr := sqlerror.NewSQLErrorFromError(err)
 		// Connection errors are retryable
 		return sqlerror.IsConnErr(sqlErr)
+	case vtrpcpb.Code_CLUSTER_EVENT:
+		return vterrors.IsStateTransitionError(err)
 	default:
 		return false
 	}
