@@ -24,6 +24,7 @@ limitations under the License.
 package s3backupstorage
 
 import (
+	"bufio"
 	"context"
 	"crypto/md5"
 	"crypto/tls"
@@ -63,6 +64,11 @@ import (
 const (
 	sseCustomerPrefix = "sse_c:"
 	MaxPartSize       = 1024 * 1024 * 1024 * 5 // 5GiB - limited by AWS https://docs.aws.amazon.com/AmazonS3/latest/userguide/qfacts.html
+
+	// maxPerFileMemory caps the transfer-manager buffer per concurrent restore
+	// file. Restore opens up to 4 files concurrently, so this limits total
+	// download buffering to ~4 GiB in the worst case.
+	maxPerFileMemory int64 = 1024 * 1024 * 1024 // 1 GiB
 )
 
 var (
@@ -98,6 +104,13 @@ var (
 	// minimum part size
 	minPartSize int64 = 5 * 1024 * 1024 // 5MiB - AWS requirement
 
+	// minimum download part size — separate from upload so the two can be configured independently
+	minDownloadPartSize int64 = 5 * 1024 * 1024 // 5MiB - S3 minimum for byte-range requests
+
+	// download part size and concurrency for parallel downloads via transfer manager
+	downloadPartSize    int64 = 8 * 1024 * 1024 // 8MiB - transfer manager default
+	downloadConcurrency int   = 5               // transfer manager default
+
 	ErrPartSize = errors.New("minimum S3 part size must be between 5MiB and 5GiB")
 )
 
@@ -112,6 +125,8 @@ func registerFlags(fs *pflag.FlagSet) {
 	utils.SetFlagStringVar(fs, &requiredLogLevel, "s3-backup-log-level", "LogOff", "determine the S3 loglevel to use from LogOff, LogDebug, LogDebugWithSigning, LogDebugWithHTTPBody, LogDebugWithRequestRetries, LogDebugWithRequestErrors.")
 	utils.SetFlagStringVar(fs, &sse, "s3-backup-server-side-encryption", "", "server-side encryption algorithm (e.g., AES256, aws:kms, sse_c:/path/to/key/file).")
 	utils.SetFlagInt64Var(fs, &minPartSize, "s3-backup-aws-min-partsize", minPartSize, "Minimum part size to use, defaults to 5MiB but can be increased due to the dataset size.")
+	utils.SetFlagInt64Var(fs, &downloadPartSize, "s3-backup-download-part-size", 8*1024*1024, "Part size in bytes for parallel S3 downloads via transfer manager.")
+	utils.SetFlagIntVar(fs, &downloadConcurrency, "s3-backup-download-concurrency", 5, "Number of parallel goroutines for S3 downloads via transfer manager.")
 }
 
 func init() {
@@ -335,7 +350,45 @@ func (bh *S3BackupHandle) ReadFile(ctx context.Context, filename string) (io.Rea
 	}
 	object := objName(bh.dir, bh.name, filename)
 	sendStats := bh.bs.params.Stats.Scope(stats.Operation("AWS:Request:Send"))
-	out, err := (&timedS3Client{client: bh.s3Client, sendStats: sendStats}).GetObject(ctx, &s3.GetObjectInput{
+	timedClient := &timedS3Client{client: bh.s3Client, sendStats: sendStats}
+
+	if downloadPartSize < minDownloadPartSize {
+		return nil, fmt.Errorf("--s3-backup-download-part-size must be >= %d (5 MiB), got %d", minDownloadPartSize, downloadPartSize)
+	}
+	if downloadConcurrency < 1 {
+		return nil, fmt.Errorf("--s3-backup-download-concurrency must be >= 1, got %d", downloadConcurrency)
+	}
+
+	bufferSize, err := downloadBufferSize(downloadPartSize, downloadConcurrency)
+	if err != nil {
+		return nil, err
+	}
+
+	// The transfer manager calls HeadObject internally to determine object size,
+	// but does not forward SSE-C params to that call (aws-sdk-go-v2 bug). We work
+	// around this by wrapping the client to inject SSE-C params into HeadObject.
+	var tmS3Client transfermanager.S3APIClient = timedClient
+	if bh.bs.s3SSE.customerAlg != nil {
+		tmS3Client = &sseCClient{
+			S3APIClient: timedClient,
+			alg:         bh.bs.s3SSE.customerAlg,
+			key:         bh.bs.s3SSE.customerKey,
+			keyMD5:      bh.bs.s3SSE.customerMd5,
+		}
+	}
+
+	tmClient := transfermanager.New(tmS3Client, func(o *transfermanager.Options) {
+		// GetObjectRanges uses byte-range GETs sized by PartSizeBytes.
+		// The default (GetObjectParts) reuses original multipart part numbers
+		// and ignores PartSizeBytes entirely.
+		o.GetObjectType = tmtypes.GetObjectRanges
+		o.PartSizeBytes = downloadPartSize
+		o.Concurrency = downloadConcurrency
+		o.GetObjectBufferSize = bufferSize
+	})
+
+	readCtx, cancel := context.WithCancel(ctx)
+	out, err := tmClient.GetObject(readCtx, &transfermanager.GetObjectInput{
 		Bucket:               &bucket,
 		Key:                  &object,
 		SSECustomerAlgorithm: bh.bs.s3SSE.customerAlg,
@@ -343,9 +396,78 @@ func (bh *S3BackupHandle) ReadFile(ctx context.Context, filename string) (io.Rea
 		SSECustomerKeyMD5:    bh.bs.s3SSE.customerMd5,
 	})
 	if err != nil {
+		cancel()
 		return nil, err
 	}
-	return out.Body, nil
+
+	// The transfer manager's concurrentReader spawns Concurrency goroutines per
+	// Read() call. Vitess's restore pipe (pgzip) reads through a small buffer
+	// (~4 KiB), so without coalescing, each tiny Read() creates a full worker
+	// pool — ~1.3M goroutine lifecycles per GiB. A one-part bufio.Reader is
+	// sufficient: the SDK's GetObjectBufferSize already manages the full transfer
+	// window internally; this buffer only needs to coalesce small downstream reads
+	// into a part-sized read for the SDK.
+	buffered := bufio.NewReaderSize(out.Body, int(downloadPartSize))
+
+	return &cancelingReader{Reader: buffered, body: out.Body, cancel: cancel}, nil
+}
+
+// downloadBufferSize computes the GetObjectBufferSize and validates that the
+// resulting per-file memory usage stays within maxPerFileMemory. The total
+// per-file allocation is the SDK's GetObjectBufferSize (partSize × concurrency)
+// plus one part for the bufio.Reader that coalesces small reads.
+func downloadBufferSize(partSize int64, concurrency int) (int64, error) {
+	if partSize > math.MaxInt64/int64(concurrency) {
+		return 0, fmt.Errorf("--s3-backup-download-part-size (%d) * --s3-backup-download-concurrency (%d) overflows int64", partSize, concurrency)
+	}
+	size := partSize * int64(concurrency)
+	if size > math.MaxInt64-partSize {
+		return 0, fmt.Errorf("--s3-backup-download-part-size (%d) * --s3-backup-download-concurrency (%d) + part size overflows int64", partSize, concurrency)
+	}
+	totalPerFile := size + partSize
+	if totalPerFile > maxPerFileMemory {
+		return 0, fmt.Errorf(
+			"per-file memory (SDK buffer %s + read buffer %s = %s) exceeds limit of %s; reduce --s3-backup-download-part-size or --s3-backup-download-concurrency",
+			humanize.IBytes(uint64(size)), humanize.IBytes(uint64(partSize)),
+			humanize.IBytes(uint64(totalPerFile)), humanize.IBytes(uint64(maxPerFileMemory)),
+		)
+	}
+	return size, nil
+}
+
+// cancelingReader wraps a transfer-manager reader with context cancellation and
+// proper resource cleanup. It also preserves the underlying body's Close method
+// for the zero-length object path where the SDK returns the raw S3 response body.
+type cancelingReader struct {
+	io.Reader
+	body   io.Reader
+	cancel context.CancelFunc
+}
+
+func (r *cancelingReader) Close() error {
+	r.cancel()
+	if c, ok := r.body.(io.Closer); ok {
+		return c.Close()
+	}
+	return nil
+}
+
+// sseCClient wraps an S3APIClient to inject SSE-C encryption params into
+// HeadObject calls. This works around a transfer manager bug where its
+// internal HeadObject (used to discover object size) omits SSE-C fields,
+// causing 403 errors for customer-encrypted objects.
+type sseCClient struct {
+	transfermanager.S3APIClient
+	alg    *string
+	key    *string
+	keyMD5 *string
+}
+
+func (c *sseCClient) HeadObject(ctx context.Context, input *s3.HeadObjectInput, optFns ...func(*s3.Options)) (*s3.HeadObjectOutput, error) {
+	input.SSECustomerAlgorithm = c.alg
+	input.SSECustomerKey = c.key
+	input.SSECustomerKeyMD5 = c.keyMD5
+	return c.S3APIClient.HeadObject(ctx, input, optFns...)
 }
 
 var _ backupstorage.BackupHandle = (*S3BackupHandle)(nil)
