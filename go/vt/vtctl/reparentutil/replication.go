@@ -174,6 +174,18 @@ func filterToMostAdvancedCombined(candidates map[string]*RelayLogPositions, logg
 	return result
 }
 
+// hasMysql56GTIDSet reports whether pos carries a MySQL 5.6-style GTID set, as
+// opposed to a MariaDB GTID set or a file position. This is the definition of
+// "GTID-based" that ERS uses: its GTID-specific handling (the relay-log reconcile
+// and errant-GTID detection) assumes MySQL56 semantics, where the retrieved
+// (Combined) set is distinct from the executed set. A zero position has a nil
+// GTIDSet and is therefore not MySQL56 here — callers that need to treat an empty
+// position as flavor-agnostic must check IsZero separately.
+func hasMysql56GTIDSet(pos replication.Position) bool {
+	_, ok := pos.GTIDSet.(replication.Mysql56GTIDSet)
+	return ok
+}
+
 // FindPositionsOfAllCandidates will find candidates for an emergency
 // reparent, and, if successful, return a mapping of those tablet aliases (as
 // raw strings) to their replication positions for later comparison.
@@ -215,7 +227,7 @@ func FindPositionsOfAllCandidates(
 	)
 
 	for alias, status := range replicationStatusMap {
-		if _, ok := status.RelayLogPosition.GTIDSet.(replication.Mysql56GTIDSet); ok {
+		if hasMysql56GTIDSet(status.RelayLogPosition) {
 			isGTIDBased = true
 		} else {
 			isNonGTIDBased = true
@@ -236,7 +248,7 @@ func FindPositionsOfAllCandidates(
 		if pos.IsZero() {
 			continue
 		}
-		if _, ok := pos.GTIDSet.(replication.Mysql56GTIDSet); ok {
+		if hasMysql56GTIDSet(pos) {
 			isGTIDBased = true
 		} else {
 			isNonGTIDBased = true

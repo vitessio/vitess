@@ -475,7 +475,18 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	// maps disables version-aware ordering for those shards.
 	versionMap := stoppedReplicationSnapshot.mysqlVersions
 	flavorMap := stoppedReplicationSnapshot.mysqlFlavors
-	if !isGTIDBased {
+	// FindPositionsOfAllCandidates classifies a shard by the GTID type of its
+	// positions, so a MySQL-GTID shard that has no transactions yet (all positions
+	// empty — e.g. a just-created or idle shard) decodes to nil GTID sets and is
+	// reported as non-GTID. That would drop version-aware election exactly when
+	// positions are equal and version is the only safe differentiator. Recognize
+	// that case explicitly: version election stays on when the shard is either
+	// GTID-based, or an all-empty-position shard whose candidates all run MySQL/
+	// Percona with GTID enabled. We can only use the flavor here (not inside
+	// FindPositionsOfAllCandidates) because empty positions can't distinguish
+	// MySQL-GTID from MariaDB-GTID, and this must not re-enable the MySQL56-only
+	// wait/reconcile path — hence it is scoped to the election gate only.
+	if !isGTIDBased && !isEmptyMysqlGTIDShard(validCandidates, stoppedReplicationSnapshot) {
 		versionMap = nil
 		flavorMap = nil
 	}
@@ -772,6 +783,37 @@ func (erp *EmergencyReparenter) applyRelayLogsAndReconcile(
 	}
 
 	return reconciled, waitResult, nil
+}
+
+// isEmptyMysqlGTIDShard reports whether every valid candidate is a MySQL/Percona
+// tablet with GTID enabled but no transactions yet (empty position). On such a
+// shard FindPositionsOfAllCandidates sees only nil GTID sets and reports non-GTID,
+// even though it is really a MySQL-GTID shard that simply has nothing replicated
+// yet. This lets the caller keep version-aware election on for that case (where
+// positions are equal and version is the only safe differentiator) without
+// re-enabling the MySQL56-only wait/reconcile path. It requires every candidate to
+// be present in the status map (a former primary with no status can't confirm
+// GTID mode) and to report UsingGtid, and every flavor to be in the MySQL family
+// (excludes MariaDB-GTID, whose empty positions are indistinguishable from
+// MySQL's by position alone).
+func isEmptyMysqlGTIDShard(validCandidates map[string]*RelayLogPositions, snapshot *replicationSnapshot) bool {
+	if len(validCandidates) == 0 || len(snapshot.mysqlFlavors) == 0 {
+		return false
+	}
+	for alias, pos := range validCandidates {
+		if !pos.IsZero() {
+			return false
+		}
+		status, ok := snapshot.statusMap[alias]
+		if !ok || status.After == nil || !status.After.UsingGtid {
+			return false
+		}
+		flavor, ok := snapshot.mysqlFlavors[alias]
+		if !ok || flavor.ReplicationFamily() != mysqlctl.FlavorFamilyMySQL {
+			return false
+		}
+	}
+	return true
 }
 
 // findMostAdvanced finds the intermediate source for ERS. We always choose the most advanced one from our valid candidates list. Further ties are broken by looking at the promotion rules.

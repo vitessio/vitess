@@ -4467,6 +4467,73 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 			cells:     []string{"zone1"},
 			shouldErr: false,
 		},
+		{
+			// An idle MySQL-GTID shard with no transactions yet: both candidates report
+			// empty positions (which decode to nil GTID sets, so FindPositionsOfAllCandidates
+			// classifies the shard as non-GTID) but UsingGtid is true and both are MySQL.
+			// Version-aware election must still fire so the lower-version tablet wins;
+			// otherwise the tie would fall through to the alias tiebreak and elect 100.
+			// Winner-gating: only 101 (the expected winner) can be promoted, so if the
+			// version gate is removed and 100 is elected, promotion fails and so does the test.
+			name:       "empty MySQL-GTID shard still gets version ordering",
+			durability: policy.DurabilityNone,
+			tmc: &testutil.TabletManagerClient{
+				PopulateReparentJournalResults: map[string]error{
+					"zone1-0000000101": nil,
+				},
+				PromoteReplicaResults: map[string]struct {
+					Result string
+					Error  error
+				}{
+					"zone1-0000000101": {Result: "ok", Error: nil},
+				},
+				SetReplicationSourceResults: map[string]error{
+					"zone1-0000000100": nil,
+				},
+				StopReplicationAndGetStatusResults: map[string]struct {
+					StopStatus *replicationdatapb.StopReplicationStatus
+					Error      error
+				}{
+					// 100: MySQL 8.4, empty position, GTID enabled.
+					"zone1-0000000100": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning), ServerVersion: "Ver 8.4.0"},
+							After:  &replicationdatapb.Status{UsingGtid: true},
+						},
+					},
+					// 101: MySQL 8.0 (lower version), empty position, GTID enabled -> should win.
+					"zone1-0000000101": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning), ServerVersion: "Ver 8.0.35"},
+							After:  &replicationdatapb.Status{UsingGtid: true},
+						},
+					},
+				},
+				// Non-GTID wait path (empty positions) waits on every candidate for the
+				// empty applied position.
+				WaitForPositionResults: map[string]map[string]error{
+					"zone1-0000000100": {"": nil},
+					"zone1-0000000101": {"": nil},
+				},
+			},
+			shards: []*vtctldatapb.Shard{
+				{
+					Keyspace: "testkeyspace",
+					Name:     "-",
+					Shard: &topodatapb.Shard{
+						PrimaryAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+					},
+				},
+			},
+			tablets: []*topodatapb.Tablet{
+				{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}, Keyspace: "testkeyspace", Shard: "-"},
+				{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101}, Keyspace: "testkeyspace", Shard: "-"},
+			},
+			keyspace:  "testkeyspace",
+			shard:     "-",
+			cells:     []string{"zone1"},
+			shouldErr: false,
+		},
 	}
 
 	for _, tt := range tests {
@@ -9982,4 +10049,93 @@ func TestEmergencyReparenter_findMostAdvanced_versionTiebreakerAfterCatchUp(t *t
 	intermediateSource, _, err = erp.findMostAdvanced(reconciled, tabletMap, versionMap, nil, EmergencyReparentOptions{durability: durability})
 	require.NoError(t, err)
 	require.True(t, topoproto.TabletAliasEqual(intermediateSource.Alias, &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}))
+}
+
+// TestIsEmptyMysqlGTIDShard verifies the detection of a MySQL-GTID shard that has
+// no transactions yet (all positions empty), which FindPositionsOfAllCandidates
+// reports as non-GTID but which should still keep version-aware election on.
+func TestIsEmptyMysqlGTIDShard(t *testing.T) {
+	const a1, a2 = "zone1-0000000100", "zone1-0000000101"
+
+	// emptyPos is a zero RelayLogPositions, i.e. IsZero() == true, as produced by
+	// decoding an empty ("") position on a GTID shard with no transactions yet.
+	emptyPos := func() *RelayLogPositions { return &RelayLogPositions{} }
+	nonEmptyPos := func(t *testing.T) *RelayLogPositions {
+		return &RelayLogPositions{Combined: mustPosition(t, "3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5")}
+	}
+	gtidStatus := func(using bool) *replicationdatapb.StopReplicationStatus {
+		return &replicationdatapb.StopReplicationStatus{After: &replicationdatapb.Status{UsingGtid: using}}
+	}
+
+	tests := []struct {
+		name       string
+		candidates map[string]*RelayLogPositions
+		statusMap  map[string]*replicationdatapb.StopReplicationStatus
+		flavors    map[string]mysqlctl.MySQLFlavor
+		want       bool
+	}{
+		{
+			name:       "all empty, GTID on, MySQL/Percona -> true",
+			candidates: map[string]*RelayLogPositions{a1: emptyPos(), a2: emptyPos()},
+			statusMap:  map[string]*replicationdatapb.StopReplicationStatus{a1: gtidStatus(true), a2: gtidStatus(true)},
+			flavors:    map[string]mysqlctl.MySQLFlavor{a1: mysqlctl.FlavorMySQL, a2: mysqlctl.FlavorPercona},
+			want:       true,
+		},
+		{
+			name:       "a candidate has a non-empty position -> false",
+			candidates: map[string]*RelayLogPositions{a1: emptyPos(), a2: nonEmptyPos(t)},
+			statusMap:  map[string]*replicationdatapb.StopReplicationStatus{a1: gtidStatus(true), a2: gtidStatus(true)},
+			flavors:    map[string]mysqlctl.MySQLFlavor{a1: mysqlctl.FlavorMySQL, a2: mysqlctl.FlavorMySQL},
+			want:       false,
+		},
+		{
+			name:       "a candidate is not using GTID -> false",
+			candidates: map[string]*RelayLogPositions{a1: emptyPos(), a2: emptyPos()},
+			statusMap:  map[string]*replicationdatapb.StopReplicationStatus{a1: gtidStatus(true), a2: gtidStatus(false)},
+			flavors:    map[string]mysqlctl.MySQLFlavor{a1: mysqlctl.FlavorMySQL, a2: mysqlctl.FlavorMySQL},
+			want:       false,
+		},
+		{
+			name:       "a candidate is MariaDB -> false (indistinguishable from MySQL on empty positions)",
+			candidates: map[string]*RelayLogPositions{a1: emptyPos(), a2: emptyPos()},
+			statusMap:  map[string]*replicationdatapb.StopReplicationStatus{a1: gtidStatus(true), a2: gtidStatus(true)},
+			flavors:    map[string]mysqlctl.MySQLFlavor{a1: mysqlctl.FlavorMySQL, a2: mysqlctl.FlavorMariaDB},
+			want:       false,
+		},
+		{
+			name:       "a candidate is absent from the status map (e.g. former primary) -> false",
+			candidates: map[string]*RelayLogPositions{a1: emptyPos(), a2: emptyPos()},
+			statusMap:  map[string]*replicationdatapb.StopReplicationStatus{a1: gtidStatus(true)},
+			flavors:    map[string]mysqlctl.MySQLFlavor{a1: mysqlctl.FlavorMySQL, a2: mysqlctl.FlavorMySQL},
+			want:       false,
+		},
+		{
+			name:       "a candidate has a nil After status -> false",
+			candidates: map[string]*RelayLogPositions{a1: emptyPos(), a2: emptyPos()},
+			statusMap:  map[string]*replicationdatapb.StopReplicationStatus{a1: gtidStatus(true), a2: {After: nil}},
+			flavors:    map[string]mysqlctl.MySQLFlavor{a1: mysqlctl.FlavorMySQL, a2: mysqlctl.FlavorMySQL},
+			want:       false,
+		},
+		{
+			name:       "no candidates -> false",
+			candidates: map[string]*RelayLogPositions{},
+			statusMap:  map[string]*replicationdatapb.StopReplicationStatus{},
+			flavors:    map[string]mysqlctl.MySQLFlavor{},
+			want:       false,
+		},
+		{
+			name:       "no flavors collected -> false",
+			candidates: map[string]*RelayLogPositions{a1: emptyPos()},
+			statusMap:  map[string]*replicationdatapb.StopReplicationStatus{a1: gtidStatus(true)},
+			flavors:    map[string]mysqlctl.MySQLFlavor{},
+			want:       false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			snapshot := &replicationSnapshot{statusMap: tt.statusMap, mysqlFlavors: tt.flavors}
+			require.Equal(t, tt.want, isEmptyMysqlGTIDShard(tt.candidates, snapshot))
+		})
+	}
 }
