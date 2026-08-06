@@ -73,6 +73,15 @@ func TestNormalize(t *testing.T) {
 			"foobar": sqltypes.Int64BindVariable(1),
 		},
 	}, {
+		// DO statements are normalized like the equivalent SELECT: their
+		// expressions are walked and literals are turned into bind variables.
+		in:      "do get_lock('mylock', 5)",
+		outstmt: "do get_lock(:bv1 /* VARCHAR */, :bv2 /* INT64 */)",
+		outbv: map[string]*querypb.BindVariable{
+			"bv1": sqltypes.StringBindVariable("mylock"),
+			"bv2": sqltypes.Int64BindVariable(5),
+		},
+	}, {
 		// float val
 		in:      "select * from t where foobar = 1.2",
 		outstmt: "select * from t where foobar = :foobar /* DECIMAL(2,1) */",
@@ -465,6 +474,28 @@ func TestNormalize(t *testing.T) {
 			assert.Equal(t, tc.outbv, bv)
 		})
 	}
+}
+
+// A DO returns no rows, so sql_select_limit must not be injected into its
+// nested subqueries. Otherwise a scalar subquery like DO (SELECT id FROM user)
+// would silently pick one row instead of raising the multi-row error, diverging
+// from the equivalent SELECT (SELECT id FROM user).
+func TestNormalizeDoDoesNotLimitSubquery(t *testing.T) {
+	parser := NewTestParser()
+	normalize := func(sql string) string {
+		stmt, err := parser.Parse(sql)
+		require.NoError(t, err)
+		bv := make(map[string]*querypb.BindVariable)
+		// selectLimit = 1 stands in for a session sql_select_limit.
+		out, err := Normalize(stmt, NewReservedVars("bv", getBindvars(stmt)), bv, true, "ks", 1, "", map[string]string{}, nil, nil)
+		require.NoError(t, err)
+		return String(out.AST)
+	}
+
+	// A bare SELECT does get the limit injected (the value is parameterized).
+	require.Contains(t, normalize("select id from user"), "limit")
+	// DO's nested subquery must not.
+	require.NotContains(t, normalize("do (select id from user)"), "limit")
 }
 
 func TestNormalizeInvalidDates(t *testing.T) {

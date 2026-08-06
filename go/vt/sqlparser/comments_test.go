@@ -366,6 +366,12 @@ func TestSkipQueryPlanCacheDirective(t *testing.T) {
 
 	stmt, _ = parser.Parse("delete /*vt+ SKIP_QUERY_PLAN_CACHE=1 */ from users")
 	assert.False(t, CachePlan(stmt))
+
+	stmt, _ = parser.Parse("do 1")
+	assert.True(t, CachePlan(stmt))
+
+	stmt, _ = parser.Parse("do /*vt+ SKIP_QUERY_PLAN_CACHE=1 */ 1")
+	assert.False(t, CachePlan(stmt))
 }
 
 func TestIgnoreMaxPayloadSizeDirective(t *testing.T) {

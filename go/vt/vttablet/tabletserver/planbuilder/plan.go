@@ -296,7 +296,7 @@ func BuildStreaming(env *vtenv.Environment, statement sqlparser.Statement, table
 		plan = &Plan{PlanID: PlanShowThrottledApps, FullStmt: stmt}
 	case *sqlparser.ShowThrottlerStatus:
 		plan = &Plan{PlanID: PlanShowThrottlerStatus, FullStmt: stmt}
-	case *sqlparser.OtherAdmin:
+	case *sqlparser.OtherAdmin, *sqlparser.Do:
 		plan = &Plan{PlanID: PlanOtherAdmin}
 	case *sqlparser.Savepoint:
 		plan = &Plan{PlanID: PlanSavepoint, FullStmt: stmt}

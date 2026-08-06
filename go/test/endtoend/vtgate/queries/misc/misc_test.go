@@ -1043,3 +1043,17 @@ func TestOlapErrorAfterFields(t *testing.T) {
 	// The error ended the result set cleanly, so the connection stays usable.
 	utils.AssertMatches(t, mcmp.VtConn, "select 1", "[[INT64(1)]]")
 }
+
+func TestTargetedDo(t *testing.T) {
+	mcmp, closer := start(t)
+	t.Cleanup(closer)
+
+	vtConn := mcmp.VtConn
+	utils.Exec(t, vtConn, fmt.Sprintf("use `%s/-80`", keyspaceName))
+	t.Cleanup(func() {
+		utils.Exec(t, vtConn, "use "+keyspaceName)
+	})
+
+	utils.Exec(t, vtConn, "do 1")
+	utils.Exec(t, vtConn, "do 1 + 1, 'a'")
+}

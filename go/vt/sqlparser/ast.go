@@ -765,6 +765,11 @@ type (
 	// the full AST for the statement.
 	OtherAdmin struct{}
 
+	Do struct {
+		Comments *ParsedComments
+		Exprs    []Expr
+	}
+
 	// CommentOnly represents a query which only has comments
 	CommentOnly struct {
 		Comments []string
@@ -927,6 +932,7 @@ func (*Savepoint) iStatement()             {}
 func (*Release) iStatement()               {}
 func (*Analyze) iStatement()               {}
 func (*OtherAdmin) iStatement()            {}
+func (*Do) iStatement()                    {}
 func (*CommentOnly) iStatement()           {}
 func (*Select) iSelectStatement()          {}
 func (*Select) iTableStatement()           {}
@@ -1008,6 +1014,7 @@ func (*Update) iSupportOptimizerHint()  {}
 func (*VStream) iSupportOptimizerHint() {}
 func (*Select) iSupportOptimizerHint()  {}
 func (*Union) iSupportOptimizerHint()   {}
+func (*Do) iSupportOptimizerHint()      {}
 
 // IsFullyParsed implements the DDLStatement interface
 func (*TruncateTable) IsFullyParsed() bool {
@@ -1662,6 +1669,11 @@ func (node *Stream) SetComments(comments Comments) {
 	node.Comments = comments.Parsed()
 }
 
+// SetComments for Do
+func (node *Do) SetComments(comments Comments) {
+	node.Comments = comments.Parsed()
+}
+
 // SetComments for Update
 func (node *Update) SetComments(comments Comments) {
 	node.Comments = comments.Parsed()
@@ -1754,6 +1766,11 @@ func (node *Insert) GetParsedComments() *ParsedComments {
 
 // GetParsedComments implements Stream.
 func (node *Stream) GetParsedComments() *ParsedComments {
+	return node.Comments
+}
+
+// GetParsedComments implements Do.
+func (node *Do) GetParsedComments() *ParsedComments {
 	return node.Comments
 }
 

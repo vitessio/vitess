@@ -3132,11 +3132,12 @@ var validSQL = []struct {
 	input:  "SHOW EXTENDED INDEXES IN `AO_E8B6CC_PROJECT_MAPPING` IN `jiradb`",
 	output: "show indexes from AO_E8B6CC_PROJECT_MAPPING from jiradb",
 }, {
-	input:  "do 1",
-	output: "otheradmin",
+	input: "do 1",
 }, {
-	input:  "do funcCall(), 2 = 1, 3 + 1",
-	output: "otheradmin",
+	input: "do funcCall(), 2 = 1, 3 + 1",
+}, {
+	input:  "do /*vt+ ALLOW_SCATTER */ (select count(*) from user)",
+	output: "do /*vt+ ALLOW_SCATTER */ (select count(*) from `user`)",
 }, {
 	input: "savepoint a",
 }, {

@@ -283,5 +283,98 @@
         "Query": "select count(*), col from unsharded join vt_main.t1 where exists (select 1 from t2 join information_schema.`tables` where `table_name` = 't3')"
       }
     }
+  },
+  {
+    "comment": "DO bypass sends a synthetic SELECT, so bind variables resolve through the ordinary SELECT plan",
+    "query": "do 1",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "DO",
+      "Original": "do 1",
+      "Instructions": {
+        "OperatorType": "Discard",
+        "Inputs": [
+          {
+            "OperatorType": "Send",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "TargetDestination": "Shard(-80)",
+            "Query": "select 1 from dual"
+          }
+        ]
+      }
+    }
+  },
+  {
+    "comment": "DO bypass with a lock function plans like the SELECT form",
+    "query": "do get_lock('mylock', 5)",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "DO",
+      "Original": "do get_lock('mylock', 5)",
+      "Instructions": {
+        "OperatorType": "Discard",
+        "Inputs": [
+          {
+            "OperatorType": "Send",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "TargetDestination": "Shard(-80)",
+            "Query": "select get_lock('mylock', 5) from dual"
+          }
+        ]
+      }
+    }
+  },
+  {
+    "comment": "DO bypass keeps the whole expression list in one SELECT, so it stays a single statement",
+    "query": "do get_lock('mylock', 5), 1",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "DO",
+      "Original": "do get_lock('mylock', 5), 1",
+      "Instructions": {
+        "OperatorType": "Discard",
+        "Inputs": [
+          {
+            "OperatorType": "Send",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "TargetDestination": "Shard(-80)",
+            "Query": "select get_lock('mylock', 5), 1 from dual"
+          }
+        ]
+      }
+    }
+  },
+  {
+    "comment": "DO bypass carries its query hints onto the synthetic SELECT",
+    "query": "do /*vt+ QUERY_TIMEOUT_MS=100 */ 1",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "DO",
+      "Original": "do /*vt+ QUERY_TIMEOUT_MS=100 */ 1",
+      "Instructions": {
+        "OperatorType": "Discard",
+        "Inputs": [
+          {
+            "OperatorType": "Send",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "TargetDestination": "Shard(-80)",
+            "Query": "select /*vt+ QUERY_TIMEOUT_MS=100 */ 1 from dual",
+            "QueryTimeout": 100
+          }
+        ]
+      }
+    }
   }
 ]
