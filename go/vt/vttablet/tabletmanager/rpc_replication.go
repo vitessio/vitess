@@ -115,21 +115,26 @@ const maxPostMutationVersionLookup = 2 * time.Second
 // risks consuming the remaining deadline so the client sees DEADLINE_EXCEEDED even
 // though the mutation succeeded and the status is ready to return — which in ERS
 // can drop the tablet from the status map (so cleanup may not restart it) and in
-// PRS can report a demotion that happened as failed. We therefore bound the lookup
-// to at most half the remaining deadline (reserving the other half to return the
-// response), and never more than maxPostMutationVersionLookup. On timeout it
-// returns "" like any other lookup failure, degrading to position-only ordering.
+// PRS can report a demotion that happened as failed. The lookup is therefore
+// always capped at maxPostMutationVersionLookup — including for a deadline-less
+// caller (e.g. an in-process DemotePrimary/StopReplicationAndGetStatus), where an
+// unbounded hung fetch would otherwise hold the action lock indefinitely — and is
+// tightened further to half the remaining deadline when one exists, reserving the
+// other half to return the response. On timeout it returns "" like any other
+// lookup failure, degrading to position-only ordering.
 func (tm *TabletManager) getMySQLVersionStringAfterMutation(ctx context.Context) string {
+	budget := maxPostMutationVersionLookup
 	if deadline, ok := ctx.Deadline(); ok {
-		budget := min(time.Until(deadline)/2, maxPostMutationVersionLookup)
-		if budget <= 0 {
-			// No budget left; skip the best-effort lookup rather than risk the response.
-			return ""
-		}
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, budget)
-		defer cancel()
+		budget = min(time.Until(deadline)/2, budget)
 	}
+	if budget <= 0 {
+		// No budget left; skip the best-effort lookup rather than risk the response.
+		return ""
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, budget)
+	defer cancel()
+
 	return tm.getMySQLVersionString(ctx)
 }
 
