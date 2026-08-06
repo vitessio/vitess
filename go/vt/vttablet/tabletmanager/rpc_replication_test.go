@@ -1072,17 +1072,71 @@ func TestStopReplicationAndGetStatus_ServerVersion(t *testing.T) {
 	}
 }
 
+// TestStopReplicationAndGetStatus_SlowVersionLookup verifies the wiring: when the
+// post-mutation version lookup is slow (cold cache), StopReplicationAndGetStatus
+// still returns the stopped-replication status (with an empty ServerVersion)
+// rather than failing with a deadline error — the mutation already happened, so
+// the response must be delivered.
+func TestStopReplicationAndGetStatus_SlowVersionLookup(t *testing.T) {
+	fakeMysqlDaemon := newTestMysqlDaemon(t, 1)
+	fakeMysqlDaemon.Replicating = true
+	fakeMysqlDaemon.IOThreadRunning = true
+	fakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{"STOP REPLICA IO_THREAD"}
+
+	tm := newTestReplicationTM(newTestTablet(t, 100, "ks", "0", nil), fakeMysqlDaemon, nil)
+	// Swap in a version daemon whose lookup never completes on its own, so the
+	// bounded post-mutation helper must cap it and fall back to "". The wrapper
+	// embeds the same fakeMysqlDaemon and overrides only GetVersionString, so all
+	// other calls (ReplicationStatus, the STOP REPLICA IO_THREAD query, etc.) still
+	// route to the fake and behave as configured above.
+	tm.MysqlDaemon = &countingVersionDaemon{
+		FakeMysqlDaemon: fakeMysqlDaemon,
+		version:         "Ver 8.0.35",
+		delay:           time.Hour,
+	}
+
+	const deadline = 30 * time.Second
+	ctx, cancel := context.WithTimeout(t.Context(), deadline)
+	defer cancel()
+
+	start := time.Now()
+	resp, err := tm.StopReplicationAndGetStatus(ctx, replicationdatapb.StopReplicationMode_IOTHREADONLY)
+	elapsed := time.Since(start)
+
+	require.NoError(t, err, "a slow version lookup must not fail the RPC after replication was stopped")
+	require.NotNil(t, resp.Status)
+	require.NotNil(t, resp.Status.After, "the post-stop status must still be returned")
+	require.Empty(t, resp.Status.Before.ServerVersion, "version degrades to empty when the lookup is bounded out")
+	// The bounded helper caps the lookup near maxPostMutationVersionLookup (2s), so
+	// the RPC must return promptly rather than run to the full deadline. Without the
+	// bound it would block for the entire 30s. A generous 15s upper bound keeps this
+	// CI-safe while still proving the lookup was bounded, not run to the deadline.
+	require.Less(t, elapsed, 15*time.Second, "the bounded lookup must not run to the caller's full deadline")
+}
+
 // countingVersionDaemon wraps a FakeMysqlDaemon to count GetVersionString calls
-// and optionally return an error, so we can assert the version cache behavior.
+// and optionally return an error or block, so we can assert the version cache and
+// deadline-bounding behavior.
 type countingVersionDaemon struct {
 	*mysqlctl.FakeMysqlDaemon
 	calls   atomic.Int64
 	version string
 	err     error
+	// delay, if set, makes GetVersionString block for up to delay, returning early
+	// with ctx.Err() if the context is cancelled first. It simulates a slow
+	// cold-cache lookup.
+	delay time.Duration
 }
 
 func (d *countingVersionDaemon) GetVersionString(ctx context.Context) (string, error) {
 	d.calls.Add(1)
+	if d.delay > 0 {
+		select {
+		case <-ctx.Done():
+			return "", ctx.Err()
+		case <-time.After(d.delay):
+		}
+	}
 	if d.err != nil {
 		return "", d.err
 	}
@@ -1160,6 +1214,83 @@ func TestGetMySQLVersionStringCache(t *testing.T) {
 		// Cold-cache burst may fetch more than once, but far fewer than once per caller.
 		require.LessOrEqual(t, daemon.calls.Load(), int64(goroutines))
 		require.GreaterOrEqual(t, daemon.calls.Load(), int64(1))
+	})
+}
+
+func TestGetMySQLVersionStringAfterMutation(t *testing.T) {
+	t.Run("bounds a slow lookup to half the remaining deadline and returns empty", func(t *testing.T) {
+		// A cold-cache lookup that would never finish on its own. With a generous
+		// (CI-safe) deadline, the helper must cap it at half the remaining budget,
+		// return "" (best-effort), and leave the other half for the caller to return
+		// the already-applied mutation. Timings are seconds, not sub-second, to avoid
+		// flakiness on starved runners.
+		daemon := &countingVersionDaemon{
+			FakeMysqlDaemon: newTestMysqlDaemon(t, 1),
+			version:         "Ver 8.0.35",
+			delay:           time.Hour, // effectively never completes on its own
+		}
+		tm := &TabletManager{MysqlDaemon: daemon}
+
+		const deadline = 8 * time.Second
+		ctx, cancel := context.WithTimeout(t.Context(), deadline)
+		defer cancel()
+
+		start := time.Now()
+		got := tm.getMySQLVersionStringAfterMutation(ctx)
+		elapsed := time.Since(start)
+
+		require.Empty(t, got, "a lookup that outruns its budget degrades to empty version")
+		// The lookup is capped at min(deadline/2, 2s) = 2s here, so it must return
+		// comfortably before the caller's full deadline, leaving budget to respond.
+		require.Less(t, elapsed, deadline, "lookup must not consume the whole deadline")
+		require.NoError(t, ctx.Err(), "caller deadline must not be exhausted by the version lookup")
+	})
+
+	t.Run("caps the lookup at maxPostMutationVersionLookup on a large deadline", func(t *testing.T) {
+		// With a large remaining deadline, half of it (e.g. 15s) far exceeds the 2s
+		// absolute cap, so the min(..., maxPostMutationVersionLookup) arm must bound
+		// the hung lookup near 2s rather than ~15s.
+		daemon := &countingVersionDaemon{
+			FakeMysqlDaemon: newTestMysqlDaemon(t, 1),
+			version:         "Ver 8.0.35",
+			delay:           time.Hour,
+		}
+		tm := &TabletManager{MysqlDaemon: daemon}
+
+		ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+		defer cancel()
+
+		start := time.Now()
+		got := tm.getMySQLVersionStringAfterMutation(ctx)
+		elapsed := time.Since(start)
+
+		require.Empty(t, got)
+		// Must be bounded by the 2s cap, not remaining/2 (~15s). Generous upper bound
+		// (10s) keeps it CI-safe while still proving the cap — not remaining/2 — applied.
+		require.Less(t, elapsed, 10*time.Second, "lookup must be capped near maxPostMutationVersionLookup, not remaining/2")
+	})
+
+	t.Run("returns the version on a fast lookup", func(t *testing.T) {
+		daemon := &countingVersionDaemon{
+			FakeMysqlDaemon: newTestMysqlDaemon(t, 1),
+			version:         "Ver 8.0.35",
+		}
+		tm := &TabletManager{MysqlDaemon: daemon}
+
+		ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+		defer cancel()
+
+		require.Equal(t, "Ver 8.0.35", tm.getMySQLVersionStringAfterMutation(ctx))
+	})
+
+	t.Run("no deadline falls back to an unbounded lookup", func(t *testing.T) {
+		daemon := &countingVersionDaemon{
+			FakeMysqlDaemon: newTestMysqlDaemon(t, 1),
+			version:         "Ver 8.0.35",
+		}
+		tm := &TabletManager{MysqlDaemon: daemon}
+
+		require.Equal(t, "Ver 8.0.35", tm.getMySQLVersionStringAfterMutation(context.Background()))
 	})
 }
 
