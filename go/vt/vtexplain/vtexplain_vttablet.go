@@ -386,14 +386,14 @@ func newTabletEnvironment(ddls []sqlparser.DDLStatement, opts *Options, collatio
 			}},
 			Rows: [][]sqltypes.Value{},
 		},
-		"create table if not exists `_vt`.redo_state(\n  dtid varbinary(512),\n  state bigint,\n  time_created bigint,\n  primary key(dtid)\n\t) engine=InnoDB": {
+		"create table if not exists `_vt`.redo_state(\n  dtid varbinary(512),\n  db_name varbinary(256) default '',\n  state bigint,\n  time_created bigint,\n  primary key(dtid, db_name)\n\t) engine=InnoDB": {
 			Fields: []*querypb.Field{{
 				Type:    sqltypes.Uint64,
 				Charset: collations.CollationBinaryID,
 			}},
 			Rows: [][]sqltypes.Value{},
 		},
-		"create table if not exists `_vt`.redo_statement(\n  dtid varbinary(512),\n  id bigint,\n  statement mediumblob,\n  primary key(dtid, id)\n\t) engine=InnoDB": {
+		"create table if not exists `_vt`.redo_statement(\n  dtid varbinary(512),\n  db_name varbinary(256) default '',\n  id bigint,\n  statement mediumblob,\n  primary key(dtid, db_name, id)\n\t) engine=InnoDB": {
 			Fields: []*querypb.Field{{
 				Type:    sqltypes.Uint64,
 				Charset: collations.CollationBinaryID,

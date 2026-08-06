@@ -2316,10 +2316,10 @@ func addQueryExecutorSupportedQueries(db *fakesqldb.DB) {
 				mysql.ShowPrimaryRow("msg", "id"),
 			},
 		},
-		"begin":                                {},
-		"commit":                               {},
-		"rollback":                             {},
-		fmt.Sprintf(readAllRedo, "_vt", "_vt"): {},
+		"begin":    {},
+		"commit":   {},
+		"rollback": {},
+		fmt.Sprintf(readAllRedo, "_vt", "_vt", sqltypes.EncodeStringSQL("fakesqldb"), "_vt", sqltypes.EncodeStringSQL("fakesqldb")): {},
 	}
 
 	sidecardb.AddSchemaInitQueries(db, true, sqlparser.NewTestParser())
