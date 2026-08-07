@@ -25,6 +25,7 @@ import (
 	"vitess.io/vitess/go/bytes2"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/collations/charset"
+	"vitess.io/vitess/go/mysql/collations/charset/types"
 )
 
 type Charset struct {
@@ -68,7 +69,7 @@ func (c *Charset) EncodeRune(dst []byte, r rune) int {
 	panic("unsupported: EncodeRune in remote.Charset (use Charset.Convert directly)")
 }
 
-func (c *Charset) DecodeRune(bytes []byte) (rune, int, bool) {
+func (c *Charset) DecodeRune(bytes []byte) (rune, int, types.Decoding) {
 	panic("unsupported: DecodeRune in remote.Charset (use Charset.Convert directly)")
 }
 
