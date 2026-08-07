@@ -14,17 +14,18 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package logtest lets tests capture log output through [log.SwapLogger], which is
-// atomic. Assigning to the log package's function variables instead (log.Warn = ...)
-// races with every concurrent log call in the process.
+// Package logtest lets tests capture log output through [log.WrapLogger], which
+// installs the capture atomically. Assigning to the log package's function
+// variables instead (log.Warn = ...) races with every concurrent log call in the
+// process.
 package logtest
 
 import (
 	"context"
-	"io"
 	"log/slog"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 
 	"vitess.io/vitess/go/vt/log"
@@ -41,6 +42,13 @@ type (
 		// a nil levels map captures every level.
 		levels map[slog.Level]bool
 
+		// previous and installed are written by Capture before the recorder is
+		// handed out, and are only read by Stop.
+		previous  *slog.Logger
+		installed *slog.Logger
+
+		active atomic.Bool
+
 		mu      sync.Mutex
 		records []Record
 	}
@@ -53,6 +61,9 @@ type (
 
 // Capture records everything logged at the given levels, all levels if none are
 // given, until the test ends. Records are still forwarded to the previous logger.
+//
+// Captures may overlap: installing and giving up a capture never drops a record
+// and never disables a capture belonging to another test.
 func Capture(t testing.TB, levels ...slog.Level) *Recorder {
 	r := &Recorder{}
 	if len(levels) > 0 {
@@ -61,21 +72,31 @@ func Capture(t testing.TB, levels ...slog.Level) *Recorder {
 			r.levels[level] = true
 		}
 	}
+	r.active.Store(true)
 
-	// the log package has no accessor for the current logger, so swap in a
-	// placeholder to get hold of the handler to wrap.
-	var wrapped slog.Handler = slog.NewTextHandler(io.Discard, nil)
-	previous := log.SwapLogger(slog.New(wrapped))
-	if previous != nil {
-		wrapped = previous.Handler()
-	}
-	log.SwapLogger(slog.New(&handler{recorder: r, wrapped: wrapped}))
-
-	t.Cleanup(func() {
-		log.SwapLogger(previous)
+	r.previous, r.installed = log.WrapLogger(func(current *slog.Logger) *slog.Logger {
+		wrapped := slog.DiscardHandler
+		if current != nil {
+			wrapped = current.Handler()
+		}
+		return slog.New(&handler{recorder: r, wrapped: wrapped})
 	})
 
+	t.Cleanup(r.Stop)
+
 	return r
+}
+
+// Stop ends the capture. The previous logger is restored if this capture is still
+// the installed one; otherwise the handler stays in the chain as a pass-through,
+// so that a capture installed on top of this one keeps working. Capture calls Stop
+// when the test ends, so calling it early is only needed to end a capture sooner.
+func (r *Recorder) Stop() {
+	if !r.active.Swap(false) {
+		return
+	}
+
+	log.CompareAndSwapLogger(r.installed, r.previous)
 }
 
 func (r *Recorder) Records() []Record {
@@ -105,8 +126,8 @@ func (r *Recorder) Clear() {
 	r.records = nil
 }
 
-func (r *Recorder) capturing(level slog.Level) bool {
-	return r.levels == nil || r.levels[level]
+func (r *Recorder) recording(level slog.Level) bool {
+	return r.active.Load() && (r.levels == nil || r.levels[level])
 }
 
 func (r *Recorder) record(rec Record) {
@@ -117,11 +138,11 @@ func (r *Recorder) record(rec Record) {
 }
 
 func (h *handler) Enabled(ctx context.Context, level slog.Level) bool {
-	return h.recorder.capturing(level) || h.wrapped.Enabled(ctx, level)
+	return h.recorder.recording(level) || h.wrapped.Enabled(ctx, level)
 }
 
 func (h *handler) Handle(ctx context.Context, r slog.Record) error {
-	if h.recorder.capturing(r.Level) {
+	if h.recorder.recording(r.Level) {
 		rec := Record{
 			Level:   r.Level,
 			Message: r.Message,
