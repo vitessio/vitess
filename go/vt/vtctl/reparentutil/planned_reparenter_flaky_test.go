@@ -2241,6 +2241,36 @@ func TestCheckPrimaryElectContainsAllPositions_FilePosExplicitPrimary(t *testing
 	require.NoError(t, err)
 }
 
+// TestCheckPrimaryElectContainsAllPositions_SingleFilePosCandidate verifies that a
+// lone file-position candidate can auto-initialize: with no peers, there are no
+// cross-tablet coordinates to compare, so the elect's own file position must not
+// trip the file-position rejection even without an explicit primary. This is the
+// initial-bootstrap / no-clear-primary single-tablet case.
+func TestCheckPrimaryElectContainsAllPositions_SingleFilePosCandidate(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	tmc := &testutil.TabletManagerClient{
+		PrimaryPositionResults: map[string]struct {
+			Position string
+			Error    error
+		}{
+			"zone1-0000000200": {Position: "FilePos/vt-bin.000002:100"},
+		},
+	}
+	pr := NewPlannedReparenter(nil, tmc, logutil.NewMemoryLogger())
+
+	primaryElect := &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 200}}
+	tabletMap := map[string]*topo.TabletInfo{
+		"zone1-0000000200": {Tablet: primaryElect},
+	}
+
+	// Auto-election, single candidate: no peers to compare against, so the sole
+	// file-position elect is safe to initialize and must not be rejected.
+	err := pr.checkPrimaryElectContainsAllPositions(ctx, primaryElect, tabletMap, false /* primaryElectExplicit */)
+	require.NoError(t, err)
+}
+
 func TestPlannedReparenter_performPartialPromotionRecovery(t *testing.T) {
 	t.Parallel()
 

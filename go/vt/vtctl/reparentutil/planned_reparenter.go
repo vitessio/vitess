@@ -466,6 +466,14 @@ func verifyPrimaryElectDominates(primaryElectAliasStr string, positions map[stri
 	}
 
 	for alias, pos := range positions {
+		// The elect's own position is never compared against itself. Skip it first, so
+		// a single-candidate non-GTID shard (only the elect) is not rejected by the
+		// file-position check below — that check is about cross-tablet incomparability,
+		// and there are no peers to compare against here.
+		if alias == primaryElectAliasStr {
+			continue
+		}
+
 		if _, isFilePos := pos.GTIDSet.(replication.FilePosGTID); isFilePos {
 			// File positions are each tablet's own binlog coordinates, not comparable
 			// across tablets, so a dominance verdict on them is meaningless. Without an
@@ -478,9 +486,6 @@ func verifyPrimaryElectDominates(primaryElectAliasStr string, positions map[stri
 			return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "cannot verify primary-elect %v contains all transactions: tablet %v reports a file-position replication position (%v), which is not comparable across tablets; specify an explicit primary to promote", primaryElectAliasStr, alias, replication.EncodePosition(pos))
 		}
 
-		if alias == primaryElectAliasStr {
-			continue
-		}
 		// GTID positions are globally comparable: even with an explicit primary the
 		// elect must still contain every peer's transactions (the design doc forbids
 		// NewPrimaryAlias from bypassing this data-loss safeguard).
