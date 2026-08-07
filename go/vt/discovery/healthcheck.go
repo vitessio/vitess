@@ -915,10 +915,14 @@ func (hc *HealthCheckImpl) registeredHealthCheck(alias *topodata.TabletAlias) *t
 // TabletConnection returns the Connection to a given tablet.
 func (hc *HealthCheckImpl) TabletConnection(ctx context.Context, alias *topodata.TabletAlias, target *query.Target) (queryservice.QueryService, error) {
 	thc := hc.registeredHealthCheck(alias)
-	if thc == nil || thc.Conn == nil {
+	if thc == nil {
 		return nil, vterrors.Errorf(vtrpc.Code_NOT_FOUND, "tablet: %v is either down or nonexistent", alias)
 	}
-	return thc.Connection(ctx), nil
+	conn := thc.currentConnection()
+	if conn == nil {
+		return nil, vterrors.Errorf(vtrpc.Code_NOT_FOUND, "tablet: %v is either down or nonexistent", alias)
+	}
+	return conn, nil
 }
 
 // getAliasByCell should only be called while holding hc.mu
