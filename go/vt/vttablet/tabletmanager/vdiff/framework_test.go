@@ -23,6 +23,7 @@ import (
 	"io"
 	"os"
 	"regexp"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -435,19 +436,21 @@ func (dbc *realDBClient) SupportsCapability(capability capabilities.FlavorCapabi
 
 type fakeTMClient struct {
 	tmclient.TabletManagerClient
-	schema    *tabletmanagerdatapb.SchemaDefinition
-	vrQueries map[int]map[string]*querypb.QueryResult
-	waitpos   map[int]string
-	vrpos     map[int]string
-	pos       map[int]string
+	schema     *tabletmanagerdatapb.SchemaDefinition
+	vrQueries  map[int]map[string]*querypb.QueryResult
+	waitpos    map[int]string
+	vrpos      map[int]string
+	pos        map[int]string
+	pkeResults map[string]*sqltypes.Result
 }
 
 func newFakeTMClient() *fakeTMClient {
 	return &fakeTMClient{
-		vrQueries: make(map[int]map[string]*querypb.QueryResult),
-		waitpos:   make(map[int]string),
-		vrpos:     make(map[int]string),
-		pos:       make(map[int]string),
+		vrQueries:  make(map[int]map[string]*querypb.QueryResult),
+		waitpos:    make(map[int]string),
+		vrpos:      make(map[int]string),
+		pos:        make(map[int]string),
+		pkeResults: make(map[string]*sqltypes.Result),
 	}
 }
 
@@ -455,7 +458,28 @@ func newFakeTMClient() *fakeTMClient {
 func (tmc *fakeTMClient) Close() {}
 
 func (tmc *fakeTMClient) GetSchema(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.GetSchemaRequest) (*tabletmanagerdatapb.SchemaDefinition, error) {
-	return tmc.schema, nil
+	if len(request.Tables) == 0 {
+		return tmc.schema, nil
+	}
+	filtered := &tabletmanagerdatapb.SchemaDefinition{
+		TableDefinitions: make([]*tabletmanagerdatapb.TableDefinition, 0),
+	}
+	for _, td := range tmc.schema.TableDefinitions {
+		if slices.Contains(request.Tables, td.Name) {
+			filtered.TableDefinitions = append(filtered.TableDefinitions, td)
+		}
+	}
+	return filtered, nil
+}
+
+func (tmc *fakeTMClient) ExecuteFetchAsApp(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, req *tabletmanagerdatapb.ExecuteFetchAsAppRequest) (*querypb.QueryResult, error) {
+	query := string(req.Query)
+	for tableName, result := range tmc.pkeResults {
+		if strings.Contains(query, tableName) {
+			return sqltypes.ResultToProto3(result), nil
+		}
+	}
+	return sqltypes.ResultToProto3(noResults), nil
 }
 
 // setVRResults allows you to specify VReplicationExec queries and their results. You can specify
@@ -564,6 +588,10 @@ func newTestVDiffEnv(t *testing.T) *testVDiffEnv {
 	vdiffenv.vre.Open(t.Context())
 
 	vdiffenv.tmc.schema = testSchema
+	vdiffenv.tmc.pkeResults["nopkwithpke"] = sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("column_name|index_name", "varchar|varchar"),
+		"c3|c3",
+	)
 	// We need to add t1, which we use for a full VDiff in TestVDiff, to
 	// the schema engine with the PK val.
 	st := &schema.Table{

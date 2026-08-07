@@ -1012,18 +1012,78 @@ func (td *tableDiffer) getSourcePKCols() error {
 		}
 	}
 
-	sourcePKColumns := make(map[string]struct{}, len(sourceTable.PrimaryKeyColumns))
-	td.tablePlan.sourcePkCols = make([]int, 0, len(sourceTable.PrimaryKeyColumns))
-	for _, pkc := range sourceTable.PrimaryKeyColumns {
-		sourcePKColumns[pkc] = struct{}{}
+	// Parse the source query to determine column positions in the actual row layout.
+	// We must map PK columns against the SELECT expression order (not td.table.Columns)
+	// because filters can reorder columns (e.g., "select c2, c1 from t1").
+	statement, err := td.wd.ct.vde.parser.Parse(td.tablePlan.sourceQuery)
+	if err != nil {
+		return vterrors.Wrapf(err, "failed to parse source query for table %s", td.table.Name)
 	}
-	for i, pkc := range td.table.Columns {
-		if _, ok := sourcePKColumns[pkc]; ok {
-			td.tablePlan.sourcePkCols = append(td.tablePlan.sourcePkCols, i)
-		}
+	sourceSelect, ok := statement.(*sqlparser.Select)
+	if !ok {
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected statement type for source query of table %s", td.table.Name)
 	}
 
+	indices, err := sourcePKSelectIndices(sourceSelect, sourceTable.PrimaryKeyColumns)
+	if err != nil {
+		return vterrors.Wrapf(err, "table %s", td.table.Name)
+	}
+	td.tablePlan.sourcePkCols = indices
+
 	return nil
+}
+
+// sourcePKSelectIndices maps each PK column to its position in the SELECT expression list.
+// It uses two passes: first matching by underlying ColName (to prevent alias shadowing),
+// then falling back to alias matching for cross-table filters.
+func sourcePKSelectIndices(sourceSelect *sqlparser.Select, pkColumns []string) ([]int, error) {
+	indices := make([]int, 0, len(pkColumns))
+	for _, pkc := range pkColumns {
+		found := false
+		// Pass 1: match by underlying ColName (direct source column match).
+		// This must run first so that an alias shadowing a PK name cannot
+		// win over the real source column (e.g., "select b as a, a as b").
+		for i, selExpr := range sourceSelect.SelectExprs.Exprs {
+			aliasedExpr, ok := selExpr.(*sqlparser.AliasedExpr)
+			if !ok {
+				continue
+			}
+			switch ct := aliasedExpr.Expr.(type) {
+			case *sqlparser.ColName:
+				if strings.EqualFold(pkc, ct.Name.String()) {
+					indices = append(indices, i)
+					found = true
+				}
+			case *sqlparser.FuncExpr:
+				if strings.EqualFold(pkc, aliasedExpr.As.String()) {
+					indices = append(indices, i)
+					found = true
+				}
+			}
+			if found {
+				break
+			}
+		}
+		// Pass 2: fallback to alias match for cross-table filters
+		// (e.g., "select c0 as c1 from t2" where target PK is c1).
+		if !found {
+			for i, selExpr := range sourceSelect.SelectExprs.Exprs {
+				aliasedExpr, ok := selExpr.(*sqlparser.AliasedExpr)
+				if !ok {
+					continue
+				}
+				if !aliasedExpr.As.IsEmpty() && strings.EqualFold(pkc, aliasedExpr.As.String()) {
+					indices = append(indices, i)
+					found = true
+					break
+				}
+			}
+		}
+		if !found {
+			return nil, fmt.Errorf("source PK column %s not found in SELECT list", pkc)
+		}
+	}
+	return indices, nil
 }
 
 func getColumnNameForSelectExpr(selectExpression sqlparser.SelectExpr) (string, error) {
