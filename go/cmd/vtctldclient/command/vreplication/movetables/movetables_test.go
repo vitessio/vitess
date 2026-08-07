@@ -17,15 +17,31 @@ limitations under the License.
 package movetables
 
 import (
+	"sync"
 	"testing"
 
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
 )
 
+var (
+	testRoot     *cobra.Command
+	testRootOnce sync.Once
+)
+
+// registeredTestRoot registers the MoveTables commands exactly once. registerCommands
+// adds flags to package-level command variables, so it panics if called more than once
+// per test binary.
+func registeredTestRoot() *cobra.Command {
+	testRootOnce.Do(func() {
+		testRoot = &cobra.Command{Use: "test"}
+		registerCommands(testRoot)
+	})
+	return testRoot
+}
+
 func TestKeepDataHelpMentionsReverseWorkflowDefault(t *testing.T) {
-	root := &cobra.Command{Use: "test"}
-	registerCommands(root)
+	root := registeredTestRoot()
 
 	completeCmd, _, err := root.Find([]string{"MoveTables", "complete"})
 	require.NoError(t, err)
@@ -34,4 +50,16 @@ func TestKeepDataHelpMentionsReverseWorkflowDefault(t *testing.T) {
 	cancelCmd, _, err := root.Find([]string{"MoveTables", "cancel"})
 	require.NoError(t, err)
 	require.Contains(t, cancelCmd.Flags().Lookup("keep-data").Usage, "Defaults to true for an explicitly specified _reverse workflow unless --keep-data=false is provided.")
+}
+
+func TestCompleteRenameTablesDefaultsToRename(t *testing.T) {
+	root := registeredTestRoot()
+
+	completeCmd, _, err := root.Find([]string{"MoveTables", "complete"})
+	require.NoError(t, err)
+
+	renameFlag := completeCmd.Flags().Lookup("rename-tables")
+	require.NotNil(t, renameFlag)
+	require.Equal(t, "true", renameFlag.DefValue)
+	require.Contains(t, renameFlag.Usage, "--rename-tables=false")
 }
