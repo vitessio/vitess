@@ -192,6 +192,8 @@ func (m *mockBackupHandle) ResetErrorForFile(filename string) {
 	delete(m.failedFiles, filename)
 }
 
+func (m *mockBackupHandle) Wait() {}
+
 func (m *mockBackupHandle) Error() error {
 	m.mu.Lock()
 	defer m.mu.Unlock()

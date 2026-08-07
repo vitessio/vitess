@@ -241,6 +241,11 @@ func (bh *S3BackupHandle) AddFile(ctx context.Context, filename string, filesize
 	return writer, nil
 }
 
+// Wait is part of the backupstorage.BackupHandle interface.
+func (bh *S3BackupHandle) Wait() {
+	bh.waitGroup.Wait()
+}
+
 func (bh *S3BackupHandle) handleAddFile(ctx context.Context, filename string, partSizeBytes int64, reader io.Reader, closer func(error)) {
 	bh.waitGroup.Go(func() {
 		object := objName(bh.dir, bh.name, filename)

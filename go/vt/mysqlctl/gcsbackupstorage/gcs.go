@@ -114,6 +114,9 @@ func (bh *GCSBackupHandle) ReadFile(ctx context.Context, filename string) (io.Re
 	return bh.client.Bucket(bucket).Object(object).NewReader(ctx)
 }
 
+// Wait is part of the BackupHandle interface. GCS backup is synchronous so this is a no-op.
+func (bh *GCSBackupHandle) Wait() {}
+
 // GCSBackupStorage implements BackupStorage for Google Cloud Storage.
 type GCSBackupStorage struct {
 	// client is the instance of the Google Cloud Storage Go client.

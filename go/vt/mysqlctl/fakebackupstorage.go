@@ -94,6 +94,8 @@ func (fbh *FakeBackupHandle) ReadFile(ctx context.Context, filename string) (io.
 	return fbh.ReadFileReturnF(ctx, filename)
 }
 
+func (fbh *FakeBackupHandle) Wait() {}
+
 type FakeBackupStorage struct {
 	CloseCalls          int
 	CloseReturn         error

@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/logutil"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
@@ -38,6 +39,9 @@ type (
 	ctxAwareCloser struct {
 		ctx context.Context
 	}
+
+	// nopWriteCloser is an io.WriteCloser whose Close returns immediately.
+	nopWriteCloser struct{}
 )
 
 func (c ctxAwareCloser) Write(p []byte) (int, error) { return len(p), nil }
@@ -45,6 +49,9 @@ func (c ctxAwareCloser) Close() error {
 	<-c.ctx.Done()
 	return c.ctx.Err()
 }
+
+func (nopWriteCloser) Write([]byte) (int, error) { return 0, nil }
+func (nopWriteCloser) Close() error             { return nil }
 
 func TestFindReplicationPosition(t *testing.T) {
 	input := `MySQL binlog position: filename 'vt-0476396352-bin.000005', position '310088991', GTID of the last change '145e508e-ae54-11e9-8ce6-46824dd1815e:1-3,

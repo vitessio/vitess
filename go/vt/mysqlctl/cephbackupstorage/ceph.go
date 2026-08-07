@@ -138,6 +138,9 @@ func (bh *CephBackupHandle) ReadFile(ctx context.Context, filename string) (io.R
 	return bh.client.GetObjectWithContext(ctx, bucket, object, minio.GetObjectOptions{})
 }
 
+// Wait is part of the BackupHandle interface. Ceph backup is synchronous so this is a no-op.
+func (bh *CephBackupHandle) Wait() {}
+
 // CephBackupStorage implements BackupStorage for Ceph Cloud Storage.
 type CephBackupStorage struct {
 	// client is the instance of the Ceph Cloud Storage Go client.

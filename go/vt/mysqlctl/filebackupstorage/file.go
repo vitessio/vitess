@@ -142,6 +142,9 @@ func (fbh *FileBackupHandle) ReadFile(ctx context.Context, filename string) (io.
 	return ioutil.NewMeteredReadCloser(f, stat.TimedIncrementBytes), nil
 }
 
+// Wait is part of the BackupHandle interface. File backup is synchronous so this is a no-op.
+func (fbh *FileBackupHandle) Wait() {}
+
 // FileBackupStorage implements BackupStorage for local file system.
 type FileBackupStorage struct {
 	params backupstorage.Params
