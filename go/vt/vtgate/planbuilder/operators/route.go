@@ -52,6 +52,13 @@ type (
 		// this field will contain the conditions under which this route is valid
 		Conditions []engine.Condition
 
+		// PreservesReferenceRows marks a route that produces the rows of a reference table kept
+		// by an outer join. Those rows do not depend on the routing finding a match, which has
+		// two consequences the route carries with it through any later merge: the routing has to
+		// stay single-shard, or each unmatched row comes back once per shard, and the query has
+		// to run even when the routing resolves to no destination, or they do not come back at all.
+		PreservesReferenceRows bool
+
 		ResultColumns int
 	}
 
@@ -179,6 +186,19 @@ func UpdateRoutingLogic(ctx *plancontext.PlanningContext, in sqlparser.Expr, r R
 // Cost implements the Operator interface
 func (r *Route) Cost() int {
 	return r.Routing.Cost()
+}
+
+// referenceRowsInvariant reports whether a route merged from these inputs produces the rows of a
+// reference table kept by an outer join, seeded with whether the merge itself originates them, and
+// whether a route with the given routing can honour those rows. Merge sites have to ask before
+// they mutate anything: a refused merge has to leave the plan exactly as it was.
+func referenceRowsInvariant(routing Routing, originated bool, inputs ...*Route) (preserved, canMerge bool) {
+	preserved = originated
+	for _, input := range inputs {
+		preserved = preserved || input.PreservesReferenceRows
+	}
+
+	return preserved, !preserved || routing.OpCode().IsSingleShard()
 }
 
 // Clone implements the Operator interface
