@@ -85,6 +85,12 @@ func (tm *TabletManager) FullStatus(ctx context.Context) (*replicationdatapb.Ful
 		return tm.fullStatusFromResult(result)
 	}
 
+	return tm.legacyFullStatus(ctx)
+}
+
+// legacyFullStatus builds the full status one field at a time, each with its own
+// query. It is the fallback for flavors that optimized collection does not support.
+func (tm *TabletManager) legacyFullStatus(ctx context.Context) (*replicationdatapb.FullStatus, error) {
 	// Server ID - "select @@global.server_id"
 	serverID, err := tm.MysqlDaemon.GetServerID(ctx)
 	if err != nil {
