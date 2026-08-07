@@ -39,6 +39,8 @@
         - [Schema engine table-count limit is now configurable](#vttablet-schema-max-table-count)
         - [Skip MySQL version check when restoring from a mysql-shell backup](#vttablet-mysql-shell-restore-skip-version-check)
         - [ApplySchema session variables](#vttablet-applyschema-session-variables)
+    - **[VTCtld](#minor-changes-vtctld)**
+        - [MySQL version-aware reparent candidate election](#vtctld-version-aware-reparent)
     - **[Backup/Restore](#minor-changes-backup)**
         - [Chunked backup/restore for the builtinbackupengine](#backup-chunked-builtin)
         - [Slow clean mysqld shutdowns no longer fail backups](#backup-mysqld-shutdown-timeout)
@@ -376,6 +378,45 @@ Upgrade vtctld, vtctldclient, vtgate and vttablet before executing a schema
 change with `--session-variable`.
 
 See [#20654](https://github.com/vitessio/vitess/pull/20654) for details.
+
+### <a id="minor-changes-vtctld"/>VTCtld</a>
+
+#### <a id="vtctld-version-aware-reparent"/>MySQL version-aware reparent candidate election</a>
+
+`PlannedReparentShard` (PRS) and `EmergencyReparentShard` (ERS) now consider the MySQL server version when electing a new primary. During rolling MySQL upgrades, this prevents promoting a newer-version tablet that would break replication for replicas still on the older version.
+
+Versions are compared by major.minor. The patch component is normally ignored (patch releases are bugfix-only and do not affect replication compatibility), with one exception: within the MySQL 8.0 series, feature additions before 8.0.34 (the first bugfix-only 8.0 patch — e.g. binary log transaction compression added in 8.0.20) can make a newer patch incompatible as a source to an older-patch replica. So when both candidates are in the 8.0 series and the lower patch is below 8.0.34, the patch is compared too.
+
+**Sort order:**
+- PRS: promotion rules > MySQL version > replication position > buffer pool > alias
+- ERS: replication position > promotion rules > MySQL version > buffer pool > alias
+
+**Behavior change:** PRS during a rolling MySQL upgrade will now prefer lower-version candidates even when they are slightly behind in replication position. The elected tablet will catch up to the old primary's demotion position before completing the reparent, which may increase reparent latency. Operators should ensure `--wait-replicas-timeout` is generous enough to accommodate this catch-up time.
+
+**Behavior change (PRS ordering):** independent of any version difference, PRS now orders candidates by promotion rule before replication position (previously position came first). This can change which tablet PRS elects even in a cluster with a single MySQL version — for example, a `PREFERRED` candidate that is slightly behind is now chosen over a same-position candidate with a neutral promotion rule. As above, PRS catches the elected tablet up to the old primary's position before completing, so this does not risk data loss. This ordering is unchanged for ERS, which still puts replication position first.
+
+**Cross-cell limitation:** PRS will still promote a higher-version tablet if no lower-version candidate exists in the same cell as the current primary. The cell boundary is enforced before version comparison. Operators who want version preference to override cell locality can use `--allow-cross-cell-promotion`.
+
+Tablets that do not report a version (e.g. running an older Vitess build) are treated as "unknown version" and sorted last. When every candidate is unknown, the version comparison is a no-op and election falls through to the previous position/promotion ordering. But during a rolling upgrade of Vitess itself — where some `vttablet`s already report a version and others do not yet — this biases elections toward the already-upgraded tablets: the known-version candidates remain comparable to each other while the not-yet-upgraded ones lose the version tiebreak. This never promotes a replication-incompatible primary; it only prefers upgraded nodes among otherwise-equal candidates.
+
+**Former-primary tie-breaking:** as part of this change, an ERS candidate that was the former primary and is equally advanced (same replication position) as a replica now participates in the promotion-rule and version tie-breakers. Previously such a candidate was treated as slightly behind and could lose the election to an equally-advanced replica, because its executed position was left uninitialized.
+
+**Flavor compatibility:** version comparison is only applied when all candidates belong to the same flavor family. MySQL and Percona Server share a version lineage and are compared against each other; MariaDB is a separate lineage, so a shard mixing MariaDB with MySQL/Percona disables version-aware election and falls back to the previous position/promotion ordering (with a warning logged).
+
+**ERS is version-aware only for MySQL-GTID shards; PRS applies to all single-family shards.** This is a deliberate asymmetry between the two operations:
+
+- **PRS** applies version-aware election whenever all candidates share one flavor family (see above), including MariaDB-only shards and shards using file-position (non-GTID) replication. PRS always catches the elected tablet up to the old primary's exact position before completing, so replication position is not a data-safety concern for PRS and preferring a compatible version is safe.
+- **ERS** applies version-aware election only when the shard uses MySQL GTID-based replication (`MySQL56` GTID sets — i.e. MySQL or Percona Server). ERS is **not** version-aware, and retains the previous position/promotion ordering with no version tiebreak, when:
+  - the shard uses file-position (non-GTID) replication, or
+  - the shard uses MariaDB (whose GTID sets are not `MySQL56`-based and take the same non-GTID code path).
+
+  ERS prioritizes certainty that it picked the most-advanced candidate to minimize data loss, and only the MySQL-GTID path reconciles equally-advanced candidates to a common applied position after the relay-log wait — which is what lets the version tiebreak fire without misordering candidates by position. On the other paths ERS compares candidates on their executed positions and leaves version out of the decision.
+
+**Upgrade ordering for non-`REPLICA` tablets:** version-aware election only considers `REPLICA`-type candidates, but a completed reparent repoints every non-`RESTORE` tablet (including `RDONLY`) to the new primary. Because the election prefers the lowest-version replica, all other replicas are at least as new as the winner and replicate safely; a non-`REPLICA` tablet on an *older* MySQL version, however, could be made to replicate from a newer-version primary, which is not guaranteed safe. To avoid this during a rolling MySQL upgrade, upgrade non-`REPLICA` tablets (e.g. `RDONLY`) **before** `REPLICA` tablets, so that no older non-`REPLICA` tablet ever needs to replicate from a newer elected primary. This is operational guidance — PRS does not enforce the ordering or fail when it is not followed.
+
+**Behavior change (file-position PRS without an explicit primary):** when PRS elects the new primary itself (no `--new-primary` given) on the initialization or no-clear-primary paths, it now confirms the elected tablet's replication position contains every other tablet's before promoting — those paths promote directly, without first catching the elect up to a source. On file-position (non-GTID) shards this containment cannot be established: each tablet's binlog coordinates are local to that tablet and not comparable across tablets. PRS now **fails closed** in that case rather than risk promoting a tablet that is missing another's transactions. Operators of file-position shards should pass an explicit `--new-primary` to PRS on these paths. GTID-based shards (MySQL/Percona/MariaDB GTID) and freshly-initialized shards with empty positions are unaffected.
+
+See [#20211](https://github.com/vitessio/vitess/pull/20211) for details.
 
 ### <a id="minor-changes-backup"/>Backup/Restore</a>
 

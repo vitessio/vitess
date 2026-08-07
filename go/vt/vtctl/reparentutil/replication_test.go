@@ -31,6 +31,7 @@ import (
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sets"
 	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools/events"
@@ -207,6 +208,170 @@ func TestFindPositionsOfAllCandidates(t *testing.T) {
 	}
 }
 
+// TestFindPositionsOfAllCandidates_PrimaryExecutedInitialized verifies that a
+// PrimaryStatus candidate has its Executed position initialized to its executed
+// position, not left as the zero position. A demoted/former primary applies no
+// relay log, so its executed position is authoritative. If Executed were left
+// zero, RelayLogPositions.AtLeast would rank an equally-advanced replica (whose
+// Executed is reconciled up after its relay-log wait) strictly ahead of the
+// former primary, so ERS would never reach the promotion-rule/version
+// tiebreakers for that primary.
+func TestFindPositionsOfAllCandidates_PrimaryExecutedInitialized(t *testing.T) {
+	t.Parallel()
+
+	const gtid = "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5"
+
+	positionMap, isGTIDBased, err := FindPositionsOfAllCandidates(
+		map[string]*replicationdatapb.StopReplicationStatus{
+			"r1": {After: &replicationdatapb.Status{
+				SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
+				RelayLogPosition: gtid,
+				Position:         gtid,
+			}},
+		},
+		map[string]*replicationdatapb.PrimaryStatus{
+			"p1": {Position: gtid},
+		},
+	)
+	require.NoError(t, err)
+	require.True(t, isGTIDBased)
+
+	primary := positionMap["p1"]
+	require.NotNil(t, primary)
+
+	executed, err := replication.DecodePosition(gtid)
+	require.NoError(t, err)
+	assert.True(t, primary.Executed.Equal(executed),
+		"primary candidate Executed must be initialized to its executed position, got %v", primary.Executed)
+
+	// The former primary and an equally-advanced replica must compare equal, so
+	// election falls through to the promotion-rule/version tiebreakers rather
+	// than treating the primary as behind.
+	replica := positionMap["r1"]
+	require.NotNil(t, replica)
+	assert.True(t, primary.AtLeast(replica),
+		"former primary must be at least as advanced as an equally-advanced replica")
+	assert.True(t, replica.AtLeast(primary),
+		"equally-advanced replica must be at least as advanced as the former primary")
+}
+
+// TestFindPositionsOfAllCandidates_PrimaryExecutedZeroOnNonGTID verifies that on
+// a non-GTID (file-position) shard, a former primary's Executed position is left
+// zero, matching how replicas are stored (their executed position lives in
+// Combined, Executed zero). This preserves the prior non-GTID position ordering:
+// initializing the primary's Executed would make it strictly dominate an
+// equally-advanced replica on the executed tiebreak, changing who leads. Version-
+// aware election is GTID-only, so the former primary must not be reordered here.
+func TestFindPositionsOfAllCandidates_PrimaryExecutedZeroOnNonGTID(t *testing.T) {
+	t.Parallel()
+
+	const filePos = "FilePos/mysql-bin.0001:100"
+
+	positionMap, isGTIDBased, err := FindPositionsOfAllCandidates(
+		map[string]*replicationdatapb.StopReplicationStatus{
+			"r1": {After: &replicationdatapb.Status{
+				RelayLogPosition: filePos,
+				Position:         filePos,
+			}},
+		},
+		map[string]*replicationdatapb.PrimaryStatus{
+			"p1": {Position: filePos},
+		},
+	)
+	require.NoError(t, err)
+	require.False(t, isGTIDBased)
+
+	primary := positionMap["p1"]
+	require.NotNil(t, primary)
+
+	executed, err := replication.DecodePosition(filePos)
+	require.NoError(t, err)
+	assert.True(t, primary.Combined.Equal(executed),
+		"primary candidate Combined must hold its executed position, got %v", primary.Combined)
+	assert.True(t, primary.Executed.IsZero(),
+		"primary candidate Executed must stay zero on a non-GTID shard, got %v", primary.Executed)
+}
+
+// TestFindPositionsOfAllCandidates_FlavorFromPrimaryStatus verifies that GTID/
+// non-GTID detection inspects the primary status map, not just the replica status
+// map. When every reachable candidate is a former primary (empty statusMap), the
+// flavor must still be classified from the primary positions, and a shard mixing
+// GTID and non-GTID positions across the two maps must be rejected.
+func TestFindPositionsOfAllCandidates_FlavorFromPrimaryStatus(t *testing.T) {
+	t.Parallel()
+
+	const (
+		gtid    = "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5"
+		filePos = "FilePos/mysql-bin.0001:100"
+	)
+
+	tests := []struct {
+		name          string
+		statusMap     map[string]*replicationdatapb.StopReplicationStatus
+		primaryMap    map[string]*replicationdatapb.PrimaryStatus
+		wantGTIDBased bool
+		wantErr       string
+	}{
+		{
+			name:          "primary-only MySQL56 is detected as GTID-based",
+			primaryMap:    map[string]*replicationdatapb.PrimaryStatus{"p1": {Position: gtid}},
+			wantGTIDBased: true,
+		},
+		{
+			name:          "primary-only FilePos is detected as non-GTID-based",
+			primaryMap:    map[string]*replicationdatapb.PrimaryStatus{"p1": {Position: filePos}},
+			wantGTIDBased: false,
+		},
+		{
+			name: "GTID replica mixed with FilePos former primary is rejected",
+			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
+				"r1": {After: &replicationdatapb.Status{RelayLogPosition: gtid, Position: gtid}},
+			},
+			primaryMap: map[string]*replicationdatapb.PrimaryStatus{"p1": {Position: filePos}},
+			wantErr:    "mix of GTID-based and non GTID-based",
+		},
+		{
+			// A former primary with an empty executed position is flavor-agnostic and
+			// must not be counted as non-GTID; otherwise it would falsely trip the
+			// mixed-mode guard against the GTID replicas. This pins the IsZero() skip
+			// in the flavor detection.
+			name: "GTID replica with a zero-position former primary stays GTID-based",
+			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
+				"r1": {After: &replicationdatapb.Status{RelayLogPosition: gtid, Position: gtid}},
+			},
+			primaryMap:    map[string]*replicationdatapb.PrimaryStatus{"p1": {Position: ""}},
+			wantGTIDBased: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			positionMap, isGTIDBased, err := FindPositionsOfAllCandidates(tt.statusMap, tt.primaryMap)
+			if tt.wantErr != "" {
+				require.ErrorContains(t, err, tt.wantErr)
+				return
+			}
+			require.NoError(t, err)
+			require.Equal(t, tt.wantGTIDBased, isGTIDBased)
+
+			// The former primary's Executed position is initialized only on a
+			// GTID-based shard (see TestFindPositionsOfAllCandidates_PrimaryExecuted*).
+			primary := positionMap["p1"]
+			require.NotNil(t, primary)
+			executed, decErr := replication.DecodePosition(tt.primaryMap["p1"].Position)
+			require.NoError(t, decErr)
+			assert.True(t, primary.Combined.Equal(executed), "primary Combined must hold its executed position")
+			if tt.wantGTIDBased {
+				assert.True(t, primary.Executed.Equal(executed), "primary Executed must be initialized on a GTID-based shard")
+			} else {
+				assert.True(t, primary.Executed.IsZero(), "primary Executed must stay zero on a non-GTID shard")
+			}
+		})
+	}
+}
+
 // TestFindPositionsOfAllCandidates_ErrorNotDuplicated verifies that when
 // FindPositionsOfAllCandidates wraps an error the underlying cause message is
 // not repeated twice in the output. vterrors.Wrapf already appends the cause
@@ -314,6 +479,7 @@ func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {
 		waitForAllTablets        bool
 		expectedStatusMap        map[string]*replicationdatapb.StopReplicationStatus
 		expectedPrimaryStatusMap map[string]*replicationdatapb.PrimaryStatus
+		expectedMysqlVersions    map[string]mysqlctl.ServerVersion
 		expectedTakingBackup     map[string]bool
 		expectedTabletsReachable []*topodatapb.Tablet
 		shouldErr                bool
@@ -864,6 +1030,103 @@ func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {
 				"zone1-0000000100": {
 					Position: "primary-position-100",
 				},
+			},
+			expectedTabletsReachable: []*topodatapb.Tablet{{
+				Type: topodatapb.TabletType_REPLICA,
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			}, {
+				Type: topodatapb.TabletType_REPLICA,
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  101,
+				},
+			}},
+			shouldErr: false,
+		},
+		{
+			name:       "demoted primary reports MySQL version",
+			durability: policy.DurabilityNone,
+			tmc: &stopReplicationAndBuildStatusMapsTestTMClient{
+				demotePrimaryResults: map[string]*struct {
+					PrimaryStatus *replicationdatapb.PrimaryStatus
+					Err           error
+				}{
+					"zone1-0000000100": {
+						PrimaryStatus: &replicationdatapb.PrimaryStatus{
+							Position:      "primary-position-100",
+							ServerVersion: "Ver 8.0.35",
+						},
+					},
+				},
+				stopReplicationAndGetStatusResults: map[string]*struct {
+					StopStatus *replicationdatapb.StopReplicationStatus
+					Err        error
+				}{
+					"zone1-0000000100": {
+						Err: vterrors.ToGRPC(vterrors.Wrap(mysql.ErrNotReplica, "before status failed")),
+					},
+					"zone1-0000000101": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{
+								Position:      "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429101:1-5",
+								IoState:       int32(replication.ReplicationStateRunning),
+								SqlState:      int32(replication.ReplicationStateRunning),
+								ServerVersion: "Ver 8.0.35",
+							},
+							After: &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429101:1-9"},
+						},
+					},
+				},
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Type: topodatapb.TabletType_PRIMARY,
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+					},
+				},
+				"zone1-0000000101": {
+					Tablet: &topodatapb.Tablet{
+						Type: topodatapb.TabletType_REPLICA,
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  101,
+						},
+					},
+				},
+			},
+			primaryAlias: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  100,
+			},
+			ignoredTablets: sets.New[string](),
+			expectedStatusMap: map[string]*replicationdatapb.StopReplicationStatus{
+				"zone1-0000000101": {
+					Before: &replicationdatapb.Status{
+						Position:      "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429101:1-5",
+						IoState:       int32(replication.ReplicationStateRunning),
+						SqlState:      int32(replication.ReplicationStateRunning),
+						ServerVersion: "Ver 8.0.35",
+					},
+					After: &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429101:1-9"},
+				},
+			},
+			expectedTakingBackup: map[string]bool{"zone1-0000000101": false},
+			expectedPrimaryStatusMap: map[string]*replicationdatapb.PrimaryStatus{
+				"zone1-0000000100": {
+					Position:      "primary-position-100",
+					ServerVersion: "Ver 8.0.35",
+				},
+			},
+			expectedMysqlVersions: map[string]mysqlctl.ServerVersion{
+				"zone1-0000000100": {Major: 8, Minor: 0, Patch: 35},
+				"zone1-0000000101": {Major: 8, Minor: 0, Patch: 35},
 			},
 			expectedTabletsReachable: []*topodatapb.Tablet{{
 				Type: topodatapb.TabletType_REPLICA,
@@ -1518,6 +1781,9 @@ func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {
 				assert.True(t, topoproto.IsTabletInList(tablet, tt.expectedTabletsReachable), "TabletsReached[%d] not found - %s", idx, topoproto.TabletAliasString(tablet.Alias))
 			}
 			assert.Equal(t, tt.expectedTakingBackup, res.tabletsBackupState)
+			if tt.expectedMysqlVersions != nil {
+				assert.Equal(t, tt.expectedMysqlVersions, res.mysqlVersions, "mysqlVersions mismatch")
+			}
 		})
 	}
 }

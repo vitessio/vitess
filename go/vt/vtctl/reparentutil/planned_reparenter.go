@@ -318,10 +318,32 @@ func (pr *PlannedReparenter) performGracefulPromotion(
 
 func (pr *PlannedReparenter) performInitialPromotion(
 	ctx context.Context,
+	keyspace string,
+	shard string,
 	primaryElect *topodatapb.Tablet,
+	tabletMap map[string]*topo.TabletInfo,
+	primaryElectExplicit bool,
 	opts PlannedReparentOptions,
 ) (string, error) {
 	primaryElectAliasStr := topoproto.TabletAliasString(primaryElect.Alias)
+
+	// Unlike the other PRS paths, initial promotion calls InitPrimary directly and
+	// never catches the primary-elect up to another tablet's position — there is no
+	// current primary to catch up to. The election may have preferred this candidate
+	// on a tiebreaker (e.g. MySQL version) even though a peer is more advanced, so we
+	// must confirm the elect contains every reachable tablet's transactions before
+	// promoting it; otherwise InitPrimary would silently discard the transactions only
+	// the peer holds. This mirrors the dominance check performPotentialPromotion runs
+	// on the no-clear-primary path. Position.AtLeast also rejects incomparable GTID
+	// sets, so a divergent peer fails the check rather than being silently dropped.
+	if err := pr.checkPrimaryElectContainsAllPositions(ctx, primaryElect, tabletMap, primaryElectExplicit); err != nil {
+		return "", err
+	}
+
+	if err := topo.CheckShardLocked(ctx, keyspace, shard); err != nil {
+		return "", vterrors.Wrap(err, lostTopologyLockMsg)
+	}
+
 	promoteCtx, promoteCancel := context.WithTimeout(ctx, opts.WaitReplicasTimeout)
 	defer promoteCancel()
 
@@ -345,6 +367,134 @@ func (pr *PlannedReparenter) performInitialPromotion(
 	}
 
 	return rp, nil
+}
+
+// checkPrimaryElectContainsAllPositions verifies that the primary-elect's
+// replication position is at least as advanced as every other reachable tablet's,
+// so that promoting it (via InitPrimary, with no catch-up) cannot discard
+// transactions another tablet holds. It returns an error if any tablet has a
+// position the elect does not contain, including a position that is incomparable
+// with the elect's (divergent GTID history). It also fails closed on file-position
+// (non-GTID) tablets, whose per-tablet binlog coordinates cannot be compared across
+// tablets to establish containment.
+func (pr *PlannedReparenter) checkPrimaryElectContainsAllPositions(
+	ctx context.Context,
+	primaryElect *topodatapb.Tablet,
+	tabletMap map[string]*topo.TabletInfo,
+	primaryElectExplicit bool,
+) error {
+	primaryElectAliasStr := topoproto.TabletAliasString(primaryElect.Alias)
+
+	// Fetch every tablet's position concurrently under one shared timeout. The
+	// calls run in parallel, so each RPC gets the full RemoteOperationTimeout to
+	// respond rather than draining a single budget sequentially — a slow-but-healthy
+	// tablet, or a shard with many tablets, must not make later lookups inherit an
+	// already-expired deadline. Unlike performPotentialPromotion, this reads the
+	// position without demoting: on this path no primary has ever existed, so
+	// nothing is accepting writes and there is no "stop the world" to perform.
+	posCtx, posCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
+	defer posCancel()
+
+	var (
+		mu        sync.Mutex
+		wg        sync.WaitGroup
+		rec       concurrency.AllErrorRecorder
+		positions = make(map[string]replication.Position, len(tabletMap))
+	)
+
+	for alias, tabletInfo := range tabletMap {
+		if tabletInfo.Type == topodatapb.TabletType_RESTORE {
+			continue
+		}
+
+		wg.Add(1)
+		go func(alias string, tablet *topodatapb.Tablet) {
+			defer wg.Done()
+
+			posStr, err := pr.tmc.PrimaryPosition(posCtx, tablet)
+			if err != nil {
+				rec.RecordError(vterrors.Wrapf(err, "cannot get replication position of tablet %v; all tablets must be reachable to safely promote primary-elect %v during initial promotion", alias, primaryElectAliasStr))
+				return
+			}
+			pos, err := replication.DecodePosition(posStr)
+			if err != nil {
+				rec.RecordError(vterrors.Wrapf(err, "cannot decode replication position (%v) for tablet %v", posStr, alias))
+				return
+			}
+
+			mu.Lock()
+			positions[alias] = pos
+			mu.Unlock()
+		}(alias, tabletInfo.Tablet)
+	}
+
+	wg.Wait()
+
+	if rec.HasErrors() {
+		return rec.Error()
+	}
+
+	return verifyPrimaryElectDominates(primaryElectAliasStr, positions, primaryElectExplicit)
+}
+
+// verifyPrimaryElectDominates returns an error unless the primary-elect's
+// position is at least as advanced as every other position in positions, so that
+// promoting it cannot discard transactions another tablet holds. A position that
+// is incomparable with the elect's (divergent GTID history) also fails, since
+// AtLeast is false for it. positions must include the primary-elect's own alias.
+// Shared by the initial-promotion and potential-promotion paths, both of which
+// promote without catching the elect up to a source first.
+//
+// It fails closed on file-position (non-GTID) positions: these are each tablet's
+// own SHOW BINARY LOG STATUS coordinates, whose file names and offsets are local
+// to a tablet and not comparable across tablets. Feeding them to AtLeast would
+// produce a meaningless verdict that could wave through a promotion discarding a
+// peer's transactions. An empty position (a genuinely fresh tablet on a
+// never-initialized shard) carries no FilePosGTID and is still safe to compare, so
+// GTID and fresh-init promotions are unaffected.
+//
+// primaryElectExplicit reports whether the operator named this primary via
+// --new-primary. Because these paths can't compare file positions across tablets,
+// the file-position rejection is the operator's escape hatch: when they explicitly
+// chose the primary, we honor that choice and skip it (the standard PRS contract
+// for promoting a non-GTID shard). It does not relax the GTID dominance check,
+// which remains a real data-loss safeguard the explicit alias must still pass.
+func verifyPrimaryElectDominates(primaryElectAliasStr string, positions map[string]replication.Position, primaryElectExplicit bool) error {
+	electPos, ok := positions[primaryElectAliasStr]
+	if !ok {
+		return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "primary-elect tablet %v not found in tablet map", primaryElectAliasStr)
+	}
+
+	for alias, pos := range positions {
+		// The elect's own position is never compared against itself. Skip it first, so
+		// a single-candidate non-GTID shard (only the elect) is not rejected by the
+		// file-position check below — that check is about cross-tablet incomparability,
+		// and there are no peers to compare against here.
+		if alias == primaryElectAliasStr {
+			continue
+		}
+
+		if _, isFilePos := pos.GTIDSet.(replication.FilePosGTID); isFilePos {
+			// File positions are each tablet's own binlog coordinates, not comparable
+			// across tablets, so a dominance verdict on them is meaningless. Without an
+			// explicit primary we fail closed; with one, the operator has taken
+			// responsibility for the choice, so we skip this tablet entirely — both the
+			// rejection and the (equally meaningless) AtLeast comparison below.
+			if primaryElectExplicit {
+				continue
+			}
+			return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "cannot verify primary-elect %v contains all transactions: tablet %v reports a file-position replication position (%v), which is not comparable across tablets; specify an explicit primary to promote", primaryElectAliasStr, alias, replication.EncodePosition(pos))
+		}
+
+		// GTID positions are globally comparable: even with an explicit primary the
+		// elect must still contain every peer's transactions (the design doc forbids
+		// NewPrimaryAlias from bypassing this data-loss safeguard).
+		if !electPos.AtLeast(pos) {
+			return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "tablet %v (position: %v) contains transactions not found in primary-elect %v (position: %v)", alias, pos, primaryElectAliasStr, electPos)
+		}
+	}
+
+	return nil
 }
 
 func (pr *PlannedReparenter) performPartialPromotionRecovery(ctx context.Context, primaryElect *topodatapb.Tablet) (string, error) {
@@ -378,6 +528,7 @@ func (pr *PlannedReparenter) performPotentialPromotion(
 	shard string,
 	primaryElect *topodatapb.Tablet,
 	tabletMap map[string]*topo.TabletInfo,
+	primaryElectExplicit bool,
 ) error {
 	primaryElectAliasStr := topoproto.TabletAliasString(primaryElect.Alias)
 
@@ -460,14 +611,6 @@ func (pr *PlannedReparenter) performPotentialPromotion(
 	}
 
 	// Construct a mapping of alias to tablet position.
-	tabletPosMap := make(map[string]tabletPos, len(tabletMap))
-	for tp := range positions {
-		tabletPosMap[tp.alias] = tp
-	}
-
-	// Make sure no tablet has a more advanced position than the candidate
-	// primary. It's up to the caller to choose a suitable candidate, and to
-	// choose another if this check fails.
 	//
 	// Note that we still allow replication to run during this time, but we
 	// assume that no new high water mark can appear because we just demoted all
@@ -475,23 +618,16 @@ func (pr *PlannedReparenter) performPotentialPromotion(
 	//
 	// TODO: consider temporarily replicating from another tablet to catch up,
 	// if the candidate primary is behind that tablet.
-	tp, ok := tabletPosMap[primaryElectAliasStr]
-	if !ok {
-		return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "primary-elect tablet %v not found in tablet map", primaryElectAliasStr)
+	positionMap := make(map[string]replication.Position, len(tabletMap))
+	for tp := range positions {
+		positionMap[tp.alias] = tp.pos
 	}
 
-	primaryElectPos := tp.pos
-
-	for _, tp := range tabletPosMap {
-		// The primary-elect pos has to be at least as advanced as every tablet
-		// in the shard.
-		if !primaryElectPos.AtLeast(tp.pos) {
-			return vterrors.Errorf(
-				vtrpc.Code_FAILED_PRECONDITION,
-				"tablet %v (position: %v) contains transactions not found in primary-elect %v (position: %v)",
-				tp.alias, tp.pos, primaryElectAliasStr, primaryElectPos,
-			)
-		}
+	// Make sure no tablet has a more advanced position than the candidate
+	// primary. It's up to the caller to choose a suitable candidate, and to
+	// choose another if this check fails.
+	if err := verifyPrimaryElectDominates(primaryElectAliasStr, positionMap, primaryElectExplicit); err != nil {
+		return err
 	}
 
 	// Check that we still have the topology lock.
@@ -544,6 +680,13 @@ func (pr *PlannedReparenter) reparentShardLocked(
 	if err != nil {
 		return err
 	}
+
+	// Capture whether the operator explicitly requested a specific primary before
+	// preflightChecks overwrites opts.NewPrimaryAlias with the elected candidate.
+	// An explicit request is the operator's informed choice and is allowed to
+	// bypass the file-position "can't compare across tablets" fail-closed check
+	// below (it is not allowed to bypass real GTID dominance safety).
+	primaryElectExplicit := opts.NewPrimaryAlias != nil
 
 	// Check invariants that PlannedReparentShard depends on.
 	if isNoop, err := pr.preflightChecks(ctx, ev, tabletMap, innodbBufferPoolData, &opts); err != nil {
@@ -607,12 +750,12 @@ func (pr *PlannedReparenter) reparentShardLocked(
 	case currentPrimary == nil && ev.ShardInfo.PrimaryTermStartTime == nil:
 		// Case (1): no primary has been elected ever. Initialize
 		// the primary-elect tablet
-		reparentJournalPos, err = pr.performInitialPromotion(ctx, ev.NewPrimary, opts)
+		reparentJournalPos, err = pr.performInitialPromotion(ctx, keyspace, shard, ev.NewPrimary, tabletMap, primaryElectExplicit, opts)
 		needsRefresh = true
 	case currentPrimary == nil && ev.ShardInfo.PrimaryTermStartTime != nil:
 		// Case (2): no clear current primary. Try to find a safe promotion
 		// candidate, and promote to it.
-		err = pr.performPotentialPromotion(ctx, keyspace, shard, ev.NewPrimary, tabletMap)
+		err = pr.performPotentialPromotion(ctx, keyspace, shard, ev.NewPrimary, tabletMap, primaryElectExplicit)
 		// We need to call `PromoteReplica` when we reparent the tablets.
 		promoteReplicaRequired = true
 	case topoproto.TabletAliasEqual(currentPrimary.Alias, opts.NewPrimaryAlias):

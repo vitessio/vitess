@@ -41,6 +41,7 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sets"
 	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -4364,6 +4365,246 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 			shouldErr:        true,
 			errShouldContain: "no valid candidates for emergency reparent",
 		},
+		{
+			// Regression: a MariaDB candidate (uid 102) is dropped by findErrantGTIDs
+			// for an errant GTID, leaving MySQL-only survivors (100 at 8.4, 101 at
+			// 8.0) at equal position. The version guard must be scoped to the reduced
+			// candidate set — {100, 101}, both MySQL — so version-aware election still
+			// runs and promotes the lower version (101). If the guard operated over
+			// the full reachable set (which still includes the MariaDB 102), it would
+			// see mixed families, disable version ordering, and the tie would fall to
+			// the alias tiebreak, promoting 100 — whose PromoteReplica is not mocked,
+			// so the reparent would error. In other words, this case only succeeds if
+			// ERS passes the post-findErrantGTIDs reduced set to the election.
+			name:       "errant-GTID drop leaves same-family survivors that still get version ordering",
+			durability: policy.DurabilityNone,
+			// 102 is the most advanced on Combined (it carries the errant GTID), so it is
+			// the leader ERS waits on first; once errant-GTID detection drops it, ERS
+			// re-waits on the surviving 100/101, which needs a wait budget.
+			emergencyReparentOps: EmergencyReparentOptions{WaitReplicasTimeout: time.Second * 30},
+			tmc: &testutil.TabletManagerClient{
+				// Only 101 (the expected winner) can be promoted; if 100 were elected,
+				// PromoteReplica would return an error and the test would fail.
+				PopulateReparentJournalResults: map[string]error{
+					"zone1-0000000101": nil,
+				},
+				PromoteReplicaResults: map[string]struct {
+					Result string
+					Error  error
+				}{
+					"zone1-0000000101": {Result: "ok", Error: nil},
+				},
+				SetReplicationSourceResults: map[string]error{
+					"zone1-0000000100": nil,
+					"zone1-0000000102": nil,
+				},
+				ReadReparentJournalInfoResults: map[string]int32{
+					"zone1-0000000100": 3,
+					"zone1-0000000101": 3,
+					"zone1-0000000102": 3,
+				},
+				StopReplicationAndGetStatusResults: map[string]struct {
+					StopStatus *replicationdatapb.StopReplicationStatus
+					Error      error
+				}{
+					// 100: MySQL 8.4, same position as 101.
+					"zone1-0000000100": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning), ServerVersion: "Ver 8.4.0"},
+							After: &replicationdatapb.Status{
+								SourceUuid:       "00000000-0000-0000-0000-000000000001",
+								RelayLogPosition: getRelayLogPosition("1-20"),
+							},
+						},
+					},
+					// 101: MySQL 8.0 (lower version), same position as 100 -> should win.
+					"zone1-0000000101": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning), ServerVersion: "Ver 8.0.35"},
+							After: &replicationdatapb.Status{
+								SourceUuid:       "00000000-0000-0000-0000-000000000001",
+								RelayLogPosition: getRelayLogPosition("1-20"),
+							},
+						},
+					},
+					// 102: MariaDB, carries an errant GTID (u2:1-5 that no one else has)
+					// -> dropped by findErrantGTIDs before the election. Only its flavor
+					// (mariadb) matters here — the parsed version is never compared
+					// because the tablet is dropped. The version string is the
+					// @@global.version form ERS actually sees in production.
+					"zone1-0000000102": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning), ServerVersion: "Ver 10.6.16-MariaDB-1:10.6.16+maria~ubu2004"},
+							After: &replicationdatapb.Status{
+								SourceUuid:       "00000000-0000-0000-0000-000000000001",
+								RelayLogPosition: getRelayLogPosition("1-20", "1-5"),
+							},
+						},
+					},
+				},
+				WaitForPositionResults: map[string]map[string]error{
+					"zone1-0000000100": {getRelayLogPosition("1-20"): nil},
+					"zone1-0000000101": {getRelayLogPosition("1-20"): nil},
+					"zone1-0000000102": {getRelayLogPosition("1-20", "1-5"): nil},
+				},
+			},
+			shards: []*vtctldatapb.Shard{
+				{
+					Keyspace: "testkeyspace",
+					Name:     "-",
+					Shard: &topodatapb.Shard{
+						PrimaryAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+					},
+				},
+			},
+			tablets: []*topodatapb.Tablet{
+				{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}, Keyspace: "testkeyspace", Shard: "-"},
+				{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101}, Keyspace: "testkeyspace", Shard: "-"},
+				{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 102}, Keyspace: "testkeyspace", Shard: "-"},
+			},
+			keyspace:  "testkeyspace",
+			shard:     "-",
+			cells:     []string{"zone1"},
+			shouldErr: false,
+		},
+		{
+			// An idle MySQL-GTID shard with no transactions yet: both candidates report
+			// empty positions (which decode to nil GTID sets, so FindPositionsOfAllCandidates
+			// classifies the shard as non-GTID) but UsingGtid is true and both are MySQL.
+			// Version-aware election must still fire so the lower-version tablet wins;
+			// otherwise the tie would fall through to the alias tiebreak and elect 100.
+			// Winner-gating: only 101 (the expected winner) can be promoted, so if the
+			// version gate is removed and 100 is elected, promotion fails and so does the test.
+			name:       "empty MySQL-GTID shard still gets version ordering",
+			durability: policy.DurabilityNone,
+			tmc: &testutil.TabletManagerClient{
+				PopulateReparentJournalResults: map[string]error{
+					"zone1-0000000101": nil,
+				},
+				PromoteReplicaResults: map[string]struct {
+					Result string
+					Error  error
+				}{
+					"zone1-0000000101": {Result: "ok", Error: nil},
+				},
+				SetReplicationSourceResults: map[string]error{
+					"zone1-0000000100": nil,
+				},
+				StopReplicationAndGetStatusResults: map[string]struct {
+					StopStatus *replicationdatapb.StopReplicationStatus
+					Error      error
+				}{
+					// 100: MySQL 8.4, empty position, GTID enabled.
+					"zone1-0000000100": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning), ServerVersion: "Ver 8.4.0"},
+							After:  &replicationdatapb.Status{UsingGtid: true},
+						},
+					},
+					// 101: MySQL 8.0 (lower version), empty position, GTID enabled -> should win.
+					"zone1-0000000101": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning), ServerVersion: "Ver 8.0.35"},
+							After:  &replicationdatapb.Status{UsingGtid: true},
+						},
+					},
+				},
+				// Non-GTID wait path (empty positions) waits on every candidate for the
+				// empty applied position.
+				WaitForPositionResults: map[string]map[string]error{
+					"zone1-0000000100": {"": nil},
+					"zone1-0000000101": {"": nil},
+				},
+			},
+			shards: []*vtctldatapb.Shard{
+				{
+					Keyspace: "testkeyspace",
+					Name:     "-",
+					Shard: &topodatapb.Shard{
+						PrimaryAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+					},
+				},
+			},
+			tablets: []*topodatapb.Tablet{
+				{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}, Keyspace: "testkeyspace", Shard: "-"},
+				{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101}, Keyspace: "testkeyspace", Shard: "-"},
+			},
+			keyspace:  "testkeyspace",
+			shard:     "-",
+			cells:     []string{"zone1"},
+			shouldErr: false,
+		},
+		{
+			// Empty MySQL-GTID shard where the lower-version candidate is a reachable
+			// former primary (demoted into primaryStatusMap, so it has no replica
+			// status and no UsingGtid). Version ordering must still fire and elect the
+			// equally-advanced 8.0 former primary over the empty 8.4 replica.
+			//
+			// The 8.0 former primary is the *higher* alias (uid 101) and the 8.4 replica
+			// the lower (uid 100), so with version ordering off the election would fall
+			// to the alias tiebreak and pick the 8.4 (uid 100). Winner-gating to 101
+			// therefore only passes when version ordering actually stays on.
+			name:       "empty MySQL-GTID shard elects lower-version former primary",
+			durability: policy.DurabilityNone,
+			tmc: &testutil.TabletManagerClient{
+				PopulateReparentJournalResults: map[string]error{
+					"zone1-0000000101": nil,
+				},
+				PromoteReplicaResults: map[string]struct {
+					Result string
+					Error  error
+				}{
+					"zone1-0000000101": {Result: "ok", Error: nil},
+				},
+				SetReplicationSourceResults: map[string]error{
+					"zone1-0000000100": nil,
+				},
+				DemotePrimaryResults: map[string]struct {
+					Status *replicationdatapb.PrimaryStatus
+					Error  error
+				}{
+					// 101: reachable former primary, MySQL 8.0 (lower version), empty
+					// position -> should win once version ordering stays on.
+					"zone1-0000000101": {
+						Status: &replicationdatapb.PrimaryStatus{ServerVersion: "Ver 8.0.35"},
+					},
+				},
+				StopReplicationAndGetStatusResults: map[string]struct {
+					StopStatus *replicationdatapb.StopReplicationStatus
+					Error      error
+				}{
+					// 100: MySQL 8.4 replica, empty position, GTID enabled.
+					"zone1-0000000100": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning), ServerVersion: "Ver 8.4.0"},
+							After:  &replicationdatapb.Status{UsingGtid: true},
+						},
+					},
+					// 101 claims PRIMARY, so it is demoted into primaryStatusMap.
+					"zone1-0000000101": {Error: mysql.ErrNotReplica},
+				},
+				WaitForPositionResults: map[string]map[string]error{
+					"zone1-0000000100": {"": nil},
+				},
+			},
+			shards: []*vtctldatapb.Shard{
+				{
+					Keyspace: "testkeyspace",
+					Name:     "-",
+					Shard: &topodatapb.Shard{
+						PrimaryAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
+					},
+				},
+			},
+			tablets: []*topodatapb.Tablet{
+				{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}, Keyspace: "testkeyspace", Shard: "-"},
+				{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101}, Keyspace: "testkeyspace", Shard: "-"},
+			},
+			keyspace:  "testkeyspace",
+			shard:     "-",
+			cells:     []string{"zone1"},
+			shouldErr: false,
+		},
 	}
 
 	for _, tt := range tests {
@@ -6646,6 +6887,8 @@ func TestEmergencyReparenter_findMostAdvanced(t *testing.T) {
 		name                 string
 		validCandidates      map[string]*RelayLogPositions
 		tabletMap            map[string]*topo.TabletInfo
+		versionMap           map[string]mysqlctl.ServerVersion
+		flavorMap            map[string]mysqlctl.MySQLFlavor
 		emergencyReparentOps EmergencyReparentOptions
 		result               *topodatapb.Tablet
 		err                  string
@@ -6982,6 +7225,153 @@ func TestEmergencyReparenter_findMostAdvanced(t *testing.T) {
 				},
 			},
 			err: "split brain detected between servers",
+		}, {
+			name: "lower MySQL version preferred when positions are equal",
+			validCandidates: map[string]*RelayLogPositions{
+				"zone1-0000000100": positionMostAdvanced,
+				"zone1-0000000101": positionMostAdvanced,
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+				"zone1-0000000101": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  101,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+			},
+			versionMap: map[string]mysqlctl.ServerVersion{
+				"zone1-0000000100": {Major: 8, Minor: 4, Patch: 0},
+				"zone1-0000000101": {Major: 8, Minor: 0, Patch: 35},
+			},
+			result: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  101,
+				},
+			},
+		}, {
+			// Mixed flavor families disable version-aware intermediate-source
+			// selection: MariaDB 10.6 (uid 100) and MySQL 8.4 (uid 101) at equal
+			// position. Without the flavor guard, findMostAdvanced would compute
+			// 8.4 < 10.6 and prefer the MySQL tablet; with it, version ordering is
+			// skipped and the tie falls through to the stable alias tiebreak (uid
+			// 100 sorts first).
+			name: "mixed flavor families skip version-aware selection",
+			validCandidates: map[string]*RelayLogPositions{
+				"zone1-0000000100": positionMostAdvanced,
+				"zone1-0000000101": positionMostAdvanced,
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+						Type:  topodatapb.TabletType_REPLICA,
+					},
+				},
+				"zone1-0000000101": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
+						Type:  topodatapb.TabletType_REPLICA,
+					},
+				},
+			},
+			versionMap: map[string]mysqlctl.ServerVersion{
+				"zone1-0000000100": {Major: 10, Minor: 6},
+				"zone1-0000000101": {Major: 8, Minor: 4, Patch: 0},
+			},
+			flavorMap: map[string]mysqlctl.MySQLFlavor{
+				"zone1-0000000100": mysqlctl.FlavorMariaDB,
+				"zone1-0000000101": mysqlctl.FlavorMySQL,
+			},
+			result: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+		}, {
+			name: "same MySQL version falls through to position",
+			validCandidates: map[string]*RelayLogPositions{
+				"zone1-0000000100": positionMostAdvanced,
+				"zone1-0000000101": positionAlmostMostAdvanced,
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+				"zone1-0000000101": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  101,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+			},
+			versionMap: map[string]mysqlctl.ServerVersion{
+				"zone1-0000000100": {Major: 8, Minor: 0, Patch: 35},
+				"zone1-0000000101": {Major: 8, Minor: 0, Patch: 35},
+			},
+			result: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+		}, {
+			name: "unknown MySQL version sorts last",
+			validCandidates: map[string]*RelayLogPositions{
+				"zone1-0000000100": positionMostAdvanced,
+				"zone1-0000000101": positionMostAdvanced,
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+				"zone1-0000000101": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  101,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+			},
+			versionMap: map[string]mysqlctl.ServerVersion{
+				"zone1-0000000101": {Major: 8, Minor: 0, Patch: 35},
+			},
+			result: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  101,
+				},
+			},
 		},
 	}
 
@@ -6992,7 +7382,7 @@ func TestEmergencyReparenter_findMostAdvanced(t *testing.T) {
 			erp := NewEmergencyReparenter(nil, nil, logutil.NewMemoryLogger())
 
 			test.emergencyReparentOps.durability = durability
-			winningTablet, _, err := erp.findMostAdvanced(test.validCandidates, test.tabletMap, test.emergencyReparentOps)
+			winningTablet, _, err := erp.findMostAdvanced(test.validCandidates, test.tabletMap, test.versionMap, test.flavorMap, test.emergencyReparentOps)
 			if test.err != "" {
 				require.Error(t, err)
 				assert.Contains(t, err.Error(), test.err)
@@ -8118,6 +8508,8 @@ func TestEmergencyReparenter_identifyPrimaryCandidate(t *testing.T) {
 		intermediateSource   *topodatapb.Tablet
 		validCandidates      []*topodatapb.Tablet
 		tabletMap            map[string]*topo.TabletInfo
+		versionMap           map[string]mysqlctl.ServerVersion
+		flavorMap            map[string]mysqlctl.MySQLFlavor
 		err                  string
 		result               *topodatapb.Tablet
 	}{
@@ -8297,6 +8689,52 @@ func TestEmergencyReparenter_identifyPrimaryCandidate(t *testing.T) {
 					Uid:  102,
 				},
 			},
+		}, {
+			// Same-family (MySQL) candidates at the same promotion tier: the final
+			// election prefers the lower version, promoting zone1-101 (8.0) over the
+			// 8.4 intermediate source.
+			name:               "lower version preferred among same-family candidates",
+			intermediateSource: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}},
+			validCandidates: []*topodatapb.Tablet{
+				{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}},
+				{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101}},
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}}},
+				"zone1-0000000101": {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101}}},
+			},
+			versionMap: map[string]mysqlctl.ServerVersion{
+				"zone1-0000000100": {Major: 8, Minor: 4, Patch: 0},
+				"zone1-0000000101": {Major: 8, Minor: 0, Patch: 35},
+			},
+			result: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101}},
+		}, {
+			// Regression for the mixed-flavor-family case. The intermediate source is
+			// the MariaDB tablet (10.6, uid 100); the other candidate is MySQL 8.4
+			// (uid 101). identifyPrimaryCandidate is given the raw (unguarded) version
+			// and flavor maps, so its internal scopedVersionMap must detect the mixed
+			// families and disable version comparison. Without that guard, findCandidate
+			// would compute 8.4 < 10.6 and pull the election to the MySQL tablet — the
+			// incompatible choice; with it, the MariaDB intermediate source is kept.
+			name:               "mixed flavor families disable version comparison in final election",
+			intermediateSource: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}},
+			validCandidates: []*topodatapb.Tablet{
+				{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}}, // MariaDB 10.6 (intermediate source)
+				{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101}}, // MySQL 8.4
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}}},
+				"zone1-0000000101": {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101}}},
+			},
+			versionMap: map[string]mysqlctl.ServerVersion{
+				"zone1-0000000100": {Major: 10, Minor: 6},
+				"zone1-0000000101": {Major: 8, Minor: 4, Patch: 0},
+			},
+			flavorMap: map[string]mysqlctl.MySQLFlavor{
+				"zone1-0000000100": mysqlctl.FlavorMariaDB,
+				"zone1-0000000101": mysqlctl.FlavorMySQL,
+			},
+			result: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}},
 		},
 	}
 
@@ -8307,7 +8745,7 @@ func TestEmergencyReparenter_identifyPrimaryCandidate(t *testing.T) {
 			logger := logutil.NewMemoryLogger()
 
 			erp := NewEmergencyReparenter(nil, nil, logger)
-			res, err := erp.identifyPrimaryCandidate(test.intermediateSource, test.validCandidates, test.tabletMap, test.emergencyReparentOps)
+			res, err := erp.identifyPrimaryCandidate(test.intermediateSource, test.validCandidates, test.tabletMap, test.versionMap, test.flavorMap, test.emergencyReparentOps)
 			if test.err != "" {
 				assert.EqualError(t, err, test.err)
 				return
@@ -9522,7 +9960,7 @@ func TestEmergencyReparenterFindErrantGTIDs(t *testing.T) {
 			dp, err := policy.GetDurabilityPolicy(policy.DurabilitySemiSync)
 			require.NoError(t, err)
 			ers := EmergencyReparenter{logger: logutil.NewCallbackLogger(func(*logutilpb.Event) {})}
-			winningPrimary, _, err := ers.findMostAdvanced(candidates, tt.tabletMap, EmergencyReparentOptions{durability: dp})
+			winningPrimary, _, err := ers.findMostAdvanced(candidates, tt.tabletMap, nil, nil, EmergencyReparentOptions{durability: dp})
 			require.NoError(t, err)
 			require.True(t, slices.Contains(tt.wantMostAdvancedPossible, winningPrimary.Hostname), winningPrimary.Hostname)
 		})
@@ -9615,4 +10053,194 @@ func TestEmergencyReparenterFindErrantGTIDs_NilPosition(t *testing.T) {
 	// the nil peer at maxLen contributed no evidence, so the surviving candidate was
 	// accepted without any comparison
 	assert.ElementsMatch(t, []string{"zone1-0000000102"}, starved)
+}
+
+// TestEmergencyReparenter_findMostAdvanced_versionTiebreakerAfterCatchUp is a
+// regression test for the case where a lower-version candidate has the same
+// combined relay-log position as a higher-version candidate but a lower pre-wait
+// executed position. After the relay-log wait, applyRelayLogsAndReconcile bumps
+// each applied candidate's Executed up to its Combined position, so both compare
+// equal and the MySQL version tiebreaker must select the lower-version tablet
+// rather than the one that merely looked more advanced before catch-up.
+//
+// This is GTID-only: version-aware election is restricted to GTID-based
+// (MySQL/Percona) shards, which is also the only path applyRelayLogsAndReconcile
+// reconciles.
+func TestEmergencyReparenter_findMostAdvanced_versionTiebreakerAfterCatchUp(t *testing.T) {
+	// The relay log holds GTIDs through sequence 10; executedBehind has applied
+	// only through sequence 5, so it is a proper subset of the combined position.
+	combined := mustPosition(t, "3e11fa47-71ca-11e1-9e33-c80aa9429562:1-10")
+	executedFull := combined
+	executedBehind := mustPosition(t, "3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5")
+
+	// olderReplica: lower version, SQL thread behind pre-wait.
+	// newerReplica: higher version, fully applied pre-wait.
+	// Both have the same combined relay-log position.
+	validCandidates := map[string]*RelayLogPositions{
+		"zone1-0000000100": {Combined: combined, Executed: executedBehind},
+		"zone1-0000000101": {Combined: combined, Executed: executedFull},
+	}
+	tabletMap := map[string]*topo.TabletInfo{
+		"zone1-0000000100": {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}, Type: topodatapb.TabletType_REPLICA}},
+		"zone1-0000000101": {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101}, Type: topodatapb.TabletType_REPLICA}},
+	}
+	versionMap := map[string]mysqlctl.ServerVersion{
+		"zone1-0000000100": {Major: 8, Minor: 0, Patch: 35},
+		"zone1-0000000101": {Major: 8, Minor: 4, Patch: 0},
+	}
+
+	durability, err := policy.GetDurabilityPolicy(policy.DurabilityNone)
+	require.NoError(t, err)
+
+	// Before the relay-log wait, the newer tablet looks more advanced on Executed
+	// and would be chosen as the intermediate source.
+	erpBefore := NewEmergencyReparenter(nil, nil, logutil.NewMemoryLogger())
+	intermediateSource, _, err := erpBefore.findMostAdvanced(validCandidates, tabletMap, versionMap, nil, EmergencyReparentOptions{durability: durability})
+	require.NoError(t, err)
+	require.True(t, topoproto.TabletAliasEqual(intermediateSource.Alias, &topodatapb.TabletAlias{Cell: "zone1", Uid: 101}))
+
+	// Both candidates' SQL threads catch up to the combined relay-log position
+	// during the wait, which reconciles their Executed up to Combined. After that,
+	// positions are equal and the version tiebreaker selects the lower-version tablet.
+	combinedStr := replication.EncodePosition(combined)
+	statusMap := map[string]*replicationdatapb.StopReplicationStatus{
+		"zone1-0000000100": {After: &replicationdatapb.Status{RelayLogPosition: combinedStr}},
+		"zone1-0000000101": {After: &replicationdatapb.Status{RelayLogPosition: combinedStr}},
+	}
+	tmc := &testutil.TabletManagerClient{
+		WaitForPositionResults: map[string]map[string]error{
+			"zone1-0000000100": {combinedStr: nil},
+			"zone1-0000000101": {combinedStr: nil},
+		},
+	}
+	erp := NewEmergencyReparenter(nil, tmc, logutil.NewMemoryLogger())
+	reconciled, _, err := erp.applyRelayLogsAndReconcile(t.Context(), validCandidates, validCandidates, tabletMap, statusMap, 30*time.Second, true /* requireAll */, true /* isGTIDBased */)
+	require.NoError(t, err)
+
+	intermediateSource, _, err = erp.findMostAdvanced(reconciled, tabletMap, versionMap, nil, EmergencyReparentOptions{durability: durability})
+	require.NoError(t, err)
+	require.True(t, topoproto.TabletAliasEqual(intermediateSource.Alias, &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}))
+}
+
+// TestIsEmptyMysqlGTIDShard verifies the detection of a MySQL-GTID shard that has
+// no transactions yet (all positions empty), which FindPositionsOfAllCandidates
+// reports as non-GTID but which should still keep version-aware election on.
+func TestIsEmptyMysqlGTIDShard(t *testing.T) {
+	const a1, a2 = "zone1-0000000100", "zone1-0000000101"
+
+	// emptyPos is a zero RelayLogPositions, i.e. IsZero() == true, as produced by
+	// decoding an empty ("") position on a GTID shard with no transactions yet.
+	emptyPos := func() *RelayLogPositions { return &RelayLogPositions{} }
+	nonEmptyPos := func(t *testing.T) *RelayLogPositions {
+		return &RelayLogPositions{Combined: mustPosition(t, "3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5")}
+	}
+	gtidStatus := func(using bool) *replicationdatapb.StopReplicationStatus {
+		return &replicationdatapb.StopReplicationStatus{After: &replicationdatapb.Status{UsingGtid: using}}
+	}
+
+	tests := []struct {
+		name       string
+		candidates map[string]*RelayLogPositions
+		statusMap  map[string]*replicationdatapb.StopReplicationStatus
+		primaryMap map[string]*replicationdatapb.PrimaryStatus
+		flavors    map[string]mysqlctl.MySQLFlavor
+		want       bool
+	}{
+		{
+			name:       "all empty, GTID on, MySQL/Percona -> true",
+			candidates: map[string]*RelayLogPositions{a1: emptyPos(), a2: emptyPos()},
+			statusMap:  map[string]*replicationdatapb.StopReplicationStatus{a1: gtidStatus(true), a2: gtidStatus(true)},
+			flavors:    map[string]mysqlctl.MySQLFlavor{a1: mysqlctl.FlavorMySQL, a2: mysqlctl.FlavorPercona},
+			want:       true,
+		},
+		{
+			name:       "a candidate has a non-empty position -> false",
+			candidates: map[string]*RelayLogPositions{a1: emptyPos(), a2: nonEmptyPos(t)},
+			statusMap:  map[string]*replicationdatapb.StopReplicationStatus{a1: gtidStatus(true), a2: gtidStatus(true)},
+			flavors:    map[string]mysqlctl.MySQLFlavor{a1: mysqlctl.FlavorMySQL, a2: mysqlctl.FlavorMySQL},
+			want:       false,
+		},
+		{
+			name:       "a candidate is not using GTID -> false",
+			candidates: map[string]*RelayLogPositions{a1: emptyPos(), a2: emptyPos()},
+			statusMap:  map[string]*replicationdatapb.StopReplicationStatus{a1: gtidStatus(true), a2: gtidStatus(false)},
+			flavors:    map[string]mysqlctl.MySQLFlavor{a1: mysqlctl.FlavorMySQL, a2: mysqlctl.FlavorMySQL},
+			want:       false,
+		},
+		{
+			name:       "a candidate is MariaDB -> false (indistinguishable from MySQL on empty positions)",
+			candidates: map[string]*RelayLogPositions{a1: emptyPos(), a2: emptyPos()},
+			statusMap:  map[string]*replicationdatapb.StopReplicationStatus{a1: gtidStatus(true), a2: gtidStatus(true)},
+			flavors:    map[string]mysqlctl.MySQLFlavor{a1: mysqlctl.FlavorMySQL, a2: mysqlctl.FlavorMariaDB},
+			want:       false,
+		},
+		{
+			name:       "a candidate is absent from both maps -> false",
+			candidates: map[string]*RelayLogPositions{a1: emptyPos(), a2: emptyPos()},
+			statusMap:  map[string]*replicationdatapb.StopReplicationStatus{a1: gtidStatus(true)},
+			flavors:    map[string]mysqlctl.MySQLFlavor{a1: mysqlctl.FlavorMySQL, a2: mysqlctl.FlavorMySQL},
+			want:       false,
+		},
+		{
+			// A reachable former primary is demoted into primaryStatusMap, not the
+			// replica status map, and PrimaryStatus carries no UsingGtid. An empty
+			// MySQL-family former primary must still count, so its lower version can
+			// win the tiebreak against an empty newer replica.
+			name:       "an empty MySQL former primary is accepted -> true",
+			candidates: map[string]*RelayLogPositions{a1: emptyPos(), a2: emptyPos()},
+			statusMap:  map[string]*replicationdatapb.StopReplicationStatus{a2: gtidStatus(true)},
+			primaryMap: map[string]*replicationdatapb.PrimaryStatus{a1: {}},
+			flavors:    map[string]mysqlctl.MySQLFlavor{a1: mysqlctl.FlavorMySQL, a2: mysqlctl.FlavorMySQL},
+			want:       true,
+		},
+		{
+			// Even as a former primary, a non-MySQL flavor is excluded (empty MariaDB
+			// GTID is indistinguishable from MySQL by position alone).
+			name:       "a MariaDB former primary is rejected -> false",
+			candidates: map[string]*RelayLogPositions{a1: emptyPos(), a2: emptyPos()},
+			statusMap:  map[string]*replicationdatapb.StopReplicationStatus{a2: gtidStatus(true)},
+			primaryMap: map[string]*replicationdatapb.PrimaryStatus{a1: {}},
+			flavors:    map[string]mysqlctl.MySQLFlavor{a1: mysqlctl.FlavorMariaDB, a2: mysqlctl.FlavorMySQL},
+			want:       false,
+		},
+		{
+			// A former primary with a real (non-empty) position is not an empty-shard
+			// candidate: the IsZero() check runs before the former-primary branch, so a
+			// stale former primary with GTIDs can't slip through.
+			name:       "a non-empty former primary is rejected -> false",
+			candidates: map[string]*RelayLogPositions{a1: nonEmptyPos(t), a2: emptyPos()},
+			statusMap:  map[string]*replicationdatapb.StopReplicationStatus{a2: gtidStatus(true)},
+			primaryMap: map[string]*replicationdatapb.PrimaryStatus{a1: {}},
+			flavors:    map[string]mysqlctl.MySQLFlavor{a1: mysqlctl.FlavorMySQL, a2: mysqlctl.FlavorMySQL},
+			want:       false,
+		},
+		{
+			name:       "a candidate has a nil After status -> false",
+			candidates: map[string]*RelayLogPositions{a1: emptyPos(), a2: emptyPos()},
+			statusMap:  map[string]*replicationdatapb.StopReplicationStatus{a1: gtidStatus(true), a2: {After: nil}},
+			flavors:    map[string]mysqlctl.MySQLFlavor{a1: mysqlctl.FlavorMySQL, a2: mysqlctl.FlavorMySQL},
+			want:       false,
+		},
+		{
+			name:       "no candidates -> false",
+			candidates: map[string]*RelayLogPositions{},
+			statusMap:  map[string]*replicationdatapb.StopReplicationStatus{},
+			flavors:    map[string]mysqlctl.MySQLFlavor{},
+			want:       false,
+		},
+		{
+			name:       "no flavors collected -> false",
+			candidates: map[string]*RelayLogPositions{a1: emptyPos()},
+			statusMap:  map[string]*replicationdatapb.StopReplicationStatus{a1: gtidStatus(true)},
+			flavors:    map[string]mysqlctl.MySQLFlavor{},
+			want:       false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			snapshot := &replicationSnapshot{statusMap: tt.statusMap, primaryStatusMap: tt.primaryMap, mysqlFlavors: tt.flavors}
+			require.Equal(t, tt.want, isEmptyMysqlGTIDShard(tt.candidates, snapshot))
+		})
+	}
 }

@@ -119,6 +119,7 @@ type Status struct {
 	SemiSyncReplicaEnabled                 bool   `protobuf:"varint,27,opt,name=semi_sync_replica_enabled,json=semiSyncReplicaEnabled,proto3" json:"semi_sync_replica_enabled,omitempty"`
 	SemiSyncPrimaryStatus                  bool   `protobuf:"varint,28,opt,name=semi_sync_primary_status,json=semiSyncPrimaryStatus,proto3" json:"semi_sync_primary_status,omitempty"`
 	SemiSyncReplicaStatus                  bool   `protobuf:"varint,29,opt,name=semi_sync_replica_status,json=semiSyncReplicaStatus,proto3" json:"semi_sync_replica_status,omitempty"`
+	ServerVersion                          string `protobuf:"bytes,30,opt,name=server_version,json=serverVersion,proto3" json:"server_version,omitempty"`
 	unknownFields                          protoimpl.UnknownFields
 	sizeCache                              protoimpl.SizeCache
 }
@@ -342,6 +343,13 @@ func (x *Status) GetSemiSyncReplicaStatus() bool {
 	return false
 }
 
+func (x *Status) GetServerVersion() string {
+	if x != nil {
+		return x.ServerVersion
+	}
+	return ""
+}
+
 // Configuration holds replication configuration information gathered from performance_schema and global variables.
 type Configuration struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -457,6 +465,7 @@ type PrimaryStatus struct {
 	Position      string                 `protobuf:"bytes,1,opt,name=position,proto3" json:"position,omitempty"`
 	FilePosition  string                 `protobuf:"bytes,2,opt,name=file_position,json=filePosition,proto3" json:"file_position,omitempty"`
 	ServerUuid    string                 `protobuf:"bytes,3,opt,name=server_uuid,json=serverUuid,proto3" json:"server_uuid,omitempty"`
+	ServerVersion string                 `protobuf:"bytes,4,opt,name=server_version,json=serverVersion,proto3" json:"server_version,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -508,6 +517,13 @@ func (x *PrimaryStatus) GetFilePosition() string {
 func (x *PrimaryStatus) GetServerUuid() string {
 	if x != nil {
 		return x.ServerUuid
+	}
+	return ""
+}
+
+func (x *PrimaryStatus) GetServerVersion() string {
+	if x != nil {
+		return x.ServerVersion
 	}
 	return ""
 }
@@ -847,7 +863,7 @@ var File_replicationdata_proto protoreflect.FileDescriptor
 
 const file_replicationdata_proto_rawDesc = "" +
 	"\n" +
-	"\x15replicationdata.proto\x12\x0freplicationdata\x1a\x0etopodata.proto\x1a\fvttime.proto\"\xa5\t\n" +
+	"\x15replicationdata.proto\x12\x0freplicationdata\x1a\x0etopodata.proto\x1a\fvttime.proto\"\xcc\t\n" +
 	"\x06Status\x12\x1a\n" +
 	"\bposition\x18\x01 \x01(\tR\bposition\x126\n" +
 	"\x17replication_lag_seconds\x18\x04 \x01(\rR\x15replicationLagSeconds\x12\x1f\n" +
@@ -882,18 +898,20 @@ const file_replicationdata_proto_rawDesc = "" +
 	"\x19semi_sync_primary_enabled\x18\x1a \x01(\bR\x16semiSyncPrimaryEnabled\x129\n" +
 	"\x19semi_sync_replica_enabled\x18\x1b \x01(\bR\x16semiSyncReplicaEnabled\x127\n" +
 	"\x18semi_sync_primary_status\x18\x1c \x01(\bR\x15semiSyncPrimaryStatus\x127\n" +
-	"\x18semi_sync_replica_status\x18\x1d \x01(\bR\x15semiSyncReplicaStatusJ\x04\b\x02\x10\x03J\x04\b\x03\x10\x04\"n\n" +
+	"\x18semi_sync_replica_status\x18\x1d \x01(\bR\x15semiSyncReplicaStatus\x12%\n" +
+	"\x0eserver_version\x18\x1e \x01(\tR\rserverVersionJ\x04\b\x02\x10\x03J\x04\b\x03\x10\x04\"n\n" +
 	"\rConfiguration\x12-\n" +
 	"\x12heartbeat_interval\x18\x01 \x01(\x01R\x11heartbeatInterval\x12.\n" +
 	"\x13replica_net_timeout\x18\x02 \x01(\x05R\x11replicaNetTimeout\"w\n" +
 	"\x15StopReplicationStatus\x12/\n" +
 	"\x06before\x18\x01 \x01(\v2\x17.replicationdata.StatusR\x06before\x12-\n" +
-	"\x05after\x18\x02 \x01(\v2\x17.replicationdata.StatusR\x05after\"q\n" +
+	"\x05after\x18\x02 \x01(\v2\x17.replicationdata.StatusR\x05after\"\x98\x01\n" +
 	"\rPrimaryStatus\x12\x1a\n" +
 	"\bposition\x18\x01 \x01(\tR\bposition\x12#\n" +
 	"\rfile_position\x18\x02 \x01(\tR\ffilePosition\x12\x1f\n" +
 	"\vserver_uuid\x18\x03 \x01(\tR\n" +
-	"serverUuid\"\xdb\x02\n" +
+	"serverUuid\x12%\n" +
+	"\x0eserver_version\x18\x04 \x01(\tR\rserverVersion\"\xdb\x02\n" +
 	"\x0fShardPeerHealth\x128\n" +
 	"\ftablet_alias\x18\x01 \x01(\v2\x15.topodata.TabletAliasR\vtabletAlias\x12:\n" +
 	"\x19consecutive_ping_failures\x18\x02 \x01(\x03R\x17consecutivePingFailures\x12>\n" +

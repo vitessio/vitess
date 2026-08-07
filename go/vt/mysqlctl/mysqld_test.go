@@ -20,6 +20,7 @@ import (
 	"context"
 	"net"
 	"os"
+	"os/exec"
 	"strconv"
 	"strings"
 	"testing"
@@ -350,6 +351,39 @@ func TestGetVersionString(t *testing.T) {
 	str, err = testMysqld.GetVersionString(ctx)
 	assert.Equal(t, ver, str)
 	assert.NoError(t, err)
+}
+
+// TestExecCmdWithContext verifies that execCmdWithContext is actually bound to its
+// context, so the mysqld --version fallback of GetVersionString can no longer
+// outlive a caller's deadline (e.g. holding the TabletManager action lock).
+func TestExecCmdWithContext(t *testing.T) {
+	if _, err := exec.LookPath("sleep"); err != nil {
+		t.Skip("sleep binary not available")
+	}
+
+	t.Run("cancelled context returns promptly", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(t.Context())
+		cancel() // already cancelled
+
+		start := time.Now()
+		_, _, err := execCmdWithContext(ctx, "sleep", []string{"60"}, nil, "", nil)
+		elapsed := time.Since(start)
+
+		require.Error(t, err, "a cancelled context must not run the command to completion")
+		require.Less(t, elapsed, 30*time.Second, "the command must be killed rather than sleep for 60s")
+	})
+
+	t.Run("expired deadline kills a long-running command", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(t.Context(), 100*time.Millisecond)
+		defer cancel()
+
+		start := time.Now()
+		_, _, err := execCmdWithContext(ctx, "sleep", []string{"60"}, nil, "", nil)
+		elapsed := time.Since(start)
+
+		require.Error(t, err)
+		require.Less(t, elapsed, 30*time.Second, "the command must be killed at the deadline, not run for 60s")
+	})
 }
 
 func TestGetVersionComment(t *testing.T) {
