@@ -103,6 +103,9 @@ type flavor interface {
 	// startSQLThreadCommand returns the command to start the replica's SQL thread only.
 	startSQLThreadCommand() string
 
+	// startIOThreadCommand returns the command to start the replica's IO thread only.
+	startIOThreadCommand() string
+
 	// sendBinlogDumpCommand sends the COM_BINLOG_DUMP packet to start
 	// dumping binlogs from the specified file and position.
 	// This is the original file/position-based protocol.
@@ -355,6 +358,11 @@ func (c *Conn) StopSQLThreadCommand() string {
 // StartSQLThreadCommand returns the command to start the replica's SQL thread.
 func (c *Conn) StartSQLThreadCommand() string {
 	return c.flavor.startSQLThreadCommand()
+}
+
+// StartIOThreadCommand returns the command to start the replica's IO thread.
+func (c *Conn) StartIOThreadCommand() string {
+	return c.flavor.startIOThreadCommand()
 }
 
 // SendBinlogDumpCommand sends the COM_BINLOG_DUMP command to start
