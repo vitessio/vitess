@@ -328,11 +328,11 @@ func TestCallProcedure(t *testing.T) {
 
 	utils.AssertMatches(t, conn, "show warnings", `[[VARCHAR("Warning") UINT16(1235) VARCHAR("'CALL' not supported in sharded mode")]]`)
 
-	err = conn.ExecuteFetchMultiDrain(`CALL sp_select()`)
-	require.ErrorContains(t, err, "Multi-Resultset not supported in stored procedure")
-
-	err = conn.ExecuteFetchMultiDrain(`CALL sp_all()`)
-	require.ErrorContains(t, err, "Multi-Resultset not supported in stored procedure")
+	// A single-resultset stored procedure (one SELECT followed by the mandatory
+	// trailing OK packet) now executes successfully instead of being rejected as
+	// multi-resultset.
+	require.NoError(t, conn.ExecuteFetchMultiDrain(`CALL sp_select()`))
+	require.NoError(t, conn.ExecuteFetchMultiDrain(`CALL sp_all()`))
 
 	qr = utils.Exec(t, conn, `CALL sp_delete()`)
 	require.GreaterOrEqual(t, 1, int(qr.RowsAffected))

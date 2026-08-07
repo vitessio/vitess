@@ -112,6 +112,32 @@ func (sc *StatefulConnection) Exec(ctx context.Context, query string, maxrows in
 	return r, nil
 }
 
+// ExecMulti executes the query on the transaction's connection and returns the
+// first result set together with a flag reporting whether more result sets
+// remain, without draining or erroring on them. See connpool.Conn.ExecMulti.
+func (sc *StatefulConnection) ExecMulti(ctx context.Context, query string, maxrows int, wantfields bool) (*sqltypes.Result, bool, error) {
+	if sc.IsClosed() {
+		if sc.IsInTransaction() {
+			return nil, false, vterrors.Errorf(vtrpcpb.Code_ABORTED, "transaction was aborted: %v", sc.txProps.Conclusion)
+		}
+		return nil, false, vterrors.New(vtrpcpb.Code_ABORTED, "connection was aborted")
+	}
+	r, more, err := sc.dbConn.Conn.ExecOnceMulti(ctx, query, maxrows, wantfields)
+	if err != nil {
+		if sqlerror.IsConnErr(err) {
+			select {
+			case <-ctx.Done():
+				// If the context is done, the query was killed.
+				// So, don't trigger a mysql check.
+			default:
+				sc.env.CheckMySQL()
+			}
+		}
+		return nil, false, err
+	}
+	return r, more, nil
+}
+
 func (sc *StatefulConnection) execWithRetry(ctx context.Context, query string, maxrows int, wantfields bool) (string, error) {
 	if sc.IsClosed() {
 		return "", vterrors.New(vtrpcpb.Code_CANCELED, "connection is closed")

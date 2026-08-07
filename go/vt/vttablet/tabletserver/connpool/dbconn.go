@@ -228,6 +228,136 @@ func (dbc *Conn) ExecOnce(ctx context.Context, query string, maxrows int, wantfi
 	return dbc.execOnce(ctx, query, maxrows, wantfields, true /* Once means we are in a txn*/)
 }
 
+// ExecMulti executes the query and returns its first result set together with a
+// flag reporting whether more result sets remain on the connection. Unlike Exec,
+// it neither drains nor errors on trailing result sets, leaving the caller to
+// inspect them via FetchNext. Like Exec, it reconnects and retries once after a
+// connection error on the initial execute — nothing has been read at that
+// point, so the retry cannot duplicate or lose result sets.
+func (dbc *Conn) ExecMulti(ctx context.Context, query string, maxrows int, wantfields bool) (*sqltypes.Result, bool, error) {
+	span, ctx := trace.NewSpan(ctx, "DBConn.ExecMulti")
+	defer span.Finish()
+
+	for attempt := 1; attempt <= 2; attempt++ {
+		r, more, err := dbc.execOnceMulti(ctx, query, maxrows, wantfields, false)
+		switch {
+		case err == nil:
+			// Success.
+			return r, more, nil
+		case sqlerror.IsConnLostDuringQuery(err):
+			// Query probably killed. Don't retry.
+			return nil, false, err
+		case !sqlerror.IsConnErr(err):
+			// Not a connection error. Don't retry.
+			return nil, false, err
+		case attempt == 2:
+			// Reached the retry limit.
+			return nil, false, err
+		}
+
+		// Conn error. Retry if context has not expired.
+		select {
+		case <-ctx.Done():
+			return nil, false, err
+		default:
+		}
+
+		if reconnectErr := dbc.Reconnect(ctx); reconnectErr != nil {
+			dbc.env.CheckMySQL()
+			// Return the error of the reconnect and not the original connection error.
+			return nil, false, reconnectErr
+		}
+
+		// Reconnect succeeded. Retry query at second attempt.
+	}
+	panic("unreachable")
+}
+
+// ExecOnceMulti is ExecMulti for a connection that is inside a transaction.
+func (dbc *Conn) ExecOnceMulti(ctx context.Context, query string, maxrows int, wantfields bool) (*sqltypes.Result, bool, error) {
+	return dbc.execOnceMulti(ctx, query, maxrows, wantfields, true /* Once means we are in a txn*/)
+}
+
+func (dbc *Conn) execOnceMulti(ctx context.Context, query string, maxrows int, wantfields bool, insideTxn bool) (*sqltypes.Result, bool, error) {
+	dbc.current.Store(&query)
+	defer dbc.current.Store(nil)
+
+	// Check if the context is already past its deadline before
+	// trying to execute the query.
+	if err := ctx.Err(); err != nil {
+		return nil, false, vterrors.Errorf(vtrpcpb.Code_CANCELED, "%s before execution started", dbc.getErrorMessageFromContextError(ctx))
+	}
+
+	now := time.Now()
+	defer dbc.stats.MySQLTimings.Record("Exec", now)
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	stop := context.AfterFunc(ctx, func() {
+		defer wg.Done()
+		dbc.terminate(ctx, insideTxn, now)
+	})
+	result, more, err := dbc.conn.ExecuteFetchMulti(query, maxrows, wantfields)
+	if !stop() {
+		// The context was cancelled and terminate has started. Wait for
+		// it to finish so that the kill statement completes and the dba
+		// pool connection is released before we return.
+		wg.Wait()
+		if more {
+			// The stateless termination only kills the query, leaving the
+			// connection open with this result's trailing resultsets unread.
+			// Close it so it cannot be recycled into the pool mid-stream.
+			dbc.Close()
+		}
+		return nil, false, dbc.Err()
+	}
+	// Check for errors set by an explicit Kill call from another
+	// goroutine (not triggered by context cancellation).
+	if dbcErr := dbc.Err(); dbcErr != nil {
+		return nil, false, dbcErr
+	}
+	return result, more, err
+}
+
+// FetchNextWithTermination is FetchNext with context-cancellation-driven
+// termination armed for the duration of the read, so a read that blocks while
+// draining a stored procedure's trailing resultsets is killed when the context
+// is cancelled instead of waiting for the procedure to finish on its own.
+// insideTxn selects whether a cancellation kills the connection (inside a
+// transaction) or just the query, matching execOnce/execOnceMulti.
+func (dbc *Conn) FetchNextWithTermination(ctx context.Context, maxrows int, wantfields bool, insideTxn bool) (*sqltypes.Result, error) {
+	// Check if the context is already past its deadline before
+	// trying to fetch the next result.
+	if err := ctx.Err(); err != nil {
+		return nil, vterrors.Errorf(vtrpcpb.Code_CANCELED, "%s before reading next result set", dbc.getErrorMessageFromContextError(ctx))
+	}
+
+	now := time.Now()
+	var wg sync.WaitGroup
+	wg.Add(1)
+	stop := context.AfterFunc(ctx, func() {
+		defer wg.Done()
+		dbc.terminate(ctx, insideTxn, now)
+	})
+	res, _, _, err := dbc.conn.ReadQueryResult(maxrows, wantfields)
+	if !stop() {
+		// The context was cancelled and terminate has started. Wait for
+		// it to finish so that the kill statement completes and the dba
+		// pool connection is released before we return.
+		wg.Wait()
+		return nil, dbc.Err()
+	}
+	// Check for errors set by an explicit Kill call from another
+	// goroutine (not triggered by context cancellation).
+	if dbcErr := dbc.Err(); dbcErr != nil {
+		return nil, dbcErr
+	}
+	if err != nil {
+		return nil, err
+	}
+	return res, nil
+}
+
 // FetchNext returns the next result set.
 func (dbc *Conn) FetchNext(ctx context.Context, maxrows int, wantfields bool) (*sqltypes.Result, error) {
 	// Check if the context is already past its deadline before
@@ -549,6 +679,20 @@ func (dbc *Conn) Current() string {
 		return *q
 	}
 	return ""
+}
+
+// SetCurrent records query as the statement currently occupying the
+// connection, so live-query inspection and kill diagnostics can report it
+// while resultsets are read outside the Exec/Stream wrappers (which only
+// track their own span, e.g. while a stored procedure call's trailing
+// resultsets are drained).
+func (dbc *Conn) SetCurrent(query string) {
+	dbc.current.Store(&query)
+}
+
+// ClearCurrent removes the query recorded by SetCurrent.
+func (dbc *Conn) ClearCurrent() {
+	dbc.current.Store(nil)
 }
 
 // ID returns the connection id.

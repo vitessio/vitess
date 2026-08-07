@@ -359,6 +359,11 @@ func (c *Conn) ExecuteFetchMulti(query string, maxrows int, wantfields bool) (re
 		}
 	}()
 
+	// Reset the OK packet captured from any previous streaming query, so a
+	// caller inspecting StreamOKResult after this buffered call does not read
+	// state left behind by an earlier ExecuteStreamFetch on this connection.
+	c.streamOK = nil
+
 	// Send the query as a COM_QUERY packet.
 	if err = c.WriteComQuery(query); err != nil {
 		return nil, false, err
