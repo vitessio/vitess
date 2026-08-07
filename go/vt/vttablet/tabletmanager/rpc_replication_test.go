@@ -29,9 +29,12 @@ import (
 	"golang.org/x/sync/semaphore"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/test/utils"
+	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
@@ -105,7 +108,17 @@ type (
 		err    error
 		calls  int
 	}
+
+	// legacyFullStatusMysqlDaemon forces FullStatus down the legacy per-field
+	// path the same way an unsupported flavor does.
+	legacyFullStatusMysqlDaemon struct {
+		mysqlctl.MysqlDaemon
+	}
 )
+
+func (d *legacyFullStatusMysqlDaemon) CollectFullStatusData(context.Context) (*mysqlctl.FullStatusResult, error) {
+	return nil, nil
+}
 
 func (d *demotePrimaryStallQS) SetDemotePrimaryStalled(val bool) {
 	d.primaryStalled.Store(val)
@@ -235,6 +248,145 @@ func TestFullStatusReturnsCollectorError(t *testing.T) {
 	require.ErrorContains(t, err, "collector failed")
 	assert.Nil(t, status)
 	assert.Equal(t, 1, mysqlDaemon.calls)
+}
+
+// TestFullStatusMatchesLegacyCollection pins the collected FullStatus to the
+// legacy per-field one, so that a field the collector maps differently, drops
+// or stops populating is caught. Both runs answer from the same MySQL.
+func TestFullStatusMatchesLegacyCollection(t *testing.T) {
+	db := fakesqldb.New(t)
+	t.Cleanup(db.Close)
+
+	params := db.ConnParams()
+	cp := *params
+	mysqld := mysqlctl.NewMysqld(dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb"))
+	t.Cleanup(mysqld.Close)
+
+	db.AddQuery("SELECT 1", &sqltypes.Result{})
+
+	// Answers for the collected path.
+	db.AddQueryPattern(
+		"SELECT @@global.server_id AS server_id,.*",
+		sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields("server_id|server_uuid|version|version_comment|read_only|super_read_only|gtid_mode|binlog_format|log_bin|log_replica_updates|binlog_row_image", "uint64|varchar|varchar|varchar|int64|int64|varchar|varchar|int64|int64|varchar"),
+			"42|test-uuid|8.0.35|MySQL Community Server - GPL|1|1|ON|ROW|1|1|FULL",
+		),
+	)
+	db.AddQueryPattern(
+		"SELECT variable_name, variable_value FROM performance_schema.global_variables WHERE variable_name IN .*",
+		sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields("variable_name|variable_value", "varchar|varchar"),
+			"rpl_semi_sync_source_enabled|ON",
+			"rpl_semi_sync_replica_enabled|ON",
+			"rpl_semi_sync_source_timeout|10000",
+			"rpl_semi_sync_source_wait_for_replica_count|2",
+		),
+	)
+	db.AddQueryPattern(
+		"SELECT variable_name, variable_value FROM performance_schema.global_status WHERE variable_name IN .*",
+		sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields("variable_name|variable_value", "varchar|varchar"),
+			"Rpl_semi_sync_source_status|ON",
+			"Rpl_semi_sync_replica_status|ON",
+			"Rpl_semi_sync_source_clients|3",
+		),
+	)
+
+	// Answers for the legacy path, carrying the same values.
+	db.AddQuery("select @@global.server_id", sqltypes.MakeTestResult(sqltypes.MakeTestFields("@@global.server_id", "uint64"), "42"))
+	db.AddQuery("SELECT @@global.server_uuid", sqltypes.MakeTestResult(sqltypes.MakeTestFields("@@global.server_uuid", "varchar"), "test-uuid"))
+	db.AddQuery("select concat('Ver ', @@global.version, ' ', @@global.version_comment) as version", sqltypes.MakeTestResult(sqltypes.MakeTestFields("version", "varchar"), "Ver 8.0.35 MySQL Community Server - GPL"))
+	db.AddQuery("select @@global.version_comment", sqltypes.MakeTestResult(sqltypes.MakeTestFields("@@global.version_comment", "varchar"), "MySQL Community Server - GPL"))
+	db.AddQuery("SHOW VARIABLES LIKE 'read_only'", sqltypes.MakeTestResult(sqltypes.MakeTestFields("Variable_name|Value", "varchar|varchar"), "read_only|ON"))
+	db.AddQuery("SELECT @@global.super_read_only", sqltypes.MakeTestResult(sqltypes.MakeTestFields("@@global.super_read_only", "int64"), "1"))
+	db.AddQuery("select @@global.gtid_mode", sqltypes.MakeTestResult(sqltypes.MakeTestFields("@@global.gtid_mode", "varchar"), "ON"))
+	db.AddQuery("select @@global.binlog_format, @@global.log_bin, @@global.log_replica_updates, @@global.binlog_row_image", sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("@@global.binlog_format|@@global.log_bin|@@global.log_replica_updates|@@global.binlog_row_image", "varchar|int64|int64|varchar"),
+		"ROW|1|1|FULL",
+	))
+	db.AddQuery("SHOW VARIABLES LIKE 'rpl_semi_sync_%_enabled'", sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("Variable_name|Value", "varchar|varchar"),
+		"rpl_semi_sync_source_enabled|ON",
+		"rpl_semi_sync_replica_enabled|ON",
+	))
+	db.AddQuery("SHOW VARIABLES LIKE 'rpl_semi_sync_%'", sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("Variable_name|Value", "varchar|varchar"),
+		"rpl_semi_sync_source_timeout|10000",
+		"rpl_semi_sync_source_wait_for_replica_count|2",
+	))
+	db.AddQuery("SHOW STATUS LIKE 'Rpl_semi_sync_%_status'", sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("Variable_name|Value", "varchar|varchar"),
+		"Rpl_semi_sync_source_status|ON",
+		"Rpl_semi_sync_replica_status|ON",
+	))
+	db.AddQuery("SHOW STATUS LIKE 'Rpl_semi_sync_source_clients'", sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("Variable_name|Value", "varchar|varchar"),
+		"Rpl_semi_sync_source_clients|3",
+	))
+
+	// Answers shared by both paths.
+	db.AddQuery("SHOW REPLICA STATUS", sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("Last_SQL_Error|Last_IO_Error", "varchar|varchar"),
+		"|",
+	))
+	db.AddQuery("SHOW BINARY LOG STATUS", sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("File|Position|Binlog_Do_DB|Binlog_Ignore_DB|Executed_Gtid_Set", "varchar|int64|varchar|varchar|varchar"),
+		"binlog.000001|154|||8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8",
+	))
+	db.AddQuery("SELECT @@global.gtid_purged", sqltypes.MakeTestResult(sqltypes.MakeTestFields("gtid_purged", "varchar"), "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-5"))
+	db.AddQuery("SELECT * FROM performance_schema.replication_connection_configuration", sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("HEARTBEAT_INTERVAL", "float64"),
+		"4.5",
+	))
+	db.AddQuery("select @@global.replica_net_timeout", sqltypes.MakeTestResult(sqltypes.MakeTestFields("replica_net_timeout", "int64"), "9"))
+
+	tablet := newTestTablet(t, 100, "ks", "0", nil)
+	tm := newTestReplicationTM(tablet, mysqld, nil)
+	tm.QueryServiceControl = tabletservermock.NewController()
+	tm.SemiSyncMonitor = semisyncmonitor.CreateTestSemiSyncMonitor(db, exporter)
+
+	collected, err := tm.FullStatus(t.Context())
+	require.NoError(t, err)
+	require.NotNil(t, collected)
+	// Guard against the collector silently falling back, which would compare
+	// the legacy path against itself.
+	assert.Zero(t, db.GetQueryCalledNum("select @@global.server_id"))
+
+	tm.MysqlDaemon = &legacyFullStatusMysqlDaemon{mysqld}
+	legacy, err := tm.FullStatus(t.Context())
+	require.NoError(t, err)
+	require.NotNil(t, legacy)
+	assert.NotZero(t, db.GetQueryCalledNum("select @@global.server_id"))
+
+	utils.MustMatch(t, legacy, collected)
+
+	// Both paths agreeing on zero values would make the comparison above
+	// vacuous, so pin what the fields are expected to hold.
+	assert.Equal(t, uint32(42), collected.ServerId)
+	assert.Equal(t, "test-uuid", collected.ServerUuid)
+	assert.Equal(t, "8.0.35", collected.Version)
+	assert.Equal(t, "MySQL Community Server - GPL", collected.VersionComment)
+	assert.True(t, collected.ReadOnly)
+	assert.True(t, collected.SuperReadOnly)
+	assert.Equal(t, "ON", collected.GtidMode)
+	assert.Equal(t, "ROW", collected.BinlogFormat)
+	assert.Equal(t, "FULL", collected.BinlogRowImage)
+	assert.True(t, collected.LogBinEnabled)
+	assert.True(t, collected.LogReplicaUpdates)
+	assert.True(t, collected.SemiSyncPrimaryEnabled)
+	assert.True(t, collected.SemiSyncReplicaEnabled)
+	assert.True(t, collected.SemiSyncPrimaryStatus)
+	assert.True(t, collected.SemiSyncReplicaStatus)
+	assert.Equal(t, uint32(3), collected.SemiSyncPrimaryClients)
+	assert.Equal(t, uint64(10000), collected.SemiSyncPrimaryTimeout)
+	assert.Equal(t, uint32(2), collected.SemiSyncWaitForReplicaCount)
+	assert.Equal(t, "MySQL56/8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-5", collected.GtidPurged)
+	require.NotNil(t, collected.ReplicationStatus)
+	require.NotNil(t, collected.PrimaryStatus)
+	assert.Equal(t, "test-uuid", collected.PrimaryStatus.ServerUuid)
+	require.NotNil(t, collected.ReplicationConfiguration)
+	assert.Equal(t, int32(9), collected.ReplicationConfiguration.ReplicaNetTimeout)
+	assert.Equal(t, topodatapb.TabletType_REPLICA, collected.TabletType)
 }
 
 // TestDemotePrimaryStalled checks that if demote primary takes too long, then we mark it as stalled.

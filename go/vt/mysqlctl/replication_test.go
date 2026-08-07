@@ -40,6 +40,7 @@ import (
 	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/log"
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtenv"
 )
 
@@ -955,6 +956,93 @@ func TestCollectFullStatusDataRetriesLostConnectionOnce(t *testing.T) {
 		assert.Nil(t, result)
 		assert.Equal(t, 2, db.GetQueryCalledNum("SHOW REPLICA STATUS"))
 	})
+}
+
+// fullStatusSemiSyncQuery builds the bound semi-sync query for the given names
+// so tests can register it as an exact query.
+func fullStatusSemiSyncQuery(t *testing.T, queryTemplate string, names []string) string {
+	t.Helper()
+
+	bv, err := sqltypes.BuildBindVariable(names)
+	require.NoError(t, err)
+	query, err := sqlparser.ParseAndBind(queryTemplate, bv)
+	require.NoError(t, err)
+	return query
+}
+
+// TestCollectFullStatusDataRetriesSemiSyncAfterLostConnection covers a
+// connection lost while reading semi-sync data. Without a retry the collector
+// reports semi-sync as disabled and off while returning success, which VTOrc
+// consumes as the truth and can act on.
+func TestCollectFullStatusDataRetriesSemiSyncAfterLostConnection(t *testing.T) {
+	variablesQuery := fullStatusSemiSyncQuery(t, fullStatusGlobalVariablesQuery, fullStatusSemiSyncVariables)
+	statusQuery := fullStatusSemiSyncQuery(t, fullStatusGlobalStatusQuery, fullStatusSemiSyncStatuses)
+
+	testcases := []struct {
+		name  string
+		query string
+	}{
+		{name: "variables query", query: variablesQuery},
+		{name: "status query", query: statusQuery},
+	}
+
+	for _, testcase := range testcases {
+		t.Run(testcase.name, func(t *testing.T) {
+			db, mysqld := newCollectFullStatusDataTestMysqld(t)
+			db.AddQuery(variablesQuery, sqltypes.MakeTestResult(
+				sqltypes.MakeTestFields("variable_name|variable_value", "varchar|varchar"),
+				"rpl_semi_sync_source_enabled|ON",
+				"rpl_semi_sync_replica_enabled|ON",
+				"rpl_semi_sync_source_timeout|10000",
+				"rpl_semi_sync_source_wait_for_replica_count|2",
+			))
+			db.AddQuery(statusQuery, sqltypes.MakeTestResult(
+				sqltypes.MakeTestFields("variable_name|variable_value", "varchar|varchar"),
+				"Rpl_semi_sync_source_status|ON",
+				"Rpl_semi_sync_replica_status|ON",
+				"Rpl_semi_sync_source_clients|3",
+			))
+
+			var connectionClosed atomic.Bool
+			db.SetBeforeFunc(testcase.query, func() {
+				if connectionClosed.CompareAndSwap(false, true) {
+					db.CloseAllConnections()
+				}
+			})
+
+			result, err := mysqld.CollectFullStatusData(t.Context())
+
+			require.NoError(t, err)
+			require.NotNil(t, result)
+			assert.Empty(t, result.SoftErrors)
+			assert.Equal(t, 2, db.GetQueryCalledNum(testcase.query))
+
+			status := result.Status
+			assert.True(t, status.SemiSyncPrimaryEnabled)
+			assert.True(t, status.SemiSyncReplicaEnabled)
+			assert.Equal(t, uint64(10000), status.SemiSyncPrimaryTimeout)
+			assert.Equal(t, uint32(2), status.SemiSyncWaitForReplicaCount)
+			assert.True(t, status.SemiSyncPrimaryStatus)
+			assert.True(t, status.SemiSyncReplicaStatus)
+			assert.Equal(t, uint32(3), status.SemiSyncPrimaryClients)
+		})
+	}
+}
+
+func TestCollectFullStatusDataFailsWhenMySQLStaysDownDuringSemiSync(t *testing.T) {
+	db, mysqld := newCollectFullStatusDataTestMysqld(t)
+	variablesQuery := fullStatusSemiSyncQuery(t, fullStatusGlobalVariablesQuery, fullStatusSemiSyncVariables)
+	db.AddQuery(variablesQuery, &sqltypes.Result{})
+	db.SetBeforeFunc(variablesQuery, func() {
+		db.EnableConnFail()
+		db.CloseAllConnections()
+	})
+	t.Cleanup(db.DisableConnFail)
+
+	result, err := mysqld.CollectFullStatusData(t.Context())
+
+	require.ErrorContains(t, err, "replication configuration")
+	assert.Nil(t, result)
 }
 
 func TestCollectFullStatusDataFallsBackWhenCoreBatchFails(t *testing.T) {
