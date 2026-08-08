@@ -443,6 +443,31 @@ func TestSetAndResetReplication(t *testing.T) {
 	assert.Equal(t, int32(0), r.SourcePort)
 }
 
+func TestGetGTIDMode(t *testing.T) {
+	require.NotNil(t, mysqld)
+
+	// Default value
+	ctx := t.Context()
+	res, err := mysqld.GetGTIDMode(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, "ON", res)
+
+	conn, err := mysql.Connect(t.Context(), &mysqlParams)
+	require.NoError(t, err)
+
+	// Change value for the purpose of testing
+	r := Exec(t, conn, "SET GLOBAL gtid_mode = 'ON_PERMISSIVE'")
+	require.NotNil(t, r)
+
+	res, err = mysqld.GetGTIDMode(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, "ON_PERMISSIVE", res)
+
+	// Back to default
+	r = Exec(t, conn, "SET GLOBAL gtid_mode = 'ON'")
+	require.NotNil(t, r)
+}
+
 func TestBinaryLogs(t *testing.T) {
 	require.NotNil(t, mysqld)
 

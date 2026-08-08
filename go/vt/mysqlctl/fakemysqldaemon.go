@@ -407,6 +407,13 @@ func (fmd *FakeMysqlDaemon) CollectFullStatusData(context.Context) (*FullStatusR
 	return nil, nil
 }
 
+// GetGTIDMode is part of the MysqlDaemon interface.
+func (fmd *FakeMysqlDaemon) GetGTIDMode(ctx context.Context) (gtidMode string, err error) {
+	return "ON", fmd.ExecuteSuperQueryList(ctx, []string{
+		"FAKE select @@global",
+	})
+}
+
 // GetGTIDPurged is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) GetGTIDPurged(ctx context.Context) (replication.Position, error) {
 	return replication.Position{}, nil

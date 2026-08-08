@@ -69,6 +69,7 @@ type flavor interface {
 	purgedGTIDSet(c *Conn) (replication.GTIDSet, error)
 
 	// gtidMode returns the gtid mode of a server.
+	gtidMode(c *Conn) (string, error)
 
 	// serverUUID returns the UUID of a server.
 	serverUUID(c *Conn) (string, error)
@@ -264,6 +265,11 @@ func (c *Conn) IsMariaDB() bool {
 		return true
 	}
 	return false
+}
+
+// GetGTIDMode returns the tablet's GTID mode. Only available in MySQL flavour
+func (c *Conn) GetGTIDMode() (string, error) {
+	return c.flavor.gtidMode(c)
 }
 
 // PrimaryPosition returns the current primary's replication position.

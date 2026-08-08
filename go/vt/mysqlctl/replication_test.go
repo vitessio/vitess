@@ -464,6 +464,27 @@ func TestFindReplicas(t *testing.T) {
 	assert.Equal(t, want, res)
 }
 
+func TestGetGTIDMode(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+
+	params := db.ConnParams()
+	cp := *params
+	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb")
+
+	in := "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8,8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:12-17"
+	db.AddQuery("SELECT 1", &sqltypes.Result{})
+	db.AddQuery("select @@global.gtid_mode", sqltypes.MakeTestResult(sqltypes.MakeTestFields("test_field", "varchar"), in))
+
+	testMysqld := NewMysqld(dbc)
+	defer testMysqld.Close()
+
+	ctx := t.Context()
+	res, err := testMysqld.GetGTIDMode(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, in, res)
+}
+
 func TestFlushBinaryLogs(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()

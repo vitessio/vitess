@@ -71,6 +71,7 @@ type MysqlDaemon interface {
 	SemiSyncReplicationStatus(ctx context.Context) (bool, error)
 	IsSemiSyncBlocked(ctx context.Context) (bool, error)
 	ResetReplicationParameters(ctx context.Context) error
+	GetGTIDMode(ctx context.Context) (gtidMode string, err error)
 	FlushBinaryLogs(ctx context.Context) (err error)
 	GetBinaryLogs(ctx context.Context) (binaryLogs []string, err error)
 	GetPreviousGTIDs(ctx context.Context, binlog string) (previousGtids string, err error)

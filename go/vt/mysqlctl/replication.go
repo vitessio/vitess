@@ -636,6 +636,17 @@ func FindReplicas(ctx context.Context, mysqld MysqlDaemon) ([]string, error) {
 	return addrs, nil
 }
 
+// GetGTIDMode gets the GTID mode for the server
+func (mysqld *Mysqld) GetGTIDMode(ctx context.Context) (string, error) {
+	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
+	if err != nil {
+		return "", err
+	}
+	defer conn.Recycle()
+
+	return conn.Conn.GetGTIDMode()
+}
+
 // FlushBinaryLogs is part of the MysqlDaemon interface.
 func (mysqld *Mysqld) FlushBinaryLogs(ctx context.Context) (err error) {
 	_, err = mysqld.FetchSuperQuery(ctx, "FLUSH BINARY LOGS")
