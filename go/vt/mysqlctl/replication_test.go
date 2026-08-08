@@ -674,8 +674,8 @@ func TestCollectFullStatusData(t *testing.T) {
 	db.AddQueryPattern(
 		"SELECT @@global.server_id AS server_id,.*",
 		sqltypes.MakeTestResult(
-			sqltypes.MakeTestFields("server_id|server_uuid|version|version_comment|read_only|super_read_only|gtid_mode|binlog_format|log_bin|log_replica_updates|binlog_row_image", "uint64|varchar|varchar|varchar|int64|int64|varchar|varchar|int64|int64|varchar"),
-			"42|test-uuid|8.0.35|MySQL Community Server - GPL|1|1|ON|ROW|1|1|FULL",
+			sqltypes.MakeTestFields("server_id|server_uuid|version|version_comment|read_only|super_read_only|gtid_mode|binlog_format|log_bin|log_replica_updates|binlog_row_image|gtid_purged", "uint64|varchar|varchar|varchar|int64|int64|varchar|varchar|int64|int64|varchar|varchar"),
+			"42|test-uuid|8.0.35|MySQL Community Server - GPL|1|1|ON|ROW|1|1|FULL|8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-5",
 		),
 	)
 	db.AddQuery("SHOW REPLICA STATUS", sqltypes.MakeTestResult(sqltypes.MakeTestFields("Last_SQL_Error|Last_IO_Error", "varchar|varchar"), "|"))
@@ -748,7 +748,9 @@ func TestCollectFullStatusData(t *testing.T) {
 	require.NotNil(t, status.ReplicationConfiguration)
 	assert.Equal(t, int32(9), status.ReplicationConfiguration.ReplicaNetTimeout)
 	assert.Empty(t, result.SoftErrors)
-	assert.Len(t, strings.Split(db.QueryLog(), ";"), 9)
+	// gtid_purged now rides the mandatory batch instead of costing its own query.
+	assert.Zero(t, db.GetQueryCalledNum("SELECT @@global.gtid_purged"))
+	assert.Len(t, strings.Split(db.QueryLog(), ";"), 8)
 	assert.Equal(t, selectOneCalls+1, db.GetQueryCalledNum("SELECT 1"))
 
 	db.AddQuery("SHOW REPLICA STATUS", &sqltypes.Result{})
@@ -765,7 +767,7 @@ func TestCollectFullStatusData(t *testing.T) {
 	assert.Nil(t, result.Status.ReplicationStatus)
 	assert.Nil(t, result.Status.ReplicationConfiguration)
 	assert.Equal(t, netTimeoutCalls, db.GetQueryCalledNum("select @@global.replica_net_timeout"))
-	assert.Len(t, strings.Split(db.QueryLog(), ";"), 8)
+	assert.Len(t, strings.Split(db.QueryLog(), ";"), 7)
 }
 
 func newCollectFullStatusDataTestMysqld(t *testing.T) (*fakesqldb.DB, *Mysqld) {
@@ -782,8 +784,8 @@ func newCollectFullStatusDataTestMysqld(t *testing.T) (*fakesqldb.DB, *Mysqld) {
 	db.AddQueryPattern(
 		"SELECT @@global.server_id AS server_id,.*",
 		sqltypes.MakeTestResult(
-			sqltypes.MakeTestFields("server_id|server_uuid|version|version_comment|read_only|super_read_only|gtid_mode|binlog_format|log_bin|log_replica_updates|binlog_row_image", "uint64|varchar|varchar|varchar|int64|int64|varchar|varchar|int64|int64|varchar"),
-			"42|test-uuid|8.0.35|MySQL Community Server - GPL|1|1|ON|ROW|1|1|FULL",
+			sqltypes.MakeTestFields("server_id|server_uuid|version|version_comment|read_only|super_read_only|gtid_mode|binlog_format|log_bin|log_replica_updates|binlog_row_image|gtid_purged", "uint64|varchar|varchar|varchar|int64|int64|varchar|varchar|int64|int64|varchar|varchar"),
+			"42|test-uuid|8.0.35|MySQL Community Server - GPL|1|1|ON|ROW|1|1|FULL|8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-5",
 		),
 	)
 	db.AddQuery("SHOW REPLICA STATUS", &sqltypes.Result{})
@@ -808,7 +810,6 @@ func TestCollectFullStatusDataStopsAfterCancellation(t *testing.T) {
 	require.ErrorIs(t, err, context.Canceled)
 	assert.Nil(t, result)
 	assert.Zero(t, db.GetQueryCalledNum("SHOW BINARY LOG STATUS"))
-	assert.Zero(t, db.GetQueryCalledNum("SELECT @@global.gtid_purged"))
 	assert.Zero(t, db.GetQueryCalledNum("SELECT * FROM performance_schema.replication_connection_configuration"))
 }
 
@@ -854,8 +855,8 @@ func TestCollectFullStatusDataRetriesVariablesAfterLostConnection(t *testing.T) 
 	variablesQuery := conn.FullStatusVariablesQuery()
 	conn.Close()
 	db.AddQuery(variablesQuery, sqltypes.MakeTestResult(
-		sqltypes.MakeTestFields("server_id|server_uuid|version|version_comment|read_only|super_read_only|gtid_mode|binlog_format|log_bin|log_replica_updates|binlog_row_image", "uint64|varchar|varchar|varchar|int64|int64|varchar|varchar|int64|int64|varchar"),
-		"42|test-uuid|8.0.35|MySQL Community Server - GPL|1|1|ON|ROW|1|1|FULL",
+		sqltypes.MakeTestFields("server_id|server_uuid|version|version_comment|read_only|super_read_only|gtid_mode|binlog_format|log_bin|log_replica_updates|binlog_row_image|gtid_purged", "uint64|varchar|varchar|varchar|int64|int64|varchar|varchar|int64|int64|varchar|varchar"),
+		"42|test-uuid|8.0.35|MySQL Community Server - GPL|1|1|ON|ROW|1|1|FULL|8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-5",
 	))
 
 	var connectionClosed atomic.Bool
@@ -1015,6 +1016,46 @@ func TestCollectFullStatusDataFailsForMariaDB(t *testing.T) {
 	result, err := mysqld.CollectFullStatusData(t.Context())
 	require.ErrorContains(t, err, "not supported on MariaDB")
 	assert.Nil(t, result)
+}
+
+// TestCollectFullStatusDataOmitsGTIDPurgedForFilePos covers the FilePos flavor,
+// which tracks positions by binlog file and offset. The batch still reads
+// gtid_purged from the server, but reporting it would put a MySQL56 position in
+// a status whose other positions are FilePos, so it has to stay empty.
+func TestCollectFullStatusDataOmitsGTIDPurgedForFilePos(t *testing.T) {
+	db := fakesqldb.New(t)
+	t.Cleanup(db.Close)
+
+	params := db.ConnParams()
+	cp := *params
+	cp.Flavor = replication.FilePosFlavorID
+	mysqld := NewMysqld(dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb"))
+	t.Cleanup(mysqld.Close)
+
+	db.AddQuery("SELECT 1", &sqltypes.Result{})
+	db.AddQueryPattern(
+		"SELECT @@global.server_id AS server_id,.*",
+		sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields("server_id|server_uuid|version|version_comment|read_only|super_read_only|gtid_mode|binlog_format|log_bin|log_replica_updates|binlog_row_image|gtid_purged", "uint64|varchar|varchar|varchar|int64|int64|varchar|varchar|int64|int64|varchar|varchar"),
+			"42|test-uuid|8.0.35|MySQL Community Server - GPL|1|1|OFF|ROW|1|1|FULL|8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-5",
+		),
+	)
+	db.AddQuery("SHOW SLAVE STATUS", &sqltypes.Result{})
+	db.AddQuery("SHOW BINARY LOG STATUS", &sqltypes.Result{})
+	db.AddQuery("SHOW MASTER STATUS", &sqltypes.Result{})
+	db.AddQuery("SELECT * FROM performance_schema.replication_connection_configuration", &sqltypes.Result{})
+	db.AddQueryPattern("SELECT variable_name, variable_value FROM performance_schema.global_variables WHERE variable_name IN .*", &sqltypes.Result{})
+	db.AddQueryPattern("SELECT variable_name, variable_value FROM performance_schema.global_status WHERE variable_name IN .*", &sqltypes.Result{})
+
+	result, err := mysqld.CollectFullStatusData(t.Context())
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.NotNil(t, result.Status)
+	// The server answered with a real GTID set, so an empty value here is the
+	// FilePos guard rather than the server having nothing to report.
+	assert.Empty(t, result.Status.GtidPurged)
+	assert.Equal(t, uint32(42), result.Status.ServerId)
 }
 
 func TestFetchFullStatusVariablesHonorsCanceledContext(t *testing.T) {

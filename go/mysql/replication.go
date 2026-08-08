@@ -21,6 +21,7 @@ import (
 	"io"
 	"math"
 
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -224,6 +225,7 @@ type FullStatusVariables struct {
 	LogBin            bool
 	LogReplicaUpdates bool
 	BinlogRowImage    string
+	GTIDPurged        replication.Position
 }
 
 const (
@@ -305,6 +307,14 @@ func ParseFullStatusVariables(qr *sqltypes.Result) (*FullStatusVariables, error)
 	if err != nil {
 		return nil, vterrors.Wrapf(err, "failed to read binlog_row_image")
 	}
+	gtidPurged, err := row.ToString("gtid_purged")
+	if err != nil {
+		return nil, vterrors.Wrapf(err, "failed to read gtid_purged")
+	}
+	purgedGTIDSet, err := replication.ParseMysql56GTIDSet(gtidPurged)
+	if err != nil {
+		return nil, vterrors.Wrapf(err, "failed to parse gtid_purged")
+	}
 
 	return &FullStatusVariables{
 		ServerID:          uint32(serverID),
@@ -318,6 +328,7 @@ func ParseFullStatusVariables(qr *sqltypes.Result) (*FullStatusVariables, error)
 		LogBin:            logBin == 1,
 		LogReplicaUpdates: logReplicaUpdates == 1,
 		BinlogRowImage:    binlogRowImage,
+		GTIDPurged:        replication.Position{GTIDSet: purgedGTIDSet},
 	}, nil
 }
 
@@ -334,7 +345,8 @@ func (c *Conn) FullStatusVariablesQuery() string {
 	@@global.binlog_format AS binlog_format,
 	@@global.log_bin AS log_bin,
 	%s AS log_replica_updates,
-	@@global.binlog_row_image AS binlog_row_image`, c.flavor.binlogReplicatedUpdates())
+	@@global.binlog_row_image AS binlog_row_image,
+	@@global.gtid_purged AS gtid_purged`, c.flavor.binlogReplicatedUpdates())
 }
 
 // ResetBinaryLogsCommand returns the command used to reset the

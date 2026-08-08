@@ -252,8 +252,8 @@ func TestFullStatusCollectsEveryField(t *testing.T) {
 	db.AddQueryPattern(
 		"SELECT @@global.server_id AS server_id,.*",
 		sqltypes.MakeTestResult(
-			sqltypes.MakeTestFields("server_id|server_uuid|version|version_comment|read_only|super_read_only|gtid_mode|binlog_format|log_bin|log_replica_updates|binlog_row_image", "uint64|varchar|varchar|varchar|int64|int64|varchar|varchar|int64|int64|varchar"),
-			"42|test-uuid|8.0.35|MySQL Community Server - GPL|1|1|ON|ROW|1|1|FULL",
+			sqltypes.MakeTestFields("server_id|server_uuid|version|version_comment|read_only|super_read_only|gtid_mode|binlog_format|log_bin|log_replica_updates|binlog_row_image|gtid_purged", "uint64|varchar|varchar|varchar|int64|int64|varchar|varchar|int64|int64|varchar|varchar"),
+			"42|test-uuid|8.0.35|MySQL Community Server - GPL|1|1|ON|ROW|1|1|FULL|8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-5",
 		),
 	)
 	db.AddQueryPattern(

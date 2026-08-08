@@ -267,6 +267,13 @@ func (c *Conn) IsMariaDB() bool {
 	return false
 }
 
+// IsFilePos returns true iff the connection is using the FilePos flavor,
+// which tracks positions by binlog file and offset rather than by GTID.
+func (c *Conn) IsFilePos() bool {
+	_, ok := c.flavor.(*filePosFlavor)
+	return ok
+}
+
 // PrimaryPosition returns the current primary's replication position.
 func (c *Conn) PrimaryPosition() (replication.Position, error) {
 	gtidSet, err := c.flavor.primaryGTIDSet(c)
@@ -448,6 +455,11 @@ func (c *Conn) ReplicationConfiguration() (*replicationdata.Configuration, error
 	}
 	if err != nil {
 		return nil, err
+	}
+	// Flavors that do not track a replication configuration, such as FilePos,
+	// report none rather than an error.
+	if replConfiguration == nil {
+		return nil, nil
 	}
 	replNetTimeout, err := c.flavor.replicationNetTimeout(c)
 	replConfiguration.ReplicaNetTimeout = replNetTimeout

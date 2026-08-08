@@ -144,16 +144,11 @@ func (mysqld *Mysqld) CollectFullStatusData(ctx context.Context) (*FullStatusRes
 		status.PrimaryStatus = replication.PrimaryStatusToProto(primaryStatus)
 	}
 
-	var gtidPurged replication.Position
-	err = runFullStatusQuery(ctx, conn, "GTID purged", func() error {
-		var queryErr error
-		gtidPurged, queryErr = conn.Conn.GetGTIDPurged()
-		return queryErr
-	})
-	if err != nil {
-		return nil, err
+	// The FilePos flavor tracks positions by binlog file and offset, so it
+	// reports no purged GTID set even though the server has one.
+	if !conn.Conn.IsFilePos() {
+		status.GtidPurged = replication.EncodePosition(variables.GTIDPurged)
 	}
-	status.GtidPurged = replication.EncodePosition(gtidPurged)
 
 	if err := mysqld.collectFullStatusSemiSync(ctx, conn, result); err != nil {
 		return nil, err
