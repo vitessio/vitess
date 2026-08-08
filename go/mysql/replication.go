@@ -209,24 +209,22 @@ func (c *Conn) WritePacketDirect(payload []byte) error {
 	return nil
 }
 
-type (
-	SemiSyncType int8
+type SemiSyncType int8
 
-	// FullStatusVariables contains the mandatory global variables used by FullStatus.
-	FullStatusVariables struct {
-		ServerID          uint32
-		ServerUUID        string
-		Version           string
-		VersionComment    string
-		ReadOnly          bool
-		SuperReadOnly     bool
-		GTIDMode          string
-		BinlogFormat      string
-		LogBin            bool
-		LogReplicaUpdates bool
-		BinlogRowImage    string
-	}
-)
+// FullStatusVariables contains the mandatory global variables used by FullStatus.
+type FullStatusVariables struct {
+	ServerID          uint32
+	ServerUUID        string
+	Version           string
+	VersionComment    string
+	ReadOnly          bool
+	SuperReadOnly     bool
+	GTIDMode          string
+	BinlogFormat      string
+	LogBin            bool
+	LogReplicaUpdates bool
+	BinlogRowImage    string
+}
 
 const (
 	SemiSyncTypeUnknown SemiSyncType = iota
