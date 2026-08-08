@@ -339,37 +339,6 @@ func (c *Conn) FullStatusVariablesQuery() string {
 	@@global.binlog_row_image AS binlog_row_image`, c.flavor.binlogReplicatedUpdates())
 }
 
-func (c *Conn) BinlogInformation() (string, bool, bool, string, error) {
-	replicaField := c.flavor.binlogReplicatedUpdates()
-
-	query := fmt.Sprintf("select @@global.binlog_format, @@global.log_bin, %s, @@global.binlog_row_image", replicaField)
-	qr, err := c.ExecuteFetch(query, 1, true)
-	if err != nil {
-		return "", false, false, "", err
-	}
-	if len(qr.Rows) != 1 {
-		return "", false, false, "", fmt.Errorf("unable to read global variables binlog_format, log_bin, %s, binlog_row_image", replicaField)
-	}
-	res := qr.Named().Row()
-	binlogFormat, err := res.ToString("@@global.binlog_format")
-	if err != nil {
-		return "", false, false, "", err
-	}
-	logBin, err := res.ToInt64("@@global.log_bin")
-	if err != nil {
-		return "", false, false, "", err
-	}
-	logReplicaUpdates, err := res.ToInt64(replicaField)
-	if err != nil {
-		return "", false, false, "", err
-	}
-	binlogRowImage, err := res.ToString("@@global.binlog_row_image")
-	if err != nil {
-		return "", false, false, "", err
-	}
-	return binlogFormat, logBin == 1, logReplicaUpdates == 1, binlogRowImage, nil
-}
-
 // ResetBinaryLogsCommand returns the command used to reset the
 // binary logs on the server.
 func (c *Conn) ResetBinaryLogsCommand() string {

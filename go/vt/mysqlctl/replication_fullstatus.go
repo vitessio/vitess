@@ -71,9 +71,9 @@ var (
 	}
 )
 
-// CollectFullStatusData collects FullStatus data on one connection for
-// supported MySQL flavors. A nil result (with a nil error) means the caller
-// should use the existing collection path.
+// CollectFullStatusData collects FullStatus data on one connection. MariaDB is
+// not supported, because the mandatory variables include server_uuid, gtid_mode,
+// and super_read_only, none of which MariaDB has.
 func (mysqld *Mysqld) CollectFullStatusData(ctx context.Context) (*FullStatusResult, error) {
 	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
 	if err != nil {
@@ -82,18 +82,17 @@ func (mysqld *Mysqld) CollectFullStatusData(ctx context.Context) (*FullStatusRes
 	defer conn.Recycle()
 
 	if conn.Conn.IsMariaDB() {
-		return nil, nil
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "FullStatus is not supported on MariaDB")
 	}
 
-	variables, err := mysqld.fetchFullStatusVariables(ctx, conn)
+	var variables *mysql.FullStatusVariables
+	err = runFullStatusQuery(ctx, conn, "variables", func() error {
+		var queryErr error
+		variables, queryErr = mysqld.fetchFullStatusVariables(ctx, conn)
+		return queryErr
+	})
 	if err != nil {
-		if ctx.Err() != nil {
-			return nil, ctx.Err()
-		}
-		log.Warn("FullStatus optimized collection failed; falling back to legacy collection",
-			slog.String("recovery", "legacy_full_status"),
-			slog.Any("error", err))
-		return nil, nil
+		return nil, err
 	}
 
 	_, parsedVersion, err := ParseVersionString(versionStringPrefix + variables.Version)

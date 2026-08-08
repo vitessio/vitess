@@ -69,7 +69,6 @@ type flavor interface {
 	purgedGTIDSet(c *Conn) (replication.GTIDSet, error)
 
 	// gtidMode returns the gtid mode of a server.
-	gtidMode(c *Conn) (string, error)
 
 	// serverUUID returns the UUID of a server.
 	serverUUID(c *Conn) (string, error)
@@ -287,11 +286,6 @@ func (c *Conn) GetGTIDPurged() (replication.Position, error) {
 	return replication.Position{
 		GTIDSet: gtidSet,
 	}, nil
-}
-
-// GetGTIDMode returns the tablet's GTID mode. Only available in MySQL flavour
-func (c *Conn) GetGTIDMode() (string, error) {
-	return c.flavor.gtidMode(c)
 }
 
 // GetServerUUID returns the server's UUID.

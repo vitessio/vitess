@@ -25,7 +25,6 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
-	"vitess.io/vitess/go/vt/proto/replicationdata"
 
 	mysqlctlpb "vitess.io/vitess/go/vt/proto/mysqlctl"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -48,9 +47,6 @@ type MysqlDaemon interface {
 	// GetMysqlPort returns the current port mysql is listening on.
 	GetMysqlPort(ctx context.Context) (int32, error)
 
-	// GetServerID returns the servers ID.
-	GetServerID(ctx context.Context) (uint32, error)
-
 	// GetServerUUID returns the servers UUID
 	GetServerUUID(ctx context.Context) (string, error)
 
@@ -67,19 +63,14 @@ type MysqlDaemon interface {
 	ReplicationStatus(ctx context.Context) (replication.ReplicationStatus, error)
 	PrimaryStatus(ctx context.Context) (replication.PrimaryStatus, error)
 	CollectFullStatusData(ctx context.Context) (*FullStatusResult, error)
-	ReplicationConfiguration(ctx context.Context) (*replicationdata.Configuration, error)
 	GetGTIDPurged(ctx context.Context) (replication.Position, error)
 	SetSemiSyncEnabled(ctx context.Context, source, replica bool) error
 	SemiSyncEnabled(ctx context.Context) (source, replica bool)
 	SemiSyncExtensionLoaded(ctx context.Context) (mysql.SemiSyncType, error)
 	SemiSyncStatus(ctx context.Context) (source, replica bool)
-	SemiSyncClients(ctx context.Context) (count uint32)
-	SemiSyncSettings(ctx context.Context) (timeout uint64, numReplicas uint32)
 	SemiSyncReplicationStatus(ctx context.Context) (bool, error)
 	IsSemiSyncBlocked(ctx context.Context) (bool, error)
 	ResetReplicationParameters(ctx context.Context) error
-	GetBinlogInformation(ctx context.Context) (binlogFormat string, logEnabled bool, logReplicaUpdate bool, binlogRowImage string, err error)
-	GetGTIDMode(ctx context.Context) (gtidMode string, err error)
 	FlushBinaryLogs(ctx context.Context) (err error)
 	GetBinaryLogs(ctx context.Context) (binaryLogs []string, err error)
 	GetPreviousGTIDs(ctx context.Context, binlog string) (previousGtids string, err error)
@@ -120,9 +111,6 @@ type MysqlDaemon interface {
 
 	// GetVersionString returns the database version as a string
 	GetVersionString(ctx context.Context) (string, error)
-
-	// GetVersionComment returns the version comment
-	GetVersionComment(ctx context.Context) (string, error)
 
 	// HostMetrics returns some OS metrics
 	HostMetrics(ctx context.Context, cnf *Mycnf) (*mysqlctlpb.HostMetricsResponse, error)

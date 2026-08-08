@@ -33,7 +33,6 @@ import (
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/topo"
@@ -108,17 +107,7 @@ type (
 		err    error
 		calls  int
 	}
-
-	// legacyFullStatusMysqlDaemon forces FullStatus down the legacy per-field
-	// path the same way an unsupported flavor does.
-	legacyFullStatusMysqlDaemon struct {
-		mysqlctl.MysqlDaemon
-	}
 )
-
-func (d *legacyFullStatusMysqlDaemon) CollectFullStatusData(context.Context) (*mysqlctl.FullStatusResult, error) {
-	return nil, nil
-}
 
 func (d *demotePrimaryStallQS) SetDemotePrimaryStalled(val bool) {
 	d.primaryStalled.Store(val)
@@ -207,29 +196,24 @@ func TestFullStatusUsesCollectedData(t *testing.T) {
 	assert.Equal(t, topodatapb.TabletType_REPLICA, status.TabletType)
 }
 
-func TestFullStatusFallsBackWhenCollectedDataIsUnavailable(t *testing.T) {
+// TestFullStatusRejectsMissingCollectedData covers a collector that reports
+// neither data nor an error. There is no second collection path to fall back
+// to, so FullStatus must fail rather than report an empty status as the truth.
+func TestFullStatusRejectsMissingCollectedData(t *testing.T) {
 	fakeMysqlDaemon := newTestMysqlDaemon(t, 1)
 	t.Cleanup(fakeMysqlDaemon.DB().Close)
-	fakeMysqlDaemon.Version = "Ver 8.0.32"
-	fakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
-		"FAKE select @@global",
-		"FAKE select @@global",
-	}
 	mysqlDaemon := &fullStatusMysqlDaemon{
 		FakeMysqlDaemon: fakeMysqlDaemon,
 	}
 	tablet := newTestTablet(t, 100, "ks", "0", nil)
 	tm := newTestReplicationTM(tablet, mysqlDaemon, nil)
 	tm.QueryServiceControl = tabletservermock.NewController()
-	tm.SemiSyncMonitor = semisyncmonitor.CreateTestSemiSyncMonitor(fakeMysqlDaemon.DB(), exporter)
 
 	status, err := tm.FullStatus(t.Context())
 
-	require.NoError(t, err)
-	require.NotNil(t, status)
+	require.ErrorContains(t, err, "returned no data")
+	assert.Nil(t, status)
 	assert.Equal(t, 1, mysqlDaemon.calls)
-	assert.Equal(t, uint32(1), status.ServerId)
-	assert.Equal(t, "8.0.32", status.Version)
 }
 
 func TestFullStatusReturnsCollectorError(t *testing.T) {
@@ -250,10 +234,10 @@ func TestFullStatusReturnsCollectorError(t *testing.T) {
 	assert.Equal(t, 1, mysqlDaemon.calls)
 }
 
-// TestFullStatusMatchesLegacyCollection pins the collected FullStatus to the
-// legacy per-field one, so that a field the collector maps differently, drops
-// or stops populating is caught. Both runs answer from the same MySQL.
-func TestFullStatusMatchesLegacyCollection(t *testing.T) {
+// TestFullStatusCollectsEveryField pins each FullStatus field to the value its
+// query answers with, so that a field the collector maps differently, drops or
+// stops populating is caught.
+func TestFullStatusCollectsEveryField(t *testing.T) {
 	db := fakesqldb.New(t)
 	t.Cleanup(db.Close)
 
@@ -292,39 +276,6 @@ func TestFullStatusMatchesLegacyCollection(t *testing.T) {
 		),
 	)
 
-	// Answers for the legacy path, carrying the same values.
-	db.AddQuery("select @@global.server_id", sqltypes.MakeTestResult(sqltypes.MakeTestFields("@@global.server_id", "uint64"), "42"))
-	db.AddQuery("SELECT @@global.server_uuid", sqltypes.MakeTestResult(sqltypes.MakeTestFields("@@global.server_uuid", "varchar"), "test-uuid"))
-	db.AddQuery("select concat('Ver ', @@global.version, ' ', @@global.version_comment) as version", sqltypes.MakeTestResult(sqltypes.MakeTestFields("version", "varchar"), "Ver 8.0.35 MySQL Community Server - GPL"))
-	db.AddQuery("select @@global.version_comment", sqltypes.MakeTestResult(sqltypes.MakeTestFields("@@global.version_comment", "varchar"), "MySQL Community Server - GPL"))
-	db.AddQuery("SHOW VARIABLES LIKE 'read_only'", sqltypes.MakeTestResult(sqltypes.MakeTestFields("Variable_name|Value", "varchar|varchar"), "read_only|ON"))
-	db.AddQuery("SELECT @@global.super_read_only", sqltypes.MakeTestResult(sqltypes.MakeTestFields("@@global.super_read_only", "int64"), "1"))
-	db.AddQuery("select @@global.gtid_mode", sqltypes.MakeTestResult(sqltypes.MakeTestFields("@@global.gtid_mode", "varchar"), "ON"))
-	db.AddQuery("select @@global.binlog_format, @@global.log_bin, @@global.log_replica_updates, @@global.binlog_row_image", sqltypes.MakeTestResult(
-		sqltypes.MakeTestFields("@@global.binlog_format|@@global.log_bin|@@global.log_replica_updates|@@global.binlog_row_image", "varchar|int64|int64|varchar"),
-		"ROW|1|1|FULL",
-	))
-	db.AddQuery("SHOW VARIABLES LIKE 'rpl_semi_sync_%_enabled'", sqltypes.MakeTestResult(
-		sqltypes.MakeTestFields("Variable_name|Value", "varchar|varchar"),
-		"rpl_semi_sync_source_enabled|ON",
-		"rpl_semi_sync_replica_enabled|ON",
-	))
-	db.AddQuery("SHOW VARIABLES LIKE 'rpl_semi_sync_%'", sqltypes.MakeTestResult(
-		sqltypes.MakeTestFields("Variable_name|Value", "varchar|varchar"),
-		"rpl_semi_sync_source_timeout|10000",
-		"rpl_semi_sync_source_wait_for_replica_count|2",
-	))
-	db.AddQuery("SHOW STATUS LIKE 'Rpl_semi_sync_%_status'", sqltypes.MakeTestResult(
-		sqltypes.MakeTestFields("Variable_name|Value", "varchar|varchar"),
-		"Rpl_semi_sync_source_status|ON",
-		"Rpl_semi_sync_replica_status|ON",
-	))
-	db.AddQuery("SHOW STATUS LIKE 'Rpl_semi_sync_source_clients'", sqltypes.MakeTestResult(
-		sqltypes.MakeTestFields("Variable_name|Value", "varchar|varchar"),
-		"Rpl_semi_sync_source_clients|3",
-	))
-
-	// Answers shared by both paths.
 	db.AddQuery("SHOW REPLICA STATUS", sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields("Last_SQL_Error|Last_IO_Error", "varchar|varchar"),
 		"|",
@@ -348,20 +299,10 @@ func TestFullStatusMatchesLegacyCollection(t *testing.T) {
 	collected, err := tm.FullStatus(t.Context())
 	require.NoError(t, err)
 	require.NotNil(t, collected)
-	// Guard against the collector silently falling back, which would compare
-	// the legacy path against itself.
+	// Every field below comes from a batched query, so a reintroduced per-field
+	// read would show up here.
 	assert.Zero(t, db.GetQueryCalledNum("select @@global.server_id"))
 
-	tm.MysqlDaemon = &legacyFullStatusMysqlDaemon{mysqld}
-	legacy, err := tm.FullStatus(t.Context())
-	require.NoError(t, err)
-	require.NotNil(t, legacy)
-	assert.NotZero(t, db.GetQueryCalledNum("select @@global.server_id"))
-
-	utils.MustMatch(t, legacy, collected)
-
-	// Both paths agreeing on zero values would make the comparison above
-	// vacuous, so pin what the fields are expected to hold.
 	assert.Equal(t, uint32(42), collected.ServerId)
 	assert.Equal(t, "test-uuid", collected.ServerUuid)
 	assert.Equal(t, "8.0.35", collected.Version)

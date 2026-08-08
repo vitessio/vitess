@@ -27,7 +27,6 @@ import (
 	"log/slog"
 	"math"
 	"net"
-	"strconv"
 	"strings"
 	"time"
 
@@ -38,7 +37,6 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/hook"
 	"vitess.io/vitess/go/vt/log"
-	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -234,22 +232,6 @@ func (mysqld *Mysqld) GetMysqlPort(ctx context.Context) (int32, error) {
 		return 0, err
 	}
 	return int32(utemp), nil
-}
-
-// GetServerID returns mysql server id
-func (mysqld *Mysqld) GetServerID(ctx context.Context) (uint32, error) {
-	qr, err := mysqld.FetchSuperQuery(ctx, "select @@global.server_id")
-	if err != nil {
-		return 0, err
-	}
-	if len(qr.Rows) != 1 {
-		return 0, errors.New("no server_id in mysql")
-	}
-	utemp, err := qr.Rows[0][0].ToCastUint64()
-	if err != nil {
-		return 0, err
-	}
-	return uint32(utemp), nil
 }
 
 // GetServerUUID returns mysql server uuid
@@ -514,16 +496,6 @@ func (mysqld *Mysqld) PrimaryStatus(ctx context.Context) (replication.PrimarySta
 	return primaryStatus, nil
 }
 
-func (mysqld *Mysqld) ReplicationConfiguration(ctx context.Context) (*replicationdatapb.Configuration, error) {
-	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
-	if err != nil {
-		return nil, err
-	}
-	defer conn.Recycle()
-
-	return conn.Conn.ReplicationConfiguration()
-}
-
 // GetGTIDPurged returns the gtid purged statuses
 func (mysqld *Mysqld) GetGTIDPurged(ctx context.Context) (replication.Position, error) {
 	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
@@ -664,28 +636,6 @@ func FindReplicas(ctx context.Context, mysqld MysqlDaemon) ([]string, error) {
 	return addrs, nil
 }
 
-// GetBinlogInformation gets the binlog format, whether binlog is enabled and if updates on replica logging is enabled.
-func (mysqld *Mysqld) GetBinlogInformation(ctx context.Context) (string, bool, bool, string, error) {
-	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
-	if err != nil {
-		return "", false, false, "", err
-	}
-	defer conn.Recycle()
-
-	return conn.Conn.BinlogInformation()
-}
-
-// GetGTIDMode gets the GTID mode for the server
-func (mysqld *Mysqld) GetGTIDMode(ctx context.Context) (string, error) {
-	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
-	if err != nil {
-		return "", err
-	}
-	defer conn.Recycle()
-
-	return conn.Conn.GetGTIDMode()
-}
-
 // FlushBinaryLogs is part of the MysqlDaemon interface.
 func (mysqld *Mysqld) FlushBinaryLogs(ctx context.Context) (err error) {
 	_, err = mysqld.FetchSuperQuery(ctx, "FLUSH BINARY LOGS")
@@ -739,16 +689,6 @@ func (mysqld *Mysqld) enableSemiSyncQuery(ctx context.Context) (string, error) {
 		return "SET GLOBAL rpl_semi_sync_source_enabled = %v, GLOBAL rpl_semi_sync_replica_enabled = %v", nil
 	case mysql.SemiSyncTypeMaster:
 		return "SET GLOBAL rpl_semi_sync_master_enabled = %v, GLOBAL rpl_semi_sync_slave_enabled = %v", nil
-	}
-	return "", ErrNoSemiSync
-}
-
-func (mysqld *Mysqld) semiSyncClientsQuery(ctx context.Context) (string, error) {
-	switch mysqld.SemiSyncType(ctx) {
-	case mysql.SemiSyncTypeSource:
-		return "SHOW STATUS LIKE 'Rpl_semi_sync_source_clients'", nil
-	case mysql.SemiSyncTypeMaster:
-		return "SHOW STATUS LIKE 'Rpl_semi_sync_master_clients'", nil
 	}
 	return "", ErrNoSemiSync
 }
@@ -821,42 +761,6 @@ func (mysqld *Mysqld) SemiSyncStatus(ctx context.Context) (primary, replica bool
 		replica = vars["Rpl_semi_sync_slave_status"] == "ON"
 	}
 	return primary, replica
-}
-
-// SemiSyncClients returns the number of semi-sync clients for the primary.
-func (mysqld *Mysqld) SemiSyncClients(ctx context.Context) uint32 {
-	query, err := mysqld.semiSyncClientsQuery(ctx)
-	if err != nil {
-		return 0
-	}
-	qr, err := mysqld.FetchSuperQuery(ctx, query)
-	if err != nil {
-		return 0
-	}
-	if len(qr.Rows) != 1 {
-		return 0
-	}
-	countStr := qr.Rows[0][1].ToString()
-	count, _ := strconv.ParseUint(countStr, 10, 32)
-	return uint32(count)
-}
-
-// SemiSyncSettings returns the settings of semi-sync which includes the timeout and the number of replicas to wait for.
-func (mysqld *Mysqld) SemiSyncSettings(ctx context.Context) (timeout uint64, numReplicas uint32) {
-	vars, err := mysqld.fetchVariables(ctx, "rpl_semi_sync_%")
-	if err != nil {
-		return 0, 0
-	}
-	var numReplicasUint uint64
-	switch mysqld.SemiSyncType(ctx) {
-	case mysql.SemiSyncTypeSource:
-		timeout, _ = strconv.ParseUint(vars["rpl_semi_sync_source_timeout"], 10, 64)
-		numReplicasUint, _ = strconv.ParseUint(vars["rpl_semi_sync_source_wait_for_replica_count"], 10, 32)
-	case mysql.SemiSyncTypeMaster:
-		timeout, _ = strconv.ParseUint(vars["rpl_semi_sync_master_timeout"], 10, 64)
-		numReplicasUint, _ = strconv.ParseUint(vars["rpl_semi_sync_master_wait_for_slave_count"], 10, 32)
-	}
-	return timeout, uint32(numReplicasUint)
 }
 
 // SemiSyncReplicationStatus returns whether semi-sync is currently used by replication.
