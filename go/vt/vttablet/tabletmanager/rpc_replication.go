@@ -75,6 +75,7 @@ func (tm *TabletManager) FullStatus(ctx context.Context) (*replicationdatapb.Ful
 		}, nil
 	}
 
+	// Collect mysql state using CollectFullStatusData.
 	result, err := tm.MysqlDaemon.CollectFullStatusData(ctx)
 	if err != nil {
 		return nil, err
