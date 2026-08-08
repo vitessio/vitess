@@ -267,11 +267,6 @@ func (c *Conn) IsMariaDB() bool {
 	return false
 }
 
-// GetGTIDMode returns the tablet's GTID mode. Only available in MySQL flavour
-func (c *Conn) GetGTIDMode() (string, error) {
-	return c.flavor.gtidMode(c)
-}
-
 // PrimaryPosition returns the current primary's replication position.
 func (c *Conn) PrimaryPosition() (replication.Position, error) {
 	gtidSet, err := c.flavor.primaryGTIDSet(c)
@@ -292,6 +287,11 @@ func (c *Conn) GetGTIDPurged() (replication.Position, error) {
 	return replication.Position{
 		GTIDSet: gtidSet,
 	}, nil
+}
+
+// GetGTIDMode returns the tablet's GTID mode. Only available in MySQL flavour
+func (c *Conn) GetGTIDMode() (string, error) {
+	return c.flavor.gtidMode(c)
 }
 
 // GetServerUUID returns the server's UUID.
