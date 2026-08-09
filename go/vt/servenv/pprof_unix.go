@@ -89,11 +89,14 @@ func startPprof() (stop func()) {
 	}()
 
 	return sync.OnceFunc(func() {
-		signal.Stop(startSignal)
-		signal.Stop(stopSignal)
 		close(stopCh)
 		<-startDoneCh
 		<-stopDoneCh
+		// Unregister the channels only after both listeners have exited;
+		// a listener handling a signal could otherwise re-register a
+		// channel via signal.Notify after it was stopped here.
+		signal.Stop(startSignal)
+		signal.Stop(stopSignal)
 		stopProf()
 	})
 }
