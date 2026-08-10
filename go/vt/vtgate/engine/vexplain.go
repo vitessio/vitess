@@ -265,6 +265,16 @@ func (v *VExplain) explainRoutesInMySQL(ctx context.Context, vcursor VCursor, pr
 		if err != nil {
 			return err
 		}
+		// Mirror executeShards: when routing resolves no shard but the Route is
+		// marked for no-routes special handling (e.g. an aggregate SELECT whose
+		// predicate maps to no shard), the real query would still be sent to an
+		// arbitrary shard. Fall back to anyShard so EXPLAIN reflects that.
+		if len(rss) == 0 && route.NoRoutesSpecialHandling {
+			rss, bvs, err = route.anyShard(ctx, vcursor, bindVars)
+			if err != nil {
+				return err
+			}
+		}
 		queries := getQueries(route.Query, bvs)
 		perShard := make(map[string]json.RawMessage, len(rss))
 		for i, rs := range rss {
