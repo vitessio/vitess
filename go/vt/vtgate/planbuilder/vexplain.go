@@ -57,9 +57,9 @@ func buildVExplainPlan(
 
 // buildVExplainMySQLPlan builds the plan for VEXPLAIN MYSQLPLAN, which runs
 // EXPLAIN FORMAT=JSON against the shards a query would target, without executing
-// the query itself. It only supports read plans (trees of Route primitives) whose
-// target shards can be resolved from a vindex without reading cluster data; any
-// other plan is rejected here with a message pointing the user to VEXPLAIN ALL.
+// the query itself. It only supports read plans whose target shards can be resolved
+// from a vindex without reading cluster data; any other plan is rejected here with a
+// message pointing the user to VEXPLAIN ALL.
 func buildVExplainMySQLPlan(ctx context.Context, explainStatement sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, cfg dynamicconfig.DDL) (*planResult, error) {
 	innerInstruction, err := createInstructionFor(ctx, sqlparser.String(explainStatement), explainStatement, reservedVars, vschema, cfg)
 	if err != nil {
@@ -77,27 +77,50 @@ func buildVExplainMySQLPlan(ctx context.Context, explainStatement sqlparser.Stat
 	return innerInstruction, nil
 }
 
+const (
+	vexplainMySQLDMLError = "VEXPLAIN MYSQLPLAN only supports SELECT statements; use VEXPLAIN ALL instead"
+
+	vexplainMySQLUnresolvableError = "VEXPLAIN MYSQLPLAN cannot resolve the target shards without executing the query " +
+		"(the query uses a cross-shard join, subquery, or lookup vindex); use VEXPLAIN ALL instead"
+)
+
 // checkVExplainMySQLSupported returns an error if any primitive in the tree cannot
-// be handled by VEXPLAIN MYSQLPLAN. Unsupported cases are DML (whose plans are not
-// Route primitives) and any plan whose shard set depends on data read from the
-// cluster: cross-shard joins and subqueries (whose child Routes are parameterized
-// by rows produced at runtime) and lookup vindexes (which resolve shards by
-// querying a lookup table). All of these are directed to VEXPLAIN ALL instead.
+// be handled by VEXPLAIN MYSQLPLAN. It is an allowlist: only primitives whose target
+// shards can be resolved from a vindex without reading cluster data are permitted -
+// a Route (with a resolvable vindex) and the shard-independent container primitives
+// that pass their bind variables through to their inputs unchanged. DML is rejected
+// with a SELECT-only message. Everything else - cross-shard joins, subqueries,
+// recursive CTEs (whose child Routes are parameterized by rows produced at runtime)
+// and lookup vindexes (which resolve shards by querying a lookup table) - is rejected
+// and directed to VEXPLAIN ALL instead. Defaulting to reject keeps the check fail-closed
+// as new primitive types are added.
 func checkVExplainMySQLSupported(primitive engine.Primitive) error {
 	switch prim := primitive.(type) {
-	case *engine.Insert, *engine.Update, *engine.Delete:
-		return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED,
-			"VEXPLAIN MYSQLPLAN only supports SELECT statements; use VEXPLAIN ALL instead")
-	case *engine.Join, *engine.SemiJoin, *engine.HashJoin, *engine.ValuesJoin, *engine.UncorrelatedSubquery, *engine.VindexLookup:
-		return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED,
-			"VEXPLAIN MYSQLPLAN cannot resolve the target shards without executing the query "+
-				"(the query uses a cross-shard join, subquery, or lookup vindex); use VEXPLAIN ALL instead")
 	case *engine.Route:
 		if prim.Vindex != nil && prim.Vindex.NeedsVCursor() {
-			return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED,
-				"VEXPLAIN MYSQLPLAN cannot resolve the target shards without executing the query "+
-					"(the query uses a cross-shard join, subquery, or lookup vindex); use VEXPLAIN ALL instead")
+			return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, vexplainMySQLUnresolvableError)
 		}
+	case *engine.Concatenate,
+		*engine.Distinct,
+		*engine.Filter,
+		*engine.Limit,
+		*engine.MemorySort,
+		*engine.MergeSort,
+		*engine.OrderedAggregate,
+		*engine.Projection,
+		*engine.RenameFields,
+		*engine.Rows,
+		*engine.ScalarAggregate,
+		*engine.SimpleProjection,
+		*engine.SingleRow,
+		*engine.SQLCalcFoundRows:
+		// Shard-independent container primitives: they forward bind variables to
+		// their inputs unchanged, so shard resolution is unaffected. Fall through
+		// to recurse into their inputs.
+	case *engine.Insert, *engine.InsertSelect, *engine.Update, *engine.Delete, *engine.Upsert, *engine.DMLWithInput, *engine.FkCascade, *engine.FkVerify:
+		return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, vexplainMySQLDMLError)
+	default:
+		return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, vexplainMySQLUnresolvableError)
 	}
 
 	inputs, _ := primitive.Inputs()

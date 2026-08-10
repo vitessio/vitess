@@ -170,6 +170,66 @@ func TestVExplainMySQLPlanKeysByShard(t *testing.T) {
 	}
 }
 
+// TestVExplainMySQLPlanMultipleRoutes verifies that a plan with more than one
+// Route node (here a UNION, which plans as Distinct over a Concatenate of two
+// Routes) attaches a distinct per-shard EXPLAIN map to each Route node, keyed by
+// shard, without executing the wrapped query.
+func TestVExplainMySQLPlanMultipleRoutes(t *testing.T) {
+	conns := map[string]*sandboxconn.SandboxConn{}
+	executor, ctx := createExecutorEnvCallback(t, createExecutorConfig(), func(shard, ks string, tabletType topodatapb.TabletType, conn *sandboxconn.SandboxConn) {
+		if ks == KsTestSharded && tabletType == topodatapb.TabletType_PRIMARY {
+			// Both Routes of the UNION scatter to every shard, so each shard is
+			// asked to EXPLAIN twice; queue a shard-identifying result for each.
+			conn.SetResults([]*sqltypes.Result{explainResultForShard(shard), explainResultForShard(shard)})
+			conns[shard] = conn
+		}
+	})
+
+	session := &vtgatepb.Session{TargetString: "@primary"}
+	gotResult, err := executorExec(ctx, executor, session,
+		"vexplain mysqlplan select id from `user` where id = 1 union select id from `user` where id = 2", nil)
+	require.NoError(t, err)
+
+	// The wrapped query must never be executed: each shard should only ever have
+	// received EXPLAIN FORMAT=JSON queries, never a plain SELECT.
+	for shard, conn := range conns {
+		for _, q := range conn.Queries {
+			assert.Contains(t, q.Sql, "explain format = json", "shard %s received a non-explain query", shard)
+		}
+	}
+
+	// The plan is Distinct -> Concatenate -> [Route, Route]. Each Route node must
+	// carry its own per-shard EXPLAIN map keyed by the shard it resolved to.
+	type planNode struct {
+		OperatorType     string `json:"OperatorType"`
+		MySQLExplainJSON map[string]struct {
+			Shard string `json:"shard"`
+		} `json:"mysql_explain_json"`
+		Inputs []json.RawMessage `json:"Inputs"`
+	}
+	var top planNode
+	require.NoError(t, json.Unmarshal([]byte(gotResult.Rows[0][0].ToString()), &top))
+	require.Equal(t, "Distinct", top.OperatorType)
+	require.Len(t, top.Inputs, 1)
+
+	var concatenate planNode
+	require.NoError(t, json.Unmarshal(top.Inputs[0], &concatenate))
+	require.Equal(t, "Concatenate", concatenate.OperatorType)
+	require.Len(t, concatenate.Inputs, 2, "UNION should plan as a Concatenate of two Routes")
+
+	for i, raw := range concatenate.Inputs {
+		var route planNode
+		require.NoError(t, json.Unmarshal(raw, &route))
+		require.Equal(t, "Route", route.OperatorType, "input %d", i)
+		require.NotEmpty(t, route.MySQLExplainJSON, "Route %d must carry per-shard EXPLAIN output", i)
+		// The map must be keyed by the shard the Route resolved to, and each entry
+		// must carry that same shard's EXPLAIN document.
+		for shard, doc := range route.MySQLExplainJSON {
+			assert.Equal(t, shard, doc.Shard, "Route %d entry must be keyed by its own shard", i)
+		}
+	}
+}
+
 func TestVExplainMySQLPlanRequiresExecution(t *testing.T) {
 	executor, _, _, _, ctx := createExecutorEnv(t)
 	session := &vtgatepb.Session{TargetString: "@primary"}
@@ -181,6 +241,7 @@ func TestVExplainMySQLPlanRequiresExecution(t *testing.T) {
 	}{
 		{"lookup vindex", "vexplain mysqlplan select * from music where id = 5", "cannot resolve the target shards without executing the query"},
 		{"cross-shard join", "vexplain mysqlplan select u.id from `user` u join user_extra ue on u.col = ue.col", "cannot resolve the target shards without executing the query"},
+		{"recursive cte", "vexplain mysqlplan with recursive cte(id) as (select id from `user` where id = 1 union select u.id from `user` u join cte on u.id = cte.id) select * from cte", "cannot resolve the target shards without executing the query"},
 		{"insert", "vexplain mysqlplan insert into user_extra(user_id) values (5)", "only supports SELECT statements"},
 		{"update", "vexplain mysqlplan update user_extra set col = 1 where user_id = 5", "only supports SELECT statements"},
 		{"delete", "vexplain mysqlplan delete from user_extra where user_id = 5", "only supports SELECT statements"},

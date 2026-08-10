@@ -274,7 +274,7 @@ A new `VEXPLAIN MYSQLPLAN <query>` statement runs MySQL's `EXPLAIN FORMAT=JSON` 
 
 Unlike `VEXPLAIN ALL`, which executes the query to discover the shard-level queries before explaining them, `VEXPLAIN MYSQLPLAN` never runs the wrapped query.
 
-Only `SELECT` statements whose target shards can be resolved from a vindex without reading cluster data are supported. DML (`INSERT`/`UPDATE`/`DELETE`), and any query whose shard set depends on data — cross-shard joins, subqueries, and lookup vindexes — are rejected with an error suggesting `VEXPLAIN ALL` instead.
+Only `SELECT` statements whose target shards can be resolved from a vindex without reading cluster data are supported. DML (`INSERT`/`UPDATE`/`DELETE`), and any query whose shard set depends on data — cross-shard joins, subqueries, recursive CTEs, and lookup vindexes — are rejected with an error suggesting `VEXPLAIN ALL` instead.
 
 ### <a id="minor-changes-reparent"/>Reparent</a>
 
