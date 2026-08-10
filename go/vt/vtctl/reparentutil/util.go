@@ -201,14 +201,49 @@ func ElectNewPrimary(
 		mysqlVersions = nil
 	}
 
-	// sort preferred tablets for finding the best primary — PRS prefers version over position
-	// because it always catches the elected tablet up to the old primary's exact position.
-	err = sortTabletsForReparent(validTablets, tabletPositions, innodbBufferPool, mysqlVersions, opts.durability, SortForPRS)
-	if err != nil {
+	// Choose the sort ordering based on how the elected candidate will be promoted,
+	// mirroring the path dispatch in reparentShardLocked:
+	//   - No current primary but the shard has had one before (PrimaryTermStartTime set):
+	//     the no-clear-primary path promotes without catching the elect up to a source, and
+	//     demoted tablets may hold received-but-unapplied relay logs. Position must lead so we
+	//     never elect a candidate that is behind on received transactions; version only breaks
+	//     ties among equally-advanced candidates.
+	//   - Otherwise (a current primary exists, so the graceful path catches the elect up; or
+	//     the shard has never had a primary, so nothing has ever replicated): replication
+	//     position is not a data-safety concern and we prefer a compatible MySQL version.
+	noCurrentPrimary := FindCurrentPrimary(tabletMap, logger) == nil
+	promotesWithoutCatchUp := noCurrentPrimary && shardInfo.PrimaryTermStartTime != nil
+
+	mode := SortByVersion
+	if promotesWithoutCatchUp {
+		mode = SortByPosition
+	}
+
+	if err = sortTabletsForReparent(validTablets, tabletPositions, innodbBufferPool, mysqlVersions, opts.durability, mode); err != nil {
 		return nil, err
 	}
 
-	return validTablets[0].Alias, nil
+	elected := validTablets[0]
+
+	// On the no-catch-up path we ordered by position, so we may have elected a
+	// more-advanced candidate over a lower (more broadly compatible) MySQL version. Warn
+	// operators that version-correct election could not be honored, since promoting a newer
+	// version can break replication for older-version replicas. They can move to the preferred
+	// version with a follow-up PRS once the shard has a healthy primary to catch up from.
+	if promotesWithoutCatchUp && len(mysqlVersions) != 0 && mysqlVersions[0] != unknownVersion {
+		electedVersion := mysqlVersions[0]
+		for _, v := range mysqlVersions[1:] {
+			if v == unknownVersion {
+				continue
+			}
+			if electedVersion.CompareForReplication(v) > 0 {
+				logger.Warningf("PlannedReparentShard could not honor version-correct election: elected tablet %v (MySQL %d.%d.%d) is a higher version than another candidate, because it is more advanced in replication position and this path promotes without catching up. Run PlannedReparentShard again once the shard is healthy to move to a lower-version primary if desired.", topoproto.TabletAliasString(elected.Alias), electedVersion.Major, electedVersion.Minor, electedVersion.Patch)
+				break
+			}
+		}
+	}
+
+	return elected.Alias, nil
 }
 
 // findTabletPositionLagBackupStatus processes the replication positions and lag for a single tablet and

@@ -256,7 +256,7 @@ func TestReparentSorter(t *testing.T) {
 	require.NoError(t, err)
 	for _, testcase := range testcases {
 		t.Run(testcase.name, func(t *testing.T) {
-			err := sortTabletsForReparent(testcase.tablets, testcase.positions, testcase.innodbBufferPool, testcase.mysqlVersions, durability, SortForERS)
+			err := sortTabletsForReparent(testcase.tablets, testcase.positions, testcase.innodbBufferPool, testcase.mysqlVersions, durability, SortByPosition)
 			if testcase.containsErr != "" {
 				require.EqualError(t, err, testcase.containsErr)
 			} else {
@@ -353,7 +353,7 @@ func TestReparentSorter(t *testing.T) {
 					positions = append(positions, testcase.candidatePositions[index])
 				}
 
-				err := sortTabletsForReparent(tablets, positions, nil, nil, durability, SortForERS)
+				err := sortTabletsForReparent(tablets, positions, nil, nil, durability, SortByPosition)
 				require.NoError(t, err)
 				assert.Equalf(t, expectedTablets, tablets, "input permutation: %v", permutation)
 				assert.Equalf(t, testcase.expectedPositions, positions, "input permutation: %v", permutation)
@@ -486,7 +486,7 @@ func TestReparentSorter_MySQLVersion(t *testing.T) {
 			tablets:       []*topodatapb.Tablet{tabletA, tabletB},
 			positions:     []*RelayLogPositions{posAdvanced, posBehind},
 			mysqlVersions: []mysqlctl.ServerVersion{mysql84, mysql80},
-			mode:          SortForPRS,
+			mode:          SortByVersion,
 			sortedTablets: []*topodatapb.Tablet{tabletB, tabletA},
 		},
 		{
@@ -494,7 +494,7 @@ func TestReparentSorter_MySQLVersion(t *testing.T) {
 			tablets:       []*topodatapb.Tablet{tabletA, tabletB},
 			positions:     []*RelayLogPositions{posAdvanced, posBehind},
 			mysqlVersions: []mysqlctl.ServerVersion{mysql80, mysql80},
-			mode:          SortForPRS,
+			mode:          SortByVersion,
 			sortedTablets: []*topodatapb.Tablet{tabletA, tabletB},
 		},
 		{
@@ -502,7 +502,7 @@ func TestReparentSorter_MySQLVersion(t *testing.T) {
 			tablets:       []*topodatapb.Tablet{tabletRdonly, tabletA},
 			positions:     []*RelayLogPositions{posAdvanced, posAdvanced},
 			mysqlVersions: []mysqlctl.ServerVersion{mysql80, mysql84},
-			mode:          SortForPRS,
+			mode:          SortByVersion,
 			sortedTablets: []*topodatapb.Tablet{tabletA, tabletRdonly},
 		},
 		{
@@ -517,7 +517,7 @@ func TestReparentSorter_MySQLVersion(t *testing.T) {
 			tablets:       []*topodatapb.Tablet{tabletA, tabletB},
 			positions:     []*RelayLogPositions{posAdvanced, posBehind},
 			mysqlVersions: []mysqlctl.ServerVersion{mysql80, mysql8020},
-			mode:          SortForPRS,
+			mode:          SortByVersion,
 			sortedTablets: []*topodatapb.Tablet{tabletB, tabletA},
 		},
 	}
@@ -564,8 +564,8 @@ func TestReparentSorter_ExecutedTiebreak(t *testing.T) {
 	durability, err := policy.GetDurabilityPolicy(policy.DurabilityNone)
 	require.NoError(t, err)
 
-	for _, mode := range []SortMode{SortForERS, SortForPRS} {
-		t.Run(map[SortMode]string{SortForERS: "ERS", SortForPRS: "PRS"}[mode], func(t *testing.T) {
+	for _, mode := range []SortMode{SortByPosition, SortByVersion} {
+		t.Run(map[SortMode]string{SortByPosition: "ERS", SortByVersion: "PRS"}[mode], func(t *testing.T) {
 			// Input order deliberately puts the behind tablet first to prove the sort
 			// reorders on the Executed tiebreak rather than preserving input order.
 			tablets := []*topodatapb.Tablet{tabletBehind, tabletCaughtUp}

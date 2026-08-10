@@ -19,6 +19,7 @@ package reparentutil
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -67,7 +68,6 @@ func TestElectNewPrimary(t *testing.T) {
 	t.Parallel()
 
 	ctx := t.Context()
-	logger := logutil.NewMemoryLogger()
 	tests := []struct {
 		name                    string
 		tmc                     *chooseNewPrimaryTestTMClient
@@ -79,7 +79,11 @@ func TestElectNewPrimary(t *testing.T) {
 		tolerableReplLag        time.Duration
 		allowCrossCellPromotion bool
 		expected                *topodatapb.TabletAlias
-		errContains             []string
+		// expectVersionWarning asserts whether ElectNewPrimary logs the warning that
+		// version-correct election could not be honored (it elected a more-advanced,
+		// higher-version candidate on a no-catch-up path).
+		expectVersionWarning bool
+		errContains          []string
 	}{
 		{
 			name: "found a replica",
@@ -1522,6 +1526,156 @@ zone1-0000000101 matches the primary alias to avoid`,
 zone1-0000000100 is not a replica`,
 			},
 		},
+		{
+			// No clear current primary but the shard has had one before
+			// (PrimaryTermStartTime set): this is the no-clear-primary PRS path, which
+			// promotes without catching the elect up. zone1-101 is a newer MySQL version
+			// but is ahead on received (relay-log) position; zone1-102 is a lower version
+			// but behind. Election must be position-first here (electing the newer, more
+			// advanced 101) so a demoted replica's received-but-unapplied transactions
+			// cannot be discarded, and it must warn that version-correct election could
+			// not be honored.
+			name: "no clear primary: position wins over lower version and warns",
+			tmc: &chooseNewPrimaryTestTMClient{
+				replicationStatuses: map[string]*replicationdatapb.Status{
+					"zone1-0000000101": {
+						Position:         "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
+						RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10",
+						ServerVersion:    "Ver 8.4.0",
+					},
+					"zone1-0000000102": {
+						Position:         "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
+						RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
+						ServerVersion:    "Ver 8.0.35",
+					},
+				},
+			},
+			innodbBufferPoolData: map[string]int{},
+			// A primary existed before (PrimaryTermStartTime set) but none is currently
+			// present in the tablet map, so FindCurrentPrimary returns nil.
+			shardInfo: topo.NewShardInfo("testkeyspace", "-", &topodatapb.Shard{
+				PrimaryTermStartTime: &vttime.Time{Seconds: 100},
+			}, nil),
+			tabletMap: map[string]*topo.TabletInfo{
+				"replica1": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
+						Type:  topodatapb.TabletType_REPLICA,
+					},
+				},
+				"replica2": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 102},
+						Type:  topodatapb.TabletType_REPLICA,
+					},
+				},
+			},
+			expected: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  101,
+			},
+			expectVersionWarning: true,
+			errContains:          nil,
+		},
+		{
+			// Fresh initialization: no current primary and the shard has never had one
+			// (PrimaryTermStartTime nil). Nothing has ever replicated, so version-aware
+			// election is retained: the lower-version 102 is elected even though it is
+			// behind, and no version warning is logged. Same candidates as the
+			// no-clear-primary case above; only PrimaryTermStartTime differs.
+			name: "fresh init: version-aware election is retained, no warning",
+			tmc: &chooseNewPrimaryTestTMClient{
+				replicationStatuses: map[string]*replicationdatapb.Status{
+					"zone1-0000000101": {
+						Position:         "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
+						RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10",
+						ServerVersion:    "Ver 8.4.0",
+					},
+					"zone1-0000000102": {
+						Position:         "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
+						RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
+						ServerVersion:    "Ver 8.0.35",
+					},
+				},
+			},
+			innodbBufferPoolData: map[string]int{},
+			shardInfo:            topo.NewShardInfo("testkeyspace", "-", &topodatapb.Shard{}, nil),
+			tabletMap: map[string]*topo.TabletInfo{
+				"replica1": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
+						Type:  topodatapb.TabletType_REPLICA,
+					},
+				},
+				"replica2": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 102},
+						Type:  topodatapb.TabletType_REPLICA,
+					},
+				},
+			},
+			expected: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  102,
+			},
+			expectVersionWarning: false,
+			errContains:          nil,
+		},
+		{
+			// Graceful path: a current primary is present, so the elect will be caught up
+			// to the old primary's position before promotion. Version-aware election is
+			// retained (lower-version 102 wins despite being behind) and no warning is
+			// logged. Same candidate versions/positions as the no-clear-primary case.
+			name: "graceful (current primary present): version-aware election is retained, no warning",
+			tmc: &chooseNewPrimaryTestTMClient{
+				replicationStatuses: map[string]*replicationdatapb.Status{
+					"zone1-0000000101": {
+						Position:         "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
+						RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10",
+						ServerVersion:    "Ver 8.4.0",
+					},
+					"zone1-0000000102": {
+						Position:         "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
+						RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
+						ServerVersion:    "Ver 8.0.35",
+					},
+				},
+			},
+			innodbBufferPoolData: map[string]int{},
+			shardInfo: topo.NewShardInfo("testkeyspace", "-", &topodatapb.Shard{
+				PrimaryAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+			}, nil),
+			tabletMap: map[string]*topo.TabletInfo{
+				"primary": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+						Type:  topodatapb.TabletType_PRIMARY,
+					},
+				},
+				"replica1": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
+						Type:  topodatapb.TabletType_REPLICA,
+					},
+				},
+				"replica2": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 102},
+						Type:  topodatapb.TabletType_REPLICA,
+					},
+				},
+			},
+			avoidPrimaryAlias: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  0,
+			},
+			expected: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  102,
+			},
+			expectVersionWarning: false,
+			errContains:          nil,
+		},
 	}
 
 	durability, err := policy.GetDurabilityPolicy(policy.DurabilityNone)
@@ -1530,6 +1684,7 @@ zone1-0000000100 is not a replica`,
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
+			logger := logutil.NewMemoryLogger()
 			options := &PlannedReparentOptions{
 				NewPrimaryAlias:         tt.newPrimaryAlias,
 				AvoidPrimaryAlias:       tt.avoidPrimaryAlias,
@@ -1548,6 +1703,15 @@ zone1-0000000100 is not a replica`,
 
 			require.NoError(t, err)
 			utils.MustMatch(t, tt.expected, actual)
+
+			var loggedVersionWarning bool
+			for _, e := range logger.Events {
+				if strings.Contains(e.Value, "could not honor version-correct election") {
+					loggedVersionWarning = true
+					break
+				}
+			}
+			assert.Equal(t, tt.expectVersionWarning, loggedVersionWarning, "version-correct-election warning presence")
 		})
 	}
 }

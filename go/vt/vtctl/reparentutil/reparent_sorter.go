@@ -104,13 +104,18 @@ func scopedVersionMap(candidates []*topodatapb.Tablet, versionMap map[string]mys
 type SortMode int
 
 const (
-	// SortForERS sorts by: position > promotion rules > version > buffer pool > alias.
-	// Position is paramount because ERS must minimize data loss.
-	SortForERS SortMode = iota
-	// SortForPRS sorts by: promotion rules > version > position > buffer pool > alias.
-	// PRS always catches the elected tablet up to the old primary's position, so version
-	// compatibility matters more than replication position.
-	SortForPRS
+	// SortByPosition sorts by: position > promotion rules > version > buffer pool > alias.
+	// It is used when the elected tablet is promoted without first catching it up to a
+	// source, so replication position must lead to avoid discarding transactions; version
+	// only breaks ties among equally-advanced candidates. ERS uses this (it must minimize
+	// data loss), as does PRS on the no-clear-primary path (which promotes without catch-up).
+	SortByPosition SortMode = iota
+	// SortByVersion sorts by: promotion rules > version > position > buffer pool > alias.
+	// It is used when the elected tablet is caught up to a known position before promotion
+	// (or when no tablet has ever replicated), so replication position is not a data-safety
+	// concern and a compatible MySQL version can be preferred. PRS uses this on the graceful
+	// and initialization paths.
+	SortByVersion
 )
 
 // reparentSorter sorts tablets for candidate election during reparent operations.
@@ -175,10 +180,10 @@ func (rs *reparentSorter) Less(i, j int) bool {
 		return true
 	}
 
-	if rs.mode == SortForPRS {
-		return rs.lessPRS(i, j)
+	if rs.mode == SortByVersion {
+		return rs.lessVersionFirst(i, j)
 	}
-	return rs.lessERS(i, j)
+	return rs.lessPositionFirst(i, j)
 }
 
 // comparePosition orders by replication position using the precomputed dominated
@@ -209,9 +214,8 @@ func (rs *reparentSorter) comparePosition(i, j int) int {
 	return 0
 }
 
-// lessERS sorts for ERS: position > promotion rules > version > buffer pool > alias.
-// Position is paramount because ERS must minimize data loss.
-func (rs *reparentSorter) lessERS(i, j int) bool {
+// lessPositionFirst sorts by: position > promotion rules > version > buffer pool > alias.
+func (rs *reparentSorter) lessPositionFirst(i, j int) bool {
 	if v := rs.comparePosition(i, j); v != 0 {
 		return v < 0
 	}
@@ -234,11 +238,8 @@ func (rs *reparentSorter) lessERS(i, j int) bool {
 	return rs.compareAlias(i, j)
 }
 
-// lessPRS sorts for PRS: promotion rules > version > position > buffer pool > alias.
-// PRS always catches the elected tablet up to the old primary's position, so replication
-// position is irrelevant for data safety. Version compatibility matters more because
-// promoting a newer-version primary breaks replication for older-version replicas.
-func (rs *reparentSorter) lessPRS(i, j int) bool {
+// lessVersionFirst sorts by: promotion rules > version > position > buffer pool > alias.
+func (rs *reparentSorter) lessVersionFirst(i, j int) bool {
 	jPromotionRule := policy.PromotionRule(rs.durability, rs.tablets[j])
 	iPromotionRule := policy.PromotionRule(rs.durability, rs.tablets[i])
 
@@ -341,8 +342,8 @@ func hasDominantReparentPosition(moreAdvanced, lessAdvanced *RelayLogPositions) 
 }
 
 // sortTabletsForReparent sorts tablets for candidate election.
-// With SortForPRS, the order is: promotion rules > version > position > buffer pool > alias.
-// With SortForERS, the order is: position > promotion rules > version > buffer pool > alias.
+// With SortByVersion, the order is: promotion rules > version > position > buffer pool > alias.
+// With SortByPosition, the order is: position > promotion rules > version > buffer pool > alias.
 func sortTabletsForReparent(tablets []*topodatapb.Tablet, positions []*RelayLogPositions, innodbBufferPool []int, mysqlVersions []mysqlctl.ServerVersion, durability policy.Durabler, mode SortMode) error {
 	if len(tablets) != len(positions) {
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unequal number of tablets and positions")
