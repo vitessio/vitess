@@ -293,6 +293,13 @@ func (rs *rowStreamer) buildSelect(st *binlogdatapb.MinimalTable) (string, error
 			return "", fmt.Errorf("cannot build a row streamer plan for the %s table as a lastpk value was provided (%v) and the number of primary key values within it (%d) does not match the number of primary key columns in the table (%d)",
 				st.Name, rs.lastpk, len(rs.lastpk), len(rs.pkColumns))
 		}
+		// A lastpk can come straight from a client's VStream request, and the
+		// values below are written into the statement with EncodeSQL, which does
+		// not quote every type. Check them against the table's own columns before
+		// any of them reaches the query.
+		if err := validateLastPK(rs.lastpk, rs.plan.Table.Fields, rs.pkColumns); err != nil {
+			return "", err
+		}
 		buf.WriteString(" where ")
 		// This closure handles the case for composite PKs. For example,
 		// if lastpk was (1,2), the where clause would be:
@@ -306,11 +313,11 @@ func (rs *rowStreamer) buildSelect(st *binlogdatapb.MinimalTable) (string, error
 				prefix = " or "
 				for i, pk := range rs.pkColumns[:lastcol] {
 					buf.Myprintf("%v = ", sqlparser.NewIdentifierCI(rs.plan.Table.Fields[pk].Name))
-					rs.lastpk[i].EncodeSQL(buf)
+					writeLastPKValue(buf, rs.lastpk[i])
 					buf.Myprintf(" and ")
 				}
 				buf.Myprintf("%v > ", sqlparser.NewIdentifierCI(rs.plan.Table.Fields[pkCol].Name))
-				rs.lastpk[lastcol].EncodeSQL(buf)
+				writeLastPKValue(buf, rs.lastpk[lastcol])
 				buf.Myprintf(")")
 			}
 		}
