@@ -24,6 +24,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
@@ -65,4 +66,42 @@ func TestVExplainMySQLNoRoutesSpecialHandling(t *testing.T) {
 	require.Contains(t, result.Rows[0][0].ToString(), "mysql_explain_json")
 	require.Contains(t, result.Rows[0][0].ToString(), `"-20"`)
 	require.Contains(t, result.Rows[0][0].ToString(), `"plan": "x"`)
+}
+
+// TestVExplainMySQLPushedDownLimit verifies that when a pushed-down scatter limit
+// rewrites its child Route's query to use :__upper_limit, MYSQLPLAN computes that
+// bind variable before running EXPLAIN, mirroring Limit.TryExecute - otherwise the
+// EXPLAIN would be sent with :__upper_limit unbound.
+func TestVExplainMySQLPushedDownLimit(t *testing.T) {
+	route := NewRoute(
+		Scatter,
+		&vindexes.Keyspace{Name: "ks", Sharded: true},
+		"dummy_select limit :__upper_limit",
+		"dummy_select_field",
+	)
+	limit := &Limit{
+		Count:  evalengine.NewLiteralInt(5),
+		Offset: evalengine.NewLiteralInt(10),
+		Input:  route,
+	}
+
+	vexplain := &VExplain{Input: limit, Type: sqlparser.MySQLVExplainType}
+
+	vc := &loggingVCursor{
+		shards: []string{"-20", "20-"},
+		results: []*sqltypes.Result{
+			sqltypes.MakeTestResult(sqltypes.MakeTestFields("json", "varchar"), `{"plan":"x"}`),
+			sqltypes.MakeTestResult(sqltypes.MakeTestFields("json", "varchar"), `{"plan":"x"}`),
+		},
+	}
+
+	_, err := vexplain.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
+	require.NoError(t, err)
+
+	// EXPLAIN must be sent to every shard with :__upper_limit bound to count+offset.
+	vc.ExpectLog(t, []string{
+		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
+		`ExecuteStandalone explain format = json dummy_select limit :__upper_limit __upper_limit: type:INT64 value:"15" ks -20`,
+		`ExecuteStandalone explain format = json dummy_select limit :__upper_limit __upper_limit: type:INT64 value:"15" ks 20-`,
+	})
 }

@@ -260,8 +260,9 @@ func (v *VExplain) convertToVExplainMySQLResult(ctx context.Context, vcursor VCu
 // target shards and runs EXPLAIN FORMAT=JSON against each of them, recording the
 // per-shard results in explainResults.
 func (v *VExplain) explainRoutesInMySQL(ctx context.Context, vcursor VCursor, primitive Primitive, bindVars map[string]*querypb.BindVariable, explainResults map[Primitive]map[string]json.RawMessage) error {
-	if route, ok := primitive.(*Route); ok {
-		rss, bvs, err := route.findRoute(ctx, vcursor, bindVars)
+	switch prim := primitive.(type) {
+	case *Route:
+		rss, bvs, err := prim.findRoute(ctx, vcursor, bindVars)
 		if err != nil {
 			return err
 		}
@@ -269,13 +270,13 @@ func (v *VExplain) explainRoutesInMySQL(ctx context.Context, vcursor VCursor, pr
 		// marked for no-routes special handling (e.g. an aggregate SELECT whose
 		// predicate maps to no shard), the real query would still be sent to an
 		// arbitrary shard. Fall back to anyShard so EXPLAIN reflects that.
-		if len(rss) == 0 && route.NoRoutesSpecialHandling {
-			rss, bvs, err = route.anyShard(ctx, vcursor, bindVars)
+		if len(rss) == 0 && prim.NoRoutesSpecialHandling {
+			rss, bvs, err = prim.anyShard(ctx, vcursor, bindVars)
 			if err != nil {
 				return err
 			}
 		}
-		queries := getQueries(route.Query, bvs)
+		queries := getQueries(prim.Query, bvs)
 		perShard := make(map[string]json.RawMessage, len(rss))
 		for i, rs := range rss {
 			explainQuery := "explain format = json " + queries[i].Sql
@@ -289,8 +290,18 @@ func (v *VExplain) explainRoutesInMySQL(ctx context.Context, vcursor VCursor, pr
 			perShard[rs.Target.Shard] = json.RawMessage(res.Rows[0][0].ToString())
 		}
 		if len(perShard) > 0 {
-			explainResults[route] = perShard
+			explainResults[prim] = perShard
 		}
+	case *Limit:
+		// A pushed-down scatter limit rewrites its child Route's query to use
+		// :__upper_limit, which Limit.TryExecute computes before executing its
+		// input. Compute it here too so the child Route's EXPLAIN can bind it.
+		count, offset, err := prim.getCountAndOffset(ctx, vcursor, bindVars)
+		if err != nil {
+			return err
+		}
+		bindVars = copyBindVars(bindVars)
+		bindVars[UpperLimitStr] = sqltypes.Int64BindVariable(int64(count + offset))
 	}
 
 	inputs, _ := primitive.Inputs()
