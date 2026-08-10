@@ -317,7 +317,7 @@ func commandTabletExternallyReparented(cmd *cobra.Command, args []string) error 
 func init() {
 	EmergencyReparentShard.Flags().DurationVar(&emergencyReparentShardOptions.WaitReplicasTimeout, "wait-replicas-timeout", topo.RemoteOperationTimeout, "Time to wait for replicas to catch up in reparenting.")
 	EmergencyReparentShard.Flags().StringVar(&emergencyReparentShardOptions.NewPrimaryAliasStr, "new-primary", "", "Alias of a tablet that should be the new primary. If not specified, the vtctld will select the best candidate to promote.")
-	EmergencyReparentShard.Flags().BoolVar(&emergencyReparentShardOptions.AllowSplitBrainPromotion, "allow-split-brain-promotion", false, "Allow promoting --new-primary when divergent GTID histories are detected.")
+	EmergencyReparentShard.Flags().BoolVar(&emergencyReparentShardOptions.AllowSplitBrainPromotion, "allow-split-brain-promotion", false, "Requires --new-primary; allows promoting it when divergent GTID histories (split brain) are detected. This is a lossy recovery: transactions that exist only on the other leading candidates are discarded.")
 	EmergencyReparentShard.Flags().StringVar(&emergencyReparentShardOptions.ExpectedPrimaryAliasStr, "expected-primary", "", "Alias of a tablet that must be the current primary in order for the reparent to be processed.")
 	EmergencyReparentShard.Flags().BoolVar(&emergencyReparentShardOptions.PreventCrossCellPromotion, "prevent-cross-cell-promotion", false, "Only promotes a new primary from the same cell as the previous primary.")
 	EmergencyReparentShard.Flags().BoolVar(&emergencyReparentShardOptions.WaitForAllTablets, "wait-for-all-tablets", false, "Should ERS wait for all the tablets to respond. Useful when all the tablets are reachable.")

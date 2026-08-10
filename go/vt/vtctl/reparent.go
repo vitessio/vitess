@@ -171,7 +171,7 @@ func commandEmergencyReparentShard(ctx context.Context, wr *wrangler.Wrangler, s
 	keyspaceShard := subFlags.String("keyspace_shard", "", "keyspace/shard of the shard that needs to be reparented")
 	newPrimary := subFlags.String("new-primary", "", "optional alias of a tablet that should be the new primary. If not specified, Vitess will select the best candidate")
 	subFlags.StringVar(newPrimary, "new_primary", "", "alias for --new-primary")
-	allowSplitBrainPromotion := subFlags.Bool("allow-split-brain-promotion", false, "allow promoting --new-primary when divergent GTID histories are detected")
+	allowSplitBrainPromotion := subFlags.Bool("allow-split-brain-promotion", false, "requires --new-primary; allows promoting it when divergent GTID histories (split brain) are detected. This is a lossy recovery: transactions that exist only on the other leading candidates are discarded")
 	preventCrossCellPromotion := subFlags.Bool("prevent_cross_cell_promotion", false, "only promotes a new primary from the same cell as the previous primary")
 	ignoreReplicasList := subFlags.String("ignore_replicas", "", "comma-separated list of replica tablet aliases to ignore during emergency reparent")
 	waitForAllTablets := subFlags.Bool("wait_for_all_tablets", false, "should ERS wait for all the tablets to respond. Useful when all the tablets are reachable")

@@ -180,7 +180,7 @@ func validateEmergencyReparentOptions(opts EmergencyReparentOptions) error {
 		return nil
 	}
 	if opts.NewPrimaryAlias == nil || topoproto.TabletAliasIsZero(opts.NewPrimaryAlias) {
-		return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "--allow-split-brain-promotion requires --new-primary")
+		return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "split-brain promotion requires an explicitly requested primary (--new-primary)")
 	}
 	return nil
 }
@@ -340,7 +340,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 
 				splitBrainOverrideActive = true
 				ersSplitBrainOverrides.Add([]string{keyspace, shard}, 1)
-				erp.logger.Warningf("EmergencyReparentShard split-brain promotion allowed in keyspace %s shard %s for new primary %s; the divergent branches of the other leading candidates (%s) are discarded and those tablets may require re-cloning", keyspace, shard, requestedPrimary, leadingPositions)
+				erp.logger.Warningf("EmergencyReparentShard split-brain promotion allowed in keyspace %s shard %s for new primary %s; the divergent branches of the other leading candidates (%s) are discarded and those tablets may require rebuilding from the new primary", keyspace, shard, requestedPrimary, leadingPositions)
 
 				// Promote exactly the requested primary and discard the divergent branches.
 				// Reducing the candidate set here means the relay-log wait, the errant-GTID
@@ -467,7 +467,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 				}
 			}
 			if survivingLeaders != 1 {
-				return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "suspected split-brain: leading candidates have incomparable Combined GTID positions: %s; specify --new-primary with --allow-split-brain-promotion to continue", describeCombinedPositions(suspectedSplitBrainCandidates))
+				return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "suspected split-brain: leading candidates have incomparable Combined GTID positions: %s; to continue, choose the history to preserve with --new-primary and --allow-split-brain-promotion, discarding transactions that exist only on the other leaders", describeCombinedPositions(suspectedSplitBrainCandidates))
 			}
 		}
 

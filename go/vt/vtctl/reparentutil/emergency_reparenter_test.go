@@ -4678,7 +4678,7 @@ func TestERSSplitBrainPromotionRequiresNewPrimary(t *testing.T) {
 	})
 	require.Error(t, err)
 	assert.Equal(t, vtrpc.Code_INVALID_ARGUMENT, vterrors.Code(err))
-	assert.ErrorContains(t, err, "--allow-split-brain-promotion requires --new-primary")
+	assert.ErrorContains(t, err, "split-brain promotion requires an explicitly requested primary (--new-primary)")
 }
 
 func TestERSSplitBrainPromotionEligibility(t *testing.T) {
