@@ -276,6 +276,8 @@ Unlike `VEXPLAIN ALL`, which executes the query to discover the shard-level quer
 
 Only `SELECT` statements whose target shards can be resolved from a vindex without reading cluster data are supported. DML (`INSERT`/`UPDATE`/`DELETE`), and any query whose shard set depends on data — cross-shard joins, subqueries, recursive CTEs, and lookup vindexes — are rejected with an error suggesting `VEXPLAIN ALL` instead.
 
+For queries eligible for deferred plan optimization (where equal bind variable values let the plan collapse to a single shard at execution time), `VEXPLAIN MYSQLPLAN` explains the general (baseline) plan rather than the value-specific optimized one, so it reports the full shard footprint the query can target regardless of the bind variable values supplied.
+
 ### <a id="minor-changes-reparent"/>Reparent</a>
 
 #### <a id="ers-lagging-relay-log-wait"/>`EmergencyReparentShard` no longer waits on replicas that cannot win the election</a>
