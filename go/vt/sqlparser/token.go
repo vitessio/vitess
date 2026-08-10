@@ -299,7 +299,7 @@ func (tkn *Tokenizer) Scan() (int, string) {
 				switch tkn.cur() {
 				case '-':
 					nextChar := tkn.peek(1)
-					if nextChar == ' ' || nextChar == '\n' || nextChar == '\t' || nextChar == '\r' || nextChar == eofChar {
+					if nextChar == ' ' || nextChar == '\t' || nextChar == '\n' || nextChar == '\v' || nextChar == '\f' || nextChar == '\r' || nextChar == eofChar {
 						tkn.skip(1)
 						return tkn.scanCommentType1(2)
 					}
@@ -374,7 +374,7 @@ func (tkn *Tokenizer) skipStatement() int {
 // skipBlank skips the cursor while it finds whitespace
 func (tkn *Tokenizer) skipBlank() {
 	ch := tkn.cur()
-	for ch == ' ' || ch == '\n' || ch == '\r' || ch == '\t' {
+	for ch == ' ' || ch == '\t' || ch == '\n' || ch == '\v' || ch == '\f' || ch == '\r' {
 		tkn.skip(1)
 		ch = tkn.cur()
 	}

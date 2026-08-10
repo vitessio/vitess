@@ -74,6 +74,7 @@
         - [Connections whose certificate revocation cannot be checked against a configured CRL are rejected](#vttls-crl-fail-closed)
         - [Optional gRPC TLS: connections are counted by transport](#grpc-optional-tls-connections)
         - [ORCA metrics now report QPS and EPS](#grpc-orca-qps)
+        - [Trailing comment detection and whitespace in the SQL parser](#sqlparser-margin-comment-split)
 
 ## <a id="major-changes"/>Major Changes</a>
 
@@ -840,3 +841,15 @@ See [#21161](https://github.com/vitessio/vitess/issues/21161) for details.
 With `--grpc-enable-orca-metrics`, gRPC servers now report QPS and EPS in their ORCA load reports, alongside CPU and memory utilization. QPS is the rate of gRPC messages sent plus failed calls: one per unary response or stream message, and one per call that fails, so long-lived streams such as `VStream` keep counting while they send. EPS is the rate of calls whose gRPC handler returns an error; query errors that VTGate returns inside a successful response, as `Execute` does, are not counted. Health checks and ORCA reports are not counted.
 
 Clients using gRPC's standard `weighted_round_robin` policy with `enableOobLoadReport: true` ignore reports without QPS, so they previously fell back to plain round robin. After upgrading a server that has `--grpc-enable-orca-metrics` set, those clients switch to weighted routing with no configuration change. The policy weighs each server by its QPS, CPU utilization, and error rate.
+
+#### <a id="sqlparser-margin-comment-split"/>Trailing comment detection and whitespace in the SQL parser</a>
+
+`SplitMarginComments`, which separates the leading and trailing comments from a statement, now finds the trailing comments by scanning the statement forward from the start, tracking string literals, quoted identifiers and comments, rather than backward from the end.
+
+Three user-visible consequences:
+
+- **`\v` and `\f` are now a space between two tokens.** MySQL treats them as spaces, because it uses C `isspace`, and now Vitess does too, so `select 1\vfrom t` and `select 0\f` parse where they were rejected before. This affects all parsing, not only comment splitting.
+- **Characters outside MySQL's space set are no longer removed from a statement.** The splitting trimmed with `unicode.IsSpace`, which accepts a no-break space among others. Such a character now stays in the statement and the parser rejects it, which is what MySQL does — `select 0` followed by a no-break space is `unknown column '0 '` to MySQL. Vitess previously removed the character and ran a statement MySQL refuses.
+- **`StripLeadingComments` trims the same set**, so `Preview` (statement-type detection) and `vtexplain` report on the statement as MySQL reads it.
+
+Query rules that match `trailingComment` are affected. When the end of a statement cannot be shown to hold only comments and spaces, the text now stays in the statement instead of being split off, and such a rule no longer matches it. Rules keyed on a comment appended after a `/*!...*/` versioned comment, or after a line comment whose body ends in `--`, do still match, as they did before this change.
