@@ -170,6 +170,48 @@ func TestVExplainMySQLPlanKeysByShard(t *testing.T) {
 	}
 }
 
+// TestVExplainMySQLPlanTargetedSend verifies that a SELECT with an explicit shard
+// target (which plans as a Send, not a Route) still produces per-shard EXPLAIN
+// output, and only the targeted shard is queried.
+func TestVExplainMySQLPlanTargetedSend(t *testing.T) {
+	const targetShard = "-20"
+	conns := map[string]*sandboxconn.SandboxConn{}
+	executor, ctx := createExecutorEnvCallback(t, createExecutorConfig(), func(shard, ks string, tabletType topodatapb.TabletType, conn *sandboxconn.SandboxConn) {
+		if ks == KsTestSharded && tabletType == topodatapb.TabletType_PRIMARY {
+			conn.SetResults([]*sqltypes.Result{explainResultForShard(shard)})
+			conns[shard] = conn
+		}
+	})
+
+	session := &vtgatepb.Session{TargetString: KsTestSharded + "/" + targetShard + "@primary"}
+	gotResult, err := executorExec(ctx, executor, session, "vexplain mysqlplan select id from `user`", nil)
+	require.NoError(t, err)
+
+	// Only the targeted shard should have received the EXPLAIN; no other shard is touched.
+	for shard, conn := range conns {
+		if shard == targetShard {
+			require.Len(t, conn.Queries, 1, "target shard %s should receive exactly one query", shard)
+			assert.Equal(t, "explain format = json select id from `user`", conn.Queries[0].Sql)
+		} else {
+			assert.Empty(t, conn.Queries, "non-target shard %s should receive no query", shard)
+		}
+	}
+
+	// The plan is a Send node carrying the per-shard EXPLAIN output keyed by the
+	// targeted shard.
+	var plan struct {
+		OperatorType     string `json:"OperatorType"`
+		MySQLExplainJSON map[string]struct {
+			Shard string `json:"shard"`
+		} `json:"mysql_explain_json"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(gotResult.Rows[0][0].ToString()), &plan))
+	require.Equal(t, "Send", plan.OperatorType)
+	require.Len(t, plan.MySQLExplainJSON, 1)
+	require.Contains(t, plan.MySQLExplainJSON, targetShard)
+	assert.Equal(t, targetShard, plan.MySQLExplainJSON[targetShard].Shard)
+}
+
 // TestVExplainMySQLPlanMultipleRoutes verifies that a plan with more than one
 // Route node (here a UNION, which plans as Distinct over a Concatenate of two
 // Routes) attaches a distinct per-shard EXPLAIN map to each Route node, keyed by

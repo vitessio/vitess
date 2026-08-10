@@ -87,8 +87,9 @@ const (
 // checkVExplainMySQLSupported returns an error if any primitive in the tree cannot
 // be handled by VEXPLAIN MYSQLPLAN. It is an allowlist: only primitives whose target
 // shards can be resolved from a vindex without reading cluster data are permitted -
-// a Route (with a resolvable vindex) and the shard-independent container primitives
-// that pass their bind variables through to their inputs unchanged. DML is rejected
+// a Route (with a resolvable vindex), a read Send (whose shards come from an explicit
+// target destination) and the shard-independent container primitives that pass their
+// bind variables through to their inputs unchanged. DML is rejected
 // with a SELECT-only message. Everything else - cross-shard joins, subqueries,
 // recursive CTEs (whose child Routes are parameterized by rows produced at runtime)
 // and lookup vindexes (which resolve shards by querying a lookup table) - is rejected
@@ -99,6 +100,13 @@ func checkVExplainMySQLSupported(primitive engine.Primitive) error {
 	case *engine.Route:
 		if prim.Vindex != nil && prim.Vindex.NeedsVCursor() {
 			return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, vexplainMySQLUnresolvableError)
+		}
+	case *engine.Send:
+		// A read with an explicit shard/keyrange target (bypass planning) resolves
+		// its shards from the target destination alone, so it is explainable. DML
+		// and DDL sends are not SELECTs and are rejected.
+		if prim.IsDML || prim.IsDDL {
+			return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, vexplainMySQLDMLError)
 		}
 	case *engine.Concatenate,
 		*engine.Distinct,

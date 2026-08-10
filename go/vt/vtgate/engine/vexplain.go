@@ -23,6 +23,7 @@ import (
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/key"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -276,21 +277,23 @@ func (v *VExplain) explainRoutesInMySQL(ctx context.Context, vcursor VCursor, pr
 				return err
 			}
 		}
-		queries := getQueries(prim.Query, bvs)
-		perShard := make(map[string]json.RawMessage, len(rss))
-		for i, rs := range rss {
-			explainQuery := "explain format = json " + queries[i].Sql
-			res, err := vcursor.ExecuteStandalone(ctx, nil, explainQuery, queries[i].BindVariables, rs, false)
-			if err != nil {
-				return err
-			}
-			if len(res.Rows) == 0 || len(res.Rows[0]) == 0 {
-				continue
-			}
-			perShard[rs.Target.Shard] = json.RawMessage(res.Rows[0][0].ToString())
+		if err := v.explainOnShards(ctx, vcursor, prim, rss, getQueries(prim.Query, bvs), explainResults); err != nil {
+			return err
 		}
-		if len(perShard) > 0 {
-			explainResults[prim] = perShard
+	case *Send:
+		// A read Send targets an explicit shard/keyrange destination, so its shards
+		// resolve without executing the query. DML/DDL sends are rejected at plan
+		// time, so anything reaching here is a read.
+		rss, _, err := vcursor.ResolveDestinations(ctx, prim.Keyspace.Name, nil, []key.ShardDestination{prim.TargetDestination})
+		if err != nil {
+			return err
+		}
+		queries := make([]*querypb.BoundQuery, len(rss))
+		for i := range rss {
+			queries[i] = &querypb.BoundQuery{Sql: prim.Query, BindVariables: bindVars}
+		}
+		if err := v.explainOnShards(ctx, vcursor, prim, rss, queries, explainResults); err != nil {
+			return err
 		}
 	case *Limit:
 		// A pushed-down scatter limit rewrites its child Route's query to use
@@ -309,6 +312,28 @@ func (v *VExplain) explainRoutesInMySQL(ctx context.Context, vcursor VCursor, pr
 		if err := v.explainRoutesInMySQL(ctx, vcursor, input, bindVars, explainResults); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+// explainOnShards runs EXPLAIN FORMAT=JSON for the given per-shard queries against
+// each resolved shard and records the per-shard results, keyed by shard, against
+// the owning primitive.
+func (v *VExplain) explainOnShards(ctx context.Context, vcursor VCursor, primitive Primitive, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, explainResults map[Primitive]map[string]json.RawMessage) error {
+	perShard := make(map[string]json.RawMessage, len(rss))
+	for i, rs := range rss {
+		explainQuery := "explain format = json " + queries[i].Sql
+		res, err := vcursor.ExecuteStandalone(ctx, nil, explainQuery, queries[i].BindVariables, rs, false)
+		if err != nil {
+			return err
+		}
+		if len(res.Rows) == 0 || len(res.Rows[0]) == 0 {
+			continue
+		}
+		perShard[rs.Target.Shard] = json.RawMessage(res.Rows[0][0].ToString())
+	}
+	if len(perShard) > 0 {
+		explainResults[primitive] = perShard
 	}
 	return nil
 }
