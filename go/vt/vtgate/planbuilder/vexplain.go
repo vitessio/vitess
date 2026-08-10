@@ -49,8 +49,64 @@ func buildVExplainPlan(
 		return buildVExplainTracePlan(ctx, vexplainStmt.Statement, reservedVars, vschema, cfg)
 	case sqlparser.KeysVExplainType:
 		return buildVExplainKeysPlan(vexplainStmt.Statement, vschema)
+	case sqlparser.MySQLVExplainType:
+		return buildVExplainMySQLPlan(ctx, vexplainStmt.Statement, reservedVars, vschema, cfg)
 	}
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unexpected vtexplain type: %s", vexplainStmt.Type.ToString())
+}
+
+// buildVExplainMySQLPlan builds the plan for VEXPLAIN MYSQLPLAN, which runs
+// EXPLAIN FORMAT=JSON against the shards a query would target, without executing
+// the query itself. It only supports read plans (trees of Route primitives) whose
+// target shards can be resolved from a vindex without reading cluster data; any
+// other plan is rejected here with a message pointing the user to VEXPLAIN ALL.
+func buildVExplainMySQLPlan(ctx context.Context, explainStatement sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, cfg dynamicconfig.DDL) (*planResult, error) {
+	innerInstruction, err := createInstructionFor(ctx, sqlparser.String(explainStatement), explainStatement, reservedVars, vschema, cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := checkVExplainMySQLSupported(innerInstruction.primitive); err != nil {
+		return nil, err
+	}
+
+	innerInstruction.primitive = &engine.VExplain{
+		Input: innerInstruction.primitive,
+		Type:  sqlparser.MySQLVExplainType,
+	}
+	return innerInstruction, nil
+}
+
+// checkVExplainMySQLSupported returns an error if any primitive in the tree cannot
+// be handled by VEXPLAIN MYSQLPLAN. Unsupported cases are DML (whose plans are not
+// Route primitives) and any plan whose shard set depends on data read from the
+// cluster: cross-shard joins and subqueries (whose child Routes are parameterized
+// by rows produced at runtime) and lookup vindexes (which resolve shards by
+// querying a lookup table). All of these are directed to VEXPLAIN ALL instead.
+func checkVExplainMySQLSupported(primitive engine.Primitive) error {
+	switch prim := primitive.(type) {
+	case *engine.Insert, *engine.Update, *engine.Delete:
+		return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED,
+			"VEXPLAIN MYSQLPLAN only supports SELECT statements; use VEXPLAIN ALL instead")
+	case *engine.Join, *engine.SemiJoin, *engine.HashJoin, *engine.ValuesJoin, *engine.UncorrelatedSubquery, *engine.VindexLookup:
+		return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED,
+			"VEXPLAIN MYSQLPLAN cannot resolve the target shards without executing the query "+
+				"(the query uses a cross-shard join, subquery, or lookup vindex); use VEXPLAIN ALL instead")
+	case *engine.Route:
+		if prim.Vindex != nil && prim.Vindex.NeedsVCursor() {
+			return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED,
+				"VEXPLAIN MYSQLPLAN cannot resolve the target shards without executing the query "+
+					"(the query uses a cross-shard join, subquery, or lookup vindex); use VEXPLAIN ALL instead")
+		}
+	}
+
+	inputs, _ := primitive.Inputs()
+	for _, input := range inputs {
+		if err := checkVExplainMySQLSupported(input); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func explainTabPlan(explain *sqlparser.ExplainTab, vschema plancontext.VSchema) (*planResult, error) {

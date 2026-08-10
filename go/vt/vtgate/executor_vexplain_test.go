@@ -117,6 +117,84 @@ func TestSimpleVexplainTrace(t *testing.T) {
 	require.Equal(t, expectedRowString, gotRowString)
 }
 
+// explainResultForShard builds a single-row EXPLAIN FORMAT=JSON style result
+// whose only column carries a JSON document that identifies the shard, so the
+// test can assert results are keyed by the shard they came from.
+func explainResultForShard(shard string) *sqltypes.Result {
+	return &sqltypes.Result{
+		Fields: []*querypb.Field{{Name: "EXPLAIN", Type: sqltypes.VarChar}},
+		Rows: [][]sqltypes.Value{
+			{sqltypes.NewVarChar(fmt.Sprintf(`{"shard":%q}`, shard))},
+		},
+	}
+}
+
+func TestVExplainMySQLPlanKeysByShard(t *testing.T) {
+	conns := map[string]*sandboxconn.SandboxConn{}
+	executor, ctx := createExecutorEnvCallback(t, createExecutorConfig(), func(shard, ks string, tabletType topodatapb.TabletType, conn *sandboxconn.SandboxConn) {
+		if ks == KsTestSharded && tabletType == topodatapb.TabletType_PRIMARY {
+			conn.SetResults([]*sqltypes.Result{explainResultForShard(shard)})
+			conns[shard] = conn
+		}
+	})
+
+	session := &vtgatepb.Session{TargetString: "@primary"}
+	gotResult, err := executorExec(ctx, executor, session, "vexplain mysqlplan select id from `user`", nil)
+	require.NoError(t, err)
+
+	// The wrapped query must never be executed: each shard should only ever have
+	// received the EXPLAIN FORMAT=JSON form of the query.
+	wantQuery := "explain format = json select id from `user`"
+	for shard, conn := range conns {
+		require.Len(t, conn.Queries, 1, "shard %s should receive exactly one query", shard)
+		assert.Equal(t, wantQuery, conn.Queries[0].Sql, "shard %s", shard)
+	}
+
+	// The plan JSON must attach the per-shard EXPLAIN output keyed by shard.
+	// PrimitiveDescription inlines the entries of Other at the top level, so
+	// mysql_explain_json appears alongside OperatorType.
+	var plan struct {
+		OperatorType     string `json:"OperatorType"`
+		MySQLExplainJSON map[string]struct {
+			Shard string `json:"shard"`
+		} `json:"mysql_explain_json"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(gotResult.Rows[0][0].ToString()), &plan))
+	require.Equal(t, "Route", plan.OperatorType)
+
+	perShard := plan.MySQLExplainJSON
+	require.Len(t, perShard, len(conns))
+	for shard := range conns {
+		require.Contains(t, perShard, shard)
+		assert.Equal(t, shard, perShard[shard].Shard)
+	}
+}
+
+func TestVExplainMySQLPlanRequiresExecution(t *testing.T) {
+	executor, _, _, _, ctx := createExecutorEnv(t)
+	session := &vtgatepb.Session{TargetString: "@primary"}
+
+	testCases := []struct {
+		name    string
+		query   string
+		wantMsg string
+	}{
+		{"lookup vindex", "vexplain mysqlplan select * from music where id = 5", "cannot resolve the target shards without executing the query"},
+		{"cross-shard join", "vexplain mysqlplan select u.id from `user` u join user_extra ue on u.col = ue.col", "cannot resolve the target shards without executing the query"},
+		{"insert", "vexplain mysqlplan insert into user_extra(user_id) values (5)", "only supports SELECT statements"},
+		{"update", "vexplain mysqlplan update user_extra set col = 1 where user_id = 5", "only supports SELECT statements"},
+		{"delete", "vexplain mysqlplan delete from user_extra where user_id = 5", "only supports SELECT statements"},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := executorExec(ctx, executor, session, tc.query, nil)
+			require.ErrorContains(t, err, tc.wantMsg)
+			// All unsupported cases direct the user to VEXPLAIN ALL.
+			require.ErrorContains(t, err, "use VEXPLAIN ALL instead")
+		})
+	}
+}
+
 func TestVExplainKeys(t *testing.T) {
 	type testCase struct {
 		Query    string          `json:"query"`

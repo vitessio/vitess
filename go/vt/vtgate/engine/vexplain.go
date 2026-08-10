@@ -61,7 +61,7 @@ func (v *VExplain) GetFields(context.Context, VCursor, map[string]*querypb.BindV
 	switch v.Type {
 	case sqlparser.QueriesVExplainType:
 		fields = getVExplainQueriesFields()
-	case sqlparser.AllVExplainType:
+	case sqlparser.AllVExplainType, sqlparser.MySQLVExplainType:
 		fields = getVExplainAllFields()
 	case sqlparser.TraceVExplainType:
 		fields = getVExplainTraceFields()
@@ -102,6 +102,11 @@ func (v *VExplain) NeedsTransaction() bool {
 
 // TryExecute implements the Primitive interface
 func (v *VExplain) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+	// MySQLPLAN resolves target shards and runs EXPLAIN against them without
+	// executing the wrapped query, so we neither trace nor log nor run the input.
+	if v.Type == sqlparser.MySQLVExplainType {
+		return v.convertToVExplainMySQLResult(ctx, vcursor, bindVars)
+	}
 	var stats func() Stats
 	if v.Type == sqlparser.TraceVExplainType {
 		stats = vcursor.StartPrimitiveTrace()
@@ -121,6 +126,15 @@ func noOpCallback(*sqltypes.Result) error {
 
 // TryStreamExecute implements the Primitive interface
 func (v *VExplain) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+	// MySQLPLAN resolves target shards and runs EXPLAIN against them without
+	// executing the wrapped query, so we neither trace nor log nor run the input.
+	if v.Type == sqlparser.MySQLVExplainType {
+		result, err := v.convertToVExplainMySQLResult(ctx, vcursor, bindVars)
+		if err != nil {
+			return err
+		}
+		return callback(result)
+	}
 	var stats func() Stats
 	if v.Type == sqlparser.TraceVExplainType {
 		stats = vcursor.StartPrimitiveTrace()
@@ -217,6 +231,97 @@ func (v *VExplain) convertToVExplainAllResult(ctx context.Context, vcursor VCurs
 		Rows:   rows,
 	}
 	return qr, nil
+}
+
+// convertToVExplainMySQLResult resolves the target shards of each Route in the
+// plan and runs EXPLAIN FORMAT=JSON against every resolved shard, without
+// executing the wrapped query. The MySQL EXPLAIN output is attached to each Route
+// node keyed by shard, so per-shard plan and cost differences are visible.
+func (v *VExplain) convertToVExplainMySQLResult(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+	explainResults := make(map[Primitive]map[string]json.RawMessage)
+	if err := v.explainRoutesInMySQL(ctx, vcursor, v.Input, bindVars, explainResults); err != nil {
+		return nil, err
+	}
+
+	planDescription := primitiveToPlanDescriptionWithShardedSQLResults(v.Input, explainResults)
+	resultBytes, err := json.MarshalIndent(planDescription, "", "\t")
+	if err != nil {
+		return nil, err
+	}
+
+	rows := []sqltypes.Row{{sqltypes.NewVarChar(string(resultBytes))}}
+	return &sqltypes.Result{
+		Fields: getVExplainAllFields(),
+		Rows:   rows,
+	}, nil
+}
+
+// explainRoutesInMySQL walks the primitive tree and, for each Route, resolves its
+// target shards and runs EXPLAIN FORMAT=JSON against each of them, recording the
+// per-shard results in explainResults.
+func (v *VExplain) explainRoutesInMySQL(ctx context.Context, vcursor VCursor, primitive Primitive, bindVars map[string]*querypb.BindVariable, explainResults map[Primitive]map[string]json.RawMessage) error {
+	if route, ok := primitive.(*Route); ok {
+		rss, bvs, err := route.findRoute(ctx, vcursor, bindVars)
+		if err != nil {
+			return err
+		}
+		queries := getQueries(route.Query, bvs)
+		perShard := make(map[string]json.RawMessage, len(rss))
+		for i, rs := range rss {
+			explainQuery := "explain format = json " + queries[i].Sql
+			res, err := vcursor.ExecuteStandalone(ctx, nil, explainQuery, queries[i].BindVariables, rs, false)
+			if err != nil {
+				return err
+			}
+			if len(res.Rows) == 0 || len(res.Rows[0]) == 0 {
+				continue
+			}
+			perShard[rs.Target.Shard] = json.RawMessage(res.Rows[0][0].ToString())
+		}
+		if len(perShard) > 0 {
+			explainResults[route] = perShard
+		}
+	}
+
+	inputs, _ := primitive.Inputs()
+	for _, input := range inputs {
+		if err := v.explainRoutesInMySQL(ctx, vcursor, input, bindVars, explainResults); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// primitiveToPlanDescriptionWithShardedSQLResults transforms a primitive tree
+// into a corresponding PlanDescription tree, attaching the per-shard MySQL
+// EXPLAIN output (keyed by shard) to the matching Route nodes.
+func primitiveToPlanDescriptionWithShardedSQLResults(in Primitive, res map[Primitive]map[string]json.RawMessage) PrimitiveDescription {
+	this := in.description()
+
+	if perShard, found := res[in]; found {
+		this.Other["mysql_explain_json"] = perShard
+	}
+
+	inputs, infos := in.Inputs()
+	for idx, input := range inputs {
+		pd := primitiveToPlanDescriptionWithShardedSQLResults(input, res)
+		if infos != nil {
+			for k, v := range infos[idx] {
+				if k == inputName {
+					pd.InputName = v.(string)
+					continue
+				}
+				pd.Other[k] = v
+			}
+		}
+		this.Inputs = append(this.Inputs, pd)
+	}
+
+	if len(inputs) == 0 {
+		this.Inputs = []PrimitiveDescription{}
+	}
+
+	return this
 }
 
 // primitiveToPlanDescriptionWithSQLResults transforms a primitive tree into a corresponding PlanDescription tree

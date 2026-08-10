@@ -18,13 +18,16 @@ package vexplain
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/capabilities"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/test/endtoend/onlineddl"
 	"vitess.io/vitess/go/test/endtoend/utils"
 )
 
@@ -148,4 +151,44 @@ func TestVExplainAll(t *testing.T) {
 
 	utils.AssertMatchesContains(t, conn, `vexplain /*vt+ EXECUTE_DML_QUERIES */ all insert into user (id,lookup,lookup_unique) values (4,'apa','foo'),(5,'apa','bar'),(6,'monkey','nobar')`, "Insert", "mysql_explain_json")
 	utils.AssertMatchesContains(t, conn, `vexplain all select id from user where lookup = "apa"`, "mysql_explain_json", "ByDestination")
+}
+
+func TestVExplainMySQLPlan(t *testing.T) {
+	// VEXPLAIN MYSQLPLAN is a v25 syntax; an older vtgate cannot parse it. Under the
+	// upgrade/downgrade CI this suite can run current test code against an N-1 vtgate.
+	utils.SkipIfBinaryIsBelowVersion(t, 25, "vtgate")
+
+	conn, closer := start(t)
+	defer closer()
+
+	// The result must carry the VTGate plan tree (Route) with real per-shard MySQL
+	// EXPLAIN output attached, without executing the query.
+	utils.AssertMatchesContains(t, conn,
+		`vexplain mysqlplan select id from user where id = 1`,
+		"mysql_explain_json", "Route")
+
+	// query_block is a key emitted only by a genuine MySQL EXPLAIN FORMAT=JSON, so it
+	// proves we actually reached MySQL. MariaDB's EXPLAIN JSON does not use it, so gate
+	// this assertion to MySQL/Percona 8.0+ (which covers the 8.0 and 8.4 CI flavors).
+	mysqlVersion := onlineddl.GetMySQLVersion(t, clusterInstance.Keyspaces[0].Shards[0].PrimaryTablet())
+	require.NotEmpty(t, mysqlVersion)
+	atLeast80, err := capabilities.ServerVersionAtLeast(mysqlVersion, 8, 0, 0)
+	require.NoError(t, err)
+	if atLeast80 && !strings.Contains(mysqlVersion, "MariaDB") {
+		utils.AssertMatchesContains(t, conn,
+			`vexplain mysqlplan select id from user where id = 1`,
+			"query_block")
+	}
+
+	// DML is not supported (its plans are not Route primitives): it must fail closed
+	// and point the user to VEXPLAIN ALL, not silently produce a plan with no EXPLAIN.
+	utils.AssertContainsError(t, conn,
+		`vexplain mysqlplan insert into user (id,lookup,lookup_unique) values (99,'apa','apa')`,
+		"use VEXPLAIN ALL instead")
+
+	// A lookup vindex cannot resolve shards without executing, so it must fail closed
+	// and point the user to VEXPLAIN ALL.
+	utils.AssertContainsError(t, conn,
+		`vexplain mysqlplan select id from user where lookup_unique = "apa"`,
+		"use VEXPLAIN ALL instead")
 }
