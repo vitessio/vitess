@@ -243,6 +243,7 @@ func TestVExplainMySQLPlanRequiresExecution(t *testing.T) {
 		{"cross-shard join", "vexplain mysqlplan select u.id from `user` u join user_extra ue on u.col = ue.col", "cannot resolve the target shards without executing the query"},
 		{"recursive cte", "vexplain mysqlplan with recursive cte(id) as (select id from `user` where id = 1 union select u.id from `user` u join cte on u.id = cte.id) select * from cte", "cannot resolve the target shards without executing the query"},
 		{"insert", "vexplain mysqlplan insert into user_extra(user_id) values (5)", "only supports SELECT statements"},
+		{"insert select", "vexplain mysqlplan insert into user_extra(user_id) select id from `user`", "only supports SELECT statements"},
 		{"update", "vexplain mysqlplan update user_extra set col = 1 where user_id = 5", "only supports SELECT statements"},
 		{"delete", "vexplain mysqlplan delete from user_extra where user_id = 5", "only supports SELECT statements"},
 	}
