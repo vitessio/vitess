@@ -30,7 +30,7 @@ arthurschreiber
 arthurschreiber
 
 ### Planner
-frouioui arthurschreiber
+frouioui, arthurschreiber
 
 ### Query Serving
 frouioui, arthurschreiber
