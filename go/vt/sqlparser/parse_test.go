@@ -4173,6 +4173,55 @@ var validSQL = []struct {
 }, {
 	input:  "SELECT 1,2 UNION SELECT * from (VALUES ROW(10,15)) t",
 	output: "select 1, 2 from dual union select * from (values row(10, 15)) as t",
+}, {
+	// MySQL's lexer treats these function names as keywords only when
+	// immediately followed by '(' — otherwise they are plain identifiers.
+	input:  "create table CAST (a int)",
+	output: "create table `CAST` (\n\ta int\n)",
+}, {
+	input:  "drop table CAST",
+	output: "drop table `CAST`",
+}, {
+	input:  "create table CURDATE (a int)",
+	output: "create table `CURDATE` (\n\ta int\n)",
+}, {
+	input:  "create table CURTIME (a int)",
+	output: "create table `CURTIME` (\n\ta int\n)",
+}, {
+	input:  "create table EXTRACT (a int)",
+	output: "create table `EXTRACT` (\n\ta int\n)",
+}, {
+	input:  "create table NOW (a int)",
+	output: "create table `NOW` (\n\ta int\n)",
+}, {
+	input:  "create table SUBSTR (a int)",
+	output: "create table `SUBSTR` (\n\ta int\n)",
+}, {
+	input:  "create table SUBSTRING (a int)",
+	output: "create table `SUBSTRING` (\n\ta int\n)",
+}, {
+	input:  "create table SYSDATE (a int)",
+	output: "create table `SYSDATE` (\n\ta int\n)",
+}, {
+	input:  "create table t (cast int, now int, extract int)",
+	output: "create table t (\n\t`cast` int,\n\t`now` int,\n\t`extract` int\n)",
+}, {
+	input:  "select now from t",
+	output: "select `now` from t",
+}, {
+	input:  "select cast(1 as char), now(), now(6), sysdate(), curdate(), curtime(), substr('a', 1), extract(year from d) from t",
+	output: "select cast(1 as char), now(), now(6), sysdate(), curdate(), curtime(), substr('a', 1), extract(year from d) from t",
+}, {
+	// with whitespace before '(' the name is an identifier, and the call is
+	// a generic function call — same as MySQL's stored-function call path
+	input:  "select now () from t",
+	output: "select now() from t",
+}, {
+	input:  "select substr ('abc', 1, 2) from t",
+	output: "select substr('abc', 1, 2) from t",
+}, {
+	input:  "select t.now from t",
+	output: "select t.`now` from t",
 }}
 
 func TestValid(t *testing.T) {
@@ -5513,7 +5562,7 @@ func TestCreateTable(t *testing.T) {
 	s2 varchar default 'this is a string',
 	s3 varchar default null,
 	s4 timestamp default current_timestamp,
-	s41 timestamp default now,
+	s41 timestamp default now(),
 	s5 bit(1) default B'0'
 )`,
 			output: `create table t (
@@ -5574,12 +5623,13 @@ func TestCreateTable(t *testing.T) {
 )`,
 		},
 		{
-			// test now with and without ()
+			// test now() variants; bare now (without parens) is an
+			// identifier, like in MySQL
 			input: `create table t (
-	time1 timestamp default now,
+	time1 timestamp default now(),
 	time2 timestamp default now(),
 	time3 timestamp default (now()),
-	time4 timestamp default now on update now,
+	time4 timestamp default now() on update now(),
 	time5 timestamp default now() on update now(),
 	time6 timestamp(3) default now(3) on update now(3)
 )`,
@@ -6694,6 +6744,15 @@ var invalidSQL = []struct {
 }, {
 	input:  "select *, * from t",
 	output: "syntax error at position 12",
+}, {
+	// CAST is only a keyword when directly followed by '('; with a space it
+	// is an identifier and AS is not valid in a generic argument list.
+	input:  "select cast (1 as char)",
+	output: "syntax error at position 18 near 'as'",
+}, {
+	// bare now (without parens) is an identifier, not the now() function
+	input:  "create table t (a datetime default now)",
+	output: "syntax error at position 39 near 'now'",
 }}
 
 func TestErrors(t *testing.T) {
