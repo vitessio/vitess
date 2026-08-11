@@ -137,8 +137,8 @@ func TestERSSplitBrainDetection(t *testing.T) {
 		utils.TeardownCluster(clusterInstance)
 	})
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
-	newPrimary := tablets[1]
-	otherLeader := tablets[2]
+	newPrimary := tablets[2]
+	otherLeader := tablets[1]
 
 	utils.ConfirmReplication(t, tablets[0], tablets[1:])
 
@@ -173,6 +173,11 @@ func TestERSSplitBrainDetection(t *testing.T) {
 		"--wait-replicas-timeout", "30s",
 	)
 	require.NoError(t, err, out)
+	vars := clusterInstance.VtctldProcess.GetVars()
+	require.NotNil(t, vars)
+	overrideCounts, ok := vars["EmergencyReparentSplitBrainOverrides"].(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, float64(1), overrideCounts[utils.KeyspaceName+"."+utils.ShardName])
 	utils.CheckPrimaryTablet(t, clusterInstance, newPrimary)
 
 	result := utils.RunSQL(t.Context(), t, "SELECT msg FROM vt_insert_test WHERE id = 999901", newPrimary)
