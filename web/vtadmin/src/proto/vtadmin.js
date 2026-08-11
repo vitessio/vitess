@@ -75215,9 +75215,9 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.name != null && $Object.hasOwnProperty.call(message, "name"))
+            if (message.name != null && $Object.hasOwnProperty.call(message, "name") && message.name !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.name);
-            if (message.value != null && $Object.hasOwnProperty.call(message, "value"))
+            if (message.value != null && $Object.hasOwnProperty.call(message, "value") && message.value !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.value);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
