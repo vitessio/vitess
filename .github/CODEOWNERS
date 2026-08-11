@@ -18,7 +18,7 @@ go.sum @mattlord @frouioui @timvaillancourt
 /go/cmd/vtadmin @mattlord @mhamza15
 /go/cmd/vtctldclient @mattlord
 /go/cmd/vtctldclient/command/throttler.go @mattlord
-/go/cmd/vtctldclient/command/vreplication @mattlord @beingnoble03
+/go/cmd/vtctldclient/command/vreplication @mattlord
 /go/cmd/vtctldclient/command/backups.go @frouioui @mattlord
 /go/cmd/vtbackup @frouioui
 /go/internal/flag @mattlord
@@ -87,24 +87,9 @@ go.sum @mattlord @frouioui @timvaillancourt
 /proto/vtadmin.proto @mattlord
 /proto/vtctldata.proto @mattlord
 /proto/vtctlservice.proto @mattlord
-<<<<<<< HEAD
-/proto/vtorcdata.proto @mattlord @shlomi-noach @timvaillancourt
-/test/ @frouioui @rohit-nayak-ps @mattlord @harshit-gangal
-/tools/ @frouioui @rohit-nayak-ps
-/web/vtadmin @beingnoble03
-/web/vtadmin/src/proto @harshit-gangal @mattlord @beingnoble03
-||||||| parent of 47f790a72f (Update maintainers and code owners project lists (#20772))
-/proto/vtgateservice.proto @vitessio/vtgateservice
-/proto/vtorcdata.proto @mattlord @shlomi-noach @timvaillancourt
-/test/ @frouioui @rohit-nayak-ps @mattlord @harshit-gangal
-/tools/ @frouioui @rohit-nayak-ps
-/web/vtadmin @beingnoble03
-/web/vtadmin/src/proto @harshit-gangal @mattlord @beingnoble03
-=======
 /proto/vtgateservice.proto @arthurschreiber
 /proto/vtorcdata.proto @mattlord @timvaillancourt
 /test/ @frouioui @mattlord
 /tools/ @frouioui
 /web/vtadmin @mattlord
 /web/vtadmin/src/proto @mattlord
->>>>>>> 47f790a72f (Update maintainers and code owners project lists (#20772))
