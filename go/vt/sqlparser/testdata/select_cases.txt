@@ -1783,8 +1783,8 @@ END
 INPUT
 select t1.*,t2.* from { oj t2 left outer join t1 on (t1.a=t2.a) };
 END
-ERROR
-syntax error at position 24 near '{'
+OUTPUT
+select t1.*, t2.* from t2 left join t1 on t1.a = t2.a
 END
 INPUT
 select round(1e1, 2147483648), truncate(1e1, 2147483648);
@@ -10279,8 +10279,8 @@ END
 INPUT
 select {fn length("hello")}, { date "1997-10-20" };
 END
-ERROR
-syntax error at position 9 near '{'
+OUTPUT
+select length('hello'), '1997-10-20' from dual
 END
 INPUT
 select cast(repeat('1',20) as unsigned);
@@ -13387,8 +13387,8 @@ END
 INPUT
 select t1.*,t2.* from t1 as t0,{ oj t2 left outer join t1 on (t1.a=t2.a) } WHERE t0.a=2;
 END
-ERROR
-syntax error at position 33 near '{'
+OUTPUT
+select t1.*, t2.* from t1 as t0, t2 left join t1 on t1.a = t2.a where t0.a = 2
 END
 INPUT
 select length(s1),char_length(s1) from t1;

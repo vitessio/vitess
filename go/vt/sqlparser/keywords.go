@@ -497,6 +497,7 @@ var keywords = []keyword{
 	{"of", OF},
 	{"off", OFF},
 	{"offset", OFFSET},
+	{"oj", OJ},
 	{"on", ON},
 	{"only", ONLY},
 	{"open", OPEN},

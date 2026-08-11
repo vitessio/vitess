@@ -4295,6 +4295,42 @@ var validSQL = []struct {
 }, {
 	input:  "select t.now from t",
 	output: "select t.`now` from t",
+}, {
+	// ODBC escape sequences: {d/t/ts 'literal'} become typed literals, any
+	// other escaped expression passes through unchanged, and { OJ ... }
+	// wraps a join. All of them normalize away, like MySQL does.
+	input:  "select {fn concat(a1, a2)} from t1",
+	output: "select concat(a1, a2) from t1",
+}, {
+	input:  "select a1, a4 from t2 where a4 like {fn ucase('1789-07-14')}",
+	output: "select a1, a4 from t2 where a4 like ucase('1789-07-14')",
+}, {
+	input:  "update t3 set a4 = {d '1789-07-14'} where a1 = 0",
+	output: "update t3 set a4 = date'1789-07-14' where a1 = 0",
+}, {
+	input:  "select {t '10:20:30'}, {ts '2020-01-01 10:20:30'} from dual",
+	output: "select time'10:20:30', timestamp'2020-01-01 10:20:30' from dual",
+}, {
+	input:  "select {d a1} from t1",
+	output: "select a1 from t1",
+}, {
+	input:  "select {x 1 + 1} from dual",
+	output: "select 1 + 1 from dual",
+}, {
+	input:  "select * from {oj t1 left outer join t2 on t1.a1 = t2.a3} where t1.a2 > 10",
+	output: "select * from t1 left join t2 on t1.a1 = t2.a3 where t1.a2 > 10",
+}, {
+	input:  "select * from { OJ t1 left join t2 on true }",
+	output: "select * from t1 left join t2 on true",
+}, {
+	input:  "select t1.* from t1 as t0, { OJ t2 inner join t1 on t1.a1 = t2.a1 } where t0.a3 = 2",
+	output: "select t1.* from t1 as t0, t2 join t1 on t1.a1 = t2.a1 where t0.a3 = 2",
+}, {
+	input:  "select t1.*, t2.* from { OJ ((t1 inner join t2 on t1.a1 = t2.a2) left outer join t3 on t3.a3 = t2.a1) }",
+	output: "select t1.*, t2.* from ((t1 join t2 on t1.a1 = t2.a2) left join t3 on t3.a3 = t2.a1)",
+}, {
+	input:  "select oj from t",
+	output: "select `oj` from t",
 }}
 
 func TestValid(t *testing.T) {

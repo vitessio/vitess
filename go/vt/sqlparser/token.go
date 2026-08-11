@@ -351,6 +351,9 @@ func (tkn *Tokenizer) Scan() (int, string) {
 				return tkn.scanString(ch, STRING)
 			case '`':
 				return tkn.scanLiteralIdentifier()
+			case '{', '}':
+				// ODBC escape sequence delimiters, e.g. {d '2020-01-01'}
+				return int(ch), ""
 			default:
 				return LEX_ERROR, string(byte(ch))
 			}

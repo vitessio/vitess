@@ -5809,6 +5809,12 @@ table_references:
 table_reference:
   table_factor
 | join_table
+| '{' OJ table_reference '}'
+  {
+    // ODBC "outer join" escape sequence: the braces are dropped, like
+    // MySQL does when it normalizes the query.
+    $$ = $3
+  }
 
 table_factor:
   aliased_table_name
@@ -6346,6 +6352,23 @@ function_call_keyword
 | literal_or_null
   {
     $$ = $1
+  }
+| '{' sql_id expression '}'
+  {
+    // ODBC escape sequence: {d/t/ts 'literal'} produces a typed literal;
+    // any other escaped expression is passed through unchanged, mirroring
+    // MySQL's behavior.
+    $$ = $3
+    if lit, ok := $3.(*Literal); ok && lit.Type == StrVal {
+      switch $2.Lowered() {
+      case "d":
+        $$ = NewDateLiteral(lit.Val)
+      case "t":
+        $$ = NewTimeLiteral(lit.Val)
+      case "ts":
+        $$ = NewTimestampLiteral(lit.Val)
+      }
+    }
   }
 | column_name_or_offset
   {
