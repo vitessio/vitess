@@ -6,19 +6,7 @@ The following is the full list, alphabetically ordered.
 * Derek Perkins ([derekperkins](https://github.com/derekperkins)) derek@nozzle.io
 * Florent Poinsard ([frouioui](https://github.com/frouioui)) florent@planetscale.com
 * Matt Lord ([mattlord](https://github.com/mattlord)) mattalord@gmail.com
-<<<<<<< HEAD
-* Noble Mittal ([beingnoble03](https://github.com/beingnoble03)) noble@planetscale.com
-* Rohit Nayak ([rohit-nayak-ps](https://github.com/rohit-nayak-ps)) rohit@planetscale.com
-* Shlomi Noach ([shlomi-noach](https://github.com/shlomi-noach)) shlomi@planetscale.com
-||||||| parent of 47f790a72f (Update maintainers and code owners project lists (#20772))
 * Mohamed Hamza ([mhamza15](https://github.com/mhamza15)) mhamza@fastmail.com
-* Nick Van Wiggeren ([nickvanw](https://github.com/nickvanw)) nick@planetscale.com
-* Noble Mittal ([beingnoble03](https://github.com/beingnoble03)) noble@planetscale.com
-* Rohit Nayak ([rohit-nayak-ps](https://github.com/rohit-nayak-ps)) rohit@planetscale.com
-* Shlomi Noach ([shlomi-noach](https://github.com/shlomi-noach)) shlomi@planetscale.com
-=======
-* Mohamed Hamza ([mhamza15](https://github.com/mhamza15)) mhamza@fastmail.com
->>>>>>> 47f790a72f (Update maintainers and code owners project lists (#20772))
 * Tim Vaillancourt ([timvaillancourt](https://github.com/timvaillancourt)) tim@timvaillancourt.com
 
 ## Areas of expertise
@@ -51,13 +39,7 @@ frouioui, arthurschreiber
 mattlord
 
 ### Cluster Management
-<<<<<<< HEAD
-dbussink
-||||||| parent of 47f790a72f (Update maintainers and code owners project lists (#20772))
-dbussink, timvaillancourt
-=======
 mattlord, timvaillancourt
->>>>>>> 47f790a72f (Update maintainers and code owners project lists (#20772))
 
 ### Java
 mattlord
@@ -71,22 +53,12 @@ mattlord
 ### Messaging
 derekperkins, mattlord
 
-<<<<<<< HEAD
-||||||| parent of 47f790a72f (Update maintainers and code owners project lists (#20772))
-### High Availability
-mattlord, timvaillancourt
-
-### Security
-timvaillancourt
-
-=======
 ### High Availability
 mattlord, timvaillancourt
 
 ### Security
 timvaillancourt, mattlord
 
->>>>>>> 47f790a72f (Update maintainers and code owners project lists (#20772))
 ## Past Maintainers
 We thank the following past maintainers for their contributions.
 

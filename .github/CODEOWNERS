@@ -1,19 +1,8 @@
 bootstrap.sh @frouioui
-<<<<<<< HEAD
-go.mod @harshit-gangal @mattlord @rohit-nayak-ps @systay @frouioui
-go.sum @harshit-gangal @mattlord @rohit-nayak-ps @systay @frouioui
-/.github/ @mattlord @rohit-nayak-ps @frouioui
-||||||| parent of 47f790a72f (Update maintainers and code owners project lists (#20772))
-go.mod @harshit-gangal @mattlord @rohit-nayak-ps @systay @frouioui @timvaillancourt
-go.sum @harshit-gangal @mattlord @rohit-nayak-ps @systay @frouioui @timvaillancourt
-/.golangci.yml @timvaillancourt
-/.github/ @mattlord @rohit-nayak-ps @frouioui
-=======
 go.mod @mattlord @frouioui @timvaillancourt
 go.sum @mattlord @frouioui @timvaillancourt
 /.golangci.yml @timvaillancourt
 /.github/ @mattlord @frouioui @mhamza15
->>>>>>> 47f790a72f (Update maintainers and code owners project lists (#20772))
 /.github/ISSUE_TEMPLATE/ @frouioui @mattlord
 /.github/workflows/ @frouioui @mattlord @mhamza15 @arthurschreiber
 /config/mycnf/ @mattlord
@@ -29,44 +18,9 @@ go.sum @mattlord @frouioui @timvaillancourt
 /go/cmd/vtadmin @mattlord @mhamza15
 /go/cmd/vtctldclient @mattlord
 /go/cmd/vtctldclient/command/throttler.go @mattlord
-/go/cmd/vtctldclient/command/vreplication @mattlord @beingnoble03
+/go/cmd/vtctldclient/command/vreplication @mattlord
 /go/cmd/vtctldclient/command/backups.go @frouioui @mattlord
 /go/cmd/vtbackup @frouioui
-<<<<<<< HEAD
-/go/internal/flag @rohit-nayak-ps
-/go/mysql @harshit-gangal @systay @mattlord
-/go/pools @harshit-gangal
-/go/protoutil @mattlord
-/go/sqltypes @harshit-gangal @shlomi-noach
-/go/test/endtoend/onlineddl @rohit-nayak-ps @shlomi-noach
-/go/test/endtoend/messaging @mattlord @rohit-nayak-ps @derekperkins
-/go/test/endtoend/schemadiff @shlomi-noach @mattlord
-/go/test/endtoend/transaction @harshit-gangal @systay @frouioui
-/go/test/endtoend/*throttler* @shlomi-noach @mattlord @timvaillancourt
-/go/test/endtoend/vtgate @harshit-gangal @systay @frouioui
-/go/test/endtoend/vtorc @shlomi-noach @timvaillancourt
-/go/tools/ @frouioui @systay
-/go/vt/dbconnpool @harshit-gangal @mattlord
-/go/vt/discovery @frouioui
-/go/vt/discovery/*tablet_picker* @rohit-nayak-ps @mattlord
-||||||| parent of 47f790a72f (Update maintainers and code owners project lists (#20772))
-/go/internal/flag @rohit-nayak-ps
-/go/mysql @harshit-gangal @systay @mattlord
-/go/pools @harshit-gangal
-/go/protoutil @mattlord @timvaillancourt
-/go/sqltypes @harshit-gangal @shlomi-noach
-/go/test/endtoend/onlineddl @rohit-nayak-ps @shlomi-noach
-/go/test/endtoend/messaging @mattlord @rohit-nayak-ps @derekperkins
-/go/test/endtoend/schemadiff @shlomi-noach @mattlord
-/go/test/endtoend/transaction @harshit-gangal @systay @frouioui
-/go/test/endtoend/*throttler* @shlomi-noach @mattlord @timvaillancourt
-/go/test/endtoend/vtgate @harshit-gangal @systay @frouioui
-/go/test/endtoend/vtorc @mattlord @shlomi-noach @timvaillancourt
-/go/tools/ @frouioui @systay
-/go/vt/dbconnpool @harshit-gangal @mattlord
-/go/vt/discovery @frouioui @timvaillancourt
-/go/vt/discovery/*tablet_picker* @rohit-nayak-ps @mattlord @timvaillancourt
-=======
 /go/internal/flag @mattlord
 /go/mysql @mattlord @arthurschreiber
 /go/pools @arthurschreiber
@@ -83,105 +37,7 @@ go.sum @mattlord @frouioui @timvaillancourt
 /go/vt/dbconnpool @arthurschreiber @mattlord
 /go/vt/discovery @frouioui @timvaillancourt
 /go/vt/discovery/*tablet_picker* @mattlord @timvaillancourt
->>>>>>> 47f790a72f (Update maintainers and code owners project lists (#20772))
 /go/vt/mysqlctl @mattlord @frouioui
-<<<<<<< HEAD
-/go/vt/proto @harshit-gangal @mattlord
-/go/vt/proto/vtadmin @beingnoble03
-/go/vt/schema @mattlord @shlomi-noach
-/go/vt/servenv @dbussink
-/go/vt/schemadiff @shlomi-noach @mattlord
-/go/vt/sqlparser @harshit-gangal @systay
-/go/vt/srvtopo @mattlord
-/go/vt/sysvars @harshit-gangal @systay
-/go/vt/topo @mattlord
-/go/vt/topotools @mattlord
-/go/vt/vitessdriver @harshit-gangal
-/go/vt/vtadmin @beingnoble03 @rohit-nayak-ps
-/go/vt/vtctl @rohit-nayak-ps
-/go/vt/vtctl/vtctl.go @rohit-nayak-ps
-/go/vt/vtctl/grpcvtctldclient @mattlord
-/go/vt/vtctl/grpcvtctldserver @mattlord
-/go/vt/vtctl/reparentutil
-/go/vt/vtctl/vtctldclient @mattlord
-/go/vt/vtctld @rohit-nayak-ps @mattlord
-/go/vt/vterrors @harshit-gangal @systay @frouioui
-/go/vt/vtexplain @systay @harshit-gangal
-/go/vt/vtgate @harshit-gangal @systay @frouioui
-/go/vt/vtgate/endtoend/*vstream* @rohit-nayak-ps @mattlord @shlomi-noach @beingnoble03
-/go/vt/vtgate/planbuilder @harshit-gangal @systay @frouioui @arthurschreiber
-/go/vt/vtgate/*vstream* @rohit-nayak-ps @mattlord @shlomi-noach @beingnoble03
-/go/vt/vtgate/evalengine @dbussink @systay
-/go/vt/vtorc @shlomi-noach @timvaillancourt
-/go/vt/vttablet/*conn* @harshit-gangal @systay
-/go/vt/vttablet/endtoend @harshit-gangal @mattlord @rohit-nayak-ps @systay
-/go/vt/vttablet/grpc* @rohit-nayak-ps @shlomi-noach @harshit-gangal
-/go/vt/vttablet/onlineddl @mattlord @rohit-nayak-ps @shlomi-noach
-/go/vt/vttablet/queryservice @harshit-gangal @systay
-/go/vt/vttablet/tabletmanager @rohit-nayak-ps @shlomi-noach
-/go/vt/vttablet/tabletmanager/rpc_backup.go @rohit-nayak-ps @shlomi-noach @frouioui
-/go/vt/vttablet/tabletmanager/rpc_throttler.go @shlomi-noach @mattlord @timvaillancourt
-/go/vt/vttablet/tabletserver/throttle @shlomi-noach @mattlord @timvaillancourt
-/go/vt/vttablet/tabletmanager/vreplication @rohit-nayak-ps @mattlord @shlomi-noach @beingnoble03
-/go/vt/vttablet/tabletmanager/vdiff @rohit-nayak-ps @mattlord @shlomi-noach @beingnoble03
-/go/vt/vttablet/tabletmanager/vstreamer @rohit-nayak-ps @mattlord @shlomi-noach @beingnoble03
-/go/vt/vttablet/tabletserver* @harshit-gangal @systay @shlomi-noach @rohit-nayak-ps @timvaillancourt
-/go/vt/vttablet/tabletserver/messager @mattlord @rohit-nayak-ps @derekperkins
-/go/vt/vttablet/*tmclient* @rohit-nayak-ps @shlomi-noach
-/go/vt/vttablet/vexec @mattlord @rohit-nayak-ps @shlomi-noach
-/go/vt/wrangler @mattlord @rohit-nayak-ps
-/go/vt/vtctl/workflow @mattlord @rohit-nayak-ps @shlomi-noach @beingnoble03
-/proto/ @harshit-gangal
-/proto/vtadmin.proto @beingnoble03 @mattlord
-||||||| parent of 47f790a72f (Update maintainers and code owners project lists (#20772))
-/go/vt/proto @harshit-gangal @mattlord
-/go/vt/proto/vtadmin @beingnoble03
-/go/vt/schema @mattlord @shlomi-noach
-/go/vt/servenv @dbussink @timvaillancourt
-/go/vt/schemadiff @shlomi-noach @mattlord
-/go/vt/sqlparser @harshit-gangal @systay
-/go/vt/srvtopo @mattlord @timvaillancourt
-/go/vt/sysvars @harshit-gangal @systay
-/go/vt/topo @mattlord @timvaillancourt
-/go/vt/topotools @mattlord @timvaillancourt
-/go/vt/vitessdriver @harshit-gangal
-/go/vt/vtadmin @beingnoble03 @rohit-nayak-ps
-/go/vt/vtctl @rohit-nayak-ps
-/go/vt/vtctl/vtctl.go @rohit-nayak-ps
-/go/vt/vtctl/grpcvtctldclient @mattlord @timvaillancourt
-/go/vt/vtctl/grpcvtctldserver @mattlord @timvaillancourt
-/go/vt/vtctl/reparentutil @timvaillancourt
-/go/vt/vtctl/vtctldclient @mattlord @timvaillancourt
-/go/vt/vtctld @rohit-nayak-ps @mattlord @timvaillancourt
-/go/vt/vterrors @harshit-gangal @systay @frouioui @timvaillancourt
-/go/vt/vtexplain @systay @harshit-gangal
-/go/vt/vtgate @harshit-gangal @systay @frouioui
-/go/vt/vtgate/endtoend/*vstream* @rohit-nayak-ps @mattlord @shlomi-noach @beingnoble03
-/go/vt/vtgate/planbuilder @harshit-gangal @systay @frouioui @arthurschreiber
-/go/vt/vtgate/*vstream* @rohit-nayak-ps @mattlord @shlomi-noach @beingnoble03
-/go/vt/vtgate/evalengine @dbussink @systay
-/go/vt/vtorc @mattlord @shlomi-noach @timvaillancourt
-/go/vt/vttablet/*conn* @harshit-gangal @systay
-/go/vt/vttablet/endtoend @harshit-gangal @mattlord @rohit-nayak-ps @systay
-/go/vt/vttablet/grpc* @rohit-nayak-ps @shlomi-noach @harshit-gangal @timvaillancourt
-/go/vt/vttablet/onlineddl @mattlord @rohit-nayak-ps @shlomi-noach
-/go/vt/vttablet/queryservice @harshit-gangal @systay
-/go/vt/vttablet/tabletmanager @rohit-nayak-ps @shlomi-noach @timvaillancourt
-/go/vt/vttablet/tabletmanager/rpc_backup.go @rohit-nayak-ps @shlomi-noach @frouioui
-/go/vt/vttablet/tabletmanager/rpc_throttler.go @shlomi-noach @mattlord @timvaillancourt
-/go/vt/vttablet/tabletserver/throttle @shlomi-noach @mattlord @timvaillancourt
-/go/vt/vttablet/tabletmanager/vreplication @rohit-nayak-ps @mattlord @shlomi-noach @beingnoble03
-/go/vt/vttablet/tabletmanager/vdiff @rohit-nayak-ps @mattlord @shlomi-noach @beingnoble03
-/go/vt/vttablet/tabletmanager/vstreamer @rohit-nayak-ps @mattlord @shlomi-noach @beingnoble03
-/go/vt/vttablet/tabletserver* @harshit-gangal @systay @shlomi-noach @rohit-nayak-ps @timvaillancourt
-/go/vt/vttablet/tabletserver/messager @mattlord @rohit-nayak-ps @derekperkins
-/go/vt/vttablet/*tmclient* @rohit-nayak-ps @shlomi-noach @timvaillancourt
-/go/vt/vttablet/vexec @mattlord @rohit-nayak-ps @shlomi-noach
-/go/vt/wrangler @mattlord @rohit-nayak-ps
-/go/vt/vtctl/workflow @mattlord @rohit-nayak-ps @shlomi-noach @beingnoble03
-/proto/ @harshit-gangal
-/proto/vtadmin.proto @beingnoble03 @mattlord
-=======
 /go/vt/proto @mattlord
 /go/vt/proto/vtadmin @mattlord
 /go/vt/schema @mattlord
@@ -229,26 +85,11 @@ go.sum @mattlord @frouioui @timvaillancourt
 /go/vt/vtctl/workflow @mattlord
 /proto/ @mattlord
 /proto/vtadmin.proto @mattlord
->>>>>>> 47f790a72f (Update maintainers and code owners project lists (#20772))
 /proto/vtctldata.proto @mattlord
 /proto/vtctlservice.proto @mattlord
-<<<<<<< HEAD
-/test/ @frouioui @rohit-nayak-ps @mattlord @harshit-gangal
-/tools/ @frouioui @rohit-nayak-ps
-/web/vtadmin @beingnoble03
-/web/vtadmin/src/proto @harshit-gangal @mattlord @beingnoble03
-||||||| parent of 47f790a72f (Update maintainers and code owners project lists (#20772))
-/proto/vtgateservice.proto @vitessio/vtgateservice
-/proto/vtorcdata.proto @mattlord @shlomi-noach @timvaillancourt
-/test/ @frouioui @rohit-nayak-ps @mattlord @harshit-gangal
-/tools/ @frouioui @rohit-nayak-ps
-/web/vtadmin @beingnoble03
-/web/vtadmin/src/proto @harshit-gangal @mattlord @beingnoble03
-=======
 /proto/vtgateservice.proto @arthurschreiber
 /proto/vtorcdata.proto @mattlord @timvaillancourt
 /test/ @frouioui @mattlord
 /tools/ @frouioui
 /web/vtadmin @mattlord
 /web/vtadmin/src/proto @mattlord
->>>>>>> 47f790a72f (Update maintainers and code owners project lists (#20772))
