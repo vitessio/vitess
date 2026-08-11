@@ -65,7 +65,8 @@ jobs:
 
     - name: Setup Node
       if: steps.changes.outputs.proto_changes == 'true'
-      uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0  # zizmor: ignore[cache-poisoning] this workflow publishes no artifacts
+      # zizmor: ignore[cache-poisoning] this workflow publishes no artifacts
+      uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
       with:
         # node-version should match package.json
         node-version: '22.13.1'
