@@ -1461,7 +1461,7 @@ func (s *Server) MoveTablesComplete(ctx context.Context, req *vtctldatapb.MoveTa
 	span, ctx := trace.NewSpan(ctx, "workflow.Server.MoveTablesComplete")
 	defer span.Finish()
 
-	keepData, warnings := resolveWorkflowKeepData(req.GetWorkflow(), req.KeepData)
+	keepData, warnings := resolveWorkflowKeepData(req.GetWorkflow(), req.KeepData, false)
 	opts := []WorkflowActionOption{}
 	if req.IgnoreSourceKeyspace {
 		opts = append(opts, IgnoreSourceKeyspace())
@@ -1593,8 +1593,6 @@ func (s *Server) WorkflowDelete(ctx context.Context, req *vtctldatapb.WorkflowDe
 	span.Annotate("workflow", req.Workflow)
 	span.Annotate("keep_routing_rules", req.KeepRoutingRules)
 	span.Annotate("shards", req.Shards)
-	keepData, warnings := resolveWorkflowKeepData(req.GetWorkflow(), req.KeepData)
-	span.Annotate("keep_data", keepData)
 
 	opts := []WorkflowActionOption{}
 	if req.IgnoreSourceKeyspace {
@@ -1606,6 +1604,13 @@ func (s *Server) WorkflowDelete(ctx context.Context, req *vtctldatapb.WorkflowDe
 		s.Logger().Errorf("failed to get VReplication workflow state for %s.%s: %v", req.GetKeyspace(), req.GetWorkflow(), err)
 		return nil, err
 	}
+
+	keepData, warnings := resolveWorkflowKeepData(
+		req.GetWorkflow(),
+		req.KeepData,
+		ts.workflowType == binlogdatapb.VReplicationWorkflowType_Materialize,
+	)
+	span.Annotate("keep_data", keepData)
 
 	if ts.workflowType != binlogdatapb.VReplicationWorkflowType_CreateLookupIndex {
 		// Return an error if the write workflow traffic is switched.

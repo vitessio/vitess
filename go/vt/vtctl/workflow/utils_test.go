@@ -50,13 +50,19 @@ import (
 
 func TestResolveWorkflowKeepData(t *testing.T) {
 	t.Run("non-reverse workflow keeps existing default", func(t *testing.T) {
-		keepData, warnings := resolveWorkflowKeepData("wf1", nil)
+		keepData, warnings := resolveWorkflowKeepData("wf1", nil, false)
 		require.False(t, keepData)
 		require.Empty(t, warnings)
 	})
 
+	t.Run("non-reverse workflow uses caller default", func(t *testing.T) {
+		keepData, warnings := resolveWorkflowKeepData("wf1", nil, true)
+		require.True(t, keepData)
+		require.Empty(t, warnings)
+	})
+
 	t.Run("reverse workflow defaults to keeping data", func(t *testing.T) {
-		keepData, warnings := resolveWorkflowKeepData("wf1_reverse", nil)
+		keepData, warnings := resolveWorkflowKeepData("wf1_reverse", nil, false)
 		require.True(t, keepData)
 		require.Len(t, warnings, 1)
 		assert.Contains(t, warnings[0], "wf1_reverse")
@@ -67,15 +73,22 @@ func TestResolveWorkflowKeepData(t *testing.T) {
 
 	t.Run("explicit false on reverse workflow is honored", func(t *testing.T) {
 		keepDataValue := false
-		keepData, warnings := resolveWorkflowKeepData("wf1_reverse", &keepDataValue)
+		keepData, warnings := resolveWorkflowKeepData("wf1_reverse", &keepDataValue, false)
 		require.False(t, keepData)
 		require.Empty(t, warnings)
 	})
 
 	t.Run("explicit true on reverse workflow is honored", func(t *testing.T) {
 		keepDataValue := true
-		keepData, warnings := resolveWorkflowKeepData("wf1_reverse", &keepDataValue)
+		keepData, warnings := resolveWorkflowKeepData("wf1_reverse", &keepDataValue, false)
 		require.True(t, keepData)
+		require.Empty(t, warnings)
+	})
+
+	t.Run("explicit false overrides caller default", func(t *testing.T) {
+		keepDataValue := false
+		keepData, warnings := resolveWorkflowKeepData("wf1", &keepDataValue, true)
+		require.False(t, keepData)
 		require.Empty(t, warnings)
 	})
 }

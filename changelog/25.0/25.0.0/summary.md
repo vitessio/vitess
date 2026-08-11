@@ -167,6 +167,10 @@ The `--keep-data` flag help text has been updated to note this default explicitl
 
 See [#19906](https://github.com/vitessio/vitess/pull/19906) for details.
 
+#### <a id="vreplication-materialize-cancel-data-protection"/>Preserve Materialize target data on cancel by default</a>
+
+`vtctldclient Materialize cancel` now preserves the materialized target tables and their data when `--keep-data` is omitted. To remove the target tables when canceling the workflow, explicitly pass `--keep-data=false`.
+
 ### <a id="minor-changes-vtgate"/>VTGate</a>
 
 #### <a id="vtgate-logstats-ingress-bytes"/>Ingress bytes in query LogStats</a>
