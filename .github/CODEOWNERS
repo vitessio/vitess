@@ -18,7 +18,7 @@ go.sum @mattlord @frouioui @timvaillancourt
 /go/cmd/vtadmin @mattlord @mhamza15
 /go/cmd/vtctldclient @mattlord
 /go/cmd/vtctldclient/command/throttler.go @mattlord
-/go/cmd/vtctldclient/command/vreplication @mattlord @beingnoble03
+/go/cmd/vtctldclient/command/vreplication @mattlord
 /go/cmd/vtctldclient/command/backups.go @frouioui @mattlord
 /go/cmd/vtbackup @frouioui
 /go/internal/flag @mattlord
