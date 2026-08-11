@@ -461,6 +461,9 @@ func (tkn *Tokenizer) scanIdentifier(isVariable bool) (int, string) {
 	}
 	keywordName := tkn.buf[start:tkn.Pos]
 	if keywordID, found := keywordLookupTable.LookupString(keywordName); found {
+		if isFuncCallKeyword(keywordID) && tkn.cur() != '(' {
+			return ID, keywordName
+		}
 		return keywordID, keywordName
 	}
 	return ID, keywordName
