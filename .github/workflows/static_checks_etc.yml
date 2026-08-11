@@ -234,13 +234,7 @@ jobs:
 
       - name: Setup Node
         if: steps.changes.outputs.proto_changes == 'true'
-<<<<<<< HEAD
-        uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6.2.0
-||||||| parent of 74844882a2 (Add `zizmor` check to the static checks workflow (#19149))
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-=======
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0  # zizmor: ignore[cache-poisoning] this workflow publishes no artifacts
->>>>>>> 74844882a2 (Add `zizmor` check to the static checks workflow (#19149))
+        uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6.2.0  # zizmor: ignore[cache-poisoning] this workflow publishes no artifacts
         with:
           # make proto requires newer node than the pre-installed one
           node-version: '22.13.1'
@@ -270,13 +264,8 @@ jobs:
           echo ""
           exit 1
 
-<<<<<<< HEAD
-
-||||||| parent of 74844882a2 (Add `zizmor` check to the static checks workflow (#19149))
-=======
       - name: Run zizmor 🌈
         uses: zizmorcore/zizmor-action@3dc1ecc9bcb9e94e9b2c709687979e1298497054 # v0.6.2
         with:
           advanced-security: false
           annotations: true
->>>>>>> 74844882a2 (Add `zizmor` check to the static checks workflow (#19149))
