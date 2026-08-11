@@ -574,6 +574,20 @@ func (node *DropProcedure) FormatFast(buf *TrackedBuffer) {
 }
 
 // FormatFast formats the node.
+func (node *DropFunction) FormatFast(buf *TrackedBuffer) {
+	exists := ""
+	if node.IfExists {
+		exists = "if exists "
+	}
+	buf.WriteString(DropStr)
+	buf.WriteByte(' ')
+	node.Comments.FormatFast(buf)
+	buf.WriteString("function ")
+	buf.WriteString(exists)
+	node.Name.FormatFast(buf)
+}
+
+// FormatFast formats the node.
 func (pp *ProcParameter) FormatFast(buf *TrackedBuffer) {
 	buf.WriteString(pp.Mode.ToString())
 	buf.WriteByte(' ')
@@ -1591,6 +1605,18 @@ func (node *Use) FormatFast(buf *TrackedBuffer) {
 // FormatFast formats the node.
 func (node *Commit) FormatFast(buf *TrackedBuffer) {
 	buf.WriteString("commit")
+	switch node.Chain {
+	case TxChainChain:
+		buf.WriteString(" and chain")
+	case TxChainNoChain:
+		buf.WriteString(" and no chain")
+	}
+	switch node.Release {
+	case TxReleaseRelease:
+		buf.WriteString(" release")
+	case TxReleaseNoRelease:
+		buf.WriteString(" no release")
+	}
 }
 
 // FormatFast formats the node.
@@ -1614,6 +1640,18 @@ func (node *Begin) FormatFast(buf *TrackedBuffer) {
 // FormatFast formats the node.
 func (node *Rollback) FormatFast(buf *TrackedBuffer) {
 	buf.WriteString("rollback")
+	switch node.Chain {
+	case TxChainChain:
+		buf.WriteString(" and chain")
+	case TxChainNoChain:
+		buf.WriteString(" and no chain")
+	}
+	switch node.Release {
+	case TxReleaseRelease:
+		buf.WriteString(" release")
+	case TxReleaseNoRelease:
+		buf.WriteString(" no release")
+	}
 }
 
 // FormatFast formats the node.
@@ -1720,7 +1758,7 @@ func (node *Analyze) FormatFast(buf *TrackedBuffer) {
 		buf.WriteString("local ")
 	}
 	buf.WriteString("table ")
-	node.Table.FormatFast(buf)
+	node.Tables.FormatFast(buf)
 }
 
 // FormatFast formats the node.

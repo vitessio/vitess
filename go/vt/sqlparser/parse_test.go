@@ -1247,8 +1247,10 @@ var validSQL = []struct {
 	input:  "select /*!* from*/ t",
 	output: "select * from t",
 }, {
+	// MySQL reads the whole digit run as the version number, so 401011 is
+	// version 40.10.11, which is above the current version: comment skipped.
 	input:  "select /*!401011 from*/ t",
-	output: "select 1 from t",
+	output: "select t from dual",
 }, {
 	input: "select /* dual */ 1 from dual",
 }, {
@@ -4171,6 +4173,79 @@ var validSQL = []struct {
 }, {
 	input:  "SELECT 1,2 UNION SELECT * from (VALUES ROW(10,15)) t",
 	output: "select 1, 2 from dual union select * from (values row(10, 15)) as t",
+}, {
+	input: "drop function f1",
+}, {
+	input: "drop function if exists test.f1",
+}, {
+	input: "commit and chain",
+}, {
+	input: "commit and no chain",
+}, {
+	input: "commit release",
+}, {
+	input: "commit no release",
+}, {
+	input: "commit and chain no release",
+}, {
+	input: "commit and no chain release",
+}, {
+	input: "commit and no chain no release",
+}, {
+	input: "rollback and chain",
+}, {
+	input: "rollback and no chain",
+}, {
+	input: "rollback release",
+}, {
+	input: "rollback no release",
+}, {
+	input: "rollback and chain no release",
+}, {
+	input: "rollback and no chain release",
+}, {
+	input: "rollback and no chain no release",
+}, {
+	input:  "create index e_index type btree on t1 (e)",
+	output: "alter table t1 add key e_index (e) using btree",
+}, {
+	input:  "create index `type` type btree on t1 (f)",
+	output: "alter table t1 add key `type` (f) using btree",
+}, {
+	input:  "alter table t1 add index m_index (m) type btree",
+	output: "alter table t1 add key m_index (m) using btree",
+}, {
+	input: "alter table t1 convert to character set default",
+}, {
+	input: "alter table t1 convert to character set default collate utf8mb4_bin",
+}, {
+	input:  "create table t (k serial, i int)",
+	output: "create table t (\n\tk bigint unsigned not null auto_increment unique,\n\ti int\n)",
+}, {
+	input:  "create table t (serial serial)",
+	output: "create table t (\n\t`serial` bigint unsigned not null auto_increment unique\n)",
+}, {
+	input:  "select 1 /*!080100 +1*/ as x",
+	output: "select 1 + 1 as x from dual",
+}, {
+	input:  "select 1 /*!080100+1*/ as x",
+	output: "select 1 + 1 as x from dual",
+}, {
+	input:  "select 1 /*!80034\v+1*/",
+	output: "select 1 + 1 from dual",
+}, {
+	input:  "select 1 /*!80034\f+1*/",
+	output: "select 1 + 1 from dual",
+}, {
+	input:  "select\v1\ffrom t",
+	output: "select 1 from t",
+}, {
+	input: "insert into a() select * from b",
+}, {
+	input: "analyze table t1, t2, t3",
+}, {
+	input:  "analyze no_write_to_binlog table t1, t2",
+	output: "analyze local table t1, t2",
 }}
 
 func TestValid(t *testing.T) {
@@ -6514,6 +6589,19 @@ var invalidSQL = []struct {
 	// statement text of a PREPARE; a positional parameter is a syntax error.
 	input:  "prepare stmt1 from ?",
 	output: "syntax error at position 21 near ':v1'",
+}, {
+	// MySQL rejects chaining and releasing at the same time (Bug#46527).
+	input:  "commit and chain release",
+	output: "syntax error at position 25 near 'release'",
+}, {
+	input:  "commit chain",
+	output: "syntax error at position 13 near 'chain'",
+}, {
+	input:  "commit and release",
+	output: "syntax error at position 19 near 'release'",
+}, {
+	input:  "rollback and chain release",
+	output: "syntax error at position 27 near 'release'",
 }, {
 	input:  "alter vitess_migration cancel context ''",
 	output: "migration context cannot be empty at position 41",

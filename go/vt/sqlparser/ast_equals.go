@@ -434,6 +434,12 @@ func (cmp *Comparator) SQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return cmp.RefOfDropDatabase(a, b)
+	case *DropFunction:
+		b, ok := inB.(*DropFunction)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfDropFunction(a, b)
 	case *DropKey:
 		b, ok := inB.(*DropKey)
 		if !ok {
@@ -2024,7 +2030,7 @@ func (cmp *Comparator) RefOfAnalyze(a, b *Analyze) bool {
 		return false
 	}
 	return a.IsLocal == b.IsLocal &&
-		cmp.TableName(a.Table, b.Table)
+		cmp.TableNames(a.Tables, b.Tables)
 }
 
 // RefOfAndExpr does deep equals between the two objects.
@@ -2364,7 +2370,8 @@ func (cmp *Comparator) RefOfCommit(a, b *Commit) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return true
+	return a.Chain == b.Chain &&
+		a.Release == b.Release
 }
 
 // RefOfCommonTableExpr does deep equals between the two objects.
@@ -2686,6 +2693,19 @@ func (cmp *Comparator) RefOfDropDatabase(a, b *DropDatabase) bool {
 	return a.IfExists == b.IfExists &&
 		cmp.RefOfParsedComments(a.Comments, b.Comments) &&
 		cmp.IdentifierCS(a.DBName, b.DBName)
+}
+
+// RefOfDropFunction does deep equals between the two objects.
+func (cmp *Comparator) RefOfDropFunction(a, b *DropFunction) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.IfExists == b.IfExists &&
+		cmp.RefOfParsedComments(a.Comments, b.Comments) &&
+		cmp.TableName(a.Name, b.Name)
 }
 
 // RefOfDropKey does deep equals between the two objects.
@@ -4505,7 +4525,8 @@ func (cmp *Comparator) RefOfRollback(a, b *Rollback) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return true
+	return a.Chain == b.Chain &&
+		a.Release == b.Release
 }
 
 // RootNode does deep equals between the two objects.
@@ -6479,6 +6500,12 @@ func (cmp *Comparator) DDLStatement(inA, inB DDLStatement) bool {
 			return false
 		}
 		return cmp.RefOfCreateView(a, b)
+	case *DropFunction:
+		b, ok := inB.(*DropFunction)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfDropFunction(a, b)
 	case *DropProcedure:
 		b, ok := inB.(*DropProcedure)
 		if !ok {
@@ -7634,6 +7661,12 @@ func (cmp *Comparator) Statement(inA, inB Statement) bool {
 			return false
 		}
 		return cmp.RefOfDropDatabase(a, b)
+	case *DropFunction:
+		b, ok := inB.(*DropFunction)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfDropFunction(a, b)
 	case *DropProcedure:
 		b, ok := inB.(*DropProcedure)
 		if !ok {

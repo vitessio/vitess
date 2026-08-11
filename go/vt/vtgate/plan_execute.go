@@ -243,9 +243,19 @@ func (e *Executor) handleTransactions(
 		qr, err := e.handleBegin(ctx, vcursor, safeSession, logStats, stmt)
 		return qr, err
 	case sqlparser.StmtCommit:
+		// AND NO CHAIN NO RELEASE is the default completion behavior, but the
+		// chaining and connection-release behaviors are not implemented.
+		if commit, ok := stmt.(*sqlparser.Commit); ok &&
+			(commit.Chain == sqlparser.TxChainChain || commit.Release == sqlparser.TxReleaseRelease) {
+			return nil, vterrors.VT12001("COMMIT with AND CHAIN or RELEASE clause")
+		}
 		qr, err := e.handleCommit(ctx, vcursor, safeSession, logStats)
 		return qr, err
 	case sqlparser.StmtRollback:
+		if rollback, ok := stmt.(*sqlparser.Rollback); ok &&
+			(rollback.Chain == sqlparser.TxChainChain || rollback.Release == sqlparser.TxReleaseRelease) {
+			return nil, vterrors.VT12001("ROLLBACK with AND CHAIN or RELEASE clause")
+		}
 		qr, err := e.handleRollback(ctx, vcursor, safeSession, logStats)
 		return qr, err
 	case sqlparser.StmtSavepoint:

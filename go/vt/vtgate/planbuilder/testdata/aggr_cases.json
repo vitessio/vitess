@@ -7319,7 +7319,7 @@
           {
             "OperatorType": "Projection",
             "Expressions": [
-              "sum(`user`.type) * count(*) as sum(user.type)",
+              "sum(`user`.`type`) * count(*) as sum(user.type)",
               ":2 as id",
               ":3 as weight_string(user_extra.id)"
             ],
@@ -7344,8 +7344,8 @@
                           "Name": "user",
                           "Sharded": true
                         },
-                        "FieldQuery": "select sum(`user`.type), `user`.team_id from `user` where 1 != 1 group by `user`.team_id",
-                        "Query": "select sum(`user`.type), `user`.team_id from `user` group by `user`.team_id"
+                        "FieldQuery": "select sum(`user`.`type`), `user`.team_id from `user` where 1 != 1 group by `user`.team_id",
+                        "Query": "select sum(`user`.`type`), `user`.team_id from `user` group by `user`.team_id"
                       },
                       {
                         "OperatorType": "Route",

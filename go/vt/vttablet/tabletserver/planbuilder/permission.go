@@ -69,7 +69,9 @@ func BuildPermissions(stmt sqlparser.Statement) []Permission {
 			permissions = buildTableNamePermissions(t, tableacl.ADMIN, nil, permissions)
 		}
 	case *sqlparser.Analyze:
-		permissions = buildTableNamePermissions(node.Table, tableacl.WRITER, nil, permissions)
+		for _, table := range node.Tables {
+			permissions = buildTableNamePermissions(table, tableacl.WRITER, nil, permissions)
+		}
 	case *sqlparser.OtherAdmin, *sqlparser.CallProc, *sqlparser.Begin, *sqlparser.Commit, *sqlparser.Rollback,
 		*sqlparser.Load, *sqlparser.Savepoint, *sqlparser.Release, *sqlparser.SRollback, *sqlparser.Set, *sqlparser.Show, sqlparser.Explain,
 		*sqlparser.UnlockTables:

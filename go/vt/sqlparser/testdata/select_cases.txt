@@ -6686,7 +6686,7 @@ INPUT
 select column_name as 'Field',column_type as 'Type',is_nullable as 'Null',column_key as 'Key',column_default as 'Default',extra as 'Extra' from information_schema.columns where table_schema='mysqltest_db1' and table_name='t_no_priv';
 END
 OUTPUT
-select `column_name` as Field, column_type as Type, is_nullable as `Null`, column_key as `Key`, column_default as `Default`, extra as Extra from information_schema.`columns` where table_schema = 'mysqltest_db1' and `table_name` = 't_no_priv'
+select `column_name` as Field, column_type as `Type`, is_nullable as `Null`, column_key as `Key`, column_default as `Default`, extra as Extra from information_schema.`columns` where table_schema = 'mysqltest_db1' and `table_name` = 't_no_priv'
 END
 INPUT
 select id+0 as a,max(id),concat(facility) as b from t1 group by a order by b desc,a;
@@ -10250,7 +10250,7 @@ INPUT
 select column_name as 'Field',column_type as 'Type',is_nullable as 'Null',column_key as 'Key',column_default as 'Default',extra as 'Extra' from information_schema.columns where table_schema='mysqltest_db1' and table_name='t_column_priv_only';
 END
 OUTPUT
-select `column_name` as Field, column_type as Type, is_nullable as `Null`, column_key as `Key`, column_default as `Default`, extra as Extra from information_schema.`columns` where table_schema = 'mysqltest_db1' and `table_name` = 't_column_priv_only'
+select `column_name` as Field, column_type as `Type`, is_nullable as `Null`, column_key as `Key`, column_default as `Default`, extra as Extra from information_schema.`columns` where table_schema = 'mysqltest_db1' and `table_name` = 't_column_priv_only'
 END
 INPUT
 select dayname("1962-03-03"),dayname("1962-03-03")+0;
@@ -22237,8 +22237,8 @@ END
 INPUT
 select 1/*!000002*/;
 END
-ERROR
-syntax error at position 18 near '2'
+OUTPUT
+select 1 from dual
 END
 INPUT
 select 1, min(a) from t1i where a=99;

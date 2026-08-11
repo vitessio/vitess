@@ -2956,7 +2956,7 @@ func TestGetWorkflowsStreamLogs(t *testing.T) {
 
 	te.tmc.expectVRQuery(200, "select vrepl_id, table_name, lastpk from _vt.copy_state where vrepl_id in (1) and id in (select max(id) from _vt.copy_state where vrepl_id in (1) group by vrepl_id, table_name)", &sqltypes.Result{})
 	te.tmc.expectVRQuery(200, "select id from _vt.vreplication where db_name = 'vt_target_keyspace' and workflow = 'test_workflow'", &sqltypes.Result{})
-	te.tmc.expectVRQuery(200, "select id, vrepl_id, type, state, message, created_at, updated_at, `count` from _vt.vreplication_log where vrepl_id in (1) order by vrepl_id asc, id asc", logResult)
+	te.tmc.expectVRQuery(200, "select id, vrepl_id, `type`, state, message, created_at, updated_at, `count` from _vt.vreplication_log where vrepl_id in (1) order by vrepl_id asc, id asc", logResult)
 
 	res, err := te.ws.GetWorkflows(ctx, &vtctldatapb.GetWorkflowsRequest{
 		Keyspace:    targetKeyspace,

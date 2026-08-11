@@ -159,6 +159,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfDropColumn(parent, node, replacer)
 	case *DropDatabase:
 		return a.rewriteRefOfDropDatabase(parent, node, replacer)
+	case *DropFunction:
+		return a.rewriteRefOfDropFunction(parent, node, replacer)
 	case *DropKey:
 		return a.rewriteRefOfDropKey(parent, node, replacer)
 	case *DropProcedure:
@@ -1396,10 +1398,10 @@ func (a *application) rewriteRefOfAnalyze(parent SQLNode, node *Analyze, replace
 		}
 	}
 	if a.collectPaths {
-		a.cur.current.AddStep(uint16(RefOfAnalyzeTable))
+		a.cur.current.AddStep(uint16(RefOfAnalyzeTables))
 	}
-	if !a.rewriteTableName(node, node.Table, func(newNode, parent SQLNode) {
-		parent.(*Analyze).Table = newNode.(TableName)
+	if !a.rewriteTableNames(node, node.Tables, func(newNode, parent SQLNode) {
+		parent.(*Analyze).Tables = newNode.(TableNames)
 	}) {
 		return false
 	}
@@ -3906,6 +3908,55 @@ func (a *application) rewriteRefOfDropDatabase(parent SQLNode, node *DropDatabas
 	}
 	if !a.rewriteIdentifierCS(node, node.DBName, func(newNode, parent SQLNode) {
 		parent.(*DropDatabase).DBName = newNode.(IdentifierCS)
+	}) {
+		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+
+// Function Generation Source: PtrToStructMethod
+func (a *application) rewriteRefOfDropFunction(parent SQLNode, node *DropFunction, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
+			return true
+		}
+	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfDropFunctionComments))
+	}
+	if !a.rewriteRefOfParsedComments(node, node.Comments, func(newNode, parent SQLNode) {
+		parent.(*DropFunction).Comments = newNode.(*ParsedComments)
+	}) {
+		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfDropFunctionName))
+	}
+	if !a.rewriteTableName(node, node.Name, func(newNode, parent SQLNode) {
+		parent.(*DropFunction).Name = newNode.(TableName)
 	}) {
 		return false
 	}
@@ -15434,6 +15485,8 @@ func (a *application) rewriteDDLStatement(parent SQLNode, node DDLStatement, rep
 		return a.rewriteRefOfCreateTable(parent, node, replacer)
 	case *CreateView:
 		return a.rewriteRefOfCreateView(parent, node, replacer)
+	case *DropFunction:
+		return a.rewriteRefOfDropFunction(parent, node, replacer)
 	case *DropProcedure:
 		return a.rewriteRefOfDropProcedure(parent, node, replacer)
 	case *DropTable:
@@ -15900,6 +15953,8 @@ func (a *application) rewriteStatement(parent SQLNode, node Statement, replacer 
 		return a.rewriteRefOfDelete(parent, node, replacer)
 	case *DropDatabase:
 		return a.rewriteRefOfDropDatabase(parent, node, replacer)
+	case *DropFunction:
+		return a.rewriteRefOfDropFunction(parent, node, replacer)
 	case *DropProcedure:
 		return a.rewriteRefOfDropProcedure(parent, node, replacer)
 	case *DropTable:

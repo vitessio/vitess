@@ -158,6 +158,8 @@ func (c *cow) copyOnRewriteSQLNode(n SQLNode, parent SQLNode) (out SQLNode, chan
 		return c.copyOnRewriteRefOfDropColumn(n, parent)
 	case *DropDatabase:
 		return c.copyOnRewriteRefOfDropDatabase(n, parent)
+	case *DropFunction:
+		return c.copyOnRewriteRefOfDropFunction(n, parent)
 	case *DropKey:
 		return c.copyOnRewriteRefOfDropKey(n, parent)
 	case *DropProcedure:
@@ -1006,10 +1008,10 @@ func (c *cow) copyOnRewriteRefOfAnalyze(n *Analyze, parent SQLNode) (out SQLNode
 	}
 	out = n
 	if c.pre == nil || c.pre(n, parent) {
-		_Table, changedTable := c.copyOnRewriteTableName(n.Table, n)
-		if changedTable {
+		_Tables, changedTables := c.copyOnRewriteTableNames(n.Tables, n)
+		if changedTables {
 			res := *n
-			res.Table, _ = _Table.(TableName)
+			res.Tables, _ = _Tables.(TableNames)
 			out = &res
 			if c.cloned != nil {
 				c.cloned(n, out)
@@ -2276,6 +2278,31 @@ func (c *cow) copyOnRewriteRefOfDropDatabase(n *DropDatabase, parent SQLNode) (o
 			res := *n
 			res.Comments, _ = _Comments.(*ParsedComments)
 			res.DBName, _ = _DBName.(IdentifierCS)
+			out = &res
+			if c.cloned != nil {
+				c.cloned(n, out)
+			}
+			changed = true
+		}
+	}
+	if c.post != nil {
+		out, changed = c.postVisit(out, parent, changed)
+	}
+	return
+}
+
+func (c *cow) copyOnRewriteRefOfDropFunction(n *DropFunction, parent SQLNode) (out SQLNode, changed bool) {
+	if n == nil || c.cursor.stop {
+		return n, false
+	}
+	out = n
+	if c.pre == nil || c.pre(n, parent) {
+		_Comments, changedComments := c.copyOnRewriteRefOfParsedComments(n.Comments, n)
+		_Name, changedName := c.copyOnRewriteTableName(n.Name, n)
+		if changedComments || changedName {
+			res := *n
+			res.Comments, _ = _Comments.(*ParsedComments)
+			res.Name, _ = _Name.(TableName)
 			out = &res
 			if c.cloned != nil {
 				c.cloned(n, out)
@@ -8245,6 +8272,8 @@ func (c *cow) copyOnRewriteDDLStatement(n DDLStatement, parent SQLNode) (out SQL
 		return c.copyOnRewriteRefOfCreateTable(n, parent)
 	case *CreateView:
 		return c.copyOnRewriteRefOfCreateView(n, parent)
+	case *DropFunction:
+		return c.copyOnRewriteRefOfDropFunction(n, parent)
 	case *DropProcedure:
 		return c.copyOnRewriteRefOfDropProcedure(n, parent)
 	case *DropTable:
@@ -8702,6 +8731,8 @@ func (c *cow) copyOnRewriteStatement(n Statement, parent SQLNode) (out SQLNode, 
 		return c.copyOnRewriteRefOfDelete(n, parent)
 	case *DropDatabase:
 		return c.copyOnRewriteRefOfDropDatabase(n, parent)
+	case *DropFunction:
+		return c.copyOnRewriteRefOfDropFunction(n, parent)
 	case *DropProcedure:
 		return c.copyOnRewriteRefOfDropProcedure(n, parent)
 	case *DropTable:

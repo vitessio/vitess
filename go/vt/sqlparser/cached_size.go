@@ -325,10 +325,15 @@ func (cached *Analyze) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(48)
+		size += int64(32)
 	}
-	// field Table vitess.io/vitess/go/vt/sqlparser.TableName
-	size += cached.Table.CachedSize(false)
+	// field Tables vitess.io/vitess/go/vt/sqlparser.TableNames
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.Tables)) * int64(32))
+		for _, elem := range cached.Tables {
+			size += elem.CachedSize(false)
+		}
+	}
 	return size
 }
 
@@ -918,6 +923,17 @@ func (cached *Comments) CachedSize(alloc bool) int64 {
 	return size
 }
 
+func (cached *Commit) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(8)
+	}
+	return size
+}
+
 func (cached *CommonTableExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -1420,6 +1436,21 @@ func (cached *DropDatabase) CachedSize(alloc bool) int64 {
 	size += cached.Comments.CachedSize(true)
 	// field DBName vitess.io/vitess/go/vt/sqlparser.IdentifierCS
 	size += cached.DBName.CachedSize(false)
+	return size
+}
+
+func (cached *DropFunction) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field Comments *vitess.io/vitess/go/vt/sqlparser.ParsedComments
+	size += cached.Comments.CachedSize(true)
+	// field Name vitess.io/vitess/go/vt/sqlparser.TableName
+	size += cached.Name.CachedSize(false)
 	return size
 }
 
@@ -4229,6 +4260,17 @@ func (cached *RevertMigration) CachedSize(alloc bool) int64 {
 	size += hack.RuntimeAllocSize(int64(len(cached.UUID)))
 	// field Comments *vitess.io/vitess/go/vt/sqlparser.ParsedComments
 	size += cached.Comments.CachedSize(true)
+	return size
+}
+
+func (cached *Rollback) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(8)
+	}
 	return size
 }
 

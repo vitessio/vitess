@@ -159,6 +159,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfDropColumn(in)
 	case *DropDatabase:
 		return CloneRefOfDropDatabase(in)
+	case *DropFunction:
+		return CloneRefOfDropFunction(in)
 	case *DropKey:
 		return CloneRefOfDropKey(in)
 	case *DropProcedure:
@@ -791,7 +793,7 @@ func CloneRefOfAnalyze(n *Analyze) *Analyze {
 		return nil
 	}
 	out := *n
-	out.Table = CloneTableName(n.Table)
+	out.Tables = CloneTableNames(n.Tables)
 	return &out
 }
 
@@ -1351,6 +1353,17 @@ func CloneRefOfDropDatabase(n *DropDatabase) *DropDatabase {
 	out := *n
 	out.Comments = CloneRefOfParsedComments(n.Comments)
 	out.DBName = CloneIdentifierCS(n.DBName)
+	return &out
+}
+
+// CloneRefOfDropFunction creates a deep clone of the input.
+func CloneRefOfDropFunction(n *DropFunction) *DropFunction {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Comments = CloneRefOfParsedComments(n.Comments)
+	out.Name = CloneTableName(n.Name)
 	return &out
 }
 
@@ -4196,6 +4209,8 @@ func CloneDDLStatement(in DDLStatement) DDLStatement {
 		return CloneRefOfCreateTable(in)
 	case *CreateView:
 		return CloneRefOfCreateView(in)
+	case *DropFunction:
+		return CloneRefOfDropFunction(in)
 	case *DropProcedure:
 		return CloneRefOfDropProcedure(in)
 	case *DropTable:
@@ -4644,6 +4659,8 @@ func CloneStatement(in Statement) Statement {
 		return CloneRefOfDelete(in)
 	case *DropDatabase:
 		return CloneRefOfDropDatabase(in)
+	case *DropFunction:
+		return CloneRefOfDropFunction(in)
 	case *DropProcedure:
 		return CloneRefOfDropProcedure(in)
 	case *DropTable:

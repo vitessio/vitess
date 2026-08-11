@@ -433,6 +433,15 @@ func (node *DropProcedure) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node.
+func (node *DropFunction) Format(buf *TrackedBuffer) {
+	exists := ""
+	if node.IfExists {
+		exists = "if exists "
+	}
+	buf.astPrintf(node, "%s %vfunction %s%v", DropStr, node.Comments, exists, node.Name)
+}
+
+// Format formats the node.
 func (pp *ProcParameter) Format(buf *TrackedBuffer) {
 	buf.astPrintf(pp, "%s %v %v", pp.Mode.ToString(), pp.Name, pp.Type)
 }
@@ -1222,6 +1231,18 @@ func (node *Use) Format(buf *TrackedBuffer) {
 // Format formats the node.
 func (node *Commit) Format(buf *TrackedBuffer) {
 	buf.literal("commit")
+	switch node.Chain {
+	case TxChainChain:
+		buf.literal(" and chain")
+	case TxChainNoChain:
+		buf.literal(" and no chain")
+	}
+	switch node.Release {
+	case TxReleaseRelease:
+		buf.literal(" release")
+	case TxReleaseNoRelease:
+		buf.literal(" no release")
+	}
 }
 
 // Format formats the node.
@@ -1243,6 +1264,18 @@ func (node *Begin) Format(buf *TrackedBuffer) {
 // Format formats the node.
 func (node *Rollback) Format(buf *TrackedBuffer) {
 	buf.literal("rollback")
+	switch node.Chain {
+	case TxChainChain:
+		buf.literal(" and chain")
+	case TxChainNoChain:
+		buf.literal(" and no chain")
+	}
+	switch node.Release {
+	case TxReleaseRelease:
+		buf.literal(" release")
+	case TxReleaseNoRelease:
+		buf.literal(" no release")
+	}
 }
 
 // Format formats the node.
@@ -1323,7 +1356,7 @@ func (node *Analyze) Format(buf *TrackedBuffer) {
 	if node.IsLocal {
 		buf.literal("local ")
 	}
-	buf.astPrintf(node, "table %v", node.Table)
+	buf.astPrintf(node, "table %v", node.Tables)
 }
 
 // Format formats the node.

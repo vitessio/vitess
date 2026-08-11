@@ -1890,9 +1890,9 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select 'a' as type, 0 as id, '' from `user` where 1 != 1 group by ''",
+                "FieldQuery": "select 'a' as `type`, 0 as id, '' from `user` where 1 != 1 group by ''",
                 "OrderBy": "2 ASC COLLATE utf8mb4_0900_ai_ci",
-                "Query": "select 'a' as type, 0 as id, '' from `user` group by '' order by '' asc"
+                "Query": "select 'a' as `type`, 0 as id, '' from `user` group by '' order by '' asc"
               }
             ]
           },
@@ -1903,8 +1903,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select 'c' as type, 0 as id from user_extra as t where 1 != 1",
-            "Query": "select 'c' as type, 0 as id from user_extra as t"
+            "FieldQuery": "select 'c' as `type`, 0 as id from user_extra as t where 1 != 1",
+            "Query": "select 'c' as `type`, 0 as id from user_extra as t"
           }
         ]
       },

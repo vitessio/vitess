@@ -1007,6 +1007,20 @@ const (
 	ReadOnly
 )
 
+// Transaction completion chain clause
+const (
+	TxChainDefault TxChainOpt = iota
+	TxChainChain
+	TxChainNoChain
+)
+
+// Transaction completion release clause
+const (
+	TxReleaseDefault TxReleaseOpt = iota
+	TxReleaseRelease
+	TxReleaseNoRelease
+)
+
 // BEGIN statement type
 const (
 	BeginStmt BeginType = iota

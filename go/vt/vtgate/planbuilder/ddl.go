@@ -142,6 +142,8 @@ func buildDDLPlans(ctx context.Context, sql string, ddlStatement sqlparser.DDLSt
 		destination, keyspace, err = buildCreateProcedurePlan(vschema, ddl)
 	case *sqlparser.DropProcedure:
 		destination, keyspace, err = buildDropProcedurePlan(vschema, ddl)
+	case *sqlparser.DropFunction:
+		destination, keyspace, err = buildDropFunctionPlan(vschema, ddl)
 	default:
 		return nil, nil, vterrors.VT13001(fmt.Sprintf("unexpected DDL statement type: %T", ddlStatement))
 	}
@@ -179,6 +181,16 @@ func buildDropProcedurePlan(vschema plancontext.VSchema, dp *sqlparser.DropProce
 	}
 	// Clear out the qualifier from the table name.
 	dp.SetTable("", dp.Name.Name.String())
+	return destination, keyspace, nil
+}
+
+func buildDropFunctionPlan(vschema plancontext.VSchema, df *sqlparser.DropFunction) (key.ShardDestination, *vindexes.Keyspace, error) {
+	destination, keyspace, _, err := vschema.TargetDestination(df.Name.Qualifier.String())
+	if err != nil {
+		return nil, nil, err
+	}
+	// Clear out the qualifier from the table name.
+	df.SetTable("", df.Name.Name.String())
 	return destination, keyspace, nil
 }
 

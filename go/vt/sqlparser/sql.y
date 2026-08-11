@@ -361,6 +361,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %token <str> SHOW DESCRIBE EXPLAIN DATE ESCAPE REPAIR OPTIMIZE TRUNCATE COALESCE EXCHANGE REBUILD PARTITIONING REMOVE PREPARE EXECUTE
 %token <str> MAXVALUE PARTITION REORGANIZE LESS THAN PROCEDURE TRIGGER
 %token <str> VINDEX VINDEXES DIRECTORY NAME UPGRADE
+%token <str> CHAIN SERIAL TYPE
 %token <str> STATUS VARIABLES WARNINGS CASCADED DEFINER OPTION SQL UNDEFINED
 %token <str> SEQUENCE MERGE TEMPORARY TEMPTABLE INVOKER SECURITY FIRST AFTER LAST
 
@@ -1875,6 +1876,19 @@ column_definition:
     $2.Options.Reference = $10
     $2.Options.Collate = $3
     $$ = &ColumnDefinition{Name: $1, Type: $2}
+  }
+| sql_id SERIAL column_attribute_list_opt reference_definition_opt
+  {
+    // SERIAL is MySQL shorthand for BIGINT UNSIGNED NOT NULL AUTO_INCREMENT UNIQUE.
+    ct := &ColumnType{Type: "bigint", Unsigned: true}
+    ct.Options = $3
+    ct.Options.Null = ptr.Of(false)
+    ct.Options.Autoincrement = true
+    if ct.Options.KeyOpt == ColKeyNone {
+      ct.Options.KeyOpt = ColKeyUnique
+    }
+    ct.Options.Reference = $4
+    $$ = &ColumnDefinition{Name: $1, Type: ct}
   }
 
 generated_always_opt:
@@ -3479,6 +3493,10 @@ alter_option:
   {
     $$ = &AlterCharset{CharacterSet:$4, Collate:$5}
   }
+| CONVERT TO charset_or_character_set DEFAULT collate_opt
+  {
+    $$ = &AlterCharset{CharacterSet:"default", Collate:$5}
+  }
 | DISABLE KEYS
   {
     $$ = &KeyState{Enable:false}
@@ -4532,6 +4550,10 @@ drop_statement:
   {
     $$ = &DropProcedure{Comments: Comments($2).Parsed(), Name: $5, IfExists: $4}
   }
+| DROP comment_opt FUNCTION exists_opt table_name
+  {
+    $$ = &DropFunction{Comments: Comments($2).Parsed(), Name: $5, IfExists: $4}
+  }
 
 truncate_statement:
   TRUNCATE TABLE table_name
@@ -4544,9 +4566,9 @@ truncate_statement:
   }
 
 analyze_statement:
-  ANALYZE local_opt TABLE table_name
+  ANALYZE local_opt TABLE table_name_list
   {
-    $$ = &Analyze{IsLocal: $2, Table: $4}
+    $$ = &Analyze{IsLocal: $2, Tables: $4}
   }
 
 purge_statement:
@@ -5152,16 +5174,75 @@ tx_char:
   }
 
 
+// The completion clause combinations mirror MySQL's grammar: CHAIN and
+// RELEASE cannot both be requested at the same time (Bug#46527), so the
+// valid combinations are enumerated instead of using independent options.
 commit_statement:
   COMMIT
   {
     $$ = &Commit{}
+  }
+| COMMIT RELEASE
+  {
+    $$ = &Commit{Release: TxReleaseRelease}
+  }
+| COMMIT NO RELEASE
+  {
+    $$ = &Commit{Release: TxReleaseNoRelease}
+  }
+| COMMIT AND CHAIN
+  {
+    $$ = &Commit{Chain: TxChainChain}
+  }
+| COMMIT AND CHAIN NO RELEASE
+  {
+    $$ = &Commit{Chain: TxChainChain, Release: TxReleaseNoRelease}
+  }
+| COMMIT AND NO CHAIN
+  {
+    $$ = &Commit{Chain: TxChainNoChain}
+  }
+| COMMIT AND NO CHAIN RELEASE
+  {
+    $$ = &Commit{Chain: TxChainNoChain, Release: TxReleaseRelease}
+  }
+| COMMIT AND NO CHAIN NO RELEASE
+  {
+    $$ = &Commit{Chain: TxChainNoChain, Release: TxReleaseNoRelease}
   }
 
 rollback_statement:
   ROLLBACK
   {
     $$ = &Rollback{}
+  }
+| ROLLBACK RELEASE
+  {
+    $$ = &Rollback{Release: TxReleaseRelease}
+  }
+| ROLLBACK NO RELEASE
+  {
+    $$ = &Rollback{Release: TxReleaseNoRelease}
+  }
+| ROLLBACK AND CHAIN
+  {
+    $$ = &Rollback{Chain: TxChainChain}
+  }
+| ROLLBACK AND CHAIN NO RELEASE
+  {
+    $$ = &Rollback{Chain: TxChainChain, Release: TxReleaseNoRelease}
+  }
+| ROLLBACK AND NO CHAIN
+  {
+    $$ = &Rollback{Chain: TxChainNoChain}
+  }
+| ROLLBACK AND NO CHAIN RELEASE
+  {
+    $$ = &Rollback{Chain: TxChainNoChain, Release: TxReleaseRelease}
+  }
+| ROLLBACK AND NO CHAIN NO RELEASE
+  {
+    $$ = &Rollback{Chain: TxChainNoChain, Release: TxReleaseNoRelease}
   }
 | ROLLBACK work_opt TO savepoint_opt sql_id
   {
@@ -8655,6 +8736,10 @@ insert_data:
   {
     $$ = &Insert{Columns: $2, Rows: $4}
   }
+| openb closeb select_statement
+  {
+    $$ = &Insert{Columns: []IdentifierCI{}, Rows: $3}
+  }
 
 value_or_values:
   VALUE
@@ -8874,6 +8959,11 @@ using_index_type:
   USING sql_id
   {
     $$ = &IndexOption{Name: string($1), String: string($2.String())}
+  }
+| TYPE sql_id
+  {
+    // TYPE is MySQL's legacy synonym for USING; normalize to USING.
+    $$ = &IndexOption{Name: "using", String: string($2.String())}
   }
 
 sql_id:
@@ -9159,6 +9249,7 @@ non_reserved_keyword:
 | CASCADE
 | CASCADED
 | CATALOG_NAME
+| CHAIN
 | CHANNEL
 | CHAR %prec FUNCTION_CALL_NON_KEYWORD
 | CHARSET
@@ -9455,6 +9546,7 @@ non_reserved_keyword:
 | SECONDARY_UNLOAD
 | SECURITY
 | SEQUENCE
+| SERIAL
 | SESSION
 | SERIALIZABLE
 | SHARE
@@ -9573,6 +9665,7 @@ non_reserved_keyword:
 | TRIGGERS
 | TRIM %prec FUNCTION_CALL_NON_KEYWORD
 | TRUNCATE
+| TYPE
 | UNBOUNDED
 | UNCOMMITTED
 | UNDEFINED

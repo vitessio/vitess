@@ -432,7 +432,19 @@ func TestVersionedCommentParsing(t *testing.T) {
 		},
 		{
 			name:     "version number without whitespace after digits",
-			query:    "SELECT 1 + /*!801002*/",
+			query:    "SELECT 1 /*!80100+2*/",
+			expected: "select 1 + 2 from dual",
+		},
+		{
+			// MySQL reads the whole digit run as the version number, so the
+			// trailing 2 is part of the version (80.10.02), not content.
+			name:     "digit content is consumed as part of the version number",
+			query:    "SELECT 1 + /*!801002 2*/ 3",
+			expected: "select 1 + 3 from dual",
+		},
+		{
+			name:     "six-digit version number with leading zero",
+			query:    "SELECT 1 /*!080100 + 2*/",
 			expected: "select 1 + 2 from dual",
 		},
 		{

@@ -52,7 +52,7 @@ const (
 	RefOfAlterVschemaVindexSpec
 	RefOfAlterVschemaVindexColsOffset
 	RefOfAlterVschemaAutoIncSpec
-	RefOfAnalyzeTable
+	RefOfAnalyzeTables
 	RefOfAndExprLeft
 	RefOfAndExprRight
 	RefOfAnyValueArg
@@ -146,6 +146,8 @@ const (
 	RefOfDropColumnName
 	RefOfDropDatabaseComments
 	RefOfDropDatabaseDBName
+	RefOfDropFunctionComments
+	RefOfDropFunctionName
 	RefOfDropKeyName
 	RefOfDropProcedureComments
 	RefOfDropProcedureName
@@ -671,8 +673,8 @@ func (s ASTStep) DebugString() string {
 		return "(*AlterVschema).VindexColsOffset"
 	case RefOfAlterVschemaAutoIncSpec:
 		return "(*AlterVschema).AutoIncSpec"
-	case RefOfAnalyzeTable:
-		return "(*Analyze).Table"
+	case RefOfAnalyzeTables:
+		return "(*Analyze).Tables"
 	case RefOfAndExprLeft:
 		return "(*AndExpr).Left"
 	case RefOfAndExprRight:
@@ -859,6 +861,10 @@ func (s ASTStep) DebugString() string {
 		return "(*DropDatabase).Comments"
 	case RefOfDropDatabaseDBName:
 		return "(*DropDatabase).DBName"
+	case RefOfDropFunctionComments:
+		return "(*DropFunction).Comments"
+	case RefOfDropFunctionName:
+		return "(*DropFunction).Name"
 	case RefOfDropKeyName:
 		return "(*DropKey).Name"
 	case RefOfDropProcedureComments:
@@ -1852,8 +1858,8 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 			node = node.(*AlterVschema).VindexCols[idx]
 		case RefOfAlterVschemaAutoIncSpec:
 			node = node.(*AlterVschema).AutoIncSpec
-		case RefOfAnalyzeTable:
-			node = node.(*Analyze).Table
+		case RefOfAnalyzeTables:
+			node = node.(*Analyze).Tables
 		case RefOfAndExprLeft:
 			node = node.(*AndExpr).Left
 		case RefOfAndExprRight:
@@ -2060,6 +2066,10 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 			node = node.(*DropDatabase).Comments
 		case RefOfDropDatabaseDBName:
 			node = node.(*DropDatabase).DBName
+		case RefOfDropFunctionComments:
+			node = node.(*DropFunction).Comments
+		case RefOfDropFunctionName:
+			node = node.(*DropFunction).Name
 		case RefOfDropKeyName:
 			node = node.(*DropKey).Name
 		case RefOfDropProcedureComments:

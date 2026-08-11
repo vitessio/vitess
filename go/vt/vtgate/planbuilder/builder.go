@@ -256,39 +256,44 @@ func createInstructionFor(ctx context.Context, query string, stmt sqlparser.Stat
 
 func buildAnalyzePlan(stmt sqlparser.Statement, _ *sqlparser.ReservedVars, vschema plancontext.VSchema) (*planResult, error) {
 	analyzeStmt := stmt.(*sqlparser.Analyze)
+	if len(analyzeStmt.Tables) != 1 {
+		return nil, vterrors.VT12001("ANALYZE TABLE with multiple tables")
+	}
+	table := analyzeStmt.Tables[0]
 
 	var ks *vindexes.Keyspace
 	var err error
 	dest := key.ShardDestination(key.DestinationAllShards{})
 
-	if analyzeStmt.Table.Qualifier.NotEmpty() && sqlparser.SystemSchema(analyzeStmt.Table.Qualifier.String()) {
+	if table.Qualifier.NotEmpty() && sqlparser.SystemSchema(table.Qualifier.String()) {
 		ks, err = vschema.AnyKeyspace()
 		if err != nil {
 			return nil, err
 		}
 	} else {
-		tbl, _, _, _, destKs, err := vschema.FindTableOrVindex(analyzeStmt.Table)
+		tbl, _, _, _, destKs, err := vschema.FindTableOrVindex(table)
 		if err != nil {
 			return nil, err
 		}
 		if tbl == nil {
-			return nil, vterrors.VT05004(sqlparser.String(analyzeStmt.Table))
+			return nil, vterrors.VT05004(sqlparser.String(table))
 		}
 
 		ks = tbl.Keyspace
 		if destKs != nil {
 			dest = destKs
 		}
-		analyzeStmt.Table.Name = tbl.Name
+		table.Name = tbl.Name
 	}
-	analyzeStmt.Table.Qualifier = sqlparser.NewIdentifierCS("")
+	table.Qualifier = sqlparser.NewIdentifierCS("")
+	analyzeStmt.Tables[0] = table
 
 	prim := &engine.Send{
 		Keyspace:          ks,
 		TargetDestination: dest,
 		Query:             sqlparser.String(analyzeStmt),
 	}
-	return newPlanResult(prim, sqlparser.String(analyzeStmt.Table)), nil
+	return newPlanResult(prim, sqlparser.String(table)), nil
 }
 
 func buildDBDDLPlan(stmt sqlparser.Statement, _ *sqlparser.ReservedVars, vschema plancontext.VSchema) (*planResult, error) {

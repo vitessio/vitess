@@ -372,7 +372,7 @@ func (tkn *Tokenizer) skipStatement() int {
 // skipBlank skips the cursor while it finds whitespace
 func (tkn *Tokenizer) skipBlank() {
 	ch := tkn.cur()
-	for ch == ' ' || ch == '\n' || ch == '\r' || ch == '\t' {
+	for ch == ' ' || ch == '\n' || ch == '\r' || ch == '\t' || ch == '\v' || ch == '\f' {
 		tkn.skip(1)
 		ch = tkn.cur()
 	}
@@ -729,9 +729,11 @@ func (tkn *Tokenizer) scanCommentType2() (int, string) {
 func (tkn *Tokenizer) scanMySQLSpecificComment() (int, string) {
 	start := tkn.Pos - 3
 
-	// Read up to 5 version digits inline.
+	// Read the version digits inline. MySQL reads the entire digit run as one
+	// number, so a 6-digit version like 080100 (8.1.0) is a single version,
+	// not a 5-digit version followed by content.
 	versionStart := tkn.Pos
-	for i := 0; i < 5 && isDigit(tkn.cur()); i++ {
+	for isDigit(tkn.cur()) {
 		tkn.skip(1)
 	}
 	versionStr := tkn.buf[versionStart:tkn.Pos]
@@ -741,7 +743,13 @@ func (tkn *Tokenizer) scanMySQLSpecificComment() (int, string) {
 		tkn.Pos = versionStart
 	}
 
-	if tkn.parser.version >= versionStr {
+	satisfied := true
+	if versionStr != "" {
+		commentVersion, cErr := strconv.ParseUint(versionStr, 10, 64)
+		parserVersion, pErr := strconv.ParseUint(tkn.parser.version, 10, 64)
+		satisfied = cErr == nil && pErr == nil && parserVersion >= commentVersion
+	}
+	if satisfied {
 		// Version satisfied — Scan() will read inner tokens and detect
 		// the closing */ via the inVersionedComment flag.
 		tkn.inVersionedComment = true
