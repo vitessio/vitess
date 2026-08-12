@@ -170,13 +170,12 @@ DROP TABLE IF EXISTS recovery_detection
 `,
 	`
 CREATE TABLE recovery_detection (
-	detection_id integer,
+	detection_id INTEGER PRIMARY KEY AUTOINCREMENT,
 	alias varchar(256) NOT NULL,
 	analysis varchar(128) NOT NULL,
 	keyspace varchar(128) NOT NULL,
 	shard varchar(128) NOT NULL,
-	detection_timestamp timestamp NOT NULL default (''),
-	PRIMARY KEY (detection_id)
+	detection_timestamp timestamp NOT NULL default ('')
 )`,
 	// The UNIQUE index on (alias, analysis) deduplicates repeated detections of the
 	// same analysis on the same tablet within an ongoing incident. When a failure

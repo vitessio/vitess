@@ -2089,11 +2089,10 @@ func TestWriteResolveRecoveryDeletesDetectionRow(t *testing.T) {
 	require.NoError(t, orcDb.QueryRow("SELECT COUNT(*) FROM recovery_detection").Scan(&remaining))
 	require.Zero(t, remaining, "writeResolveRecovery must delete the triggering recovery_detection row to establish an incident boundary")
 
-	// Re-inserting after deletion must create a new row, not an UPSERT update of the deleted
-	// row, proving the incident boundary semantics: the next recurrence of the same failure
-	// is a new detection. (SQLite without AUTOINCREMENT may reuse the same numeric rowid after
-	// the table is emptied; the meaningful property is that a fresh row is created, not that
-	// the integer ID differs.)
+	// Re-inserting after deletion must produce a strictly greater detection_id, proving the
+	// incident boundary semantics. detection_id is INTEGER PRIMARY KEY AUTOINCREMENT, so
+	// SQLite's sqlite_sequence table tracks the highest ever-assigned ID; even after the row
+	// is deleted, the next insert gets max_ever + 1, never a reused value.
 	reEntry := &inst.DetectionAnalysis{
 		AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
 		Analysis:              inst.ReplicationStopped,
@@ -2102,7 +2101,5 @@ func TestWriteResolveRecoveryDeletesDetectionRow(t *testing.T) {
 	}
 	require.NoError(t, InsertRecoveryDetection(reEntry))
 	require.NotZero(t, reEntry.RecoveryId, "re-inserted detection must have a valid detection_id")
-	var reInsertCount int
-	require.NoError(t, orcDb.QueryRow("SELECT COUNT(*) FROM recovery_detection").Scan(&reInsertCount))
-	require.Equal(t, 1, reInsertCount, "re-inserted detection must create exactly one row — a fresh incident, not an accumulation of resolved rows")
+	require.Greater(t, reEntry.RecoveryId, entry.RecoveryId, "AUTOINCREMENT must assign a fresh detection_id strictly greater than the deleted one")
 }
