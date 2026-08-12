@@ -164,10 +164,10 @@ linters:
         path: _test\.go$
       - linters:
           - prealloc
-        path: ^go/(test|tools)/
+        path: ^go/(test|tools|vt/vttablet/endtoend)/
       - linters:
           - prealloc
-        path: ^go/vt/(sqlparser|vtgate/planbuilder|vttablet)/
+        path: ^go/vt/(sqlparser|vttablet/tabletmanager)/
       - linters:
           - errcheck
         path: ^go/vt/proto/
