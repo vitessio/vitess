@@ -4232,8 +4232,11 @@ func TestParseSQLMode(t *testing.T) {
 		{in: "ansi_quotes", mode: SQLModeANSIQuotes},
 		{in: "PIPES_AS_CONCAT,ANSI_QUOTES", mode: SQLModeANSIQuotes | SQLModePipesAsConcat},
 		{in: "STRICT_TRANS_TABLES,NO_ZERO_DATE", mode: 0},
-		// the ANSI combination mode includes ANSI_QUOTES and PIPES_AS_CONCAT
-		{in: "ANSI", mode: SQLModeANSIQuotes | SQLModePipesAsConcat},
+		{in: "IGNORE_SPACE", mode: SQLModeIgnoreSpace},
+		{in: "NO_BACKSLASH_ESCAPES", mode: SQLModeNoBackslashEscapes},
+		// the ANSI combination mode includes ANSI_QUOTES, PIPES_AS_CONCAT
+		// and IGNORE_SPACE
+		{in: "ANSI", mode: SQLModeANSIQuotes | SQLModePipesAsConcat | SQLModeIgnoreSpace},
 		// ANSI_QUOTES must not be mistaken for the ANSI combination mode
 		{in: "ANSI_QUOTES,ONLY_FULL_GROUP_BY", mode: SQLModeANSIQuotes},
 		// tolerate quoting and expression noise around the mode names
@@ -4287,6 +4290,27 @@ func TestSQLModeParsing(t *testing.T) {
 		mode:   SQLModePipesAsConcat,
 		input:  "select a || b = c from t",
 		output: "select concat(a, b) = c from t",
+	}, {
+		// IGNORE_SPACE allows whitespace between a function-name keyword
+		// and its opening parenthesis
+		mode:   SQLModeIgnoreSpace,
+		input:  "select cast (1 as char) from dual",
+		output: "select cast(1 as char) from dual",
+	}, {
+		mode:   SQLModeIgnoreSpace,
+		input:  "select now () from dual",
+		output: "select now() from dual",
+	}, {
+		// NO_BACKSLASH_ESCAPES makes backslash an ordinary character; the
+		// value formats back with default-mode escaping
+		mode:   SQLModeNoBackslashEscapes,
+		input:  `select 'a\nb' from dual`,
+		output: `select 'a\\nb' from dual`,
+	}, {
+		// doubled quotes still escape a quote under NO_BACKSLASH_ESCAPES
+		mode:   SQLModeNoBackslashEscapes,
+		input:  `select 'it''s \ here' from dual`,
+		output: `select 'it\'s \\ here' from dual`,
 	}}
 	for _, tcase := range testcases {
 		t.Run(tcase.input, func(t *testing.T) {
@@ -4297,8 +4321,14 @@ func TestSQLModeParsing(t *testing.T) {
 		})
 	}
 
+	// IGNORE_SPACE makes the function-name keywords reserved before '(',
+	// so the identifier usage that the default mode allows is rejected
+	parser := NewTestParser().WithSQLMode(SQLModeIgnoreSpace)
+	_, err := parser.Parse("create table CAST (a int)")
+	require.Error(t, err)
+
 	// the default mode keeps the historical behavior
-	parser := NewTestParser()
+	parser = NewTestParser()
 	stmt, err := parser.Parse("select 'a' || 'b' from dual")
 	require.NoError(t, err)
 	assert.Equal(t, "select 'a' or 'b' from dual", String(stmt))
