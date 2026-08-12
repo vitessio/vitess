@@ -132,10 +132,14 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfCountStar(in, f)
 	case *CreateDatabase:
 		return VisitRefOfCreateDatabase(in, f)
+	case *CreateFunction:
+		return VisitRefOfCreateFunction(in, f)
 	case *CreateProcedure:
 		return VisitRefOfCreateProcedure(in, f)
 	case *CreateTable:
 		return VisitRefOfCreateTable(in, f)
+	case *CreateTrigger:
+		return VisitRefOfCreateTrigger(in, f)
 	case *CreateView:
 		return VisitRefOfCreateView(in, f)
 	case *CurTimeFuncExpr:
@@ -202,6 +206,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfFromFirstLastClause(in, f)
 	case *FuncExpr:
 		return VisitRefOfFuncExpr(in, f)
+	case *FuncParameter:
+		return VisitRefOfFuncParameter(in, f)
 	case *GTIDFuncExpr:
 		return VisitRefOfGTIDFuncExpr(in, f)
 	case *GeoHashFromLatLongExpr:
@@ -266,6 +272,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfIntroducerExpr(in, f)
 	case *IsExpr:
 		return VisitRefOfIsExpr(in, f)
+	case *IterateStatement:
+		return VisitRefOfIterateStatement(in, f)
 	case *JSONArrayAgg:
 		return VisitRefOfJSONArrayAgg(in, f)
 	case *JSONArrayExpr:
@@ -328,6 +336,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfKill(in, f)
 	case *LagLeadExpr:
 		return VisitRefOfLagLeadExpr(in, f)
+	case *LeaveStatement:
+		return VisitRefOfLeaveStatement(in, f)
 	case *Limit:
 		return VisitRefOfLimit(in, f)
 	case *LineStringExpr:
@@ -348,6 +358,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfLockTables(in, f)
 	case *LockingFunc:
 		return VisitRefOfLockingFunc(in, f)
+	case *LoopStatement:
+		return VisitRefOfLoopStatement(in, f)
 	case MatchAction:
 		return VisitMatchAction(in, f)
 	case *MatchExpr:
@@ -456,6 +468,10 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfRenameTable(in, f)
 	case *RenameTableName:
 		return VisitRefOfRenameTableName(in, f)
+	case *RepeatStatement:
+		return VisitRefOfRepeatStatement(in, f)
+	case *ReturnStatement:
+		return VisitRefOfReturnStatement(in, f)
 	case *RevertMigration:
 		return VisitRefOfRevertMigration(in, f)
 	case *Rollback:
@@ -612,6 +628,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfWhen(in, f)
 	case *Where:
 		return VisitRefOfWhere(in, f)
+	case *WhileStatement:
+		return VisitRefOfWhileStatement(in, f)
 	case *WindowDefinition:
 		return VisitRefOfWindowDefinition(in, f)
 	case WindowDefinitions:
@@ -1013,6 +1031,9 @@ func VisitRefOfBeginEndStatement(in *BeginEndStatement, f Visit) error {
 		return nil
 	}
 	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitIdentifierCI(in.Label, f); err != nil {
 		return err
 	}
 	if err := VisitRefOfCompoundStatements(in.Statements, f); err != nil {
@@ -1454,6 +1475,36 @@ func VisitRefOfCreateDatabase(in *CreateDatabase, f Visit) error {
 	return nil
 }
 
+func VisitRefOfCreateFunction(in *CreateFunction, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitTableName(in.Name, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfParsedComments(in.Comments, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfDefiner(in.Definer, f); err != nil {
+		return err
+	}
+	for _, el := range in.Params {
+		if err := VisitRefOfFuncParameter(el, f); err != nil {
+			return err
+		}
+	}
+	if err := VisitRefOfColumnType(in.ReturnType, f); err != nil {
+		return err
+	}
+	if err := VisitCompoundStatement(in.Body, f); err != nil {
+		return err
+	}
+	return nil
+}
+
 func VisitRefOfCreateProcedure(in *CreateProcedure, f Visit) error {
 	if in == nil {
 		return nil
@@ -1501,6 +1552,31 @@ func VisitRefOfCreateTable(in *CreateTable, f Visit) error {
 		return err
 	}
 	if err := VisitTableStatement(in.Select, f); err != nil {
+		return err
+	}
+	return nil
+}
+
+func VisitRefOfCreateTrigger(in *CreateTrigger, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitTableName(in.Name, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfParsedComments(in.Comments, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfDefiner(in.Definer, f); err != nil {
+		return err
+	}
+	if err := VisitTableName(in.Table, f); err != nil {
+		return err
+	}
+	if err := VisitCompoundStatement(in.Body, f); err != nil {
 		return err
 	}
 	return nil
@@ -2031,6 +2107,22 @@ func VisitRefOfFuncExpr(in *FuncExpr, f Visit) error {
 	return nil
 }
 
+func VisitRefOfFuncParameter(in *FuncParameter, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitIdentifierCI(in.Name, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfColumnType(in.Type, f); err != nil {
+		return err
+	}
+	return nil
+}
+
 func VisitRefOfGTIDFuncExpr(in *GTIDFuncExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -2532,6 +2624,19 @@ func VisitRefOfIsExpr(in *IsExpr, f Visit) error {
 		return err
 	}
 	if err := VisitExpr(in.Left, f); err != nil {
+		return err
+	}
+	return nil
+}
+
+func VisitRefOfIterateStatement(in *IterateStatement, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitIdentifierCI(in.Label, f); err != nil {
 		return err
 	}
 	return nil
@@ -3056,6 +3161,19 @@ func VisitRefOfLagLeadExpr(in *LagLeadExpr, f Visit) error {
 	return nil
 }
 
+func VisitRefOfLeaveStatement(in *LeaveStatement, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitIdentifierCI(in.Label, f); err != nil {
+		return err
+	}
+	return nil
+}
+
 func VisitRefOfLimit(in *Limit, f Visit) error {
 	if in == nil {
 		return nil
@@ -3173,6 +3291,22 @@ func VisitRefOfLockingFunc(in *LockingFunc, f Visit) error {
 		return err
 	}
 	if err := VisitExpr(in.Timeout, f); err != nil {
+		return err
+	}
+	return nil
+}
+
+func VisitRefOfLoopStatement(in *LoopStatement, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitIdentifierCI(in.Label, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfCompoundStatements(in.Statements, f); err != nil {
 		return err
 	}
 	return nil
@@ -4006,6 +4140,38 @@ func VisitRefOfRenameTableName(in *RenameTableName, f Visit) error {
 		return err
 	}
 	if err := VisitTableName(in.Table, f); err != nil {
+		return err
+	}
+	return nil
+}
+
+func VisitRefOfRepeatStatement(in *RepeatStatement, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitIdentifierCI(in.Label, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfCompoundStatements(in.Statements, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.SearchCondition, f); err != nil {
+		return err
+	}
+	return nil
+}
+
+func VisitRefOfReturnStatement(in *ReturnStatement, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.Expr, f); err != nil {
 		return err
 	}
 	return nil
@@ -5116,6 +5282,9 @@ func VisitRefOfVariable(in *Variable, f Visit) error {
 	if err := VisitIdentifierCI(in.Name, f); err != nil {
 		return err
 	}
+	if err := VisitIdentifierCI(in.Qualifier, f); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -5206,6 +5375,25 @@ func VisitRefOfWhere(in *Where, f Visit) error {
 		return err
 	}
 	if err := VisitExpr(in.Expr, f); err != nil {
+		return err
+	}
+	return nil
+}
+
+func VisitRefOfWhileStatement(in *WhileStatement, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitIdentifierCI(in.Label, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.SearchCondition, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfCompoundStatements(in.Statements, f); err != nil {
 		return err
 	}
 	return nil
@@ -5610,10 +5798,22 @@ func VisitCompoundStatement(in CompoundStatement, f Visit) error {
 		return VisitRefOfDeclareVar(in, f)
 	case *IfStatement:
 		return VisitRefOfIfStatement(in, f)
+	case *IterateStatement:
+		return VisitRefOfIterateStatement(in, f)
+	case *LeaveStatement:
+		return VisitRefOfLeaveStatement(in, f)
+	case *LoopStatement:
+		return VisitRefOfLoopStatement(in, f)
+	case *RepeatStatement:
+		return VisitRefOfRepeatStatement(in, f)
+	case *ReturnStatement:
+		return VisitRefOfReturnStatement(in, f)
 	case *Signal:
 		return VisitRefOfSignal(in, f)
 	case *SingleStatement:
 		return VisitRefOfSingleStatement(in, f)
+	case *WhileStatement:
+		return VisitRefOfWhileStatement(in, f)
 	case Visitable:
 		return VisitVisitable(in, f)
 	default:
@@ -5667,10 +5867,14 @@ func VisitDDLStatement(in DDLStatement, f Visit) error {
 		return VisitRefOfAlterTable(in, f)
 	case *AlterView:
 		return VisitRefOfAlterView(in, f)
+	case *CreateFunction:
+		return VisitRefOfCreateFunction(in, f)
 	case *CreateProcedure:
 		return VisitRefOfCreateProcedure(in, f)
 	case *CreateTable:
 		return VisitRefOfCreateTable(in, f)
+	case *CreateTrigger:
+		return VisitRefOfCreateTrigger(in, f)
 	case *CreateView:
 		return VisitRefOfCreateView(in, f)
 	case *DropFunction:
@@ -6120,10 +6324,14 @@ func VisitStatement(in Statement, f Visit) error {
 		return VisitRefOfCommit(in, f)
 	case *CreateDatabase:
 		return VisitRefOfCreateDatabase(in, f)
+	case *CreateFunction:
+		return VisitRefOfCreateFunction(in, f)
 	case *CreateProcedure:
 		return VisitRefOfCreateProcedure(in, f)
 	case *CreateTable:
 		return VisitRefOfCreateTable(in, f)
+	case *CreateTrigger:
+		return VisitRefOfCreateTrigger(in, f)
 	case *CreateView:
 		return VisitRefOfCreateView(in, f)
 	case *DeallocateStmt:

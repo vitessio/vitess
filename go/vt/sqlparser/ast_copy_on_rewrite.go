@@ -132,10 +132,14 @@ func (c *cow) copyOnRewriteSQLNode(n SQLNode, parent SQLNode) (out SQLNode, chan
 		return c.copyOnRewriteRefOfCountStar(n, parent)
 	case *CreateDatabase:
 		return c.copyOnRewriteRefOfCreateDatabase(n, parent)
+	case *CreateFunction:
+		return c.copyOnRewriteRefOfCreateFunction(n, parent)
 	case *CreateProcedure:
 		return c.copyOnRewriteRefOfCreateProcedure(n, parent)
 	case *CreateTable:
 		return c.copyOnRewriteRefOfCreateTable(n, parent)
+	case *CreateTrigger:
+		return c.copyOnRewriteRefOfCreateTrigger(n, parent)
 	case *CreateView:
 		return c.copyOnRewriteRefOfCreateView(n, parent)
 	case *CurTimeFuncExpr:
@@ -202,6 +206,8 @@ func (c *cow) copyOnRewriteSQLNode(n SQLNode, parent SQLNode) (out SQLNode, chan
 		return c.copyOnRewriteRefOfFromFirstLastClause(n, parent)
 	case *FuncExpr:
 		return c.copyOnRewriteRefOfFuncExpr(n, parent)
+	case *FuncParameter:
+		return c.copyOnRewriteRefOfFuncParameter(n, parent)
 	case *GTIDFuncExpr:
 		return c.copyOnRewriteRefOfGTIDFuncExpr(n, parent)
 	case *GeoHashFromLatLongExpr:
@@ -266,6 +272,8 @@ func (c *cow) copyOnRewriteSQLNode(n SQLNode, parent SQLNode) (out SQLNode, chan
 		return c.copyOnRewriteRefOfIntroducerExpr(n, parent)
 	case *IsExpr:
 		return c.copyOnRewriteRefOfIsExpr(n, parent)
+	case *IterateStatement:
+		return c.copyOnRewriteRefOfIterateStatement(n, parent)
 	case *JSONArrayAgg:
 		return c.copyOnRewriteRefOfJSONArrayAgg(n, parent)
 	case *JSONArrayExpr:
@@ -328,6 +336,8 @@ func (c *cow) copyOnRewriteSQLNode(n SQLNode, parent SQLNode) (out SQLNode, chan
 		return c.copyOnRewriteRefOfKill(n, parent)
 	case *LagLeadExpr:
 		return c.copyOnRewriteRefOfLagLeadExpr(n, parent)
+	case *LeaveStatement:
+		return c.copyOnRewriteRefOfLeaveStatement(n, parent)
 	case *Limit:
 		return c.copyOnRewriteRefOfLimit(n, parent)
 	case *LineStringExpr:
@@ -348,6 +358,8 @@ func (c *cow) copyOnRewriteSQLNode(n SQLNode, parent SQLNode) (out SQLNode, chan
 		return c.copyOnRewriteRefOfLockTables(n, parent)
 	case *LockingFunc:
 		return c.copyOnRewriteRefOfLockingFunc(n, parent)
+	case *LoopStatement:
+		return c.copyOnRewriteRefOfLoopStatement(n, parent)
 	case MatchAction:
 		return c.copyOnRewriteMatchAction(n, parent)
 	case *MatchExpr:
@@ -456,6 +468,10 @@ func (c *cow) copyOnRewriteSQLNode(n SQLNode, parent SQLNode) (out SQLNode, chan
 		return c.copyOnRewriteRefOfRenameTable(n, parent)
 	case *RenameTableName:
 		return c.copyOnRewriteRefOfRenameTableName(n, parent)
+	case *RepeatStatement:
+		return c.copyOnRewriteRefOfRepeatStatement(n, parent)
+	case *ReturnStatement:
+		return c.copyOnRewriteRefOfReturnStatement(n, parent)
 	case *RevertMigration:
 		return c.copyOnRewriteRefOfRevertMigration(n, parent)
 	case *Rollback:
@@ -612,6 +628,8 @@ func (c *cow) copyOnRewriteSQLNode(n SQLNode, parent SQLNode) (out SQLNode, chan
 		return c.copyOnRewriteRefOfWhen(n, parent)
 	case *Where:
 		return c.copyOnRewriteRefOfWhere(n, parent)
+	case *WhileStatement:
+		return c.copyOnRewriteRefOfWhileStatement(n, parent)
 	case *WindowDefinition:
 		return c.copyOnRewriteRefOfWindowDefinition(n, parent)
 	case WindowDefinitions:
@@ -1228,9 +1246,11 @@ func (c *cow) copyOnRewriteRefOfBeginEndStatement(n *BeginEndStatement, parent S
 	}
 	out = n
 	if c.pre == nil || c.pre(n, parent) {
+		_Label, changedLabel := c.copyOnRewriteIdentifierCI(n.Label, n)
 		_Statements, changedStatements := c.copyOnRewriteRefOfCompoundStatements(n.Statements, n)
-		if changedStatements {
+		if changedLabel || changedStatements {
 			res := *n
+			res.Label, _ = _Label.(IdentifierCI)
 			res.Statements, _ = _Statements.(*CompoundStatements)
 			out = &res
 			if c.cloned != nil {
@@ -1936,6 +1956,47 @@ func (c *cow) copyOnRewriteRefOfCreateDatabase(n *CreateDatabase, parent SQLNode
 	return
 }
 
+func (c *cow) copyOnRewriteRefOfCreateFunction(n *CreateFunction, parent SQLNode) (out SQLNode, changed bool) {
+	if n == nil || c.cursor.stop {
+		return n, false
+	}
+	out = n
+	if c.pre == nil || c.pre(n, parent) {
+		_Name, changedName := c.copyOnRewriteTableName(n.Name, n)
+		_Comments, changedComments := c.copyOnRewriteRefOfParsedComments(n.Comments, n)
+		_Definer, changedDefiner := c.copyOnRewriteRefOfDefiner(n.Definer, n)
+		var changedParams bool
+		_Params := make([]*FuncParameter, len(n.Params))
+		for x, el := range n.Params {
+			this, changed := c.copyOnRewriteRefOfFuncParameter(el, n)
+			_Params[x] = this.(*FuncParameter)
+			if changed {
+				changedParams = true
+			}
+		}
+		_ReturnType, changedReturnType := c.copyOnRewriteRefOfColumnType(n.ReturnType, n)
+		_Body, changedBody := c.copyOnRewriteCompoundStatement(n.Body, n)
+		if changedName || changedComments || changedDefiner || changedParams || changedReturnType || changedBody {
+			res := *n
+			res.Name, _ = _Name.(TableName)
+			res.Comments, _ = _Comments.(*ParsedComments)
+			res.Definer, _ = _Definer.(*Definer)
+			res.Params = _Params
+			res.ReturnType, _ = _ReturnType.(*ColumnType)
+			res.Body, _ = _Body.(CompoundStatement)
+			out = &res
+			if c.cloned != nil {
+				c.cloned(n, out)
+			}
+			changed = true
+		}
+	}
+	if c.post != nil {
+		out, changed = c.postVisit(out, parent, changed)
+	}
+	return
+}
+
 func (c *cow) copyOnRewriteRefOfCreateProcedure(n *CreateProcedure, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -1993,6 +2054,37 @@ func (c *cow) copyOnRewriteRefOfCreateTable(n *CreateTable, parent SQLNode) (out
 			res.OptLike, _ = _OptLike.(*OptLike)
 			res.Comments, _ = _Comments.(*ParsedComments)
 			res.Select, _ = _Select.(TableStatement)
+			out = &res
+			if c.cloned != nil {
+				c.cloned(n, out)
+			}
+			changed = true
+		}
+	}
+	if c.post != nil {
+		out, changed = c.postVisit(out, parent, changed)
+	}
+	return
+}
+
+func (c *cow) copyOnRewriteRefOfCreateTrigger(n *CreateTrigger, parent SQLNode) (out SQLNode, changed bool) {
+	if n == nil || c.cursor.stop {
+		return n, false
+	}
+	out = n
+	if c.pre == nil || c.pre(n, parent) {
+		_Name, changedName := c.copyOnRewriteTableName(n.Name, n)
+		_Comments, changedComments := c.copyOnRewriteRefOfParsedComments(n.Comments, n)
+		_Definer, changedDefiner := c.copyOnRewriteRefOfDefiner(n.Definer, n)
+		_Table, changedTable := c.copyOnRewriteTableName(n.Table, n)
+		_Body, changedBody := c.copyOnRewriteCompoundStatement(n.Body, n)
+		if changedName || changedComments || changedDefiner || changedTable || changedBody {
+			res := *n
+			res.Name, _ = _Name.(TableName)
+			res.Comments, _ = _Comments.(*ParsedComments)
+			res.Definer, _ = _Definer.(*Definer)
+			res.Table, _ = _Table.(TableName)
+			res.Body, _ = _Body.(CompoundStatement)
 			out = &res
 			if c.cloned != nil {
 				c.cloned(n, out)
@@ -2837,6 +2929,31 @@ func (c *cow) copyOnRewriteRefOfFuncExpr(n *FuncExpr, parent SQLNode) (out SQLNo
 	return
 }
 
+func (c *cow) copyOnRewriteRefOfFuncParameter(n *FuncParameter, parent SQLNode) (out SQLNode, changed bool) {
+	if n == nil || c.cursor.stop {
+		return n, false
+	}
+	out = n
+	if c.pre == nil || c.pre(n, parent) {
+		_Name, changedName := c.copyOnRewriteIdentifierCI(n.Name, n)
+		_Type, changedType := c.copyOnRewriteRefOfColumnType(n.Type, n)
+		if changedName || changedType {
+			res := *n
+			res.Name, _ = _Name.(IdentifierCI)
+			res.Type, _ = _Type.(*ColumnType)
+			out = &res
+			if c.cloned != nil {
+				c.cloned(n, out)
+			}
+			changed = true
+		}
+	}
+	if c.post != nil {
+		out, changed = c.postVisit(out, parent, changed)
+	}
+	return
+}
+
 func (c *cow) copyOnRewriteRefOfGTIDFuncExpr(n *GTIDFuncExpr, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -3603,6 +3720,29 @@ func (c *cow) copyOnRewriteRefOfIsExpr(n *IsExpr, parent SQLNode) (out SQLNode, 
 		if changedLeft {
 			res := *n
 			res.Left, _ = _Left.(Expr)
+			out = &res
+			if c.cloned != nil {
+				c.cloned(n, out)
+			}
+			changed = true
+		}
+	}
+	if c.post != nil {
+		out, changed = c.postVisit(out, parent, changed)
+	}
+	return
+}
+
+func (c *cow) copyOnRewriteRefOfIterateStatement(n *IterateStatement, parent SQLNode) (out SQLNode, changed bool) {
+	if n == nil || c.cursor.stop {
+		return n, false
+	}
+	out = n
+	if c.pre == nil || c.pre(n, parent) {
+		_Label, changedLabel := c.copyOnRewriteIdentifierCI(n.Label, n)
+		if changedLabel {
+			res := *n
+			res.Label, _ = _Label.(IdentifierCI)
 			out = &res
 			if c.cloned != nil {
 				c.cloned(n, out)
@@ -4449,6 +4589,29 @@ func (c *cow) copyOnRewriteRefOfLagLeadExpr(n *LagLeadExpr, parent SQLNode) (out
 	return
 }
 
+func (c *cow) copyOnRewriteRefOfLeaveStatement(n *LeaveStatement, parent SQLNode) (out SQLNode, changed bool) {
+	if n == nil || c.cursor.stop {
+		return n, false
+	}
+	out = n
+	if c.pre == nil || c.pre(n, parent) {
+		_Label, changedLabel := c.copyOnRewriteIdentifierCI(n.Label, n)
+		if changedLabel {
+			res := *n
+			res.Label, _ = _Label.(IdentifierCI)
+			out = &res
+			if c.cloned != nil {
+				c.cloned(n, out)
+			}
+			changed = true
+		}
+	}
+	if c.post != nil {
+		out, changed = c.postVisit(out, parent, changed)
+	}
+	return
+}
+
 func (c *cow) copyOnRewriteRefOfLimit(n *Limit, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -4621,6 +4784,31 @@ func (c *cow) copyOnRewriteRefOfLockingFunc(n *LockingFunc, parent SQLNode) (out
 			res := *n
 			res.Name, _ = _Name.(Expr)
 			res.Timeout, _ = _Timeout.(Expr)
+			out = &res
+			if c.cloned != nil {
+				c.cloned(n, out)
+			}
+			changed = true
+		}
+	}
+	if c.post != nil {
+		out, changed = c.postVisit(out, parent, changed)
+	}
+	return
+}
+
+func (c *cow) copyOnRewriteRefOfLoopStatement(n *LoopStatement, parent SQLNode) (out SQLNode, changed bool) {
+	if n == nil || c.cursor.stop {
+		return n, false
+	}
+	out = n
+	if c.pre == nil || c.pre(n, parent) {
+		_Label, changedLabel := c.copyOnRewriteIdentifierCI(n.Label, n)
+		_Statements, changedStatements := c.copyOnRewriteRefOfCompoundStatements(n.Statements, n)
+		if changedLabel || changedStatements {
+			res := *n
+			res.Label, _ = _Label.(IdentifierCI)
+			res.Statements, _ = _Statements.(*CompoundStatements)
 			out = &res
 			if c.cloned != nil {
 				c.cloned(n, out)
@@ -5911,6 +6099,56 @@ func (c *cow) copyOnRewriteRefOfRenameTableName(n *RenameTableName, parent SQLNo
 		if changedTable {
 			res := *n
 			res.Table, _ = _Table.(TableName)
+			out = &res
+			if c.cloned != nil {
+				c.cloned(n, out)
+			}
+			changed = true
+		}
+	}
+	if c.post != nil {
+		out, changed = c.postVisit(out, parent, changed)
+	}
+	return
+}
+
+func (c *cow) copyOnRewriteRefOfRepeatStatement(n *RepeatStatement, parent SQLNode) (out SQLNode, changed bool) {
+	if n == nil || c.cursor.stop {
+		return n, false
+	}
+	out = n
+	if c.pre == nil || c.pre(n, parent) {
+		_Label, changedLabel := c.copyOnRewriteIdentifierCI(n.Label, n)
+		_Statements, changedStatements := c.copyOnRewriteRefOfCompoundStatements(n.Statements, n)
+		_SearchCondition, changedSearchCondition := c.copyOnRewriteExpr(n.SearchCondition, n)
+		if changedLabel || changedStatements || changedSearchCondition {
+			res := *n
+			res.Label, _ = _Label.(IdentifierCI)
+			res.Statements, _ = _Statements.(*CompoundStatements)
+			res.SearchCondition, _ = _SearchCondition.(Expr)
+			out = &res
+			if c.cloned != nil {
+				c.cloned(n, out)
+			}
+			changed = true
+		}
+	}
+	if c.post != nil {
+		out, changed = c.postVisit(out, parent, changed)
+	}
+	return
+}
+
+func (c *cow) copyOnRewriteRefOfReturnStatement(n *ReturnStatement, parent SQLNode) (out SQLNode, changed bool) {
+	if n == nil || c.cursor.stop {
+		return n, false
+	}
+	out = n
+	if c.pre == nil || c.pre(n, parent) {
+		_Expr, changedExpr := c.copyOnRewriteExpr(n.Expr, n)
+		if changedExpr {
+			res := *n
+			res.Expr, _ = _Expr.(Expr)
 			out = &res
 			if c.cloned != nil {
 				c.cloned(n, out)
@@ -7612,9 +7850,11 @@ func (c *cow) copyOnRewriteRefOfVariable(n *Variable, parent SQLNode) (out SQLNo
 	out = n
 	if c.pre == nil || c.pre(n, parent) {
 		_Name, changedName := c.copyOnRewriteIdentifierCI(n.Name, n)
-		if changedName {
+		_Qualifier, changedQualifier := c.copyOnRewriteIdentifierCI(n.Qualifier, n)
+		if changedName || changedQualifier {
 			res := *n
 			res.Name, _ = _Name.(IdentifierCI)
+			res.Qualifier, _ = _Qualifier.(IdentifierCI)
 			out = &res
 			if c.cloned != nil {
 				c.cloned(n, out)
@@ -7768,6 +8008,33 @@ func (c *cow) copyOnRewriteRefOfWhere(n *Where, parent SQLNode) (out SQLNode, ch
 		if changedExpr {
 			res := *n
 			res.Expr, _ = _Expr.(Expr)
+			out = &res
+			if c.cloned != nil {
+				c.cloned(n, out)
+			}
+			changed = true
+		}
+	}
+	if c.post != nil {
+		out, changed = c.postVisit(out, parent, changed)
+	}
+	return
+}
+
+func (c *cow) copyOnRewriteRefOfWhileStatement(n *WhileStatement, parent SQLNode) (out SQLNode, changed bool) {
+	if n == nil || c.cursor.stop {
+		return n, false
+	}
+	out = n
+	if c.pre == nil || c.pre(n, parent) {
+		_Label, changedLabel := c.copyOnRewriteIdentifierCI(n.Label, n)
+		_SearchCondition, changedSearchCondition := c.copyOnRewriteExpr(n.SearchCondition, n)
+		_Statements, changedStatements := c.copyOnRewriteRefOfCompoundStatements(n.Statements, n)
+		if changedLabel || changedSearchCondition || changedStatements {
+			res := *n
+			res.Label, _ = _Label.(IdentifierCI)
+			res.SearchCondition, _ = _SearchCondition.(Expr)
+			res.Statements, _ = _Statements.(*CompoundStatements)
 			out = &res
 			if c.cloned != nil {
 				c.cloned(n, out)
@@ -8236,10 +8503,22 @@ func (c *cow) copyOnRewriteCompoundStatement(n CompoundStatement, parent SQLNode
 		return c.copyOnRewriteRefOfDeclareVar(n, parent)
 	case *IfStatement:
 		return c.copyOnRewriteRefOfIfStatement(n, parent)
+	case *IterateStatement:
+		return c.copyOnRewriteRefOfIterateStatement(n, parent)
+	case *LeaveStatement:
+		return c.copyOnRewriteRefOfLeaveStatement(n, parent)
+	case *LoopStatement:
+		return c.copyOnRewriteRefOfLoopStatement(n, parent)
+	case *RepeatStatement:
+		return c.copyOnRewriteRefOfRepeatStatement(n, parent)
+	case *ReturnStatement:
+		return c.copyOnRewriteRefOfReturnStatement(n, parent)
 	case *Signal:
 		return c.copyOnRewriteRefOfSignal(n, parent)
 	case *SingleStatement:
 		return c.copyOnRewriteRefOfSingleStatement(n, parent)
+	case *WhileStatement:
+		return c.copyOnRewriteRefOfWhileStatement(n, parent)
 	case Visitable:
 		return c.copyOnRewriteVisitable(n, parent)
 	default:
@@ -8293,10 +8572,14 @@ func (c *cow) copyOnRewriteDDLStatement(n DDLStatement, parent SQLNode) (out SQL
 		return c.copyOnRewriteRefOfAlterTable(n, parent)
 	case *AlterView:
 		return c.copyOnRewriteRefOfAlterView(n, parent)
+	case *CreateFunction:
+		return c.copyOnRewriteRefOfCreateFunction(n, parent)
 	case *CreateProcedure:
 		return c.copyOnRewriteRefOfCreateProcedure(n, parent)
 	case *CreateTable:
 		return c.copyOnRewriteRefOfCreateTable(n, parent)
+	case *CreateTrigger:
+		return c.copyOnRewriteRefOfCreateTrigger(n, parent)
 	case *CreateView:
 		return c.copyOnRewriteRefOfCreateView(n, parent)
 	case *DropFunction:
@@ -8746,10 +9029,14 @@ func (c *cow) copyOnRewriteStatement(n Statement, parent SQLNode) (out SQLNode, 
 		return c.copyOnRewriteRefOfCommit(n, parent)
 	case *CreateDatabase:
 		return c.copyOnRewriteRefOfCreateDatabase(n, parent)
+	case *CreateFunction:
+		return c.copyOnRewriteRefOfCreateFunction(n, parent)
 	case *CreateProcedure:
 		return c.copyOnRewriteRefOfCreateProcedure(n, parent)
 	case *CreateTable:
 		return c.copyOnRewriteRefOfCreateTable(n, parent)
+	case *CreateTrigger:
+		return c.copyOnRewriteRefOfCreateTrigger(n, parent)
 	case *CreateView:
 		return c.copyOnRewriteRefOfCreateView(n, parent)
 	case *DeallocateStmt:

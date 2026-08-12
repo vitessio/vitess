@@ -1467,6 +1467,10 @@ func (action DDLAction) ToString() string {
 		return TruncateStr
 	case CreateProcedureAction:
 		return CreateProcStr
+	case CreateFunctionAction:
+		return CreateFStr
+	case CreateTriggerAction:
+		return CreateTrStr
 	case CreateVindexDDLAction:
 		return CreateVindexStr
 	case DropVindexDDLAction:
@@ -2392,6 +2396,32 @@ func (columnFormat ColumnFormat) ToString() string {
 		return keywordStrings[COMPRESSED]
 	default:
 		return "Unknown column format type"
+	}
+}
+
+// ToString returns the TriggerTime type as a string
+func (tt TriggerTime) ToString() string {
+	switch tt {
+	case BeforeTrigger:
+		return "before"
+	case AfterTrigger:
+		return "after"
+	default:
+		return "Unknown TriggerTime"
+	}
+}
+
+// ToString returns the TriggerEvent type as a string
+func (te TriggerEvent) ToString() string {
+	switch te {
+	case InsertTriggerEvent:
+		return "insert"
+	case UpdateTriggerEvent:
+		return "update"
+	case DeleteTriggerEvent:
+		return "delete"
+	default:
+		return "Unknown TriggerEvent"
 	}
 }
 

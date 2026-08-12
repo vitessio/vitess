@@ -540,6 +540,36 @@ type (
 		Body        CompoundStatement
 	}
 
+	// CreateFunction represents a CREATE FUNCTION statement for a stored
+	// function with a body (not a loadable UDF).
+	CreateFunction struct {
+		Name        TableName
+		Comments    *ParsedComments
+		IfNotExists bool
+		Definer     *Definer
+		Params      []*FuncParameter
+		ReturnType  *ColumnType
+		Body        CompoundStatement
+	}
+
+	// CreateTrigger represents a CREATE TRIGGER statement.
+	CreateTrigger struct {
+		Name     TableName
+		Comments *ParsedComments
+		Definer  *Definer
+		Time     TriggerTime
+		Event    TriggerEvent
+		Table    TableName
+		Body     CompoundStatement
+	}
+
+	// TriggerTime is an enum for a trigger's BEFORE/AFTER activation time.
+	TriggerTime int8
+
+	// TriggerEvent is an enum for the INSERT/UPDATE/DELETE event a trigger
+	// fires on.
+	TriggerEvent int8
+
 	// AlterTable represents a ALTER TABLE statement.
 	AlterTable struct {
 		Table           TableName
@@ -819,8 +849,9 @@ type (
 		Statement Statement
 	}
 
-	// BeginEndStatement represents a BEGIN ... END block.
+	// BeginEndStatement represents a [label:] BEGIN ... END block.
 	BeginEndStatement struct {
+		Label      IdentifierCI
 		Statements *CompoundStatements
 	}
 
@@ -836,6 +867,42 @@ type (
 	ElseIfBlock struct {
 		SearchCondition Expr
 		ThenStatements  *CompoundStatements
+	}
+
+	// LoopStatement represents a [label:] LOOP ... END LOOP block.
+	LoopStatement struct {
+		Label      IdentifierCI
+		Statements *CompoundStatements
+	}
+
+	// WhileStatement represents a [label:] WHILE ... DO ... END WHILE block.
+	WhileStatement struct {
+		Label           IdentifierCI
+		SearchCondition Expr
+		Statements      *CompoundStatements
+	}
+
+	// RepeatStatement represents a [label:] REPEAT ... UNTIL ... END REPEAT
+	// block.
+	RepeatStatement struct {
+		Label           IdentifierCI
+		Statements      *CompoundStatements
+		SearchCondition Expr
+	}
+
+	// IterateStatement represents an ITERATE statement.
+	IterateStatement struct {
+		Label IdentifierCI
+	}
+
+	// LeaveStatement represents a LEAVE statement.
+	LeaveStatement struct {
+		Label IdentifierCI
+	}
+
+	// ReturnStatement represents a RETURN statement in a stored function.
+	ReturnStatement struct {
+		Expr Expr
 	}
 
 	// DeclareVar represents a Local Variable DECLARE Statement
@@ -867,6 +934,12 @@ type (
 func (*SingleStatement) iCompoundStatement()   {}
 func (*BeginEndStatement) iCompoundStatement() {}
 func (*IfStatement) iCompoundStatement()       {}
+func (*LoopStatement) iCompoundStatement()     {}
+func (*WhileStatement) iCompoundStatement()    {}
+func (*RepeatStatement) iCompoundStatement()   {}
+func (*IterateStatement) iCompoundStatement()  {}
+func (*LeaveStatement) iCompoundStatement()    {}
+func (*ReturnStatement) iCompoundStatement()   {}
 func (*DeclareVar) iCompoundStatement()        {}
 func (*DeclareHandler) iCompoundStatement()    {}
 func (*DeclareCondition) iCompoundStatement()  {}
@@ -966,6 +1039,8 @@ func (*AlterTable) iStatement()            {}
 func (*AlterVschema) iStatement()          {}
 func (*AlterMigration) iStatement()        {}
 func (*CreateProcedure) iStatement()       {}
+func (*CreateFunction) iStatement()        {}
+func (*CreateTrigger) iStatement()         {}
 func (*RevertMigration) iStatement()       {}
 func (*ShowMigrationLogs) iStatement()     {}
 func (*ShowThrottledApps) iStatement()     {}
@@ -995,6 +1070,8 @@ func (*AlterTable) iDDLStatement()      {}
 func (*TruncateTable) iDDLStatement()   {}
 func (*RenameTable) iDDLStatement()     {}
 func (*CreateProcedure) iDDLStatement() {}
+func (*CreateFunction) iDDLStatement()  {}
+func (*CreateTrigger) iDDLStatement()   {}
 func (*DropProcedure) iDDLStatement()   {}
 func (*DropFunction) iDDLStatement()    {}
 
@@ -2039,6 +2116,56 @@ func (node *CreateProcedure) SetTable(qualifier string, name string) {
 	node.Name.Name = NewIdentifierCS(name)
 }
 
+// DDLStatement implementation for CreateFunction
+
+func (node *CreateFunction) IsFullyParsed() bool        { return true }
+func (node *CreateFunction) SetFullyParsed(bool)        {}
+func (node *CreateFunction) IsTemporary() bool          { return false }
+func (node *CreateFunction) GetTable() TableName        { return node.Name }
+func (node *CreateFunction) GetAction() DDLAction       { return CreateFunctionAction }
+func (node *CreateFunction) GetOptLike() *OptLike       { return nil }
+func (node *CreateFunction) GetIfExists() bool          { return false }
+func (node *CreateFunction) GetIfNotExists() bool       { return node.IfNotExists }
+func (node *CreateFunction) GetIsReplace() bool         { return false }
+func (node *CreateFunction) GetTableSpec() *TableSpec   { return nil }
+func (node *CreateFunction) GetFromTables() TableNames  { return nil }
+func (node *CreateFunction) SetFromTables(TableNames)   {}
+func (node *CreateFunction) GetToTables() TableNames    { return nil }
+func (node *CreateFunction) AffectedTables() TableNames { return TableNames{node.Name} }
+func (node *CreateFunction) SetComments(comments Comments) {
+	node.Comments = comments.Parsed()
+}
+func (node *CreateFunction) GetParsedComments() *ParsedComments { return node.Comments }
+func (node *CreateFunction) SetTable(qualifier string, name string) {
+	node.Name.Qualifier = NewIdentifierCS(qualifier)
+	node.Name.Name = NewIdentifierCS(name)
+}
+
+// DDLStatement implementation for CreateTrigger
+
+func (node *CreateTrigger) IsFullyParsed() bool        { return true }
+func (node *CreateTrigger) SetFullyParsed(bool)        {}
+func (node *CreateTrigger) IsTemporary() bool          { return false }
+func (node *CreateTrigger) GetTable() TableName        { return node.Table }
+func (node *CreateTrigger) GetAction() DDLAction       { return CreateTriggerAction }
+func (node *CreateTrigger) GetOptLike() *OptLike       { return nil }
+func (node *CreateTrigger) GetIfExists() bool          { return false }
+func (node *CreateTrigger) GetIfNotExists() bool       { return false }
+func (node *CreateTrigger) GetIsReplace() bool         { return false }
+func (node *CreateTrigger) GetTableSpec() *TableSpec   { return nil }
+func (node *CreateTrigger) GetFromTables() TableNames  { return nil }
+func (node *CreateTrigger) SetFromTables(TableNames)   {}
+func (node *CreateTrigger) GetToTables() TableNames    { return nil }
+func (node *CreateTrigger) AffectedTables() TableNames { return TableNames{node.Table} }
+func (node *CreateTrigger) SetComments(comments Comments) {
+	node.Comments = comments.Parsed()
+}
+func (node *CreateTrigger) GetParsedComments() *ParsedComments { return node.Comments }
+func (node *CreateTrigger) SetTable(qualifier string, name string) {
+	node.Table.Qualifier = NewIdentifierCS(qualifier)
+	node.Table.Name = NewIdentifierCS(name)
+}
+
 // SetTable implements the DDL interface
 func (node *DropProcedure) SetTable(qualifier string, name string) {
 	node.Name.Qualifier = NewIdentifierCS(qualifier)
@@ -2223,6 +2350,12 @@ type OptLike struct {
 // ProcParameter represents a procedure parameter
 type ProcParameter struct {
 	Mode ProcParameterMode
+	Name IdentifierCI
+	Type *ColumnType
+}
+
+// FuncParameter represents a stored function parameter
+type FuncParameter struct {
 	Name IdentifierCI
 	Type *ColumnType
 }
@@ -2879,6 +3012,9 @@ type (
 	Variable struct {
 		Scope Scope
 		Name  IdentifierCI
+		// Qualifier is set for qualified assignment targets like NEW.col
+		// in trigger bodies.
+		Qualifier IdentifierCI
 	}
 
 	// ColTuple represents a list of column values.

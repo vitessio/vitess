@@ -57,6 +57,11 @@ func buildSetPlan(stmt *sqlparser.Set, vschema plancontext.VSchema) (*planResult
 	}
 
 	for _, expr := range stmt.Exprs {
+		if expr.Var.Qualifier.NotEmpty() {
+			// Qualified assignment targets like NEW.col only have meaning
+			// inside trigger bodies, which vtgate does not execute.
+			return nil, vterrors.VT12001("SET of qualified variable: " + sqlparser.String(expr.Var))
+		}
 		// AST struct has been prepared before getting here, so no scope here means that
 		// we have a UDV. If the original query didn't explicitly specify the scope, it
 		// would have been explicitly set to sqlparser.SessionStr before reaching this

@@ -133,10 +133,14 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfCountStar(parent, node, replacer)
 	case *CreateDatabase:
 		return a.rewriteRefOfCreateDatabase(parent, node, replacer)
+	case *CreateFunction:
+		return a.rewriteRefOfCreateFunction(parent, node, replacer)
 	case *CreateProcedure:
 		return a.rewriteRefOfCreateProcedure(parent, node, replacer)
 	case *CreateTable:
 		return a.rewriteRefOfCreateTable(parent, node, replacer)
+	case *CreateTrigger:
+		return a.rewriteRefOfCreateTrigger(parent, node, replacer)
 	case *CreateView:
 		return a.rewriteRefOfCreateView(parent, node, replacer)
 	case *CurTimeFuncExpr:
@@ -203,6 +207,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfFromFirstLastClause(parent, node, replacer)
 	case *FuncExpr:
 		return a.rewriteRefOfFuncExpr(parent, node, replacer)
+	case *FuncParameter:
+		return a.rewriteRefOfFuncParameter(parent, node, replacer)
 	case *GTIDFuncExpr:
 		return a.rewriteRefOfGTIDFuncExpr(parent, node, replacer)
 	case *GeoHashFromLatLongExpr:
@@ -267,6 +273,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfIntroducerExpr(parent, node, replacer)
 	case *IsExpr:
 		return a.rewriteRefOfIsExpr(parent, node, replacer)
+	case *IterateStatement:
+		return a.rewriteRefOfIterateStatement(parent, node, replacer)
 	case *JSONArrayAgg:
 		return a.rewriteRefOfJSONArrayAgg(parent, node, replacer)
 	case *JSONArrayExpr:
@@ -329,6 +337,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfKill(parent, node, replacer)
 	case *LagLeadExpr:
 		return a.rewriteRefOfLagLeadExpr(parent, node, replacer)
+	case *LeaveStatement:
+		return a.rewriteRefOfLeaveStatement(parent, node, replacer)
 	case *Limit:
 		return a.rewriteRefOfLimit(parent, node, replacer)
 	case *LineStringExpr:
@@ -349,6 +359,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfLockTables(parent, node, replacer)
 	case *LockingFunc:
 		return a.rewriteRefOfLockingFunc(parent, node, replacer)
+	case *LoopStatement:
+		return a.rewriteRefOfLoopStatement(parent, node, replacer)
 	case MatchAction:
 		return a.rewriteMatchAction(parent, node, replacer)
 	case *MatchExpr:
@@ -457,6 +469,10 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfRenameTable(parent, node, replacer)
 	case *RenameTableName:
 		return a.rewriteRefOfRenameTableName(parent, node, replacer)
+	case *RepeatStatement:
+		return a.rewriteRefOfRepeatStatement(parent, node, replacer)
+	case *ReturnStatement:
+		return a.rewriteRefOfReturnStatement(parent, node, replacer)
 	case *RevertMigration:
 		return a.rewriteRefOfRevertMigration(parent, node, replacer)
 	case *Rollback:
@@ -613,6 +629,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfWhen(parent, node, replacer)
 	case *Where:
 		return a.rewriteRefOfWhere(parent, node, replacer)
+	case *WhileStatement:
+		return a.rewriteRefOfWhileStatement(parent, node, replacer)
 	case *WindowDefinition:
 		return a.rewriteRefOfWindowDefinition(parent, node, replacer)
 	case WindowDefinitions:
@@ -1818,6 +1836,15 @@ func (a *application) rewriteRefOfBeginEndStatement(parent SQLNode, node *BeginE
 		}
 	}
 	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfBeginEndStatementLabel))
+	}
+	if !a.rewriteIdentifierCI(node, node.Label, func(newNode, parent SQLNode) {
+		parent.(*BeginEndStatement).Label = newNode.(IdentifierCI)
+	}) {
+		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 		a.cur.current.AddStep(uint16(RefOfBeginEndStatementStatements))
 	}
 	if !a.rewriteRefOfCompoundStatements(node, node.Statements, func(newNode, parent SQLNode) {
@@ -3183,6 +3210,101 @@ func (a *application) rewriteRefOfCreateDatabase(parent SQLNode, node *CreateDat
 }
 
 // Function Generation Source: PtrToStructMethod
+func (a *application) rewriteRefOfCreateFunction(parent SQLNode, node *CreateFunction, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
+			return true
+		}
+	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfCreateFunctionName))
+	}
+	if !a.rewriteTableName(node, node.Name, func(newNode, parent SQLNode) {
+		parent.(*CreateFunction).Name = newNode.(TableName)
+	}) {
+		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfCreateFunctionComments))
+	}
+	if !a.rewriteRefOfParsedComments(node, node.Comments, func(newNode, parent SQLNode) {
+		parent.(*CreateFunction).Comments = newNode.(*ParsedComments)
+	}) {
+		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfCreateFunctionDefiner))
+	}
+	if !a.rewriteRefOfDefiner(node, node.Definer, func(newNode, parent SQLNode) {
+		parent.(*CreateFunction).Definer = newNode.(*Definer)
+	}) {
+		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+	}
+	for x, el := range node.Params {
+		if a.collectPaths {
+			if x == 0 {
+				a.cur.current.AddStepWithOffset(uint16(RefOfCreateFunctionParamsOffset))
+			} else {
+				a.cur.current.ChangeOffset(x)
+			}
+		}
+		if !a.rewriteRefOfFuncParameter(node, el, func(idx int) replacerFunc {
+			return func(newNode, parent SQLNode) {
+				parent.(*CreateFunction).Params[idx] = newNode.(*FuncParameter)
+			}
+		}(x)) {
+			return false
+		}
+	}
+	if a.collectPaths && len(node.Params) > 0 {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfCreateFunctionReturnType))
+	}
+	if !a.rewriteRefOfColumnType(node, node.ReturnType, func(newNode, parent SQLNode) {
+		parent.(*CreateFunction).ReturnType = newNode.(*ColumnType)
+	}) {
+		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfCreateFunctionBody))
+	}
+	if !a.rewriteCompoundStatement(node, node.Body, func(newNode, parent SQLNode) {
+		parent.(*CreateFunction).Body = newNode.(CompoundStatement)
+	}) {
+		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfCreateProcedure(parent SQLNode, node *CreateProcedure, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -3327,6 +3449,82 @@ func (a *application) rewriteRefOfCreateTable(parent SQLNode, node *CreateTable,
 	}
 	if !a.rewriteTableStatement(node, node.Select, func(newNode, parent SQLNode) {
 		parent.(*CreateTable).Select = newNode.(TableStatement)
+	}) {
+		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+
+// Function Generation Source: PtrToStructMethod
+func (a *application) rewriteRefOfCreateTrigger(parent SQLNode, node *CreateTrigger, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
+			return true
+		}
+	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfCreateTriggerName))
+	}
+	if !a.rewriteTableName(node, node.Name, func(newNode, parent SQLNode) {
+		parent.(*CreateTrigger).Name = newNode.(TableName)
+	}) {
+		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfCreateTriggerComments))
+	}
+	if !a.rewriteRefOfParsedComments(node, node.Comments, func(newNode, parent SQLNode) {
+		parent.(*CreateTrigger).Comments = newNode.(*ParsedComments)
+	}) {
+		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfCreateTriggerDefiner))
+	}
+	if !a.rewriteRefOfDefiner(node, node.Definer, func(newNode, parent SQLNode) {
+		parent.(*CreateTrigger).Definer = newNode.(*Definer)
+	}) {
+		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfCreateTriggerTable))
+	}
+	if !a.rewriteTableName(node, node.Table, func(newNode, parent SQLNode) {
+		parent.(*CreateTrigger).Table = newNode.(TableName)
+	}) {
+		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfCreateTriggerBody))
+	}
+	if !a.rewriteCompoundStatement(node, node.Body, func(newNode, parent SQLNode) {
+		parent.(*CreateTrigger).Body = newNode.(CompoundStatement)
 	}) {
 		return false
 	}
@@ -4971,6 +5169,55 @@ func (a *application) rewriteRefOfFuncExpr(parent SQLNode, node *FuncExpr, repla
 }
 
 // Function Generation Source: PtrToStructMethod
+func (a *application) rewriteRefOfFuncParameter(parent SQLNode, node *FuncParameter, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
+			return true
+		}
+	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfFuncParameterName))
+	}
+	if !a.rewriteIdentifierCI(node, node.Name, func(newNode, parent SQLNode) {
+		parent.(*FuncParameter).Name = newNode.(IdentifierCI)
+	}) {
+		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfFuncParameterType))
+	}
+	if !a.rewriteRefOfColumnType(node, node.Type, func(newNode, parent SQLNode) {
+		parent.(*FuncParameter).Type = newNode.(*ColumnType)
+	}) {
+		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfGTIDFuncExpr(parent SQLNode, node *GTIDFuncExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -6531,6 +6778,46 @@ func (a *application) rewriteRefOfIsExpr(parent SQLNode, node *IsExpr, replacer 
 	}
 	if !a.rewriteExpr(node, node.Left, func(newNode, parent SQLNode) {
 		parent.(*IsExpr).Left = newNode.(Expr)
+	}) {
+		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+
+// Function Generation Source: PtrToStructMethod
+func (a *application) rewriteRefOfIterateStatement(parent SQLNode, node *IterateStatement, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
+			return true
+		}
+	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfIterateStatementLabel))
+	}
+	if !a.rewriteIdentifierCI(node, node.Label, func(newNode, parent SQLNode) {
+		parent.(*IterateStatement).Label = newNode.(IdentifierCI)
 	}) {
 		return false
 	}
@@ -8173,6 +8460,46 @@ func (a *application) rewriteRefOfLagLeadExpr(parent SQLNode, node *LagLeadExpr,
 }
 
 // Function Generation Source: PtrToStructMethod
+func (a *application) rewriteRefOfLeaveStatement(parent SQLNode, node *LeaveStatement, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
+			return true
+		}
+	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfLeaveStatementLabel))
+	}
+	if !a.rewriteIdentifierCI(node, node.Label, func(newNode, parent SQLNode) {
+		parent.(*LeaveStatement).Label = newNode.(IdentifierCI)
+	}) {
+		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfLimit(parent SQLNode, node *Limit, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -8532,6 +8859,55 @@ func (a *application) rewriteRefOfLockingFunc(parent SQLNode, node *LockingFunc,
 	}
 	if !a.rewriteExpr(node, node.Timeout, func(newNode, parent SQLNode) {
 		parent.(*LockingFunc).Timeout = newNode.(Expr)
+	}) {
+		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+
+// Function Generation Source: PtrToStructMethod
+func (a *application) rewriteRefOfLoopStatement(parent SQLNode, node *LoopStatement, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
+			return true
+		}
+	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfLoopStatementLabel))
+	}
+	if !a.rewriteIdentifierCI(node, node.Label, func(newNode, parent SQLNode) {
+		parent.(*LoopStatement).Label = newNode.(IdentifierCI)
+	}) {
+		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfLoopStatementStatements))
+	}
+	if !a.rewriteRefOfCompoundStatements(node, node.Statements, func(newNode, parent SQLNode) {
+		parent.(*LoopStatement).Statements = newNode.(*CompoundStatements)
 	}) {
 		return false
 	}
@@ -11109,6 +11485,104 @@ func (a *application) rewriteRefOfRenameTableName(parent SQLNode, node *RenameTa
 	}
 	if !a.rewriteTableName(node, node.Table, func(newNode, parent SQLNode) {
 		parent.(*RenameTableName).Table = newNode.(TableName)
+	}) {
+		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+
+// Function Generation Source: PtrToStructMethod
+func (a *application) rewriteRefOfRepeatStatement(parent SQLNode, node *RepeatStatement, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
+			return true
+		}
+	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfRepeatStatementLabel))
+	}
+	if !a.rewriteIdentifierCI(node, node.Label, func(newNode, parent SQLNode) {
+		parent.(*RepeatStatement).Label = newNode.(IdentifierCI)
+	}) {
+		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfRepeatStatementStatements))
+	}
+	if !a.rewriteRefOfCompoundStatements(node, node.Statements, func(newNode, parent SQLNode) {
+		parent.(*RepeatStatement).Statements = newNode.(*CompoundStatements)
+	}) {
+		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfRepeatStatementSearchCondition))
+	}
+	if !a.rewriteExpr(node, node.SearchCondition, func(newNode, parent SQLNode) {
+		parent.(*RepeatStatement).SearchCondition = newNode.(Expr)
+	}) {
+		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+
+// Function Generation Source: PtrToStructMethod
+func (a *application) rewriteRefOfReturnStatement(parent SQLNode, node *ReturnStatement, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
+			return true
+		}
+	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfReturnStatementExpr))
+	}
+	if !a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
+		parent.(*ReturnStatement).Expr = newNode.(Expr)
 	}) {
 		return false
 	}
@@ -14577,6 +15051,15 @@ func (a *application) rewriteRefOfVariable(parent SQLNode, node *Variable, repla
 	}
 	if a.collectPaths {
 		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfVariableQualifier))
+	}
+	if !a.rewriteIdentifierCI(node, node.Qualifier, func(newNode, parent SQLNode) {
+		parent.(*Variable).Qualifier = newNode.(IdentifierCI)
+	}) {
+		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -14864,6 +15347,64 @@ func (a *application) rewriteRefOfWhere(parent SQLNode, node *Where, replacer re
 	}
 	if !a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
 		parent.(*Where).Expr = newNode.(Expr)
+	}) {
+		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+
+// Function Generation Source: PtrToStructMethod
+func (a *application) rewriteRefOfWhileStatement(parent SQLNode, node *WhileStatement, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
+			return true
+		}
+	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfWhileStatementLabel))
+	}
+	if !a.rewriteIdentifierCI(node, node.Label, func(newNode, parent SQLNode) {
+		parent.(*WhileStatement).Label = newNode.(IdentifierCI)
+	}) {
+		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfWhileStatementSearchCondition))
+	}
+	if !a.rewriteExpr(node, node.SearchCondition, func(newNode, parent SQLNode) {
+		parent.(*WhileStatement).SearchCondition = newNode.(Expr)
+	}) {
+		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfWhileStatementStatements))
+	}
+	if !a.rewriteRefOfCompoundStatements(node, node.Statements, func(newNode, parent SQLNode) {
+		parent.(*WhileStatement).Statements = newNode.(*CompoundStatements)
 	}) {
 		return false
 	}
@@ -15470,10 +16011,22 @@ func (a *application) rewriteCompoundStatement(parent SQLNode, node CompoundStat
 		return a.rewriteRefOfDeclareVar(parent, node, replacer)
 	case *IfStatement:
 		return a.rewriteRefOfIfStatement(parent, node, replacer)
+	case *IterateStatement:
+		return a.rewriteRefOfIterateStatement(parent, node, replacer)
+	case *LeaveStatement:
+		return a.rewriteRefOfLeaveStatement(parent, node, replacer)
+	case *LoopStatement:
+		return a.rewriteRefOfLoopStatement(parent, node, replacer)
+	case *RepeatStatement:
+		return a.rewriteRefOfRepeatStatement(parent, node, replacer)
+	case *ReturnStatement:
+		return a.rewriteRefOfReturnStatement(parent, node, replacer)
 	case *Signal:
 		return a.rewriteRefOfSignal(parent, node, replacer)
 	case *SingleStatement:
 		return a.rewriteRefOfSingleStatement(parent, node, replacer)
+	case *WhileStatement:
+		return a.rewriteRefOfWhileStatement(parent, node, replacer)
 	case Visitable:
 		return a.rewriteVisitable(parent, node, replacer)
 	default:
@@ -15530,10 +16083,14 @@ func (a *application) rewriteDDLStatement(parent SQLNode, node DDLStatement, rep
 		return a.rewriteRefOfAlterTable(parent, node, replacer)
 	case *AlterView:
 		return a.rewriteRefOfAlterView(parent, node, replacer)
+	case *CreateFunction:
+		return a.rewriteRefOfCreateFunction(parent, node, replacer)
 	case *CreateProcedure:
 		return a.rewriteRefOfCreateProcedure(parent, node, replacer)
 	case *CreateTable:
 		return a.rewriteRefOfCreateTable(parent, node, replacer)
+	case *CreateTrigger:
+		return a.rewriteRefOfCreateTrigger(parent, node, replacer)
 	case *CreateView:
 		return a.rewriteRefOfCreateView(parent, node, replacer)
 	case *DropFunction:
@@ -15992,10 +16549,14 @@ func (a *application) rewriteStatement(parent SQLNode, node Statement, replacer 
 		return a.rewriteRefOfCommit(parent, node, replacer)
 	case *CreateDatabase:
 		return a.rewriteRefOfCreateDatabase(parent, node, replacer)
+	case *CreateFunction:
+		return a.rewriteRefOfCreateFunction(parent, node, replacer)
 	case *CreateProcedure:
 		return a.rewriteRefOfCreateProcedure(parent, node, replacer)
 	case *CreateTable:
 		return a.rewriteRefOfCreateTable(parent, node, replacer)
+	case *CreateTrigger:
+		return a.rewriteRefOfCreateTrigger(parent, node, replacer)
 	case *CreateView:
 		return a.rewriteRefOfCreateView(parent, node, replacer)
 	case *DeallocateStmt:

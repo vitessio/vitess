@@ -10760,7 +10760,7 @@ INPUT
 select * from t1 :;
 END
 ERROR
-syntax error at position 19 near ':'
+syntax error at position 19
 END
 INPUT
 select AES_ENCRYPT(@ENCSTR, @KEYS, @IV)=AES_ENCRYPT(@ENCSTR, @KEYS, @IV1);
@@ -20191,8 +20191,8 @@ END
 INPUT
 select max(t1.connection) into connection from t1;
 END
-ERROR
-syntax error at position 42 near 'connection'
+OUTPUT
+select max(t1.`connection`) from t1 into `connection`
 END
 INPUT
 select hex(_utf32 X'44');

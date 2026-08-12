@@ -560,6 +560,61 @@ func (node *CreateProcedure) FormatFast(buf *TrackedBuffer) {
 }
 
 // FormatFast formats the node.
+func (node *CreateFunction) FormatFast(buf *TrackedBuffer) {
+	buf.WriteString("create ")
+	node.Comments.FormatFast(buf)
+	if node.Definer != nil {
+		buf.WriteString("definer = ")
+		node.Definer.FormatFast(buf)
+		buf.WriteByte(' ')
+	}
+	buf.WriteString("function ")
+	if node.IfNotExists {
+		buf.WriteString("if not exists ")
+	}
+	node.Name.FormatFast(buf)
+	buf.WriteString(" (")
+	prefix := ""
+	for _, param := range node.Params {
+		buf.WriteString(prefix)
+		param.FormatFast(buf)
+		prefix = ", "
+	}
+	buf.WriteString(") returns ")
+	node.ReturnType.FormatFast(buf)
+	buf.WriteByte(' ')
+	node.Body.FormatFast(buf)
+}
+
+// FormatFast formats the node.
+func (fp *FuncParameter) FormatFast(buf *TrackedBuffer) {
+	fp.Name.FormatFast(buf)
+	buf.WriteByte(' ')
+	fp.Type.FormatFast(buf)
+}
+
+// FormatFast formats the node.
+func (node *CreateTrigger) FormatFast(buf *TrackedBuffer) {
+	buf.WriteString("create ")
+	node.Comments.FormatFast(buf)
+	if node.Definer != nil {
+		buf.WriteString("definer = ")
+		node.Definer.FormatFast(buf)
+		buf.WriteByte(' ')
+	}
+	buf.WriteString("trigger ")
+	node.Name.FormatFast(buf)
+	buf.WriteByte(' ')
+	buf.WriteString(node.Time.ToString())
+	buf.WriteByte(' ')
+	buf.WriteString(node.Event.ToString())
+	buf.WriteString(" on ")
+	node.Table.FormatFast(buf)
+	buf.WriteString(" for each row ")
+	node.Body.FormatFast(buf)
+}
+
+// FormatFast formats the node.
 func (node *DropProcedure) FormatFast(buf *TrackedBuffer) {
 	exists := ""
 	if node.IfExists {
@@ -604,9 +659,18 @@ func (s *SingleStatement) FormatFast(buf *TrackedBuffer) {
 
 // FormatFast formats the node.
 func (bes *BeginEndStatement) FormatFast(buf *TrackedBuffer) {
+	if bes.Label.NotEmpty() {
+		bes.Label.FormatFast(buf)
+		buf.WriteString(": ")
+	}
 	buf.WriteString("begin")
 	bes.Statements.FormatFast(buf)
-	buf.WriteString(" end;")
+	buf.WriteString(" end")
+	if bes.Label.NotEmpty() {
+		buf.WriteByte(' ')
+		bes.Label.FormatFast(buf)
+	}
+	buf.WriteString(";")
 }
 
 // FormatFast formats the node.
@@ -644,6 +708,79 @@ func (eib *ElseIfBlock) FormatFast(buf *TrackedBuffer) {
 	eib.SearchCondition.FormatFast(buf)
 	buf.WriteString(" then")
 	eib.ThenStatements.FormatFast(buf)
+}
+
+// FormatFast formats the node.
+func (ls *LoopStatement) FormatFast(buf *TrackedBuffer) {
+	if ls.Label.NotEmpty() {
+		ls.Label.FormatFast(buf)
+		buf.WriteString(": ")
+	}
+	buf.WriteString("loop")
+	ls.Statements.FormatFast(buf)
+	buf.WriteString(" end loop")
+	if ls.Label.NotEmpty() {
+		buf.WriteByte(' ')
+		ls.Label.FormatFast(buf)
+	}
+	buf.WriteString(";")
+}
+
+// FormatFast formats the node.
+func (ws *WhileStatement) FormatFast(buf *TrackedBuffer) {
+	if ws.Label.NotEmpty() {
+		ws.Label.FormatFast(buf)
+		buf.WriteString(": ")
+	}
+	buf.WriteString("while ")
+	ws.SearchCondition.FormatFast(buf)
+	buf.WriteString(" do")
+	ws.Statements.FormatFast(buf)
+	buf.WriteString(" end while")
+	if ws.Label.NotEmpty() {
+		buf.WriteByte(' ')
+		ws.Label.FormatFast(buf)
+	}
+	buf.WriteString(";")
+}
+
+// FormatFast formats the node.
+func (rs *RepeatStatement) FormatFast(buf *TrackedBuffer) {
+	if rs.Label.NotEmpty() {
+		rs.Label.FormatFast(buf)
+		buf.WriteString(": ")
+	}
+	buf.WriteString("repeat")
+	rs.Statements.FormatFast(buf)
+	buf.WriteString(" until ")
+	rs.SearchCondition.FormatFast(buf)
+	buf.WriteString(" end repeat")
+	if rs.Label.NotEmpty() {
+		buf.WriteByte(' ')
+		rs.Label.FormatFast(buf)
+	}
+	buf.WriteString(";")
+}
+
+// FormatFast formats the node.
+func (is *IterateStatement) FormatFast(buf *TrackedBuffer) {
+	buf.WriteString("iterate ")
+	is.Label.FormatFast(buf)
+	buf.WriteByte(';')
+}
+
+// FormatFast formats the node.
+func (ls *LeaveStatement) FormatFast(buf *TrackedBuffer) {
+	buf.WriteString("leave ")
+	ls.Label.FormatFast(buf)
+	buf.WriteByte(';')
+}
+
+// FormatFast formats the node.
+func (rs *ReturnStatement) FormatFast(buf *TrackedBuffer) {
+	buf.WriteString("return ")
+	rs.Expr.FormatFast(buf)
+	buf.WriteByte(';')
 }
 
 // FormatFast formats the node.
@@ -4404,6 +4541,10 @@ func (node *Variable) FormatFast(buf *TrackedBuffer) {
 		buf.WriteByte('.')
 	case NextTxScope:
 		buf.WriteString("@@")
+	}
+	if node.Qualifier.NotEmpty() {
+		node.Qualifier.FormatFast(buf)
+		buf.WriteByte('.')
 	}
 	node.Name.FormatFast(buf)
 }

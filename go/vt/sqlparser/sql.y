@@ -163,6 +163,10 @@ func markBindVariable(yylex yyLexer, bvar string) {
   jsonObjectParams []*JSONObjectParam
   procParam  *ProcParameter
   procParams []*ProcParameter
+  funcParam  *FuncParameter
+  funcParams []*FuncParameter
+  triggerTime TriggerTime
+  triggerEvent TriggerEvent
   handlerAction HandlerAction
   handlerCondition HandlerCondition
   handlerConditions []HandlerCondition
@@ -369,6 +373,8 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %token <str> VINDEX VINDEXES DIRECTORY NAME UPGRADE
 %token <str> CHAIN SERIAL TYPE
 %token <str> AT ZONE
+%token <str> EACH ITERATE LEAVE LOOP REPEAT RETURN RETURNS UNTIL WHILE
+%token <str> LABEL_IDENT
 %token <str> STATUS VARIABLES WARNINGS CASCADED DEFINER OPTION SQL UNDEFINED
 %token <str> SEQUENCE MERGE TEMPORARY TEMPTABLE INVOKER SECURITY FIRST AFTER LAST
 
@@ -490,6 +496,11 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %type <renameTablePairs> rename_list
 %type <createTable> create_table_prefix
 %type <createProcedure> create_procedure
+%type <statement> create_function create_trigger
+%type <funcParam> func_param
+%type <funcParams> func_params_list func_params_list_opt
+%type <triggerTime> trigger_time
+%type <triggerEvent> trigger_event
 %type <createView> create_view_prefix
 %type <alterTable> alter_table_prefix
 %type <alterOption> alter_option alter_commands_modifier lock_index algorithm_index
@@ -789,9 +800,81 @@ compound_statement_without_semicolon:
   {
     $$ = &BeginEndStatement{Statements: $2}
   }
+| LABEL_IDENT ':' BEGIN compound_statement_list_opt END
+  {
+    $$ = &BeginEndStatement{Label: createIdentifierCI($1), Statements: $4}
+  }
+| LABEL_IDENT ':' BEGIN compound_statement_list_opt END sql_id
+  {
+    if !createIdentifierCI($1).Equal($6) {
+      yylex.Error("end label " + $6.String() + " does not match begin label " + $1)
+      return 1
+    }
+    $$ = &BeginEndStatement{Label: createIdentifierCI($1), Statements: $4}
+  }
 | IF expression THEN compound_statement_list elseif_list_opt else_opt END IF
   {
     $$ = &IfStatement{SearchCondition: $2, ThenStatements: $4, ElseIfBlocks: $5, ElseStatements: $6}
+  }
+| LOOP compound_statement_list_opt END LOOP
+  {
+    $$ = &LoopStatement{Statements: $2}
+  }
+| LABEL_IDENT ':' LOOP compound_statement_list_opt END LOOP
+  {
+    $$ = &LoopStatement{Label: createIdentifierCI($1), Statements: $4}
+  }
+| LABEL_IDENT ':' LOOP compound_statement_list_opt END LOOP sql_id
+  {
+    if !createIdentifierCI($1).Equal($7) {
+      yylex.Error("end label " + $7.String() + " does not match begin label " + $1)
+      return 1
+    }
+    $$ = &LoopStatement{Label: createIdentifierCI($1), Statements: $4}
+  }
+| WHILE expression DO compound_statement_list_opt END WHILE
+  {
+    $$ = &WhileStatement{SearchCondition: $2, Statements: $4}
+  }
+| LABEL_IDENT ':' WHILE expression DO compound_statement_list_opt END WHILE
+  {
+    $$ = &WhileStatement{Label: createIdentifierCI($1), SearchCondition: $4, Statements: $6}
+  }
+| LABEL_IDENT ':' WHILE expression DO compound_statement_list_opt END WHILE sql_id
+  {
+    if !createIdentifierCI($1).Equal($9) {
+      yylex.Error("end label " + $9.String() + " does not match begin label " + $1)
+      return 1
+    }
+    $$ = &WhileStatement{Label: createIdentifierCI($1), SearchCondition: $4, Statements: $6}
+  }
+| REPEAT compound_statement_list_opt UNTIL expression END REPEAT
+  {
+    $$ = &RepeatStatement{Statements: $2, SearchCondition: $4}
+  }
+| LABEL_IDENT ':' REPEAT compound_statement_list_opt UNTIL expression END REPEAT
+  {
+    $$ = &RepeatStatement{Label: createIdentifierCI($1), Statements: $4, SearchCondition: $6}
+  }
+| LABEL_IDENT ':' REPEAT compound_statement_list_opt UNTIL expression END REPEAT sql_id
+  {
+    if !createIdentifierCI($1).Equal($9) {
+      yylex.Error("end label " + $9.String() + " does not match begin label " + $1)
+      return 1
+    }
+    $$ = &RepeatStatement{Label: createIdentifierCI($1), Statements: $4, SearchCondition: $6}
+  }
+| ITERATE sql_id
+  {
+    $$ = &IterateStatement{Label: $2}
+  }
+| LEAVE sql_id
+  {
+    $$ = &LeaveStatement{Label: $2}
+  }
+| RETURN expression
+  {
+    $$ = &ReturnStatement{Expr: $2}
   }
 | DECLARE column_list column_type column_type_default_opt
   {
@@ -1428,6 +1511,10 @@ set_expression:
   {
     $$ = &SetExpr{Var: $1, Expr: $3}
   }
+| set_variable ASSIGNMENT_OPT expression
+  {
+    $$ = &SetExpr{Var: $1, Expr: $3}
+  }
 | charset_or_character_set_or_names charset_value collate_opt
   {
     $$ = &SetExpr{Var: NewSetVariable(string($1), SessionScope), Expr: $2}
@@ -1437,6 +1524,11 @@ set_variable:
   ID
   {
     $$ = NewSetVariable(string($1), NoScope)
+  }
+| sql_id '.' sql_id
+  {
+    // Qualified assignment target, e.g. NEW.col in a trigger body.
+    $$ = &Variable{Qualifier: $1, Name: $3, Scope: NoScope}
   }
 | variable_expr
   {
@@ -1546,6 +1638,14 @@ create_statement:
   {
     $$ = $1
   }
+| create_function
+  {
+    $$ = $1
+  }
+| create_trigger
+  {
+    $$ = $1
+  }
 | create_index_prefix '(' index_column_list ')' index_option_list_opt algorithm_lock_opt
   {
     indexDef := $1.AlterOptions[0].(*AddIndexDefinition).IndexDefinition
@@ -1646,6 +1746,67 @@ create_procedure:
   CREATE comment_opt definer_opt PROCEDURE not_exists_opt table_name openb proc_params_list_opt closeb compound_statement
   {
     $$ = &CreateProcedure{Comments: Comments($2).Parsed(), Name: $6, IfNotExists: $5, Definer: $3, Params: $8, Body: $10}
+  }
+
+create_function:
+  CREATE comment_opt definer_opt FUNCTION not_exists_opt table_name openb func_params_list_opt closeb RETURNS column_type compound_statement
+  {
+    $$ = &CreateFunction{Comments: Comments($2).Parsed(), Name: $6, IfNotExists: $5, Definer: $3, Params: $8, ReturnType: $11, Body: $12}
+  }
+
+func_params_list_opt:
+  {
+    $$ = nil
+  }
+| func_params_list
+  {
+    $$ = $1
+  }
+
+func_params_list:
+  func_param
+  {
+    $$ = []*FuncParameter{$1}
+  }
+| func_params_list ',' func_param
+  {
+    $$ = append($1, $3)
+  }
+
+func_param:
+  sql_id column_type
+  {
+    $$ = &FuncParameter{Name: $1, Type: $2}
+  }
+
+create_trigger:
+  CREATE comment_opt definer_opt TRIGGER table_name trigger_time trigger_event ON table_name FOR EACH ROW compound_statement
+  {
+    $$ = &CreateTrigger{Comments: Comments($2).Parsed(), Definer: $3, Name: $5, Time: $6, Event: $7, Table: $9, Body: $13}
+  }
+
+trigger_time:
+  BEFORE
+  {
+    $$ = BeforeTrigger
+  }
+| AFTER
+  {
+    $$ = AfterTrigger
+  }
+
+trigger_event:
+  INSERT
+  {
+    $$ = InsertTriggerEvent
+  }
+| UPDATE
+  {
+    $$ = UpdateTriggerEvent
+  }
+| DELETE
+  {
+    $$ = DeleteTriggerEvent
   }
 
 create_table_prefix:
@@ -8627,9 +8788,9 @@ into_var:
   {
     $$ = $1
   }
-| ID
+| sql_id
   {
-    $$ = &Variable{Name: createIdentifierCI($1), Scope: NoScope}
+    $$ = &Variable{Name: $1, Scope: NoScope}
   }
 
 format_opt:
@@ -9353,6 +9514,7 @@ non_reserved_keyword:
 | DUMPFILE
 | DUPLICATE
 | DYNAMIC
+| EACH
 | ENABLE
 | ENCLOSED
 | ENCRYPTION
@@ -9417,6 +9579,7 @@ non_reserved_keyword:
 | INTEGER
 | INVISIBLE
 | INVOKER
+| ITERATE
 | INDEXES
 | IS_FREE_LOCK %prec FUNCTION_CALL_NON_KEYWORD
 | IS_USED_LOCK %prec FUNCTION_CALL_NON_KEYWORD
@@ -9459,6 +9622,7 @@ non_reserved_keyword:
 | LAST
 | LAST_INSERT_ID
 | LAUNCH
+| LEAVE
 | LESS
 | LEVEL
 | LINES
@@ -9466,6 +9630,7 @@ non_reserved_keyword:
 | LIST
 | LOAD
 | LOCAL
+| LOOP
 | LOCATE %prec FUNCTION_CALL_NON_KEYWORD
 | LOCKED
 | LOG
@@ -9572,12 +9737,15 @@ non_reserved_keyword:
 | REPAIR
 | REPLICA
 | REPLICAS
+| REPEAT %prec FUNCTION_CALL_NON_KEYWORD
 | REPEATABLE
 | RESTRICT
 | REQUIRE_ROW_FORMAT
 | RESOURCE
 | RESPECT
 | RESTART
+| RETURN
+| RETURNS
 | RETAIN
 | RETRY
 | RETURNING
@@ -9722,6 +9890,7 @@ non_reserved_keyword:
 | UNICODE
 | UNKNOWN
 | UNRESOLVED
+| UNTIL
 | UNSIGNED
 | UNTHROTTLE
 | UNUSED
@@ -9786,6 +9955,7 @@ non_reserved_keyword:
 | SECOND_MICROSECOND
 | YEAR_MONTH
 | WEIGHT_STRING %prec FUNCTION_CALL_NON_KEYWORD
+| WHILE
 
 
 

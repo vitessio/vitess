@@ -424,6 +424,41 @@ func (node *CreateProcedure) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node.
+func (node *CreateFunction) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "create %v", node.Comments)
+	if node.Definer != nil {
+		buf.astPrintf(node, "definer = %v ", node.Definer)
+	}
+	buf.literal("function ")
+	if node.IfNotExists {
+		buf.literal("if not exists ")
+	}
+	buf.astPrintf(node, "%v (", node.Name)
+	prefix := ""
+	for _, param := range node.Params {
+		buf.astPrintf(node, "%s%v", prefix, param)
+		prefix = ", "
+	}
+	buf.astPrintf(node, ") returns %v ", node.ReturnType)
+	buf.astPrintf(node, "%v", node.Body)
+}
+
+// Format formats the node.
+func (fp *FuncParameter) Format(buf *TrackedBuffer) {
+	buf.astPrintf(fp, "%v %v", fp.Name, fp.Type)
+}
+
+// Format formats the node.
+func (node *CreateTrigger) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "create %v", node.Comments)
+	if node.Definer != nil {
+		buf.astPrintf(node, "definer = %v ", node.Definer)
+	}
+	buf.astPrintf(node, "trigger %v %s %s on %v for each row %v",
+		node.Name, node.Time.ToString(), node.Event.ToString(), node.Table, node.Body)
+}
+
+// Format formats the node.
 func (node *DropProcedure) Format(buf *TrackedBuffer) {
 	exists := ""
 	if node.IfExists {
@@ -453,7 +488,14 @@ func (s *SingleStatement) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (bes *BeginEndStatement) Format(buf *TrackedBuffer) {
-	buf.astPrintf(bes, "begin%v end;", bes.Statements)
+	if bes.Label.NotEmpty() {
+		buf.astPrintf(bes, "%v: ", bes.Label)
+	}
+	buf.astPrintf(bes, "begin%v end", bes.Statements)
+	if bes.Label.NotEmpty() {
+		buf.astPrintf(bes, " %v", bes.Label)
+	}
+	buf.literal(";")
 }
 
 // Format formats the node.
@@ -482,6 +524,57 @@ func (is *IfStatement) Format(buf *TrackedBuffer) {
 // Format formats the node.
 func (eib *ElseIfBlock) Format(buf *TrackedBuffer) {
 	buf.astPrintf(eib, "elseif %v then%v", eib.SearchCondition, eib.ThenStatements)
+}
+
+// Format formats the node.
+func (ls *LoopStatement) Format(buf *TrackedBuffer) {
+	if ls.Label.NotEmpty() {
+		buf.astPrintf(ls, "%v: ", ls.Label)
+	}
+	buf.astPrintf(ls, "loop%v end loop", ls.Statements)
+	if ls.Label.NotEmpty() {
+		buf.astPrintf(ls, " %v", ls.Label)
+	}
+	buf.literal(";")
+}
+
+// Format formats the node.
+func (ws *WhileStatement) Format(buf *TrackedBuffer) {
+	if ws.Label.NotEmpty() {
+		buf.astPrintf(ws, "%v: ", ws.Label)
+	}
+	buf.astPrintf(ws, "while %v do%v end while", ws.SearchCondition, ws.Statements)
+	if ws.Label.NotEmpty() {
+		buf.astPrintf(ws, " %v", ws.Label)
+	}
+	buf.literal(";")
+}
+
+// Format formats the node.
+func (rs *RepeatStatement) Format(buf *TrackedBuffer) {
+	if rs.Label.NotEmpty() {
+		buf.astPrintf(rs, "%v: ", rs.Label)
+	}
+	buf.astPrintf(rs, "repeat%v until %v end repeat", rs.Statements, rs.SearchCondition)
+	if rs.Label.NotEmpty() {
+		buf.astPrintf(rs, " %v", rs.Label)
+	}
+	buf.literal(";")
+}
+
+// Format formats the node.
+func (is *IterateStatement) Format(buf *TrackedBuffer) {
+	buf.astPrintf(is, "iterate %v;", is.Label)
+}
+
+// Format formats the node.
+func (ls *LeaveStatement) Format(buf *TrackedBuffer) {
+	buf.astPrintf(ls, "leave %v;", ls.Label)
+}
+
+// Format formats the node.
+func (rs *ReturnStatement) Format(buf *TrackedBuffer) {
+	buf.astPrintf(rs, "return %v;", rs.Expr)
 }
 
 // Format formats the node.
@@ -3407,6 +3500,9 @@ func (node *Variable) Format(buf *TrackedBuffer) {
 		buf.astPrintf(node, "@@%s.", node.Scope.ToString())
 	case NextTxScope:
 		buf.literal("@@")
+	}
+	if node.Qualifier.NotEmpty() {
+		buf.astPrintf(node, "%v.", node.Qualifier)
 	}
 	buf.astPrintf(node, "%v", node.Name)
 }

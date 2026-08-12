@@ -64,6 +64,7 @@ const (
 	RefOfAutoIncSpecSequence
 	RefOfAvgArg
 	RefOfAvgOverClause
+	RefOfBeginEndStatementLabel
 	RefOfBeginEndStatementStatements
 	RefOfBetweenExprLeft
 	RefOfBetweenExprFrom
@@ -112,6 +113,12 @@ const (
 	RefOfCountStarOverClause
 	RefOfCreateDatabaseComments
 	RefOfCreateDatabaseDBName
+	RefOfCreateFunctionName
+	RefOfCreateFunctionComments
+	RefOfCreateFunctionDefiner
+	RefOfCreateFunctionParamsOffset
+	RefOfCreateFunctionReturnType
+	RefOfCreateFunctionBody
 	RefOfCreateProcedureName
 	RefOfCreateProcedureComments
 	RefOfCreateProcedureDefiner
@@ -122,6 +129,11 @@ const (
 	RefOfCreateTableOptLike
 	RefOfCreateTableComments
 	RefOfCreateTableSelect
+	RefOfCreateTriggerName
+	RefOfCreateTriggerComments
+	RefOfCreateTriggerDefiner
+	RefOfCreateTriggerTable
+	RefOfCreateTriggerBody
 	RefOfCreateViewViewName
 	RefOfCreateViewDefiner
 	RefOfCreateViewColumns
@@ -183,6 +195,8 @@ const (
 	RefOfFuncExprQualifier
 	RefOfFuncExprName
 	RefOfFuncExprExprsOffset
+	RefOfFuncParameterName
+	RefOfFuncParameterType
 	RefOfGTIDFuncExprSet1
 	RefOfGTIDFuncExprSet2
 	RefOfGTIDFuncExprTimeout
@@ -243,6 +257,7 @@ const (
 	RefOfIntervalFuncExprExprsOffset
 	RefOfIntroducerExprExpr
 	RefOfIsExprLeft
+	RefOfIterateStatementLabel
 	RefOfJSONArrayAggExpr
 	RefOfJSONArrayAggOverClause
 	RefOfJSONArrayExprParamsOffset
@@ -306,6 +321,7 @@ const (
 	RefOfLagLeadExprDefault
 	RefOfLagLeadExprOverClause
 	RefOfLagLeadExprNullTreatmentClause
+	RefOfLeaveStatementLabel
 	RefOfLimitOffset
 	RefOfLimitRowcount
 	RefOfLineStringExprPointParamsOffset
@@ -316,6 +332,8 @@ const (
 	RefOfLocateExprPos
 	RefOfLockingFuncName
 	RefOfLockingFuncTimeout
+	RefOfLoopStatementLabel
+	RefOfLoopStatementStatements
 	RefOfMatchExprColumnsOffset
 	RefOfMatchExprExpr
 	RefOfMaxArg
@@ -413,6 +431,10 @@ const (
 	RefOfRenameIndexOldName
 	RefOfRenameIndexNewName
 	RefOfRenameTableNameTable
+	RefOfRepeatStatementLabel
+	RefOfRepeatStatementStatements
+	RefOfRepeatStatementSearchCondition
+	RefOfReturnStatementExpr
 	RefOfRevertMigrationComments
 	RootNodeSQLNode
 	RefOfRowAliasTableName
@@ -536,6 +558,7 @@ const (
 	RefOfVarSampArg
 	RefOfVarSampOverClause
 	RefOfVariableName
+	RefOfVariableQualifier
 	RefOfVarianceArg
 	RefOfVarianceOverClause
 	VindexParamKey
@@ -547,6 +570,9 @@ const (
 	RefOfWhenCond
 	RefOfWhenVal
 	RefOfWhereExpr
+	RefOfWhileStatementLabel
+	RefOfWhileStatementSearchCondition
+	RefOfWhileStatementStatements
 	RefOfWindowDefinitionName
 	RefOfWindowDefinitionWindowSpec
 	WindowDefinitionsOffset
@@ -571,6 +597,7 @@ const (
 	RefOfColumnTypeOptionsSecondaryEngineAttribute
 	RefOfColumnTypeOptionsSRID
 	SliceOfCompoundStatementOffset
+	SliceOfRefOfFuncParameterOffset
 	SliceOfRefOfProcParameterOffset
 	SliceOfHandlerConditionOffset
 	SliceOfTableExprOffset
@@ -699,6 +726,8 @@ func (s ASTStep) DebugString() string {
 		return "(*Avg).Arg"
 	case RefOfAvgOverClause:
 		return "(*Avg).OverClause"
+	case RefOfBeginEndStatementLabel:
+		return "(*BeginEndStatement).Label"
 	case RefOfBeginEndStatementStatements:
 		return "(*BeginEndStatement).Statements"
 	case RefOfBetweenExprLeft:
@@ -795,6 +824,18 @@ func (s ASTStep) DebugString() string {
 		return "(*CreateDatabase).Comments"
 	case RefOfCreateDatabaseDBName:
 		return "(*CreateDatabase).DBName"
+	case RefOfCreateFunctionName:
+		return "(*CreateFunction).Name"
+	case RefOfCreateFunctionComments:
+		return "(*CreateFunction).Comments"
+	case RefOfCreateFunctionDefiner:
+		return "(*CreateFunction).Definer"
+	case RefOfCreateFunctionParamsOffset:
+		return "(*CreateFunction).ParamsOffset"
+	case RefOfCreateFunctionReturnType:
+		return "(*CreateFunction).ReturnType"
+	case RefOfCreateFunctionBody:
+		return "(*CreateFunction).Body"
 	case RefOfCreateProcedureName:
 		return "(*CreateProcedure).Name"
 	case RefOfCreateProcedureComments:
@@ -815,6 +856,16 @@ func (s ASTStep) DebugString() string {
 		return "(*CreateTable).Comments"
 	case RefOfCreateTableSelect:
 		return "(*CreateTable).Select"
+	case RefOfCreateTriggerName:
+		return "(*CreateTrigger).Name"
+	case RefOfCreateTriggerComments:
+		return "(*CreateTrigger).Comments"
+	case RefOfCreateTriggerDefiner:
+		return "(*CreateTrigger).Definer"
+	case RefOfCreateTriggerTable:
+		return "(*CreateTrigger).Table"
+	case RefOfCreateTriggerBody:
+		return "(*CreateTrigger).Body"
 	case RefOfCreateViewViewName:
 		return "(*CreateView).ViewName"
 	case RefOfCreateViewDefiner:
@@ -937,6 +988,10 @@ func (s ASTStep) DebugString() string {
 		return "(*FuncExpr).Name"
 	case RefOfFuncExprExprsOffset:
 		return "(*FuncExpr).ExprsOffset"
+	case RefOfFuncParameterName:
+		return "(*FuncParameter).Name"
+	case RefOfFuncParameterType:
+		return "(*FuncParameter).Type"
 	case RefOfGTIDFuncExprSet1:
 		return "(*GTIDFuncExpr).Set1"
 	case RefOfGTIDFuncExprSet2:
@@ -1057,6 +1112,8 @@ func (s ASTStep) DebugString() string {
 		return "(*IntroducerExpr).Expr"
 	case RefOfIsExprLeft:
 		return "(*IsExpr).Left"
+	case RefOfIterateStatementLabel:
+		return "(*IterateStatement).Label"
 	case RefOfJSONArrayAggExpr:
 		return "(*JSONArrayAgg).Expr"
 	case RefOfJSONArrayAggOverClause:
@@ -1183,6 +1240,8 @@ func (s ASTStep) DebugString() string {
 		return "(*LagLeadExpr).OverClause"
 	case RefOfLagLeadExprNullTreatmentClause:
 		return "(*LagLeadExpr).NullTreatmentClause"
+	case RefOfLeaveStatementLabel:
+		return "(*LeaveStatement).Label"
 	case RefOfLimitOffset:
 		return "(*Limit).Offset"
 	case RefOfLimitRowcount:
@@ -1203,6 +1262,10 @@ func (s ASTStep) DebugString() string {
 		return "(*LockingFunc).Name"
 	case RefOfLockingFuncTimeout:
 		return "(*LockingFunc).Timeout"
+	case RefOfLoopStatementLabel:
+		return "(*LoopStatement).Label"
+	case RefOfLoopStatementStatements:
+		return "(*LoopStatement).Statements"
 	case RefOfMatchExprColumnsOffset:
 		return "(*MatchExpr).ColumnsOffset"
 	case RefOfMatchExprExpr:
@@ -1397,6 +1460,14 @@ func (s ASTStep) DebugString() string {
 		return "(*RenameIndex).NewName"
 	case RefOfRenameTableNameTable:
 		return "(*RenameTableName).Table"
+	case RefOfRepeatStatementLabel:
+		return "(*RepeatStatement).Label"
+	case RefOfRepeatStatementStatements:
+		return "(*RepeatStatement).Statements"
+	case RefOfRepeatStatementSearchCondition:
+		return "(*RepeatStatement).SearchCondition"
+	case RefOfReturnStatementExpr:
+		return "(*ReturnStatement).Expr"
 	case RefOfRevertMigrationComments:
 		return "(*RevertMigration).Comments"
 	case RootNodeSQLNode:
@@ -1643,6 +1714,8 @@ func (s ASTStep) DebugString() string {
 		return "(*VarSamp).OverClause"
 	case RefOfVariableName:
 		return "(*Variable).Name"
+	case RefOfVariableQualifier:
+		return "(*Variable).Qualifier"
 	case RefOfVarianceArg:
 		return "(*Variance).Arg"
 	case RefOfVarianceOverClause:
@@ -1665,6 +1738,12 @@ func (s ASTStep) DebugString() string {
 		return "(*When).Val"
 	case RefOfWhereExpr:
 		return "(*Where).Expr"
+	case RefOfWhileStatementLabel:
+		return "(*WhileStatement).Label"
+	case RefOfWhileStatementSearchCondition:
+		return "(*WhileStatement).SearchCondition"
+	case RefOfWhileStatementStatements:
+		return "(*WhileStatement).Statements"
 	case RefOfWindowDefinitionName:
 		return "(*WindowDefinition).Name"
 	case RefOfWindowDefinitionWindowSpec:
@@ -1713,6 +1792,8 @@ func (s ASTStep) DebugString() string {
 		return "(*ColumnTypeOptions).SRID"
 	case SliceOfCompoundStatementOffset:
 		return "([]CompoundStatement)[]Offset"
+	case SliceOfRefOfFuncParameterOffset:
+		return "([]*FuncParameter)[]Offset"
 	case SliceOfRefOfProcParameterOffset:
 		return "([]*ProcParameter)[]Offset"
 	case SliceOfHandlerConditionOffset:
@@ -1888,6 +1969,8 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 			node = node.(*Avg).Arg
 		case RefOfAvgOverClause:
 			node = node.(*Avg).OverClause
+		case RefOfBeginEndStatementLabel:
+			node = node.(*BeginEndStatement).Label
 		case RefOfBeginEndStatementStatements:
 			node = node.(*BeginEndStatement).Statements
 		case RefOfBetweenExprLeft:
@@ -1996,6 +2079,20 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 			node = node.(*CreateDatabase).Comments
 		case RefOfCreateDatabaseDBName:
 			node = node.(*CreateDatabase).DBName
+		case RefOfCreateFunctionName:
+			node = node.(*CreateFunction).Name
+		case RefOfCreateFunctionComments:
+			node = node.(*CreateFunction).Comments
+		case RefOfCreateFunctionDefiner:
+			node = node.(*CreateFunction).Definer
+		case RefOfCreateFunctionParamsOffset:
+			idx, bytesRead := path.nextPathOffset()
+			path = path[bytesRead:]
+			node = node.(*CreateFunction).Params[idx]
+		case RefOfCreateFunctionReturnType:
+			node = node.(*CreateFunction).ReturnType
+		case RefOfCreateFunctionBody:
+			node = node.(*CreateFunction).Body
 		case RefOfCreateProcedureName:
 			node = node.(*CreateProcedure).Name
 		case RefOfCreateProcedureComments:
@@ -2018,6 +2115,16 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 			node = node.(*CreateTable).Comments
 		case RefOfCreateTableSelect:
 			node = node.(*CreateTable).Select
+		case RefOfCreateTriggerName:
+			node = node.(*CreateTrigger).Name
+		case RefOfCreateTriggerComments:
+			node = node.(*CreateTrigger).Comments
+		case RefOfCreateTriggerDefiner:
+			node = node.(*CreateTrigger).Definer
+		case RefOfCreateTriggerTable:
+			node = node.(*CreateTrigger).Table
+		case RefOfCreateTriggerBody:
+			node = node.(*CreateTrigger).Body
 		case RefOfCreateViewViewName:
 			node = node.(*CreateView).ViewName
 		case RefOfCreateViewDefiner:
@@ -2152,6 +2259,10 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 			idx, bytesRead := path.nextPathOffset()
 			path = path[bytesRead:]
 			node = node.(*FuncExpr).Exprs[idx]
+		case RefOfFuncParameterName:
+			node = node.(*FuncParameter).Name
+		case RefOfFuncParameterType:
+			node = node.(*FuncParameter).Type
 		case RefOfGTIDFuncExprSet1:
 			node = node.(*GTIDFuncExpr).Set1
 		case RefOfGTIDFuncExprSet2:
@@ -2284,6 +2395,8 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 			node = node.(*IntroducerExpr).Expr
 		case RefOfIsExprLeft:
 			node = node.(*IsExpr).Left
+		case RefOfIterateStatementLabel:
+			node = node.(*IterateStatement).Label
 		case RefOfJSONArrayAggExpr:
 			node = node.(*JSONArrayAgg).Expr
 		case RefOfJSONArrayAggOverClause:
@@ -2430,6 +2543,8 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 			node = node.(*LagLeadExpr).OverClause
 		case RefOfLagLeadExprNullTreatmentClause:
 			node = node.(*LagLeadExpr).NullTreatmentClause
+		case RefOfLeaveStatementLabel:
+			node = node.(*LeaveStatement).Label
 		case RefOfLimitOffset:
 			node = node.(*Limit).Offset
 		case RefOfLimitRowcount:
@@ -2452,6 +2567,10 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 			node = node.(*LockingFunc).Name
 		case RefOfLockingFuncTimeout:
 			node = node.(*LockingFunc).Timeout
+		case RefOfLoopStatementLabel:
+			node = node.(*LoopStatement).Label
+		case RefOfLoopStatementStatements:
+			node = node.(*LoopStatement).Statements
 		case RefOfMatchExprColumnsOffset:
 			idx, bytesRead := path.nextPathOffset()
 			path = path[bytesRead:]
@@ -2668,6 +2787,14 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 			node = node.(*RenameIndex).NewName
 		case RefOfRenameTableNameTable:
 			node = node.(*RenameTableName).Table
+		case RefOfRepeatStatementLabel:
+			node = node.(*RepeatStatement).Label
+		case RefOfRepeatStatementStatements:
+			node = node.(*RepeatStatement).Statements
+		case RefOfRepeatStatementSearchCondition:
+			node = node.(*RepeatStatement).SearchCondition
+		case RefOfReturnStatementExpr:
+			node = node.(*ReturnStatement).Expr
 		case RefOfRevertMigrationComments:
 			node = node.(*RevertMigration).Comments
 		case RootNodeSQLNode:
@@ -2944,6 +3071,8 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 			node = node.(*VarSamp).OverClause
 		case RefOfVariableName:
 			node = node.(*Variable).Name
+		case RefOfVariableQualifier:
+			node = node.(*Variable).Qualifier
 		case RefOfVarianceArg:
 			node = node.(*Variance).Arg
 		case RefOfVarianceOverClause:
@@ -2968,6 +3097,12 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 			node = node.(*When).Val
 		case RefOfWhereExpr:
 			node = node.(*Where).Expr
+		case RefOfWhileStatementLabel:
+			node = node.(*WhileStatement).Label
+		case RefOfWhileStatementSearchCondition:
+			node = node.(*WhileStatement).SearchCondition
+		case RefOfWhileStatementStatements:
+			node = node.(*WhileStatement).Statements
 		case RefOfWindowDefinitionName:
 			node = node.(*WindowDefinition).Name
 		case RefOfWindowDefinitionWindowSpec:

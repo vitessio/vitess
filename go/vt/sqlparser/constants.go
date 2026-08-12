@@ -540,6 +540,8 @@ const (
 	DropAutoIncDDLAction
 	RevertDDLAction
 	CreateProcedureAction
+	CreateFunctionAction
+	CreateTriggerAction
 )
 
 // Constants for scope of variables
@@ -1005,6 +1007,19 @@ const (
 	WithConsistentSnapshot TxAccessMode = iota
 	ReadWrite
 	ReadOnly
+)
+
+// Trigger activation time
+const (
+	BeforeTrigger TriggerTime = iota
+	AfterTrigger
+)
+
+// Trigger event
+const (
+	InsertTriggerEvent TriggerEvent = iota
+	UpdateTriggerEvent
+	DeleteTriggerEvent
 )
 
 // Transaction completion chain clause

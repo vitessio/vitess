@@ -4356,6 +4356,56 @@ var validSQL = []struct {
 }, {
 	input:  "select at, zone from t",
 	output: "select `at`, `zone` from t",
+}, {
+	// SELECT ... INTO accepts non-reserved keywords as variable names
+	input:  "select 1 into slow from t",
+	output: "select 1 from t into `slow`",
+}, {
+	input:  "create procedure p1 () begin select max(t1.a) into a from t1; end;",
+	output: "create procedure p1 () begin select max(t1.a) from t1 into a; end;",
+}, {
+	// loop statements, with and without labels
+	input: "create procedure p1 () begin authors: while n > 0 do set n = n - 1; end while authors; end;",
+}, {
+	input: "create procedure p1 () begin while n > 0 do set n = n - 1; end while; end;",
+}, {
+	input:  "create procedure p1 () begin x: loop select 1; end loop x; end;",
+	output: "create procedure p1 () begin x: loop select 1 from dual; end loop x; end;",
+}, {
+	input:  "create procedure p1 () begin l: loop iterate l; leave l; end loop; end;",
+	output: "create procedure p1 () begin l: loop iterate l; leave l; end loop l; end;",
+}, {
+	input:  "create procedure p1 () begin r: repeat select 1; until n = 0 end repeat r; end;",
+	output: "create procedure p1 () begin r: repeat select 1 from dual; until n = 0 end repeat r; end;",
+}, {
+	input:  "create procedure p1 () begin repeat select 1; until n = 0 end repeat; end;",
+	output: "create procedure p1 () begin repeat select 1 from dual; until n = 0 end repeat; end;",
+}, {
+	// create function
+	input: "create function f1 () returns int return 1;",
+}, {
+	input: "create function f1 () returns int begin return 1; end;",
+}, {
+	input: "create function if not exists f1 (x int, s varchar(20)) returns varchar(50) begin declare r varchar(50); set r = concat(s, x); return r; end;",
+}, {
+	// create trigger
+	input: "create trigger tr1 before insert on t1 for each row set @a = new.a;",
+}, {
+	input: "create trigger tr1 after update on t1 for each row begin set @a = old.a; end;",
+}, {
+	input:  "create trigger tr1 before delete on t1 for each row begin select 1; end;",
+	output: "create trigger tr1 before delete on t1 for each row begin select 1 from dual; end;",
+}, {
+	input:  "create trigger tr1 before insert on t1 for each row begin set new.b := new.a, new.c = 2; end;",
+	output: "create trigger tr1 before insert on t1 for each row begin set new.b = new.a, new.c = 2; end;",
+}, {
+	input:  "set a := 1",
+	output: "set a = 1",
+}, {
+	input: "create procedure p1 () begin b1: begin select 1 from dual; end b1; end;",
+}, {
+	input:  "create procedure p1 () begin b1:begin select 1 from dual; end; end;",
+	output: "create procedure p1 () begin b1: begin select 1 from dual; end b1; end;",
 }}
 
 func TestConditionlessJoinStaysLeftAssociative(t *testing.T) {
@@ -6788,7 +6838,7 @@ var invalidSQL = []struct {
 	output: "migration context cannot be empty at position 45",
 }, {
 	input:  "select : from t",
-	output: "syntax error at position 9 near ':'",
+	output: "syntax error at position 9",
 }, {
 	input:  "execute stmt using 1;",
 	output: "syntax error at position 21 near '1'",
@@ -6809,7 +6859,7 @@ var invalidSQL = []struct {
 	output: "syntax error at position 26 near 'f'",
 }, {
 	input:  "select * from t where :. = 2",
-	output: "syntax error at position 24 near ':'",
+	output: "syntax error at position 24",
 }, {
 	input:  "select * from t where ::1 = 2",
 	output: "syntax error at position 25 near '::'",

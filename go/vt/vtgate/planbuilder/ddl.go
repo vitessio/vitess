@@ -144,6 +144,10 @@ func buildDDLPlans(ctx context.Context, sql string, ddlStatement sqlparser.DDLSt
 		destination, keyspace, err = buildDropProcedurePlan(vschema, ddl)
 	case *sqlparser.DropFunction:
 		destination, keyspace, err = buildDropFunctionPlan(vschema, ddl)
+	case *sqlparser.CreateFunction:
+		destination, keyspace, err = buildCreateFunctionPlan(vschema, ddl)
+	case *sqlparser.CreateTrigger:
+		destination, keyspace, err = buildCreateTriggerPlan(vschema, ddl)
 	default:
 		return nil, nil, vterrors.VT13001(fmt.Sprintf("unexpected DDL statement type: %T", ddlStatement))
 	}
@@ -191,6 +195,34 @@ func buildDropFunctionPlan(vschema plancontext.VSchema, df *sqlparser.DropFuncti
 	}
 	// Clear out the qualifier from the table name.
 	df.SetTable("", df.Name.Name.String())
+	return destination, keyspace, nil
+}
+
+func buildCreateFunctionPlan(vschema plancontext.VSchema, cf *sqlparser.CreateFunction) (key.ShardDestination, *vindexes.Keyspace, error) {
+	destination, keyspace, _, err := vschema.TargetDestination(cf.Name.Qualifier.String())
+	if err != nil {
+		return nil, nil, err
+	}
+	if keyspace.Sharded {
+		return nil, nil, vterrors.VT12001("CREATE FUNCTION is not supported on sharded keyspaces")
+	}
+	// Clear out the qualifier from the table name.
+	cf.SetTable("", cf.Name.Name.String())
+	sqlparser.RemoveSpecificKeyspace(cf, keyspace.Name)
+	return destination, keyspace, nil
+}
+
+func buildCreateTriggerPlan(vschema plancontext.VSchema, ct *sqlparser.CreateTrigger) (key.ShardDestination, *vindexes.Keyspace, error) {
+	destination, keyspace, _, err := vschema.TargetDestination(ct.Table.Qualifier.String())
+	if err != nil {
+		return nil, nil, err
+	}
+	if keyspace.Sharded {
+		return nil, nil, vterrors.VT12001("CREATE TRIGGER is not supported on sharded keyspaces")
+	}
+	// Clear out the qualifier from the table name.
+	ct.SetTable("", ct.Table.Name.String())
+	sqlparser.RemoveSpecificKeyspace(ct, keyspace.Name)
 	return destination, keyspace, nil
 }
 

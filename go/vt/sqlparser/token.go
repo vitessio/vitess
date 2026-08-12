@@ -214,6 +214,12 @@ func (tkn *Tokenizer) Scan() (int, string) {
 		case isDigit(ch):
 			return tkn.scanNumber()
 		case ch == ':':
+			if tkn.lastTokenType == LABEL_IDENT {
+				// The colon that terminates a statement label, which may
+				// be directly attached to what follows, e.g. `x:LOOP`.
+				tkn.skip(1)
+				return int(':'), ""
+			}
 			return tkn.scanBindVarOrAssignmentExpression()
 		case ch == ';':
 			if tkn.multi {
@@ -394,6 +400,12 @@ func (tkn *Tokenizer) scanIdentifier(isVariable bool) (int, string) {
 		tkn.skip(1)
 	}
 	keywordName := tkn.buf[start:tkn.Pos]
+	if !isVariable && tkn.cur() == ':' && tkn.peek(1) != '=' && tkn.peek(1) != ':' {
+		// An identifier directly followed by ':' is a statement label,
+		// e.g. `x: LOOP ... END LOOP x`. No valid SQL statement contains
+		// an identifier directly followed by a colon.
+		return LABEL_IDENT, keywordName
+	}
 	if keywordID, found := keywordLookupTable.LookupString(keywordName); found {
 		if isFuncCallKeyword(keywordID) && tkn.cur() != '(' {
 			return ID, keywordName
@@ -516,6 +528,11 @@ func (tkn *Tokenizer) scanBindVarOrAssignmentExpression() (int, string) {
 		tkn.skip(1)
 	}
 	if !isLetter(tkn.cur()) {
+		if token == VALUE_ARG {
+			// A bare ':' is a statement label delimiter in compound
+			// statements, e.g. `x: LOOP ... END LOOP x`.
+			return int(':'), ""
+		}
 		return LEX_ERROR, tkn.buf[start:tkn.Pos]
 	}
 	// If : is followed by a letter, it is a bindvariable. Example :v1, :v2
