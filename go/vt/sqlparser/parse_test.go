@@ -4331,7 +4331,55 @@ var validSQL = []struct {
 }, {
 	input:  "select oj from t",
 	output: "select `oj` from t",
+}, {
+	// nested joins: each ON binds to the innermost unbound join, as in MySQL
+	input: "select * from t1 join t2 join t3 on t2.b = t3.c on t1.a = t2.b",
+}, {
+	input: "select * from t1 join t2 join t3 join t4 on t3.c = t4.d on t2.b = t3.c",
+}, {
+	input: "select * from t1 join t2 join t3 join t4 on t3.c = t4.d on t1.a = t2.b",
+}, {
+	input:  "select * from t1 inner join t2 cross join t3 on t2.b = t3.c on t1.a = t2.b",
+	output: "select * from t1 join t2 join t3 on t2.b = t3.c on t1.a = t2.b",
+}, {
+	input:  "select * from t1 natural inner join t2",
+	output: "select * from t1 natural join t2",
+}, {
+	input: "select * from t1 as t11 straight_join t1 as t12 using (a)",
 }}
+
+func TestConditionlessJoinStaysLeftAssociative(t *testing.T) {
+	parser := NewTestParser()
+	stmt, err := parser.Parse("select 1 from a join b join c on a.x = c.x")
+	require.NoError(t, err)
+	join, ok := stmt.(*Select).From[0].(*JoinTableExpr)
+	require.True(t, ok)
+	// The single ON binds to the outermost join, whose left side is the
+	// chained (a join b): the historical left-associative shape.
+	require.NotNil(t, join.Condition.On)
+	assert.Equal(t, "a.x = c.x", String(join.Condition.On))
+	left, ok := join.LeftExpr.(*JoinTableExpr)
+	require.True(t, ok)
+	assert.Equal(t, "a join b", String(left))
+	assert.Equal(t, "c", String(join.RightExpr))
+}
+
+func TestNestedJoinOnBindsInnermost(t *testing.T) {
+	parser := NewTestParser()
+	stmt, err := parser.Parse("select 1 from t1 join t2 join t3 on t2.b = t3.c on t1.a = t2.b")
+	require.NoError(t, err)
+	outer, ok := stmt.(*Select).From[0].(*JoinTableExpr)
+	require.True(t, ok)
+	// With two ON clauses the first binds the inner join and the second the
+	// outer one, so the right side stays nested, as in MySQL.
+	require.NotNil(t, outer.Condition.On)
+	assert.Equal(t, "t1.a = t2.b", String(outer.Condition.On))
+	assert.Equal(t, "t1", String(outer.LeftExpr))
+	inner, ok := outer.RightExpr.(*JoinTableExpr)
+	require.True(t, ok)
+	require.NotNil(t, inner.Condition.On)
+	assert.Equal(t, "t2.b = t3.c", String(inner.Condition.On))
+}
 
 func TestValid(t *testing.T) {
 	parser := NewTestParser()
@@ -6816,9 +6864,6 @@ var invalidSQL = []struct {
 }, {
 	input:  "select /* vitess-reserved keyword as unqualified column */ * from t where escape = 'test'",
 	output: "syntax error at position 81 near 'escape'",
-}, {
-	input:  "select /* straight_join using */ 1 from t1 straight_join t2 using (a)",
-	output: "syntax error at position 66 near 'using'",
 }, {
 	input:  "select 'aa",
 	output: "syntax error at position 11 near 'aa'",

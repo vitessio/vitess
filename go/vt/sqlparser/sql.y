@@ -295,6 +295,11 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %token <str> VALUES LAST_INSERT_ID
 %token <str> NEXT VALUE SHARE MODE
 %token <str> SQL_NO_CACHE SQL_CACHE SQL_CALC_FOUND_ROWS SQL_SMALL_RESULT SQL_BIG_RESULT HIGH_PRIORITY
+// CONDITIONLESS_JOIN is declared below the join tokens and ON/USING so that a
+// conditionless join reduces only when the lookahead cannot extend the join,
+// making `t1 JOIN t2 JOIN t3 ON c1 ON c2` bind each ON to the innermost
+// unbound join, like MySQL.
+%left <str> CONDITIONLESS_JOIN
 %left <str> JOIN STRAIGHT_JOIN LEFT RIGHT INNER OUTER CROSS NATURAL USE FORCE
 %left <str> ON USING INPLACE COPY INSTANT ALGORITHM NONE SHARED EXCLUSIVE
 %left <str> SUBQUERY_AS_EXPR
@@ -555,7 +560,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %type <jtColumnDefinition> jt_column
 %type <jtColumnList> jt_columns_clause columns_list
 %type <jtOnResponse> on_error on_empty json_on_response
-%type <joinCondition> join_condition join_condition_opt on_expression_opt
+%type <joinCondition> join_condition join_condition_opt
 %type <tableNames> table_name_list delete_table_list view_name_list
 %type <joinType> inner_join outer_join straight_join natural_join
 %type <tableName> table_name into_table_name delete_table_name
@@ -5928,11 +5933,18 @@ partition_list:
 // first construct, which automatically makes the second construct a
 // syntax error. This is the same behavior as MySQL.
 join_table:
-  table_reference inner_join table_factor join_condition_opt
+  table_reference inner_join table_reference join_condition
   {
     $$ = &JoinTableExpr{LeftExpr: $1, Join: $2, RightExpr: $3, Condition: $4}
   }
-| table_reference straight_join table_factor on_expression_opt
+| table_reference inner_join table_reference %prec CONDITIONLESS_JOIN
+  {
+    // The greedy parse builds right-nested trees; rotating conditionless
+    // joins left restores the historical left-associative shape for every
+    // input that has no nested ON clause.
+    $$ = rotateConditionlessJoin($2, $1, $3)
+  }
+| table_reference straight_join table_factor join_condition_opt
   {
     $$ = &JoinTableExpr{LeftExpr: $1, Join: $2, RightExpr: $3, Condition: $4}
   }
@@ -5956,12 +5968,6 @@ join_condition_opt:
   { $$ = &JoinCondition{} }
 | join_condition
   { $$ = $1 }
-
-on_expression_opt:
-%prec JOIN
-  { $$ = &JoinCondition{} }
-| ON expression
-  { $$ = &JoinCondition{On: $2} }
 
 as_opt:
   { $$ = struct{}{} }
@@ -6028,6 +6034,10 @@ outer_join:
 
 natural_join:
  NATURAL JOIN
+  {
+    $$ = NaturalJoinType
+  }
+| NATURAL INNER JOIN
   {
     $$ = NaturalJoinType
   }

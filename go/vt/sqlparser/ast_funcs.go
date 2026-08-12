@@ -808,6 +808,24 @@ func NewJoinTableExpr(leftExpr TableExpr, join JoinType, rightExpr TableExpr, co
 	}
 }
 
+// rotateConditionlessJoin builds the JoinTableExpr for a join without a join
+// condition. The grammar parses join chains right-nested so that in
+// `t1 JOIN t2 JOIN t3 ON c1 ON c2` each ON binds to the innermost unbound
+// join, like MySQL. A conditionless join whose right side is itself an
+// unparenthesized join is rotated left so that every input without a nested
+// ON keeps the historical left-associative tree shape.
+func rotateConditionlessJoin(join JoinType, left, right TableExpr) *JoinTableExpr {
+	if r, ok := right.(*JoinTableExpr); ok {
+		return &JoinTableExpr{
+			LeftExpr:  rotateConditionlessJoin(join, left, r.LeftExpr),
+			Join:      r.Join,
+			RightExpr: r.RightExpr,
+			Condition: r.Condition,
+		}
+	}
+	return &JoinTableExpr{LeftExpr: left, Join: join, RightExpr: right, Condition: &JoinCondition{}}
+}
+
 // NewJoinCondition makes a new JoinCondition
 func NewJoinCondition(on Expr, using Columns) *JoinCondition {
 	return &JoinCondition{
