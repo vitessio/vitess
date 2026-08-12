@@ -34,6 +34,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/vt/external/golib/sqlutils"
@@ -59,11 +61,6 @@ type writerFunc func([]byte) (int, error)
 
 func (wf writerFunc) Write(p []byte) (int, error) {
 	return wf(p)
-}
-
-func seedTestAnalysisRow(row sqlutils.RowMap) error {
-	_ = row
-	return nil
 }
 
 func TestAnalysisEntriesHaveSameRecovery(t *testing.T) {
@@ -324,6 +321,25 @@ func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
 			ersEnabled: false,
 			analysisEntry: &inst.DetectionAnalysis{
 				Analysis:         inst.PrimarySemiSyncBlocked,
+				AnalyzedKeyspace: keyspace,
+				AnalyzedShard:    shard,
+			},
+			wantRecoveryFunction: recoverDeadPrimaryFunc,
+			wantRecoverySkipCode: RecoverySkipERSDisabled,
+		}, {
+			name:       "PrimaryTabletUnreachableByQuorum with ERS enabled",
+			ersEnabled: true,
+			analysisEntry: &inst.DetectionAnalysis{
+				Analysis:         inst.PrimaryTabletUnreachableByQuorum,
+				AnalyzedKeyspace: keyspace,
+				AnalyzedShard:    shard,
+			},
+			wantRecoveryFunction: recoverDeadPrimaryFunc,
+		}, {
+			name:       "PrimaryTabletUnreachableByQuorum with ERS disabled",
+			ersEnabled: false,
+			analysisEntry: &inst.DetectionAnalysis{
+				Analysis:         inst.PrimaryTabletUnreachableByQuorum,
 				AnalyzedKeyspace: keyspace,
 				AnalyzedShard:    shard,
 			},
@@ -715,6 +731,15 @@ func TestShardWideRecoveryIgnoredTablets(t *testing.T) {
 		{
 			name:        "PrimaryDiskStalled does NOT skip primary refresh",
 			analysis:    inst.PrimaryDiskStalled,
+			wantIgnored: false,
+		},
+		{
+			// The quorum case is specifically a vttablet crash with mysqld
+			// still up: the vttablet may restart between detection and
+			// recovery, so the primary must be refreshed under the shard
+			// lock for checkIfAlreadyFixed to abort on a recovered primary.
+			name:        "PrimaryTabletUnreachableByQuorum does NOT skip primary refresh",
+			analysis:    inst.PrimaryTabletUnreachableByQuorum,
 			wantIgnored: false,
 		},
 	}
@@ -1388,7 +1413,117 @@ func TestReconcileStaleTopoPrimaryTopoTimeout(t *testing.T) {
 	})
 }
 
-// TestRestartDirectReplicasTimeout verifies that restartDirectReplicas does not block forever if an RPC hangs.
+func TestRestartReplicationFallback(t *testing.T) {
+	oldTMC := tmc
+	t.Cleanup(func() {
+		tmc = oldTMC
+	})
+
+	oldRemoteOpTimeout := topo.RemoteOperationTimeout
+	topo.RemoteOperationTimeout = 100 * time.Millisecond
+	t.Cleanup(func() {
+		topo.RemoteOperationTimeout = oldRemoteOpTimeout
+	})
+
+	tablet := &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101}}
+	logger := log.NewPrefixedLogger("test-restart-replication-fallback")
+
+	setup := func(t *testing.T) *tmcmock.MockTabletManagerClient {
+		mockController := gomock.NewController(t)
+		mockTMC := tmcmock.NewMockTabletManagerClient(mockController)
+		tmc = mockTMC
+		return mockTMC
+	}
+
+	// The server may have run STOP REPLICA before timing out, so the fallback
+	// must run while the recovery context is still alive.
+	t.Run("fallback starts replication after RPC timeout", func(t *testing.T) {
+		mockTMC := setup(t)
+		ctx, cancel := context.WithCancel(t.Context())
+		t.Cleanup(cancel)
+
+		gomock.InOrder(
+			mockTMC.EXPECT().
+				RestartReplication(gomock.Any(), tablet, true).
+				DoAndReturn(func(restartCtx context.Context, _ *topodatapb.Tablet, _ bool) error {
+					<-restartCtx.Done()
+					return restartCtx.Err()
+				}),
+			mockTMC.EXPECT().
+				StartReplication(gomock.Any(), tablet, true).
+				DoAndReturn(func(ctx context.Context, _ *topodatapb.Tablet, _ bool) error {
+					require.NoError(t, ctx.Err())
+					_, ok := ctx.Deadline()
+					require.True(t, ok, "cleanup context must have a deadline")
+					return nil
+				}),
+		)
+
+		err := restartReplication(ctx, tablet, true, logger)
+		require.ErrorIs(t, err, context.DeadlineExceeded)
+	})
+
+	// When the fallback also fails, the returned error must still unwrap to
+	// the original RestartReplication error so callers can match on it.
+	t.Run("fallback failure preserves original error", func(t *testing.T) {
+		mockTMC := setup(t)
+
+		gomock.InOrder(
+			mockTMC.EXPECT().
+				RestartReplication(gomock.Any(), tablet, true).
+				DoAndReturn(func(restartCtx context.Context, _ *topodatapb.Tablet, _ bool) error {
+					<-restartCtx.Done()
+					return restartCtx.Err()
+				}),
+			mockTMC.EXPECT().
+				StartReplication(gomock.Any(), tablet, true).
+				Return(errors.New("start failed")),
+		)
+
+		err := restartReplication(t.Context(), tablet, true, logger)
+		require.ErrorIs(t, err, context.DeadlineExceeded)
+		require.ErrorContains(t, err, "failed to ensure replication was started")
+	})
+
+	// A canceled recovery context means the recovery is being torn down; the
+	// detached fallback would only delay eg.Wait() and the next recovery.
+	t.Run("fallback skipped when recovery context is canceled", func(t *testing.T) {
+		mockTMC := setup(t)
+		ctx, cancel := context.WithCancel(t.Context())
+		t.Cleanup(cancel)
+
+		mockTMC.EXPECT().
+			RestartReplication(gomock.Any(), tablet, true).
+			DoAndReturn(func(context.Context, *topodatapb.Tablet, bool) error {
+				cancel()
+				return context.Canceled
+			})
+		mockTMC.EXPECT().
+			StartReplication(gomock.Any(), gomock.Any(), gomock.Any()).
+			Times(0)
+
+		err := restartReplication(ctx, tablet, true, logger)
+		require.ErrorIs(t, err, context.Canceled)
+	})
+
+	// On transport errors the RPC never reached the tablet, so STOP cannot
+	// have run and the fallback would waste a full RemoteOperationTimeout.
+	t.Run("fallback skipped when tablet is unreachable", func(t *testing.T) {
+		mockTMC := setup(t)
+
+		mockTMC.EXPECT().
+			RestartReplication(gomock.Any(), tablet, true).
+			Return(status.Error(codes.Unavailable, "connection refused"))
+		mockTMC.EXPECT().
+			StartReplication(gomock.Any(), gomock.Any(), gomock.Any()).
+			Times(0)
+
+		err := restartReplication(t.Context(), tablet, true, logger)
+		require.Equal(t, codes.Unavailable, status.Code(err))
+	})
+}
+
+// TestRestartDirectReplicasTimeout verifies that restartDirectReplicas does not block forever if replication RPCs hang.
 func TestRestartDirectReplicasTimeout(t *testing.T) {
 	orcDB, fromCache, err := db.OpenVTOrcWithCache()
 	require.NoError(t, err)
@@ -1476,8 +1611,15 @@ func TestRestartDirectReplicasTimeout(t *testing.T) {
 		// when the passed context is canceled.
 		mockTMC := tmcmock.NewMockTabletManagerClient(mockController)
 		mockTMC.EXPECT().
-			StopReplication(gomock.Any(), gomock.Any()).
-			DoAndReturn(func(ctx context.Context, _ *topodatapb.Tablet) error {
+			RestartReplication(gomock.Any(), gomock.Any(), gomock.Any()).
+			DoAndReturn(func(ctx context.Context, _ *topodatapb.Tablet, _ bool) error {
+				<-ctx.Done()
+				return ctx.Err()
+			}).
+			Times(1)
+		mockTMC.EXPECT().
+			StartReplication(gomock.Any(), gomock.Any(), gomock.Any()).
+			DoAndReturn(func(ctx context.Context, _ *topodatapb.Tablet, _ bool) error {
 				<-ctx.Done()
 				return ctx.Err()
 			}).
@@ -1518,10 +1660,13 @@ func TestRestartDirectReplicasTimeout(t *testing.T) {
 		}()
 
 		// Let the recovery goroutine reach a blocked state before advancing fake time (in this case,
-		// hanging on the StopReplication RPC).
+		// hanging on the RestartReplication RPC).
 		synctest.Wait()
 
-		// Move fake time just beyond the expected RPC timeout boundary.
+		// Move fake time beyond both RPC timeout boundaries.
+		time.Sleep(topo.RemoteOperationTimeout + time.Nanosecond)
+		synctest.Wait()
+
 		time.Sleep(topo.RemoteOperationTimeout + time.Nanosecond)
 		synctest.Wait()
 
@@ -1532,7 +1677,7 @@ func TestRestartDirectReplicasTimeout(t *testing.T) {
 			require.NotNil(t, result.topologyRecovery, "topology recovery record must be returned")
 			require.ErrorIs(t, result.err, context.DeadlineExceeded, "restartDirectReplicas must timeout and return when a replication RPC hangs indefinitely")
 		default:
-			require.FailNowf(t, "restartDirectReplicas did not return", "expected timeout after %s when a replication RPC hangs indefinitely", topo.RemoteOperationTimeout)
+			require.FailNowf(t, "restartDirectReplicas did not return", "expected timeout after %s when replication RPCs hang indefinitely", 2*topo.RemoteOperationTimeout)
 		}
 
 		activeRecoveries, err := ReadActiveClusterRecoveries(keyspace, shard)

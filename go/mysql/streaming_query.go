@@ -145,7 +145,10 @@ func (c *Conn) FetchNext(in []sqltypes.Value) ([]sqltypes.Value, error) {
 		c.fields = nil
 		return nil, nil
 	} else if isErrorPacket(data) {
-		// Error packet.
+		// An error packet terminates the result set: the server sends nothing
+		// further for this query. Mark the result done so a later CloseResult
+		// does not block reading packets that will never arrive.
+		c.fields = nil
 		return nil, ParseErrorPacket(data)
 	}
 

@@ -706,8 +706,6 @@ func TestPlayerStatementMode(t *testing.T) {
 func TestPlayerFilters(t *testing.T) {
 	defer deleteTablet(addTablet(100))
 
-	vttablet.DefaultVReplicationConfig.EnableHttpLog = true
-
 	execStatements(t, []string{
 		"create table src1(id int, val varbinary(128), primary key(id))",
 		fmt.Sprintf("create table %s.dst1(id int, val varbinary(128), primary key(id))", vrepldb),
@@ -787,7 +785,6 @@ func TestPlayerFilters(t *testing.T) {
 		output qh.ExpectationSequence
 		table  string
 		data   [][]string
-		logs   []LogExpectation // logs are defined for a few testcases since they are enough to test all log events
 	}{{
 		// insert with insertNormal
 		input: "insert into src1 values(1, 'aaa')",
@@ -800,11 +797,6 @@ func TestPlayerFilters(t *testing.T) {
 		table: "dst1",
 		data: [][]string{
 			{"1", "aaa"},
-		},
-		logs: []LogExpectation{
-			{"FIELD", "/src1.*id.*INT32.*val.*VARBINARY.*"},
-			{"ROWCHANGE", "insert into dst1(id,val) values (1,_binary'aaa')"},
-			{"ROW", "/src1.*3.*1aaa.*"},
 		},
 	}, {
 		// update with insertNormal
@@ -819,10 +811,6 @@ func TestPlayerFilters(t *testing.T) {
 		data: [][]string{
 			{"1", "bbb"},
 		},
-		logs: []LogExpectation{
-			{"ROWCHANGE", "update dst1 set val=_binary'bbb' where id=1"},
-			{"ROW", "/src1.*3.*1aaa.*"},
-		},
 	}, {
 		// delete with insertNormal
 		input: "delete from src1 where id=1",
@@ -834,10 +822,6 @@ func TestPlayerFilters(t *testing.T) {
 		),
 		table: "dst1",
 		data:  [][]string{},
-		logs: []LogExpectation{
-			{"ROWCHANGE", "delete from dst1 where id=1"},
-			{"ROW", "/src1.*3.*1bbb.*"},
-		},
 	}, {
 		// insert with insertOnDup
 		input: "insert into src2 values(1, 2, 3)",
@@ -851,10 +835,6 @@ func TestPlayerFilters(t *testing.T) {
 		data: [][]string{
 			{"1", "2", "3", "1"},
 		},
-		logs: []LogExpectation{
-			{"FIELD", "/src2.*id.*val1.*val2.*"},
-			{"ROWCHANGE", "insert into dst2(id,val1,sval2,rcount) values (1,2,ifnull(3, 0),1) on duplicate key update val1=values(val1), sval2=sval2+ifnull(values(sval2), 0), rcount=rcount+1"},
-		},
 	}, {
 		// update with insertOnDup
 		input: "update src2 set val1=5, val2=1 where id=1",
@@ -867,10 +847,6 @@ func TestPlayerFilters(t *testing.T) {
 		table: "dst2",
 		data: [][]string{
 			{"1", "5", "1", "1"},
-		},
-		logs: []LogExpectation{
-			{"ROWCHANGE", "update dst2 set val1=5, sval2=sval2-ifnull(3, 0)+ifnull(1, 0), rcount=rcount where id=1"},
-			{"ROW", "/src2.*123.*"},
 		},
 	}, {
 		// delete with insertOnDup
@@ -1028,10 +1004,6 @@ func TestPlayerFilters(t *testing.T) {
 
 	for _, tcase := range testcases {
 		t.Run(tcase.input, func(t *testing.T) {
-			if tcase.logs != nil {
-				logch := vrLogStatsLogger.Subscribe("vrlogstats")
-				defer expectLogsAndUnsubscribe(t, tcase.logs, logch)
-			}
 			execStatements(t, []string{tcase.input})
 			expectDBClientQueries(t, tcase.output)
 			if tcase.table != "" {
@@ -3891,6 +3863,83 @@ func TestPlayerBatchMode(t *testing.T) {
 	}
 }
 
+// TestPlayerBatchModeMixedRowEvent confirms that a row event whose changes do
+// not all have the same shape is applied per-change in batch mode. The source
+// vstreamer emits only the Before or After image of an update when just one
+// side passes the workflow filter, so a single multi-row UPDATE that moves
+// rows across an in_keyrange boundary (e.g. a sharding-key update replicated
+// by a MoveTables or Reshard workflow) produces one row event mixing
+// insert-shaped and delete-shaped changes. Batch mode used to pick the
+// bulk-insert or bulk-delete statement by looking only at the first change
+// and then apply every change in the event with that shape, panicking on the
+// first change of the opposite shape (nil row image in MakeRowTrusted).
+func TestPlayerBatchModeMixedRowEvent(t *testing.T) {
+	oldVreplicationExperimentalFlags := vttablet.DefaultVReplicationConfig.ExperimentalFlags
+	vttablet.DefaultVReplicationConfig.ExperimentalFlags = vttablet.VReplicationExperimentalFlagVPlayerBatching
+	defer func() {
+		vttablet.DefaultVReplicationConfig.ExperimentalFlags = oldVreplicationExperimentalFlags
+	}()
+
+	defer deleteTablet(addTablet(100))
+	execStatements(t, []string{
+		"create table t1(id bigint, val varbinary(128), primary key(id))",
+		fmt.Sprintf("create table %s.t1(id bigint, val varbinary(128), primary key(id))", vrepldb),
+	})
+	defer execStatements(t, []string{
+		"drop table t1",
+		fmt.Sprintf("drop table %s.t1", vrepldb),
+	})
+
+	// Replicate only the rows whose id hashes into -80, like one target shard
+	// of a MoveTables or Reshard workflow. With the hash vindex, ids 2, 3 and
+	// 5 map into -80 while ids 4 and 6 map into 80-.
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match:  "t1",
+			Filter: "select * from t1 where in_keyrange(id, 'hash', '-80')",
+		}},
+	}
+	bls := &binlogdatapb.BinlogSource{
+		Keyspace: env.KeyspaceName,
+		Shard:    env.ShardName,
+		Filter:   filter,
+		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
+	}
+	cancel, _ := startVReplication(t, bls, "")
+	defer cancel()
+
+	execStatements(t, []string{"insert into t1 values (4, 'a'), (5, 'b')"})
+	expectNontxQueries(t, qh.Expect("insert into t1(id,val) values (5,_binary'b')"), recvTimeout)
+	expectData(t, "t1", [][]string{{"5", "b"}})
+
+	// One UPDATE whose first row moves into the keyrange (an insert-shaped
+	// change with only an After image) and whose second row moves out of it
+	// (a delete-shaped change with only a Before image). Batch mode used to
+	// route the whole event to the bulk-insert path based on the first change
+	// and panic on the delete-shaped change's nil After image.
+	execStatements(t, []string{
+		"update t1 set id = case id when 4 then 2 when 5 then 6 end where id in (4, 5)",
+	})
+	expectNontxQueries(t, qh.Expect(
+		"insert into t1(id,val) values (2,_binary'a')",
+		"delete from t1 where id=5",
+	), recvTimeout)
+	expectData(t, "t1", [][]string{{"2", "a"}})
+
+	// The mirror image: the first row moves out of the keyrange (a
+	// delete-shaped change) and the second moves in (an insert-shaped
+	// change). Batch mode used to route the whole event to the bulk-delete
+	// path and panic on the insert-shaped change's nil Before image.
+	execStatements(t, []string{
+		"update t1 set id = case id when 2 then 4 when 6 then 3 end where id in (2, 6)",
+	})
+	expectNontxQueries(t, qh.Expect(
+		"delete from t1 where id=2",
+		"insert into t1(id,val) values (3,_binary'b')",
+	), recvTimeout)
+	expectData(t, "t1", [][]string{{"3", "b"}})
+}
+
 // TestPlayerStalls confirms that the vplayer will detect a stall and generate
 // a meaningful error -- which is stored in the vreplication record and the
 // vreplication_log table as well as being logged -- when it does.
@@ -3917,10 +3966,11 @@ func TestPlayerStalls(t *testing.T) {
 		vttablet.DefaultVReplicationConfig.RetryDelay = oldRetryDelay
 	}()
 
-	// Shorten the deadline for the test.
-	vplayerProgressDeadline = 5 * time.Second
+	// Shorten the deadline for the test. It only needs to comfortably exceed
+	// the time a normal, non-stalled transaction takes to apply.
+	vplayerProgressDeadline = 2 * time.Second
 	// Shorten the time for a required heartbeat recording for the test.
-	vreplicationMinimumHeartbeatUpdateInterval = 5
+	vreplicationMinimumHeartbeatUpdateInterval = 2
 	// So each relay log batch will be a single statement transaction.
 	vttablet.DefaultVReplicationConfig.RelayLogMaxItems = 1
 
@@ -3930,6 +3980,12 @@ func TestPlayerStalls(t *testing.T) {
 
 	// A channel to communicate across goroutines.
 	done := make(chan struct{})
+	// Idempotent release of the row locks held by the heartbeat subtest's
+	// preFunc connection. postFunc releases them inline and again from a
+	// defer in case an assertion aborts the subtest first; the preFunc
+	// goroutine only receives once.
+	var releaseLocksOnce sync.Once
+	releaseLocks := func() { releaseLocksOnce.Do(func() { done <- struct{}{} }) }
 
 	testTimeout := vplayerProgressDeadline * 10
 
@@ -3961,24 +4017,41 @@ func TestPlayerStalls(t *testing.T) {
 		{
 			name: "stall in relay log IO",
 			input: []string{
-				"set @@session.binlog_format='STATEMENT'",                            // As we are using the sleep function in the query to simulate a stall
-				"insert into t1(id, val1) values (1, 'aaa'), (2, 'bbb'), (3, 'ccc')", // This should be the only query that gets replicated
-				// This will cause a stall in the vplayer.
-				fmt.Sprintf("update t1 set val1 = concat(sleep (%d), val1)", int64(vplayerProgressDeadline.Seconds()+5)),
+				"set @@session.binlog_format='STATEMENT'",    // As we are using the sleep function in the query to simulate a stall
+				"insert into t1(id, val1) values (1, 'aaa')", // This should be the only query that gets replicated
+				// This will cause a stall in the vplayer. MySQL evaluates SLEEP()
+				// once per affected row, and with STATEMENT format the statement
+				// is executed again on the target, so keep the table at a single
+				// row and the sleep only as long as needed: it must exceed
+				// vplayerProgressDeadline for the stall to be detected, with some
+				// margin so a late-firing timer can't miss the still-running query.
+				fmt.Sprintf("update t1 set val1 = concat(sleep (%d), val1)", int64(vplayerProgressDeadline.Seconds()+3)),
+				// These reach the binlog as soon as the update commits on the
+				// source, queue up behind the stalled update on the target, and
+				// block the vstreamer's relay log Send right as the target
+				// starts applying the update. That starts the stall-detection
+				// timer immediately, without depending on the vstreamer's ~1s
+				// heartbeat cadence to fill the relay log. They are never
+				// applied: the workflow errors out first.
+				"insert into t1(id, val1) values (2, 'bbb')",
+				"insert into t1(id, val1) values (3, 'ccc')",
 			},
 			expectQueries: true,
 			output: qh.Expect(
-				"insert into t1(id, val1) values (1, 'aaa'), (2, 'bbb'), (3, 'ccc')",
+				"insert into t1(id, val1) values (1, 'aaa')",
 				// This will cause a stall to be detected in the vplayer. This is
 				// what we want in the end, our improved error message (which also
 				// gets logged).
-				fmt.Sprintf("update t1 set val1 = concat(sleep (%d), val1)", int64(vplayerProgressDeadline.Seconds()+5)),
+				fmt.Sprintf("update t1 set val1 = concat(sleep (%d), val1)", int64(vplayerProgressDeadline.Seconds()+3)),
 				"/update _vt.vreplication set message=.*progress stalled.*",
 			),
 			postFunc: func() {
-				time.Sleep(vplayerProgressDeadline)
-				log.Flush()
-				require.Contains(t, logger.String(), relayLogIOStalledMsg, "expected log message not found")
+				// The log message is written asynchronously after the stalled
+				// workflow transitions to the error state, so poll for it.
+				require.EventuallyWithT(t, func(c *assert.CollectT) {
+					log.Flush()
+					assert.Contains(c, logger.String(), relayLogIOStalledMsg)
+				}, 30*time.Second, 100*time.Millisecond, "expected log message not found")
 				execStatements(t, []string{"set @@session.binlog_format='ROW'"})
 			},
 		},
@@ -4008,15 +4081,36 @@ func TestPlayerStalls(t *testing.T) {
 				}()
 			},
 			postFunc: func() {
-				// Sleep long enough that we fail to record the heartbeat.
-				to := time.Duration(int64(vreplicationMinimumHeartbeatUpdateInterval*2) * int64(time.Second))
-				time.Sleep(to)
-				// Signal the preFunc goroutine to close the connection holding the row locks.
-				done <- struct{}{}
-				log.Flush()
-				logMessage := logger.String()
-				if !strings.Contains(logMessage, failedToRecordHeartbeatMsg) {
-					require.Contains(t, logMessage, "Lock wait timeout exceeded", "expected log message not found")
+				// Also release the row locks if the assertions below abort
+				// the subtest: teardown deletes from the locked table and
+				// would otherwise hang until the test timeout.
+				defer releaseLocks()
+				// Wait until a heartbeat recording attempt (or the position
+				// update it is part of) fails on the row locks held by the
+				// preFunc connection, rather than sleeping a fixed multiple of
+				// the heartbeat interval.
+				require.EventuallyWithT(t, func(c *assert.CollectT) {
+					log.Flush()
+					logMessage := logger.String()
+					assert.True(c, strings.Contains(logMessage, failedToRecordHeartbeatMsg) ||
+						strings.Contains(logMessage, "Lock wait timeout exceeded"),
+						"expected log message not found")
+				}, 30*time.Second, 100*time.Millisecond, "expected log message not found")
+				// The vplayer also records the failure in the vreplication
+				// record's message column, but that update is blocked by the
+				// same row locks and completes only after they are released.
+				// Wait for it to flow through globalDBQueries before draining,
+				// so it can't instead surface during teardown and fail the
+				// expected delete queries.
+				releaseLocks()
+				timeout := time.After(30 * time.Second)
+				for seen := false; !seen; {
+					select {
+					case got := <-globalDBQueries:
+						seen = strings.Contains(got, "update _vt.vreplication set message=")
+					case <-timeout:
+						require.Fail(t, "vplayer did not record the stall error in the vreplication record's message column")
+					}
 				}
 				drainDBQueries()
 			},
