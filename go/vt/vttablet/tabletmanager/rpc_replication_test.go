@@ -1114,6 +1114,63 @@ func TestStopReplicationAndGetStatus_SlowVersionLookup(t *testing.T) {
 	require.Less(t, elapsed, 15*time.Second, "the bounded lookup must not run to the caller's full deadline")
 }
 
+// TestStopReplicationAndGetStatus_SlowVersionLookupNoOp verifies the no-op early
+// returns (IO thread already stopped, or replication not running) also bound the
+// version lookup. No stop is performed on these paths, but the status was already
+// read successfully; a slow cold-cache lookup under the caller's full context must
+// not burn the deadline and fail the RPC with DEADLINE_EXCEEDED, which in ERS would
+// drop a reachable tablet purely over optional version metadata.
+func TestStopReplicationAndGetStatus_SlowVersionLookupNoOp(t *testing.T) {
+	tests := []struct {
+		name string
+		mode replicationdatapb.StopReplicationMode
+	}{
+		{
+			name: "IO thread only, IO already stopped",
+			mode: replicationdatapb.StopReplicationMode_IOTHREADONLY,
+		},
+		{
+			name: "full stop, replication not running",
+			mode: replicationdatapb.StopReplicationMode_IOANDSQLTHREAD,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			fakeMysqlDaemon := newTestMysqlDaemon(t, 1)
+			// Replication is not running, so both StopReplicationMode branches take
+			// their no-op early return without issuing any STOP REPLICA query.
+			fakeMysqlDaemon.Replicating = false
+			fakeMysqlDaemon.IOThreadRunning = false
+
+			tm := newTestReplicationTM(newTestTablet(t, 100, "ks", "0", nil), fakeMysqlDaemon, nil)
+			// A version lookup that never completes on its own, so the bounded helper
+			// must cap it and fall back to "".
+			tm.MysqlDaemon = &countingVersionDaemon{
+				FakeMysqlDaemon: fakeMysqlDaemon,
+				version:         "Ver 8.0.35",
+				delay:           time.Hour,
+			}
+
+			const deadline = 30 * time.Second
+			ctx, cancel := context.WithTimeout(t.Context(), deadline)
+			defer cancel()
+
+			start := time.Now()
+			resp, err := tm.StopReplicationAndGetStatus(ctx, tc.mode)
+			elapsed := time.Since(start)
+
+			require.NoError(t, err, "a slow version lookup must not fail the no-op RPC")
+			require.NotNil(t, resp.Status)
+			require.NotNil(t, resp.Status.After, "the no-op path returns before as after")
+			require.Empty(t, resp.Status.Before.ServerVersion, "version degrades to empty when the lookup is bounded out")
+			// Without the bound the lookup would run to the full 30s deadline; the
+			// bounded helper caps it near maxPostMutationVersionLookup (2s). A generous
+			// 15s upper bound keeps this CI-safe while still proving the bound applies.
+			require.Less(t, elapsed, 15*time.Second, "the bounded lookup must not run to the caller's full deadline")
+		})
+	}
+}
+
 // countingVersionDaemon wraps a FakeMysqlDaemon to count GetVersionString calls
 // and optionally return an error or block, so we can assert the version cache and
 // deadline-bounding behavior.
