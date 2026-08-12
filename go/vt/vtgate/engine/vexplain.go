@@ -54,6 +54,15 @@ type (
 	}
 )
 
+// vexplainMySQLReservedConnError is returned when VEXPLAIN MYSQLPLAN runs in a
+// session that holds a reserved connection (for example, one that has created a
+// temporary table). Each EXPLAIN is issued on a fresh standalone connection that
+// cannot see that session-local state, so the captured plan would not match the
+// one the real query would use. VEXPLAIN ALL shares the same standalone-EXPLAIN
+// path, so we do not point the user at it.
+const vexplainMySQLReservedConnError = "VEXPLAIN MYSQLPLAN is not supported in a session that holds a reserved connection " +
+	"(for example, one that has created a temporary table), because EXPLAIN runs on a separate connection that cannot see the session's temporary tables"
+
 var _ Primitive = (*VExplain)(nil)
 
 // GetFields implements the Primitive interface
@@ -239,6 +248,10 @@ func (v *VExplain) convertToVExplainAllResult(ctx context.Context, vcursor VCurs
 // executing the wrapped query. The MySQL EXPLAIN output is attached to each Route
 // node keyed by shard, so per-shard plan and cost differences are visible.
 func (v *VExplain) convertToVExplainMySQLResult(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+	if vcursor.Session().InReservedConn() {
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, vexplainMySQLReservedConnError)
+	}
+
 	explainResults := make(map[Primitive]map[string]json.RawMessage)
 	if err := v.explainRoutesInMySQL(ctx, vcursor, v.Input, bindVars, explainResults); err != nil {
 		return nil, err

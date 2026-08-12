@@ -105,3 +105,29 @@ func TestVExplainMySQLPushedDownLimit(t *testing.T) {
 		`ExecuteStandalone explain format = json dummy_select limit :__upper_limit __upper_limit: type:INT64 value:"15" ks 20-`,
 	})
 }
+
+// TestVExplainMySQLReservedConn verifies that MYSQLPLAN fails closed when the
+// session holds a reserved connection (e.g. one that created a temporary table):
+// each EXPLAIN would run on a separate standalone connection that cannot see the
+// session's temporary tables, so we reject rather than report a misleading plan.
+func TestVExplainMySQLReservedConn(t *testing.T) {
+	route := NewRoute(
+		Scatter,
+		&vindexes.Keyspace{Name: "ks", Sharded: true},
+		"dummy_select",
+		"dummy_select_field",
+	)
+
+	vexplain := &VExplain{Input: route, Type: sqlparser.MySQLVExplainType}
+
+	vc := &loggingVCursor{
+		shards:         []string{"-20", "20-"},
+		inReservedConn: true,
+		results:        []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("json", "varchar"), `{"plan":"x"}`)},
+	}
+
+	_, err := vexplain.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
+	require.ErrorContains(t, err, "VEXPLAIN MYSQLPLAN is not supported in a session that holds a reserved connection")
+	// It must fail before touching any shard: no destinations resolved, no EXPLAIN sent.
+	vc.ExpectLog(t, nil)
+}

@@ -192,3 +192,32 @@ func TestVExplainMySQLPlan(t *testing.T) {
 		`vexplain mysqlplan select id from user where lookup_unique = "apa"`,
 		"use VEXPLAIN ALL instead")
 }
+
+// TestVExplainMySQLPlanReservedConn verifies that once a session holds a reserved
+// connection (here, by creating a temporary table), VEXPLAIN MYSQLPLAN fails
+// closed rather than reporting a plan from a separate connection that cannot see
+// the session's temporary tables. The plain SELECT still succeeds on the reserved
+// connection, which is exactly the asymmetry the rejection guards against.
+func TestVExplainMySQLPlanReservedConn(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 25, "vtgate")
+
+	// A dedicated connection, since creating a temp table pins it to a reserved
+	// connection for the rest of its life.
+	ctx := t.Context()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	utils.Exec(t, conn, `create temporary table temp_user(id bigint primary key)`)
+	utils.Exec(t, conn, `insert into temp_user(id) values (1)`)
+
+	// The real SELECT works on the reserved connection that can see the temp table.
+	utils.AssertMatches(t, conn, `select id from temp_user`, `[[INT64(1)]]`)
+
+	// But MYSQLPLAN must refuse rather than EXPLAIN on a connection that cannot see
+	// the temp table. It must not point the user at VEXPLAIN ALL, which shares the
+	// same standalone-EXPLAIN blind spot.
+	_, err = utils.ExecAllowError(t, conn, `vexplain mysqlplan select id from temp_user`)
+	require.ErrorContains(t, err, "reserved connection")
+	require.NotContains(t, err.Error(), "VEXPLAIN ALL")
+}
