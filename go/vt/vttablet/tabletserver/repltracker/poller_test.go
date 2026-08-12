@@ -26,6 +26,9 @@ import (
 
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/vt/mysqlctl"
+	"vitess.io/vitess/go/vt/vterrors"
+
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 func TestPoller(t *testing.T) {
@@ -70,6 +73,9 @@ func TestPollerReturnsFatalReplicationError(t *testing.T) {
 
 	lag, err := poller.Status()
 	require.ErrorContains(t, err, mysqld.LastIOError)
+	// The point of this path is the CODE, not just the text: healthcheck keys
+	// off UNAVAILABLE to take the tablet out of rotation.
+	assert.Equal(t, vtrpcpb.Code_UNAVAILABLE, vterrors.Code(err))
 	assert.GreaterOrEqual(t, lag, time.Second)
 }
 
@@ -83,6 +89,7 @@ func TestPollerReturnsFatalReplicationErrorWithoutCachedLag(t *testing.T) {
 
 	lag, err := poller.Status()
 	require.ErrorContains(t, err, mysqld.LastIOError)
+	assert.Equal(t, vtrpcpb.Code_UNAVAILABLE, vterrors.Code(err))
 	assert.Zero(t, lag)
 }
 
