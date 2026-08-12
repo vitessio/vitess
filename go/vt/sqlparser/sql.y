@@ -341,6 +341,9 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %left <str> '+' '-'
 %left <str> '*' '/' DIV '%' MOD
 %left <str> '^'
+// PIPE_CONCAT is || under the PIPES_AS_CONCAT sql_mode; MySQL places its
+// precedence between ^ and the unary operators.
+%left <str> PIPE_CONCAT
 %right <str> '~' UNARY
 %left <str> COLLATE
 %right <str> BINARY UNDERSCORE_ARMSCII8 UNDERSCORE_ASCII UNDERSCORE_BIG5 UNDERSCORE_BINARY UNDERSCORE_CP1250 UNDERSCORE_CP1251
@@ -6256,6 +6259,12 @@ simple_expr:
 function_call_keyword
   {
     $$ = $1
+  }
+| simple_expr PIPE_CONCAT simple_expr %prec PIPE_CONCAT
+  {
+    // || under PIPES_AS_CONCAT lowers to concat(), like MySQL does when
+    // normalizing view definitions; the AST stays mode-independent.
+    $$ = &FuncExpr{Name: NewIdentifierCI("concat"), Exprs: []Expr{$1, $3}}
   }
 | function_call_nonkeyword
   {

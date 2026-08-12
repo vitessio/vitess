@@ -4224,6 +4224,91 @@ var validSQL = []struct {
 	output: "select t.`now` from t",
 }}
 
+func TestParseSQLMode(t *testing.T) {
+	testcases := []struct {
+		in   string
+		mode SQLMode
+	}{
+		{in: "", mode: 0},
+		{in: "ANSI_QUOTES", mode: SQLModeANSIQuotes},
+		{in: "ansi_quotes", mode: SQLModeANSIQuotes},
+		{in: "PIPES_AS_CONCAT,ANSI_QUOTES", mode: SQLModeANSIQuotes | SQLModePipesAsConcat},
+		{in: "STRICT_TRANS_TABLES,NO_ZERO_DATE", mode: 0},
+		// the ANSI combination mode includes ANSI_QUOTES and PIPES_AS_CONCAT
+		{in: "ANSI", mode: SQLModeANSIQuotes | SQLModePipesAsConcat},
+		// ANSI_QUOTES must not be mistaken for the ANSI combination mode
+		{in: "ANSI_QUOTES,ONLY_FULL_GROUP_BY", mode: SQLModeANSIQuotes},
+		// tolerate quoting and expression noise around the mode names
+		{in: "(SELECT CONCAT(@@sql_mode, ',PIPES_AS_CONCAT'))", mode: SQLModePipesAsConcat},
+	}
+	for _, tcase := range testcases {
+		t.Run(tcase.in, func(t *testing.T) {
+			assert.Equal(t, tcase.mode, ParseSQLMode(tcase.in))
+		})
+	}
+}
+
+func TestSQLModeParsing(t *testing.T) {
+	testcases := []struct {
+		mode   SQLMode
+		input  string
+		output string
+	}{{
+		mode:   SQLModeANSIQuotes,
+		input:  `select * from "full"`,
+		output: "select * from `full`",
+	}, {
+		mode:   SQLModeANSIQuotes,
+		input:  `create table t ("blah" int)`,
+		output: "create table t (\n\tblah int\n)",
+	}, {
+		// single-quoted strings are unaffected
+		mode:   SQLModeANSIQuotes,
+		input:  `select "a", 'b' from t`,
+		output: "select a, 'b' from t",
+	}, {
+		// a doubled quote is an escaped quote inside the identifier
+		mode:   SQLModeANSIQuotes,
+		input:  `select * from "a""b"`,
+		output: "select * from `a\"b`",
+	}, {
+		mode:   SQLModePipesAsConcat,
+		input:  "select 'a' || 'b' from dual",
+		output: "select concat('a', 'b') from dual",
+	}, {
+		mode:   SQLModePipesAsConcat,
+		input:  "select 'a' || 'b' || 'c' from dual",
+		output: "select concat(concat('a', 'b'), 'c') from dual",
+	}, {
+		// || binds tighter than LIKE, so the concatenation forms the pattern
+		mode:   SQLModePipesAsConcat,
+		input:  "select 'a%' like 'a!' || '%' escape '!' from dual",
+		output: "select 'a%' like concat('a!', '%') escape '!' from dual",
+	}, {
+		// || binds tighter than comparison operators
+		mode:   SQLModePipesAsConcat,
+		input:  "select a || b = c from t",
+		output: "select concat(a, b) = c from t",
+	}}
+	for _, tcase := range testcases {
+		t.Run(tcase.input, func(t *testing.T) {
+			parser := NewTestParser().WithSQLMode(tcase.mode)
+			stmt, err := parser.Parse(tcase.input)
+			require.NoError(t, err)
+			assert.Equal(t, tcase.output, String(stmt))
+		})
+	}
+
+	// the default mode keeps the historical behavior
+	parser := NewTestParser()
+	stmt, err := parser.Parse("select 'a' || 'b' from dual")
+	require.NoError(t, err)
+	assert.Equal(t, "select 'a' or 'b' from dual", String(stmt))
+	stmt, err = parser.Parse(`select "a" from t`)
+	require.NoError(t, err)
+	assert.Equal(t, "select 'a' from t", String(stmt))
+}
+
 func TestValid(t *testing.T) {
 	parser := NewTestParser()
 	for _, tcase := range validSQL {

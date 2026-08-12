@@ -22,6 +22,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"unicode"
 
 	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/vt/log"
@@ -465,16 +466,64 @@ func (p *Parser) SetTruncateErrLen(l int) {
 	p.truncateErrLen = l
 }
 
+// SQLMode holds the sql_mode flags that change how statements are parsed.
+// Only the parse-relevant modes are represented; execution-only modes are
+// ignored by the parser. All flags follow MySQL's lexer behavior: parsing
+// is mode-dependent, but the resulting AST always formats back to
+// mode-independent SQL (e.g. || lowers to concat(), quoted identifiers
+// format with backticks), like MySQL's own normalization of stored views.
+type SQLMode uint32
+
+const (
+	// SQLModeANSIQuotes treats "..." as a quoted identifier instead of a
+	// string literal.
+	SQLModeANSIQuotes SQLMode = 1 << iota
+	// SQLModePipesAsConcat treats || as the string concatenation operator
+	// instead of logical OR.
+	SQLModePipesAsConcat
+)
+
+// ParseSQLMode extracts the parse-relevant flags from a MySQL sql_mode
+// value. Mode names are matched as whole words, case-insensitively, so
+// quoting or expression noise around the names is tolerated. The ANSI
+// combination mode expands to the parse-relevant modes it includes.
+func ParseSQLMode(sqlMode string) SQLMode {
+	var mode SQLMode
+	for _, word := range strings.FieldsFunc(sqlMode, func(r rune) bool {
+		return !unicode.IsLetter(r) && !unicode.IsDigit(r) && r != '_'
+	}) {
+		switch {
+		case strings.EqualFold(word, "ANSI_QUOTES"):
+			mode |= SQLModeANSIQuotes
+		case strings.EqualFold(word, "PIPES_AS_CONCAT"):
+			mode |= SQLModePipesAsConcat
+		case strings.EqualFold(word, "ANSI"):
+			mode |= SQLModeANSIQuotes | SQLModePipesAsConcat
+		}
+	}
+	return mode
+}
+
 type Options struct {
 	MySQLServerVersion string
 	TruncateUILen      int
 	TruncateErrLen     int
+	SQLMode            SQLMode
 }
 
 type Parser struct {
 	version        string
 	truncateUILen  int
 	truncateErrLen int
+	sqlMode        SQLMode
+}
+
+// WithSQLMode returns a copy of the parser that parses statements according
+// to the given parse-relevant sql_mode flags.
+func (p *Parser) WithSQLMode(mode SQLMode) *Parser {
+	clone := *p
+	clone.sqlMode = mode
+	return &clone
 }
 
 func New(opts Options) (*Parser, error) {
@@ -489,6 +538,7 @@ func New(opts Options) (*Parser, error) {
 		version:        convVersion,
 		truncateUILen:  opts.TruncateUILen,
 		truncateErrLen: opts.TruncateErrLen,
+		sqlMode:        opts.SQLMode,
 	}, nil
 }
 
