@@ -82,6 +82,9 @@ const (
 
 	vexplainMySQLUnresolvableError = "VEXPLAIN MYSQLPLAN cannot resolve the target shards without executing the query " +
 		"(the query uses a cross-shard join, subquery, or lookup vindex); use VEXPLAIN ALL instead"
+
+	vexplainMySQLSequenceError = "VEXPLAIN MYSQLPLAN does not support sequence next value queries, " +
+		"because the 'select next ... values' syntax is Vitess-specific and cannot be sent to MySQL as EXPLAIN"
 )
 
 // checkVExplainMySQLSupported returns an error if any primitive in the tree cannot
@@ -98,6 +101,12 @@ const (
 func checkVExplainMySQLSupported(primitive engine.Primitive) error {
 	switch prim := primitive.(type) {
 	case *engine.Route:
+		// A sequence next-value route carries Vitess-specific 'select next ... values'
+		// syntax that MySQL cannot parse as EXPLAIN. VEXPLAIN ALL would execute it and
+		// consume sequence values, so we do not point the user there.
+		if prim.Opcode == engine.Next {
+			return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, vexplainMySQLSequenceError)
+		}
 		if prim.Vindex != nil && prim.Vindex.NeedsVCursor() {
 			return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, vexplainMySQLUnresolvableError)
 		}

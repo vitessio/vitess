@@ -272,6 +272,29 @@ func TestVExplainMySQLPlanMultipleRoutes(t *testing.T) {
 	}
 }
 
+// TestVExplainMySQLPlanRejectsSequence verifies that a sequence next-value query
+// is rejected at plan time: its Vitess-specific `select next ... values` syntax
+// cannot be sent to MySQL as EXPLAIN. The rejection must not suggest VEXPLAIN ALL
+// (which would execute the query and consume sequence values), and no tablet query
+// must be sent.
+func TestVExplainMySQLPlanRejectsSequence(t *testing.T) {
+	conns := map[string]*sandboxconn.SandboxConn{}
+	executor, ctx := createExecutorEnvCallback(t, createExecutorConfig(), func(shard, ks string, tabletType topodatapb.TabletType, conn *sandboxconn.SandboxConn) {
+		conns[ks+"/"+shard] = conn
+	})
+
+	session := &vtgatepb.Session{TargetString: "@primary"}
+	_, err := executorExec(ctx, executor, session, "vexplain mysqlplan select next 2 values from user_seq", nil)
+	require.ErrorContains(t, err, "does not support sequence next value queries")
+	// The sequence case must not point at VEXPLAIN ALL, which would consume values.
+	require.NotContains(t, err.Error(), "VEXPLAIN ALL")
+
+	// Rejection happens at plan time, so no tablet query is ever sent.
+	for target, conn := range conns {
+		assert.Empty(t, conn.Queries, "no query should be sent to %s", target)
+	}
+}
+
 func TestVExplainMySQLPlanRequiresExecution(t *testing.T) {
 	executor, _, _, _, ctx := createExecutorEnv(t)
 	session := &vtgatepb.Session{TargetString: "@primary"}
