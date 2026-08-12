@@ -76,6 +76,12 @@ type (
 		ExecuteStandalone(ctx context.Context, primitive Primitive, query string, bindVars map[string]*querypb.BindVariable, rs *srvtopo.ResolvedShard, fetchLastInsertID bool) (*sqltypes.Result, error)
 		StreamExecuteMulti(ctx context.Context, primitive Primitive, query string, rss []*srvtopo.ResolvedShard, bindVars []map[string]*querypb.BindVariable, rollbackOnError, autocommit, fetchLastInsertID bool, callback func(reply *sqltypes.Result) error) []error
 
+		// RecordShardsQueried adds noOfShards to the query-stats shard-query
+		// counter. ExecuteStandalone does not increment it, so callers that fan
+		// out shard-level work through that path (e.g. VEXPLAIN MYSQLPLAN) use
+		// this to account for the shards they queried.
+		RecordShardsQueried(noOfShards int)
+
 		// Keyspace ID level functions.
 		ExecuteKeyspaceID(ctx context.Context, keyspace string, ksid []byte, query string, bindVars map[string]*querypb.BindVariable, rollbackOnError, autocommit bool) (*sqltypes.Result, error)
 

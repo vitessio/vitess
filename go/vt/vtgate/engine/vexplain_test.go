@@ -17,13 +17,18 @@ limitations under the License.
 package engine
 
 import (
+	"strconv"
+	"sync"
+	"sync/atomic"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
@@ -99,11 +104,82 @@ func TestVExplainMySQLPushedDownLimit(t *testing.T) {
 	require.NoError(t, err)
 
 	// EXPLAIN must be sent to every shard with :__upper_limit bound to count+offset.
-	vc.ExpectLog(t, []string{
+	// The per-shard EXPLAINs run concurrently, so their log lines may arrive in
+	// either order; assert membership rather than a fixed order.
+	vc.ExpectLogUnordered(t, []string{
 		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
 		`ExecuteStandalone explain format = json dummy_select limit :__upper_limit __upper_limit: type:INT64 value:"15" ks -20`,
 		`ExecuteStandalone explain format = json dummy_select limit :__upper_limit __upper_limit: type:INT64 value:"15" ks 20-`,
 	})
+}
+
+// TestVExplainMySQLBoundedConcurrency verifies that the per-shard EXPLAIN queries
+// never exceed maxParallelMySQLExplains in flight at once, even when a scatter
+// resolves to far more shards than the bound. Each EXPLAIN blocks on a gate until
+// the test has observed the bound's worth of concurrent calls, so the assertion is
+// deterministic: without the bound all shards would run at once and the observed
+// peak would equal the shard count.
+func TestVExplainMySQLBoundedConcurrency(t *testing.T) {
+	const numShards = 20
+
+	shards := make([]string, numShards)
+	results := make([]*sqltypes.Result, numShards)
+	for i := range shards {
+		shards[i] = strconv.Itoa(i)
+		results[i] = sqltypes.MakeTestResult(sqltypes.MakeTestFields("json", "varchar"), `{"plan":"x"}`)
+	}
+
+	route := NewRoute(
+		Scatter,
+		&vindexes.Keyspace{Name: "ks", Sharded: true},
+		"dummy_select",
+		"dummy_select_field",
+	)
+	vexplain := &VExplain{Input: route, Type: sqlparser.MySQLVExplainType}
+
+	var (
+		active  atomic.Int32
+		peak    atomic.Int32
+		started = make(chan struct{}, numShards)
+		gate    = make(chan struct{})
+	)
+
+	vc := &loggingVCursor{
+		shards:  shards,
+		results: results,
+		onExecuteStandaloneFn: func(_ *srvtopo.ResolvedShard) {
+			cur := active.Add(1)
+			for {
+				old := peak.Load()
+				if cur <= old || peak.CompareAndSwap(old, cur) {
+					break
+				}
+			}
+			started <- struct{}{}
+			<-gate
+			active.Add(-1)
+		},
+	}
+
+	var (
+		wg      sync.WaitGroup
+		execErr error
+	)
+	wg.Go(func() {
+		_, execErr = vexplain.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
+	})
+
+	// Wait until the bound's worth of EXPLAINs are simultaneously in flight, then
+	// release them all. If the bound were not enforced, more than
+	// maxParallelMySQLExplains would launch before any could proceed.
+	for range maxParallelMySQLExplains {
+		<-started
+	}
+	close(gate)
+	wg.Wait()
+
+	require.NoError(t, execErr)
+	assert.EqualValues(t, maxParallelMySQLExplains, peak.Load())
 }
 
 // TestVExplainMySQLReservedConn verifies that MYSQLPLAN fails closed when the

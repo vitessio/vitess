@@ -129,6 +129,10 @@ func explainResultForShard(shard string) *sqltypes.Result {
 	}
 }
 
+// TestVExplainMySQLPlanKeysByShard verifies that a scatter SELECT runs only the
+// EXPLAIN FORMAT=JSON form of the query against each shard (never the wrapped
+// query), and that the resulting plan attaches the per-shard EXPLAIN output keyed
+// by the shard it came from.
 func TestVExplainMySQLPlanKeysByShard(t *testing.T) {
 	conns := map[string]*sandboxconn.SandboxConn{}
 	executor, ctx := createExecutorEnvCallback(t, createExecutorConfig(), func(shard, ks string, tabletType topodatapb.TabletType, conn *sandboxconn.SandboxConn) {
@@ -168,6 +172,30 @@ func TestVExplainMySQLPlanKeysByShard(t *testing.T) {
 		require.Contains(t, perShard, shard)
 		assert.Equal(t, shard, perShard[shard].Shard)
 	}
+}
+
+// TestVExplainMySQLPlanShardQueriesAccounting verifies that the per-shard EXPLAIN
+// queries VEXPLAIN MYSQLPLAN issues are counted in ShardQueries. They run through
+// ExecuteStandalone, which does not increment the counter on its own, so a scatter
+// over eight shards must report eight shard queries rather than zero.
+func TestVExplainMySQLPlanShardQueriesAccounting(t *testing.T) {
+	const wantShards = 8
+	executor, ctx := createExecutorEnvCallback(t, createExecutorConfig(), func(shard, ks string, tabletType topodatapb.TabletType, conn *sandboxconn.SandboxConn) {
+		if ks == KsTestSharded && tabletType == topodatapb.TabletType_PRIMARY {
+			conn.SetResults([]*sqltypes.Result{explainResultForShard(shard)})
+		}
+	})
+
+	logChan := executor.queryLogger.Subscribe("Test")
+	defer executor.queryLogger.Unsubscribe(logChan)
+
+	session := &vtgatepb.Session{TargetString: "@primary"}
+	_, err := executorExec(ctx, executor, session, "vexplain mysqlplan select id from `user`", nil)
+	require.NoError(t, err)
+
+	logStats := getQueryLog(logChan)
+	require.NotNil(t, logStats)
+	assert.EqualValues(t, wantShards, logStats.ShardQueries)
 }
 
 // TestVExplainMySQLPlanTargetedSend verifies that a SELECT with an explicit shard
@@ -295,6 +323,10 @@ func TestVExplainMySQLPlanRejectsSequence(t *testing.T) {
 	}
 }
 
+// TestVExplainMySQLPlanRequiresExecution verifies that plans whose target shards
+// cannot be resolved without running the query (lookup vindex, cross-shard join,
+// recursive CTE) and DML statements are rejected at plan time, each pointing the
+// user to VEXPLAIN ALL.
 func TestVExplainMySQLPlanRequiresExecution(t *testing.T) {
 	executor, _, _, _, ctx := createExecutorEnv(t)
 	session := &vtgatepb.Session{TargetString: "@primary"}

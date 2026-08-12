@@ -945,6 +945,11 @@ func (vc *VCursorImpl) ExecuteStandalone(ctx context.Context, primitive engine.P
 	return qr, vterrors.Aggregate(errs)
 }
 
+// RecordShardsQueried is part of the engine.VCursor interface.
+func (vc *VCursorImpl) RecordShardsQueried(noOfShards int) {
+	atomic.AddUint64(&vc.logStats.ShardQueries, uint64(noOfShards))
+}
+
 // ExecuteKeyspaceID is part of the engine.VCursor interface.
 func (vc *VCursorImpl) ExecuteKeyspaceID(ctx context.Context, keyspace string, ksid []byte, query string, bindVars map[string]*querypb.BindVariable, rollbackOnError, autocommit bool) (*sqltypes.Result, error) {
 	atomic.AddUint64(&vc.logStats.ShardQueries, 1)

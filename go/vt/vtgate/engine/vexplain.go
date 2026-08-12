@@ -20,6 +20,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sync"
+
+	"golang.org/x/sync/errgroup"
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
@@ -243,6 +246,19 @@ func (v *VExplain) convertToVExplainAllResult(ctx context.Context, vcursor VCurs
 	return qr, nil
 }
 
+// maxParallelMySQLExplains bounds how many per-shard EXPLAIN FORMAT=JSON queries
+// VEXPLAIN MYSQLPLAN issues concurrently, so a wide scatter (or a plan with many
+// Routes) cannot fan out an unbounded number of shard queries at once.
+const maxParallelMySQLExplains = 8
+
+// mysqlExplainTask is one EXPLAIN FORMAT=JSON query to run against a single
+// resolved shard, recorded against the primitive that owns it.
+type mysqlExplainTask struct {
+	primitive Primitive
+	rs        *srvtopo.ResolvedShard
+	query     *querypb.BoundQuery
+}
+
 // convertToVExplainMySQLResult resolves the target shards of each Route in the
 // plan and runs EXPLAIN FORMAT=JSON against every resolved shard, without
 // executing the wrapped query. The MySQL EXPLAIN output is attached to each Route
@@ -252,8 +268,13 @@ func (v *VExplain) convertToVExplainMySQLResult(ctx context.Context, vcursor VCu
 		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, vexplainMySQLReservedConnError)
 	}
 
-	explainResults := make(map[Primitive]map[string]json.RawMessage)
-	if err := v.explainRoutesInMySQL(ctx, vcursor, v.Input, bindVars, explainResults); err != nil {
+	var tasks []mysqlExplainTask
+	if err := v.collectMySQLExplainTasks(ctx, vcursor, v.Input, bindVars, &tasks); err != nil {
+		return nil, err
+	}
+
+	explainResults, err := runMySQLExplainTasks(ctx, vcursor, tasks)
+	if err != nil {
 		return nil, err
 	}
 
@@ -270,10 +291,12 @@ func (v *VExplain) convertToVExplainMySQLResult(ctx context.Context, vcursor VCu
 	}, nil
 }
 
-// explainRoutesInMySQL walks the primitive tree and, for each Route, resolves its
-// target shards and runs EXPLAIN FORMAT=JSON against each of them, recording the
-// per-shard results in explainResults.
-func (v *VExplain) explainRoutesInMySQL(ctx context.Context, vcursor VCursor, primitive Primitive, bindVars map[string]*querypb.BindVariable, explainResults map[Primitive]map[string]json.RawMessage) error {
+// collectMySQLExplainTasks walks the primitive tree and, for each Route or read
+// Send, resolves its target shards and appends one EXPLAIN task per shard. Shard
+// resolution runs serially here (it is cheap and, for a pushed-down Limit, must
+// happen before its child Route is visited); the EXPLAIN queries themselves are
+// run concurrently by runMySQLExplainTasks.
+func (v *VExplain) collectMySQLExplainTasks(ctx context.Context, vcursor VCursor, primitive Primitive, bindVars map[string]*querypb.BindVariable, tasks *[]mysqlExplainTask) error {
 	switch prim := primitive.(type) {
 	case *Route:
 		rss, bvs, err := prim.findRoute(ctx, vcursor, bindVars)
@@ -290,9 +313,7 @@ func (v *VExplain) explainRoutesInMySQL(ctx context.Context, vcursor VCursor, pr
 				return err
 			}
 		}
-		if err := v.explainOnShards(ctx, vcursor, prim, rss, getQueries(prim.Query, bvs), explainResults); err != nil {
-			return err
-		}
+		appendMySQLExplainTasks(tasks, prim, rss, getQueries(prim.Query, bvs))
 	case *Send:
 		// A read Send targets an explicit shard/keyrange destination, so its shards
 		// resolve without executing the query. DML/DDL sends are rejected at plan
@@ -305,9 +326,7 @@ func (v *VExplain) explainRoutesInMySQL(ctx context.Context, vcursor VCursor, pr
 		for i := range rss {
 			queries[i] = &querypb.BoundQuery{Sql: prim.Query, BindVariables: bindVars}
 		}
-		if err := v.explainOnShards(ctx, vcursor, prim, rss, queries, explainResults); err != nil {
-			return err
-		}
+		appendMySQLExplainTasks(tasks, prim, rss, queries)
 	case *Limit:
 		// A pushed-down scatter limit rewrites its child Route's query to use
 		// :__upper_limit, which Limit.TryExecute computes before executing its
@@ -322,33 +341,61 @@ func (v *VExplain) explainRoutesInMySQL(ctx context.Context, vcursor VCursor, pr
 
 	inputs, _ := primitive.Inputs()
 	for _, input := range inputs {
-		if err := v.explainRoutesInMySQL(ctx, vcursor, input, bindVars, explainResults); err != nil {
+		if err := v.collectMySQLExplainTasks(ctx, vcursor, input, bindVars, tasks); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-// explainOnShards runs EXPLAIN FORMAT=JSON for the given per-shard queries against
-// each resolved shard and records the per-shard results, keyed by shard, against
-// the owning primitive.
-func (v *VExplain) explainOnShards(ctx context.Context, vcursor VCursor, primitive Primitive, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, explainResults map[Primitive]map[string]json.RawMessage) error {
-	perShard := make(map[string]json.RawMessage, len(rss))
+// appendMySQLExplainTasks records one EXPLAIN task per resolved shard for the
+// given primitive.
+func appendMySQLExplainTasks(tasks *[]mysqlExplainTask, primitive Primitive, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery) {
 	for i, rs := range rss {
-		explainQuery := "explain format = json " + queries[i].Sql
-		res, err := vcursor.ExecuteStandalone(ctx, nil, explainQuery, queries[i].BindVariables, rs, false)
-		if err != nil {
-			return err
-		}
-		if len(res.Rows) == 0 || len(res.Rows[0]) == 0 {
-			continue
-		}
-		perShard[rs.Target.Shard] = json.RawMessage(res.Rows[0][0].ToString())
+		*tasks = append(*tasks, mysqlExplainTask{primitive: primitive, rs: rs, query: queries[i]})
 	}
-	if len(perShard) > 0 {
-		explainResults[primitive] = perShard
+}
+
+// runMySQLExplainTasks runs the given EXPLAIN FORMAT=JSON tasks against their
+// shards concurrently, bounded by maxParallelMySQLExplains, and returns the
+// per-shard results keyed by shard against the primitive that owns each. Every
+// shard queried is accounted for in ShardQueries, since ExecuteStandalone (unlike
+// the normal shard path) does not increment it.
+func runMySQLExplainTasks(ctx context.Context, vcursor VCursor, tasks []mysqlExplainTask) (map[Primitive]map[string]json.RawMessage, error) {
+	explainResults := make(map[Primitive]map[string]json.RawMessage)
+	if len(tasks) == 0 {
+		return explainResults, nil
 	}
-	return nil
+	vcursor.RecordShardsQueried(len(tasks))
+
+	var mu sync.Mutex
+	g, gctx := errgroup.WithContext(ctx)
+	g.SetLimit(maxParallelMySQLExplains)
+	for _, task := range tasks {
+		g.Go(func() error {
+			explainQuery := "explain format = json " + task.query.Sql
+			res, err := vcursor.ExecuteStandalone(gctx, nil, explainQuery, task.query.BindVariables, task.rs, false)
+			if err != nil {
+				return err
+			}
+			if len(res.Rows) == 0 || len(res.Rows[0]) == 0 {
+				return nil
+			}
+			mu.Lock()
+			defer mu.Unlock()
+			perShard := explainResults[task.primitive]
+			if perShard == nil {
+				perShard = make(map[string]json.RawMessage)
+				explainResults[task.primitive] = perShard
+			}
+			perShard[task.rs.Target.Shard] = json.RawMessage(res.Rows[0][0].ToString())
+			return nil
+		})
+	}
+	if err := g.Wait(); err != nil {
+		return nil, err
+	}
+	return explainResults, nil
 }
 
 // primitiveToPlanDescriptionWithShardedSQLResults transforms a primitive tree
