@@ -150,6 +150,7 @@ func registerTabletEnvFlags(fs *pflag.FlagSet) {
 	fs.UintVar(&currentConfig.OltpReadPool.MaxWaiters, "queryserver-config-query-pool-waiter-cap", defaultConfig.OltpReadPool.MaxWaiters, "query server query pool waiter cap is the maximum number of queries allowed to wait for a connection from the pool. If set to 0 (default) then there is no limit.")
 	fs.UintVar(&currentConfig.OlapReadPool.MaxWaiters, "queryserver-config-stream-pool-waiter-cap", defaultConfig.OlapReadPool.MaxWaiters, "query server stream pool waiter cap is the maximum number of streaming queries allowed to wait for a connection from the pool. If set to 0 (default) then there is no limit.")
 	fs.UintVar(&currentConfig.TxPool.MaxWaiters, "queryserver-config-txpool-waiter-cap", defaultConfig.TxPool.MaxWaiters, "query server transaction pool waiter cap is the maximum number of transactions allowed to wait for a connection from the pool. If set to 0 (default) then there is no limit.")
+	fs.BoolVar(&currentConfig.PoolWaiterCapDryRun, "queryserver-config-pool-waiter-cap-dryrun", defaultConfig.PoolWaiterCapDryRun, "If true, pool waiter cap rejections are logged and counted in metrics but queries are still allowed to wait. Use to observe rejection rates before enforcing.")
 	fs.DurationVar(&currentConfig.OltpReadPool.IdleTimeout, "queryserver-config-idle-timeout", defaultConfig.OltpReadPool.IdleTimeout, "query server idle timeout, vttablet manages various mysql connection pools. This config means if a connection has not been used in given idle timeout, this connection will be removed from pool. This effectively manages number of connection objects and optimize the pool performance.")
 	fs.DurationVar(&currentConfig.OltpReadPool.MaxLifetime, "queryserver-config-pool-conn-max-lifetime", defaultConfig.OltpReadPool.MaxLifetime, "query server connection max lifetime, vttablet manages various mysql connection pools. This config means if a connection has lived at least this long, it connection will be removed from pool upon the next time it is returned to the pool.")
 
@@ -204,6 +205,7 @@ func registerTabletEnvFlags(fs *pflag.FlagSet) {
 
 	fs.Int64Var(&currentConfig.ConsolidatorQueryWaiterCap, "consolidator-query-waiter-cap", 0, "Configure the maximum number of clients allowed to wait on the consolidator.")
 	fs.StringVar(&currentConfig.ConsolidatorQueryWaiterCapMethod, "consolidator-query-waiter-cap-method", "fallthrough", "Configure the method when consolidator waiter cap is exceeded. Options: fallthrough, reject.")
+	fs.BoolVar(&currentConfig.ConsolidatorQueryWaiterCapDryRun, "consolidator-query-waiter-cap-dryrun", defaultConfig.ConsolidatorQueryWaiterCapDryRun, "If true, consolidator waiter cap rejections are counted in metrics but queries are still allowed to wait on the consolidator.")
 	fs.BoolVar(&currentConfig.ConsolidatorCacheProto3Rows, "consolidator-cache-proto3-rows", defaultConfig.ConsolidatorCacheProto3Rows, "If true, the consolidation leader pre-caches proto3-encoded rows so that waiters avoid redundant encoding work.")
 	fs.DurationVar(&healthCheckInterval, "health_check_interval", defaultConfig.Healthcheck.Interval, "Interval between health checks")
 	fs.DurationVar(&degradedThreshold, "degraded_threshold", defaultConfig.Healthcheck.DegradedThreshold, "replication lag after which a replica is considered degraded")
@@ -238,6 +240,10 @@ func Init() {
 	currentConfig.TxPool.IdleTimeout = currentConfig.OltpReadPool.IdleTimeout
 	currentConfig.OlapReadPool.MaxLifetime = currentConfig.OltpReadPool.MaxLifetime
 	currentConfig.TxPool.MaxLifetime = currentConfig.OltpReadPool.MaxLifetime
+
+	currentConfig.OltpReadPool.WaiterCapDryRun = currentConfig.PoolWaiterCapDryRun
+	currentConfig.OlapReadPool.WaiterCapDryRun = currentConfig.PoolWaiterCapDryRun
+	currentConfig.TxPool.WaiterCapDryRun = currentConfig.PoolWaiterCapDryRun
 
 	if enableHotRowProtection {
 		if enableHotRowProtectionDryRun {
@@ -345,6 +351,7 @@ type TabletConfig struct {
 	ConsolidatorStreamQuerySize      int64         `json:"consolidatorStreamQuerySize,omitempty"`
 	ConsolidatorQueryWaiterCap       int64         `json:"consolidatorMaxQueryWait,omitempty"`
 	ConsolidatorQueryWaiterCapMethod string        `json:"consolidatorQueryWaiterCapMethod,omitempty"`
+	ConsolidatorQueryWaiterCapDryRun bool          `json:"consolidatorQueryWaiterCapDryRun,omitempty"`
 	ConsolidatorCacheProto3Rows      bool          `json:"consolidatorCacheProto3Rows,omitempty"`
 	QueryCacheMemory                 int64         `json:"queryCacheMemory,omitempty"`
 	QueryCacheDoorkeeper             bool          `json:"queryCacheDoorkeeper,omitempty"`
@@ -366,6 +373,8 @@ type TabletConfig struct {
 	EnableTableACLDryRun bool          `json:"-"`
 	TableACLExemptACL    string        `json:"-"`
 	TwoPCAbandonAge      time.Duration `json:"-"`
+
+	PoolWaiterCapDryRun bool `json:"-"`
 
 	EnableTxThrottler              bool                          `json:"-"`
 	TxThrottlerConfig              *TxThrottlerConfigFlag        `json:"-"`
@@ -453,6 +462,7 @@ type ConnPoolConfig struct {
 	MaxIdleCount       int           `json:"maxIdleCount,omitempty"`
 	MaxLifetime        time.Duration `json:"maxLifetimeSeconds,omitempty"`
 	MaxWaiters         uint          `json:"maxWaiters,omitempty"`
+	WaiterCapDryRun    bool          `json:"waiterCapDryRun,omitempty"`
 	PrefillParallelism int           `json:"prefillParallelism,omitempty"`
 }
 

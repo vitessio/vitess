@@ -105,6 +105,7 @@ type Config[C Connection] struct {
 	MaxLifetime     time.Duration
 	RefreshInterval time.Duration
 	MaxWaiters      uint
+	WaiterCapDryRun bool
 	LogWait         func(time.Time)
 }
 
@@ -162,6 +163,8 @@ type ConnPool[C Connection] struct {
 		// maxWaiters is the maximum number of clients that can be waiting for a connection;
 		// 0 means unlimited
 		maxWaiters uint
+		// waiterCapDryRun when true, fires the rejection metric but lets the query wait
+		waiterCapDryRun bool
 	}
 
 	Metrics Metrics
@@ -179,6 +182,7 @@ func NewPool[C Connection](config *Config[C]) *ConnPool[C] {
 	pool.config.refreshInterval.Store(config.RefreshInterval.Nanoseconds())
 	pool.config.logWait = config.LogWait
 	pool.config.maxWaiters = config.MaxWaiters
+	pool.config.waiterCapDryRun = config.WaiterCapDryRun
 	pool.wait.init()
 	pool.wait.onWait = func() {
 		pool.Metrics.waitCount.Add(1)
@@ -631,7 +635,7 @@ func (pool *ConnPool[C]) get(ctx context.Context) (*Pooled[C], error) {
 			return nil, ErrConnPoolClosed
 		}
 
-		conn, err = pool.wait.waitForConn(ctx, nil, *closeChan, pool.config.maxWaiters)
+		conn, err = pool.wait.waitForConn(ctx, nil, *closeChan, pool.config.maxWaiters, pool.config.waiterCapDryRun)
 		if err != nil {
 			if errors.Is(err, ErrPoolWaiterCapReached) {
 				return nil, err
@@ -697,7 +701,7 @@ func (pool *ConnPool[C]) getWithSetting(ctx context.Context, setting *Setting) (
 			return nil, ErrConnPoolClosed
 		}
 
-		conn, err = pool.wait.waitForConn(ctx, setting, *closeChan, pool.config.maxWaiters)
+		conn, err = pool.wait.waitForConn(ctx, setting, *closeChan, pool.config.maxWaiters, pool.config.waiterCapDryRun)
 		if err != nil {
 			if errors.Is(err, ErrPoolWaiterCapReached) {
 				return nil, err
