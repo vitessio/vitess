@@ -168,6 +168,22 @@ func writeResolveRecovery(topologyRecovery *TopologyRecovery) error {
 	if err != nil {
 		log.Error(err.Error())
 	}
+	// Delete the recovery_detection row that triggered this recovery. The unconditional UPSERT in
+	// InsertRecoveryDetection refreshes detection_timestamp on every poll, so a resolved
+	// incident must be explicitly cleared; otherwise the next recurrence of the same failure on
+	// the same tablet reuses the same detection_id, making the new topology_recovery row appear
+	// to reference a detection that predates it. Deleting here creates a clean incident boundary:
+	// the next recurrence inserts a fresh row with a new detection_id. This is best-effort —
+	// suppressed recoveries (cell gate, quorum gate) have no writeResolveRecovery call and rely
+	// on UPSERT expiry for cleanup.
+	if topologyRecovery.AnalysisEntry.RecoveryId != 0 {
+		if _, delErr := db.ExecVTOrc(
+			`DELETE FROM recovery_detection WHERE detection_id = ?`,
+			topologyRecovery.AnalysisEntry.RecoveryId,
+		); delErr != nil {
+			log.Error(delErr.Error())
+		}
+	}
 	return err
 }
 
