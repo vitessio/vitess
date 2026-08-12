@@ -481,6 +481,12 @@ const (
 	// SQLModePipesAsConcat treats || as the string concatenation operator
 	// instead of logical OR.
 	SQLModePipesAsConcat
+	// SQLModeIgnoreSpace permits whitespace between a function-name
+	// keyword and the opening parenthesis of its call.
+	SQLModeIgnoreSpace
+	// SQLModeNoBackslashEscapes treats backslash as an ordinary character
+	// in string literals instead of an escape character.
+	SQLModeNoBackslashEscapes
 )
 
 // ParseSQLMode extracts the parse-relevant flags from a MySQL sql_mode
@@ -497,8 +503,12 @@ func ParseSQLMode(sqlMode string) SQLMode {
 			mode |= SQLModeANSIQuotes
 		case strings.EqualFold(word, "PIPES_AS_CONCAT"):
 			mode |= SQLModePipesAsConcat
+		case strings.EqualFold(word, "IGNORE_SPACE"):
+			mode |= SQLModeIgnoreSpace
+		case strings.EqualFold(word, "NO_BACKSLASH_ESCAPES"):
+			mode |= SQLModeNoBackslashEscapes
 		case strings.EqualFold(word, "ANSI"):
-			mode |= SQLModeANSIQuotes | SQLModePipesAsConcat
+			mode |= SQLModeANSIQuotes | SQLModePipesAsConcat | SQLModeIgnoreSpace
 		}
 	}
 	return mode

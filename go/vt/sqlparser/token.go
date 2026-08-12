@@ -446,6 +446,27 @@ func (tkn *Tokenizer) skipStatement() int {
 // included, non-breaking space and the other Unicode spaces not.
 const blankChars = " \n\r\t\v\f"
 
+// funcCallParenAhead reports whether the character following a function-name
+// keyword opens a call. By default the parenthesis must be directly attached;
+// under IGNORE_SPACE, whitespace between the name and the parenthesis is
+// permitted, as in MySQL.
+func (tkn *Tokenizer) funcCallParenAhead() bool {
+	if tkn.cur() == '(' {
+		return true
+	}
+	if tkn.parser.sqlMode&SQLModeIgnoreSpace == 0 {
+		return false
+	}
+	for i := 0; ; i++ {
+		switch tkn.peek(i) {
+		case ' ', '\t', '\n', '\r', '\v', '\f':
+			continue
+		default:
+			return tkn.peek(i) == '('
+		}
+	}
+}
+
 // skipBlank skips the cursor while it finds whitespace
 func (tkn *Tokenizer) skipBlank() {
 	ch := tkn.cur()
@@ -469,7 +490,7 @@ func (tkn *Tokenizer) scanIdentifier(isVariable bool) (int, string) {
 	}
 	keywordName := tkn.buf[start:tkn.Pos]
 	if keywordID, found := keywordLookupTable.LookupString(keywordName); found {
-		if isFuncCallKeyword(keywordID) && tkn.cur() != '(' {
+		if isFuncCallKeyword(keywordID) && !tkn.funcCallParenAhead() {
 			return ID, keywordName
 		}
 		return keywordID, keywordName
@@ -685,22 +706,25 @@ exit:
 // will fall back to scanStringSlow
 func (tkn *Tokenizer) scanString(delim uint16, typ int) (int, string) {
 	start := tkn.Pos
+	noBackslashEscapes := tkn.parser.sqlMode&SQLModeNoBackslashEscapes != 0
 
 	for {
-		switch tkn.cur() {
-		case delim:
+		switch ch := tkn.cur(); {
+		case ch == delim:
 			if tkn.peek(1) != delim {
 				tkn.skip(1)
 				return typ, tkn.buf[start : tkn.Pos-1]
 			}
-			fallthrough
-
-		case '\\':
 			var buffer strings.Builder
 			buffer.WriteString(tkn.buf[start:tkn.Pos])
 			return tkn.scanStringSlow(&buffer, delim, typ)
 
-		case eofChar:
+		case ch == '\\' && !noBackslashEscapes:
+			var buffer strings.Builder
+			buffer.WriteString(tkn.buf[start:tkn.Pos])
+			return tkn.scanStringSlow(&buffer, delim, typ)
+
+		case ch == eofChar:
 			return LEX_ERROR, tkn.buf[start:tkn.Pos]
 		}
 
@@ -712,6 +736,7 @@ func (tkn *Tokenizer) scanString(delim uint16, typ int) (int, string) {
 // sequencse. The given `buffer` contains the contents of the string that have
 // been scanned so far.
 func (tkn *Tokenizer) scanStringSlow(buffer *strings.Builder, delim uint16, typ int) (int, string) {
+	noBackslashEscapes := tkn.parser.sqlMode&SQLModeNoBackslashEscapes != 0
 	for {
 		ch := tkn.cur()
 		if ch == eofChar {
@@ -719,12 +744,12 @@ func (tkn *Tokenizer) scanStringSlow(buffer *strings.Builder, delim uint16, typ 
 			return LEX_ERROR, buffer.String()
 		}
 
-		if ch != delim && ch != '\\' {
+		if ch != delim && (ch != '\\' || noBackslashEscapes) {
 			// Scan ahead to the next interesting character.
 			start := tkn.Pos
 			for ; tkn.Pos < len(tkn.buf); tkn.Pos++ {
 				ch = uint16(tkn.buf[tkn.Pos])
-				if ch == delim || ch == '\\' {
+				if ch == delim || (ch == '\\' && !noBackslashEscapes) {
 					break
 				}
 			}
