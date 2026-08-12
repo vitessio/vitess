@@ -17,6 +17,7 @@ limitations under the License.
 package cluster
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
@@ -140,6 +141,25 @@ func (vtctld *VtctldProcess) IsHealthy() bool {
 	}
 	defer resp.Body.Close()
 	return resp.StatusCode == 200
+}
+
+// GetVars gets the variables exported on the /debug/vars page of vtctld
+func (vtctld *VtctldProcess) GetVars() map[string]any {
+	resp, err := http.Get(vtctld.VerifyURL)
+	if err != nil {
+		return nil
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil
+	}
+
+	resultMap := make(map[string]any)
+	if err := json.NewDecoder(resp.Body).Decode(&resultMap); err != nil {
+		return nil
+	}
+	return resultMap
 }
 
 // TearDown shutdowns the running vtctld service
