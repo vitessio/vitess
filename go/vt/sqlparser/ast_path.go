@@ -59,6 +59,7 @@ const (
 	RefOfArgumentLessWindowExprOverClause
 	RefOfAssignmentExprLeft
 	RefOfAssignmentExprRight
+	RefOfAtTimeZoneZone
 	RefOfAutoIncSpecColumn
 	RefOfAutoIncSpecSequence
 	RefOfAvgArg
@@ -81,6 +82,7 @@ const (
 	RefOfCaseExprWhensOffset
 	RefOfCaseExprElse
 	RefOfCastExprExpr
+	RefOfCastExprTimeZone
 	RefOfCastExprType
 	RefOfChangeColumnOldColumn
 	RefOfChangeColumnNewColDefinition
@@ -687,6 +689,8 @@ func (s ASTStep) DebugString() string {
 		return "(*AssignmentExpr).Left"
 	case RefOfAssignmentExprRight:
 		return "(*AssignmentExpr).Right"
+	case RefOfAtTimeZoneZone:
+		return "(*AtTimeZone).Zone"
 	case RefOfAutoIncSpecColumn:
 		return "(*AutoIncSpec).Column"
 	case RefOfAutoIncSpecSequence:
@@ -731,6 +735,8 @@ func (s ASTStep) DebugString() string {
 		return "(*CaseExpr).Else"
 	case RefOfCastExprExpr:
 		return "(*CastExpr).Expr"
+	case RefOfCastExprTimeZone:
+		return "(*CastExpr).TimeZone"
 	case RefOfCastExprType:
 		return "(*CastExpr).Type"
 	case RefOfChangeColumnOldColumn:
@@ -1872,6 +1878,8 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 			node = node.(*AssignmentExpr).Left
 		case RefOfAssignmentExprRight:
 			node = node.(*AssignmentExpr).Right
+		case RefOfAtTimeZoneZone:
+			node = node.(*AtTimeZone).Zone
 		case RefOfAutoIncSpecColumn:
 			node = node.(*AutoIncSpec).Column
 		case RefOfAutoIncSpecSequence:
@@ -1920,6 +1928,8 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 			node = node.(*CaseExpr).Else
 		case RefOfCastExprExpr:
 			node = node.(*CastExpr).Expr
+		case RefOfCastExprTimeZone:
+			node = node.(*CastExpr).TimeZone
 		case RefOfCastExprType:
 			node = node.(*CastExpr).Type
 		case RefOfChangeColumnOldColumn:

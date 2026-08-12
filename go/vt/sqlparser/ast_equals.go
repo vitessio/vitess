@@ -152,6 +152,12 @@ func (cmp *Comparator) SQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return cmp.RefOfAssignmentExpr(a, b)
+	case *AtTimeZone:
+		b, ok := inB.(*AtTimeZone)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfAtTimeZone(a, b)
 	case *AutoIncSpec:
 		b, ok := inB.(*AutoIncSpec)
 		if !ok {
@@ -2094,6 +2100,18 @@ func (cmp *Comparator) RefOfAssignmentExpr(a, b *AssignmentExpr) bool {
 		cmp.Expr(a.Right, b.Right)
 }
 
+// RefOfAtTimeZone does deep equals between the two objects.
+func (cmp *Comparator) RefOfAtTimeZone(a, b *AtTimeZone) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Interval == b.Interval &&
+		cmp.RefOfLiteral(a.Zone, b.Zone)
+}
+
 // RefOfAutoIncSpec does deep equals between the two objects.
 func (cmp *Comparator) RefOfAutoIncSpec(a, b *AutoIncSpec) bool {
 	if a == b {
@@ -2240,6 +2258,7 @@ func (cmp *Comparator) RefOfCastExpr(a, b *CastExpr) bool {
 	}
 	return a.Array == b.Array &&
 		cmp.Expr(a.Expr, b.Expr) &&
+		cmp.RefOfAtTimeZone(a.TimeZone, b.TimeZone) &&
 		cmp.RefOfConvertType(a.Type, b.Type)
 }
 

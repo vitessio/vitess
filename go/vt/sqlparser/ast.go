@@ -2971,9 +2971,17 @@ type (
 	// places such as in CREATE TABLE statements where they
 	// are treated differently.
 	CastExpr struct {
-		Expr  Expr
-		Type  *ConvertType
-		Array bool
+		Expr     Expr
+		TimeZone *AtTimeZone
+		Type     *ConvertType
+		Array    bool
+	}
+
+	// AtTimeZone represents the AT TIME ZONE clause of a
+	// CAST(expr AT TIME ZONE tz AS DATETIME) expression.
+	AtTimeZone struct {
+		Interval bool
+		Zone     *Literal
 	}
 
 	// ConvertExpr represents a call to CONVERT(expr, type)

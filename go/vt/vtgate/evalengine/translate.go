@@ -545,6 +545,9 @@ func (ast *astCompiler) translateExpr(e sqlparser.Expr) (IR, error) {
 	case *sqlparser.UnaryExpr:
 		return ast.translateUnaryExpr(node)
 	case *sqlparser.CastExpr:
+		if node.TimeZone != nil {
+			return nil, translateExprNotSupported(e)
+		}
 		return ast.translateConvertExpr(node.Expr, node.Type)
 	case *sqlparser.CaseExpr:
 		return ast.translateCaseExpr(node)

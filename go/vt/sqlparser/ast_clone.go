@@ -65,6 +65,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfArgumentLessWindowExpr(in)
 	case *AssignmentExpr:
 		return CloneRefOfAssignmentExpr(in)
+	case *AtTimeZone:
+		return CloneRefOfAtTimeZone(in)
 	case *AutoIncSpec:
 		return CloneRefOfAutoIncSpec(in)
 	case *Avg:
@@ -848,6 +850,16 @@ func CloneRefOfAssignmentExpr(n *AssignmentExpr) *AssignmentExpr {
 	return &out
 }
 
+// CloneRefOfAtTimeZone creates a deep clone of the input.
+func CloneRefOfAtTimeZone(n *AtTimeZone) *AtTimeZone {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Zone = CloneRefOfLiteral(n.Zone)
+	return &out
+}
+
 // CloneRefOfAutoIncSpec creates a deep clone of the input.
 func CloneRefOfAutoIncSpec(n *AutoIncSpec) *AutoIncSpec {
 	if n == nil {
@@ -976,6 +988,7 @@ func CloneRefOfCastExpr(n *CastExpr) *CastExpr {
 	}
 	out := *n
 	out.Expr = CloneExpr(n.Expr)
+	out.TimeZone = CloneRefOfAtTimeZone(n.TimeZone)
 	out.Type = CloneRefOfConvertType(n.Type)
 	return &out
 }

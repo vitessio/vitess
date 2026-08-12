@@ -2875,6 +2875,10 @@ func (node WindowDefinitions) FormatFast(buf *TrackedBuffer) {
 func (node *CastExpr) FormatFast(buf *TrackedBuffer) {
 	buf.WriteString("cast(")
 	buf.printExpr(node, node.Expr, true)
+	if node.TimeZone != nil {
+		buf.WriteByte(' ')
+		node.TimeZone.FormatFast(buf)
+	}
 	buf.WriteString(" as ")
 	node.Type.FormatFast(buf)
 	if node.Array {
@@ -2882,6 +2886,15 @@ func (node *CastExpr) FormatFast(buf *TrackedBuffer) {
 		buf.WriteString(keywordStrings[ARRAY])
 	}
 	buf.WriteByte(')')
+}
+
+// FormatFast formats the node.
+func (node *AtTimeZone) FormatFast(buf *TrackedBuffer) {
+	buf.WriteString("at time zone ")
+	if node.Interval {
+		buf.WriteString("interval ")
+	}
+	node.Zone.FormatFast(buf)
 }
 
 // FormatFast formats the node.

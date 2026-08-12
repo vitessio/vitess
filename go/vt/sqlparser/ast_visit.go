@@ -64,6 +64,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfArgumentLessWindowExpr(in, f)
 	case *AssignmentExpr:
 		return VisitRefOfAssignmentExpr(in, f)
+	case *AtTimeZone:
+		return VisitRefOfAtTimeZone(in, f)
 	case *AutoIncSpec:
 		return VisitRefOfAutoIncSpec(in, f)
 	case *Avg:
@@ -951,6 +953,19 @@ func VisitRefOfAssignmentExpr(in *AssignmentExpr, f Visit) error {
 	return nil
 }
 
+func VisitRefOfAtTimeZone(in *AtTimeZone, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitRefOfLiteral(in.Zone, f); err != nil {
+		return err
+	}
+	return nil
+}
+
 func VisitRefOfAutoIncSpec(in *AutoIncSpec, f Visit) error {
 	if in == nil {
 		return nil
@@ -1136,6 +1151,9 @@ func VisitRefOfCastExpr(in *CastExpr, f Visit) error {
 		return err
 	}
 	if err := VisitExpr(in.Expr, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfAtTimeZone(in.TimeZone, f); err != nil {
 		return err
 	}
 	if err := VisitRefOfConvertType(in.Type, f); err != nil {

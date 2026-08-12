@@ -64,6 +64,8 @@ func (c *cow) copyOnRewriteSQLNode(n SQLNode, parent SQLNode) (out SQLNode, chan
 		return c.copyOnRewriteRefOfArgumentLessWindowExpr(n, parent)
 	case *AssignmentExpr:
 		return c.copyOnRewriteRefOfAssignmentExpr(n, parent)
+	case *AtTimeZone:
+		return c.copyOnRewriteRefOfAtTimeZone(n, parent)
 	case *AutoIncSpec:
 		return c.copyOnRewriteRefOfAutoIncSpec(n, parent)
 	case *Avg:
@@ -1134,6 +1136,29 @@ func (c *cow) copyOnRewriteRefOfAssignmentExpr(n *AssignmentExpr, parent SQLNode
 	return
 }
 
+func (c *cow) copyOnRewriteRefOfAtTimeZone(n *AtTimeZone, parent SQLNode) (out SQLNode, changed bool) {
+	if n == nil || c.cursor.stop {
+		return n, false
+	}
+	out = n
+	if c.pre == nil || c.pre(n, parent) {
+		_Zone, changedZone := c.copyOnRewriteRefOfLiteral(n.Zone, n)
+		if changedZone {
+			res := *n
+			res.Zone, _ = _Zone.(*Literal)
+			out = &res
+			if c.cloned != nil {
+				c.cloned(n, out)
+			}
+			changed = true
+		}
+	}
+	if c.post != nil {
+		out, changed = c.postVisit(out, parent, changed)
+	}
+	return
+}
+
 func (c *cow) copyOnRewriteRefOfAutoIncSpec(n *AutoIncSpec, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -1422,10 +1447,12 @@ func (c *cow) copyOnRewriteRefOfCastExpr(n *CastExpr, parent SQLNode) (out SQLNo
 	out = n
 	if c.pre == nil || c.pre(n, parent) {
 		_Expr, changedExpr := c.copyOnRewriteExpr(n.Expr, n)
+		_TimeZone, changedTimeZone := c.copyOnRewriteRefOfAtTimeZone(n.TimeZone, n)
 		_Type, changedType := c.copyOnRewriteRefOfConvertType(n.Type, n)
-		if changedExpr || changedType {
+		if changedExpr || changedTimeZone || changedType {
 			res := *n
 			res.Expr, _ = _Expr.(Expr)
+			res.TimeZone, _ = _TimeZone.(*AtTimeZone)
 			res.Type, _ = _Type.(*ConvertType)
 			out = &res
 			if c.cloned != nil {

@@ -2193,11 +2193,24 @@ func (node WindowDefinitions) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *CastExpr) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "cast(%v as %v", node.Expr, node.Type)
+	buf.astPrintf(node, "cast(%v", node.Expr)
+	if node.TimeZone != nil {
+		buf.astPrintf(node, " %v", node.TimeZone)
+	}
+	buf.astPrintf(node, " as %v", node.Type)
 	if node.Array {
 		buf.astPrintf(node, " %#s", keywordStrings[ARRAY])
 	}
 	buf.astPrintf(node, ")")
+}
+
+// Format formats the node.
+func (node *AtTimeZone) Format(buf *TrackedBuffer) {
+	buf.literal("at time zone ")
+	if node.Interval {
+		buf.literal("interval ")
+	}
+	buf.astPrintf(node, "%v", node.Zone)
 }
 
 // Format formats the node.

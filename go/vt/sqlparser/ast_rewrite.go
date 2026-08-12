@@ -65,6 +65,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfArgumentLessWindowExpr(parent, node, replacer)
 	case *AssignmentExpr:
 		return a.rewriteRefOfAssignmentExpr(parent, node, replacer)
+	case *AtTimeZone:
+		return a.rewriteRefOfAtTimeZone(parent, node, replacer)
 	case *AutoIncSpec:
 		return a.rewriteRefOfAutoIncSpec(parent, node, replacer)
 	case *Avg:
@@ -1629,6 +1631,46 @@ func (a *application) rewriteRefOfAssignmentExpr(parent SQLNode, node *Assignmen
 }
 
 // Function Generation Source: PtrToStructMethod
+func (a *application) rewriteRefOfAtTimeZone(parent SQLNode, node *AtTimeZone, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
+			return true
+		}
+	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfAtTimeZoneZone))
+	}
+	if !a.rewriteRefOfLiteral(node, node.Zone, func(newNode, parent SQLNode) {
+		parent.(*AtTimeZone).Zone = newNode.(*Literal)
+	}) {
+		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfAutoIncSpec(parent SQLNode, node *AutoIncSpec, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -2201,6 +2243,15 @@ func (a *application) rewriteRefOfCastExpr(parent SQLNode, node *CastExpr, repla
 	}
 	if !a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
 		parent.(*CastExpr).Expr = newNode.(Expr)
+	}) {
+		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfCastExprTimeZone))
+	}
+	if !a.rewriteRefOfAtTimeZone(node, node.TimeZone, func(newNode, parent SQLNode) {
+		parent.(*CastExpr).TimeZone = newNode.(*AtTimeZone)
 	}) {
 		return false
 	}

@@ -4346,6 +4346,16 @@ var validSQL = []struct {
 	output: "select * from t1 natural join t2",
 }, {
 	input: "select * from t1 as t11 straight_join t1 as t12 using (a)",
+}, {
+	input: "select cast(a at time zone 'UTC' as datetime) from t",
+}, {
+	input: "select cast(a at time zone interval '+05:30' as datetime(3)) from t",
+}, {
+	input:  "select cast( NULL AT TIME ZONE 'UTC' AS DATETIME )",
+	output: "select cast(null at time zone 'UTC' as DATETIME) from dual",
+}, {
+	input:  "select at, zone from t",
+	output: "select `at`, `zone` from t",
 }}
 
 func TestConditionlessJoinStaysLeftAssociative(t *testing.T) {
@@ -6736,6 +6746,10 @@ var invalidSQL = []struct {
 	// bare now (without parens) is an identifier, not the now() function
 	input:  "create table t (a datetime default now)",
 	output: "syntax error at position 39 near 'now'",
+}, {
+	// MySQL only allows AT TIME ZONE when casting to DATETIME
+	input:  "select cast(a at time zone 'UTC' as char)",
+	output: "AT TIME ZONE is only supported when casting to DATETIME at position 42",
 }, {
 	input:  "commit chain",
 	output: "syntax error at position 13 near 'chain'",

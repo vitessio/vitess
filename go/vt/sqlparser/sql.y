@@ -64,6 +64,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
   jsonObjectParam *JSONObjectParam
   identifierCI      IdentifierCI
   joinCondition *JoinCondition
+  atTimeZone *AtTimeZone
   databaseOption DatabaseOption
   columnType    *ColumnType
   columnCharset ColumnCharset
@@ -367,6 +368,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %token <str> MAXVALUE PARTITION REORGANIZE LESS THAN PROCEDURE TRIGGER
 %token <str> VINDEX VINDEXES DIRECTORY NAME UPGRADE
 %token <str> CHAIN SERIAL TYPE
+%token <str> AT ZONE
 %token <str> STATUS VARIABLES WARNINGS CASCADED DEFINER OPTION SQL UNDEFINED
 %token <str> SEQUENCE MERGE TEMPORARY TEMPTABLE INVOKER SECURITY FIRST AFTER LAST
 
@@ -561,6 +563,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %type <jtColumnList> jt_columns_clause columns_list
 %type <jtOnResponse> on_error on_empty json_on_response
 %type <joinCondition> join_condition join_condition_opt
+%type <atTimeZone> at_time_zone_opt
 %type <tableNames> table_name_list delete_table_list view_name_list
 %type <joinType> inner_join outer_join straight_join natural_join
 %type <tableName> table_name into_table_name delete_table_name
@@ -5963,6 +5966,13 @@ join_condition:
 | USING '(' column_list ')'
   { $$ = &JoinCondition{Using: $3} }
 
+at_time_zone_opt:
+  { $$ = nil }
+| AT TIME ZONE STRING
+  { $$ = &AtTimeZone{Zone: NewStrLiteral($4)} }
+| AT TIME ZONE INTERVAL STRING
+  { $$ = &AtTimeZone{Interval: true, Zone: NewStrLiteral($5)} }
+
 join_condition_opt:
 %prec JOIN
   { $$ = &JoinCondition{} }
@@ -6420,9 +6430,15 @@ function_call_keyword
   {
     $$ = &MatchExpr{Columns: $2, Expr: $5, Option: $6}
   }
-| CAST openb expression AS convert_type array_opt closeb
+| CAST openb expression at_time_zone_opt AS convert_type array_opt closeb
   {
-    $$ = &CastExpr{Expr: $3, Type: $5, Array: $6}
+    if $4 != nil && !strings.EqualFold($6.Type, "datetime") {
+      // MySQL only allows AT TIME ZONE when casting to DATETIME, and
+      // rejects other target types with a parse error.
+      yylex.Error("AT TIME ZONE is only supported when casting to DATETIME")
+      return 1
+    }
+    $$ = &CastExpr{Expr: $3, TimeZone: $4, Type: $6, Array: $7}
   }
 | CONVERT openb expression ',' convert_type closeb
   {
@@ -9261,6 +9277,7 @@ non_reserved_keyword:
 | ANY_VALUE %prec FUNCTION_CALL_NON_KEYWORD
 | ARRAY
 | ASCII
+| AT
 | AUTO_INCREMENT
 | AUTOEXTEND_SIZE
 | AVG %prec FUNCTION_CALL_NON_KEYWORD
@@ -9748,6 +9765,7 @@ non_reserved_keyword:
 | WITHOUT
 | WORK
 | YEAR
+| ZONE
 | ZEROFILL
 | DAY
 | DAY_HOUR

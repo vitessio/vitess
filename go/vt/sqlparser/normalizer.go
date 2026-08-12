@@ -302,6 +302,11 @@ func (nz *normalizer) visitLiteral(cursor *Cursor, node *Literal) {
 	if !nz.shouldParameterize() {
 		return
 	}
+	if _, ok := cursor.Parent().(*AtTimeZone); ok {
+		// MySQL only accepts a text literal as the time zone of an
+		// AT TIME ZONE clause, not a bind parameter.
+		return
+	}
 	if nz.inSelect == 0 {
 		nz.convertLiteral(node, cursor)
 		return

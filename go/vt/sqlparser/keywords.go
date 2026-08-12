@@ -133,6 +133,7 @@ var keywords = []keyword{
 	{"asc", ASC},
 	{"ascii", ASCII},
 	{"asensitive", UNUSED},
+	{"at", AT},
 	{"auto_increment", AUTO_INCREMENT},
 	{"autoextend_size", AUTOEXTEND_SIZE},
 	{"avg", AVG},
@@ -834,6 +835,7 @@ var keywords = []keyword{
 	{"year", YEAR},
 	{"year_month", YEAR_MONTH},
 	{"zerofill", ZEROFILL},
+	{"zone", ZONE},
 }
 
 // keywordStrings contains the reverse mapping of token to keyword strings
