@@ -186,6 +186,19 @@ func TestERSSplitBrainDetection(t *testing.T) {
 
 	result = utils.RunSQL(t.Context(), t, "SELECT msg FROM vt_insert_test WHERE id = 999902", newPrimary)
 	require.Empty(t, result.Rows)
+
+	// The losing leader must be fenced from serving its discarded history: the
+	// errant-GTID check in SetReplicationSource refuses to repoint it, so it never
+	// rejoins the replication graph and stays unhealthy
+	require.NoError(t, otherLeader.VttabletProcess.WaitForTabletStatus("NOT_SERVING"))
+	result = utils.RunSQL(t.Context(), t, "SHOW REPLICA STATUS", otherLeader)
+	require.Empty(t, result.Rows)
+
+	// The divergent row stays on the losing leader for an operator to inspect; the
+	// tablet keeps its history until it is rebuilt from the new primary
+	result = utils.RunSQL(t.Context(), t, "SELECT msg FROM vt_insert_test WHERE id = 999902", otherLeader)
+	require.Len(t, result.Rows, 1)
+	require.Equal(t, "other leader", result.Rows[0][0].ToString())
 }
 
 func TestEmergencyReparentWithBlockedPrimary(t *testing.T) {

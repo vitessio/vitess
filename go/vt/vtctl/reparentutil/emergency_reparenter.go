@@ -98,7 +98,7 @@ var (
 		[]string{"Keyspace", "Shard", "Result"},
 	)
 	ersSplitBrainOverrides = stats.NewCountersWithMultiLabels(
-		"EmergencyReparentSplitBrainOverrides", "Number of Emergency Reparent Shard split-brain detections accepted for an explicitly selected primary",
+		"EmergencyReparentSplitBrainOverrides", "Number of Emergency Reparent Shard split-brain promotions completed for an explicitly selected primary",
 		[]string{"Keyspace", "Shard"},
 	)
 )
@@ -339,8 +339,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 				}
 
 				splitBrainOverrideActive = true
-				ersSplitBrainOverrides.Add([]string{keyspace, shard}, 1)
-				erp.logger.Warningf("EmergencyReparentShard split-brain promotion allowed in keyspace %s shard %s for new primary %s; the divergent branches of the other leading candidates (%s) are discarded and those tablets may require rebuilding from the new primary", keyspace, shard, requestedPrimary, leadingPositions)
+				erp.logger.Warningf("EmergencyReparentShard attempting split-brain promotion in keyspace %s shard %s for new primary %s; the divergent branches of the other leading candidates (%s) will be discarded and those tablets may require rebuilding from the new primary", keyspace, shard, requestedPrimary, leadingPositions)
 
 				// Promote exactly the requested primary and discard the divergent branches.
 				// Reducing the candidate set here means the relay-log wait, the errant-GTID
@@ -604,6 +603,13 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	if err != nil {
 		return err
 	}
+
+	// An override that aborted before this point discarded nothing, so the counter
+	// only records overrides whose promotion actually completed
+	if splitBrainOverrideActive {
+		ersSplitBrainOverrides.Add([]string{keyspace, shard}, 1)
+	}
+
 	ev.NewPrimary = newPrimary.CloneVT()
 	return err
 }

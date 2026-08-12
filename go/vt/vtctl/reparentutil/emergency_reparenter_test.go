@@ -4407,7 +4407,8 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 		{
 			// A split-brain override only waits on the chosen primary, so if that tablet
 			// cannot apply its own relay logs the override still aborts — even though the
-			// discarded leader (which is not waited on) could have applied.
+			// discarded leader (which is not waited on) could have applied. An aborted
+			// override discards nothing, so the override counter must not record it.
 			name:       "split-brain override aborts when the chosen primary cannot apply its relay logs",
 			durability: policy.DurabilityNone,
 			emergencyReparentOps: EmergencyReparentOptions{
@@ -4484,7 +4485,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 			shard:                  "-",
 			cells:                  []string{"zone1"},
 			errShouldContain:       "could not apply all relay logs",
-			wantSplitBrainOverride: 1,
+			wantSplitBrainOverride: 0,
 		},
 		{
 			// A lone demoted primary (StopReplication reports it is not a replica) with an
@@ -4801,7 +4802,8 @@ func TestERSSplitBrainPromotionEligibility(t *testing.T) {
 				Keyspace: "testkeyspace",
 				Name:     "-",
 			})
-			testutil.AddTablets(ctx, t, ts, nil,
+			testutil.AddTablets(
+				ctx, t, ts, nil,
 				&topodatapb.Tablet{
 					Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
 					Type:     topodatapb.TabletType_REPLICA,

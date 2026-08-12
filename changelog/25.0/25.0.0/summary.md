@@ -285,7 +285,7 @@ See [#18529](https://github.com/vitessio/vitess/issues/18529).
 
 `EmergencyReparentShard` now identifies divergent leading MySQL GTID histories before waiting for relay logs or filtering errant GTIDs. The default path proceeds only when existing errant-GTID detection proves exactly one upfront leader remains; otherwise ERS fails with the tablet alias and position of every leader. An operator can proceed by passing `--new-primary <tablet-alias> --allow-split-brain-promotion`; the requested primary must be one of those upfront undominated candidates. The override requires `--new-primary`. ERS promotes exactly that tablet and preserves its complete history. It bypasses nothing else: the chosen primary must still apply its relay logs, and the `MustNot` promotion rule, cross-cell restrictions, the semi-sync forward-progress check, and the shard lock re-checks all still apply. VTOrc never opts in automatically.
 
-**Impact**: allowing a split-brain promotion discards divergent transactions that exist only on losing branches, and tablets containing those branches may need to be rebuilt from the new primary. Each accepted override increments `EmergencyReparentSplitBrainOverrides{Keyspace,Shard}` so operators can alert on and audit use of the escape hatch.
+**Impact**: allowing a split-brain promotion discards divergent transactions that exist only on losing branches, and tablets containing those branches may need to be rebuilt from the new primary. Each override whose promotion completes increments `EmergencyReparentSplitBrainOverrides{Keyspace,Shard}` so operators can alert on and audit use of the escape hatch; an override that aborts before promotion discards nothing and is not counted.
 
 See [#20199](https://github.com/vitessio/vitess/issues/20199).
 
