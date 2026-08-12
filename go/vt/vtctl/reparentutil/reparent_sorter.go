@@ -75,10 +75,10 @@ func (rs *reparentSorter) Less(i, j int) bool {
 
 	// Should not happen
 	// fail-safe code
-	if rs.tablets[i] == nil {
+	if rs.tablets[i] == nil || rs.tablets[i].Alias == nil {
 		return false
 	}
-	if rs.tablets[j] == nil {
+	if rs.tablets[j] == nil || rs.tablets[j].Alias == nil {
 		return true
 	}
 
@@ -134,11 +134,11 @@ func (rs *reparentSorter) Less(i, j int) bool {
 func dominatedCountsForSort(tablets []*topodatapb.Tablet, positions []*RelayLogPositions, dominates func(*RelayLogPositions, *RelayLogPositions) bool) []int {
 	dominatedCounts := make([]int, len(positions))
 	for i := range positions {
-		if tablets[i] == nil {
+		if tablets[i] == nil || tablets[i].Alias == nil {
 			continue
 		}
 		for j := range positions {
-			if i == j || tablets[j] == nil {
+			if i == j || tablets[j] == nil || tablets[j].Alias == nil {
 				continue
 			}
 			if dominates(positions[j], positions[i]) {

@@ -13,7 +13,8 @@ concurrency:
   group: format('{0}-{1}', ${{ github.ref }}, 'Cluster End-to-End Tests')
   cancel-in-progress: true
 
-permissions: read-all
+permissions:
+  contents: read
 
 env:
   LAUNCHABLE_ORGANIZATION: "vitess"
@@ -191,7 +192,7 @@ jobs:
       # There is no separate 'zookeeper' need, so 'consul' is the correct proxy for "this shard needs ZooKeeper".
       - name: Cache ZooKeeper
         if: steps.changes.outputs.end_to_end == 'true' && contains(matrix.needs, 'consul')
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0  # zizmor: ignore[cache-poisoning] this workflow publishes no artifacts
         with:
           path: dist/vt-zookeeper-*
           key: zookeeper-${{ hashFiles('build.env', 'bootstrap.sh') }}
@@ -215,13 +216,18 @@ jobs:
       - name: Run cluster endtoend test
         if: steps.changes.outputs.end_to_end == 'true'
         timeout-minutes: 45
+        env:
+          LIMIT_RESOURCES: ${{ contains(matrix.needs, 'limit-resources') }}
+          BINLOG_COMPRESSION: ${{ contains(matrix.needs, 'binlog-compression') }}
+          BUILD_TAG: ${{ matrix.buildTag }}
+          SHARD: ${{ matrix.shard }}
         run: |
           export VTDATAROOT="/tmp/"
           source build.env
           set -exo pipefail
 
           # Apply resource limits for heavy shards
-          if [[ "${{ contains(matrix.needs, 'limit-resources') }}" == "true" ]]; then
+          if [[ "$LIMIT_RESOURCES" == "true" ]]; then
             ulimit -n 65536
             cat <<-EOF>>./config/mycnf/mysql84.cnf
           innodb_buffer_pool_dump_at_shutdown=OFF
@@ -241,7 +247,7 @@ jobs:
           fi
 
           # Enable binlog compression for vreplication shards
-          if [[ "${{ contains(matrix.needs, 'binlog-compression') }}" == "true" ]]; then
+          if [[ "$BINLOG_COMPRESSION" == "true" ]]; then
             cat <<-EOF>>./config/mycnf/mysql84.cnf
           binlog-transaction-compression=ON
           binlog-row-value-options=PARTIAL_JSON
@@ -250,14 +256,14 @@ jobs:
 
           # Build test command with optional flags
           EXTRA_FLAGS=""
-          if [[ "${{ matrix.buildTag }}" != "" ]]; then
-            EXTRA_FLAGS="$EXTRA_FLAGS -build-tag=${{ matrix.buildTag }}"
+          if [[ "$BUILD_TAG" != "" ]]; then
+            EXTRA_FLAGS="$EXTRA_FLAGS -build-tag=$BUILD_TAG"
           fi
-          if [[ "${{ matrix.shard }}" == *"partial_keyspace"* ]]; then
+          if [[ "$SHARD" == *"partial_keyspace"* ]]; then
             EXTRA_FLAGS="$EXTRA_FLAGS -partial-keyspace=true"
           fi
 
-          go run test.go -docker=false -follow -shard "${{ matrix.shard }}" $EXTRA_FLAGS
+          go run test.go -docker=false -follow -shard "$SHARD" $EXTRA_FLAGS
 
       - name: Record test results in launchable
         if: |
