@@ -599,15 +599,9 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	// Since the new primary tablet belongs to the validCandidateTablets list, we no longer need any additional constraint checks
 
 	// Final step is to promote our primary candidate
-	_, err = erp.reparentReplicas(ctx, ev, newPrimary, tabletMap, stoppedReplicationSnapshot.statusMap, opts, nonAckers, false /* intermediateReparent */)
+	_, err = erp.reparentReplicas(ctx, ev, newPrimary, tabletMap, stoppedReplicationSnapshot.statusMap, opts, nonAckers, splitBrainOverrideActive, false /* intermediateReparent */)
 	if err != nil {
 		return err
-	}
-
-	// An override that aborted before this point discarded nothing, so the counter
-	// only records overrides whose promotion actually completed
-	if splitBrainOverrideActive {
-		ersSplitBrainOverrides.Add([]string{keyspace, shard}, 1)
 	}
 
 	ev.NewPrimary = newPrimary.CloneVT()
@@ -913,7 +907,7 @@ func (erp *EmergencyReparenter) promoteIntermediateSource(
 	// we wait for all the replicas so that we can choose a better candidate from the ones that started replication later
 	// The intermediate reparent doesn't run the acker quorum gate, so it has no
 	// non-ackers to exclude.
-	reachableTablets, err := erp.reparentReplicas(ctx, ev, source, validTabletMap, statusMap, opts, nil /* nonAckers */, true /* intermediateReparent */)
+	reachableTablets, err := erp.reparentReplicas(ctx, ev, source, validTabletMap, statusMap, opts, nil /* nonAckers */, false /* splitBrainOverrideActive */, true /* intermediateReparent */)
 	if err != nil {
 		return nil, err
 	}
@@ -943,6 +937,7 @@ func (erp *EmergencyReparenter) reparentReplicas(
 	statusMap map[string]*replicationdatapb.StopReplicationStatus,
 	opts EmergencyReparentOptions,
 	nonAckers []string, // nonAckers are tablets that can't be relied on to send semi-sync ACKs, so they don't count towards the acker quorum gate below even when their repoint succeeds. This must match the set filterValidCandidates excluded when it proved forward progress.
+	splitBrainOverrideActive bool, // splitBrainOverrideActive records the promotion in the split-brain override counter once it commits. An override that aborts before the promotion discarded nothing, and a replica repoint failure afterwards doesn't undo it, so the counter is bumped right after the reparent journal write.
 	intermediateReparent bool, // intermediateReparent represents whether the reparenting of the replicas is the final reparent or not.
 	// Since ERS can sometimes promote a tablet, which isn't a candidate for promotion, if it is the most advanced, we don't want to
 	// call PromoteReplica on it. We just want to get all replicas to replicate from it to get caught up, after which we'll promote the primary
@@ -1160,6 +1155,12 @@ func (erp *EmergencyReparenter) reparentReplicas(
 		replCancel()
 
 		return nil, vterrors.Wrapf(primaryErr, "failed to promote %v to primary", topoproto.TabletAliasString(newPrimaryTablet.Alias))
+	}
+
+	// The journal write above committed the override's lossy history, so it is counted
+	// here even if repointing the replicas below fails
+	if splitBrainOverrideActive && !intermediateReparent {
+		ersSplitBrainOverrides.Add([]string{ev.ShardInfo.Keyspace(), ev.ShardInfo.ShardName()}, 1)
 	}
 
 	select {

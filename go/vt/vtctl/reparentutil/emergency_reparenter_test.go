@@ -4687,6 +4687,7 @@ func TestERSSplitBrainPromotionEligibility(t *testing.T) {
 		name                 string
 		newPrimary           *topodatapb.TabletAlias
 		stuckDiscardedLeader bool
+		replicaRepointsFail  bool
 		wantErr              string
 		wantPrimary          *topodatapb.TabletAlias
 		wantOverrideCount    int64
@@ -4725,6 +4726,19 @@ func TestERSSplitBrainPromotionEligibility(t *testing.T) {
 				Uid:  100,
 			},
 			wantOverrideCount: 1,
+		},
+		{
+			// The promotion and reparent journal write commit the override's lossy history
+			// before the replicas are repointed, so the override must be counted even when
+			// ERS errors afterwards because every repoint failed.
+			name: "counts override when repoints fail after promotion",
+			newPrimary: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  100,
+			},
+			replicaRepointsFail: true,
+			wantErr:             "replica(s) failed",
+			wantOverrideCount:   1,
 		},
 	}
 
@@ -4793,6 +4807,12 @@ func TestERSSplitBrainPromotionEligibility(t *testing.T) {
 					"zone1-0000000101": discardedLeaderWait,
 				},
 				ReadReparentJournalInfoResults: map[string]int32{},
+			}
+			if tt.replicaRepointsFail {
+				tmc.SetReplicationSourceResults = map[string]error{
+					"zone1-0000000101": assert.AnError,
+					"zone1-0000000102": assert.AnError,
+				}
 			}
 
 			ctx := t.Context()
@@ -5888,7 +5908,7 @@ func TestEmergencyReparenter_promotionOfNewPrimary(t *testing.T) {
 			tt.emergencyReparentOps.durability = durability
 
 			erp := NewEmergencyReparenter(ts, tt.tmc, logger)
-			_, err := erp.reparentReplicas(ctx, ev, tabletInfo.Tablet, tt.tabletMap, tt.statusMap, tt.emergencyReparentOps, nil /* nonAckers */, false)
+			_, err := erp.reparentReplicas(ctx, ev, tabletInfo.Tablet, tt.tabletMap, tt.statusMap, tt.emergencyReparentOps, nil /* nonAckers */, false /* splitBrainOverrideActive */, false)
 			if tt.shouldErr {
 				require.Error(t, err)
 				assert.Contains(t, err.Error(), tt.errShouldContain)
@@ -7952,7 +7972,7 @@ func TestEmergencyReparenter_reparentReplicas(t *testing.T) {
 			tt.emergencyReparentOps.durability = durability
 
 			erp := NewEmergencyReparenter(ts, tt.tmc, logger)
-			_, err := erp.reparentReplicas(ctx, ev, tabletInfo.Tablet, tt.tabletMap, tt.statusMap, tt.emergencyReparentOps, nil /* nonAckers */, false /* intermediateReparent */)
+			_, err := erp.reparentReplicas(ctx, ev, tabletInfo.Tablet, tt.tabletMap, tt.statusMap, tt.emergencyReparentOps, nil /* nonAckers */, false /* splitBrainOverrideActive */, false /* intermediateReparent */)
 			if tt.shouldErr {
 				require.Error(t, err)
 				assert.Contains(t, err.Error(), tt.errShouldContain)
@@ -8822,7 +8842,7 @@ func TestParentContextCancelled(t *testing.T) {
 		time.Sleep(time.Second)
 		cancel()
 	}()
-	_, err = erp.reparentReplicas(ctx, ev, tabletMap[newPrimaryTabletAlias].Tablet, tabletMap, statusMap, emergencyReparentOps, nil /* nonAckers */, true)
+	_, err = erp.reparentReplicas(ctx, ev, tabletMap[newPrimaryTabletAlias].Tablet, tabletMap, statusMap, emergencyReparentOps, nil /* nonAckers */, false /* splitBrainOverrideActive */, true)
 	require.NoError(t, err)
 }
 
