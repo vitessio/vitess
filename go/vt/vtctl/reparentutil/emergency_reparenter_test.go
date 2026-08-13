@@ -9965,7 +9965,7 @@ func TestEmergencyReparenterFindErrantGTIDs(t *testing.T) {
 			validCandidates, isGtid, err := FindPositionsOfAllCandidates(tt.statusMap, tt.primaryStatusMap)
 			require.NoError(t, err)
 			require.True(t, isGtid)
-			candidates, starved, err := erp.findErrantGTIDs(t.Context(), validCandidates, tt.statusMap, tt.tabletMap, 10*time.Second, nil)
+			candidates, starved, err := erp.findErrantGTIDs(t.Context(), validCandidates, tt.statusMap, tt.tabletMap, 10*time.Second, nil, false)
 			if tt.wantErr != "" {
 				require.ErrorContains(t, err, tt.wantErr)
 				return
@@ -10067,7 +10067,7 @@ func TestEmergencyReparenterFindErrantGTIDs_NilPosition(t *testing.T) {
 		"zone1-0000000104": nil,
 	}
 
-	candidates, starved, err := erp.findErrantGTIDs(t.Context(), validCandidates, statusMap, tabletMap, 10*time.Second, nil)
+	candidates, starved, err := erp.findErrantGTIDs(t.Context(), validCandidates, statusMap, tabletMap, 10*time.Second, nil, false)
 	require.NoError(t, err)
 	require.Contains(t, candidates, "zone1-0000000102")
 	// the nil peer at maxLen contributed no evidence, so the surviving candidate was
@@ -10132,7 +10132,7 @@ func TestEmergencyReparenterFindErrantGTIDs_EmptyPrimaryPosition(t *testing.T) {
 		},
 	}
 
-	candidates, starved, err := erp.findErrantGTIDs(t.Context(), validCandidates, statusMap, tabletMap, 10*time.Second, nil)
+	candidates, starved, err := erp.findErrantGTIDs(t.Context(), validCandidates, statusMap, tabletMap, 10*time.Second, nil, false)
 	require.NoError(t, err)
 	// the empty primary contributed no evidence, so the lagged replica must be accepted
 	// as-is rather than have its entire GTID set flagged errant
@@ -10223,7 +10223,7 @@ func TestEmergencyReparenterFindErrantGTIDs_EmptyPrimaryErrantReplica(t *testing
 		},
 	}
 
-	candidates, starved, err := erp.findErrantGTIDs(t.Context(), validCandidates, statusMap, tabletMap, 10*time.Second, nil)
+	candidates, starved, err := erp.findErrantGTIDs(t.Context(), validCandidates, statusMap, tabletMap, 10*time.Second, nil, false)
 	require.NoError(t, err)
 	require.Contains(t, candidates, "zone1-0000000101")
 	// no other tablet corroborates u3:1, so zone1-0000000102 has an errant GTID and
@@ -10298,7 +10298,7 @@ func TestEmergencyReparenterFindErrantGTIDs_WipedMaxJournalFailsClosed(t *testin
 		},
 	}
 
-	_, _, err := erp.findErrantGTIDs(t.Context(), validCandidates, statusMap, tabletMap, 10*time.Second, nil)
+	_, _, err := erp.findErrantGTIDs(t.Context(), validCandidates, statusMap, tabletMap, 10*time.Second, nil, false)
 	require.ErrorContains(t, err, "cannot be proven to have seen the latest promotion")
 	require.ErrorContains(t, err, "zone1-0000000100")
 }
@@ -10321,7 +10321,7 @@ func TestEmergencyReparenterFindErrantGTIDs_AllZeroPositionsWithJournalHistory(t
 		"zone1-0000000101": {Combined: emptyPos},
 	}
 
-	_, _, err := erp.findErrantGTIDs(t.Context(), validCandidates, map[string]*replicationdatapb.StopReplicationStatus{}, tabletMap, 10*time.Second, nil)
+	_, _, err := erp.findErrantGTIDs(t.Context(), validCandidates, map[string]*replicationdatapb.StopReplicationStatus{}, tabletMap, 10*time.Second, nil, false)
 	require.ErrorContains(t, err, "cannot be proven to have seen the latest promotion")
 	require.ErrorContains(t, err, "zone1-0000000100")
 }
@@ -10344,7 +10344,7 @@ func TestEmergencyReparenterFindErrantGTIDs_AllZeroPositionsNewShard(t *testing.
 		"zone1-0000000101": {Combined: emptyPos},
 	}
 
-	candidates, starved, err := erp.findErrantGTIDs(t.Context(), validCandidates, map[string]*replicationdatapb.StopReplicationStatus{}, tabletMap, 10*time.Second, nil)
+	candidates, starved, err := erp.findErrantGTIDs(t.Context(), validCandidates, map[string]*replicationdatapb.StopReplicationStatus{}, tabletMap, 10*time.Second, nil, true)
 	require.NoError(t, err)
 	assert.Contains(t, candidates, "zone1-0000000100")
 	assert.Contains(t, candidates, "zone1-0000000101")
@@ -10376,7 +10376,7 @@ func TestEmergencyReparenterFindErrantGTIDs_MissingJournalTableRealPosition(t *t
 		},
 	}
 
-	_, _, err := erp.findErrantGTIDs(t.Context(), validCandidates, map[string]*replicationdatapb.StopReplicationStatus{}, tabletMap, 10*time.Second, nil)
+	_, _, err := erp.findErrantGTIDs(t.Context(), validCandidates, map[string]*replicationdatapb.StopReplicationStatus{}, tabletMap, 10*time.Second, nil, false)
 	require.ErrorContains(t, err, "could not read reparent journal information")
 }
 
@@ -10400,9 +10400,32 @@ func TestEmergencyReparenterFindErrantGTIDs_MissingJournalTableNewShard(t *testi
 		"zone1-0000000101": {Combined: emptyPos},
 	}
 
-	candidates, starved, err := erp.findErrantGTIDs(t.Context(), validCandidates, map[string]*replicationdatapb.StopReplicationStatus{}, tabletMap, 10*time.Second, nil)
+	candidates, starved, err := erp.findErrantGTIDs(t.Context(), validCandidates, map[string]*replicationdatapb.StopReplicationStatus{}, tabletMap, 10*time.Second, nil, true)
 	require.NoError(t, err)
 	assert.Contains(t, candidates, "zone1-0000000100")
 	assert.Contains(t, candidates, "zone1-0000000101")
 	assert.Empty(t, starved)
+}
+
+// TestEmergencyReparenterFindErrantGTIDs_AllZeroPositionsInitializedShard covers a shard
+// that lost both its GTID state and its sidecar tables on every reachable candidate: the
+// journal counts alone cannot distinguish this from a brand-new shard, so the topology
+// must agree the shard was never initialized before anyone is treated as a valid first
+// primary. Here the topology records a previous primary, so ERS fails closed.
+func TestEmergencyReparenterFindErrantGTIDs_AllZeroPositionsInitializedShard(t *testing.T) {
+	tabletMap, emptyPos := findErrantGTIDsWipedShardFixture(t)
+
+	erp := NewEmergencyReparenter(nil, &testutil.TabletManagerClient{
+		ReadReparentJournalInfoErrors: map[string]error{
+			"zone1-0000000100": errors.New("rpc error: code = Unknown desc = Table '_vt.reparent_journal' doesn't exist (errno 1146) (sqlstate 42S02) during query: SELECT COUNT(*) FROM _vt.reparent_journal"),
+			"zone1-0000000101": errors.New("rpc error: code = Unknown desc = Table '_vt.reparent_journal' doesn't exist (errno 1146) (sqlstate 42S02) during query: SELECT COUNT(*) FROM _vt.reparent_journal"),
+		},
+	}, nil)
+	validCandidates := map[string]*RelayLogPositions{
+		"zone1-0000000100": {Combined: emptyPos},
+		"zone1-0000000101": {Combined: emptyPos},
+	}
+
+	_, _, err := erp.findErrantGTIDs(t.Context(), validCandidates, map[string]*replicationdatapb.StopReplicationStatus{}, tabletMap, 10*time.Second, nil, false)
+	require.ErrorContains(t, err, "topology records a previous primary")
 }
