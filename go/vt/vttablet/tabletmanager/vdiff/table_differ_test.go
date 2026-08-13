@@ -153,11 +153,111 @@ func TestGetSourcePKCols_TableDroppedOnSource(t *testing.T) {
 		},
 		table: table,
 		tablePlan: &tablePlan{
-			table: table,
+			table:       table,
+			sourceQuery: "select c1, c2 from dropped_table order by c1 asc",
 		},
 	}
 
 	err := td.getSourcePKCols()
 	require.NoError(t, err)
 	require.Nil(t, td.tablePlan.sourcePkCols)
+}
+
+// TestGetSourcePKCols_ComputedAliasFailsClosed verifies that when a source PK
+// column is not projected as a physical column in the source query (only a
+// computed value aliased to the PK name is present), getSourcePKCols fails
+// closed rather than persisting the derived value as the source checkpoint.
+// The row streamer resumes using the physical source PK, so accepting the
+// computed value would skip or repeat rows on resume.
+func TestGetSourcePKCols_ComputedAliasFailsClosed(t *testing.T) {
+	tvde := newTestVDiffEnv(t)
+	defer tvde.close()
+
+	ct := tvde.createController(t, 1)
+
+	// The source table's physical PK is "textcol", but the source query only
+	// projects a computed expression "a + b" aliased to "textcol".
+	sourceTable := &tabletmanagerdatapb.TableDefinition{
+		Name:              "pktext",
+		Columns:           []string{"textcol", "c2"},
+		PrimaryKeyColumns: []string{"textcol"},
+		Fields:            sqltypes.MakeTestFields("textcol|c2", "varchar|int64"),
+	}
+	tvde.tmc.schema = &tabletmanagerdatapb.SchemaDefinition{
+		TableDefinitions: []*tabletmanagerdatapb.TableDefinition{sourceTable},
+	}
+
+	td := &tableDiffer{
+		wd: &workflowDiffer{
+			ct: ct,
+		},
+		table: sourceTable,
+		tablePlan: &tablePlan{
+			table:       sourceTable,
+			sourceQuery: "select c2, a + b as textcol from pktext order by textcol asc",
+		},
+	}
+
+	err := td.getSourcePKCols()
+	require.Error(t, err)
+	require.ErrorContains(t, err, "source PK column textcol not found as a physical column")
+	require.Nil(t, td.tablePlan.sourcePkCols)
+}
+
+// TestGetSourcePKCols_ResumeCheckpointReorderedPK is a resume regression test.
+// For a composite-PK table whose source query reorders the PK columns
+// (SELECT layout differs from PK definition order), it confirms that the
+// sourcePkCols indices point at the correct SELECT positions so that the
+// persisted source lastpk pairs each PK value with the right column. Before
+// the fix, the indices were in column-ordinal order and lastPKFromRow built a
+// corrupted source checkpoint, causing false ExtraRowsSource on every resume.
+func TestGetSourcePKCols_ResumeCheckpointReorderedPK(t *testing.T) {
+	tvde := newTestVDiffEnv(t)
+	defer tvde.close()
+
+	ct := tvde.createController(t, 1)
+
+	// Physical source table "t" has columns a,b,c with composite PK (c, a).
+	// The source query projects them in a different order: b, c, a.
+	// So source PK "c" is at SELECT index 1 and "a" is at SELECT index 2.
+	sourceTable := &tabletmanagerdatapb.TableDefinition{
+		Name:              "t",
+		Columns:           []string{"a", "b", "c"},
+		PrimaryKeyColumns: []string{"c", "a"},
+		Fields:            sqltypes.MakeTestFields("b|c|a", "int64|int64|int64"),
+	}
+	tvde.tmc.schema = &tabletmanagerdatapb.SchemaDefinition{
+		TableDefinitions: []*tabletmanagerdatapb.TableDefinition{sourceTable},
+	}
+
+	td := &tableDiffer{
+		wd: &workflowDiffer{
+			ct: ct,
+		},
+		table: sourceTable,
+		tablePlan: &tablePlan{
+			table:       sourceTable,
+			sourceQuery: "select b, c, a from t order by c asc, a asc",
+			// Target PK differs from source PK order so that lastPKFromRow
+			// persists a distinct Source checkpoint.
+			pkCols: []int{2, 1},
+		},
+	}
+
+	err := td.getSourcePKCols()
+	require.NoError(t, err)
+	require.Equal(t, []int{1, 2}, td.tablePlan.sourcePkCols)
+
+	// A streamed row [b=10, c=20, a=30] must serialize the source checkpoint
+	// as PK (c, a) = (20, 30), i.e. taking SELECT indices [1, 2], not the
+	// ordinal-order indices [2, 0] that the buggy code would have produced.
+	row := []sqltypes.Value{sqltypes.NewInt64(10), sqltypes.NewInt64(20), sqltypes.NewInt64(30)}
+	lastPK := td.lastPKFromRow(row)
+	require.NotNil(t, lastPK.Source)
+	sourceResult := sqltypes.Proto3ToResult(lastPK.Source)
+	require.Len(t, sourceResult.Rows, 1)
+	require.Equal(t, "20", sourceResult.Rows[0][0].ToString(), "first source PK value should be column c")
+	require.Equal(t, "30", sourceResult.Rows[0][1].ToString(), "second source PK value should be column a")
+	require.Equal(t, "c", sourceResult.Fields[0].Name)
+	require.Equal(t, "a", sourceResult.Fields[1].Name)
 }

@@ -948,6 +948,27 @@ func (td *tableDiffer) getSourcePKCols() error {
 	ctx, cancel := context.WithTimeout(td.wd.ct.vde.ctx, topo.RemoteOperationTimeout*3)
 	defer cancel()
 
+	// Parse the source query first. We need it for two reasons:
+	//  1. The physical source table can differ from the target table name
+	//     (td.table.Name) for cross-table MoveTables filters, e.g. a filter of
+	//     "select ... from t2" for target table t1. The schema, PK-equivalent,
+	//     and PK column lookups must all use the real source table.
+	//  2. We map PK columns against the SELECT expression order (the actual row
+	//     layout) rather than td.table.Columns (column ordinal position),
+	//     because filters can reorder columns (e.g. "select c2, c1 from t1").
+	statement, err := td.wd.ct.vde.parser.Parse(td.tablePlan.sourceQuery)
+	if err != nil {
+		return vterrors.Wrapf(err, "failed to parse source query for table %s", td.table.Name)
+	}
+	sourceSelect, ok := statement.(*sqlparser.Select)
+	if !ok {
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected statement type for source query of table %s", td.table.Name)
+	}
+	sourceTableName, err := sourceTableNameFromSelect(sourceSelect)
+	if err != nil {
+		return vterrors.Wrapf(err, "failed to determine source table for target table %s", td.table.Name)
+	}
+
 	// We use the first sourceShard as all of them should have the same schema.
 	if len(td.wd.ct.sources) == 0 {
 		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "no source shards found in %s keyspace",
@@ -971,16 +992,16 @@ func (td *tableDiffer) getSourcePKCols() error {
 			td.wd.ct.sourceKeyspace, sourceShardName)
 	}
 	sourceSchema, err := td.wd.ct.tmc.GetSchema(ctx, sourceTablet.Tablet, &tabletmanagerdatapb.GetSchemaRequest{
-		Tables: []string{td.table.Name},
+		Tables: []string{sourceTableName},
 	})
 	if err != nil {
 		return vterrors.Wrapf(err, "failed to get the schema for table %s from source tablet %s",
-			td.table.Name, topoproto.TabletAliasString(sourceTablet.Alias))
+			sourceTableName, topoproto.TabletAliasString(sourceTablet.Alias))
 	}
 	if len(sourceSchema.TableDefinitions) == 0 {
 		// The table no longer exists on the source. Any rows that exist on the target will be
 		// reported as extra rows.
-		log.Warn(fmt.Sprintf("The %s table was not found on source tablet %s during VDiff for the %s workflow; any rows on the target will be reported as extra", td.table.Name, topoproto.TabletAliasString(sourceTablet.Alias), td.wd.ct.workflow))
+		log.Warn(fmt.Sprintf("The %s table was not found on source tablet %s during VDiff for the %s workflow; any rows on the target will be reported as extra", sourceTableName, topoproto.TabletAliasString(sourceTablet.Alias), td.wd.ct.workflow))
 		return nil
 	}
 	sourceTable := sourceSchema.TableDefinitions[0]
@@ -993,97 +1014,117 @@ func (td *tableDiffer) getSourcePKCols() error {
 			})
 			if err != nil {
 				return nil, vterrors.Wrapf(err, "failed to query the %s source tablet in order to get a primary key equivalent for the %s table",
-					topoproto.TabletAliasString(sourceTablet.Alias), td.table.Name)
+					topoproto.TabletAliasString(sourceTablet.Alias), sourceTableName)
 			}
 			return sqltypes.Proto3ToResult(res), nil
 		}
-		pkeCols, _, err := mysqlctl.GetPrimaryKeyEquivalentColumns(ctx, executeFetch, sourceTablet.DbName(), td.table.Name)
+		pkeCols, _, err := mysqlctl.GetPrimaryKeyEquivalentColumns(ctx, executeFetch, sourceTablet.DbName(), sourceTableName)
 		if err != nil {
 			return vterrors.Wrapf(err, "failed to get a primary key equivalent for the %s table from source tablet %s",
-				td.table.Name, topoproto.TabletAliasString(sourceTablet.Alias))
+				sourceTableName, topoproto.TabletAliasString(sourceTablet.Alias))
 		}
 		if len(pkeCols) > 0 {
-			log.Info(fmt.Sprintf("Using primary key equivalent columns %+v for table %s in vdiff %s", pkeCols, td.table.Name, td.wd.ct.uuid))
+			log.Info(fmt.Sprintf("Using primary key equivalent columns %+v for table %s in vdiff %s", pkeCols, sourceTableName, td.wd.ct.uuid))
 			sourceTable.PrimaryKeyColumns = pkeCols
 		} else {
 			// We use every column together as a substitute PK.
-			log.Info(fmt.Sprintf("Using all columns as a substitute primary key for table %s in vdiff %s", td.table.Name, td.wd.ct.uuid))
-			sourceTable.PrimaryKeyColumns = append(sourceTable.PrimaryKeyColumns, td.table.Columns...)
+			log.Info(fmt.Sprintf("Using all columns as a substitute primary key for table %s in vdiff %s", sourceTableName, td.wd.ct.uuid))
+			sourceTable.PrimaryKeyColumns = append(sourceTable.PrimaryKeyColumns, sourceTable.Columns...)
 		}
 	}
 
-	// Parse the source query to determine column positions in the actual row layout.
-	// We must map PK columns against the SELECT expression order (not td.table.Columns)
-	// because filters can reorder columns (e.g., "select c2, c1 from t1").
-	statement, err := td.wd.ct.vde.parser.Parse(td.tablePlan.sourceQuery)
-	if err != nil {
-		return vterrors.Wrapf(err, "failed to parse source query for table %s", td.table.Name)
-	}
-	sourceSelect, ok := statement.(*sqlparser.Select)
-	if !ok {
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected statement type for source query of table %s", td.table.Name)
-	}
-
+	// Map each source PK column to its position in the SELECT expression order,
+	// which is the actual layout of the streamed rows.
 	indices, err := sourcePKSelectIndices(sourceSelect, sourceTable.PrimaryKeyColumns)
 	if err != nil {
-		return vterrors.Wrapf(err, "table %s", td.table.Name)
+		return vterrors.Wrapf(err, "table %s", sourceTableName)
 	}
 	td.tablePlan.sourcePkCols = indices
 
 	return nil
 }
 
-// sourcePKSelectIndices maps each PK column to its position in the SELECT expression list.
-// It uses two passes: first matching by underlying ColName (to prevent alias shadowing),
-// then falling back to alias matching for cross-table filters.
+// sourceTableNameFromSelect returns the physical source table referenced by the
+// VReplication filter's SELECT. This can differ from the VDiff target table name
+// for cross-table MoveTables filters (e.g. "select ... from t2" for target t1),
+// and must be used for all source schema/PK lookups.
+func sourceTableNameFromSelect(sourceSelect *sqlparser.Select) (string, error) {
+	if len(sourceSelect.From) != 1 {
+		return "", fmt.Errorf("unsupported source query, expected a single table in the FROM clause: %s", sqlparser.String(sourceSelect))
+	}
+	aliased, ok := sourceSelect.From[0].(*sqlparser.AliasedTableExpr)
+	if !ok {
+		return "", fmt.Errorf("unsupported source query, expected a simple table reference: %s", sqlparser.String(sourceSelect))
+	}
+	tableName := sqlparser.GetTableName(aliased.Expr)
+	if tableName.IsEmpty() {
+		return "", fmt.Errorf("unsupported source query, could not resolve the source table: %s", sqlparser.String(sourceSelect))
+	}
+	return tableName.String(), nil
+}
+
+// sourcePKSelectIndices maps each source PK column to its position in the SELECT
+// expression list (the physical row layout the row streamer produces). The
+// indices are returned in PK definition order.
+//
+// Because the schema lookup now uses the real source table (see
+// sourceTableNameFromSelect), every source PK column is expected to appear in
+// the SELECT list as a direct reference to that physical column. We resolve each
+// PK against the underlying column of the expression:
+//   - a plain ColName ("select c1, c2 ..." or reordered "select c2, c1 ..."),
+//   - a renamed column ("select source_id as target_id ...", underlying ColName), or
+//   - a CONVERT(col USING charset) rename, unwrapping to the inner ColName,
+//     mirroring how the row streamer's planner resolves the physical column.
+//
+// We deliberately do NOT accept an alias that resolves to a computed or
+// unrelated expression (e.g. "select a + b as c1" or "select other_col as c1").
+// The row streamer resumes using the physical source PK value, so persisting a
+// derived value as the source checkpoint would skip or repeat rows on resume.
+// Such cases fail closed with an error rather than corrupting the checkpoint.
 func sourcePKSelectIndices(sourceSelect *sqlparser.Select, pkColumns []string) ([]int, error) {
 	indices := make([]int, 0, len(pkColumns))
 	for _, pkc := range pkColumns {
 		found := false
-		// Pass 1: match by underlying ColName (direct source column match).
-		// This must run first so that an alias shadowing a PK name cannot
-		// win over the real source column (e.g., "select b as a, a as b").
 		for i, selExpr := range sourceSelect.SelectExprs.Exprs {
 			aliasedExpr, ok := selExpr.(*sqlparser.AliasedExpr)
 			if !ok {
 				continue
 			}
-			switch ct := aliasedExpr.Expr.(type) {
-			case *sqlparser.ColName:
-				if strings.EqualFold(pkc, ct.Name.String()) {
-					indices = append(indices, i)
-					found = true
-				}
-			case *sqlparser.FuncExpr:
-				if strings.EqualFold(pkc, aliasedExpr.As.String()) {
-					indices = append(indices, i)
-					found = true
-				}
+			colName, ok := underlyingSourceColumn(aliasedExpr.Expr)
+			if !ok {
+				continue
 			}
-			if found {
+			if strings.EqualFold(pkc, colName) {
+				indices = append(indices, i)
+				found = true
 				break
 			}
 		}
-		// Pass 2: fallback to alias match for cross-table filters
-		// (e.g., "select c0 as c1 from t2" where target PK is c1).
 		if !found {
-			for i, selExpr := range sourceSelect.SelectExprs.Exprs {
-				aliasedExpr, ok := selExpr.(*sqlparser.AliasedExpr)
-				if !ok {
-					continue
-				}
-				if !aliasedExpr.As.IsEmpty() && strings.EqualFold(pkc, aliasedExpr.As.String()) {
-					indices = append(indices, i)
-					found = true
-					break
-				}
-			}
-		}
-		if !found {
-			return nil, fmt.Errorf("source PK column %s not found in SELECT list", pkc)
+			return nil, fmt.Errorf("source PK column %s not found as a physical column in the source query SELECT list", pkc)
 		}
 	}
 	return indices, nil
+}
+
+// underlyingSourceColumn returns the name of the physical source column that a
+// SELECT expression reads from, and whether the expression resolves to one. It
+// handles plain column references and CONVERT(col USING charset) renames (used
+// for charset conversions where the AS is the renamed target column). Computed
+// expressions, functions, and literals do not resolve to a physical column and
+// return ok == false.
+func underlyingSourceColumn(expr sqlparser.Expr) (string, bool) {
+	switch e := expr.(type) {
+	case *sqlparser.ColName:
+		return e.Name.String(), true
+	case *sqlparser.ConvertUsingExpr:
+		// e.g. "convert(c1 using utf8mb4) as c2": the inner column is the
+		// physical source column. This mirrors the row streamer planner.
+		if inner, ok := e.Expr.(*sqlparser.ColName); ok {
+			return inner.Name.String(), true
+		}
+	}
+	return "", false
 }
 
 func getColumnNameForSelectExpr(selectExpression sqlparser.SelectExpr) (string, error) {

@@ -44,7 +44,11 @@ func TestSourcePKColsOrdering(t *testing.T) {
 	ct := tvde.createController(t, 1)
 
 	testCases := []struct {
-		name              string
+		name string
+		// sourceTable is the physical table the source query reads from
+		// (the table in the FROM clause). getSourcePKCols resolves the source
+		// schema from this name, which can differ from the target table name.
+		sourceTable       string
 		columns           []string
 		primaryKeyColumns []string
 		sourceQuery       string
@@ -52,6 +56,7 @@ func TestSourcePKColsOrdering(t *testing.T) {
 	}{
 		{
 			name:              "columns in natural order",
+			sourceTable:       "t",
 			columns:           []string{"c1", "c2"},
 			primaryKeyColumns: []string{"c1"},
 			sourceQuery:       "select c1, c2 from t order by c1 asc",
@@ -59,6 +64,7 @@ func TestSourcePKColsOrdering(t *testing.T) {
 		},
 		{
 			name:              "columns reordered in select",
+			sourceTable:       "t",
 			columns:           []string{"c1", "c2"},
 			primaryKeyColumns: []string{"c1"},
 			sourceQuery:       "select c2, c1 from t order by c1 asc",
@@ -66,6 +72,7 @@ func TestSourcePKColsOrdering(t *testing.T) {
 		},
 		{
 			name:              "composite pk reordered in select",
+			sourceTable:       "t",
 			columns:           []string{"a", "b", "c"},
 			primaryKeyColumns: []string{"c", "a"},
 			sourceQuery:       "select a, b, c from t order by c asc, a asc",
@@ -73,20 +80,26 @@ func TestSourcePKColsOrdering(t *testing.T) {
 		},
 		{
 			name:              "composite pk with select reorder",
+			sourceTable:       "t",
 			columns:           []string{"a", "b", "c", "d"},
 			primaryKeyColumns: []string{"b", "d"},
 			sourceQuery:       "select d, c, b, a from t order by b asc, d asc",
 			wantSourcePkCols:  []int{2, 0},
 		},
 		{
-			name:              "aliased column matches pk via alias",
-			columns:           []string{"c1", "c2"},
-			primaryKeyColumns: []string{"c1"},
+			// Cross-table MoveTables filter: the source table is t2 and its
+			// physical PK is c0, renamed to the target column c1 in the SELECT.
+			// The source PK c0 is matched via its underlying ColName.
+			name:              "renamed physical source column resolves from source table",
+			sourceTable:       "t2",
+			columns:           []string{"c0", "c2"},
+			primaryKeyColumns: []string{"c0"},
 			sourceQuery:       "select c0 as c1, c2 from t2 order by c1 asc",
 			wantSourcePkCols:  []int{0},
 		},
 		{
 			name:              "pk matches ordinal order",
+			sourceTable:       "t",
 			columns:           []string{"a", "b", "c"},
 			primaryKeyColumns: []string{"a", "b"},
 			sourceQuery:       "select a, b, c from t order by a asc, b asc",
@@ -94,6 +107,7 @@ func TestSourcePKColsOrdering(t *testing.T) {
 		},
 		{
 			name:              "column swap alias does not shadow real pk",
+			sourceTable:       "t",
 			columns:           []string{"a", "b"},
 			primaryKeyColumns: []string{"a"},
 			sourceQuery:       "select b as a, a as b from t order by a asc",
@@ -101,6 +115,7 @@ func TestSourcePKColsOrdering(t *testing.T) {
 		},
 		{
 			name:              "column swap composite pk prefers colname over alias",
+			sourceTable:       "t",
 			columns:           []string{"a", "b", "c"},
 			primaryKeyColumns: []string{"a", "b"},
 			sourceQuery:       "select b as a, a as b, c from t order by a asc, b asc",
@@ -117,24 +132,26 @@ func TestSourcePKColsOrdering(t *testing.T) {
 			fieldTypes := strings.Join(types, "|")
 			fields := strings.Join(tc.columns, "|")
 
-			table := &tabletmanagerdatapb.TableDefinition{
-				Name:              tc.name,
+			// The source schema is keyed by the physical source table name so
+			// that getSourcePKCols resolves it from the query's FROM clause.
+			sourceTable := &tabletmanagerdatapb.TableDefinition{
+				Name:              tc.sourceTable,
 				Columns:           tc.columns,
 				PrimaryKeyColumns: tc.primaryKeyColumns,
 				Fields:            sqltypes.MakeTestFields(fields, fieldTypes),
 			}
 
 			tvde.tmc.schema = &tabletmanagerdatapb.SchemaDefinition{
-				TableDefinitions: []*tabletmanagerdatapb.TableDefinition{table},
+				TableDefinitions: []*tabletmanagerdatapb.TableDefinition{sourceTable},
 			}
 
 			td := &tableDiffer{
 				wd: &workflowDiffer{
 					ct: ct,
 				},
-				table: table,
+				table: sourceTable,
 				tablePlan: &tablePlan{
-					table:       table,
+					table:       sourceTable,
 					sourceQuery: tc.sourceQuery,
 				},
 			}
@@ -189,8 +206,19 @@ func TestSourcePKSelectIndices(t *testing.T) {
 			wantIndices: []int{2, 0},
 		},
 		{
-			name:        "alias matches PK (cross-table MoveTables filter)",
+			// Cross-table MoveTables filter: the physical source column c0 is
+			// renamed to the target column c1. The source PK is the physical
+			// column c0, which we match via the underlying ColName.
+			name:        "renamed physical source column (cross-table MoveTables filter)",
 			sourceQuery: "select c0 as c1, c2 from t2 order by c1 asc",
+			pkColumns:   []string{"c0"},
+			wantIndices: []int{0},
+		},
+		{
+			// A CONVERT(col USING charset) rename must unwrap to the inner
+			// physical source column, mirroring the row streamer planner.
+			name:        "convert using rename unwraps to source column",
+			sourceQuery: "select convert(c1 using utf8mb4) as c2, c3 from t order by c2 asc",
 			pkColumns:   []string{"c1"},
 			wantIndices: []int{0},
 		},
@@ -231,10 +259,29 @@ func TestSourcePKSelectIndices(t *testing.T) {
 			wantIndices: []int{1, 3, 5},
 		},
 		{
-			name:        "multi-alias cross-table filter",
+			// The source PKs are the physical columns src_a and src_b, matched
+			// via their underlying ColNames even though they are renamed.
+			name:        "multi-column cross-table filter matches physical columns",
 			sourceQuery: "select src_a as id, src_b as name, src_c as value from source_t order by id asc",
-			pkColumns:   []string{"id", "name"},
+			pkColumns:   []string{"src_a", "src_b"},
 			wantIndices: []int{0, 1},
+		},
+		{
+			// A computed alias must not satisfy a source PK lookup: the row
+			// streamer resumes using the physical PK value, so persisting a
+			// derived value would skip/repeat rows. Fail closed instead.
+			name:        "computed alias does not satisfy source PK (fails closed)",
+			sourceQuery: "select a + b as id, c from t order by id asc",
+			pkColumns:   []string{"id"},
+			wantErr:     true,
+		},
+		{
+			// An alias mapping an unrelated physical column to the source PK
+			// name must not match; only the real physical PK column may.
+			name:        "unrelated column aliased to source PK name fails closed",
+			sourceQuery: "select other_col as id, c from t order by id asc",
+			pkColumns:   []string{"id"},
+			wantErr:     true,
 		},
 		{
 			name:        "column swap alias does not shadow real PK",

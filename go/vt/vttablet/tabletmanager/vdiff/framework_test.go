@@ -113,6 +113,16 @@ var (
 				Name:    "nopkwithpke",
 				Columns: []string{"c1", "c2", "c3"},
 				Fields:  sqltypes.MakeTestFields("c1|c2|c3", "int64|int64|int64"),
+			}, {
+				// t2 is a cross-table MoveTables source: its physical PK is c0,
+				// which is renamed to the target's c1 by the filter
+				// "select c0 as c1, c2 from t2". getSourcePKCols resolves the
+				// source schema from the FROM table (t2) and matches the
+				// physical PK c0 via its underlying ColName.
+				Name:              "t2",
+				Columns:           []string{"c0", "c2"},
+				PrimaryKeyColumns: []string{"c0"},
+				Fields:            sqltypes.MakeTestFields("c0|c2", "int64|int64"),
 			},
 		},
 	}
@@ -125,6 +135,7 @@ var (
 		"datze":       5,
 		"nopk":        6,
 		"nopkwithpke": 7,
+		"t2":          8,
 	}
 )
 

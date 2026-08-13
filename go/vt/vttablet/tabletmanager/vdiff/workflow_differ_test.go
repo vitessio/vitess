@@ -688,28 +688,6 @@ func TestBuildPlanSuccess(t *testing.T) {
 			},
 		},
 	}, {
-		// Text column as expression.
-		input: &binlogdatapb.Rule{
-			Match:  "pktext",
-			Filter: "select c2, a+b as textcol from pktext",
-		},
-		table: "pktext",
-		tablePlan: &tablePlan{
-			dbName:       vdiffDBName,
-			table:        testSchema.TableDefinitions[tableDefMap["pktext"]],
-			sourceQuery:  "select c2, a + b as textcol from pktext order by textcol asc",
-			targetQuery:  "select c2, textcol from pktext order by textcol asc",
-			compareCols:  []compareColInfo{{0, collations.MySQL8().LookupByName(sqltypes.NULL.String()), false, "c2"}, {1, collations.MySQL8().LookupByName(sqltypes.NULL.String()), true, "textcol"}},
-			comparePKs:   []compareColInfo{{1, collations.MySQL8().LookupByName(sqltypes.NULL.String()), true, "textcol"}},
-			pkCols:       []int{1},
-			sourcePkCols: []int{1},
-			selectPks:    []int{1},
-			orderBy: sqlparser.OrderBy{&sqlparser.Order{
-				Expr:      &sqlparser.ColName{Name: sqlparser.NewIdentifierCI("textcol")},
-				Direction: sqlparser.AscOrder,
-			}},
-		},
-	}, {
 		// Multiple PK columns.
 		input: &binlogdatapb.Rule{
 			Match: "multipk",
