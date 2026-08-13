@@ -22,11 +22,13 @@ import (
 	"fmt"
 	"maps"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 
 	"vitess.io/vitess/go/event"
 	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sets"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/concurrency"
@@ -1343,27 +1345,13 @@ func (erp *EmergencyReparenter) findErrantGTIDs(
 			break
 		}
 	}
-	if allPositionsZero {
-		return maps.Clone(validCandidates), nil, nil
-	}
-
-	// A tablet with nil or zero positions has no GTIDs to corroborate anyone and can't be
-	// promoted over tablets with real history, so it is dropped from candidacy up front:
-	// letting a wiped tablet that kept its reparent journal rows define the evidence tier
-	// would leave the real candidates compared against nothing at all.
-	nonZeroCandidates := make(map[string]*RelayLogPositions, len(validCandidates))
-	for alias, positions := range validCandidates {
-		if positions == nil || positions.IsZero() {
-			erp.logger.Warningf("skipping candidate %s during errant GTID detection: nil or zero positions", alias)
-			continue
-		}
-		nonZeroCandidates[alias] = positions
-	}
 
 	// First we need to collect the reparent journal length for all the candidates.
 	// This will tell us, which of the tablets are severly lagged, and haven't even seen all the primary promotions.
 	// Such severely lagging tablets cannot be used to find errant GTIDs in other tablets, seeing that they themselves don't have enough information.
-	reparentJournalLen, err := erp.gatherReparenJournalInfo(ctx, nonZeroCandidates, tabletMap, waitReplicasTimeout)
+	// Zero-position candidates are included: their journal rows survive a GTID wipe and
+	// prove the shard has promotion history even when no GTID state is left to compare.
+	reparentJournalLen, err := erp.gatherReparenJournalInfo(ctx, validCandidates, tabletMap, waitReplicasTimeout)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1374,12 +1362,52 @@ func (erp *EmergencyReparenter) findErrantGTIDs(
 		maxLen = max(maxLen, length)
 	}
 
-	// Find the candidates with the maximum length of the reparent journal.
+	// A shard where every candidate has an empty GTID position and an empty reparent
+	// journal has never seen a promotion: it is being initialized, and every candidate
+	// is an equally valid first primary. Empty positions alongside journal history mean
+	// the GTID state was wiped instead, which fails closed below.
+	if allPositionsZero && maxLen == 0 {
+		return maps.Clone(validCandidates), nil, nil
+	}
+
+	// A tablet with nil or zero positions has no GTIDs to corroborate anyone and can't be
+	// promoted over tablets with real history, so it is dropped from candidacy up front.
+	nonZeroCandidates := make(map[string]*RelayLogPositions, len(validCandidates))
+	for alias, positions := range validCandidates {
+		if positions == nil || positions.IsZero() {
+			erp.logger.Warningf("skipping candidate %s during errant GTID detection: nil or zero positions", alias)
+			continue
+		}
+		nonZeroCandidates[alias] = positions
+	}
+
+	// Find the candidates with the maximum length of the reparent journal. A dropped
+	// zero-position tablet can't be part of the evidence tier: it has no GTIDs to
+	// compare anyone against.
 	var maxLenCandidates []string
 	for alias, length := range reparentJournalLen {
-		if length == maxLen {
-			maxLenCandidates = append(maxLenCandidates, alias)
+		if length != maxLen {
+			continue
 		}
+		if _, ok := nonZeroCandidates[alias]; !ok {
+			continue
+		}
+		maxLenCandidates = append(maxLenCandidates, alias)
+	}
+
+	// If every tablet holding the latest reparent journal history had its GTID state
+	// wiped, the surviving candidates provably missed a promotion and no evidence is
+	// left to prove what it contained. Promoting one of them could silently discard
+	// the missed history, so fail closed and leave the decision to an operator.
+	if len(maxLenCandidates) == 0 && len(reparentJournalLen) > 0 {
+		var wipedLeaders []string
+		for alias, length := range reparentJournalLen {
+			if length == maxLen {
+				wipedLeaders = append(wipedLeaders, alias)
+			}
+		}
+		slices.Sort(wipedLeaders)
+		return nil, nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "errant GTID detection has no usable evidence: the candidates with the latest reparent journal history (%s, %d entries) have empty GTID positions, so the remaining candidates cannot be proven to have seen the latest promotion; restore the GTID state or data of a wiped tablet, or remove the wiped tablets from the shard, before retrying", strings.Join(wipedLeaders, ", "), maxLen)
 	}
 
 	// We use all the candidates with the maximum length of the reparent journal to find the errant GTIDs amongst them.
@@ -1458,7 +1486,10 @@ func (erp *EmergencyReparenter) findErrantGTIDs(
 		// This exact scenario outlined above, can be found in the test for this function, subtest `Case 5a`.
 		// The idea is that if the tablet is lagged, then even the server UUID that it is replicating from
 		// should not be considered a valid source of writes that no other tablet has.
-		candidatePositions := nonZeroCandidates[alias]
+		candidatePositions, ok := nonZeroCandidates[alias]
+		if !ok {
+			continue
+		}
 		errantGTIDs, err := replication.FindErrantGTIDs(candidatePositions.Combined, replication.SID{}, maxLenPositions)
 		if err != nil {
 			return nil, nil, err
@@ -1500,6 +1531,19 @@ func (erp *EmergencyReparenter) gatherReparenJournalInfo(
 				}
 			}()
 			length, err = erp.tmc.ReadReparentJournalInfo(groupCtx, tabletMap[alias].Tablet)
+			if err != nil {
+				// A tablet with no GTIDs and no sidecar reparent journal table has never
+				// seen a promotion: treat it as zero journal entries instead of failing
+				// the gather, so ERS can still initialize a brand-new shard. A tablet
+				// with real GTIDs but no journal table is abnormal and stays an error.
+				if positions := validCandidates[alias]; positions == nil || positions.IsZero() {
+					if sqlErr, ok := sqlerror.NewSQLErrorFromError(err).(*sqlerror.SQLError); ok &&
+						(sqlErr.Number() == sqlerror.ERNoSuchTable || sqlErr.Number() == sqlerror.ERBadDb) {
+						erp.logger.Warningf("treating missing reparent journal table on %s as zero entries during errant GTID detection: %v", alias, err)
+						length, err = 0, nil
+					}
+				}
+			}
 			mu.Lock()
 			defer mu.Unlock()
 			reparentJournalLen[alias] = length

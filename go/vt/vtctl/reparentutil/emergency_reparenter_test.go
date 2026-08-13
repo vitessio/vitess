@@ -4496,6 +4496,10 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 				WaitReplicasTimeout: time.Second,
 			},
 			tmc: &testutil.TabletManagerClient{
+				// a never-initialized shard has no sidecar reparent journal table yet
+				ReadReparentJournalInfoErrors: map[string]error{
+					"zone1-0000000100": errors.New("rpc error: code = Unknown desc = Table '_vt.reparent_journal' doesn't exist (errno 1146) (sqlstate 42S02) during query: SELECT COUNT(*) FROM _vt.reparent_journal"),
+				},
 				ReadReparentJournalInfoResults: map[string]int32{},
 				DemotePrimaryResults: map[string]struct {
 					Status *replicationdatapb.PrimaryStatus
@@ -10072,11 +10076,11 @@ func TestEmergencyReparenterFindErrantGTIDs_NilPosition(t *testing.T) {
 }
 
 // TestEmergencyReparenterFindErrantGTIDs_EmptyPrimaryPosition is a regression test
-// for a bug where a demoted primary with a zero GTID position but the maximum reparent
-// journal count (its GTID state was wiped while the journal table kept its rows) was
-// accepted as a candidate and its empty position added to the evidence set. Empty
-// evidence corroborates nothing, so every GTID on a lagged replica was flagged errant,
-// leaving the empty primary as the only candidate left to promote.
+// for a bug where a demoted primary with a zero GTID position (its GTID state was
+// wiped while the journal table kept its rows) was accepted as a candidate and its
+// empty position added to the evidence set. Empty evidence corroborates nothing, so
+// every GTID on the surviving replica was flagged errant, leaving the empty primary
+// as the only candidate left to promote.
 func TestEmergencyReparenterFindErrantGTIDs_EmptyPrimaryPosition(t *testing.T) {
 	u1 := "00000000-0000-0000-0000-000000000001"
 	emptyPos, err := replication.DecodePosition("MySQL56/")
@@ -10086,7 +10090,7 @@ func TestEmergencyReparenterFindErrantGTIDs_EmptyPrimaryPosition(t *testing.T) {
 	erp := NewEmergencyReparenter(nil, &testutil.TabletManagerClient{
 		ReadReparentJournalInfoResults: map[string]int32{
 			"zone1-0000000100": 2,
-			"zone1-0000000101": 1,
+			"zone1-0000000101": 2,
 		},
 	}, nil)
 	tabletMap := map[string]*topo.TabletInfo{
@@ -10143,10 +10147,10 @@ func TestEmergencyReparenterFindErrantGTIDs_EmptyPrimaryPosition(t *testing.T) {
 }
 
 // TestEmergencyReparenterFindErrantGTIDs_EmptyPrimaryErrantReplica covers the case where
-// the only max-reparent-journal candidate has a zero GTID position and the remaining
-// candidates disagree. Dropping the wiped tablet must not leave the real candidates
-// compared against nothing: with the wiped tablet out of the way the replicas form the
-// evidence tier and are compared against each other, catching the errant one.
+// a max-reparent-journal candidate has a zero GTID position and the remaining candidates
+// disagree. Dropping the wiped tablet must not leave the real candidates compared
+// against nothing: the surviving replicas form the evidence tier and are compared
+// against each other, catching the errant one.
 func TestEmergencyReparenterFindErrantGTIDs_EmptyPrimaryErrantReplica(t *testing.T) {
 	u1 := "00000000-0000-0000-0000-000000000001"
 	u3 := "00000000-0000-0000-0000-000000000003"
@@ -10157,8 +10161,8 @@ func TestEmergencyReparenterFindErrantGTIDs_EmptyPrimaryErrantReplica(t *testing
 	erp := NewEmergencyReparenter(nil, &testutil.TabletManagerClient{
 		ReadReparentJournalInfoResults: map[string]int32{
 			"zone1-0000000100": 2,
-			"zone1-0000000101": 1,
-			"zone1-0000000102": 1,
+			"zone1-0000000101": 2,
+			"zone1-0000000102": 2,
 		},
 	}, nil)
 	tabletMap := map[string]*topo.TabletInfo{
@@ -10227,5 +10231,178 @@ func TestEmergencyReparenterFindErrantGTIDs_EmptyPrimaryErrantReplica(t *testing
 	assert.NotContains(t, candidates, "zone1-0000000102")
 	assert.NotContains(t, candidates, "zone1-0000000100")
 	// both replicas had a peer to compare against, so nobody was accepted blindly
+	assert.Empty(t, starved)
+}
+
+// findErrantGTIDsWipedShardFixture returns a two-tablet fixture (a demoted primary and
+// a replica) for the wiped-shard fail-closed tests: positions and journal counts vary
+// per test, the topology does not.
+func findErrantGTIDsWipedShardFixture(t *testing.T) (map[string]*topo.TabletInfo, replication.Position) {
+	t.Helper()
+	emptyPos, err := replication.DecodePosition("MySQL56/")
+	require.NoError(t, err)
+	require.True(t, emptyPos.IsZero())
+
+	tabletMap := map[string]*topo.TabletInfo{
+		"zone1-0000000100": {
+			Tablet: &topodatapb.Tablet{
+				Hostname: "zone1-0000000100",
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+				Type: topodatapb.TabletType_PRIMARY,
+			},
+		},
+		"zone1-0000000101": {
+			Tablet: &topodatapb.Tablet{
+				Hostname: "zone1-0000000101",
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  101,
+				},
+				Type: topodatapb.TabletType_REPLICA,
+			},
+		},
+	}
+	return tabletMap, emptyPos
+}
+
+// TestEmergencyReparenterFindErrantGTIDs_WipedMaxJournalFailsClosed covers the case
+// where the only candidate holding the latest reparent journal history has a zero GTID
+// position: the surviving replica provably missed a promotion and no evidence is left
+// to prove what it contained, so ERS must fail closed instead of promoting from a
+// recomputed lagged tier.
+func TestEmergencyReparenterFindErrantGTIDs_WipedMaxJournalFailsClosed(t *testing.T) {
+	u1 := "00000000-0000-0000-0000-000000000001"
+	tabletMap, emptyPos := findErrantGTIDsWipedShardFixture(t)
+
+	erp := NewEmergencyReparenter(nil, &testutil.TabletManagerClient{
+		ReadReparentJournalInfoResults: map[string]int32{
+			"zone1-0000000100": 2,
+			"zone1-0000000101": 1,
+		},
+	}, nil)
+	statusMap := map[string]*replicationdatapb.StopReplicationStatus{
+		"zone1-0000000101": {
+			After: &replicationdatapb.Status{
+				RelayLogPosition: getRelayLogPosition("1-100"),
+				SourceUuid:       u1,
+			},
+		},
+	}
+	validCandidates := map[string]*RelayLogPositions{
+		"zone1-0000000100": {Combined: emptyPos},
+		"zone1-0000000101": {
+			Combined: replication.MustParsePosition(replication.Mysql56FlavorID, u1+":1-100"),
+		},
+	}
+
+	_, _, err := erp.findErrantGTIDs(t.Context(), validCandidates, statusMap, tabletMap, 10*time.Second, nil)
+	require.ErrorContains(t, err, "cannot be proven to have seen the latest promotion")
+	require.ErrorContains(t, err, "zone1-0000000100")
+}
+
+// TestEmergencyReparenterFindErrantGTIDs_AllZeroPositionsWithJournalHistory covers a
+// shard where every candidate reports an empty GTID position but the reparent journal
+// still has entries: the GTID state was wiped on every reachable tablet, which must
+// not be mistaken for an uninitialized shard, so ERS fails closed.
+func TestEmergencyReparenterFindErrantGTIDs_AllZeroPositionsWithJournalHistory(t *testing.T) {
+	tabletMap, emptyPos := findErrantGTIDsWipedShardFixture(t)
+
+	erp := NewEmergencyReparenter(nil, &testutil.TabletManagerClient{
+		ReadReparentJournalInfoResults: map[string]int32{
+			"zone1-0000000100": 2,
+			"zone1-0000000101": 1,
+		},
+	}, nil)
+	validCandidates := map[string]*RelayLogPositions{
+		"zone1-0000000100": {Combined: emptyPos},
+		"zone1-0000000101": {Combined: emptyPos},
+	}
+
+	_, _, err := erp.findErrantGTIDs(t.Context(), validCandidates, map[string]*replicationdatapb.StopReplicationStatus{}, tabletMap, 10*time.Second, nil)
+	require.ErrorContains(t, err, "cannot be proven to have seen the latest promotion")
+	require.ErrorContains(t, err, "zone1-0000000100")
+}
+
+// TestEmergencyReparenterFindErrantGTIDs_AllZeroPositionsNewShard pins the shard
+// initialization case: every candidate has an empty GTID position and an empty
+// reparent journal, so there is no history to protect and every candidate remains
+// eligible to become the first primary.
+func TestEmergencyReparenterFindErrantGTIDs_AllZeroPositionsNewShard(t *testing.T) {
+	tabletMap, emptyPos := findErrantGTIDsWipedShardFixture(t)
+
+	erp := NewEmergencyReparenter(nil, &testutil.TabletManagerClient{
+		ReadReparentJournalInfoResults: map[string]int32{
+			"zone1-0000000100": 0,
+			"zone1-0000000101": 0,
+		},
+	}, nil)
+	validCandidates := map[string]*RelayLogPositions{
+		"zone1-0000000100": {Combined: emptyPos},
+		"zone1-0000000101": {Combined: emptyPos},
+	}
+
+	candidates, starved, err := erp.findErrantGTIDs(t.Context(), validCandidates, map[string]*replicationdatapb.StopReplicationStatus{}, tabletMap, 10*time.Second, nil)
+	require.NoError(t, err)
+	assert.Contains(t, candidates, "zone1-0000000100")
+	assert.Contains(t, candidates, "zone1-0000000101")
+	assert.Empty(t, starved)
+}
+
+// TestEmergencyReparenterFindErrantGTIDs_MissingJournalTableRealPosition covers the
+// converse of the new-shard tolerance: a tablet with real GTIDs but no reparent journal
+// table is abnormal (a botched restore, not an uninitialized shard) and must keep
+// failing the gather rather than being silently treated as maximally lagged.
+func TestEmergencyReparenterFindErrantGTIDs_MissingJournalTableRealPosition(t *testing.T) {
+	u1 := "00000000-0000-0000-0000-000000000001"
+	tabletMap, _ := findErrantGTIDsWipedShardFixture(t)
+
+	erp := NewEmergencyReparenter(nil, &testutil.TabletManagerClient{
+		ReadReparentJournalInfoErrors: map[string]error{
+			"zone1-0000000100": errors.New("rpc error: code = Unknown desc = Table '_vt.reparent_journal' doesn't exist (errno 1146) (sqlstate 42S02) during query: SELECT COUNT(*) FROM _vt.reparent_journal"),
+		},
+		ReadReparentJournalInfoResults: map[string]int32{
+			"zone1-0000000101": 1,
+		},
+	}, nil)
+	validCandidates := map[string]*RelayLogPositions{
+		"zone1-0000000100": {
+			Combined: replication.MustParsePosition(replication.Mysql56FlavorID, u1+":1-100"),
+		},
+		"zone1-0000000101": {
+			Combined: replication.MustParsePosition(replication.Mysql56FlavorID, u1+":1-100"),
+		},
+	}
+
+	_, _, err := erp.findErrantGTIDs(t.Context(), validCandidates, map[string]*replicationdatapb.StopReplicationStatus{}, tabletMap, 10*time.Second, nil)
+	require.ErrorContains(t, err, "could not read reparent journal information")
+}
+
+// TestEmergencyReparenterFindErrantGTIDs_MissingJournalTableNewShard covers a shard so
+// new that the sidecar reparent journal table does not exist yet: the resulting MySQL
+// error must be treated as zero journal entries rather than failing the gather, so ERS
+// can still initialize the shard.
+func TestEmergencyReparenterFindErrantGTIDs_MissingJournalTableNewShard(t *testing.T) {
+	tabletMap, emptyPos := findErrantGTIDsWipedShardFixture(t)
+
+	erp := NewEmergencyReparenter(nil, &testutil.TabletManagerClient{
+		ReadReparentJournalInfoErrors: map[string]error{
+			"zone1-0000000100": errors.New("rpc error: code = Unknown desc = Table '_vt.reparent_journal' doesn't exist (errno 1146) (sqlstate 42S02) during query: SELECT COUNT(*) FROM _vt.reparent_journal"),
+		},
+		ReadReparentJournalInfoResults: map[string]int32{
+			"zone1-0000000101": 0,
+		},
+	}, nil)
+	validCandidates := map[string]*RelayLogPositions{
+		"zone1-0000000100": {Combined: emptyPos},
+		"zone1-0000000101": {Combined: emptyPos},
+	}
+
+	candidates, starved, err := erp.findErrantGTIDs(t.Context(), validCandidates, map[string]*replicationdatapb.StopReplicationStatus{}, tabletMap, 10*time.Second, nil)
+	require.NoError(t, err)
+	assert.Contains(t, candidates, "zone1-0000000100")
+	assert.Contains(t, candidates, "zone1-0000000101")
 	assert.Empty(t, starved)
 }

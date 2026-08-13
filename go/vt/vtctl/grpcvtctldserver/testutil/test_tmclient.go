@@ -301,6 +301,8 @@ type TabletManagerClient struct {
 	PopulateReparentJournalResults map[string]error
 	// keyed by tablet alias
 	ReadReparentJournalInfoResults map[string]int32
+	// keyed by tablet alias; takes precedence over ReadReparentJournalInfoResults
+	ReadReparentJournalInfoErrors map[string]error
 	// keyed by tablet alias. once a WaitForPosition call for the tablet has
 	// succeeded, this value is returned instead of ReadReparentJournalInfoResults,
 	// mirroring how the reparent journal count only advances once relay logs are
@@ -1004,6 +1006,9 @@ func (fake *TabletManagerClient) ReadReparentJournalInfo(ctx context.Context, ta
 		}
 	}
 
+	if err, ok := fake.ReadReparentJournalInfoErrors[key]; ok {
+		return 0, err
+	}
 	if fake.ReadReparentJournalInfoResults == nil {
 		return 1, nil
 	}

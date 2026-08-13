@@ -31,6 +31,7 @@
     - **[Reparent](#minor-changes-reparent)**
         - [`EmergencyReparentShard` no longer waits on replicas that cannot win the election](#ers-lagging-relay-log-wait)
         - [`EmergencyReparentShard` can explicitly recover from split brain](#ers-allow-split-brain-promotion)
+        - [`EmergencyReparentShard` fails closed when GTID state was wiped](#ers-wiped-gtid-fail-closed)
         - [Reparent candidate ordering now respects partially ordered GTID histories](#reparent-gtid-candidate-ordering)
     - **[VTTablet](#minor-changes-vttablet)**
         - [Consolidator Reject on Waiter Cap](#vttablet-consolidator-reject-on-cap)
@@ -289,6 +290,12 @@ See [#18529](https://github.com/vitessio/vitess/issues/18529).
 **Impact**: allowing a split-brain promotion discards divergent transactions that exist only on losing branches, and tablets containing those branches may need to be rebuilt from the new primary. Each override whose promotion completes increments `EmergencyReparentSplitBrainOverrides{Keyspace,Shard}` so operators can alert on and audit use of the escape hatch; an override that aborts before promotion discards nothing and is not counted.
 
 See [#20199](https://github.com/vitessio/vitess/issues/20199).
+
+#### <a id="ers-wiped-gtid-fail-closed"/>`EmergencyReparentShard` fails closed when GTID state was wiped</a>
+
+`EmergencyReparentShard` now reads the reparent journal of every candidate before errant GTID detection, including candidates with an empty GTID position. A tablet with an empty position cannot corroborate evidence or be promoted over tablets with real history, but its surviving reparent journal rows still prove the shard has promotion history. When every tablet holding the deepest journal history has an empty position, including when every position is empty on a shard whose journal shows history, ERS now fails instead of promoting a candidate that provably missed a promotion. A shard with empty positions and empty journals everywhere is still treated as uninitialized, where any candidate may become the first primary; a missing sidecar reparent journal table on a tablet with no GTIDs counts as an empty journal, so ERS can still initialize a brand-new shard.
+
+**Impact**: ERS invocations that previously promoted an empty-position tablet (discarding the shard's history) or elected a survivor missing a promotion now fail with a `FAILED_PRECONDITION` error naming the wiped tablets. Restore the GTID state or data of a wiped tablet, or remove the wiped tablets from the shard, before retrying.
 
 #### <a id="reparent-gtid-candidate-ordering"/>Reparent candidate ordering now respects partially ordered GTID histories</a>
 
