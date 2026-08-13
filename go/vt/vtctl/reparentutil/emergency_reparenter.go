@@ -1347,10 +1347,23 @@ func (erp *EmergencyReparenter) findErrantGTIDs(
 		return maps.Clone(validCandidates), nil, nil
 	}
 
+	// A tablet with nil or zero positions has no GTIDs to corroborate anyone and can't be
+	// promoted over tablets with real history, so it is dropped from candidacy up front:
+	// letting a wiped tablet that kept its reparent journal rows define the evidence tier
+	// would leave the real candidates compared against nothing at all.
+	nonZeroCandidates := make(map[string]*RelayLogPositions, len(validCandidates))
+	for alias, positions := range validCandidates {
+		if positions == nil || positions.IsZero() {
+			erp.logger.Warningf("skipping candidate %s during errant GTID detection: nil or zero positions", alias)
+			continue
+		}
+		nonZeroCandidates[alias] = positions
+	}
+
 	// First we need to collect the reparent journal length for all the candidates.
 	// This will tell us, which of the tablets are severly lagged, and haven't even seen all the primary promotions.
 	// Such severely lagging tablets cannot be used to find errant GTIDs in other tablets, seeing that they themselves don't have enough information.
-	reparentJournalLen, err := erp.gatherReparenJournalInfo(ctx, validCandidates, tabletMap, waitReplicasTimeout)
+	reparentJournalLen, err := erp.gatherReparenJournalInfo(ctx, nonZeroCandidates, tabletMap, waitReplicasTimeout)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1374,12 +1387,7 @@ func (erp *EmergencyReparenter) findErrantGTIDs(
 	var starvedCandidates []string
 	updatedValidCandidates := make(map[string]*RelayLogPositions)
 	for _, candidate := range maxLenCandidates {
-		candidatePositions := validCandidates[candidate]
-		if candidatePositions == nil || candidatePositions.IsZero() {
-			erp.logger.Warningf("skipping candidate %s during errant GTID detection: nil or zero positions", candidate)
-			continue
-		}
-
+		candidatePositions := nonZeroCandidates[candidate]
 		status, ok := statusMap[candidate]
 		if !ok {
 			// If the tablet is not in the status map, and has the maximum length of the reparent journal,
@@ -1393,7 +1401,7 @@ func (erp *EmergencyReparenter) findErrantGTIDs(
 			// Even in this case, the best we can do is not run errant GTID detection on either, and let the split brain detection code
 			// deal with it, if A in fact has errant GTIDs.
 			maxLenPositions = append(maxLenPositions, candidatePositions.Combined)
-			updatedValidCandidates[candidate] = validCandidates[candidate]
+			updatedValidCandidates[candidate] = candidatePositions
 			continue
 		}
 		// Store all the other candidate's positions so that we can run errant GTID detection using them.
@@ -1402,10 +1410,7 @@ func (erp *EmergencyReparenter) findErrantGTIDs(
 			if otherCandidate == candidate {
 				continue
 			}
-			otherPosition := validCandidates[otherCandidate]
-			if otherPosition != nil && !otherPosition.IsZero() {
-				otherPositions = append(otherPositions, otherPosition.Combined)
-			}
+			otherPositions = append(otherPositions, nonZeroCandidates[otherCandidate].Combined)
 		}
 		otherPositions = append(otherPositions, extraEvidence...)
 		// FindErrantGTIDs accepts a candidate's GTID set as-is when there is nothing to
@@ -1425,7 +1430,7 @@ func (erp *EmergencyReparenter) findErrantGTIDs(
 			continue
 		}
 		maxLenPositions = append(maxLenPositions, candidatePositions.Combined)
-		updatedValidCandidates[candidate] = validCandidates[candidate]
+		updatedValidCandidates[candidate] = candidatePositions
 	}
 
 	// The extra evidence positions also corroborate the lagged tablets below.
@@ -1453,10 +1458,7 @@ func (erp *EmergencyReparenter) findErrantGTIDs(
 		// This exact scenario outlined above, can be found in the test for this function, subtest `Case 5a`.
 		// The idea is that if the tablet is lagged, then even the server UUID that it is replicating from
 		// should not be considered a valid source of writes that no other tablet has.
-		candidatePositions := validCandidates[alias]
-		if candidatePositions == nil || candidatePositions.IsZero() {
-			continue
-		}
+		candidatePositions := nonZeroCandidates[alias]
 		errantGTIDs, err := replication.FindErrantGTIDs(candidatePositions.Combined, replication.SID{}, maxLenPositions)
 		if err != nil {
 			return nil, nil, err

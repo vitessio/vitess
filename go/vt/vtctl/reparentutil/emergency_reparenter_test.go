@@ -9989,8 +9989,8 @@ func TestEmergencyReparenterFindErrantGTIDs(t *testing.T) {
 // for a bug where a nil *RelayLogPositions entry in validCandidates would
 // cause a nil pointer panic. The test includes:
 //   - zone1-0000000102: valid candidate with max reparent journal length
-//   - zone1-0000000103: nil position with max reparent journal length (exercises the maxLenCandidates loop)
-//   - zone1-0000000104: nil position with a lower reparent journal length (exercises the lagged-candidate loop)
+//   - zone1-0000000103: nil position with max reparent journal length
+//   - zone1-0000000104: nil position with a lower reparent journal length
 func TestEmergencyReparenterFindErrantGTIDs_NilPosition(t *testing.T) {
 	u1 := "00000000-0000-0000-0000-000000000001"
 	erp := NewEmergencyReparenter(nil, &testutil.TabletManagerClient{
@@ -10053,10 +10053,8 @@ func TestEmergencyReparenterFindErrantGTIDs_NilPosition(t *testing.T) {
 		},
 	}
 	// Construct validCandidates with nil entries for zone1-0000000103 and
-	// zone1-0000000104. zone1-0000000103 has the same reparent journal length
-	// as zone1-0000000102 (maxLen), so it exercises the nil guard in the
-	// maxLenCandidates loop. zone1-0000000104 has a lower reparent journal
-	// length, so it exercises the nil guard in the lagged-candidate loop.
+	// zone1-0000000104, at max and lower reparent journal lengths respectively;
+	// both must be dropped from candidacy before the evidence tier is computed.
 	validCandidates := map[string]*RelayLogPositions{
 		"zone1-0000000102": {
 			Combined: replication.MustParsePosition(replication.Mysql56FlavorID, u1+":1-100"),
@@ -10138,5 +10136,96 @@ func TestEmergencyReparenterFindErrantGTIDs_EmptyPrimaryPosition(t *testing.T) {
 	// a candidate with no GTIDs corroborates nothing and cannot be promoted over tablets
 	// with real history, so it is dropped from candidacy
 	assert.NotContains(t, candidates, "zone1-0000000100")
+	// with the empty primary dropped, the replica forms the evidence tier on its own and
+	// was accepted with nothing to compare against; report it starved so the caller can
+	// decide whether the blind spot is acceptable
+	assert.ElementsMatch(t, []string{"zone1-0000000101"}, starved)
+}
+
+// TestEmergencyReparenterFindErrantGTIDs_EmptyPrimaryErrantReplica covers the case where
+// the only max-reparent-journal candidate has a zero GTID position and the remaining
+// candidates disagree. Dropping the wiped tablet must not leave the real candidates
+// compared against nothing: with the wiped tablet out of the way the replicas form the
+// evidence tier and are compared against each other, catching the errant one.
+func TestEmergencyReparenterFindErrantGTIDs_EmptyPrimaryErrantReplica(t *testing.T) {
+	u1 := "00000000-0000-0000-0000-000000000001"
+	u3 := "00000000-0000-0000-0000-000000000003"
+	emptyPos, err := replication.DecodePosition("MySQL56/")
+	require.NoError(t, err)
+	require.True(t, emptyPos.IsZero())
+
+	erp := NewEmergencyReparenter(nil, &testutil.TabletManagerClient{
+		ReadReparentJournalInfoResults: map[string]int32{
+			"zone1-0000000100": 2,
+			"zone1-0000000101": 1,
+			"zone1-0000000102": 1,
+		},
+	}, nil)
+	tabletMap := map[string]*topo.TabletInfo{
+		"zone1-0000000100": {
+			Tablet: &topodatapb.Tablet{
+				Hostname: "zone1-0000000100",
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+				Type: topodatapb.TabletType_PRIMARY,
+			},
+		},
+		"zone1-0000000101": {
+			Tablet: &topodatapb.Tablet{
+				Hostname: "zone1-0000000101",
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  101,
+				},
+				Type: topodatapb.TabletType_REPLICA,
+			},
+		},
+		"zone1-0000000102": {
+			Tablet: &topodatapb.Tablet{
+				Hostname: "zone1-0000000102",
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  102,
+				},
+				Type: topodatapb.TabletType_REPLICA,
+			},
+		},
+	}
+	// The demoted primary is not in statusMap: it answered the stop-replication phase
+	// as a primary.
+	statusMap := map[string]*replicationdatapb.StopReplicationStatus{
+		"zone1-0000000101": {
+			After: &replicationdatapb.Status{
+				RelayLogPosition: getRelayLogPosition("1-100"),
+				SourceUuid:       u1,
+			},
+		},
+		"zone1-0000000102": {
+			After: &replicationdatapb.Status{
+				RelayLogPosition: getRelayLogPosition("1-100", "", "1"),
+				SourceUuid:       u1,
+			},
+		},
+	}
+	validCandidates := map[string]*RelayLogPositions{
+		"zone1-0000000100": {Combined: emptyPos},
+		"zone1-0000000101": {
+			Combined: replication.MustParsePosition(replication.Mysql56FlavorID, u1+":1-100"),
+		},
+		"zone1-0000000102": {
+			Combined: replication.MustParsePosition(replication.Mysql56FlavorID, u1+":1-100,"+u3+":1"),
+		},
+	}
+
+	candidates, starved, err := erp.findErrantGTIDs(t.Context(), validCandidates, statusMap, tabletMap, 10*time.Second, nil)
+	require.NoError(t, err)
+	require.Contains(t, candidates, "zone1-0000000101")
+	// no other tablet corroborates u3:1, so zone1-0000000102 has an errant GTID and
+	// must not survive detection
+	assert.NotContains(t, candidates, "zone1-0000000102")
+	assert.NotContains(t, candidates, "zone1-0000000100")
+	// both replicas had a peer to compare against, so nobody was accepted blindly
 	assert.Empty(t, starved)
 }
