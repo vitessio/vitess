@@ -310,6 +310,15 @@ func FindCurrentPrimary(tabletMap map[string]*topo.TabletInfo, logger logutil.Lo
 	var (
 		currentPrimary       *topo.TabletInfo
 		currentTermStartTime time.Time
+		// tiedAtLatestTerm records whether another PRIMARY shares currentTermStartTime.
+		// It is reset whenever a strictly newer term is found, so only a tie at the
+		// maximum term makes the primary indeterminate. A tie at an older, superseded
+		// term is irrelevant. Tracking this independently of iteration order keeps the
+		// result deterministic — Go randomizes map iteration, and callers compare the
+		// result across separate invocations (election ordering vs. promotion-path
+		// dispatch), which must agree.
+		tiedAtLatestTerm bool
+		tiedWith         *topo.TabletInfo
 	)
 
 	for _, tablet := range tabletMap {
@@ -317,31 +326,30 @@ func FindCurrentPrimary(tabletMap map[string]*topo.TabletInfo, logger logutil.Lo
 			continue
 		}
 
-		if currentPrimary == nil {
-			currentPrimary = tablet
-			currentTermStartTime = tablet.GetPrimaryTermStartTime()
-			continue
-		}
-
 		otherPrimaryTermStartTime := tablet.GetPrimaryTermStartTime()
-		if otherPrimaryTermStartTime.After(currentTermStartTime) {
+		if currentPrimary == nil || otherPrimaryTermStartTime.After(currentTermStartTime) {
 			currentPrimary = tablet
 			currentTermStartTime = otherPrimaryTermStartTime
+			tiedAtLatestTerm = false
+			tiedWith = nil
 		} else if otherPrimaryTermStartTime.Equal(currentTermStartTime) {
-			// A tie should not happen unless the upgrade order was violated
-			// (e.g. some vttablets have not been upgraded) or if we get really
-			// unlucky.
-			//
-			// Either way, we need to be safe and not assume we know who the
-			// true primary is.
-			logger.Warningf(
-				"Multiple primaries (%v and %v) are tied for PrimaryTermStartTime; can't determine the true primary.",
-				topoproto.TabletAliasString(currentPrimary.Alias),
-				topoproto.TabletAliasString(tablet.Alias),
-			)
-
-			return nil
+			tiedAtLatestTerm = true
+			tiedWith = tablet
 		}
+	}
+
+	if tiedAtLatestTerm {
+		// A tie at the latest term should not happen unless the upgrade order was
+		// violated (e.g. some vttablets have not been upgraded) or if we get really
+		// unlucky. Either way, we need to be safe and not assume we know who the true
+		// primary is.
+		logger.Warningf(
+			"Multiple primaries (%v and %v) are tied for the latest PrimaryTermStartTime; can't determine the true primary.",
+			topoproto.TabletAliasString(currentPrimary.Alias),
+			topoproto.TabletAliasString(tiedWith.Alias),
+		)
+
+		return nil
 	}
 
 	return currentPrimary

@@ -2137,14 +2137,111 @@ func TestFindCurrentPrimary(t *testing.T) {
 			},
 			expected: nil,
 		},
+		{
+			// Two stale PRIMARY records tied at an older term, plus one unique newer
+			// primary. Only a tie at the *latest* term makes the primary
+			// indeterminate; a tie below a unique maximum must not. The result must be
+			// the newer primary regardless of map iteration order (Go randomizes it),
+			// so election ordering and promotion-path dispatch — which call this
+			// separately — always agree.
+			name: "tied stale primaries below a unique latest term",
+			in: map[string]*topo.TabletInfo{
+				"stale-primary-1": {
+					Tablet: &topodatapb.Tablet{
+						Alias: alias,
+						Type:  topodatapb.TabletType_PRIMARY,
+						PrimaryTermStartTime: &vttime.Time{
+							Seconds: 100,
+						},
+						Hostname: "stale-primary-tablet-1",
+					},
+				},
+				"stale-primary-2": {
+					Tablet: &topodatapb.Tablet{
+						Alias: alias,
+						Type:  topodatapb.TabletType_PRIMARY,
+						PrimaryTermStartTime: &vttime.Time{
+							Seconds: 100,
+						},
+						Hostname: "stale-primary-tablet-2",
+					},
+				},
+				"true-primary": {
+					Tablet: &topodatapb.Tablet{
+						Alias: alias,
+						Type:  topodatapb.TabletType_PRIMARY,
+						PrimaryTermStartTime: &vttime.Time{
+							Seconds: 1000,
+						},
+						Hostname: "true-primary-tablet",
+					},
+				},
+			},
+			expected: &topo.TabletInfo{
+				Tablet: &topodatapb.Tablet{
+					Alias: alias,
+					Type:  topodatapb.TabletType_PRIMARY,
+					PrimaryTermStartTime: &vttime.Time{
+						Seconds: 1000,
+					},
+					Hostname: "true-primary-tablet",
+				},
+			},
+		},
+		{
+			// A genuine tie at the latest term (two at 1000) coexisting with a stale
+			// lower record (at 100). This must still return nil: the reset that clears
+			// a superseded tie when a newer term is found must not clear a legitimate
+			// tie at the maximum term itself, regardless of the order the newer term
+			// and the stale record are visited.
+			name: "tie at latest term with a stale lower record still returns nil",
+			in: map[string]*topo.TabletInfo{
+				"primary1": {
+					Tablet: &topodatapb.Tablet{
+						Alias: alias,
+						Type:  topodatapb.TabletType_PRIMARY,
+						PrimaryTermStartTime: &vttime.Time{
+							Seconds: 1000,
+						},
+						Hostname: "primary-tablet-1",
+					},
+				},
+				"primary2": {
+					Tablet: &topodatapb.Tablet{
+						Alias: alias,
+						Type:  topodatapb.TabletType_PRIMARY,
+						PrimaryTermStartTime: &vttime.Time{
+							Seconds: 1000,
+						},
+						Hostname: "primary-tablet-2",
+					},
+				},
+				"stale-primary": {
+					Tablet: &topodatapb.Tablet{
+						Alias: alias,
+						Type:  topodatapb.TabletType_PRIMARY,
+						PrimaryTermStartTime: &vttime.Time{
+							Seconds: 100,
+						},
+						Hostname: "stale-primary-tablet",
+					},
+				},
+			},
+			expected: nil,
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			actual := FindCurrentPrimary(tt.in, logger)
-			assert.Equal(t, tt.expected, actual)
+			// Run repeatedly: FindCurrentPrimary iterates a map (randomized order),
+			// so a single pass could pass by luck. The result must be stable across
+			// orders.
+			for range 50 {
+				actual := FindCurrentPrimary(tt.in, logger)
+				assert.Equal(t, tt.expected, actual)
+			}
 		})
 	}
 }
