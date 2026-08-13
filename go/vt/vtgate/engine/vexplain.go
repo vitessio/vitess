@@ -365,16 +365,18 @@ func appendMySQLExplainTasks(tasks *[]mysqlExplainTask, primitive Primitive, rss
 // runMySQLExplainTasks runs the given EXPLAIN FORMAT=JSON tasks against their
 // shards concurrently, bounded by maxParallelMySQLExplains, and returns the
 // per-shard results keyed by shard against the primitive that owns each. Every
-// shard queried is accounted for in ShardQueries, since ExecuteStandalone (unlike
-// the normal shard path) does not increment it.
+// shard that returns an EXPLAIN plan is accounted for in ShardQueries, since
+// ExecuteStandalone (unlike the normal shard path) does not increment it.
 func runMySQLExplainTasks(ctx context.Context, vcursor VCursor, tasks []mysqlExplainTask) (map[Primitive]map[string]json.RawMessage, error) {
 	explainResults := make(map[Primitive]map[string]json.RawMessage)
 	if len(tasks) == 0 {
 		return explainResults, nil
 	}
-	vcursor.RecordShardsQueried(len(tasks))
 
-	var mu sync.Mutex
+	var (
+		mu      sync.Mutex
+		queried int
+	)
 	g, gctx := errgroup.WithContext(ctx)
 	g.SetLimit(maxParallelMySQLExplains)
 	for _, task := range tasks {
@@ -389,6 +391,7 @@ func runMySQLExplainTasks(ctx context.Context, vcursor VCursor, tasks []mysqlExp
 			}
 			mu.Lock()
 			defer mu.Unlock()
+			queried++
 			perShard := explainResults[task.primitive]
 			if perShard == nil {
 				perShard = make(map[string]json.RawMessage)
@@ -401,6 +404,7 @@ func runMySQLExplainTasks(ctx context.Context, vcursor VCursor, tasks []mysqlExp
 	if err := g.Wait(); err != nil {
 		return nil, err
 	}
+	vcursor.RecordShardsQueried(queried)
 	return explainResults, nil
 }
 

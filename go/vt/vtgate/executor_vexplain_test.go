@@ -198,6 +198,35 @@ func TestVExplainMySQLPlanShardQueriesAccounting(t *testing.T) {
 	assert.EqualValues(t, wantShards, logStats.ShardQueries)
 }
 
+// TestVExplainMySQLPlanShardQueriesAccountingSkipsEmpty verifies that a shard
+// whose EXPLAIN returns no rows (so it contributes no plan and is skipped) is not
+// counted in ShardQueries. Of an eight-shard scatter, one shard returns an empty
+// result, so only the seven shards that produced a plan are counted.
+func TestVExplainMySQLPlanShardQueriesAccountingSkipsEmpty(t *testing.T) {
+	const emptyShard = "-20"
+	const wantShards = 7
+	executor, ctx := createExecutorEnvCallback(t, createExecutorConfig(), func(shard, ks string, tabletType topodatapb.TabletType, conn *sandboxconn.SandboxConn) {
+		if ks == KsTestSharded && tabletType == topodatapb.TabletType_PRIMARY {
+			if shard == emptyShard {
+				conn.SetResults([]*sqltypes.Result{{Fields: []*querypb.Field{{Name: "EXPLAIN", Type: sqltypes.VarChar}}}})
+				return
+			}
+			conn.SetResults([]*sqltypes.Result{explainResultForShard(shard)})
+		}
+	})
+
+	logChan := executor.queryLogger.Subscribe("Test")
+	defer executor.queryLogger.Unsubscribe(logChan)
+
+	session := &vtgatepb.Session{TargetString: "@primary"}
+	_, err := executorExec(ctx, executor, session, "vexplain mysqlplan select id from `user`", nil)
+	require.NoError(t, err)
+
+	logStats := getQueryLog(logChan)
+	require.NotNil(t, logStats)
+	assert.EqualValues(t, wantShards, logStats.ShardQueries)
+}
+
 // TestVExplainMySQLPlanTargetedSend verifies that a SELECT with an explicit shard
 // target (which plans as a Send, not a Route) still produces per-shard EXPLAIN
 // output, and only the targeted shard is queried.
