@@ -422,10 +422,10 @@ func TestFindPositionsOfAllCandidates_FlavorFromPrimaryStatus(t *testing.T) {
 			wantErr:    "mix of GTID-based and non GTID-based",
 		},
 		{
-			// A former primary with an empty executed position is flavor-agnostic and
-			// must not be counted as non-GTID; otherwise it would falsely trip the
-			// mixed-mode guard against the GTID replicas. This pins the IsZero() skip
-			// in the flavor detection.
+			// A former primary whose executed position decodes to no GTID set at all
+			// (empty "") is flavor-agnostic and must not be counted as non-GTID;
+			// otherwise it would falsely trip the mixed-mode guard against the GTID
+			// replicas. This pins the GTIDSet == nil skip in the flavor detection.
 			name: "GTID replica with a zero-position former primary stays GTID-based",
 			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
 				"r1": {After: &replicationdatapb.Status{RelayLogPosition: gtid, Position: gtid}},

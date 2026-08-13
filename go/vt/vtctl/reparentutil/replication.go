@@ -211,20 +211,11 @@ func FindPositionsOfAllCandidates(
 		status := replication.ProtoToReplicationStatus(statuspb.After)
 		replicationStatusMap[alias] = &status
 	}
-	for alias, primaryStatus := range primaryStatusMap {
-		executedPosition, err := replication.DecodePosition(primaryStatus.Position)
-		if err != nil {
-			return nil, false, vterrors.Wrapf(err, "could not decode a primary status executed position for tablet %v", alias)
-		}
-		primaryPositions[alias] = executedPosition
-	}
-
 	// Decode former-primary executed positions up front so their flavor can
 	// participate in the GTID/non-GTID detection below. A former primary was not
 	// replicating, so it has no relay-log position; its executed position is
 	// authoritative and is what we key its flavor off. It is exempt from the
 	// empty-relay-log check that applies to replicas.
-	primaryPositions := make(map[string]replication.Position, len(primaryStatusMap))
 	for alias, primaryStatus := range primaryStatusMap {
 		executedPosition, err := replication.DecodePosition(primaryStatus.Position)
 		if err != nil {
@@ -257,22 +248,13 @@ func FindPositionsOfAllCandidates(
 			emptyRelayPosErrorRecorder.RecordError(vterrors.Errorf(vtrpc.Code_UNAVAILABLE, "encountered tablet %v with no relay log position, when at least one other tablet in the status map has GTID based relay log positions", alias))
 		}
 	}
-	for _, position := range primaryPositions {
-		if position.GTIDSet == nil {
-			continue
-		}
-		if _, ok := position.GTIDSet.(replication.Mysql56GTIDSet); ok {
-			isGTIDBased = true
-		} else {
-			isNonGTIDBased = true
-		}
-	}
-
-	// Fold former-primary flavors into detection. A zero position (a former primary
-	// with no executed transactions) tells us nothing about the flavor, so skip it
-	// rather than treating it as non-GTID.
+	// Fold former-primary flavors into detection. A position with no decoded GTID
+	// set at all (a former primary whose executed position was empty, e.g. "") is
+	// flavor-agnostic, so skip it rather than treating it as non-GTID. A typed but
+	// empty set (e.g. "MySQL56/" with no transactions) still identifies the flavor
+	// and is counted.
 	for _, pos := range primaryPositions {
-		if pos.IsZero() {
+		if pos.GTIDSet == nil {
 			continue
 		}
 		if hasMysql56GTIDSet(pos) {
