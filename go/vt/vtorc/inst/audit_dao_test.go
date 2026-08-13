@@ -90,8 +90,8 @@ func TestAuditOperation(t *testing.T) {
 		require.NoError(t, err)
 		require.Len(t, audits, 1)
 		require.EqualValues(t, 1, audits[0].AuditID)
-		require.EqualValues(t, auditType, audits[0].AuditType)
-		require.EqualValues(t, message, audits[0].Message)
+		require.Equal(t, auditType, audits[0].AuditType)
+		require.Equal(t, message, audits[0].Message)
 		testRequireTabletAliasEqual(t, tab100.Alias, audits[0].AuditTabletAlias)
 
 		// Check the same for no-filtering
@@ -99,8 +99,8 @@ func TestAuditOperation(t *testing.T) {
 		require.NoError(t, err)
 		require.Len(t, audits, 1)
 		require.EqualValues(t, 1, audits[0].AuditID)
-		require.EqualValues(t, auditType, audits[0].AuditType)
-		require.EqualValues(t, message, audits[0].Message)
+		require.Equal(t, auditType, audits[0].AuditType)
+		require.Equal(t, message, audits[0].Message)
 		testRequireTabletAliasEqual(t, tab100.Alias, audits[0].AuditTabletAlias)
 	})
 

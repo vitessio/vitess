@@ -69,7 +69,7 @@ func TestDurabilityNone(t *testing.T) {
 	})
 	assert.Equal(t, promotionrule.MustNot, promoteRule)
 	assert.Equal(t, 0, SemiSyncAckers(durability, nil))
-	assert.Equal(t, false, IsReplicaSemiSync(durability, nil, nil))
+	assert.False(t, IsReplicaSemiSync(durability, nil, nil))
 }
 
 func TestDurabilitySemiSync(t *testing.T) {
@@ -127,7 +127,7 @@ func TestDurabilitySemiSync(t *testing.T) {
 			})
 			assert.Equal(t, promotionrule.MustNot, promoteRule)
 			assert.Equal(t, 1, SemiSyncAckers(durability, nil))
-			assert.Equal(t, true, IsReplicaSemiSync(durability, &topodatapb.Tablet{
+			assert.True(t, IsReplicaSemiSync(durability, &topodatapb.Tablet{
 				Alias: &topodatapb.TabletAlias{
 					Cell: "cell1",
 					Uid:  101,
@@ -140,7 +140,7 @@ func TestDurabilitySemiSync(t *testing.T) {
 				},
 				Type: topodatapb.TabletType_REPLICA,
 			}))
-			assert.Equal(t, false, IsReplicaSemiSync(durability, &topodatapb.Tablet{
+			assert.False(t, IsReplicaSemiSync(durability, &topodatapb.Tablet{
 				Alias: &topodatapb.TabletAlias{
 					Cell: "cell1",
 					Uid:  101,
@@ -225,7 +225,7 @@ func TestDurabilityCrossCell(t *testing.T) {
 			})
 			assert.Equal(t, promotionrule.MustNot, promoteRule)
 			assert.Equal(t, 1, SemiSyncAckers(durability, nil))
-			assert.Equal(t, false, IsReplicaSemiSync(durability, &topodatapb.Tablet{
+			assert.False(t, IsReplicaSemiSync(durability, &topodatapb.Tablet{
 				Type: topodatapb.TabletType_PRIMARY,
 				Alias: &topodatapb.TabletAlias{
 					Cell: "cell1",
@@ -236,7 +236,7 @@ func TestDurabilityCrossCell(t *testing.T) {
 					Cell: "cell1",
 				},
 			}))
-			assert.Equal(t, true, IsReplicaSemiSync(durability, &topodatapb.Tablet{
+			assert.True(t, IsReplicaSemiSync(durability, &topodatapb.Tablet{
 				Type: topodatapb.TabletType_PRIMARY,
 				Alias: &topodatapb.TabletAlias{
 					Cell: "cell1",
@@ -247,7 +247,7 @@ func TestDurabilityCrossCell(t *testing.T) {
 					Cell: "cell2",
 				},
 			}))
-			assert.Equal(t, false, IsReplicaSemiSync(durability, &topodatapb.Tablet{
+			assert.False(t, IsReplicaSemiSync(durability, &topodatapb.Tablet{
 				Type: topodatapb.TabletType_PRIMARY,
 				Alias: &topodatapb.TabletAlias{
 					Cell: "cell1",

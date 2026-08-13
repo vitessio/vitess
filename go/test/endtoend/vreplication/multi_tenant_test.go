@@ -201,7 +201,7 @@ func TestMultiTenantSimple(t *testing.T) {
 		},
 	}
 
-	require.Zero(t, len(getKeyspaceRoutingRules(t, vc).Rules))
+	require.Empty(t, getKeyspaceRoutingRules(t, vc).Rules)
 
 	createFunc := func() {
 		mt.Create()
@@ -209,7 +209,7 @@ func TestMultiTenantSimple(t *testing.T) {
 		validateKeyspaceRoutingRules(t, vc, initialRules)
 
 		lastIndex = insertRows(lastIndex, sourceKeyspace)
-		waitForWorkflowState(t, vc, fmt.Sprintf("%s.%s", targetKeyspace, mt.workflowName), binlogdatapb.VReplicationWorkflowState_Running.String())
+		require.NoError(t, waitForWorkflowState(vc, fmt.Sprintf("%s.%s", targetKeyspace, mt.workflowName), binlogdatapb.VReplicationWorkflowState_Running.String()))
 	}
 
 	t.Run("cancel", func(t *testing.T) {
@@ -252,7 +252,7 @@ func TestMultiTenantSimple(t *testing.T) {
 	waitForRowCountInTablet(t, sourceTablet, sourceKeyspace, "t1", lastIndex)
 
 	mt.Complete()
-	require.Zero(t, len(getKeyspaceRoutingRules(t, vc).Rules))
+	require.Empty(t, getKeyspaceRoutingRules(t, vc).Rules)
 	// Targeting to target keyspace should start working now. Upto this point we had to target the source keyspace.
 	lastIndex = insertRows(lastIndex, targetKeyspace)
 
@@ -383,26 +383,26 @@ func TestMultiTenantSharded(t *testing.T) {
 	})
 
 	mt.Create()
-	waitForWorkflowState(t, vc, fmt.Sprintf("%s.%s", targetKeyspace, mt.workflowName), binlogdatapb.VReplicationWorkflowState_Running.String())
+	require.NoError(t, waitForWorkflowState(vc, fmt.Sprintf("%s.%s", targetKeyspace, mt.workflowName), binlogdatapb.VReplicationWorkflowState_Running.String()))
 	mt.Show()
 	var workflowState vtctldata.GetWorkflowsResponse
 	err = protojson.Unmarshal([]byte(mt.lastOutput), &workflowState)
 	require.NoError(t, err)
-	require.Equal(t, 1, len(workflowState.Workflows))
+	require.Len(t, workflowState.Workflows, 1)
 	wf := workflowState.Workflows[0]
 	// Verifies that only one stream is created for the tenant on the shard to which this tenant id will be routed.
-	require.Equal(t, 1, len(wf.ShardStreams))
+	require.Len(t, wf.ShardStreams, 1)
 
 	// Note: we cannot insert into the target keyspace since that is never routed to the source keyspace.
 	lastIndex = insertRows(lastIndex, sourceKeyspace)
-	waitForWorkflowState(t, vc, fmt.Sprintf("%s.%s", targetKeyspace, mt.workflowName), binlogdatapb.VReplicationWorkflowState_Running.String())
+	require.NoError(t, waitForWorkflowState(vc, fmt.Sprintf("%s.%s", targetKeyspace, mt.workflowName), binlogdatapb.VReplicationWorkflowState_Running.String()))
 	vdiff(t, targetKeyspace, defaultWorkflowName, defaultCellName, nil)
 	mt.SwitchReadsAndWrites()
 	// Note: here we have already switched, and we can insert into the target keyspace, and it should get reverse
 	// replicated to the source keyspace. The source keyspace is routed to the target keyspace at this point.
 	lastIndex = insertRows(lastIndex, sourceKeyspace)
 	mt.Complete()
-	require.Zero(t, len(getKeyspaceRoutingRules(t, vc).Rules))
+	require.Empty(t, getKeyspaceRoutingRules(t, vc).Rules)
 	actualRowsInserted := getRowCount(t, vtgateConn, fmt.Sprintf("%s.%s", targetKeyspace, "t1"))
 	require.Equal(t, lastIndex, int64(actualRowsInserted))
 	require.Equal(t, lastIndex, int64(getRowCount(t, vtgateConn, fmt.Sprintf("%s.%s", targetKeyspace, "t1"))))
@@ -595,7 +595,7 @@ func (mtm *multiTenantMigration) switchTraffic(tenantId int64) {
 	sourceKeyspaceName := getSourceKeyspace(tenantId)
 	mt := mtm.getActiveMoveTables(tenantId)
 	ksWorkflow := fmt.Sprintf("%s.%s", mtm.targetKeyspace, mt.workflowName)
-	waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
+	require.NoError(t, waitForWorkflowState(vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String()))
 	vdiff(t, mt.targetKeyspace, mt.workflowName, defaultCellName, nil)
 	mtm.insertSomeData(t, tenantId, sourceKeyspaceName, numAdditionalRowsPerTenant)
 	mt.SwitchReadsAndWrites()

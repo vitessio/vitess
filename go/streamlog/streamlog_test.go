@@ -187,7 +187,7 @@ func TestFile(t *testing.T) {
 	logPath := path.Join(dir, "test.log")
 	logChan, err := logger.LogToFile(logPath, testLogf)
 	defer logger.Unsubscribe(logChan)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	logger.Send(&logMessage{"test 1"})
 	logger.Send(&logMessage{"test 2"})

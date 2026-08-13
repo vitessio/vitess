@@ -42,7 +42,7 @@ func TestPreventGlogVFlagFromClobberingVersionFlagShorthand(t *testing.T) {
 
 	f := testFlagSet.Lookup("v")
 	assert.NotNil(t, f)
-	assert.Equal(t, "", f.Shorthand)
+	assert.Empty(t, f.Shorthand)
 
 	// The function should not panic if -v flag is already defined
 	assert.NotPanics(t, func() { PreventGlogVFlagFromClobberingVersionFlagShorthand(testFlagSet) })
@@ -79,7 +79,7 @@ func TestParse(t *testing.T) {
 	Parse(testFlagSet)
 	f = testFlagSet.Lookup("help")
 	assert.NotNil(t, f)
-	assert.Equal(t, "", f.Shorthand)
+	assert.Empty(t, f.Shorthand)
 
 	// Check if AddGoFlagSet was called
 	f = testFlagSet.Lookup("testFlag")
@@ -173,7 +173,7 @@ func TestParseFlagsForTest(t *testing.T) {
 	}
 
 	assert.Equal(t, expectedOsArgs, os.Args)
-	assert.Equal(t, true, pflag.Parsed())
+	assert.True(t, pflag.Parsed())
 }
 
 func TestParsed(t *testing.T) {
@@ -279,7 +279,7 @@ func TestArgs(t *testing.T) {
 
 	// Should return empty string if the index is greater than len of CommandLine.args
 	arg = Arg(3)
-	assert.Equal(t, "", arg)
+	assert.Empty(t, arg)
 }
 
 func TestIsZeroValue(t *testing.T) {

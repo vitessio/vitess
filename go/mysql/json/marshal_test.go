@@ -109,7 +109,7 @@ func TestAppendMarshalSQLDepthLimit(t *testing.T) {
 		appendErr := AppendMarshalSQL(buf, []byte(input))
 
 		if tc.wantErr {
-			assert.Error(t, parseErr, "depth %d: parser should reject", tc.depth)
+			require.Error(t, parseErr, "depth %d: parser should reject", tc.depth)
 			assert.Error(t, appendErr, "depth %d: AppendMarshalSQL should reject", tc.depth)
 		} else {
 			assert.NoError(t, parseErr, "depth %d: parser should accept", tc.depth)
@@ -128,11 +128,18 @@ func TestAppendMarshalSQLNumberGrammar(t *testing.T) {
 		`1e+`,
 		`1e`,
 		`--1`,
+		// Shapes JSON's grammar does not have: a written plus, an integer
+		// part opening with a zero, and a decimal point with nothing on
+		// one side of it.
+		`+1`,
+		`007`,
+		`.2`,
+		`12.`,
 	}
 	for _, input := range malformed {
 		buf := &bytes2.Buffer{}
 		err := AppendMarshalSQL(buf, []byte(input))
-		assert.Error(t, err, "malformed number %q should be rejected", input)
+		require.Error(t, err, "malformed number %q should be rejected", input)
 	}
 
 	valid := []string{
@@ -156,7 +163,7 @@ func TestAppendMarshalSQLTrailingBackslash(t *testing.T) {
 	for _, input := range inputs {
 		buf := &bytes2.Buffer{}
 		err := AppendMarshalSQL(buf, []byte(input))
-		assert.Error(t, err, "input %q should be rejected", input)
+		require.Error(t, err, "input %q should be rejected", input)
 		assert.ErrorContains(t, err, "unterminated string", "input %q", input)
 	}
 }

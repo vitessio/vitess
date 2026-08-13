@@ -450,7 +450,7 @@ func TestRPCTabletExternallyReparentedDemotesPrimaryToConfiguredTabletType(t *te
 
 	// Build keyspace graph
 	err := topotools.RebuildKeyspace(t.Context(), logutil.NewConsoleLogger(), ts, oldPrimary.Tablet.Keyspace, []string{"cell1"}, false)
-	assert.NoError(t, err, "RebuildKeyspaceLocked failed: %v", err)
+	require.NoError(t, err, "RebuildKeyspaceLocked failed: %v", err)
 
 	// Reparent to new primary
 	ti, err := ts.GetTablet(ctx, newPrimary.Tablet.Alias)
@@ -482,7 +482,7 @@ func TestRPCTabletExternallyReparentedDemotesPrimaryToConfiguredTabletType(t *te
 	waitForShardPrimary(t, wr, newPrimary.Tablet)
 
 	shardInfo, err := ts.GetShard(t.Context(), newPrimary.Tablet.Keyspace, newPrimary.Tablet.Shard)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	assert.True(t, topoproto.TabletAliasEqual(newPrimary.Tablet.Alias, shardInfo.PrimaryAlias))
 	assert.Equal(t, topodatapb.TabletType_PRIMARY, newPrimary.TM.Tablet().Type)

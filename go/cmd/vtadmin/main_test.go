@@ -30,23 +30,23 @@ func TestMainFlagRegistration(t *testing.T) {
 	t.Run("grpc tls flags are registered", func(t *testing.T) {
 		certFlag := rootCmd.Flags().Lookup("vtctld-grpc-cert")
 		require.NotNil(t, certFlag, "vtctld-grpc-cert flag should be registered")
-		assert.Equal(t, "", certFlag.DefValue)
+		assert.Empty(t, certFlag.DefValue)
 		assert.Equal(t, "the cert to use to connect", certFlag.Usage)
 
 		keyFlag := rootCmd.Flags().Lookup("vtctld-grpc-key")
 		require.NotNil(t, keyFlag, "vtctld-grpc-key flag should be registered")
-		assert.Equal(t, "", keyFlag.DefValue)
+		assert.Empty(t, keyFlag.DefValue)
 
 		caFlag := rootCmd.Flags().Lookup("vtctld-grpc-ca")
 		require.NotNil(t, caFlag, "vtctld-grpc-ca flag should be registered")
-		assert.Equal(t, "", caFlag.DefValue)
+		assert.Empty(t, caFlag.DefValue)
 
 		crlFlag := rootCmd.Flags().Lookup("vtctld-grpc-crl")
 		require.NotNil(t, crlFlag, "vtctld-grpc-crl flag should be registered")
-		assert.Equal(t, "", crlFlag.DefValue)
+		assert.Empty(t, crlFlag.DefValue)
 
 		serverNameFlag := rootCmd.Flags().Lookup("vtctld-grpc-server-name")
 		require.NotNil(t, serverNameFlag, "vtctld-grpc-server-name flag should be registered")
-		assert.Equal(t, "", serverNameFlag.DefValue)
+		assert.Empty(t, serverNameFlag.DefValue)
 	})
 }

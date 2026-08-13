@@ -20,6 +20,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -84,6 +86,102 @@ func (rlp *RelayLogPositions) IsZero() bool {
 	return rlp.Combined.IsZero()
 }
 
+// hasDominantPosition returns true if position a is strictly ahead of position b, meaning
+// a contains everything b has, plus more.
+func hasDominantPosition(a, b replication.Position) bool {
+	return a.AtLeast(b) && !b.AtLeast(a)
+}
+
+// haveIncomparablePositions returns true if neither position contains the other. Replication
+// lag alone can't cause this, it takes writes that no other tablet has seen (split brain
+// or errant GTIDs).
+func haveIncomparablePositions(a, b replication.Position) bool {
+	return !a.AtLeast(b) && !b.AtLeast(a)
+}
+
+// haveReciprocallyContainedPositions returns true if two unequal positions contain each
+// other. Containment can't order these: MariaDB GTID containment ignores the origin
+// server, so positions like 0-1-10 and 0-2-10 "contain" each other while holding
+// different histories (a split brain).
+func haveReciprocallyContainedPositions(a, b replication.Position) bool {
+	return a.AtLeast(b) && b.AtLeast(a) && !a.Equal(b)
+}
+
+func describeCombinedPositions(candidates map[string]*RelayLogPositions) string {
+	parts := make([]string, 0, len(candidates))
+	for alias, pos := range candidates {
+		parts = append(parts, fmt.Sprintf("%s=%s", alias, pos.Combined.String()))
+	}
+	slices.Sort(parts)
+	return strings.Join(parts, ", ")
+}
+
+// hasUniformCombinedPosition returns true when every candidate has the same Combined position. On the
+// output of filterToMostAdvancedCombined a false result means the leading candidates have
+// incomparable positions, as the filter already removed anything dominated.
+func hasUniformCombinedPosition(candidates map[string]*RelayLogPositions) bool {
+	var ref replication.Position
+	var set bool
+	for _, pos := range candidates {
+		if !set {
+			ref = pos.Combined
+			set = true
+			continue
+		}
+		if !pos.Combined.Equal(ref) {
+			return false
+		}
+	}
+	return true
+}
+
+// filterToMostAdvancedCombined returns the candidates that no other candidate dominates on
+// the Combined position. GTID positions are partially ordered, so each candidate is
+// compared against all of the others; two incomparable leaders don't dominate each other
+// and both must be kept, which hasUniformCombinedPosition relies on. The returned map shares the
+// caller's RelayLogPositions structs.
+func filterToMostAdvancedCombined(candidates map[string]*RelayLogPositions, logger logutil.Logger) map[string]*RelayLogPositions {
+	if len(candidates) == 0 {
+		return candidates
+	}
+
+	result := make(map[string]*RelayLogPositions, len(candidates))
+	for alias, pos := range candidates {
+		var dominated bool
+		for otherAlias, otherPos := range candidates {
+			if otherAlias == alias {
+				continue
+			}
+			if hasDominantPosition(otherPos.Combined, pos.Combined) {
+				dominated = true
+				break
+			}
+		}
+		if !dominated {
+			result[alias] = pos
+		}
+	}
+
+	if len(result) < len(candidates) {
+		excluded := make([]string, 0, len(candidates)-len(result))
+		kept := make([]string, 0, len(result))
+		for alias := range candidates {
+			if _, ok := result[alias]; !ok {
+				excluded = append(excluded, alias)
+			}
+		}
+		for alias := range result {
+			kept = append(kept, alias)
+		}
+		slices.Sort(excluded)
+		slices.Sort(kept)
+		logger.Infof("excluding %d candidate(s) strictly behind the most-advanced received relay log position from the relay-log-apply wait: %s (still repointed after promotion); waiting on: %s",
+			len(excluded), strings.Join(excluded, ", "), strings.Join(kept, ", "))
+	}
+
+	return result
+}
+
 // FindPositionsOfAllCandidates will find candidates for an emergency
 // reparent, and, if successful, return a mapping of those tablet aliases (as
 // raw strings) to their replication positions for later comparison.
@@ -92,12 +190,20 @@ func FindPositionsOfAllCandidates(
 	primaryStatusMap map[string]*replicationdatapb.PrimaryStatus,
 ) (map[string]*RelayLogPositions, bool, error) {
 	replicationStatusMap := make(map[string]*replication.ReplicationStatus, len(statusMap))
-	positionMap := make(map[string]*RelayLogPositions)
+	primaryPositions := make(map[string]replication.Position, len(primaryStatusMap))
+	positionMap := make(map[string]*RelayLogPositions, len(statusMap)+len(primaryStatusMap))
 
 	// Build out replication status list from proto types.
 	for alias, statuspb := range statusMap {
 		status := replication.ProtoToReplicationStatus(statuspb.After)
 		replicationStatusMap[alias] = &status
+	}
+	for alias, primaryStatus := range primaryStatusMap {
+		executedPosition, err := replication.DecodePosition(primaryStatus.Position)
+		if err != nil {
+			return nil, false, vterrors.Wrapf(err, "could not decode a primary status executed position for tablet %v", alias)
+		}
+		primaryPositions[alias] = executedPosition
 	}
 
 	// Determine if we're GTID-based. If we are, we'll need to look for errant
@@ -122,6 +228,16 @@ func FindPositionsOfAllCandidates(
 			emptyRelayPosErrorRecorder.RecordError(vterrors.Errorf(vtrpc.Code_UNAVAILABLE, "encountered tablet %v with no relay log position, when at least one other tablet in the status map has GTID based relay log positions", alias))
 		}
 	}
+	for _, position := range primaryPositions {
+		if position.GTIDSet == nil {
+			continue
+		}
+		if _, ok := position.GTIDSet.(replication.Mysql56GTIDSet); ok {
+			isGTIDBased = true
+		} else {
+			isNonGTIDBased = true
+		}
+	}
 
 	if isGTIDBased && emptyRelayPosErrorRecorder.HasErrors() {
 		return nil, false, emptyRelayPosErrorRecorder.Error()
@@ -144,12 +260,7 @@ func FindPositionsOfAllCandidates(
 		}
 	}
 
-	for alias, primaryStatus := range primaryStatusMap {
-		executedPosition, err := replication.DecodePosition(primaryStatus.Position)
-		if err != nil {
-			return nil, false, vterrors.Wrapf(err, "could not decode a primary status executed position for tablet %v", alias)
-		}
-
+	for alias, executedPosition := range primaryPositions {
 		positionMap[alias] = &RelayLogPositions{Combined: executedPosition}
 	}
 
@@ -291,7 +402,7 @@ func stopReplicationAndBuildStatusMaps(
 		res        = &replicationSnapshot{
 			statusMap:          map[string]*replicationdatapb.StopReplicationStatus{},
 			primaryStatusMap:   map[string]*replicationdatapb.PrimaryStatus{},
-			reachableTablets:   []*topodatapb.Tablet{},
+			reachableTablets:   make([]*topodatapb.Tablet, 0, len(tabletMap)),
 			tabletsBackupState: map[string]bool{},
 		}
 	)

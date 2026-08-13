@@ -82,7 +82,7 @@ func TestExternalConnectorCopy(t *testing.T) {
 	cancel1()
 
 	// Check that only one connector was created.
-	assert.Equal(t, 1, len(playerEngine.ec.connectors))
+	assert.Len(t, playerEngine.ec.connectors, 1)
 	filter2 := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
 			Match:  "tab2",
@@ -106,7 +106,7 @@ func TestExternalConnectorCopy(t *testing.T) {
 	cancel2()
 
 	// Check that only one connector was created.
-	assert.Equal(t, 1, len(playerEngine.ec.connectors))
+	assert.Len(t, playerEngine.ec.connectors, 1)
 
 	filter3 := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
@@ -131,7 +131,7 @@ func TestExternalConnectorCopy(t *testing.T) {
 	cancel3()
 
 	// Check that there now two connectors.
-	assert.Equal(t, 2, len(playerEngine.ec.connectors))
+	assert.Len(t, playerEngine.ec.connectors, 2)
 }
 
 func TestExternalConnectorPlay(t *testing.T) {

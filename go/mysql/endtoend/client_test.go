@@ -151,27 +151,27 @@ func doTestMultiResult(t *testing.T, disableClientDeprecateEOF bool) {
 	qr, more, err := conn.ExecuteFetchMulti("select 1 from dual; set autocommit=1; select 1 from dual", 10, true)
 	expectNoError(t, err)
 	expectFlag(t, "ExecuteMultiFetch(multi result)", more, true)
-	assert.EqualValues(t, 1, len(qr.Rows))
+	assert.Len(t, qr.Rows, 1)
 
 	qr, more, _, err = conn.ReadQueryResult(10, true)
 	expectNoError(t, err)
 	expectFlag(t, "ReadQueryResult(1)", more, true)
-	assert.EqualValues(t, 0, len(qr.Rows))
+	assert.Empty(t, qr.Rows)
 
 	qr, more, _, err = conn.ReadQueryResult(10, true)
 	expectNoError(t, err)
 	expectFlag(t, "ReadQueryResult(2)", more, false)
-	assert.EqualValues(t, 1, len(qr.Rows))
+	assert.Len(t, qr.Rows, 1)
 
 	qr, more, err = conn.ExecuteFetchMulti("select 1 from dual", 10, true)
 	expectNoError(t, err)
 	expectFlag(t, "ExecuteMultiFetch(single result)", more, false)
-	assert.EqualValues(t, 1, len(qr.Rows))
+	assert.Len(t, qr.Rows, 1)
 
 	qr, more, err = conn.ExecuteFetchMulti("set autocommit=1", 10, true)
 	expectNoError(t, err)
 	expectFlag(t, "ExecuteMultiFetch(no result)", more, false)
-	assert.EqualValues(t, 0, len(qr.Rows))
+	assert.Empty(t, qr.Rows)
 
 	// The ClientDeprecateEOF protocol change has a subtle twist in which an EOF or OK
 	// packet happens to have the status flags in the same position if the affected_rows
@@ -207,12 +207,12 @@ func doTestMultiResult(t *testing.T, disableClientDeprecateEOF bool) {
 	qr, more, _, err = conn.ReadQueryResult(300, true)
 	expectNoError(t, err)
 	expectFlag(t, "ReadQueryResult(1)", more, true)
-	assert.EqualValues(t, 255, len(qr.Rows), "ReadQueryResult(1)")
+	assert.Len(t, qr.Rows, 255, "ReadQueryResult(1)")
 
 	qr, more, _, err = conn.ReadQueryResult(300, true)
 	expectNoError(t, err)
 	expectFlag(t, "ReadQueryResult(2)", more, false)
-	assert.EqualValues(t, 1, len(qr.Rows), "ReadQueryResult(1)")
+	assert.Len(t, qr.Rows, 1, "ReadQueryResult(1)")
 
 	// Verify that a ExecuteFetchMultiDrain is happy to operate again after all the above.
 	err = conn.ExecuteFetchMultiDrain("update a set name = concat(name, ', multi drain 2'); select * from a; select count(*) from a")
@@ -251,7 +251,7 @@ func TestTLS(t *testing.T) {
 	// First make sure the official 'mysql' client can connect.
 	output, ok := runMysql(t, &params, "status")
 	require.True(t, ok, "'mysql -e status' failed: %v", output)
-	require.True(t, strings.Contains(output, "Cipher in use is"), "cannot connect via SSL: %v", output)
+	require.Contains(t, output, "Cipher in use is", "cannot connect via SSL: %v", output)
 
 	// Now connect with our client.
 	ctx := t.Context()
@@ -309,7 +309,7 @@ func TestCachingSha2Password(t *testing.T) {
 	defer conn.Close()
 
 	qr, err := conn.ExecuteFetch(`select true from information_schema.PLUGINS where PLUGIN_NAME='caching_sha2_password' and PLUGIN_STATUS='ACTIVE'`, 1, false)
-	assert.NoError(t, err, "select true from information_schema.PLUGINS failed: %v", err)
+	require.NoError(t, err, "select true from information_schema.PLUGINS failed: %v", err)
 
 	if len(qr.Rows) != 1 {
 		t.Skip("Server does not support caching_sha2_password plugin")

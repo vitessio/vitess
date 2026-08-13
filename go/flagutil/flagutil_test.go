@@ -36,7 +36,7 @@ func TestStringList(t *testing.T) {
 	}
 	for in, out := range wanted {
 		err := p.Set(in)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 
 		assert.Equal(t, out, strings.Join(p, "."))
 		assert.Equal(t, in, p.String())
@@ -50,7 +50,7 @@ func TestEmptyStringList(t *testing.T) {
 
 	err := p.Set("")
 	require.NoError(t, err)
-	require.Len(t, p, 0)
+	require.Empty(t, p)
 }
 
 type pair struct {
@@ -78,7 +78,7 @@ func TestStringMap(t *testing.T) {
 	}
 	for _, want := range wanted {
 		err := v.Set(want.in)
-		assert.ErrorIs(t, err, want.err)
+		require.ErrorIs(t, err, want.err)
 
 		if want.err != nil {
 			continue
@@ -124,7 +124,7 @@ func TestDualFormatStringListVar(t *testing.T) {
 
 	newVal := "newValue1,newValue2"
 	err := testFlagSet.Set("test-flag-name", newVal)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	assert.Equal(t, newVal, f.Value.String())
 	assert.Equal(t, []string{"newValue1", "newValue2"}, flagVal)
@@ -150,7 +150,7 @@ func TestDualFormatStringVar(t *testing.T) {
 
 	newVal := "newValue"
 	err := testFlagSet.Set("test-flag-name", newVal)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	assert.Equal(t, newVal, f.Value.String())
 	assert.Equal(t, newVal, flagVal)
@@ -174,7 +174,7 @@ func TestDualFormatBoolVar(t *testing.T) {
 	assert.Equal(t, "true", f.Value.String())
 
 	err := testFlagSet.Set("test-flag-name", "false")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	assert.Equal(t, "false", f.Value.String())
 	assert.False(t, flagVal)
@@ -199,7 +199,7 @@ func TestDualFormatInt64Var(t *testing.T) {
 
 	newVal := "128"
 	err := testFlagSet.Set("test-flag-name", newVal)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	assert.Equal(t, newVal, f.Value.String())
 	assert.Equal(t, int64(128), flagVal)
@@ -224,7 +224,7 @@ func TestDualFormatIntVar(t *testing.T) {
 
 	newVal := "256"
 	err := testFlagSet.Set("test-flag-name", newVal)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	assert.Equal(t, newVal, f.Value.String())
 	assert.Equal(t, 256, flagVal)
@@ -273,7 +273,7 @@ func TestDualFormatVar(t *testing.T) {
 
 	newVal := "false"
 	err := testFlagSet.Set("test-flag-name", newVal)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	assert.Equal(t, newVal, f.Value.String())
 	assert.False(t, flagVal)

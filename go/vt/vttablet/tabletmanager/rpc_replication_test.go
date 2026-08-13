@@ -28,14 +28,17 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/semaphore"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/semisyncmonitor"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver"
+	"vitess.io/vitess/go/vt/vttablet/tabletservermock"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
@@ -81,11 +84,20 @@ func TestWaitForGrantsToHaveApplied(t *testing.T) {
 	require.NoError(t, err)
 }
 
-type demotePrimaryStallQS struct {
-	tabletserver.Controller
-	qsWaitChan     chan any
-	primaryStalled atomic.Bool
-}
+type (
+	demotePrimaryStallQS struct {
+		tabletserver.Controller
+		qsWaitChan     chan any
+		primaryStalled atomic.Bool
+	}
+
+	restartReplicationMysqlDaemon struct {
+		*mysqlctl.FakeMysqlDaemon
+		cancel                   context.CancelFunc
+		postStopTimeoutRemaining chan time.Duration
+		stopDelay                time.Duration
+	}
+)
 
 func (d *demotePrimaryStallQS) SetDemotePrimaryStalled(val bool) {
 	d.primaryStalled.Store(val)
@@ -94,6 +106,30 @@ func (d *demotePrimaryStallQS) SetDemotePrimaryStalled(val bool) {
 func (d *demotePrimaryStallQS) IsServing() bool {
 	<-d.qsWaitChan
 	return false
+}
+
+func (rmd *restartReplicationMysqlDaemon) StopReplication(context.Context, map[string]string) error {
+	if rmd.cancel != nil {
+		rmd.cancel()
+	}
+	if rmd.stopDelay > 0 {
+		time.Sleep(rmd.stopDelay)
+	}
+	return nil
+}
+
+func (rmd *restartReplicationMysqlDaemon) SemiSyncExtensionLoaded(ctx context.Context) (mysql.SemiSyncType, error) {
+	if err := ctx.Err(); err != nil {
+		return mysql.SemiSyncTypeUnknown, err
+	}
+	deadline, ok := ctx.Deadline()
+	if !ok {
+		return mysql.SemiSyncTypeUnknown, errors.New("post-STOP context must have a deadline")
+	}
+	if rmd.postStopTimeoutRemaining != nil {
+		rmd.postStopTimeoutRemaining <- time.Until(deadline)
+	}
+	return mysql.SemiSyncTypeOff, nil
 }
 
 // TestDemotePrimaryStalled checks that if demote primary takes too long, then we mark it as stalled.
@@ -139,6 +175,59 @@ func TestDemotePrimaryStalled(t *testing.T) {
 	require.Eventually(t, func() bool {
 		return !qsc.primaryStalled.Load()
 	}, 5*time.Second, 100*time.Millisecond)
+}
+
+// TestDemotePrimaryLockWaitTimeout checks that a demotion enables super_read_only
+// with a 1 second lock_wait_timeout, so that it fails fast instead of stalling
+// behind metadata locks held by in-flight queries.
+func TestDemotePrimaryLockWaitTimeout(t *testing.T) {
+	old := demotePrimaryLockWaitTimeout
+	demotePrimaryLockWaitTimeout = time.Second
+	t.Cleanup(func() { demotePrimaryLockWaitTimeout = old })
+
+	fakeDb := newTestMysqlDaemon(t, 1)
+	tm := &TabletManager{
+		actionSema:  semaphore.NewWeighted(1),
+		MysqlDaemon: fakeDb,
+		tmState: &tmState{
+			displayState: displayState{
+				tablet: newTestTablet(t, 100, "ks", "-", map[string]string{}),
+			},
+		},
+		QueryServiceControl: tabletservermock.NewController(),
+		SemiSyncMonitor:     semisyncmonitor.CreateTestSemiSyncMonitor(fakeDb.DB(), exporter),
+	}
+
+	_, err := tm.demotePrimary(t.Context(), false /* revertPartialFailure */, false /* force */)
+	require.NoError(t, err)
+
+	assert.True(t, fakeDb.SuperReadOnly.Load(), "demotePrimary must enable super_read_only")
+	assert.Equal(t, time.Second, fakeDb.SetSuperReadOnlyLockWaitTimeout, "demotePrimary must enable super_read_only with a 1s lock_wait_timeout")
+}
+
+// TestDemotePrimaryLockWaitTimeoutDisabledByDefault checks that a demotion does not pass a
+// lock_wait_timeout bound when demotePrimaryLockWaitTimeout is left at its zero-value default.
+func TestDemotePrimaryLockWaitTimeoutDisabledByDefault(t *testing.T) {
+	require.Zero(t, demotePrimaryLockWaitTimeout, "test requires the flag to be at its default value")
+
+	fakeDb := newTestMysqlDaemon(t, 1)
+	tm := &TabletManager{
+		actionSema:  semaphore.NewWeighted(1),
+		MysqlDaemon: fakeDb,
+		tmState: &tmState{
+			displayState: displayState{
+				tablet: newTestTablet(t, 100, "ks", "-", map[string]string{}),
+			},
+		},
+		QueryServiceControl: tabletservermock.NewController(),
+		SemiSyncMonitor:     semisyncmonitor.CreateTestSemiSyncMonitor(fakeDb.DB(), exporter),
+	}
+
+	_, err := tm.demotePrimary(t.Context(), false /* revertPartialFailure */, false /* force */)
+	require.NoError(t, err)
+
+	assert.True(t, fakeDb.SuperReadOnly.Load(), "demotePrimary must enable super_read_only")
+	assert.Zero(t, fakeDb.SetSuperReadOnlyLockWaitTimeout, "demotePrimary must not bound lock_wait_timeout when the flag is disabled")
 }
 
 // TestDemotePrimaryWaitingForSemiSyncUnblock tests that demote primary unblocks if the primary is blocked on semi-sync ACKs
@@ -345,14 +434,14 @@ func TestUndoDemotePrimaryStateChange(t *testing.T) {
 	require.NoError(t, err)
 
 	// Check that the tablet is initially a replica.
-	require.EqualValues(t, topodatapb.TabletType_REPLICA, tm.Tablet().Type)
+	require.Equal(t, topodatapb.TabletType_REPLICA, tm.Tablet().Type)
 	// Verify that the tablet record says the tablet should be a primary.
-	require.EqualValues(t, topodatapb.TabletType_PRIMARY, ti.Type)
+	require.Equal(t, topodatapb.TabletType_PRIMARY, ti.Type)
 
 	err = tm.UndoDemotePrimary(ctx, false)
 	require.NoError(t, err)
-	require.EqualValues(t, topodatapb.TabletType_PRIMARY, tm.Tablet().Type)
-	require.EqualValues(t, ti.PrimaryTermStartTime, tm.Tablet().PrimaryTermStartTime)
+	require.Equal(t, topodatapb.TabletType_PRIMARY, tm.Tablet().Type)
+	require.Equal(t, ti.PrimaryTermStartTime, tm.Tablet().PrimaryTermStartTime)
 	require.True(t, tm.QueryServiceControl.IsServing())
 	isReadOnly, err := tm.MysqlDaemon.IsReadOnly(ctx)
 	require.NoError(t, err)
@@ -450,6 +539,81 @@ func TestStartReplicationRecoversFromRecoverableReplicationInitError(t *testing.
 	err := tm.StartReplication(t.Context(), false)
 	require.NoError(t, err)
 	require.NoError(t, fakeMysqlDaemon.CheckSuperQueryList())
+}
+
+// TestRestartReplicationCompletesAfterContextCancellation verifies a successful
+// stop is followed by a bounded start when the RPC context is canceled.
+func TestRestartReplicationCompletesAfterContextCancellation(t *testing.T) {
+	fakeMysqlDaemon := newTestMysqlDaemon(t, 1)
+	fakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{"START REPLICA"}
+	ctx, cancel := context.WithCancel(t.Context())
+	t.Cleanup(cancel)
+
+	restartMysqlDaemon := &restartReplicationMysqlDaemon{
+		FakeMysqlDaemon: fakeMysqlDaemon,
+		cancel:          cancel,
+	}
+	tm := newTestReplicationTM(newTestTablet(t, 100, "ks", "0", nil), fakeMysqlDaemon, nil)
+	tm.MysqlDaemon = restartMysqlDaemon
+
+	err := tm.RestartReplication(ctx, false)
+	require.NoError(t, err)
+	require.NoError(t, fakeMysqlDaemon.CheckSuperQueryList())
+	assert.True(t, fakeMysqlDaemon.Replicating, "replication must be started after STOP succeeds")
+}
+
+func TestRestartReplicationUsesCallerTimeoutAfterStop(t *testing.T) {
+	fakeMysqlDaemon := newTestMysqlDaemon(t, 1)
+	fakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{"START REPLICA"}
+	ctx, cancel := context.WithTimeout(t.Context(), 2*topo.RemoteOperationTimeout)
+	t.Cleanup(cancel)
+
+	postStopTimeoutRemaining := make(chan time.Duration, 1)
+	restartMysqlDaemon := &restartReplicationMysqlDaemon{
+		FakeMysqlDaemon:          fakeMysqlDaemon,
+		cancel:                   cancel,
+		postStopTimeoutRemaining: postStopTimeoutRemaining,
+	}
+	tm := newTestReplicationTM(newTestTablet(t, 100, "ks", "0", nil), fakeMysqlDaemon, nil)
+	tm.MysqlDaemon = restartMysqlDaemon
+
+	err := tm.RestartReplication(ctx, false)
+	require.NoError(t, err)
+	require.NoError(t, fakeMysqlDaemon.CheckSuperQueryList())
+	assert.LessOrEqual(t, <-postStopTimeoutRemaining, topo.RemoteOperationTimeout,
+		"post-STOP budget must be capped at RemoteOperationTimeout")
+}
+
+// TestRestartReplicationDeductsPreStopTimeFromPostStopBudget verifies time spent
+// before and during STOP is deducted from the post-STOP timeout budget.
+func TestRestartReplicationDeductsPreStopTimeFromPostStopBudget(t *testing.T) {
+	oldRemoteOpTimeout := topo.RemoteOperationTimeout
+	topo.RemoteOperationTimeout = 30 * time.Second
+	t.Cleanup(func() {
+		topo.RemoteOperationTimeout = oldRemoteOpTimeout
+	})
+
+	fakeMysqlDaemon := newTestMysqlDaemon(t, 1)
+	fakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{"START REPLICA"}
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+	t.Cleanup(cancel)
+
+	postStopTimeoutRemaining := make(chan time.Duration, 1)
+	restartMysqlDaemon := &restartReplicationMysqlDaemon{
+		FakeMysqlDaemon:          fakeMysqlDaemon,
+		postStopTimeoutRemaining: postStopTimeoutRemaining,
+		stopDelay:                time.Second,
+	}
+	tm := newTestReplicationTM(newTestTablet(t, 100, "ks", "0", nil), fakeMysqlDaemon, nil)
+	tm.MysqlDaemon = restartMysqlDaemon
+
+	err := tm.RestartReplication(ctx, false)
+	require.NoError(t, err)
+	require.NoError(t, fakeMysqlDaemon.CheckSuperQueryList())
+
+	remaining := <-postStopTimeoutRemaining
+	assert.Greater(t, remaining, 8*time.Second)
+	assert.Less(t, remaining, 9500*time.Millisecond, "time spent in STOP must be deducted from the post-STOP budget")
 }
 
 // TestRestartReplicationRecoversFromRecoverableReplicationInitializationError verifies RestartReplication self-heals recoverable init failures.
@@ -725,4 +889,25 @@ func TestSetReplicationSourceRecovery(t *testing.T) {
 		require.EqualValues(t, 3306, fakeMysqlDaemon.CurrentSourcePort)
 		require.NoError(t, fakeMysqlDaemon.CheckSuperQueryList())
 	})
+}
+
+func TestShardPeerHealthSnapshot(t *testing.T) {
+	// Without a monitor configured, FullStatus gets a nil snapshot and must not panic.
+	tm := &TabletManager{}
+	assert.Nil(t, tm.shardPeerHealthSnapshot(), "no monitor configured -> nil snapshot, no panic")
+
+	// With a monitor, the primary's latest liveness signals are surfaced. The monitor tracks only
+	// the shard primary, so the observed peer must be PRIMARY-typed.
+	self := &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}}
+	peer := &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101}, Keyspace: "ks", Shard: "0", Type: topodatapb.TabletType_PRIMARY}
+	pinger := &fakePinger{fail: true}
+	m := newShardHealthMonitor(pinger, staticLister(self, peer), staticPrimaryAlias(peer), topoproto.TabletAliasString(self.Alias), time.Second, time.Second)
+	require.NoError(t, m.refreshPeers(t.Context()))
+	m.runPingRound(t.Context())
+	assert.Eventually(t, func() bool { return m.inflightCount() == 0 }, 30*time.Second, 5*time.Millisecond)
+
+	tm = &TabletManager{shardHealthMonitor: m}
+	snap := tm.shardPeerHealthSnapshot()
+	require.Len(t, snap, 1)
+	assert.Equal(t, int64(1), snap[0].ConsecutivePingFailures)
 }

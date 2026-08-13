@@ -24,6 +24,18 @@ import (
 
 // connStack is a lock-free stack for Connection objects. It is safe to
 // use from several goroutines.
+//
+// ALIGNMENT: the 128-bit atomic in this struct faults (SIGBUS) on amd64 and
+// arm64 unless it is 16-byte aligned. Go has no supported way to demand
+// 16-byte alignment (the maximum natural alignment is 8 bytes), so it
+// depends entirely on where the allocator places the enclosing allocation,
+// which varies with the allocation's exact size, pointer layout, and Go
+// version — e.g. allocation headers (Go 1.22+) shift some pointer-bearing
+// objects larger than 512 bytes to an odd 8-byte boundary. ConnPool
+// currently lands in a bucket where allocations are 16-byte aligned; growing
+// it can silently break that, which is why its waitlist is held behind a
+// pointer. Be careful when adding fields to ConnPool or anything embedded
+// in it.
 type connStack[C Connection] struct {
 	// top is a pointer to the top node on the stack and to an increasing
 	// counter of pop operations, to prevent A-B-A races.

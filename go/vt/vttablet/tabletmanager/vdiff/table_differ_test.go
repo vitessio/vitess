@@ -123,7 +123,7 @@ func TestUpdateTableProgress(t *testing.T) {
 				},
 			}
 			if err := td.updateTableProgress(dbc, dr, tc.lastRow); (err != nil) != tc.wantErr {
-				require.FailNow(t, "tableDiffer.updateTableProgress() error = %v, wantErr %v",
+				require.FailNowf(t, "tableDiffer.updateTableProgress() error =", "%v, wantErr %v",
 					err, tc.wantErr)
 			}
 		})

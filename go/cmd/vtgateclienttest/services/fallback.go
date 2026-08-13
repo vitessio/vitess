@@ -55,8 +55,8 @@ func (c fallbackClient) ExecuteBatch(ctx context.Context, session *vtgatepb.Sess
 	return c.fallback.ExecuteBatch(ctx, session, sqlList, bindVariablesList)
 }
 
-func (c fallbackClient) StreamExecute(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable, callback func(*sqltypes.Result) error) (*vtgatepb.Session, error) {
-	return c.fallback.StreamExecute(ctx, mysqlCtx, session, sql, bindVariables, callback)
+func (c fallbackClient) StreamExecute(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable, prepared bool, callback func(*sqltypes.Result) error) (*vtgatepb.Session, error) {
+	return c.fallback.StreamExecute(ctx, mysqlCtx, session, sql, bindVariables, prepared, callback)
 }
 
 func (c fallbackClient) ExecuteMulti(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, session *vtgatepb.Session, sqlString string) (newSession *vtgatepb.Session, qrs []*sqltypes.Result, err error) {

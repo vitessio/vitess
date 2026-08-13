@@ -1,3 +1,19 @@
+/*
+Copyright 2026 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package vreplication
 
 import (
@@ -25,7 +41,7 @@ func getSidecarDBTables(t *testing.T, tabletID string) (numTablets int, tables [
 		require.True(t, row.IsArray())
 		rows2 := row.Array()
 		require.NotNil(t, rows2)
-		require.Equal(t, len(rows2), 1)
+		require.Len(t, rows2, 1)
 		table := rows2[0].String()
 		tables = append(tables, table)
 	}
@@ -117,7 +133,7 @@ func TestSidecarDB(t *testing.T) {
 
 func validateSidecarDBTables(t *testing.T, tabletID string, tables []string) {
 	_, tables2 := getSidecarDBTables(t, tabletID)
-	require.EqualValues(t, tables, tables2)
+	require.Equal(t, tables, tables2)
 }
 
 func modifySidecarDBSchema(t *testing.T, vc *VitessCluster, tabletID string, ddls []string) (numChanges int) {

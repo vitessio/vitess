@@ -1,3 +1,19 @@
+/*
+Copyright 2026 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package plancontext
 
 import (
@@ -93,20 +109,11 @@ type VSchema interface {
 	// IsViewsEnabled returns true if Vitess manages the views.
 	IsViewsEnabled() bool
 
-	// GetUDV returns user defined value from the variable passed.
-	GetUDV(name string) *querypb.BindVariable
-
 	// PlanPrepareStatement plans the prepared statement.
 	PlanPrepareStatement(ctx context.Context, query string) (*engine.Plan, error)
 
-	// ClearPrepareData clears the prepared data from the session.
-	ClearPrepareData(stmtName string)
-
 	// GetPrepareData returns the prepared data for the statement from the session.
 	GetPrepareData(stmtName string) *vtgatepb.PrepareData
-
-	// StorePrepareData stores the prepared data in the session.
-	StorePrepareData(name string, v *vtgatepb.PrepareData)
 
 	// GetAggregateUDFs returns the list of aggregate UDFs.
 	GetAggregateUDFs() []string

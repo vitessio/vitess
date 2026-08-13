@@ -183,7 +183,7 @@ func TestBuildTableColumns(t *testing.T) {
 				// Should return basic field info with @N position based names.
 				require.Equal(t, "@1", fields[0].Name)
 				require.Equal(t, "@4", fields[3].Name)
-				require.Equal(t, fields[3].Type, sqltypes.Int32)
+				require.Equal(t, sqltypes.Int32, fields[3].Type)
 			},
 		},
 	}

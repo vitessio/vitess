@@ -99,7 +99,7 @@ func TestUnionAll(t *testing.T) {
 
 			// union all between two different tables
 			result := mcmp.Exec("(select id1,id2 from t1) union all (select id3,id4 from t2)")
-			assert.Equal(t, 4, len(result.Rows))
+			assert.Len(t, result.Rows, 4)
 
 			// union all between two different tables
 			mcmp.AssertMatchesNoOrder("select tbl2.id1 FROM  ((select id1 from t1 order by id1 limit 5) union all (select id1 from t1 order by id1 desc limit 5)) as tbl1 INNER JOIN t1 as tbl2  ON tbl1.id1 = tbl2.id1",

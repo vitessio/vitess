@@ -230,7 +230,7 @@ func TestConsistentLookupVerify(t *testing.T) {
 	// Test query fail.
 	vc.AddResult(nil, errors.New("execute failed"))
 	_, err = lookup.Verify(ctx, vc, []sqltypes.Value{sqltypes.NewInt64(1)}, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6")})
-	assert.EqualError(t, err, "lookup.Verify: execute failed", "lookup(query fail)")
+	require.EqualError(t, err, "lookup.Verify: execute failed", "lookup(query fail)")
 
 	// Test write_only.
 	lookup = createConsistentLookup(t, "consistent_lookup", true)
@@ -252,7 +252,7 @@ func TestConsistentLookupCreateSimple(t *testing.T) {
 		sqltypes.NewInt64(3),
 		sqltypes.NewInt64(4),
 	}}, [][]byte{[]byte("test1"), []byte("test2")}, false)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	vc.verifyLog(t, []string{
 		"ExecutePre insert into t(fromc1, fromc2, toc) values(:fromc1_0, :fromc2_0, :toc_0), (:fromc1_1, :fromc2_1, :toc_1) [{fromc1_0 1} {fromc1_1 3} {fromc2_0 2} {fromc2_1 4} {toc_0 test1} {toc_1 test2}] true",
 	})
@@ -271,7 +271,7 @@ func TestConsistentLookupCreateThenRecreate(t *testing.T) {
 		sqltypes.NewInt64(1),
 		sqltypes.NewInt64(2),
 	}}, [][]byte{[]byte("test1")}, false)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	vc.verifyLog(t, []string{
 		"ExecutePre insert into t(fromc1, fromc2, toc) values(:fromc1_0, :fromc2_0, :toc_0) [{fromc1_0 1} {fromc2_0 2} {toc_0 test1}] true",
 		"ExecutePre select toc from t where fromc1 = :fromc1 and fromc2 = :fromc2 for update [{fromc1 1} {fromc2 2} {toc test1}] false",
@@ -293,7 +293,7 @@ func TestConsistentLookupCreateThenUpdate(t *testing.T) {
 		sqltypes.NewInt64(1),
 		sqltypes.NewInt64(2),
 	}}, [][]byte{[]byte("test1")}, false)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	vc.verifyLog(t, []string{
 		"ExecutePre insert into t(fromc1, fromc2, toc) values(:fromc1_0, :fromc2_0, :toc_0) [{fromc1_0 1} {fromc2_0 2} {toc_0 test1}] true",
 		"ExecutePre select toc from t where fromc1 = :fromc1 and fromc2 = :fromc2 for update [{fromc1 1} {fromc2 2} {toc test1}] false",
@@ -316,7 +316,7 @@ func TestConsistentLookupCreateThenSkipUpdate(t *testing.T) {
 		sqltypes.NewInt64(1),
 		sqltypes.NewInt64(2),
 	}}, [][]byte{[]byte("1")}, false)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	vc.verifyLog(t, []string{
 		"ExecutePre insert into t(fromc1, fromc2, toc) values(:fromc1_0, :fromc2_0, :toc_0) [{fromc1_0 1} {fromc2_0 2} {toc_0 1}] true",
 		"ExecutePre select toc from t where fromc1 = :fromc1 and fromc2 = :fromc2 for update [{fromc1 1} {fromc2 2} {toc 1}] false",
@@ -394,7 +394,7 @@ func TestConsistentLookupDelete(t *testing.T) {
 		sqltypes.NewInt64(1),
 		sqltypes.NewInt64(2),
 	}}, []byte("test"))
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	vc.verifyLog(t, []string{
 		"ExecutePost delete from t where fromc1 = :fromc1 and fromc2 = :fromc2 and toc = :toc [{fromc1 1} {fromc2 2} {toc test}] true",
 	})
@@ -415,7 +415,7 @@ func TestConsistentLookupUpdate(t *testing.T) {
 		sqltypes.NewInt64(3),
 		sqltypes.NewInt64(4),
 	})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	vc.verifyLog(t, []string{
 		"ExecutePost delete from t where fromc1 = :fromc1 and fromc2 = :fromc2 and toc = :toc [{fromc1 1} {fromc2 2} {toc test}] true",
 		"ExecutePre insert into t(fromc1, fromc2, toc) values(:fromc1_0, :fromc2_0, :toc_0) [{fromc1_0 3} {fromc2_0 4} {toc_0 test}] true",
@@ -436,7 +436,7 @@ func TestConsistentLookupNoUpdate(t *testing.T) {
 		sqltypes.NewInt64(1),
 		sqltypes.NewInt64(2),
 	})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	vc.verifyLog(t, []string{})
 }
 

@@ -54,7 +54,7 @@ func TestEffectiveCallerIDWithNoAccess(t *testing.T) {
 	ctx = callerid.NewContext(ctx, callerid.NewEffectiveCallerID("user_no_access", "", ""), nil)
 	_, err = session.Execute(ctx, query, nil, false)
 	require.Error(t, err)
-	assert.ErrorContains(t, err, "Select command denied to user")
+	require.ErrorContains(t, err, "Select command denied to user")
 	assert.ErrorContains(t, err, "for table 'test_table' (ACL check error)")
 }
 
@@ -84,7 +84,7 @@ func TestAuthenticatedUserNoAccess(t *testing.T) {
 	query := "SELECT id FROM test_table"
 	_, err = session.Execute(ctx, query, nil, false)
 	require.Error(t, err)
-	assert.ErrorContains(t, err, "Select command denied to user")
+	require.ErrorContains(t, err, "Select command denied to user")
 	assert.ErrorContains(t, err, "for table 'test_table' (ACL check error)")
 }
 

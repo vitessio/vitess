@@ -32,6 +32,7 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	"vitess.io/vitess/go/vt/vtenv"
+	"vitess.io/vitess/go/vt/vtgate/engine"
 	econtext "vitess.io/vitess/go/vt/vtgate/executorcontext"
 	"vitess.io/vitess/go/vt/vtgate/logstats"
 	_ "vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -91,6 +92,129 @@ func TestStreamSQLSharded(t *testing.T) {
 	assert.Truef(t, result.Equal(wantResult), "result: %+v, want %+v", result, wantResult)
 }
 
+// TestStreamExecutePropagatesOKPacketData verifies that the streaming path reports
+// the OK-packet data — affected rows, last insert id and session-state changes —
+// to the client for row-returning statements that carry an OK packet (e.g. a CALL
+// of a procedure that performs DML), matching the buffered Execute path.
+func TestStreamExecutePropagatesOKPacketData(t *testing.T) {
+	executor, _, _, sbclookup, ctx := createExecutorEnv(t)
+
+	// An OK packet with affected rows but no fields or rows, like a CALL that
+	// performs an INSERT.
+	sbclookup.SetResults([]*sqltypes.Result{{
+		RowsAffected:        1,
+		InsertID:            99,
+		InsertIDChanged:     true,
+		SessionStateChanges: "8bb25b46-16bd-11ea-8ffa-98af65266957:8",
+	}})
+
+	session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded})
+	got := &sqltypes.Result{}
+	err := executor.StreamExecute(ctx, nil, "TestStreamExecutePropagatesOKPacketData", session,
+		"select id from main1", nil, false, func(qr *sqltypes.Result) error {
+			got.AppendResult(qr)
+			if qr.SessionStateChanges != "" {
+				got.SessionStateChanges = qr.SessionStateChanges
+			}
+			return nil
+		})
+	require.NoError(t, err)
+	assert.EqualValues(t, 1, got.RowsAffected, "streamed result must carry RowsAffected to the client")
+	assert.EqualValues(t, 99, got.InsertID, "streamed result must carry InsertID to the client")
+	assert.True(t, got.InsertIDChanged)
+	assert.Equal(t, "8bb25b46-16bd-11ea-8ffa-98af65266957:8", got.SessionStateChanges,
+		"streamed result must carry SessionStateChanges to the client")
+}
+
+// TestStreamExecuteOKPacketDataAfterResultSet verifies that OK-packet data arriving
+// after a result set was already delivered to the client is still sent in a final
+// packet instead of being dropped — e.g. a stream that first produces fields and
+// then an affected-row count.
+func TestStreamExecuteOKPacketDataAfterResultSet(t *testing.T) {
+	executor, _, _, sbclookup, ctx := createExecutorEnv(t)
+
+	// The first result carries only fields, so the metadata is sent to the client
+	// immediately. The second carries OK-packet data with no rows, so the final
+	// left-over result has no rows either and must still be sent.
+	sbclookup.SetResults([]*sqltypes.Result{
+		{Fields: sqltypes.MakeTestFields("id", "int64")},
+		{RowsAffected: 1},
+	})
+
+	session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded})
+	var rowsAffected uint64
+	err := executor.StreamExecute(ctx, nil, "TestStreamExecuteOKPacketDataAfterResultSet", session,
+		"select id from main1", nil, false, func(qr *sqltypes.Result) error {
+			rowsAffected += qr.RowsAffected
+			return nil
+		})
+	require.NoError(t, err)
+	assert.EqualValues(t, 1, rowsAffected,
+		"RowsAffected arriving after the result set was sent must still reach the client")
+}
+
+// TestStreamExecuteOKPacketDataWithFields verifies that OK-packet data arriving in
+// the same packet as the field metadata reaches the client exactly once — in the
+// final left-over result — and is not also duplicated into the fields-only
+// metadata packet sent ahead of the rows.
+func TestStreamExecuteOKPacketDataWithFields(t *testing.T) {
+	executor, _, _, sbclookup, ctx := createExecutorEnv(t)
+
+	sbclookup.SetResults([]*sqltypes.Result{{
+		Fields:          sqltypes.MakeTestFields("id", "int64"),
+		RowsAffected:    1,
+		InsertID:        99,
+		InsertIDChanged: true,
+	}})
+
+	session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded})
+	var rowsAffected uint64
+	var insertIDs []uint64
+	err := executor.StreamExecute(ctx, nil, "TestStreamExecuteOKPacketDataWithFields", session,
+		"select id from main1", nil, false, func(qr *sqltypes.Result) error {
+			rowsAffected += qr.RowsAffected
+			if qr.InsertIDUpdated() {
+				insertIDs = append(insertIDs, qr.InsertID)
+			}
+			return nil
+		})
+	require.NoError(t, err)
+	assert.EqualValues(t, 1, rowsAffected,
+		"a client summing RowsAffected across packets must see the OK-packet count exactly once")
+	assert.Equal(t, []uint64{99}, insertIDs,
+		"the last insert id must be delivered in exactly one packet")
+}
+
+// TestStreamExecuteRecordsPlanStats verifies that the streaming path records
+// per-plan execution statistics (exec count, rows returned) on the engine.Plan,
+// matching the buffered Execute path.
+func TestStreamExecuteRecordsPlanStats(t *testing.T) {
+	executor, _, _, sbclookup, ctx := createExecutorEnv(t)
+
+	sbclookup.SetResults([]*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("id", "int64"), "1", "2")})
+
+	sql := "select id from main1"
+	session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded})
+	err := executor.StreamExecute(ctx, nil, "TestStreamExecuteRecordsPlanStats", session,
+		sql, nil, false, func(*sqltypes.Result) error { return nil })
+	require.NoError(t, err)
+
+	var plan *engine.Plan
+	executor.ForEachPlan(func(p *engine.Plan) bool {
+		if p.Original == sql {
+			plan = p
+			return false
+		}
+		return true
+	})
+	require.NotNil(t, plan, "plan not found in cache")
+
+	execCount, _, _, _, rowsReturned, errCount := plan.Stats()
+	assert.EqualValues(t, 1, execCount, "streamed query must record an execution in plan stats")
+	assert.EqualValues(t, 2, rowsReturned, "streamed query must record rows returned in plan stats")
+	assert.EqualValues(t, 0, errCount, "successful streamed query must not record an error in plan stats")
+}
+
 func executorStreamMessages(executor *Executor, sql string) (qr *sqltypes.Result, err error) {
 	results := make(chan *sqltypes.Result, 100)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
@@ -103,6 +227,7 @@ func executorStreamMessages(executor *Executor, sql string) (qr *sqltypes.Result
 		econtext.NewSafeSession(session),
 		sql,
 		nil,
+		false,
 		func(qr *sqltypes.Result) error {
 			results <- qr
 			return nil

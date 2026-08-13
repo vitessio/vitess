@@ -320,6 +320,7 @@ func (e *Executor) StreamExecute(
 	safeSession *econtext.SafeSession,
 	sql string,
 	bindVars map[string]*querypb.BindVariable,
+	prepared bool,
 	callback func(*sqltypes.Result) error,
 ) error {
 	span, ctx := trace.NewSpan(ctx, "executor.StreamExecute")
@@ -339,13 +340,32 @@ func (e *Executor) StreamExecute(
 			srr.callback = func(qr *sqltypes.Result) error {
 				resultMu.Lock()
 				defer resultMu.Unlock()
+				// Carry over the OK-packet data (affected rows, last insert id, info,
+				// session state changes) so statements that return an OK packet (e.g.
+				// CALL of a procedure that performs DML) report it to the client,
+				// matching the buffered Execute path.
+				result.RowsAffected += qr.RowsAffected
+				if qr.InsertIDUpdated() {
+					result.InsertID = qr.InsertID
+					result.InsertIDChanged = true
+				}
+				if qr.SessionStateChanges != "" {
+					result.SessionStateChanges = qr.SessionStateChanges
+				}
+				if qr.Info != "" {
+					result.Info = qr.Info
+				}
 				// If the row has field info, send it separately.
 				// TODO(sougou): this behavior is for handling tests because
 				// the framework currently sends all results as one packet.
 				byteCount := 0
 				if len(qr.Fields) > 0 {
 					result.Fields = qr.Fields
-					if err := callback(qr.Metadata()); err != nil {
+					// Send only the fields here: any OK-packet data on qr was
+					// accumulated into result above and goes to the client with
+					// the left-over result, so repeating it in this packet would
+					// deliver it twice to clients that sum across packets.
+					if err := callback(&sqltypes.Result{Fields: qr.Fields}); err != nil {
 						return err
 					}
 					seenResults.Store(true)
@@ -377,24 +397,46 @@ func (e *Executor) StreamExecute(
 			return srr.storeResultStats(plan.QueryType, qr)
 		})
 
-		updateLogStats := func() {
+		updateLogStats := func(err error) {
 			logStats.StmtType = plan.QueryType.String()
 			logStats.PlanType = plan.Type.String()
-			logStats.TablesUsed = plan.TablesUsed
-			executedRoot := vc.ExecutedPrimitive()
-			if executedRoot == nil {
-				executedRoot = plan.Instructions
-			}
-			logStats.RoutingIndexesUsed = engine.GetRoutingIndexes(executedRoot)
 			logStats.TabletType = vc.TabletType().String()
 			logStats.ExecuteTime = time.Since(execStart)
 			logStats.ActiveKeyspace = vc.GetKeyspace()
 
-			e.updateQueryStats(plan.QueryType.String(), plan.Type.String(), vc.TabletType().String(), int64(logStats.ShardQueries), plan.TablesUsed)
+			// On error, leave the tables, routing indexes and row counts unset so the
+			// per-table counters are not incremented, matching the buffered Execute path.
+			var tablesUsed []string
+			var errCount uint64
+			if err != nil {
+				logStats.Error = err
+				errCount = 1
+			} else {
+				srr.mu.Lock()
+				logStats.RowsAffected = srr.rowsAffected
+				logStats.RowsReturned = uint64(srr.rowsReturned)
+				srr.mu.Unlock()
+				logStats.TablesUsed = plan.TablesUsed
+				tablesUsed = plan.TablesUsed
+				executedRoot := vc.ExecutedPrimitive()
+				if executedRoot == nil {
+					executedRoot = plan.Instructions
+				}
+				logStats.RoutingIndexesUsed = engine.GetRoutingIndexes(executedRoot)
+			}
+
+			e.updateQueryStats(plan.QueryType.String(), plan.Type.String(), vc.TabletType().String(), int64(logStats.ShardQueries), tablesUsed)
+			plan.AddStats(1, time.Since(logStats.StartTime), logStats.ShardQueries, logStats.RowsAffected, logStats.RowsReturned, errCount)
 		}
 
 		// Check if there was partial DML execution. If so, rollback the effect of the partially executed query.
 		if err != nil {
+			// Record query stats for a failed row-returning query before any
+			// rollback handling, matching the buffered Execute path which always
+			// records them ahead of its own rollback handling.
+			if canReturnRows(plan.QueryType) {
+				updateLogStats(err)
+			}
 			if safeSession.InTransaction() && e.rollbackOnFatalTxError(ctx, safeSession, err) {
 				return err
 			}
@@ -405,24 +447,33 @@ func (e *Executor) StreamExecute(
 		}
 
 		if !canReturnRows(plan.QueryType) {
-			updateLogStats()
+			updateLogStats(nil)
 			return nil
 		}
 
-		// Send left-over rows if there is no error on execution.
-		if len(result.Rows) > 0 || !seenResults.Load() {
+		// Send left-over rows if there is no error on execution. The left-over
+		// result must also go out when it carries OK-packet data with no rows —
+		// e.g. an affected-row count that arrived after a result set was already
+		// sent — so that data is not dropped.
+		hasOKData := result.RowsAffected > 0 || result.InsertIDUpdated() ||
+			result.SessionStateChanges != "" || result.Info != ""
+		if len(result.Rows) > 0 || hasOKData || !seenResults.Load() {
 			if err := callback(result); err != nil {
+				// The query executed; only the delivery to the client failed.
+				// Record it as an error, like a mid-stream send failure that
+				// surfaces through the execution error above.
+				updateLogStats(err)
 				return err
 			}
 		}
 
 		// 5: Log and add statistics
-		updateLogStats()
+		updateLogStats(nil)
 
 		return err
 	}
 
-	err = e.newExecute(ctx, mysqlCtx, safeSession, sql, bindVars, false, logStats, resultHandler, srr.storeResultStats)
+	err = e.newExecute(ctx, mysqlCtx, safeSession, sql, bindVars, prepared, logStats, resultHandler, srr.storeResultStats)
 
 	logStats.Error = err
 	saveSessionStats(safeSession, srr.stmtType, srr.rowsAffected, srr.rowsReturned, err)
@@ -478,6 +529,11 @@ func (e *Executor) finalizeLogStats(logStats *logstats.LogStats, mysqlCtx vtgate
 	logStats.MarkSlowQuery(slowQueryThreshold)
 	if mysqlCtx != nil {
 		mysqlCtx.SetQueryWasSlow(logStats.SlowQuery)
+	}
+	if ingressBytes, ok := vtgateservice.IngressBytesFromContext(logStats.Ctx); ok {
+		logStats.IngressBytes = ingressBytes
+	} else if mysqlCtx != nil {
+		logStats.IngressBytes = mysqlCtx.IngressBytes()
 	}
 	if logStats.SlowQuery && logStats.StmtType != "" && logStats.PlanType != "" && logStats.TabletType != "" {
 		slowQueries.Add([]string{logStats.StmtType, logStats.PlanType, logStats.TabletType}, 1)
@@ -1299,6 +1355,23 @@ func (e *Executor) getCachedOrBuildPlan(
 		return nil, false, nil, err
 	}
 
+	preparedPlan := planKey.Query != ""
+	if preparedPlan {
+		// MySQL rejects statement text that itself manages prepared
+		// statements with ER_UNSUPPORTED_PS. The check must run before the
+		// statement is planned: planning an EXECUTE plans its stored
+		// statement text, and the gRPC API lets clients store arbitrary
+		// text in the session's prepared-statement map, so nested EXECUTE
+		// text would otherwise recurse through the planner without bound.
+		// No statement is returned with the error so that a failed
+		// binary-protocol prepare does not fall back to accepting the
+		// statement with NULL field types.
+		switch stmt.(type) {
+		case *sqlparser.PrepareStmt, *sqlparser.ExecuteStmt, *sqlparser.DeallocateStmt:
+			return nil, false, nil, vterrors.NewErrorf(vtrpcpb.Code_UNIMPLEMENTED, vterrors.UnsupportedPS, "This command is not supported in the prepared statement protocol yet")
+		}
+	}
+
 	defer func() {
 		if err == nil {
 			vcursor.CheckForReservedConnection(setVarComment, stmt)
@@ -1316,7 +1389,6 @@ func (e *Executor) getCachedOrBuildPlan(
 	vcursor.SetForeignKeyCheckState(qh.ForeignKeyChecks)
 
 	paramsCount := uint16(0)
-	preparedPlan := planKey.Query != ""
 	if preparedPlan {
 		// We need to count the number of arguments in the statement before we plan the query.
 		// Planning could add additional arguments to the statement.
@@ -1556,13 +1628,29 @@ func (e *Executor) Prepare(ctx context.Context, method string, safeSession *econ
 }
 
 func (e *Executor) prepare(ctx context.Context, safeSession *econtext.SafeSession, sql string, logStats *logstats.LogStats) ([]*querypb.Field, uint16, error) {
-	// Start an implicit transaction if necessary.
-	if !safeSession.Autocommit && !safeSession.InTransaction() {
-		if err := e.txConn.Begin(ctx, safeSession, nil); err != nil {
+	stmtType := sqlparser.Preview(sql)
+	if stmtType == sqlparser.StmtUnknown {
+		// Preview only looks at the first keyword, so statements starting with
+		// a WITH clause come back as unknown. Classify those from the AST, but
+		// only rescue the statements handlePrepare can count parameters for
+		// (WITH ... SELECT/INSERT/REPLACE/UPDATE/DELETE). Anything else stays
+		// unknown and is rejected below, rather than being reported to the
+		// client as a zero-parameter success.
+		stmt, err := e.env.Parser().Parse(sql)
+		if err != nil {
+			// The statement stays unknown, and an unparseable statement is
+			// never SHOW, so record the type and clear warnings the way the
+			// code below does before returning the syntax error.
+			logStats.StmtType = stmtType.String()
+			safeSession.ClearWarnings()
 			return nil, 0, err
 		}
+		switch astType := sqlparser.ASTToStatementType(stmt); astType {
+		case sqlparser.StmtSelect, sqlparser.StmtInsert, sqlparser.StmtReplace,
+			sqlparser.StmtUpdate, sqlparser.StmtDelete:
+			stmtType = astType
+		}
 	}
-	stmtType := sqlparser.Preview(sql)
 	logStats.StmtType = stmtType.String()
 
 	// Mysql warnings are scoped to the current session, but are
@@ -1877,7 +1965,10 @@ func (e *Executor) PlanPrepareStmt(ctx context.Context, safeSession *econtext.Sa
 	// creating this log stats to not interfere with the original log stats.
 	lStats := logstats.NewLogStats(ctx, "prepare", query, safeSession.GetSessionUUID(), nil, streamlog.GetQueryLogConfig())
 	plan, _, _, err := e.fetchOrCreatePlan(ctx, safeSession, query, nil, false, true, lStats, false)
-	return plan, err
+	if err != nil {
+		return nil, err
+	}
+	return plan, nil
 }
 
 func (e *Executor) Close() {

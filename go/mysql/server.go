@@ -256,7 +256,17 @@ func NewFromListener(
 	}
 
 	if proxyProtocol {
-		cfg.Listener = &proxyproto.Listener{Listener: l}
+		cfg.Listener = &proxyproto.Listener{
+			Listener: l,
+			// A USE policy keeps the PROXY header optional, so listeners with
+			// proxy protocol support enabled keep accepting direct, headerless
+			// connections (e.g. health checks) alongside proxied ones.
+			// go-proxyproto >= v0.14 would otherwise require a header and
+			// reject headerless connections after its header read timeout.
+			ConnPolicy: func(proxyproto.ConnPolicyOptions) (proxyproto.Policy, error) {
+				return proxyproto.USE, nil
+			},
+		}
 	}
 
 	return NewListenerWithConfig(cfg)

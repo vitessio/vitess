@@ -4582,7 +4582,7 @@ func TestIntroducers(t *testing.T) {
 				tcase.output = tcase.input
 			}
 			tree, err := parser.Parse(tcase.input)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			out := String(tree)
 			assert.Equal(t, tcase.output, out)
 		})
@@ -6510,6 +6510,11 @@ var invalidSQL = []struct {
 	input  string
 	output string
 }{{
+	// MySQL only accepts a text literal or a user defined variable as the
+	// statement text of a PREPARE; a positional parameter is a syntax error.
+	input:  "prepare stmt1 from ?",
+	output: "syntax error at position 21 near ':v1'",
+}, {
 	input:  "alter vitess_migration cancel context ''",
 	output: "migration context cannot be empty at position 41",
 }, {
@@ -6940,7 +6945,7 @@ func TestParseMultiple(t *testing.T) {
 			finalStmts = append(finalStmts, stmt)
 		}
 	}
-	require.EqualValues(t, totalCases, len(finalStmts))
+	require.Len(t, finalStmts, totalCases)
 	idx := 0
 	for _, tcase := range validSQL {
 		if tcase.partialDDL {
@@ -7014,7 +7019,7 @@ func TestParseMultipleEdgeCases(t *testing.T) {
 				return
 			}
 			require.NoError(t, err)
-			require.EqualValues(t, len(test.want), len(stmts))
+			require.Len(t, stmts, len(test.want))
 			for i, stmt := range stmts {
 				require.Equal(t, test.want[i], String(stmt))
 			}

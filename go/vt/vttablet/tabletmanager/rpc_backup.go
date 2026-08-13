@@ -190,6 +190,23 @@ func (tm *TabletManager) Backup(ctx context.Context, logger logutil.Logger, req 
 // RestoreFromBackup deletes all local data and then restores the data from the latest backup [at
 // or before the backupTime value if specified]
 func (tm *TabletManager) RestoreFromBackup(ctx context.Context, logger logutil.Logger, request *tabletmanagerdatapb.RestoreFromBackupRequest) error {
+	var (
+		startTime    time.Time
+		backupEngine string
+		restoreErr   error
+	)
+
+	// Declare the hook defer before the lock so it runs after unlock (LIFO).
+	// BroadcastHealth intentionally runs outside the action lock so vtgate
+	// sees the updated serving state without waiting for the hook to finish.
+	defer func() {
+		if startTime.IsZero() {
+			return
+		}
+		tm.QueryServiceControl.BroadcastHealth()
+		tm.invokeRestoreDoneHook(startTime, restoreErr, backupEngine)
+	}()
+
 	if err := tm.lock(ctx); err != nil {
 		return err
 	}
@@ -207,14 +224,10 @@ func (tm *TabletManager) RestoreFromBackup(ctx context.Context, logger logutil.L
 	l := logutil.NewTeeLogger(logutil.NewConsoleLogger(), logger)
 
 	// Now we can run restore.
-	startTime := time.Now()
-	backupEngine, err := tm.restoreBackupLocked(ctx, l, 0 /* waitForBackupInterval */, true /* deleteBeforeRestore */, request, mysqlShutdownTimeout)
-	tm.invokeRestoreDoneHook(startTime, err, backupEngine)
+	startTime = time.Now()
+	backupEngine, restoreErr = tm.restoreBackupLocked(ctx, l, 0 /* waitForBackupInterval */, true /* deleteBeforeRestore */, request, mysqlShutdownTimeout)
 
-	// Re-run health check to be sure to capture any replication delay.
-	tm.QueryServiceControl.BroadcastHealth()
-
-	return err
+	return restoreErr
 }
 
 func (tm *TabletManager) IsBackupRunning() bool {

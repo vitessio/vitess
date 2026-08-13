@@ -30,7 +30,9 @@ func FormatImpossibleQuery(buf *TrackedBuffer, node SQLNode) {
 		if node.With != nil {
 			node.With.Format(buf)
 		}
-		buf.Myprintf("select %v", node.SelectExprs)
+		// Preserve query hints (e.g. SET_VAR(sql_mode = ...)) so the field query is
+		// executed under the same session settings as the main query.
+		buf.Myprintf("select %v%v", node.Comments, node.SelectExprs)
 		if len(node.From) == 0 {
 			buf.Myprintf(" from dual")
 		} else {

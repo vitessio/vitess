@@ -323,7 +323,7 @@ func TestContextCancel(t *testing.T) {
 	// Wait for Apply to return,
 	// and call dbClient.Wait to ensure
 	// no new statements were issued.
-	assert.NoError(t, errfunc())
+	require.NoError(t, errfunc())
 
 	dbClient.Wait()
 }

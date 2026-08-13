@@ -124,6 +124,10 @@ func TestFilterStreaming(t *testing.T) {
 		name:   "uint64_int32",
 		res:    sqltypes.MakeTestStreamingResults(sqltypes.MakeTestFields("left|right", "uint64|int32"), "0|1", "1|0", "2|3", "---", "0|1", "1|3", "5|3"),
 		expRes: `[[UINT64(1) INT32(0)] [UINT64(5) INT32(3)]]`,
+	}, {
+		name:   "null_predicate",
+		res:    sqltypes.MakeTestStreamingResults(sqltypes.MakeTestFields("left|right", "int32|int32"), "null|0", "---", "1|0"),
+		expRes: `[[INT32(1) INT32(0)]]`,
 	}}
 	for _, tc := range tcases {
 		t.Run(tc.name, func(t *testing.T) {

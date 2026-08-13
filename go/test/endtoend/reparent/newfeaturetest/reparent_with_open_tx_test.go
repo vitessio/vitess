@@ -94,7 +94,7 @@ func testExecuteError(t *testing.T, conn *mysql.Conn, clusterInstance *cluster.L
 	// if the unhealthy shard is the first one where we commited, let's assert that the table is empty on all the shards
 	r, err := conn.ExecuteFetch("select * from vt_insert_test", 1, false)
 	require.NoError(t, err)
-	require.Len(t, r.Rows, 0)
+	require.Empty(t, r.Rows)
 }
 
 func testExecuteErrorWhileTabletIsNotServing(t *testing.T, conn *mysql.Conn, clusterInstance *cluster.LocalProcessCluster, tablets []*cluster.Vttablet) {
@@ -134,7 +134,7 @@ func testExecuteErrorWhileTabletIsNotServing(t *testing.T, conn *mysql.Conn, clu
 	// if the unhealthy shard is the first one where we commited, let's assert that the table is empty on all the shards
 	r, err := conn.ExecuteFetch("select * from vt_insert_test", 1, false)
 	require.NoError(t, err)
-	require.Len(t, r.Rows, 0)
+	require.Empty(t, r.Rows)
 }
 
 func createTxAndInsertRows(conn *mysql.Conn, t *testing.T, idx *int) {

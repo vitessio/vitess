@@ -19,6 +19,7 @@ package etcd2topo
 import (
 	"context"
 	"fmt"
+	"net"
 	"os"
 	"os/exec"
 	"path"
@@ -179,6 +180,26 @@ func startEtcdWithTLS(t *testing.T) (string, *tlstest.ClientServerKeyPairs) {
 	return clientAddr, &certs
 }
 
+// TestNewServerAgainstUnreachableEtcd ensures a topo server cannot be
+// constructed against an etcd address nobody is listening on: the error must
+// surface at construction time, so a misconfigured or unreachable topo
+// address is reported at startup rather than as timeouts on later topo
+// operations.
+func TestNewServerAgainstUnreachableEtcd(t *testing.T) {
+	// Reserve a port and close the listener again, so nothing is listening
+	// at the address.
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	addr := listener.Addr().String()
+	require.NoError(t, listener.Close())
+
+	s, err := NewServer("http://"+addr, "/vitess")
+	if s != nil {
+		s.Close()
+	}
+	require.Error(t, err, "NewServer should fail when no etcd is reachable at the given address")
+}
+
 func TestEtcd2TLS(t *testing.T) {
 	// Start a single etcd in the background.
 	clientAddr, certs := startEtcdWithTLS(t)
@@ -254,7 +275,7 @@ func TestEtcd2TopoGetTabletsPartialResults(t *testing.T) {
 		{testfiles.GoVtTopoEtcd2topoCell1Port, testfiles.GoVtTopoEtcd2topoCell1PeerPort},
 		{testfiles.GoVtTopoEtcd2topoCell2Port, testfiles.GoVtTopoEtcd2topoCell2PeerPort},
 	}
-	require.Equal(t, len(cells), len(cellPorts))
+	require.Len(t, cellPorts, len(cells))
 	cellClientAddrs := make([]string, len(cells))
 	cellClientCmds := make([]*exec.Cmd, len(cells))
 	cellTSs := make([]*topo.Server, len(cells))
@@ -320,7 +341,7 @@ func TestEtcd2TopoGetTabletsPartialResults(t *testing.T) {
 	})
 
 	// And no error message.
-	require.Len(t, stderr, 0, "Unexpected error message: %s", strings.Join(stderr, "\n"))
+	require.Empty(t, stderr, "Unexpected error message: %s", strings.Join(stderr, "\n"))
 
 	// Stop the last cell topo server.
 	cmd := cellClientCmds[len(cells)-1]
@@ -335,13 +356,13 @@ func TestEtcd2TopoGetTabletsPartialResults(t *testing.T) {
 	// We get partial results, missing the tablet from the last cell.
 	require.Len(t, stdout, len(cells)-1, "Unexpected output: %s", strings.Join(stdout, "\n"))
 	// We get an error message for the cell that was unreachable.
-	require.Greater(t, len(stderr), 0, "Unexpected error message: %s", strings.Join(stderr, "\n"))
+	require.NotEmpty(t, stderr, "Unexpected error message: %s", strings.Join(stderr, "\n"))
 
 	// Execute the vtctldclient command with strict enabled.
 	_, stderr, err = getTablets(true)
 	require.Error(t, err) // We get an error
 	// We still get an error message printed to the console for the cell that was unreachable.
-	require.Greater(t, len(stderr), 0, "Unexpected error message: %s", strings.Join(stderr, "\n"))
+	require.NotEmpty(t, stderr, "Unexpected error message: %s", strings.Join(stderr, "\n"))
 
 	globalTS.Close()
 	for _, cellTS := range cellTSs {

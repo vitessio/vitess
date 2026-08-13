@@ -193,7 +193,7 @@ func TestStreamPlan(t *testing.T) {
 		var err error
 		statement, err := parser.Parse(tcase.input)
 		if err == nil {
-			plan, err = BuildStreaming(statement, testSchema)
+			plan, err = BuildStreaming(vtenv.NewTestEnv(), statement, testSchema, "dbName")
 		}
 		var out string
 		if err != nil {
@@ -228,7 +228,7 @@ func TestMessageStreamingPlan(t *testing.T) {
 	assert.Equalf(t, wantJSON, planJSON, "BuildMessageStreaming")
 
 	_, err = BuildMessageStreaming("absent", testSchema)
-	assert.EqualError(t, err, "table absent not found in schema", "BuildMessageStreaming(absent)")
+	require.EqualError(t, err, "table absent not found in schema", "BuildMessageStreaming(absent)")
 
 	_, err = BuildMessageStreaming("a", testSchema)
 	assert.EqualError(t, err, "'a' is not a message table", "BuildMessageStreaming(absent)")

@@ -61,6 +61,7 @@ const (
 	PrimarySemiSyncBlocked                 AnalysisCode = "PrimarySemiSyncBlocked"
 	ErrantGTIDDetected                     AnalysisCode = "ErrantGTIDDetected"
 	PrimaryDiskStalled                     AnalysisCode = "PrimaryDiskStalled"
+	PrimaryTabletUnreachableByQuorum       AnalysisCode = "PrimaryTabletUnreachableByQuorum"
 
 	// StaleTopoPrimary describes when a tablet still has the type PRIMARY in the topology when a newer primary
 	// has been elected. VTOrc should demote this primary to a replica.
@@ -98,6 +99,12 @@ type DetectionAnalysis struct {
 	// TabletType is the tablet's type as seen in the topology.
 	TabletType topodatapb.TabletType
 
+	// IsTabletShutdown is true when the analyzed tablet's record carries a TabletShutdownTime,
+	// i.e. its vttablet was gracefully shut down (an intentional operator action) rather than
+	// crashing. The quorum-confirmed ERS path fails closed when this is set so an intentionally
+	// shut down primary is never failed over.
+	IsTabletShutdown bool
+
 	// CurrentTabletType is the type this tablet is currently running as.
 	CurrentTabletType topodatapb.TabletType
 
@@ -107,14 +114,19 @@ type DetectionAnalysis struct {
 	AnalyzedKeyspaceEmergencyReparentDisabled bool
 	AnalyzedShardEmergencyReparentDisabled    bool
 	// ShardPrimaryTermTimestamp is the primary term start time stored in the shard record.
-	ShardPrimaryTermTimestamp                 time.Time
-	AnalyzedInstanceBinlogCoordinates         BinlogCoordinates
-	IsPrimary                                 bool
-	IsClusterPrimary                          bool
-	LastCheckValid                            bool
-	PrimaryHealthUnhealthy                    bool
-	LastCheckPartialSuccess                   bool
-	CountReplicas                             uint
+	ShardPrimaryTermTimestamp         time.Time
+	AnalyzedInstanceBinlogCoordinates BinlogCoordinates
+	IsPrimary                         bool
+	IsClusterPrimary                  bool
+	LastCheckValid                    bool
+	PrimaryHealthUnhealthy            bool
+	LastCheckPartialSuccess           bool
+	CountReplicas                     uint
+	// ShardEligibleObservers is the number of REPLICA/RDONLY tablets in the shard (from topo),
+	// i.e. the population eligible to vote in the shard-peer health quorum. It is the expected
+	// observer count fed to the quorum gate, derived independently of the primary's instance data
+	// so it is available even when VTOrc has never reached the primary (the cold-start case).
+	ShardEligibleObservers                    uint
 	CountValidReplicas                        uint
 	CountValidReplicatingReplicas             uint
 	CountValidSemiSyncReplicatingReplicas     uint
@@ -150,6 +162,7 @@ type DetectionAnalysis struct {
 	MaxReplicaGTIDErrant                      string
 	IsReadOnly                                bool
 	IsDiskStalled                             bool
+	QuorumDetail                              *QuorumResult `json:",omitempty"`
 }
 
 // hasMinSemiSyncAckers returns true if there are a minimum number of semi-sync ackers enabled and replicating.

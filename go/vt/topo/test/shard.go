@@ -21,6 +21,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
@@ -141,26 +142,29 @@ func checkShardWithLock(t *testing.T, ctx context.Context, ts *topo.Server) {
 			// TryLockShard will fail since we already have acquired lock for `test-keyspace`
 			if err != nil {
 				if !topo.IsErrType(err, topo.NodeExists) {
-					require.Fail(t, "expected node exists during tryLockShard", err.Error())
+					assert.Fail(t, "expected node exists during tryLockShard", err.Error())
+					return
 				}
 				var finalErr error
 				// unlock `test-keyspace` shard. Now the subsequent call to `TryLockShard` will succeed.
 				unlock1(&finalErr)
 				isUnLocked1 = true
 				if finalErr != nil {
-					require.Fail(t, "Unlock(test_keyspace) failed", finalErr.Error())
+					assert.Fail(t, "Unlock(test_keyspace) failed", finalErr.Error())
+					return
 				}
 			} else {
 				// unlock shard acquired through `TryLockShard`
 				unlock2(&err)
 				if err != nil {
-					require.Fail(t, "Unlock(test_keyspace) failed", err.Error())
+					assert.Fail(t, "Unlock(test_keyspace) failed", err.Error())
+					return
 				}
 				// true value of 'isUnLocked1' signify that we at-least hit 'NodeExits' once.
 				if isUnLocked1 {
 					close(finished)
 				} else {
-					require.Fail(t, "Test was expecting to hit `NodeExists` error at-least once")
+					assert.Fail(t, "Test was expecting to hit `NodeExists` error at-least once")
 				}
 				break
 			}
