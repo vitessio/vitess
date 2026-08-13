@@ -408,46 +408,35 @@ func runMySQLExplainTasks(ctx context.Context, vcursor VCursor, tasks []mysqlExp
 // into a corresponding PlanDescription tree, attaching the per-shard MySQL
 // EXPLAIN output (keyed by shard) to the matching Route nodes.
 func primitiveToPlanDescriptionWithShardedSQLResults(in Primitive, res map[Primitive]map[string]json.RawMessage) PrimitiveDescription {
-	this := in.description()
-
-	if perShard, found := res[in]; found {
-		this.Other["mysql_explain_json"] = perShard
-	}
-
-	inputs, infos := in.Inputs()
-	for idx, input := range inputs {
-		pd := primitiveToPlanDescriptionWithShardedSQLResults(input, res)
-		if infos != nil {
-			for k, v := range infos[idx] {
-				if k == inputName {
-					pd.InputName = v.(string)
-					continue
-				}
-				pd.Other[k] = v
-			}
+	return primitiveToPlanDescriptionWith(in, func(prim Primitive, pd *PrimitiveDescription) {
+		if perShard, found := res[prim]; found {
+			pd.Other["mysql_explain_json"] = perShard
 		}
-		this.Inputs = append(this.Inputs, pd)
-	}
-
-	if len(inputs) == 0 {
-		this.Inputs = []PrimitiveDescription{}
-	}
-
-	return this
+	})
 }
 
-// primitiveToPlanDescriptionWithSQLResults transforms a primitive tree into a corresponding PlanDescription tree
-// and adds the given res ...
+// primitiveToPlanDescriptionWithSQLResults transforms a primitive tree into a
+// corresponding PlanDescription tree, attaching the given per-primitive MySQL
+// EXPLAIN output to the matching nodes.
 func primitiveToPlanDescriptionWithSQLResults(in Primitive, res map[Primitive]string) PrimitiveDescription {
+	return primitiveToPlanDescriptionWith(in, func(prim Primitive, pd *PrimitiveDescription) {
+		if v, found := res[prim]; found {
+			pd.Other["mysql_explain_json"] = json.RawMessage(v)
+		}
+	})
+}
+
+// primitiveToPlanDescriptionWith walks the primitive tree into a PlanDescription
+// tree, calling attach on each node so the caller can decorate it with its own
+// EXPLAIN output (which differs in shape between VEXPLAIN ALL and MYSQLPLAN).
+func primitiveToPlanDescriptionWith(in Primitive, attach func(Primitive, *PrimitiveDescription)) PrimitiveDescription {
 	this := in.description()
 
-	if v, found := res[in]; found {
-		this.Other["mysql_explain_json"] = json.RawMessage(v)
-	}
+	attach(in, &this)
 
 	inputs, infos := in.Inputs()
 	for idx, input := range inputs {
-		pd := primitiveToPlanDescriptionWithSQLResults(input, res)
+		pd := primitiveToPlanDescriptionWith(input, attach)
 		if infos != nil {
 			for k, v := range infos[idx] {
 				if k == inputName {
