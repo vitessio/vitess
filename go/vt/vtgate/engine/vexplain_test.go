@@ -25,6 +25,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -180,6 +181,57 @@ func TestVExplainMySQLBoundedConcurrency(t *testing.T) {
 
 	require.NoError(t, execErr)
 	assert.EqualValues(t, maxParallelMySQLExplains, peak.Load())
+}
+
+// TestVExplainMySQLPerInputBindVars verifies that sibling inputs of a container
+// (here two DBA/information_schema Routes under a Concatenate) each EXPLAIN with
+// their own bind vars. findRoute mutates the bind-var map in place (an
+// information_schema route writes the resolved table name under a fixed bv key),
+// and the collected task keeps that map pointer, so sharing one map across
+// siblings would let the second Route overwrite the first task's binding before
+// the EXPLAINs run.
+func TestVExplainMySQLPerInputBindVars(t *testing.T) {
+	newDBARoute := func(query, tableBv, tableName string) *Route {
+		return &Route{
+			RoutingParameters: &RoutingParameters{
+				Opcode:            DBA,
+				Keyspace:          &vindexes.Keyspace{Name: "ks", Sharded: false},
+				SysTableTableName: map[string]evalengine.Expr{tableBv: evalengine.NewLiteralString([]byte(tableName), collations.SystemCollation)},
+			},
+			Query:      query,
+			FieldQuery: query + "_field",
+		}
+	}
+
+	routeA := newDBARoute("select_a", "table_name", "tblA")
+	routeB := newDBARoute("select_b", "table_name", "tblB")
+	concatenate := NewConcatenate([]Primitive{routeA, routeB}, nil)
+
+	vexplain := &VExplain{Input: concatenate, Type: sqlparser.MySQLVExplainType}
+
+	vc := &loggingVCursor{
+		shards: []string{"1"},
+		results: []*sqltypes.Result{
+			sqltypes.MakeTestResult(sqltypes.MakeTestFields("json", "varchar"), `{"plan":"x"}`),
+			sqltypes.MakeTestResult(sqltypes.MakeTestFields("json", "varchar"), `{"plan":"x"}`),
+		},
+	}
+
+	_, err := vexplain.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
+	require.NoError(t, err)
+
+	// Each Route must EXPLAIN with its own table_name binding: select_a with tblA
+	// and select_b with tblB. If the siblings shared one bind-var map, both
+	// EXPLAINs would carry tblB (the last findRoute to mutate the shared map).
+	// The per-shard EXPLAINs run concurrently, so assert membership, not order.
+	vc.ExpectLogUnordered(t, []string{
+		`FindTable(tblA)`,
+		`FindTable(tblB)`,
+		`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
+		`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
+		`ExecuteStandalone explain format = json select_a __vtschemaname: type:VARCHAR table_name: type:VARCHAR value:"tblA" ks 1`,
+		`ExecuteStandalone explain format = json select_b __vtschemaname: type:VARCHAR table_name: type:VARCHAR value:"tblB" ks 1`,
+	})
 }
 
 // TestVExplainMySQLReservedConn verifies that MYSQLPLAN fails closed when the

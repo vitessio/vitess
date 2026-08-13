@@ -341,7 +341,13 @@ func (v *VExplain) collectMySQLExplainTasks(ctx context.Context, vcursor VCursor
 
 	inputs, _ := primitive.Inputs()
 	for _, input := range inputs {
-		if err := v.collectMySQLExplainTasks(ctx, vcursor, input, bindVars, tasks); err != nil {
+		// Each input gets its own copy: a Route's findRoute mutates the map in
+		// place (e.g. DBA/information_schema routes populate schema/table
+		// replacement bind vars), and the resulting task keeps that map pointer.
+		// Sharing one map across sibling inputs (e.g. the arms of a Concatenate)
+		// would let a later sibling overwrite an earlier task's bindings before
+		// the EXPLAINs run. This mirrors Concatenate's per-source copyBindVars.
+		if err := v.collectMySQLExplainTasks(ctx, vcursor, input, copyBindVars(bindVars), tasks); err != nil {
 			return err
 		}
 	}
