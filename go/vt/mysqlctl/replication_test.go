@@ -598,7 +598,7 @@ func TestRestoreReplicaAfterFailedShutdown(t *testing.T) {
 				ctx, cancel = context.WithTimeout(ctx, 500*time.Millisecond)
 				defer cancel()
 			}
-			testMysqld.restoreReplicaAfterFailedShutdown(ctx, testCase.state, 10*time.Millisecond, 30*time.Second)
+			testMysqld.restoreReplicaAfterFailedShutdown(ctx, testCase.state, 10*time.Millisecond, 30*time.Second, replicaRestorePendingStopSettlePasses)
 			if testCase.wantSetAtLeast {
 				assert.GreaterOrEqual(t, db.GetQueryCalledNum(restoreFlushLog), testCase.wantSet)
 			} else {
@@ -671,7 +671,7 @@ func TestRestoreRetriesConnectUntilMysqldReturns(t *testing.T) {
 		defer close(restored)
 		ctx, cancel := context.WithTimeout(context.WithoutCancel(t.Context()), 30*time.Second)
 		defer cancel()
-		testMysqld.restoreReplicaAfterFailedShutdown(ctx, state, 10*time.Millisecond, 30*time.Second)
+		testMysqld.restoreReplicaAfterFailedShutdown(ctx, state, 10*time.Millisecond, 30*time.Second, replicaRestorePendingStopSettlePasses)
 	}()
 
 	// The restoration must survive the connection failures rather than give
@@ -722,7 +722,7 @@ func TestRestoreBoundsConnectRetries(t *testing.T) {
 		defer close(restored)
 		ctx, cancel := context.WithTimeout(context.WithoutCancel(t.Context()), 5*time.Minute)
 		defer cancel()
-		testMysqld.restoreReplicaAfterFailedShutdown(ctx, state, 10*time.Millisecond, time.Second)
+		testMysqld.restoreReplicaAfterFailedShutdown(ctx, state, 10*time.Millisecond, time.Second, replicaRestorePendingStopSettlePasses)
 	}()
 
 	// It must retry through the connect budget rather than give up on the
@@ -793,7 +793,7 @@ func TestRestoreRetriesStatusRead(t *testing.T) {
 		defer close(restored)
 		ctx, cancel := context.WithTimeout(context.WithoutCancel(t.Context()), 30*time.Second)
 		defer cancel()
-		testMysqld.restoreReplicaAfterFailedShutdown(ctx, state, 10*time.Millisecond, 30*time.Second)
+		testMysqld.restoreReplicaAfterFailedShutdown(ctx, state, 10*time.Millisecond, 30*time.Second, replicaRestorePendingStopSettlePasses)
 	}()
 
 	// The restoration must keep retrying the failing status read.
@@ -974,7 +974,7 @@ func TestRestoreStopsWhenNoLongerReplica(t *testing.T) {
 	}
 	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
 	defer cancel()
-	testMysqld.restoreReplicaAfterFailedShutdown(ctx, state, 10*time.Millisecond, 30*time.Second)
+	testMysqld.restoreReplicaAfterFailedShutdown(ctx, state, 10*time.Millisecond, 30*time.Second, replicaRestorePendingStopSettlePasses)
 	assert.Equal(t, 1, db.GetQueryCalledNum(showReplicaStatus), "the restoration must stop on the first not-a-replica answer instead of retrying")
 	assert.Zero(t, db.GetQueryCalledNum(restoreFlushLog), "a server that is no longer a replica must not receive the relaxed durability settings")
 }
@@ -1019,7 +1019,7 @@ func TestRestoreRetriesSettingsRestore(t *testing.T) {
 		defer close(restored)
 		ctx, cancel := context.WithTimeout(context.WithoutCancel(t.Context()), 30*time.Second)
 		defer cancel()
-		testMysqld.restoreReplicaAfterFailedShutdown(ctx, state, 10*time.Millisecond, 30*time.Second)
+		testMysqld.restoreReplicaAfterFailedShutdown(ctx, state, 10*time.Millisecond, 30*time.Second, replicaRestorePendingStopSettlePasses)
 	}()
 
 	// The restoration must keep retrying the failing setting.
@@ -1082,7 +1082,7 @@ func TestRestoreRetriesSettingsWhenThreadsAlreadyConverged(t *testing.T) {
 		defer close(restored)
 		ctx, cancel := context.WithTimeout(context.WithoutCancel(t.Context()), 30*time.Second)
 		defer cancel()
-		testMysqld.restoreReplicaAfterFailedShutdown(ctx, state, 10*time.Millisecond, 30*time.Second)
+		testMysqld.restoreReplicaAfterFailedShutdown(ctx, state, 10*time.Millisecond, 30*time.Second, replicaRestorePendingStopSettlePasses)
 	}()
 
 	// The restoration must keep retrying the failing setting instead of
@@ -1148,7 +1148,7 @@ func TestRestoreRetriesSettingsWhenThreadStartUnavailable(t *testing.T) {
 		defer close(restored)
 		ctx, cancel := context.WithTimeout(context.WithoutCancel(t.Context()), 30*time.Second)
 		defer cancel()
-		testMysqld.restoreReplicaAfterFailedShutdown(ctx, state, 10*time.Millisecond, 30*time.Second)
+		testMysqld.restoreReplicaAfterFailedShutdown(ctx, state, 10*time.Millisecond, 30*time.Second, replicaRestorePendingStopSettlePasses)
 	}()
 
 	// The restoration must keep retrying the failing setting rather than end
@@ -1220,7 +1220,7 @@ func TestRestoreStopsSettingsWhenPromotedMidRestore(t *testing.T) {
 	}
 	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 	defer cancel()
-	testMysqld.restoreReplicaAfterFailedShutdown(ctx, state, 10*time.Millisecond, 30*time.Second)
+	testMysqld.restoreReplicaAfterFailedShutdown(ctx, state, 10*time.Millisecond, 30*time.Second, replicaRestorePendingStopSettlePasses)
 
 	// Three passes saw a replica and were allowed to try the settings; the
 	// fourth observed the promotion and must not have touched them first.
@@ -1273,7 +1273,7 @@ func TestRestoreReconnectsWhenSettingsRestoreLosesConnection(t *testing.T) {
 	}
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
-	testMysqld.restoreReplicaAfterFailedShutdown(ctx, state, 10*time.Millisecond, 30*time.Second)
+	testMysqld.restoreReplicaAfterFailedShutdown(ctx, state, 10*time.Millisecond, 30*time.Second, replicaRestorePendingStopSettlePasses)
 	assert.GreaterOrEqual(t, db.GetQueryCalledNum(restoreSyncRelayLog), 1,
 		"the settings must be restored on a fresh connection after the first one broke")
 }
@@ -1366,7 +1366,7 @@ func TestReplicaShutdownSkipsUnavailableThreadCommands(t *testing.T) {
 		}
 		ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 		defer cancel()
-		testMysqld.restoreReplicaAfterFailedShutdown(ctx, state, 10*time.Millisecond, 30*time.Second)
+		testMysqld.restoreReplicaAfterFailedShutdown(ctx, state, 10*time.Millisecond, 30*time.Second, replicaRestorePendingStopSettlePasses)
 		assert.Equal(t, 1, db.GetQueryCalledNum("SET GLOBAL sync_relay_log = 10000"), "the durability settings must still be restored")
 		assert.Zero(t, db.GetQueryCalledNum(unsupported), `the "unsupported" thread start must not be issued`)
 	})
@@ -2864,7 +2864,10 @@ func TestRestoreReconcilesInterruptedStop(t *testing.T) {
 		defer close(restored)
 		ctx, cancel := context.WithTimeout(context.WithoutCancel(t.Context()), 30*time.Second)
 		defer cancel()
-		testMysqld.restoreReplicaAfterFailedShutdown(ctx, state, 10*time.Millisecond, 30*time.Second)
+		// The settle bound is effectively disabled: this test exercises the
+		// wait-for-settle path, and the wall-clock flip below must not race a
+		// pass-counted early exit.
+		testMysqld.restoreReplicaAfterFailedShutdown(ctx, state, 10*time.Millisecond, 30*time.Second, 1<<30)
 	}()
 
 	// While the interrupted stop is still draining, the restoration must wait
@@ -2949,11 +2952,134 @@ func TestRestoreCyclesReceiverAfterMonitorTimeout(t *testing.T) {
 	}
 	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 	defer cancel()
-	testMysqld.restoreReplicaAfterFailedShutdown(ctx, state, 10*time.Millisecond, 30*time.Second)
+	testMysqld.restoreReplicaAfterFailedShutdown(ctx, state, 10*time.Millisecond, 30*time.Second, replicaRestorePendingStopSettlePasses)
 
 	assert.Equal(t, 1, db.GetQueryCalledNum(stopIOThread), "the receiver must be stopped to cycle it")
 	assert.Equal(t, 1, db.GetQueryCalledNum(startIOThread), "the receiver must be restarted after the cycle stop takes effect")
 	assert.Zero(t, db.GetQueryCalledNum(startReplication))
+}
+
+// TestRestoreConvergesWhenInterruptedStopNeverSettles covers an interrupted
+// stop that never lands: CRServerLost only means the response was lost, and
+// the common case is a statement the server never received, so no thread ever
+// reports stopped. Once the durability settings are restored and the threads
+// have reported the desired state for settlePasses consecutive passes, the
+// restoration must converge -- not spin to its full deadline holding the
+// shutdown locks and Close -- leaving a stop that lands later to external
+// recovery (e.g. VTOrc).
+func TestRestoreConvergesWhenInterruptedStopNeverSettles(t *testing.T) {
+	const (
+		showReplicaStatus   = "SHOW REPLICA STATUS"
+		restoreFlushLog     = "SET GLOBAL innodb_flush_log_at_trx_commit = 2"
+		restoreSyncBinlog   = "SET GLOBAL sync_binlog = 0"
+		restoreSyncRelayLog = "SET GLOBAL sync_relay_log = 10000"
+		stopIOThread        = "STOP REPLICA IO_THREAD"
+		startReplication    = "START REPLICA"
+		startSQLThread      = "START REPLICA SQL_THREAD"
+		startIOThread       = "START REPLICA IO_THREAD"
+	)
+
+	db := fakesqldb.New(t)
+	defer db.Close()
+	db.AddQuery("SELECT 1", &sqltypes.Result{})
+	// Both threads report running on every pass: the interrupted stop never
+	// settles.
+	db.AddQuery(showReplicaStatus, sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("Source_Host|Replica_IO_Running|Replica_SQL_Running", "varchar|varchar|varchar"),
+		"source|Yes|Yes",
+	))
+	for _, query := range []string{restoreFlushLog, restoreSyncBinlog, restoreSyncRelayLog} {
+		db.AddQuery(query, &sqltypes.Result{})
+	}
+
+	params := db.ConnParams()
+	cp := *params
+	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb")
+	testMysqld := NewMysqld(dbc)
+	defer testMysqld.Close()
+
+	state := &replicaShutdownState{
+		startReceiver:          true,
+		startApplier:           true,
+		flushLogAtTrxCommit:    "2",
+		syncBinlog:             "0",
+		syncRelayLog:           "10000",
+		applierStopInterrupted: true,
+	}
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+	defer cancel()
+	testMysqld.restoreReplicaAfterFailedShutdown(ctx, state, 10*time.Millisecond, 30*time.Second, 5)
+
+	// The status is read once per pass, so the pass count proves the bounded
+	// exit: convergence at the settle bound, not the context deadline.
+	assert.GreaterOrEqual(t, db.GetQueryCalledNum(showReplicaStatus), 5, "the restoration must wait out the settle bound before giving up on the interrupted stop")
+	assert.LessOrEqual(t, db.GetQueryCalledNum(showReplicaStatus), 10, "the restoration must converge at the settle bound, not spin to its deadline")
+	assert.Equal(t, 1, db.GetQueryCalledNum(restoreFlushLog))
+	for _, threadCommand := range []string{stopIOThread, startReplication, startSQLThread, startIOThread} {
+		assert.Zero(t, db.GetQueryCalledNum(threadCommand), "no thread command may be issued while the threads report the desired state")
+	}
+}
+
+// TestRestoreDiscardsPendingStopsWhenNoThreadsWereRunning pins the intent of
+// the no-threads fast path: when neither replication thread was running
+// before the preparation, there is nothing to reconcile -- a recorded
+// interrupted stop or monitor cycle refers to a thread that was not running,
+// so it needs no settling -- and the restoration must only restore the
+// durability settings and return, without issuing any thread command. The
+// status deliberately reports both threads running: threads started in the
+// window (e.g. by an operator) are not this restoration's to touch, so a
+// regression that moves the fast path below the reconcile logic would be
+// caught here as extra status polls and a cycle stop.
+func TestRestoreDiscardsPendingStopsWhenNoThreadsWereRunning(t *testing.T) {
+	const (
+		showReplicaStatus   = "SHOW REPLICA STATUS"
+		restoreFlushLog     = "SET GLOBAL innodb_flush_log_at_trx_commit = 2"
+		restoreSyncBinlog   = "SET GLOBAL sync_binlog = 0"
+		restoreSyncRelayLog = "SET GLOBAL sync_relay_log = 10000"
+		stopIOThread        = "STOP REPLICA IO_THREAD"
+		startReplication    = "START REPLICA"
+		startSQLThread      = "START REPLICA SQL_THREAD"
+		startIOThread       = "START REPLICA IO_THREAD"
+	)
+
+	db := fakesqldb.New(t)
+	defer db.Close()
+	db.AddQuery("SELECT 1", &sqltypes.Result{})
+	db.AddQuery(showReplicaStatus, sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("Source_Host|Replica_IO_Running|Replica_SQL_Running", "varchar|varchar|varchar"),
+		"source|Yes|Yes",
+	))
+	for _, query := range []string{restoreFlushLog, restoreSyncBinlog, restoreSyncRelayLog} {
+		db.AddQuery(query, &sqltypes.Result{})
+	}
+
+	params := db.ConnParams()
+	cp := *params
+	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb")
+	testMysqld := NewMysqld(dbc)
+	defer testMysqld.Close()
+
+	state := &replicaShutdownState{
+		startReceiver:           false,
+		startApplier:            false,
+		flushLogAtTrxCommit:     "2",
+		syncBinlog:              "0",
+		syncRelayLog:            "10000",
+		receiverStopInterrupted: true,
+		applierStopInterrupted:  true,
+		cycleReceiver:           true,
+	}
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+	defer cancel()
+	testMysqld.restoreReplicaAfterFailedShutdown(ctx, state, 10*time.Millisecond, 30*time.Second, replicaRestorePendingStopSettlePasses)
+
+	assert.Equal(t, 1, db.GetQueryCalledNum(showReplicaStatus), "the fast path must return on the first pass once the settings are restored")
+	for _, query := range []string{restoreFlushLog, restoreSyncBinlog, restoreSyncRelayLog} {
+		assert.Equal(t, 1, db.GetQueryCalledNum(query), "the durability settings must still be restored")
+	}
+	for _, threadCommand := range []string{stopIOThread, startReplication, startSQLThread, startIOThread} {
+		assert.Zero(t, db.GetQueryCalledNum(threadCommand), "no thread command may be issued when no threads were running before the preparation")
+	}
 }
 
 // TestKillConnectionBoundsItsIO covers killing a connection on a wedged

@@ -346,6 +346,8 @@ Just before handing off to the shutdown hook, VTTablet, on replicas only:
 
 The whole preparation is best effort: if any step fails, or the (bounded) preparation times out, the error is logged and shutdown proceeds regardless, so making a replica crash-safe never blocks or fails the shutdown itself. If the shutdown itself then fails while mysqld is still running — for example a failing `mysqld_shutdown` hook — the previous replication and durability state is restored (best effort), so a failed shutdown does not leave a live replica with replication stopped.
 
+A failed shutdown that leaves such a restoration pending can delay process exit past `--shutdown-wait-time` while the exit waits for the restoration to finish — by up to roughly 10 minutes in the worst case — and environments that enforce a hard exit deadline (e.g. Kubernetes' termination grace period) will SIGKILL and discard the restoration, leaving the safely fenced replica to external recovery such as VTOrc. Shutdown attempts are also now serialized across processes sharing a mysqld instance via a lock file next to the pid file: while one process's shutdown attempt (or its pending restoration) is in flight, another process's attempt waits within its own timeout and then fails, rather than proceed unserialized.
+
 **Impact**: On a graceful replica shutdown that completes the preparation, `innodb_flush_log_at_trx_commit`, `sync_binlog`, and `sync_relay_log` are set to `1` and both replication threads are stopped, regardless of their prior runtime values; if the preparation cannot complete, it is skipped and logged. This does not affect `PRIMARY` tablets.
 
 See [#20599](https://github.com/vitessio/vitess/pull/20599) for details.

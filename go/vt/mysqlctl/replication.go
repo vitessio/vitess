@@ -79,7 +79,10 @@ type (
 		// deadline, or hit rpl_stop_replica_timeout): the server-side stop may
 		// then still be draining, and a restore must wait for it to settle --
 		// a START issued while the thread is still draining is a no-op, and
-		// the stop landing afterwards would leave replication stopped.
+		// the stop landing afterwards would leave replication stopped. The
+		// wait is bounded (replicaRestorePendingStopSettlePasses): the stop is
+		// only possibly pending, so one that never settles is eventually left
+		// to external recovery.
 		receiverStopInterrupted bool
 		applierStopInterrupted  bool
 
@@ -104,6 +107,18 @@ const (
 	// connections, but one that stays unreachable this long is treated as
 	// exiting after all.
 	replicaRestoreConnectTimeout = time.Minute
+
+	// replicaRestorePendingStopSettlePasses bounds how long the
+	// post-failed-shutdown restore waits for an interrupted replication-thread
+	// stop to settle once everything else has converged. An interrupted stop
+	// is only possibly pending server-side -- the common CRServerLost case is
+	// a statement the server never received -- so a stop that never lands must
+	// not hold the restoration (and with it the shutdown locks and Close) for
+	// the full restore deadline. Once the durability settings are restored and
+	// the threads have reported the desired state for this many consecutive
+	// passes, the restoration converges and leaves a stop that lands later to
+	// external recovery (e.g. VTOrc).
+	replicaRestorePendingStopSettlePasses = 30
 )
 
 // WithLockWaitTimeout sets the session lock_wait_timeout (rounded up to whole
@@ -465,7 +480,11 @@ func (mysqld *Mysqld) showReplicationStatusDirectContext(ctx context.Context, co
 // It uses a dedicated connection rather than the pools, so it keeps working
 // after Close has closed them, and its START REPLICA serializes behind -- that
 // is, waits out -- a server-side STOP REPLICA that is still draining, which is
-// why callers must give it a generous deadline. All steps are best effort and
+// why callers must give it a generous deadline. That wait is bounded by
+// settlePasses: an interrupted stop is only possibly pending, so once
+// everything else has converged and the threads have held the desired state
+// for that many consecutive passes, the restoration converges and leaves a
+// stop that lands later to external recovery. All steps are best effort and
 // retried within ctx: mysqld can be briefly unreachable right after the very
 // failed shutdown that makes this restoration matter, so failed connections
 // (and status reads on a connection the shutdown may have broken) are retried
@@ -481,7 +500,7 @@ func (mysqld *Mysqld) showReplicationStatusDirectContext(ctx context.Context, co
 // clobber the configuration of) a newly promoted primary. The window of a
 // single in-flight SET racing the role change cannot be closed from this
 // layer.
-func (mysqld *Mysqld) restoreReplicaAfterFailedShutdown(ctx context.Context, state *replicaShutdownState, pollInterval, connectTimeout time.Duration) {
+func (mysqld *Mysqld) restoreReplicaAfterFailedShutdown(ctx context.Context, state *replicaShutdownState, pollInterval, connectTimeout time.Duration, settlePasses int) {
 	var conn *dbconnpool.DBConnection
 	defer func() {
 		if conn != nil {
@@ -492,6 +511,7 @@ func (mysqld *Mysqld) restoreReplicaAfterFailedShutdown(ctx context.Context, sta
 	var unreachableSince time.Time
 	settingsRestored := false
 	statusObserved := false
+	settledPasses := 0
 	pendingReceiver := state.receiverStopInterrupted
 	pendingApplier := state.applierStopInterrupted
 	cycleReceiver := state.cycleReceiver
@@ -620,6 +640,22 @@ func (mysqld *Mysqld) restoreReplicaAfterFailedShutdown(ctx context.Context, sta
 		if settingsRestored && !needReceiver && !needApplier && !pendingReceiver && !pendingApplier && !cycleReceiver {
 			log.Warn("shutdown failed after replication was stopped to make the replica crash-safe; restored the previous replication state")
 			return
+		}
+		// Only a possibly-pending stop is left. It may never land -- the
+		// common CRServerLost case is a statement the server never received --
+		// so once the threads have held the desired state for settlePasses
+		// consecutive passes, converge rather than hold the restoration (and
+		// with it the shutdown locks and Close) for the full restore deadline.
+		// A stop that lands later stops replication visibly, and external
+		// recovery (e.g. VTOrc) restarts it.
+		if settingsRestored && !needReceiver && !needApplier && !cycleReceiver {
+			settledPasses++
+			if settledPasses >= settlePasses {
+				log.Warn("the replication threads have held their desired state after a failed shutdown, but an interrupted stop never settled; ending the restoration -- if the stop lands later, replication must be restarted externally (e.g. by VTOrc)")
+				return
+			}
+		} else {
+			settledPasses = 0
 		}
 		if cycleReceiver {
 			// The preparation's receiver stop failed because stopping the
