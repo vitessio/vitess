@@ -1375,7 +1375,7 @@ func (erp *EmergencyReparenter) findErrantGTIDs(
 	updatedValidCandidates := make(map[string]*RelayLogPositions)
 	for _, candidate := range maxLenCandidates {
 		candidatePositions := validCandidates[candidate]
-		if candidatePositions == nil {
+		if candidatePositions == nil || candidatePositions.IsZero() {
 			erp.logger.Warningf("skipping candidate %s during errant GTID detection: nil or zero positions", candidate)
 			continue
 		}
@@ -1394,10 +1394,6 @@ func (erp *EmergencyReparenter) findErrantGTIDs(
 			// deal with it, if A in fact has errant GTIDs.
 			maxLenPositions = append(maxLenPositions, candidatePositions.Combined)
 			updatedValidCandidates[candidate] = validCandidates[candidate]
-			continue
-		}
-		if candidatePositions.IsZero() {
-			erp.logger.Warningf("skipping candidate %s during errant GTID detection: nil or zero positions", candidate)
 			continue
 		}
 		// Store all the other candidate's positions so that we can run errant GTID detection using them.

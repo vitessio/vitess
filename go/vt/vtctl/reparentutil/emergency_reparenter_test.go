@@ -10072,3 +10072,71 @@ func TestEmergencyReparenterFindErrantGTIDs_NilPosition(t *testing.T) {
 	// accepted without any comparison
 	assert.ElementsMatch(t, []string{"zone1-0000000102"}, starved)
 }
+
+// TestEmergencyReparenterFindErrantGTIDs_EmptyPrimaryPosition is a regression test
+// for a bug where a demoted primary with a zero GTID position but the maximum reparent
+// journal count (its GTID state was wiped while the journal table kept its rows) was
+// accepted as a candidate and its empty position added to the evidence set. Empty
+// evidence corroborates nothing, so every GTID on a lagged replica was flagged errant,
+// leaving the empty primary as the only candidate left to promote.
+func TestEmergencyReparenterFindErrantGTIDs_EmptyPrimaryPosition(t *testing.T) {
+	u1 := "00000000-0000-0000-0000-000000000001"
+	emptyPos, err := replication.DecodePosition("MySQL56/")
+	require.NoError(t, err)
+	require.True(t, emptyPos.IsZero())
+
+	erp := NewEmergencyReparenter(nil, &testutil.TabletManagerClient{
+		ReadReparentJournalInfoResults: map[string]int32{
+			"zone1-0000000100": 2,
+			"zone1-0000000101": 1,
+		},
+	}, nil)
+	tabletMap := map[string]*topo.TabletInfo{
+		"zone1-0000000100": {
+			Tablet: &topodatapb.Tablet{
+				Hostname: "zone1-0000000100",
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+				Type: topodatapb.TabletType_PRIMARY,
+			},
+		},
+		"zone1-0000000101": {
+			Tablet: &topodatapb.Tablet{
+				Hostname: "zone1-0000000101",
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  101,
+				},
+				Type: topodatapb.TabletType_REPLICA,
+			},
+		},
+	}
+	// The demoted primary is not in statusMap: it answered the stop-replication phase
+	// as a primary.
+	statusMap := map[string]*replicationdatapb.StopReplicationStatus{
+		"zone1-0000000101": {
+			After: &replicationdatapb.Status{
+				RelayLogPosition: getRelayLogPosition("1-100"),
+				SourceUuid:       u1,
+			},
+		},
+	}
+	validCandidates := map[string]*RelayLogPositions{
+		"zone1-0000000100": {Combined: emptyPos},
+		"zone1-0000000101": {
+			Combined: replication.MustParsePosition(replication.Mysql56FlavorID, u1+":1-100"),
+		},
+	}
+
+	candidates, starved, err := erp.findErrantGTIDs(t.Context(), validCandidates, statusMap, tabletMap, 10*time.Second, nil)
+	require.NoError(t, err)
+	// the empty primary contributed no evidence, so the lagged replica must be accepted
+	// as-is rather than have its entire GTID set flagged errant
+	require.Contains(t, candidates, "zone1-0000000101")
+	// a candidate with no GTIDs corroborates nothing and cannot be promoted over tablets
+	// with real history, so it is dropped from candidacy
+	assert.NotContains(t, candidates, "zone1-0000000100")
+	assert.Empty(t, starved)
+}
