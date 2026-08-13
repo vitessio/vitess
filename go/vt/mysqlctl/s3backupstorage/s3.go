@@ -405,10 +405,19 @@ func (bh *S3BackupHandle) ReadFile(ctx context.Context, filename string) (io.Rea
 	// flight (~71% CPU/wall on network-bound transfers). With restore-concurrency
 	// defaulting to 4 files, that's up to 4× cores competing with decompression.
 	// This is upstream SDK behaviour (aws-sdk-go-v2 transfermanager).
-	buffered := bufio.NewReaderSize(out.Body, int(downloadPartSize))
+	body := io.Reader(out.Body)
+	if testBodyWrapHook != nil {
+		body = testBodyWrapHook(body)
+	}
+	buffered := bufio.NewReaderSize(body, int(downloadPartSize))
 
 	return &cancelingReader{Reader: buffered, body: out.Body, cancel: cancel}, nil
 }
+
+// testBodyWrapHook allows tests to wrap the SDK body reader before it's passed
+// to bufio.NewReaderSize, enabling read-counting without pinning the
+// coalescing implementation.
+var testBodyWrapHook func(io.Reader) io.Reader
 
 // downloadBufferSize computes the GetObjectBufferSize and validates that the
 // resulting per-file memory usage stays within maxPerFileMemory. The total

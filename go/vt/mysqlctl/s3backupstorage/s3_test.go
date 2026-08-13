@@ -17,7 +17,6 @@ limitations under the License.
 package s3backupstorage
 
 import (
-	"bufio"
 	"bytes"
 	"context"
 	"crypto/md5"
@@ -1047,13 +1046,11 @@ func TestReadFileZeroLengthObjectCloser(t *testing.T) {
 }
 
 func TestReadFileCoalescesSmallReads(t *testing.T) {
-	// This test pins the bufio.Reader coalescing by verifying the structural
-	// invariant: ReadFile must return a cancelingReader whose Reader field is a
-	// *bufio.Reader with a buffer sized to downloadPartSize. Without this bufio
-	// layer, each small Read() from pgzip (4 KiB) would directly call the SDK's
-	// concurrentReader.Read(), which spawns Concurrency goroutines per invocation
-	// — ~1.3M goroutine lifecycles per GiB of data restored.
-	const objectSize = 1024 // small object is fine for this structural check
+	// This test verifies read coalescing behavior: when the caller reads in small
+	// chunks (4 KiB, as pgzip does), the underlying SDK body must see far fewer
+	// Read() calls. Without coalescing, each 4 KiB caller-read maps 1:1 to a
+	// concurrentReader.Read(), each of which spawns Concurrency goroutines.
+	const objectSize = 8 * 1024 * 1024 // 8MiB — exactly one download part
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "HEAD" {
@@ -1109,24 +1106,27 @@ func TestReadFileCoalescesSmallReads(t *testing.T) {
 		readOnly: true,
 	}
 
+	// Install a test hook that counts Read calls on the SDK body BEFORE the
+	// coalescing layer. This lets us observe the actual coalescing ratio without
+	// pinning a specific implementation (bufio vs custom reader).
+	var innerCounter readCounter
+	testBodyWrapHook = func(r io.Reader) io.Reader {
+		innerCounter.reader = r
+		return &innerCounter
+	}
+	t.Cleanup(func() { testBodyWrapHook = nil })
+
 	rc, err := bh.ReadFile(t.Context(), "testfile")
 	require.NoError(t, err)
 
-	// Verify the returned reader has the bufio.Reader coalescing wrapper
-	cr, ok := rc.(*cancelingReader)
-	require.True(t, ok, "ReadFile must return a *cancelingReader")
-
-	br, ok := cr.Reader.(*bufio.Reader)
-	require.True(t, ok, "cancelingReader.Reader must be a *bufio.Reader for read coalescing")
-	assert.Equal(t, int(downloadPartSize), br.Size(),
-		"bufio.Reader buffer size must equal downloadPartSize")
-
-	// Also verify it reads correctly with small buffers
+	// Read in 4 KiB chunks (simulating pgzip)
 	buf := make([]byte, 4096)
+	callerReads := 0
 	var totalRead int
 	for {
 		n, readErr := rc.Read(buf)
 		totalRead += n
+		callerReads++
 		if readErr == io.EOF {
 			break
 		}
@@ -1134,6 +1134,26 @@ func TestReadFileCoalescesSmallReads(t *testing.T) {
 	}
 	require.Equal(t, objectSize, totalRead)
 	require.NoError(t, rc.Close())
+
+	// The caller made ~2048 reads (8MiB / 4KiB). With coalescing, the inner
+	// reader should see a small fraction of that — the coalescing layer batches
+	// many small reads into fewer large reads on the underlying body. Without
+	// coalescing the ratio would be ~1:1.
+	innerReads := innerCounter.count.Load()
+	ratio := float64(callerReads) / float64(innerReads)
+	assert.Greater(t, ratio, float64(10),
+		"expected coalescing ratio >10x (caller=%d, inner=%d) — read coalescing may be missing",
+		callerReads, innerReads)
+}
+
+type readCounter struct {
+	reader io.Reader
+	count  atomic.Int64
+}
+
+func (r *readCounter) Read(p []byte) (int, error) {
+	r.count.Add(1)
+	return r.reader.Read(p)
 }
 
 func TestReadFileMidStreamError(t *testing.T) {
