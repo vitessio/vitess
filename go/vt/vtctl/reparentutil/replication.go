@@ -108,6 +108,15 @@ func haveReciprocallyContainedPositions(a, b replication.Position) bool {
 	return a.AtLeast(b) && b.AtLeast(a) && !a.Equal(b)
 }
 
+func describeCombinedPositions(candidates map[string]*RelayLogPositions) string {
+	parts := make([]string, 0, len(candidates))
+	for alias, pos := range candidates {
+		parts = append(parts, fmt.Sprintf("%s=%s", alias, pos.Combined.String()))
+	}
+	slices.Sort(parts)
+	return strings.Join(parts, ", ")
+}
+
 // hasUniformCombinedPosition returns true when every candidate has the same Combined position. On the
 // output of filterToMostAdvancedCombined a false result means the leading candidates have
 // incomparable positions, as the filter already removed anything dominated.
@@ -194,12 +203,20 @@ func FindPositionsOfAllCandidates(
 	primaryStatusMap map[string]*replicationdatapb.PrimaryStatus,
 ) (map[string]*RelayLogPositions, bool, error) {
 	replicationStatusMap := make(map[string]*replication.ReplicationStatus, len(statusMap))
-	positionMap := make(map[string]*RelayLogPositions)
+	primaryPositions := make(map[string]replication.Position, len(primaryStatusMap))
+	positionMap := make(map[string]*RelayLogPositions, len(statusMap)+len(primaryStatusMap))
 
 	// Build out replication status list from proto types.
 	for alias, statuspb := range statusMap {
 		status := replication.ProtoToReplicationStatus(statuspb.After)
 		replicationStatusMap[alias] = &status
+	}
+	for alias, primaryStatus := range primaryStatusMap {
+		executedPosition, err := replication.DecodePosition(primaryStatus.Position)
+		if err != nil {
+			return nil, false, vterrors.Wrapf(err, "could not decode a primary status executed position for tablet %v", alias)
+		}
+		primaryPositions[alias] = executedPosition
 	}
 
 	// Decode former-primary executed positions up front so their flavor can
@@ -238,6 +255,16 @@ func FindPositionsOfAllCandidates(
 			// GTID-based relay log positions, we will return the error recorded
 			// here.
 			emptyRelayPosErrorRecorder.RecordError(vterrors.Errorf(vtrpc.Code_UNAVAILABLE, "encountered tablet %v with no relay log position, when at least one other tablet in the status map has GTID based relay log positions", alias))
+		}
+	}
+	for _, position := range primaryPositions {
+		if position.GTIDSet == nil {
+			continue
+		}
+		if _, ok := position.GTIDSet.(replication.Mysql56GTIDSet); ok {
+			isGTIDBased = true
+		} else {
+			isNonGTIDBased = true
 		}
 	}
 

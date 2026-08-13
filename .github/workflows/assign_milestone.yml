@@ -1,7 +1,7 @@
 name: Assign Milestone
 
 on:
-  pull_request_target:
+  pull_request_target: # zizmor: ignore[dangerous-triggers] only checks out the base ref, never PR code
     types: [opened]
 
 permissions:
@@ -23,7 +23,7 @@ jobs:
           egress-policy: audit
 
       - name: Checkout code
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # We must explicitly checkout the base's SHA to avoid executing any code coming from
           # the PR's SHA - Which would be executed in the base branch's context.
