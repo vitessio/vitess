@@ -103,7 +103,6 @@ func writeTopologyRecovery(topologyRecovery *TopologyRecovery) (*TopologyRecover
 		string(analysisEntry.Analysis),
 		analysisEntry.AnalyzedKeyspace,
 		analysisEntry.AnalyzedShard,
-		topoproto.TabletAliasString(analysisEntry.AnalyzedInstanceAlias),
 		analysisEntry.RecoveryId,
 	)
 	if err != nil {
@@ -150,6 +149,11 @@ func AttemptRecoveryRegistration(analysisEntry *inst.DetectionAnalysis) (*Topolo
 
 // ResolveRecovery is called on completion of a recovery process and updates the recovery status.
 // It does not clear the "active period" as this still takes place in order to avoid flapping.
+// The recovery_detection row is NOT deleted here: if the recovery failed, the problem is still
+// active and the detection row must survive so subsequent retry attempts share the same
+// detection_id. The incident boundary is established by executeCheckAndRecoverFunction when
+// checkIfAlreadyFixed confirms the topology is healthy; at that point the detection row is
+// deleted so any future recurrence creates a fresh detection_id.
 func writeResolveRecovery(topologyRecovery *TopologyRecovery) error {
 	_, err := db.ExecVTOrc(`UPDATE topology_recovery
 		SET
@@ -168,23 +172,22 @@ func writeResolveRecovery(topologyRecovery *TopologyRecovery) error {
 	if err != nil {
 		log.Error(err.Error())
 	}
-	// Delete the recovery_detection row that triggered this recovery. The unconditional UPSERT in
-	// InsertRecoveryDetection refreshes detection_timestamp on every poll, so a resolved
-	// incident must be explicitly cleared; otherwise the next recurrence of the same failure on
-	// the same tablet reuses the same detection_id, making the new topology_recovery row appear
-	// to reference a detection that predates it. Deleting here creates a clean incident boundary:
-	// the next recurrence inserts a fresh row with a new detection_id. This is best-effort —
-	// suppressed recoveries (cell gate, quorum gate) have no writeResolveRecovery call and rely
-	// on UPSERT expiry for cleanup.
-	if topologyRecovery.AnalysisEntry.RecoveryId != 0 {
-		if _, delErr := db.ExecVTOrc(
-			`DELETE FROM recovery_detection WHERE detection_id = ?`,
-			topologyRecovery.AnalysisEntry.RecoveryId,
-		); delErr != nil {
-			log.Error(delErr.Error())
-		}
-	}
 	return err
+}
+
+// deleteResolvedDetection removes a recovery_detection row by its detection_id.
+// It is called when checkIfAlreadyFixed confirms the topology is healthy, establishing
+// the incident boundary so any future recurrence creates a fresh detection_id.
+func deleteResolvedDetection(detectionID int64) {
+	if detectionID == 0 {
+		return
+	}
+	if _, err := db.ExecVTOrc(
+		`DELETE FROM recovery_detection WHERE detection_id = ?`,
+		detectionID,
+	); err != nil {
+		log.Error(err.Error())
+	}
 }
 
 // readRecoveries reads recovery entry/audit entries from topology_recovery

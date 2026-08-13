@@ -2053,11 +2053,11 @@ func TestCellsNoRecoveryGateFiresAfterPostLockCellShift(t *testing.T) {
 	require.Equal(t, 1, detectionRows, "detection must be recorded even when recovery is suppressed by the post-lock cell gate")
 }
 
-// TestWriteResolveRecoveryDeletesDetectionRow verifies that writeResolveRecovery deletes the
-// recovery_detection row that triggered the recovery. This creates a clean incident boundary:
-// the next recurrence of the same failure inserts a fresh row with a new detection_id, so
-// topology_recovery rows always reference a detection that reflects the correct incident.
-func TestWriteResolveRecoveryDeletesDetectionRow(t *testing.T) {
+// TestWriteResolveRecoveryPreservesDetectionAfterFailedAttempt verifies that a failed recovery
+// attempt does NOT delete the recovery_detection row. The incident is still active; subsequent
+// retry attempts must share the same detection_id so topology_recovery rows reference the
+// correct ongoing incident.
+func TestWriteResolveRecoveryPreservesDetectionAfterFailedAttempt(t *testing.T) {
 	orcDb, fromCache, err := db.OpenVTOrcWithCache()
 	require.NoError(t, err)
 	defer func() {
@@ -2077,22 +2077,70 @@ func TestWriteResolveRecoveryDeletesDetectionRow(t *testing.T) {
 		AnalyzedShard:         "0",
 	}
 	require.NoError(t, InsertRecoveryDetection(entry))
-	require.NotZero(t, entry.RecoveryId, "detection row must have been inserted")
+	firstID := entry.RecoveryId
+	require.NotZero(t, firstID, "detection row must have been inserted")
 
 	recovery := &TopologyRecovery{
 		AnalysisEntry: *entry,
+		IsSuccessful:  false,
 	}
-
 	require.NoError(t, writeResolveRecovery(recovery))
 
 	var remaining int
 	require.NoError(t, orcDb.QueryRow("SELECT COUNT(*) FROM recovery_detection").Scan(&remaining))
-	require.Zero(t, remaining, "writeResolveRecovery must delete the triggering recovery_detection row to establish an incident boundary")
+	require.Equal(t, 1, remaining, "failed recovery must NOT delete the detection row — incident is still active")
 
-	// Re-inserting after deletion must produce a strictly greater detection_id, proving the
-	// incident boundary semantics. detection_id is INTEGER PRIMARY KEY AUTOINCREMENT, so
-	// SQLite's sqlite_sequence table tracks the highest ever-assigned ID; even after the row
-	// is deleted, the next insert gets max_ever + 1, never a reused value.
+	// A retry attempt re-inserts (UPSERT) and must return the same detection_id: the
+	// incident has not cleared, so there is no boundary between attempts.
+	reEntry := &inst.DetectionAnalysis{
+		AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+		Analysis:              inst.ReplicationStopped,
+		AnalyzedKeyspace:      "ks",
+		AnalyzedShard:         "0",
+	}
+	require.NoError(t, InsertRecoveryDetection(reEntry))
+	require.Equal(t, firstID, reEntry.RecoveryId,
+		"retry must share the same detection_id: incident is ongoing, not a new incident")
+}
+
+// TestDeleteResolvedDetectionEstablishesIncidentBoundary verifies that deleteResolvedDetection
+// removes the detection row and that a subsequent re-insertion produces a strictly greater
+// detection_id. The AUTOINCREMENT constraint guarantees no ID reuse, so topology_recovery rows
+// from a prior incident can never collide with those from a new one.
+func TestDeleteResolvedDetectionEstablishesIncidentBoundary(t *testing.T) {
+	orcDb, fromCache, err := db.OpenVTOrcWithCache()
+	require.NoError(t, err)
+	defer func() {
+		if !fromCache {
+			require.NoError(t, orcDb.Close())
+		}
+	}()
+	defer func() {
+		_, err = orcDb.Exec("DELETE FROM recovery_detection")
+		require.NoError(t, err)
+	}()
+
+	entry := &inst.DetectionAnalysis{
+		AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+		Analysis:              inst.ReplicationStopped,
+		AnalyzedKeyspace:      "ks",
+		AnalyzedShard:         "0",
+	}
+	require.NoError(t, InsertRecoveryDetection(entry))
+	firstID := entry.RecoveryId
+	require.NotZero(t, firstID, "detection row must have been inserted")
+
+	// Simulate the alreadyFixed path: topology is healthy, establish the incident boundary.
+	deleteResolvedDetection(firstID)
+
+	var remaining int
+	require.NoError(t, orcDb.QueryRow("SELECT COUNT(*) FROM recovery_detection").Scan(&remaining))
+	require.Zero(t, remaining, "deleteResolvedDetection must remove the row when the incident is resolved")
+
+	// A new incident (same alias+analysis) must get a strictly greater detection_id.
+	// detection_id is INTEGER PRIMARY KEY AUTOINCREMENT, so SQLite's sqlite_sequence
+	// tracks the highest ever-assigned ID; even after deletion, the next insert gets
+	// max_ever + 1, never a reused value.
 	reEntry := &inst.DetectionAnalysis{
 		AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
 		Analysis:              inst.ReplicationStopped,
@@ -2101,5 +2149,44 @@ func TestWriteResolveRecoveryDeletesDetectionRow(t *testing.T) {
 	}
 	require.NoError(t, InsertRecoveryDetection(reEntry))
 	require.NotZero(t, reEntry.RecoveryId, "re-inserted detection must have a valid detection_id")
-	require.Greater(t, reEntry.RecoveryId, entry.RecoveryId, "AUTOINCREMENT must assign a fresh detection_id strictly greater than the deleted one")
+	require.Greater(t, reEntry.RecoveryId, firstID,
+		"AUTOINCREMENT must assign a fresh detection_id strictly greater than the deleted one")
+}
+
+// TestAttemptRecoveryRegistrationStoresDetectionID verifies that writeTopologyRecovery correctly
+// stores analysisEntry.RecoveryId (the detection FK) in topology_recovery.detection_id. There are
+// 6 SQL placeholders and 6 Go args; a regression would silently store the alias string in the
+// detection_id column (SQLite drops extra args without error) and ReadRecentRecoveries would
+// return DetectionID=0 for every row.
+func TestAttemptRecoveryRegistrationStoresDetectionID(t *testing.T) {
+	orcDb, fromCache, err := db.OpenVTOrcWithCache()
+	require.NoError(t, err)
+	defer func() {
+		if !fromCache {
+			require.NoError(t, orcDb.Close())
+		}
+	}()
+	defer func() {
+		_, _ = orcDb.Exec("DELETE FROM topology_recovery")
+		_, _ = orcDb.Exec("DELETE FROM recovery_detection")
+	}()
+
+	entry := &inst.DetectionAnalysis{
+		AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+		Analysis:              inst.ReplicationStopped,
+		AnalyzedKeyspace:      "ks",
+		AnalyzedShard:         "0",
+	}
+	require.NoError(t, InsertRecoveryDetection(entry))
+	require.NotZero(t, entry.RecoveryId, "detection row must have been inserted")
+
+	recovery, err := AttemptRecoveryRegistration(entry)
+	require.NoError(t, err)
+	require.NotNil(t, recovery)
+
+	recoveries, err := ReadRecentRecoveries(0)
+	require.NoError(t, err)
+	require.Len(t, recoveries, 1)
+	require.Equal(t, entry.RecoveryId, recoveries[0].DetectionID,
+		"topology_recovery.detection_id must store the integer RecoveryId, not the alias string")
 }

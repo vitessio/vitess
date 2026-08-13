@@ -1090,6 +1090,13 @@ func executeCheckAndRecoverFunction(analysisEntry *inst.DetectionAnalysis) (err 
 			return err
 		}
 		if alreadyFixed {
+			// The topology is healthy: establish the incident boundary by deleting the
+			// detection row. Future recurrences of the same failure will insert a fresh row
+			// (AUTOINCREMENT detection_id), so topology_recovery rows always reference a
+			// detection from the correct incident. Best-effort — if the DELETE fails, expiry
+			// cleans it up. Failed recovery attempts do NOT delete the row (writeResolveRecovery
+			// deliberately leaves it intact so retries share the same detection_id).
+			deleteResolvedDetection(analysisEntry.RecoveryId)
 			logger.Info(fmt.Sprintf("Analysis: %v on tablet %v - No longer valid, some other agent must have fixed the problem.", analysisEntry.Analysis, analyzedInstanceAliasString))
 			recoveriesSkippedCounter.Add(append(recoveryLabels, RecoverySkipStaleAnalysis.String()), 1)
 			return nil
