@@ -400,6 +400,11 @@ func (bh *S3BackupHandle) ReadFile(ctx context.Context, filename string) (io.Rea
 	// sufficient: the SDK's GetObjectBufferSize already manages the full transfer
 	// window internally; this buffer only needs to coalesce small downstream reads
 	// into a part-sized read for the SDK.
+	//
+	// NOTE: the SDK's dispatch loop busy-spins while a download window is in
+	// flight (~71% CPU/wall on network-bound transfers). With restore-concurrency
+	// defaulting to 4 files, that's up to 4× cores competing with decompression.
+	// This is upstream SDK behaviour (aws-sdk-go-v2 transfermanager).
 	buffered := bufio.NewReaderSize(out.Body, int(downloadPartSize))
 
 	return &cancelingReader{Reader: buffered, body: out.Body, cancel: cancel}, nil

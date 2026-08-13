@@ -21,6 +21,7 @@
         - [Consolidator Reject on Waiter Cap](#vttablet-consolidator-reject-on-cap)
     - **[VTTablet](#minor-changes-vttablet)**
         - [Schema engine table-count limit is now configurable](#vttablet-schema-max-table-count)
+        - [Parallel S3 downloads during restore](#vttablet-s3-parallel-downloads)
 
 ## <a id="major-changes"/>Major Changes</a>
 
@@ -136,3 +137,24 @@ Two changes:
 Tablets that already have more tracked schema objects than the configured limit will reload fine — only new creations are gated. Operators who need to support more tables and views should increase the flag and ensure both vttablet and mysqld have enough memory to comfortably hold the larger schema.
 
 See [#19978](https://github.com/vitessio/vitess/issues/19978) for details.
+
+#### <a id="vttablet-s3-parallel-downloads"/>Parallel S3 downloads during restore</a>
+
+S3 backup restores now use the AWS SDK v2 transfer manager for parallel downloads. Each file is fetched via concurrent byte-range GETs instead of a single sequential stream, significantly reducing restore wall-clock time for large backups.
+
+**Behavioral changes for all `--backup_storage_implementation=s3` users:**
+
+- A `HeadObject` call is issued per file to determine object size before downloading.
+- Downloads use ranged GETs sized by `--s3-backup-download-part-size` (default 8 MiB) with `--s3-backup-download-concurrency` (default 5) parallel workers per file.
+- Per-file memory is capped at 1 GiB (SDK buffer + read buffer). Configurations exceeding this fail fast at restore start.
+
+**New flags:**
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--s3-backup-download-part-size` | `8388608` (8 MiB) | Part size in bytes for parallel S3 downloads. |
+| `--s3-backup-download-concurrency` | `5` | Number of parallel goroutines per file download. |
+
+**CPU note:** The SDK transfer manager's dispatch loop busy-spins while a download window is in flight, consuming meaningful CPU even when the workload is network-bound. With `--restore-concurrency=4` (the default), up to 4 × cores may be active during restores, competing with decompression. This is an upstream SDK behaviour; a tracking issue has been filed.
+
+See [#20225](https://github.com/vitessio/vitess/pull/20225) for details.
