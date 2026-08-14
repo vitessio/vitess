@@ -50,7 +50,6 @@ type VReplicationConfig struct {
 	StoreCompressedGTID     bool
 	ParallelInsertWorkers   int
 	TabletTypesStr          string
-	EnableHttpLog           bool // Enable the /debug/vrlog endpoint
 
 	// Config parameters applicable to the source side (vstreamer)
 	// The coresponding Override fields are used to determine if the user has provided a value for the parameter so
@@ -95,7 +94,6 @@ func GetVReplicationConfigDefaults(useCached bool) *VReplicationConfig {
 		StoreCompressedGTID:     vreplicationStoreCompressedGTID,
 		ParallelInsertWorkers:   vreplicationParallelInsertWorkers,
 		TabletTypesStr:          vreplicationTabletTypesStr,
-		EnableHttpLog:           vreplicationEnableHttpLog,
 
 		VStreamPacketSizeOverride:              false,
 		VStreamPacketSize:                      VStreamerDefaultPacketSize,

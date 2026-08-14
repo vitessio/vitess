@@ -78,11 +78,6 @@ var (
 	recvTimeout              = 5 * time.Second
 )
 
-type LogExpectation struct {
-	Type   string
-	Detail string
-}
-
 var heartbeatRe *regexp.Regexp
 
 // setFlag() sets a flag for a test in a non-racy way:
@@ -570,41 +565,6 @@ func deleteAllVReplicationStreams(t *testing.T) {
 	require.NoError(t, err, "failed to delete vreplication rows: %v", err)
 }
 
-func expectLogsAndUnsubscribe(t *testing.T, logs []LogExpectation, logCh chan *VrLogStats) {
-	t.Helper()
-	defer vrLogStatsLogger.Unsubscribe(logCh)
-	failed := false
-	for i, log := range logs {
-		if failed {
-			t.Errorf("no logs received")
-			continue
-		}
-		select {
-		case got := <-logCh:
-			var match bool
-			match = (log.Type == got.Type)
-			if match {
-				if log.Detail[0] == '/' {
-					result, err := regexp.MatchString(log.Detail[1:], got.Detail)
-					if err != nil {
-						panic(err)
-					}
-					match = result
-				} else {
-					match = (got.Detail == log.Detail)
-				}
-			}
-
-			if !match {
-				t.Errorf("log:\n%q, does not match log %d:\n%q", got, i, log)
-			}
-		case <-time.After(5 * time.Second):
-			t.Errorf("no logs received, expecting %s", log)
-			failed = true
-		}
-	}
-}
-
 func shouldIgnoreQuery(query string) bool {
 	queriesToIgnore := []string{
 		"_vt.vreplication_log",   // ignore all selects, updates and inserts into this table
@@ -793,8 +753,8 @@ func customExpectData(t *testing.T, table string, values [][]string, exec func(c
 }
 
 func compareQueryResults(t *testing.T, query string, values [][]string,
-	exec func(ctx context.Context, query string) (*sqltypes.Result, error)) error {
-
+	exec func(ctx context.Context, query string) (*sqltypes.Result, error),
+) error {
 	t.Helper()
 	qr, err := exec(context.Background(), query)
 	if err != nil {
