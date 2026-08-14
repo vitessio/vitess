@@ -1209,6 +1209,9 @@ func (se *Engine) Environment() *vtenv.Environment {
 
 func extractNamesFromTablesList(tables []*Table) []string {
 	var tableNames []string
+	if len(tables) > 0 {
+		tableNames = make([]string, 0, len(tables))
+	}
 	for _, table := range tables {
 		tableNames = append(tableNames, table.Name.String())
 	}

@@ -89,7 +89,7 @@ func (rlp *RelayLogPositions) IsZero() bool {
 // hasDominantPosition returns true if position a is strictly ahead of position b, meaning
 // a contains everything b has, plus more.
 func hasDominantPosition(a, b replication.Position) bool {
-	return a.AtLeast(b) && !a.Equal(b)
+	return a.AtLeast(b) && !b.AtLeast(a)
 }
 
 // haveIncomparablePositions returns true if neither position contains the other. Replication
@@ -97,6 +97,23 @@ func hasDominantPosition(a, b replication.Position) bool {
 // or errant GTIDs).
 func haveIncomparablePositions(a, b replication.Position) bool {
 	return !a.AtLeast(b) && !b.AtLeast(a)
+}
+
+// haveReciprocallyContainedPositions returns true if two unequal positions contain each
+// other. Containment can't order these: MariaDB GTID containment ignores the origin
+// server, so positions like 0-1-10 and 0-2-10 "contain" each other while holding
+// different histories (a split brain).
+func haveReciprocallyContainedPositions(a, b replication.Position) bool {
+	return a.AtLeast(b) && b.AtLeast(a) && !a.Equal(b)
+}
+
+func describeCombinedPositions(candidates map[string]*RelayLogPositions) string {
+	parts := make([]string, 0, len(candidates))
+	for alias, pos := range candidates {
+		parts = append(parts, fmt.Sprintf("%s=%s", alias, pos.Combined.String()))
+	}
+	slices.Sort(parts)
+	return strings.Join(parts, ", ")
 }
 
 // hasUniformCombinedPosition returns true when every candidate has the same Combined position. On the
@@ -173,12 +190,20 @@ func FindPositionsOfAllCandidates(
 	primaryStatusMap map[string]*replicationdatapb.PrimaryStatus,
 ) (map[string]*RelayLogPositions, bool, error) {
 	replicationStatusMap := make(map[string]*replication.ReplicationStatus, len(statusMap))
-	positionMap := make(map[string]*RelayLogPositions)
+	primaryPositions := make(map[string]replication.Position, len(primaryStatusMap))
+	positionMap := make(map[string]*RelayLogPositions, len(statusMap)+len(primaryStatusMap))
 
 	// Build out replication status list from proto types.
 	for alias, statuspb := range statusMap {
 		status := replication.ProtoToReplicationStatus(statuspb.After)
 		replicationStatusMap[alias] = &status
+	}
+	for alias, primaryStatus := range primaryStatusMap {
+		executedPosition, err := replication.DecodePosition(primaryStatus.Position)
+		if err != nil {
+			return nil, false, vterrors.Wrapf(err, "could not decode a primary status executed position for tablet %v", alias)
+		}
+		primaryPositions[alias] = executedPosition
 	}
 
 	// Determine if we're GTID-based. If we are, we'll need to look for errant
@@ -203,6 +228,16 @@ func FindPositionsOfAllCandidates(
 			emptyRelayPosErrorRecorder.RecordError(vterrors.Errorf(vtrpc.Code_UNAVAILABLE, "encountered tablet %v with no relay log position, when at least one other tablet in the status map has GTID based relay log positions", alias))
 		}
 	}
+	for _, position := range primaryPositions {
+		if position.GTIDSet == nil {
+			continue
+		}
+		if _, ok := position.GTIDSet.(replication.Mysql56GTIDSet); ok {
+			isGTIDBased = true
+		} else {
+			isNonGTIDBased = true
+		}
+	}
 
 	if isGTIDBased && emptyRelayPosErrorRecorder.HasErrors() {
 		return nil, false, emptyRelayPosErrorRecorder.Error()
@@ -225,12 +260,7 @@ func FindPositionsOfAllCandidates(
 		}
 	}
 
-	for alias, primaryStatus := range primaryStatusMap {
-		executedPosition, err := replication.DecodePosition(primaryStatus.Position)
-		if err != nil {
-			return nil, false, vterrors.Wrapf(err, "could not decode a primary status executed position for tablet %v", alias)
-		}
-
+	for alias, executedPosition := range primaryPositions {
 		positionMap[alias] = &RelayLogPositions{Combined: executedPosition}
 	}
 

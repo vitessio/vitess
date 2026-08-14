@@ -30980,6 +30980,129 @@ export namespace tabletmanagerdata {
     }
 
     /**
+     * Properties of a SessionVariable.
+     * @deprecated Use tabletmanagerdata.SessionVariable.$Properties instead.
+     */
+    interface ISessionVariable extends tabletmanagerdata.SessionVariable.$Properties {
+    }
+
+    /** Represents a SessionVariable. */
+    class SessionVariable {
+
+        /**
+         * Constructs a new SessionVariable.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: tabletmanagerdata.SessionVariable.$Properties);
+
+        /** Unknown fields preserved while decoding when enabled */
+        $unknowns?: Uint8Array[];
+
+        /** SessionVariable name. */
+        name: string;
+
+        /** SessionVariable value. */
+        value: string;
+
+        /**
+         * Creates a new SessionVariable instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns SessionVariable instance
+         */
+        static create(properties: tabletmanagerdata.SessionVariable.$Shape): tabletmanagerdata.SessionVariable & tabletmanagerdata.SessionVariable.$Shape;
+        static create(properties?: tabletmanagerdata.SessionVariable.$Properties): tabletmanagerdata.SessionVariable;
+
+        /**
+         * Encodes the specified SessionVariable message. Does not implicitly {@link tabletmanagerdata.SessionVariable.verify|verify} messages.
+         * @param message SessionVariable message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        static encode(message: tabletmanagerdata.SessionVariable.$Properties, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified SessionVariable message, length delimited. Does not implicitly {@link tabletmanagerdata.SessionVariable.verify|verify} messages.
+         * @param message SessionVariable message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        static encodeDelimited(message: tabletmanagerdata.SessionVariable.$Properties, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a SessionVariable message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns {tabletmanagerdata.SessionVariable & tabletmanagerdata.SessionVariable.$Shape} SessionVariable
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): tabletmanagerdata.SessionVariable & tabletmanagerdata.SessionVariable.$Shape;
+
+        /**
+         * Decodes a SessionVariable message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns {tabletmanagerdata.SessionVariable & tabletmanagerdata.SessionVariable.$Shape} SessionVariable
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): tabletmanagerdata.SessionVariable & tabletmanagerdata.SessionVariable.$Shape;
+
+        /**
+         * Verifies a SessionVariable message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a SessionVariable message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns SessionVariable
+         */
+        static fromObject(object: { [k: string]: any }): tabletmanagerdata.SessionVariable;
+
+        /**
+         * Creates a plain object from a SessionVariable message. Also converts values to other types if specified.
+         * @param message SessionVariable
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        static toObject(message: tabletmanagerdata.SessionVariable, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this SessionVariable to JSON.
+         * @returns JSON object
+         */
+        toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the type url for SessionVariable
+         * @param [prefix] Custom type url prefix, defaults to `"type.googleapis.com"`
+         * @returns The type url
+         */
+        static getTypeUrl(prefix?: string): string;
+    }
+
+    namespace SessionVariable {
+
+        /** Properties of a SessionVariable. */
+        interface $Properties {
+
+            /** SessionVariable name */
+            name?: (string|null);
+
+            /** SessionVariable value */
+            value?: (string|null);
+
+            /** Unknown fields preserved while decoding when enabled */
+            $unknowns?: Uint8Array[];
+        }
+
+        /** Shape of a SessionVariable. */
+        type $Shape = tabletmanagerdata.SessionVariable.$Properties;
+    }
+
+    /**
      * Properties of an ExecuteMultiFetchAsDbaRequest.
      * @deprecated Use tabletmanagerdata.ExecuteMultiFetchAsDbaRequest.$Properties instead.
      */
@@ -31015,6 +31138,9 @@ export namespace tabletmanagerdata {
 
         /** ExecuteMultiFetchAsDbaRequest disable_foreign_key_checks. */
         disable_foreign_key_checks: boolean;
+
+        /** ExecuteMultiFetchAsDbaRequest session_variables. */
+        session_variables: tabletmanagerdata.SessionVariable.$Properties[];
 
         /**
          * Creates a new ExecuteMultiFetchAsDbaRequest instance using the specified properties.
@@ -31117,6 +31243,9 @@ export namespace tabletmanagerdata {
 
             /** ExecuteMultiFetchAsDbaRequest disable_foreign_key_checks */
             disable_foreign_key_checks?: (boolean|null);
+
+            /** ExecuteMultiFetchAsDbaRequest session_variables */
+            session_variables?: (tabletmanagerdata.SessionVariable.$Properties[]|null);
 
             /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
@@ -71949,6 +72078,9 @@ export namespace vtctldata {
         /** EmergencyReparentShardRequest expected_primary. */
         expected_primary?: (topodata.TabletAlias.$Properties|null);
 
+        /** EmergencyReparentShardRequest allow_split_brain_promotion. */
+        allow_split_brain_promotion: boolean;
+
         /**
          * Creates a new EmergencyReparentShardRequest instance using the specified properties.
          * @param [properties] Properties to set
@@ -72056,6 +72188,9 @@ export namespace vtctldata {
 
             /** EmergencyReparentShardRequest expected_primary */
             expected_primary?: (topodata.TabletAlias.$Properties|null);
+
+            /** EmergencyReparentShardRequest allow_split_brain_promotion */
+            allow_split_brain_promotion?: (boolean|null);
 
             /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];

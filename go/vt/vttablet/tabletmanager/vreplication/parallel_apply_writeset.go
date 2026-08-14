@@ -152,12 +152,12 @@ func collationUsesPadSpace(collation colldata.Collation) bool {
 func trimTrailingPadSpaceCodepoints(cs charset.Charset, raw []byte) []byte {
 	trimmedEnd := 0
 	for i := 0; i < len(raw); {
-		r, size := cs.DecodeRune(raw[i:])
+		r, size, ok := cs.DecodeRune(raw[i:])
 		if size <= 0 {
 			return raw
 		}
 		i += size
-		if r != ' ' {
+		if !ok || r != ' ' {
 			trimmedEnd = i
 		}
 	}

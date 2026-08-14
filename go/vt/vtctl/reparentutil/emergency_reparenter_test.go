@@ -134,8 +134,11 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 		shards     []*vtctldatapb.Shard
 		tablets    []*topodatapb.Tablet
 		// results
-		shouldErr        bool
-		errShouldContain string
+		shouldErr              bool
+		errShouldContain       string
+		errShouldContainAll    []string
+		wantSplitBrainOverride int64
+		wantNewPrimary         *topodatapb.TabletAlias
 	}{
 		{
 			name:       "success with matching expected primary",
@@ -4291,16 +4294,29 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 			errShouldContain: "primary <nil> is not equal to expected alias zone1-0000000101",
 		},
 		{
-			// Regression test: if every candidate has mutually errant GTIDs, findErrantGTIDs
-			// returns an empty map, which previously caused findMostAdvanced to panic with
-			// "index out of range [0] with length 0" when indexing the empty tablet slice.
-			name:                 "all candidates filtered out by errant GTID detection",
-			durability:           policy.DurabilityNone,
-			emergencyReparentOps: EmergencyReparentOptions{},
+			name:       "mutually errant leaders do not fall back to a lagging candidate",
+			durability: policy.DurabilityNone,
+			emergencyReparentOps: EmergencyReparentOptions{
+				WaitReplicasTimeout: time.Second,
+			},
 			tmc: &testutil.TabletManagerClient{
+				InitPrimaryResults: map[string]struct {
+					Result string
+					Error  error
+				}{
+					"zone1-0000000102": {Result: "ok"},
+				},
+				PopulateReparentJournalResults: map[string]error{
+					"zone1-0000000102": nil,
+				},
 				ReadReparentJournalInfoResults: map[string]int32{
-					"zone1-0000000100": 3,
-					"zone1-0000000101": 3,
+					"zone1-0000000100": 1,
+					"zone1-0000000101": 1,
+					"zone1-0000000102": 1,
+				},
+				SetReplicationSourceResults: map[string]error{
+					"zone1-0000000100": nil,
+					"zone1-0000000101": nil,
 				},
 				StopReplicationAndGetStatusResults: map[string]struct {
 					StopStatus *replicationdatapb.StopReplicationStatus
@@ -4324,6 +4340,15 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 							},
 						},
 					},
+					"zone1-0000000102": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
+							After: &replicationdatapb.Status{
+								SourceUuid:       "00000000-0000-0000-0000-000000000001",
+								RelayLogPosition: getRelayLogPosition("1-90", "1-30", "1-50"),
+							},
+						},
+					},
 				},
 				WaitForPositionResults: map[string]map[string]error{
 					"zone1-0000000100": {
@@ -4331,6 +4356,9 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 					},
 					"zone1-0000000101": {
 						getRelayLogPosition("1-100", "1-30", "1-51"): nil,
+					},
+					"zone1-0000000102": {
+						getRelayLogPosition("1-90", "1-30", "1-50"): nil,
 					},
 				},
 			},
@@ -4357,12 +4385,232 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 					Keyspace: "testkeyspace",
 					Shard:    "-",
 				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  102,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
 			},
 			keyspace:         "testkeyspace",
 			shard:            "-",
 			cells:            []string{"zone1"},
 			shouldErr:        true,
-			errShouldContain: "no valid candidates for emergency reparent",
+			errShouldContain: "suspected split-brain: leading candidates have incomparable Combined GTID positions",
+			errShouldContainAll: []string{
+				"zone1-0000000100=00000000-0000-0000-0000-000000000001:",
+				"zone1-0000000101=00000000-0000-0000-0000-000000000001:",
+			},
+		},
+		{
+			// A split-brain override only waits on the chosen primary, so if that tablet
+			// cannot apply its own relay logs the override still aborts — even though the
+			// discarded leader (which is not waited on) could have applied. An aborted
+			// override discards nothing, so the override counter must not record it.
+			name:       "split-brain override aborts when the chosen primary cannot apply its relay logs",
+			durability: policy.DurabilityNone,
+			emergencyReparentOps: EmergencyReparentOptions{
+				NewPrimaryAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+				AllowSplitBrainPromotion: true,
+				WaitReplicasTimeout:      time.Millisecond * 50,
+			},
+			tmc: &testutil.TabletManagerClient{
+				StopReplicationAndGetStatusResults: map[string]struct {
+					StopStatus *replicationdatapb.StopReplicationStatus
+					Error      error
+				}{
+					"zone1-0000000100": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
+							After: &replicationdatapb.Status{
+								SourceUuid:       "00000000-0000-0000-0000-000000000001",
+								RelayLogPosition: getRelayLogPosition("1-21", "1-5"),
+							},
+						},
+					},
+					"zone1-0000000101": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
+							After: &replicationdatapb.Status{
+								SourceUuid:       "00000000-0000-0000-0000-000000000001",
+								RelayLogPosition: getRelayLogPosition("1-21", "", "1-5"),
+							},
+						},
+					},
+				},
+				// The chosen primary fails its wait; the discarded leader would apply, but
+				// it is not waited on so it cannot rescue the override.
+				WaitForPositionResults: map[string]map[string]error{
+					"zone1-0000000100": {
+						getRelayLogPosition("1-21"): nil,
+					},
+					"zone1-0000000101": {
+						getRelayLogPosition("1-21", "", "1-5"): nil,
+					},
+				},
+			},
+			shards: []*vtctldatapb.Shard{
+				{
+					Keyspace: "testkeyspace",
+					Name:     "-",
+				},
+			},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+					Hostname: "chosen primary, fails to apply relay logs",
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  101,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+					Hostname: "discarded leader, not waited on",
+				},
+			},
+			shouldErr:              true,
+			keyspace:               "testkeyspace",
+			shard:                  "-",
+			cells:                  []string{"zone1"},
+			errShouldContain:       "could not apply all relay logs",
+			wantSplitBrainOverride: 0,
+		},
+		{
+			// A lone demoted primary (StopReplication reports it is not a replica) with an
+			// empty MySQL GTID position still classifies as GTID-based and is initialized.
+			name:       "initializes an empty GTID shard from a lone demoted primary",
+			durability: policy.DurabilityNone,
+			emergencyReparentOps: EmergencyReparentOptions{
+				WaitReplicasTimeout: time.Second,
+			},
+			tmc: &testutil.TabletManagerClient{
+				ReadReparentJournalInfoResults: map[string]int32{},
+				DemotePrimaryResults: map[string]struct {
+					Status *replicationdatapb.PrimaryStatus
+					Error  error
+				}{
+					"zone1-0000000100": {
+						Status: &replicationdatapb.PrimaryStatus{Position: "MySQL56/"},
+					},
+				},
+				InitPrimaryResults: map[string]struct {
+					Result string
+					Error  error
+				}{
+					"zone1-0000000100": {Result: "ok"},
+				},
+				PopulateReparentJournalResults: map[string]error{
+					"zone1-0000000100": nil,
+				},
+				StopReplicationAndGetStatusResults: map[string]struct {
+					StopStatus *replicationdatapb.StopReplicationStatus
+					Error      error
+				}{
+					"zone1-0000000100": {Error: mysql.ErrNotReplica},
+				},
+			},
+			shards: []*vtctldatapb.Shard{
+				{Keyspace: "testkeyspace", Name: "-"},
+			},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+					Type:     topodatapb.TabletType_REPLICA,
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+			},
+			keyspace:       "testkeyspace",
+			shard:          "-",
+			cells:          []string{"zone1"},
+			wantNewPrimary: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+		},
+		{
+			// Two divergent leaders: errant-GTID detection convicts the one carrying the
+			// errant transaction and promotes the surviving leader without an override.
+			name:       "errant divergence leaves exactly one leader, which is promoted",
+			durability: policy.DurabilityNone,
+			emergencyReparentOps: EmergencyReparentOptions{
+				WaitReplicasTimeout: time.Second,
+			},
+			tmc: &testutil.TabletManagerClient{
+				InitPrimaryResults: map[string]struct {
+					Result string
+					Error  error
+				}{
+					"zone1-0000000100": {Result: "ok"},
+				},
+				PopulateReparentJournalResults: map[string]error{
+					"zone1-0000000100": nil,
+				},
+				ReadReparentJournalInfoResults: map[string]int32{
+					"zone1-0000000100": 1,
+					"zone1-0000000101": 1,
+				},
+				SetReplicationSourceResults: map[string]error{
+					"zone1-0000000101": nil,
+				},
+				StopReplicationAndGetStatusResults: map[string]struct {
+					StopStatus *replicationdatapb.StopReplicationStatus
+					Error      error
+				}{
+					"zone1-0000000100": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
+							After: &replicationdatapb.Status{
+								SourceUuid:       "00000000-0000-0000-0000-000000000002",
+								RelayLogPosition: getRelayLogPosition("1-100", "1-31", "1-50"),
+							},
+						},
+					},
+					"zone1-0000000101": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
+							After: &replicationdatapb.Status{
+								SourceUuid:       "00000000-0000-0000-0000-000000000001",
+								RelayLogPosition: getRelayLogPosition("1-100", "1-30", "1-51"),
+							},
+						},
+					},
+				},
+				WaitForPositionResults: map[string]map[string]error{
+					"zone1-0000000100": {getRelayLogPosition("1-100", "1-31", "1-50"): nil},
+					"zone1-0000000101": {getRelayLogPosition("1-100", "1-30", "1-51"): nil},
+				},
+			},
+			shards: []*vtctldatapb.Shard{
+				{Keyspace: "testkeyspace", Name: "-"},
+			},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+					Type:     topodatapb.TabletType_REPLICA,
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+				{
+					Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
+					Type:     topodatapb.TabletType_REPLICA,
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+			},
+			keyspace:       "testkeyspace",
+			shard:          "-",
+			cells:          []string{"zone1"},
+			wantNewPrimary: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
 		},
 	}
 
@@ -4372,6 +4620,8 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 
 			logger := logutil.NewMemoryLogger()
 			ev := &events.Reparent{}
+			ersSplitBrainOverrides.ResetAll()
+			t.Cleanup(ersSplitBrainOverrides.ResetAll)
 
 			for i, tablet := range tt.tablets {
 				if tablet.Type == topodatapb.TabletType_UNKNOWN {
@@ -4403,11 +4653,217 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 			err := erp.reparentShardLocked(ctx, ev, tt.keyspace, tt.shard, tt.emergencyReparentOps)
 			if tt.shouldErr {
 				require.Error(t, err)
-				assert.ErrorContains(t, err, tt.errShouldContain)
+				require.ErrorContains(t, err, tt.errShouldContain)
+				for _, expected := range tt.errShouldContainAll {
+					require.ErrorContains(t, err, expected)
+				}
+				assert.Equal(t, tt.wantSplitBrainOverride, ersSplitBrainOverrides.Counts()[tt.keyspace+"."+tt.shard])
 				return
 			}
 
-			assert.NoError(t, err)
+			require.NoError(t, err)
+			assert.Equal(t, tt.wantSplitBrainOverride, ersSplitBrainOverrides.Counts()[tt.keyspace+"."+tt.shard])
+			if tt.wantNewPrimary != nil {
+				require.NotNil(t, ev.NewPrimary)
+				assert.True(t, topoproto.TabletAliasEqual(tt.wantNewPrimary, ev.NewPrimary.Alias), "want new primary %v, got %v", tt.wantNewPrimary, ev.NewPrimary.Alias)
+			}
+		})
+	}
+}
+
+func TestERSSplitBrainPromotionRequiresNewPrimary(t *testing.T) {
+	erp := NewEmergencyReparenter(nil, nil, logutil.NewMemoryLogger())
+
+	_, err := erp.ReparentShard(t.Context(), "testkeyspace", "-", EmergencyReparentOptions{
+		AllowSplitBrainPromotion: true,
+	})
+	require.Error(t, err)
+	assert.Equal(t, vtrpc.Code_INVALID_ARGUMENT, vterrors.Code(err))
+	assert.ErrorContains(t, err, "split-brain promotion requires an explicitly requested primary (--new-primary)")
+}
+
+func TestERSSplitBrainPromotionEligibility(t *testing.T) {
+	tests := []struct {
+		name                 string
+		newPrimary           *topodatapb.TabletAlias
+		stuckDiscardedLeader bool
+		replicaRepointsFail  bool
+		wantErr              string
+		wantPrimary          *topodatapb.TabletAlias
+		wantOverrideCount    int64
+	}{
+		{
+			name: "rejects dominated requested primary",
+			newPrimary: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  102,
+			},
+			wantErr: "requested primary zone1-0000000102 is not a leading candidate",
+		},
+		{
+			name: "promotes requested leading primary",
+			newPrimary: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  100,
+			},
+			wantPrimary: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  100,
+			},
+			wantOverrideCount: 1,
+		},
+		{
+			// The override only waits on the chosen primary, so a discarded divergent
+			// leader that cannot apply its relay logs must not block the promotion.
+			name: "promotes chosen leader while a discarded leader is stuck",
+			newPrimary: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  100,
+			},
+			stuckDiscardedLeader: true,
+			wantPrimary: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  100,
+			},
+			wantOverrideCount: 1,
+		},
+		{
+			// The promotion and reparent journal write commit the override's lossy history
+			// before the replicas are repointed, so the override must be counted even when
+			// ERS errors afterwards because every repoint failed.
+			name: "counts override when repoints fail after promotion",
+			newPrimary: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  100,
+			},
+			replicaRepointsFail: true,
+			wantErr:             "replica(s) failed",
+			wantOverrideCount:   1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ersSplitBrainOverrides.ResetAll()
+			t.Cleanup(ersSplitBrainOverrides.ResetAll)
+
+			posA := getRelayLogPosition("1-100", "1-31", "1-50")
+			posB := getRelayLogPosition("1-100", "1-30", "1-51")
+			posLagger := getRelayLogPosition("1-90", "1-30", "1-50")
+			// The discarded divergent leader (101) fails its relay-log wait when stuck. The
+			// override only waits on the chosen primary, so this must not affect the outcome.
+			discardedLeaderWait := map[string]error{posB: nil}
+			if tt.stuckDiscardedLeader {
+				discardedLeaderWait = map[string]error{posB: assert.AnError}
+			}
+			tmc := &testutil.TabletManagerClient{
+				PopulateReparentJournalResults: map[string]error{
+					"zone1-0000000100": nil,
+				},
+				InitPrimaryResults: map[string]struct {
+					Result string
+					Error  error
+				}{
+					"zone1-0000000100": {Result: "ok"},
+				},
+				SetReplicationSourceResults: map[string]error{
+					"zone1-0000000101": nil,
+					"zone1-0000000102": nil,
+				},
+				StopReplicationAndGetStatusResults: map[string]struct {
+					StopStatus *replicationdatapb.StopReplicationStatus
+					Error      error
+				}{
+					"zone1-0000000100": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
+							After: &replicationdatapb.Status{
+								SourceUuid:       "00000000-0000-0000-0000-000000000001",
+								RelayLogPosition: posA,
+							},
+						},
+					},
+					"zone1-0000000101": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
+							After: &replicationdatapb.Status{
+								SourceUuid:       "00000000-0000-0000-0000-000000000001",
+								RelayLogPosition: posB,
+							},
+						},
+					},
+					"zone1-0000000102": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
+							After: &replicationdatapb.Status{
+								SourceUuid:       "00000000-0000-0000-0000-000000000001",
+								RelayLogPosition: posLagger,
+							},
+						},
+					},
+				},
+				WaitForPositionResults: map[string]map[string]error{
+					"zone1-0000000100": {posA: nil},
+					"zone1-0000000101": discardedLeaderWait,
+				},
+				ReadReparentJournalInfoResults: map[string]int32{},
+			}
+			if tt.replicaRepointsFail {
+				tmc.SetReplicationSourceResults = map[string]error{
+					"zone1-0000000101": assert.AnError,
+					"zone1-0000000102": assert.AnError,
+				}
+			}
+
+			ctx := t.Context()
+			ts := memorytopo.NewServer(ctx, "zone1")
+			t.Cleanup(ts.Close)
+			testutil.AddShards(ctx, t, ts, &vtctldatapb.Shard{
+				Keyspace: "testkeyspace",
+				Name:     "-",
+			})
+			testutil.AddTablets(
+				ctx, t, ts, nil,
+				&topodatapb.Tablet{
+					Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+					Type:     topodatapb.TabletType_REPLICA,
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+				&topodatapb.Tablet{
+					Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
+					Type:     topodatapb.TabletType_REPLICA,
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+				&topodatapb.Tablet{
+					Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 102},
+					Type:     topodatapb.TabletType_RDONLY,
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+			)
+			reparenttestutil.SetKeyspaceDurability(ctx, t, ts, "testkeyspace", policy.DurabilityNone)
+
+			lockCtx, unlock, err := ts.LockShard(ctx, "testkeyspace", "-", "test lock")
+			require.NoError(t, err)
+			defer unlock(&err)
+
+			ev := &events.Reparent{}
+			erp := NewEmergencyReparenter(ts, tmc, logutil.NewMemoryLogger())
+			err = erp.reparentShardLocked(lockCtx, ev, "testkeyspace", "-", EmergencyReparentOptions{
+				NewPrimaryAlias:          tt.newPrimary,
+				AllowSplitBrainPromotion: true,
+				WaitReplicasTimeout:      time.Second,
+			})
+			if tt.wantErr != "" {
+				require.ErrorContains(t, err, tt.wantErr)
+			} else {
+				require.NoError(t, err)
+				require.NotNil(t, ev.NewPrimary)
+				assert.True(t, topoproto.TabletAliasEqual(tt.wantPrimary, ev.NewPrimary.Alias))
+			}
+			assert.Equal(t, tt.wantOverrideCount, ersSplitBrainOverrides.Counts()["testkeyspace.-"])
 		})
 	}
 }
@@ -5452,7 +5908,7 @@ func TestEmergencyReparenter_promotionOfNewPrimary(t *testing.T) {
 			tt.emergencyReparentOps.durability = durability
 
 			erp := NewEmergencyReparenter(ts, tt.tmc, logger)
-			_, err := erp.reparentReplicas(ctx, ev, tabletInfo.Tablet, tt.tabletMap, tt.statusMap, tt.emergencyReparentOps, nil /* nonAckers */, false)
+			_, err := erp.reparentReplicas(ctx, ev, tabletInfo.Tablet, tt.tabletMap, tt.statusMap, tt.emergencyReparentOps, nil /* nonAckers */, false /* splitBrainOverrideActive */, false)
 			if tt.shouldErr {
 				require.Error(t, err)
 				assert.Contains(t, err.Error(), tt.errShouldContain)
@@ -6627,6 +7083,21 @@ func TestEmergencyReparenter_findMostAdvanced(t *testing.T) {
 		Executed: replication.Position{GTIDSet: replication.Mysql56GTIDSet{}},
 	}
 
+	// MariaDB GTID containment ignores the origin server, so these two positions contain
+	// each other while holding a different write for sequence 10
+	positionMariadbServer1 := &RelayLogPositions{
+		Combined: replication.MustParsePosition(replication.MariadbFlavorID, "0-1-10"),
+		Executed: replication.MustParsePosition(replication.MariadbFlavorID, "0-1-10"),
+	}
+	positionMariadbServer2 := &RelayLogPositions{
+		Combined: replication.MustParsePosition(replication.MariadbFlavorID, "0-2-10"),
+		Executed: replication.MustParsePosition(replication.MariadbFlavorID, "0-2-10"),
+	}
+	positionMariadbServer1Seq11 := &RelayLogPositions{
+		Combined: replication.MustParsePosition(replication.MariadbFlavorID, "0-1-11"),
+		Executed: replication.MustParsePosition(replication.MariadbFlavorID, "0-1-11"),
+	}
+
 	tests := []struct {
 		name                 string
 		validCandidates      map[string]*RelayLogPositions
@@ -6897,6 +7368,72 @@ func TestEmergencyReparenter_findMostAdvanced(t *testing.T) {
 							Uid:  404,
 						},
 						Hostname: "ignored tablet",
+					},
+				},
+			},
+			err: "split brain detected between servers",
+		}, {
+			// reciprocally contained but unequal positions (MariaDB GTIDs with the same
+			// domain and sequence from different origin servers) are divergent histories
+			// that containment can't order, so ERS must fail closed instead of picking
+			// a side of the divergence by tiebreak
+			name: "split brain detection on reciprocal but unequal mariadb positions",
+			validCandidates: map[string]*RelayLogPositions{
+				"zone1-0000000100": positionMariadbServer1,
+				"zone1-0000000101": positionMariadbServer2,
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+					},
+				},
+				"zone1-0000000101": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  101,
+						},
+					},
+				},
+			},
+			err: "split brain detected between servers",
+		}, {
+			// the divergent pair can sit behind a candidate that dominates both of them,
+			// so reciprocal containment must be checked between every pair of candidates,
+			// not just against the winning position
+			name: "split brain detection on reciprocal mariadb positions behind the winner",
+			validCandidates: map[string]*RelayLogPositions{
+				"zone1-0000000100": positionMariadbServer1Seq11,
+				"zone1-0000000101": positionMariadbServer1,
+				"zone1-0000000102": positionMariadbServer2,
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+					},
+				},
+				"zone1-0000000101": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  101,
+						},
+					},
+				},
+				"zone1-0000000102": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  102,
+						},
 					},
 				},
 			},
@@ -7435,7 +7972,7 @@ func TestEmergencyReparenter_reparentReplicas(t *testing.T) {
 			tt.emergencyReparentOps.durability = durability
 
 			erp := NewEmergencyReparenter(ts, tt.tmc, logger)
-			_, err := erp.reparentReplicas(ctx, ev, tabletInfo.Tablet, tt.tabletMap, tt.statusMap, tt.emergencyReparentOps, nil /* nonAckers */, false /* intermediateReparent */)
+			_, err := erp.reparentReplicas(ctx, ev, tabletInfo.Tablet, tt.tabletMap, tt.statusMap, tt.emergencyReparentOps, nil /* nonAckers */, false /* splitBrainOverrideActive */, false /* intermediateReparent */)
 			if tt.shouldErr {
 				require.Error(t, err)
 				assert.Contains(t, err.Error(), tt.errShouldContain)
@@ -8305,7 +8842,7 @@ func TestParentContextCancelled(t *testing.T) {
 		time.Sleep(time.Second)
 		cancel()
 	}()
-	_, err = erp.reparentReplicas(ctx, ev, tabletMap[newPrimaryTabletAlias].Tablet, tabletMap, statusMap, emergencyReparentOps, nil /* nonAckers */, true)
+	_, err = erp.reparentReplicas(ctx, ev, tabletMap[newPrimaryTabletAlias].Tablet, tabletMap, statusMap, emergencyReparentOps, nil /* nonAckers */, false /* splitBrainOverrideActive */, true)
 	require.NoError(t, err)
 }
 

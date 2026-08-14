@@ -63,6 +63,7 @@ type EmergencyReparentOptions struct {
 	// further after n-1 tablets have returned.
 	WaitAllTablets            bool
 	WaitReplicasTimeout       time.Duration
+	AllowSplitBrainPromotion  bool
 	PreventCrossCellPromotion bool
 	ExpectedPrimaryAlias      *topodatapb.TabletAlias
 
@@ -91,9 +92,15 @@ type relayLogWaitResult struct {
 }
 
 // counters for Emergency Reparent Shard
-var ersCounter = stats.NewCountersWithMultiLabels(
-	"EmergencyReparentCounts", "Number of times Emergency Reparent Shard has been run",
-	[]string{"Keyspace", "Shard", "Result"},
+var (
+	ersCounter = stats.NewCountersWithMultiLabels(
+		"EmergencyReparentCounts", "Number of times Emergency Reparent Shard has been run",
+		[]string{"Keyspace", "Shard", "Result"},
+	)
+	ersSplitBrainOverrides = stats.NewCountersWithMultiLabels(
+		"EmergencyReparentSplitBrainOverrides", "Number of Emergency Reparent Shard split-brain promotions completed for an explicitly selected primary",
+		[]string{"Keyspace", "Shard"},
+	)
 )
 
 // NewEmergencyReparenter returns a new EmergencyReparenter object, ready to
@@ -123,6 +130,9 @@ func (erp *EmergencyReparenter) ReparentShard(ctx context.Context, keyspace stri
 	var err error
 	statsLabels := []string{keyspace, shard}
 
+	if err = validateEmergencyReparentOptions(opts); err != nil {
+		return nil, err
+	}
 	opts.lockAction = erp.getLockAction(opts.NewPrimaryAlias)
 	// First step is to lock the shard for the given operation, if not already locked
 	if err = topo.CheckShardLocked(ctx, keyspace, shard); err != nil {
@@ -163,6 +173,16 @@ func (erp *EmergencyReparenter) getLockAction(newPrimaryAlias *topodatapb.Tablet
 	}
 
 	return action
+}
+
+func validateEmergencyReparentOptions(opts EmergencyReparentOptions) error {
+	if !opts.AllowSplitBrainPromotion {
+		return nil
+	}
+	if opts.NewPrimaryAlias == nil || topoproto.TabletAliasIsZero(opts.NewPrimaryAlias) {
+		return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "split-brain promotion requires an explicitly requested primary (--new-primary)")
+	}
+	return nil
 }
 
 // reparentShardLocked performs Emergency Reparent Shard operation assuming that the shard is already locked
@@ -302,12 +322,34 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	// of waiting for every candidate and failing on any error.
 	waitCandidates := validCandidates
 	requireAll := true
+	splitBrainOverrideActive := false
+	var suspectedSplitBrainCandidates map[string]*RelayLogPositions
 	if isGTIDBased {
 		waitCandidates = filterToMostAdvancedCombined(validCandidates, erp.logger)
-		// Leading candidates with incomparable positions are a suspected split brain:
-		// wait for all of them so a failed one isn't dropped before findMostAdvanced
-		// sees it
 		requireAll = !hasUniformCombinedPosition(waitCandidates)
+		if requireAll {
+			leadingPositions := describeCombinedPositions(waitCandidates)
+			if !opts.AllowSplitBrainPromotion {
+				suspectedSplitBrainCandidates = maps.Clone(waitCandidates)
+			} else {
+				requestedPrimary := topoproto.TabletAliasString(opts.NewPrimaryAlias)
+				requestedCandidate, ok := waitCandidates[requestedPrimary]
+				if !ok {
+					return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "requested primary %s is not a leading candidate in the suspected split-brain: %s", requestedPrimary, leadingPositions)
+				}
+
+				splitBrainOverrideActive = true
+				erp.logger.Warningf("EmergencyReparentShard attempting split-brain promotion in keyspace %s shard %s for new primary %s; the divergent branches of the other leading candidates (%s) will be discarded and those tablets may require rebuilding from the new primary", keyspace, shard, requestedPrimary, leadingPositions)
+
+				// Promote exactly the requested primary and discard the divergent branches.
+				// Reducing the candidate set here means the relay-log wait, the errant-GTID
+				// skip, and the election all operate on that one tablet: only it needs to apply
+				// its relay logs, so a wedged losing branch cannot block the recovery this
+				// override exists for.
+				validCandidates = map[string]*RelayLogPositions{requestedPrimary: requestedCandidate}
+				waitCandidates = validCandidates
+			}
+		}
 	}
 
 	// Keep the pre-wait candidates around: tablets that fail the wait are removed from
@@ -341,7 +383,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	}
 
 	// For GTID based replication, we will run errant GTID detection.
-	if isGTIDBased {
+	if isGTIDBased && !splitBrainOverrideActive {
 		// Failed waiters are only ever removed from a uniform leading group (a
 		// requireAll wait aborts on failure instead of removing anyone), so a failed
 		// tablet received exactly what the surviving leaders received, including every
@@ -413,6 +455,18 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 				if err != nil {
 					return err
 				}
+			}
+		}
+
+		if len(suspectedSplitBrainCandidates) > 0 {
+			survivingLeaders := 0
+			for alias := range suspectedSplitBrainCandidates {
+				if _, ok := validCandidates[alias]; ok {
+					survivingLeaders++
+				}
+			}
+			if survivingLeaders != 1 {
+				return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "suspected split-brain: leading candidates have incomparable Combined GTID positions: %s; to continue, choose the history to preserve with --new-primary and --allow-split-brain-promotion, discarding transactions that exist only on the other leaders", describeCombinedPositions(suspectedSplitBrainCandidates))
 			}
 		}
 
@@ -545,10 +599,11 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	// Since the new primary tablet belongs to the validCandidateTablets list, we no longer need any additional constraint checks
 
 	// Final step is to promote our primary candidate
-	_, err = erp.reparentReplicas(ctx, ev, newPrimary, tabletMap, stoppedReplicationSnapshot.statusMap, opts, nonAckers, false /* intermediateReparent */)
+	_, err = erp.reparentReplicas(ctx, ev, newPrimary, tabletMap, stoppedReplicationSnapshot.statusMap, opts, nonAckers, splitBrainOverrideActive, false /* intermediateReparent */)
 	if err != nil {
 		return err
 	}
+
 	ev.NewPrimary = newPrimary.CloneVT()
 	return err
 }
@@ -789,15 +844,22 @@ func (erp *EmergencyReparenter) findMostAdvanced(
 	// We have already removed the tablets with errant GTIDs before calling this function. At this point our winning position must be a
 	// superset of all the other valid positions. If any position is incomparable with it, then we have a split brain scenario, and we
 	// should cancel the ERS. Split brain is about divergent received history, so we only compare the Combined positions; the Executed
-	// positions can be transiently incomparable at an equal Combined position (multi-threaded apply gaps) without any divergence
+	// positions can be transiently incomparable at an equal Combined position (multi-threaded apply gaps) without any divergence.
+	// Reciprocally contained but unequal positions are divergent too, containment just can't order them (MariaDB GTID containment
+	// ignores the origin server), so they must also fail closed. The divergent pair can sit behind a candidate that dominates both
+	// of them, so reciprocal containment is checked between every pair of candidates, not just against the winning position
 	for i, position := range tabletPositions {
 		if haveIncomparablePositions(winningPosition.Combined, position.Combined) {
 			return nil, nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "split brain detected between servers - %s and %s", topoproto.TabletAliasString(winningPrimaryTablet.Alias), topoproto.TabletAliasString(validTablets[i].Alias))
 		}
-		// The sort can't guarantee a maximum at index 0 when some positions are incomparable, so also reject a winner that
-		// another candidate dominates. This is an invariant check that should never fire, not an expected path
-		if hasDominantPosition(position.Combined, winningPosition.Combined) {
+		// Keep the sort's maximum-at-index-zero guarantee as a defense-in-depth invariant.
+		if hasDominantReparentPosition(position, winningPosition) {
 			return nil, nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "candidate sorting error: %s has a more advanced position than the chosen candidate %s", topoproto.TabletAliasString(validTablets[i].Alias), topoproto.TabletAliasString(winningPrimaryTablet.Alias))
+		}
+		for j := i + 1; j < len(tabletPositions); j++ {
+			if haveReciprocallyContainedPositions(position.Combined, tabletPositions[j].Combined) {
+				return nil, nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "split brain detected between servers - %s and %s", topoproto.TabletAliasString(validTablets[i].Alias), topoproto.TabletAliasString(validTablets[j].Alias))
+			}
 		}
 	}
 
@@ -845,7 +907,7 @@ func (erp *EmergencyReparenter) promoteIntermediateSource(
 	// we wait for all the replicas so that we can choose a better candidate from the ones that started replication later
 	// The intermediate reparent doesn't run the acker quorum gate, so it has no
 	// non-ackers to exclude.
-	reachableTablets, err := erp.reparentReplicas(ctx, ev, source, validTabletMap, statusMap, opts, nil /* nonAckers */, true /* intermediateReparent */)
+	reachableTablets, err := erp.reparentReplicas(ctx, ev, source, validTabletMap, statusMap, opts, nil /* nonAckers */, false /* splitBrainOverrideActive */, true /* intermediateReparent */)
 	if err != nil {
 		return nil, err
 	}
@@ -875,6 +937,7 @@ func (erp *EmergencyReparenter) reparentReplicas(
 	statusMap map[string]*replicationdatapb.StopReplicationStatus,
 	opts EmergencyReparentOptions,
 	nonAckers []string, // nonAckers are tablets that can't be relied on to send semi-sync ACKs, so they don't count towards the acker quorum gate below even when their repoint succeeds. This must match the set filterValidCandidates excluded when it proved forward progress.
+	splitBrainOverrideActive bool, // splitBrainOverrideActive records the promotion in the split-brain override counter once it commits. An override that aborts before the promotion discarded nothing, and a replica repoint failure afterwards doesn't undo it, so the counter is bumped right after the reparent journal write.
 	intermediateReparent bool, // intermediateReparent represents whether the reparenting of the replicas is the final reparent or not.
 	// Since ERS can sometimes promote a tablet, which isn't a candidate for promotion, if it is the most advanced, we don't want to
 	// call PromoteReplica on it. We just want to get all replicas to replicate from it to get caught up, after which we'll promote the primary
@@ -1094,6 +1157,12 @@ func (erp *EmergencyReparenter) reparentReplicas(
 		return nil, vterrors.Wrapf(primaryErr, "failed to promote %v to primary", topoproto.TabletAliasString(newPrimaryTablet.Alias))
 	}
 
+	// The journal write above committed the override's lossy history, so it is counted
+	// here even if repointing the replicas below fails
+	if splitBrainOverrideActive && !intermediateReparent {
+		ersSplitBrainOverrides.Add([]string{ev.ShardInfo.Keyspace(), ev.ShardInfo.ShardName()}, 1)
+	}
+
 	select {
 	case <-replSuccessCtx.Done():
 		// At least one replica was able to SetReplicationSource successfully
@@ -1267,6 +1336,17 @@ func (erp *EmergencyReparenter) findErrantGTIDs(
 	waitReplicasTimeout time.Duration,
 	extraEvidence []replication.Position,
 ) (map[string]*RelayLogPositions, []string, error) {
+	allPositionsZero := len(validCandidates) > 0
+	for _, positions := range validCandidates {
+		if positions == nil || !positions.IsZero() {
+			allPositionsZero = false
+			break
+		}
+	}
+	if allPositionsZero {
+		return maps.Clone(validCandidates), nil, nil
+	}
+
 	// First we need to collect the reparent journal length for all the candidates.
 	// This will tell us, which of the tablets are severly lagged, and haven't even seen all the primary promotions.
 	// Such severely lagging tablets cannot be used to find errant GTIDs in other tablets, seeing that they themselves don't have enough information.
@@ -1295,7 +1375,7 @@ func (erp *EmergencyReparenter) findErrantGTIDs(
 	updatedValidCandidates := make(map[string]*RelayLogPositions)
 	for _, candidate := range maxLenCandidates {
 		candidatePositions := validCandidates[candidate]
-		if candidatePositions == nil || candidatePositions.IsZero() {
+		if candidatePositions == nil {
 			erp.logger.Warningf("skipping candidate %s during errant GTID detection: nil or zero positions", candidate)
 			continue
 		}
@@ -1314,6 +1394,10 @@ func (erp *EmergencyReparenter) findErrantGTIDs(
 			// deal with it, if A in fact has errant GTIDs.
 			maxLenPositions = append(maxLenPositions, candidatePositions.Combined)
 			updatedValidCandidates[candidate] = validCandidates[candidate]
+			continue
+		}
+		if candidatePositions.IsZero() {
+			erp.logger.Warningf("skipping candidate %s during errant GTID detection: nil or zero positions", candidate)
 			continue
 		}
 		// Store all the other candidate's positions so that we can run errant GTID detection using them.
