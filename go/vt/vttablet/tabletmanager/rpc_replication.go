@@ -340,17 +340,28 @@ func (tm *TabletManager) RestartReplication(ctx context.Context, semiSync bool) 
 		return err
 	}
 
-	semiSyncAction, err := tm.convertBoolToSemiSyncAction(ctx, semiSync)
+	// Once STOP succeeds, run the post-STOP work with cancellation detached so
+	// caller cancellation cannot leave replication stopped. The detached work is
+	// bounded by the caller's remaining budget, capped at RemoteOperationTimeout,
+	// so the action lock cannot be held well beyond the caller's deadline.
+	postStopTimeout := topo.RemoteOperationTimeout
+	if deadline, ok := ctx.Deadline(); ok {
+		postStopTimeout = min(time.Until(deadline), postStopTimeout)
+	}
+	postStopCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), postStopTimeout)
+	defer cancel()
+
+	semiSyncAction, err := tm.convertBoolToSemiSyncAction(postStopCtx, semiSync)
 	if err != nil {
 		return err
 	}
 
-	if err := tm.fixSemiSync(ctx, tm.Tablet().Type, semiSyncAction); err != nil {
+	if err := tm.fixSemiSync(postStopCtx, tm.Tablet().Type, semiSyncAction); err != nil {
 		return err
 	}
 
 	// Start replication
-	return tm.startReplicationRecoverable(ctx)
+	return tm.startReplicationRecoverable(postStopCtx)
 }
 
 // StartReplicationUntilAfter will start the replication and let it catch up

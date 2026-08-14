@@ -32,6 +32,7 @@
         - [Stricter PROXY protocol v1 header validation](#vtgate-proxy-protocol-v1-strictness)
     - **[Reparent](#minor-changes-reparent)**
         - [`EmergencyReparentShard` no longer waits on replicas that cannot win the election](#ers-lagging-relay-log-wait)
+        - [`EmergencyReparentShard` can explicitly recover from split brain](#ers-allow-split-brain-promotion)
         - [Reparent candidate ordering now respects partially ordered GTID histories](#reparent-gtid-candidate-ordering)
     - **[VTTablet](#minor-changes-vttablet)**
         - [Consolidator Reject on Waiter Cap](#vttablet-consolidator-reject-on-cap)
@@ -41,6 +42,7 @@
         - [New `--demote-primary-lock-wait-timeout` flag](#vttablet-demote-primary-lock-wait-timeout)
         - [Schema engine table-count limit is now configurable](#vttablet-schema-max-table-count)
         - [Skip MySQL version check when restoring from a mysql-shell backup](#vttablet-mysql-shell-restore-skip-version-check)
+        - [ApplySchema session variables](#vttablet-applyschema-session-variables)
     - **[Backup/Restore](#minor-changes-backup)**
         - [Chunked backup/restore for the builtinbackupengine](#backup-chunked-builtin)
         - [Slow clean mysqld shutdowns no longer fail backups](#backup-mysqld-shutdown-timeout)
@@ -315,6 +317,14 @@ This mirrors a tradeoff `orchestrator` made before Vitess: it never gated dead-p
 
 See [#18529](https://github.com/vitessio/vitess/issues/18529).
 
+#### <a id="ers-allow-split-brain-promotion"/>`EmergencyReparentShard` can explicitly recover from split brain</a>
+
+`EmergencyReparentShard` now identifies divergent leading MySQL GTID histories before waiting for relay logs or filtering errant GTIDs. The default path proceeds only when existing errant-GTID detection proves exactly one upfront leader remains; otherwise ERS fails with the tablet alias and position of every leader. An operator can proceed by passing `--new-primary <tablet-alias> --allow-split-brain-promotion`; the requested primary must be one of those upfront undominated candidates. The override requires `--new-primary`. ERS promotes exactly that tablet and preserves its complete history. It bypasses nothing else: the chosen primary must still apply its relay logs, and the `MustNot` promotion rule, cross-cell restrictions, the semi-sync forward-progress check, and the shard lock re-checks all still apply. VTOrc never opts in automatically.
+
+**Impact**: allowing a split-brain promotion discards divergent transactions that exist only on losing branches, and tablets containing those branches may need to be rebuilt from the new primary. Each override whose promotion completes increments `EmergencyReparentSplitBrainOverrides{Keyspace,Shard}` so operators can alert on and audit use of the escape hatch; an override that aborts before promotion discards nothing and is not counted.
+
+See [#20199](https://github.com/vitessio/vitess/issues/20199).
+
 #### <a id="reparent-gtid-candidate-ordering"/>Reparent candidate ordering now respects partially ordered GTID histories</a>
 
 GTID containment is pairwise, so a candidate set can mix comparable and divergent histories: candidate A at `p:1-100,a:1-10` is strictly ahead of B at `p:1-100,a:1-5`, while C at `p:1-100,c:1-3` is incomparable with both. The reparent sorter that both `EmergencyReparentShard` and `PlannedReparentShard` use compared such candidates non-transitively, so ordering could depend on map iteration or RPC completion order, and `PlannedReparentShard` could select B even though A was known to be more advanced.
@@ -381,6 +391,41 @@ A new `--mysql-shell-restore-skip-version-check` flag (default `false`) has been
 Because mysql-shell performs a logical restore, its backups are not tied to the on-disk data dictionary format the way physical backups are, so restoring across otherwise-incompatible MySQL versions can be safe. This flag lets operators opt into that behavior.
 
 **Impact**: With this flag set, VTTablet may select and restore a `mysqlshell` backup whose MySQL version would otherwise be rejected as incompatible. Leave it unset to preserve the existing behavior.
+
+#### <a id="vttablet-applyschema-session-variables"/>ApplySchema session variables</a>
+
+`ApplySchema` now accepts repeatable `--session-variable name=value` DDL
+strategy options. The assignments use MySQL `SESSION` scope and are applied in
+the order supplied.
+
+For the `direct` strategy, the variables apply to the dedicated DBA connection
+that executes the requested schema statements. For Online DDL, they apply to
+the dedicated connections used for:
+
+- scheduler-executed direct DDL;
+- VReplication shadow-table creation, alteration, and `AUTO_INCREMENT`
+  adjustment;
+- declarative comparison-table DDL; and
+- online view artifact creation and its view swap.
+
+The variables do not apply to the pooled connections used during a
+VReplication cutover. In particular, they do not affect sentry-table DDL or the
+final `RENAME TABLE` that swaps the original and shadow tables.
+
+Each affected connection's previous values are restored afterward. Invalid,
+duplicate, or denied variable names and failed assignments stop the operation
+before schema DDL executes on that connection. `sql_log_bin`,
+`foreign_key_checks`, and `gtid_next` are denied.
+
+**Compatibility note:** `--session-variable` requires vtctld and vttablet at
+v25 or newer. On a mixed-version cluster, an upgraded caller can send the new
+`session_variables` RPC field (or Online DDL options) to an older tablet that
+does not understand them. The tablet may still run the DDL while skipping the
+requested session state, so the option can appear to succeed without effect.
+Upgrade vtctld, vtctldclient, vtgate and vttablet before executing a schema
+change with `--session-variable`.
+
+See [#20654](https://github.com/vitessio/vitess/pull/20654) for details.
 
 ### <a id="minor-changes-backup"/>Backup/Restore</a>
 

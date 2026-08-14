@@ -3131,9 +3131,9 @@ export const vtadmin = $root.vtadmin = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.id != null && $Object.hasOwnProperty.call(message, "id"))
+            if (message.id != null && $Object.hasOwnProperty.call(message, "id") && message.id !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.id);
-            if (message.name != null && $Object.hasOwnProperty.call(message, "name"))
+            if (message.name != null && $Object.hasOwnProperty.call(message, "name") && message.name !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.name);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -3794,7 +3794,7 @@ export const vtadmin = $root.vtadmin = (() => {
                             case 2:
                                 if (wireType !== 2)
                                     break;
-                                value = $root.topodata.CellsAlias.decode(reader, reader.uint32(), $undefined, _depth + 1);
+                                value = $root.topodata.CellsAlias.decode(reader, reader.uint32(), $undefined, _depth + 1, value);
                                 continue;
                             }
                             reader.skipType(wireType, _depth, tag2);
@@ -4063,7 +4063,7 @@ export const vtadmin = $root.vtadmin = (() => {
                 throw $Error("max depth exceeded");
             if (message.cluster != null && $Object.hasOwnProperty.call(message, "cluster"))
                 $root.vtadmin.Cluster.encode(message.cluster, writer.uint32(/* id 1, wireType 2 =*/10).fork(), _depth + 1).ldelim();
-            if (message.name != null && $Object.hasOwnProperty.call(message, "name"))
+            if (message.name != null && $Object.hasOwnProperty.call(message, "name") && message.name !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.name);
             if (message.cell_info != null && $Object.hasOwnProperty.call(message, "cell_info"))
                 $root.topodata.CellInfo.encode(message.cell_info, writer.uint32(/* id 3, wireType 2 =*/26).fork(), _depth + 1).ldelim();
@@ -4393,9 +4393,9 @@ export const vtadmin = $root.vtadmin = (() => {
                 throw $Error("max depth exceeded");
             if (message.cluster != null && $Object.hasOwnProperty.call(message, "cluster"))
                 $root.vtadmin.Cluster.encode(message.cluster, writer.uint32(/* id 1, wireType 2 =*/10).fork(), _depth + 1).ldelim();
-            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
+            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace") && message.keyspace !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.keyspace);
-            if (message.shard != null && $Object.hasOwnProperty.call(message, "shard"))
+            if (message.shard != null && $Object.hasOwnProperty.call(message, "shard") && message.shard !== "")
                 writer.uint32(/* id 3, wireType 2 =*/26).string(message.shard);
             if (message.position_info != null && $Object.hasOwnProperty.call(message, "position_info"))
                 $root.vtctldata.ShardReplicationPositionsResponse.encode(message.position_info, writer.uint32(/* id 4, wireType 2 =*/34).fork(), _depth + 1).ldelim();
@@ -5140,7 +5140,7 @@ export const vtadmin = $root.vtadmin = (() => {
                             case 2:
                                 if (wireType !== 2)
                                     break;
-                                value = $root.vtctldata.Shard.decode(reader, reader.uint32(), $undefined, _depth + 1);
+                                value = $root.vtctldata.Shard.decode(reader, reader.uint32(), $undefined, _depth + 1, value);
                                 continue;
                             }
                             reader.skipType(wireType, _depth, tag2);
@@ -5434,7 +5434,7 @@ export const vtadmin = $root.vtadmin = (() => {
                 throw $Error("max depth exceeded");
             if (message.cluster != null && $Object.hasOwnProperty.call(message, "cluster"))
                 $root.vtadmin.Cluster.encode(message.cluster, writer.uint32(/* id 1, wireType 2 =*/10).fork(), _depth + 1).ldelim();
-            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
+            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace") && message.keyspace !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.keyspace);
             if (message.table_definitions != null && message.table_definitions.length)
                 for (let i = 0; i < message.table_definitions.length; ++i)
@@ -5534,7 +5534,7 @@ export const vtadmin = $root.vtadmin = (() => {
                             case 2:
                                 if (wireType !== 2)
                                     break;
-                                value = $root.vtadmin.Schema.TableSize.decode(reader, reader.uint32(), $undefined, _depth + 1);
+                                value = $root.vtadmin.Schema.TableSize.decode(reader, reader.uint32(), $undefined, _depth + 1, value);
                                 continue;
                             }
                             reader.skipType(wireType, _depth, tag2);
@@ -5825,9 +5825,9 @@ export const vtadmin = $root.vtadmin = (() => {
                     _depth = 0;
                 if (_depth > $util.recursionLimit)
                     throw $Error("max depth exceeded");
-                if (message.row_count != null && $Object.hasOwnProperty.call(message, "row_count"))
+                if (message.row_count != null && $Object.hasOwnProperty.call(message, "row_count") && (typeof message.row_count === "object" ? message.row_count.low || message.row_count.high : message.row_count !== 0))
                     writer.uint32(/* id 1, wireType 0 =*/8).uint64(message.row_count);
-                if (message.data_length != null && $Object.hasOwnProperty.call(message, "data_length"))
+                if (message.data_length != null && $Object.hasOwnProperty.call(message, "data_length") && (typeof message.data_length === "object" ? message.data_length.low || message.data_length.high : message.data_length !== 0))
                     writer.uint32(/* id 2, wireType 0 =*/16).uint64(message.data_length);
                 if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                     for (let i = 0; i < message.$unknowns.length; ++i)
@@ -6157,9 +6157,9 @@ export const vtadmin = $root.vtadmin = (() => {
                     _depth = 0;
                 if (_depth > $util.recursionLimit)
                     throw $Error("max depth exceeded");
-                if (message.row_count != null && $Object.hasOwnProperty.call(message, "row_count"))
+                if (message.row_count != null && $Object.hasOwnProperty.call(message, "row_count") && (typeof message.row_count === "object" ? message.row_count.low || message.row_count.high : message.row_count !== 0))
                     writer.uint32(/* id 1, wireType 0 =*/8).uint64(message.row_count);
-                if (message.data_length != null && $Object.hasOwnProperty.call(message, "data_length"))
+                if (message.data_length != null && $Object.hasOwnProperty.call(message, "data_length") && (typeof message.data_length === "object" ? message.data_length.low || message.data_length.high : message.data_length !== 0))
                     writer.uint32(/* id 2, wireType 0 =*/16).uint64(message.data_length);
                 if (message.by_shard != null && $Object.hasOwnProperty.call(message, "by_shard"))
                     for (let keys = $Object.keys(message.by_shard), i = 0; i < keys.length; ++i) {
@@ -6251,7 +6251,7 @@ export const vtadmin = $root.vtadmin = (() => {
                                 case 2:
                                     if (wireType !== 2)
                                         break;
-                                    value = $root.vtadmin.Schema.ShardTableSize.decode(reader, reader.uint32(), $undefined, _depth + 1);
+                                    value = $root.vtadmin.Schema.ShardTableSize.decode(reader, reader.uint32(), $undefined, _depth + 1, value);
                                     continue;
                                 }
                                 reader.skipType(wireType, _depth, tag2);
@@ -7143,7 +7143,7 @@ export const vtadmin = $root.vtadmin = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.cell != null && $Object.hasOwnProperty.call(message, "cell"))
+            if (message.cell != null && $Object.hasOwnProperty.call(message, "cell") && message.cell !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.cell);
             if (message.cluster != null && $Object.hasOwnProperty.call(message, "cluster"))
                 $root.vtadmin.Cluster.encode(message.cluster, writer.uint32(/* id 2, wireType 2 =*/18).fork(), _depth + 1).ldelim();
@@ -7477,9 +7477,9 @@ export const vtadmin = $root.vtadmin = (() => {
                 $root.vtadmin.Cluster.encode(message.cluster, writer.uint32(/* id 1, wireType 2 =*/10).fork(), _depth + 1).ldelim();
             if (message.tablet != null && $Object.hasOwnProperty.call(message, "tablet"))
                 $root.topodata.Tablet.encode(message.tablet, writer.uint32(/* id 2, wireType 2 =*/18).fork(), _depth + 1).ldelim();
-            if (message.state != null && $Object.hasOwnProperty.call(message, "state"))
+            if (message.state != null && $Object.hasOwnProperty.call(message, "state") && message.state !== 0)
                 writer.uint32(/* id 3, wireType 0 =*/24).int32(message.state);
-            if (message.FQDN != null && $Object.hasOwnProperty.call(message, "FQDN"))
+            if (message.FQDN != null && $Object.hasOwnProperty.call(message, "FQDN") && message.FQDN !== "")
                 writer.uint32(/* id 4, wireType 2 =*/34).string(message.FQDN);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -7612,14 +7612,8 @@ export const vtadmin = $root.vtadmin = (() => {
                     return "tablet." + error;
             }
             if (message.state != null && $Object.hasOwnProperty.call(message, "state"))
-                switch (message.state) {
-                default:
+                if (typeof message.state !== "number" || (message.state | 0) !== message.state)
                     return "state: enum value expected";
-                case 0:
-                case 1:
-                case 2:
-                    break;
-                }
             if (message.FQDN != null && $Object.hasOwnProperty.call(message, "FQDN"))
                 if (!$util.isString(message.FQDN))
                     return "FQDN: string expected";
@@ -7656,12 +7650,6 @@ export const vtadmin = $root.vtadmin = (() => {
             }
             if (object.state !== 0 && (typeof object.state !== "string" || $root.vtadmin.Tablet.ServingState[object.state] !== 0))
                 switch (object.state) {
-                default:
-                    if (typeof object.state === "number") {
-                        message.state = object.state;
-                        break;
-                    }
-                    break;
                 case "UNKNOWN":
                 case 0:
                     message.state = 0;
@@ -7674,6 +7662,9 @@ export const vtadmin = $root.vtadmin = (() => {
                 case 2:
                     message.state = 2;
                     break;
+                default:
+                    if (typeof object.state === "number" && (object.state | 0) === object.state)
+                        message.state = object.state;
                 }
             if (object.FQDN != null)
                 if (typeof object.FQDN !== "string" || object.FQDN.length)
@@ -7856,7 +7847,7 @@ export const vtadmin = $root.vtadmin = (() => {
                 throw $Error("max depth exceeded");
             if (message.cluster != null && $Object.hasOwnProperty.call(message, "cluster"))
                 $root.vtadmin.Cluster.encode(message.cluster, writer.uint32(/* id 1, wireType 2 =*/10).fork(), _depth + 1).ldelim();
-            if (message.name != null && $Object.hasOwnProperty.call(message, "name"))
+            if (message.name != null && $Object.hasOwnProperty.call(message, "name") && message.name !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.name);
             if (message.v_schema != null && $Object.hasOwnProperty.call(message, "v_schema"))
                 $root.vschema.Keyspace.encode(message.v_schema, writer.uint32(/* id 3, wireType 2 =*/26).fork(), _depth + 1).ldelim();
@@ -8175,11 +8166,11 @@ export const vtadmin = $root.vtadmin = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.hostname != null && $Object.hasOwnProperty.call(message, "hostname"))
+            if (message.hostname != null && $Object.hasOwnProperty.call(message, "hostname") && message.hostname !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.hostname);
             if (message.cluster != null && $Object.hasOwnProperty.call(message, "cluster"))
                 $root.vtadmin.Cluster.encode(message.cluster, writer.uint32(/* id 2, wireType 2 =*/18).fork(), _depth + 1).ldelim();
-            if (message.FQDN != null && $Object.hasOwnProperty.call(message, "FQDN"))
+            if (message.FQDN != null && $Object.hasOwnProperty.call(message, "FQDN") && message.FQDN !== "")
                 writer.uint32(/* id 3, wireType 2 =*/26).string(message.FQDN);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -8523,18 +8514,18 @@ export const vtadmin = $root.vtadmin = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.hostname != null && $Object.hasOwnProperty.call(message, "hostname"))
+            if (message.hostname != null && $Object.hasOwnProperty.call(message, "hostname") && message.hostname !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.hostname);
-            if (message.pool != null && $Object.hasOwnProperty.call(message, "pool"))
+            if (message.pool != null && $Object.hasOwnProperty.call(message, "pool") && message.pool !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.pool);
-            if (message.cell != null && $Object.hasOwnProperty.call(message, "cell"))
+            if (message.cell != null && $Object.hasOwnProperty.call(message, "cell") && message.cell !== "")
                 writer.uint32(/* id 3, wireType 2 =*/26).string(message.cell);
             if (message.cluster != null && $Object.hasOwnProperty.call(message, "cluster"))
                 $root.vtadmin.Cluster.encode(message.cluster, writer.uint32(/* id 4, wireType 2 =*/34).fork(), _depth + 1).ldelim();
             if (message.keyspaces != null && message.keyspaces.length)
                 for (let i = 0; i < message.keyspaces.length; ++i)
                     writer.uint32(/* id 5, wireType 2 =*/42).string(message.keyspaces[i]);
-            if (message.FQDN != null && $Object.hasOwnProperty.call(message, "FQDN"))
+            if (message.FQDN != null && $Object.hasOwnProperty.call(message, "FQDN") && message.FQDN !== "")
                 writer.uint32(/* id 6, wireType 2 =*/50).string(message.FQDN);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -8917,7 +8908,7 @@ export const vtadmin = $root.vtadmin = (() => {
                 throw $Error("max depth exceeded");
             if (message.cluster != null && $Object.hasOwnProperty.call(message, "cluster"))
                 $root.vtadmin.Cluster.encode(message.cluster, writer.uint32(/* id 1, wireType 2 =*/10).fork(), _depth + 1).ldelim();
-            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
+            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace") && message.keyspace !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.keyspace);
             if (message.workflow != null && $Object.hasOwnProperty.call(message, "workflow"))
                 $root.vtctldata.Workflow.encode(message.workflow, writer.uint32(/* id 3, wireType 2 =*/26).fork(), _depth + 1).ldelim();
@@ -9227,7 +9218,7 @@ export const vtadmin = $root.vtadmin = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.cluster_id != null && $Object.hasOwnProperty.call(message, "cluster_id"))
+            if (message.cluster_id != null && $Object.hasOwnProperty.call(message, "cluster_id") && message.cluster_id !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.cluster_id);
             if (message.request != null && $Object.hasOwnProperty.call(message, "request"))
                 $root.vtctldata.WorkflowDeleteRequest.encode(message.request, writer.uint32(/* id 2, wireType 2 =*/18).fork(), _depth + 1).ldelim();
@@ -9518,7 +9509,7 @@ export const vtadmin = $root.vtadmin = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.cluster_id != null && $Object.hasOwnProperty.call(message, "cluster_id"))
+            if (message.cluster_id != null && $Object.hasOwnProperty.call(message, "cluster_id") && message.cluster_id !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.cluster_id);
             if (message.request != null && $Object.hasOwnProperty.call(message, "request"))
                 $root.vtctldata.WorkflowSwitchTrafficRequest.encode(message.request, writer.uint32(/* id 2, wireType 2 =*/18).fork(), _depth + 1).ldelim();
@@ -9827,11 +9818,11 @@ export const vtadmin = $root.vtadmin = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.cluster_id != null && $Object.hasOwnProperty.call(message, "cluster_id"))
+            if (message.cluster_id != null && $Object.hasOwnProperty.call(message, "cluster_id") && message.cluster_id !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.cluster_id);
-            if (message.sql != null && $Object.hasOwnProperty.call(message, "sql"))
+            if (message.sql != null && $Object.hasOwnProperty.call(message, "sql") && message.sql !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.sql);
-            if (message.caller_id != null && $Object.hasOwnProperty.call(message, "caller_id"))
+            if (message.caller_id != null && $Object.hasOwnProperty.call(message, "caller_id") && message.caller_id !== "")
                 writer.uint32(/* id 3, wireType 2 =*/26).string(message.caller_id);
             if (message.request != null && $Object.hasOwnProperty.call(message, "request"))
                 $root.vtctldata.ApplySchemaRequest.encode(message.request, writer.uint32(/* id 4, wireType 2 =*/34).fork(), _depth + 1).ldelim();
@@ -10158,7 +10149,7 @@ export const vtadmin = $root.vtadmin = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.cluster_id != null && $Object.hasOwnProperty.call(message, "cluster_id"))
+            if (message.cluster_id != null && $Object.hasOwnProperty.call(message, "cluster_id") && message.cluster_id !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.cluster_id);
             if (message.request != null && $Object.hasOwnProperty.call(message, "request"))
                 $root.vtctldata.CancelSchemaMigrationRequest.encode(message.request, writer.uint32(/* id 2, wireType 2 =*/18).fork(), _depth + 1).ldelim();
@@ -10449,7 +10440,7 @@ export const vtadmin = $root.vtadmin = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.cluster_id != null && $Object.hasOwnProperty.call(message, "cluster_id"))
+            if (message.cluster_id != null && $Object.hasOwnProperty.call(message, "cluster_id") && message.cluster_id !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.cluster_id);
             if (message.request != null && $Object.hasOwnProperty.call(message, "request"))
                 $root.vtctldata.CleanupSchemaMigrationRequest.encode(message.request, writer.uint32(/* id 2, wireType 2 =*/18).fork(), _depth + 1).ldelim();
@@ -10740,7 +10731,7 @@ export const vtadmin = $root.vtadmin = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.cluster_id != null && $Object.hasOwnProperty.call(message, "cluster_id"))
+            if (message.cluster_id != null && $Object.hasOwnProperty.call(message, "cluster_id") && message.cluster_id !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.cluster_id);
             if (message.request != null && $Object.hasOwnProperty.call(message, "request"))
                 $root.vtctldata.CompleteSchemaMigrationRequest.encode(message.request, writer.uint32(/* id 2, wireType 2 =*/18).fork(), _depth + 1).ldelim();
@@ -11031,9 +11022,9 @@ export const vtadmin = $root.vtadmin = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.cluster_id != null && $Object.hasOwnProperty.call(message, "cluster_id"))
+            if (message.cluster_id != null && $Object.hasOwnProperty.call(message, "cluster_id") && message.cluster_id !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.cluster_id);
-            if (message.dtid != null && $Object.hasOwnProperty.call(message, "dtid"))
+            if (message.dtid != null && $Object.hasOwnProperty.call(message, "dtid") && message.dtid !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.dtid);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -11321,7 +11312,7 @@ export const vtadmin = $root.vtadmin = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.cluster_id != null && $Object.hasOwnProperty.call(message, "cluster_id"))
+            if (message.cluster_id != null && $Object.hasOwnProperty.call(message, "cluster_id") && message.cluster_id !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.cluster_id);
             if (message.options != null && $Object.hasOwnProperty.call(message, "options"))
                 $root.vtctldata.CreateKeyspaceRequest.encode(message.options, writer.uint32(/* id 2, wireType 2 =*/18).fork(), _depth + 1).ldelim();
@@ -11873,7 +11864,7 @@ export const vtadmin = $root.vtadmin = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.cluster_id != null && $Object.hasOwnProperty.call(message, "cluster_id"))
+            if (message.cluster_id != null && $Object.hasOwnProperty.call(message, "cluster_id") && message.cluster_id !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.cluster_id);
             if (message.options != null && $Object.hasOwnProperty.call(message, "options"))
                 $root.vtctldata.CreateShardRequest.encode(message.options, writer.uint32(/* id 2, wireType 2 =*/18).fork(), _depth + 1).ldelim();
@@ -12164,7 +12155,7 @@ export const vtadmin = $root.vtadmin = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.cluster_id != null && $Object.hasOwnProperty.call(message, "cluster_id"))
+            if (message.cluster_id != null && $Object.hasOwnProperty.call(message, "cluster_id") && message.cluster_id !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.cluster_id);
             if (message.options != null && $Object.hasOwnProperty.call(message, "options"))
                 $root.vtctldata.DeleteKeyspaceRequest.encode(message.options, writer.uint32(/* id 2, wireType 2 =*/18).fork(), _depth + 1).ldelim();
@@ -12455,7 +12446,7 @@ export const vtadmin = $root.vtadmin = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.cluster_id != null && $Object.hasOwnProperty.call(message, "cluster_id"))
+            if (message.cluster_id != null && $Object.hasOwnProperty.call(message, "cluster_id") && message.cluster_id !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.cluster_id);
             if (message.options != null && $Object.hasOwnProperty.call(message, "options"))
                 $root.vtctldata.DeleteShardsRequest.encode(message.options, writer.uint32(/* id 2, wireType 2 =*/18).fork(), _depth + 1).ldelim();
@@ -12761,7 +12752,7 @@ export const vtadmin = $root.vtadmin = (() => {
             if (message.cluster_ids != null && message.cluster_ids.length)
                 for (let i = 0; i < message.cluster_ids.length; ++i)
                     writer.uint32(/* id 2, wireType 2 =*/18).string(message.cluster_ids[i]);
-            if (message.allow_primary != null && $Object.hasOwnProperty.call(message, "allow_primary"))
+            if (message.allow_primary != null && $Object.hasOwnProperty.call(message, "allow_primary") && message.allow_primary !== false)
                 writer.uint32(/* id 3, wireType 0 =*/24).bool(message.allow_primary);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -13079,7 +13070,7 @@ export const vtadmin = $root.vtadmin = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.status != null && $Object.hasOwnProperty.call(message, "status"))
+            if (message.status != null && $Object.hasOwnProperty.call(message, "status") && message.status !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.status);
             if (message.cluster != null && $Object.hasOwnProperty.call(message, "cluster"))
                 $root.vtadmin.Cluster.encode(message.cluster, writer.uint32(/* id 2, wireType 2 =*/18).fork(), _depth + 1).ldelim();
@@ -13370,7 +13361,7 @@ export const vtadmin = $root.vtadmin = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.cluster_id != null && $Object.hasOwnProperty.call(message, "cluster_id"))
+            if (message.cluster_id != null && $Object.hasOwnProperty.call(message, "cluster_id") && message.cluster_id !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.cluster_id);
             if (message.options != null && $Object.hasOwnProperty.call(message, "options"))
                 $root.vtctldata.EmergencyReparentShardRequest.encode(message.options, writer.uint32(/* id 2, wireType 2 =*/18).fork(), _depth + 1).ldelim();
@@ -13691,9 +13682,9 @@ export const vtadmin = $root.vtadmin = (() => {
                 throw $Error("max depth exceeded");
             if (message.cluster != null && $Object.hasOwnProperty.call(message, "cluster"))
                 $root.vtadmin.Cluster.encode(message.cluster, writer.uint32(/* id 1, wireType 2 =*/10).fork(), _depth + 1).ldelim();
-            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
+            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace") && message.keyspace !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.keyspace);
-            if (message.shard != null && $Object.hasOwnProperty.call(message, "shard"))
+            if (message.shard != null && $Object.hasOwnProperty.call(message, "shard") && message.shard !== "")
                 writer.uint32(/* id 3, wireType 2 =*/26).string(message.shard);
             if (message.promoted_primary != null && $Object.hasOwnProperty.call(message, "promoted_primary"))
                 $root.topodata.TabletAlias.encode(message.promoted_primary, writer.uint32(/* id 4, wireType 2 =*/34).fork(), _depth + 1).ldelim();
@@ -14068,7 +14059,7 @@ export const vtadmin = $root.vtadmin = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.table != null && $Object.hasOwnProperty.call(message, "table"))
+            if (message.table != null && $Object.hasOwnProperty.call(message, "table") && message.table !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.table);
             if (message.cluster_ids != null && message.cluster_ids.length)
                 for (let i = 0; i < message.cluster_ids.length; ++i)
@@ -15071,7 +15062,7 @@ export const vtadmin = $root.vtadmin = (() => {
             if (message.cells != null && message.cells.length)
                 for (let i = 0; i < message.cells.length; ++i)
                     writer.uint32(/* id 2, wireType 2 =*/18).string(message.cells[i]);
-            if (message.names_only != null && $Object.hasOwnProperty.call(message, "names_only"))
+            if (message.names_only != null && $Object.hasOwnProperty.call(message, "names_only") && message.names_only !== false)
                 writer.uint32(/* id 3, wireType 0 =*/24).bool(message.names_only);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -16720,7 +16711,7 @@ export const vtadmin = $root.vtadmin = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.cluster_id != null && $Object.hasOwnProperty.call(message, "cluster_id"))
+            if (message.cluster_id != null && $Object.hasOwnProperty.call(message, "cluster_id") && message.cluster_id !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.cluster_id);
             if (message.alias != null && $Object.hasOwnProperty.call(message, "alias"))
                 $root.topodata.TabletAlias.encode(message.alias, writer.uint32(/* id 2, wireType 2 =*/18).fork(), _depth + 1).ldelim();
@@ -17560,9 +17551,9 @@ export const vtadmin = $root.vtadmin = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.cluster_id != null && $Object.hasOwnProperty.call(message, "cluster_id"))
+            if (message.cluster_id != null && $Object.hasOwnProperty.call(message, "cluster_id") && message.cluster_id !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.cluster_id);
-            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
+            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace") && message.keyspace !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.keyspace);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -18417,11 +18408,11 @@ export const vtadmin = $root.vtadmin = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.cluster_id != null && $Object.hasOwnProperty.call(message, "cluster_id"))
+            if (message.cluster_id != null && $Object.hasOwnProperty.call(message, "cluster_id") && message.cluster_id !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.cluster_id);
-            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
+            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace") && message.keyspace !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.keyspace);
-            if (message.table != null && $Object.hasOwnProperty.call(message, "table"))
+            if (message.table != null && $Object.hasOwnProperty.call(message, "table") && message.table !== "")
                 writer.uint32(/* id 3, wireType 2 =*/26).string(message.table);
             if (message.table_size_options != null && $Object.hasOwnProperty.call(message, "table_size_options"))
                 $root.vtadmin.GetSchemaTableSizeOptions.encode(message.table_size_options, writer.uint32(/* id 4, wireType 2 =*/34).fork(), _depth + 1).ldelim();
@@ -19602,7 +19593,7 @@ export const vtadmin = $root.vtadmin = (() => {
                     _depth = 0;
                 if (_depth > $util.recursionLimit)
                     throw $Error("max depth exceeded");
-                if (message.cluster_id != null && $Object.hasOwnProperty.call(message, "cluster_id"))
+                if (message.cluster_id != null && $Object.hasOwnProperty.call(message, "cluster_id") && message.cluster_id !== "")
                     writer.uint32(/* id 1, wireType 2 =*/10).string(message.cluster_id);
                 if (message.request != null && $Object.hasOwnProperty.call(message, "request"))
                     $root.vtctldata.GetSchemaMigrationsRequest.encode(message.request, writer.uint32(/* id 2, wireType 2 =*/18).fork(), _depth + 1).ldelim();
@@ -20815,9 +20806,9 @@ export const vtadmin = $root.vtadmin = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.cluster_id != null && $Object.hasOwnProperty.call(message, "cluster_id"))
+            if (message.cluster_id != null && $Object.hasOwnProperty.call(message, "cluster_id") && message.cluster_id !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.cluster_id);
-            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
+            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace") && message.keyspace !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.keyspace);
             if (message.cells != null && message.cells.length)
                 for (let i = 0; i < message.cells.length; ++i)
@@ -21515,7 +21506,7 @@ export const vtadmin = $root.vtadmin = (() => {
                             case 2:
                                 if (wireType !== 2)
                                     break;
-                                value = $root.vtctldata.GetSrvKeyspacesResponse.decode(reader, reader.uint32(), $undefined, _depth + 1);
+                                value = $root.vtctldata.GetSrvKeyspacesResponse.decode(reader, reader.uint32(), $undefined, _depth + 1, value);
                                 continue;
                             }
                             reader.skipType(wireType, _depth, tag2);
@@ -21759,9 +21750,9 @@ export const vtadmin = $root.vtadmin = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.cluster_id != null && $Object.hasOwnProperty.call(message, "cluster_id"))
+            if (message.cluster_id != null && $Object.hasOwnProperty.call(message, "cluster_id") && message.cluster_id !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.cluster_id);
-            if (message.cell != null && $Object.hasOwnProperty.call(message, "cell"))
+            if (message.cell != null && $Object.hasOwnProperty.call(message, "cell") && message.cell !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.cell);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -22640,9 +22631,9 @@ export const vtadmin = $root.vtadmin = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.aggregate_sizes != null && $Object.hasOwnProperty.call(message, "aggregate_sizes"))
+            if (message.aggregate_sizes != null && $Object.hasOwnProperty.call(message, "aggregate_sizes") && message.aggregate_sizes !== false)
                 writer.uint32(/* id 1, wireType 0 =*/8).bool(message.aggregate_sizes);
-            if (message.include_non_serving_shards != null && $Object.hasOwnProperty.call(message, "include_non_serving_shards"))
+            if (message.include_non_serving_shards != null && $Object.hasOwnProperty.call(message, "include_non_serving_shards") && message.include_non_serving_shards !== false)
                 writer.uint32(/* id 2, wireType 0 =*/16).bool(message.include_non_serving_shards);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -23782,9 +23773,9 @@ export const vtadmin = $root.vtadmin = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.cluster_id != null && $Object.hasOwnProperty.call(message, "cluster_id"))
+            if (message.cluster_id != null && $Object.hasOwnProperty.call(message, "cluster_id") && message.cluster_id !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.cluster_id);
-            if (message.path != null && $Object.hasOwnProperty.call(message, "path"))
+            if (message.path != null && $Object.hasOwnProperty.call(message, "path") && message.path !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.path);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -24072,7 +24063,7 @@ export const vtadmin = $root.vtadmin = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.cluster_id != null && $Object.hasOwnProperty.call(message, "cluster_id"))
+            if (message.cluster_id != null && $Object.hasOwnProperty.call(message, "cluster_id") && message.cluster_id !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.cluster_id);
             if (message.request != null && $Object.hasOwnProperty.call(message, "request"))
                 $root.vtctldata.GetTransactionInfoRequest.encode(message.request, writer.uint32(/* id 2, wireType 2 =*/18).fork(), _depth + 1).ldelim();
@@ -24372,11 +24363,11 @@ export const vtadmin = $root.vtadmin = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.cluster_id != null && $Object.hasOwnProperty.call(message, "cluster_id"))
+            if (message.cluster_id != null && $Object.hasOwnProperty.call(message, "cluster_id") && message.cluster_id !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.cluster_id);
-            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
+            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace") && message.keyspace !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.keyspace);
-            if (message.abandon_age != null && $Object.hasOwnProperty.call(message, "abandon_age"))
+            if (message.abandon_age != null && $Object.hasOwnProperty.call(message, "abandon_age") && (typeof message.abandon_age === "object" ? message.abandon_age.low || message.abandon_age.high : message.abandon_age !== 0))
                 writer.uint32(/* id 3, wireType 0 =*/24).int64(message.abandon_age);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -24698,9 +24689,9 @@ export const vtadmin = $root.vtadmin = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.cluster_id != null && $Object.hasOwnProperty.call(message, "cluster_id"))
+            if (message.cluster_id != null && $Object.hasOwnProperty.call(message, "cluster_id") && message.cluster_id !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.cluster_id);
-            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
+            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace") && message.keyspace !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.keyspace);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -26104,13 +26095,13 @@ export const vtadmin = $root.vtadmin = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.cluster_id != null && $Object.hasOwnProperty.call(message, "cluster_id"))
+            if (message.cluster_id != null && $Object.hasOwnProperty.call(message, "cluster_id") && message.cluster_id !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.cluster_id);
-            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
+            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace") && message.keyspace !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.keyspace);
-            if (message.name != null && $Object.hasOwnProperty.call(message, "name"))
+            if (message.name != null && $Object.hasOwnProperty.call(message, "name") && message.name !== "")
                 writer.uint32(/* id 3, wireType 2 =*/26).string(message.name);
-            if (message.active_only != null && $Object.hasOwnProperty.call(message, "active_only"))
+            if (message.active_only != null && $Object.hasOwnProperty.call(message, "active_only") && message.active_only !== false)
                 writer.uint32(/* id 4, wireType 0 =*/32).bool(message.active_only);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -26443,11 +26434,11 @@ export const vtadmin = $root.vtadmin = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.cluster_id != null && $Object.hasOwnProperty.call(message, "cluster_id"))
+            if (message.cluster_id != null && $Object.hasOwnProperty.call(message, "cluster_id") && message.cluster_id !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.cluster_id);
-            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
+            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace") && message.keyspace !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.keyspace);
-            if (message.name != null && $Object.hasOwnProperty.call(message, "name"))
+            if (message.name != null && $Object.hasOwnProperty.call(message, "name") && message.name !== "")
                 writer.uint32(/* id 3, wireType 2 =*/26).string(message.name);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -26762,11 +26753,11 @@ export const vtadmin = $root.vtadmin = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.cluster_id != null && $Object.hasOwnProperty.call(message, "cluster_id"))
+            if (message.cluster_id != null && $Object.hasOwnProperty.call(message, "cluster_id") && message.cluster_id !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.cluster_id);
-            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
+            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace") && message.keyspace !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.keyspace);
-            if (message.workflow != null && $Object.hasOwnProperty.call(message, "workflow"))
+            if (message.workflow != null && $Object.hasOwnProperty.call(message, "workflow") && message.workflow !== "")
                 writer.uint32(/* id 3, wireType 2 =*/26).string(message.workflow);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -27081,11 +27072,11 @@ export const vtadmin = $root.vtadmin = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.cluster_id != null && $Object.hasOwnProperty.call(message, "cluster_id"))
+            if (message.cluster_id != null && $Object.hasOwnProperty.call(message, "cluster_id") && message.cluster_id !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.cluster_id);
-            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
+            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace") && message.keyspace !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.keyspace);
-            if (message.workflow != null && $Object.hasOwnProperty.call(message, "workflow"))
+            if (message.workflow != null && $Object.hasOwnProperty.call(message, "workflow") && message.workflow !== "")
                 writer.uint32(/* id 3, wireType 2 =*/26).string(message.workflow);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -27415,7 +27406,7 @@ export const vtadmin = $root.vtadmin = (() => {
             if (message.cluster_ids != null && message.cluster_ids.length)
                 for (let i = 0; i < message.cluster_ids.length; ++i)
                     writer.uint32(/* id 1, wireType 2 =*/10).string(message.cluster_ids[i]);
-            if (message.active_only != null && $Object.hasOwnProperty.call(message, "active_only"))
+            if (message.active_only != null && $Object.hasOwnProperty.call(message, "active_only") && message.active_only !== false)
                 writer.uint32(/* id 2, wireType 0 =*/16).bool(message.active_only);
             if (message.keyspaces != null && message.keyspaces.length)
                 for (let i = 0; i < message.keyspaces.length; ++i)
@@ -27840,7 +27831,7 @@ export const vtadmin = $root.vtadmin = (() => {
                             case 2:
                                 if (wireType !== 2)
                                     break;
-                                value = $root.vtadmin.ClusterWorkflows.decode(reader, reader.uint32(), $undefined, _depth + 1);
+                                value = $root.vtadmin.ClusterWorkflows.decode(reader, reader.uint32(), $undefined, _depth + 1, value);
                                 continue;
                             }
                             reader.skipType(wireType, _depth, tag2);
@@ -28084,7 +28075,7 @@ export const vtadmin = $root.vtadmin = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.cluster_id != null && $Object.hasOwnProperty.call(message, "cluster_id"))
+            if (message.cluster_id != null && $Object.hasOwnProperty.call(message, "cluster_id") && message.cluster_id !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.cluster_id);
             if (message.request != null && $Object.hasOwnProperty.call(message, "request"))
                 $root.vtctldata.LaunchSchemaMigrationRequest.encode(message.request, writer.uint32(/* id 2, wireType 2 =*/18).fork(), _depth + 1).ldelim();
@@ -28384,9 +28375,9 @@ export const vtadmin = $root.vtadmin = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.cluster_id != null && $Object.hasOwnProperty.call(message, "cluster_id"))
+            if (message.cluster_id != null && $Object.hasOwnProperty.call(message, "cluster_id") && message.cluster_id !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.cluster_id);
-            if (message.table_settings != null && $Object.hasOwnProperty.call(message, "table_settings"))
+            if (message.table_settings != null && $Object.hasOwnProperty.call(message, "table_settings") && message.table_settings !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.table_settings);
             if (message.request != null && $Object.hasOwnProperty.call(message, "request"))
                 $root.vtctldata.MaterializeCreateRequest.encode(message.request, writer.uint32(/* id 3, wireType 2 =*/26).fork(), _depth + 1).ldelim();
@@ -28695,7 +28686,7 @@ export const vtadmin = $root.vtadmin = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.cluster_id != null && $Object.hasOwnProperty.call(message, "cluster_id"))
+            if (message.cluster_id != null && $Object.hasOwnProperty.call(message, "cluster_id") && message.cluster_id !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.cluster_id);
             if (message.request != null && $Object.hasOwnProperty.call(message, "request"))
                 $root.vtctldata.MoveTablesCompleteRequest.encode(message.request, writer.uint32(/* id 2, wireType 2 =*/18).fork(), _depth + 1).ldelim();
@@ -28986,7 +28977,7 @@ export const vtadmin = $root.vtadmin = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.cluster_id != null && $Object.hasOwnProperty.call(message, "cluster_id"))
+            if (message.cluster_id != null && $Object.hasOwnProperty.call(message, "cluster_id") && message.cluster_id !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.cluster_id);
             if (message.request != null && $Object.hasOwnProperty.call(message, "request"))
                 $root.vtctldata.MoveTablesCreateRequest.encode(message.request, writer.uint32(/* id 2, wireType 2 =*/18).fork(), _depth + 1).ldelim();
@@ -29580,7 +29571,7 @@ export const vtadmin = $root.vtadmin = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.status != null && $Object.hasOwnProperty.call(message, "status"))
+            if (message.status != null && $Object.hasOwnProperty.call(message, "status") && message.status !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.status);
             if (message.cluster != null && $Object.hasOwnProperty.call(message, "cluster"))
                 $root.vtadmin.Cluster.encode(message.cluster, writer.uint32(/* id 2, wireType 2 =*/18).fork(), _depth + 1).ldelim();
@@ -29871,7 +29862,7 @@ export const vtadmin = $root.vtadmin = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.cluster_id != null && $Object.hasOwnProperty.call(message, "cluster_id"))
+            if (message.cluster_id != null && $Object.hasOwnProperty.call(message, "cluster_id") && message.cluster_id !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.cluster_id);
             if (message.options != null && $Object.hasOwnProperty.call(message, "options"))
                 $root.vtctldata.PlannedReparentShardRequest.encode(message.options, writer.uint32(/* id 2, wireType 2 =*/18).fork(), _depth + 1).ldelim();
@@ -30192,9 +30183,9 @@ export const vtadmin = $root.vtadmin = (() => {
                 throw $Error("max depth exceeded");
             if (message.cluster != null && $Object.hasOwnProperty.call(message, "cluster"))
                 $root.vtadmin.Cluster.encode(message.cluster, writer.uint32(/* id 1, wireType 2 =*/10).fork(), _depth + 1).ldelim();
-            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
+            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace") && message.keyspace !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.keyspace);
-            if (message.shard != null && $Object.hasOwnProperty.call(message, "shard"))
+            if (message.shard != null && $Object.hasOwnProperty.call(message, "shard") && message.shard !== "")
                 writer.uint32(/* id 3, wireType 2 =*/26).string(message.shard);
             if (message.promoted_primary != null && $Object.hasOwnProperty.call(message, "promoted_primary"))
                 $root.topodata.TabletAlias.encode(message.promoted_primary, writer.uint32(/* id 4, wireType 2 =*/34).fork(), _depth + 1).ldelim();
@@ -30578,14 +30569,14 @@ export const vtadmin = $root.vtadmin = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.cluster_id != null && $Object.hasOwnProperty.call(message, "cluster_id"))
+            if (message.cluster_id != null && $Object.hasOwnProperty.call(message, "cluster_id") && message.cluster_id !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.cluster_id);
-            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
+            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace") && message.keyspace !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.keyspace);
             if (message.cells != null && message.cells.length)
                 for (let i = 0; i < message.cells.length; ++i)
                     writer.uint32(/* id 3, wireType 2 =*/26).string(message.cells[i]);
-            if (message.allow_partial != null && $Object.hasOwnProperty.call(message, "allow_partial"))
+            if (message.allow_partial != null && $Object.hasOwnProperty.call(message, "allow_partial") && message.allow_partial !== false)
                 writer.uint32(/* id 4, wireType 0 =*/32).bool(message.allow_partial);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -30911,7 +30902,7 @@ export const vtadmin = $root.vtadmin = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.status != null && $Object.hasOwnProperty.call(message, "status"))
+            if (message.status != null && $Object.hasOwnProperty.call(message, "status") && message.status !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.status);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -31483,7 +31474,7 @@ export const vtadmin = $root.vtadmin = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.status != null && $Object.hasOwnProperty.call(message, "status"))
+            if (message.status != null && $Object.hasOwnProperty.call(message, "status") && message.status !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.status);
             if (message.cluster != null && $Object.hasOwnProperty.call(message, "cluster"))
                 $root.vtadmin.Cluster.encode(message.cluster, writer.uint32(/* id 2, wireType 2 =*/18).fork(), _depth + 1).ldelim();
@@ -31835,11 +31826,11 @@ export const vtadmin = $root.vtadmin = (() => {
             if (message.cluster_ids != null && message.cluster_ids.length)
                 for (let i = 0; i < message.cluster_ids.length; ++i)
                     writer.uint32(/* id 4, wireType 2 =*/34).string(message.cluster_ids[i]);
-            if (message.concurrency != null && $Object.hasOwnProperty.call(message, "concurrency"))
+            if (message.concurrency != null && $Object.hasOwnProperty.call(message, "concurrency") && message.concurrency !== 0)
                 writer.uint32(/* id 5, wireType 0 =*/40).int32(message.concurrency);
-            if (message.wait_position != null && $Object.hasOwnProperty.call(message, "wait_position"))
+            if (message.wait_position != null && $Object.hasOwnProperty.call(message, "wait_position") && message.wait_position !== "")
                 writer.uint32(/* id 6, wireType 2 =*/50).string(message.wait_position);
-            if (message.include_primary != null && $Object.hasOwnProperty.call(message, "include_primary"))
+            if (message.include_primary != null && $Object.hasOwnProperty.call(message, "include_primary") && message.include_primary !== false)
                 writer.uint32(/* id 7, wireType 0 =*/56).bool(message.include_primary);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -33249,7 +33240,7 @@ export const vtadmin = $root.vtadmin = (() => {
                     throw $Error("max depth exceeded");
                 if (message.tablet != null && $Object.hasOwnProperty.call(message, "tablet"))
                     $root.vtadmin.Tablet.encode(message.tablet, writer.uint32(/* id 1, wireType 2 =*/10).fork(), _depth + 1).ldelim();
-                if (message.result != null && $Object.hasOwnProperty.call(message, "result"))
+                if (message.result != null && $Object.hasOwnProperty.call(message, "result") && message.result !== "")
                     writer.uint32(/* id 2, wireType 2 =*/18).string(message.result);
                 if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                     for (let i = 0; i < message.$unknowns.length; ++i)
@@ -33577,17 +33568,17 @@ export const vtadmin = $root.vtadmin = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.cluster_id != null && $Object.hasOwnProperty.call(message, "cluster_id"))
+            if (message.cluster_id != null && $Object.hasOwnProperty.call(message, "cluster_id") && message.cluster_id !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.cluster_id);
-            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
+            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace") && message.keyspace !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.keyspace);
-            if (message.shard != null && $Object.hasOwnProperty.call(message, "shard"))
+            if (message.shard != null && $Object.hasOwnProperty.call(message, "shard") && message.shard !== "")
                 writer.uint32(/* id 3, wireType 2 =*/26).string(message.shard);
-            if (message.wait_position != null && $Object.hasOwnProperty.call(message, "wait_position"))
+            if (message.wait_position != null && $Object.hasOwnProperty.call(message, "wait_position") && message.wait_position !== "")
                 writer.uint32(/* id 4, wireType 2 =*/34).string(message.wait_position);
-            if (message.include_primary != null && $Object.hasOwnProperty.call(message, "include_primary"))
+            if (message.include_primary != null && $Object.hasOwnProperty.call(message, "include_primary") && message.include_primary !== false)
                 writer.uint32(/* id 5, wireType 0 =*/40).bool(message.include_primary);
-            if (message.concurrency != null && $Object.hasOwnProperty.call(message, "concurrency"))
+            if (message.concurrency != null && $Object.hasOwnProperty.call(message, "concurrency") && message.concurrency !== 0)
                 writer.uint32(/* id 6, wireType 0 =*/48).int32(message.concurrency);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -34545,9 +34536,9 @@ export const vtadmin = $root.vtadmin = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
+            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace") && message.keyspace !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.keyspace);
-            if (message.shard != null && $Object.hasOwnProperty.call(message, "shard"))
+            if (message.shard != null && $Object.hasOwnProperty.call(message, "shard") && message.shard !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.shard);
             if (message.primary != null && $Object.hasOwnProperty.call(message, "primary"))
                 $root.topodata.TabletAlias.encode(message.primary, writer.uint32(/* id 3, wireType 2 =*/26).fork(), _depth + 1).ldelim();
@@ -34904,15 +34895,15 @@ export const vtadmin = $root.vtadmin = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.cluster_id != null && $Object.hasOwnProperty.call(message, "cluster_id"))
+            if (message.cluster_id != null && $Object.hasOwnProperty.call(message, "cluster_id") && message.cluster_id !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.cluster_id);
-            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
+            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace") && message.keyspace !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.keyspace);
-            if (message.cell != null && $Object.hasOwnProperty.call(message, "cell"))
+            if (message.cell != null && $Object.hasOwnProperty.call(message, "cell") && message.cell !== "")
                 writer.uint32(/* id 3, wireType 2 =*/26).string(message.cell);
-            if (message.force != null && $Object.hasOwnProperty.call(message, "force"))
+            if (message.force != null && $Object.hasOwnProperty.call(message, "force") && message.force !== false)
                 writer.uint32(/* id 4, wireType 0 =*/32).bool(message.force);
-            if (message.recursive != null && $Object.hasOwnProperty.call(message, "recursive"))
+            if (message.recursive != null && $Object.hasOwnProperty.call(message, "recursive") && message.recursive !== false)
                 writer.uint32(/* id 5, wireType 0 =*/40).bool(message.recursive);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -35245,7 +35236,7 @@ export const vtadmin = $root.vtadmin = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.status != null && $Object.hasOwnProperty.call(message, "status"))
+            if (message.status != null && $Object.hasOwnProperty.call(message, "status") && message.status !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.status);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -35514,7 +35505,7 @@ export const vtadmin = $root.vtadmin = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.cluster_id != null && $Object.hasOwnProperty.call(message, "cluster_id"))
+            if (message.cluster_id != null && $Object.hasOwnProperty.call(message, "cluster_id") && message.cluster_id !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.cluster_id);
             if (message.request != null && $Object.hasOwnProperty.call(message, "request"))
                 $root.vtctldata.RetrySchemaMigrationRequest.encode(message.request, writer.uint32(/* id 2, wireType 2 =*/18).fork(), _depth + 1).ldelim();
@@ -36108,7 +36099,7 @@ export const vtadmin = $root.vtadmin = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.status != null && $Object.hasOwnProperty.call(message, "status"))
+            if (message.status != null && $Object.hasOwnProperty.call(message, "status") && message.status !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.status);
             if (message.cluster != null && $Object.hasOwnProperty.call(message, "cluster"))
                 $root.vtadmin.Cluster.encode(message.cluster, writer.uint32(/* id 2, wireType 2 =*/18).fork(), _depth + 1).ldelim();
@@ -36399,7 +36390,7 @@ export const vtadmin = $root.vtadmin = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.cluster_id != null && $Object.hasOwnProperty.call(message, "cluster_id"))
+            if (message.cluster_id != null && $Object.hasOwnProperty.call(message, "cluster_id") && message.cluster_id !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.cluster_id);
             if (message.request != null && $Object.hasOwnProperty.call(message, "request"))
                 $root.vtctldata.ReshardCreateRequest.encode(message.request, writer.uint32(/* id 2, wireType 2 =*/18).fork(), _depth + 1).ldelim();
@@ -38037,7 +38028,7 @@ export const vtadmin = $root.vtadmin = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.status != null && $Object.hasOwnProperty.call(message, "status"))
+            if (message.status != null && $Object.hasOwnProperty.call(message, "status") && message.status !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.status);
             if (message.cluster != null && $Object.hasOwnProperty.call(message, "cluster"))
                 $root.vtadmin.Cluster.encode(message.cluster, writer.uint32(/* id 2, wireType 2 =*/18).fork(), _depth + 1).ldelim();
@@ -38631,7 +38622,7 @@ export const vtadmin = $root.vtadmin = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.status != null && $Object.hasOwnProperty.call(message, "status"))
+            if (message.status != null && $Object.hasOwnProperty.call(message, "status") && message.status !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.status);
             if (message.cluster != null && $Object.hasOwnProperty.call(message, "cluster"))
                 $root.vtadmin.Cluster.encode(message.cluster, writer.uint32(/* id 2, wireType 2 =*/18).fork(), _depth + 1).ldelim();
@@ -39254,9 +39245,9 @@ export const vtadmin = $root.vtadmin = (() => {
                 throw $Error("max depth exceeded");
             if (message.cluster != null && $Object.hasOwnProperty.call(message, "cluster"))
                 $root.vtadmin.Cluster.encode(message.cluster, writer.uint32(/* id 1, wireType 2 =*/10).fork(), _depth + 1).ldelim();
-            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
+            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace") && message.keyspace !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.keyspace);
-            if (message.shard != null && $Object.hasOwnProperty.call(message, "shard"))
+            if (message.shard != null && $Object.hasOwnProperty.call(message, "shard") && message.shard !== "")
                 writer.uint32(/* id 3, wireType 2 =*/26).string(message.shard);
             if (message.new_primary != null && $Object.hasOwnProperty.call(message, "new_primary"))
                 $root.topodata.TabletAlias.encode(message.new_primary, writer.uint32(/* id 4, wireType 2 =*/34).fork(), _depth + 1).ldelim();
@@ -39908,9 +39899,9 @@ export const vtadmin = $root.vtadmin = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.cluster_id != null && $Object.hasOwnProperty.call(message, "cluster_id"))
+            if (message.cluster_id != null && $Object.hasOwnProperty.call(message, "cluster_id") && message.cluster_id !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.cluster_id);
-            if (message.ping_tablets != null && $Object.hasOwnProperty.call(message, "ping_tablets"))
+            if (message.ping_tablets != null && $Object.hasOwnProperty.call(message, "ping_tablets") && message.ping_tablets !== false)
                 writer.uint32(/* id 2, wireType 0 =*/16).bool(message.ping_tablets);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -40207,11 +40198,11 @@ export const vtadmin = $root.vtadmin = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.cluster_id != null && $Object.hasOwnProperty.call(message, "cluster_id"))
+            if (message.cluster_id != null && $Object.hasOwnProperty.call(message, "cluster_id") && message.cluster_id !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.cluster_id);
-            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
+            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace") && message.keyspace !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.keyspace);
-            if (message.ping_tablets != null && $Object.hasOwnProperty.call(message, "ping_tablets"))
+            if (message.ping_tablets != null && $Object.hasOwnProperty.call(message, "ping_tablets") && message.ping_tablets !== false)
                 writer.uint32(/* id 3, wireType 0 =*/24).bool(message.ping_tablets);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -40517,9 +40508,9 @@ export const vtadmin = $root.vtadmin = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.cluster_id != null && $Object.hasOwnProperty.call(message, "cluster_id"))
+            if (message.cluster_id != null && $Object.hasOwnProperty.call(message, "cluster_id") && message.cluster_id !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.cluster_id);
-            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
+            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace") && message.keyspace !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.keyspace);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -40825,13 +40816,13 @@ export const vtadmin = $root.vtadmin = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.cluster_id != null && $Object.hasOwnProperty.call(message, "cluster_id"))
+            if (message.cluster_id != null && $Object.hasOwnProperty.call(message, "cluster_id") && message.cluster_id !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.cluster_id);
-            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
+            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace") && message.keyspace !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.keyspace);
-            if (message.shard != null && $Object.hasOwnProperty.call(message, "shard"))
+            if (message.shard != null && $Object.hasOwnProperty.call(message, "shard") && message.shard !== "")
                 writer.uint32(/* id 3, wireType 2 =*/26).string(message.shard);
-            if (message.ping_tablets != null && $Object.hasOwnProperty.call(message, "ping_tablets"))
+            if (message.ping_tablets != null && $Object.hasOwnProperty.call(message, "ping_tablets") && message.ping_tablets !== false)
                 writer.uint32(/* id 4, wireType 0 =*/32).bool(message.ping_tablets);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -41155,9 +41146,9 @@ export const vtadmin = $root.vtadmin = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.cluster_id != null && $Object.hasOwnProperty.call(message, "cluster_id"))
+            if (message.cluster_id != null && $Object.hasOwnProperty.call(message, "cluster_id") && message.cluster_id !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.cluster_id);
-            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
+            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace") && message.keyspace !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.keyspace);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -41454,11 +41445,11 @@ export const vtadmin = $root.vtadmin = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.cluster_id != null && $Object.hasOwnProperty.call(message, "cluster_id"))
+            if (message.cluster_id != null && $Object.hasOwnProperty.call(message, "cluster_id") && message.cluster_id !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.cluster_id);
-            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
+            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace") && message.keyspace !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.keyspace);
-            if (message.shard != null && $Object.hasOwnProperty.call(message, "shard"))
+            if (message.shard != null && $Object.hasOwnProperty.call(message, "shard") && message.shard !== "")
                 writer.uint32(/* id 3, wireType 2 =*/26).string(message.shard);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -41764,7 +41755,7 @@ export const vtadmin = $root.vtadmin = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.cluster_id != null && $Object.hasOwnProperty.call(message, "cluster_id"))
+            if (message.cluster_id != null && $Object.hasOwnProperty.call(message, "cluster_id") && message.cluster_id !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.cluster_id);
             if (message.request != null && $Object.hasOwnProperty.call(message, "request"))
                 $root.vtctldata.VDiffCreateRequest.encode(message.request, writer.uint32(/* id 2, wireType 2 =*/18).fork(), _depth + 1).ldelim();
@@ -42055,7 +42046,7 @@ export const vtadmin = $root.vtadmin = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.cluster_id != null && $Object.hasOwnProperty.call(message, "cluster_id"))
+            if (message.cluster_id != null && $Object.hasOwnProperty.call(message, "cluster_id") && message.cluster_id !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.cluster_id);
             if (message.request != null && $Object.hasOwnProperty.call(message, "request"))
                 $root.vtctldata.VDiffShowRequest.encode(message.request, writer.uint32(/* id 2, wireType 2 =*/18).fork(), _depth + 1).ldelim();
@@ -42346,9 +42337,9 @@ export const vtadmin = $root.vtadmin = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.percentage != null && $Object.hasOwnProperty.call(message, "percentage"))
+            if (message.percentage != null && $Object.hasOwnProperty.call(message, "percentage") && !$Object.is(message.percentage, 0))
                 writer.uint32(/* id 1, wireType 1 =*/9).double(message.percentage);
-            if (message.eta != null && $Object.hasOwnProperty.call(message, "eta"))
+            if (message.eta != null && $Object.hasOwnProperty.call(message, "eta") && message.eta !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.eta);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -42400,7 +42391,7 @@ export const vtadmin = $root.vtadmin = (() => {
                 case 1: {
                         if (wireType !== 1)
                             break;
-                        if ((value = reader.double()) !== 0)
+                        if (!$Object.is(value = reader.double(), 0))
                             message.percentage = value;
                         else
                             delete message.percentage;
@@ -42486,7 +42477,7 @@ export const vtadmin = $root.vtadmin = (() => {
                 throw $Error("max depth exceeded");
             let message = new $root.vtadmin.VDiffProgress();
             if (object.percentage != null)
-                if ($Number(object.percentage) !== 0)
+                if (!$Object.is($Number(object.percentage), 0))
                     message.percentage = $Number(object.percentage);
             if (object.eta != null)
                 if (typeof object.eta !== "string" || object.eta.length)
@@ -42672,15 +42663,15 @@ export const vtadmin = $root.vtadmin = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.state != null && $Object.hasOwnProperty.call(message, "state"))
+            if (message.state != null && $Object.hasOwnProperty.call(message, "state") && message.state !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.state);
-            if (message.rows_compared != null && $Object.hasOwnProperty.call(message, "rows_compared"))
+            if (message.rows_compared != null && $Object.hasOwnProperty.call(message, "rows_compared") && (typeof message.rows_compared === "object" ? message.rows_compared.low || message.rows_compared.high : message.rows_compared !== 0))
                 writer.uint32(/* id 2, wireType 0 =*/16).int64(message.rows_compared);
-            if (message.has_mismatch != null && $Object.hasOwnProperty.call(message, "has_mismatch"))
+            if (message.has_mismatch != null && $Object.hasOwnProperty.call(message, "has_mismatch") && message.has_mismatch !== false)
                 writer.uint32(/* id 3, wireType 0 =*/24).bool(message.has_mismatch);
-            if (message.started_at != null && $Object.hasOwnProperty.call(message, "started_at"))
+            if (message.started_at != null && $Object.hasOwnProperty.call(message, "started_at") && message.started_at !== "")
                 writer.uint32(/* id 4, wireType 2 =*/34).string(message.started_at);
-            if (message.completed_at != null && $Object.hasOwnProperty.call(message, "completed_at"))
+            if (message.completed_at != null && $Object.hasOwnProperty.call(message, "completed_at") && message.completed_at !== "")
                 writer.uint32(/* id 5, wireType 2 =*/42).string(message.completed_at);
             if (message.progress != null && $Object.hasOwnProperty.call(message, "progress"))
                 $root.vtadmin.VDiffProgress.encode(message.progress, writer.uint32(/* id 6, wireType 2 =*/50).fork(), _depth + 1).ldelim();
@@ -43123,7 +43114,7 @@ export const vtadmin = $root.vtadmin = (() => {
                             case 2:
                                 if (wireType !== 2)
                                     break;
-                                value = $root.vtadmin.VDiffShardReport.decode(reader, reader.uint32(), $undefined, _depth + 1);
+                                value = $root.vtadmin.VDiffShardReport.decode(reader, reader.uint32(), $undefined, _depth + 1, value);
                                 continue;
                             }
                             reader.skipType(wireType, _depth, tag2);
@@ -43376,11 +43367,11 @@ export const vtadmin = $root.vtadmin = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.cluster != null && $Object.hasOwnProperty.call(message, "cluster"))
+            if (message.cluster != null && $Object.hasOwnProperty.call(message, "cluster") && message.cluster !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.cluster);
-            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
+            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace") && message.keyspace !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.keyspace);
-            if (message.sql != null && $Object.hasOwnProperty.call(message, "sql"))
+            if (message.sql != null && $Object.hasOwnProperty.call(message, "sql") && message.sql !== "")
                 writer.uint32(/* id 3, wireType 2 =*/26).string(message.sql);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -43677,7 +43668,7 @@ export const vtadmin = $root.vtadmin = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.response != null && $Object.hasOwnProperty.call(message, "response"))
+            if (message.response != null && $Object.hasOwnProperty.call(message, "response") && message.response !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.response);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -43955,11 +43946,11 @@ export const vtadmin = $root.vtadmin = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.cluster_id != null && $Object.hasOwnProperty.call(message, "cluster_id"))
+            if (message.cluster_id != null && $Object.hasOwnProperty.call(message, "cluster_id") && message.cluster_id !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.cluster_id);
-            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
+            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace") && message.keyspace !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.keyspace);
-            if (message.sql != null && $Object.hasOwnProperty.call(message, "sql"))
+            if (message.sql != null && $Object.hasOwnProperty.call(message, "sql") && message.sql !== "")
                 writer.uint32(/* id 3, wireType 2 =*/26).string(message.sql);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -44256,7 +44247,7 @@ export const vtadmin = $root.vtadmin = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.response != null && $Object.hasOwnProperty.call(message, "response"))
+            if (message.response != null && $Object.hasOwnProperty.call(message, "response") && message.response !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.response);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -44584,13 +44575,13 @@ export const logutil = $root.logutil = (() => {
                 throw $Error("max depth exceeded");
             if (message.time != null && $Object.hasOwnProperty.call(message, "time"))
                 $root.vttime.Time.encode(message.time, writer.uint32(/* id 1, wireType 2 =*/10).fork(), _depth + 1).ldelim();
-            if (message.level != null && $Object.hasOwnProperty.call(message, "level"))
+            if (message.level != null && $Object.hasOwnProperty.call(message, "level") && message.level !== 0)
                 writer.uint32(/* id 2, wireType 0 =*/16).int32(message.level);
-            if (message.file != null && $Object.hasOwnProperty.call(message, "file"))
+            if (message.file != null && $Object.hasOwnProperty.call(message, "file") && message.file !== "")
                 writer.uint32(/* id 3, wireType 2 =*/26).string(message.file);
-            if (message.line != null && $Object.hasOwnProperty.call(message, "line"))
+            if (message.line != null && $Object.hasOwnProperty.call(message, "line") && (typeof message.line === "object" ? message.line.low || message.line.high : message.line !== 0))
                 writer.uint32(/* id 4, wireType 0 =*/32).int64(message.line);
-            if (message.value != null && $Object.hasOwnProperty.call(message, "value"))
+            if (message.value != null && $Object.hasOwnProperty.call(message, "value") && message.value !== "")
                 writer.uint32(/* id 5, wireType 2 =*/42).string(message.value);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -44730,15 +44721,8 @@ export const logutil = $root.logutil = (() => {
                     return "time." + error;
             }
             if (message.level != null && $Object.hasOwnProperty.call(message, "level"))
-                switch (message.level) {
-                default:
+                if (typeof message.level !== "number" || (message.level | 0) !== message.level)
                     return "level: enum value expected";
-                case 0:
-                case 1:
-                case 2:
-                case 3:
-                    break;
-                }
             if (message.file != null && $Object.hasOwnProperty.call(message, "file"))
                 if (!$util.isString(message.file))
                     return "file: string expected";
@@ -44776,12 +44760,6 @@ export const logutil = $root.logutil = (() => {
             }
             if (object.level !== 0 && (typeof object.level !== "string" || $root.logutil.Level[object.level] !== 0))
                 switch (object.level) {
-                default:
-                    if (typeof object.level === "number") {
-                        message.level = object.level;
-                        break;
-                    }
-                    break;
                 case "INFO":
                 case 0:
                     message.level = 0;
@@ -44798,6 +44776,9 @@ export const logutil = $root.logutil = (() => {
                 case 3:
                     message.level = 3;
                     break;
+                default:
+                    if (typeof object.level === "number" && (object.level | 0) === object.level)
+                        message.level = object.level;
                 }
             if (object.file != null)
                 if (typeof object.file !== "string" || object.file.length)
@@ -44990,9 +44971,9 @@ export const vttime = $root.vttime = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.seconds != null && $Object.hasOwnProperty.call(message, "seconds"))
+            if (message.seconds != null && $Object.hasOwnProperty.call(message, "seconds") && (typeof message.seconds === "object" ? message.seconds.low || message.seconds.high : message.seconds !== 0))
                 writer.uint32(/* id 1, wireType 0 =*/8).int64(message.seconds);
-            if (message.nanoseconds != null && $Object.hasOwnProperty.call(message, "nanoseconds"))
+            if (message.nanoseconds != null && $Object.hasOwnProperty.call(message, "nanoseconds") && message.nanoseconds !== 0)
                 writer.uint32(/* id 2, wireType 0 =*/16).int32(message.nanoseconds);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -45296,9 +45277,9 @@ export const vttime = $root.vttime = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.seconds != null && $Object.hasOwnProperty.call(message, "seconds"))
+            if (message.seconds != null && $Object.hasOwnProperty.call(message, "seconds") && (typeof message.seconds === "object" ? message.seconds.low || message.seconds.high : message.seconds !== 0))
                 writer.uint32(/* id 1, wireType 0 =*/8).int64(message.seconds);
-            if (message.nanos != null && $Object.hasOwnProperty.call(message, "nanos"))
+            if (message.nanos != null && $Object.hasOwnProperty.call(message, "nanos") && message.nanos !== 0)
                 writer.uint32(/* id 2, wireType 0 =*/16).int32(message.nanos);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -46105,7 +46086,7 @@ export const mysqlctl = $root.mysqlctl = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.wait_for_mysqld != null && $Object.hasOwnProperty.call(message, "wait_for_mysqld"))
+            if (message.wait_for_mysqld != null && $Object.hasOwnProperty.call(message, "wait_for_mysqld") && message.wait_for_mysqld !== false)
                 writer.uint32(/* id 1, wireType 0 =*/8).bool(message.wait_for_mysqld);
             if (message.mysql_shutdown_timeout != null && $Object.hasOwnProperty.call(message, "mysql_shutdown_timeout"))
                 $root.vttime.Duration.encode(message.mysql_shutdown_timeout, writer.uint32(/* id 2, wireType 2 =*/18).fork(), _depth + 1).ldelim();
@@ -47062,9 +47043,9 @@ export const mysqlctl = $root.mysqlctl = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.binlog_file_name != null && $Object.hasOwnProperty.call(message, "binlog_file_name"))
+            if (message.binlog_file_name != null && $Object.hasOwnProperty.call(message, "binlog_file_name") && message.binlog_file_name !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.binlog_file_name);
-            if (message.binlog_restore_position != null && $Object.hasOwnProperty.call(message, "binlog_restore_position"))
+            if (message.binlog_restore_position != null && $Object.hasOwnProperty.call(message, "binlog_restore_position") && message.binlog_restore_position !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.binlog_restore_position);
             if (message.binlog_restore_datetime != null && $Object.hasOwnProperty.call(message, "binlog_restore_datetime"))
                 $root.vttime.Time.encode(message.binlog_restore_datetime, writer.uint32(/* id 3, wireType 2 =*/26).fork(), _depth + 1).ldelim();
@@ -47884,11 +47865,11 @@ export const mysqlctl = $root.mysqlctl = (() => {
                 throw $Error("max depth exceeded");
             if (message.first_timestamp != null && $Object.hasOwnProperty.call(message, "first_timestamp"))
                 $root.vttime.Time.encode(message.first_timestamp, writer.uint32(/* id 1, wireType 2 =*/10).fork(), _depth + 1).ldelim();
-            if (message.first_timestamp_binlog != null && $Object.hasOwnProperty.call(message, "first_timestamp_binlog"))
+            if (message.first_timestamp_binlog != null && $Object.hasOwnProperty.call(message, "first_timestamp_binlog") && message.first_timestamp_binlog !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.first_timestamp_binlog);
             if (message.last_timestamp != null && $Object.hasOwnProperty.call(message, "last_timestamp"))
                 $root.vttime.Time.encode(message.last_timestamp, writer.uint32(/* id 3, wireType 2 =*/26).fork(), _depth + 1).ldelim();
-            if (message.last_timestamp_binlog != null && $Object.hasOwnProperty.call(message, "last_timestamp_binlog"))
+            if (message.last_timestamp_binlog != null && $Object.hasOwnProperty.call(message, "last_timestamp_binlog") && message.last_timestamp_binlog !== "")
                 writer.uint32(/* id 4, wireType 2 =*/34).string(message.last_timestamp_binlog);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -49300,7 +49281,7 @@ export const mysqlctl = $root.mysqlctl = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.version != null && $Object.hasOwnProperty.call(message, "version"))
+            if (message.version != null && $Object.hasOwnProperty.call(message, "version") && message.version !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.version);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -49852,7 +49833,7 @@ export const mysqlctl = $root.mysqlctl = (() => {
                             case 2:
                                 if (wireType !== 2)
                                     break;
-                                value = $root.mysqlctl.HostMetricsResponse.Metric.decode(reader, reader.uint32(), $undefined, _depth + 1);
+                                value = $root.mysqlctl.HostMetricsResponse.Metric.decode(reader, reader.uint32(), $undefined, _depth + 1, value);
                                 continue;
                             }
                             reader.skipType(wireType, _depth, tag2);
@@ -50102,9 +50083,9 @@ export const mysqlctl = $root.mysqlctl = (() => {
                     _depth = 0;
                 if (_depth > $util.recursionLimit)
                     throw $Error("max depth exceeded");
-                if (message.name != null && $Object.hasOwnProperty.call(message, "name"))
+                if (message.name != null && $Object.hasOwnProperty.call(message, "name") && message.name !== "")
                     writer.uint32(/* id 1, wireType 2 =*/10).string(message.name);
-                if (message.value != null && $Object.hasOwnProperty.call(message, "value"))
+                if (message.value != null && $Object.hasOwnProperty.call(message, "value") && !$Object.is(message.value, 0))
                     writer.uint32(/* id 2, wireType 1 =*/17).double(message.value);
                 if (message.error != null && $Object.hasOwnProperty.call(message, "error"))
                     $root.vtrpc.RPCError.encode(message.error, writer.uint32(/* id 3, wireType 2 =*/26).fork(), _depth + 1).ldelim();
@@ -50167,7 +50148,7 @@ export const mysqlctl = $root.mysqlctl = (() => {
                     case 2: {
                             if (wireType !== 1)
                                 break;
-                            if ((value = reader.double()) !== 0)
+                            if (!$Object.is(value = reader.double(), 0))
                                 message.value = value;
                             else
                                 delete message.value;
@@ -50258,7 +50239,7 @@ export const mysqlctl = $root.mysqlctl = (() => {
                     if (typeof object.name !== "string" || object.name.length)
                         message.name = $String(object.name);
                 if (object.value != null)
-                    if ($Number(object.value) !== 0)
+                    if (!$Object.is($Number(object.value), 0))
                         message.value = $Number(object.value);
                 if (object.error != null) {
                     if (!$util.isObject(object.error))
@@ -50874,21 +50855,21 @@ export const mysqlctl = $root.mysqlctl = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.name != null && $Object.hasOwnProperty.call(message, "name"))
+            if (message.name != null && $Object.hasOwnProperty.call(message, "name") && message.name !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.name);
-            if (message.directory != null && $Object.hasOwnProperty.call(message, "directory"))
+            if (message.directory != null && $Object.hasOwnProperty.call(message, "directory") && message.directory !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.directory);
-            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
+            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace") && message.keyspace !== "")
                 writer.uint32(/* id 3, wireType 2 =*/26).string(message.keyspace);
-            if (message.shard != null && $Object.hasOwnProperty.call(message, "shard"))
+            if (message.shard != null && $Object.hasOwnProperty.call(message, "shard") && message.shard !== "")
                 writer.uint32(/* id 4, wireType 2 =*/34).string(message.shard);
             if (message.tablet_alias != null && $Object.hasOwnProperty.call(message, "tablet_alias"))
                 $root.topodata.TabletAlias.encode(message.tablet_alias, writer.uint32(/* id 5, wireType 2 =*/42).fork(), _depth + 1).ldelim();
             if (message.time != null && $Object.hasOwnProperty.call(message, "time"))
                 $root.vttime.Time.encode(message.time, writer.uint32(/* id 6, wireType 2 =*/50).fork(), _depth + 1).ldelim();
-            if (message.engine != null && $Object.hasOwnProperty.call(message, "engine"))
+            if (message.engine != null && $Object.hasOwnProperty.call(message, "engine") && message.engine !== "")
                 writer.uint32(/* id 7, wireType 2 =*/58).string(message.engine);
-            if (message.status != null && $Object.hasOwnProperty.call(message, "status"))
+            if (message.status != null && $Object.hasOwnProperty.call(message, "status") && message.status !== 0)
                 writer.uint32(/* id 8, wireType 0 =*/64).int32(message.status);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -51072,16 +51053,8 @@ export const mysqlctl = $root.mysqlctl = (() => {
                 if (!$util.isString(message.engine))
                     return "engine: string expected";
             if (message.status != null && $Object.hasOwnProperty.call(message, "status"))
-                switch (message.status) {
-                default:
+                if (typeof message.status !== "number" || (message.status | 0) !== message.status)
                     return "status: enum value expected";
-                case 0:
-                case 1:
-                case 2:
-                case 3:
-                case 4:
-                    break;
-                }
             return null;
         };
 
@@ -51130,12 +51103,6 @@ export const mysqlctl = $root.mysqlctl = (() => {
                     message.engine = $String(object.engine);
             if (object.status !== 0 && (typeof object.status !== "string" || $root.mysqlctl.BackupInfo.Status[object.status] !== 0))
                 switch (object.status) {
-                default:
-                    if (typeof object.status === "number") {
-                        message.status = object.status;
-                        break;
-                    }
-                    break;
                 case "UNKNOWN":
                 case 0:
                     message.status = 0;
@@ -51156,6 +51123,9 @@ export const mysqlctl = $root.mysqlctl = (() => {
                 case 4:
                     message.status = 4;
                     break;
+                default:
+                    if (typeof object.status === "number" && (object.status | 0) === object.status)
+                        message.status = object.status;
                 }
             return message;
         };
@@ -51352,9 +51322,9 @@ export const topodata = $root.topodata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.start != null && $Object.hasOwnProperty.call(message, "start"))
+            if (message.start != null && $Object.hasOwnProperty.call(message, "start") && message.start.length)
                 writer.uint32(/* id 1, wireType 2 =*/10).bytes(message.start);
-            if (message.end != null && $Object.hasOwnProperty.call(message, "end"))
+            if (message.end != null && $Object.hasOwnProperty.call(message, "end") && message.end.length)
                 writer.uint32(/* id 2, wireType 2 =*/18).bytes(message.end);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -51674,9 +51644,9 @@ export const topodata = $root.topodata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.cell != null && $Object.hasOwnProperty.call(message, "cell"))
+            if (message.cell != null && $Object.hasOwnProperty.call(message, "cell") && message.cell !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.cell);
-            if (message.uid != null && $Object.hasOwnProperty.call(message, "uid"))
+            if (message.uid != null && $Object.hasOwnProperty.call(message, "uid") && message.uid !== 0)
                 writer.uint32(/* id 2, wireType 0 =*/16).uint32(message.uid);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -52117,31 +52087,31 @@ export const topodata = $root.topodata = (() => {
                 throw $Error("max depth exceeded");
             if (message.alias != null && $Object.hasOwnProperty.call(message, "alias"))
                 $root.topodata.TabletAlias.encode(message.alias, writer.uint32(/* id 1, wireType 2 =*/10).fork(), _depth + 1).ldelim();
-            if (message.hostname != null && $Object.hasOwnProperty.call(message, "hostname"))
+            if (message.hostname != null && $Object.hasOwnProperty.call(message, "hostname") && message.hostname !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.hostname);
             if (message.port_map != null && $Object.hasOwnProperty.call(message, "port_map"))
                 for (let keys = $Object.keys(message.port_map), i = 0; i < keys.length; ++i)
                     writer.uint32(/* id 4, wireType 2 =*/34).fork().uint32(/* id 1, wireType 2 =*/10).string(keys[i]).uint32(/* id 2, wireType 0 =*/16).int32(message.port_map[keys[i]]).ldelim();
-            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
+            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace") && message.keyspace !== "")
                 writer.uint32(/* id 5, wireType 2 =*/42).string(message.keyspace);
-            if (message.shard != null && $Object.hasOwnProperty.call(message, "shard"))
+            if (message.shard != null && $Object.hasOwnProperty.call(message, "shard") && message.shard !== "")
                 writer.uint32(/* id 6, wireType 2 =*/50).string(message.shard);
             if (message.key_range != null && $Object.hasOwnProperty.call(message, "key_range"))
                 $root.topodata.KeyRange.encode(message.key_range, writer.uint32(/* id 7, wireType 2 =*/58).fork(), _depth + 1).ldelim();
-            if (message.type != null && $Object.hasOwnProperty.call(message, "type"))
+            if (message.type != null && $Object.hasOwnProperty.call(message, "type") && message.type !== 0)
                 writer.uint32(/* id 8, wireType 0 =*/64).int32(message.type);
-            if (message.db_name_override != null && $Object.hasOwnProperty.call(message, "db_name_override"))
+            if (message.db_name_override != null && $Object.hasOwnProperty.call(message, "db_name_override") && message.db_name_override !== "")
                 writer.uint32(/* id 9, wireType 2 =*/74).string(message.db_name_override);
             if (message.tags != null && $Object.hasOwnProperty.call(message, "tags"))
                 for (let keys = $Object.keys(message.tags), i = 0; i < keys.length; ++i)
                     writer.uint32(/* id 10, wireType 2 =*/82).fork().uint32(/* id 1, wireType 2 =*/10).string(keys[i]).uint32(/* id 2, wireType 2 =*/18).string(message.tags[keys[i]]).ldelim();
-            if (message.mysql_hostname != null && $Object.hasOwnProperty.call(message, "mysql_hostname"))
+            if (message.mysql_hostname != null && $Object.hasOwnProperty.call(message, "mysql_hostname") && message.mysql_hostname !== "")
                 writer.uint32(/* id 12, wireType 2 =*/98).string(message.mysql_hostname);
-            if (message.mysql_port != null && $Object.hasOwnProperty.call(message, "mysql_port"))
+            if (message.mysql_port != null && $Object.hasOwnProperty.call(message, "mysql_port") && message.mysql_port !== 0)
                 writer.uint32(/* id 13, wireType 0 =*/104).int32(message.mysql_port);
             if (message.primary_term_start_time != null && $Object.hasOwnProperty.call(message, "primary_term_start_time"))
                 $root.vttime.Time.encode(message.primary_term_start_time, writer.uint32(/* id 14, wireType 2 =*/114).fork(), _depth + 1).ldelim();
-            if (message.default_conn_collation != null && $Object.hasOwnProperty.call(message, "default_conn_collation"))
+            if (message.default_conn_collation != null && $Object.hasOwnProperty.call(message, "default_conn_collation") && message.default_conn_collation !== 0)
                 writer.uint32(/* id 16, wireType 0 =*/128).uint32(message.default_conn_collation);
             if (message.tablet_start_time != null && $Object.hasOwnProperty.call(message, "tablet_start_time"))
                 $root.vttime.Time.encode(message.tablet_start_time, writer.uint32(/* id 17, wireType 2 =*/138).fork(), _depth + 1).ldelim();
@@ -52427,22 +52397,8 @@ export const topodata = $root.topodata = (() => {
                     return "key_range." + error;
             }
             if (message.type != null && $Object.hasOwnProperty.call(message, "type"))
-                switch (message.type) {
-                default:
+                if (typeof message.type !== "number" || (message.type | 0) !== message.type)
                     return "type: enum value expected";
-                case 0:
-                case 1:
-                case 1:
-                case 2:
-                case 3:
-                case 3:
-                case 4:
-                case 5:
-                case 6:
-                case 7:
-                case 8:
-                    break;
-                }
             if (message.db_name_override != null && $Object.hasOwnProperty.call(message, "db_name_override"))
                 if (!$util.isString(message.db_name_override))
                     return "db_name_override: string expected";
@@ -52530,12 +52486,6 @@ export const topodata = $root.topodata = (() => {
             }
             if (object.type !== 0 && (typeof object.type !== "string" || $root.topodata.TabletType[object.type] !== 0))
                 switch (object.type) {
-                default:
-                    if (typeof object.type === "number") {
-                        message.type = object.type;
-                        break;
-                    }
-                    break;
                 case "UNKNOWN":
                 case 0:
                     message.type = 0;
@@ -52580,6 +52530,9 @@ export const topodata = $root.topodata = (() => {
                 case 8:
                     message.type = 8;
                     break;
+                default:
+                    if (typeof object.type === "number" && (object.type | 0) === object.type)
+                        message.type = object.type;
                 }
             if (object.db_name_override != null)
                 if (typeof object.db_name_override !== "string" || object.db_name_override.length)
@@ -52874,7 +52827,7 @@ export const topodata = $root.topodata = (() => {
             if (message.tablet_controls != null && message.tablet_controls.length)
                 for (let i = 0; i < message.tablet_controls.length; ++i)
                     $root.topodata.Shard.TabletControl.encode(message.tablet_controls[i], writer.uint32(/* id 6, wireType 2 =*/50).fork(), _depth + 1).ldelim();
-            if (message.is_primary_serving != null && $Object.hasOwnProperty.call(message, "is_primary_serving"))
+            if (message.is_primary_serving != null && $Object.hasOwnProperty.call(message, "is_primary_serving") && message.is_primary_serving !== false)
                 writer.uint32(/* id 7, wireType 0 =*/56).bool(message.is_primary_serving);
             if (message.primary_term_start_time != null && $Object.hasOwnProperty.call(message, "primary_term_start_time"))
                 $root.vttime.Time.encode(message.primary_term_start_time, writer.uint32(/* id 8, wireType 2 =*/66).fork(), _depth + 1).ldelim();
@@ -53317,11 +53270,11 @@ export const topodata = $root.topodata = (() => {
                     _depth = 0;
                 if (_depth > $util.recursionLimit)
                     throw $Error("max depth exceeded");
-                if (message.uid != null && $Object.hasOwnProperty.call(message, "uid"))
+                if (message.uid != null && $Object.hasOwnProperty.call(message, "uid") && message.uid !== 0)
                     writer.uint32(/* id 1, wireType 0 =*/8).int32(message.uid);
-                if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
+                if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace") && message.keyspace !== "")
                     writer.uint32(/* id 2, wireType 2 =*/18).string(message.keyspace);
-                if (message.shard != null && $Object.hasOwnProperty.call(message, "shard"))
+                if (message.shard != null && $Object.hasOwnProperty.call(message, "shard") && message.shard !== "")
                     writer.uint32(/* id 3, wireType 2 =*/26).string(message.shard);
                 if (message.key_range != null && $Object.hasOwnProperty.call(message, "key_range"))
                     $root.topodata.KeyRange.encode(message.key_range, writer.uint32(/* id 4, wireType 2 =*/34).fork(), _depth + 1).ldelim();
@@ -53709,7 +53662,7 @@ export const topodata = $root.topodata = (() => {
                     _depth = 0;
                 if (_depth > $util.recursionLimit)
                     throw $Error("max depth exceeded");
-                if (message.tablet_type != null && $Object.hasOwnProperty.call(message, "tablet_type"))
+                if (message.tablet_type != null && $Object.hasOwnProperty.call(message, "tablet_type") && message.tablet_type !== 0)
                     writer.uint32(/* id 1, wireType 0 =*/8).int32(message.tablet_type);
                 if (message.cells != null && message.cells.length)
                     for (let i = 0; i < message.cells.length; ++i)
@@ -53717,9 +53670,9 @@ export const topodata = $root.topodata = (() => {
                 if (message.denied_tables != null && message.denied_tables.length)
                     for (let i = 0; i < message.denied_tables.length; ++i)
                         writer.uint32(/* id 4, wireType 2 =*/34).string(message.denied_tables[i]);
-                if (message.frozen != null && $Object.hasOwnProperty.call(message, "frozen"))
+                if (message.frozen != null && $Object.hasOwnProperty.call(message, "frozen") && message.frozen !== false)
                     writer.uint32(/* id 5, wireType 0 =*/40).bool(message.frozen);
-                if (message.allow_reads != null && $Object.hasOwnProperty.call(message, "allow_reads"))
+                if (message.allow_reads != null && $Object.hasOwnProperty.call(message, "allow_reads") && message.allow_reads !== false)
                     writer.uint32(/* id 6, wireType 0 =*/48).bool(message.allow_reads);
                 if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                     for (let i = 0; i < message.$unknowns.length; ++i)
@@ -53855,22 +53808,8 @@ export const topodata = $root.topodata = (() => {
                 if (_depth > $util.recursionLimit)
                     return "max depth exceeded";
                 if (message.tablet_type != null && $Object.hasOwnProperty.call(message, "tablet_type"))
-                    switch (message.tablet_type) {
-                    default:
+                    if (typeof message.tablet_type !== "number" || (message.tablet_type | 0) !== message.tablet_type)
                         return "tablet_type: enum value expected";
-                    case 0:
-                    case 1:
-                    case 1:
-                    case 2:
-                    case 3:
-                    case 3:
-                    case 4:
-                    case 5:
-                    case 6:
-                    case 7:
-                    case 8:
-                        break;
-                    }
                 if (message.cells != null && $Object.hasOwnProperty.call(message, "cells")) {
                     if (!$Array.isArray(message.cells))
                         return "cells: array expected";
@@ -53914,12 +53853,6 @@ export const topodata = $root.topodata = (() => {
                 let message = new $root.topodata.Shard.TabletControl();
                 if (object.tablet_type !== 0 && (typeof object.tablet_type !== "string" || $root.topodata.TabletType[object.tablet_type] !== 0))
                     switch (object.tablet_type) {
-                    default:
-                        if (typeof object.tablet_type === "number") {
-                            message.tablet_type = object.tablet_type;
-                            break;
-                        }
-                        break;
                     case "UNKNOWN":
                     case 0:
                         message.tablet_type = 0;
@@ -53964,6 +53897,9 @@ export const topodata = $root.topodata = (() => {
                     case 8:
                         message.tablet_type = 8;
                         break;
+                    default:
+                        if (typeof object.tablet_type === "number" && (object.tablet_type | 0) === object.tablet_type)
+                            message.tablet_type = object.tablet_type;
                     }
                 if (object.cells) {
                     if (!$Array.isArray(object.cells))
@@ -54204,17 +54140,17 @@ export const topodata = $root.topodata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.keyspace_type != null && $Object.hasOwnProperty.call(message, "keyspace_type"))
+            if (message.keyspace_type != null && $Object.hasOwnProperty.call(message, "keyspace_type") && message.keyspace_type !== 0)
                 writer.uint32(/* id 5, wireType 0 =*/40).int32(message.keyspace_type);
-            if (message.base_keyspace != null && $Object.hasOwnProperty.call(message, "base_keyspace"))
+            if (message.base_keyspace != null && $Object.hasOwnProperty.call(message, "base_keyspace") && message.base_keyspace !== "")
                 writer.uint32(/* id 6, wireType 2 =*/50).string(message.base_keyspace);
             if (message.snapshot_time != null && $Object.hasOwnProperty.call(message, "snapshot_time"))
                 $root.vttime.Time.encode(message.snapshot_time, writer.uint32(/* id 7, wireType 2 =*/58).fork(), _depth + 1).ldelim();
-            if (message.durability_policy != null && $Object.hasOwnProperty.call(message, "durability_policy"))
+            if (message.durability_policy != null && $Object.hasOwnProperty.call(message, "durability_policy") && message.durability_policy !== "")
                 writer.uint32(/* id 8, wireType 2 =*/66).string(message.durability_policy);
             if (message.throttler_config != null && $Object.hasOwnProperty.call(message, "throttler_config"))
                 $root.topodata.ThrottlerConfig.encode(message.throttler_config, writer.uint32(/* id 9, wireType 2 =*/74).fork(), _depth + 1).ldelim();
-            if (message.sidecar_db_name != null && $Object.hasOwnProperty.call(message, "sidecar_db_name"))
+            if (message.sidecar_db_name != null && $Object.hasOwnProperty.call(message, "sidecar_db_name") && message.sidecar_db_name !== "")
                 writer.uint32(/* id 10, wireType 2 =*/82).string(message.sidecar_db_name);
             if (message.vtorc_state != null && $Object.hasOwnProperty.call(message, "vtorc_state"))
                 $root.vtorcdata.Keyspace.encode(message.vtorc_state, writer.uint32(/* id 11, wireType 2 =*/90).fork(), _depth + 1).ldelim();
@@ -54371,13 +54307,8 @@ export const topodata = $root.topodata = (() => {
             if (_depth > $util.recursionLimit)
                 return "max depth exceeded";
             if (message.keyspace_type != null && $Object.hasOwnProperty.call(message, "keyspace_type"))
-                switch (message.keyspace_type) {
-                default:
+                if (typeof message.keyspace_type !== "number" || (message.keyspace_type | 0) !== message.keyspace_type)
                     return "keyspace_type: enum value expected";
-                case 0:
-                case 1:
-                    break;
-                }
             if (message.base_keyspace != null && $Object.hasOwnProperty.call(message, "base_keyspace"))
                 if (!$util.isString(message.base_keyspace))
                     return "base_keyspace: string expected";
@@ -54430,12 +54361,6 @@ export const topodata = $root.topodata = (() => {
             let message = new $root.topodata.Keyspace();
             if (object.keyspace_type !== 0 && (typeof object.keyspace_type !== "string" || $root.topodata.KeyspaceType[object.keyspace_type] !== 0))
                 switch (object.keyspace_type) {
-                default:
-                    if (typeof object.keyspace_type === "number") {
-                        message.keyspace_type = object.keyspace_type;
-                        break;
-                    }
-                    break;
                 case "NORMAL":
                 case 0:
                     message.keyspace_type = 0;
@@ -54444,6 +54369,9 @@ export const topodata = $root.topodata = (() => {
                 case 1:
                     message.keyspace_type = 1;
                     break;
+                default:
+                    if (typeof object.keyspace_type === "number" && (object.keyspace_type | 0) === object.keyspace_type)
+                        message.keyspace_type = object.keyspace_type;
                 }
             if (object.base_keyspace != null)
                 if (typeof object.base_keyspace !== "string" || object.base_keyspace.length)
@@ -55175,7 +55103,7 @@ export const topodata = $root.topodata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.type != null && $Object.hasOwnProperty.call(message, "type"))
+            if (message.type != null && $Object.hasOwnProperty.call(message, "type") && message.type !== 0)
                 writer.uint32(/* id 1, wireType 0 =*/8).int32(message.type);
             if (message.tablet_alias != null && $Object.hasOwnProperty.call(message, "tablet_alias"))
                 $root.topodata.TabletAlias.encode(message.tablet_alias, writer.uint32(/* id 2, wireType 2 =*/18).fork(), _depth + 1).ldelim();
@@ -55285,14 +55213,8 @@ export const topodata = $root.topodata = (() => {
             if (_depth > $util.recursionLimit)
                 return "max depth exceeded";
             if (message.type != null && $Object.hasOwnProperty.call(message, "type"))
-                switch (message.type) {
-                default:
+                if (typeof message.type !== "number" || (message.type | 0) !== message.type)
                     return "type: enum value expected";
-                case 0:
-                case 1:
-                case 2:
-                    break;
-                }
             if (message.tablet_alias != null && $Object.hasOwnProperty.call(message, "tablet_alias")) {
                 let error = $root.topodata.TabletAlias.verify(message.tablet_alias, _depth + 1);
                 if (error)
@@ -55321,12 +55243,6 @@ export const topodata = $root.topodata = (() => {
             let message = new $root.topodata.ShardReplicationError();
             if (object.type !== 0 && (typeof object.type !== "string" || $root.topodata.ShardReplicationError.Type[object.type] !== 0))
                 switch (object.type) {
-                default:
-                    if (typeof object.type === "number") {
-                        message.type = object.type;
-                        break;
-                    }
-                    break;
                 case "UNKNOWN":
                 case 0:
                     message.type = 0;
@@ -55339,6 +55255,9 @@ export const topodata = $root.topodata = (() => {
                 case 2:
                     message.type = 2;
                     break;
+                default:
+                    if (typeof object.type === "number" && (object.type | 0) === object.type)
+                        message.type = object.type;
                 }
             if (object.tablet_alias != null) {
                 if (!$util.isObject(object.tablet_alias))
@@ -55506,7 +55425,7 @@ export const topodata = $root.topodata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.name != null && $Object.hasOwnProperty.call(message, "name"))
+            if (message.name != null && $Object.hasOwnProperty.call(message, "name") && message.name !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.name);
             if (message.key_range != null && $Object.hasOwnProperty.call(message, "key_range"))
                 $root.topodata.KeyRange.encode(message.key_range, writer.uint32(/* id 2, wireType 2 =*/18).fork(), _depth + 1).ldelim();
@@ -55806,11 +55725,11 @@ export const topodata = $root.topodata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.name != null && $Object.hasOwnProperty.call(message, "name"))
+            if (message.name != null && $Object.hasOwnProperty.call(message, "name") && message.name !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.name);
             if (message.key_range != null && $Object.hasOwnProperty.call(message, "key_range"))
                 $root.topodata.KeyRange.encode(message.key_range, writer.uint32(/* id 2, wireType 2 =*/18).fork(), _depth + 1).ldelim();
-            if (message.query_service_disabled != null && $Object.hasOwnProperty.call(message, "query_service_disabled"))
+            if (message.query_service_disabled != null && $Object.hasOwnProperty.call(message, "query_service_disabled") && message.query_service_disabled !== false)
                 writer.uint32(/* id 3, wireType 0 =*/24).bool(message.query_service_disabled);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -56135,13 +56054,13 @@ export const topodata = $root.topodata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.name != null && $Object.hasOwnProperty.call(message, "name"))
+            if (message.name != null && $Object.hasOwnProperty.call(message, "name") && message.name !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.name);
-            if (message.ratio != null && $Object.hasOwnProperty.call(message, "ratio"))
+            if (message.ratio != null && $Object.hasOwnProperty.call(message, "ratio") && !$Object.is(message.ratio, 0))
                 writer.uint32(/* id 2, wireType 1 =*/17).double(message.ratio);
             if (message.expires_at != null && $Object.hasOwnProperty.call(message, "expires_at"))
                 $root.vttime.Time.encode(message.expires_at, writer.uint32(/* id 3, wireType 2 =*/26).fork(), _depth + 1).ldelim();
-            if (message.exempt != null && $Object.hasOwnProperty.call(message, "exempt"))
+            if (message.exempt != null && $Object.hasOwnProperty.call(message, "exempt") && message.exempt !== false)
                 writer.uint32(/* id 4, wireType 0 =*/32).bool(message.exempt);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -56202,7 +56121,7 @@ export const topodata = $root.topodata = (() => {
                 case 2: {
                         if (wireType !== 1)
                             break;
-                        if ((value = reader.double()) !== 0)
+                        if (!$Object.is(value = reader.double(), 0))
                             message.ratio = value;
                         else
                             delete message.ratio;
@@ -56305,7 +56224,7 @@ export const topodata = $root.topodata = (() => {
                 if (typeof object.name !== "string" || object.name.length)
                     message.name = $String(object.name);
             if (object.ratio != null)
-                if ($Number(object.ratio) !== 0)
+                if (!$Object.is($Number(object.ratio), 0))
                     message.ratio = $Number(object.ratio);
             if (object.expires_at != null) {
                 if (!$util.isObject(object.expires_at))
@@ -56514,13 +56433,13 @@ export const topodata = $root.topodata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.enabled != null && $Object.hasOwnProperty.call(message, "enabled"))
+            if (message.enabled != null && $Object.hasOwnProperty.call(message, "enabled") && message.enabled !== false)
                 writer.uint32(/* id 1, wireType 0 =*/8).bool(message.enabled);
-            if (message.threshold != null && $Object.hasOwnProperty.call(message, "threshold"))
+            if (message.threshold != null && $Object.hasOwnProperty.call(message, "threshold") && !$Object.is(message.threshold, 0))
                 writer.uint32(/* id 2, wireType 1 =*/17).double(message.threshold);
-            if (message.custom_query != null && $Object.hasOwnProperty.call(message, "custom_query"))
+            if (message.custom_query != null && $Object.hasOwnProperty.call(message, "custom_query") && message.custom_query !== "")
                 writer.uint32(/* id 3, wireType 2 =*/26).string(message.custom_query);
-            if (message.check_as_check_self != null && $Object.hasOwnProperty.call(message, "check_as_check_self"))
+            if (message.check_as_check_self != null && $Object.hasOwnProperty.call(message, "check_as_check_self") && message.check_as_check_self !== false)
                 writer.uint32(/* id 4, wireType 0 =*/32).bool(message.check_as_check_self);
             if (message.throttled_apps != null && $Object.hasOwnProperty.call(message, "throttled_apps"))
                 for (let keys = $Object.keys(message.throttled_apps), i = 0; i < keys.length; ++i) {
@@ -56594,7 +56513,7 @@ export const topodata = $root.topodata = (() => {
                 case 2: {
                         if (wireType !== 1)
                             break;
-                        if ((value = reader.double()) !== 0)
+                        if (!$Object.is(value = reader.double(), 0))
                             message.threshold = value;
                         else
                             delete message.threshold;
@@ -56638,7 +56557,7 @@ export const topodata = $root.topodata = (() => {
                             case 2:
                                 if (wireType !== 2)
                                     break;
-                                value = $root.topodata.ThrottledAppRule.decode(reader, reader.uint32(), $undefined, _depth + 1);
+                                value = $root.topodata.ThrottledAppRule.decode(reader, reader.uint32(), $undefined, _depth + 1, value);
                                 continue;
                             }
                             reader.skipType(wireType, _depth, tag2);
@@ -56668,7 +56587,7 @@ export const topodata = $root.topodata = (() => {
                             case 2:
                                 if (wireType !== 2)
                                     break;
-                                value = $root.topodata.ThrottlerConfig.MetricNames.decode(reader, reader.uint32(), $undefined, _depth + 1);
+                                value = $root.topodata.ThrottlerConfig.MetricNames.decode(reader, reader.uint32(), $undefined, _depth + 1, value);
                                 continue;
                             }
                             reader.skipType(wireType, _depth, tag2);
@@ -56816,7 +56735,7 @@ export const topodata = $root.topodata = (() => {
                 if (object.enabled)
                     message.enabled = $Boolean(object.enabled);
             if (object.threshold != null)
-                if ($Number(object.threshold) !== 0)
+                if (!$Object.is($Number(object.threshold), 0))
                     message.threshold = $Number(object.threshold);
             if (object.custom_query != null)
                 if (typeof object.custom_query !== "string" || object.custom_query.length)
@@ -57658,7 +57577,7 @@ export const topodata = $root.topodata = (() => {
                     _depth = 0;
                 if (_depth > $util.recursionLimit)
                     throw $Error("max depth exceeded");
-                if (message.served_type != null && $Object.hasOwnProperty.call(message, "served_type"))
+                if (message.served_type != null && $Object.hasOwnProperty.call(message, "served_type") && message.served_type !== 0)
                     writer.uint32(/* id 1, wireType 0 =*/8).int32(message.served_type);
                 if (message.shard_references != null && message.shard_references.length)
                     for (let i = 0; i < message.shard_references.length; ++i)
@@ -57782,22 +57701,8 @@ export const topodata = $root.topodata = (() => {
                 if (_depth > $util.recursionLimit)
                     return "max depth exceeded";
                 if (message.served_type != null && $Object.hasOwnProperty.call(message, "served_type"))
-                    switch (message.served_type) {
-                    default:
+                    if (typeof message.served_type !== "number" || (message.served_type | 0) !== message.served_type)
                         return "served_type: enum value expected";
-                    case 0:
-                    case 1:
-                    case 1:
-                    case 2:
-                    case 3:
-                    case 3:
-                    case 4:
-                    case 5:
-                    case 6:
-                    case 7:
-                    case 8:
-                        break;
-                    }
                 if (message.shard_references != null && $Object.hasOwnProperty.call(message, "shard_references")) {
                     if (!$Array.isArray(message.shard_references))
                         return "shard_references: array expected";
@@ -57839,12 +57744,6 @@ export const topodata = $root.topodata = (() => {
                 let message = new $root.topodata.SrvKeyspace.KeyspacePartition();
                 if (object.served_type !== 0 && (typeof object.served_type !== "string" || $root.topodata.TabletType[object.served_type] !== 0))
                     switch (object.served_type) {
-                    default:
-                        if (typeof object.served_type === "number") {
-                            message.served_type = object.served_type;
-                            break;
-                        }
-                        break;
                     case "UNKNOWN":
                     case 0:
                         message.served_type = 0;
@@ -57889,6 +57788,9 @@ export const topodata = $root.topodata = (() => {
                     case 8:
                         message.served_type = 8;
                         break;
+                    default:
+                        if (typeof object.served_type === "number" && (object.served_type | 0) === object.served_type)
+                            message.served_type = object.served_type;
                     }
                 if (object.shard_references) {
                     if (!$Array.isArray(object.shard_references))
@@ -58068,9 +57970,9 @@ export const topodata = $root.topodata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.server_address != null && $Object.hasOwnProperty.call(message, "server_address"))
+            if (message.server_address != null && $Object.hasOwnProperty.call(message, "server_address") && message.server_address !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.server_address);
-            if (message.root != null && $Object.hasOwnProperty.call(message, "root"))
+            if (message.root != null && $Object.hasOwnProperty.call(message, "root") && message.root !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.root);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -58639,11 +58541,11 @@ export const topodata = $root.topodata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.topo_type != null && $Object.hasOwnProperty.call(message, "topo_type"))
+            if (message.topo_type != null && $Object.hasOwnProperty.call(message, "topo_type") && message.topo_type !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.topo_type);
-            if (message.server != null && $Object.hasOwnProperty.call(message, "server"))
+            if (message.server != null && $Object.hasOwnProperty.call(message, "server") && message.server !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.server);
-            if (message.root != null && $Object.hasOwnProperty.call(message, "root"))
+            if (message.root != null && $Object.hasOwnProperty.call(message, "root") && message.root !== "")
                 writer.uint32(/* id 3, wireType 2 =*/26).string(message.root);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -59490,7 +59392,7 @@ export const vtorcdata = $root.vtorcdata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.disable_emergency_reparent != null && $Object.hasOwnProperty.call(message, "disable_emergency_reparent"))
+            if (message.disable_emergency_reparent != null && $Object.hasOwnProperty.call(message, "disable_emergency_reparent") && message.disable_emergency_reparent !== false)
                 writer.uint32(/* id 1, wireType 0 =*/8).bool(message.disable_emergency_reparent);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -59750,7 +59652,7 @@ export const vtorcdata = $root.vtorcdata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.disable_emergency_reparent != null && $Object.hasOwnProperty.call(message, "disable_emergency_reparent"))
+            if (message.disable_emergency_reparent != null && $Object.hasOwnProperty.call(message, "disable_emergency_reparent") && message.disable_emergency_reparent !== false)
                 writer.uint32(/* id 1, wireType 0 =*/8).bool(message.disable_emergency_reparent);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -60019,9 +59921,9 @@ export const vtorcdata = $root.vtorcdata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.at_unix_nanos != null && $Object.hasOwnProperty.call(message, "at_unix_nanos"))
+            if (message.at_unix_nanos != null && $Object.hasOwnProperty.call(message, "at_unix_nanos") && (typeof message.at_unix_nanos === "object" ? message.at_unix_nanos.low || message.at_unix_nanos.high : message.at_unix_nanos !== 0))
                 writer.uint32(/* id 1, wireType 0 =*/8).int64(message.at_unix_nanos);
-            if (message.success != null && $Object.hasOwnProperty.call(message, "success"))
+            if (message.success != null && $Object.hasOwnProperty.call(message, "success") && message.success !== false)
                 writer.uint32(/* id 2, wireType 0 =*/16).bool(message.success);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -60329,7 +60231,7 @@ export const vtorcdata = $root.vtorcdata = (() => {
             if (message.events != null && message.events.length)
                 for (let i = 0; i < message.events.length; ++i)
                     $root.vtorcdata.PrimaryHealthEvent.encode(message.events[i], writer.uint32(/* id 1, wireType 2 =*/10).fork(), _depth + 1).ldelim();
-            if (message.unhealthy != null && $Object.hasOwnProperty.call(message, "unhealthy"))
+            if (message.unhealthy != null && $Object.hasOwnProperty.call(message, "unhealthy") && message.unhealthy !== false)
                 writer.uint32(/* id 2, wireType 0 =*/16).bool(message.unhealthy);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -60676,13 +60578,13 @@ export const querythrottler = $root.querythrottler = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.enabled != null && $Object.hasOwnProperty.call(message, "enabled"))
+            if (message.enabled != null && $Object.hasOwnProperty.call(message, "enabled") && message.enabled !== false)
                 writer.uint32(/* id 1, wireType 0 =*/8).bool(message.enabled);
-            if (message.strategy != null && $Object.hasOwnProperty.call(message, "strategy"))
+            if (message.strategy != null && $Object.hasOwnProperty.call(message, "strategy") && message.strategy !== 0)
                 writer.uint32(/* id 2, wireType 0 =*/16).int32(message.strategy);
             if (message.tablet_strategy_config != null && $Object.hasOwnProperty.call(message, "tablet_strategy_config"))
                 $root.querythrottler.TabletStrategyConfig.encode(message.tablet_strategy_config, writer.uint32(/* id 3, wireType 2 =*/26).fork(), _depth + 1).ldelim();
-            if (message.dry_run != null && $Object.hasOwnProperty.call(message, "dry_run"))
+            if (message.dry_run != null && $Object.hasOwnProperty.call(message, "dry_run") && message.dry_run !== false)
                 writer.uint32(/* id 4, wireType 0 =*/32).bool(message.dry_run);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -60811,13 +60713,8 @@ export const querythrottler = $root.querythrottler = (() => {
                 if (typeof message.enabled !== "boolean")
                     return "enabled: boolean expected";
             if (message.strategy != null && $Object.hasOwnProperty.call(message, "strategy"))
-                switch (message.strategy) {
-                default:
+                if (typeof message.strategy !== "number" || (message.strategy | 0) !== message.strategy)
                     return "strategy: enum value expected";
-                case 0:
-                case 1:
-                    break;
-                }
             if (message.tablet_strategy_config != null && $Object.hasOwnProperty.call(message, "tablet_strategy_config")) {
                 let error = $root.querythrottler.TabletStrategyConfig.verify(message.tablet_strategy_config, _depth + 1);
                 if (error)
@@ -60852,12 +60749,6 @@ export const querythrottler = $root.querythrottler = (() => {
                     message.enabled = $Boolean(object.enabled);
             if (object.strategy !== 0 && (typeof object.strategy !== "string" || $root.querythrottler.ThrottlingStrategy[object.strategy] !== 0))
                 switch (object.strategy) {
-                default:
-                    if (typeof object.strategy === "number") {
-                        message.strategy = object.strategy;
-                        break;
-                    }
-                    break;
                 case "UNKNOWN":
                 case 0:
                     message.strategy = 0;
@@ -60866,6 +60757,9 @@ export const querythrottler = $root.querythrottler = (() => {
                 case 1:
                     message.strategy = 1;
                     break;
+                default:
+                    if (typeof object.strategy === "number" && (object.strategy | 0) === object.strategy)
+                        message.strategy = object.strategy;
                 }
             if (object.tablet_strategy_config != null) {
                 if (!$util.isObject(object.tablet_strategy_config))
@@ -61090,7 +60984,7 @@ export const querythrottler = $root.querythrottler = (() => {
                             case 2:
                                 if (wireType !== 2)
                                     break;
-                                value = $root.querythrottler.StatementRuleSet.decode(reader, reader.uint32(), $undefined, _depth + 1);
+                                value = $root.querythrottler.StatementRuleSet.decode(reader, reader.uint32(), $undefined, _depth + 1, value);
                                 continue;
                             }
                             reader.skipType(wireType, _depth, tag2);
@@ -61398,7 +61292,7 @@ export const querythrottler = $root.querythrottler = (() => {
                             case 2:
                                 if (wireType !== 2)
                                     break;
-                                value = $root.querythrottler.MetricRuleSet.decode(reader, reader.uint32(), $undefined, _depth + 1);
+                                value = $root.querythrottler.MetricRuleSet.decode(reader, reader.uint32(), $undefined, _depth + 1, value);
                                 continue;
                             }
                             reader.skipType(wireType, _depth, tag2);
@@ -61706,7 +61600,7 @@ export const querythrottler = $root.querythrottler = (() => {
                             case 2:
                                 if (wireType !== 2)
                                     break;
-                                value = $root.querythrottler.MetricRule.decode(reader, reader.uint32(), $undefined, _depth + 1);
+                                value = $root.querythrottler.MetricRule.decode(reader, reader.uint32(), $undefined, _depth + 1, value);
                                 continue;
                             }
                             reader.skipType(wireType, _depth, tag2);
@@ -62227,9 +62121,9 @@ export const querythrottler = $root.querythrottler = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.above != null && $Object.hasOwnProperty.call(message, "above"))
+            if (message.above != null && $Object.hasOwnProperty.call(message, "above") && !$Object.is(message.above, 0))
                 writer.uint32(/* id 1, wireType 1 =*/9).double(message.above);
-            if (message.throttle != null && $Object.hasOwnProperty.call(message, "throttle"))
+            if (message.throttle != null && $Object.hasOwnProperty.call(message, "throttle") && message.throttle !== 0)
                 writer.uint32(/* id 2, wireType 0 =*/16).int32(message.throttle);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -62281,7 +62175,7 @@ export const querythrottler = $root.querythrottler = (() => {
                 case 1: {
                         if (wireType !== 1)
                             break;
-                        if ((value = reader.double()) !== 0)
+                        if (!$Object.is(value = reader.double(), 0))
                             message.above = value;
                         else
                             delete message.above;
@@ -62367,7 +62261,7 @@ export const querythrottler = $root.querythrottler = (() => {
                 throw $Error("max depth exceeded");
             let message = new $root.querythrottler.ThrottleThreshold();
             if (object.above != null)
-                if ($Number(object.above) !== 0)
+                if (!$Object.is($Number(object.above), 0))
                     message.above = $Number(object.above);
             if (object.throttle != null)
                 if ($Number(object.throttle) !== 0)
@@ -62548,11 +62442,11 @@ export const vtrpc = $root.vtrpc = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.principal != null && $Object.hasOwnProperty.call(message, "principal"))
+            if (message.principal != null && $Object.hasOwnProperty.call(message, "principal") && message.principal !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.principal);
-            if (message.component != null && $Object.hasOwnProperty.call(message, "component"))
+            if (message.component != null && $Object.hasOwnProperty.call(message, "component") && message.component !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.component);
-            if (message.subcomponent != null && $Object.hasOwnProperty.call(message, "subcomponent"))
+            if (message.subcomponent != null && $Object.hasOwnProperty.call(message, "subcomponent") && message.subcomponent !== "")
                 writer.uint32(/* id 3, wireType 2 =*/26).string(message.subcomponent);
             if (message.groups != null && message.groups.length)
                 for (let i = 0; i < message.groups.length; ++i)
@@ -62938,9 +62832,9 @@ export const vtrpc = $root.vtrpc = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.message != null && $Object.hasOwnProperty.call(message, "message"))
+            if (message.message != null && $Object.hasOwnProperty.call(message, "message") && message.message !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.message);
-            if (message.code != null && $Object.hasOwnProperty.call(message, "code"))
+            if (message.code != null && $Object.hasOwnProperty.call(message, "code") && message.code !== 0)
                 writer.uint32(/* id 3, wireType 0 =*/24).int32(message.code);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -63054,30 +62948,8 @@ export const vtrpc = $root.vtrpc = (() => {
                 if (!$util.isString(message.message))
                     return "message: string expected";
             if (message.code != null && $Object.hasOwnProperty.call(message, "code"))
-                switch (message.code) {
-                default:
+                if (typeof message.code !== "number" || (message.code | 0) !== message.code)
                     return "code: enum value expected";
-                case 0:
-                case 1:
-                case 2:
-                case 3:
-                case 4:
-                case 5:
-                case 6:
-                case 7:
-                case 8:
-                case 9:
-                case 10:
-                case 11:
-                case 12:
-                case 13:
-                case 14:
-                case 15:
-                case 16:
-                case 17:
-                case 18:
-                    break;
-                }
             return null;
         };
 
@@ -63104,12 +62976,6 @@ export const vtrpc = $root.vtrpc = (() => {
                     message.message = $String(object.message);
             if (object.code !== 0 && (typeof object.code !== "string" || $root.vtrpc.Code[object.code] !== 0))
                 switch (object.code) {
-                default:
-                    if (typeof object.code === "number") {
-                        message.code = object.code;
-                        break;
-                    }
-                    break;
                 case "OK":
                 case 0:
                     message.code = 0;
@@ -63186,6 +63052,9 @@ export const vtrpc = $root.vtrpc = (() => {
                 case 18:
                     message.code = 18;
                     break;
+                default:
+                    if (typeof object.code === "number" && (object.code | 0) === object.code)
+                        message.code = object.code;
                 }
             return message;
         };
@@ -63417,9 +63286,9 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.name != null && $Object.hasOwnProperty.call(message, "name"))
+            if (message.name != null && $Object.hasOwnProperty.call(message, "name") && message.name !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.name);
-            if (message.schema != null && $Object.hasOwnProperty.call(message, "schema"))
+            if (message.schema != null && $Object.hasOwnProperty.call(message, "schema") && message.schema !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.schema);
             if (message.columns != null && message.columns.length)
                 for (let i = 0; i < message.columns.length; ++i)
@@ -63427,11 +63296,11 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
             if (message.primary_key_columns != null && message.primary_key_columns.length)
                 for (let i = 0; i < message.primary_key_columns.length; ++i)
                     writer.uint32(/* id 4, wireType 2 =*/34).string(message.primary_key_columns[i]);
-            if (message.type != null && $Object.hasOwnProperty.call(message, "type"))
+            if (message.type != null && $Object.hasOwnProperty.call(message, "type") && message.type !== "")
                 writer.uint32(/* id 5, wireType 2 =*/42).string(message.type);
-            if (message.data_length != null && $Object.hasOwnProperty.call(message, "data_length"))
+            if (message.data_length != null && $Object.hasOwnProperty.call(message, "data_length") && (typeof message.data_length === "object" ? message.data_length.low || message.data_length.high : message.data_length !== 0))
                 writer.uint32(/* id 6, wireType 0 =*/48).uint64(message.data_length);
-            if (message.row_count != null && $Object.hasOwnProperty.call(message, "row_count"))
+            if (message.row_count != null && $Object.hasOwnProperty.call(message, "row_count") && (typeof message.row_count === "object" ? message.row_count.low || message.row_count.high : message.row_count !== 0))
                 writer.uint32(/* id 7, wireType 0 =*/56).uint64(message.row_count);
             if (message.fields != null && message.fields.length)
                 for (let i = 0; i < message.fields.length; ++i)
@@ -63900,7 +63769,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.database_schema != null && $Object.hasOwnProperty.call(message, "database_schema"))
+            if (message.database_schema != null && $Object.hasOwnProperty.call(message, "database_schema") && message.database_schema !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.database_schema);
             if (message.table_definitions != null && message.table_definitions.length)
                 for (let i = 0; i < message.table_definitions.length; ++i)
@@ -64517,11 +64386,11 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.host != null && $Object.hasOwnProperty.call(message, "host"))
+            if (message.host != null && $Object.hasOwnProperty.call(message, "host") && message.host !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.host);
-            if (message.user != null && $Object.hasOwnProperty.call(message, "user"))
+            if (message.user != null && $Object.hasOwnProperty.call(message, "user") && message.user !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.user);
-            if (message.password_checksum != null && $Object.hasOwnProperty.call(message, "password_checksum"))
+            if (message.password_checksum != null && $Object.hasOwnProperty.call(message, "password_checksum") && (typeof message.password_checksum === "object" ? message.password_checksum.low || message.password_checksum.high : message.password_checksum !== 0))
                 writer.uint32(/* id 3, wireType 0 =*/24).uint64(message.password_checksum);
             if (message.privileges != null && $Object.hasOwnProperty.call(message, "privileges"))
                 for (let keys = $Object.keys(message.privileges), i = 0; i < keys.length; ++i)
@@ -64924,11 +64793,11 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.host != null && $Object.hasOwnProperty.call(message, "host"))
+            if (message.host != null && $Object.hasOwnProperty.call(message, "host") && message.host !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.host);
-            if (message.db != null && $Object.hasOwnProperty.call(message, "db"))
+            if (message.db != null && $Object.hasOwnProperty.call(message, "db") && message.db !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.db);
-            if (message.user != null && $Object.hasOwnProperty.call(message, "user"))
+            if (message.user != null && $Object.hasOwnProperty.call(message, "user") && message.user !== "")
                 writer.uint32(/* id 3, wireType 2 =*/26).string(message.user);
             if (message.privileges != null && $Object.hasOwnProperty.call(message, "privileges"))
                 for (let keys = $Object.keys(message.privileges), i = 0; i < keys.length; ++i)
@@ -65611,7 +65480,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.payload != null && $Object.hasOwnProperty.call(message, "payload"))
+            if (message.payload != null && $Object.hasOwnProperty.call(message, "payload") && message.payload !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.payload);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -65871,7 +65740,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.payload != null && $Object.hasOwnProperty.call(message, "payload"))
+            if (message.payload != null && $Object.hasOwnProperty.call(message, "payload") && message.payload !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.payload);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -66131,7 +66000,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.duration != null && $Object.hasOwnProperty.call(message, "duration"))
+            if (message.duration != null && $Object.hasOwnProperty.call(message, "duration") && (typeof message.duration === "object" ? message.duration.low || message.duration.high : message.duration !== 0))
                 writer.uint32(/* id 1, wireType 0 =*/8).int64(message.duration);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -66646,7 +66515,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.name != null && $Object.hasOwnProperty.call(message, "name"))
+            if (message.name != null && $Object.hasOwnProperty.call(message, "name") && message.name !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.name);
             if (message.parameters != null && message.parameters.length)
                 for (let i = 0; i < message.parameters.length; ++i)
@@ -67018,11 +66887,11 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.exit_status != null && $Object.hasOwnProperty.call(message, "exit_status"))
+            if (message.exit_status != null && $Object.hasOwnProperty.call(message, "exit_status") && (typeof message.exit_status === "object" ? message.exit_status.low || message.exit_status.high : message.exit_status !== 0))
                 writer.uint32(/* id 1, wireType 0 =*/8).int64(message.exit_status);
-            if (message.stdout != null && $Object.hasOwnProperty.call(message, "stdout"))
+            if (message.stdout != null && $Object.hasOwnProperty.call(message, "stdout") && message.stdout !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.stdout);
-            if (message.stderr != null && $Object.hasOwnProperty.call(message, "stderr"))
+            if (message.stderr != null && $Object.hasOwnProperty.call(message, "stderr") && message.stderr !== "")
                 writer.uint32(/* id 3, wireType 2 =*/26).string(message.stderr);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -67367,12 +67236,12 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
             if (message.tables != null && message.tables.length)
                 for (let i = 0; i < message.tables.length; ++i)
                     writer.uint32(/* id 1, wireType 2 =*/10).string(message.tables[i]);
-            if (message.include_views != null && $Object.hasOwnProperty.call(message, "include_views"))
+            if (message.include_views != null && $Object.hasOwnProperty.call(message, "include_views") && message.include_views !== false)
                 writer.uint32(/* id 2, wireType 0 =*/16).bool(message.include_views);
             if (message.exclude_tables != null && message.exclude_tables.length)
                 for (let i = 0; i < message.exclude_tables.length; ++i)
                     writer.uint32(/* id 3, wireType 2 =*/26).string(message.exclude_tables[i]);
-            if (message.table_schema_only != null && $Object.hasOwnProperty.call(message, "table_schema_only"))
+            if (message.table_schema_only != null && $Object.hasOwnProperty.call(message, "table_schema_only") && message.table_schema_only !== false)
                 writer.uint32(/* id 4, wireType 0 =*/32).bool(message.table_schema_only);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -69909,9 +69778,9 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.tablet_type != null && $Object.hasOwnProperty.call(message, "tablet_type"))
+            if (message.tablet_type != null && $Object.hasOwnProperty.call(message, "tablet_type") && message.tablet_type !== 0)
                 writer.uint32(/* id 1, wireType 0 =*/8).int32(message.tablet_type);
-            if (message.semiSync != null && $Object.hasOwnProperty.call(message, "semiSync"))
+            if (message.semiSync != null && $Object.hasOwnProperty.call(message, "semiSync") && message.semiSync !== false)
                 writer.uint32(/* id 2, wireType 0 =*/16).bool(message.semiSync);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -70022,22 +69891,8 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
             if (_depth > $util.recursionLimit)
                 return "max depth exceeded";
             if (message.tablet_type != null && $Object.hasOwnProperty.call(message, "tablet_type"))
-                switch (message.tablet_type) {
-                default:
+                if (typeof message.tablet_type !== "number" || (message.tablet_type | 0) !== message.tablet_type)
                     return "tablet_type: enum value expected";
-                case 0:
-                case 1:
-                case 1:
-                case 2:
-                case 3:
-                case 3:
-                case 4:
-                case 5:
-                case 6:
-                case 7:
-                case 8:
-                    break;
-                }
             if (message.semiSync != null && $Object.hasOwnProperty.call(message, "semiSync"))
                 if (typeof message.semiSync !== "boolean")
                     return "semiSync: boolean expected";
@@ -70064,12 +69919,6 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
             let message = new $root.tabletmanagerdata.ChangeTypeRequest();
             if (object.tablet_type !== 0 && (typeof object.tablet_type !== "string" || $root.topodata.TabletType[object.tablet_type] !== 0))
                 switch (object.tablet_type) {
-                default:
-                    if (typeof object.tablet_type === "number") {
-                        message.tablet_type = object.tablet_type;
-                        break;
-                    }
-                    break;
                 case "UNKNOWN":
                 case 0:
                     message.tablet_type = 0;
@@ -70114,6 +69963,9 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 case 8:
                     message.tablet_type = 8;
                     break;
+                default:
+                    if (typeof object.tablet_type === "number" && (object.tablet_type | 0) === object.tablet_type)
+                        message.tablet_type = object.tablet_type;
                 }
             if (object.semiSync != null)
                 if (object.semiSync)
@@ -71349,7 +71201,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.wait_position != null && $Object.hasOwnProperty.call(message, "wait_position"))
+            if (message.wait_position != null && $Object.hasOwnProperty.call(message, "wait_position") && message.wait_position !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.wait_position);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -72440,21 +72292,21 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.sql != null && $Object.hasOwnProperty.call(message, "sql"))
+            if (message.sql != null && $Object.hasOwnProperty.call(message, "sql") && message.sql !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.sql);
-            if (message.force != null && $Object.hasOwnProperty.call(message, "force"))
+            if (message.force != null && $Object.hasOwnProperty.call(message, "force") && message.force !== false)
                 writer.uint32(/* id 2, wireType 0 =*/16).bool(message.force);
-            if (message.allow_replication != null && $Object.hasOwnProperty.call(message, "allow_replication"))
+            if (message.allow_replication != null && $Object.hasOwnProperty.call(message, "allow_replication") && message.allow_replication !== false)
                 writer.uint32(/* id 3, wireType 0 =*/24).bool(message.allow_replication);
             if (message.before_schema != null && $Object.hasOwnProperty.call(message, "before_schema"))
                 $root.tabletmanagerdata.SchemaDefinition.encode(message.before_schema, writer.uint32(/* id 4, wireType 2 =*/34).fork(), _depth + 1).ldelim();
             if (message.after_schema != null && $Object.hasOwnProperty.call(message, "after_schema"))
                 $root.tabletmanagerdata.SchemaDefinition.encode(message.after_schema, writer.uint32(/* id 5, wireType 2 =*/42).fork(), _depth + 1).ldelim();
-            if (message.sql_mode != null && $Object.hasOwnProperty.call(message, "sql_mode"))
+            if (message.sql_mode != null && $Object.hasOwnProperty.call(message, "sql_mode") && message.sql_mode !== "")
                 writer.uint32(/* id 6, wireType 2 =*/50).string(message.sql_mode);
-            if (message.batch_size != null && $Object.hasOwnProperty.call(message, "batch_size"))
+            if (message.batch_size != null && $Object.hasOwnProperty.call(message, "batch_size") && (typeof message.batch_size === "object" ? message.batch_size.low || message.batch_size.high : message.batch_size !== 0))
                 writer.uint32(/* id 7, wireType 0 =*/56).int64(message.batch_size);
-            if (message.disable_foreign_key_checks != null && $Object.hasOwnProperty.call(message, "disable_foreign_key_checks"))
+            if (message.disable_foreign_key_checks != null && $Object.hasOwnProperty.call(message, "disable_foreign_key_checks") && message.disable_foreign_key_checks !== false)
                 writer.uint32(/* id 8, wireType 0 =*/64).bool(message.disable_foreign_key_checks);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -74054,11 +73906,11 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.query != null && $Object.hasOwnProperty.call(message, "query"))
+            if (message.query != null && $Object.hasOwnProperty.call(message, "query") && message.query.length)
                 writer.uint32(/* id 1, wireType 2 =*/10).bytes(message.query);
-            if (message.db_name != null && $Object.hasOwnProperty.call(message, "db_name"))
+            if (message.db_name != null && $Object.hasOwnProperty.call(message, "db_name") && message.db_name !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.db_name);
-            if (message.max_rows != null && $Object.hasOwnProperty.call(message, "max_rows"))
+            if (message.max_rows != null && $Object.hasOwnProperty.call(message, "max_rows") && (typeof message.max_rows === "object" ? message.max_rows.low || message.max_rows.high : message.max_rows !== 0))
                 writer.uint32(/* id 3, wireType 0 =*/24).uint64(message.max_rows);
             if (message.caller_id != null && $Object.hasOwnProperty.call(message, "caller_id"))
                 $root.vtrpc.CallerID.encode(message.caller_id, writer.uint32(/* id 4, wireType 2 =*/34).fork(), _depth + 1).ldelim();
@@ -74707,17 +74559,17 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.query != null && $Object.hasOwnProperty.call(message, "query"))
+            if (message.query != null && $Object.hasOwnProperty.call(message, "query") && message.query.length)
                 writer.uint32(/* id 1, wireType 2 =*/10).bytes(message.query);
-            if (message.db_name != null && $Object.hasOwnProperty.call(message, "db_name"))
+            if (message.db_name != null && $Object.hasOwnProperty.call(message, "db_name") && message.db_name !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.db_name);
-            if (message.max_rows != null && $Object.hasOwnProperty.call(message, "max_rows"))
+            if (message.max_rows != null && $Object.hasOwnProperty.call(message, "max_rows") && (typeof message.max_rows === "object" ? message.max_rows.low || message.max_rows.high : message.max_rows !== 0))
                 writer.uint32(/* id 3, wireType 0 =*/24).uint64(message.max_rows);
-            if (message.disable_binlogs != null && $Object.hasOwnProperty.call(message, "disable_binlogs"))
+            if (message.disable_binlogs != null && $Object.hasOwnProperty.call(message, "disable_binlogs") && message.disable_binlogs !== false)
                 writer.uint32(/* id 4, wireType 0 =*/32).bool(message.disable_binlogs);
-            if (message.reload_schema != null && $Object.hasOwnProperty.call(message, "reload_schema"))
+            if (message.reload_schema != null && $Object.hasOwnProperty.call(message, "reload_schema") && message.reload_schema !== false)
                 writer.uint32(/* id 5, wireType 0 =*/40).bool(message.reload_schema);
-            if (message.disable_foreign_key_checks != null && $Object.hasOwnProperty.call(message, "disable_foreign_key_checks"))
+            if (message.disable_foreign_key_checks != null && $Object.hasOwnProperty.call(message, "disable_foreign_key_checks") && message.disable_foreign_key_checks !== false)
                 writer.uint32(/* id 6, wireType 0 =*/48).bool(message.disable_foreign_key_checks);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -75277,6 +75129,296 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         return ExecuteFetchAsDbaResponse;
     })();
 
+    tabletmanagerdata.SessionVariable = (function() {
+
+        /**
+         * Properties of a SessionVariable.
+         * @typedef {Object} tabletmanagerdata.SessionVariable.$Properties
+         * @property {string|null} [name] SessionVariable name
+         * @property {string|null} [value] SessionVariable value
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
+         */
+
+        /**
+         * Properties of a SessionVariable.
+         * @memberof tabletmanagerdata
+         * @interface ISessionVariable
+         * @augments tabletmanagerdata.SessionVariable.$Properties
+         * @deprecated Use tabletmanagerdata.SessionVariable.$Properties instead.
+         */
+
+        /**
+         * Shape of a SessionVariable.
+         * @typedef {tabletmanagerdata.SessionVariable.$Properties} tabletmanagerdata.SessionVariable.$Shape
+         */
+
+        /**
+         * Constructs a new SessionVariable.
+         * @memberof tabletmanagerdata
+         * @classdesc Represents a SessionVariable.
+         * @constructor
+         * @param {tabletmanagerdata.SessionVariable.$Properties=} [properties] Properties to set
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
+         */
+        const SessionVariable = function (properties) {
+            if (properties)
+                for (let keys = $Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                        this[keys[i]] = properties[keys[i]];
+        };
+
+        /**
+         * SessionVariable name.
+         * @member {string} name
+         * @memberof tabletmanagerdata.SessionVariable
+         * @instance
+         */
+        SessionVariable.prototype.name = "";
+
+        /**
+         * SessionVariable value.
+         * @member {string} value
+         * @memberof tabletmanagerdata.SessionVariable
+         * @instance
+         */
+        SessionVariable.prototype.value = "";
+
+        /**
+         * Creates a new SessionVariable instance using the specified properties.
+         * @function create
+         * @memberof tabletmanagerdata.SessionVariable
+         * @static
+         * @param {tabletmanagerdata.SessionVariable.$Properties=} [properties] Properties to set
+         * @returns {tabletmanagerdata.SessionVariable} SessionVariable instance
+         * @type {{
+         *   (properties: tabletmanagerdata.SessionVariable.$Shape): tabletmanagerdata.SessionVariable & tabletmanagerdata.SessionVariable.$Shape;
+         *   (properties?: tabletmanagerdata.SessionVariable.$Properties): tabletmanagerdata.SessionVariable;
+         * }}
+         */
+        SessionVariable.create = function(properties) {
+            return new SessionVariable(properties);
+        };
+
+        /**
+         * Encodes the specified SessionVariable message. Does not implicitly {@link tabletmanagerdata.SessionVariable.verify|verify} messages.
+         * @function encode
+         * @memberof tabletmanagerdata.SessionVariable
+         * @static
+         * @param {tabletmanagerdata.SessionVariable.$Properties} message SessionVariable message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        SessionVariable.encode = function (message, writer, _depth) {
+            if (!writer)
+                writer = $Writer.create();
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            if (message.name != null && $Object.hasOwnProperty.call(message, "name") && message.name !== "")
+                writer.uint32(/* id 1, wireType 2 =*/10).string(message.name);
+            if (message.value != null && $Object.hasOwnProperty.call(message, "value") && message.value !== "")
+                writer.uint32(/* id 2, wireType 2 =*/18).string(message.value);
+            if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
+                for (let i = 0; i < message.$unknowns.length; ++i)
+                    writer.raw(message.$unknowns[i]);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified SessionVariable message, length delimited. Does not implicitly {@link tabletmanagerdata.SessionVariable.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof tabletmanagerdata.SessionVariable
+         * @static
+         * @param {tabletmanagerdata.SessionVariable.$Properties} message SessionVariable message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        SessionVariable.encodeDelimited = function(message, writer) {
+            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+        };
+
+        /**
+         * Decodes a SessionVariable message from the specified reader or buffer.
+         * @function decode
+         * @memberof tabletmanagerdata.SessionVariable
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {tabletmanagerdata.SessionVariable & tabletmanagerdata.SessionVariable.$Shape} SessionVariable
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        SessionVariable.decode = function (reader, length, _end, _depth, _target) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $Reader.recursionLimit)
+                throw $Error("max depth exceeded");
+            let end = length === $undefined ? reader.len : reader.pos + length, message = _target || new $root.tabletmanagerdata.SessionVariable(), value;
+            while (reader.pos < end) {
+                let start = reader.pos;
+                let tag = reader.tag();
+                if (tag === _end) {
+                    _end = $undefined;
+                    break;
+                }
+                let wireType = tag & 7;
+                switch (tag >>>= 3) {
+                case 1: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.stringVerify()).length)
+                            message.name = value;
+                        else
+                            delete message.name;
+                        continue;
+                    }
+                case 2: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.stringVerify()).length)
+                            message.value = value;
+                        else
+                            delete message.value;
+                        continue;
+                    }
+                }
+                reader.skipType(wireType, _depth, tag);
+                if (!reader.discardUnknown) {
+                    $util.makeProp(message, "$unknowns", false);
+                    (message.$unknowns || (message.$unknowns = [])).push(reader.raw(start, reader.pos));
+                }
+            }
+            if (_end !== $undefined)
+                throw $Error("missing end group");
+            return message;
+        };
+
+        /**
+         * Decodes a SessionVariable message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof tabletmanagerdata.SessionVariable
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {tabletmanagerdata.SessionVariable & tabletmanagerdata.SessionVariable.$Shape} SessionVariable
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        SessionVariable.decodeDelimited = function(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a SessionVariable message.
+         * @function verify
+         * @memberof tabletmanagerdata.SessionVariable
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        SessionVariable.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.name != null && $Object.hasOwnProperty.call(message, "name"))
+                if (!$util.isString(message.name))
+                    return "name: string expected";
+            if (message.value != null && $Object.hasOwnProperty.call(message, "value"))
+                if (!$util.isString(message.value))
+                    return "value: string expected";
+            return null;
+        };
+
+        /**
+         * Creates a SessionVariable message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof tabletmanagerdata.SessionVariable
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {tabletmanagerdata.SessionVariable} SessionVariable
+         */
+        SessionVariable.fromObject = function (object, _depth) {
+            if (object instanceof $root.tabletmanagerdata.SessionVariable)
+                return object;
+            if (!$util.isObject(object))
+                throw $TypeError(".tabletmanagerdata.SessionVariable: object expected");
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            let message = new $root.tabletmanagerdata.SessionVariable();
+            if (object.name != null)
+                if (typeof object.name !== "string" || object.name.length)
+                    message.name = $String(object.name);
+            if (object.value != null)
+                if (typeof object.value !== "string" || object.value.length)
+                    message.value = $String(object.value);
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a SessionVariable message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof tabletmanagerdata.SessionVariable
+         * @static
+         * @param {tabletmanagerdata.SessionVariable} message SessionVariable
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        SessionVariable.toObject = function (message, options, _depth) {
+            if (!options)
+                options = {};
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            let object = {};
+            if (options.defaults) {
+                object.name = "";
+                object.value = "";
+            }
+            if (message.name != null && $Object.hasOwnProperty.call(message, "name"))
+                object.name = message.name;
+            if (message.value != null && $Object.hasOwnProperty.call(message, "value"))
+                object.value = message.value;
+            return object;
+        };
+
+        /**
+         * Converts this SessionVariable to JSON.
+         * @function toJSON
+         * @memberof tabletmanagerdata.SessionVariable
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        SessionVariable.prototype.toJSON = function() {
+            return SessionVariable.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        /**
+         * Gets the type url for SessionVariable
+         * @function getTypeUrl
+         * @memberof tabletmanagerdata.SessionVariable
+         * @static
+         * @param {string} [prefix] Custom type url prefix, defaults to `"type.googleapis.com"`
+         * @returns {string} The type url
+         */
+        SessionVariable.getTypeUrl = function(prefix) {
+            if (prefix === $undefined)
+                prefix = "type.googleapis.com";
+            return prefix + "/tabletmanagerdata.SessionVariable";
+        };
+
+        return SessionVariable;
+    })();
+
     tabletmanagerdata.ExecuteMultiFetchAsDbaRequest = (function() {
 
         /**
@@ -75288,6 +75430,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @property {boolean|null} [disable_binlogs] ExecuteMultiFetchAsDbaRequest disable_binlogs
          * @property {boolean|null} [reload_schema] ExecuteMultiFetchAsDbaRequest reload_schema
          * @property {boolean|null} [disable_foreign_key_checks] ExecuteMultiFetchAsDbaRequest disable_foreign_key_checks
+         * @property {Array.<tabletmanagerdata.SessionVariable.$Properties>|null} [session_variables] ExecuteMultiFetchAsDbaRequest session_variables
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
@@ -75313,6 +75456,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const ExecuteMultiFetchAsDbaRequest = function (properties) {
+            this.session_variables = [];
             if (properties)
                 for (let keys = $Object.keys(properties), i = 0; i < keys.length; ++i)
                     if (properties[keys[i]] != null && keys[i] !== "__proto__")
@@ -75368,6 +75512,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         ExecuteMultiFetchAsDbaRequest.prototype.disable_foreign_key_checks = false;
 
         /**
+         * ExecuteMultiFetchAsDbaRequest session_variables.
+         * @member {Array.<tabletmanagerdata.SessionVariable.$Properties>} session_variables
+         * @memberof tabletmanagerdata.ExecuteMultiFetchAsDbaRequest
+         * @instance
+         */
+        ExecuteMultiFetchAsDbaRequest.prototype.session_variables = $util.emptyArray;
+
+        /**
          * Creates a new ExecuteMultiFetchAsDbaRequest instance using the specified properties.
          * @function create
          * @memberof tabletmanagerdata.ExecuteMultiFetchAsDbaRequest
@@ -75399,18 +75551,21 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.sql != null && $Object.hasOwnProperty.call(message, "sql"))
+            if (message.sql != null && $Object.hasOwnProperty.call(message, "sql") && message.sql.length)
                 writer.uint32(/* id 1, wireType 2 =*/10).bytes(message.sql);
-            if (message.db_name != null && $Object.hasOwnProperty.call(message, "db_name"))
+            if (message.db_name != null && $Object.hasOwnProperty.call(message, "db_name") && message.db_name !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.db_name);
-            if (message.max_rows != null && $Object.hasOwnProperty.call(message, "max_rows"))
+            if (message.max_rows != null && $Object.hasOwnProperty.call(message, "max_rows") && (typeof message.max_rows === "object" ? message.max_rows.low || message.max_rows.high : message.max_rows !== 0))
                 writer.uint32(/* id 3, wireType 0 =*/24).uint64(message.max_rows);
-            if (message.disable_binlogs != null && $Object.hasOwnProperty.call(message, "disable_binlogs"))
+            if (message.disable_binlogs != null && $Object.hasOwnProperty.call(message, "disable_binlogs") && message.disable_binlogs !== false)
                 writer.uint32(/* id 4, wireType 0 =*/32).bool(message.disable_binlogs);
-            if (message.reload_schema != null && $Object.hasOwnProperty.call(message, "reload_schema"))
+            if (message.reload_schema != null && $Object.hasOwnProperty.call(message, "reload_schema") && message.reload_schema !== false)
                 writer.uint32(/* id 5, wireType 0 =*/40).bool(message.reload_schema);
-            if (message.disable_foreign_key_checks != null && $Object.hasOwnProperty.call(message, "disable_foreign_key_checks"))
+            if (message.disable_foreign_key_checks != null && $Object.hasOwnProperty.call(message, "disable_foreign_key_checks") && message.disable_foreign_key_checks !== false)
                 writer.uint32(/* id 6, wireType 0 =*/48).bool(message.disable_foreign_key_checks);
+            if (message.session_variables != null && message.session_variables.length)
+                for (let i = 0; i < message.session_variables.length; ++i)
+                    $root.tabletmanagerdata.SessionVariable.encode(message.session_variables[i], writer.uint32(/* id 7, wireType 2 =*/58).fork(), _depth + 1).ldelim();
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
                     writer.raw(message.$unknowns[i]);
@@ -75512,6 +75667,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                             delete message.disable_foreign_key_checks;
                         continue;
                     }
+                case 7: {
+                        if (wireType !== 2)
+                            break;
+                        if (!(message.session_variables && message.session_variables.length))
+                            message.session_variables = [];
+                        message.session_variables.push($root.tabletmanagerdata.SessionVariable.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        continue;
+                    }
                 }
                 reader.skipType(wireType, _depth, tag);
                 if (!reader.discardUnknown) {
@@ -75573,6 +75736,15 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
             if (message.disable_foreign_key_checks != null && $Object.hasOwnProperty.call(message, "disable_foreign_key_checks"))
                 if (typeof message.disable_foreign_key_checks !== "boolean")
                     return "disable_foreign_key_checks: boolean expected";
+            if (message.session_variables != null && $Object.hasOwnProperty.call(message, "session_variables")) {
+                if (!$Array.isArray(message.session_variables))
+                    return "session_variables: array expected";
+                for (let i = 0; i < message.session_variables.length; ++i) {
+                    let error = $root.tabletmanagerdata.SessionVariable.verify(message.session_variables[i], _depth + 1);
+                    if (error)
+                        return "session_variables." + error;
+                }
+            }
             return null;
         };
 
@@ -75622,6 +75794,16 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
             if (object.disable_foreign_key_checks != null)
                 if (object.disable_foreign_key_checks)
                     message.disable_foreign_key_checks = $Boolean(object.disable_foreign_key_checks);
+            if (object.session_variables) {
+                if (!$Array.isArray(object.session_variables))
+                    throw $TypeError(".tabletmanagerdata.ExecuteMultiFetchAsDbaRequest.session_variables: array expected");
+                message.session_variables = $Array(object.session_variables.length);
+                for (let i = 0; i < object.session_variables.length; ++i) {
+                    if (!$util.isObject(object.session_variables[i]))
+                        throw $TypeError(".tabletmanagerdata.ExecuteMultiFetchAsDbaRequest.session_variables: object expected");
+                    message.session_variables[i] = $root.tabletmanagerdata.SessionVariable.fromObject(object.session_variables[i], _depth + 1);
+                }
+            }
             return message;
         };
 
@@ -75642,6 +75824,8 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
             let object = {};
+            if (options.arrays || options.defaults)
+                object.session_variables = [];
             if (options.defaults) {
                 if (options.bytes === $String)
                     object.sql = "";
@@ -75677,6 +75861,11 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 object.reload_schema = message.reload_schema;
             if (message.disable_foreign_key_checks != null && $Object.hasOwnProperty.call(message, "disable_foreign_key_checks"))
                 object.disable_foreign_key_checks = message.disable_foreign_key_checks;
+            if (message.session_variables && message.session_variables.length) {
+                object.session_variables = $Array(message.session_variables.length);
+                for (let j = 0; j < message.session_variables.length; ++j)
+                    object.session_variables[j] = $root.tabletmanagerdata.SessionVariable.toObject(message.session_variables[j], options, _depth + 1);
+            }
             return object;
         };
 
@@ -76089,13 +76278,13 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.query != null && $Object.hasOwnProperty.call(message, "query"))
+            if (message.query != null && $Object.hasOwnProperty.call(message, "query") && message.query.length)
                 writer.uint32(/* id 1, wireType 2 =*/10).bytes(message.query);
-            if (message.db_name != null && $Object.hasOwnProperty.call(message, "db_name"))
+            if (message.db_name != null && $Object.hasOwnProperty.call(message, "db_name") && message.db_name !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.db_name);
-            if (message.max_rows != null && $Object.hasOwnProperty.call(message, "max_rows"))
+            if (message.max_rows != null && $Object.hasOwnProperty.call(message, "max_rows") && (typeof message.max_rows === "object" ? message.max_rows.low || message.max_rows.high : message.max_rows !== 0))
                 writer.uint32(/* id 3, wireType 0 =*/24).uint64(message.max_rows);
-            if (message.reload_schema != null && $Object.hasOwnProperty.call(message, "reload_schema"))
+            if (message.reload_schema != null && $Object.hasOwnProperty.call(message, "reload_schema") && message.reload_schema !== false)
                 writer.uint32(/* id 4, wireType 0 =*/32).bool(message.reload_schema);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -76705,9 +76894,9 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.query != null && $Object.hasOwnProperty.call(message, "query"))
+            if (message.query != null && $Object.hasOwnProperty.call(message, "query") && message.query.length)
                 writer.uint32(/* id 1, wireType 2 =*/10).bytes(message.query);
-            if (message.max_rows != null && $Object.hasOwnProperty.call(message, "max_rows"))
+            if (message.max_rows != null && $Object.hasOwnProperty.call(message, "max_rows") && (typeof message.max_rows === "object" ? message.max_rows.low || message.max_rows.high : message.max_rows !== 0))
                 writer.uint32(/* id 2, wireType 0 =*/16).uint64(message.max_rows);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -77272,7 +77461,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.abandon_age != null && $Object.hasOwnProperty.call(message, "abandon_age"))
+            if (message.abandon_age != null && $Object.hasOwnProperty.call(message, "abandon_age") && (typeof message.abandon_age === "object" ? message.abandon_age.low || message.abandon_age.high : message.abandon_age !== 0))
                 writer.uint32(/* id 1, wireType 0 =*/8).int64(message.abandon_age);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -77825,7 +78014,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.dtid != null && $Object.hasOwnProperty.call(message, "dtid"))
+            if (message.dtid != null && $Object.hasOwnProperty.call(message, "dtid") && message.dtid !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.dtid);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -78346,7 +78535,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.dtid != null && $Object.hasOwnProperty.call(message, "dtid"))
+            if (message.dtid != null && $Object.hasOwnProperty.call(message, "dtid") && message.dtid !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.dtid);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -78634,11 +78823,11 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.state != null && $Object.hasOwnProperty.call(message, "state"))
+            if (message.state != null && $Object.hasOwnProperty.call(message, "state") && message.state !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.state);
-            if (message.message != null && $Object.hasOwnProperty.call(message, "message"))
+            if (message.message != null && $Object.hasOwnProperty.call(message, "message") && message.message !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.message);
-            if (message.time_created != null && $Object.hasOwnProperty.call(message, "time_created"))
+            if (message.time_created != null && $Object.hasOwnProperty.call(message, "time_created") && (typeof message.time_created === "object" ? message.time_created.low || message.time_created.high : message.time_created !== 0))
                 writer.uint32(/* id 3, wireType 0 =*/24).int64(message.time_created);
             if (message.statements != null && message.statements.length)
                 for (let i = 0; i < message.statements.length; ++i)
@@ -78992,9 +79181,9 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.dtid != null && $Object.hasOwnProperty.call(message, "dtid"))
+            if (message.dtid != null && $Object.hasOwnProperty.call(message, "dtid") && message.dtid !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.dtid);
-            if (message.mm != null && $Object.hasOwnProperty.call(message, "mm"))
+            if (message.mm != null && $Object.hasOwnProperty.call(message, "mm") && message.mm !== false)
                 writer.uint32(/* id 2, wireType 0 =*/16).bool(message.mm);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -81151,7 +81340,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.position != null && $Object.hasOwnProperty.call(message, "position"))
+            if (message.position != null && $Object.hasOwnProperty.call(message, "position") && message.position !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.position);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -81411,7 +81600,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.position != null && $Object.hasOwnProperty.call(message, "position"))
+            if (message.position != null && $Object.hasOwnProperty.call(message, "position") && message.position !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.position);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -82337,9 +82526,9 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.position != null && $Object.hasOwnProperty.call(message, "position"))
+            if (message.position != null && $Object.hasOwnProperty.call(message, "position") && message.position !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.position);
-            if (message.wait_timeout != null && $Object.hasOwnProperty.call(message, "wait_timeout"))
+            if (message.wait_timeout != null && $Object.hasOwnProperty.call(message, "wait_timeout") && (typeof message.wait_timeout === "object" ? message.wait_timeout.low || message.wait_timeout.high : message.wait_timeout !== 0))
                 writer.uint32(/* id 2, wireType 0 =*/16).int64(message.wait_timeout);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -82634,7 +82823,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.position != null && $Object.hasOwnProperty.call(message, "position"))
+            if (message.position != null && $Object.hasOwnProperty.call(message, "position") && message.position !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.position);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -82894,7 +83083,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.semiSync != null && $Object.hasOwnProperty.call(message, "semiSync"))
+            if (message.semiSync != null && $Object.hasOwnProperty.call(message, "semiSync") && message.semiSync !== false)
                 writer.uint32(/* id 1, wireType 0 =*/8).bool(message.semiSync);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -83373,7 +83562,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.semiSync != null && $Object.hasOwnProperty.call(message, "semiSync"))
+            if (message.semiSync != null && $Object.hasOwnProperty.call(message, "semiSync") && message.semiSync !== false)
                 writer.uint32(/* id 1, wireType 0 =*/8).bool(message.semiSync);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -83861,9 +84050,9 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.position != null && $Object.hasOwnProperty.call(message, "position"))
+            if (message.position != null && $Object.hasOwnProperty.call(message, "position") && message.position !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.position);
-            if (message.wait_timeout != null && $Object.hasOwnProperty.call(message, "wait_timeout"))
+            if (message.wait_timeout != null && $Object.hasOwnProperty.call(message, "wait_timeout") && (typeof message.wait_timeout === "object" ? message.wait_timeout.low || message.wait_timeout.high : message.wait_timeout !== 0))
                 writer.uint32(/* id 2, wireType 0 =*/16).int64(message.wait_timeout);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -85306,7 +85495,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.query != null && $Object.hasOwnProperty.call(message, "query"))
+            if (message.query != null && $Object.hasOwnProperty.call(message, "query") && message.query !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.query);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -85836,9 +86025,9 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.id != null && $Object.hasOwnProperty.call(message, "id"))
+            if (message.id != null && $Object.hasOwnProperty.call(message, "id") && message.id !== 0)
                 writer.uint32(/* id 1, wireType 0 =*/8).int32(message.id);
-            if (message.position != null && $Object.hasOwnProperty.call(message, "position"))
+            if (message.position != null && $Object.hasOwnProperty.call(message, "position") && message.position !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.position);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -86336,7 +86525,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.semiSync != null && $Object.hasOwnProperty.call(message, "semiSync"))
+            if (message.semiSync != null && $Object.hasOwnProperty.call(message, "semiSync") && message.semiSync !== false)
                 writer.uint32(/* id 1, wireType 0 =*/8).bool(message.semiSync);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -86596,7 +86785,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.position != null && $Object.hasOwnProperty.call(message, "position"))
+            if (message.position != null && $Object.hasOwnProperty.call(message, "position") && message.position !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.position);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -86883,13 +87072,13 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.time_created_ns != null && $Object.hasOwnProperty.call(message, "time_created_ns"))
+            if (message.time_created_ns != null && $Object.hasOwnProperty.call(message, "time_created_ns") && (typeof message.time_created_ns === "object" ? message.time_created_ns.low || message.time_created_ns.high : message.time_created_ns !== 0))
                 writer.uint32(/* id 1, wireType 0 =*/8).int64(message.time_created_ns);
-            if (message.action_name != null && $Object.hasOwnProperty.call(message, "action_name"))
+            if (message.action_name != null && $Object.hasOwnProperty.call(message, "action_name") && message.action_name !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.action_name);
             if (message.primary_alias != null && $Object.hasOwnProperty.call(message, "primary_alias"))
                 $root.topodata.TabletAlias.encode(message.primary_alias, writer.uint32(/* id 3, wireType 2 =*/26).fork(), _depth + 1).ldelim();
-            if (message.replication_position != null && $Object.hasOwnProperty.call(message, "replication_position"))
+            if (message.replication_position != null && $Object.hasOwnProperty.call(message, "replication_position") && message.replication_position !== "")
                 writer.uint32(/* id 4, wireType 2 =*/34).string(message.replication_position);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -87659,7 +87848,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.length != null && $Object.hasOwnProperty.call(message, "length"))
+            if (message.length != null && $Object.hasOwnProperty.call(message, "length") && message.length !== 0)
                 writer.uint32(/* id 1, wireType 0 =*/8).int32(message.length);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -87948,11 +88137,11 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 throw $Error("max depth exceeded");
             if (message.parent != null && $Object.hasOwnProperty.call(message, "parent"))
                 $root.topodata.TabletAlias.encode(message.parent, writer.uint32(/* id 1, wireType 2 =*/10).fork(), _depth + 1).ldelim();
-            if (message.replication_position != null && $Object.hasOwnProperty.call(message, "replication_position"))
+            if (message.replication_position != null && $Object.hasOwnProperty.call(message, "replication_position") && message.replication_position !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.replication_position);
-            if (message.time_created_ns != null && $Object.hasOwnProperty.call(message, "time_created_ns"))
+            if (message.time_created_ns != null && $Object.hasOwnProperty.call(message, "time_created_ns") && (typeof message.time_created_ns === "object" ? message.time_created_ns.low || message.time_created_ns.high : message.time_created_ns !== 0))
                 writer.uint32(/* id 3, wireType 0 =*/24).int64(message.time_created_ns);
-            if (message.semiSync != null && $Object.hasOwnProperty.call(message, "semiSync"))
+            if (message.semiSync != null && $Object.hasOwnProperty.call(message, "semiSync") && message.semiSync !== false)
                 writer.uint32(/* id 4, wireType 0 =*/32).bool(message.semiSync);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -88503,7 +88692,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.force != null && $Object.hasOwnProperty.call(message, "force"))
+            if (message.force != null && $Object.hasOwnProperty.call(message, "force") && message.force !== false)
                 writer.uint32(/* id 1, wireType 0 =*/8).bool(message.force);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -89024,7 +89213,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.semiSync != null && $Object.hasOwnProperty.call(message, "semiSync"))
+            if (message.semiSync != null && $Object.hasOwnProperty.call(message, "semiSync") && message.semiSync !== false)
                 writer.uint32(/* id 1, wireType 0 =*/8).bool(message.semiSync);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -90906,15 +91095,15 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 throw $Error("max depth exceeded");
             if (message.parent != null && $Object.hasOwnProperty.call(message, "parent"))
                 $root.topodata.TabletAlias.encode(message.parent, writer.uint32(/* id 1, wireType 2 =*/10).fork(), _depth + 1).ldelim();
-            if (message.time_created_ns != null && $Object.hasOwnProperty.call(message, "time_created_ns"))
+            if (message.time_created_ns != null && $Object.hasOwnProperty.call(message, "time_created_ns") && (typeof message.time_created_ns === "object" ? message.time_created_ns.low || message.time_created_ns.high : message.time_created_ns !== 0))
                 writer.uint32(/* id 2, wireType 0 =*/16).int64(message.time_created_ns);
-            if (message.force_start_replication != null && $Object.hasOwnProperty.call(message, "force_start_replication"))
+            if (message.force_start_replication != null && $Object.hasOwnProperty.call(message, "force_start_replication") && message.force_start_replication !== false)
                 writer.uint32(/* id 3, wireType 0 =*/24).bool(message.force_start_replication);
-            if (message.wait_position != null && $Object.hasOwnProperty.call(message, "wait_position"))
+            if (message.wait_position != null && $Object.hasOwnProperty.call(message, "wait_position") && message.wait_position !== "")
                 writer.uint32(/* id 4, wireType 2 =*/34).string(message.wait_position);
-            if (message.semiSync != null && $Object.hasOwnProperty.call(message, "semiSync"))
+            if (message.semiSync != null && $Object.hasOwnProperty.call(message, "semiSync") && message.semiSync !== false)
                 writer.uint32(/* id 5, wireType 0 =*/40).bool(message.semiSync);
-            if (message.heartbeat_interval != null && $Object.hasOwnProperty.call(message, "heartbeat_interval"))
+            if (message.heartbeat_interval != null && $Object.hasOwnProperty.call(message, "heartbeat_interval") && !$Object.is(message.heartbeat_interval, 0))
                 writer.uint32(/* id 6, wireType 1 =*/49).double(message.heartbeat_interval);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -91008,7 +91197,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 case 6: {
                         if (wireType !== 1)
                             break;
-                        if ((value = reader.double()) !== 0)
+                        if (!$Object.is(value = reader.double(), 0))
                             message.heartbeat_interval = value;
                         else
                             delete message.heartbeat_interval;
@@ -91123,7 +91312,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 if (object.semiSync)
                     message.semiSync = $Boolean(object.semiSync);
             if (object.heartbeat_interval != null)
-                if ($Number(object.heartbeat_interval) !== 0)
+                if (!$Object.is($Number(object.heartbeat_interval), 0))
                     message.heartbeat_interval = $Number(object.heartbeat_interval);
             return message;
         };
@@ -91981,7 +92170,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.stop_replication_mode != null && $Object.hasOwnProperty.call(message, "stop_replication_mode"))
+            if (message.stop_replication_mode != null && $Object.hasOwnProperty.call(message, "stop_replication_mode") && message.stop_replication_mode !== 0)
                 writer.uint32(/* id 1, wireType 0 =*/8).int32(message.stop_replication_mode);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -92083,13 +92272,8 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
             if (_depth > $util.recursionLimit)
                 return "max depth exceeded";
             if (message.stop_replication_mode != null && $Object.hasOwnProperty.call(message, "stop_replication_mode"))
-                switch (message.stop_replication_mode) {
-                default:
+                if (typeof message.stop_replication_mode !== "number" || (message.stop_replication_mode | 0) !== message.stop_replication_mode)
                     return "stop_replication_mode: enum value expected";
-                case 0:
-                case 1:
-                    break;
-                }
             return null;
         };
 
@@ -92113,12 +92297,6 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
             let message = new $root.tabletmanagerdata.StopReplicationAndGetStatusRequest();
             if (object.stop_replication_mode !== 0 && (typeof object.stop_replication_mode !== "string" || $root.replicationdata.StopReplicationMode[object.stop_replication_mode] !== 0))
                 switch (object.stop_replication_mode) {
-                default:
-                    if (typeof object.stop_replication_mode === "number") {
-                        message.stop_replication_mode = object.stop_replication_mode;
-                        break;
-                    }
-                    break;
                 case "IOANDSQLTHREAD":
                 case 0:
                     message.stop_replication_mode = 0;
@@ -92127,6 +92305,9 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 case 1:
                     message.stop_replication_mode = 1;
                     break;
+                default:
+                    if (typeof object.stop_replication_mode === "number" && (object.stop_replication_mode | 0) === object.stop_replication_mode)
+                        message.stop_replication_mode = object.stop_replication_mode;
                 }
             return message;
         };
@@ -92521,7 +92702,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.semiSync != null && $Object.hasOwnProperty.call(message, "semiSync"))
+            if (message.semiSync != null && $Object.hasOwnProperty.call(message, "semiSync") && message.semiSync !== false)
                 writer.uint32(/* id 1, wireType 0 =*/8).bool(message.semiSync);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -92781,7 +92962,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.position != null && $Object.hasOwnProperty.call(message, "position"))
+            if (message.position != null && $Object.hasOwnProperty.call(message, "position") && message.position !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.position);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -93104,13 +93285,13 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.concurrency != null && $Object.hasOwnProperty.call(message, "concurrency"))
+            if (message.concurrency != null && $Object.hasOwnProperty.call(message, "concurrency") && message.concurrency !== 0)
                 writer.uint32(/* id 1, wireType 0 =*/8).int32(message.concurrency);
-            if (message.allow_primary != null && $Object.hasOwnProperty.call(message, "allow_primary"))
+            if (message.allow_primary != null && $Object.hasOwnProperty.call(message, "allow_primary") && message.allow_primary !== false)
                 writer.uint32(/* id 2, wireType 0 =*/16).bool(message.allow_primary);
-            if (message.incremental_from_pos != null && $Object.hasOwnProperty.call(message, "incremental_from_pos"))
+            if (message.incremental_from_pos != null && $Object.hasOwnProperty.call(message, "incremental_from_pos") && message.incremental_from_pos !== "")
                 writer.uint32(/* id 3, wireType 2 =*/26).string(message.incremental_from_pos);
-            if (message.upgrade_safe != null && $Object.hasOwnProperty.call(message, "upgrade_safe"))
+            if (message.upgrade_safe != null && $Object.hasOwnProperty.call(message, "upgrade_safe") && message.upgrade_safe !== false)
                 writer.uint32(/* id 4, wireType 0 =*/32).bool(message.upgrade_safe);
             if (message.backup_engine != null && $Object.hasOwnProperty.call(message, "backup_engine"))
                 writer.uint32(/* id 5, wireType 2 =*/42).string(message.backup_engine);
@@ -93515,15 +93696,11 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 if (message.queries != null && message.queries.length)
                     for (let i = 0; i < message.queries.length; ++i)
                         writer.uint32(/* id 1, wireType 2 =*/10).string(message.queries[i]);
-                if (message.tablet_types != null && message.tablet_types.length) {
-                    writer.uint32(/* id 2, wireType 2 =*/18).fork();
-                    for (let i = 0; i < message.tablet_types.length; ++i)
-                        writer.int32(message.tablet_types[i]);
-                    writer.ldelim();
-                }
+                if (message.tablet_types != null && message.tablet_types.length)
+                    writer.uint32(/* id 2, wireType 2 =*/18).int32s(message.tablet_types);
                 if (message.timeout != null && $Object.hasOwnProperty.call(message, "timeout"))
                     $root.vttime.Duration.encode(message.timeout, writer.uint32(/* id 3, wireType 2 =*/26).fork(), _depth + 1).ldelim();
-                if (message.fail_on_error != null && $Object.hasOwnProperty.call(message, "fail_on_error"))
+                if (message.fail_on_error != null && $Object.hasOwnProperty.call(message, "fail_on_error") && message.fail_on_error !== false)
                     writer.uint32(/* id 4, wireType 0 =*/32).bool(message.fail_on_error);
                 if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                     for (let i = 0; i < message.$unknowns.length; ++i)
@@ -93584,9 +93761,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                             if (wireType === 2) {
                                 if (!(message.tablet_types && message.tablet_types.length))
                                     message.tablet_types = [];
-                                let end2 = reader.uint32() + reader.pos;
-                                while (reader.pos < end2)
-                                    message.tablet_types.push(reader.int32());
+                                reader.int32s(message.tablet_types);
                                 continue;
                             }
                             if (wireType !== 0)
@@ -93665,22 +93840,8 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                     if (!$Array.isArray(message.tablet_types))
                         return "tablet_types: array expected";
                     for (let i = 0; i < message.tablet_types.length; ++i)
-                        switch (message.tablet_types[i]) {
-                        default:
+                        if (typeof message.tablet_types[i] !== "number" || (message.tablet_types[i] | 0) !== message.tablet_types[i])
                             return "tablet_types: enum value[] expected";
-                        case 0:
-                        case 1:
-                        case 1:
-                        case 2:
-                        case 3:
-                        case 3:
-                        case 4:
-                        case 5:
-                        case 6:
-                        case 7:
-                        case 8:
-                            break;
-                        }
                 }
                 if (message.timeout != null && $Object.hasOwnProperty.call(message, "timeout")) {
                     let error = $root.vttime.Duration.verify(message.timeout, _depth + 1);
@@ -93721,58 +93882,56 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 if (object.tablet_types) {
                     if (!$Array.isArray(object.tablet_types))
                         throw $TypeError(".tabletmanagerdata.BackupRequest.InitSQL.tablet_types: array expected");
-                    message.tablet_types = $Array(object.tablet_types.length);
+                    message.tablet_types = [];
                     for (let i = 0; i < object.tablet_types.length; ++i)
                         switch (object.tablet_types[i]) {
-                        default:
-                            if (typeof object.tablet_types[i] === "number") {
-                                message.tablet_types[i] = object.tablet_types[i];
-                                break;
-                            }
                         case "UNKNOWN":
                         case 0:
-                            message.tablet_types[i] = 0;
+                            message.tablet_types[message.tablet_types.length] = 0;
                             break;
                         case "PRIMARY":
                         case 1:
-                            message.tablet_types[i] = 1;
+                            message.tablet_types[message.tablet_types.length] = 1;
                             break;
                         case "MASTER":
                         case 1:
-                            message.tablet_types[i] = 1;
+                            message.tablet_types[message.tablet_types.length] = 1;
                             break;
                         case "REPLICA":
                         case 2:
-                            message.tablet_types[i] = 2;
+                            message.tablet_types[message.tablet_types.length] = 2;
                             break;
                         case "RDONLY":
                         case 3:
-                            message.tablet_types[i] = 3;
+                            message.tablet_types[message.tablet_types.length] = 3;
                             break;
                         case "BATCH":
                         case 3:
-                            message.tablet_types[i] = 3;
+                            message.tablet_types[message.tablet_types.length] = 3;
                             break;
                         case "SPARE":
                         case 4:
-                            message.tablet_types[i] = 4;
+                            message.tablet_types[message.tablet_types.length] = 4;
                             break;
                         case "EXPERIMENTAL":
                         case 5:
-                            message.tablet_types[i] = 5;
+                            message.tablet_types[message.tablet_types.length] = 5;
                             break;
                         case "BACKUP":
                         case 6:
-                            message.tablet_types[i] = 6;
+                            message.tablet_types[message.tablet_types.length] = 6;
                             break;
                         case "RESTORE":
                         case 7:
-                            message.tablet_types[i] = 7;
+                            message.tablet_types[message.tablet_types.length] = 7;
                             break;
                         case "DRAINED":
                         case 8:
-                            message.tablet_types[i] = 8;
+                            message.tablet_types[message.tablet_types.length] = 8;
                             break;
+                        default:
+                            if (typeof object.tablet_types[i] === "number" && (object.tablet_types[i] | 0) === object.tablet_types[i])
+                                message.tablet_types[message.tablet_types.length] = object.tablet_types[i];
                         }
                 }
                 if (object.timeout != null) {
@@ -94236,9 +94395,9 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 throw $Error("max depth exceeded");
             if (message.backup_time != null && $Object.hasOwnProperty.call(message, "backup_time"))
                 $root.vttime.Time.encode(message.backup_time, writer.uint32(/* id 1, wireType 2 =*/10).fork(), _depth + 1).ldelim();
-            if (message.restore_to_pos != null && $Object.hasOwnProperty.call(message, "restore_to_pos"))
+            if (message.restore_to_pos != null && $Object.hasOwnProperty.call(message, "restore_to_pos") && message.restore_to_pos !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.restore_to_pos);
-            if (message.dry_run != null && $Object.hasOwnProperty.call(message, "dry_run"))
+            if (message.dry_run != null && $Object.hasOwnProperty.call(message, "dry_run") && message.dry_run !== false)
                 writer.uint32(/* id 3, wireType 0 =*/24).bool(message.dry_run);
             if (message.restore_to_timestamp != null && $Object.hasOwnProperty.call(message, "restore_to_timestamp"))
                 $root.vttime.Time.encode(message.restore_to_timestamp, writer.uint32(/* id 4, wireType 2 =*/34).fork(), _depth + 1).ldelim();
@@ -94943,7 +95102,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.workflow != null && $Object.hasOwnProperty.call(message, "workflow"))
+            if (message.workflow != null && $Object.hasOwnProperty.call(message, "workflow") && message.workflow !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.workflow);
             if (message.binlog_source != null && message.binlog_source.length)
                 for (let i = 0; i < message.binlog_source.length; ++i)
@@ -94951,25 +95110,21 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
             if (message.cells != null && message.cells.length)
                 for (let i = 0; i < message.cells.length; ++i)
                     writer.uint32(/* id 3, wireType 2 =*/26).string(message.cells[i]);
-            if (message.tablet_types != null && message.tablet_types.length) {
-                writer.uint32(/* id 4, wireType 2 =*/34).fork();
-                for (let i = 0; i < message.tablet_types.length; ++i)
-                    writer.int32(message.tablet_types[i]);
-                writer.ldelim();
-            }
-            if (message.tablet_selection_preference != null && $Object.hasOwnProperty.call(message, "tablet_selection_preference"))
+            if (message.tablet_types != null && message.tablet_types.length)
+                writer.uint32(/* id 4, wireType 2 =*/34).int32s(message.tablet_types);
+            if (message.tablet_selection_preference != null && $Object.hasOwnProperty.call(message, "tablet_selection_preference") && message.tablet_selection_preference !== 0)
                 writer.uint32(/* id 5, wireType 0 =*/40).int32(message.tablet_selection_preference);
-            if (message.workflow_type != null && $Object.hasOwnProperty.call(message, "workflow_type"))
+            if (message.workflow_type != null && $Object.hasOwnProperty.call(message, "workflow_type") && message.workflow_type !== 0)
                 writer.uint32(/* id 6, wireType 0 =*/48).int32(message.workflow_type);
-            if (message.workflow_sub_type != null && $Object.hasOwnProperty.call(message, "workflow_sub_type"))
+            if (message.workflow_sub_type != null && $Object.hasOwnProperty.call(message, "workflow_sub_type") && message.workflow_sub_type !== 0)
                 writer.uint32(/* id 7, wireType 0 =*/56).int32(message.workflow_sub_type);
-            if (message.defer_secondary_keys != null && $Object.hasOwnProperty.call(message, "defer_secondary_keys"))
+            if (message.defer_secondary_keys != null && $Object.hasOwnProperty.call(message, "defer_secondary_keys") && message.defer_secondary_keys !== false)
                 writer.uint32(/* id 8, wireType 0 =*/64).bool(message.defer_secondary_keys);
-            if (message.auto_start != null && $Object.hasOwnProperty.call(message, "auto_start"))
+            if (message.auto_start != null && $Object.hasOwnProperty.call(message, "auto_start") && message.auto_start !== false)
                 writer.uint32(/* id 9, wireType 0 =*/72).bool(message.auto_start);
-            if (message.stop_after_copy != null && $Object.hasOwnProperty.call(message, "stop_after_copy"))
+            if (message.stop_after_copy != null && $Object.hasOwnProperty.call(message, "stop_after_copy") && message.stop_after_copy !== false)
                 writer.uint32(/* id 10, wireType 0 =*/80).bool(message.stop_after_copy);
-            if (message.options != null && $Object.hasOwnProperty.call(message, "options"))
+            if (message.options != null && $Object.hasOwnProperty.call(message, "options") && message.options !== "")
                 writer.uint32(/* id 11, wireType 2 =*/90).string(message.options);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -95047,9 +95202,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                         if (wireType === 2) {
                             if (!(message.tablet_types && message.tablet_types.length))
                                 message.tablet_types = [];
-                            let end2 = reader.uint32() + reader.pos;
-                            while (reader.pos < end2)
-                                message.tablet_types.push(reader.int32());
+                            reader.int32s(message.tablet_types);
                             continue;
                         }
                         if (wireType !== 0)
@@ -95188,53 +95341,18 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 if (!$Array.isArray(message.tablet_types))
                     return "tablet_types: array expected";
                 for (let i = 0; i < message.tablet_types.length; ++i)
-                    switch (message.tablet_types[i]) {
-                    default:
+                    if (typeof message.tablet_types[i] !== "number" || (message.tablet_types[i] | 0) !== message.tablet_types[i])
                         return "tablet_types: enum value[] expected";
-                    case 0:
-                    case 1:
-                    case 1:
-                    case 2:
-                    case 3:
-                    case 3:
-                    case 4:
-                    case 5:
-                    case 6:
-                    case 7:
-                    case 8:
-                        break;
-                    }
             }
             if (message.tablet_selection_preference != null && $Object.hasOwnProperty.call(message, "tablet_selection_preference"))
-                switch (message.tablet_selection_preference) {
-                default:
+                if (typeof message.tablet_selection_preference !== "number" || (message.tablet_selection_preference | 0) !== message.tablet_selection_preference)
                     return "tablet_selection_preference: enum value expected";
-                case 0:
-                case 1:
-                case 3:
-                    break;
-                }
             if (message.workflow_type != null && $Object.hasOwnProperty.call(message, "workflow_type"))
-                switch (message.workflow_type) {
-                default:
+                if (typeof message.workflow_type !== "number" || (message.workflow_type | 0) !== message.workflow_type)
                     return "workflow_type: enum value expected";
-                case 0:
-                case 1:
-                case 2:
-                case 3:
-                case 4:
-                case 5:
-                    break;
-                }
             if (message.workflow_sub_type != null && $Object.hasOwnProperty.call(message, "workflow_sub_type"))
-                switch (message.workflow_sub_type) {
-                default:
+                if (typeof message.workflow_sub_type !== "number" || (message.workflow_sub_type | 0) !== message.workflow_sub_type)
                     return "workflow_sub_type: enum value expected";
-                case 0:
-                case 1:
-                case 2:
-                    break;
-                }
             if (message.defer_secondary_keys != null && $Object.hasOwnProperty.call(message, "defer_secondary_keys"))
                 if (typeof message.defer_secondary_keys !== "boolean")
                     return "defer_secondary_keys: boolean expected";
@@ -95291,68 +95409,60 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
             if (object.tablet_types) {
                 if (!$Array.isArray(object.tablet_types))
                     throw $TypeError(".tabletmanagerdata.CreateVReplicationWorkflowRequest.tablet_types: array expected");
-                message.tablet_types = $Array(object.tablet_types.length);
+                message.tablet_types = [];
                 for (let i = 0; i < object.tablet_types.length; ++i)
                     switch (object.tablet_types[i]) {
-                    default:
-                        if (typeof object.tablet_types[i] === "number") {
-                            message.tablet_types[i] = object.tablet_types[i];
-                            break;
-                        }
                     case "UNKNOWN":
                     case 0:
-                        message.tablet_types[i] = 0;
+                        message.tablet_types[message.tablet_types.length] = 0;
                         break;
                     case "PRIMARY":
                     case 1:
-                        message.tablet_types[i] = 1;
+                        message.tablet_types[message.tablet_types.length] = 1;
                         break;
                     case "MASTER":
                     case 1:
-                        message.tablet_types[i] = 1;
+                        message.tablet_types[message.tablet_types.length] = 1;
                         break;
                     case "REPLICA":
                     case 2:
-                        message.tablet_types[i] = 2;
+                        message.tablet_types[message.tablet_types.length] = 2;
                         break;
                     case "RDONLY":
                     case 3:
-                        message.tablet_types[i] = 3;
+                        message.tablet_types[message.tablet_types.length] = 3;
                         break;
                     case "BATCH":
                     case 3:
-                        message.tablet_types[i] = 3;
+                        message.tablet_types[message.tablet_types.length] = 3;
                         break;
                     case "SPARE":
                     case 4:
-                        message.tablet_types[i] = 4;
+                        message.tablet_types[message.tablet_types.length] = 4;
                         break;
                     case "EXPERIMENTAL":
                     case 5:
-                        message.tablet_types[i] = 5;
+                        message.tablet_types[message.tablet_types.length] = 5;
                         break;
                     case "BACKUP":
                     case 6:
-                        message.tablet_types[i] = 6;
+                        message.tablet_types[message.tablet_types.length] = 6;
                         break;
                     case "RESTORE":
                     case 7:
-                        message.tablet_types[i] = 7;
+                        message.tablet_types[message.tablet_types.length] = 7;
                         break;
                     case "DRAINED":
                     case 8:
-                        message.tablet_types[i] = 8;
+                        message.tablet_types[message.tablet_types.length] = 8;
                         break;
+                    default:
+                        if (typeof object.tablet_types[i] === "number" && (object.tablet_types[i] | 0) === object.tablet_types[i])
+                            message.tablet_types[message.tablet_types.length] = object.tablet_types[i];
                     }
             }
             if (object.tablet_selection_preference !== 0 && (typeof object.tablet_selection_preference !== "string" || $root.tabletmanagerdata.TabletSelectionPreference[object.tablet_selection_preference] !== 0))
                 switch (object.tablet_selection_preference) {
-                default:
-                    if (typeof object.tablet_selection_preference === "number") {
-                        message.tablet_selection_preference = object.tablet_selection_preference;
-                        break;
-                    }
-                    break;
                 case "ANY":
                 case 0:
                     message.tablet_selection_preference = 0;
@@ -95365,15 +95475,12 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 case 3:
                     message.tablet_selection_preference = 3;
                     break;
+                default:
+                    if (typeof object.tablet_selection_preference === "number" && (object.tablet_selection_preference | 0) === object.tablet_selection_preference)
+                        message.tablet_selection_preference = object.tablet_selection_preference;
                 }
             if (object.workflow_type !== 0 && (typeof object.workflow_type !== "string" || $root.binlogdata.VReplicationWorkflowType[object.workflow_type] !== 0))
                 switch (object.workflow_type) {
-                default:
-                    if (typeof object.workflow_type === "number") {
-                        message.workflow_type = object.workflow_type;
-                        break;
-                    }
-                    break;
                 case "Materialize":
                 case 0:
                     message.workflow_type = 0;
@@ -95398,15 +95505,12 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 case 5:
                     message.workflow_type = 5;
                     break;
+                default:
+                    if (typeof object.workflow_type === "number" && (object.workflow_type | 0) === object.workflow_type)
+                        message.workflow_type = object.workflow_type;
                 }
             if (object.workflow_sub_type !== 0 && (typeof object.workflow_sub_type !== "string" || $root.binlogdata.VReplicationWorkflowSubType[object.workflow_sub_type] !== 0))
                 switch (object.workflow_sub_type) {
-                default:
-                    if (typeof object.workflow_sub_type === "number") {
-                        message.workflow_sub_type = object.workflow_sub_type;
-                        break;
-                    }
-                    break;
                 case "None":
                 case 0:
                     message.workflow_sub_type = 0;
@@ -95419,6 +95523,9 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 case 2:
                     message.workflow_sub_type = 2;
                     break;
+                default:
+                    if (typeof object.workflow_sub_type === "number" && (object.workflow_sub_type | 0) === object.workflow_sub_type)
+                        message.workflow_sub_type = object.workflow_sub_type;
                 }
             if (object.defer_secondary_keys != null)
                 if (object.defer_secondary_keys)
@@ -95880,7 +95987,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
             if (message.table_filters != null && $Object.hasOwnProperty.call(message, "table_filters"))
                 for (let keys = $Object.keys(message.table_filters), i = 0; i < keys.length; ++i)
                     writer.uint32(/* id 1, wireType 2 =*/10).fork().uint32(/* id 1, wireType 2 =*/10).string(keys[i]).uint32(/* id 2, wireType 2 =*/18).string(message.table_filters[keys[i]]).ldelim();
-            if (message.batch_size != null && $Object.hasOwnProperty.call(message, "batch_size"))
+            if (message.batch_size != null && $Object.hasOwnProperty.call(message, "batch_size") && (typeof message.batch_size === "object" ? message.batch_size.low || message.batch_size.high : message.batch_size !== 0))
                 writer.uint32(/* id 2, wireType 0 =*/16).int64(message.batch_size);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -96434,7 +96541,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.workflow != null && $Object.hasOwnProperty.call(message, "workflow"))
+            if (message.workflow != null && $Object.hasOwnProperty.call(message, "workflow") && message.workflow !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.workflow);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -97174,7 +97281,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.has != null && $Object.hasOwnProperty.call(message, "has"))
+            if (message.has != null && $Object.hasOwnProperty.call(message, "has") && message.has !== false)
                 writer.uint32(/* id 1, wireType 0 =*/8).bool(message.has);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -97484,31 +97591,19 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.include_ids != null && message.include_ids.length) {
-                writer.uint32(/* id 1, wireType 2 =*/10).fork();
-                for (let i = 0; i < message.include_ids.length; ++i)
-                    writer.int32(message.include_ids[i]);
-                writer.ldelim();
-            }
+            if (message.include_ids != null && message.include_ids.length)
+                writer.uint32(/* id 1, wireType 2 =*/10).int32s(message.include_ids);
             if (message.include_workflows != null && message.include_workflows.length)
                 for (let i = 0; i < message.include_workflows.length; ++i)
                     writer.uint32(/* id 2, wireType 2 =*/18).string(message.include_workflows[i]);
-            if (message.include_states != null && message.include_states.length) {
-                writer.uint32(/* id 3, wireType 2 =*/26).fork();
-                for (let i = 0; i < message.include_states.length; ++i)
-                    writer.int32(message.include_states[i]);
-                writer.ldelim();
-            }
+            if (message.include_states != null && message.include_states.length)
+                writer.uint32(/* id 3, wireType 2 =*/26).int32s(message.include_states);
             if (message.exclude_workflows != null && message.exclude_workflows.length)
                 for (let i = 0; i < message.exclude_workflows.length; ++i)
                     writer.uint32(/* id 4, wireType 2 =*/34).string(message.exclude_workflows[i]);
-            if (message.exclude_states != null && message.exclude_states.length) {
-                writer.uint32(/* id 5, wireType 2 =*/42).fork();
-                for (let i = 0; i < message.exclude_states.length; ++i)
-                    writer.int32(message.exclude_states[i]);
-                writer.ldelim();
-            }
-            if (message.exclude_frozen != null && $Object.hasOwnProperty.call(message, "exclude_frozen"))
+            if (message.exclude_states != null && message.exclude_states.length)
+                writer.uint32(/* id 5, wireType 2 =*/42).int32s(message.exclude_states);
+            if (message.exclude_frozen != null && $Object.hasOwnProperty.call(message, "exclude_frozen") && message.exclude_frozen !== false)
                 writer.uint32(/* id 6, wireType 0 =*/48).bool(message.exclude_frozen);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -97561,9 +97656,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                         if (wireType === 2) {
                             if (!(message.include_ids && message.include_ids.length))
                                 message.include_ids = [];
-                            let end2 = reader.uint32() + reader.pos;
-                            while (reader.pos < end2)
-                                message.include_ids.push(reader.int32());
+                            reader.int32s(message.include_ids);
                             continue;
                         }
                         if (wireType !== 0)
@@ -97585,9 +97678,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                         if (wireType === 2) {
                             if (!(message.include_states && message.include_states.length))
                                 message.include_states = [];
-                            let end2 = reader.uint32() + reader.pos;
-                            while (reader.pos < end2)
-                                message.include_states.push(reader.int32());
+                            reader.int32s(message.include_states);
                             continue;
                         }
                         if (wireType !== 0)
@@ -97609,9 +97700,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                         if (wireType === 2) {
                             if (!(message.exclude_states && message.exclude_states.length))
                                 message.exclude_states = [];
-                            let end2 = reader.uint32() + reader.pos;
-                            while (reader.pos < end2)
-                                message.exclude_states.push(reader.int32());
+                            reader.int32s(message.exclude_states);
                             continue;
                         }
                         if (wireType !== 0)
@@ -97691,18 +97780,8 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 if (!$Array.isArray(message.include_states))
                     return "include_states: array expected";
                 for (let i = 0; i < message.include_states.length; ++i)
-                    switch (message.include_states[i]) {
-                    default:
+                    if (typeof message.include_states[i] !== "number" || (message.include_states[i] | 0) !== message.include_states[i])
                         return "include_states: enum value[] expected";
-                    case 0:
-                    case 1:
-                    case 2:
-                    case 3:
-                    case 4:
-                    case 5:
-                    case 6:
-                        break;
-                    }
             }
             if (message.exclude_workflows != null && $Object.hasOwnProperty.call(message, "exclude_workflows")) {
                 if (!$Array.isArray(message.exclude_workflows))
@@ -97715,18 +97794,8 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 if (!$Array.isArray(message.exclude_states))
                     return "exclude_states: array expected";
                 for (let i = 0; i < message.exclude_states.length; ++i)
-                    switch (message.exclude_states[i]) {
-                    default:
+                    if (typeof message.exclude_states[i] !== "number" || (message.exclude_states[i] | 0) !== message.exclude_states[i])
                         return "exclude_states: enum value[] expected";
-                    case 0:
-                    case 1:
-                    case 2:
-                    case 3:
-                    case 4:
-                    case 5:
-                    case 6:
-                        break;
-                    }
             }
             if (message.exclude_frozen != null && $Object.hasOwnProperty.call(message, "exclude_frozen"))
                 if (typeof message.exclude_frozen !== "boolean")
@@ -97769,42 +97838,40 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
             if (object.include_states) {
                 if (!$Array.isArray(object.include_states))
                     throw $TypeError(".tabletmanagerdata.ReadVReplicationWorkflowsRequest.include_states: array expected");
-                message.include_states = $Array(object.include_states.length);
+                message.include_states = [];
                 for (let i = 0; i < object.include_states.length; ++i)
                     switch (object.include_states[i]) {
-                    default:
-                        if (typeof object.include_states[i] === "number") {
-                            message.include_states[i] = object.include_states[i];
-                            break;
-                        }
                     case "Unknown":
                     case 0:
-                        message.include_states[i] = 0;
+                        message.include_states[message.include_states.length] = 0;
                         break;
                     case "Init":
                     case 1:
-                        message.include_states[i] = 1;
+                        message.include_states[message.include_states.length] = 1;
                         break;
                     case "Stopped":
                     case 2:
-                        message.include_states[i] = 2;
+                        message.include_states[message.include_states.length] = 2;
                         break;
                     case "Copying":
                     case 3:
-                        message.include_states[i] = 3;
+                        message.include_states[message.include_states.length] = 3;
                         break;
                     case "Running":
                     case 4:
-                        message.include_states[i] = 4;
+                        message.include_states[message.include_states.length] = 4;
                         break;
                     case "Error":
                     case 5:
-                        message.include_states[i] = 5;
+                        message.include_states[message.include_states.length] = 5;
                         break;
                     case "Lagging":
                     case 6:
-                        message.include_states[i] = 6;
+                        message.include_states[message.include_states.length] = 6;
                         break;
+                    default:
+                        if (typeof object.include_states[i] === "number" && (object.include_states[i] | 0) === object.include_states[i])
+                            message.include_states[message.include_states.length] = object.include_states[i];
                     }
             }
             if (object.exclude_workflows) {
@@ -97817,42 +97884,40 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
             if (object.exclude_states) {
                 if (!$Array.isArray(object.exclude_states))
                     throw $TypeError(".tabletmanagerdata.ReadVReplicationWorkflowsRequest.exclude_states: array expected");
-                message.exclude_states = $Array(object.exclude_states.length);
+                message.exclude_states = [];
                 for (let i = 0; i < object.exclude_states.length; ++i)
                     switch (object.exclude_states[i]) {
-                    default:
-                        if (typeof object.exclude_states[i] === "number") {
-                            message.exclude_states[i] = object.exclude_states[i];
-                            break;
-                        }
                     case "Unknown":
                     case 0:
-                        message.exclude_states[i] = 0;
+                        message.exclude_states[message.exclude_states.length] = 0;
                         break;
                     case "Init":
                     case 1:
-                        message.exclude_states[i] = 1;
+                        message.exclude_states[message.exclude_states.length] = 1;
                         break;
                     case "Stopped":
                     case 2:
-                        message.exclude_states[i] = 2;
+                        message.exclude_states[message.exclude_states.length] = 2;
                         break;
                     case "Copying":
                     case 3:
-                        message.exclude_states[i] = 3;
+                        message.exclude_states[message.exclude_states.length] = 3;
                         break;
                     case "Running":
                     case 4:
-                        message.exclude_states[i] = 4;
+                        message.exclude_states[message.exclude_states.length] = 4;
                         break;
                     case "Error":
                     case 5:
-                        message.exclude_states[i] = 5;
+                        message.exclude_states[message.exclude_states.length] = 5;
                         break;
                     case "Lagging":
                     case 6:
-                        message.exclude_states[i] = 6;
+                        message.exclude_states[message.exclude_states.length] = 6;
                         break;
+                    default:
+                        if (typeof object.exclude_states[i] === "number" && (object.exclude_states[i] | 0) === object.exclude_states[i])
+                            message.exclude_states[message.exclude_states.length] = object.exclude_states[i];
                     }
             }
             if (object.exclude_frozen != null)
@@ -98299,7 +98364,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.workflow != null && $Object.hasOwnProperty.call(message, "workflow"))
+            if (message.workflow != null && $Object.hasOwnProperty.call(message, "workflow") && message.workflow !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.workflow);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -98661,32 +98726,28 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.workflow != null && $Object.hasOwnProperty.call(message, "workflow"))
+            if (message.workflow != null && $Object.hasOwnProperty.call(message, "workflow") && message.workflow !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.workflow);
-            if (message.cells != null && $Object.hasOwnProperty.call(message, "cells"))
+            if (message.cells != null && $Object.hasOwnProperty.call(message, "cells") && message.cells !== "")
                 writer.uint32(/* id 3, wireType 2 =*/26).string(message.cells);
-            if (message.tablet_types != null && message.tablet_types.length) {
-                writer.uint32(/* id 4, wireType 2 =*/34).fork();
-                for (let i = 0; i < message.tablet_types.length; ++i)
-                    writer.int32(message.tablet_types[i]);
-                writer.ldelim();
-            }
-            if (message.tablet_selection_preference != null && $Object.hasOwnProperty.call(message, "tablet_selection_preference"))
+            if (message.tablet_types != null && message.tablet_types.length)
+                writer.uint32(/* id 4, wireType 2 =*/34).int32s(message.tablet_types);
+            if (message.tablet_selection_preference != null && $Object.hasOwnProperty.call(message, "tablet_selection_preference") && message.tablet_selection_preference !== 0)
                 writer.uint32(/* id 5, wireType 0 =*/40).int32(message.tablet_selection_preference);
-            if (message.db_name != null && $Object.hasOwnProperty.call(message, "db_name"))
+            if (message.db_name != null && $Object.hasOwnProperty.call(message, "db_name") && message.db_name !== "")
                 writer.uint32(/* id 6, wireType 2 =*/50).string(message.db_name);
-            if (message.tags != null && $Object.hasOwnProperty.call(message, "tags"))
+            if (message.tags != null && $Object.hasOwnProperty.call(message, "tags") && message.tags !== "")
                 writer.uint32(/* id 7, wireType 2 =*/58).string(message.tags);
-            if (message.workflow_type != null && $Object.hasOwnProperty.call(message, "workflow_type"))
+            if (message.workflow_type != null && $Object.hasOwnProperty.call(message, "workflow_type") && message.workflow_type !== 0)
                 writer.uint32(/* id 8, wireType 0 =*/64).int32(message.workflow_type);
-            if (message.workflow_sub_type != null && $Object.hasOwnProperty.call(message, "workflow_sub_type"))
+            if (message.workflow_sub_type != null && $Object.hasOwnProperty.call(message, "workflow_sub_type") && message.workflow_sub_type !== 0)
                 writer.uint32(/* id 9, wireType 0 =*/72).int32(message.workflow_sub_type);
-            if (message.defer_secondary_keys != null && $Object.hasOwnProperty.call(message, "defer_secondary_keys"))
+            if (message.defer_secondary_keys != null && $Object.hasOwnProperty.call(message, "defer_secondary_keys") && message.defer_secondary_keys !== false)
                 writer.uint32(/* id 10, wireType 0 =*/80).bool(message.defer_secondary_keys);
             if (message.streams != null && message.streams.length)
                 for (let i = 0; i < message.streams.length; ++i)
                     $root.tabletmanagerdata.ReadVReplicationWorkflowResponse.Stream.encode(message.streams[i], writer.uint32(/* id 11, wireType 2 =*/90).fork(), _depth + 1).ldelim();
-            if (message.options != null && $Object.hasOwnProperty.call(message, "options"))
+            if (message.options != null && $Object.hasOwnProperty.call(message, "options") && message.options !== "")
                 writer.uint32(/* id 12, wireType 2 =*/98).string(message.options);
             if (message.config_overrides != null && $Object.hasOwnProperty.call(message, "config_overrides"))
                 for (let keys = $Object.keys(message.config_overrides), i = 0; i < keys.length; ++i)
@@ -98760,9 +98821,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                         if (wireType === 2) {
                             if (!(message.tablet_types && message.tablet_types.length))
                                 message.tablet_types = [];
-                            let end2 = reader.uint32() + reader.pos;
-                            while (reader.pos < end2)
-                                message.tablet_types.push(reader.int32());
+                            reader.int32s(message.tablet_types);
                             continue;
                         }
                         if (wireType !== 0)
@@ -98926,32 +98985,12 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 if (!$Array.isArray(message.tablet_types))
                     return "tablet_types: array expected";
                 for (let i = 0; i < message.tablet_types.length; ++i)
-                    switch (message.tablet_types[i]) {
-                    default:
+                    if (typeof message.tablet_types[i] !== "number" || (message.tablet_types[i] | 0) !== message.tablet_types[i])
                         return "tablet_types: enum value[] expected";
-                    case 0:
-                    case 1:
-                    case 1:
-                    case 2:
-                    case 3:
-                    case 3:
-                    case 4:
-                    case 5:
-                    case 6:
-                    case 7:
-                    case 8:
-                        break;
-                    }
             }
             if (message.tablet_selection_preference != null && $Object.hasOwnProperty.call(message, "tablet_selection_preference"))
-                switch (message.tablet_selection_preference) {
-                default:
+                if (typeof message.tablet_selection_preference !== "number" || (message.tablet_selection_preference | 0) !== message.tablet_selection_preference)
                     return "tablet_selection_preference: enum value expected";
-                case 0:
-                case 1:
-                case 3:
-                    break;
-                }
             if (message.db_name != null && $Object.hasOwnProperty.call(message, "db_name"))
                 if (!$util.isString(message.db_name))
                     return "db_name: string expected";
@@ -98959,26 +98998,11 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 if (!$util.isString(message.tags))
                     return "tags: string expected";
             if (message.workflow_type != null && $Object.hasOwnProperty.call(message, "workflow_type"))
-                switch (message.workflow_type) {
-                default:
+                if (typeof message.workflow_type !== "number" || (message.workflow_type | 0) !== message.workflow_type)
                     return "workflow_type: enum value expected";
-                case 0:
-                case 1:
-                case 2:
-                case 3:
-                case 4:
-                case 5:
-                    break;
-                }
             if (message.workflow_sub_type != null && $Object.hasOwnProperty.call(message, "workflow_sub_type"))
-                switch (message.workflow_sub_type) {
-                default:
+                if (typeof message.workflow_sub_type !== "number" || (message.workflow_sub_type | 0) !== message.workflow_sub_type)
                     return "workflow_sub_type: enum value expected";
-                case 0:
-                case 1:
-                case 2:
-                    break;
-                }
             if (message.defer_secondary_keys != null && $Object.hasOwnProperty.call(message, "defer_secondary_keys"))
                 if (typeof message.defer_secondary_keys !== "boolean")
                     return "defer_secondary_keys: boolean expected";
@@ -99032,68 +99056,60 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
             if (object.tablet_types) {
                 if (!$Array.isArray(object.tablet_types))
                     throw $TypeError(".tabletmanagerdata.ReadVReplicationWorkflowResponse.tablet_types: array expected");
-                message.tablet_types = $Array(object.tablet_types.length);
+                message.tablet_types = [];
                 for (let i = 0; i < object.tablet_types.length; ++i)
                     switch (object.tablet_types[i]) {
-                    default:
-                        if (typeof object.tablet_types[i] === "number") {
-                            message.tablet_types[i] = object.tablet_types[i];
-                            break;
-                        }
                     case "UNKNOWN":
                     case 0:
-                        message.tablet_types[i] = 0;
+                        message.tablet_types[message.tablet_types.length] = 0;
                         break;
                     case "PRIMARY":
                     case 1:
-                        message.tablet_types[i] = 1;
+                        message.tablet_types[message.tablet_types.length] = 1;
                         break;
                     case "MASTER":
                     case 1:
-                        message.tablet_types[i] = 1;
+                        message.tablet_types[message.tablet_types.length] = 1;
                         break;
                     case "REPLICA":
                     case 2:
-                        message.tablet_types[i] = 2;
+                        message.tablet_types[message.tablet_types.length] = 2;
                         break;
                     case "RDONLY":
                     case 3:
-                        message.tablet_types[i] = 3;
+                        message.tablet_types[message.tablet_types.length] = 3;
                         break;
                     case "BATCH":
                     case 3:
-                        message.tablet_types[i] = 3;
+                        message.tablet_types[message.tablet_types.length] = 3;
                         break;
                     case "SPARE":
                     case 4:
-                        message.tablet_types[i] = 4;
+                        message.tablet_types[message.tablet_types.length] = 4;
                         break;
                     case "EXPERIMENTAL":
                     case 5:
-                        message.tablet_types[i] = 5;
+                        message.tablet_types[message.tablet_types.length] = 5;
                         break;
                     case "BACKUP":
                     case 6:
-                        message.tablet_types[i] = 6;
+                        message.tablet_types[message.tablet_types.length] = 6;
                         break;
                     case "RESTORE":
                     case 7:
-                        message.tablet_types[i] = 7;
+                        message.tablet_types[message.tablet_types.length] = 7;
                         break;
                     case "DRAINED":
                     case 8:
-                        message.tablet_types[i] = 8;
+                        message.tablet_types[message.tablet_types.length] = 8;
                         break;
+                    default:
+                        if (typeof object.tablet_types[i] === "number" && (object.tablet_types[i] | 0) === object.tablet_types[i])
+                            message.tablet_types[message.tablet_types.length] = object.tablet_types[i];
                     }
             }
             if (object.tablet_selection_preference !== 0 && (typeof object.tablet_selection_preference !== "string" || $root.tabletmanagerdata.TabletSelectionPreference[object.tablet_selection_preference] !== 0))
                 switch (object.tablet_selection_preference) {
-                default:
-                    if (typeof object.tablet_selection_preference === "number") {
-                        message.tablet_selection_preference = object.tablet_selection_preference;
-                        break;
-                    }
-                    break;
                 case "ANY":
                 case 0:
                     message.tablet_selection_preference = 0;
@@ -99106,6 +99122,9 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 case 3:
                     message.tablet_selection_preference = 3;
                     break;
+                default:
+                    if (typeof object.tablet_selection_preference === "number" && (object.tablet_selection_preference | 0) === object.tablet_selection_preference)
+                        message.tablet_selection_preference = object.tablet_selection_preference;
                 }
             if (object.db_name != null)
                 if (typeof object.db_name !== "string" || object.db_name.length)
@@ -99115,12 +99134,6 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                     message.tags = $String(object.tags);
             if (object.workflow_type !== 0 && (typeof object.workflow_type !== "string" || $root.binlogdata.VReplicationWorkflowType[object.workflow_type] !== 0))
                 switch (object.workflow_type) {
-                default:
-                    if (typeof object.workflow_type === "number") {
-                        message.workflow_type = object.workflow_type;
-                        break;
-                    }
-                    break;
                 case "Materialize":
                 case 0:
                     message.workflow_type = 0;
@@ -99145,15 +99158,12 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 case 5:
                     message.workflow_type = 5;
                     break;
+                default:
+                    if (typeof object.workflow_type === "number" && (object.workflow_type | 0) === object.workflow_type)
+                        message.workflow_type = object.workflow_type;
                 }
             if (object.workflow_sub_type !== 0 && (typeof object.workflow_sub_type !== "string" || $root.binlogdata.VReplicationWorkflowSubType[object.workflow_sub_type] !== 0))
                 switch (object.workflow_sub_type) {
-                default:
-                    if (typeof object.workflow_sub_type === "number") {
-                        message.workflow_sub_type = object.workflow_sub_type;
-                        break;
-                    }
-                    break;
                 case "None":
                 case 0:
                     message.workflow_sub_type = 0;
@@ -99166,6 +99176,9 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 case 2:
                     message.workflow_sub_type = 2;
                     break;
+                default:
+                    if (typeof object.workflow_sub_type === "number" && (object.workflow_sub_type | 0) === object.workflow_sub_type)
+                        message.workflow_sub_type = object.workflow_sub_type;
                 }
             if (object.defer_secondary_keys != null)
                 if (object.defer_secondary_keys)
@@ -99489,33 +99502,33 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                     _depth = 0;
                 if (_depth > $util.recursionLimit)
                     throw $Error("max depth exceeded");
-                if (message.id != null && $Object.hasOwnProperty.call(message, "id"))
+                if (message.id != null && $Object.hasOwnProperty.call(message, "id") && message.id !== 0)
                     writer.uint32(/* id 1, wireType 0 =*/8).int32(message.id);
                 if (message.bls != null && $Object.hasOwnProperty.call(message, "bls"))
                     $root.binlogdata.BinlogSource.encode(message.bls, writer.uint32(/* id 2, wireType 2 =*/18).fork(), _depth + 1).ldelim();
-                if (message.pos != null && $Object.hasOwnProperty.call(message, "pos"))
+                if (message.pos != null && $Object.hasOwnProperty.call(message, "pos") && message.pos !== "")
                     writer.uint32(/* id 3, wireType 2 =*/26).string(message.pos);
-                if (message.stop_pos != null && $Object.hasOwnProperty.call(message, "stop_pos"))
+                if (message.stop_pos != null && $Object.hasOwnProperty.call(message, "stop_pos") && message.stop_pos !== "")
                     writer.uint32(/* id 4, wireType 2 =*/34).string(message.stop_pos);
-                if (message.max_tps != null && $Object.hasOwnProperty.call(message, "max_tps"))
+                if (message.max_tps != null && $Object.hasOwnProperty.call(message, "max_tps") && (typeof message.max_tps === "object" ? message.max_tps.low || message.max_tps.high : message.max_tps !== 0))
                     writer.uint32(/* id 5, wireType 0 =*/40).int64(message.max_tps);
-                if (message.max_replication_lag != null && $Object.hasOwnProperty.call(message, "max_replication_lag"))
+                if (message.max_replication_lag != null && $Object.hasOwnProperty.call(message, "max_replication_lag") && (typeof message.max_replication_lag === "object" ? message.max_replication_lag.low || message.max_replication_lag.high : message.max_replication_lag !== 0))
                     writer.uint32(/* id 6, wireType 0 =*/48).int64(message.max_replication_lag);
                 if (message.time_updated != null && $Object.hasOwnProperty.call(message, "time_updated"))
                     $root.vttime.Time.encode(message.time_updated, writer.uint32(/* id 7, wireType 2 =*/58).fork(), _depth + 1).ldelim();
                 if (message.transaction_timestamp != null && $Object.hasOwnProperty.call(message, "transaction_timestamp"))
                     $root.vttime.Time.encode(message.transaction_timestamp, writer.uint32(/* id 8, wireType 2 =*/66).fork(), _depth + 1).ldelim();
-                if (message.state != null && $Object.hasOwnProperty.call(message, "state"))
+                if (message.state != null && $Object.hasOwnProperty.call(message, "state") && message.state !== 0)
                     writer.uint32(/* id 9, wireType 0 =*/72).int32(message.state);
-                if (message.message != null && $Object.hasOwnProperty.call(message, "message"))
+                if (message.message != null && $Object.hasOwnProperty.call(message, "message") && message.message !== "")
                     writer.uint32(/* id 10, wireType 2 =*/82).string(message.message);
-                if (message.rows_copied != null && $Object.hasOwnProperty.call(message, "rows_copied"))
+                if (message.rows_copied != null && $Object.hasOwnProperty.call(message, "rows_copied") && (typeof message.rows_copied === "object" ? message.rows_copied.low || message.rows_copied.high : message.rows_copied !== 0))
                     writer.uint32(/* id 11, wireType 0 =*/88).int64(message.rows_copied);
                 if (message.time_heartbeat != null && $Object.hasOwnProperty.call(message, "time_heartbeat"))
                     $root.vttime.Time.encode(message.time_heartbeat, writer.uint32(/* id 12, wireType 2 =*/98).fork(), _depth + 1).ldelim();
                 if (message.time_throttled != null && $Object.hasOwnProperty.call(message, "time_throttled"))
                     $root.vttime.Time.encode(message.time_throttled, writer.uint32(/* id 13, wireType 2 =*/106).fork(), _depth + 1).ldelim();
-                if (message.component_throttled != null && $Object.hasOwnProperty.call(message, "component_throttled"))
+                if (message.component_throttled != null && $Object.hasOwnProperty.call(message, "component_throttled") && message.component_throttled !== "")
                     writer.uint32(/* id 14, wireType 2 =*/114).string(message.component_throttled);
                 if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                     for (let i = 0; i < message.$unknowns.length; ++i)
@@ -99749,18 +99762,8 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                         return "transaction_timestamp." + error;
                 }
                 if (message.state != null && $Object.hasOwnProperty.call(message, "state"))
-                    switch (message.state) {
-                    default:
+                    if (typeof message.state !== "number" || (message.state | 0) !== message.state)
                         return "state: enum value expected";
-                    case 0:
-                    case 1:
-                    case 2:
-                    case 3:
-                    case 4:
-                    case 5:
-                    case 6:
-                        break;
-                    }
                 if (message.message != null && $Object.hasOwnProperty.call(message, "message"))
                     if (!$util.isString(message.message))
                         return "message: string expected";
@@ -99847,12 +99850,6 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 }
                 if (object.state !== 0 && (typeof object.state !== "string" || $root.binlogdata.VReplicationWorkflowState[object.state] !== 0))
                     switch (object.state) {
-                    default:
-                        if (typeof object.state === "number") {
-                            message.state = object.state;
-                            break;
-                        }
-                        break;
                     case "Unknown":
                     case 0:
                         message.state = 0;
@@ -99881,6 +99878,9 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                     case 6:
                         message.state = 6;
                         break;
+                    default:
+                        if (typeof object.state === "number" && (object.state | 0) === object.state)
+                            message.state = object.state;
                     }
                 if (object.message != null)
                     if (typeof object.message !== "string" || object.message.length)
@@ -100347,11 +100347,11 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.user != null && $Object.hasOwnProperty.call(message, "user"))
+            if (message.user != null && $Object.hasOwnProperty.call(message, "user") && message.user !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.user);
-            if (message.ok != null && $Object.hasOwnProperty.call(message, "ok"))
+            if (message.ok != null && $Object.hasOwnProperty.call(message, "ok") && message.ok !== false)
                 writer.uint32(/* id 2, wireType 0 =*/16).bool(message.ok);
-            if (message.error != null && $Object.hasOwnProperty.call(message, "error"))
+            if (message.error != null && $Object.hasOwnProperty.call(message, "error") && message.error !== "")
                 writer.uint32(/* id 3, wireType 2 =*/26).string(message.error);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -100693,15 +100693,15 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
+            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace") && message.keyspace !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.keyspace);
-            if (message.workflow != null && $Object.hasOwnProperty.call(message, "workflow"))
+            if (message.workflow != null && $Object.hasOwnProperty.call(message, "workflow") && message.workflow !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.workflow);
-            if (message.action != null && $Object.hasOwnProperty.call(message, "action"))
+            if (message.action != null && $Object.hasOwnProperty.call(message, "action") && message.action !== "")
                 writer.uint32(/* id 3, wireType 2 =*/26).string(message.action);
-            if (message.action_arg != null && $Object.hasOwnProperty.call(message, "action_arg"))
+            if (message.action_arg != null && $Object.hasOwnProperty.call(message, "action_arg") && message.action_arg !== "")
                 writer.uint32(/* id 4, wireType 2 =*/34).string(message.action_arg);
-            if (message.vdiff_uuid != null && $Object.hasOwnProperty.call(message, "vdiff_uuid"))
+            if (message.vdiff_uuid != null && $Object.hasOwnProperty.call(message, "vdiff_uuid") && message.vdiff_uuid !== "")
                 writer.uint32(/* id 5, wireType 2 =*/42).string(message.vdiff_uuid);
             if (message.options != null && $Object.hasOwnProperty.call(message, "options"))
                 $root.tabletmanagerdata.VDiffOptions.encode(message.options, writer.uint32(/* id 6, wireType 2 =*/50).fork(), _depth + 1).ldelim();
@@ -101073,11 +101073,11 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.id != null && $Object.hasOwnProperty.call(message, "id"))
+            if (message.id != null && $Object.hasOwnProperty.call(message, "id") && (typeof message.id === "object" ? message.id.low || message.id.high : message.id !== 0))
                 writer.uint32(/* id 1, wireType 0 =*/8).int64(message.id);
             if (message.output != null && $Object.hasOwnProperty.call(message, "output"))
                 $root.query.QueryResult.encode(message.output, writer.uint32(/* id 2, wireType 2 =*/18).fork(), _depth + 1).ldelim();
-            if (message.vdiff_uuid != null && $Object.hasOwnProperty.call(message, "vdiff_uuid"))
+            if (message.vdiff_uuid != null && $Object.hasOwnProperty.call(message, "vdiff_uuid") && message.vdiff_uuid !== "")
                 writer.uint32(/* id 3, wireType 2 =*/26).string(message.vdiff_uuid);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -101409,11 +101409,11 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.tablet_types != null && $Object.hasOwnProperty.call(message, "tablet_types"))
+            if (message.tablet_types != null && $Object.hasOwnProperty.call(message, "tablet_types") && message.tablet_types !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.tablet_types);
-            if (message.source_cell != null && $Object.hasOwnProperty.call(message, "source_cell"))
+            if (message.source_cell != null && $Object.hasOwnProperty.call(message, "source_cell") && message.source_cell !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.source_cell);
-            if (message.target_cell != null && $Object.hasOwnProperty.call(message, "target_cell"))
+            if (message.target_cell != null && $Object.hasOwnProperty.call(message, "target_cell") && message.target_cell !== "")
                 writer.uint32(/* id 3, wireType 2 =*/26).string(message.target_cell);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -101746,15 +101746,15 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.only_pks != null && $Object.hasOwnProperty.call(message, "only_pks"))
+            if (message.only_pks != null && $Object.hasOwnProperty.call(message, "only_pks") && message.only_pks !== false)
                 writer.uint32(/* id 1, wireType 0 =*/8).bool(message.only_pks);
-            if (message.debug_query != null && $Object.hasOwnProperty.call(message, "debug_query"))
+            if (message.debug_query != null && $Object.hasOwnProperty.call(message, "debug_query") && message.debug_query !== false)
                 writer.uint32(/* id 2, wireType 0 =*/16).bool(message.debug_query);
-            if (message.format != null && $Object.hasOwnProperty.call(message, "format"))
+            if (message.format != null && $Object.hasOwnProperty.call(message, "format") && message.format !== "")
                 writer.uint32(/* id 3, wireType 2 =*/26).string(message.format);
-            if (message.max_sample_rows != null && $Object.hasOwnProperty.call(message, "max_sample_rows"))
+            if (message.max_sample_rows != null && $Object.hasOwnProperty.call(message, "max_sample_rows") && (typeof message.max_sample_rows === "object" ? message.max_sample_rows.low || message.max_sample_rows.high : message.max_sample_rows !== 0))
                 writer.uint32(/* id 4, wireType 0 =*/32).int64(message.max_sample_rows);
-            if (message.row_diff_column_truncate_at != null && $Object.hasOwnProperty.call(message, "row_diff_column_truncate_at"))
+            if (message.row_diff_column_truncate_at != null && $Object.hasOwnProperty.call(message, "row_diff_column_truncate_at") && (typeof message.row_diff_column_truncate_at === "object" ? message.row_diff_column_truncate_at.low || message.row_diff_column_truncate_at.high : message.row_diff_column_truncate_at !== 0))
                 writer.uint32(/* id 5, wireType 0 =*/40).int64(message.row_diff_column_truncate_at);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -102209,23 +102209,23 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.tables != null && $Object.hasOwnProperty.call(message, "tables"))
+            if (message.tables != null && $Object.hasOwnProperty.call(message, "tables") && message.tables !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.tables);
-            if (message.auto_retry != null && $Object.hasOwnProperty.call(message, "auto_retry"))
+            if (message.auto_retry != null && $Object.hasOwnProperty.call(message, "auto_retry") && message.auto_retry !== false)
                 writer.uint32(/* id 2, wireType 0 =*/16).bool(message.auto_retry);
-            if (message.max_rows != null && $Object.hasOwnProperty.call(message, "max_rows"))
+            if (message.max_rows != null && $Object.hasOwnProperty.call(message, "max_rows") && (typeof message.max_rows === "object" ? message.max_rows.low || message.max_rows.high : message.max_rows !== 0))
                 writer.uint32(/* id 3, wireType 0 =*/24).int64(message.max_rows);
-            if (message.checksum != null && $Object.hasOwnProperty.call(message, "checksum"))
+            if (message.checksum != null && $Object.hasOwnProperty.call(message, "checksum") && message.checksum !== false)
                 writer.uint32(/* id 4, wireType 0 =*/32).bool(message.checksum);
-            if (message.sample_pct != null && $Object.hasOwnProperty.call(message, "sample_pct"))
+            if (message.sample_pct != null && $Object.hasOwnProperty.call(message, "sample_pct") && (typeof message.sample_pct === "object" ? message.sample_pct.low || message.sample_pct.high : message.sample_pct !== 0))
                 writer.uint32(/* id 5, wireType 0 =*/40).int64(message.sample_pct);
-            if (message.timeout_seconds != null && $Object.hasOwnProperty.call(message, "timeout_seconds"))
+            if (message.timeout_seconds != null && $Object.hasOwnProperty.call(message, "timeout_seconds") && (typeof message.timeout_seconds === "object" ? message.timeout_seconds.low || message.timeout_seconds.high : message.timeout_seconds !== 0))
                 writer.uint32(/* id 6, wireType 0 =*/48).int64(message.timeout_seconds);
-            if (message.max_extra_rows_to_compare != null && $Object.hasOwnProperty.call(message, "max_extra_rows_to_compare"))
+            if (message.max_extra_rows_to_compare != null && $Object.hasOwnProperty.call(message, "max_extra_rows_to_compare") && (typeof message.max_extra_rows_to_compare === "object" ? message.max_extra_rows_to_compare.low || message.max_extra_rows_to_compare.high : message.max_extra_rows_to_compare !== 0))
                 writer.uint32(/* id 7, wireType 0 =*/56).int64(message.max_extra_rows_to_compare);
-            if (message.update_table_stats != null && $Object.hasOwnProperty.call(message, "update_table_stats"))
+            if (message.update_table_stats != null && $Object.hasOwnProperty.call(message, "update_table_stats") && message.update_table_stats !== false)
                 writer.uint32(/* id 8, wireType 0 =*/64).bool(message.update_table_stats);
-            if (message.max_diff_seconds != null && $Object.hasOwnProperty.call(message, "max_diff_seconds"))
+            if (message.max_diff_seconds != null && $Object.hasOwnProperty.call(message, "max_diff_seconds") && (typeof message.max_diff_seconds === "object" ? message.max_diff_seconds.low || message.max_diff_seconds.high : message.max_diff_seconds !== 0))
                 writer.uint32(/* id 9, wireType 0 =*/72).int64(message.max_diff_seconds);
             if (message.auto_start != null && $Object.hasOwnProperty.call(message, "auto_start"))
                 writer.uint32(/* id 10, wireType 0 =*/80).bool(message.auto_start);
@@ -103468,17 +103468,13 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.workflow != null && $Object.hasOwnProperty.call(message, "workflow"))
+            if (message.workflow != null && $Object.hasOwnProperty.call(message, "workflow") && message.workflow !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.workflow);
             if (message.cells != null && message.cells.length)
                 for (let i = 0; i < message.cells.length; ++i)
                     writer.uint32(/* id 2, wireType 2 =*/18).string(message.cells[i]);
-            if (message.tablet_types != null && message.tablet_types.length) {
-                writer.uint32(/* id 3, wireType 2 =*/26).fork();
-                for (let i = 0; i < message.tablet_types.length; ++i)
-                    writer.int32(message.tablet_types[i]);
-                writer.ldelim();
-            }
+            if (message.tablet_types != null && message.tablet_types.length)
+                writer.uint32(/* id 3, wireType 2 =*/26).int32s(message.tablet_types);
             if (message.tablet_selection_preference != null && $Object.hasOwnProperty.call(message, "tablet_selection_preference"))
                 writer.uint32(/* id 4, wireType 0 =*/32).int32(message.tablet_selection_preference);
             if (message.on_ddl != null && $Object.hasOwnProperty.call(message, "on_ddl"))
@@ -103564,9 +103560,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                         if (wireType === 2) {
                             if (!(message.tablet_types && message.tablet_types.length))
                                 message.tablet_types = [];
-                            let end2 = reader.uint32() + reader.pos;
-                            while (reader.pos < end2)
-                                message.tablet_types.push(reader.int32());
+                            reader.int32s(message.tablet_types);
                             continue;
                         }
                         if (wireType !== 0)
@@ -103708,60 +103702,23 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 if (!$Array.isArray(message.tablet_types))
                     return "tablet_types: array expected";
                 for (let i = 0; i < message.tablet_types.length; ++i)
-                    switch (message.tablet_types[i]) {
-                    default:
+                    if (typeof message.tablet_types[i] !== "number" || (message.tablet_types[i] | 0) !== message.tablet_types[i])
                         return "tablet_types: enum value[] expected";
-                    case 0:
-                    case 1:
-                    case 1:
-                    case 2:
-                    case 3:
-                    case 3:
-                    case 4:
-                    case 5:
-                    case 6:
-                    case 7:
-                    case 8:
-                        break;
-                    }
             }
             if (message.tablet_selection_preference != null && $Object.hasOwnProperty.call(message, "tablet_selection_preference")) {
                 properties._tablet_selection_preference = 1;
-                switch (message.tablet_selection_preference) {
-                default:
+                if (typeof message.tablet_selection_preference !== "number" || (message.tablet_selection_preference | 0) !== message.tablet_selection_preference)
                     return "tablet_selection_preference: enum value expected";
-                case 0:
-                case 1:
-                case 3:
-                    break;
-                }
             }
             if (message.on_ddl != null && $Object.hasOwnProperty.call(message, "on_ddl")) {
                 properties._on_ddl = 1;
-                switch (message.on_ddl) {
-                default:
+                if (typeof message.on_ddl !== "number" || (message.on_ddl | 0) !== message.on_ddl)
                     return "on_ddl: enum value expected";
-                case 0:
-                case 1:
-                case 2:
-                case 3:
-                    break;
-                }
             }
             if (message.state != null && $Object.hasOwnProperty.call(message, "state")) {
                 properties._state = 1;
-                switch (message.state) {
-                default:
+                if (typeof message.state !== "number" || (message.state | 0) !== message.state)
                     return "state: enum value expected";
-                case 0:
-                case 1:
-                case 2:
-                case 3:
-                case 4:
-                case 5:
-                case 6:
-                    break;
-                }
             }
             if (message.shards != null && $Object.hasOwnProperty.call(message, "shards")) {
                 if (!$Array.isArray(message.shards))
@@ -103826,67 +103783,59 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
             if (object.tablet_types) {
                 if (!$Array.isArray(object.tablet_types))
                     throw $TypeError(".tabletmanagerdata.UpdateVReplicationWorkflowRequest.tablet_types: array expected");
-                message.tablet_types = $Array(object.tablet_types.length);
+                message.tablet_types = [];
                 for (let i = 0; i < object.tablet_types.length; ++i)
                     switch (object.tablet_types[i]) {
-                    default:
-                        if (typeof object.tablet_types[i] === "number") {
-                            message.tablet_types[i] = object.tablet_types[i];
-                            break;
-                        }
                     case "UNKNOWN":
                     case 0:
-                        message.tablet_types[i] = 0;
+                        message.tablet_types[message.tablet_types.length] = 0;
                         break;
                     case "PRIMARY":
                     case 1:
-                        message.tablet_types[i] = 1;
+                        message.tablet_types[message.tablet_types.length] = 1;
                         break;
                     case "MASTER":
                     case 1:
-                        message.tablet_types[i] = 1;
+                        message.tablet_types[message.tablet_types.length] = 1;
                         break;
                     case "REPLICA":
                     case 2:
-                        message.tablet_types[i] = 2;
+                        message.tablet_types[message.tablet_types.length] = 2;
                         break;
                     case "RDONLY":
                     case 3:
-                        message.tablet_types[i] = 3;
+                        message.tablet_types[message.tablet_types.length] = 3;
                         break;
                     case "BATCH":
                     case 3:
-                        message.tablet_types[i] = 3;
+                        message.tablet_types[message.tablet_types.length] = 3;
                         break;
                     case "SPARE":
                     case 4:
-                        message.tablet_types[i] = 4;
+                        message.tablet_types[message.tablet_types.length] = 4;
                         break;
                     case "EXPERIMENTAL":
                     case 5:
-                        message.tablet_types[i] = 5;
+                        message.tablet_types[message.tablet_types.length] = 5;
                         break;
                     case "BACKUP":
                     case 6:
-                        message.tablet_types[i] = 6;
+                        message.tablet_types[message.tablet_types.length] = 6;
                         break;
                     case "RESTORE":
                     case 7:
-                        message.tablet_types[i] = 7;
+                        message.tablet_types[message.tablet_types.length] = 7;
                         break;
                     case "DRAINED":
                     case 8:
-                        message.tablet_types[i] = 8;
+                        message.tablet_types[message.tablet_types.length] = 8;
                         break;
+                    default:
+                        if (typeof object.tablet_types[i] === "number" && (object.tablet_types[i] | 0) === object.tablet_types[i])
+                            message.tablet_types[message.tablet_types.length] = object.tablet_types[i];
                     }
             }
             switch (object.tablet_selection_preference) {
-            default:
-                if (typeof object.tablet_selection_preference === "number") {
-                    message.tablet_selection_preference = object.tablet_selection_preference;
-                    break;
-                }
-                break;
             case "ANY":
             case 0:
                 message.tablet_selection_preference = 0;
@@ -103899,14 +103848,11 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
             case 3:
                 message.tablet_selection_preference = 3;
                 break;
+            default:
+                if (typeof object.tablet_selection_preference === "number" && (object.tablet_selection_preference | 0) === object.tablet_selection_preference)
+                    message.tablet_selection_preference = object.tablet_selection_preference;
             }
             switch (object.on_ddl) {
-            default:
-                if (typeof object.on_ddl === "number") {
-                    message.on_ddl = object.on_ddl;
-                    break;
-                }
-                break;
             case "IGNORE":
             case 0:
                 message.on_ddl = 0;
@@ -103923,14 +103869,11 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
             case 3:
                 message.on_ddl = 3;
                 break;
+            default:
+                if (typeof object.on_ddl === "number" && (object.on_ddl | 0) === object.on_ddl)
+                    message.on_ddl = object.on_ddl;
             }
             switch (object.state) {
-            default:
-                if (typeof object.state === "number") {
-                    message.state = object.state;
-                    break;
-                }
-                break;
             case "Unknown":
             case 0:
                 message.state = 0;
@@ -103959,6 +103902,9 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
             case 6:
                 message.state = 6;
                 break;
+            default:
+                if (typeof object.state === "number" && (object.state | 0) === object.state)
+                    message.state = object.state;
             }
             if (object.shards) {
                 if (!$Array.isArray(object.shards))
@@ -104495,7 +104441,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.all_workflows != null && $Object.hasOwnProperty.call(message, "all_workflows"))
+            if (message.all_workflows != null && $Object.hasOwnProperty.call(message, "all_workflows") && message.all_workflows !== false)
                 writer.uint32(/* id 1, wireType 0 =*/8).bool(message.all_workflows);
             if (message.include_workflows != null && message.include_workflows.length)
                 for (let i = 0; i < message.include_workflows.length; ++i)
@@ -104665,18 +104611,8 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
             }
             if (message.state != null && $Object.hasOwnProperty.call(message, "state")) {
                 properties._state = 1;
-                switch (message.state) {
-                default:
+                if (typeof message.state !== "number" || (message.state | 0) !== message.state)
                     return "state: enum value expected";
-                case 0:
-                case 1:
-                case 2:
-                case 3:
-                case 4:
-                case 5:
-                case 6:
-                    break;
-                }
             }
             if (message.message != null && $Object.hasOwnProperty.call(message, "message")) {
                 properties._message = 1;
@@ -104727,12 +104663,6 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                     message.exclude_workflows[i] = $String(object.exclude_workflows[i]);
             }
             switch (object.state) {
-            default:
-                if (typeof object.state === "number") {
-                    message.state = object.state;
-                    break;
-                }
-                break;
             case "Unknown":
             case 0:
                 message.state = 0;
@@ -104761,6 +104691,9 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
             case 6:
                 message.state = 6;
                 break;
+            default:
+                if (typeof object.state === "number" && (object.state | 0) === object.state)
+                    message.state = object.state;
             }
             if (object.message != null)
                 message.message = $String(object.message);
@@ -105697,13 +105630,13 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.app_name != null && $Object.hasOwnProperty.call(message, "app_name"))
+            if (message.app_name != null && $Object.hasOwnProperty.call(message, "app_name") && message.app_name !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.app_name);
-            if (message.scope != null && $Object.hasOwnProperty.call(message, "scope"))
+            if (message.scope != null && $Object.hasOwnProperty.call(message, "scope") && message.scope !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.scope);
-            if (message.skip_request_heartbeats != null && $Object.hasOwnProperty.call(message, "skip_request_heartbeats"))
+            if (message.skip_request_heartbeats != null && $Object.hasOwnProperty.call(message, "skip_request_heartbeats") && message.skip_request_heartbeats !== false)
                 writer.uint32(/* id 3, wireType 0 =*/24).bool(message.skip_request_heartbeats);
-            if (message.ok_if_not_exists != null && $Object.hasOwnProperty.call(message, "ok_if_not_exists"))
+            if (message.ok_if_not_exists != null && $Object.hasOwnProperty.call(message, "ok_if_not_exists") && message.ok_if_not_exists !== false)
                 writer.uint32(/* id 4, wireType 0 =*/32).bool(message.ok_if_not_exists);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -106113,26 +106046,26 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.value != null && $Object.hasOwnProperty.call(message, "value"))
+            if (message.value != null && $Object.hasOwnProperty.call(message, "value") && !$Object.is(message.value, 0))
                 writer.uint32(/* id 2, wireType 1 =*/17).double(message.value);
-            if (message.threshold != null && $Object.hasOwnProperty.call(message, "threshold"))
+            if (message.threshold != null && $Object.hasOwnProperty.call(message, "threshold") && !$Object.is(message.threshold, 0))
                 writer.uint32(/* id 3, wireType 1 =*/25).double(message.threshold);
-            if (message.error != null && $Object.hasOwnProperty.call(message, "error"))
+            if (message.error != null && $Object.hasOwnProperty.call(message, "error") && message.error !== "")
                 writer.uint32(/* id 4, wireType 2 =*/34).string(message.error);
-            if (message.message != null && $Object.hasOwnProperty.call(message, "message"))
+            if (message.message != null && $Object.hasOwnProperty.call(message, "message") && message.message !== "")
                 writer.uint32(/* id 5, wireType 2 =*/42).string(message.message);
-            if (message.recently_checked != null && $Object.hasOwnProperty.call(message, "recently_checked"))
+            if (message.recently_checked != null && $Object.hasOwnProperty.call(message, "recently_checked") && message.recently_checked !== false)
                 writer.uint32(/* id 6, wireType 0 =*/48).bool(message.recently_checked);
             if (message.metrics != null && $Object.hasOwnProperty.call(message, "metrics"))
                 for (let keys = $Object.keys(message.metrics), i = 0; i < keys.length; ++i) {
                     writer.uint32(/* id 7, wireType 2 =*/58).fork().uint32(/* id 1, wireType 2 =*/10).string(keys[i]);
                     $root.tabletmanagerdata.CheckThrottlerResponse.Metric.encode(message.metrics[keys[i]], writer.uint32(/* id 2, wireType 2 =*/18).fork(), _depth + 1).ldelim().ldelim();
                 }
-            if (message.app_name != null && $Object.hasOwnProperty.call(message, "app_name"))
+            if (message.app_name != null && $Object.hasOwnProperty.call(message, "app_name") && message.app_name !== "")
                 writer.uint32(/* id 8, wireType 2 =*/66).string(message.app_name);
-            if (message.summary != null && $Object.hasOwnProperty.call(message, "summary"))
+            if (message.summary != null && $Object.hasOwnProperty.call(message, "summary") && message.summary !== "")
                 writer.uint32(/* id 9, wireType 2 =*/74).string(message.summary);
-            if (message.response_code != null && $Object.hasOwnProperty.call(message, "response_code"))
+            if (message.response_code != null && $Object.hasOwnProperty.call(message, "response_code") && message.response_code !== 0)
                 writer.uint32(/* id 10, wireType 0 =*/80).int32(message.response_code);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -106184,7 +106117,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 case 2: {
                         if (wireType !== 1)
                             break;
-                        if ((value = reader.double()) !== 0)
+                        if (!$Object.is(value = reader.double(), 0))
                             message.value = value;
                         else
                             delete message.value;
@@ -106193,7 +106126,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 case 3: {
                         if (wireType !== 1)
                             break;
-                        if ((value = reader.double()) !== 0)
+                        if (!$Object.is(value = reader.double(), 0))
                             message.threshold = value;
                         else
                             delete message.threshold;
@@ -106246,7 +106179,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                             case 2:
                                 if (wireType !== 2)
                                     break;
-                                value = $root.tabletmanagerdata.CheckThrottlerResponse.Metric.decode(reader, reader.uint32(), $undefined, _depth + 1);
+                                value = $root.tabletmanagerdata.CheckThrottlerResponse.Metric.decode(reader, reader.uint32(), $undefined, _depth + 1, value);
                                 continue;
                             }
                             reader.skipType(wireType, _depth, tag2);
@@ -106358,17 +106291,8 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 if (!$util.isString(message.summary))
                     return "summary: string expected";
             if (message.response_code != null && $Object.hasOwnProperty.call(message, "response_code"))
-                switch (message.response_code) {
-                default:
+                if (typeof message.response_code !== "number" || (message.response_code | 0) !== message.response_code)
                     return "response_code: enum value expected";
-                case 0:
-                case 1:
-                case 2:
-                case 3:
-                case 4:
-                case 5:
-                    break;
-                }
             return null;
         };
 
@@ -106391,10 +106315,10 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 throw $Error("max depth exceeded");
             let message = new $root.tabletmanagerdata.CheckThrottlerResponse();
             if (object.value != null)
-                if ($Number(object.value) !== 0)
+                if (!$Object.is($Number(object.value), 0))
                     message.value = $Number(object.value);
             if (object.threshold != null)
-                if ($Number(object.threshold) !== 0)
+                if (!$Object.is($Number(object.threshold), 0))
                     message.threshold = $Number(object.threshold);
             if (object.error != null)
                 if (typeof object.error !== "string" || object.error.length)
@@ -106425,12 +106349,6 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                     message.summary = $String(object.summary);
             if (object.response_code !== 0 && (typeof object.response_code !== "string" || $root.tabletmanagerdata.CheckThrottlerResponseCode[object.response_code] !== 0))
                 switch (object.response_code) {
-                default:
-                    if (typeof object.response_code === "number") {
-                        message.response_code = object.response_code;
-                        break;
-                    }
-                    break;
                 case "UNDEFINED":
                 case 0:
                     message.response_code = 0;
@@ -106455,6 +106373,9 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 case 5:
                     message.response_code = 5;
                     break;
+                default:
+                    if (typeof object.response_code === "number" && (object.response_code | 0) === object.response_code)
+                        message.response_code = object.response_code;
                 }
             return message;
         };
@@ -106672,19 +106593,19 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                     _depth = 0;
                 if (_depth > $util.recursionLimit)
                     throw $Error("max depth exceeded");
-                if (message.name != null && $Object.hasOwnProperty.call(message, "name"))
+                if (message.name != null && $Object.hasOwnProperty.call(message, "name") && message.name !== "")
                     writer.uint32(/* id 1, wireType 2 =*/10).string(message.name);
-                if (message.value != null && $Object.hasOwnProperty.call(message, "value"))
+                if (message.value != null && $Object.hasOwnProperty.call(message, "value") && !$Object.is(message.value, 0))
                     writer.uint32(/* id 3, wireType 1 =*/25).double(message.value);
-                if (message.threshold != null && $Object.hasOwnProperty.call(message, "threshold"))
+                if (message.threshold != null && $Object.hasOwnProperty.call(message, "threshold") && !$Object.is(message.threshold, 0))
                     writer.uint32(/* id 4, wireType 1 =*/33).double(message.threshold);
-                if (message.error != null && $Object.hasOwnProperty.call(message, "error"))
+                if (message.error != null && $Object.hasOwnProperty.call(message, "error") && message.error !== "")
                     writer.uint32(/* id 5, wireType 2 =*/42).string(message.error);
-                if (message.message != null && $Object.hasOwnProperty.call(message, "message"))
+                if (message.message != null && $Object.hasOwnProperty.call(message, "message") && message.message !== "")
                     writer.uint32(/* id 6, wireType 2 =*/50).string(message.message);
-                if (message.scope != null && $Object.hasOwnProperty.call(message, "scope"))
+                if (message.scope != null && $Object.hasOwnProperty.call(message, "scope") && message.scope !== "")
                     writer.uint32(/* id 7, wireType 2 =*/58).string(message.scope);
-                if (message.response_code != null && $Object.hasOwnProperty.call(message, "response_code"))
+                if (message.response_code != null && $Object.hasOwnProperty.call(message, "response_code") && message.response_code !== 0)
                     writer.uint32(/* id 8, wireType 0 =*/64).int32(message.response_code);
                 if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                     for (let i = 0; i < message.$unknowns.length; ++i)
@@ -106745,7 +106666,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                     case 3: {
                             if (wireType !== 1)
                                 break;
-                            if ((value = reader.double()) !== 0)
+                            if (!$Object.is(value = reader.double(), 0))
                                 message.value = value;
                             else
                                 delete message.value;
@@ -106754,7 +106675,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                     case 4: {
                             if (wireType !== 1)
                                 break;
-                            if ((value = reader.double()) !== 0)
+                            if (!$Object.is(value = reader.double(), 0))
                                 message.threshold = value;
                             else
                                 delete message.threshold;
@@ -106858,17 +106779,8 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                     if (!$util.isString(message.scope))
                         return "scope: string expected";
                 if (message.response_code != null && $Object.hasOwnProperty.call(message, "response_code"))
-                    switch (message.response_code) {
-                    default:
+                    if (typeof message.response_code !== "number" || (message.response_code | 0) !== message.response_code)
                         return "response_code: enum value expected";
-                    case 0:
-                    case 1:
-                    case 2:
-                    case 3:
-                    case 4:
-                    case 5:
-                        break;
-                    }
                 return null;
             };
 
@@ -106894,10 +106806,10 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                     if (typeof object.name !== "string" || object.name.length)
                         message.name = $String(object.name);
                 if (object.value != null)
-                    if ($Number(object.value) !== 0)
+                    if (!$Object.is($Number(object.value), 0))
                         message.value = $Number(object.value);
                 if (object.threshold != null)
-                    if ($Number(object.threshold) !== 0)
+                    if (!$Object.is($Number(object.threshold), 0))
                         message.threshold = $Number(object.threshold);
                 if (object.error != null)
                     if (typeof object.error !== "string" || object.error.length)
@@ -106910,12 +106822,6 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                         message.scope = $String(object.scope);
                 if (object.response_code !== 0 && (typeof object.response_code !== "string" || $root.tabletmanagerdata.CheckThrottlerResponseCode[object.response_code] !== 0))
                     switch (object.response_code) {
-                    default:
-                        if (typeof object.response_code === "number") {
-                            message.response_code = object.response_code;
-                            break;
-                        }
-                        break;
                     case "UNDEFINED":
                     case 0:
                         message.response_code = 0;
@@ -106940,6 +106846,9 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                     case 5:
                         message.response_code = 5;
                         break;
+                    default:
+                        if (typeof object.response_code === "number" && (object.response_code | 0) === object.response_code)
+                            message.response_code = object.response_code;
                     }
                 return message;
             };
@@ -107473,27 +107382,27 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.tablet_alias != null && $Object.hasOwnProperty.call(message, "tablet_alias"))
+            if (message.tablet_alias != null && $Object.hasOwnProperty.call(message, "tablet_alias") && message.tablet_alias !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.tablet_alias);
-            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
+            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace") && message.keyspace !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.keyspace);
-            if (message.shard != null && $Object.hasOwnProperty.call(message, "shard"))
+            if (message.shard != null && $Object.hasOwnProperty.call(message, "shard") && message.shard !== "")
                 writer.uint32(/* id 3, wireType 2 =*/26).string(message.shard);
-            if (message.is_leader != null && $Object.hasOwnProperty.call(message, "is_leader"))
+            if (message.is_leader != null && $Object.hasOwnProperty.call(message, "is_leader") && message.is_leader !== false)
                 writer.uint32(/* id 4, wireType 0 =*/32).bool(message.is_leader);
-            if (message.is_open != null && $Object.hasOwnProperty.call(message, "is_open"))
+            if (message.is_open != null && $Object.hasOwnProperty.call(message, "is_open") && message.is_open !== false)
                 writer.uint32(/* id 5, wireType 0 =*/40).bool(message.is_open);
-            if (message.is_enabled != null && $Object.hasOwnProperty.call(message, "is_enabled"))
+            if (message.is_enabled != null && $Object.hasOwnProperty.call(message, "is_enabled") && message.is_enabled !== false)
                 writer.uint32(/* id 6, wireType 0 =*/48).bool(message.is_enabled);
-            if (message.is_dormant != null && $Object.hasOwnProperty.call(message, "is_dormant"))
+            if (message.is_dormant != null && $Object.hasOwnProperty.call(message, "is_dormant") && message.is_dormant !== false)
                 writer.uint32(/* id 7, wireType 0 =*/56).bool(message.is_dormant);
-            if (message.lag_metric_query != null && $Object.hasOwnProperty.call(message, "lag_metric_query"))
+            if (message.lag_metric_query != null && $Object.hasOwnProperty.call(message, "lag_metric_query") && message.lag_metric_query !== "")
                 writer.uint32(/* id 8, wireType 2 =*/66).string(message.lag_metric_query);
-            if (message.custom_metric_query != null && $Object.hasOwnProperty.call(message, "custom_metric_query"))
+            if (message.custom_metric_query != null && $Object.hasOwnProperty.call(message, "custom_metric_query") && message.custom_metric_query !== "")
                 writer.uint32(/* id 9, wireType 2 =*/74).string(message.custom_metric_query);
-            if (message.default_threshold != null && $Object.hasOwnProperty.call(message, "default_threshold"))
+            if (message.default_threshold != null && $Object.hasOwnProperty.call(message, "default_threshold") && !$Object.is(message.default_threshold, 0))
                 writer.uint32(/* id 10, wireType 1 =*/81).double(message.default_threshold);
-            if (message.metric_name_used_as_default != null && $Object.hasOwnProperty.call(message, "metric_name_used_as_default"))
+            if (message.metric_name_used_as_default != null && $Object.hasOwnProperty.call(message, "metric_name_used_as_default") && message.metric_name_used_as_default !== "")
                 writer.uint32(/* id 11, wireType 2 =*/90).string(message.metric_name_used_as_default);
             if (message.aggregated_metrics != null && $Object.hasOwnProperty.call(message, "aggregated_metrics"))
                 for (let keys = $Object.keys(message.aggregated_metrics), i = 0; i < keys.length; ++i) {
@@ -107516,7 +107425,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
             if (message.app_checked_metrics != null && $Object.hasOwnProperty.call(message, "app_checked_metrics"))
                 for (let keys = $Object.keys(message.app_checked_metrics), i = 0; i < keys.length; ++i)
                     writer.uint32(/* id 16, wireType 2 =*/130).fork().uint32(/* id 1, wireType 2 =*/10).string(keys[i]).uint32(/* id 2, wireType 2 =*/18).string(message.app_checked_metrics[keys[i]]).ldelim();
-            if (message.recently_checked != null && $Object.hasOwnProperty.call(message, "recently_checked"))
+            if (message.recently_checked != null && $Object.hasOwnProperty.call(message, "recently_checked") && message.recently_checked !== false)
                 writer.uint32(/* id 17, wireType 0 =*/136).bool(message.recently_checked);
             if (message.recent_apps != null && $Object.hasOwnProperty.call(message, "recent_apps"))
                 for (let keys = $Object.keys(message.recent_apps), i = 0; i < keys.length; ++i) {
@@ -107654,7 +107563,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 case 10: {
                         if (wireType !== 1)
                             break;
-                        if ((value = reader.double()) !== 0)
+                        if (!$Object.is(value = reader.double(), 0))
                             message.default_threshold = value;
                         else
                             delete message.default_threshold;
@@ -107689,7 +107598,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                             case 2:
                                 if (wireType !== 2)
                                     break;
-                                value = $root.tabletmanagerdata.GetThrottlerStatusResponse.MetricResult.decode(reader, reader.uint32(), $undefined, _depth + 1);
+                                value = $root.tabletmanagerdata.GetThrottlerStatusResponse.MetricResult.decode(reader, reader.uint32(), $undefined, _depth + 1, value);
                                 continue;
                             }
                             reader.skipType(wireType, _depth, tag2);
@@ -107749,7 +107658,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                             case 2:
                                 if (wireType !== 2)
                                     break;
-                                value = $root.tabletmanagerdata.GetThrottlerStatusResponse.MetricHealth.decode(reader, reader.uint32(), $undefined, _depth + 1);
+                                value = $root.tabletmanagerdata.GetThrottlerStatusResponse.MetricHealth.decode(reader, reader.uint32(), $undefined, _depth + 1, value);
                                 continue;
                             }
                             reader.skipType(wireType, _depth, tag2);
@@ -107779,7 +107688,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                             case 2:
                                 if (wireType !== 2)
                                     break;
-                                value = $root.topodata.ThrottledAppRule.decode(reader, reader.uint32(), $undefined, _depth + 1);
+                                value = $root.topodata.ThrottledAppRule.decode(reader, reader.uint32(), $undefined, _depth + 1, value);
                                 continue;
                             }
                             reader.skipType(wireType, _depth, tag2);
@@ -107848,7 +107757,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                             case 2:
                                 if (wireType !== 2)
                                     break;
-                                value = $root.tabletmanagerdata.GetThrottlerStatusResponse.RecentApp.decode(reader, reader.uint32(), $undefined, _depth + 1);
+                                value = $root.tabletmanagerdata.GetThrottlerStatusResponse.RecentApp.decode(reader, reader.uint32(), $undefined, _depth + 1, value);
                                 continue;
                             }
                             reader.skipType(wireType, _depth, tag2);
@@ -108042,7 +107951,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 if (typeof object.custom_metric_query !== "string" || object.custom_metric_query.length)
                     message.custom_metric_query = $String(object.custom_metric_query);
             if (object.default_threshold != null)
-                if ($Number(object.default_threshold) !== 0)
+                if (!$Object.is($Number(object.default_threshold), 0))
                     message.default_threshold = $Number(object.default_threshold);
             if (object.metric_name_used_as_default != null)
                 if (typeof object.metric_name_used_as_default !== "string" || object.metric_name_used_as_default.length)
@@ -108347,9 +108256,9 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                     _depth = 0;
                 if (_depth > $util.recursionLimit)
                     throw $Error("max depth exceeded");
-                if (message.value != null && $Object.hasOwnProperty.call(message, "value"))
+                if (message.value != null && $Object.hasOwnProperty.call(message, "value") && !$Object.is(message.value, 0))
                     writer.uint32(/* id 1, wireType 1 =*/9).double(message.value);
-                if (message.error != null && $Object.hasOwnProperty.call(message, "error"))
+                if (message.error != null && $Object.hasOwnProperty.call(message, "error") && message.error !== "")
                     writer.uint32(/* id 2, wireType 2 =*/18).string(message.error);
                 if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                     for (let i = 0; i < message.$unknowns.length; ++i)
@@ -108401,7 +108310,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                     case 1: {
                             if (wireType !== 1)
                                 break;
-                            if ((value = reader.double()) !== 0)
+                            if (!$Object.is(value = reader.double(), 0))
                                 message.value = value;
                             else
                                 delete message.value;
@@ -108487,7 +108396,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                     throw $Error("max depth exceeded");
                 let message = new $root.tabletmanagerdata.GetThrottlerStatusResponse.MetricResult();
                 if (object.value != null)
-                    if ($Number(object.value) !== 0)
+                    if (!$Object.is($Number(object.value), 0))
                         message.value = $Number(object.value);
                 if (object.error != null)
                     if (typeof object.error !== "string" || object.error.length)
@@ -108639,7 +108548,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                     throw $Error("max depth exceeded");
                 if (message.last_healthy_at != null && $Object.hasOwnProperty.call(message, "last_healthy_at"))
                     $root.vttime.Time.encode(message.last_healthy_at, writer.uint32(/* id 1, wireType 2 =*/10).fork(), _depth + 1).ldelim();
-                if (message.seconds_since_last_healthy != null && $Object.hasOwnProperty.call(message, "seconds_since_last_healthy"))
+                if (message.seconds_since_last_healthy != null && $Object.hasOwnProperty.call(message, "seconds_since_last_healthy") && (typeof message.seconds_since_last_healthy === "object" ? message.seconds_since_last_healthy.low || message.seconds_since_last_healthy.high : message.seconds_since_last_healthy !== 0))
                     writer.uint32(/* id 2, wireType 0 =*/16).int64(message.seconds_since_last_healthy);
                 if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                     for (let i = 0; i < message.$unknowns.length; ++i)
@@ -108946,7 +108855,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                     throw $Error("max depth exceeded");
                 if (message.checked_at != null && $Object.hasOwnProperty.call(message, "checked_at"))
                     $root.vttime.Time.encode(message.checked_at, writer.uint32(/* id 1, wireType 2 =*/10).fork(), _depth + 1).ldelim();
-                if (message.response_code != null && $Object.hasOwnProperty.call(message, "response_code"))
+                if (message.response_code != null && $Object.hasOwnProperty.call(message, "response_code") && message.response_code !== 0)
                     writer.uint32(/* id 3, wireType 0 =*/24).int32(message.response_code);
                 if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                     for (let i = 0; i < message.$unknowns.length; ++i)
@@ -109059,17 +108968,8 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                         return "checked_at." + error;
                 }
                 if (message.response_code != null && $Object.hasOwnProperty.call(message, "response_code"))
-                    switch (message.response_code) {
-                    default:
+                    if (typeof message.response_code !== "number" || (message.response_code | 0) !== message.response_code)
                         return "response_code: enum value expected";
-                    case 0:
-                    case 1:
-                    case 2:
-                    case 3:
-                    case 4:
-                    case 5:
-                        break;
-                    }
                 return null;
             };
 
@@ -109098,12 +108998,6 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 }
                 if (object.response_code !== 0 && (typeof object.response_code !== "string" || $root.tabletmanagerdata.CheckThrottlerResponseCode[object.response_code] !== 0))
                     switch (object.response_code) {
-                    default:
-                        if (typeof object.response_code === "number") {
-                            message.response_code = object.response_code;
-                            break;
-                        }
-                        break;
                     case "UNDEFINED":
                     case 0:
                         message.response_code = 0;
@@ -109128,6 +109022,9 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                     case 5:
                         message.response_code = 5;
                         break;
+                    default:
+                        if (typeof object.response_code === "number" && (object.response_code | 0) === object.response_code)
+                            message.response_code = object.response_code;
                     }
                 return message;
             };
@@ -109281,7 +109178,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
             if (message.tags != null && $Object.hasOwnProperty.call(message, "tags"))
                 for (let keys = $Object.keys(message.tags), i = 0; i < keys.length; ++i)
                     writer.uint32(/* id 1, wireType 2 =*/10).fork().uint32(/* id 1, wireType 2 =*/10).string(keys[i]).uint32(/* id 2, wireType 2 =*/18).string(message.tags[keys[i]]).ldelim();
-            if (message.replace != null && $Object.hasOwnProperty.call(message, "replace"))
+            if (message.replace != null && $Object.hasOwnProperty.call(message, "replace") && message.replace !== false)
                 writer.uint32(/* id 2, wireType 0 =*/16).bool(message.replace);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -110194,11 +110091,11 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                     _depth = 0;
                 if (_depth > $util.recursionLimit)
                     throw $Error("max depth exceeded");
-                if (message.backing_table_name != null && $Object.hasOwnProperty.call(message, "backing_table_name"))
+                if (message.backing_table_name != null && $Object.hasOwnProperty.call(message, "backing_table_name") && message.backing_table_name !== "")
                     writer.uint32(/* id 1, wireType 2 =*/10).string(message.backing_table_name);
-                if (message.backing_table_db_name != null && $Object.hasOwnProperty.call(message, "backing_table_db_name"))
+                if (message.backing_table_db_name != null && $Object.hasOwnProperty.call(message, "backing_table_db_name") && message.backing_table_db_name !== "")
                     writer.uint32(/* id 2, wireType 2 =*/18).string(message.backing_table_db_name);
-                if (message.max_value != null && $Object.hasOwnProperty.call(message, "max_value"))
+                if (message.max_value != null && $Object.hasOwnProperty.call(message, "max_value") && (typeof message.max_value === "object" ? message.max_value.low || message.max_value.high : message.max_value !== 0))
                     writer.uint32(/* id 3, wireType 0 =*/24).int64(message.max_value);
                 if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                     for (let i = 0; i < message.$unknowns.length; ++i)
@@ -111034,13 +110931,13 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                     _depth = 0;
                 if (_depth > $util.recursionLimit)
                     throw $Error("max depth exceeded");
-                if (message.backing_table_name != null && $Object.hasOwnProperty.call(message, "backing_table_name"))
+                if (message.backing_table_name != null && $Object.hasOwnProperty.call(message, "backing_table_name") && message.backing_table_name !== "")
                     writer.uint32(/* id 1, wireType 2 =*/10).string(message.backing_table_name);
-                if (message.using_col_escaped != null && $Object.hasOwnProperty.call(message, "using_col_escaped"))
+                if (message.using_col_escaped != null && $Object.hasOwnProperty.call(message, "using_col_escaped") && message.using_col_escaped !== "")
                     writer.uint32(/* id 2, wireType 2 =*/18).string(message.using_col_escaped);
-                if (message.using_table_name_escaped != null && $Object.hasOwnProperty.call(message, "using_table_name_escaped"))
+                if (message.using_table_name_escaped != null && $Object.hasOwnProperty.call(message, "using_table_name_escaped") && message.using_table_name_escaped !== "")
                     writer.uint32(/* id 3, wireType 2 =*/26).string(message.using_table_name_escaped);
-                if (message.using_table_db_name_escaped != null && $Object.hasOwnProperty.call(message, "using_table_db_name_escaped"))
+                if (message.using_table_db_name_escaped != null && $Object.hasOwnProperty.call(message, "using_table_db_name_escaped") && message.using_table_db_name_escaped !== "")
                     writer.uint32(/* id 4, wireType 2 =*/34).string(message.using_table_db_name_escaped);
                 if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                     for (let i = 0; i < message.$unknowns.length; ++i)
@@ -111702,11 +111599,11 @@ export const binlogdata = $root.binlogdata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.client != null && $Object.hasOwnProperty.call(message, "client"))
+            if (message.client != null && $Object.hasOwnProperty.call(message, "client") && message.client !== 0)
                 writer.uint32(/* id 1, wireType 0 =*/8).int32(message.client);
-            if (message.conn != null && $Object.hasOwnProperty.call(message, "conn"))
+            if (message.conn != null && $Object.hasOwnProperty.call(message, "conn") && message.conn !== 0)
                 writer.uint32(/* id 2, wireType 0 =*/16).int32(message.conn);
-            if (message.server != null && $Object.hasOwnProperty.call(message, "server"))
+            if (message.server != null && $Object.hasOwnProperty.call(message, "server") && message.server !== 0)
                 writer.uint32(/* id 3, wireType 0 =*/24).int32(message.server);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -112326,11 +112223,11 @@ export const binlogdata = $root.binlogdata = (() => {
                     _depth = 0;
                 if (_depth > $util.recursionLimit)
                     throw $Error("max depth exceeded");
-                if (message.category != null && $Object.hasOwnProperty.call(message, "category"))
+                if (message.category != null && $Object.hasOwnProperty.call(message, "category") && message.category !== 0)
                     writer.uint32(/* id 1, wireType 0 =*/8).int32(message.category);
                 if (message.charset != null && $Object.hasOwnProperty.call(message, "charset"))
                     $root.binlogdata.Charset.encode(message.charset, writer.uint32(/* id 2, wireType 2 =*/18).fork(), _depth + 1).ldelim();
-                if (message.sql != null && $Object.hasOwnProperty.call(message, "sql"))
+                if (message.sql != null && $Object.hasOwnProperty.call(message, "sql") && message.sql.length)
                     writer.uint32(/* id 3, wireType 2 =*/26).bytes(message.sql);
                 if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                     for (let i = 0; i < message.$unknowns.length; ++i)
@@ -112447,21 +112344,8 @@ export const binlogdata = $root.binlogdata = (() => {
                 if (_depth > $util.recursionLimit)
                     return "max depth exceeded";
                 if (message.category != null && $Object.hasOwnProperty.call(message, "category"))
-                    switch (message.category) {
-                    default:
+                    if (typeof message.category !== "number" || (message.category | 0) !== message.category)
                         return "category: enum value expected";
-                    case 0:
-                    case 1:
-                    case 2:
-                    case 3:
-                    case 4:
-                    case 5:
-                    case 6:
-                    case 7:
-                    case 8:
-                    case 9:
-                        break;
-                    }
                 if (message.charset != null && $Object.hasOwnProperty.call(message, "charset")) {
                     let error = $root.binlogdata.Charset.verify(message.charset, _depth + 1);
                     if (error)
@@ -112493,12 +112377,6 @@ export const binlogdata = $root.binlogdata = (() => {
                 let message = new $root.binlogdata.BinlogTransaction.Statement();
                 if (object.category !== 0 && (typeof object.category !== "string" || $root.binlogdata.BinlogTransaction.Statement.Category[object.category] !== 0))
                     switch (object.category) {
-                    default:
-                        if (typeof object.category === "number") {
-                            message.category = object.category;
-                            break;
-                        }
-                        break;
                     case "BL_UNRECOGNIZED":
                     case 0:
                         message.category = 0;
@@ -112539,6 +112417,9 @@ export const binlogdata = $root.binlogdata = (() => {
                     case 9:
                         message.category = 9;
                         break;
+                    default:
+                        if (typeof object.category === "number" && (object.category | 0) === object.category)
+                            message.category = object.category;
                     }
                 if (object.charset != null) {
                     if (!$util.isObject(object.charset))
@@ -112747,7 +112628,7 @@ export const binlogdata = $root.binlogdata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.position != null && $Object.hasOwnProperty.call(message, "position"))
+            if (message.position != null && $Object.hasOwnProperty.call(message, "position") && message.position !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.position);
             if (message.key_range != null && $Object.hasOwnProperty.call(message, "key_range"))
                 $root.topodata.KeyRange.encode(message.key_range, writer.uint32(/* id 2, wireType 2 =*/18).fork(), _depth + 1).ldelim();
@@ -113330,7 +113211,7 @@ export const binlogdata = $root.binlogdata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.position != null && $Object.hasOwnProperty.call(message, "position"))
+            if (message.position != null && $Object.hasOwnProperty.call(message, "position") && message.position !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.position);
             if (message.tables != null && message.tables.length)
                 for (let i = 0; i < message.tables.length; ++i)
@@ -113914,9 +113795,9 @@ export const binlogdata = $root.binlogdata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.from_charset != null && $Object.hasOwnProperty.call(message, "from_charset"))
+            if (message.from_charset != null && $Object.hasOwnProperty.call(message, "from_charset") && message.from_charset !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.from_charset);
-            if (message.to_charset != null && $Object.hasOwnProperty.call(message, "to_charset"))
+            if (message.to_charset != null && $Object.hasOwnProperty.call(message, "to_charset") && message.to_charset !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.to_charset);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -114270,9 +114151,9 @@ export const binlogdata = $root.binlogdata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.match != null && $Object.hasOwnProperty.call(message, "match"))
+            if (message.match != null && $Object.hasOwnProperty.call(message, "match") && message.match !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.match);
-            if (message.filter != null && $Object.hasOwnProperty.call(message, "filter"))
+            if (message.filter != null && $Object.hasOwnProperty.call(message, "filter") && message.filter !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.filter);
             if (message.convert_enum_to_text != null && $Object.hasOwnProperty.call(message, "convert_enum_to_text"))
                 for (let keys = $Object.keys(message.convert_enum_to_text), i = 0; i < keys.length; ++i)
@@ -114282,16 +114163,16 @@ export const binlogdata = $root.binlogdata = (() => {
                     writer.uint32(/* id 4, wireType 2 =*/34).fork().uint32(/* id 1, wireType 2 =*/10).string(keys[i]);
                     $root.binlogdata.CharsetConversion.encode(message.convert_charset[keys[i]], writer.uint32(/* id 2, wireType 2 =*/18).fork(), _depth + 1).ldelim().ldelim();
                 }
-            if (message.source_unique_key_columns != null && $Object.hasOwnProperty.call(message, "source_unique_key_columns"))
+            if (message.source_unique_key_columns != null && $Object.hasOwnProperty.call(message, "source_unique_key_columns") && message.source_unique_key_columns !== "")
                 writer.uint32(/* id 5, wireType 2 =*/42).string(message.source_unique_key_columns);
-            if (message.target_unique_key_columns != null && $Object.hasOwnProperty.call(message, "target_unique_key_columns"))
+            if (message.target_unique_key_columns != null && $Object.hasOwnProperty.call(message, "target_unique_key_columns") && message.target_unique_key_columns !== "")
                 writer.uint32(/* id 6, wireType 2 =*/50).string(message.target_unique_key_columns);
-            if (message.source_unique_key_target_columns != null && $Object.hasOwnProperty.call(message, "source_unique_key_target_columns"))
+            if (message.source_unique_key_target_columns != null && $Object.hasOwnProperty.call(message, "source_unique_key_target_columns") && message.source_unique_key_target_columns !== "")
                 writer.uint32(/* id 7, wireType 2 =*/58).string(message.source_unique_key_target_columns);
             if (message.convert_int_to_enum != null && $Object.hasOwnProperty.call(message, "convert_int_to_enum"))
                 for (let keys = $Object.keys(message.convert_int_to_enum), i = 0; i < keys.length; ++i)
                     writer.uint32(/* id 8, wireType 2 =*/66).fork().uint32(/* id 1, wireType 2 =*/10).string(keys[i]).uint32(/* id 2, wireType 0 =*/16).bool(message.convert_int_to_enum[keys[i]]).ldelim();
-            if (message.force_unique_key != null && $Object.hasOwnProperty.call(message, "force_unique_key"))
+            if (message.force_unique_key != null && $Object.hasOwnProperty.call(message, "force_unique_key") && message.force_unique_key !== "")
                 writer.uint32(/* id 9, wireType 2 =*/74).string(message.force_unique_key);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -114408,7 +114289,7 @@ export const binlogdata = $root.binlogdata = (() => {
                             case 2:
                                 if (wireType !== 2)
                                     break;
-                                value = $root.binlogdata.CharsetConversion.decode(reader, reader.uint32(), $undefined, _depth + 1);
+                                value = $root.binlogdata.CharsetConversion.decode(reader, reader.uint32(), $undefined, _depth + 1, value);
                                 continue;
                             }
                             reader.skipType(wireType, _depth, tag2);
@@ -114851,11 +114732,11 @@ export const binlogdata = $root.binlogdata = (() => {
             if (message.rules != null && message.rules.length)
                 for (let i = 0; i < message.rules.length; ++i)
                     $root.binlogdata.Rule.encode(message.rules[i], writer.uint32(/* id 1, wireType 2 =*/10).fork(), _depth + 1).ldelim();
-            if (message.field_event_mode != null && $Object.hasOwnProperty.call(message, "field_event_mode"))
+            if (message.field_event_mode != null && $Object.hasOwnProperty.call(message, "field_event_mode") && message.field_event_mode !== 0)
                 writer.uint32(/* id 2, wireType 0 =*/16).int32(message.field_event_mode);
-            if (message.workflow_type != null && $Object.hasOwnProperty.call(message, "workflow_type"))
+            if (message.workflow_type != null && $Object.hasOwnProperty.call(message, "workflow_type") && (typeof message.workflow_type === "object" ? message.workflow_type.low || message.workflow_type.high : message.workflow_type !== 0))
                 writer.uint32(/* id 3, wireType 0 =*/24).int64(message.workflow_type);
-            if (message.workflow_name != null && $Object.hasOwnProperty.call(message, "workflow_name"))
+            if (message.workflow_name != null && $Object.hasOwnProperty.call(message, "workflow_name") && message.workflow_name !== "")
                 writer.uint32(/* id 4, wireType 2 =*/34).string(message.workflow_name);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -114992,13 +114873,8 @@ export const binlogdata = $root.binlogdata = (() => {
                 }
             }
             if (message.field_event_mode != null && $Object.hasOwnProperty.call(message, "field_event_mode"))
-                switch (message.field_event_mode) {
-                default:
+                if (typeof message.field_event_mode !== "number" || (message.field_event_mode | 0) !== message.field_event_mode)
                     return "field_event_mode: enum value expected";
-                case 0:
-                case 1:
-                    break;
-                }
             if (message.workflow_type != null && $Object.hasOwnProperty.call(message, "workflow_type"))
                 if (!$util.isInteger(message.workflow_type) && !(message.workflow_type && $util.isInteger(message.workflow_type.low) && $util.isInteger(message.workflow_type.high)))
                     return "workflow_type: integer|Long expected";
@@ -115038,12 +114914,6 @@ export const binlogdata = $root.binlogdata = (() => {
             }
             if (object.field_event_mode !== 0 && (typeof object.field_event_mode !== "string" || $root.binlogdata.Filter.FieldEventMode[object.field_event_mode] !== 0))
                 switch (object.field_event_mode) {
-                default:
-                    if (typeof object.field_event_mode === "number") {
-                        message.field_event_mode = object.field_event_mode;
-                        break;
-                    }
-                    break;
                 case "ERR_ON_MISMATCH":
                 case 0:
                     message.field_event_mode = 0;
@@ -115052,6 +114922,9 @@ export const binlogdata = $root.binlogdata = (() => {
                 case 1:
                     message.field_event_mode = 1;
                     break;
+                default:
+                    if (typeof object.field_event_mode === "number" && (object.field_event_mode | 0) === object.field_event_mode)
+                        message.field_event_mode = object.field_event_mode;
                 }
             if (object.workflow_type != null)
                 if (typeof object.workflow_type === "object" ? object.workflow_type.low || object.workflow_type.high : $Number(object.workflow_type) !== 0)
@@ -115415,11 +115288,11 @@ export const binlogdata = $root.binlogdata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
+            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace") && message.keyspace !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.keyspace);
-            if (message.shard != null && $Object.hasOwnProperty.call(message, "shard"))
+            if (message.shard != null && $Object.hasOwnProperty.call(message, "shard") && message.shard !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.shard);
-            if (message.tablet_type != null && $Object.hasOwnProperty.call(message, "tablet_type"))
+            if (message.tablet_type != null && $Object.hasOwnProperty.call(message, "tablet_type") && message.tablet_type !== 0)
                 writer.uint32(/* id 3, wireType 0 =*/24).int32(message.tablet_type);
             if (message.key_range != null && $Object.hasOwnProperty.call(message, "key_range"))
                 $root.topodata.KeyRange.encode(message.key_range, writer.uint32(/* id 4, wireType 2 =*/34).fork(), _depth + 1).ldelim();
@@ -115428,17 +115301,17 @@ export const binlogdata = $root.binlogdata = (() => {
                     writer.uint32(/* id 5, wireType 2 =*/42).string(message.tables[i]);
             if (message.filter != null && $Object.hasOwnProperty.call(message, "filter"))
                 $root.binlogdata.Filter.encode(message.filter, writer.uint32(/* id 6, wireType 2 =*/50).fork(), _depth + 1).ldelim();
-            if (message.on_ddl != null && $Object.hasOwnProperty.call(message, "on_ddl"))
+            if (message.on_ddl != null && $Object.hasOwnProperty.call(message, "on_ddl") && message.on_ddl !== 0)
                 writer.uint32(/* id 7, wireType 0 =*/56).int32(message.on_ddl);
-            if (message.external_mysql != null && $Object.hasOwnProperty.call(message, "external_mysql"))
+            if (message.external_mysql != null && $Object.hasOwnProperty.call(message, "external_mysql") && message.external_mysql !== "")
                 writer.uint32(/* id 8, wireType 2 =*/66).string(message.external_mysql);
-            if (message.stop_after_copy != null && $Object.hasOwnProperty.call(message, "stop_after_copy"))
+            if (message.stop_after_copy != null && $Object.hasOwnProperty.call(message, "stop_after_copy") && message.stop_after_copy !== false)
                 writer.uint32(/* id 9, wireType 0 =*/72).bool(message.stop_after_copy);
-            if (message.external_cluster != null && $Object.hasOwnProperty.call(message, "external_cluster"))
+            if (message.external_cluster != null && $Object.hasOwnProperty.call(message, "external_cluster") && message.external_cluster !== "")
                 writer.uint32(/* id 10, wireType 2 =*/82).string(message.external_cluster);
-            if (message.source_time_zone != null && $Object.hasOwnProperty.call(message, "source_time_zone"))
+            if (message.source_time_zone != null && $Object.hasOwnProperty.call(message, "source_time_zone") && message.source_time_zone !== "")
                 writer.uint32(/* id 11, wireType 2 =*/90).string(message.source_time_zone);
-            if (message.target_time_zone != null && $Object.hasOwnProperty.call(message, "target_time_zone"))
+            if (message.target_time_zone != null && $Object.hasOwnProperty.call(message, "target_time_zone") && message.target_time_zone !== "")
                 writer.uint32(/* id 12, wireType 2 =*/98).string(message.target_time_zone);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -115638,22 +115511,8 @@ export const binlogdata = $root.binlogdata = (() => {
                 if (!$util.isString(message.shard))
                     return "shard: string expected";
             if (message.tablet_type != null && $Object.hasOwnProperty.call(message, "tablet_type"))
-                switch (message.tablet_type) {
-                default:
+                if (typeof message.tablet_type !== "number" || (message.tablet_type | 0) !== message.tablet_type)
                     return "tablet_type: enum value expected";
-                case 0:
-                case 1:
-                case 1:
-                case 2:
-                case 3:
-                case 3:
-                case 4:
-                case 5:
-                case 6:
-                case 7:
-                case 8:
-                    break;
-                }
             if (message.key_range != null && $Object.hasOwnProperty.call(message, "key_range")) {
                 let error = $root.topodata.KeyRange.verify(message.key_range, _depth + 1);
                 if (error)
@@ -115672,15 +115531,8 @@ export const binlogdata = $root.binlogdata = (() => {
                     return "filter." + error;
             }
             if (message.on_ddl != null && $Object.hasOwnProperty.call(message, "on_ddl"))
-                switch (message.on_ddl) {
-                default:
+                if (typeof message.on_ddl !== "number" || (message.on_ddl | 0) !== message.on_ddl)
                     return "on_ddl: enum value expected";
-                case 0:
-                case 1:
-                case 2:
-                case 3:
-                    break;
-                }
             if (message.external_mysql != null && $Object.hasOwnProperty.call(message, "external_mysql"))
                 if (!$util.isString(message.external_mysql))
                     return "external_mysql: string expected";
@@ -115725,12 +115577,6 @@ export const binlogdata = $root.binlogdata = (() => {
                     message.shard = $String(object.shard);
             if (object.tablet_type !== 0 && (typeof object.tablet_type !== "string" || $root.topodata.TabletType[object.tablet_type] !== 0))
                 switch (object.tablet_type) {
-                default:
-                    if (typeof object.tablet_type === "number") {
-                        message.tablet_type = object.tablet_type;
-                        break;
-                    }
-                    break;
                 case "UNKNOWN":
                 case 0:
                     message.tablet_type = 0;
@@ -115775,6 +115621,9 @@ export const binlogdata = $root.binlogdata = (() => {
                 case 8:
                     message.tablet_type = 8;
                     break;
+                default:
+                    if (typeof object.tablet_type === "number" && (object.tablet_type | 0) === object.tablet_type)
+                        message.tablet_type = object.tablet_type;
                 }
             if (object.key_range != null) {
                 if (!$util.isObject(object.key_range))
@@ -115795,12 +115644,6 @@ export const binlogdata = $root.binlogdata = (() => {
             }
             if (object.on_ddl !== 0 && (typeof object.on_ddl !== "string" || $root.binlogdata.OnDDLAction[object.on_ddl] !== 0))
                 switch (object.on_ddl) {
-                default:
-                    if (typeof object.on_ddl === "number") {
-                        message.on_ddl = object.on_ddl;
-                        break;
-                    }
-                    break;
                 case "IGNORE":
                 case 0:
                     message.on_ddl = 0;
@@ -115817,6 +115660,9 @@ export const binlogdata = $root.binlogdata = (() => {
                 case 3:
                     message.on_ddl = 3;
                     break;
+                default:
+                    if (typeof object.on_ddl === "number" && (object.on_ddl | 0) === object.on_ddl)
+                        message.on_ddl = object.on_ddl;
                 }
             if (object.external_mysql != null)
                 if (typeof object.external_mysql !== "string" || object.external_mysql.length)
@@ -116417,9 +116263,9 @@ export const binlogdata = $root.binlogdata = (() => {
                     _depth = 0;
                 if (_depth > $util.recursionLimit)
                     throw $Error("max depth exceeded");
-                if (message.count != null && $Object.hasOwnProperty.call(message, "count"))
+                if (message.count != null && $Object.hasOwnProperty.call(message, "count") && (typeof message.count === "object" ? message.count.low || message.count.high : message.count !== 0))
                     writer.uint32(/* id 1, wireType 0 =*/8).int64(message.count);
-                if (message.cols != null && $Object.hasOwnProperty.call(message, "cols"))
+                if (message.cols != null && $Object.hasOwnProperty.call(message, "cols") && message.cols.length)
                     writer.uint32(/* id 2, wireType 2 =*/18).bytes(message.cols);
                 if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                     for (let i = 0; i < message.$unknowns.length; ++i)
@@ -116772,18 +116618,18 @@ export const binlogdata = $root.binlogdata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.table_name != null && $Object.hasOwnProperty.call(message, "table_name"))
+            if (message.table_name != null && $Object.hasOwnProperty.call(message, "table_name") && message.table_name !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.table_name);
             if (message.row_changes != null && message.row_changes.length)
                 for (let i = 0; i < message.row_changes.length; ++i)
                     $root.binlogdata.RowChange.encode(message.row_changes[i], writer.uint32(/* id 2, wireType 2 =*/18).fork(), _depth + 1).ldelim();
-            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
+            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace") && message.keyspace !== "")
                 writer.uint32(/* id 3, wireType 2 =*/26).string(message.keyspace);
-            if (message.shard != null && $Object.hasOwnProperty.call(message, "shard"))
+            if (message.shard != null && $Object.hasOwnProperty.call(message, "shard") && message.shard !== "")
                 writer.uint32(/* id 4, wireType 2 =*/34).string(message.shard);
-            if (message.flags != null && $Object.hasOwnProperty.call(message, "flags"))
+            if (message.flags != null && $Object.hasOwnProperty.call(message, "flags") && message.flags !== 0)
                 writer.uint32(/* id 5, wireType 0 =*/40).uint32(message.flags);
-            if (message.is_internal_table != null && $Object.hasOwnProperty.call(message, "is_internal_table"))
+            if (message.is_internal_table != null && $Object.hasOwnProperty.call(message, "is_internal_table") && message.is_internal_table !== false)
                 writer.uint32(/* id 6, wireType 0 =*/48).bool(message.is_internal_table);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -117196,18 +117042,18 @@ export const binlogdata = $root.binlogdata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.table_name != null && $Object.hasOwnProperty.call(message, "table_name"))
+            if (message.table_name != null && $Object.hasOwnProperty.call(message, "table_name") && message.table_name !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.table_name);
             if (message.fields != null && message.fields.length)
                 for (let i = 0; i < message.fields.length; ++i)
                     $root.query.Field.encode(message.fields[i], writer.uint32(/* id 2, wireType 2 =*/18).fork(), _depth + 1).ldelim();
-            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
+            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace") && message.keyspace !== "")
                 writer.uint32(/* id 3, wireType 2 =*/26).string(message.keyspace);
-            if (message.shard != null && $Object.hasOwnProperty.call(message, "shard"))
+            if (message.shard != null && $Object.hasOwnProperty.call(message, "shard") && message.shard !== "")
                 writer.uint32(/* id 4, wireType 2 =*/34).string(message.shard);
-            if (message.enum_set_string_values != null && $Object.hasOwnProperty.call(message, "enum_set_string_values"))
+            if (message.enum_set_string_values != null && $Object.hasOwnProperty.call(message, "enum_set_string_values") && message.enum_set_string_values !== false)
                 writer.uint32(/* id 25, wireType 0 =*/200).bool(message.enum_set_string_values);
-            if (message.is_internal_table != null && $Object.hasOwnProperty.call(message, "is_internal_table"))
+            if (message.is_internal_table != null && $Object.hasOwnProperty.call(message, "is_internal_table") && message.is_internal_table !== false)
                 writer.uint32(/* id 26, wireType 0 =*/208).bool(message.is_internal_table);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -117602,11 +117448,11 @@ export const binlogdata = $root.binlogdata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
+            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace") && message.keyspace !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.keyspace);
-            if (message.shard != null && $Object.hasOwnProperty.call(message, "shard"))
+            if (message.shard != null && $Object.hasOwnProperty.call(message, "shard") && message.shard !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.shard);
-            if (message.gtid != null && $Object.hasOwnProperty.call(message, "gtid"))
+            if (message.gtid != null && $Object.hasOwnProperty.call(message, "gtid") && message.gtid !== "")
                 writer.uint32(/* id 3, wireType 2 =*/26).string(message.gtid);
             if (message.table_p_ks != null && message.table_p_ks.length)
                 for (let i = 0; i < message.table_p_ks.length; ++i)
@@ -118226,9 +118072,9 @@ export const binlogdata = $root.binlogdata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
+            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace") && message.keyspace !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.keyspace);
-            if (message.shard != null && $Object.hasOwnProperty.call(message, "shard"))
+            if (message.shard != null && $Object.hasOwnProperty.call(message, "shard") && message.shard !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.shard);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -118579,14 +118425,14 @@ export const binlogdata = $root.binlogdata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.id != null && $Object.hasOwnProperty.call(message, "id"))
+            if (message.id != null && $Object.hasOwnProperty.call(message, "id") && (typeof message.id === "object" ? message.id.low || message.id.high : message.id !== 0))
                 writer.uint32(/* id 1, wireType 0 =*/8).int64(message.id);
-            if (message.migration_type != null && $Object.hasOwnProperty.call(message, "migration_type"))
+            if (message.migration_type != null && $Object.hasOwnProperty.call(message, "migration_type") && message.migration_type !== 0)
                 writer.uint32(/* id 2, wireType 0 =*/16).int32(message.migration_type);
             if (message.tables != null && message.tables.length)
                 for (let i = 0; i < message.tables.length; ++i)
                     writer.uint32(/* id 3, wireType 2 =*/26).string(message.tables[i]);
-            if (message.local_position != null && $Object.hasOwnProperty.call(message, "local_position"))
+            if (message.local_position != null && $Object.hasOwnProperty.call(message, "local_position") && message.local_position !== "")
                 writer.uint32(/* id 4, wireType 2 =*/34).string(message.local_position);
             if (message.shard_gtids != null && message.shard_gtids.length)
                 for (let i = 0; i < message.shard_gtids.length; ++i)
@@ -118750,13 +118596,8 @@ export const binlogdata = $root.binlogdata = (() => {
                 if (!$util.isInteger(message.id) && !(message.id && $util.isInteger(message.id.low) && $util.isInteger(message.id.high)))
                     return "id: integer|Long expected";
             if (message.migration_type != null && $Object.hasOwnProperty.call(message, "migration_type"))
-                switch (message.migration_type) {
-                default:
+                if (typeof message.migration_type !== "number" || (message.migration_type | 0) !== message.migration_type)
                     return "migration_type: enum value expected";
-                case 0:
-                case 1:
-                    break;
-                }
             if (message.tables != null && $Object.hasOwnProperty.call(message, "tables")) {
                 if (!$Array.isArray(message.tables))
                     return "tables: array expected";
@@ -118825,12 +118666,6 @@ export const binlogdata = $root.binlogdata = (() => {
                         message.id = new $util.LongBits(object.id.low >>> 0, object.id.high >>> 0).toNumber();
             if (object.migration_type !== 0 && (typeof object.migration_type !== "string" || $root.binlogdata.MigrationType[object.migration_type] !== 0))
                 switch (object.migration_type) {
-                default:
-                    if (typeof object.migration_type === "number") {
-                        message.migration_type = object.migration_type;
-                        break;
-                    }
-                    break;
                 case "TABLES":
                 case 0:
                     message.migration_type = 0;
@@ -118839,6 +118674,9 @@ export const binlogdata = $root.binlogdata = (() => {
                 case 1:
                     message.migration_type = 1;
                     break;
+                default:
+                    if (typeof object.migration_type === "number" && (object.migration_type | 0) === object.migration_type)
+                        message.migration_type = object.migration_type;
                 }
             if (object.tables) {
                 if (!$Array.isArray(object.tables))
@@ -119204,13 +119042,13 @@ export const binlogdata = $root.binlogdata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.type != null && $Object.hasOwnProperty.call(message, "type"))
+            if (message.type != null && $Object.hasOwnProperty.call(message, "type") && message.type !== 0)
                 writer.uint32(/* id 1, wireType 0 =*/8).int32(message.type);
-            if (message.timestamp != null && $Object.hasOwnProperty.call(message, "timestamp"))
+            if (message.timestamp != null && $Object.hasOwnProperty.call(message, "timestamp") && (typeof message.timestamp === "object" ? message.timestamp.low || message.timestamp.high : message.timestamp !== 0))
                 writer.uint32(/* id 2, wireType 0 =*/16).int64(message.timestamp);
-            if (message.gtid != null && $Object.hasOwnProperty.call(message, "gtid"))
+            if (message.gtid != null && $Object.hasOwnProperty.call(message, "gtid") && message.gtid !== "")
                 writer.uint32(/* id 3, wireType 2 =*/26).string(message.gtid);
-            if (message.statement != null && $Object.hasOwnProperty.call(message, "statement"))
+            if (message.statement != null && $Object.hasOwnProperty.call(message, "statement") && message.statement !== "")
                 writer.uint32(/* id 4, wireType 2 =*/34).string(message.statement);
             if (message.row_event != null && $Object.hasOwnProperty.call(message, "row_event"))
                 $root.binlogdata.RowEvent.encode(message.row_event, writer.uint32(/* id 5, wireType 2 =*/42).fork(), _depth + 1).ldelim();
@@ -119220,25 +119058,25 @@ export const binlogdata = $root.binlogdata = (() => {
                 $root.binlogdata.VGtid.encode(message.vgtid, writer.uint32(/* id 7, wireType 2 =*/58).fork(), _depth + 1).ldelim();
             if (message.journal != null && $Object.hasOwnProperty.call(message, "journal"))
                 $root.binlogdata.Journal.encode(message.journal, writer.uint32(/* id 8, wireType 2 =*/66).fork(), _depth + 1).ldelim();
-            if (message.dml != null && $Object.hasOwnProperty.call(message, "dml"))
+            if (message.dml != null && $Object.hasOwnProperty.call(message, "dml") && message.dml !== "")
                 writer.uint32(/* id 9, wireType 2 =*/74).string(message.dml);
-            if (message.current_time != null && $Object.hasOwnProperty.call(message, "current_time"))
+            if (message.current_time != null && $Object.hasOwnProperty.call(message, "current_time") && (typeof message.current_time === "object" ? message.current_time.low || message.current_time.high : message.current_time !== 0))
                 writer.uint32(/* id 20, wireType 0 =*/160).int64(message.current_time);
             if (message.last_p_k_event != null && $Object.hasOwnProperty.call(message, "last_p_k_event"))
                 $root.binlogdata.LastPKEvent.encode(message.last_p_k_event, writer.uint32(/* id 21, wireType 2 =*/170).fork(), _depth + 1).ldelim();
-            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
+            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace") && message.keyspace !== "")
                 writer.uint32(/* id 22, wireType 2 =*/178).string(message.keyspace);
-            if (message.shard != null && $Object.hasOwnProperty.call(message, "shard"))
+            if (message.shard != null && $Object.hasOwnProperty.call(message, "shard") && message.shard !== "")
                 writer.uint32(/* id 23, wireType 2 =*/186).string(message.shard);
-            if (message.throttled != null && $Object.hasOwnProperty.call(message, "throttled"))
+            if (message.throttled != null && $Object.hasOwnProperty.call(message, "throttled") && message.throttled !== false)
                 writer.uint32(/* id 24, wireType 0 =*/192).bool(message.throttled);
-            if (message.throttled_reason != null && $Object.hasOwnProperty.call(message, "throttled_reason"))
+            if (message.throttled_reason != null && $Object.hasOwnProperty.call(message, "throttled_reason") && message.throttled_reason !== "")
                 writer.uint32(/* id 25, wireType 2 =*/202).string(message.throttled_reason);
-            if (message.commit_parent != null && $Object.hasOwnProperty.call(message, "commit_parent"))
+            if (message.commit_parent != null && $Object.hasOwnProperty.call(message, "commit_parent") && (typeof message.commit_parent === "object" ? message.commit_parent.low || message.commit_parent.high : message.commit_parent !== 0))
                 writer.uint32(/* id 26, wireType 0 =*/208).int64(message.commit_parent);
-            if (message.sequence_number != null && $Object.hasOwnProperty.call(message, "sequence_number"))
+            if (message.sequence_number != null && $Object.hasOwnProperty.call(message, "sequence_number") && (typeof message.sequence_number === "object" ? message.sequence_number.low || message.sequence_number.high : message.sequence_number !== 0))
                 writer.uint32(/* id 27, wireType 0 =*/216).int64(message.sequence_number);
-            if (message.event_gtid != null && $Object.hasOwnProperty.call(message, "event_gtid"))
+            if (message.event_gtid != null && $Object.hasOwnProperty.call(message, "event_gtid") && message.event_gtid !== "")
                 writer.uint32(/* id 28, wireType 2 =*/226).string(message.event_gtid);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -119478,34 +119316,8 @@ export const binlogdata = $root.binlogdata = (() => {
             if (_depth > $util.recursionLimit)
                 return "max depth exceeded";
             if (message.type != null && $Object.hasOwnProperty.call(message, "type"))
-                switch (message.type) {
-                default:
+                if (typeof message.type !== "number" || (message.type | 0) !== message.type)
                     return "type: enum value expected";
-                case 0:
-                case 1:
-                case 2:
-                case 3:
-                case 4:
-                case 5:
-                case 6:
-                case 7:
-                case 8:
-                case 9:
-                case 10:
-                case 11:
-                case 12:
-                case 13:
-                case 14:
-                case 15:
-                case 16:
-                case 17:
-                case 18:
-                case 19:
-                case 20:
-                case 21:
-                case 22:
-                    break;
-                }
             if (message.timestamp != null && $Object.hasOwnProperty.call(message, "timestamp"))
                 if (!$util.isInteger(message.timestamp) && !(message.timestamp && $util.isInteger(message.timestamp.low) && $util.isInteger(message.timestamp.high)))
                     return "timestamp: integer|Long expected";
@@ -119590,12 +119402,6 @@ export const binlogdata = $root.binlogdata = (() => {
             let message = new $root.binlogdata.VEvent();
             if (object.type !== 0 && (typeof object.type !== "string" || $root.binlogdata.VEventType[object.type] !== 0))
                 switch (object.type) {
-                default:
-                    if (typeof object.type === "number") {
-                        message.type = object.type;
-                        break;
-                    }
-                    break;
                 case "UNKNOWN":
                 case 0:
                     message.type = 0;
@@ -119688,6 +119494,9 @@ export const binlogdata = $root.binlogdata = (() => {
                 case 22:
                     message.type = 22;
                     break;
+                default:
+                    if (typeof object.type === "number" && (object.type | 0) === object.type)
+                        message.type = object.type;
                 }
             if (object.timestamp != null)
                 if (typeof object.timestamp === "object" ? object.timestamp.low || object.timestamp.high : $Number(object.timestamp) !== 0)
@@ -120027,18 +119836,14 @@ export const binlogdata = $root.binlogdata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.name != null && $Object.hasOwnProperty.call(message, "name"))
+            if (message.name != null && $Object.hasOwnProperty.call(message, "name") && message.name !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.name);
             if (message.fields != null && message.fields.length)
                 for (let i = 0; i < message.fields.length; ++i)
                     $root.query.Field.encode(message.fields[i], writer.uint32(/* id 2, wireType 2 =*/18).fork(), _depth + 1).ldelim();
-            if (message.p_k_columns != null && message.p_k_columns.length) {
-                writer.uint32(/* id 3, wireType 2 =*/26).fork();
-                for (let i = 0; i < message.p_k_columns.length; ++i)
-                    writer.int64(message.p_k_columns[i]);
-                writer.ldelim();
-            }
-            if (message.p_k_index_name != null && $Object.hasOwnProperty.call(message, "p_k_index_name"))
+            if (message.p_k_columns != null && message.p_k_columns.length)
+                writer.uint32(/* id 3, wireType 2 =*/26).int64s(message.p_k_columns);
+            if (message.p_k_index_name != null && $Object.hasOwnProperty.call(message, "p_k_index_name") && message.p_k_index_name !== "")
                 writer.uint32(/* id 4, wireType 2 =*/34).string(message.p_k_index_name);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -120108,9 +119913,7 @@ export const binlogdata = $root.binlogdata = (() => {
                         if (wireType === 2) {
                             if (!(message.p_k_columns && message.p_k_columns.length))
                                 message.p_k_columns = [];
-                            let end2 = reader.uint32() + reader.pos;
-                            while (reader.pos < end2)
-                                message.p_k_columns.push(reader.int64());
+                            reader.int64s(message.p_k_columns);
                             continue;
                         }
                         if (wireType !== 0)
@@ -120726,14 +120529,10 @@ export const binlogdata = $root.binlogdata = (() => {
             if (message.tables_to_copy != null && message.tables_to_copy.length)
                 for (let i = 0; i < message.tables_to_copy.length; ++i)
                     writer.uint32(/* id 3, wireType 2 =*/26).string(message.tables_to_copy[i]);
-            if (message.no_timeouts != null && $Object.hasOwnProperty.call(message, "no_timeouts"))
+            if (message.no_timeouts != null && $Object.hasOwnProperty.call(message, "no_timeouts") && message.no_timeouts !== false)
                 writer.uint32(/* id 4, wireType 0 =*/32).bool(message.no_timeouts);
-            if (message.event_types != null && message.event_types.length) {
-                writer.uint32(/* id 5, wireType 2 =*/42).fork();
-                for (let i = 0; i < message.event_types.length; ++i)
-                    writer.int32(message.event_types[i]);
-                writer.ldelim();
-            }
+            if (message.event_types != null && message.event_types.length)
+                writer.uint32(/* id 5, wireType 2 =*/42).int32s(message.event_types);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
                     writer.raw(message.$unknowns[i]);
@@ -120840,9 +120639,7 @@ export const binlogdata = $root.binlogdata = (() => {
                         if (wireType === 2) {
                             if (!(message.event_types && message.event_types.length))
                                 message.event_types = [];
-                            let end2 = reader.uint32() + reader.pos;
-                            while (reader.pos < end2)
-                                message.event_types.push(reader.int32());
+                            reader.int32s(message.event_types);
                             continue;
                         }
                         if (wireType !== 0)
@@ -120924,34 +120721,8 @@ export const binlogdata = $root.binlogdata = (() => {
                 if (!$Array.isArray(message.event_types))
                     return "event_types: array expected";
                 for (let i = 0; i < message.event_types.length; ++i)
-                    switch (message.event_types[i]) {
-                    default:
+                    if (typeof message.event_types[i] !== "number" || (message.event_types[i] | 0) !== message.event_types[i])
                         return "event_types: enum value[] expected";
-                    case 0:
-                    case 1:
-                    case 2:
-                    case 3:
-                    case 4:
-                    case 5:
-                    case 6:
-                    case 7:
-                    case 8:
-                    case 9:
-                    case 10:
-                    case 11:
-                    case 12:
-                    case 13:
-                    case 14:
-                    case 15:
-                    case 16:
-                    case 17:
-                    case 18:
-                    case 19:
-                    case 20:
-                    case 21:
-                    case 22:
-                        break;
-                    }
             }
             return null;
         };
@@ -121004,106 +120775,104 @@ export const binlogdata = $root.binlogdata = (() => {
             if (object.event_types) {
                 if (!$Array.isArray(object.event_types))
                     throw $TypeError(".binlogdata.VStreamOptions.event_types: array expected");
-                message.event_types = $Array(object.event_types.length);
+                message.event_types = [];
                 for (let i = 0; i < object.event_types.length; ++i)
                     switch (object.event_types[i]) {
-                    default:
-                        if (typeof object.event_types[i] === "number") {
-                            message.event_types[i] = object.event_types[i];
-                            break;
-                        }
                     case "UNKNOWN":
                     case 0:
-                        message.event_types[i] = 0;
+                        message.event_types[message.event_types.length] = 0;
                         break;
                     case "GTID":
                     case 1:
-                        message.event_types[i] = 1;
+                        message.event_types[message.event_types.length] = 1;
                         break;
                     case "BEGIN":
                     case 2:
-                        message.event_types[i] = 2;
+                        message.event_types[message.event_types.length] = 2;
                         break;
                     case "COMMIT":
                     case 3:
-                        message.event_types[i] = 3;
+                        message.event_types[message.event_types.length] = 3;
                         break;
                     case "ROLLBACK":
                     case 4:
-                        message.event_types[i] = 4;
+                        message.event_types[message.event_types.length] = 4;
                         break;
                     case "DDL":
                     case 5:
-                        message.event_types[i] = 5;
+                        message.event_types[message.event_types.length] = 5;
                         break;
                     case "INSERT":
                     case 6:
-                        message.event_types[i] = 6;
+                        message.event_types[message.event_types.length] = 6;
                         break;
                     case "REPLACE":
                     case 7:
-                        message.event_types[i] = 7;
+                        message.event_types[message.event_types.length] = 7;
                         break;
                     case "UPDATE":
                     case 8:
-                        message.event_types[i] = 8;
+                        message.event_types[message.event_types.length] = 8;
                         break;
                     case "DELETE":
                     case 9:
-                        message.event_types[i] = 9;
+                        message.event_types[message.event_types.length] = 9;
                         break;
                     case "SET":
                     case 10:
-                        message.event_types[i] = 10;
+                        message.event_types[message.event_types.length] = 10;
                         break;
                     case "OTHER":
                     case 11:
-                        message.event_types[i] = 11;
+                        message.event_types[message.event_types.length] = 11;
                         break;
                     case "ROW":
                     case 12:
-                        message.event_types[i] = 12;
+                        message.event_types[message.event_types.length] = 12;
                         break;
                     case "FIELD":
                     case 13:
-                        message.event_types[i] = 13;
+                        message.event_types[message.event_types.length] = 13;
                         break;
                     case "HEARTBEAT":
                     case 14:
-                        message.event_types[i] = 14;
+                        message.event_types[message.event_types.length] = 14;
                         break;
                     case "VGTID":
                     case 15:
-                        message.event_types[i] = 15;
+                        message.event_types[message.event_types.length] = 15;
                         break;
                     case "JOURNAL":
                     case 16:
-                        message.event_types[i] = 16;
+                        message.event_types[message.event_types.length] = 16;
                         break;
                     case "VERSION":
                     case 17:
-                        message.event_types[i] = 17;
+                        message.event_types[message.event_types.length] = 17;
                         break;
                     case "LASTPK":
                     case 18:
-                        message.event_types[i] = 18;
+                        message.event_types[message.event_types.length] = 18;
                         break;
                     case "SAVEPOINT":
                     case 19:
-                        message.event_types[i] = 19;
+                        message.event_types[message.event_types.length] = 19;
                         break;
                     case "COPY_COMPLETED":
                     case 20:
-                        message.event_types[i] = 20;
+                        message.event_types[message.event_types.length] = 20;
                         break;
                     case "PREVIOUS_GTIDS":
                     case 21:
-                        message.event_types[i] = 21;
+                        message.event_types[message.event_types.length] = 21;
                         break;
                     case "ROWS_QUERY":
                     case 22:
-                        message.event_types[i] = 22;
+                        message.event_types[message.event_types.length] = 22;
                         break;
+                    default:
+                        if (typeof object.event_types[i] === "number" && (object.event_types[i] | 0) === object.event_types[i])
+                            message.event_types[message.event_types.length] = object.event_types[i];
                     }
             }
             return message;
@@ -121330,7 +121099,7 @@ export const binlogdata = $root.binlogdata = (() => {
                 $root.query.VTGateCallerID.encode(message.immediate_caller_id, writer.uint32(/* id 2, wireType 2 =*/18).fork(), _depth + 1).ldelim();
             if (message.target != null && $Object.hasOwnProperty.call(message, "target"))
                 $root.query.Target.encode(message.target, writer.uint32(/* id 3, wireType 2 =*/26).fork(), _depth + 1).ldelim();
-            if (message.position != null && $Object.hasOwnProperty.call(message, "position"))
+            if (message.position != null && $Object.hasOwnProperty.call(message, "position") && message.position !== "")
                 writer.uint32(/* id 4, wireType 2 =*/34).string(message.position);
             if (message.filter != null && $Object.hasOwnProperty.call(message, "filter"))
                 $root.binlogdata.Filter.encode(message.filter, writer.uint32(/* id 5, wireType 2 =*/42).fork(), _depth + 1).ldelim();
@@ -122055,7 +121824,7 @@ export const binlogdata = $root.binlogdata = (() => {
                 $root.query.VTGateCallerID.encode(message.immediate_caller_id, writer.uint32(/* id 2, wireType 2 =*/18).fork(), _depth + 1).ldelim();
             if (message.target != null && $Object.hasOwnProperty.call(message, "target"))
                 $root.query.Target.encode(message.target, writer.uint32(/* id 3, wireType 2 =*/26).fork(), _depth + 1).ldelim();
-            if (message.query != null && $Object.hasOwnProperty.call(message, "query"))
+            if (message.query != null && $Object.hasOwnProperty.call(message, "query") && message.query !== "")
                 writer.uint32(/* id 4, wireType 2 =*/34).string(message.query);
             if (message.lastpk != null && $Object.hasOwnProperty.call(message, "lastpk"))
                 $root.query.QueryResult.encode(message.lastpk, writer.uint32(/* id 5, wireType 2 =*/42).fork(), _depth + 1).ldelim();
@@ -122487,18 +122256,18 @@ export const binlogdata = $root.binlogdata = (() => {
             if (message.pkfields != null && message.pkfields.length)
                 for (let i = 0; i < message.pkfields.length; ++i)
                     $root.query.Field.encode(message.pkfields[i], writer.uint32(/* id 2, wireType 2 =*/18).fork(), _depth + 1).ldelim();
-            if (message.gtid != null && $Object.hasOwnProperty.call(message, "gtid"))
+            if (message.gtid != null && $Object.hasOwnProperty.call(message, "gtid") && message.gtid !== "")
                 writer.uint32(/* id 3, wireType 2 =*/26).string(message.gtid);
             if (message.rows != null && message.rows.length)
                 for (let i = 0; i < message.rows.length; ++i)
                     $root.query.Row.encode(message.rows[i], writer.uint32(/* id 4, wireType 2 =*/34).fork(), _depth + 1).ldelim();
             if (message.lastpk != null && $Object.hasOwnProperty.call(message, "lastpk"))
                 $root.query.Row.encode(message.lastpk, writer.uint32(/* id 5, wireType 2 =*/42).fork(), _depth + 1).ldelim();
-            if (message.throttled != null && $Object.hasOwnProperty.call(message, "throttled"))
+            if (message.throttled != null && $Object.hasOwnProperty.call(message, "throttled") && message.throttled !== false)
                 writer.uint32(/* id 6, wireType 0 =*/48).bool(message.throttled);
-            if (message.heartbeat != null && $Object.hasOwnProperty.call(message, "heartbeat"))
+            if (message.heartbeat != null && $Object.hasOwnProperty.call(message, "heartbeat") && message.heartbeat !== false)
                 writer.uint32(/* id 7, wireType 0 =*/56).bool(message.heartbeat);
-            if (message.throttled_reason != null && $Object.hasOwnProperty.call(message, "throttled_reason"))
+            if (message.throttled_reason != null && $Object.hasOwnProperty.call(message, "throttled_reason") && message.throttled_reason !== "")
                 writer.uint32(/* id 8, wireType 2 =*/66).string(message.throttled_reason);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -123333,7 +123102,7 @@ export const binlogdata = $root.binlogdata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.table_name != null && $Object.hasOwnProperty.call(message, "table_name"))
+            if (message.table_name != null && $Object.hasOwnProperty.call(message, "table_name") && message.table_name !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.table_name);
             if (message.fields != null && message.fields.length)
                 for (let i = 0; i < message.fields.length; ++i)
@@ -123341,7 +123110,7 @@ export const binlogdata = $root.binlogdata = (() => {
             if (message.pkfields != null && message.pkfields.length)
                 for (let i = 0; i < message.pkfields.length; ++i)
                     $root.query.Field.encode(message.pkfields[i], writer.uint32(/* id 3, wireType 2 =*/26).fork(), _depth + 1).ldelim();
-            if (message.gtid != null && $Object.hasOwnProperty.call(message, "gtid"))
+            if (message.gtid != null && $Object.hasOwnProperty.call(message, "gtid") && message.gtid !== "")
                 writer.uint32(/* id 4, wireType 2 =*/34).string(message.gtid);
             if (message.rows != null && message.rows.length)
                 for (let i = 0; i < message.rows.length; ++i)
@@ -123756,7 +123525,7 @@ export const binlogdata = $root.binlogdata = (() => {
                 throw $Error("max depth exceeded");
             if (message.table_last_p_k != null && $Object.hasOwnProperty.call(message, "table_last_p_k"))
                 $root.binlogdata.TableLastPK.encode(message.table_last_p_k, writer.uint32(/* id 1, wireType 2 =*/10).fork(), _depth + 1).ldelim();
-            if (message.completed != null && $Object.hasOwnProperty.call(message, "completed"))
+            if (message.completed != null && $Object.hasOwnProperty.call(message, "completed") && message.completed !== false)
                 writer.uint32(/* id 2, wireType 0 =*/16).bool(message.completed);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -124045,7 +123814,7 @@ export const binlogdata = $root.binlogdata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.table_name != null && $Object.hasOwnProperty.call(message, "table_name"))
+            if (message.table_name != null && $Object.hasOwnProperty.call(message, "table_name") && message.table_name !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.table_name);
             if (message.lastpk != null && $Object.hasOwnProperty.call(message, "lastpk"))
                 $root.query.QueryResult.encode(message.lastpk, writer.uint32(/* id 3, wireType 2 =*/26).fork(), _depth + 1).ldelim();
@@ -124360,7 +124129,7 @@ export const binlogdata = $root.binlogdata = (() => {
                 $root.query.VTGateCallerID.encode(message.immediate_caller_id, writer.uint32(/* id 2, wireType 2 =*/18).fork(), _depth + 1).ldelim();
             if (message.target != null && $Object.hasOwnProperty.call(message, "target"))
                 $root.query.Target.encode(message.target, writer.uint32(/* id 3, wireType 2 =*/26).fork(), _depth + 1).ldelim();
-            if (message.query != null && $Object.hasOwnProperty.call(message, "query"))
+            if (message.query != null && $Object.hasOwnProperty.call(message, "query") && message.query !== "")
                 writer.uint32(/* id 4, wireType 2 =*/34).string(message.query);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -124701,7 +124470,7 @@ export const binlogdata = $root.binlogdata = (() => {
             if (message.fields != null && message.fields.length)
                 for (let i = 0; i < message.fields.length; ++i)
                     $root.query.Field.encode(message.fields[i], writer.uint32(/* id 1, wireType 2 =*/10).fork(), _depth + 1).ldelim();
-            if (message.gtid != null && $Object.hasOwnProperty.call(message, "gtid"))
+            if (message.gtid != null && $Object.hasOwnProperty.call(message, "gtid") && message.gtid !== "")
                 writer.uint32(/* id 3, wireType 2 =*/26).string(message.gtid);
             if (message.rows != null && message.rows.length)
                 for (let i = 0; i < message.rows.length; ++i)
@@ -125092,13 +124861,13 @@ export const binlogdata = $root.binlogdata = (() => {
                 $root.query.VTGateCallerID.encode(message.immediate_caller_id, writer.uint32(/* id 2, wireType 2 =*/18).fork(), _depth + 1).ldelim();
             if (message.target != null && $Object.hasOwnProperty.call(message, "target"))
                 $root.query.Target.encode(message.target, writer.uint32(/* id 3, wireType 2 =*/26).fork(), _depth + 1).ldelim();
-            if (message.binlog_filename != null && $Object.hasOwnProperty.call(message, "binlog_filename"))
+            if (message.binlog_filename != null && $Object.hasOwnProperty.call(message, "binlog_filename") && message.binlog_filename !== "")
                 writer.uint32(/* id 4, wireType 2 =*/34).string(message.binlog_filename);
-            if (message.binlog_position != null && $Object.hasOwnProperty.call(message, "binlog_position"))
+            if (message.binlog_position != null && $Object.hasOwnProperty.call(message, "binlog_position") && (typeof message.binlog_position === "object" ? message.binlog_position.low || message.binlog_position.high : message.binlog_position !== 0))
                 writer.uint32(/* id 5, wireType 0 =*/40).uint64(message.binlog_position);
-            if (message.gtid_set != null && $Object.hasOwnProperty.call(message, "gtid_set"))
+            if (message.gtid_set != null && $Object.hasOwnProperty.call(message, "gtid_set") && message.gtid_set !== "")
                 writer.uint32(/* id 6, wireType 2 =*/50).string(message.gtid_set);
-            if (message.flags != null && $Object.hasOwnProperty.call(message, "flags"))
+            if (message.flags != null && $Object.hasOwnProperty.call(message, "flags") && message.flags !== 0)
                 writer.uint32(/* id 7, wireType 0 =*/56).uint32(message.flags);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -125486,7 +125255,7 @@ export const binlogdata = $root.binlogdata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.raw != null && $Object.hasOwnProperty.call(message, "raw"))
+            if (message.raw != null && $Object.hasOwnProperty.call(message, "raw") && message.raw.length)
                 writer.uint32(/* id 1, wireType 2 =*/10).bytes(message.raw);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -125794,13 +125563,13 @@ export const query = $root.query = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
+            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace") && message.keyspace !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.keyspace);
-            if (message.shard != null && $Object.hasOwnProperty.call(message, "shard"))
+            if (message.shard != null && $Object.hasOwnProperty.call(message, "shard") && message.shard !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.shard);
-            if (message.tablet_type != null && $Object.hasOwnProperty.call(message, "tablet_type"))
+            if (message.tablet_type != null && $Object.hasOwnProperty.call(message, "tablet_type") && message.tablet_type !== 0)
                 writer.uint32(/* id 3, wireType 0 =*/24).int32(message.tablet_type);
-            if (message.cell != null && $Object.hasOwnProperty.call(message, "cell"))
+            if (message.cell != null && $Object.hasOwnProperty.call(message, "cell") && message.cell !== "")
                 writer.uint32(/* id 4, wireType 2 =*/34).string(message.cell);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -125935,22 +125704,8 @@ export const query = $root.query = (() => {
                 if (!$util.isString(message.shard))
                     return "shard: string expected";
             if (message.tablet_type != null && $Object.hasOwnProperty.call(message, "tablet_type"))
-                switch (message.tablet_type) {
-                default:
+                if (typeof message.tablet_type !== "number" || (message.tablet_type | 0) !== message.tablet_type)
                     return "tablet_type: enum value expected";
-                case 0:
-                case 1:
-                case 1:
-                case 2:
-                case 3:
-                case 3:
-                case 4:
-                case 5:
-                case 6:
-                case 7:
-                case 8:
-                    break;
-                }
             if (message.cell != null && $Object.hasOwnProperty.call(message, "cell"))
                 if (!$util.isString(message.cell))
                     return "cell: string expected";
@@ -125983,12 +125738,6 @@ export const query = $root.query = (() => {
                     message.shard = $String(object.shard);
             if (object.tablet_type !== 0 && (typeof object.tablet_type !== "string" || $root.topodata.TabletType[object.tablet_type] !== 0))
                 switch (object.tablet_type) {
-                default:
-                    if (typeof object.tablet_type === "number") {
-                        message.tablet_type = object.tablet_type;
-                        break;
-                    }
-                    break;
                 case "UNKNOWN":
                 case 0:
                     message.tablet_type = 0;
@@ -126033,6 +125782,9 @@ export const query = $root.query = (() => {
                 case 8:
                     message.tablet_type = 8;
                     break;
+                default:
+                    if (typeof object.tablet_type === "number" && (object.tablet_type | 0) === object.tablet_type)
+                        message.tablet_type = object.tablet_type;
                 }
             if (object.cell != null)
                 if (typeof object.cell !== "string" || object.cell.length)
@@ -126189,7 +125941,7 @@ export const query = $root.query = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.username != null && $Object.hasOwnProperty.call(message, "username"))
+            if (message.username != null && $Object.hasOwnProperty.call(message, "username") && message.username !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.username);
             if (message.groups != null && message.groups.length)
                 for (let i = 0; i < message.groups.length; ++i)
@@ -126499,11 +126251,11 @@ export const query = $root.query = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.timestamp != null && $Object.hasOwnProperty.call(message, "timestamp"))
+            if (message.timestamp != null && $Object.hasOwnProperty.call(message, "timestamp") && (typeof message.timestamp === "object" ? message.timestamp.low || message.timestamp.high : message.timestamp !== 0))
                 writer.uint32(/* id 1, wireType 0 =*/8).int64(message.timestamp);
-            if (message.shard != null && $Object.hasOwnProperty.call(message, "shard"))
+            if (message.shard != null && $Object.hasOwnProperty.call(message, "shard") && message.shard !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.shard);
-            if (message.position != null && $Object.hasOwnProperty.call(message, "position"))
+            if (message.position != null && $Object.hasOwnProperty.call(message, "position") && message.position !== "")
                 writer.uint32(/* id 3, wireType 2 =*/26).string(message.position);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -126985,9 +126737,9 @@ export const query = $root.query = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.type != null && $Object.hasOwnProperty.call(message, "type"))
+            if (message.type != null && $Object.hasOwnProperty.call(message, "type") && message.type !== 0)
                 writer.uint32(/* id 1, wireType 0 =*/8).int32(message.type);
-            if (message.value != null && $Object.hasOwnProperty.call(message, "value"))
+            if (message.value != null && $Object.hasOwnProperty.call(message, "value") && message.value.length)
                 writer.uint32(/* id 2, wireType 2 =*/18).bytes(message.value);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -127098,49 +126850,8 @@ export const query = $root.query = (() => {
             if (_depth > $util.recursionLimit)
                 return "max depth exceeded";
             if (message.type != null && $Object.hasOwnProperty.call(message, "type"))
-                switch (message.type) {
-                default:
+                if (typeof message.type !== "number" || (message.type | 0) !== message.type)
                     return "type: enum value expected";
-                case 0:
-                case 257:
-                case 770:
-                case 259:
-                case 772:
-                case 261:
-                case 774:
-                case 263:
-                case 776:
-                case 265:
-                case 778:
-                case 1035:
-                case 1036:
-                case 2061:
-                case 2062:
-                case 2063:
-                case 2064:
-                case 785:
-                case 18:
-                case 6163:
-                case 10260:
-                case 6165:
-                case 10262:
-                case 6167:
-                case 10264:
-                case 2073:
-                case 2074:
-                case 2075:
-                case 28:
-                case 2077:
-                case 2078:
-                case 31:
-                case 4128:
-                case 4129:
-                case 4130:
-                case 2083:
-                case 36:
-                case 37:
-                    break;
-                }
             if (message.value != null && $Object.hasOwnProperty.call(message, "value"))
                 if (!(message.value && typeof message.value.length === "number" || $util.isString(message.value)))
                     return "value: buffer expected";
@@ -127167,12 +126878,6 @@ export const query = $root.query = (() => {
             let message = new $root.query.Value();
             if (object.type !== 0 && (typeof object.type !== "string" || $root.query.Type[object.type] !== 0))
                 switch (object.type) {
-                default:
-                    if (typeof object.type === "number") {
-                        message.type = object.type;
-                        break;
-                    }
-                    break;
                 case "NULL_TYPE":
                 case 0:
                     message.type = 0;
@@ -127325,6 +127030,9 @@ export const query = $root.query = (() => {
                 case 37:
                     message.type = 37;
                     break;
+                default:
+                    if (typeof object.type === "number" && (object.type | 0) === object.type)
+                        message.type = object.type;
                 }
             if (object.value != null)
                 if (object.value.length)
@@ -127493,9 +127201,9 @@ export const query = $root.query = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.type != null && $Object.hasOwnProperty.call(message, "type"))
+            if (message.type != null && $Object.hasOwnProperty.call(message, "type") && message.type !== 0)
                 writer.uint32(/* id 1, wireType 0 =*/8).int32(message.type);
-            if (message.value != null && $Object.hasOwnProperty.call(message, "value"))
+            if (message.value != null && $Object.hasOwnProperty.call(message, "value") && message.value.length)
                 writer.uint32(/* id 2, wireType 2 =*/18).bytes(message.value);
             if (message.values != null && message.values.length)
                 for (let i = 0; i < message.values.length; ++i)
@@ -127617,49 +127325,8 @@ export const query = $root.query = (() => {
             if (_depth > $util.recursionLimit)
                 return "max depth exceeded";
             if (message.type != null && $Object.hasOwnProperty.call(message, "type"))
-                switch (message.type) {
-                default:
+                if (typeof message.type !== "number" || (message.type | 0) !== message.type)
                     return "type: enum value expected";
-                case 0:
-                case 257:
-                case 770:
-                case 259:
-                case 772:
-                case 261:
-                case 774:
-                case 263:
-                case 776:
-                case 265:
-                case 778:
-                case 1035:
-                case 1036:
-                case 2061:
-                case 2062:
-                case 2063:
-                case 2064:
-                case 785:
-                case 18:
-                case 6163:
-                case 10260:
-                case 6165:
-                case 10262:
-                case 6167:
-                case 10264:
-                case 2073:
-                case 2074:
-                case 2075:
-                case 28:
-                case 2077:
-                case 2078:
-                case 31:
-                case 4128:
-                case 4129:
-                case 4130:
-                case 2083:
-                case 36:
-                case 37:
-                    break;
-                }
             if (message.value != null && $Object.hasOwnProperty.call(message, "value"))
                 if (!(message.value && typeof message.value.length === "number" || $util.isString(message.value)))
                     return "value: buffer expected";
@@ -127695,12 +127362,6 @@ export const query = $root.query = (() => {
             let message = new $root.query.BindVariable();
             if (object.type !== 0 && (typeof object.type !== "string" || $root.query.Type[object.type] !== 0))
                 switch (object.type) {
-                default:
-                    if (typeof object.type === "number") {
-                        message.type = object.type;
-                        break;
-                    }
-                    break;
                 case "NULL_TYPE":
                 case 0:
                     message.type = 0;
@@ -127853,6 +127514,9 @@ export const query = $root.query = (() => {
                 case 37:
                     message.type = 37;
                     break;
+                default:
+                    if (typeof object.type === "number" && (object.type | 0) === object.type)
+                        message.type = object.type;
                 }
             if (object.value != null)
                 if (object.value.length)
@@ -128029,7 +127693,7 @@ export const query = $root.query = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.sql != null && $Object.hasOwnProperty.call(message, "sql"))
+            if (message.sql != null && $Object.hasOwnProperty.call(message, "sql") && message.sql !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.sql);
             if (message.bind_variables != null && $Object.hasOwnProperty.call(message, "bind_variables"))
                 for (let keys = $Object.keys(message.bind_variables), i = 0; i < keys.length; ++i) {
@@ -128112,7 +127776,7 @@ export const query = $root.query = (() => {
                             case 2:
                                 if (wireType !== 2)
                                     break;
-                                value = $root.query.BindVariable.decode(reader, reader.uint32(), $undefined, _depth + 1);
+                                value = $root.query.BindVariable.decode(reader, reader.uint32(), $undefined, _depth + 1, value);
                                 continue;
                             }
                             reader.skipType(wireType, _depth, tag2);
@@ -128544,43 +128208,39 @@ export const query = $root.query = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.included_fields != null && $Object.hasOwnProperty.call(message, "included_fields"))
+            if (message.included_fields != null && $Object.hasOwnProperty.call(message, "included_fields") && message.included_fields !== 0)
                 writer.uint32(/* id 4, wireType 0 =*/32).int32(message.included_fields);
-            if (message.client_found_rows != null && $Object.hasOwnProperty.call(message, "client_found_rows"))
+            if (message.client_found_rows != null && $Object.hasOwnProperty.call(message, "client_found_rows") && message.client_found_rows !== false)
                 writer.uint32(/* id 5, wireType 0 =*/40).bool(message.client_found_rows);
-            if (message.workload != null && $Object.hasOwnProperty.call(message, "workload"))
+            if (message.workload != null && $Object.hasOwnProperty.call(message, "workload") && message.workload !== 0)
                 writer.uint32(/* id 6, wireType 0 =*/48).int32(message.workload);
-            if (message.sql_select_limit != null && $Object.hasOwnProperty.call(message, "sql_select_limit"))
+            if (message.sql_select_limit != null && $Object.hasOwnProperty.call(message, "sql_select_limit") && (typeof message.sql_select_limit === "object" ? message.sql_select_limit.low || message.sql_select_limit.high : message.sql_select_limit !== 0))
                 writer.uint32(/* id 8, wireType 0 =*/64).int64(message.sql_select_limit);
-            if (message.transaction_isolation != null && $Object.hasOwnProperty.call(message, "transaction_isolation"))
+            if (message.transaction_isolation != null && $Object.hasOwnProperty.call(message, "transaction_isolation") && message.transaction_isolation !== 0)
                 writer.uint32(/* id 9, wireType 0 =*/72).int32(message.transaction_isolation);
-            if (message.skip_query_plan_cache != null && $Object.hasOwnProperty.call(message, "skip_query_plan_cache"))
+            if (message.skip_query_plan_cache != null && $Object.hasOwnProperty.call(message, "skip_query_plan_cache") && message.skip_query_plan_cache !== false)
                 writer.uint32(/* id 10, wireType 0 =*/80).bool(message.skip_query_plan_cache);
-            if (message.planner_version != null && $Object.hasOwnProperty.call(message, "planner_version"))
+            if (message.planner_version != null && $Object.hasOwnProperty.call(message, "planner_version") && message.planner_version !== 0)
                 writer.uint32(/* id 11, wireType 0 =*/88).int32(message.planner_version);
-            if (message.has_created_temp_tables != null && $Object.hasOwnProperty.call(message, "has_created_temp_tables"))
+            if (message.has_created_temp_tables != null && $Object.hasOwnProperty.call(message, "has_created_temp_tables") && message.has_created_temp_tables !== false)
                 writer.uint32(/* id 12, wireType 0 =*/96).bool(message.has_created_temp_tables);
-            if (message.consolidator != null && $Object.hasOwnProperty.call(message, "consolidator"))
+            if (message.consolidator != null && $Object.hasOwnProperty.call(message, "consolidator") && message.consolidator !== 0)
                 writer.uint32(/* id 13, wireType 0 =*/104).int32(message.consolidator);
-            if (message.transaction_access_mode != null && message.transaction_access_mode.length) {
-                writer.uint32(/* id 14, wireType 2 =*/114).fork();
-                for (let i = 0; i < message.transaction_access_mode.length; ++i)
-                    writer.int32(message.transaction_access_mode[i]);
-                writer.ldelim();
-            }
-            if (message.WorkloadName != null && $Object.hasOwnProperty.call(message, "WorkloadName"))
+            if (message.transaction_access_mode != null && message.transaction_access_mode.length)
+                writer.uint32(/* id 14, wireType 2 =*/114).int32s(message.transaction_access_mode);
+            if (message.WorkloadName != null && $Object.hasOwnProperty.call(message, "WorkloadName") && message.WorkloadName !== "")
                 writer.uint32(/* id 15, wireType 2 =*/122).string(message.WorkloadName);
-            if (message.priority != null && $Object.hasOwnProperty.call(message, "priority"))
+            if (message.priority != null && $Object.hasOwnProperty.call(message, "priority") && message.priority !== "")
                 writer.uint32(/* id 16, wireType 2 =*/130).string(message.priority);
             if (message.authoritative_timeout != null && $Object.hasOwnProperty.call(message, "authoritative_timeout"))
                 writer.uint32(/* id 17, wireType 0 =*/136).int64(message.authoritative_timeout);
-            if (message.fetch_last_insert_id != null && $Object.hasOwnProperty.call(message, "fetch_last_insert_id"))
+            if (message.fetch_last_insert_id != null && $Object.hasOwnProperty.call(message, "fetch_last_insert_id") && message.fetch_last_insert_id !== false)
                 writer.uint32(/* id 18, wireType 0 =*/144).bool(message.fetch_last_insert_id);
-            if (message.in_dml_execution != null && $Object.hasOwnProperty.call(message, "in_dml_execution"))
+            if (message.in_dml_execution != null && $Object.hasOwnProperty.call(message, "in_dml_execution") && message.in_dml_execution !== false)
                 writer.uint32(/* id 19, wireType 0 =*/152).bool(message.in_dml_execution);
             if (message.transaction_timeout != null && $Object.hasOwnProperty.call(message, "transaction_timeout"))
                 writer.uint32(/* id 20, wireType 0 =*/160).int64(message.transaction_timeout);
-            if (message.no_result != null && $Object.hasOwnProperty.call(message, "no_result"))
+            if (message.no_result != null && $Object.hasOwnProperty.call(message, "no_result") && message.no_result !== false)
                 writer.uint32(/* id 21, wireType 0 =*/168).bool(message.no_result);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -128714,9 +128374,7 @@ export const query = $root.query = (() => {
                         if (wireType === 2) {
                             if (!(message.transaction_access_mode && message.transaction_access_mode.length))
                                 message.transaction_access_mode = [];
-                            let end2 = reader.uint32() + reader.pos;
-                            while (reader.pos < end2)
-                                message.transaction_access_mode.push(reader.int32());
+                            reader.int32s(message.transaction_access_mode);
                             continue;
                         }
                         if (wireType !== 0)
@@ -128830,85 +128488,38 @@ export const query = $root.query = (() => {
                 return "max depth exceeded";
             let properties = {};
             if (message.included_fields != null && $Object.hasOwnProperty.call(message, "included_fields"))
-                switch (message.included_fields) {
-                default:
+                if (typeof message.included_fields !== "number" || (message.included_fields | 0) !== message.included_fields)
                     return "included_fields: enum value expected";
-                case 0:
-                case 1:
-                case 2:
-                    break;
-                }
             if (message.client_found_rows != null && $Object.hasOwnProperty.call(message, "client_found_rows"))
                 if (typeof message.client_found_rows !== "boolean")
                     return "client_found_rows: boolean expected";
             if (message.workload != null && $Object.hasOwnProperty.call(message, "workload"))
-                switch (message.workload) {
-                default:
+                if (typeof message.workload !== "number" || (message.workload | 0) !== message.workload)
                     return "workload: enum value expected";
-                case 0:
-                case 1:
-                case 2:
-                case 3:
-                    break;
-                }
             if (message.sql_select_limit != null && $Object.hasOwnProperty.call(message, "sql_select_limit"))
                 if (!$util.isInteger(message.sql_select_limit) && !(message.sql_select_limit && $util.isInteger(message.sql_select_limit.low) && $util.isInteger(message.sql_select_limit.high)))
                     return "sql_select_limit: integer|Long expected";
             if (message.transaction_isolation != null && $Object.hasOwnProperty.call(message, "transaction_isolation"))
-                switch (message.transaction_isolation) {
-                default:
+                if (typeof message.transaction_isolation !== "number" || (message.transaction_isolation | 0) !== message.transaction_isolation)
                     return "transaction_isolation: enum value expected";
-                case 0:
-                case 1:
-                case 2:
-                case 3:
-                case 4:
-                case 5:
-                case 6:
-                    break;
-                }
             if (message.skip_query_plan_cache != null && $Object.hasOwnProperty.call(message, "skip_query_plan_cache"))
                 if (typeof message.skip_query_plan_cache !== "boolean")
                     return "skip_query_plan_cache: boolean expected";
             if (message.planner_version != null && $Object.hasOwnProperty.call(message, "planner_version"))
-                switch (message.planner_version) {
-                default:
+                if (typeof message.planner_version !== "number" || (message.planner_version | 0) !== message.planner_version)
                     return "planner_version: enum value expected";
-                case 0:
-                case 1:
-                case 2:
-                case 3:
-                case 4:
-                case 5:
-                case 6:
-                case 7:
-                    break;
-                }
             if (message.has_created_temp_tables != null && $Object.hasOwnProperty.call(message, "has_created_temp_tables"))
                 if (typeof message.has_created_temp_tables !== "boolean")
                     return "has_created_temp_tables: boolean expected";
             if (message.consolidator != null && $Object.hasOwnProperty.call(message, "consolidator"))
-                switch (message.consolidator) {
-                default:
+                if (typeof message.consolidator !== "number" || (message.consolidator | 0) !== message.consolidator)
                     return "consolidator: enum value expected";
-                case 0:
-                case 1:
-                case 2:
-                case 3:
-                    break;
-                }
             if (message.transaction_access_mode != null && $Object.hasOwnProperty.call(message, "transaction_access_mode")) {
                 if (!$Array.isArray(message.transaction_access_mode))
                     return "transaction_access_mode: array expected";
                 for (let i = 0; i < message.transaction_access_mode.length; ++i)
-                    switch (message.transaction_access_mode[i]) {
-                    default:
+                    if (typeof message.transaction_access_mode[i] !== "number" || (message.transaction_access_mode[i] | 0) !== message.transaction_access_mode[i])
                         return "transaction_access_mode: enum value[] expected";
-                    case 0:
-                    case 1:
-                    case 2:
-                        break;
-                    }
             }
             if (message.WorkloadName != null && $Object.hasOwnProperty.call(message, "WorkloadName"))
                 if (!$util.isString(message.WorkloadName))
@@ -128958,12 +128569,6 @@ export const query = $root.query = (() => {
             let message = new $root.query.ExecuteOptions();
             if (object.included_fields !== 0 && (typeof object.included_fields !== "string" || $root.query.ExecuteOptions.IncludedFields[object.included_fields] !== 0))
                 switch (object.included_fields) {
-                default:
-                    if (typeof object.included_fields === "number") {
-                        message.included_fields = object.included_fields;
-                        break;
-                    }
-                    break;
                 case "TYPE_AND_NAME":
                 case 0:
                     message.included_fields = 0;
@@ -128976,18 +128581,15 @@ export const query = $root.query = (() => {
                 case 2:
                     message.included_fields = 2;
                     break;
+                default:
+                    if (typeof object.included_fields === "number" && (object.included_fields | 0) === object.included_fields)
+                        message.included_fields = object.included_fields;
                 }
             if (object.client_found_rows != null)
                 if (object.client_found_rows)
                     message.client_found_rows = $Boolean(object.client_found_rows);
             if (object.workload !== 0 && (typeof object.workload !== "string" || $root.query.ExecuteOptions.Workload[object.workload] !== 0))
                 switch (object.workload) {
-                default:
-                    if (typeof object.workload === "number") {
-                        message.workload = object.workload;
-                        break;
-                    }
-                    break;
                 case "UNSPECIFIED":
                 case 0:
                     message.workload = 0;
@@ -129004,6 +128606,9 @@ export const query = $root.query = (() => {
                 case 3:
                     message.workload = 3;
                     break;
+                default:
+                    if (typeof object.workload === "number" && (object.workload | 0) === object.workload)
+                        message.workload = object.workload;
                 }
             if (object.sql_select_limit != null)
                 if (typeof object.sql_select_limit === "object" ? object.sql_select_limit.low || object.sql_select_limit.high : $Number(object.sql_select_limit) !== 0)
@@ -129017,12 +128622,6 @@ export const query = $root.query = (() => {
                         message.sql_select_limit = new $util.LongBits(object.sql_select_limit.low >>> 0, object.sql_select_limit.high >>> 0).toNumber();
             if (object.transaction_isolation !== 0 && (typeof object.transaction_isolation !== "string" || $root.query.ExecuteOptions.TransactionIsolation[object.transaction_isolation] !== 0))
                 switch (object.transaction_isolation) {
-                default:
-                    if (typeof object.transaction_isolation === "number") {
-                        message.transaction_isolation = object.transaction_isolation;
-                        break;
-                    }
-                    break;
                 case "DEFAULT":
                 case 0:
                     message.transaction_isolation = 0;
@@ -129051,18 +128650,15 @@ export const query = $root.query = (() => {
                 case 6:
                     message.transaction_isolation = 6;
                     break;
+                default:
+                    if (typeof object.transaction_isolation === "number" && (object.transaction_isolation | 0) === object.transaction_isolation)
+                        message.transaction_isolation = object.transaction_isolation;
                 }
             if (object.skip_query_plan_cache != null)
                 if (object.skip_query_plan_cache)
                     message.skip_query_plan_cache = $Boolean(object.skip_query_plan_cache);
             if (object.planner_version !== 0 && (typeof object.planner_version !== "string" || $root.query.ExecuteOptions.PlannerVersion[object.planner_version] !== 0))
                 switch (object.planner_version) {
-                default:
-                    if (typeof object.planner_version === "number") {
-                        message.planner_version = object.planner_version;
-                        break;
-                    }
-                    break;
                 case "DEFAULT_PLANNER":
                 case 0:
                     message.planner_version = 0;
@@ -129095,18 +128691,15 @@ export const query = $root.query = (() => {
                 case 7:
                     message.planner_version = 7;
                     break;
+                default:
+                    if (typeof object.planner_version === "number" && (object.planner_version | 0) === object.planner_version)
+                        message.planner_version = object.planner_version;
                 }
             if (object.has_created_temp_tables != null)
                 if (object.has_created_temp_tables)
                     message.has_created_temp_tables = $Boolean(object.has_created_temp_tables);
             if (object.consolidator !== 0 && (typeof object.consolidator !== "string" || $root.query.ExecuteOptions.Consolidator[object.consolidator] !== 0))
                 switch (object.consolidator) {
-                default:
-                    if (typeof object.consolidator === "number") {
-                        message.consolidator = object.consolidator;
-                        break;
-                    }
-                    break;
                 case "CONSOLIDATOR_UNSPECIFIED":
                 case 0:
                     message.consolidator = 0;
@@ -129123,30 +128716,31 @@ export const query = $root.query = (() => {
                 case 3:
                     message.consolidator = 3;
                     break;
+                default:
+                    if (typeof object.consolidator === "number" && (object.consolidator | 0) === object.consolidator)
+                        message.consolidator = object.consolidator;
                 }
             if (object.transaction_access_mode) {
                 if (!$Array.isArray(object.transaction_access_mode))
                     throw $TypeError(".query.ExecuteOptions.transaction_access_mode: array expected");
-                message.transaction_access_mode = $Array(object.transaction_access_mode.length);
+                message.transaction_access_mode = [];
                 for (let i = 0; i < object.transaction_access_mode.length; ++i)
                     switch (object.transaction_access_mode[i]) {
-                    default:
-                        if (typeof object.transaction_access_mode[i] === "number") {
-                            message.transaction_access_mode[i] = object.transaction_access_mode[i];
-                            break;
-                        }
                     case "CONSISTENT_SNAPSHOT":
                     case 0:
-                        message.transaction_access_mode[i] = 0;
+                        message.transaction_access_mode[message.transaction_access_mode.length] = 0;
                         break;
                     case "READ_WRITE":
                     case 1:
-                        message.transaction_access_mode[i] = 1;
+                        message.transaction_access_mode[message.transaction_access_mode.length] = 1;
                         break;
                     case "READ_ONLY":
                     case 2:
-                        message.transaction_access_mode[i] = 2;
+                        message.transaction_access_mode[message.transaction_access_mode.length] = 2;
                         break;
+                    default:
+                        if (typeof object.transaction_access_mode[i] === "number" && (object.transaction_access_mode[i] | 0) === object.transaction_access_mode[i])
+                            message.transaction_access_mode[message.transaction_access_mode.length] = object.transaction_access_mode[i];
                     }
             }
             if (object.WorkloadName != null)
@@ -129595,27 +129189,27 @@ export const query = $root.query = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.name != null && $Object.hasOwnProperty.call(message, "name"))
+            if (message.name != null && $Object.hasOwnProperty.call(message, "name") && message.name !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.name);
-            if (message.type != null && $Object.hasOwnProperty.call(message, "type"))
+            if (message.type != null && $Object.hasOwnProperty.call(message, "type") && message.type !== 0)
                 writer.uint32(/* id 2, wireType 0 =*/16).int32(message.type);
-            if (message.table != null && $Object.hasOwnProperty.call(message, "table"))
+            if (message.table != null && $Object.hasOwnProperty.call(message, "table") && message.table !== "")
                 writer.uint32(/* id 3, wireType 2 =*/26).string(message.table);
-            if (message.org_table != null && $Object.hasOwnProperty.call(message, "org_table"))
+            if (message.org_table != null && $Object.hasOwnProperty.call(message, "org_table") && message.org_table !== "")
                 writer.uint32(/* id 4, wireType 2 =*/34).string(message.org_table);
-            if (message.database != null && $Object.hasOwnProperty.call(message, "database"))
+            if (message.database != null && $Object.hasOwnProperty.call(message, "database") && message.database !== "")
                 writer.uint32(/* id 5, wireType 2 =*/42).string(message.database);
-            if (message.org_name != null && $Object.hasOwnProperty.call(message, "org_name"))
+            if (message.org_name != null && $Object.hasOwnProperty.call(message, "org_name") && message.org_name !== "")
                 writer.uint32(/* id 6, wireType 2 =*/50).string(message.org_name);
-            if (message.column_length != null && $Object.hasOwnProperty.call(message, "column_length"))
+            if (message.column_length != null && $Object.hasOwnProperty.call(message, "column_length") && message.column_length !== 0)
                 writer.uint32(/* id 7, wireType 0 =*/56).uint32(message.column_length);
-            if (message.charset != null && $Object.hasOwnProperty.call(message, "charset"))
+            if (message.charset != null && $Object.hasOwnProperty.call(message, "charset") && message.charset !== 0)
                 writer.uint32(/* id 8, wireType 0 =*/64).uint32(message.charset);
-            if (message.decimals != null && $Object.hasOwnProperty.call(message, "decimals"))
+            if (message.decimals != null && $Object.hasOwnProperty.call(message, "decimals") && message.decimals !== 0)
                 writer.uint32(/* id 9, wireType 0 =*/72).uint32(message.decimals);
-            if (message.flags != null && $Object.hasOwnProperty.call(message, "flags"))
+            if (message.flags != null && $Object.hasOwnProperty.call(message, "flags") && message.flags !== 0)
                 writer.uint32(/* id 10, wireType 0 =*/80).uint32(message.flags);
-            if (message.column_type != null && $Object.hasOwnProperty.call(message, "column_type"))
+            if (message.column_type != null && $Object.hasOwnProperty.call(message, "column_type") && message.column_type !== "")
                 writer.uint32(/* id 11, wireType 2 =*/90).string(message.column_type);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -129810,49 +129404,8 @@ export const query = $root.query = (() => {
                 if (!$util.isString(message.name))
                     return "name: string expected";
             if (message.type != null && $Object.hasOwnProperty.call(message, "type"))
-                switch (message.type) {
-                default:
+                if (typeof message.type !== "number" || (message.type | 0) !== message.type)
                     return "type: enum value expected";
-                case 0:
-                case 257:
-                case 770:
-                case 259:
-                case 772:
-                case 261:
-                case 774:
-                case 263:
-                case 776:
-                case 265:
-                case 778:
-                case 1035:
-                case 1036:
-                case 2061:
-                case 2062:
-                case 2063:
-                case 2064:
-                case 785:
-                case 18:
-                case 6163:
-                case 10260:
-                case 6165:
-                case 10262:
-                case 6167:
-                case 10264:
-                case 2073:
-                case 2074:
-                case 2075:
-                case 28:
-                case 2077:
-                case 2078:
-                case 31:
-                case 4128:
-                case 4129:
-                case 4130:
-                case 2083:
-                case 36:
-                case 37:
-                    break;
-                }
             if (message.table != null && $Object.hasOwnProperty.call(message, "table"))
                 if (!$util.isString(message.table))
                     return "table: string expected";
@@ -129906,12 +129459,6 @@ export const query = $root.query = (() => {
                     message.name = $String(object.name);
             if (object.type !== 0 && (typeof object.type !== "string" || $root.query.Type[object.type] !== 0))
                 switch (object.type) {
-                default:
-                    if (typeof object.type === "number") {
-                        message.type = object.type;
-                        break;
-                    }
-                    break;
                 case "NULL_TYPE":
                 case 0:
                     message.type = 0;
@@ -130064,6 +129611,9 @@ export const query = $root.query = (() => {
                 case 37:
                     message.type = 37;
                     break;
+                default:
+                    if (typeof object.type === "number" && (object.type | 0) === object.type)
+                        message.type = object.type;
                 }
             if (object.table != null)
                 if (typeof object.table !== "string" || object.table.length)
@@ -130265,13 +129815,9 @@ export const query = $root.query = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.lengths != null && message.lengths.length) {
-                writer.uint32(/* id 1, wireType 2 =*/10).fork();
-                for (let i = 0; i < message.lengths.length; ++i)
-                    writer.sint64(message.lengths[i]);
-                writer.ldelim();
-            }
-            if (message.values != null && $Object.hasOwnProperty.call(message, "values"))
+            if (message.lengths != null && message.lengths.length)
+                writer.uint32(/* id 1, wireType 2 =*/10).sint64s(message.lengths);
+            if (message.values != null && $Object.hasOwnProperty.call(message, "values") && message.values.length)
                 writer.uint32(/* id 2, wireType 2 =*/18).bytes(message.values);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -130324,9 +129870,7 @@ export const query = $root.query = (() => {
                         if (wireType === 2) {
                             if (!(message.lengths && message.lengths.length))
                                 message.lengths = [];
-                            let end2 = reader.uint32() + reader.pos;
-                            while (reader.pos < end2)
-                                message.lengths.push(reader.sint64());
+                            reader.sint64s(message.lengths);
                             continue;
                         }
                         if (wireType !== 0)
@@ -130648,18 +130192,18 @@ export const query = $root.query = (() => {
             if (message.fields != null && message.fields.length)
                 for (let i = 0; i < message.fields.length; ++i)
                     $root.query.Field.encode(message.fields[i], writer.uint32(/* id 1, wireType 2 =*/10).fork(), _depth + 1).ldelim();
-            if (message.rows_affected != null && $Object.hasOwnProperty.call(message, "rows_affected"))
+            if (message.rows_affected != null && $Object.hasOwnProperty.call(message, "rows_affected") && (typeof message.rows_affected === "object" ? message.rows_affected.low || message.rows_affected.high : message.rows_affected !== 0))
                 writer.uint32(/* id 2, wireType 0 =*/16).uint64(message.rows_affected);
-            if (message.insert_id != null && $Object.hasOwnProperty.call(message, "insert_id"))
+            if (message.insert_id != null && $Object.hasOwnProperty.call(message, "insert_id") && (typeof message.insert_id === "object" ? message.insert_id.low || message.insert_id.high : message.insert_id !== 0))
                 writer.uint32(/* id 3, wireType 0 =*/24).uint64(message.insert_id);
             if (message.rows != null && message.rows.length)
                 for (let i = 0; i < message.rows.length; ++i)
                     $root.query.Row.encode(message.rows[i], writer.uint32(/* id 4, wireType 2 =*/34).fork(), _depth + 1).ldelim();
-            if (message.info != null && $Object.hasOwnProperty.call(message, "info"))
+            if (message.info != null && $Object.hasOwnProperty.call(message, "info") && message.info !== "")
                 writer.uint32(/* id 6, wireType 2 =*/50).string(message.info);
-            if (message.session_state_changes != null && $Object.hasOwnProperty.call(message, "session_state_changes"))
+            if (message.session_state_changes != null && $Object.hasOwnProperty.call(message, "session_state_changes") && message.session_state_changes !== "")
                 writer.uint32(/* id 7, wireType 2 =*/58).string(message.session_state_changes);
-            if (message.insert_id_changed != null && $Object.hasOwnProperty.call(message, "insert_id_changed"))
+            if (message.insert_id_changed != null && $Object.hasOwnProperty.call(message, "insert_id_changed") && message.insert_id_changed !== false)
                 writer.uint32(/* id 8, wireType 0 =*/64).bool(message.insert_id_changed);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -131101,9 +130645,9 @@ export const query = $root.query = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.code != null && $Object.hasOwnProperty.call(message, "code"))
+            if (message.code != null && $Object.hasOwnProperty.call(message, "code") && message.code !== 0)
                 writer.uint32(/* id 1, wireType 0 =*/8).uint32(message.code);
-            if (message.message != null && $Object.hasOwnProperty.call(message, "message"))
+            if (message.message != null && $Object.hasOwnProperty.call(message, "message") && message.message !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.message);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -131725,9 +131269,9 @@ export const query = $root.query = (() => {
                     _depth = 0;
                 if (_depth > $util.recursionLimit)
                     throw $Error("max depth exceeded");
-                if (message.category != null && $Object.hasOwnProperty.call(message, "category"))
+                if (message.category != null && $Object.hasOwnProperty.call(message, "category") && message.category !== 0)
                     writer.uint32(/* id 1, wireType 0 =*/8).int32(message.category);
-                if (message.table_name != null && $Object.hasOwnProperty.call(message, "table_name"))
+                if (message.table_name != null && $Object.hasOwnProperty.call(message, "table_name") && message.table_name !== "")
                     writer.uint32(/* id 2, wireType 2 =*/18).string(message.table_name);
                 if (message.primary_key_fields != null && message.primary_key_fields.length)
                     for (let i = 0; i < message.primary_key_fields.length; ++i)
@@ -131735,7 +131279,7 @@ export const query = $root.query = (() => {
                 if (message.primary_key_values != null && message.primary_key_values.length)
                     for (let i = 0; i < message.primary_key_values.length; ++i)
                         $root.query.Row.encode(message.primary_key_values[i], writer.uint32(/* id 4, wireType 2 =*/34).fork(), _depth + 1).ldelim();
-                if (message.sql != null && $Object.hasOwnProperty.call(message, "sql"))
+                if (message.sql != null && $Object.hasOwnProperty.call(message, "sql") && message.sql.length)
                     writer.uint32(/* id 5, wireType 2 =*/42).bytes(message.sql);
                 if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                     for (let i = 0; i < message.$unknowns.length; ++i)
@@ -131871,14 +131415,8 @@ export const query = $root.query = (() => {
                 if (_depth > $util.recursionLimit)
                     return "max depth exceeded";
                 if (message.category != null && $Object.hasOwnProperty.call(message, "category"))
-                    switch (message.category) {
-                    default:
+                    if (typeof message.category !== "number" || (message.category | 0) !== message.category)
                         return "category: enum value expected";
-                    case 0:
-                    case 1:
-                    case 2:
-                        break;
-                    }
                 if (message.table_name != null && $Object.hasOwnProperty.call(message, "table_name"))
                     if (!$util.isString(message.table_name))
                         return "table_name: string expected";
@@ -131926,12 +131464,6 @@ export const query = $root.query = (() => {
                 let message = new $root.query.StreamEvent.Statement();
                 if (object.category !== 0 && (typeof object.category !== "string" || $root.query.StreamEvent.Statement.Category[object.category] !== 0))
                     switch (object.category) {
-                    default:
-                        if (typeof object.category === "number") {
-                            message.category = object.category;
-                            break;
-                        }
-                        break;
                     case "Error":
                     case 0:
                         message.category = 0;
@@ -131944,6 +131476,9 @@ export const query = $root.query = (() => {
                     case 2:
                         message.category = 2;
                         break;
+                    default:
+                        if (typeof object.category === "number" && (object.category | 0) === object.category)
+                            message.category = object.category;
                     }
                 if (object.table_name != null)
                     if (typeof object.table_name !== "string" || object.table_name.length)
@@ -132254,11 +131789,11 @@ export const query = $root.query = (() => {
                 $root.query.Target.encode(message.target, writer.uint32(/* id 3, wireType 2 =*/26).fork(), _depth + 1).ldelim();
             if (message.query != null && $Object.hasOwnProperty.call(message, "query"))
                 $root.query.BoundQuery.encode(message.query, writer.uint32(/* id 4, wireType 2 =*/34).fork(), _depth + 1).ldelim();
-            if (message.transaction_id != null && $Object.hasOwnProperty.call(message, "transaction_id"))
+            if (message.transaction_id != null && $Object.hasOwnProperty.call(message, "transaction_id") && (typeof message.transaction_id === "object" ? message.transaction_id.low || message.transaction_id.high : message.transaction_id !== 0))
                 writer.uint32(/* id 5, wireType 0 =*/40).int64(message.transaction_id);
             if (message.options != null && $Object.hasOwnProperty.call(message, "options"))
                 $root.query.ExecuteOptions.encode(message.options, writer.uint32(/* id 6, wireType 2 =*/50).fork(), _depth + 1).ldelim();
-            if (message.reserved_id != null && $Object.hasOwnProperty.call(message, "reserved_id"))
+            if (message.reserved_id != null && $Object.hasOwnProperty.call(message, "reserved_id") && (typeof message.reserved_id === "object" ? message.reserved_id.low || message.reserved_id.high : message.reserved_id !== 0))
                 writer.uint32(/* id 7, wireType 0 =*/56).int64(message.reserved_id);
             if (message.reserved_conn_keep_alive != null && $Object.hasOwnProperty.call(message, "reserved_conn_keep_alive"))
                 writer.uint32(/* id 8, wireType 0 =*/64).bool(message.reserved_conn_keep_alive);
@@ -133385,9 +132920,9 @@ export const query = $root.query = (() => {
                 $root.query.BoundQuery.encode(message.query, writer.uint32(/* id 4, wireType 2 =*/34).fork(), _depth + 1).ldelim();
             if (message.options != null && $Object.hasOwnProperty.call(message, "options"))
                 $root.query.ExecuteOptions.encode(message.options, writer.uint32(/* id 5, wireType 2 =*/42).fork(), _depth + 1).ldelim();
-            if (message.transaction_id != null && $Object.hasOwnProperty.call(message, "transaction_id"))
+            if (message.transaction_id != null && $Object.hasOwnProperty.call(message, "transaction_id") && (typeof message.transaction_id === "object" ? message.transaction_id.low || message.transaction_id.high : message.transaction_id !== 0))
                 writer.uint32(/* id 6, wireType 0 =*/48).int64(message.transaction_id);
-            if (message.reserved_id != null && $Object.hasOwnProperty.call(message, "reserved_id"))
+            if (message.reserved_id != null && $Object.hasOwnProperty.call(message, "reserved_id") && (typeof message.reserved_id === "object" ? message.reserved_id.low || message.reserved_id.high : message.reserved_id !== 0))
                 writer.uint32(/* id 7, wireType 0 =*/56).int64(message.reserved_id);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -134430,11 +133965,11 @@ export const query = $root.query = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.transaction_id != null && $Object.hasOwnProperty.call(message, "transaction_id"))
+            if (message.transaction_id != null && $Object.hasOwnProperty.call(message, "transaction_id") && (typeof message.transaction_id === "object" ? message.transaction_id.low || message.transaction_id.high : message.transaction_id !== 0))
                 writer.uint32(/* id 1, wireType 0 =*/8).int64(message.transaction_id);
             if (message.tablet_alias != null && $Object.hasOwnProperty.call(message, "tablet_alias"))
                 $root.topodata.TabletAlias.encode(message.tablet_alias, writer.uint32(/* id 2, wireType 2 =*/18).fork(), _depth + 1).ldelim();
-            if (message.session_state_changes != null && $Object.hasOwnProperty.call(message, "session_state_changes"))
+            if (message.session_state_changes != null && $Object.hasOwnProperty.call(message, "session_state_changes") && message.session_state_changes !== "")
                 writer.uint32(/* id 3, wireType 2 =*/26).string(message.session_state_changes);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -134781,7 +134316,7 @@ export const query = $root.query = (() => {
                 $root.query.VTGateCallerID.encode(message.immediate_caller_id, writer.uint32(/* id 2, wireType 2 =*/18).fork(), _depth + 1).ldelim();
             if (message.target != null && $Object.hasOwnProperty.call(message, "target"))
                 $root.query.Target.encode(message.target, writer.uint32(/* id 3, wireType 2 =*/26).fork(), _depth + 1).ldelim();
-            if (message.transaction_id != null && $Object.hasOwnProperty.call(message, "transaction_id"))
+            if (message.transaction_id != null && $Object.hasOwnProperty.call(message, "transaction_id") && (typeof message.transaction_id === "object" ? message.transaction_id.low || message.transaction_id.high : message.transaction_id !== 0))
                 writer.uint32(/* id 4, wireType 0 =*/32).int64(message.transaction_id);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -135115,7 +134650,7 @@ export const query = $root.query = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.reserved_id != null && $Object.hasOwnProperty.call(message, "reserved_id"))
+            if (message.reserved_id != null && $Object.hasOwnProperty.call(message, "reserved_id") && (typeof message.reserved_id === "object" ? message.reserved_id.low || message.reserved_id.high : message.reserved_id !== 0))
                 writer.uint32(/* id 1, wireType 0 =*/8).int64(message.reserved_id);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -135424,7 +134959,7 @@ export const query = $root.query = (() => {
                 $root.query.VTGateCallerID.encode(message.immediate_caller_id, writer.uint32(/* id 2, wireType 2 =*/18).fork(), _depth + 1).ldelim();
             if (message.target != null && $Object.hasOwnProperty.call(message, "target"))
                 $root.query.Target.encode(message.target, writer.uint32(/* id 3, wireType 2 =*/26).fork(), _depth + 1).ldelim();
-            if (message.transaction_id != null && $Object.hasOwnProperty.call(message, "transaction_id"))
+            if (message.transaction_id != null && $Object.hasOwnProperty.call(message, "transaction_id") && (typeof message.transaction_id === "object" ? message.transaction_id.low || message.transaction_id.high : message.transaction_id !== 0))
                 writer.uint32(/* id 4, wireType 0 =*/32).int64(message.transaction_id);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -135758,7 +135293,7 @@ export const query = $root.query = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.reserved_id != null && $Object.hasOwnProperty.call(message, "reserved_id"))
+            if (message.reserved_id != null && $Object.hasOwnProperty.call(message, "reserved_id") && (typeof message.reserved_id === "object" ? message.reserved_id.low || message.reserved_id.high : message.reserved_id !== 0))
                 writer.uint32(/* id 1, wireType 0 =*/8).int64(message.reserved_id);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -136076,9 +135611,9 @@ export const query = $root.query = (() => {
                 $root.query.VTGateCallerID.encode(message.immediate_caller_id, writer.uint32(/* id 2, wireType 2 =*/18).fork(), _depth + 1).ldelim();
             if (message.target != null && $Object.hasOwnProperty.call(message, "target"))
                 $root.query.Target.encode(message.target, writer.uint32(/* id 3, wireType 2 =*/26).fork(), _depth + 1).ldelim();
-            if (message.transaction_id != null && $Object.hasOwnProperty.call(message, "transaction_id"))
+            if (message.transaction_id != null && $Object.hasOwnProperty.call(message, "transaction_id") && (typeof message.transaction_id === "object" ? message.transaction_id.low || message.transaction_id.high : message.transaction_id !== 0))
                 writer.uint32(/* id 4, wireType 0 =*/32).int64(message.transaction_id);
-            if (message.dtid != null && $Object.hasOwnProperty.call(message, "dtid"))
+            if (message.dtid != null && $Object.hasOwnProperty.call(message, "dtid") && message.dtid !== "")
                 writer.uint32(/* id 5, wireType 2 =*/42).string(message.dtid);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -136682,7 +136217,7 @@ export const query = $root.query = (() => {
                 $root.query.VTGateCallerID.encode(message.immediate_caller_id, writer.uint32(/* id 2, wireType 2 =*/18).fork(), _depth + 1).ldelim();
             if (message.target != null && $Object.hasOwnProperty.call(message, "target"))
                 $root.query.Target.encode(message.target, writer.uint32(/* id 3, wireType 2 =*/26).fork(), _depth + 1).ldelim();
-            if (message.dtid != null && $Object.hasOwnProperty.call(message, "dtid"))
+            if (message.dtid != null && $Object.hasOwnProperty.call(message, "dtid") && message.dtid !== "")
                 writer.uint32(/* id 4, wireType 2 =*/34).string(message.dtid);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -137261,9 +136796,9 @@ export const query = $root.query = (() => {
                 $root.query.VTGateCallerID.encode(message.immediate_caller_id, writer.uint32(/* id 2, wireType 2 =*/18).fork(), _depth + 1).ldelim();
             if (message.target != null && $Object.hasOwnProperty.call(message, "target"))
                 $root.query.Target.encode(message.target, writer.uint32(/* id 3, wireType 2 =*/26).fork(), _depth + 1).ldelim();
-            if (message.transaction_id != null && $Object.hasOwnProperty.call(message, "transaction_id"))
+            if (message.transaction_id != null && $Object.hasOwnProperty.call(message, "transaction_id") && (typeof message.transaction_id === "object" ? message.transaction_id.low || message.transaction_id.high : message.transaction_id !== 0))
                 writer.uint32(/* id 4, wireType 0 =*/32).int64(message.transaction_id);
-            if (message.dtid != null && $Object.hasOwnProperty.call(message, "dtid"))
+            if (message.dtid != null && $Object.hasOwnProperty.call(message, "dtid") && message.dtid !== "")
                 writer.uint32(/* id 5, wireType 2 =*/42).string(message.dtid);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -137877,7 +137412,7 @@ export const query = $root.query = (() => {
                 $root.query.VTGateCallerID.encode(message.immediate_caller_id, writer.uint32(/* id 2, wireType 2 =*/18).fork(), _depth + 1).ldelim();
             if (message.target != null && $Object.hasOwnProperty.call(message, "target"))
                 $root.query.Target.encode(message.target, writer.uint32(/* id 3, wireType 2 =*/26).fork(), _depth + 1).ldelim();
-            if (message.dtid != null && $Object.hasOwnProperty.call(message, "dtid"))
+            if (message.dtid != null && $Object.hasOwnProperty.call(message, "dtid") && message.dtid !== "")
                 writer.uint32(/* id 4, wireType 2 =*/34).string(message.dtid);
             if (message.participants != null && message.participants.length)
                 for (let i = 0; i < message.participants.length; ++i)
@@ -138493,9 +138028,9 @@ export const query = $root.query = (() => {
                 $root.query.VTGateCallerID.encode(message.immediate_caller_id, writer.uint32(/* id 2, wireType 2 =*/18).fork(), _depth + 1).ldelim();
             if (message.target != null && $Object.hasOwnProperty.call(message, "target"))
                 $root.query.Target.encode(message.target, writer.uint32(/* id 3, wireType 2 =*/26).fork(), _depth + 1).ldelim();
-            if (message.transaction_id != null && $Object.hasOwnProperty.call(message, "transaction_id"))
+            if (message.transaction_id != null && $Object.hasOwnProperty.call(message, "transaction_id") && (typeof message.transaction_id === "object" ? message.transaction_id.low || message.transaction_id.high : message.transaction_id !== 0))
                 writer.uint32(/* id 4, wireType 0 =*/32).int64(message.transaction_id);
-            if (message.dtid != null && $Object.hasOwnProperty.call(message, "dtid"))
+            if (message.dtid != null && $Object.hasOwnProperty.call(message, "dtid") && message.dtid !== "")
                 writer.uint32(/* id 5, wireType 2 =*/42).string(message.dtid);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -138863,7 +138398,7 @@ export const query = $root.query = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.state != null && $Object.hasOwnProperty.call(message, "state"))
+            if (message.state != null && $Object.hasOwnProperty.call(message, "state") && message.state !== 0)
                 writer.uint32(/* id 1, wireType 0 =*/8).int32(message.state);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -138965,14 +138500,8 @@ export const query = $root.query = (() => {
             if (_depth > $util.recursionLimit)
                 return "max depth exceeded";
             if (message.state != null && $Object.hasOwnProperty.call(message, "state"))
-                switch (message.state) {
-                default:
+                if (typeof message.state !== "number" || (message.state | 0) !== message.state)
                     return "state: enum value expected";
-                case 0:
-                case 1:
-                case 2:
-                    break;
-                }
             return null;
         };
 
@@ -138996,12 +138525,6 @@ export const query = $root.query = (() => {
             let message = new $root.query.StartCommitResponse();
             if (object.state !== 0 && (typeof object.state !== "string" || $root.query.StartCommitState[object.state] !== 0))
                 switch (object.state) {
-                default:
-                    if (typeof object.state === "number") {
-                        message.state = object.state;
-                        break;
-                    }
-                    break;
                 case "Unknown":
                 case 0:
                     message.state = 0;
@@ -139014,6 +138537,9 @@ export const query = $root.query = (() => {
                 case 2:
                     message.state = 2;
                     break;
+                default:
+                    if (typeof object.state === "number" && (object.state | 0) === object.state)
+                        message.state = object.state;
                 }
             return message;
         };
@@ -139189,9 +138715,9 @@ export const query = $root.query = (() => {
                 $root.query.VTGateCallerID.encode(message.immediate_caller_id, writer.uint32(/* id 2, wireType 2 =*/18).fork(), _depth + 1).ldelim();
             if (message.target != null && $Object.hasOwnProperty.call(message, "target"))
                 $root.query.Target.encode(message.target, writer.uint32(/* id 3, wireType 2 =*/26).fork(), _depth + 1).ldelim();
-            if (message.transaction_id != null && $Object.hasOwnProperty.call(message, "transaction_id"))
+            if (message.transaction_id != null && $Object.hasOwnProperty.call(message, "transaction_id") && (typeof message.transaction_id === "object" ? message.transaction_id.low || message.transaction_id.high : message.transaction_id !== 0))
                 writer.uint32(/* id 4, wireType 0 =*/32).int64(message.transaction_id);
-            if (message.dtid != null && $Object.hasOwnProperty.call(message, "dtid"))
+            if (message.dtid != null && $Object.hasOwnProperty.call(message, "dtid") && message.dtid !== "")
                 writer.uint32(/* id 5, wireType 2 =*/42).string(message.dtid);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -139795,7 +139321,7 @@ export const query = $root.query = (() => {
                 $root.query.VTGateCallerID.encode(message.immediate_caller_id, writer.uint32(/* id 2, wireType 2 =*/18).fork(), _depth + 1).ldelim();
             if (message.target != null && $Object.hasOwnProperty.call(message, "target"))
                 $root.query.Target.encode(message.target, writer.uint32(/* id 3, wireType 2 =*/26).fork(), _depth + 1).ldelim();
-            if (message.dtid != null && $Object.hasOwnProperty.call(message, "dtid"))
+            if (message.dtid != null && $Object.hasOwnProperty.call(message, "dtid") && message.dtid !== "")
                 writer.uint32(/* id 4, wireType 2 =*/34).string(message.dtid);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -140365,7 +139891,7 @@ export const query = $root.query = (() => {
                 $root.query.VTGateCallerID.encode(message.immediate_caller_id, writer.uint32(/* id 2, wireType 2 =*/18).fork(), _depth + 1).ldelim();
             if (message.target != null && $Object.hasOwnProperty.call(message, "target"))
                 $root.query.Target.encode(message.target, writer.uint32(/* id 3, wireType 2 =*/26).fork(), _depth + 1).ldelim();
-            if (message.dtid != null && $Object.hasOwnProperty.call(message, "dtid"))
+            if (message.dtid != null && $Object.hasOwnProperty.call(message, "dtid") && message.dtid !== "")
                 writer.uint32(/* id 4, wireType 2 =*/34).string(message.dtid);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -140977,7 +140503,7 @@ export const query = $root.query = (() => {
                 $root.query.VTGateCallerID.encode(message.immediate_caller_id, writer.uint32(/* id 2, wireType 2 =*/18).fork(), _depth + 1).ldelim();
             if (message.target != null && $Object.hasOwnProperty.call(message, "target"))
                 $root.query.Target.encode(message.target, writer.uint32(/* id 3, wireType 2 =*/26).fork(), _depth + 1).ldelim();
-            if (message.abandon_age != null && $Object.hasOwnProperty.call(message, "abandon_age"))
+            if (message.abandon_age != null && $Object.hasOwnProperty.call(message, "abandon_age") && (typeof message.abandon_age === "object" ? message.abandon_age.low || message.abandon_age.high : message.abandon_age !== 0))
                 writer.uint32(/* id 4, wireType 0 =*/32).int64(message.abandon_age);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -141662,7 +141188,7 @@ export const query = $root.query = (() => {
                 $root.query.BoundQuery.encode(message.query, writer.uint32(/* id 4, wireType 2 =*/34).fork(), _depth + 1).ldelim();
             if (message.options != null && $Object.hasOwnProperty.call(message, "options"))
                 $root.query.ExecuteOptions.encode(message.options, writer.uint32(/* id 5, wireType 2 =*/42).fork(), _depth + 1).ldelim();
-            if (message.reserved_id != null && $Object.hasOwnProperty.call(message, "reserved_id"))
+            if (message.reserved_id != null && $Object.hasOwnProperty.call(message, "reserved_id") && (typeof message.reserved_id === "object" ? message.reserved_id.low || message.reserved_id.high : message.reserved_id !== 0))
                 writer.uint32(/* id 6, wireType 0 =*/48).int64(message.reserved_id);
             if (message.pre_queries != null && message.pre_queries.length)
                 for (let i = 0; i < message.pre_queries.length; ++i)
@@ -142106,11 +141632,11 @@ export const query = $root.query = (() => {
                 $root.vtrpc.RPCError.encode(message.error, writer.uint32(/* id 1, wireType 2 =*/10).fork(), _depth + 1).ldelim();
             if (message.result != null && $Object.hasOwnProperty.call(message, "result"))
                 $root.query.QueryResult.encode(message.result, writer.uint32(/* id 2, wireType 2 =*/18).fork(), _depth + 1).ldelim();
-            if (message.transaction_id != null && $Object.hasOwnProperty.call(message, "transaction_id"))
+            if (message.transaction_id != null && $Object.hasOwnProperty.call(message, "transaction_id") && (typeof message.transaction_id === "object" ? message.transaction_id.low || message.transaction_id.high : message.transaction_id !== 0))
                 writer.uint32(/* id 3, wireType 0 =*/24).int64(message.transaction_id);
             if (message.tablet_alias != null && $Object.hasOwnProperty.call(message, "tablet_alias"))
                 $root.topodata.TabletAlias.encode(message.tablet_alias, writer.uint32(/* id 4, wireType 2 =*/34).fork(), _depth + 1).ldelim();
-            if (message.session_state_changes != null && $Object.hasOwnProperty.call(message, "session_state_changes"))
+            if (message.session_state_changes != null && $Object.hasOwnProperty.call(message, "session_state_changes") && message.session_state_changes !== "")
                 writer.uint32(/* id 5, wireType 2 =*/42).string(message.session_state_changes);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -142539,7 +142065,7 @@ export const query = $root.query = (() => {
             if (message.pre_queries != null && message.pre_queries.length)
                 for (let i = 0; i < message.pre_queries.length; ++i)
                     writer.uint32(/* id 6, wireType 2 =*/50).string(message.pre_queries[i]);
-            if (message.reserved_id != null && $Object.hasOwnProperty.call(message, "reserved_id"))
+            if (message.reserved_id != null && $Object.hasOwnProperty.call(message, "reserved_id") && (typeof message.reserved_id === "object" ? message.reserved_id.low || message.reserved_id.high : message.reserved_id !== 0))
                 writer.uint32(/* id 7, wireType 0 =*/56).int64(message.reserved_id);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -142980,11 +142506,11 @@ export const query = $root.query = (() => {
                 $root.vtrpc.RPCError.encode(message.error, writer.uint32(/* id 1, wireType 2 =*/10).fork(), _depth + 1).ldelim();
             if (message.result != null && $Object.hasOwnProperty.call(message, "result"))
                 $root.query.QueryResult.encode(message.result, writer.uint32(/* id 2, wireType 2 =*/18).fork(), _depth + 1).ldelim();
-            if (message.transaction_id != null && $Object.hasOwnProperty.call(message, "transaction_id"))
+            if (message.transaction_id != null && $Object.hasOwnProperty.call(message, "transaction_id") && (typeof message.transaction_id === "object" ? message.transaction_id.low || message.transaction_id.high : message.transaction_id !== 0))
                 writer.uint32(/* id 3, wireType 0 =*/24).int64(message.transaction_id);
             if (message.tablet_alias != null && $Object.hasOwnProperty.call(message, "tablet_alias"))
                 $root.topodata.TabletAlias.encode(message.tablet_alias, writer.uint32(/* id 4, wireType 2 =*/34).fork(), _depth + 1).ldelim();
-            if (message.session_state_changes != null && $Object.hasOwnProperty.call(message, "session_state_changes"))
+            if (message.session_state_changes != null && $Object.hasOwnProperty.call(message, "session_state_changes") && message.session_state_changes !== "")
                 writer.uint32(/* id 5, wireType 2 =*/42).string(message.session_state_changes);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -143369,7 +142895,7 @@ export const query = $root.query = (() => {
                 $root.query.VTGateCallerID.encode(message.immediate_caller_id, writer.uint32(/* id 2, wireType 2 =*/18).fork(), _depth + 1).ldelim();
             if (message.target != null && $Object.hasOwnProperty.call(message, "target"))
                 $root.query.Target.encode(message.target, writer.uint32(/* id 3, wireType 2 =*/26).fork(), _depth + 1).ldelim();
-            if (message.name != null && $Object.hasOwnProperty.call(message, "name"))
+            if (message.name != null && $Object.hasOwnProperty.call(message, "name") && message.name !== "")
                 writer.uint32(/* id 4, wireType 2 =*/34).string(message.name);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -143991,7 +143517,7 @@ export const query = $root.query = (() => {
                 $root.query.VTGateCallerID.encode(message.immediate_caller_id, writer.uint32(/* id 2, wireType 2 =*/18).fork(), _depth + 1).ldelim();
             if (message.target != null && $Object.hasOwnProperty.call(message, "target"))
                 $root.query.Target.encode(message.target, writer.uint32(/* id 3, wireType 2 =*/26).fork(), _depth + 1).ldelim();
-            if (message.name != null && $Object.hasOwnProperty.call(message, "name"))
+            if (message.name != null && $Object.hasOwnProperty.call(message, "name") && message.name !== "")
                 writer.uint32(/* id 4, wireType 2 =*/34).string(message.name);
             if (message.ids != null && message.ids.length)
                 for (let i = 0; i < message.ids.length; ++i)
@@ -144679,7 +144205,7 @@ export const query = $root.query = (() => {
                 $root.query.Target.encode(message.target, writer.uint32(/* id 3, wireType 2 =*/26).fork(), _depth + 1).ldelim();
             if (message.query != null && $Object.hasOwnProperty.call(message, "query"))
                 $root.query.BoundQuery.encode(message.query, writer.uint32(/* id 4, wireType 2 =*/34).fork(), _depth + 1).ldelim();
-            if (message.transaction_id != null && $Object.hasOwnProperty.call(message, "transaction_id"))
+            if (message.transaction_id != null && $Object.hasOwnProperty.call(message, "transaction_id") && (typeof message.transaction_id === "object" ? message.transaction_id.low || message.transaction_id.high : message.transaction_id !== 0))
                 writer.uint32(/* id 5, wireType 0 =*/40).int64(message.transaction_id);
             if (message.options != null && $Object.hasOwnProperty.call(message, "options"))
                 $root.query.ExecuteOptions.encode(message.options, writer.uint32(/* id 6, wireType 2 =*/50).fork(), _depth + 1).ldelim();
@@ -145116,7 +144642,7 @@ export const query = $root.query = (() => {
                 $root.vtrpc.RPCError.encode(message.error, writer.uint32(/* id 1, wireType 2 =*/10).fork(), _depth + 1).ldelim();
             if (message.result != null && $Object.hasOwnProperty.call(message, "result"))
                 $root.query.QueryResult.encode(message.result, writer.uint32(/* id 2, wireType 2 =*/18).fork(), _depth + 1).ldelim();
-            if (message.reserved_id != null && $Object.hasOwnProperty.call(message, "reserved_id"))
+            if (message.reserved_id != null && $Object.hasOwnProperty.call(message, "reserved_id") && (typeof message.reserved_id === "object" ? message.reserved_id.low || message.reserved_id.high : message.reserved_id !== 0))
                 writer.uint32(/* id 3, wireType 0 =*/24).int64(message.reserved_id);
             if (message.tablet_alias != null && $Object.hasOwnProperty.call(message, "tablet_alias"))
                 $root.topodata.TabletAlias.encode(message.tablet_alias, writer.uint32(/* id 4, wireType 2 =*/34).fork(), _depth + 1).ldelim();
@@ -145526,7 +145052,7 @@ export const query = $root.query = (() => {
                 $root.query.BoundQuery.encode(message.query, writer.uint32(/* id 4, wireType 2 =*/34).fork(), _depth + 1).ldelim();
             if (message.options != null && $Object.hasOwnProperty.call(message, "options"))
                 $root.query.ExecuteOptions.encode(message.options, writer.uint32(/* id 5, wireType 2 =*/42).fork(), _depth + 1).ldelim();
-            if (message.transaction_id != null && $Object.hasOwnProperty.call(message, "transaction_id"))
+            if (message.transaction_id != null && $Object.hasOwnProperty.call(message, "transaction_id") && (typeof message.transaction_id === "object" ? message.transaction_id.low || message.transaction_id.high : message.transaction_id !== 0))
                 writer.uint32(/* id 6, wireType 0 =*/48).int64(message.transaction_id);
             if (message.pre_queries != null && message.pre_queries.length)
                 for (let i = 0; i < message.pre_queries.length; ++i)
@@ -145961,7 +145487,7 @@ export const query = $root.query = (() => {
                 $root.vtrpc.RPCError.encode(message.error, writer.uint32(/* id 1, wireType 2 =*/10).fork(), _depth + 1).ldelim();
             if (message.result != null && $Object.hasOwnProperty.call(message, "result"))
                 $root.query.QueryResult.encode(message.result, writer.uint32(/* id 2, wireType 2 =*/18).fork(), _depth + 1).ldelim();
-            if (message.reserved_id != null && $Object.hasOwnProperty.call(message, "reserved_id"))
+            if (message.reserved_id != null && $Object.hasOwnProperty.call(message, "reserved_id") && (typeof message.reserved_id === "object" ? message.reserved_id.low || message.reserved_id.high : message.reserved_id !== 0))
                 writer.uint32(/* id 3, wireType 0 =*/24).int64(message.reserved_id);
             if (message.tablet_alias != null && $Object.hasOwnProperty.call(message, "tablet_alias"))
                 $root.topodata.TabletAlias.encode(message.tablet_alias, writer.uint32(/* id 4, wireType 2 =*/34).fork(), _depth + 1).ldelim();
@@ -146821,13 +146347,13 @@ export const query = $root.query = (() => {
                 $root.vtrpc.RPCError.encode(message.error, writer.uint32(/* id 1, wireType 2 =*/10).fork(), _depth + 1).ldelim();
             if (message.result != null && $Object.hasOwnProperty.call(message, "result"))
                 $root.query.QueryResult.encode(message.result, writer.uint32(/* id 2, wireType 2 =*/18).fork(), _depth + 1).ldelim();
-            if (message.transaction_id != null && $Object.hasOwnProperty.call(message, "transaction_id"))
+            if (message.transaction_id != null && $Object.hasOwnProperty.call(message, "transaction_id") && (typeof message.transaction_id === "object" ? message.transaction_id.low || message.transaction_id.high : message.transaction_id !== 0))
                 writer.uint32(/* id 3, wireType 0 =*/24).int64(message.transaction_id);
-            if (message.reserved_id != null && $Object.hasOwnProperty.call(message, "reserved_id"))
+            if (message.reserved_id != null && $Object.hasOwnProperty.call(message, "reserved_id") && (typeof message.reserved_id === "object" ? message.reserved_id.low || message.reserved_id.high : message.reserved_id !== 0))
                 writer.uint32(/* id 4, wireType 0 =*/32).int64(message.reserved_id);
             if (message.tablet_alias != null && $Object.hasOwnProperty.call(message, "tablet_alias"))
                 $root.topodata.TabletAlias.encode(message.tablet_alias, writer.uint32(/* id 5, wireType 2 =*/42).fork(), _depth + 1).ldelim();
-            if (message.session_state_changes != null && $Object.hasOwnProperty.call(message, "session_state_changes"))
+            if (message.session_state_changes != null && $Object.hasOwnProperty.call(message, "session_state_changes") && message.session_state_changes !== "")
                 writer.uint32(/* id 6, wireType 2 =*/50).string(message.session_state_changes);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -147737,13 +147263,13 @@ export const query = $root.query = (() => {
                 $root.vtrpc.RPCError.encode(message.error, writer.uint32(/* id 1, wireType 2 =*/10).fork(), _depth + 1).ldelim();
             if (message.result != null && $Object.hasOwnProperty.call(message, "result"))
                 $root.query.QueryResult.encode(message.result, writer.uint32(/* id 2, wireType 2 =*/18).fork(), _depth + 1).ldelim();
-            if (message.transaction_id != null && $Object.hasOwnProperty.call(message, "transaction_id"))
+            if (message.transaction_id != null && $Object.hasOwnProperty.call(message, "transaction_id") && (typeof message.transaction_id === "object" ? message.transaction_id.low || message.transaction_id.high : message.transaction_id !== 0))
                 writer.uint32(/* id 3, wireType 0 =*/24).int64(message.transaction_id);
-            if (message.reserved_id != null && $Object.hasOwnProperty.call(message, "reserved_id"))
+            if (message.reserved_id != null && $Object.hasOwnProperty.call(message, "reserved_id") && (typeof message.reserved_id === "object" ? message.reserved_id.low || message.reserved_id.high : message.reserved_id !== 0))
                 writer.uint32(/* id 4, wireType 0 =*/32).int64(message.reserved_id);
             if (message.tablet_alias != null && $Object.hasOwnProperty.call(message, "tablet_alias"))
                 $root.topodata.TabletAlias.encode(message.tablet_alias, writer.uint32(/* id 5, wireType 2 =*/42).fork(), _depth + 1).ldelim();
-            if (message.session_state_changes != null && $Object.hasOwnProperty.call(message, "session_state_changes"))
+            if (message.session_state_changes != null && $Object.hasOwnProperty.call(message, "session_state_changes") && message.session_state_changes !== "")
                 writer.uint32(/* id 6, wireType 2 =*/50).string(message.session_state_changes);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -148171,9 +147697,9 @@ export const query = $root.query = (() => {
                 $root.query.VTGateCallerID.encode(message.immediate_caller_id, writer.uint32(/* id 2, wireType 2 =*/18).fork(), _depth + 1).ldelim();
             if (message.target != null && $Object.hasOwnProperty.call(message, "target"))
                 $root.query.Target.encode(message.target, writer.uint32(/* id 3, wireType 2 =*/26).fork(), _depth + 1).ldelim();
-            if (message.transaction_id != null && $Object.hasOwnProperty.call(message, "transaction_id"))
+            if (message.transaction_id != null && $Object.hasOwnProperty.call(message, "transaction_id") && (typeof message.transaction_id === "object" ? message.transaction_id.low || message.transaction_id.high : message.transaction_id !== 0))
                 writer.uint32(/* id 4, wireType 0 =*/32).int64(message.transaction_id);
-            if (message.reserved_id != null && $Object.hasOwnProperty.call(message, "reserved_id"))
+            if (message.reserved_id != null && $Object.hasOwnProperty.call(message, "reserved_id") && (typeof message.reserved_id === "object" ? message.reserved_id.low || message.reserved_id.high : message.reserved_id !== 0))
                 writer.uint32(/* id 5, wireType 0 =*/40).int64(message.reserved_id);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -149062,17 +148588,17 @@ export const query = $root.query = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.health_error != null && $Object.hasOwnProperty.call(message, "health_error"))
+            if (message.health_error != null && $Object.hasOwnProperty.call(message, "health_error") && message.health_error !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.health_error);
-            if (message.replication_lag_seconds != null && $Object.hasOwnProperty.call(message, "replication_lag_seconds"))
+            if (message.replication_lag_seconds != null && $Object.hasOwnProperty.call(message, "replication_lag_seconds") && message.replication_lag_seconds !== 0)
                 writer.uint32(/* id 2, wireType 0 =*/16).uint32(message.replication_lag_seconds);
-            if (message.binlog_players_count != null && $Object.hasOwnProperty.call(message, "binlog_players_count"))
+            if (message.binlog_players_count != null && $Object.hasOwnProperty.call(message, "binlog_players_count") && message.binlog_players_count !== 0)
                 writer.uint32(/* id 3, wireType 0 =*/24).int32(message.binlog_players_count);
-            if (message.filtered_replication_lag_seconds != null && $Object.hasOwnProperty.call(message, "filtered_replication_lag_seconds"))
+            if (message.filtered_replication_lag_seconds != null && $Object.hasOwnProperty.call(message, "filtered_replication_lag_seconds") && (typeof message.filtered_replication_lag_seconds === "object" ? message.filtered_replication_lag_seconds.low || message.filtered_replication_lag_seconds.high : message.filtered_replication_lag_seconds !== 0))
                 writer.uint32(/* id 4, wireType 0 =*/32).int64(message.filtered_replication_lag_seconds);
-            if (message.cpu_usage != null && $Object.hasOwnProperty.call(message, "cpu_usage"))
+            if (message.cpu_usage != null && $Object.hasOwnProperty.call(message, "cpu_usage") && !$Object.is(message.cpu_usage, 0))
                 writer.uint32(/* id 5, wireType 1 =*/41).double(message.cpu_usage);
-            if (message.qps != null && $Object.hasOwnProperty.call(message, "qps"))
+            if (message.qps != null && $Object.hasOwnProperty.call(message, "qps") && !$Object.is(message.qps, 0))
                 writer.uint32(/* id 6, wireType 1 =*/49).double(message.qps);
             if (message.table_schema_changed != null && message.table_schema_changed.length)
                 for (let i = 0; i < message.table_schema_changed.length; ++i)
@@ -149080,9 +148606,9 @@ export const query = $root.query = (() => {
             if (message.view_schema_changed != null && message.view_schema_changed.length)
                 for (let i = 0; i < message.view_schema_changed.length; ++i)
                     writer.uint32(/* id 8, wireType 2 =*/66).string(message.view_schema_changed[i]);
-            if (message.udfs_changed != null && $Object.hasOwnProperty.call(message, "udfs_changed"))
+            if (message.udfs_changed != null && $Object.hasOwnProperty.call(message, "udfs_changed") && message.udfs_changed !== false)
                 writer.uint32(/* id 9, wireType 0 =*/72).bool(message.udfs_changed);
-            if (message.tx_unresolved != null && $Object.hasOwnProperty.call(message, "tx_unresolved"))
+            if (message.tx_unresolved != null && $Object.hasOwnProperty.call(message, "tx_unresolved") && message.tx_unresolved !== false)
                 writer.uint32(/* id 10, wireType 0 =*/80).bool(message.tx_unresolved);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -149170,7 +148696,7 @@ export const query = $root.query = (() => {
                 case 5: {
                         if (wireType !== 1)
                             break;
-                        if ((value = reader.double()) !== 0)
+                        if (!$Object.is(value = reader.double(), 0))
                             message.cpu_usage = value;
                         else
                             delete message.cpu_usage;
@@ -149179,7 +148705,7 @@ export const query = $root.query = (() => {
                 case 6: {
                         if (wireType !== 1)
                             break;
-                        if ((value = reader.double()) !== 0)
+                        if (!$Object.is(value = reader.double(), 0))
                             message.qps = value;
                         else
                             delete message.qps;
@@ -149341,10 +148867,10 @@ export const query = $root.query = (() => {
                     else if (typeof object.filtered_replication_lag_seconds === "object")
                         message.filtered_replication_lag_seconds = new $util.LongBits(object.filtered_replication_lag_seconds.low >>> 0, object.filtered_replication_lag_seconds.high >>> 0).toNumber();
             if (object.cpu_usage != null)
-                if ($Number(object.cpu_usage) !== 0)
+                if (!$Object.is($Number(object.cpu_usage), 0))
                     message.cpu_usage = $Number(object.cpu_usage);
             if (object.qps != null)
-                if ($Number(object.qps) !== 0)
+                if (!$Object.is($Number(object.qps), 0))
                     message.qps = $Number(object.qps);
             if (object.table_schema_changed) {
                 if (!$Array.isArray(object.table_schema_changed))
@@ -149570,13 +149096,13 @@ export const query = $root.query = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.healthy_tablet_count != null && $Object.hasOwnProperty.call(message, "healthy_tablet_count"))
+            if (message.healthy_tablet_count != null && $Object.hasOwnProperty.call(message, "healthy_tablet_count") && message.healthy_tablet_count !== 0)
                 writer.uint32(/* id 1, wireType 0 =*/8).int32(message.healthy_tablet_count);
-            if (message.unhealthy_tablet_count != null && $Object.hasOwnProperty.call(message, "unhealthy_tablet_count"))
+            if (message.unhealthy_tablet_count != null && $Object.hasOwnProperty.call(message, "unhealthy_tablet_count") && message.unhealthy_tablet_count !== 0)
                 writer.uint32(/* id 2, wireType 0 =*/16).int32(message.unhealthy_tablet_count);
-            if (message.replication_lag_seconds_min != null && $Object.hasOwnProperty.call(message, "replication_lag_seconds_min"))
+            if (message.replication_lag_seconds_min != null && $Object.hasOwnProperty.call(message, "replication_lag_seconds_min") && message.replication_lag_seconds_min !== 0)
                 writer.uint32(/* id 3, wireType 0 =*/24).uint32(message.replication_lag_seconds_min);
-            if (message.replication_lag_seconds_max != null && $Object.hasOwnProperty.call(message, "replication_lag_seconds_max"))
+            if (message.replication_lag_seconds_max != null && $Object.hasOwnProperty.call(message, "replication_lag_seconds_max") && message.replication_lag_seconds_max !== 0)
                 writer.uint32(/* id 4, wireType 0 =*/32).uint32(message.replication_lag_seconds_max);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -149929,9 +149455,9 @@ export const query = $root.query = (() => {
                 throw $Error("max depth exceeded");
             if (message.target != null && $Object.hasOwnProperty.call(message, "target"))
                 $root.query.Target.encode(message.target, writer.uint32(/* id 1, wireType 2 =*/10).fork(), _depth + 1).ldelim();
-            if (message.serving != null && $Object.hasOwnProperty.call(message, "serving"))
+            if (message.serving != null && $Object.hasOwnProperty.call(message, "serving") && message.serving !== false)
                 writer.uint32(/* id 2, wireType 0 =*/16).bool(message.serving);
-            if (message.primary_term_start_timestamp != null && $Object.hasOwnProperty.call(message, "primary_term_start_timestamp"))
+            if (message.primary_term_start_timestamp != null && $Object.hasOwnProperty.call(message, "primary_term_start_timestamp") && (typeof message.primary_term_start_timestamp === "object" ? message.primary_term_start_timestamp.low || message.primary_term_start_timestamp.high : message.primary_term_start_timestamp !== 0))
                 writer.uint32(/* id 3, wireType 0 =*/24).int64(message.primary_term_start_timestamp);
             if (message.realtime_stats != null && $Object.hasOwnProperty.call(message, "realtime_stats"))
                 $root.query.RealtimeStats.encode(message.realtime_stats, writer.uint32(/* id 4, wireType 2 =*/34).fork(), _depth + 1).ldelim();
@@ -150333,11 +149859,11 @@ export const query = $root.query = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.dtid != null && $Object.hasOwnProperty.call(message, "dtid"))
+            if (message.dtid != null && $Object.hasOwnProperty.call(message, "dtid") && message.dtid !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.dtid);
-            if (message.state != null && $Object.hasOwnProperty.call(message, "state"))
+            if (message.state != null && $Object.hasOwnProperty.call(message, "state") && message.state !== 0)
                 writer.uint32(/* id 2, wireType 0 =*/16).int32(message.state);
-            if (message.time_created != null && $Object.hasOwnProperty.call(message, "time_created"))
+            if (message.time_created != null && $Object.hasOwnProperty.call(message, "time_created") && (typeof message.time_created === "object" ? message.time_created.low || message.time_created.high : message.time_created !== 0))
                 writer.uint32(/* id 3, wireType 0 =*/24).int64(message.time_created);
             if (message.participants != null && message.participants.length)
                 for (let i = 0; i < message.participants.length; ++i)
@@ -150471,15 +149997,8 @@ export const query = $root.query = (() => {
                 if (!$util.isString(message.dtid))
                     return "dtid: string expected";
             if (message.state != null && $Object.hasOwnProperty.call(message, "state"))
-                switch (message.state) {
-                default:
+                if (typeof message.state !== "number" || (message.state | 0) !== message.state)
                     return "state: enum value expected";
-                case 0:
-                case 1:
-                case 2:
-                case 3:
-                    break;
-                }
             if (message.time_created != null && $Object.hasOwnProperty.call(message, "time_created"))
                 if (!$util.isInteger(message.time_created) && !(message.time_created && $util.isInteger(message.time_created.low) && $util.isInteger(message.time_created.high)))
                     return "time_created: integer|Long expected";
@@ -150518,12 +150037,6 @@ export const query = $root.query = (() => {
                     message.dtid = $String(object.dtid);
             if (object.state !== 0 && (typeof object.state !== "string" || $root.query.TransactionState[object.state] !== 0))
                 switch (object.state) {
-                default:
-                    if (typeof object.state === "number") {
-                        message.state = object.state;
-                        break;
-                    }
-                    break;
                 case "UNKNOWN":
                 case 0:
                     message.state = 0;
@@ -150540,6 +150053,9 @@ export const query = $root.query = (() => {
                 case 3:
                     message.state = 3;
                     break;
+                default:
+                    if (typeof object.state === "number" && (object.state | 0) === object.state)
+                        message.state = object.state;
                 }
             if (object.time_created != null)
                 if (typeof object.time_created === "object" ? object.time_created.low || object.time_created.high : $Number(object.time_created) !== 0)
@@ -150755,7 +150271,7 @@ export const query = $root.query = (() => {
                 throw $Error("max depth exceeded");
             if (message.target != null && $Object.hasOwnProperty.call(message, "target"))
                 $root.query.Target.encode(message.target, writer.uint32(/* id 1, wireType 2 =*/10).fork(), _depth + 1).ldelim();
-            if (message.table_type != null && $Object.hasOwnProperty.call(message, "table_type"))
+            if (message.table_type != null && $Object.hasOwnProperty.call(message, "table_type") && message.table_type !== 0)
                 writer.uint32(/* id 2, wireType 0 =*/16).int32(message.table_type);
             if (message.table_names != null && message.table_names.length)
                 for (let i = 0; i < message.table_names.length; ++i)
@@ -150879,15 +150395,8 @@ export const query = $root.query = (() => {
                     return "target." + error;
             }
             if (message.table_type != null && $Object.hasOwnProperty.call(message, "table_type"))
-                switch (message.table_type) {
-                default:
+                if (typeof message.table_type !== "number" || (message.table_type | 0) !== message.table_type)
                     return "table_type: enum value expected";
-                case 0:
-                case 1:
-                case 2:
-                case 3:
-                    break;
-                }
             if (message.table_names != null && $Object.hasOwnProperty.call(message, "table_names")) {
                 if (!$Array.isArray(message.table_names))
                     return "table_names: array expected";
@@ -150923,12 +150432,6 @@ export const query = $root.query = (() => {
             }
             if (object.table_type !== 0 && (typeof object.table_type !== "string" || $root.query.SchemaTableType[object.table_type] !== 0))
                 switch (object.table_type) {
-                default:
-                    if (typeof object.table_type === "number") {
-                        message.table_type = object.table_type;
-                        break;
-                    }
-                    break;
                 case "VIEWS":
                 case 0:
                     message.table_type = 0;
@@ -150945,6 +150448,9 @@ export const query = $root.query = (() => {
                 case 3:
                     message.table_type = 3;
                     break;
+                default:
+                    if (typeof object.table_type === "number" && (object.table_type | 0) === object.table_type)
+                        message.table_type = object.table_type;
                 }
             if (object.table_names) {
                 if (!$Array.isArray(object.table_names))
@@ -151114,11 +150620,11 @@ export const query = $root.query = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.name != null && $Object.hasOwnProperty.call(message, "name"))
+            if (message.name != null && $Object.hasOwnProperty.call(message, "name") && message.name !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.name);
-            if (message.aggregating != null && $Object.hasOwnProperty.call(message, "aggregating"))
+            if (message.aggregating != null && $Object.hasOwnProperty.call(message, "aggregating") && message.aggregating !== false)
                 writer.uint32(/* id 2, wireType 0 =*/16).bool(message.aggregating);
-            if (message.return_type != null && $Object.hasOwnProperty.call(message, "return_type"))
+            if (message.return_type != null && $Object.hasOwnProperty.call(message, "return_type") && message.return_type !== 0)
                 writer.uint32(/* id 3, wireType 0 =*/24).int32(message.return_type);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -151244,49 +150750,8 @@ export const query = $root.query = (() => {
                 if (typeof message.aggregating !== "boolean")
                     return "aggregating: boolean expected";
             if (message.return_type != null && $Object.hasOwnProperty.call(message, "return_type"))
-                switch (message.return_type) {
-                default:
+                if (typeof message.return_type !== "number" || (message.return_type | 0) !== message.return_type)
                     return "return_type: enum value expected";
-                case 0:
-                case 257:
-                case 770:
-                case 259:
-                case 772:
-                case 261:
-                case 774:
-                case 263:
-                case 776:
-                case 265:
-                case 778:
-                case 1035:
-                case 1036:
-                case 2061:
-                case 2062:
-                case 2063:
-                case 2064:
-                case 785:
-                case 18:
-                case 6163:
-                case 10260:
-                case 6165:
-                case 10262:
-                case 6167:
-                case 10264:
-                case 2073:
-                case 2074:
-                case 2075:
-                case 28:
-                case 2077:
-                case 2078:
-                case 31:
-                case 4128:
-                case 4129:
-                case 4130:
-                case 2083:
-                case 36:
-                case 37:
-                    break;
-                }
             return null;
         };
 
@@ -151316,12 +150781,6 @@ export const query = $root.query = (() => {
                     message.aggregating = $Boolean(object.aggregating);
             if (object.return_type !== 0 && (typeof object.return_type !== "string" || $root.query.Type[object.return_type] !== 0))
                 switch (object.return_type) {
-                default:
-                    if (typeof object.return_type === "number") {
-                        message.return_type = object.return_type;
-                        break;
-                    }
-                    break;
                 case "NULL_TYPE":
                 case 0:
                     message.return_type = 0;
@@ -151474,6 +150933,9 @@ export const query = $root.query = (() => {
                 case 37:
                     message.return_type = 37;
                     break;
+                default:
+                    if (typeof object.return_type === "number" && (object.return_type | 0) === object.return_type)
+                        message.return_type = object.return_type;
                 }
             return message;
         };
@@ -152209,59 +151671,59 @@ export const replicationdata = $root.replicationdata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.position != null && $Object.hasOwnProperty.call(message, "position"))
+            if (message.position != null && $Object.hasOwnProperty.call(message, "position") && message.position !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.position);
-            if (message.replication_lag_seconds != null && $Object.hasOwnProperty.call(message, "replication_lag_seconds"))
+            if (message.replication_lag_seconds != null && $Object.hasOwnProperty.call(message, "replication_lag_seconds") && message.replication_lag_seconds !== 0)
                 writer.uint32(/* id 4, wireType 0 =*/32).uint32(message.replication_lag_seconds);
-            if (message.source_host != null && $Object.hasOwnProperty.call(message, "source_host"))
+            if (message.source_host != null && $Object.hasOwnProperty.call(message, "source_host") && message.source_host !== "")
                 writer.uint32(/* id 5, wireType 2 =*/42).string(message.source_host);
-            if (message.source_port != null && $Object.hasOwnProperty.call(message, "source_port"))
+            if (message.source_port != null && $Object.hasOwnProperty.call(message, "source_port") && message.source_port !== 0)
                 writer.uint32(/* id 6, wireType 0 =*/48).int32(message.source_port);
-            if (message.connect_retry != null && $Object.hasOwnProperty.call(message, "connect_retry"))
+            if (message.connect_retry != null && $Object.hasOwnProperty.call(message, "connect_retry") && message.connect_retry !== 0)
                 writer.uint32(/* id 7, wireType 0 =*/56).int32(message.connect_retry);
-            if (message.relay_log_position != null && $Object.hasOwnProperty.call(message, "relay_log_position"))
+            if (message.relay_log_position != null && $Object.hasOwnProperty.call(message, "relay_log_position") && message.relay_log_position !== "")
                 writer.uint32(/* id 8, wireType 2 =*/66).string(message.relay_log_position);
-            if (message.file_position != null && $Object.hasOwnProperty.call(message, "file_position"))
+            if (message.file_position != null && $Object.hasOwnProperty.call(message, "file_position") && message.file_position !== "")
                 writer.uint32(/* id 9, wireType 2 =*/74).string(message.file_position);
-            if (message.relay_log_source_binlog_equivalent_position != null && $Object.hasOwnProperty.call(message, "relay_log_source_binlog_equivalent_position"))
+            if (message.relay_log_source_binlog_equivalent_position != null && $Object.hasOwnProperty.call(message, "relay_log_source_binlog_equivalent_position") && message.relay_log_source_binlog_equivalent_position !== "")
                 writer.uint32(/* id 10, wireType 2 =*/82).string(message.relay_log_source_binlog_equivalent_position);
-            if (message.source_server_id != null && $Object.hasOwnProperty.call(message, "source_server_id"))
+            if (message.source_server_id != null && $Object.hasOwnProperty.call(message, "source_server_id") && message.source_server_id !== 0)
                 writer.uint32(/* id 11, wireType 0 =*/88).uint32(message.source_server_id);
-            if (message.source_uuid != null && $Object.hasOwnProperty.call(message, "source_uuid"))
+            if (message.source_uuid != null && $Object.hasOwnProperty.call(message, "source_uuid") && message.source_uuid !== "")
                 writer.uint32(/* id 12, wireType 2 =*/98).string(message.source_uuid);
-            if (message.io_state != null && $Object.hasOwnProperty.call(message, "io_state"))
+            if (message.io_state != null && $Object.hasOwnProperty.call(message, "io_state") && message.io_state !== 0)
                 writer.uint32(/* id 13, wireType 0 =*/104).int32(message.io_state);
-            if (message.last_io_error != null && $Object.hasOwnProperty.call(message, "last_io_error"))
+            if (message.last_io_error != null && $Object.hasOwnProperty.call(message, "last_io_error") && message.last_io_error !== "")
                 writer.uint32(/* id 14, wireType 2 =*/114).string(message.last_io_error);
-            if (message.sql_state != null && $Object.hasOwnProperty.call(message, "sql_state"))
+            if (message.sql_state != null && $Object.hasOwnProperty.call(message, "sql_state") && message.sql_state !== 0)
                 writer.uint32(/* id 15, wireType 0 =*/120).int32(message.sql_state);
-            if (message.last_sql_error != null && $Object.hasOwnProperty.call(message, "last_sql_error"))
+            if (message.last_sql_error != null && $Object.hasOwnProperty.call(message, "last_sql_error") && message.last_sql_error !== "")
                 writer.uint32(/* id 16, wireType 2 =*/130).string(message.last_sql_error);
-            if (message.relay_log_file_position != null && $Object.hasOwnProperty.call(message, "relay_log_file_position"))
+            if (message.relay_log_file_position != null && $Object.hasOwnProperty.call(message, "relay_log_file_position") && message.relay_log_file_position !== "")
                 writer.uint32(/* id 17, wireType 2 =*/138).string(message.relay_log_file_position);
-            if (message.source_user != null && $Object.hasOwnProperty.call(message, "source_user"))
+            if (message.source_user != null && $Object.hasOwnProperty.call(message, "source_user") && message.source_user !== "")
                 writer.uint32(/* id 18, wireType 2 =*/146).string(message.source_user);
-            if (message.sql_delay != null && $Object.hasOwnProperty.call(message, "sql_delay"))
+            if (message.sql_delay != null && $Object.hasOwnProperty.call(message, "sql_delay") && message.sql_delay !== 0)
                 writer.uint32(/* id 19, wireType 0 =*/152).uint32(message.sql_delay);
-            if (message.auto_position != null && $Object.hasOwnProperty.call(message, "auto_position"))
+            if (message.auto_position != null && $Object.hasOwnProperty.call(message, "auto_position") && message.auto_position !== false)
                 writer.uint32(/* id 20, wireType 0 =*/160).bool(message.auto_position);
-            if (message.using_gtid != null && $Object.hasOwnProperty.call(message, "using_gtid"))
+            if (message.using_gtid != null && $Object.hasOwnProperty.call(message, "using_gtid") && message.using_gtid !== false)
                 writer.uint32(/* id 21, wireType 0 =*/168).bool(message.using_gtid);
-            if (message.has_replication_filters != null && $Object.hasOwnProperty.call(message, "has_replication_filters"))
+            if (message.has_replication_filters != null && $Object.hasOwnProperty.call(message, "has_replication_filters") && message.has_replication_filters !== false)
                 writer.uint32(/* id 22, wireType 0 =*/176).bool(message.has_replication_filters);
-            if (message.ssl_allowed != null && $Object.hasOwnProperty.call(message, "ssl_allowed"))
+            if (message.ssl_allowed != null && $Object.hasOwnProperty.call(message, "ssl_allowed") && message.ssl_allowed !== false)
                 writer.uint32(/* id 23, wireType 0 =*/184).bool(message.ssl_allowed);
-            if (message.replication_lag_unknown != null && $Object.hasOwnProperty.call(message, "replication_lag_unknown"))
+            if (message.replication_lag_unknown != null && $Object.hasOwnProperty.call(message, "replication_lag_unknown") && message.replication_lag_unknown !== false)
                 writer.uint32(/* id 24, wireType 0 =*/192).bool(message.replication_lag_unknown);
-            if (message.backup_running != null && $Object.hasOwnProperty.call(message, "backup_running"))
+            if (message.backup_running != null && $Object.hasOwnProperty.call(message, "backup_running") && message.backup_running !== false)
                 writer.uint32(/* id 25, wireType 0 =*/200).bool(message.backup_running);
-            if (message.semi_sync_primary_enabled != null && $Object.hasOwnProperty.call(message, "semi_sync_primary_enabled"))
+            if (message.semi_sync_primary_enabled != null && $Object.hasOwnProperty.call(message, "semi_sync_primary_enabled") && message.semi_sync_primary_enabled !== false)
                 writer.uint32(/* id 26, wireType 0 =*/208).bool(message.semi_sync_primary_enabled);
-            if (message.semi_sync_replica_enabled != null && $Object.hasOwnProperty.call(message, "semi_sync_replica_enabled"))
+            if (message.semi_sync_replica_enabled != null && $Object.hasOwnProperty.call(message, "semi_sync_replica_enabled") && message.semi_sync_replica_enabled !== false)
                 writer.uint32(/* id 27, wireType 0 =*/216).bool(message.semi_sync_replica_enabled);
-            if (message.semi_sync_primary_status != null && $Object.hasOwnProperty.call(message, "semi_sync_primary_status"))
+            if (message.semi_sync_primary_status != null && $Object.hasOwnProperty.call(message, "semi_sync_primary_status") && message.semi_sync_primary_status !== false)
                 writer.uint32(/* id 28, wireType 0 =*/224).bool(message.semi_sync_primary_status);
-            if (message.semi_sync_replica_status != null && $Object.hasOwnProperty.call(message, "semi_sync_replica_status"))
+            if (message.semi_sync_replica_status != null && $Object.hasOwnProperty.call(message, "semi_sync_replica_status") && message.semi_sync_replica_status !== false)
                 writer.uint32(/* id 29, wireType 0 =*/232).bool(message.semi_sync_replica_status);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -152999,9 +152461,9 @@ export const replicationdata = $root.replicationdata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.heartbeat_interval != null && $Object.hasOwnProperty.call(message, "heartbeat_interval"))
+            if (message.heartbeat_interval != null && $Object.hasOwnProperty.call(message, "heartbeat_interval") && !$Object.is(message.heartbeat_interval, 0))
                 writer.uint32(/* id 1, wireType 1 =*/9).double(message.heartbeat_interval);
-            if (message.replica_net_timeout != null && $Object.hasOwnProperty.call(message, "replica_net_timeout"))
+            if (message.replica_net_timeout != null && $Object.hasOwnProperty.call(message, "replica_net_timeout") && message.replica_net_timeout !== 0)
                 writer.uint32(/* id 2, wireType 0 =*/16).int32(message.replica_net_timeout);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -153053,7 +152515,7 @@ export const replicationdata = $root.replicationdata = (() => {
                 case 1: {
                         if (wireType !== 1)
                             break;
-                        if ((value = reader.double()) !== 0)
+                        if (!$Object.is(value = reader.double(), 0))
                             message.heartbeat_interval = value;
                         else
                             delete message.heartbeat_interval;
@@ -153139,7 +152601,7 @@ export const replicationdata = $root.replicationdata = (() => {
                 throw $Error("max depth exceeded");
             let message = new $root.replicationdata.Configuration();
             if (object.heartbeat_interval != null)
-                if ($Number(object.heartbeat_interval) !== 0)
+                if (!$Object.is($Number(object.heartbeat_interval), 0))
                     message.heartbeat_interval = $Number(object.heartbeat_interval);
             if (object.replica_net_timeout != null)
                 if ($Number(object.replica_net_timeout) !== 0)
@@ -153604,11 +153066,11 @@ export const replicationdata = $root.replicationdata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.position != null && $Object.hasOwnProperty.call(message, "position"))
+            if (message.position != null && $Object.hasOwnProperty.call(message, "position") && message.position !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.position);
-            if (message.file_position != null && $Object.hasOwnProperty.call(message, "file_position"))
+            if (message.file_position != null && $Object.hasOwnProperty.call(message, "file_position") && message.file_position !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.file_position);
-            if (message.server_uuid != null && $Object.hasOwnProperty.call(message, "server_uuid"))
+            if (message.server_uuid != null && $Object.hasOwnProperty.call(message, "server_uuid") && message.server_uuid !== "")
                 writer.uint32(/* id 3, wireType 2 =*/26).string(message.server_uuid);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -153943,7 +153405,7 @@ export const replicationdata = $root.replicationdata = (() => {
                 throw $Error("max depth exceeded");
             if (message.tablet_alias != null && $Object.hasOwnProperty.call(message, "tablet_alias"))
                 $root.topodata.TabletAlias.encode(message.tablet_alias, writer.uint32(/* id 1, wireType 2 =*/10).fork(), _depth + 1).ldelim();
-            if (message.consecutive_ping_failures != null && $Object.hasOwnProperty.call(message, "consecutive_ping_failures"))
+            if (message.consecutive_ping_failures != null && $Object.hasOwnProperty.call(message, "consecutive_ping_failures") && (typeof message.consecutive_ping_failures === "object" ? message.consecutive_ping_failures.low || message.consecutive_ping_failures.high : message.consecutive_ping_failures !== 0))
                 writer.uint32(/* id 2, wireType 0 =*/16).int64(message.consecutive_ping_failures);
             if (message.last_successful_ping != null && $Object.hasOwnProperty.call(message, "last_successful_ping"))
                 $root.vttime.Time.encode(message.last_successful_ping, writer.uint32(/* id 3, wireType 2 =*/26).fork(), _depth + 1).ldelim();
@@ -154528,55 +153990,55 @@ export const replicationdata = $root.replicationdata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.server_id != null && $Object.hasOwnProperty.call(message, "server_id"))
+            if (message.server_id != null && $Object.hasOwnProperty.call(message, "server_id") && message.server_id !== 0)
                 writer.uint32(/* id 1, wireType 0 =*/8).uint32(message.server_id);
-            if (message.server_uuid != null && $Object.hasOwnProperty.call(message, "server_uuid"))
+            if (message.server_uuid != null && $Object.hasOwnProperty.call(message, "server_uuid") && message.server_uuid !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.server_uuid);
             if (message.replication_status != null && $Object.hasOwnProperty.call(message, "replication_status"))
                 $root.replicationdata.Status.encode(message.replication_status, writer.uint32(/* id 3, wireType 2 =*/26).fork(), _depth + 1).ldelim();
             if (message.primary_status != null && $Object.hasOwnProperty.call(message, "primary_status"))
                 $root.replicationdata.PrimaryStatus.encode(message.primary_status, writer.uint32(/* id 4, wireType 2 =*/34).fork(), _depth + 1).ldelim();
-            if (message.gtid_purged != null && $Object.hasOwnProperty.call(message, "gtid_purged"))
+            if (message.gtid_purged != null && $Object.hasOwnProperty.call(message, "gtid_purged") && message.gtid_purged !== "")
                 writer.uint32(/* id 5, wireType 2 =*/42).string(message.gtid_purged);
-            if (message.version != null && $Object.hasOwnProperty.call(message, "version"))
+            if (message.version != null && $Object.hasOwnProperty.call(message, "version") && message.version !== "")
                 writer.uint32(/* id 6, wireType 2 =*/50).string(message.version);
-            if (message.version_comment != null && $Object.hasOwnProperty.call(message, "version_comment"))
+            if (message.version_comment != null && $Object.hasOwnProperty.call(message, "version_comment") && message.version_comment !== "")
                 writer.uint32(/* id 7, wireType 2 =*/58).string(message.version_comment);
-            if (message.read_only != null && $Object.hasOwnProperty.call(message, "read_only"))
+            if (message.read_only != null && $Object.hasOwnProperty.call(message, "read_only") && message.read_only !== false)
                 writer.uint32(/* id 8, wireType 0 =*/64).bool(message.read_only);
-            if (message.gtid_mode != null && $Object.hasOwnProperty.call(message, "gtid_mode"))
+            if (message.gtid_mode != null && $Object.hasOwnProperty.call(message, "gtid_mode") && message.gtid_mode !== "")
                 writer.uint32(/* id 9, wireType 2 =*/74).string(message.gtid_mode);
-            if (message.binlog_format != null && $Object.hasOwnProperty.call(message, "binlog_format"))
+            if (message.binlog_format != null && $Object.hasOwnProperty.call(message, "binlog_format") && message.binlog_format !== "")
                 writer.uint32(/* id 10, wireType 2 =*/82).string(message.binlog_format);
-            if (message.binlog_row_image != null && $Object.hasOwnProperty.call(message, "binlog_row_image"))
+            if (message.binlog_row_image != null && $Object.hasOwnProperty.call(message, "binlog_row_image") && message.binlog_row_image !== "")
                 writer.uint32(/* id 11, wireType 2 =*/90).string(message.binlog_row_image);
-            if (message.log_bin_enabled != null && $Object.hasOwnProperty.call(message, "log_bin_enabled"))
+            if (message.log_bin_enabled != null && $Object.hasOwnProperty.call(message, "log_bin_enabled") && message.log_bin_enabled !== false)
                 writer.uint32(/* id 12, wireType 0 =*/96).bool(message.log_bin_enabled);
-            if (message.log_replica_updates != null && $Object.hasOwnProperty.call(message, "log_replica_updates"))
+            if (message.log_replica_updates != null && $Object.hasOwnProperty.call(message, "log_replica_updates") && message.log_replica_updates !== false)
                 writer.uint32(/* id 13, wireType 0 =*/104).bool(message.log_replica_updates);
-            if (message.semi_sync_primary_enabled != null && $Object.hasOwnProperty.call(message, "semi_sync_primary_enabled"))
+            if (message.semi_sync_primary_enabled != null && $Object.hasOwnProperty.call(message, "semi_sync_primary_enabled") && message.semi_sync_primary_enabled !== false)
                 writer.uint32(/* id 14, wireType 0 =*/112).bool(message.semi_sync_primary_enabled);
-            if (message.semi_sync_replica_enabled != null && $Object.hasOwnProperty.call(message, "semi_sync_replica_enabled"))
+            if (message.semi_sync_replica_enabled != null && $Object.hasOwnProperty.call(message, "semi_sync_replica_enabled") && message.semi_sync_replica_enabled !== false)
                 writer.uint32(/* id 15, wireType 0 =*/120).bool(message.semi_sync_replica_enabled);
-            if (message.semi_sync_primary_status != null && $Object.hasOwnProperty.call(message, "semi_sync_primary_status"))
+            if (message.semi_sync_primary_status != null && $Object.hasOwnProperty.call(message, "semi_sync_primary_status") && message.semi_sync_primary_status !== false)
                 writer.uint32(/* id 16, wireType 0 =*/128).bool(message.semi_sync_primary_status);
-            if (message.semi_sync_replica_status != null && $Object.hasOwnProperty.call(message, "semi_sync_replica_status"))
+            if (message.semi_sync_replica_status != null && $Object.hasOwnProperty.call(message, "semi_sync_replica_status") && message.semi_sync_replica_status !== false)
                 writer.uint32(/* id 17, wireType 0 =*/136).bool(message.semi_sync_replica_status);
-            if (message.semi_sync_primary_clients != null && $Object.hasOwnProperty.call(message, "semi_sync_primary_clients"))
+            if (message.semi_sync_primary_clients != null && $Object.hasOwnProperty.call(message, "semi_sync_primary_clients") && message.semi_sync_primary_clients !== 0)
                 writer.uint32(/* id 18, wireType 0 =*/144).uint32(message.semi_sync_primary_clients);
-            if (message.semi_sync_primary_timeout != null && $Object.hasOwnProperty.call(message, "semi_sync_primary_timeout"))
+            if (message.semi_sync_primary_timeout != null && $Object.hasOwnProperty.call(message, "semi_sync_primary_timeout") && (typeof message.semi_sync_primary_timeout === "object" ? message.semi_sync_primary_timeout.low || message.semi_sync_primary_timeout.high : message.semi_sync_primary_timeout !== 0))
                 writer.uint32(/* id 19, wireType 0 =*/152).uint64(message.semi_sync_primary_timeout);
-            if (message.semi_sync_wait_for_replica_count != null && $Object.hasOwnProperty.call(message, "semi_sync_wait_for_replica_count"))
+            if (message.semi_sync_wait_for_replica_count != null && $Object.hasOwnProperty.call(message, "semi_sync_wait_for_replica_count") && message.semi_sync_wait_for_replica_count !== 0)
                 writer.uint32(/* id 20, wireType 0 =*/160).uint32(message.semi_sync_wait_for_replica_count);
-            if (message.super_read_only != null && $Object.hasOwnProperty.call(message, "super_read_only"))
+            if (message.super_read_only != null && $Object.hasOwnProperty.call(message, "super_read_only") && message.super_read_only !== false)
                 writer.uint32(/* id 21, wireType 0 =*/168).bool(message.super_read_only);
             if (message.replication_configuration != null && $Object.hasOwnProperty.call(message, "replication_configuration"))
                 $root.replicationdata.Configuration.encode(message.replication_configuration, writer.uint32(/* id 22, wireType 2 =*/178).fork(), _depth + 1).ldelim();
-            if (message.disk_stalled != null && $Object.hasOwnProperty.call(message, "disk_stalled"))
+            if (message.disk_stalled != null && $Object.hasOwnProperty.call(message, "disk_stalled") && message.disk_stalled !== false)
                 writer.uint32(/* id 23, wireType 0 =*/184).bool(message.disk_stalled);
-            if (message.semi_sync_blocked != null && $Object.hasOwnProperty.call(message, "semi_sync_blocked"))
+            if (message.semi_sync_blocked != null && $Object.hasOwnProperty.call(message, "semi_sync_blocked") && message.semi_sync_blocked !== false)
                 writer.uint32(/* id 24, wireType 0 =*/192).bool(message.semi_sync_blocked);
-            if (message.tablet_type != null && $Object.hasOwnProperty.call(message, "tablet_type"))
+            if (message.tablet_type != null && $Object.hasOwnProperty.call(message, "tablet_type") && message.tablet_type !== 0)
                 writer.uint32(/* id 25, wireType 0 =*/200).int32(message.tablet_type);
             if (message.shard_peer_health != null && message.shard_peer_health.length)
                 for (let i = 0; i < message.shard_peer_health.length; ++i)
@@ -154974,22 +154436,8 @@ export const replicationdata = $root.replicationdata = (() => {
                 if (typeof message.semi_sync_blocked !== "boolean")
                     return "semi_sync_blocked: boolean expected";
             if (message.tablet_type != null && $Object.hasOwnProperty.call(message, "tablet_type"))
-                switch (message.tablet_type) {
-                default:
+                if (typeof message.tablet_type !== "number" || (message.tablet_type | 0) !== message.tablet_type)
                     return "tablet_type: enum value expected";
-                case 0:
-                case 1:
-                case 1:
-                case 2:
-                case 3:
-                case 3:
-                case 4:
-                case 5:
-                case 6:
-                case 7:
-                case 8:
-                    break;
-                }
             if (message.shard_peer_health != null && $Object.hasOwnProperty.call(message, "shard_peer_health")) {
                 if (!$Array.isArray(message.shard_peer_health))
                     return "shard_peer_health: array expected";
@@ -155107,12 +154555,6 @@ export const replicationdata = $root.replicationdata = (() => {
                     message.semi_sync_blocked = $Boolean(object.semi_sync_blocked);
             if (object.tablet_type !== 0 && (typeof object.tablet_type !== "string" || $root.topodata.TabletType[object.tablet_type] !== 0))
                 switch (object.tablet_type) {
-                default:
-                    if (typeof object.tablet_type === "number") {
-                        message.tablet_type = object.tablet_type;
-                        break;
-                    }
-                    break;
                 case "UNKNOWN":
                 case 0:
                     message.tablet_type = 0;
@@ -155157,6 +154599,9 @@ export const replicationdata = $root.replicationdata = (() => {
                 case 8:
                     message.tablet_type = 8;
                     break;
+                default:
+                    if (typeof object.tablet_type === "number" && (object.tablet_type | 0) === object.tablet_type)
+                        message.tablet_type = object.tablet_type;
                 }
             if (object.shard_peer_health) {
                 if (!$Array.isArray(object.shard_peer_health))
@@ -155688,7 +155133,7 @@ export const vschema = $root.vschema = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.from_table != null && $Object.hasOwnProperty.call(message, "from_table"))
+            if (message.from_table != null && $Object.hasOwnProperty.call(message, "from_table") && message.from_table !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.from_table);
             if (message.to_tables != null && message.to_tables.length)
                 for (let i = 0; i < message.to_tables.length; ++i)
@@ -156036,7 +155481,7 @@ export const vschema = $root.vschema = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.sharded != null && $Object.hasOwnProperty.call(message, "sharded"))
+            if (message.sharded != null && $Object.hasOwnProperty.call(message, "sharded") && message.sharded !== false)
                 writer.uint32(/* id 1, wireType 0 =*/8).bool(message.sharded);
             if (message.vindexes != null && $Object.hasOwnProperty.call(message, "vindexes"))
                 for (let keys = $Object.keys(message.vindexes), i = 0; i < keys.length; ++i) {
@@ -156048,13 +155493,13 @@ export const vschema = $root.vschema = (() => {
                     writer.uint32(/* id 3, wireType 2 =*/26).fork().uint32(/* id 1, wireType 2 =*/10).string(keys[i]);
                     $root.vschema.Table.encode(message.tables[keys[i]], writer.uint32(/* id 2, wireType 2 =*/18).fork(), _depth + 1).ldelim().ldelim();
                 }
-            if (message.require_explicit_routing != null && $Object.hasOwnProperty.call(message, "require_explicit_routing"))
+            if (message.require_explicit_routing != null && $Object.hasOwnProperty.call(message, "require_explicit_routing") && message.require_explicit_routing !== false)
                 writer.uint32(/* id 4, wireType 0 =*/32).bool(message.require_explicit_routing);
-            if (message.foreign_key_mode != null && $Object.hasOwnProperty.call(message, "foreign_key_mode"))
+            if (message.foreign_key_mode != null && $Object.hasOwnProperty.call(message, "foreign_key_mode") && message.foreign_key_mode !== 0)
                 writer.uint32(/* id 5, wireType 0 =*/40).int32(message.foreign_key_mode);
             if (message.multi_tenant_spec != null && $Object.hasOwnProperty.call(message, "multi_tenant_spec"))
                 $root.vschema.MultiTenantSpec.encode(message.multi_tenant_spec, writer.uint32(/* id 6, wireType 2 =*/50).fork(), _depth + 1).ldelim();
-            if (message.prevent_cross_keyspace_reads != null && $Object.hasOwnProperty.call(message, "prevent_cross_keyspace_reads"))
+            if (message.prevent_cross_keyspace_reads != null && $Object.hasOwnProperty.call(message, "prevent_cross_keyspace_reads") && message.prevent_cross_keyspace_reads !== false)
                 writer.uint32(/* id 7, wireType 0 =*/56).bool(message.prevent_cross_keyspace_reads);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -156132,7 +155577,7 @@ export const vschema = $root.vschema = (() => {
                             case 2:
                                 if (wireType !== 2)
                                     break;
-                                value = $root.vschema.Vindex.decode(reader, reader.uint32(), $undefined, _depth + 1);
+                                value = $root.vschema.Vindex.decode(reader, reader.uint32(), $undefined, _depth + 1, value);
                                 continue;
                             }
                             reader.skipType(wireType, _depth, tag2);
@@ -156162,7 +155607,7 @@ export const vschema = $root.vschema = (() => {
                             case 2:
                                 if (wireType !== 2)
                                     break;
-                                value = $root.vschema.Table.decode(reader, reader.uint32(), $undefined, _depth + 1);
+                                value = $root.vschema.Table.decode(reader, reader.uint32(), $undefined, _depth + 1, value);
                                 continue;
                             }
                             reader.skipType(wireType, _depth, tag2);
@@ -156275,15 +155720,8 @@ export const vschema = $root.vschema = (() => {
                 if (typeof message.require_explicit_routing !== "boolean")
                     return "require_explicit_routing: boolean expected";
             if (message.foreign_key_mode != null && $Object.hasOwnProperty.call(message, "foreign_key_mode"))
-                switch (message.foreign_key_mode) {
-                default:
+                if (typeof message.foreign_key_mode !== "number" || (message.foreign_key_mode | 0) !== message.foreign_key_mode)
                     return "foreign_key_mode: enum value expected";
-                case 0:
-                case 1:
-                case 2:
-                case 3:
-                    break;
-                }
             if (message.multi_tenant_spec != null && $Object.hasOwnProperty.call(message, "multi_tenant_spec")) {
                 let error = $root.vschema.MultiTenantSpec.verify(message.multi_tenant_spec, _depth + 1);
                 if (error)
@@ -156345,12 +155783,6 @@ export const vschema = $root.vschema = (() => {
                     message.require_explicit_routing = $Boolean(object.require_explicit_routing);
             if (object.foreign_key_mode !== 0 && (typeof object.foreign_key_mode !== "string" || $root.vschema.Keyspace.ForeignKeyMode[object.foreign_key_mode] !== 0))
                 switch (object.foreign_key_mode) {
-                default:
-                    if (typeof object.foreign_key_mode === "number") {
-                        message.foreign_key_mode = object.foreign_key_mode;
-                        break;
-                    }
-                    break;
                 case "unspecified":
                 case 0:
                     message.foreign_key_mode = 0;
@@ -156367,6 +155799,9 @@ export const vschema = $root.vschema = (() => {
                 case 3:
                     message.foreign_key_mode = 3;
                     break;
+                default:
+                    if (typeof object.foreign_key_mode === "number" && (object.foreign_key_mode | 0) === object.foreign_key_mode)
+                        message.foreign_key_mode = object.foreign_key_mode;
                 }
             if (object.multi_tenant_spec != null) {
                 if (!$util.isObject(object.multi_tenant_spec))
@@ -156569,9 +156004,9 @@ export const vschema = $root.vschema = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.tenant_id_column_name != null && $Object.hasOwnProperty.call(message, "tenant_id_column_name"))
+            if (message.tenant_id_column_name != null && $Object.hasOwnProperty.call(message, "tenant_id_column_name") && message.tenant_id_column_name !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.tenant_id_column_name);
-            if (message.tenant_id_column_type != null && $Object.hasOwnProperty.call(message, "tenant_id_column_type"))
+            if (message.tenant_id_column_type != null && $Object.hasOwnProperty.call(message, "tenant_id_column_type") && message.tenant_id_column_type !== 0)
                 writer.uint32(/* id 2, wireType 0 =*/16).int32(message.tenant_id_column_type);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -156685,49 +156120,8 @@ export const vschema = $root.vschema = (() => {
                 if (!$util.isString(message.tenant_id_column_name))
                     return "tenant_id_column_name: string expected";
             if (message.tenant_id_column_type != null && $Object.hasOwnProperty.call(message, "tenant_id_column_type"))
-                switch (message.tenant_id_column_type) {
-                default:
+                if (typeof message.tenant_id_column_type !== "number" || (message.tenant_id_column_type | 0) !== message.tenant_id_column_type)
                     return "tenant_id_column_type: enum value expected";
-                case 0:
-                case 257:
-                case 770:
-                case 259:
-                case 772:
-                case 261:
-                case 774:
-                case 263:
-                case 776:
-                case 265:
-                case 778:
-                case 1035:
-                case 1036:
-                case 2061:
-                case 2062:
-                case 2063:
-                case 2064:
-                case 785:
-                case 18:
-                case 6163:
-                case 10260:
-                case 6165:
-                case 10262:
-                case 6167:
-                case 10264:
-                case 2073:
-                case 2074:
-                case 2075:
-                case 28:
-                case 2077:
-                case 2078:
-                case 31:
-                case 4128:
-                case 4129:
-                case 4130:
-                case 2083:
-                case 36:
-                case 37:
-                    break;
-                }
             return null;
         };
 
@@ -156754,12 +156148,6 @@ export const vschema = $root.vschema = (() => {
                     message.tenant_id_column_name = $String(object.tenant_id_column_name);
             if (object.tenant_id_column_type !== 0 && (typeof object.tenant_id_column_type !== "string" || $root.query.Type[object.tenant_id_column_type] !== 0))
                 switch (object.tenant_id_column_type) {
-                default:
-                    if (typeof object.tenant_id_column_type === "number") {
-                        message.tenant_id_column_type = object.tenant_id_column_type;
-                        break;
-                    }
-                    break;
                 case "NULL_TYPE":
                 case 0:
                     message.tenant_id_column_type = 0;
@@ -156912,6 +156300,9 @@ export const vschema = $root.vschema = (() => {
                 case 37:
                     message.tenant_id_column_type = 37;
                     break;
+                default:
+                    if (typeof object.tenant_id_column_type === "number" && (object.tenant_id_column_type | 0) === object.tenant_id_column_type)
+                        message.tenant_id_column_type = object.tenant_id_column_type;
                 }
             return message;
         };
@@ -157068,12 +156459,12 @@ export const vschema = $root.vschema = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.type != null && $Object.hasOwnProperty.call(message, "type"))
+            if (message.type != null && $Object.hasOwnProperty.call(message, "type") && message.type !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.type);
             if (message.params != null && $Object.hasOwnProperty.call(message, "params"))
                 for (let keys = $Object.keys(message.params), i = 0; i < keys.length; ++i)
                     writer.uint32(/* id 2, wireType 2 =*/18).fork().uint32(/* id 1, wireType 2 =*/10).string(keys[i]).uint32(/* id 2, wireType 2 =*/18).string(message.params[keys[i]]).ldelim();
-            if (message.owner != null && $Object.hasOwnProperty.call(message, "owner"))
+            if (message.owner != null && $Object.hasOwnProperty.call(message, "owner") && message.owner !== "")
                 writer.uint32(/* id 3, wireType 2 =*/26).string(message.owner);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -157467,7 +156858,7 @@ export const vschema = $root.vschema = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.type != null && $Object.hasOwnProperty.call(message, "type"))
+            if (message.type != null && $Object.hasOwnProperty.call(message, "type") && message.type !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.type);
             if (message.column_vindexes != null && message.column_vindexes.length)
                 for (let i = 0; i < message.column_vindexes.length; ++i)
@@ -157477,11 +156868,11 @@ export const vschema = $root.vschema = (() => {
             if (message.columns != null && message.columns.length)
                 for (let i = 0; i < message.columns.length; ++i)
                     $root.vschema.Column.encode(message.columns[i], writer.uint32(/* id 4, wireType 2 =*/34).fork(), _depth + 1).ldelim();
-            if (message.pinned != null && $Object.hasOwnProperty.call(message, "pinned"))
+            if (message.pinned != null && $Object.hasOwnProperty.call(message, "pinned") && message.pinned !== "")
                 writer.uint32(/* id 5, wireType 2 =*/42).string(message.pinned);
-            if (message.column_list_authoritative != null && $Object.hasOwnProperty.call(message, "column_list_authoritative"))
+            if (message.column_list_authoritative != null && $Object.hasOwnProperty.call(message, "column_list_authoritative") && message.column_list_authoritative !== false)
                 writer.uint32(/* id 6, wireType 0 =*/48).bool(message.column_list_authoritative);
-            if (message.source != null && $Object.hasOwnProperty.call(message, "source"))
+            if (message.source != null && $Object.hasOwnProperty.call(message, "source") && message.source !== "")
                 writer.uint32(/* id 7, wireType 2 =*/58).string(message.source);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -157902,9 +157293,9 @@ export const vschema = $root.vschema = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.column != null && $Object.hasOwnProperty.call(message, "column"))
+            if (message.column != null && $Object.hasOwnProperty.call(message, "column") && message.column !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.column);
-            if (message.name != null && $Object.hasOwnProperty.call(message, "name"))
+            if (message.name != null && $Object.hasOwnProperty.call(message, "name") && message.name !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.name);
             if (message.columns != null && message.columns.length)
                 for (let i = 0; i < message.columns.length; ++i)
@@ -158224,9 +157615,9 @@ export const vschema = $root.vschema = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.column != null && $Object.hasOwnProperty.call(message, "column"))
+            if (message.column != null && $Object.hasOwnProperty.call(message, "column") && message.column !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.column);
-            if (message.sequence != null && $Object.hasOwnProperty.call(message, "sequence"))
+            if (message.sequence != null && $Object.hasOwnProperty.call(message, "sequence") && message.sequence !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.sequence);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -158587,19 +157978,19 @@ export const vschema = $root.vschema = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.name != null && $Object.hasOwnProperty.call(message, "name"))
+            if (message.name != null && $Object.hasOwnProperty.call(message, "name") && message.name !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.name);
-            if (message.type != null && $Object.hasOwnProperty.call(message, "type"))
+            if (message.type != null && $Object.hasOwnProperty.call(message, "type") && message.type !== 0)
                 writer.uint32(/* id 2, wireType 0 =*/16).int32(message.type);
-            if (message.invisible != null && $Object.hasOwnProperty.call(message, "invisible"))
+            if (message.invisible != null && $Object.hasOwnProperty.call(message, "invisible") && message.invisible !== false)
                 writer.uint32(/* id 3, wireType 0 =*/24).bool(message.invisible);
-            if (message["default"] != null && $Object.hasOwnProperty.call(message, "default"))
+            if (message["default"] != null && $Object.hasOwnProperty.call(message, "default") && message["default"] !== "")
                 writer.uint32(/* id 4, wireType 2 =*/34).string(message["default"]);
-            if (message.collation_name != null && $Object.hasOwnProperty.call(message, "collation_name"))
+            if (message.collation_name != null && $Object.hasOwnProperty.call(message, "collation_name") && message.collation_name !== "")
                 writer.uint32(/* id 5, wireType 2 =*/42).string(message.collation_name);
-            if (message.size != null && $Object.hasOwnProperty.call(message, "size"))
+            if (message.size != null && $Object.hasOwnProperty.call(message, "size") && message.size !== 0)
                 writer.uint32(/* id 6, wireType 0 =*/48).int32(message.size);
-            if (message.scale != null && $Object.hasOwnProperty.call(message, "scale"))
+            if (message.scale != null && $Object.hasOwnProperty.call(message, "scale") && message.scale !== 0)
                 writer.uint32(/* id 7, wireType 0 =*/56).int32(message.scale);
             if (message.nullable != null && $Object.hasOwnProperty.call(message, "nullable"))
                 writer.uint32(/* id 8, wireType 0 =*/64).bool(message.nullable);
@@ -158779,49 +158170,8 @@ export const vschema = $root.vschema = (() => {
                 if (!$util.isString(message.name))
                     return "name: string expected";
             if (message.type != null && $Object.hasOwnProperty.call(message, "type"))
-                switch (message.type) {
-                default:
+                if (typeof message.type !== "number" || (message.type | 0) !== message.type)
                     return "type: enum value expected";
-                case 0:
-                case 257:
-                case 770:
-                case 259:
-                case 772:
-                case 261:
-                case 774:
-                case 263:
-                case 776:
-                case 265:
-                case 778:
-                case 1035:
-                case 1036:
-                case 2061:
-                case 2062:
-                case 2063:
-                case 2064:
-                case 785:
-                case 18:
-                case 6163:
-                case 10260:
-                case 6165:
-                case 10262:
-                case 6167:
-                case 10264:
-                case 2073:
-                case 2074:
-                case 2075:
-                case 28:
-                case 2077:
-                case 2078:
-                case 31:
-                case 4128:
-                case 4129:
-                case 4130:
-                case 2083:
-                case 36:
-                case 37:
-                    break;
-                }
             if (message.invisible != null && $Object.hasOwnProperty.call(message, "invisible"))
                 if (typeof message.invisible !== "boolean")
                     return "invisible: boolean expected";
@@ -158875,12 +158225,6 @@ export const vschema = $root.vschema = (() => {
                     message.name = $String(object.name);
             if (object.type !== 0 && (typeof object.type !== "string" || $root.query.Type[object.type] !== 0))
                 switch (object.type) {
-                default:
-                    if (typeof object.type === "number") {
-                        message.type = object.type;
-                        break;
-                    }
-                    break;
                 case "NULL_TYPE":
                 case 0:
                     message.type = 0;
@@ -159033,6 +158377,9 @@ export const vschema = $root.vschema = (() => {
                 case 37:
                     message.type = 37;
                     break;
+                default:
+                    if (typeof object.type === "number" && (object.type | 0) === object.type)
+                        message.type = object.type;
                 }
             if (object.invisible != null)
                 if (object.invisible)
@@ -159335,7 +158682,7 @@ export const vschema = $root.vschema = (() => {
                             case 2:
                                 if (wireType !== 2)
                                     break;
-                                value = $root.vschema.Keyspace.decode(reader, reader.uint32(), $undefined, _depth + 1);
+                                value = $root.vschema.Keyspace.decode(reader, reader.uint32(), $undefined, _depth + 1, value);
                                 continue;
                             }
                             reader.skipType(wireType, _depth, tag2);
@@ -159943,11 +159290,11 @@ export const vschema = $root.vschema = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.from_keyspace != null && $Object.hasOwnProperty.call(message, "from_keyspace"))
+            if (message.from_keyspace != null && $Object.hasOwnProperty.call(message, "from_keyspace") && message.from_keyspace !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.from_keyspace);
-            if (message.to_keyspace != null && $Object.hasOwnProperty.call(message, "to_keyspace"))
+            if (message.to_keyspace != null && $Object.hasOwnProperty.call(message, "to_keyspace") && message.to_keyspace !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.to_keyspace);
-            if (message.shard != null && $Object.hasOwnProperty.call(message, "shard"))
+            if (message.shard != null && $Object.hasOwnProperty.call(message, "shard") && message.shard !== "")
                 writer.uint32(/* id 3, wireType 2 =*/26).string(message.shard);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -160530,9 +159877,9 @@ export const vschema = $root.vschema = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.from_keyspace != null && $Object.hasOwnProperty.call(message, "from_keyspace"))
+            if (message.from_keyspace != null && $Object.hasOwnProperty.call(message, "from_keyspace") && message.from_keyspace !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.from_keyspace);
-            if (message.to_keyspace != null && $Object.hasOwnProperty.call(message, "to_keyspace"))
+            if (message.to_keyspace != null && $Object.hasOwnProperty.call(message, "to_keyspace") && message.to_keyspace !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.to_keyspace);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -161106,11 +160453,11 @@ export const vschema = $root.vschema = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.from_table != null && $Object.hasOwnProperty.call(message, "from_table"))
+            if (message.from_table != null && $Object.hasOwnProperty.call(message, "from_table") && message.from_table !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.from_table);
-            if (message.to_table != null && $Object.hasOwnProperty.call(message, "to_table"))
+            if (message.to_table != null && $Object.hasOwnProperty.call(message, "to_table") && message.to_table !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.to_table);
-            if (message.percent != null && $Object.hasOwnProperty.call(message, "percent"))
+            if (message.percent != null && $Object.hasOwnProperty.call(message, "percent") && !$Object.is(message.percent, 0))
                 writer.uint32(/* id 3, wireType 5 =*/29).float(message.percent);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -161180,7 +160527,7 @@ export const vschema = $root.vschema = (() => {
                 case 3: {
                         if (wireType !== 5)
                             break;
-                        if ((value = reader.float()) !== 0)
+                        if (!$Object.is(value = reader.float(), 0))
                             message.percent = value;
                         else
                             delete message.percent;
@@ -161266,7 +160613,7 @@ export const vschema = $root.vschema = (() => {
                 if (typeof object.to_table !== "string" || object.to_table.length)
                     message.to_table = $String(object.to_table);
             if (object.percent != null)
-                if ($Number(object.percent) !== 0)
+                if (!$Object.is($Number(object.percent), 0))
                     message.percent = $Number(object.percent);
             return message;
         };
@@ -161432,7 +160779,7 @@ export const vtctldata = $root.vtctldata = (() => {
             if (message.args != null && message.args.length)
                 for (let i = 0; i < message.args.length; ++i)
                     writer.uint32(/* id 1, wireType 2 =*/10).string(message.args[i]);
-            if (message.action_timeout != null && $Object.hasOwnProperty.call(message, "action_timeout"))
+            if (message.action_timeout != null && $Object.hasOwnProperty.call(message, "action_timeout") && (typeof message.action_timeout === "object" ? message.action_timeout.low || message.action_timeout.high : message.action_timeout !== 0))
                 writer.uint32(/* id 2, wireType 0 =*/16).int64(message.action_timeout);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -162034,11 +161381,11 @@ export const vtctldata = $root.vtctldata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.target_table != null && $Object.hasOwnProperty.call(message, "target_table"))
+            if (message.target_table != null && $Object.hasOwnProperty.call(message, "target_table") && message.target_table !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.target_table);
-            if (message.source_expression != null && $Object.hasOwnProperty.call(message, "source_expression"))
+            if (message.source_expression != null && $Object.hasOwnProperty.call(message, "source_expression") && message.source_expression !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.source_expression);
-            if (message.create_ddl != null && $Object.hasOwnProperty.call(message, "create_ddl"))
+            if (message.create_ddl != null && $Object.hasOwnProperty.call(message, "create_ddl") && message.create_ddl !== "")
                 writer.uint32(/* id 3, wireType 2 =*/26).string(message.create_ddl);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -162491,39 +161838,39 @@ export const vtctldata = $root.vtctldata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.workflow != null && $Object.hasOwnProperty.call(message, "workflow"))
+            if (message.workflow != null && $Object.hasOwnProperty.call(message, "workflow") && message.workflow !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.workflow);
-            if (message.source_keyspace != null && $Object.hasOwnProperty.call(message, "source_keyspace"))
+            if (message.source_keyspace != null && $Object.hasOwnProperty.call(message, "source_keyspace") && message.source_keyspace !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.source_keyspace);
-            if (message.target_keyspace != null && $Object.hasOwnProperty.call(message, "target_keyspace"))
+            if (message.target_keyspace != null && $Object.hasOwnProperty.call(message, "target_keyspace") && message.target_keyspace !== "")
                 writer.uint32(/* id 3, wireType 2 =*/26).string(message.target_keyspace);
-            if (message.stop_after_copy != null && $Object.hasOwnProperty.call(message, "stop_after_copy"))
+            if (message.stop_after_copy != null && $Object.hasOwnProperty.call(message, "stop_after_copy") && message.stop_after_copy !== false)
                 writer.uint32(/* id 4, wireType 0 =*/32).bool(message.stop_after_copy);
             if (message.table_settings != null && message.table_settings.length)
                 for (let i = 0; i < message.table_settings.length; ++i)
                     $root.vtctldata.TableMaterializeSettings.encode(message.table_settings[i], writer.uint32(/* id 5, wireType 2 =*/42).fork(), _depth + 1).ldelim();
-            if (message.cell != null && $Object.hasOwnProperty.call(message, "cell"))
+            if (message.cell != null && $Object.hasOwnProperty.call(message, "cell") && message.cell !== "")
                 writer.uint32(/* id 6, wireType 2 =*/50).string(message.cell);
-            if (message.tablet_types != null && $Object.hasOwnProperty.call(message, "tablet_types"))
+            if (message.tablet_types != null && $Object.hasOwnProperty.call(message, "tablet_types") && message.tablet_types !== "")
                 writer.uint32(/* id 7, wireType 2 =*/58).string(message.tablet_types);
-            if (message.external_cluster != null && $Object.hasOwnProperty.call(message, "external_cluster"))
+            if (message.external_cluster != null && $Object.hasOwnProperty.call(message, "external_cluster") && message.external_cluster !== "")
                 writer.uint32(/* id 8, wireType 2 =*/66).string(message.external_cluster);
-            if (message.materialization_intent != null && $Object.hasOwnProperty.call(message, "materialization_intent"))
+            if (message.materialization_intent != null && $Object.hasOwnProperty.call(message, "materialization_intent") && message.materialization_intent !== 0)
                 writer.uint32(/* id 9, wireType 0 =*/72).int32(message.materialization_intent);
-            if (message.source_time_zone != null && $Object.hasOwnProperty.call(message, "source_time_zone"))
+            if (message.source_time_zone != null && $Object.hasOwnProperty.call(message, "source_time_zone") && message.source_time_zone !== "")
                 writer.uint32(/* id 10, wireType 2 =*/82).string(message.source_time_zone);
-            if (message.target_time_zone != null && $Object.hasOwnProperty.call(message, "target_time_zone"))
+            if (message.target_time_zone != null && $Object.hasOwnProperty.call(message, "target_time_zone") && message.target_time_zone !== "")
                 writer.uint32(/* id 11, wireType 2 =*/90).string(message.target_time_zone);
             if (message.source_shards != null && message.source_shards.length)
                 for (let i = 0; i < message.source_shards.length; ++i)
                     writer.uint32(/* id 12, wireType 2 =*/98).string(message.source_shards[i]);
-            if (message.on_ddl != null && $Object.hasOwnProperty.call(message, "on_ddl"))
+            if (message.on_ddl != null && $Object.hasOwnProperty.call(message, "on_ddl") && message.on_ddl !== "")
                 writer.uint32(/* id 13, wireType 2 =*/106).string(message.on_ddl);
-            if (message.defer_secondary_keys != null && $Object.hasOwnProperty.call(message, "defer_secondary_keys"))
+            if (message.defer_secondary_keys != null && $Object.hasOwnProperty.call(message, "defer_secondary_keys") && message.defer_secondary_keys !== false)
                 writer.uint32(/* id 14, wireType 0 =*/112).bool(message.defer_secondary_keys);
-            if (message.tablet_selection_preference != null && $Object.hasOwnProperty.call(message, "tablet_selection_preference"))
+            if (message.tablet_selection_preference != null && $Object.hasOwnProperty.call(message, "tablet_selection_preference") && message.tablet_selection_preference !== 0)
                 writer.uint32(/* id 15, wireType 0 =*/120).int32(message.tablet_selection_preference);
-            if (message.atomic_copy != null && $Object.hasOwnProperty.call(message, "atomic_copy"))
+            if (message.atomic_copy != null && $Object.hasOwnProperty.call(message, "atomic_copy") && message.atomic_copy !== false)
                 writer.uint32(/* id 16, wireType 0 =*/128).bool(message.atomic_copy);
             if (message.workflow_options != null && $Object.hasOwnProperty.call(message, "workflow_options"))
                 $root.vtctldata.WorkflowOptions.encode(message.workflow_options, writer.uint32(/* id 17, wireType 2 =*/138).fork(), _depth + 1).ldelim();
@@ -162807,15 +162154,8 @@ export const vtctldata = $root.vtctldata = (() => {
                 if (!$util.isString(message.external_cluster))
                     return "external_cluster: string expected";
             if (message.materialization_intent != null && $Object.hasOwnProperty.call(message, "materialization_intent"))
-                switch (message.materialization_intent) {
-                default:
+                if (typeof message.materialization_intent !== "number" || (message.materialization_intent | 0) !== message.materialization_intent)
                     return "materialization_intent: enum value expected";
-                case 0:
-                case 1:
-                case 2:
-                case 3:
-                    break;
-                }
             if (message.source_time_zone != null && $Object.hasOwnProperty.call(message, "source_time_zone"))
                 if (!$util.isString(message.source_time_zone))
                     return "source_time_zone: string expected";
@@ -162836,14 +162176,8 @@ export const vtctldata = $root.vtctldata = (() => {
                 if (typeof message.defer_secondary_keys !== "boolean")
                     return "defer_secondary_keys: boolean expected";
             if (message.tablet_selection_preference != null && $Object.hasOwnProperty.call(message, "tablet_selection_preference"))
-                switch (message.tablet_selection_preference) {
-                default:
+                if (typeof message.tablet_selection_preference !== "number" || (message.tablet_selection_preference | 0) !== message.tablet_selection_preference)
                     return "tablet_selection_preference: enum value expected";
-                case 0:
-                case 1:
-                case 3:
-                    break;
-                }
             if (message.atomic_copy != null && $Object.hasOwnProperty.call(message, "atomic_copy"))
                 if (typeof message.atomic_copy !== "boolean")
                     return "atomic_copy: boolean expected";
@@ -162913,12 +162247,6 @@ export const vtctldata = $root.vtctldata = (() => {
                     message.external_cluster = $String(object.external_cluster);
             if (object.materialization_intent !== 0 && (typeof object.materialization_intent !== "string" || $root.vtctldata.MaterializationIntent[object.materialization_intent] !== 0))
                 switch (object.materialization_intent) {
-                default:
-                    if (typeof object.materialization_intent === "number") {
-                        message.materialization_intent = object.materialization_intent;
-                        break;
-                    }
-                    break;
                 case "CUSTOM":
                 case 0:
                     message.materialization_intent = 0;
@@ -162935,6 +162263,9 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 3:
                     message.materialization_intent = 3;
                     break;
+                default:
+                    if (typeof object.materialization_intent === "number" && (object.materialization_intent | 0) === object.materialization_intent)
+                        message.materialization_intent = object.materialization_intent;
                 }
             if (object.source_time_zone != null)
                 if (typeof object.source_time_zone !== "string" || object.source_time_zone.length)
@@ -162957,12 +162288,6 @@ export const vtctldata = $root.vtctldata = (() => {
                     message.defer_secondary_keys = $Boolean(object.defer_secondary_keys);
             if (object.tablet_selection_preference !== 0 && (typeof object.tablet_selection_preference !== "string" || $root.tabletmanagerdata.TabletSelectionPreference[object.tablet_selection_preference] !== 0))
                 switch (object.tablet_selection_preference) {
-                default:
-                    if (typeof object.tablet_selection_preference === "number") {
-                        message.tablet_selection_preference = object.tablet_selection_preference;
-                        break;
-                    }
-                    break;
                 case "ANY":
                 case 0:
                     message.tablet_selection_preference = 0;
@@ -162975,6 +162300,9 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 3:
                     message.tablet_selection_preference = 3;
                     break;
+                default:
+                    if (typeof object.tablet_selection_preference === "number" && (object.tablet_selection_preference | 0) === object.tablet_selection_preference)
+                        message.tablet_selection_preference = object.tablet_selection_preference;
                 }
             if (object.atomic_copy != null)
                 if (object.atomic_copy)
@@ -163195,7 +162523,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.name != null && $Object.hasOwnProperty.call(message, "name"))
+            if (message.name != null && $Object.hasOwnProperty.call(message, "name") && message.name !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.name);
             if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
                 $root.topodata.Keyspace.encode(message.keyspace, writer.uint32(/* id 2, wireType 2 =*/18).fork(), _depth + 1).ldelim();
@@ -163979,21 +163307,21 @@ export const vtctldata = $root.vtctldata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.uuid != null && $Object.hasOwnProperty.call(message, "uuid"))
+            if (message.uuid != null && $Object.hasOwnProperty.call(message, "uuid") && message.uuid !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.uuid);
-            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
+            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace") && message.keyspace !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.keyspace);
-            if (message.shard != null && $Object.hasOwnProperty.call(message, "shard"))
+            if (message.shard != null && $Object.hasOwnProperty.call(message, "shard") && message.shard !== "")
                 writer.uint32(/* id 3, wireType 2 =*/26).string(message.shard);
-            if (message.schema != null && $Object.hasOwnProperty.call(message, "schema"))
+            if (message.schema != null && $Object.hasOwnProperty.call(message, "schema") && message.schema !== "")
                 writer.uint32(/* id 4, wireType 2 =*/34).string(message.schema);
-            if (message.table != null && $Object.hasOwnProperty.call(message, "table"))
+            if (message.table != null && $Object.hasOwnProperty.call(message, "table") && message.table !== "")
                 writer.uint32(/* id 5, wireType 2 =*/42).string(message.table);
-            if (message.migration_statement != null && $Object.hasOwnProperty.call(message, "migration_statement"))
+            if (message.migration_statement != null && $Object.hasOwnProperty.call(message, "migration_statement") && message.migration_statement !== "")
                 writer.uint32(/* id 6, wireType 2 =*/50).string(message.migration_statement);
-            if (message.strategy != null && $Object.hasOwnProperty.call(message, "strategy"))
+            if (message.strategy != null && $Object.hasOwnProperty.call(message, "strategy") && message.strategy !== 0)
                 writer.uint32(/* id 7, wireType 0 =*/56).int32(message.strategy);
-            if (message.options != null && $Object.hasOwnProperty.call(message, "options"))
+            if (message.options != null && $Object.hasOwnProperty.call(message, "options") && message.options !== "")
                 writer.uint32(/* id 8, wireType 2 =*/66).string(message.options);
             if (message.added_at != null && $Object.hasOwnProperty.call(message, "added_at"))
                 $root.vttime.Time.encode(message.added_at, writer.uint32(/* id 9, wireType 2 =*/74).fork(), _depth + 1).ldelim();
@@ -164009,85 +163337,85 @@ export const vtctldata = $root.vtctldata = (() => {
                 $root.vttime.Time.encode(message.completed_at, writer.uint32(/* id 14, wireType 2 =*/114).fork(), _depth + 1).ldelim();
             if (message.cleaned_up_at != null && $Object.hasOwnProperty.call(message, "cleaned_up_at"))
                 $root.vttime.Time.encode(message.cleaned_up_at, writer.uint32(/* id 15, wireType 2 =*/122).fork(), _depth + 1).ldelim();
-            if (message.status != null && $Object.hasOwnProperty.call(message, "status"))
+            if (message.status != null && $Object.hasOwnProperty.call(message, "status") && message.status !== 0)
                 writer.uint32(/* id 16, wireType 0 =*/128).int32(message.status);
-            if (message.log_path != null && $Object.hasOwnProperty.call(message, "log_path"))
+            if (message.log_path != null && $Object.hasOwnProperty.call(message, "log_path") && message.log_path !== "")
                 writer.uint32(/* id 17, wireType 2 =*/138).string(message.log_path);
-            if (message.artifacts != null && $Object.hasOwnProperty.call(message, "artifacts"))
+            if (message.artifacts != null && $Object.hasOwnProperty.call(message, "artifacts") && message.artifacts !== "")
                 writer.uint32(/* id 18, wireType 2 =*/146).string(message.artifacts);
-            if (message.retries != null && $Object.hasOwnProperty.call(message, "retries"))
+            if (message.retries != null && $Object.hasOwnProperty.call(message, "retries") && (typeof message.retries === "object" ? message.retries.low || message.retries.high : message.retries !== 0))
                 writer.uint32(/* id 19, wireType 0 =*/152).uint64(message.retries);
             if (message.tablet != null && $Object.hasOwnProperty.call(message, "tablet"))
                 $root.topodata.TabletAlias.encode(message.tablet, writer.uint32(/* id 20, wireType 2 =*/162).fork(), _depth + 1).ldelim();
-            if (message.tablet_failure != null && $Object.hasOwnProperty.call(message, "tablet_failure"))
+            if (message.tablet_failure != null && $Object.hasOwnProperty.call(message, "tablet_failure") && message.tablet_failure !== false)
                 writer.uint32(/* id 21, wireType 0 =*/168).bool(message.tablet_failure);
-            if (message.progress != null && $Object.hasOwnProperty.call(message, "progress"))
+            if (message.progress != null && $Object.hasOwnProperty.call(message, "progress") && !$Object.is(message.progress, 0))
                 writer.uint32(/* id 22, wireType 5 =*/181).float(message.progress);
-            if (message.migration_context != null && $Object.hasOwnProperty.call(message, "migration_context"))
+            if (message.migration_context != null && $Object.hasOwnProperty.call(message, "migration_context") && message.migration_context !== "")
                 writer.uint32(/* id 23, wireType 2 =*/186).string(message.migration_context);
-            if (message.ddl_action != null && $Object.hasOwnProperty.call(message, "ddl_action"))
+            if (message.ddl_action != null && $Object.hasOwnProperty.call(message, "ddl_action") && message.ddl_action !== "")
                 writer.uint32(/* id 24, wireType 2 =*/194).string(message.ddl_action);
-            if (message.message != null && $Object.hasOwnProperty.call(message, "message"))
+            if (message.message != null && $Object.hasOwnProperty.call(message, "message") && message.message !== "")
                 writer.uint32(/* id 25, wireType 2 =*/202).string(message.message);
-            if (message.eta_seconds != null && $Object.hasOwnProperty.call(message, "eta_seconds"))
+            if (message.eta_seconds != null && $Object.hasOwnProperty.call(message, "eta_seconds") && (typeof message.eta_seconds === "object" ? message.eta_seconds.low || message.eta_seconds.high : message.eta_seconds !== 0))
                 writer.uint32(/* id 26, wireType 0 =*/208).int64(message.eta_seconds);
-            if (message.rows_copied != null && $Object.hasOwnProperty.call(message, "rows_copied"))
+            if (message.rows_copied != null && $Object.hasOwnProperty.call(message, "rows_copied") && (typeof message.rows_copied === "object" ? message.rows_copied.low || message.rows_copied.high : message.rows_copied !== 0))
                 writer.uint32(/* id 27, wireType 0 =*/216).uint64(message.rows_copied);
-            if (message.table_rows != null && $Object.hasOwnProperty.call(message, "table_rows"))
+            if (message.table_rows != null && $Object.hasOwnProperty.call(message, "table_rows") && (typeof message.table_rows === "object" ? message.table_rows.low || message.table_rows.high : message.table_rows !== 0))
                 writer.uint32(/* id 28, wireType 0 =*/224).int64(message.table_rows);
-            if (message.added_unique_keys != null && $Object.hasOwnProperty.call(message, "added_unique_keys"))
+            if (message.added_unique_keys != null && $Object.hasOwnProperty.call(message, "added_unique_keys") && message.added_unique_keys !== 0)
                 writer.uint32(/* id 29, wireType 0 =*/232).uint32(message.added_unique_keys);
-            if (message.removed_unique_keys != null && $Object.hasOwnProperty.call(message, "removed_unique_keys"))
+            if (message.removed_unique_keys != null && $Object.hasOwnProperty.call(message, "removed_unique_keys") && message.removed_unique_keys !== 0)
                 writer.uint32(/* id 30, wireType 0 =*/240).uint32(message.removed_unique_keys);
-            if (message.log_file != null && $Object.hasOwnProperty.call(message, "log_file"))
+            if (message.log_file != null && $Object.hasOwnProperty.call(message, "log_file") && message.log_file !== "")
                 writer.uint32(/* id 31, wireType 2 =*/250).string(message.log_file);
             if (message.artifact_retention != null && $Object.hasOwnProperty.call(message, "artifact_retention"))
                 $root.vttime.Duration.encode(message.artifact_retention, writer.uint32(/* id 32, wireType 2 =*/258).fork(), _depth + 1).ldelim();
-            if (message.postpone_completion != null && $Object.hasOwnProperty.call(message, "postpone_completion"))
+            if (message.postpone_completion != null && $Object.hasOwnProperty.call(message, "postpone_completion") && message.postpone_completion !== false)
                 writer.uint32(/* id 33, wireType 0 =*/264).bool(message.postpone_completion);
-            if (message.removed_unique_key_names != null && $Object.hasOwnProperty.call(message, "removed_unique_key_names"))
+            if (message.removed_unique_key_names != null && $Object.hasOwnProperty.call(message, "removed_unique_key_names") && message.removed_unique_key_names !== "")
                 writer.uint32(/* id 34, wireType 2 =*/274).string(message.removed_unique_key_names);
-            if (message.dropped_no_default_column_names != null && $Object.hasOwnProperty.call(message, "dropped_no_default_column_names"))
+            if (message.dropped_no_default_column_names != null && $Object.hasOwnProperty.call(message, "dropped_no_default_column_names") && message.dropped_no_default_column_names !== "")
                 writer.uint32(/* id 35, wireType 2 =*/282).string(message.dropped_no_default_column_names);
-            if (message.expanded_column_names != null && $Object.hasOwnProperty.call(message, "expanded_column_names"))
+            if (message.expanded_column_names != null && $Object.hasOwnProperty.call(message, "expanded_column_names") && message.expanded_column_names !== "")
                 writer.uint32(/* id 36, wireType 2 =*/290).string(message.expanded_column_names);
-            if (message.revertible_notes != null && $Object.hasOwnProperty.call(message, "revertible_notes"))
+            if (message.revertible_notes != null && $Object.hasOwnProperty.call(message, "revertible_notes") && message.revertible_notes !== "")
                 writer.uint32(/* id 37, wireType 2 =*/298).string(message.revertible_notes);
-            if (message.allow_concurrent != null && $Object.hasOwnProperty.call(message, "allow_concurrent"))
+            if (message.allow_concurrent != null && $Object.hasOwnProperty.call(message, "allow_concurrent") && message.allow_concurrent !== false)
                 writer.uint32(/* id 38, wireType 0 =*/304).bool(message.allow_concurrent);
-            if (message.reverted_uuid != null && $Object.hasOwnProperty.call(message, "reverted_uuid"))
+            if (message.reverted_uuid != null && $Object.hasOwnProperty.call(message, "reverted_uuid") && message.reverted_uuid !== "")
                 writer.uint32(/* id 39, wireType 2 =*/314).string(message.reverted_uuid);
-            if (message.is_view != null && $Object.hasOwnProperty.call(message, "is_view"))
+            if (message.is_view != null && $Object.hasOwnProperty.call(message, "is_view") && message.is_view !== false)
                 writer.uint32(/* id 40, wireType 0 =*/320).bool(message.is_view);
-            if (message.ready_to_complete != null && $Object.hasOwnProperty.call(message, "ready_to_complete"))
+            if (message.ready_to_complete != null && $Object.hasOwnProperty.call(message, "ready_to_complete") && message.ready_to_complete !== false)
                 writer.uint32(/* id 41, wireType 0 =*/328).bool(message.ready_to_complete);
-            if (message.vitess_liveness_indicator != null && $Object.hasOwnProperty.call(message, "vitess_liveness_indicator"))
+            if (message.vitess_liveness_indicator != null && $Object.hasOwnProperty.call(message, "vitess_liveness_indicator") && (typeof message.vitess_liveness_indicator === "object" ? message.vitess_liveness_indicator.low || message.vitess_liveness_indicator.high : message.vitess_liveness_indicator !== 0))
                 writer.uint32(/* id 42, wireType 0 =*/336).int64(message.vitess_liveness_indicator);
-            if (message.user_throttle_ratio != null && $Object.hasOwnProperty.call(message, "user_throttle_ratio"))
+            if (message.user_throttle_ratio != null && $Object.hasOwnProperty.call(message, "user_throttle_ratio") && !$Object.is(message.user_throttle_ratio, 0))
                 writer.uint32(/* id 43, wireType 5 =*/349).float(message.user_throttle_ratio);
-            if (message.special_plan != null && $Object.hasOwnProperty.call(message, "special_plan"))
+            if (message.special_plan != null && $Object.hasOwnProperty.call(message, "special_plan") && message.special_plan !== "")
                 writer.uint32(/* id 44, wireType 2 =*/354).string(message.special_plan);
             if (message.last_throttled_at != null && $Object.hasOwnProperty.call(message, "last_throttled_at"))
                 $root.vttime.Time.encode(message.last_throttled_at, writer.uint32(/* id 45, wireType 2 =*/362).fork(), _depth + 1).ldelim();
-            if (message.component_throttled != null && $Object.hasOwnProperty.call(message, "component_throttled"))
+            if (message.component_throttled != null && $Object.hasOwnProperty.call(message, "component_throttled") && message.component_throttled !== "")
                 writer.uint32(/* id 46, wireType 2 =*/370).string(message.component_throttled);
             if (message.cancelled_at != null && $Object.hasOwnProperty.call(message, "cancelled_at"))
                 $root.vttime.Time.encode(message.cancelled_at, writer.uint32(/* id 47, wireType 2 =*/378).fork(), _depth + 1).ldelim();
-            if (message.postpone_launch != null && $Object.hasOwnProperty.call(message, "postpone_launch"))
+            if (message.postpone_launch != null && $Object.hasOwnProperty.call(message, "postpone_launch") && message.postpone_launch !== false)
                 writer.uint32(/* id 48, wireType 0 =*/384).bool(message.postpone_launch);
-            if (message.stage != null && $Object.hasOwnProperty.call(message, "stage"))
+            if (message.stage != null && $Object.hasOwnProperty.call(message, "stage") && message.stage !== "")
                 writer.uint32(/* id 49, wireType 2 =*/394).string(message.stage);
-            if (message.cutover_attempts != null && $Object.hasOwnProperty.call(message, "cutover_attempts"))
+            if (message.cutover_attempts != null && $Object.hasOwnProperty.call(message, "cutover_attempts") && message.cutover_attempts !== 0)
                 writer.uint32(/* id 50, wireType 0 =*/400).uint32(message.cutover_attempts);
-            if (message.is_immediate_operation != null && $Object.hasOwnProperty.call(message, "is_immediate_operation"))
+            if (message.is_immediate_operation != null && $Object.hasOwnProperty.call(message, "is_immediate_operation") && message.is_immediate_operation !== false)
                 writer.uint32(/* id 51, wireType 0 =*/408).bool(message.is_immediate_operation);
             if (message.reviewed_at != null && $Object.hasOwnProperty.call(message, "reviewed_at"))
                 $root.vttime.Time.encode(message.reviewed_at, writer.uint32(/* id 52, wireType 2 =*/418).fork(), _depth + 1).ldelim();
             if (message.ready_to_complete_at != null && $Object.hasOwnProperty.call(message, "ready_to_complete_at"))
                 $root.vttime.Time.encode(message.ready_to_complete_at, writer.uint32(/* id 53, wireType 2 =*/426).fork(), _depth + 1).ldelim();
-            if (message.removed_foreign_key_names != null && $Object.hasOwnProperty.call(message, "removed_foreign_key_names"))
+            if (message.removed_foreign_key_names != null && $Object.hasOwnProperty.call(message, "removed_foreign_key_names") && message.removed_foreign_key_names !== "")
                 writer.uint32(/* id 54, wireType 2 =*/434).string(message.removed_foreign_key_names);
-            if (message.in_order_completion_pending_count != null && $Object.hasOwnProperty.call(message, "in_order_completion_pending_count"))
+            if (message.in_order_completion_pending_count != null && $Object.hasOwnProperty.call(message, "in_order_completion_pending_count") && (typeof message.in_order_completion_pending_count === "object" ? message.in_order_completion_pending_count.low || message.in_order_completion_pending_count.high : message.in_order_completion_pending_count !== 0))
                 writer.uint32(/* id 55, wireType 0 =*/440).uint64(message.in_order_completion_pending_count);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -164304,7 +163632,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 22: {
                         if (wireType !== 5)
                             break;
-                        if ((value = reader.float()) !== 0)
+                        if (!$Object.is(value = reader.float(), 0))
                             message.progress = value;
                         else
                             delete message.progress;
@@ -164490,7 +163818,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 43: {
                         if (wireType !== 5)
                             break;
-                        if ((value = reader.float()) !== 0)
+                        if (!$Object.is(value = reader.float(), 0))
                             message.user_throttle_ratio = value;
                         else
                             delete message.user_throttle_ratio;
@@ -164654,15 +163982,8 @@ export const vtctldata = $root.vtctldata = (() => {
                 if (!$util.isString(message.migration_statement))
                     return "migration_statement: string expected";
             if (message.strategy != null && $Object.hasOwnProperty.call(message, "strategy"))
-                switch (message.strategy) {
-                default:
+                if (typeof message.strategy !== "number" || (message.strategy | 0) !== message.strategy)
                     return "strategy: enum value expected";
-                case 0:
-                case 0:
-                case 3:
-                case 4:
-                    break;
-                }
             if (message.options != null && $Object.hasOwnProperty.call(message, "options"))
                 if (!$util.isString(message.options))
                     return "options: string expected";
@@ -164702,19 +164023,8 @@ export const vtctldata = $root.vtctldata = (() => {
                     return "cleaned_up_at." + error;
             }
             if (message.status != null && $Object.hasOwnProperty.call(message, "status"))
-                switch (message.status) {
-                default:
+                if (typeof message.status !== "number" || (message.status | 0) !== message.status)
                     return "status: enum value expected";
-                case 0:
-                case 1:
-                case 2:
-                case 3:
-                case 4:
-                case 5:
-                case 6:
-                case 7:
-                    break;
-                }
             if (message.log_path != null && $Object.hasOwnProperty.call(message, "log_path"))
                 if (!$util.isString(message.log_path))
                     return "log_path: string expected";
@@ -164885,12 +164195,6 @@ export const vtctldata = $root.vtctldata = (() => {
                     message.migration_statement = $String(object.migration_statement);
             if (object.strategy !== 0 && (typeof object.strategy !== "string" || $root.vtctldata.SchemaMigration.Strategy[object.strategy] !== 0))
                 switch (object.strategy) {
-                default:
-                    if (typeof object.strategy === "number") {
-                        message.strategy = object.strategy;
-                        break;
-                    }
-                    break;
                 case "VITESS":
                 case 0:
                     message.strategy = 0;
@@ -164907,6 +164211,9 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 4:
                     message.strategy = 4;
                     break;
+                default:
+                    if (typeof object.strategy === "number" && (object.strategy | 0) === object.strategy)
+                        message.strategy = object.strategy;
                 }
             if (object.options != null)
                 if (typeof object.options !== "string" || object.options.length)
@@ -164948,12 +164255,6 @@ export const vtctldata = $root.vtctldata = (() => {
             }
             if (object.status !== 0 && (typeof object.status !== "string" || $root.vtctldata.SchemaMigration.Status[object.status] !== 0))
                 switch (object.status) {
-                default:
-                    if (typeof object.status === "number") {
-                        message.status = object.status;
-                        break;
-                    }
-                    break;
                 case "UNKNOWN":
                 case 0:
                     message.status = 0;
@@ -164986,6 +164287,9 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 7:
                     message.status = 7;
                     break;
+                default:
+                    if (typeof object.status === "number" && (object.status | 0) === object.status)
+                        message.status = object.status;
                 }
             if (object.log_path != null)
                 if (typeof object.log_path !== "string" || object.log_path.length)
@@ -165012,7 +164316,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 if (object.tablet_failure)
                     message.tablet_failure = $Boolean(object.tablet_failure);
             if (object.progress != null)
-                if ($Number(object.progress) !== 0)
+                if (!$Object.is($Number(object.progress), 0))
                     message.progress = $Number(object.progress);
             if (object.migration_context != null)
                 if (typeof object.migration_context !== "string" || object.migration_context.length)
@@ -165105,7 +164409,7 @@ export const vtctldata = $root.vtctldata = (() => {
                     else if (typeof object.vitess_liveness_indicator === "object")
                         message.vitess_liveness_indicator = new $util.LongBits(object.vitess_liveness_indicator.low >>> 0, object.vitess_liveness_indicator.high >>> 0).toNumber();
             if (object.user_throttle_ratio != null)
-                if ($Number(object.user_throttle_ratio) !== 0)
+                if (!$Object.is($Number(object.user_throttle_ratio), 0))
                     message.user_throttle_ratio = $Number(object.user_throttle_ratio);
             if (object.special_plan != null)
                 if (typeof object.special_plan !== "string" || object.special_plan.length)
@@ -165569,9 +164873,9 @@ export const vtctldata = $root.vtctldata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
+            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace") && message.keyspace !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.keyspace);
-            if (message.name != null && $Object.hasOwnProperty.call(message, "name"))
+            if (message.name != null && $Object.hasOwnProperty.call(message, "name") && message.name !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.name);
             if (message.shard != null && $Object.hasOwnProperty.call(message, "shard"))
                 $root.topodata.Shard.encode(message.shard, writer.uint32(/* id 3, wireType 2 =*/26).fork(), _depth + 1).ldelim();
@@ -165935,9 +165239,9 @@ export const vtctldata = $root.vtctldata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.tenant_id != null && $Object.hasOwnProperty.call(message, "tenant_id"))
+            if (message.tenant_id != null && $Object.hasOwnProperty.call(message, "tenant_id") && message.tenant_id !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.tenant_id);
-            if (message.sharded_auto_increment_handling != null && $Object.hasOwnProperty.call(message, "sharded_auto_increment_handling"))
+            if (message.sharded_auto_increment_handling != null && $Object.hasOwnProperty.call(message, "sharded_auto_increment_handling") && message.sharded_auto_increment_handling !== 0)
                 writer.uint32(/* id 2, wireType 0 =*/16).int32(message.sharded_auto_increment_handling);
             if (message.shards != null && message.shards.length)
                 for (let i = 0; i < message.shards.length; ++i)
@@ -165945,7 +165249,7 @@ export const vtctldata = $root.vtctldata = (() => {
             if (message.config != null && $Object.hasOwnProperty.call(message, "config"))
                 for (let keys = $Object.keys(message.config), i = 0; i < keys.length; ++i)
                     writer.uint32(/* id 4, wireType 2 =*/34).fork().uint32(/* id 1, wireType 2 =*/10).string(keys[i]).uint32(/* id 2, wireType 2 =*/18).string(message.config[keys[i]]).ldelim();
-            if (message.global_keyspace != null && $Object.hasOwnProperty.call(message, "global_keyspace"))
+            if (message.global_keyspace != null && $Object.hasOwnProperty.call(message, "global_keyspace") && message.global_keyspace !== "")
                 writer.uint32(/* id 5, wireType 2 =*/42).string(message.global_keyspace);
             if (message.lookup_vindexes != null && message.lookup_vindexes.length)
                 for (let i = 0; i < message.lookup_vindexes.length; ++i)
@@ -166117,14 +165421,8 @@ export const vtctldata = $root.vtctldata = (() => {
                 if (!$util.isString(message.tenant_id))
                     return "tenant_id: string expected";
             if (message.sharded_auto_increment_handling != null && $Object.hasOwnProperty.call(message, "sharded_auto_increment_handling"))
-                switch (message.sharded_auto_increment_handling) {
-                default:
+                if (typeof message.sharded_auto_increment_handling !== "number" || (message.sharded_auto_increment_handling | 0) !== message.sharded_auto_increment_handling)
                     return "sharded_auto_increment_handling: enum value expected";
-                case 0:
-                case 1:
-                case 2:
-                    break;
-                }
             if (message.shards != null && $Object.hasOwnProperty.call(message, "shards")) {
                 if (!$Array.isArray(message.shards))
                     return "shards: array expected";
@@ -166176,12 +165474,6 @@ export const vtctldata = $root.vtctldata = (() => {
                     message.tenant_id = $String(object.tenant_id);
             if (object.sharded_auto_increment_handling !== 0 && (typeof object.sharded_auto_increment_handling !== "string" || $root.vtctldata.ShardedAutoIncrementHandling[object.sharded_auto_increment_handling] !== 0))
                 switch (object.sharded_auto_increment_handling) {
-                default:
-                    if (typeof object.sharded_auto_increment_handling === "number") {
-                        message.sharded_auto_increment_handling = object.sharded_auto_increment_handling;
-                        break;
-                    }
-                    break;
                 case "LEAVE":
                 case 0:
                     message.sharded_auto_increment_handling = 0;
@@ -166194,6 +165486,9 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 2:
                     message.sharded_auto_increment_handling = 2;
                     break;
+                default:
+                    if (typeof object.sharded_auto_increment_handling === "number" && (object.sharded_auto_increment_handling | 0) === object.sharded_auto_increment_handling)
+                        message.sharded_auto_increment_handling = object.sharded_auto_increment_handling;
                 }
             if (object.shards) {
                 if (!$Array.isArray(object.shards))
@@ -166468,26 +165763,26 @@ export const vtctldata = $root.vtctldata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.name != null && $Object.hasOwnProperty.call(message, "name"))
+            if (message.name != null && $Object.hasOwnProperty.call(message, "name") && message.name !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.name);
             if (message.source != null && $Object.hasOwnProperty.call(message, "source"))
                 $root.vtctldata.Workflow.ReplicationLocation.encode(message.source, writer.uint32(/* id 2, wireType 2 =*/18).fork(), _depth + 1).ldelim();
             if (message.target != null && $Object.hasOwnProperty.call(message, "target"))
                 $root.vtctldata.Workflow.ReplicationLocation.encode(message.target, writer.uint32(/* id 3, wireType 2 =*/26).fork(), _depth + 1).ldelim();
-            if (message.max_v_replication_lag != null && $Object.hasOwnProperty.call(message, "max_v_replication_lag"))
+            if (message.max_v_replication_lag != null && $Object.hasOwnProperty.call(message, "max_v_replication_lag") && (typeof message.max_v_replication_lag === "object" ? message.max_v_replication_lag.low || message.max_v_replication_lag.high : message.max_v_replication_lag !== 0))
                 writer.uint32(/* id 4, wireType 0 =*/32).int64(message.max_v_replication_lag);
             if (message.shard_streams != null && $Object.hasOwnProperty.call(message, "shard_streams"))
                 for (let keys = $Object.keys(message.shard_streams), i = 0; i < keys.length; ++i) {
                     writer.uint32(/* id 5, wireType 2 =*/42).fork().uint32(/* id 1, wireType 2 =*/10).string(keys[i]);
                     $root.vtctldata.Workflow.ShardStream.encode(message.shard_streams[keys[i]], writer.uint32(/* id 2, wireType 2 =*/18).fork(), _depth + 1).ldelim().ldelim();
                 }
-            if (message.workflow_type != null && $Object.hasOwnProperty.call(message, "workflow_type"))
+            if (message.workflow_type != null && $Object.hasOwnProperty.call(message, "workflow_type") && message.workflow_type !== "")
                 writer.uint32(/* id 6, wireType 2 =*/50).string(message.workflow_type);
-            if (message.workflow_sub_type != null && $Object.hasOwnProperty.call(message, "workflow_sub_type"))
+            if (message.workflow_sub_type != null && $Object.hasOwnProperty.call(message, "workflow_sub_type") && message.workflow_sub_type !== "")
                 writer.uint32(/* id 7, wireType 2 =*/58).string(message.workflow_sub_type);
-            if (message.max_v_replication_transaction_lag != null && $Object.hasOwnProperty.call(message, "max_v_replication_transaction_lag"))
+            if (message.max_v_replication_transaction_lag != null && $Object.hasOwnProperty.call(message, "max_v_replication_transaction_lag") && (typeof message.max_v_replication_transaction_lag === "object" ? message.max_v_replication_transaction_lag.low || message.max_v_replication_transaction_lag.high : message.max_v_replication_transaction_lag !== 0))
                 writer.uint32(/* id 8, wireType 0 =*/64).int64(message.max_v_replication_transaction_lag);
-            if (message.defer_secondary_keys != null && $Object.hasOwnProperty.call(message, "defer_secondary_keys"))
+            if (message.defer_secondary_keys != null && $Object.hasOwnProperty.call(message, "defer_secondary_keys") && message.defer_secondary_keys !== false)
                 writer.uint32(/* id 9, wireType 0 =*/72).bool(message.defer_secondary_keys);
             if (message.options != null && $Object.hasOwnProperty.call(message, "options"))
                 $root.vtctldata.WorkflowOptions.encode(message.options, writer.uint32(/* id 10, wireType 2 =*/82).fork(), _depth + 1).ldelim();
@@ -166588,7 +165883,7 @@ export const vtctldata = $root.vtctldata = (() => {
                             case 2:
                                 if (wireType !== 2)
                                     break;
-                                value = $root.vtctldata.Workflow.ShardStream.decode(reader, reader.uint32(), $undefined, _depth + 1);
+                                value = $root.vtctldata.Workflow.ShardStream.decode(reader, reader.uint32(), $undefined, _depth + 1, value);
                                 continue;
                             }
                             reader.skipType(wireType, _depth, tag2);
@@ -166999,7 +166294,7 @@ export const vtctldata = $root.vtctldata = (() => {
                     _depth = 0;
                 if (_depth > $util.recursionLimit)
                     throw $Error("max depth exceeded");
-                if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
+                if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace") && message.keyspace !== "")
                     writer.uint32(/* id 1, wireType 2 =*/10).string(message.keyspace);
                 if (message.shards != null && message.shards.length)
                     for (let i = 0; i < message.shards.length; ++i)
@@ -167317,7 +166612,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 if (message.tablet_controls != null && message.tablet_controls.length)
                     for (let i = 0; i < message.tablet_controls.length; ++i)
                         $root.topodata.Shard.TabletControl.encode(message.tablet_controls[i], writer.uint32(/* id 2, wireType 2 =*/18).fork(), _depth + 1).ldelim();
-                if (message.is_primary_serving != null && $Object.hasOwnProperty.call(message, "is_primary_serving"))
+                if (message.is_primary_serving != null && $Object.hasOwnProperty.call(message, "is_primary_serving") && message.is_primary_serving !== false)
                     writer.uint32(/* id 3, wireType 0 =*/24).bool(message.is_primary_serving);
                 if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                     for (let i = 0; i < message.$unknowns.length; ++i)
@@ -167821,27 +167116,27 @@ export const vtctldata = $root.vtctldata = (() => {
                     _depth = 0;
                 if (_depth > $util.recursionLimit)
                     throw $Error("max depth exceeded");
-                if (message.id != null && $Object.hasOwnProperty.call(message, "id"))
+                if (message.id != null && $Object.hasOwnProperty.call(message, "id") && (typeof message.id === "object" ? message.id.low || message.id.high : message.id !== 0))
                     writer.uint32(/* id 1, wireType 0 =*/8).int64(message.id);
-                if (message.shard != null && $Object.hasOwnProperty.call(message, "shard"))
+                if (message.shard != null && $Object.hasOwnProperty.call(message, "shard") && message.shard !== "")
                     writer.uint32(/* id 2, wireType 2 =*/18).string(message.shard);
                 if (message.tablet != null && $Object.hasOwnProperty.call(message, "tablet"))
                     $root.topodata.TabletAlias.encode(message.tablet, writer.uint32(/* id 3, wireType 2 =*/26).fork(), _depth + 1).ldelim();
                 if (message.binlog_source != null && $Object.hasOwnProperty.call(message, "binlog_source"))
                     $root.binlogdata.BinlogSource.encode(message.binlog_source, writer.uint32(/* id 4, wireType 2 =*/34).fork(), _depth + 1).ldelim();
-                if (message.position != null && $Object.hasOwnProperty.call(message, "position"))
+                if (message.position != null && $Object.hasOwnProperty.call(message, "position") && message.position !== "")
                     writer.uint32(/* id 5, wireType 2 =*/42).string(message.position);
-                if (message.stop_position != null && $Object.hasOwnProperty.call(message, "stop_position"))
+                if (message.stop_position != null && $Object.hasOwnProperty.call(message, "stop_position") && message.stop_position !== "")
                     writer.uint32(/* id 6, wireType 2 =*/50).string(message.stop_position);
-                if (message.state != null && $Object.hasOwnProperty.call(message, "state"))
+                if (message.state != null && $Object.hasOwnProperty.call(message, "state") && message.state !== "")
                     writer.uint32(/* id 7, wireType 2 =*/58).string(message.state);
-                if (message.db_name != null && $Object.hasOwnProperty.call(message, "db_name"))
+                if (message.db_name != null && $Object.hasOwnProperty.call(message, "db_name") && message.db_name !== "")
                     writer.uint32(/* id 8, wireType 2 =*/66).string(message.db_name);
                 if (message.transaction_timestamp != null && $Object.hasOwnProperty.call(message, "transaction_timestamp"))
                     $root.vttime.Time.encode(message.transaction_timestamp, writer.uint32(/* id 9, wireType 2 =*/74).fork(), _depth + 1).ldelim();
                 if (message.time_updated != null && $Object.hasOwnProperty.call(message, "time_updated"))
                     $root.vttime.Time.encode(message.time_updated, writer.uint32(/* id 10, wireType 2 =*/82).fork(), _depth + 1).ldelim();
-                if (message.message != null && $Object.hasOwnProperty.call(message, "message"))
+                if (message.message != null && $Object.hasOwnProperty.call(message, "message") && message.message !== "")
                     writer.uint32(/* id 11, wireType 2 =*/90).string(message.message);
                 if (message.copy_states != null && message.copy_states.length)
                     for (let i = 0; i < message.copy_states.length; ++i)
@@ -167849,22 +167144,18 @@ export const vtctldata = $root.vtctldata = (() => {
                 if (message.logs != null && message.logs.length)
                     for (let i = 0; i < message.logs.length; ++i)
                         $root.vtctldata.Workflow.Stream.Log.encode(message.logs[i], writer.uint32(/* id 13, wireType 2 =*/106).fork(), _depth + 1).ldelim();
-                if (message.log_fetch_error != null && $Object.hasOwnProperty.call(message, "log_fetch_error"))
+                if (message.log_fetch_error != null && $Object.hasOwnProperty.call(message, "log_fetch_error") && message.log_fetch_error !== "")
                     writer.uint32(/* id 14, wireType 2 =*/114).string(message.log_fetch_error);
                 if (message.tags != null && message.tags.length)
                     for (let i = 0; i < message.tags.length; ++i)
                         writer.uint32(/* id 15, wireType 2 =*/122).string(message.tags[i]);
-                if (message.rows_copied != null && $Object.hasOwnProperty.call(message, "rows_copied"))
+                if (message.rows_copied != null && $Object.hasOwnProperty.call(message, "rows_copied") && (typeof message.rows_copied === "object" ? message.rows_copied.low || message.rows_copied.high : message.rows_copied !== 0))
                     writer.uint32(/* id 16, wireType 0 =*/128).int64(message.rows_copied);
                 if (message.throttler_status != null && $Object.hasOwnProperty.call(message, "throttler_status"))
                     $root.vtctldata.Workflow.Stream.ThrottlerStatus.encode(message.throttler_status, writer.uint32(/* id 17, wireType 2 =*/138).fork(), _depth + 1).ldelim();
-                if (message.tablet_types != null && message.tablet_types.length) {
-                    writer.uint32(/* id 18, wireType 2 =*/146).fork();
-                    for (let i = 0; i < message.tablet_types.length; ++i)
-                        writer.int32(message.tablet_types[i]);
-                    writer.ldelim();
-                }
-                if (message.tablet_selection_preference != null && $Object.hasOwnProperty.call(message, "tablet_selection_preference"))
+                if (message.tablet_types != null && message.tablet_types.length)
+                    writer.uint32(/* id 18, wireType 2 =*/146).int32s(message.tablet_types);
+                if (message.tablet_selection_preference != null && $Object.hasOwnProperty.call(message, "tablet_selection_preference") && message.tablet_selection_preference !== 0)
                     writer.uint32(/* id 19, wireType 0 =*/152).int32(message.tablet_selection_preference);
                 if (message.cells != null && message.cells.length)
                     for (let i = 0; i < message.cells.length; ++i)
@@ -168055,9 +167346,7 @@ export const vtctldata = $root.vtctldata = (() => {
                             if (wireType === 2) {
                                 if (!(message.tablet_types && message.tablet_types.length))
                                     message.tablet_types = [];
-                                let end2 = reader.uint32() + reader.pos;
-                                while (reader.pos < end2)
-                                    message.tablet_types.push(reader.int32());
+                                reader.int32s(message.tablet_types);
                                 continue;
                             }
                             if (wireType !== 0)
@@ -168208,32 +167497,12 @@ export const vtctldata = $root.vtctldata = (() => {
                     if (!$Array.isArray(message.tablet_types))
                         return "tablet_types: array expected";
                     for (let i = 0; i < message.tablet_types.length; ++i)
-                        switch (message.tablet_types[i]) {
-                        default:
+                        if (typeof message.tablet_types[i] !== "number" || (message.tablet_types[i] | 0) !== message.tablet_types[i])
                             return "tablet_types: enum value[] expected";
-                        case 0:
-                        case 1:
-                        case 1:
-                        case 2:
-                        case 3:
-                        case 3:
-                        case 4:
-                        case 5:
-                        case 6:
-                        case 7:
-                        case 8:
-                            break;
-                        }
                 }
                 if (message.tablet_selection_preference != null && $Object.hasOwnProperty.call(message, "tablet_selection_preference"))
-                    switch (message.tablet_selection_preference) {
-                    default:
+                    if (typeof message.tablet_selection_preference !== "number" || (message.tablet_selection_preference | 0) !== message.tablet_selection_preference)
                         return "tablet_selection_preference: enum value expected";
-                    case 0:
-                    case 1:
-                    case 3:
-                        break;
-                    }
                 if (message.cells != null && $Object.hasOwnProperty.call(message, "cells")) {
                     if (!$Array.isArray(message.cells))
                         return "cells: array expected";
@@ -168358,68 +167627,60 @@ export const vtctldata = $root.vtctldata = (() => {
                 if (object.tablet_types) {
                     if (!$Array.isArray(object.tablet_types))
                         throw $TypeError(".vtctldata.Workflow.Stream.tablet_types: array expected");
-                    message.tablet_types = $Array(object.tablet_types.length);
+                    message.tablet_types = [];
                     for (let i = 0; i < object.tablet_types.length; ++i)
                         switch (object.tablet_types[i]) {
-                        default:
-                            if (typeof object.tablet_types[i] === "number") {
-                                message.tablet_types[i] = object.tablet_types[i];
-                                break;
-                            }
                         case "UNKNOWN":
                         case 0:
-                            message.tablet_types[i] = 0;
+                            message.tablet_types[message.tablet_types.length] = 0;
                             break;
                         case "PRIMARY":
                         case 1:
-                            message.tablet_types[i] = 1;
+                            message.tablet_types[message.tablet_types.length] = 1;
                             break;
                         case "MASTER":
                         case 1:
-                            message.tablet_types[i] = 1;
+                            message.tablet_types[message.tablet_types.length] = 1;
                             break;
                         case "REPLICA":
                         case 2:
-                            message.tablet_types[i] = 2;
+                            message.tablet_types[message.tablet_types.length] = 2;
                             break;
                         case "RDONLY":
                         case 3:
-                            message.tablet_types[i] = 3;
+                            message.tablet_types[message.tablet_types.length] = 3;
                             break;
                         case "BATCH":
                         case 3:
-                            message.tablet_types[i] = 3;
+                            message.tablet_types[message.tablet_types.length] = 3;
                             break;
                         case "SPARE":
                         case 4:
-                            message.tablet_types[i] = 4;
+                            message.tablet_types[message.tablet_types.length] = 4;
                             break;
                         case "EXPERIMENTAL":
                         case 5:
-                            message.tablet_types[i] = 5;
+                            message.tablet_types[message.tablet_types.length] = 5;
                             break;
                         case "BACKUP":
                         case 6:
-                            message.tablet_types[i] = 6;
+                            message.tablet_types[message.tablet_types.length] = 6;
                             break;
                         case "RESTORE":
                         case 7:
-                            message.tablet_types[i] = 7;
+                            message.tablet_types[message.tablet_types.length] = 7;
                             break;
                         case "DRAINED":
                         case 8:
-                            message.tablet_types[i] = 8;
+                            message.tablet_types[message.tablet_types.length] = 8;
                             break;
+                        default:
+                            if (typeof object.tablet_types[i] === "number" && (object.tablet_types[i] | 0) === object.tablet_types[i])
+                                message.tablet_types[message.tablet_types.length] = object.tablet_types[i];
                         }
                 }
                 if (object.tablet_selection_preference !== 0 && (typeof object.tablet_selection_preference !== "string" || $root.tabletmanagerdata.TabletSelectionPreference[object.tablet_selection_preference] !== 0))
                     switch (object.tablet_selection_preference) {
-                    default:
-                        if (typeof object.tablet_selection_preference === "number") {
-                            message.tablet_selection_preference = object.tablet_selection_preference;
-                            break;
-                        }
-                        break;
                     case "ANY":
                     case 0:
                         message.tablet_selection_preference = 0;
@@ -168432,6 +167693,9 @@ export const vtctldata = $root.vtctldata = (() => {
                     case 3:
                         message.tablet_selection_preference = 3;
                         break;
+                    default:
+                        if (typeof object.tablet_selection_preference === "number" && (object.tablet_selection_preference | 0) === object.tablet_selection_preference)
+                            message.tablet_selection_preference = object.tablet_selection_preference;
                     }
                 if (object.cells) {
                     if (!$Array.isArray(object.cells))
@@ -168680,11 +167944,11 @@ export const vtctldata = $root.vtctldata = (() => {
                         _depth = 0;
                     if (_depth > $util.recursionLimit)
                         throw $Error("max depth exceeded");
-                    if (message.table != null && $Object.hasOwnProperty.call(message, "table"))
+                    if (message.table != null && $Object.hasOwnProperty.call(message, "table") && message.table !== "")
                         writer.uint32(/* id 1, wireType 2 =*/10).string(message.table);
-                    if (message.last_pk != null && $Object.hasOwnProperty.call(message, "last_pk"))
+                    if (message.last_pk != null && $Object.hasOwnProperty.call(message, "last_pk") && message.last_pk !== "")
                         writer.uint32(/* id 2, wireType 2 =*/18).string(message.last_pk);
-                    if (message.stream_id != null && $Object.hasOwnProperty.call(message, "stream_id"))
+                    if (message.stream_id != null && $Object.hasOwnProperty.call(message, "stream_id") && (typeof message.stream_id === "object" ? message.stream_id.low || message.stream_id.high : message.stream_id !== 0))
                         writer.uint32(/* id 3, wireType 0 =*/24).int64(message.stream_id);
                     if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                         for (let i = 0; i < message.$unknowns.length; ++i)
@@ -169060,21 +168324,21 @@ export const vtctldata = $root.vtctldata = (() => {
                         _depth = 0;
                     if (_depth > $util.recursionLimit)
                         throw $Error("max depth exceeded");
-                    if (message.id != null && $Object.hasOwnProperty.call(message, "id"))
+                    if (message.id != null && $Object.hasOwnProperty.call(message, "id") && (typeof message.id === "object" ? message.id.low || message.id.high : message.id !== 0))
                         writer.uint32(/* id 1, wireType 0 =*/8).int64(message.id);
-                    if (message.stream_id != null && $Object.hasOwnProperty.call(message, "stream_id"))
+                    if (message.stream_id != null && $Object.hasOwnProperty.call(message, "stream_id") && (typeof message.stream_id === "object" ? message.stream_id.low || message.stream_id.high : message.stream_id !== 0))
                         writer.uint32(/* id 2, wireType 0 =*/16).int64(message.stream_id);
-                    if (message.type != null && $Object.hasOwnProperty.call(message, "type"))
+                    if (message.type != null && $Object.hasOwnProperty.call(message, "type") && message.type !== "")
                         writer.uint32(/* id 3, wireType 2 =*/26).string(message.type);
-                    if (message.state != null && $Object.hasOwnProperty.call(message, "state"))
+                    if (message.state != null && $Object.hasOwnProperty.call(message, "state") && message.state !== "")
                         writer.uint32(/* id 4, wireType 2 =*/34).string(message.state);
                     if (message.created_at != null && $Object.hasOwnProperty.call(message, "created_at"))
                         $root.vttime.Time.encode(message.created_at, writer.uint32(/* id 5, wireType 2 =*/42).fork(), _depth + 1).ldelim();
                     if (message.updated_at != null && $Object.hasOwnProperty.call(message, "updated_at"))
                         $root.vttime.Time.encode(message.updated_at, writer.uint32(/* id 6, wireType 2 =*/50).fork(), _depth + 1).ldelim();
-                    if (message.message != null && $Object.hasOwnProperty.call(message, "message"))
+                    if (message.message != null && $Object.hasOwnProperty.call(message, "message") && message.message !== "")
                         writer.uint32(/* id 7, wireType 2 =*/58).string(message.message);
-                    if (message.count != null && $Object.hasOwnProperty.call(message, "count"))
+                    if (message.count != null && $Object.hasOwnProperty.call(message, "count") && (typeof message.count === "object" ? message.count.low || message.count.high : message.count !== 0))
                         writer.uint32(/* id 8, wireType 0 =*/64).int64(message.count);
                     if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                         for (let i = 0; i < message.$unknowns.length; ++i)
@@ -169520,7 +168784,7 @@ export const vtctldata = $root.vtctldata = (() => {
                         _depth = 0;
                     if (_depth > $util.recursionLimit)
                         throw $Error("max depth exceeded");
-                    if (message.component_throttled != null && $Object.hasOwnProperty.call(message, "component_throttled"))
+                    if (message.component_throttled != null && $Object.hasOwnProperty.call(message, "component_throttled") && message.component_throttled !== "")
                         writer.uint32(/* id 1, wireType 2 =*/10).string(message.component_throttled);
                     if (message.time_throttled != null && $Object.hasOwnProperty.call(message, "time_throttled"))
                         $root.vttime.Time.encode(message.time_throttled, writer.uint32(/* id 2, wireType 2 =*/18).fork(), _depth + 1).ldelim();
@@ -169817,7 +169081,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.name != null && $Object.hasOwnProperty.call(message, "name"))
+            if (message.name != null && $Object.hasOwnProperty.call(message, "name") && message.name !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.name);
             if (message.cell_info != null && $Object.hasOwnProperty.call(message, "cell_info"))
                 $root.topodata.CellInfo.encode(message.cell_info, writer.uint32(/* id 2, wireType 2 =*/18).fork(), _depth + 1).ldelim();
@@ -170328,7 +169592,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.name != null && $Object.hasOwnProperty.call(message, "name"))
+            if (message.name != null && $Object.hasOwnProperty.call(message, "name") && message.name !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.name);
             if (message.cells != null && message.cells.length)
                 for (let i = 0; i < message.cells.length; ++i)
@@ -170860,7 +170124,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 throw $Error("max depth exceeded");
             if (message.keyspace_routing_rules != null && $Object.hasOwnProperty.call(message, "keyspace_routing_rules"))
                 $root.vschema.KeyspaceRoutingRules.encode(message.keyspace_routing_rules, writer.uint32(/* id 1, wireType 2 =*/10).fork(), _depth + 1).ldelim();
-            if (message.skip_rebuild != null && $Object.hasOwnProperty.call(message, "skip_rebuild"))
+            if (message.skip_rebuild != null && $Object.hasOwnProperty.call(message, "skip_rebuild") && message.skip_rebuild !== false)
                 writer.uint32(/* id 2, wireType 0 =*/16).bool(message.skip_rebuild);
             if (message.rebuild_cells != null && message.rebuild_cells.length)
                 for (let i = 0; i < message.rebuild_cells.length; ++i)
@@ -171454,7 +170718,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 throw $Error("max depth exceeded");
             if (message.routing_rules != null && $Object.hasOwnProperty.call(message, "routing_rules"))
                 $root.vschema.RoutingRules.encode(message.routing_rules, writer.uint32(/* id 1, wireType 2 =*/10).fork(), _depth + 1).ldelim();
-            if (message.skip_rebuild != null && $Object.hasOwnProperty.call(message, "skip_rebuild"))
+            if (message.skip_rebuild != null && $Object.hasOwnProperty.call(message, "skip_rebuild") && message.skip_rebuild !== false)
                 writer.uint32(/* id 2, wireType 0 =*/16).bool(message.skip_rebuild);
             if (message.rebuild_cells != null && message.rebuild_cells.length)
                 for (let i = 0; i < message.rebuild_cells.length; ++i)
@@ -172006,7 +171270,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 throw $Error("max depth exceeded");
             if (message.shard_routing_rules != null && $Object.hasOwnProperty.call(message, "shard_routing_rules"))
                 $root.vschema.ShardRoutingRules.encode(message.shard_routing_rules, writer.uint32(/* id 1, wireType 2 =*/10).fork(), _depth + 1).ldelim();
-            if (message.skip_rebuild != null && $Object.hasOwnProperty.call(message, "skip_rebuild"))
+            if (message.skip_rebuild != null && $Object.hasOwnProperty.call(message, "skip_rebuild") && message.skip_rebuild !== false)
                 writer.uint32(/* id 2, wireType 0 =*/16).bool(message.skip_rebuild);
             if (message.rebuild_cells != null && message.rebuild_cells.length)
                 for (let i = 0; i < message.rebuild_cells.length; ++i)
@@ -172602,23 +171866,23 @@ export const vtctldata = $root.vtctldata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
+            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace") && message.keyspace !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.keyspace);
             if (message.sql != null && message.sql.length)
                 for (let i = 0; i < message.sql.length; ++i)
                     writer.uint32(/* id 3, wireType 2 =*/26).string(message.sql[i]);
-            if (message.ddl_strategy != null && $Object.hasOwnProperty.call(message, "ddl_strategy"))
+            if (message.ddl_strategy != null && $Object.hasOwnProperty.call(message, "ddl_strategy") && message.ddl_strategy !== "")
                 writer.uint32(/* id 4, wireType 2 =*/34).string(message.ddl_strategy);
             if (message.uuid_list != null && message.uuid_list.length)
                 for (let i = 0; i < message.uuid_list.length; ++i)
                     writer.uint32(/* id 5, wireType 2 =*/42).string(message.uuid_list[i]);
-            if (message.migration_context != null && $Object.hasOwnProperty.call(message, "migration_context"))
+            if (message.migration_context != null && $Object.hasOwnProperty.call(message, "migration_context") && message.migration_context !== "")
                 writer.uint32(/* id 6, wireType 2 =*/50).string(message.migration_context);
             if (message.wait_replicas_timeout != null && $Object.hasOwnProperty.call(message, "wait_replicas_timeout"))
                 $root.vttime.Duration.encode(message.wait_replicas_timeout, writer.uint32(/* id 7, wireType 2 =*/58).fork(), _depth + 1).ldelim();
             if (message.caller_id != null && $Object.hasOwnProperty.call(message, "caller_id"))
                 $root.vtrpc.CallerID.encode(message.caller_id, writer.uint32(/* id 9, wireType 2 =*/74).fork(), _depth + 1).ldelim();
-            if (message.batch_size != null && $Object.hasOwnProperty.call(message, "batch_size"))
+            if (message.batch_size != null && $Object.hasOwnProperty.call(message, "batch_size") && (typeof message.batch_size === "object" ? message.batch_size.low || message.batch_size.high : message.batch_size !== 0))
                 writer.uint32(/* id 10, wireType 0 =*/80).int64(message.batch_size);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -173456,20 +172720,20 @@ export const vtctldata = $root.vtctldata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
+            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace") && message.keyspace !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.keyspace);
-            if (message.skip_rebuild != null && $Object.hasOwnProperty.call(message, "skip_rebuild"))
+            if (message.skip_rebuild != null && $Object.hasOwnProperty.call(message, "skip_rebuild") && message.skip_rebuild !== false)
                 writer.uint32(/* id 2, wireType 0 =*/16).bool(message.skip_rebuild);
-            if (message.dry_run != null && $Object.hasOwnProperty.call(message, "dry_run"))
+            if (message.dry_run != null && $Object.hasOwnProperty.call(message, "dry_run") && message.dry_run !== false)
                 writer.uint32(/* id 3, wireType 0 =*/24).bool(message.dry_run);
             if (message.cells != null && message.cells.length)
                 for (let i = 0; i < message.cells.length; ++i)
                     writer.uint32(/* id 4, wireType 2 =*/34).string(message.cells[i]);
             if (message.v_schema != null && $Object.hasOwnProperty.call(message, "v_schema"))
                 $root.vschema.Keyspace.encode(message.v_schema, writer.uint32(/* id 5, wireType 2 =*/42).fork(), _depth + 1).ldelim();
-            if (message.sql != null && $Object.hasOwnProperty.call(message, "sql"))
+            if (message.sql != null && $Object.hasOwnProperty.call(message, "sql") && message.sql !== "")
                 writer.uint32(/* id 6, wireType 2 =*/50).string(message.sql);
-            if (message.strict != null && $Object.hasOwnProperty.call(message, "strict"))
+            if (message.strict != null && $Object.hasOwnProperty.call(message, "strict") && message.strict !== false)
                 writer.uint32(/* id 7, wireType 0 =*/56).bool(message.strict);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -173940,7 +173204,7 @@ export const vtctldata = $root.vtctldata = (() => {
                             case 2:
                                 if (wireType !== 2)
                                     break;
-                                value = $root.vtctldata.ApplyVSchemaResponse.ParamList.decode(reader, reader.uint32(), $undefined, _depth + 1);
+                                value = $root.vtctldata.ApplyVSchemaResponse.ParamList.decode(reader, reader.uint32(), $undefined, _depth + 1, value);
                                 continue;
                             }
                             reader.skipType(wireType, _depth, tag2);
@@ -174535,13 +173799,13 @@ export const vtctldata = $root.vtctldata = (() => {
                 throw $Error("max depth exceeded");
             if (message.tablet_alias != null && $Object.hasOwnProperty.call(message, "tablet_alias"))
                 $root.topodata.TabletAlias.encode(message.tablet_alias, writer.uint32(/* id 1, wireType 2 =*/10).fork(), _depth + 1).ldelim();
-            if (message.allow_primary != null && $Object.hasOwnProperty.call(message, "allow_primary"))
+            if (message.allow_primary != null && $Object.hasOwnProperty.call(message, "allow_primary") && message.allow_primary !== false)
                 writer.uint32(/* id 2, wireType 0 =*/16).bool(message.allow_primary);
-            if (message.concurrency != null && $Object.hasOwnProperty.call(message, "concurrency"))
+            if (message.concurrency != null && $Object.hasOwnProperty.call(message, "concurrency") && message.concurrency !== 0)
                 writer.uint32(/* id 3, wireType 0 =*/24).int32(message.concurrency);
-            if (message.incremental_from_pos != null && $Object.hasOwnProperty.call(message, "incremental_from_pos"))
+            if (message.incremental_from_pos != null && $Object.hasOwnProperty.call(message, "incremental_from_pos") && message.incremental_from_pos !== "")
                 writer.uint32(/* id 4, wireType 2 =*/34).string(message.incremental_from_pos);
-            if (message.upgrade_safe != null && $Object.hasOwnProperty.call(message, "upgrade_safe"))
+            if (message.upgrade_safe != null && $Object.hasOwnProperty.call(message, "upgrade_safe") && message.upgrade_safe !== false)
                 writer.uint32(/* id 5, wireType 0 =*/40).bool(message.upgrade_safe);
             if (message.backup_engine != null && $Object.hasOwnProperty.call(message, "backup_engine"))
                 writer.uint32(/* id 6, wireType 2 =*/50).string(message.backup_engine);
@@ -174965,9 +174229,9 @@ export const vtctldata = $root.vtctldata = (() => {
                 throw $Error("max depth exceeded");
             if (message.tablet_alias != null && $Object.hasOwnProperty.call(message, "tablet_alias"))
                 $root.topodata.TabletAlias.encode(message.tablet_alias, writer.uint32(/* id 1, wireType 2 =*/10).fork(), _depth + 1).ldelim();
-            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
+            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace") && message.keyspace !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.keyspace);
-            if (message.shard != null && $Object.hasOwnProperty.call(message, "shard"))
+            if (message.shard != null && $Object.hasOwnProperty.call(message, "shard") && message.shard !== "")
                 writer.uint32(/* id 3, wireType 2 =*/26).string(message.shard);
             if (message.event != null && $Object.hasOwnProperty.call(message, "event"))
                 $root.logutil.Event.encode(message.event, writer.uint32(/* id 4, wireType 2 =*/34).fork(), _depth + 1).ldelim();
@@ -175349,17 +174613,17 @@ export const vtctldata = $root.vtctldata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
+            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace") && message.keyspace !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.keyspace);
-            if (message.shard != null && $Object.hasOwnProperty.call(message, "shard"))
+            if (message.shard != null && $Object.hasOwnProperty.call(message, "shard") && message.shard !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.shard);
-            if (message.allow_primary != null && $Object.hasOwnProperty.call(message, "allow_primary"))
+            if (message.allow_primary != null && $Object.hasOwnProperty.call(message, "allow_primary") && message.allow_primary !== false)
                 writer.uint32(/* id 3, wireType 0 =*/24).bool(message.allow_primary);
-            if (message.concurrency != null && $Object.hasOwnProperty.call(message, "concurrency"))
+            if (message.concurrency != null && $Object.hasOwnProperty.call(message, "concurrency") && message.concurrency !== 0)
                 writer.uint32(/* id 4, wireType 0 =*/32).int32(message.concurrency);
-            if (message.upgrade_safe != null && $Object.hasOwnProperty.call(message, "upgrade_safe"))
+            if (message.upgrade_safe != null && $Object.hasOwnProperty.call(message, "upgrade_safe") && message.upgrade_safe !== false)
                 writer.uint32(/* id 5, wireType 0 =*/40).bool(message.upgrade_safe);
-            if (message.incremental_from_pos != null && $Object.hasOwnProperty.call(message, "incremental_from_pos"))
+            if (message.incremental_from_pos != null && $Object.hasOwnProperty.call(message, "incremental_from_pos") && message.incremental_from_pos !== "")
                 writer.uint32(/* id 6, wireType 2 =*/50).string(message.incremental_from_pos);
             if (message.mysql_shutdown_timeout != null && $Object.hasOwnProperty.call(message, "mysql_shutdown_timeout"))
                 $root.vttime.Duration.encode(message.mysql_shutdown_timeout, writer.uint32(/* id 7, wireType 2 =*/58).fork(), _depth + 1).ldelim();
@@ -175770,9 +175034,9 @@ export const vtctldata = $root.vtctldata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
+            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace") && message.keyspace !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.keyspace);
-            if (message.uuid != null && $Object.hasOwnProperty.call(message, "uuid"))
+            if (message.uuid != null && $Object.hasOwnProperty.call(message, "uuid") && message.uuid !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.uuid);
             if (message.caller_id != null && $Object.hasOwnProperty.call(message, "caller_id"))
                 $root.vtrpc.CallerID.encode(message.caller_id, writer.uint32(/* id 3, wireType 2 =*/26).fork(), _depth + 1).ldelim();
@@ -176410,7 +175674,7 @@ export const vtctldata = $root.vtctldata = (() => {
             if (message.tags != null && $Object.hasOwnProperty.call(message, "tags"))
                 for (let keys = $Object.keys(message.tags), i = 0; i < keys.length; ++i)
                     writer.uint32(/* id 2, wireType 2 =*/18).fork().uint32(/* id 1, wireType 2 =*/10).string(keys[i]).uint32(/* id 2, wireType 2 =*/18).string(message.tags[keys[i]]).ldelim();
-            if (message.replace != null && $Object.hasOwnProperty.call(message, "replace"))
+            if (message.replace != null && $Object.hasOwnProperty.call(message, "replace") && message.replace !== false)
                 writer.uint32(/* id 3, wireType 0 =*/24).bool(message.replace);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -177142,9 +176406,9 @@ export const vtctldata = $root.vtctldata = (() => {
                 throw $Error("max depth exceeded");
             if (message.tablet_alias != null && $Object.hasOwnProperty.call(message, "tablet_alias"))
                 $root.topodata.TabletAlias.encode(message.tablet_alias, writer.uint32(/* id 1, wireType 2 =*/10).fork(), _depth + 1).ldelim();
-            if (message.db_type != null && $Object.hasOwnProperty.call(message, "db_type"))
+            if (message.db_type != null && $Object.hasOwnProperty.call(message, "db_type") && message.db_type !== 0)
                 writer.uint32(/* id 2, wireType 0 =*/16).int32(message.db_type);
-            if (message.dry_run != null && $Object.hasOwnProperty.call(message, "dry_run"))
+            if (message.dry_run != null && $Object.hasOwnProperty.call(message, "dry_run") && message.dry_run !== false)
                 writer.uint32(/* id 3, wireType 0 =*/24).bool(message.dry_run);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -177266,22 +176530,8 @@ export const vtctldata = $root.vtctldata = (() => {
                     return "tablet_alias." + error;
             }
             if (message.db_type != null && $Object.hasOwnProperty.call(message, "db_type"))
-                switch (message.db_type) {
-                default:
+                if (typeof message.db_type !== "number" || (message.db_type | 0) !== message.db_type)
                     return "db_type: enum value expected";
-                case 0:
-                case 1:
-                case 1:
-                case 2:
-                case 3:
-                case 3:
-                case 4:
-                case 5:
-                case 6:
-                case 7:
-                case 8:
-                    break;
-                }
             if (message.dry_run != null && $Object.hasOwnProperty.call(message, "dry_run"))
                 if (typeof message.dry_run !== "boolean")
                     return "dry_run: boolean expected";
@@ -177313,12 +176563,6 @@ export const vtctldata = $root.vtctldata = (() => {
             }
             if (object.db_type !== 0 && (typeof object.db_type !== "string" || $root.topodata.TabletType[object.db_type] !== 0))
                 switch (object.db_type) {
-                default:
-                    if (typeof object.db_type === "number") {
-                        message.db_type = object.db_type;
-                        break;
-                    }
-                    break;
                 case "UNKNOWN":
                 case 0:
                     message.db_type = 0;
@@ -177363,6 +176607,9 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 8:
                     message.db_type = 8;
                     break;
+                default:
+                    if (typeof object.db_type === "number" && (object.db_type | 0) === object.db_type)
+                        message.db_type = object.db_type;
                 }
             if (object.dry_run != null)
                 if (object.dry_run)
@@ -177528,7 +176775,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 $root.topodata.Tablet.encode(message.before_tablet, writer.uint32(/* id 1, wireType 2 =*/10).fork(), _depth + 1).ldelim();
             if (message.after_tablet != null && $Object.hasOwnProperty.call(message, "after_tablet"))
                 $root.topodata.Tablet.encode(message.after_tablet, writer.uint32(/* id 2, wireType 2 =*/18).fork(), _depth + 1).ldelim();
-            if (message.was_dry_run != null && $Object.hasOwnProperty.call(message, "was_dry_run"))
+            if (message.was_dry_run != null && $Object.hasOwnProperty.call(message, "was_dry_run") && message.was_dry_run !== false)
                 writer.uint32(/* id 3, wireType 0 =*/24).bool(message.was_dry_run);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -177865,13 +177112,13 @@ export const vtctldata = $root.vtctldata = (() => {
                 throw $Error("max depth exceeded");
             if (message.tablet_alias != null && $Object.hasOwnProperty.call(message, "tablet_alias"))
                 $root.topodata.TabletAlias.encode(message.tablet_alias, writer.uint32(/* id 1, wireType 2 =*/10).fork(), _depth + 1).ldelim();
-            if (message.app_name != null && $Object.hasOwnProperty.call(message, "app_name"))
+            if (message.app_name != null && $Object.hasOwnProperty.call(message, "app_name") && message.app_name !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.app_name);
-            if (message.scope != null && $Object.hasOwnProperty.call(message, "scope"))
+            if (message.scope != null && $Object.hasOwnProperty.call(message, "scope") && message.scope !== "")
                 writer.uint32(/* id 3, wireType 2 =*/26).string(message.scope);
-            if (message.skip_request_heartbeats != null && $Object.hasOwnProperty.call(message, "skip_request_heartbeats"))
+            if (message.skip_request_heartbeats != null && $Object.hasOwnProperty.call(message, "skip_request_heartbeats") && message.skip_request_heartbeats !== false)
                 writer.uint32(/* id 4, wireType 0 =*/32).bool(message.skip_request_heartbeats);
-            if (message.ok_if_not_exists != null && $Object.hasOwnProperty.call(message, "ok_if_not_exists"))
+            if (message.ok_if_not_exists != null && $Object.hasOwnProperty.call(message, "ok_if_not_exists") && message.ok_if_not_exists !== false)
                 writer.uint32(/* id 5, wireType 0 =*/40).bool(message.ok_if_not_exists);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -178515,9 +177762,9 @@ export const vtctldata = $root.vtctldata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
+            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace") && message.keyspace !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.keyspace);
-            if (message.uuid != null && $Object.hasOwnProperty.call(message, "uuid"))
+            if (message.uuid != null && $Object.hasOwnProperty.call(message, "uuid") && message.uuid !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.uuid);
             if (message.caller_id != null && $Object.hasOwnProperty.call(message, "caller_id"))
                 $root.vtrpc.CallerID.encode(message.caller_id, writer.uint32(/* id 3, wireType 2 =*/26).fork(), _depth + 1).ldelim();
@@ -179149,9 +178396,9 @@ export const vtctldata = $root.vtctldata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
+            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace") && message.keyspace !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.keyspace);
-            if (message.uuid != null && $Object.hasOwnProperty.call(message, "uuid"))
+            if (message.uuid != null && $Object.hasOwnProperty.call(message, "uuid") && message.uuid !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.uuid);
             if (message.caller_id != null && $Object.hasOwnProperty.call(message, "caller_id"))
                 $root.vtrpc.CallerID.encode(message.caller_id, writer.uint32(/* id 3, wireType 2 =*/26).fork(), _depth + 1).ldelim();
@@ -179838,15 +179085,15 @@ export const vtctldata = $root.vtctldata = (() => {
             if (message.exclude_tables != null && message.exclude_tables.length)
                 for (let i = 0; i < message.exclude_tables.length; ++i)
                     writer.uint32(/* id 3, wireType 2 =*/26).string(message.exclude_tables[i]);
-            if (message.include_views != null && $Object.hasOwnProperty.call(message, "include_views"))
+            if (message.include_views != null && $Object.hasOwnProperty.call(message, "include_views") && message.include_views !== false)
                 writer.uint32(/* id 4, wireType 0 =*/32).bool(message.include_views);
-            if (message.skip_verify != null && $Object.hasOwnProperty.call(message, "skip_verify"))
+            if (message.skip_verify != null && $Object.hasOwnProperty.call(message, "skip_verify") && message.skip_verify !== false)
                 writer.uint32(/* id 5, wireType 0 =*/40).bool(message.skip_verify);
             if (message.wait_replicas_timeout != null && $Object.hasOwnProperty.call(message, "wait_replicas_timeout"))
                 $root.vttime.Duration.encode(message.wait_replicas_timeout, writer.uint32(/* id 6, wireType 2 =*/50).fork(), _depth + 1).ldelim();
-            if (message.destination_keyspace != null && $Object.hasOwnProperty.call(message, "destination_keyspace"))
+            if (message.destination_keyspace != null && $Object.hasOwnProperty.call(message, "destination_keyspace") && message.destination_keyspace !== "")
                 writer.uint32(/* id 7, wireType 2 =*/58).string(message.destination_keyspace);
-            if (message.destination_shard != null && $Object.hasOwnProperty.call(message, "destination_shard"))
+            if (message.destination_shard != null && $Object.hasOwnProperty.call(message, "destination_shard") && message.destination_shard !== "")
                 writer.uint32(/* id 8, wireType 2 =*/66).string(message.destination_shard);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -180539,21 +179786,21 @@ export const vtctldata = $root.vtctldata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.name != null && $Object.hasOwnProperty.call(message, "name"))
+            if (message.name != null && $Object.hasOwnProperty.call(message, "name") && message.name !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.name);
-            if (message.force != null && $Object.hasOwnProperty.call(message, "force"))
+            if (message.force != null && $Object.hasOwnProperty.call(message, "force") && message.force !== false)
                 writer.uint32(/* id 2, wireType 0 =*/16).bool(message.force);
-            if (message.allow_empty_v_schema != null && $Object.hasOwnProperty.call(message, "allow_empty_v_schema"))
+            if (message.allow_empty_v_schema != null && $Object.hasOwnProperty.call(message, "allow_empty_v_schema") && message.allow_empty_v_schema !== false)
                 writer.uint32(/* id 3, wireType 0 =*/24).bool(message.allow_empty_v_schema);
-            if (message.type != null && $Object.hasOwnProperty.call(message, "type"))
+            if (message.type != null && $Object.hasOwnProperty.call(message, "type") && message.type !== 0)
                 writer.uint32(/* id 7, wireType 0 =*/56).int32(message.type);
-            if (message.base_keyspace != null && $Object.hasOwnProperty.call(message, "base_keyspace"))
+            if (message.base_keyspace != null && $Object.hasOwnProperty.call(message, "base_keyspace") && message.base_keyspace !== "")
                 writer.uint32(/* id 8, wireType 2 =*/66).string(message.base_keyspace);
             if (message.snapshot_time != null && $Object.hasOwnProperty.call(message, "snapshot_time"))
                 $root.vttime.Time.encode(message.snapshot_time, writer.uint32(/* id 9, wireType 2 =*/74).fork(), _depth + 1).ldelim();
-            if (message.durability_policy != null && $Object.hasOwnProperty.call(message, "durability_policy"))
+            if (message.durability_policy != null && $Object.hasOwnProperty.call(message, "durability_policy") && message.durability_policy !== "")
                 writer.uint32(/* id 10, wireType 2 =*/82).string(message.durability_policy);
-            if (message.sidecar_db_name != null && $Object.hasOwnProperty.call(message, "sidecar_db_name"))
+            if (message.sidecar_db_name != null && $Object.hasOwnProperty.call(message, "sidecar_db_name") && message.sidecar_db_name !== "")
                 writer.uint32(/* id 11, wireType 2 =*/90).string(message.sidecar_db_name);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -180724,13 +179971,8 @@ export const vtctldata = $root.vtctldata = (() => {
                 if (typeof message.allow_empty_v_schema !== "boolean")
                     return "allow_empty_v_schema: boolean expected";
             if (message.type != null && $Object.hasOwnProperty.call(message, "type"))
-                switch (message.type) {
-                default:
+                if (typeof message.type !== "number" || (message.type | 0) !== message.type)
                     return "type: enum value expected";
-                case 0:
-                case 1:
-                    break;
-                }
             if (message.base_keyspace != null && $Object.hasOwnProperty.call(message, "base_keyspace"))
                 if (!$util.isString(message.base_keyspace))
                     return "base_keyspace: string expected";
@@ -180777,12 +180019,6 @@ export const vtctldata = $root.vtctldata = (() => {
                     message.allow_empty_v_schema = $Boolean(object.allow_empty_v_schema);
             if (object.type !== 0 && (typeof object.type !== "string" || $root.topodata.KeyspaceType[object.type] !== 0))
                 switch (object.type) {
-                default:
-                    if (typeof object.type === "number") {
-                        message.type = object.type;
-                        break;
-                    }
-                    break;
                 case "NORMAL":
                 case 0:
                     message.type = 0;
@@ -180791,6 +180027,9 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 1:
                     message.type = 1;
                     break;
+                default:
+                    if (typeof object.type === "number" && (object.type | 0) === object.type)
+                        message.type = object.type;
                 }
             if (object.base_keyspace != null)
                 if (typeof object.base_keyspace !== "string" || object.base_keyspace.length)
@@ -181248,13 +180487,13 @@ export const vtctldata = $root.vtctldata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
+            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace") && message.keyspace !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.keyspace);
-            if (message.shard_name != null && $Object.hasOwnProperty.call(message, "shard_name"))
+            if (message.shard_name != null && $Object.hasOwnProperty.call(message, "shard_name") && message.shard_name !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.shard_name);
-            if (message.force != null && $Object.hasOwnProperty.call(message, "force"))
+            if (message.force != null && $Object.hasOwnProperty.call(message, "force") && message.force !== false)
                 writer.uint32(/* id 3, wireType 0 =*/24).bool(message.force);
-            if (message.include_parent != null && $Object.hasOwnProperty.call(message, "include_parent"))
+            if (message.include_parent != null && $Object.hasOwnProperty.call(message, "include_parent") && message.include_parent !== false)
                 writer.uint32(/* id 4, wireType 0 =*/32).bool(message.include_parent);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -181591,7 +180830,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 $root.vtctldata.Keyspace.encode(message.keyspace, writer.uint32(/* id 1, wireType 2 =*/10).fork(), _depth + 1).ldelim();
             if (message.shard != null && $Object.hasOwnProperty.call(message, "shard"))
                 $root.vtctldata.Shard.encode(message.shard, writer.uint32(/* id 2, wireType 2 =*/18).fork(), _depth + 1).ldelim();
-            if (message.shard_already_exists != null && $Object.hasOwnProperty.call(message, "shard_already_exists"))
+            if (message.shard_already_exists != null && $Object.hasOwnProperty.call(message, "shard_already_exists") && message.shard_already_exists !== false)
                 writer.uint32(/* id 3, wireType 0 =*/24).bool(message.shard_already_exists);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -181899,9 +181138,9 @@ export const vtctldata = $root.vtctldata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.name != null && $Object.hasOwnProperty.call(message, "name"))
+            if (message.name != null && $Object.hasOwnProperty.call(message, "name") && message.name !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.name);
-            if (message.force != null && $Object.hasOwnProperty.call(message, "force"))
+            if (message.force != null && $Object.hasOwnProperty.call(message, "force") && message.force !== false)
                 writer.uint32(/* id 2, wireType 0 =*/16).bool(message.force);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -182399,7 +181638,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.name != null && $Object.hasOwnProperty.call(message, "name"))
+            if (message.name != null && $Object.hasOwnProperty.call(message, "name") && message.name !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.name);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -182896,11 +182135,11 @@ export const vtctldata = $root.vtctldata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
+            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace") && message.keyspace !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.keyspace);
-            if (message.recursive != null && $Object.hasOwnProperty.call(message, "recursive"))
+            if (message.recursive != null && $Object.hasOwnProperty.call(message, "recursive") && message.recursive !== false)
                 writer.uint32(/* id 2, wireType 0 =*/16).bool(message.recursive);
-            if (message.force != null && $Object.hasOwnProperty.call(message, "force"))
+            if (message.force != null && $Object.hasOwnProperty.call(message, "force") && message.force !== false)
                 writer.uint32(/* id 3, wireType 0 =*/24).bool(message.force);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -183447,11 +182686,11 @@ export const vtctldata = $root.vtctldata = (() => {
             if (message.shards != null && message.shards.length)
                 for (let i = 0; i < message.shards.length; ++i)
                     $root.vtctldata.Shard.encode(message.shards[i], writer.uint32(/* id 1, wireType 2 =*/10).fork(), _depth + 1).ldelim();
-            if (message.recursive != null && $Object.hasOwnProperty.call(message, "recursive"))
+            if (message.recursive != null && $Object.hasOwnProperty.call(message, "recursive") && message.recursive !== false)
                 writer.uint32(/* id 2, wireType 0 =*/16).bool(message.recursive);
-            if (message.even_if_serving != null && $Object.hasOwnProperty.call(message, "even_if_serving"))
+            if (message.even_if_serving != null && $Object.hasOwnProperty.call(message, "even_if_serving") && message.even_if_serving !== false)
                 writer.uint32(/* id 4, wireType 0 =*/32).bool(message.even_if_serving);
-            if (message.force != null && $Object.hasOwnProperty.call(message, "force"))
+            if (message.force != null && $Object.hasOwnProperty.call(message, "force") && message.force !== false)
                 writer.uint32(/* id 5, wireType 0 =*/40).bool(message.force);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -184001,7 +183240,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.cell != null && $Object.hasOwnProperty.call(message, "cell"))
+            if (message.cell != null && $Object.hasOwnProperty.call(message, "cell") && message.cell !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.cell);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -184493,7 +183732,7 @@ export const vtctldata = $root.vtctldata = (() => {
             if (message.tablet_aliases != null && message.tablet_aliases.length)
                 for (let i = 0; i < message.tablet_aliases.length; ++i)
                     $root.topodata.TabletAlias.encode(message.tablet_aliases[i], writer.uint32(/* id 1, wireType 2 =*/10).fork(), _depth + 1).ldelim();
-            if (message.allow_primary != null && $Object.hasOwnProperty.call(message, "allow_primary"))
+            if (message.allow_primary != null && $Object.hasOwnProperty.call(message, "allow_primary") && message.allow_primary !== false)
                 writer.uint32(/* id 2, wireType 0 =*/16).bool(message.allow_primary);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -184942,6 +184181,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {boolean|null} [prevent_cross_cell_promotion] EmergencyReparentShardRequest prevent_cross_cell_promotion
          * @property {boolean|null} [wait_for_all_tablets] EmergencyReparentShardRequest wait_for_all_tablets
          * @property {topodata.TabletAlias.$Properties|null} [expected_primary] EmergencyReparentShardRequest expected_primary
+         * @property {boolean|null} [allow_split_brain_promotion] EmergencyReparentShardRequest allow_split_brain_promotion
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
@@ -185039,6 +184279,14 @@ export const vtctldata = $root.vtctldata = (() => {
         EmergencyReparentShardRequest.prototype.expected_primary = null;
 
         /**
+         * EmergencyReparentShardRequest allow_split_brain_promotion.
+         * @member {boolean} allow_split_brain_promotion
+         * @memberof vtctldata.EmergencyReparentShardRequest
+         * @instance
+         */
+        EmergencyReparentShardRequest.prototype.allow_split_brain_promotion = false;
+
+        /**
          * Creates a new EmergencyReparentShardRequest instance using the specified properties.
          * @function create
          * @memberof vtctldata.EmergencyReparentShardRequest
@@ -185070,9 +184318,9 @@ export const vtctldata = $root.vtctldata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
+            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace") && message.keyspace !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.keyspace);
-            if (message.shard != null && $Object.hasOwnProperty.call(message, "shard"))
+            if (message.shard != null && $Object.hasOwnProperty.call(message, "shard") && message.shard !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.shard);
             if (message.new_primary != null && $Object.hasOwnProperty.call(message, "new_primary"))
                 $root.topodata.TabletAlias.encode(message.new_primary, writer.uint32(/* id 3, wireType 2 =*/26).fork(), _depth + 1).ldelim();
@@ -185081,12 +184329,14 @@ export const vtctldata = $root.vtctldata = (() => {
                     $root.topodata.TabletAlias.encode(message.ignore_replicas[i], writer.uint32(/* id 4, wireType 2 =*/34).fork(), _depth + 1).ldelim();
             if (message.wait_replicas_timeout != null && $Object.hasOwnProperty.call(message, "wait_replicas_timeout"))
                 $root.vttime.Duration.encode(message.wait_replicas_timeout, writer.uint32(/* id 5, wireType 2 =*/42).fork(), _depth + 1).ldelim();
-            if (message.prevent_cross_cell_promotion != null && $Object.hasOwnProperty.call(message, "prevent_cross_cell_promotion"))
+            if (message.prevent_cross_cell_promotion != null && $Object.hasOwnProperty.call(message, "prevent_cross_cell_promotion") && message.prevent_cross_cell_promotion !== false)
                 writer.uint32(/* id 6, wireType 0 =*/48).bool(message.prevent_cross_cell_promotion);
-            if (message.wait_for_all_tablets != null && $Object.hasOwnProperty.call(message, "wait_for_all_tablets"))
+            if (message.wait_for_all_tablets != null && $Object.hasOwnProperty.call(message, "wait_for_all_tablets") && message.wait_for_all_tablets !== false)
                 writer.uint32(/* id 7, wireType 0 =*/56).bool(message.wait_for_all_tablets);
             if (message.expected_primary != null && $Object.hasOwnProperty.call(message, "expected_primary"))
                 $root.topodata.TabletAlias.encode(message.expected_primary, writer.uint32(/* id 8, wireType 2 =*/66).fork(), _depth + 1).ldelim();
+            if (message.allow_split_brain_promotion != null && $Object.hasOwnProperty.call(message, "allow_split_brain_promotion") && message.allow_split_brain_promotion !== false)
+                writer.uint32(/* id 9, wireType 0 =*/72).bool(message.allow_split_brain_promotion);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
                     writer.raw(message.$unknowns[i]);
@@ -185196,6 +184446,15 @@ export const vtctldata = $root.vtctldata = (() => {
                         message.expected_primary = $root.topodata.TabletAlias.decode(reader, reader.uint32(), $undefined, _depth + 1, message.expected_primary);
                         continue;
                     }
+                case 9: {
+                        if (wireType !== 0)
+                            break;
+                        if (value = reader.bool())
+                            message.allow_split_brain_promotion = value;
+                        else
+                            delete message.allow_split_brain_promotion;
+                        continue;
+                    }
                 }
                 reader.skipType(wireType, _depth, tag);
                 if (!reader.discardUnknown) {
@@ -185275,6 +184534,9 @@ export const vtctldata = $root.vtctldata = (() => {
                 if (error)
                     return "expected_primary." + error;
             }
+            if (message.allow_split_brain_promotion != null && $Object.hasOwnProperty.call(message, "allow_split_brain_promotion"))
+                if (typeof message.allow_split_brain_promotion !== "boolean")
+                    return "allow_split_brain_promotion: boolean expected";
             return null;
         };
 
@@ -185333,6 +184595,9 @@ export const vtctldata = $root.vtctldata = (() => {
                     throw $TypeError(".vtctldata.EmergencyReparentShardRequest.expected_primary: object expected");
                 message.expected_primary = $root.topodata.TabletAlias.fromObject(object.expected_primary, _depth + 1);
             }
+            if (object.allow_split_brain_promotion != null)
+                if (object.allow_split_brain_promotion)
+                    message.allow_split_brain_promotion = $Boolean(object.allow_split_brain_promotion);
             return message;
         };
 
@@ -185363,6 +184628,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 object.prevent_cross_cell_promotion = false;
                 object.wait_for_all_tablets = false;
                 object.expected_primary = null;
+                object.allow_split_brain_promotion = false;
             }
             if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
                 object.keyspace = message.keyspace;
@@ -185383,6 +184649,8 @@ export const vtctldata = $root.vtctldata = (() => {
                 object.wait_for_all_tablets = message.wait_for_all_tablets;
             if (message.expected_primary != null && $Object.hasOwnProperty.call(message, "expected_primary"))
                 object.expected_primary = $root.topodata.TabletAlias.toObject(message.expected_primary, options, _depth + 1);
+            if (message.allow_split_brain_promotion != null && $Object.hasOwnProperty.call(message, "allow_split_brain_promotion"))
+                object.allow_split_brain_promotion = message.allow_split_brain_promotion;
             return object;
         };
 
@@ -185519,9 +184787,9 @@ export const vtctldata = $root.vtctldata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
+            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace") && message.keyspace !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.keyspace);
-            if (message.shard != null && $Object.hasOwnProperty.call(message, "shard"))
+            if (message.shard != null && $Object.hasOwnProperty.call(message, "shard") && message.shard !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.shard);
             if (message.promoted_primary != null && $Object.hasOwnProperty.call(message, "promoted_primary"))
                 $root.topodata.TabletAlias.encode(message.promoted_primary, writer.uint32(/* id 3, wireType 2 =*/26).fork(), _depth + 1).ldelim();
@@ -185887,11 +185155,11 @@ export const vtctldata = $root.vtctldata = (() => {
                 throw $Error("max depth exceeded");
             if (message.tablet_alias != null && $Object.hasOwnProperty.call(message, "tablet_alias"))
                 $root.topodata.TabletAlias.encode(message.tablet_alias, writer.uint32(/* id 1, wireType 2 =*/10).fork(), _depth + 1).ldelim();
-            if (message.query != null && $Object.hasOwnProperty.call(message, "query"))
+            if (message.query != null && $Object.hasOwnProperty.call(message, "query") && message.query !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.query);
-            if (message.max_rows != null && $Object.hasOwnProperty.call(message, "max_rows"))
+            if (message.max_rows != null && $Object.hasOwnProperty.call(message, "max_rows") && (typeof message.max_rows === "object" ? message.max_rows.low || message.max_rows.high : message.max_rows !== 0))
                 writer.uint32(/* id 3, wireType 0 =*/24).int64(message.max_rows);
-            if (message.use_pool != null && $Object.hasOwnProperty.call(message, "use_pool"))
+            if (message.use_pool != null && $Object.hasOwnProperty.call(message, "use_pool") && message.use_pool !== false)
                 writer.uint32(/* id 4, wireType 0 =*/32).bool(message.use_pool);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -186522,13 +185790,13 @@ export const vtctldata = $root.vtctldata = (() => {
                 throw $Error("max depth exceeded");
             if (message.tablet_alias != null && $Object.hasOwnProperty.call(message, "tablet_alias"))
                 $root.topodata.TabletAlias.encode(message.tablet_alias, writer.uint32(/* id 1, wireType 2 =*/10).fork(), _depth + 1).ldelim();
-            if (message.query != null && $Object.hasOwnProperty.call(message, "query"))
+            if (message.query != null && $Object.hasOwnProperty.call(message, "query") && message.query !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.query);
-            if (message.max_rows != null && $Object.hasOwnProperty.call(message, "max_rows"))
+            if (message.max_rows != null && $Object.hasOwnProperty.call(message, "max_rows") && (typeof message.max_rows === "object" ? message.max_rows.low || message.max_rows.high : message.max_rows !== 0))
                 writer.uint32(/* id 3, wireType 0 =*/24).int64(message.max_rows);
-            if (message.disable_binlogs != null && $Object.hasOwnProperty.call(message, "disable_binlogs"))
+            if (message.disable_binlogs != null && $Object.hasOwnProperty.call(message, "disable_binlogs") && message.disable_binlogs !== false)
                 writer.uint32(/* id 4, wireType 0 =*/32).bool(message.disable_binlogs);
-            if (message.reload_schema != null && $Object.hasOwnProperty.call(message, "reload_schema"))
+            if (message.reload_schema != null && $Object.hasOwnProperty.call(message, "reload_schema") && message.reload_schema !== false)
                 writer.uint32(/* id 5, wireType 0 =*/40).bool(message.reload_schema);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -187730,13 +186998,13 @@ export const vtctldata = $root.vtctldata = (() => {
                 throw $Error("max depth exceeded");
             if (message.tablet_alias != null && $Object.hasOwnProperty.call(message, "tablet_alias"))
                 $root.topodata.TabletAlias.encode(message.tablet_alias, writer.uint32(/* id 1, wireType 2 =*/10).fork(), _depth + 1).ldelim();
-            if (message.sql != null && $Object.hasOwnProperty.call(message, "sql"))
+            if (message.sql != null && $Object.hasOwnProperty.call(message, "sql") && message.sql !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.sql);
-            if (message.max_rows != null && $Object.hasOwnProperty.call(message, "max_rows"))
+            if (message.max_rows != null && $Object.hasOwnProperty.call(message, "max_rows") && (typeof message.max_rows === "object" ? message.max_rows.low || message.max_rows.high : message.max_rows !== 0))
                 writer.uint32(/* id 3, wireType 0 =*/24).int64(message.max_rows);
-            if (message.disable_binlogs != null && $Object.hasOwnProperty.call(message, "disable_binlogs"))
+            if (message.disable_binlogs != null && $Object.hasOwnProperty.call(message, "disable_binlogs") && message.disable_binlogs !== false)
                 writer.uint32(/* id 4, wireType 0 =*/32).bool(message.disable_binlogs);
-            if (message.reload_schema != null && $Object.hasOwnProperty.call(message, "reload_schema"))
+            if (message.reload_schema != null && $Object.hasOwnProperty.call(message, "reload_schema") && message.reload_schema !== false)
                 writer.uint32(/* id 5, wireType 0 =*/40).bool(message.reload_schema);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -188363,7 +187631,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
+            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace") && message.keyspace !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.keyspace);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -188696,7 +187964,7 @@ export const vtctldata = $root.vtctldata = (() => {
                             case 2:
                                 if (wireType !== 2)
                                     break;
-                                value = $root.vtctldata.Shard.decode(reader, reader.uint32(), $undefined, _depth + 1);
+                                value = $root.vtctldata.Shard.decode(reader, reader.uint32(), $undefined, _depth + 1, value);
                                 continue;
                             }
                             reader.skipType(wireType, _depth, tag2);
@@ -188949,9 +188217,9 @@ export const vtctldata = $root.vtctldata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
+            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace") && message.keyspace !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.keyspace);
-            if (message.uuid != null && $Object.hasOwnProperty.call(message, "uuid"))
+            if (message.uuid != null && $Object.hasOwnProperty.call(message, "uuid") && message.uuid !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.uuid);
             if (message.caller_id != null && $Object.hasOwnProperty.call(message, "caller_id"))
                 $root.vtrpc.CallerID.encode(message.caller_id, writer.uint32(/* id 3, wireType 2 =*/26).fork(), _depth + 1).ldelim();
@@ -189601,15 +188869,15 @@ export const vtctldata = $root.vtctldata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
+            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace") && message.keyspace !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.keyspace);
-            if (message.shard != null && $Object.hasOwnProperty.call(message, "shard"))
+            if (message.shard != null && $Object.hasOwnProperty.call(message, "shard") && message.shard !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.shard);
-            if (message.limit != null && $Object.hasOwnProperty.call(message, "limit"))
+            if (message.limit != null && $Object.hasOwnProperty.call(message, "limit") && message.limit !== 0)
                 writer.uint32(/* id 3, wireType 0 =*/24).uint32(message.limit);
-            if (message.detailed != null && $Object.hasOwnProperty.call(message, "detailed"))
+            if (message.detailed != null && $Object.hasOwnProperty.call(message, "detailed") && message.detailed !== false)
                 writer.uint32(/* id 4, wireType 0 =*/32).bool(message.detailed);
-            if (message.detailed_limit != null && $Object.hasOwnProperty.call(message, "detailed_limit"))
+            if (message.detailed_limit != null && $Object.hasOwnProperty.call(message, "detailed_limit") && message.detailed_limit !== 0)
                 writer.uint32(/* id 5, wireType 0 =*/40).uint32(message.detailed_limit);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -190219,7 +189487,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.cell != null && $Object.hasOwnProperty.call(message, "cell"))
+            if (message.cell != null && $Object.hasOwnProperty.call(message, "cell") && message.cell !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.cell);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -191523,7 +190791,7 @@ export const vtctldata = $root.vtctldata = (() => {
                             case 2:
                                 if (wireType !== 2)
                                     break;
-                                value = $root.topodata.CellsAlias.decode(reader, reader.uint32(), $undefined, _depth + 1);
+                                value = $root.topodata.CellsAlias.decode(reader, reader.uint32(), $undefined, _depth + 1, value);
                                 continue;
                             }
                             reader.skipType(wireType, _depth, tag2);
@@ -192776,7 +192044,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
+            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace") && message.keyspace !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.keyspace);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -194843,13 +194111,13 @@ export const vtctldata = $root.vtctldata = (() => {
             if (message.exclude_tables != null && message.exclude_tables.length)
                 for (let i = 0; i < message.exclude_tables.length; ++i)
                     writer.uint32(/* id 3, wireType 2 =*/26).string(message.exclude_tables[i]);
-            if (message.include_views != null && $Object.hasOwnProperty.call(message, "include_views"))
+            if (message.include_views != null && $Object.hasOwnProperty.call(message, "include_views") && message.include_views !== false)
                 writer.uint32(/* id 4, wireType 0 =*/32).bool(message.include_views);
-            if (message.table_names_only != null && $Object.hasOwnProperty.call(message, "table_names_only"))
+            if (message.table_names_only != null && $Object.hasOwnProperty.call(message, "table_names_only") && message.table_names_only !== false)
                 writer.uint32(/* id 5, wireType 0 =*/40).bool(message.table_names_only);
-            if (message.table_sizes_only != null && $Object.hasOwnProperty.call(message, "table_sizes_only"))
+            if (message.table_sizes_only != null && $Object.hasOwnProperty.call(message, "table_sizes_only") && message.table_sizes_only !== false)
                 writer.uint32(/* id 6, wireType 0 =*/48).bool(message.table_sizes_only);
-            if (message.table_schema_only != null && $Object.hasOwnProperty.call(message, "table_schema_only"))
+            if (message.table_schema_only != null && $Object.hasOwnProperty.call(message, "table_schema_only") && message.table_schema_only !== false)
                 writer.uint32(/* id 7, wireType 0 =*/56).bool(message.table_schema_only);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -195565,21 +194833,21 @@ export const vtctldata = $root.vtctldata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
+            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace") && message.keyspace !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.keyspace);
-            if (message.uuid != null && $Object.hasOwnProperty.call(message, "uuid"))
+            if (message.uuid != null && $Object.hasOwnProperty.call(message, "uuid") && message.uuid !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.uuid);
-            if (message.migration_context != null && $Object.hasOwnProperty.call(message, "migration_context"))
+            if (message.migration_context != null && $Object.hasOwnProperty.call(message, "migration_context") && message.migration_context !== "")
                 writer.uint32(/* id 3, wireType 2 =*/26).string(message.migration_context);
-            if (message.status != null && $Object.hasOwnProperty.call(message, "status"))
+            if (message.status != null && $Object.hasOwnProperty.call(message, "status") && message.status !== 0)
                 writer.uint32(/* id 4, wireType 0 =*/32).int32(message.status);
             if (message.recent != null && $Object.hasOwnProperty.call(message, "recent"))
                 $root.vttime.Duration.encode(message.recent, writer.uint32(/* id 5, wireType 2 =*/42).fork(), _depth + 1).ldelim();
-            if (message.order != null && $Object.hasOwnProperty.call(message, "order"))
+            if (message.order != null && $Object.hasOwnProperty.call(message, "order") && message.order !== 0)
                 writer.uint32(/* id 6, wireType 0 =*/48).int32(message.order);
-            if (message.limit != null && $Object.hasOwnProperty.call(message, "limit"))
+            if (message.limit != null && $Object.hasOwnProperty.call(message, "limit") && (typeof message.limit === "object" ? message.limit.low || message.limit.high : message.limit !== 0))
                 writer.uint32(/* id 7, wireType 0 =*/56).uint64(message.limit);
-            if (message.skip != null && $Object.hasOwnProperty.call(message, "skip"))
+            if (message.skip != null && $Object.hasOwnProperty.call(message, "skip") && (typeof message.skip === "object" ? message.skip.low || message.skip.high : message.skip !== 0))
                 writer.uint32(/* id 8, wireType 0 =*/64).uint64(message.skip);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -195750,33 +195018,16 @@ export const vtctldata = $root.vtctldata = (() => {
                 if (!$util.isString(message.migration_context))
                     return "migration_context: string expected";
             if (message.status != null && $Object.hasOwnProperty.call(message, "status"))
-                switch (message.status) {
-                default:
+                if (typeof message.status !== "number" || (message.status | 0) !== message.status)
                     return "status: enum value expected";
-                case 0:
-                case 1:
-                case 2:
-                case 3:
-                case 4:
-                case 5:
-                case 6:
-                case 7:
-                    break;
-                }
             if (message.recent != null && $Object.hasOwnProperty.call(message, "recent")) {
                 let error = $root.vttime.Duration.verify(message.recent, _depth + 1);
                 if (error)
                     return "recent." + error;
             }
             if (message.order != null && $Object.hasOwnProperty.call(message, "order"))
-                switch (message.order) {
-                default:
+                if (typeof message.order !== "number" || (message.order | 0) !== message.order)
                     return "order: enum value expected";
-                case 0:
-                case 1:
-                case 2:
-                    break;
-                }
             if (message.limit != null && $Object.hasOwnProperty.call(message, "limit"))
                 if (!$util.isInteger(message.limit) && !(message.limit && $util.isInteger(message.limit.low) && $util.isInteger(message.limit.high)))
                     return "limit: integer|Long expected";
@@ -195815,12 +195066,6 @@ export const vtctldata = $root.vtctldata = (() => {
                     message.migration_context = $String(object.migration_context);
             if (object.status !== 0 && (typeof object.status !== "string" || $root.vtctldata.SchemaMigration.Status[object.status] !== 0))
                 switch (object.status) {
-                default:
-                    if (typeof object.status === "number") {
-                        message.status = object.status;
-                        break;
-                    }
-                    break;
                 case "UNKNOWN":
                 case 0:
                     message.status = 0;
@@ -195853,6 +195098,9 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 7:
                     message.status = 7;
                     break;
+                default:
+                    if (typeof object.status === "number" && (object.status | 0) === object.status)
+                        message.status = object.status;
                 }
             if (object.recent != null) {
                 if (!$util.isObject(object.recent))
@@ -195861,12 +195109,6 @@ export const vtctldata = $root.vtctldata = (() => {
             }
             if (object.order !== 0 && (typeof object.order !== "string" || $root.vtctldata.QueryOrdering[object.order] !== 0))
                 switch (object.order) {
-                default:
-                    if (typeof object.order === "number") {
-                        message.order = object.order;
-                        break;
-                    }
-                    break;
                 case "NONE":
                 case 0:
                     message.order = 0;
@@ -195879,6 +195121,9 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 2:
                     message.order = 2;
                     break;
+                default:
+                    if (typeof object.order === "number" && (object.order | 0) === object.order)
+                        message.order = object.order;
                 }
             if (object.limit != null)
                 if (typeof object.limit === "object" ? object.limit.low || object.limit.high : $Number(object.limit) !== 0)
@@ -196368,9 +195613,9 @@ export const vtctldata = $root.vtctldata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
+            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace") && message.keyspace !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.keyspace);
-            if (message.shard != null && $Object.hasOwnProperty.call(message, "shard"))
+            if (message.shard != null && $Object.hasOwnProperty.call(message, "shard") && message.shard !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.shard);
             if (message.cells != null && message.cells.length)
                 for (let i = 0; i < message.cells.length; ++i)
@@ -196754,7 +195999,7 @@ export const vtctldata = $root.vtctldata = (() => {
                             case 2:
                                 if (wireType !== 2)
                                     break;
-                                value = $root.topodata.ShardReplication.decode(reader, reader.uint32(), $undefined, _depth + 1);
+                                value = $root.topodata.ShardReplication.decode(reader, reader.uint32(), $undefined, _depth + 1, value);
                                 continue;
                             }
                             reader.skipType(wireType, _depth, tag2);
@@ -196998,9 +196243,9 @@ export const vtctldata = $root.vtctldata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
+            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace") && message.keyspace !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.keyspace);
-            if (message.shard_name != null && $Object.hasOwnProperty.call(message, "shard_name"))
+            if (message.shard_name != null && $Object.hasOwnProperty.call(message, "shard_name") && message.shard_name !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.shard_name);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -198365,7 +197610,7 @@ export const vtctldata = $root.vtctldata = (() => {
                             case 2:
                                 if (wireType !== 2)
                                     break;
-                                value = $root.vtctldata.GetSrvKeyspaceNamesResponse.NameList.decode(reader, reader.uint32(), $undefined, _depth + 1);
+                                value = $root.vtctldata.GetSrvKeyspaceNamesResponse.NameList.decode(reader, reader.uint32(), $undefined, _depth + 1, value);
                                 continue;
                             }
                             reader.skipType(wireType, _depth, tag2);
@@ -198882,7 +198127,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
+            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace") && message.keyspace !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.keyspace);
             if (message.cells != null && message.cells.length)
                 for (let i = 0; i < message.cells.length; ++i)
@@ -199247,7 +198492,7 @@ export const vtctldata = $root.vtctldata = (() => {
                             case 2:
                                 if (wireType !== 2)
                                     break;
-                                value = $root.topodata.SrvKeyspace.decode(reader, reader.uint32(), $undefined, _depth + 1);
+                                value = $root.topodata.SrvKeyspace.decode(reader, reader.uint32(), $undefined, _depth + 1, value);
                                 continue;
                             }
                             reader.skipType(wireType, _depth, tag2);
@@ -199582,27 +198827,27 @@ export const vtctldata = $root.vtctldata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
+            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace") && message.keyspace !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.keyspace);
-            if (message.enable != null && $Object.hasOwnProperty.call(message, "enable"))
+            if (message.enable != null && $Object.hasOwnProperty.call(message, "enable") && message.enable !== false)
                 writer.uint32(/* id 2, wireType 0 =*/16).bool(message.enable);
-            if (message.disable != null && $Object.hasOwnProperty.call(message, "disable"))
+            if (message.disable != null && $Object.hasOwnProperty.call(message, "disable") && message.disable !== false)
                 writer.uint32(/* id 3, wireType 0 =*/24).bool(message.disable);
-            if (message.threshold != null && $Object.hasOwnProperty.call(message, "threshold"))
+            if (message.threshold != null && $Object.hasOwnProperty.call(message, "threshold") && !$Object.is(message.threshold, 0))
                 writer.uint32(/* id 4, wireType 1 =*/33).double(message.threshold);
-            if (message.custom_query != null && $Object.hasOwnProperty.call(message, "custom_query"))
+            if (message.custom_query != null && $Object.hasOwnProperty.call(message, "custom_query") && message.custom_query !== "")
                 writer.uint32(/* id 5, wireType 2 =*/42).string(message.custom_query);
-            if (message.custom_query_set != null && $Object.hasOwnProperty.call(message, "custom_query_set"))
+            if (message.custom_query_set != null && $Object.hasOwnProperty.call(message, "custom_query_set") && message.custom_query_set !== false)
                 writer.uint32(/* id 6, wireType 0 =*/48).bool(message.custom_query_set);
-            if (message.check_as_check_self != null && $Object.hasOwnProperty.call(message, "check_as_check_self"))
+            if (message.check_as_check_self != null && $Object.hasOwnProperty.call(message, "check_as_check_self") && message.check_as_check_self !== false)
                 writer.uint32(/* id 7, wireType 0 =*/56).bool(message.check_as_check_self);
-            if (message.check_as_check_shard != null && $Object.hasOwnProperty.call(message, "check_as_check_shard"))
+            if (message.check_as_check_shard != null && $Object.hasOwnProperty.call(message, "check_as_check_shard") && message.check_as_check_shard !== false)
                 writer.uint32(/* id 8, wireType 0 =*/64).bool(message.check_as_check_shard);
             if (message.throttled_app != null && $Object.hasOwnProperty.call(message, "throttled_app"))
                 $root.topodata.ThrottledAppRule.encode(message.throttled_app, writer.uint32(/* id 9, wireType 2 =*/74).fork(), _depth + 1).ldelim();
-            if (message.metric_name != null && $Object.hasOwnProperty.call(message, "metric_name"))
+            if (message.metric_name != null && $Object.hasOwnProperty.call(message, "metric_name") && message.metric_name !== "")
                 writer.uint32(/* id 10, wireType 2 =*/82).string(message.metric_name);
-            if (message.app_name != null && $Object.hasOwnProperty.call(message, "app_name"))
+            if (message.app_name != null && $Object.hasOwnProperty.call(message, "app_name") && message.app_name !== "")
                 writer.uint32(/* id 11, wireType 2 =*/90).string(message.app_name);
             if (message.app_checked_metrics != null && message.app_checked_metrics.length)
                 for (let i = 0; i < message.app_checked_metrics.length; ++i)
@@ -199684,7 +198929,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 4: {
                         if (wireType !== 1)
                             break;
-                        if ((value = reader.double()) !== 0)
+                        if (!$Object.is(value = reader.double(), 0))
                             message.threshold = value;
                         else
                             delete message.threshold;
@@ -199874,7 +199119,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 if (object.disable)
                     message.disable = $Boolean(object.disable);
             if (object.threshold != null)
-                if ($Number(object.threshold) !== 0)
+                if (!$Object.is($Number(object.threshold), 0))
                     message.threshold = $Number(object.threshold);
             if (object.custom_query != null)
                 if (typeof object.custom_query !== "string" || object.custom_query.length)
@@ -200295,7 +199540,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.cell != null && $Object.hasOwnProperty.call(message, "cell"))
+            if (message.cell != null && $Object.hasOwnProperty.call(message, "cell") && message.cell !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.cell);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -201161,7 +200406,7 @@ export const vtctldata = $root.vtctldata = (() => {
                             case 2:
                                 if (wireType !== 2)
                                     break;
-                                value = $root.vschema.SrvVSchema.decode(reader, reader.uint32(), $undefined, _depth + 1);
+                                value = $root.vschema.SrvVSchema.decode(reader, reader.uint32(), $undefined, _depth + 1, value);
                                 continue;
                             }
                             reader.skipType(wireType, _depth, tag2);
@@ -201965,19 +201210,19 @@ export const vtctldata = $root.vtctldata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
+            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace") && message.keyspace !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.keyspace);
-            if (message.shard != null && $Object.hasOwnProperty.call(message, "shard"))
+            if (message.shard != null && $Object.hasOwnProperty.call(message, "shard") && message.shard !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.shard);
             if (message.cells != null && message.cells.length)
                 for (let i = 0; i < message.cells.length; ++i)
                     writer.uint32(/* id 3, wireType 2 =*/26).string(message.cells[i]);
-            if (message.strict != null && $Object.hasOwnProperty.call(message, "strict"))
+            if (message.strict != null && $Object.hasOwnProperty.call(message, "strict") && message.strict !== false)
                 writer.uint32(/* id 4, wireType 0 =*/32).bool(message.strict);
             if (message.tablet_aliases != null && message.tablet_aliases.length)
                 for (let i = 0; i < message.tablet_aliases.length; ++i)
                     $root.topodata.TabletAlias.encode(message.tablet_aliases[i], writer.uint32(/* id 5, wireType 2 =*/42).fork(), _depth + 1).ldelim();
-            if (message.tablet_type != null && $Object.hasOwnProperty.call(message, "tablet_type"))
+            if (message.tablet_type != null && $Object.hasOwnProperty.call(message, "tablet_type") && message.tablet_type !== 0)
                 writer.uint32(/* id 6, wireType 0 =*/48).int32(message.tablet_type);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -202147,22 +201392,8 @@ export const vtctldata = $root.vtctldata = (() => {
                 }
             }
             if (message.tablet_type != null && $Object.hasOwnProperty.call(message, "tablet_type"))
-                switch (message.tablet_type) {
-                default:
+                if (typeof message.tablet_type !== "number" || (message.tablet_type | 0) !== message.tablet_type)
                     return "tablet_type: enum value expected";
-                case 0:
-                case 1:
-                case 1:
-                case 2:
-                case 3:
-                case 3:
-                case 4:
-                case 5:
-                case 6:
-                case 7:
-                case 8:
-                    break;
-                }
             return null;
         };
 
@@ -202212,12 +201443,6 @@ export const vtctldata = $root.vtctldata = (() => {
             }
             if (object.tablet_type !== 0 && (typeof object.tablet_type !== "string" || $root.topodata.TabletType[object.tablet_type] !== 0))
                 switch (object.tablet_type) {
-                default:
-                    if (typeof object.tablet_type === "number") {
-                        message.tablet_type = object.tablet_type;
-                        break;
-                    }
-                    break;
                 case "UNKNOWN":
                 case 0:
                     message.tablet_type = 0;
@@ -202262,6 +201487,9 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 8:
                     message.tablet_type = 8;
                     break;
+                default:
+                    if (typeof object.tablet_type === "number" && (object.tablet_type | 0) === object.tablet_type)
+                        message.tablet_type = object.tablet_type;
                 }
             return message;
         };
@@ -203236,11 +202464,11 @@ export const vtctldata = $root.vtctldata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.path != null && $Object.hasOwnProperty.call(message, "path"))
+            if (message.path != null && $Object.hasOwnProperty.call(message, "path") && message.path !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.path);
-            if (message.version != null && $Object.hasOwnProperty.call(message, "version"))
+            if (message.version != null && $Object.hasOwnProperty.call(message, "version") && (typeof message.version === "object" ? message.version.low || message.version.high : message.version !== 0))
                 writer.uint32(/* id 2, wireType 0 =*/16).int64(message.version);
-            if (message.as_json != null && $Object.hasOwnProperty.call(message, "as_json"))
+            if (message.as_json != null && $Object.hasOwnProperty.call(message, "as_json") && message.as_json !== false)
                 writer.uint32(/* id 3, wireType 0 =*/24).bool(message.as_json);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -203851,16 +203079,16 @@ export const vtctldata = $root.vtctldata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.name != null && $Object.hasOwnProperty.call(message, "name"))
+            if (message.name != null && $Object.hasOwnProperty.call(message, "name") && message.name !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.name);
-            if (message.path != null && $Object.hasOwnProperty.call(message, "path"))
+            if (message.path != null && $Object.hasOwnProperty.call(message, "path") && message.path !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.path);
-            if (message.data != null && $Object.hasOwnProperty.call(message, "data"))
+            if (message.data != null && $Object.hasOwnProperty.call(message, "data") && message.data !== "")
                 writer.uint32(/* id 3, wireType 2 =*/26).string(message.data);
             if (message.children != null && message.children.length)
                 for (let i = 0; i < message.children.length; ++i)
                     writer.uint32(/* id 4, wireType 2 =*/34).string(message.children[i]);
-            if (message.version != null && $Object.hasOwnProperty.call(message, "version"))
+            if (message.version != null && $Object.hasOwnProperty.call(message, "version") && (typeof message.version === "object" ? message.version.low || message.version.high : message.version !== 0))
                 writer.uint32(/* id 5, wireType 0 =*/40).int64(message.version);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -204229,9 +203457,9 @@ export const vtctldata = $root.vtctldata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
+            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace") && message.keyspace !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.keyspace);
-            if (message.abandon_age != null && $Object.hasOwnProperty.call(message, "abandon_age"))
+            if (message.abandon_age != null && $Object.hasOwnProperty.call(message, "abandon_age") && (typeof message.abandon_age === "object" ? message.abandon_age.low || message.abandon_age.high : message.abandon_age !== 0))
                 writer.uint32(/* id 2, wireType 0 =*/16).int64(message.abandon_age);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -204803,7 +204031,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.dtid != null && $Object.hasOwnProperty.call(message, "dtid"))
+            if (message.dtid != null && $Object.hasOwnProperty.call(message, "dtid") && message.dtid !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.dtid);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -205100,13 +204328,13 @@ export const vtctldata = $root.vtctldata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.shard != null && $Object.hasOwnProperty.call(message, "shard"))
+            if (message.shard != null && $Object.hasOwnProperty.call(message, "shard") && message.shard !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.shard);
-            if (message.state != null && $Object.hasOwnProperty.call(message, "state"))
+            if (message.state != null && $Object.hasOwnProperty.call(message, "state") && message.state !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.state);
-            if (message.message != null && $Object.hasOwnProperty.call(message, "message"))
+            if (message.message != null && $Object.hasOwnProperty.call(message, "message") && message.message !== "")
                 writer.uint32(/* id 3, wireType 2 =*/26).string(message.message);
-            if (message.time_created != null && $Object.hasOwnProperty.call(message, "time_created"))
+            if (message.time_created != null && $Object.hasOwnProperty.call(message, "time_created") && (typeof message.time_created === "object" ? message.time_created.low || message.time_created.high : message.time_created !== 0))
                 writer.uint32(/* id 4, wireType 0 =*/32).int64(message.time_created);
             if (message.statements != null && message.statements.length)
                 for (let i = 0; i < message.statements.length; ++i)
@@ -205787,7 +205015,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.dtid != null && $Object.hasOwnProperty.call(message, "dtid"))
+            if (message.dtid != null && $Object.hasOwnProperty.call(message, "dtid") && message.dtid !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.dtid);
             if (message.participants != null && message.participants.length)
                 for (let i = 0; i < message.participants.length; ++i)
@@ -206303,7 +205531,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
+            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace") && message.keyspace !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.keyspace);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -206824,7 +206052,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.version != null && $Object.hasOwnProperty.call(message, "version"))
+            if (message.version != null && $Object.hasOwnProperty.call(message, "version") && message.version !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.version);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -207391,15 +206619,15 @@ export const vtctldata = $root.vtctldata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
+            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace") && message.keyspace !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.keyspace);
-            if (message.active_only != null && $Object.hasOwnProperty.call(message, "active_only"))
+            if (message.active_only != null && $Object.hasOwnProperty.call(message, "active_only") && message.active_only !== false)
                 writer.uint32(/* id 2, wireType 0 =*/16).bool(message.active_only);
-            if (message.name_only != null && $Object.hasOwnProperty.call(message, "name_only"))
+            if (message.name_only != null && $Object.hasOwnProperty.call(message, "name_only") && message.name_only !== false)
                 writer.uint32(/* id 3, wireType 0 =*/24).bool(message.name_only);
-            if (message.workflow != null && $Object.hasOwnProperty.call(message, "workflow"))
+            if (message.workflow != null && $Object.hasOwnProperty.call(message, "workflow") && message.workflow !== "")
                 writer.uint32(/* id 4, wireType 2 =*/34).string(message.workflow);
-            if (message.include_logs != null && $Object.hasOwnProperty.call(message, "include_logs"))
+            if (message.include_logs != null && $Object.hasOwnProperty.call(message, "include_logs") && message.include_logs !== false)
                 writer.uint32(/* id 5, wireType 0 =*/40).bool(message.include_logs);
             if (message.shards != null && message.shards.length)
                 for (let i = 0; i < message.shards.length; ++i)
@@ -208077,13 +207305,13 @@ export const vtctldata = $root.vtctldata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
+            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace") && message.keyspace !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.keyspace);
-            if (message.shard != null && $Object.hasOwnProperty.call(message, "shard"))
+            if (message.shard != null && $Object.hasOwnProperty.call(message, "shard") && message.shard !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.shard);
             if (message.primary_elect_tablet_alias != null && $Object.hasOwnProperty.call(message, "primary_elect_tablet_alias"))
                 $root.topodata.TabletAlias.encode(message.primary_elect_tablet_alias, writer.uint32(/* id 3, wireType 2 =*/26).fork(), _depth + 1).ldelim();
-            if (message.force != null && $Object.hasOwnProperty.call(message, "force"))
+            if (message.force != null && $Object.hasOwnProperty.call(message, "force") && message.force !== false)
                 writer.uint32(/* id 4, wireType 0 =*/32).bool(message.force);
             if (message.wait_replicas_timeout != null && $Object.hasOwnProperty.call(message, "wait_replicas_timeout"))
                 $root.vttime.Duration.encode(message.wait_replicas_timeout, writer.uint32(/* id 5, wireType 2 =*/42).fork(), _depth + 1).ldelim();
@@ -208715,9 +207943,9 @@ export const vtctldata = $root.vtctldata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
+            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace") && message.keyspace !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.keyspace);
-            if (message.uuid != null && $Object.hasOwnProperty.call(message, "uuid"))
+            if (message.uuid != null && $Object.hasOwnProperty.call(message, "uuid") && message.uuid !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.uuid);
             if (message.caller_id != null && $Object.hasOwnProperty.call(message, "caller_id"))
                 $root.vtrpc.CallerID.encode(message.caller_id, writer.uint32(/* id 3, wireType 2 =*/26).fork(), _depth + 1).ldelim();
@@ -209349,11 +208577,11 @@ export const vtctldata = $root.vtctldata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
+            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace") && message.keyspace !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.keyspace);
-            if (message.name != null && $Object.hasOwnProperty.call(message, "name"))
+            if (message.name != null && $Object.hasOwnProperty.call(message, "name") && message.name !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.name);
-            if (message.table_keyspace != null && $Object.hasOwnProperty.call(message, "table_keyspace"))
+            if (message.table_keyspace != null && $Object.hasOwnProperty.call(message, "table_keyspace") && message.table_keyspace !== "")
                 writer.uint32(/* id 3, wireType 2 =*/26).string(message.table_keyspace);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -209925,24 +209153,20 @@ export const vtctldata = $root.vtctldata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
+            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace") && message.keyspace !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.keyspace);
-            if (message.workflow != null && $Object.hasOwnProperty.call(message, "workflow"))
+            if (message.workflow != null && $Object.hasOwnProperty.call(message, "workflow") && message.workflow !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.workflow);
             if (message.cells != null && message.cells.length)
                 for (let i = 0; i < message.cells.length; ++i)
                     writer.uint32(/* id 3, wireType 2 =*/26).string(message.cells[i]);
             if (message.vindex != null && $Object.hasOwnProperty.call(message, "vindex"))
                 $root.vschema.Keyspace.encode(message.vindex, writer.uint32(/* id 4, wireType 2 =*/34).fork(), _depth + 1).ldelim();
-            if (message.continue_after_copy_with_owner != null && $Object.hasOwnProperty.call(message, "continue_after_copy_with_owner"))
+            if (message.continue_after_copy_with_owner != null && $Object.hasOwnProperty.call(message, "continue_after_copy_with_owner") && message.continue_after_copy_with_owner !== false)
                 writer.uint32(/* id 5, wireType 0 =*/40).bool(message.continue_after_copy_with_owner);
-            if (message.tablet_types != null && message.tablet_types.length) {
-                writer.uint32(/* id 6, wireType 2 =*/50).fork();
-                for (let i = 0; i < message.tablet_types.length; ++i)
-                    writer.int32(message.tablet_types[i]);
-                writer.ldelim();
-            }
-            if (message.tablet_selection_preference != null && $Object.hasOwnProperty.call(message, "tablet_selection_preference"))
+            if (message.tablet_types != null && message.tablet_types.length)
+                writer.uint32(/* id 6, wireType 2 =*/50).int32s(message.tablet_types);
+            if (message.tablet_selection_preference != null && $Object.hasOwnProperty.call(message, "tablet_selection_preference") && message.tablet_selection_preference !== 0)
                 writer.uint32(/* id 7, wireType 0 =*/56).int32(message.tablet_selection_preference);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -210036,9 +209260,7 @@ export const vtctldata = $root.vtctldata = (() => {
                         if (wireType === 2) {
                             if (!(message.tablet_types && message.tablet_types.length))
                                 message.tablet_types = [];
-                            let end2 = reader.uint32() + reader.pos;
-                            while (reader.pos < end2)
-                                message.tablet_types.push(reader.int32());
+                            reader.int32s(message.tablet_types);
                             continue;
                         }
                         if (wireType !== 0)
@@ -210125,32 +209347,12 @@ export const vtctldata = $root.vtctldata = (() => {
                 if (!$Array.isArray(message.tablet_types))
                     return "tablet_types: array expected";
                 for (let i = 0; i < message.tablet_types.length; ++i)
-                    switch (message.tablet_types[i]) {
-                    default:
+                    if (typeof message.tablet_types[i] !== "number" || (message.tablet_types[i] | 0) !== message.tablet_types[i])
                         return "tablet_types: enum value[] expected";
-                    case 0:
-                    case 1:
-                    case 1:
-                    case 2:
-                    case 3:
-                    case 3:
-                    case 4:
-                    case 5:
-                    case 6:
-                    case 7:
-                    case 8:
-                        break;
-                    }
             }
             if (message.tablet_selection_preference != null && $Object.hasOwnProperty.call(message, "tablet_selection_preference"))
-                switch (message.tablet_selection_preference) {
-                default:
+                if (typeof message.tablet_selection_preference !== "number" || (message.tablet_selection_preference | 0) !== message.tablet_selection_preference)
                     return "tablet_selection_preference: enum value expected";
-                case 0:
-                case 1:
-                case 3:
-                    break;
-                }
             return null;
         };
 
@@ -210196,68 +209398,60 @@ export const vtctldata = $root.vtctldata = (() => {
             if (object.tablet_types) {
                 if (!$Array.isArray(object.tablet_types))
                     throw $TypeError(".vtctldata.LookupVindexCreateRequest.tablet_types: array expected");
-                message.tablet_types = $Array(object.tablet_types.length);
+                message.tablet_types = [];
                 for (let i = 0; i < object.tablet_types.length; ++i)
                     switch (object.tablet_types[i]) {
-                    default:
-                        if (typeof object.tablet_types[i] === "number") {
-                            message.tablet_types[i] = object.tablet_types[i];
-                            break;
-                        }
                     case "UNKNOWN":
                     case 0:
-                        message.tablet_types[i] = 0;
+                        message.tablet_types[message.tablet_types.length] = 0;
                         break;
                     case "PRIMARY":
                     case 1:
-                        message.tablet_types[i] = 1;
+                        message.tablet_types[message.tablet_types.length] = 1;
                         break;
                     case "MASTER":
                     case 1:
-                        message.tablet_types[i] = 1;
+                        message.tablet_types[message.tablet_types.length] = 1;
                         break;
                     case "REPLICA":
                     case 2:
-                        message.tablet_types[i] = 2;
+                        message.tablet_types[message.tablet_types.length] = 2;
                         break;
                     case "RDONLY":
                     case 3:
-                        message.tablet_types[i] = 3;
+                        message.tablet_types[message.tablet_types.length] = 3;
                         break;
                     case "BATCH":
                     case 3:
-                        message.tablet_types[i] = 3;
+                        message.tablet_types[message.tablet_types.length] = 3;
                         break;
                     case "SPARE":
                     case 4:
-                        message.tablet_types[i] = 4;
+                        message.tablet_types[message.tablet_types.length] = 4;
                         break;
                     case "EXPERIMENTAL":
                     case 5:
-                        message.tablet_types[i] = 5;
+                        message.tablet_types[message.tablet_types.length] = 5;
                         break;
                     case "BACKUP":
                     case 6:
-                        message.tablet_types[i] = 6;
+                        message.tablet_types[message.tablet_types.length] = 6;
                         break;
                     case "RESTORE":
                     case 7:
-                        message.tablet_types[i] = 7;
+                        message.tablet_types[message.tablet_types.length] = 7;
                         break;
                     case "DRAINED":
                     case 8:
-                        message.tablet_types[i] = 8;
+                        message.tablet_types[message.tablet_types.length] = 8;
                         break;
+                    default:
+                        if (typeof object.tablet_types[i] === "number" && (object.tablet_types[i] | 0) === object.tablet_types[i])
+                            message.tablet_types[message.tablet_types.length] = object.tablet_types[i];
                     }
             }
             if (object.tablet_selection_preference !== 0 && (typeof object.tablet_selection_preference !== "string" || $root.tabletmanagerdata.TabletSelectionPreference[object.tablet_selection_preference] !== 0))
                 switch (object.tablet_selection_preference) {
-                default:
-                    if (typeof object.tablet_selection_preference === "number") {
-                        message.tablet_selection_preference = object.tablet_selection_preference;
-                        break;
-                    }
-                    break;
                 case "ANY":
                 case 0:
                     message.tablet_selection_preference = 0;
@@ -210270,6 +209464,9 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 3:
                     message.tablet_selection_preference = 3;
                     break;
+                default:
+                    if (typeof object.tablet_selection_preference === "number" && (object.tablet_selection_preference | 0) === object.tablet_selection_preference)
+                        message.tablet_selection_preference = object.tablet_selection_preference;
                 }
             return message;
         };
@@ -210676,13 +209873,13 @@ export const vtctldata = $root.vtctldata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
+            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace") && message.keyspace !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.keyspace);
-            if (message.name != null && $Object.hasOwnProperty.call(message, "name"))
+            if (message.name != null && $Object.hasOwnProperty.call(message, "name") && message.name !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.name);
-            if (message.table_keyspace != null && $Object.hasOwnProperty.call(message, "table_keyspace"))
+            if (message.table_keyspace != null && $Object.hasOwnProperty.call(message, "table_keyspace") && message.table_keyspace !== "")
                 writer.uint32(/* id 3, wireType 2 =*/26).string(message.table_keyspace);
-            if (message.delete_workflow != null && $Object.hasOwnProperty.call(message, "delete_workflow"))
+            if (message.delete_workflow != null && $Object.hasOwnProperty.call(message, "delete_workflow") && message.delete_workflow !== false)
                 writer.uint32(/* id 4, wireType 0 =*/32).bool(message.delete_workflow);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -211006,9 +210203,9 @@ export const vtctldata = $root.vtctldata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.workflow_stopped != null && $Object.hasOwnProperty.call(message, "workflow_stopped"))
+            if (message.workflow_stopped != null && $Object.hasOwnProperty.call(message, "workflow_stopped") && message.workflow_stopped !== false)
                 writer.uint32(/* id 1, wireType 0 =*/8).bool(message.workflow_stopped);
-            if (message.workflow_deleted != null && $Object.hasOwnProperty.call(message, "workflow_deleted"))
+            if (message.workflow_deleted != null && $Object.hasOwnProperty.call(message, "workflow_deleted") && message.workflow_deleted !== false)
                 writer.uint32(/* id 2, wireType 0 =*/16).bool(message.workflow_deleted);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -211305,11 +210502,11 @@ export const vtctldata = $root.vtctldata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
+            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace") && message.keyspace !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.keyspace);
-            if (message.name != null && $Object.hasOwnProperty.call(message, "name"))
+            if (message.name != null && $Object.hasOwnProperty.call(message, "name") && message.name !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.name);
-            if (message.table_keyspace != null && $Object.hasOwnProperty.call(message, "table_keyspace"))
+            if (message.table_keyspace != null && $Object.hasOwnProperty.call(message, "table_keyspace") && message.table_keyspace !== "")
                 writer.uint32(/* id 3, wireType 2 =*/26).string(message.table_keyspace);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -212333,14 +211530,14 @@ export const vtctldata = $root.vtctldata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.workflow != null && $Object.hasOwnProperty.call(message, "workflow"))
+            if (message.workflow != null && $Object.hasOwnProperty.call(message, "workflow") && message.workflow !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.workflow);
-            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
+            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace") && message.keyspace !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.keyspace);
             if (message.table_settings != null && message.table_settings.length)
                 for (let i = 0; i < message.table_settings.length; ++i)
                     $root.vtctldata.TableMaterializeSettings.encode(message.table_settings[i], writer.uint32(/* id 3, wireType 2 =*/26).fork(), _depth + 1).ldelim();
-            if (message.materialization_intent != null && $Object.hasOwnProperty.call(message, "materialization_intent"))
+            if (message.materialization_intent != null && $Object.hasOwnProperty.call(message, "materialization_intent") && message.materialization_intent !== 0)
                 writer.uint32(/* id 4, wireType 0 =*/32).int32(message.materialization_intent);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -212483,15 +211680,8 @@ export const vtctldata = $root.vtctldata = (() => {
                 }
             }
             if (message.materialization_intent != null && $Object.hasOwnProperty.call(message, "materialization_intent"))
-                switch (message.materialization_intent) {
-                default:
+                if (typeof message.materialization_intent !== "number" || (message.materialization_intent | 0) !== message.materialization_intent)
                     return "materialization_intent: enum value expected";
-                case 0:
-                case 1:
-                case 2:
-                case 3:
-                    break;
-                }
             return null;
         };
 
@@ -212531,12 +211721,6 @@ export const vtctldata = $root.vtctldata = (() => {
             }
             if (object.materialization_intent !== 0 && (typeof object.materialization_intent !== "string" || $root.vtctldata.MaterializationIntent[object.materialization_intent] !== 0))
                 switch (object.materialization_intent) {
-                default:
-                    if (typeof object.materialization_intent === "number") {
-                        message.materialization_intent = object.materialization_intent;
-                        break;
-                    }
-                    break;
                 case "CUSTOM":
                 case 0:
                     message.materialization_intent = 0;
@@ -212553,6 +211737,9 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 3:
                     message.materialization_intent = 3;
                     break;
+                default:
+                    if (typeof object.materialization_intent === "number" && (object.materialization_intent | 0) === object.materialization_intent)
+                        message.materialization_intent = object.materialization_intent;
                 }
             return message;
         };
@@ -213067,26 +212254,22 @@ export const vtctldata = $root.vtctldata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.workflow != null && $Object.hasOwnProperty.call(message, "workflow"))
+            if (message.workflow != null && $Object.hasOwnProperty.call(message, "workflow") && message.workflow !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.workflow);
-            if (message.source_keyspace != null && $Object.hasOwnProperty.call(message, "source_keyspace"))
+            if (message.source_keyspace != null && $Object.hasOwnProperty.call(message, "source_keyspace") && message.source_keyspace !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.source_keyspace);
-            if (message.target_keyspace != null && $Object.hasOwnProperty.call(message, "target_keyspace"))
+            if (message.target_keyspace != null && $Object.hasOwnProperty.call(message, "target_keyspace") && message.target_keyspace !== "")
                 writer.uint32(/* id 3, wireType 2 =*/26).string(message.target_keyspace);
-            if (message.mount_name != null && $Object.hasOwnProperty.call(message, "mount_name"))
+            if (message.mount_name != null && $Object.hasOwnProperty.call(message, "mount_name") && message.mount_name !== "")
                 writer.uint32(/* id 4, wireType 2 =*/34).string(message.mount_name);
             if (message.cells != null && message.cells.length)
                 for (let i = 0; i < message.cells.length; ++i)
                     writer.uint32(/* id 5, wireType 2 =*/42).string(message.cells[i]);
-            if (message.tablet_types != null && message.tablet_types.length) {
-                writer.uint32(/* id 6, wireType 2 =*/50).fork();
-                for (let i = 0; i < message.tablet_types.length; ++i)
-                    writer.int32(message.tablet_types[i]);
-                writer.ldelim();
-            }
-            if (message.tablet_selection_preference != null && $Object.hasOwnProperty.call(message, "tablet_selection_preference"))
+            if (message.tablet_types != null && message.tablet_types.length)
+                writer.uint32(/* id 6, wireType 2 =*/50).int32s(message.tablet_types);
+            if (message.tablet_selection_preference != null && $Object.hasOwnProperty.call(message, "tablet_selection_preference") && message.tablet_selection_preference !== 0)
                 writer.uint32(/* id 7, wireType 0 =*/56).int32(message.tablet_selection_preference);
-            if (message.all_tables != null && $Object.hasOwnProperty.call(message, "all_tables"))
+            if (message.all_tables != null && $Object.hasOwnProperty.call(message, "all_tables") && message.all_tables !== false)
                 writer.uint32(/* id 8, wireType 0 =*/64).bool(message.all_tables);
             if (message.include_tables != null && message.include_tables.length)
                 for (let i = 0; i < message.include_tables.length; ++i)
@@ -213094,19 +212277,19 @@ export const vtctldata = $root.vtctldata = (() => {
             if (message.exclude_tables != null && message.exclude_tables.length)
                 for (let i = 0; i < message.exclude_tables.length; ++i)
                     writer.uint32(/* id 10, wireType 2 =*/82).string(message.exclude_tables[i]);
-            if (message.source_time_zone != null && $Object.hasOwnProperty.call(message, "source_time_zone"))
+            if (message.source_time_zone != null && $Object.hasOwnProperty.call(message, "source_time_zone") && message.source_time_zone !== "")
                 writer.uint32(/* id 11, wireType 2 =*/90).string(message.source_time_zone);
-            if (message.on_ddl != null && $Object.hasOwnProperty.call(message, "on_ddl"))
+            if (message.on_ddl != null && $Object.hasOwnProperty.call(message, "on_ddl") && message.on_ddl !== "")
                 writer.uint32(/* id 12, wireType 2 =*/98).string(message.on_ddl);
-            if (message.stop_after_copy != null && $Object.hasOwnProperty.call(message, "stop_after_copy"))
+            if (message.stop_after_copy != null && $Object.hasOwnProperty.call(message, "stop_after_copy") && message.stop_after_copy !== false)
                 writer.uint32(/* id 13, wireType 0 =*/104).bool(message.stop_after_copy);
-            if (message.drop_foreign_keys != null && $Object.hasOwnProperty.call(message, "drop_foreign_keys"))
+            if (message.drop_foreign_keys != null && $Object.hasOwnProperty.call(message, "drop_foreign_keys") && message.drop_foreign_keys !== false)
                 writer.uint32(/* id 14, wireType 0 =*/112).bool(message.drop_foreign_keys);
-            if (message.defer_secondary_keys != null && $Object.hasOwnProperty.call(message, "defer_secondary_keys"))
+            if (message.defer_secondary_keys != null && $Object.hasOwnProperty.call(message, "defer_secondary_keys") && message.defer_secondary_keys !== false)
                 writer.uint32(/* id 15, wireType 0 =*/120).bool(message.defer_secondary_keys);
-            if (message.auto_start != null && $Object.hasOwnProperty.call(message, "auto_start"))
+            if (message.auto_start != null && $Object.hasOwnProperty.call(message, "auto_start") && message.auto_start !== false)
                 writer.uint32(/* id 16, wireType 0 =*/128).bool(message.auto_start);
-            if (message.no_routing_rules != null && $Object.hasOwnProperty.call(message, "no_routing_rules"))
+            if (message.no_routing_rules != null && $Object.hasOwnProperty.call(message, "no_routing_rules") && message.no_routing_rules !== false)
                 writer.uint32(/* id 17, wireType 0 =*/136).bool(message.no_routing_rules);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -213203,9 +212386,7 @@ export const vtctldata = $root.vtctldata = (() => {
                         if (wireType === 2) {
                             if (!(message.tablet_types && message.tablet_types.length))
                                 message.tablet_types = [];
-                            let end2 = reader.uint32() + reader.pos;
-                            while (reader.pos < end2)
-                                message.tablet_types.push(reader.int32());
+                            reader.int32s(message.tablet_types);
                             continue;
                         }
                         if (wireType !== 0)
@@ -213378,32 +212559,12 @@ export const vtctldata = $root.vtctldata = (() => {
                 if (!$Array.isArray(message.tablet_types))
                     return "tablet_types: array expected";
                 for (let i = 0; i < message.tablet_types.length; ++i)
-                    switch (message.tablet_types[i]) {
-                    default:
+                    if (typeof message.tablet_types[i] !== "number" || (message.tablet_types[i] | 0) !== message.tablet_types[i])
                         return "tablet_types: enum value[] expected";
-                    case 0:
-                    case 1:
-                    case 1:
-                    case 2:
-                    case 3:
-                    case 3:
-                    case 4:
-                    case 5:
-                    case 6:
-                    case 7:
-                    case 8:
-                        break;
-                    }
             }
             if (message.tablet_selection_preference != null && $Object.hasOwnProperty.call(message, "tablet_selection_preference"))
-                switch (message.tablet_selection_preference) {
-                default:
+                if (typeof message.tablet_selection_preference !== "number" || (message.tablet_selection_preference | 0) !== message.tablet_selection_preference)
                     return "tablet_selection_preference: enum value expected";
-                case 0:
-                case 1:
-                case 3:
-                    break;
-                }
             if (message.all_tables != null && $Object.hasOwnProperty.call(message, "all_tables"))
                 if (typeof message.all_tables !== "boolean")
                     return "all_tables: boolean expected";
@@ -213485,68 +212646,60 @@ export const vtctldata = $root.vtctldata = (() => {
             if (object.tablet_types) {
                 if (!$Array.isArray(object.tablet_types))
                     throw $TypeError(".vtctldata.MigrateCreateRequest.tablet_types: array expected");
-                message.tablet_types = $Array(object.tablet_types.length);
+                message.tablet_types = [];
                 for (let i = 0; i < object.tablet_types.length; ++i)
                     switch (object.tablet_types[i]) {
-                    default:
-                        if (typeof object.tablet_types[i] === "number") {
-                            message.tablet_types[i] = object.tablet_types[i];
-                            break;
-                        }
                     case "UNKNOWN":
                     case 0:
-                        message.tablet_types[i] = 0;
+                        message.tablet_types[message.tablet_types.length] = 0;
                         break;
                     case "PRIMARY":
                     case 1:
-                        message.tablet_types[i] = 1;
+                        message.tablet_types[message.tablet_types.length] = 1;
                         break;
                     case "MASTER":
                     case 1:
-                        message.tablet_types[i] = 1;
+                        message.tablet_types[message.tablet_types.length] = 1;
                         break;
                     case "REPLICA":
                     case 2:
-                        message.tablet_types[i] = 2;
+                        message.tablet_types[message.tablet_types.length] = 2;
                         break;
                     case "RDONLY":
                     case 3:
-                        message.tablet_types[i] = 3;
+                        message.tablet_types[message.tablet_types.length] = 3;
                         break;
                     case "BATCH":
                     case 3:
-                        message.tablet_types[i] = 3;
+                        message.tablet_types[message.tablet_types.length] = 3;
                         break;
                     case "SPARE":
                     case 4:
-                        message.tablet_types[i] = 4;
+                        message.tablet_types[message.tablet_types.length] = 4;
                         break;
                     case "EXPERIMENTAL":
                     case 5:
-                        message.tablet_types[i] = 5;
+                        message.tablet_types[message.tablet_types.length] = 5;
                         break;
                     case "BACKUP":
                     case 6:
-                        message.tablet_types[i] = 6;
+                        message.tablet_types[message.tablet_types.length] = 6;
                         break;
                     case "RESTORE":
                     case 7:
-                        message.tablet_types[i] = 7;
+                        message.tablet_types[message.tablet_types.length] = 7;
                         break;
                     case "DRAINED":
                     case 8:
-                        message.tablet_types[i] = 8;
+                        message.tablet_types[message.tablet_types.length] = 8;
                         break;
+                    default:
+                        if (typeof object.tablet_types[i] === "number" && (object.tablet_types[i] | 0) === object.tablet_types[i])
+                            message.tablet_types[message.tablet_types.length] = object.tablet_types[i];
                     }
             }
             if (object.tablet_selection_preference !== 0 && (typeof object.tablet_selection_preference !== "string" || $root.tabletmanagerdata.TabletSelectionPreference[object.tablet_selection_preference] !== 0))
                 switch (object.tablet_selection_preference) {
-                default:
-                    if (typeof object.tablet_selection_preference === "number") {
-                        message.tablet_selection_preference = object.tablet_selection_preference;
-                        break;
-                    }
-                    break;
                 case "ANY":
                 case 0:
                     message.tablet_selection_preference = 0;
@@ -213559,6 +212712,9 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 3:
                     message.tablet_selection_preference = 3;
                     break;
+                default:
+                    if (typeof object.tablet_selection_preference === "number" && (object.tablet_selection_preference | 0) === object.tablet_selection_preference)
+                        message.tablet_selection_preference = object.tablet_selection_preference;
                 }
             if (object.all_tables != null)
                 if (object.all_tables)
@@ -213838,17 +212994,17 @@ export const vtctldata = $root.vtctldata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.workflow != null && $Object.hasOwnProperty.call(message, "workflow"))
+            if (message.workflow != null && $Object.hasOwnProperty.call(message, "workflow") && message.workflow !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.workflow);
-            if (message.target_keyspace != null && $Object.hasOwnProperty.call(message, "target_keyspace"))
+            if (message.target_keyspace != null && $Object.hasOwnProperty.call(message, "target_keyspace") && message.target_keyspace !== "")
                 writer.uint32(/* id 3, wireType 2 =*/26).string(message.target_keyspace);
-            if (message.keep_data != null && $Object.hasOwnProperty.call(message, "keep_data"))
+            if (message.keep_data != null && $Object.hasOwnProperty.call(message, "keep_data") && message.keep_data !== false)
                 writer.uint32(/* id 4, wireType 0 =*/32).bool(message.keep_data);
-            if (message.keep_routing_rules != null && $Object.hasOwnProperty.call(message, "keep_routing_rules"))
+            if (message.keep_routing_rules != null && $Object.hasOwnProperty.call(message, "keep_routing_rules") && message.keep_routing_rules !== false)
                 writer.uint32(/* id 5, wireType 0 =*/40).bool(message.keep_routing_rules);
-            if (message.rename_tables != null && $Object.hasOwnProperty.call(message, "rename_tables"))
+            if (message.rename_tables != null && $Object.hasOwnProperty.call(message, "rename_tables") && message.rename_tables !== false)
                 writer.uint32(/* id 6, wireType 0 =*/48).bool(message.rename_tables);
-            if (message.dry_run != null && $Object.hasOwnProperty.call(message, "dry_run"))
+            if (message.dry_run != null && $Object.hasOwnProperty.call(message, "dry_run") && message.dry_run !== false)
                 writer.uint32(/* id 7, wireType 0 =*/56).bool(message.dry_run);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -214209,7 +213365,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.summary != null && $Object.hasOwnProperty.call(message, "summary"))
+            if (message.summary != null && $Object.hasOwnProperty.call(message, "summary") && message.summary !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.summary);
             if (message.dry_run_results != null && message.dry_run_results.length)
                 for (let i = 0; i < message.dry_run_results.length; ++i)
@@ -214528,13 +213684,13 @@ export const vtctldata = $root.vtctldata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.topo_type != null && $Object.hasOwnProperty.call(message, "topo_type"))
+            if (message.topo_type != null && $Object.hasOwnProperty.call(message, "topo_type") && message.topo_type !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.topo_type);
-            if (message.topo_server != null && $Object.hasOwnProperty.call(message, "topo_server"))
+            if (message.topo_server != null && $Object.hasOwnProperty.call(message, "topo_server") && message.topo_server !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.topo_server);
-            if (message.topo_root != null && $Object.hasOwnProperty.call(message, "topo_root"))
+            if (message.topo_root != null && $Object.hasOwnProperty.call(message, "topo_root") && message.topo_root !== "")
                 writer.uint32(/* id 3, wireType 2 =*/26).string(message.topo_root);
-            if (message.name != null && $Object.hasOwnProperty.call(message, "name"))
+            if (message.name != null && $Object.hasOwnProperty.call(message, "name") && message.name !== "")
                 writer.uint32(/* id 4, wireType 2 =*/34).string(message.name);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -215068,7 +214224,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.name != null && $Object.hasOwnProperty.call(message, "name"))
+            if (message.name != null && $Object.hasOwnProperty.call(message, "name") && message.name !== "")
                 writer.uint32(/* id 4, wireType 2 =*/34).string(message.name);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -215547,7 +214703,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.name != null && $Object.hasOwnProperty.call(message, "name"))
+            if (message.name != null && $Object.hasOwnProperty.call(message, "name") && message.name !== "")
                 writer.uint32(/* id 4, wireType 2 =*/34).string(message.name);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -215834,13 +214990,13 @@ export const vtctldata = $root.vtctldata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.topo_type != null && $Object.hasOwnProperty.call(message, "topo_type"))
+            if (message.topo_type != null && $Object.hasOwnProperty.call(message, "topo_type") && message.topo_type !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.topo_type);
-            if (message.topo_server != null && $Object.hasOwnProperty.call(message, "topo_server"))
+            if (message.topo_server != null && $Object.hasOwnProperty.call(message, "topo_server") && message.topo_server !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.topo_server);
-            if (message.topo_root != null && $Object.hasOwnProperty.call(message, "topo_root"))
+            if (message.topo_root != null && $Object.hasOwnProperty.call(message, "topo_root") && message.topo_root !== "")
                 writer.uint32(/* id 3, wireType 2 =*/26).string(message.topo_root);
-            if (message.name != null && $Object.hasOwnProperty.call(message, "name"))
+            if (message.name != null && $Object.hasOwnProperty.call(message, "name") && message.name !== "")
                 writer.uint32(/* id 4, wireType 2 =*/34).string(message.name);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -216822,27 +215978,23 @@ export const vtctldata = $root.vtctldata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.workflow != null && $Object.hasOwnProperty.call(message, "workflow"))
+            if (message.workflow != null && $Object.hasOwnProperty.call(message, "workflow") && message.workflow !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.workflow);
-            if (message.source_keyspace != null && $Object.hasOwnProperty.call(message, "source_keyspace"))
+            if (message.source_keyspace != null && $Object.hasOwnProperty.call(message, "source_keyspace") && message.source_keyspace !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.source_keyspace);
-            if (message.target_keyspace != null && $Object.hasOwnProperty.call(message, "target_keyspace"))
+            if (message.target_keyspace != null && $Object.hasOwnProperty.call(message, "target_keyspace") && message.target_keyspace !== "")
                 writer.uint32(/* id 3, wireType 2 =*/26).string(message.target_keyspace);
             if (message.cells != null && message.cells.length)
                 for (let i = 0; i < message.cells.length; ++i)
                     writer.uint32(/* id 4, wireType 2 =*/34).string(message.cells[i]);
-            if (message.tablet_types != null && message.tablet_types.length) {
-                writer.uint32(/* id 5, wireType 2 =*/42).fork();
-                for (let i = 0; i < message.tablet_types.length; ++i)
-                    writer.int32(message.tablet_types[i]);
-                writer.ldelim();
-            }
-            if (message.tablet_selection_preference != null && $Object.hasOwnProperty.call(message, "tablet_selection_preference"))
+            if (message.tablet_types != null && message.tablet_types.length)
+                writer.uint32(/* id 5, wireType 2 =*/42).int32s(message.tablet_types);
+            if (message.tablet_selection_preference != null && $Object.hasOwnProperty.call(message, "tablet_selection_preference") && message.tablet_selection_preference !== 0)
                 writer.uint32(/* id 6, wireType 0 =*/48).int32(message.tablet_selection_preference);
             if (message.source_shards != null && message.source_shards.length)
                 for (let i = 0; i < message.source_shards.length; ++i)
                     writer.uint32(/* id 7, wireType 2 =*/58).string(message.source_shards[i]);
-            if (message.all_tables != null && $Object.hasOwnProperty.call(message, "all_tables"))
+            if (message.all_tables != null && $Object.hasOwnProperty.call(message, "all_tables") && message.all_tables !== false)
                 writer.uint32(/* id 8, wireType 0 =*/64).bool(message.all_tables);
             if (message.include_tables != null && message.include_tables.length)
                 for (let i = 0; i < message.include_tables.length; ++i)
@@ -216850,23 +216002,23 @@ export const vtctldata = $root.vtctldata = (() => {
             if (message.exclude_tables != null && message.exclude_tables.length)
                 for (let i = 0; i < message.exclude_tables.length; ++i)
                     writer.uint32(/* id 10, wireType 2 =*/82).string(message.exclude_tables[i]);
-            if (message.external_cluster_name != null && $Object.hasOwnProperty.call(message, "external_cluster_name"))
+            if (message.external_cluster_name != null && $Object.hasOwnProperty.call(message, "external_cluster_name") && message.external_cluster_name !== "")
                 writer.uint32(/* id 11, wireType 2 =*/90).string(message.external_cluster_name);
-            if (message.source_time_zone != null && $Object.hasOwnProperty.call(message, "source_time_zone"))
+            if (message.source_time_zone != null && $Object.hasOwnProperty.call(message, "source_time_zone") && message.source_time_zone !== "")
                 writer.uint32(/* id 12, wireType 2 =*/98).string(message.source_time_zone);
-            if (message.on_ddl != null && $Object.hasOwnProperty.call(message, "on_ddl"))
+            if (message.on_ddl != null && $Object.hasOwnProperty.call(message, "on_ddl") && message.on_ddl !== "")
                 writer.uint32(/* id 13, wireType 2 =*/106).string(message.on_ddl);
-            if (message.stop_after_copy != null && $Object.hasOwnProperty.call(message, "stop_after_copy"))
+            if (message.stop_after_copy != null && $Object.hasOwnProperty.call(message, "stop_after_copy") && message.stop_after_copy !== false)
                 writer.uint32(/* id 14, wireType 0 =*/112).bool(message.stop_after_copy);
-            if (message.drop_foreign_keys != null && $Object.hasOwnProperty.call(message, "drop_foreign_keys"))
+            if (message.drop_foreign_keys != null && $Object.hasOwnProperty.call(message, "drop_foreign_keys") && message.drop_foreign_keys !== false)
                 writer.uint32(/* id 15, wireType 0 =*/120).bool(message.drop_foreign_keys);
-            if (message.defer_secondary_keys != null && $Object.hasOwnProperty.call(message, "defer_secondary_keys"))
+            if (message.defer_secondary_keys != null && $Object.hasOwnProperty.call(message, "defer_secondary_keys") && message.defer_secondary_keys !== false)
                 writer.uint32(/* id 16, wireType 0 =*/128).bool(message.defer_secondary_keys);
-            if (message.auto_start != null && $Object.hasOwnProperty.call(message, "auto_start"))
+            if (message.auto_start != null && $Object.hasOwnProperty.call(message, "auto_start") && message.auto_start !== false)
                 writer.uint32(/* id 17, wireType 0 =*/136).bool(message.auto_start);
-            if (message.no_routing_rules != null && $Object.hasOwnProperty.call(message, "no_routing_rules"))
+            if (message.no_routing_rules != null && $Object.hasOwnProperty.call(message, "no_routing_rules") && message.no_routing_rules !== false)
                 writer.uint32(/* id 18, wireType 0 =*/144).bool(message.no_routing_rules);
-            if (message.atomic_copy != null && $Object.hasOwnProperty.call(message, "atomic_copy"))
+            if (message.atomic_copy != null && $Object.hasOwnProperty.call(message, "atomic_copy") && message.atomic_copy !== false)
                 writer.uint32(/* id 19, wireType 0 =*/152).bool(message.atomic_copy);
             if (message.workflow_options != null && $Object.hasOwnProperty.call(message, "workflow_options"))
                 $root.vtctldata.WorkflowOptions.encode(message.workflow_options, writer.uint32(/* id 20, wireType 2 =*/162).fork(), _depth + 1).ldelim();
@@ -216956,9 +216108,7 @@ export const vtctldata = $root.vtctldata = (() => {
                         if (wireType === 2) {
                             if (!(message.tablet_types && message.tablet_types.length))
                                 message.tablet_types = [];
-                            let end2 = reader.uint32() + reader.pos;
-                            while (reader.pos < end2)
-                                message.tablet_types.push(reader.int32());
+                            reader.int32s(message.tablet_types);
                             continue;
                         }
                         if (wireType !== 0)
@@ -217160,32 +216310,12 @@ export const vtctldata = $root.vtctldata = (() => {
                 if (!$Array.isArray(message.tablet_types))
                     return "tablet_types: array expected";
                 for (let i = 0; i < message.tablet_types.length; ++i)
-                    switch (message.tablet_types[i]) {
-                    default:
+                    if (typeof message.tablet_types[i] !== "number" || (message.tablet_types[i] | 0) !== message.tablet_types[i])
                         return "tablet_types: enum value[] expected";
-                    case 0:
-                    case 1:
-                    case 1:
-                    case 2:
-                    case 3:
-                    case 3:
-                    case 4:
-                    case 5:
-                    case 6:
-                    case 7:
-                    case 8:
-                        break;
-                    }
             }
             if (message.tablet_selection_preference != null && $Object.hasOwnProperty.call(message, "tablet_selection_preference"))
-                switch (message.tablet_selection_preference) {
-                default:
+                if (typeof message.tablet_selection_preference !== "number" || (message.tablet_selection_preference | 0) !== message.tablet_selection_preference)
                     return "tablet_selection_preference: enum value expected";
-                case 0:
-                case 1:
-                case 3:
-                    break;
-                }
             if (message.source_shards != null && $Object.hasOwnProperty.call(message, "source_shards")) {
                 if (!$Array.isArray(message.source_shards))
                     return "source_shards: array expected";
@@ -217282,68 +216412,60 @@ export const vtctldata = $root.vtctldata = (() => {
             if (object.tablet_types) {
                 if (!$Array.isArray(object.tablet_types))
                     throw $TypeError(".vtctldata.MoveTablesCreateRequest.tablet_types: array expected");
-                message.tablet_types = $Array(object.tablet_types.length);
+                message.tablet_types = [];
                 for (let i = 0; i < object.tablet_types.length; ++i)
                     switch (object.tablet_types[i]) {
-                    default:
-                        if (typeof object.tablet_types[i] === "number") {
-                            message.tablet_types[i] = object.tablet_types[i];
-                            break;
-                        }
                     case "UNKNOWN":
                     case 0:
-                        message.tablet_types[i] = 0;
+                        message.tablet_types[message.tablet_types.length] = 0;
                         break;
                     case "PRIMARY":
                     case 1:
-                        message.tablet_types[i] = 1;
+                        message.tablet_types[message.tablet_types.length] = 1;
                         break;
                     case "MASTER":
                     case 1:
-                        message.tablet_types[i] = 1;
+                        message.tablet_types[message.tablet_types.length] = 1;
                         break;
                     case "REPLICA":
                     case 2:
-                        message.tablet_types[i] = 2;
+                        message.tablet_types[message.tablet_types.length] = 2;
                         break;
                     case "RDONLY":
                     case 3:
-                        message.tablet_types[i] = 3;
+                        message.tablet_types[message.tablet_types.length] = 3;
                         break;
                     case "BATCH":
                     case 3:
-                        message.tablet_types[i] = 3;
+                        message.tablet_types[message.tablet_types.length] = 3;
                         break;
                     case "SPARE":
                     case 4:
-                        message.tablet_types[i] = 4;
+                        message.tablet_types[message.tablet_types.length] = 4;
                         break;
                     case "EXPERIMENTAL":
                     case 5:
-                        message.tablet_types[i] = 5;
+                        message.tablet_types[message.tablet_types.length] = 5;
                         break;
                     case "BACKUP":
                     case 6:
-                        message.tablet_types[i] = 6;
+                        message.tablet_types[message.tablet_types.length] = 6;
                         break;
                     case "RESTORE":
                     case 7:
-                        message.tablet_types[i] = 7;
+                        message.tablet_types[message.tablet_types.length] = 7;
                         break;
                     case "DRAINED":
                     case 8:
-                        message.tablet_types[i] = 8;
+                        message.tablet_types[message.tablet_types.length] = 8;
                         break;
+                    default:
+                        if (typeof object.tablet_types[i] === "number" && (object.tablet_types[i] | 0) === object.tablet_types[i])
+                            message.tablet_types[message.tablet_types.length] = object.tablet_types[i];
                     }
             }
             if (object.tablet_selection_preference !== 0 && (typeof object.tablet_selection_preference !== "string" || $root.tabletmanagerdata.TabletSelectionPreference[object.tablet_selection_preference] !== 0))
                 switch (object.tablet_selection_preference) {
-                default:
-                    if (typeof object.tablet_selection_preference === "number") {
-                        message.tablet_selection_preference = object.tablet_selection_preference;
-                        break;
-                    }
-                    break;
                 case "ANY":
                 case 0:
                     message.tablet_selection_preference = 0;
@@ -217356,6 +216478,9 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 3:
                     message.tablet_selection_preference = 3;
                     break;
+                default:
+                    if (typeof object.tablet_selection_preference === "number" && (object.tablet_selection_preference | 0) === object.tablet_selection_preference)
+                        message.tablet_selection_preference = object.tablet_selection_preference;
                 }
             if (object.source_shards) {
                 if (!$Array.isArray(object.source_shards))
@@ -217630,7 +216755,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.summary != null && $Object.hasOwnProperty.call(message, "summary"))
+            if (message.summary != null && $Object.hasOwnProperty.call(message, "summary") && message.summary !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.summary);
             if (message.details != null && message.details.length)
                 for (let i = 0; i < message.details.length; ++i)
@@ -217935,7 +217060,7 @@ export const vtctldata = $root.vtctldata = (() => {
                     throw $Error("max depth exceeded");
                 if (message.tablet != null && $Object.hasOwnProperty.call(message, "tablet"))
                     $root.topodata.TabletAlias.encode(message.tablet, writer.uint32(/* id 1, wireType 2 =*/10).fork(), _depth + 1).ldelim();
-                if (message.created != null && $Object.hasOwnProperty.call(message, "created"))
+                if (message.created != null && $Object.hasOwnProperty.call(message, "created") && message.created !== false)
                     writer.uint32(/* id 2, wireType 0 =*/16).bool(message.created);
                 if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                     for (let i = 0; i < message.$unknowns.length; ++i)
@@ -218291,22 +217416,22 @@ export const vtctldata = $root.vtctldata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.workflow != null && $Object.hasOwnProperty.call(message, "workflow"))
+            if (message.workflow != null && $Object.hasOwnProperty.call(message, "workflow") && message.workflow !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.workflow);
-            if (message.target_keyspace != null && $Object.hasOwnProperty.call(message, "target_keyspace"))
+            if (message.target_keyspace != null && $Object.hasOwnProperty.call(message, "target_keyspace") && message.target_keyspace !== "")
                 writer.uint32(/* id 3, wireType 2 =*/26).string(message.target_keyspace);
             if (message.keep_data != null && $Object.hasOwnProperty.call(message, "keep_data"))
                 writer.uint32(/* id 4, wireType 0 =*/32).bool(message.keep_data);
-            if (message.keep_routing_rules != null && $Object.hasOwnProperty.call(message, "keep_routing_rules"))
+            if (message.keep_routing_rules != null && $Object.hasOwnProperty.call(message, "keep_routing_rules") && message.keep_routing_rules !== false)
                 writer.uint32(/* id 5, wireType 0 =*/40).bool(message.keep_routing_rules);
-            if (message.rename_tables != null && $Object.hasOwnProperty.call(message, "rename_tables"))
+            if (message.rename_tables != null && $Object.hasOwnProperty.call(message, "rename_tables") && message.rename_tables !== false)
                 writer.uint32(/* id 6, wireType 0 =*/48).bool(message.rename_tables);
-            if (message.dry_run != null && $Object.hasOwnProperty.call(message, "dry_run"))
+            if (message.dry_run != null && $Object.hasOwnProperty.call(message, "dry_run") && message.dry_run !== false)
                 writer.uint32(/* id 7, wireType 0 =*/56).bool(message.dry_run);
             if (message.shards != null && message.shards.length)
                 for (let i = 0; i < message.shards.length; ++i)
                     writer.uint32(/* id 8, wireType 2 =*/66).string(message.shards[i]);
-            if (message.ignore_source_keyspace != null && $Object.hasOwnProperty.call(message, "ignore_source_keyspace"))
+            if (message.ignore_source_keyspace != null && $Object.hasOwnProperty.call(message, "ignore_source_keyspace") && message.ignore_source_keyspace !== false)
                 writer.uint32(/* id 9, wireType 0 =*/72).bool(message.ignore_source_keyspace);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -218723,7 +217848,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.summary != null && $Object.hasOwnProperty.call(message, "summary"))
+            if (message.summary != null && $Object.hasOwnProperty.call(message, "summary") && message.summary !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.summary);
             if (message.dry_run_results != null && message.dry_run_results.length)
                 for (let i = 0; i < message.dry_run_results.length; ++i)
@@ -219590,9 +218715,9 @@ export const vtctldata = $root.vtctldata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
+            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace") && message.keyspace !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.keyspace);
-            if (message.shard != null && $Object.hasOwnProperty.call(message, "shard"))
+            if (message.shard != null && $Object.hasOwnProperty.call(message, "shard") && message.shard !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.shard);
             if (message.new_primary != null && $Object.hasOwnProperty.call(message, "new_primary"))
                 $root.topodata.TabletAlias.encode(message.new_primary, writer.uint32(/* id 3, wireType 2 =*/26).fork(), _depth + 1).ldelim();
@@ -219602,7 +218727,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 $root.vttime.Duration.encode(message.wait_replicas_timeout, writer.uint32(/* id 5, wireType 2 =*/42).fork(), _depth + 1).ldelim();
             if (message.tolerable_replication_lag != null && $Object.hasOwnProperty.call(message, "tolerable_replication_lag"))
                 $root.vttime.Duration.encode(message.tolerable_replication_lag, writer.uint32(/* id 6, wireType 2 =*/50).fork(), _depth + 1).ldelim();
-            if (message.allow_cross_cell_promotion != null && $Object.hasOwnProperty.call(message, "allow_cross_cell_promotion"))
+            if (message.allow_cross_cell_promotion != null && $Object.hasOwnProperty.call(message, "allow_cross_cell_promotion") && message.allow_cross_cell_promotion !== false)
                 writer.uint32(/* id 7, wireType 0 =*/56).bool(message.allow_cross_cell_promotion);
             if (message.expected_primary != null && $Object.hasOwnProperty.call(message, "expected_primary"))
                 $root.topodata.TabletAlias.encode(message.expected_primary, writer.uint32(/* id 8, wireType 2 =*/66).fork(), _depth + 1).ldelim();
@@ -220024,9 +219149,9 @@ export const vtctldata = $root.vtctldata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
+            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace") && message.keyspace !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.keyspace);
-            if (message.shard != null && $Object.hasOwnProperty.call(message, "shard"))
+            if (message.shard != null && $Object.hasOwnProperty.call(message, "shard") && message.shard !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.shard);
             if (message.promoted_primary != null && $Object.hasOwnProperty.call(message, "promoted_primary"))
                 $root.topodata.TabletAlias.encode(message.promoted_primary, writer.uint32(/* id 3, wireType 2 =*/26).fork(), _depth + 1).ldelim();
@@ -220382,12 +219507,12 @@ export const vtctldata = $root.vtctldata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
+            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace") && message.keyspace !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.keyspace);
             if (message.cells != null && message.cells.length)
                 for (let i = 0; i < message.cells.length; ++i)
                     writer.uint32(/* id 2, wireType 2 =*/18).string(message.cells[i]);
-            if (message.allow_partial != null && $Object.hasOwnProperty.call(message, "allow_partial"))
+            if (message.allow_partial != null && $Object.hasOwnProperty.call(message, "allow_partial") && message.allow_partial !== false)
                 writer.uint32(/* id 3, wireType 0 =*/24).bool(message.allow_partial);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -221904,9 +221029,9 @@ export const vtctldata = $root.vtctldata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
+            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace") && message.keyspace !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.keyspace);
-            if (message.shard != null && $Object.hasOwnProperty.call(message, "shard"))
+            if (message.shard != null && $Object.hasOwnProperty.call(message, "shard") && message.shard !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.shard);
             if (message.cells != null && message.cells.length)
                 for (let i = 0; i < message.cells.length; ++i)
@@ -222226,9 +221351,9 @@ export const vtctldata = $root.vtctldata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.is_partial_refresh != null && $Object.hasOwnProperty.call(message, "is_partial_refresh"))
+            if (message.is_partial_refresh != null && $Object.hasOwnProperty.call(message, "is_partial_refresh") && message.is_partial_refresh !== false)
                 writer.uint32(/* id 1, wireType 0 =*/8).bool(message.is_partial_refresh);
-            if (message.partial_refresh_details != null && $Object.hasOwnProperty.call(message, "partial_refresh_details"))
+            if (message.partial_refresh_details != null && $Object.hasOwnProperty.call(message, "partial_refresh_details") && message.partial_refresh_details !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.partial_refresh_details);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -223014,13 +222139,13 @@ export const vtctldata = $root.vtctldata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
+            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace") && message.keyspace !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.keyspace);
-            if (message.wait_position != null && $Object.hasOwnProperty.call(message, "wait_position"))
+            if (message.wait_position != null && $Object.hasOwnProperty.call(message, "wait_position") && message.wait_position !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.wait_position);
-            if (message.include_primary != null && $Object.hasOwnProperty.call(message, "include_primary"))
+            if (message.include_primary != null && $Object.hasOwnProperty.call(message, "include_primary") && message.include_primary !== false)
                 writer.uint32(/* id 3, wireType 0 =*/24).bool(message.include_primary);
-            if (message.concurrency != null && $Object.hasOwnProperty.call(message, "concurrency"))
+            if (message.concurrency != null && $Object.hasOwnProperty.call(message, "concurrency") && message.concurrency !== 0)
                 writer.uint32(/* id 4, wireType 0 =*/32).int32(message.concurrency);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -223648,15 +222773,15 @@ export const vtctldata = $root.vtctldata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
+            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace") && message.keyspace !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.keyspace);
-            if (message.shard != null && $Object.hasOwnProperty.call(message, "shard"))
+            if (message.shard != null && $Object.hasOwnProperty.call(message, "shard") && message.shard !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.shard);
-            if (message.wait_position != null && $Object.hasOwnProperty.call(message, "wait_position"))
+            if (message.wait_position != null && $Object.hasOwnProperty.call(message, "wait_position") && message.wait_position !== "")
                 writer.uint32(/* id 3, wireType 2 =*/26).string(message.wait_position);
-            if (message.include_primary != null && $Object.hasOwnProperty.call(message, "include_primary"))
+            if (message.include_primary != null && $Object.hasOwnProperty.call(message, "include_primary") && message.include_primary !== false)
                 writer.uint32(/* id 4, wireType 0 =*/32).bool(message.include_primary);
-            if (message.concurrency != null && $Object.hasOwnProperty.call(message, "concurrency"))
+            if (message.concurrency != null && $Object.hasOwnProperty.call(message, "concurrency") && message.concurrency !== 0)
                 writer.uint32(/* id 5, wireType 0 =*/40).int32(message.concurrency);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -224284,11 +223409,11 @@ export const vtctldata = $root.vtctldata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
+            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace") && message.keyspace !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.keyspace);
-            if (message.shard != null && $Object.hasOwnProperty.call(message, "shard"))
+            if (message.shard != null && $Object.hasOwnProperty.call(message, "shard") && message.shard !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.shard);
-            if (message.name != null && $Object.hasOwnProperty.call(message, "name"))
+            if (message.name != null && $Object.hasOwnProperty.call(message, "name") && message.name !== "")
                 writer.uint32(/* id 3, wireType 2 =*/26).string(message.name);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -224831,13 +223956,13 @@ export const vtctldata = $root.vtctldata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
+            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace") && message.keyspace !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.keyspace);
-            if (message.cell != null && $Object.hasOwnProperty.call(message, "cell"))
+            if (message.cell != null && $Object.hasOwnProperty.call(message, "cell") && message.cell !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.cell);
-            if (message.force != null && $Object.hasOwnProperty.call(message, "force"))
+            if (message.force != null && $Object.hasOwnProperty.call(message, "force") && message.force !== false)
                 writer.uint32(/* id 3, wireType 0 =*/24).bool(message.force);
-            if (message.recursive != null && $Object.hasOwnProperty.call(message, "recursive"))
+            if (message.recursive != null && $Object.hasOwnProperty.call(message, "recursive") && message.recursive !== false)
                 writer.uint32(/* id 4, wireType 0 =*/32).bool(message.recursive);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -225407,15 +224532,15 @@ export const vtctldata = $root.vtctldata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
+            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace") && message.keyspace !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.keyspace);
-            if (message.shard_name != null && $Object.hasOwnProperty.call(message, "shard_name"))
+            if (message.shard_name != null && $Object.hasOwnProperty.call(message, "shard_name") && message.shard_name !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.shard_name);
-            if (message.cell != null && $Object.hasOwnProperty.call(message, "cell"))
+            if (message.cell != null && $Object.hasOwnProperty.call(message, "cell") && message.cell !== "")
                 writer.uint32(/* id 3, wireType 2 =*/26).string(message.cell);
-            if (message.force != null && $Object.hasOwnProperty.call(message, "force"))
+            if (message.force != null && $Object.hasOwnProperty.call(message, "force") && message.force !== false)
                 writer.uint32(/* id 4, wireType 0 =*/32).bool(message.force);
-            if (message.recursive != null && $Object.hasOwnProperty.call(message, "recursive"))
+            if (message.recursive != null && $Object.hasOwnProperty.call(message, "recursive") && message.recursive !== false)
                 writer.uint32(/* id 5, wireType 0 =*/40).bool(message.recursive);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -226246,9 +225371,9 @@ export const vtctldata = $root.vtctldata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
+            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace") && message.keyspace !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.keyspace);
-            if (message.shard != null && $Object.hasOwnProperty.call(message, "shard"))
+            if (message.shard != null && $Object.hasOwnProperty.call(message, "shard") && message.shard !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.shard);
             if (message.primary != null && $Object.hasOwnProperty.call(message, "primary"))
                 $root.topodata.TabletAlias.encode(message.primary, writer.uint32(/* id 3, wireType 2 =*/26).fork(), _depth + 1).ldelim();
@@ -226660,9 +225785,9 @@ export const vtctldata = $root.vtctldata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.workflow != null && $Object.hasOwnProperty.call(message, "workflow"))
+            if (message.workflow != null && $Object.hasOwnProperty.call(message, "workflow") && message.workflow !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.workflow);
-            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
+            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace") && message.keyspace !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.keyspace);
             if (message.source_shards != null && message.source_shards.length)
                 for (let i = 0; i < message.source_shards.length; ++i)
@@ -226673,23 +225798,19 @@ export const vtctldata = $root.vtctldata = (() => {
             if (message.cells != null && message.cells.length)
                 for (let i = 0; i < message.cells.length; ++i)
                     writer.uint32(/* id 5, wireType 2 =*/42).string(message.cells[i]);
-            if (message.tablet_types != null && message.tablet_types.length) {
-                writer.uint32(/* id 6, wireType 2 =*/50).fork();
-                for (let i = 0; i < message.tablet_types.length; ++i)
-                    writer.int32(message.tablet_types[i]);
-                writer.ldelim();
-            }
-            if (message.tablet_selection_preference != null && $Object.hasOwnProperty.call(message, "tablet_selection_preference"))
+            if (message.tablet_types != null && message.tablet_types.length)
+                writer.uint32(/* id 6, wireType 2 =*/50).int32s(message.tablet_types);
+            if (message.tablet_selection_preference != null && $Object.hasOwnProperty.call(message, "tablet_selection_preference") && message.tablet_selection_preference !== 0)
                 writer.uint32(/* id 7, wireType 0 =*/56).int32(message.tablet_selection_preference);
-            if (message.skip_schema_copy != null && $Object.hasOwnProperty.call(message, "skip_schema_copy"))
+            if (message.skip_schema_copy != null && $Object.hasOwnProperty.call(message, "skip_schema_copy") && message.skip_schema_copy !== false)
                 writer.uint32(/* id 8, wireType 0 =*/64).bool(message.skip_schema_copy);
-            if (message.on_ddl != null && $Object.hasOwnProperty.call(message, "on_ddl"))
+            if (message.on_ddl != null && $Object.hasOwnProperty.call(message, "on_ddl") && message.on_ddl !== "")
                 writer.uint32(/* id 9, wireType 2 =*/74).string(message.on_ddl);
-            if (message.stop_after_copy != null && $Object.hasOwnProperty.call(message, "stop_after_copy"))
+            if (message.stop_after_copy != null && $Object.hasOwnProperty.call(message, "stop_after_copy") && message.stop_after_copy !== false)
                 writer.uint32(/* id 10, wireType 0 =*/80).bool(message.stop_after_copy);
-            if (message.defer_secondary_keys != null && $Object.hasOwnProperty.call(message, "defer_secondary_keys"))
+            if (message.defer_secondary_keys != null && $Object.hasOwnProperty.call(message, "defer_secondary_keys") && message.defer_secondary_keys !== false)
                 writer.uint32(/* id 11, wireType 0 =*/88).bool(message.defer_secondary_keys);
-            if (message.auto_start != null && $Object.hasOwnProperty.call(message, "auto_start"))
+            if (message.auto_start != null && $Object.hasOwnProperty.call(message, "auto_start") && message.auto_start !== false)
                 writer.uint32(/* id 12, wireType 0 =*/96).bool(message.auto_start);
             if (message.workflow_options != null && $Object.hasOwnProperty.call(message, "workflow_options"))
                 $root.vtctldata.WorkflowOptions.encode(message.workflow_options, writer.uint32(/* id 13, wireType 2 =*/106).fork(), _depth + 1).ldelim();
@@ -226786,9 +225907,7 @@ export const vtctldata = $root.vtctldata = (() => {
                         if (wireType === 2) {
                             if (!(message.tablet_types && message.tablet_types.length))
                                 message.tablet_types = [];
-                            let end2 = reader.uint32() + reader.pos;
-                            while (reader.pos < end2)
-                                message.tablet_types.push(reader.int32());
+                            reader.int32s(message.tablet_types);
                             continue;
                         }
                         if (wireType !== 0)
@@ -226932,32 +226051,12 @@ export const vtctldata = $root.vtctldata = (() => {
                 if (!$Array.isArray(message.tablet_types))
                     return "tablet_types: array expected";
                 for (let i = 0; i < message.tablet_types.length; ++i)
-                    switch (message.tablet_types[i]) {
-                    default:
+                    if (typeof message.tablet_types[i] !== "number" || (message.tablet_types[i] | 0) !== message.tablet_types[i])
                         return "tablet_types: enum value[] expected";
-                    case 0:
-                    case 1:
-                    case 1:
-                    case 2:
-                    case 3:
-                    case 3:
-                    case 4:
-                    case 5:
-                    case 6:
-                    case 7:
-                    case 8:
-                        break;
-                    }
             }
             if (message.tablet_selection_preference != null && $Object.hasOwnProperty.call(message, "tablet_selection_preference"))
-                switch (message.tablet_selection_preference) {
-                default:
+                if (typeof message.tablet_selection_preference !== "number" || (message.tablet_selection_preference | 0) !== message.tablet_selection_preference)
                     return "tablet_selection_preference: enum value expected";
-                case 0:
-                case 1:
-                case 3:
-                    break;
-                }
             if (message.skip_schema_copy != null && $Object.hasOwnProperty.call(message, "skip_schema_copy"))
                 if (typeof message.skip_schema_copy !== "boolean")
                     return "skip_schema_copy: boolean expected";
@@ -227029,68 +226128,60 @@ export const vtctldata = $root.vtctldata = (() => {
             if (object.tablet_types) {
                 if (!$Array.isArray(object.tablet_types))
                     throw $TypeError(".vtctldata.ReshardCreateRequest.tablet_types: array expected");
-                message.tablet_types = $Array(object.tablet_types.length);
+                message.tablet_types = [];
                 for (let i = 0; i < object.tablet_types.length; ++i)
                     switch (object.tablet_types[i]) {
-                    default:
-                        if (typeof object.tablet_types[i] === "number") {
-                            message.tablet_types[i] = object.tablet_types[i];
-                            break;
-                        }
                     case "UNKNOWN":
                     case 0:
-                        message.tablet_types[i] = 0;
+                        message.tablet_types[message.tablet_types.length] = 0;
                         break;
                     case "PRIMARY":
                     case 1:
-                        message.tablet_types[i] = 1;
+                        message.tablet_types[message.tablet_types.length] = 1;
                         break;
                     case "MASTER":
                     case 1:
-                        message.tablet_types[i] = 1;
+                        message.tablet_types[message.tablet_types.length] = 1;
                         break;
                     case "REPLICA":
                     case 2:
-                        message.tablet_types[i] = 2;
+                        message.tablet_types[message.tablet_types.length] = 2;
                         break;
                     case "RDONLY":
                     case 3:
-                        message.tablet_types[i] = 3;
+                        message.tablet_types[message.tablet_types.length] = 3;
                         break;
                     case "BATCH":
                     case 3:
-                        message.tablet_types[i] = 3;
+                        message.tablet_types[message.tablet_types.length] = 3;
                         break;
                     case "SPARE":
                     case 4:
-                        message.tablet_types[i] = 4;
+                        message.tablet_types[message.tablet_types.length] = 4;
                         break;
                     case "EXPERIMENTAL":
                     case 5:
-                        message.tablet_types[i] = 5;
+                        message.tablet_types[message.tablet_types.length] = 5;
                         break;
                     case "BACKUP":
                     case 6:
-                        message.tablet_types[i] = 6;
+                        message.tablet_types[message.tablet_types.length] = 6;
                         break;
                     case "RESTORE":
                     case 7:
-                        message.tablet_types[i] = 7;
+                        message.tablet_types[message.tablet_types.length] = 7;
                         break;
                     case "DRAINED":
                     case 8:
-                        message.tablet_types[i] = 8;
+                        message.tablet_types[message.tablet_types.length] = 8;
                         break;
+                    default:
+                        if (typeof object.tablet_types[i] === "number" && (object.tablet_types[i] | 0) === object.tablet_types[i])
+                            message.tablet_types[message.tablet_types.length] = object.tablet_types[i];
                     }
             }
             if (object.tablet_selection_preference !== 0 && (typeof object.tablet_selection_preference !== "string" || $root.tabletmanagerdata.TabletSelectionPreference[object.tablet_selection_preference] !== 0))
                 switch (object.tablet_selection_preference) {
-                default:
-                    if (typeof object.tablet_selection_preference === "number") {
-                        message.tablet_selection_preference = object.tablet_selection_preference;
-                        break;
-                    }
-                    break;
                 case "ANY":
                 case 0:
                     message.tablet_selection_preference = 0;
@@ -227103,6 +226194,9 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 3:
                     message.tablet_selection_preference = 3;
                     break;
+                default:
+                    if (typeof object.tablet_selection_preference === "number" && (object.tablet_selection_preference | 0) === object.tablet_selection_preference)
+                        message.tablet_selection_preference = object.tablet_selection_preference;
                 }
             if (object.skip_schema_copy != null)
                 if (object.skip_schema_copy)
@@ -227357,9 +226451,9 @@ export const vtctldata = $root.vtctldata = (() => {
                 $root.topodata.TabletAlias.encode(message.tablet_alias, writer.uint32(/* id 1, wireType 2 =*/10).fork(), _depth + 1).ldelim();
             if (message.backup_time != null && $Object.hasOwnProperty.call(message, "backup_time"))
                 $root.vttime.Time.encode(message.backup_time, writer.uint32(/* id 2, wireType 2 =*/18).fork(), _depth + 1).ldelim();
-            if (message.restore_to_pos != null && $Object.hasOwnProperty.call(message, "restore_to_pos"))
+            if (message.restore_to_pos != null && $Object.hasOwnProperty.call(message, "restore_to_pos") && message.restore_to_pos !== "")
                 writer.uint32(/* id 3, wireType 2 =*/26).string(message.restore_to_pos);
-            if (message.dry_run != null && $Object.hasOwnProperty.call(message, "dry_run"))
+            if (message.dry_run != null && $Object.hasOwnProperty.call(message, "dry_run") && message.dry_run !== false)
                 writer.uint32(/* id 4, wireType 0 =*/32).bool(message.dry_run);
             if (message.restore_to_timestamp != null && $Object.hasOwnProperty.call(message, "restore_to_timestamp"))
                 $root.vttime.Time.encode(message.restore_to_timestamp, writer.uint32(/* id 5, wireType 2 =*/42).fork(), _depth + 1).ldelim();
@@ -227758,9 +226852,9 @@ export const vtctldata = $root.vtctldata = (() => {
                 throw $Error("max depth exceeded");
             if (message.tablet_alias != null && $Object.hasOwnProperty.call(message, "tablet_alias"))
                 $root.topodata.TabletAlias.encode(message.tablet_alias, writer.uint32(/* id 1, wireType 2 =*/10).fork(), _depth + 1).ldelim();
-            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
+            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace") && message.keyspace !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.keyspace);
-            if (message.shard != null && $Object.hasOwnProperty.call(message, "shard"))
+            if (message.shard != null && $Object.hasOwnProperty.call(message, "shard") && message.shard !== "")
                 writer.uint32(/* id 3, wireType 2 =*/26).string(message.shard);
             if (message.event != null && $Object.hasOwnProperty.call(message, "event"))
                 $root.logutil.Event.encode(message.event, writer.uint32(/* id 4, wireType 2 =*/34).fork(), _depth + 1).ldelim();
@@ -228097,9 +227191,9 @@ export const vtctldata = $root.vtctldata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
+            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace") && message.keyspace !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.keyspace);
-            if (message.uuid != null && $Object.hasOwnProperty.call(message, "uuid"))
+            if (message.uuid != null && $Object.hasOwnProperty.call(message, "uuid") && message.uuid !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.uuid);
             if (message.caller_id != null && $Object.hasOwnProperty.call(message, "caller_id"))
                 $root.vtrpc.CallerID.encode(message.caller_id, writer.uint32(/* id 3, wireType 2 =*/26).fork(), _depth + 1).ldelim();
@@ -229202,9 +228296,9 @@ export const vtctldata = $root.vtctldata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
+            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace") && message.keyspace !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.keyspace);
-            if (message.durability_policy != null && $Object.hasOwnProperty.call(message, "durability_policy"))
+            if (message.durability_policy != null && $Object.hasOwnProperty.call(message, "durability_policy") && message.durability_policy !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.durability_policy);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -229753,9 +228847,9 @@ export const vtctldata = $root.vtctldata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
+            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace") && message.keyspace !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.keyspace);
-            if (message.force != null && $Object.hasOwnProperty.call(message, "force"))
+            if (message.force != null && $Object.hasOwnProperty.call(message, "force") && message.force !== false)
                 writer.uint32(/* id 4, wireType 0 =*/32).bool(message.force);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -230313,11 +229407,11 @@ export const vtctldata = $root.vtctldata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
+            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace") && message.keyspace !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.keyspace);
-            if (message.shard != null && $Object.hasOwnProperty.call(message, "shard"))
+            if (message.shard != null && $Object.hasOwnProperty.call(message, "shard") && message.shard !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.shard);
-            if (message.is_serving != null && $Object.hasOwnProperty.call(message, "is_serving"))
+            if (message.is_serving != null && $Object.hasOwnProperty.call(message, "is_serving") && message.is_serving !== false)
                 writer.uint32(/* id 3, wireType 0 =*/24).bool(message.is_serving);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -230931,11 +230025,11 @@ export const vtctldata = $root.vtctldata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
+            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace") && message.keyspace !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.keyspace);
-            if (message.shard != null && $Object.hasOwnProperty.call(message, "shard"))
+            if (message.shard != null && $Object.hasOwnProperty.call(message, "shard") && message.shard !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.shard);
-            if (message.tablet_type != null && $Object.hasOwnProperty.call(message, "tablet_type"))
+            if (message.tablet_type != null && $Object.hasOwnProperty.call(message, "tablet_type") && message.tablet_type !== 0)
                 writer.uint32(/* id 3, wireType 0 =*/24).int32(message.tablet_type);
             if (message.cells != null && message.cells.length)
                 for (let i = 0; i < message.cells.length; ++i)
@@ -230943,9 +230037,9 @@ export const vtctldata = $root.vtctldata = (() => {
             if (message.denied_tables != null && message.denied_tables.length)
                 for (let i = 0; i < message.denied_tables.length; ++i)
                     writer.uint32(/* id 5, wireType 2 =*/42).string(message.denied_tables[i]);
-            if (message.disable_query_service != null && $Object.hasOwnProperty.call(message, "disable_query_service"))
+            if (message.disable_query_service != null && $Object.hasOwnProperty.call(message, "disable_query_service") && message.disable_query_service !== false)
                 writer.uint32(/* id 6, wireType 0 =*/48).bool(message.disable_query_service);
-            if (message.remove != null && $Object.hasOwnProperty.call(message, "remove"))
+            if (message.remove != null && $Object.hasOwnProperty.call(message, "remove") && message.remove !== false)
                 writer.uint32(/* id 7, wireType 0 =*/56).bool(message.remove);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -231105,22 +230199,8 @@ export const vtctldata = $root.vtctldata = (() => {
                 if (!$util.isString(message.shard))
                     return "shard: string expected";
             if (message.tablet_type != null && $Object.hasOwnProperty.call(message, "tablet_type"))
-                switch (message.tablet_type) {
-                default:
+                if (typeof message.tablet_type !== "number" || (message.tablet_type | 0) !== message.tablet_type)
                     return "tablet_type: enum value expected";
-                case 0:
-                case 1:
-                case 1:
-                case 2:
-                case 3:
-                case 3:
-                case 4:
-                case 5:
-                case 6:
-                case 7:
-                case 8:
-                    break;
-                }
             if (message.cells != null && $Object.hasOwnProperty.call(message, "cells")) {
                 if (!$Array.isArray(message.cells))
                     return "cells: array expected";
@@ -231170,12 +230250,6 @@ export const vtctldata = $root.vtctldata = (() => {
                     message.shard = $String(object.shard);
             if (object.tablet_type !== 0 && (typeof object.tablet_type !== "string" || $root.topodata.TabletType[object.tablet_type] !== 0))
                 switch (object.tablet_type) {
-                default:
-                    if (typeof object.tablet_type === "number") {
-                        message.tablet_type = object.tablet_type;
-                        break;
-                    }
-                    break;
                 case "UNKNOWN":
                 case 0:
                     message.tablet_type = 0;
@@ -231220,6 +230294,9 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 8:
                     message.tablet_type = 8;
                     break;
+                default:
+                    if (typeof object.tablet_type === "number" && (object.tablet_type | 0) === object.tablet_type)
+                        message.tablet_type = object.tablet_type;
                 }
             if (object.cells) {
                 if (!$Array.isArray(object.cells))
@@ -231672,7 +230749,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 throw $Error("max depth exceeded");
             if (message.tablet_alias != null && $Object.hasOwnProperty.call(message, "tablet_alias"))
                 $root.topodata.TabletAlias.encode(message.tablet_alias, writer.uint32(/* id 1, wireType 2 =*/10).fork(), _depth + 1).ldelim();
-            if (message.writable != null && $Object.hasOwnProperty.call(message, "writable"))
+            if (message.writable != null && $Object.hasOwnProperty.call(message, "writable") && message.writable !== false)
                 writer.uint32(/* id 2, wireType 0 =*/16).bool(message.writable);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -232189,9 +231266,9 @@ export const vtctldata = $root.vtctldata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
+            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace") && message.keyspace !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.keyspace);
-            if (message.shard != null && $Object.hasOwnProperty.call(message, "shard"))
+            if (message.shard != null && $Object.hasOwnProperty.call(message, "shard") && message.shard !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.shard);
             if (message.tablet_alias != null && $Object.hasOwnProperty.call(message, "tablet_alias"))
                 $root.topodata.TabletAlias.encode(message.tablet_alias, writer.uint32(/* id 3, wireType 2 =*/26).fork(), _depth + 1).ldelim();
@@ -232728,11 +231805,11 @@ export const vtctldata = $root.vtctldata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
+            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace") && message.keyspace !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.keyspace);
-            if (message.shard != null && $Object.hasOwnProperty.call(message, "shard"))
+            if (message.shard != null && $Object.hasOwnProperty.call(message, "shard") && message.shard !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.shard);
-            if (message.cell != null && $Object.hasOwnProperty.call(message, "cell"))
+            if (message.cell != null && $Object.hasOwnProperty.call(message, "cell") && message.cell !== "")
                 writer.uint32(/* id 3, wireType 2 =*/26).string(message.cell);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -233299,9 +232376,9 @@ export const vtctldata = $root.vtctldata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
+            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace") && message.keyspace !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.keyspace);
-            if (message.shard != null && $Object.hasOwnProperty.call(message, "shard"))
+            if (message.shard != null && $Object.hasOwnProperty.call(message, "shard") && message.shard !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.shard);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -233668,7 +232745,7 @@ export const vtctldata = $root.vtctldata = (() => {
                             case 2:
                                 if (wireType !== 2)
                                     break;
-                                value = $root.replicationdata.Status.decode(reader, reader.uint32(), $undefined, _depth + 1);
+                                value = $root.replicationdata.Status.decode(reader, reader.uint32(), $undefined, _depth + 1, value);
                                 continue;
                             }
                             reader.skipType(wireType, _depth, tag2);
@@ -233698,7 +232775,7 @@ export const vtctldata = $root.vtctldata = (() => {
                             case 2:
                                 if (wireType !== 2)
                                     break;
-                                value = $root.topodata.Tablet.decode(reader, reader.uint32(), $undefined, _depth + 1);
+                                value = $root.topodata.Tablet.decode(reader, reader.uint32(), $undefined, _depth + 1, value);
                                 continue;
                             }
                             reader.skipType(wireType, _depth, tag2);
@@ -233983,9 +233060,9 @@ export const vtctldata = $root.vtctldata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
+            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace") && message.keyspace !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.keyspace);
-            if (message.shard != null && $Object.hasOwnProperty.call(message, "shard"))
+            if (message.shard != null && $Object.hasOwnProperty.call(message, "shard") && message.shard !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.shard);
             if (message.tablet_alias != null && $Object.hasOwnProperty.call(message, "tablet_alias"))
                 $root.topodata.TabletAlias.encode(message.tablet_alias, writer.uint32(/* id 3, wireType 2 =*/26).fork(), _depth + 1).ldelim();
@@ -235070,15 +234147,15 @@ export const vtctldata = $root.vtctldata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
+            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace") && message.keyspace !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.keyspace);
-            if (message.shard != null && $Object.hasOwnProperty.call(message, "shard"))
+            if (message.shard != null && $Object.hasOwnProperty.call(message, "shard") && message.shard !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.shard);
-            if (message.uid != null && $Object.hasOwnProperty.call(message, "uid"))
+            if (message.uid != null && $Object.hasOwnProperty.call(message, "uid") && message.uid !== 0)
                 writer.uint32(/* id 3, wireType 0 =*/24).int32(message.uid);
-            if (message.source_keyspace != null && $Object.hasOwnProperty.call(message, "source_keyspace"))
+            if (message.source_keyspace != null && $Object.hasOwnProperty.call(message, "source_keyspace") && message.source_keyspace !== "")
                 writer.uint32(/* id 4, wireType 2 =*/34).string(message.source_keyspace);
-            if (message.source_shard != null && $Object.hasOwnProperty.call(message, "source_shard"))
+            if (message.source_shard != null && $Object.hasOwnProperty.call(message, "source_shard") && message.source_shard !== "")
                 writer.uint32(/* id 5, wireType 2 =*/42).string(message.source_shard);
             if (message.key_range != null && $Object.hasOwnProperty.call(message, "key_range"))
                 $root.topodata.KeyRange.encode(message.key_range, writer.uint32(/* id 6, wireType 2 =*/50).fork(), _depth + 1).ldelim();
@@ -235743,11 +234820,11 @@ export const vtctldata = $root.vtctldata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
+            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace") && message.keyspace !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.keyspace);
-            if (message.shard != null && $Object.hasOwnProperty.call(message, "shard"))
+            if (message.shard != null && $Object.hasOwnProperty.call(message, "shard") && message.shard !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.shard);
-            if (message.uid != null && $Object.hasOwnProperty.call(message, "uid"))
+            if (message.uid != null && $Object.hasOwnProperty.call(message, "uid") && message.uid !== 0)
                 writer.uint32(/* id 3, wireType 0 =*/24).int32(message.uid);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -237553,9 +236630,9 @@ export const vtctldata = $root.vtctldata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
+            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace") && message.keyspace !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.keyspace);
-            if (message.shard != null && $Object.hasOwnProperty.call(message, "shard"))
+            if (message.shard != null && $Object.hasOwnProperty.call(message, "shard") && message.shard !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.shard);
             if (message.new_primary != null && $Object.hasOwnProperty.call(message, "new_primary"))
                 $root.topodata.TabletAlias.encode(message.new_primary, writer.uint32(/* id 3, wireType 2 =*/26).fork(), _depth + 1).ldelim();
@@ -237885,7 +236962,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.name != null && $Object.hasOwnProperty.call(message, "name"))
+            if (message.name != null && $Object.hasOwnProperty.call(message, "name") && message.name !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.name);
             if (message.cell_info != null && $Object.hasOwnProperty.call(message, "cell_info"))
                 $root.topodata.CellInfo.encode(message.cell_info, writer.uint32(/* id 2, wireType 2 =*/18).fork(), _depth + 1).ldelim();
@@ -238176,7 +237253,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.name != null && $Object.hasOwnProperty.call(message, "name"))
+            if (message.name != null && $Object.hasOwnProperty.call(message, "name") && message.name !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.name);
             if (message.cell_info != null && $Object.hasOwnProperty.call(message, "cell_info"))
                 $root.topodata.CellInfo.encode(message.cell_info, writer.uint32(/* id 2, wireType 2 =*/18).fork(), _depth + 1).ldelim();
@@ -238467,7 +237544,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.name != null && $Object.hasOwnProperty.call(message, "name"))
+            if (message.name != null && $Object.hasOwnProperty.call(message, "name") && message.name !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.name);
             if (message.cells_alias != null && $Object.hasOwnProperty.call(message, "cells_alias"))
                 $root.topodata.CellsAlias.encode(message.cells_alias, writer.uint32(/* id 2, wireType 2 =*/18).fork(), _depth + 1).ldelim();
@@ -238758,7 +237835,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.name != null && $Object.hasOwnProperty.call(message, "name"))
+            if (message.name != null && $Object.hasOwnProperty.call(message, "name") && message.name !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.name);
             if (message.cells_alias != null && $Object.hasOwnProperty.call(message, "cells_alias"))
                 $root.topodata.CellsAlias.encode(message.cells_alias, writer.uint32(/* id 2, wireType 2 =*/18).fork(), _depth + 1).ldelim();
@@ -239040,7 +238117,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.ping_tablets != null && $Object.hasOwnProperty.call(message, "ping_tablets"))
+            if (message.ping_tablets != null && $Object.hasOwnProperty.call(message, "ping_tablets") && message.ping_tablets !== false)
                 writer.uint32(/* id 1, wireType 0 =*/8).bool(message.ping_tablets);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -239394,7 +238471,7 @@ export const vtctldata = $root.vtctldata = (() => {
                             case 2:
                                 if (wireType !== 2)
                                     break;
-                                value = $root.vtctldata.ValidateKeyspaceResponse.decode(reader, reader.uint32(), $undefined, _depth + 1);
+                                value = $root.vtctldata.ValidateKeyspaceResponse.decode(reader, reader.uint32(), $undefined, _depth + 1, value);
                                 continue;
                             }
                             reader.skipType(wireType, _depth, tag2);
@@ -239659,9 +238736,9 @@ export const vtctldata = $root.vtctldata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
+            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace") && message.keyspace !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.keyspace);
-            if (message.ping_tablets != null && $Object.hasOwnProperty.call(message, "ping_tablets"))
+            if (message.ping_tablets != null && $Object.hasOwnProperty.call(message, "ping_tablets") && message.ping_tablets !== false)
                 writer.uint32(/* id 2, wireType 0 =*/16).bool(message.ping_tablets);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -240034,7 +239111,7 @@ export const vtctldata = $root.vtctldata = (() => {
                             case 2:
                                 if (wireType !== 2)
                                     break;
-                                value = $root.vtctldata.ValidateShardResponse.decode(reader, reader.uint32(), $undefined, _depth + 1);
+                                value = $root.vtctldata.ValidateShardResponse.decode(reader, reader.uint32(), $undefined, _depth + 1, value);
                                 continue;
                             }
                             reader.skipType(wireType, _depth, tag2);
@@ -240300,7 +239377,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
+            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace") && message.keyspace !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.keyspace);
             if (message.shards != null && message.shards.length)
                 for (let i = 0; i < message.shards.length; ++i)
@@ -240858,16 +239935,16 @@ export const vtctldata = $root.vtctldata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
+            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace") && message.keyspace !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.keyspace);
             if (message.exclude_tables != null && message.exclude_tables.length)
                 for (let i = 0; i < message.exclude_tables.length; ++i)
                     writer.uint32(/* id 2, wireType 2 =*/18).string(message.exclude_tables[i]);
-            if (message.include_views != null && $Object.hasOwnProperty.call(message, "include_views"))
+            if (message.include_views != null && $Object.hasOwnProperty.call(message, "include_views") && message.include_views !== false)
                 writer.uint32(/* id 3, wireType 0 =*/24).bool(message.include_views);
-            if (message.skip_no_primary != null && $Object.hasOwnProperty.call(message, "skip_no_primary"))
+            if (message.skip_no_primary != null && $Object.hasOwnProperty.call(message, "skip_no_primary") && message.skip_no_primary !== false)
                 writer.uint32(/* id 4, wireType 0 =*/32).bool(message.skip_no_primary);
-            if (message.include_vschema != null && $Object.hasOwnProperty.call(message, "include_vschema"))
+            if (message.include_vschema != null && $Object.hasOwnProperty.call(message, "include_vschema") && message.include_vschema !== false)
                 writer.uint32(/* id 5, wireType 0 =*/40).bool(message.include_vschema);
             if (message.shards != null && message.shards.length)
                 for (let i = 0; i < message.shards.length; ++i)
@@ -241337,7 +240414,7 @@ export const vtctldata = $root.vtctldata = (() => {
                             case 2:
                                 if (wireType !== 2)
                                     break;
-                                value = $root.vtctldata.ValidateShardResponse.decode(reader, reader.uint32(), $undefined, _depth + 1);
+                                value = $root.vtctldata.ValidateShardResponse.decode(reader, reader.uint32(), $undefined, _depth + 1, value);
                                 continue;
                             }
                             reader.skipType(wireType, _depth, tag2);
@@ -241611,11 +240688,11 @@ export const vtctldata = $root.vtctldata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
+            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace") && message.keyspace !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.keyspace);
-            if (message.shard != null && $Object.hasOwnProperty.call(message, "shard"))
+            if (message.shard != null && $Object.hasOwnProperty.call(message, "shard") && message.shard !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.shard);
-            if (message.ping_tablets != null && $Object.hasOwnProperty.call(message, "ping_tablets"))
+            if (message.ping_tablets != null && $Object.hasOwnProperty.call(message, "ping_tablets") && message.ping_tablets !== false)
                 writer.uint32(/* id 3, wireType 0 =*/24).bool(message.ping_tablets);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -242184,7 +241261,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
+            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace") && message.keyspace !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.keyspace);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -242538,7 +241615,7 @@ export const vtctldata = $root.vtctldata = (() => {
                             case 2:
                                 if (wireType !== 2)
                                     break;
-                                value = $root.vtctldata.ValidateShardResponse.decode(reader, reader.uint32(), $undefined, _depth + 1);
+                                value = $root.vtctldata.ValidateShardResponse.decode(reader, reader.uint32(), $undefined, _depth + 1, value);
                                 continue;
                             }
                             reader.skipType(wireType, _depth, tag2);
@@ -242803,9 +241880,9 @@ export const vtctldata = $root.vtctldata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
+            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace") && message.keyspace !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.keyspace);
-            if (message.shard != null && $Object.hasOwnProperty.call(message, "shard"))
+            if (message.shard != null && $Object.hasOwnProperty.call(message, "shard") && message.shard !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.shard);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -243385,7 +242462,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
+            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace") && message.keyspace !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.keyspace);
             if (message.shards != null && message.shards.length)
                 for (let i = 0; i < message.shards.length; ++i)
@@ -243393,7 +242470,7 @@ export const vtctldata = $root.vtctldata = (() => {
             if (message.exclude_tables != null && message.exclude_tables.length)
                 for (let i = 0; i < message.exclude_tables.length; ++i)
                     writer.uint32(/* id 3, wireType 2 =*/26).string(message.exclude_tables[i]);
-            if (message.include_views != null && $Object.hasOwnProperty.call(message, "include_views"))
+            if (message.include_views != null && $Object.hasOwnProperty.call(message, "include_views") && message.include_views !== false)
                 writer.uint32(/* id 4, wireType 0 =*/32).bool(message.include_views);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -243824,7 +242901,7 @@ export const vtctldata = $root.vtctldata = (() => {
                             case 2:
                                 if (wireType !== 2)
                                     break;
-                                value = $root.vtctldata.ValidateShardResponse.decode(reader, reader.uint32(), $undefined, _depth + 1);
+                                value = $root.vtctldata.ValidateShardResponse.decode(reader, reader.uint32(), $undefined, _depth + 1, value);
                                 continue;
                             }
                             reader.skipType(wireType, _depth, tag2);
@@ -244282,11 +243359,11 @@ export const vtctldata = $root.vtctldata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.workflow != null && $Object.hasOwnProperty.call(message, "workflow"))
+            if (message.workflow != null && $Object.hasOwnProperty.call(message, "workflow") && message.workflow !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.workflow);
-            if (message.target_keyspace != null && $Object.hasOwnProperty.call(message, "target_keyspace"))
+            if (message.target_keyspace != null && $Object.hasOwnProperty.call(message, "target_keyspace") && message.target_keyspace !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.target_keyspace);
-            if (message.uuid != null && $Object.hasOwnProperty.call(message, "uuid"))
+            if (message.uuid != null && $Object.hasOwnProperty.call(message, "uuid") && message.uuid !== "")
                 writer.uint32(/* id 3, wireType 2 =*/26).string(message.uuid);
             if (message.source_cells != null && message.source_cells.length)
                 for (let i = 0; i < message.source_cells.length; ++i)
@@ -244294,42 +243371,38 @@ export const vtctldata = $root.vtctldata = (() => {
             if (message.target_cells != null && message.target_cells.length)
                 for (let i = 0; i < message.target_cells.length; ++i)
                     writer.uint32(/* id 5, wireType 2 =*/42).string(message.target_cells[i]);
-            if (message.tablet_types != null && message.tablet_types.length) {
-                writer.uint32(/* id 6, wireType 2 =*/50).fork();
-                for (let i = 0; i < message.tablet_types.length; ++i)
-                    writer.int32(message.tablet_types[i]);
-                writer.ldelim();
-            }
-            if (message.tablet_selection_preference != null && $Object.hasOwnProperty.call(message, "tablet_selection_preference"))
+            if (message.tablet_types != null && message.tablet_types.length)
+                writer.uint32(/* id 6, wireType 2 =*/50).int32s(message.tablet_types);
+            if (message.tablet_selection_preference != null && $Object.hasOwnProperty.call(message, "tablet_selection_preference") && message.tablet_selection_preference !== 0)
                 writer.uint32(/* id 7, wireType 0 =*/56).int32(message.tablet_selection_preference);
             if (message.tables != null && message.tables.length)
                 for (let i = 0; i < message.tables.length; ++i)
                     writer.uint32(/* id 8, wireType 2 =*/66).string(message.tables[i]);
-            if (message.limit != null && $Object.hasOwnProperty.call(message, "limit"))
+            if (message.limit != null && $Object.hasOwnProperty.call(message, "limit") && (typeof message.limit === "object" ? message.limit.low || message.limit.high : message.limit !== 0))
                 writer.uint32(/* id 9, wireType 0 =*/72).int64(message.limit);
             if (message.filtered_replication_wait_time != null && $Object.hasOwnProperty.call(message, "filtered_replication_wait_time"))
                 $root.vttime.Duration.encode(message.filtered_replication_wait_time, writer.uint32(/* id 10, wireType 2 =*/82).fork(), _depth + 1).ldelim();
-            if (message.debug_query != null && $Object.hasOwnProperty.call(message, "debug_query"))
+            if (message.debug_query != null && $Object.hasOwnProperty.call(message, "debug_query") && message.debug_query !== false)
                 writer.uint32(/* id 11, wireType 0 =*/88).bool(message.debug_query);
-            if (message.only_p_ks != null && $Object.hasOwnProperty.call(message, "only_p_ks"))
+            if (message.only_p_ks != null && $Object.hasOwnProperty.call(message, "only_p_ks") && message.only_p_ks !== false)
                 writer.uint32(/* id 12, wireType 0 =*/96).bool(message.only_p_ks);
-            if (message.update_table_stats != null && $Object.hasOwnProperty.call(message, "update_table_stats"))
+            if (message.update_table_stats != null && $Object.hasOwnProperty.call(message, "update_table_stats") && message.update_table_stats !== false)
                 writer.uint32(/* id 13, wireType 0 =*/104).bool(message.update_table_stats);
-            if (message.max_extra_rows_to_compare != null && $Object.hasOwnProperty.call(message, "max_extra_rows_to_compare"))
+            if (message.max_extra_rows_to_compare != null && $Object.hasOwnProperty.call(message, "max_extra_rows_to_compare") && (typeof message.max_extra_rows_to_compare === "object" ? message.max_extra_rows_to_compare.low || message.max_extra_rows_to_compare.high : message.max_extra_rows_to_compare !== 0))
                 writer.uint32(/* id 14, wireType 0 =*/112).int64(message.max_extra_rows_to_compare);
-            if (message.wait != null && $Object.hasOwnProperty.call(message, "wait"))
+            if (message.wait != null && $Object.hasOwnProperty.call(message, "wait") && message.wait !== false)
                 writer.uint32(/* id 15, wireType 0 =*/120).bool(message.wait);
             if (message.wait_update_interval != null && $Object.hasOwnProperty.call(message, "wait_update_interval"))
                 $root.vttime.Duration.encode(message.wait_update_interval, writer.uint32(/* id 16, wireType 2 =*/130).fork(), _depth + 1).ldelim();
-            if (message.auto_retry != null && $Object.hasOwnProperty.call(message, "auto_retry"))
+            if (message.auto_retry != null && $Object.hasOwnProperty.call(message, "auto_retry") && message.auto_retry !== false)
                 writer.uint32(/* id 17, wireType 0 =*/136).bool(message.auto_retry);
-            if (message.verbose != null && $Object.hasOwnProperty.call(message, "verbose"))
+            if (message.verbose != null && $Object.hasOwnProperty.call(message, "verbose") && message.verbose !== false)
                 writer.uint32(/* id 18, wireType 0 =*/144).bool(message.verbose);
-            if (message.max_report_sample_rows != null && $Object.hasOwnProperty.call(message, "max_report_sample_rows"))
+            if (message.max_report_sample_rows != null && $Object.hasOwnProperty.call(message, "max_report_sample_rows") && (typeof message.max_report_sample_rows === "object" ? message.max_report_sample_rows.low || message.max_report_sample_rows.high : message.max_report_sample_rows !== 0))
                 writer.uint32(/* id 19, wireType 0 =*/152).int64(message.max_report_sample_rows);
             if (message.max_diff_duration != null && $Object.hasOwnProperty.call(message, "max_diff_duration"))
                 $root.vttime.Duration.encode(message.max_diff_duration, writer.uint32(/* id 20, wireType 2 =*/162).fork(), _depth + 1).ldelim();
-            if (message.row_diff_column_truncate_at != null && $Object.hasOwnProperty.call(message, "row_diff_column_truncate_at"))
+            if (message.row_diff_column_truncate_at != null && $Object.hasOwnProperty.call(message, "row_diff_column_truncate_at") && (typeof message.row_diff_column_truncate_at === "object" ? message.row_diff_column_truncate_at.low || message.row_diff_column_truncate_at.high : message.row_diff_column_truncate_at !== 0))
                 writer.uint32(/* id 21, wireType 0 =*/168).int64(message.row_diff_column_truncate_at);
             if (message.auto_start != null && $Object.hasOwnProperty.call(message, "auto_start"))
                 writer.uint32(/* id 22, wireType 0 =*/176).bool(message.auto_start);
@@ -244427,9 +243500,7 @@ export const vtctldata = $root.vtctldata = (() => {
                         if (wireType === 2) {
                             if (!(message.tablet_types && message.tablet_types.length))
                                 message.tablet_types = [];
-                            let end2 = reader.uint32() + reader.pos;
-                            while (reader.pos < end2)
-                                message.tablet_types.push(reader.int32());
+                            reader.int32s(message.tablet_types);
                             continue;
                         }
                         if (wireType !== 0)
@@ -244642,32 +243713,12 @@ export const vtctldata = $root.vtctldata = (() => {
                 if (!$Array.isArray(message.tablet_types))
                     return "tablet_types: array expected";
                 for (let i = 0; i < message.tablet_types.length; ++i)
-                    switch (message.tablet_types[i]) {
-                    default:
+                    if (typeof message.tablet_types[i] !== "number" || (message.tablet_types[i] | 0) !== message.tablet_types[i])
                         return "tablet_types: enum value[] expected";
-                    case 0:
-                    case 1:
-                    case 1:
-                    case 2:
-                    case 3:
-                    case 3:
-                    case 4:
-                    case 5:
-                    case 6:
-                    case 7:
-                    case 8:
-                        break;
-                    }
             }
             if (message.tablet_selection_preference != null && $Object.hasOwnProperty.call(message, "tablet_selection_preference"))
-                switch (message.tablet_selection_preference) {
-                default:
+                if (typeof message.tablet_selection_preference !== "number" || (message.tablet_selection_preference | 0) !== message.tablet_selection_preference)
                     return "tablet_selection_preference: enum value expected";
-                case 0:
-                case 1:
-                case 3:
-                    break;
-                }
             if (message.tables != null && $Object.hasOwnProperty.call(message, "tables")) {
                 if (!$Array.isArray(message.tables))
                     return "tables: array expected";
@@ -244772,68 +243823,60 @@ export const vtctldata = $root.vtctldata = (() => {
             if (object.tablet_types) {
                 if (!$Array.isArray(object.tablet_types))
                     throw $TypeError(".vtctldata.VDiffCreateRequest.tablet_types: array expected");
-                message.tablet_types = $Array(object.tablet_types.length);
+                message.tablet_types = [];
                 for (let i = 0; i < object.tablet_types.length; ++i)
                     switch (object.tablet_types[i]) {
-                    default:
-                        if (typeof object.tablet_types[i] === "number") {
-                            message.tablet_types[i] = object.tablet_types[i];
-                            break;
-                        }
                     case "UNKNOWN":
                     case 0:
-                        message.tablet_types[i] = 0;
+                        message.tablet_types[message.tablet_types.length] = 0;
                         break;
                     case "PRIMARY":
                     case 1:
-                        message.tablet_types[i] = 1;
+                        message.tablet_types[message.tablet_types.length] = 1;
                         break;
                     case "MASTER":
                     case 1:
-                        message.tablet_types[i] = 1;
+                        message.tablet_types[message.tablet_types.length] = 1;
                         break;
                     case "REPLICA":
                     case 2:
-                        message.tablet_types[i] = 2;
+                        message.tablet_types[message.tablet_types.length] = 2;
                         break;
                     case "RDONLY":
                     case 3:
-                        message.tablet_types[i] = 3;
+                        message.tablet_types[message.tablet_types.length] = 3;
                         break;
                     case "BATCH":
                     case 3:
-                        message.tablet_types[i] = 3;
+                        message.tablet_types[message.tablet_types.length] = 3;
                         break;
                     case "SPARE":
                     case 4:
-                        message.tablet_types[i] = 4;
+                        message.tablet_types[message.tablet_types.length] = 4;
                         break;
                     case "EXPERIMENTAL":
                     case 5:
-                        message.tablet_types[i] = 5;
+                        message.tablet_types[message.tablet_types.length] = 5;
                         break;
                     case "BACKUP":
                     case 6:
-                        message.tablet_types[i] = 6;
+                        message.tablet_types[message.tablet_types.length] = 6;
                         break;
                     case "RESTORE":
                     case 7:
-                        message.tablet_types[i] = 7;
+                        message.tablet_types[message.tablet_types.length] = 7;
                         break;
                     case "DRAINED":
                     case 8:
-                        message.tablet_types[i] = 8;
+                        message.tablet_types[message.tablet_types.length] = 8;
                         break;
+                    default:
+                        if (typeof object.tablet_types[i] === "number" && (object.tablet_types[i] | 0) === object.tablet_types[i])
+                            message.tablet_types[message.tablet_types.length] = object.tablet_types[i];
                     }
             }
             if (object.tablet_selection_preference !== 0 && (typeof object.tablet_selection_preference !== "string" || $root.tabletmanagerdata.TabletSelectionPreference[object.tablet_selection_preference] !== 0))
                 switch (object.tablet_selection_preference) {
-                default:
-                    if (typeof object.tablet_selection_preference === "number") {
-                        message.tablet_selection_preference = object.tablet_selection_preference;
-                        break;
-                    }
-                    break;
                 case "ANY":
                 case 0:
                     message.tablet_selection_preference = 0;
@@ -244846,6 +243889,9 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 3:
                     message.tablet_selection_preference = 3;
                     break;
+                default:
+                    if (typeof object.tablet_selection_preference === "number" && (object.tablet_selection_preference | 0) === object.tablet_selection_preference)
+                        message.tablet_selection_preference = object.tablet_selection_preference;
                 }
             if (object.tables) {
                 if (!$Array.isArray(object.tables))
@@ -245174,7 +244220,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.UUID != null && $Object.hasOwnProperty.call(message, "UUID"))
+            if (message.UUID != null && $Object.hasOwnProperty.call(message, "UUID") && message.UUID !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.UUID);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -245452,11 +244498,11 @@ export const vtctldata = $root.vtctldata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.workflow != null && $Object.hasOwnProperty.call(message, "workflow"))
+            if (message.workflow != null && $Object.hasOwnProperty.call(message, "workflow") && message.workflow !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.workflow);
-            if (message.target_keyspace != null && $Object.hasOwnProperty.call(message, "target_keyspace"))
+            if (message.target_keyspace != null && $Object.hasOwnProperty.call(message, "target_keyspace") && message.target_keyspace !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.target_keyspace);
-            if (message.arg != null && $Object.hasOwnProperty.call(message, "arg"))
+            if (message.arg != null && $Object.hasOwnProperty.call(message, "arg") && message.arg !== "")
                 writer.uint32(/* id 3, wireType 2 =*/26).string(message.arg);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -246000,11 +245046,11 @@ export const vtctldata = $root.vtctldata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.workflow != null && $Object.hasOwnProperty.call(message, "workflow"))
+            if (message.workflow != null && $Object.hasOwnProperty.call(message, "workflow") && message.workflow !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.workflow);
-            if (message.target_keyspace != null && $Object.hasOwnProperty.call(message, "target_keyspace"))
+            if (message.target_keyspace != null && $Object.hasOwnProperty.call(message, "target_keyspace") && message.target_keyspace !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.target_keyspace);
-            if (message.uuid != null && $Object.hasOwnProperty.call(message, "uuid"))
+            if (message.uuid != null && $Object.hasOwnProperty.call(message, "uuid") && message.uuid !== "")
                 writer.uint32(/* id 3, wireType 2 =*/26).string(message.uuid);
             if (message.target_shards != null && message.target_shards.length)
                 for (let i = 0; i < message.target_shards.length; ++i)
@@ -246570,11 +245616,11 @@ export const vtctldata = $root.vtctldata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.workflow != null && $Object.hasOwnProperty.call(message, "workflow"))
+            if (message.workflow != null && $Object.hasOwnProperty.call(message, "workflow") && message.workflow !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.workflow);
-            if (message.target_keyspace != null && $Object.hasOwnProperty.call(message, "target_keyspace"))
+            if (message.target_keyspace != null && $Object.hasOwnProperty.call(message, "target_keyspace") && message.target_keyspace !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.target_keyspace);
-            if (message.arg != null && $Object.hasOwnProperty.call(message, "arg"))
+            if (message.arg != null && $Object.hasOwnProperty.call(message, "arg") && message.arg !== "")
                 writer.uint32(/* id 3, wireType 2 =*/26).string(message.arg);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -246944,7 +245990,7 @@ export const vtctldata = $root.vtctldata = (() => {
                             case 2:
                                 if (wireType !== 2)
                                     break;
-                                value = $root.tabletmanagerdata.VDiffResponse.decode(reader, reader.uint32(), $undefined, _depth + 1);
+                                value = $root.tabletmanagerdata.VDiffResponse.decode(reader, reader.uint32(), $undefined, _depth + 1, value);
                                 continue;
                             }
                             reader.skipType(wireType, _depth, tag2);
@@ -247207,11 +246253,11 @@ export const vtctldata = $root.vtctldata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.workflow != null && $Object.hasOwnProperty.call(message, "workflow"))
+            if (message.workflow != null && $Object.hasOwnProperty.call(message, "workflow") && message.workflow !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.workflow);
-            if (message.target_keyspace != null && $Object.hasOwnProperty.call(message, "target_keyspace"))
+            if (message.target_keyspace != null && $Object.hasOwnProperty.call(message, "target_keyspace") && message.target_keyspace !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.target_keyspace);
-            if (message.uuid != null && $Object.hasOwnProperty.call(message, "uuid"))
+            if (message.uuid != null && $Object.hasOwnProperty.call(message, "uuid") && message.uuid !== "")
                 writer.uint32(/* id 3, wireType 2 =*/26).string(message.uuid);
             if (message.target_shards != null && message.target_shards.length)
                 for (let i = 0; i < message.target_shards.length; ++i)
@@ -247823,20 +246869,20 @@ export const vtctldata = $root.vtctldata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
+            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace") && message.keyspace !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.keyspace);
-            if (message.workflow != null && $Object.hasOwnProperty.call(message, "workflow"))
+            if (message.workflow != null && $Object.hasOwnProperty.call(message, "workflow") && message.workflow !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.workflow);
             if (message.keep_data != null && $Object.hasOwnProperty.call(message, "keep_data"))
                 writer.uint32(/* id 3, wireType 0 =*/24).bool(message.keep_data);
-            if (message.keep_routing_rules != null && $Object.hasOwnProperty.call(message, "keep_routing_rules"))
+            if (message.keep_routing_rules != null && $Object.hasOwnProperty.call(message, "keep_routing_rules") && message.keep_routing_rules !== false)
                 writer.uint32(/* id 4, wireType 0 =*/32).bool(message.keep_routing_rules);
             if (message.shards != null && message.shards.length)
                 for (let i = 0; i < message.shards.length; ++i)
                     writer.uint32(/* id 5, wireType 2 =*/42).string(message.shards[i]);
-            if (message.delete_batch_size != null && $Object.hasOwnProperty.call(message, "delete_batch_size"))
+            if (message.delete_batch_size != null && $Object.hasOwnProperty.call(message, "delete_batch_size") && (typeof message.delete_batch_size === "object" ? message.delete_batch_size.low || message.delete_batch_size.high : message.delete_batch_size !== 0))
                 writer.uint32(/* id 6, wireType 0 =*/48).int64(message.delete_batch_size);
-            if (message.ignore_source_keyspace != null && $Object.hasOwnProperty.call(message, "ignore_source_keyspace"))
+            if (message.ignore_source_keyspace != null && $Object.hasOwnProperty.call(message, "ignore_source_keyspace") && message.ignore_source_keyspace !== false)
                 writer.uint32(/* id 7, wireType 0 =*/56).bool(message.ignore_source_keyspace);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -248251,7 +247297,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.summary != null && $Object.hasOwnProperty.call(message, "summary"))
+            if (message.summary != null && $Object.hasOwnProperty.call(message, "summary") && message.summary !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.summary);
             if (message.details != null && message.details.length)
                 for (let i = 0; i < message.details.length; ++i)
@@ -248588,7 +247634,7 @@ export const vtctldata = $root.vtctldata = (() => {
                     throw $Error("max depth exceeded");
                 if (message.tablet != null && $Object.hasOwnProperty.call(message, "tablet"))
                     $root.topodata.TabletAlias.encode(message.tablet, writer.uint32(/* id 1, wireType 2 =*/10).fork(), _depth + 1).ldelim();
-                if (message.deleted != null && $Object.hasOwnProperty.call(message, "deleted"))
+                if (message.deleted != null && $Object.hasOwnProperty.call(message, "deleted") && message.deleted !== false)
                     writer.uint32(/* id 2, wireType 0 =*/16).bool(message.deleted);
                 if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                     for (let i = 0; i < message.$unknowns.length; ++i)
@@ -248890,9 +247936,9 @@ export const vtctldata = $root.vtctldata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
+            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace") && message.keyspace !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.keyspace);
-            if (message.workflow != null && $Object.hasOwnProperty.call(message, "workflow"))
+            if (message.workflow != null && $Object.hasOwnProperty.call(message, "workflow") && message.workflow !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.workflow);
             if (message.shards != null && message.shards.length)
                 for (let i = 0; i < message.shards.length; ++i)
@@ -249251,7 +248297,7 @@ export const vtctldata = $root.vtctldata = (() => {
                     writer.uint32(/* id 2, wireType 2 =*/18).fork().uint32(/* id 1, wireType 2 =*/10).string(keys[i]);
                     $root.vtctldata.WorkflowStatusResponse.ShardStreams.encode(message.shard_streams[keys[i]], writer.uint32(/* id 2, wireType 2 =*/18).fork(), _depth + 1).ldelim().ldelim();
                 }
-            if (message.traffic_state != null && $Object.hasOwnProperty.call(message, "traffic_state"))
+            if (message.traffic_state != null && $Object.hasOwnProperty.call(message, "traffic_state") && message.traffic_state !== "")
                 writer.uint32(/* id 3, wireType 2 =*/26).string(message.traffic_state);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -249320,7 +248366,7 @@ export const vtctldata = $root.vtctldata = (() => {
                             case 2:
                                 if (wireType !== 2)
                                     break;
-                                value = $root.vtctldata.WorkflowStatusResponse.TableCopyState.decode(reader, reader.uint32(), $undefined, _depth + 1);
+                                value = $root.vtctldata.WorkflowStatusResponse.TableCopyState.decode(reader, reader.uint32(), $undefined, _depth + 1, value);
                                 continue;
                             }
                             reader.skipType(wireType, _depth, tag2);
@@ -249350,7 +248396,7 @@ export const vtctldata = $root.vtctldata = (() => {
                             case 2:
                                 if (wireType !== 2)
                                     break;
-                                value = $root.vtctldata.WorkflowStatusResponse.ShardStreams.decode(reader, reader.uint32(), $undefined, _depth + 1);
+                                value = $root.vtctldata.WorkflowStatusResponse.ShardStreams.decode(reader, reader.uint32(), $undefined, _depth + 1, value);
                                 continue;
                             }
                             reader.skipType(wireType, _depth, tag2);
@@ -249687,19 +248733,19 @@ export const vtctldata = $root.vtctldata = (() => {
                     _depth = 0;
                 if (_depth > $util.recursionLimit)
                     throw $Error("max depth exceeded");
-                if (message.rows_copied != null && $Object.hasOwnProperty.call(message, "rows_copied"))
+                if (message.rows_copied != null && $Object.hasOwnProperty.call(message, "rows_copied") && (typeof message.rows_copied === "object" ? message.rows_copied.low || message.rows_copied.high : message.rows_copied !== 0))
                     writer.uint32(/* id 1, wireType 0 =*/8).int64(message.rows_copied);
-                if (message.rows_total != null && $Object.hasOwnProperty.call(message, "rows_total"))
+                if (message.rows_total != null && $Object.hasOwnProperty.call(message, "rows_total") && (typeof message.rows_total === "object" ? message.rows_total.low || message.rows_total.high : message.rows_total !== 0))
                     writer.uint32(/* id 2, wireType 0 =*/16).int64(message.rows_total);
-                if (message.rows_percentage != null && $Object.hasOwnProperty.call(message, "rows_percentage"))
+                if (message.rows_percentage != null && $Object.hasOwnProperty.call(message, "rows_percentage") && !$Object.is(message.rows_percentage, 0))
                     writer.uint32(/* id 3, wireType 5 =*/29).float(message.rows_percentage);
-                if (message.bytes_copied != null && $Object.hasOwnProperty.call(message, "bytes_copied"))
+                if (message.bytes_copied != null && $Object.hasOwnProperty.call(message, "bytes_copied") && (typeof message.bytes_copied === "object" ? message.bytes_copied.low || message.bytes_copied.high : message.bytes_copied !== 0))
                     writer.uint32(/* id 4, wireType 0 =*/32).int64(message.bytes_copied);
-                if (message.bytes_total != null && $Object.hasOwnProperty.call(message, "bytes_total"))
+                if (message.bytes_total != null && $Object.hasOwnProperty.call(message, "bytes_total") && (typeof message.bytes_total === "object" ? message.bytes_total.low || message.bytes_total.high : message.bytes_total !== 0))
                     writer.uint32(/* id 5, wireType 0 =*/40).int64(message.bytes_total);
-                if (message.bytes_percentage != null && $Object.hasOwnProperty.call(message, "bytes_percentage"))
+                if (message.bytes_percentage != null && $Object.hasOwnProperty.call(message, "bytes_percentage") && !$Object.is(message.bytes_percentage, 0))
                     writer.uint32(/* id 6, wireType 5 =*/53).float(message.bytes_percentage);
-                if (message.phase != null && $Object.hasOwnProperty.call(message, "phase"))
+                if (message.phase != null && $Object.hasOwnProperty.call(message, "phase") && message.phase !== 0)
                     writer.uint32(/* id 7, wireType 0 =*/56).int32(message.phase);
                 if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                     for (let i = 0; i < message.$unknowns.length; ++i)
@@ -249769,7 +248815,7 @@ export const vtctldata = $root.vtctldata = (() => {
                     case 3: {
                             if (wireType !== 5)
                                 break;
-                            if ((value = reader.float()) !== 0)
+                            if (!$Object.is(value = reader.float(), 0))
                                 message.rows_percentage = value;
                             else
                                 delete message.rows_percentage;
@@ -249796,7 +248842,7 @@ export const vtctldata = $root.vtctldata = (() => {
                     case 6: {
                             if (wireType !== 5)
                                 break;
-                            if ((value = reader.float()) !== 0)
+                            if (!$Object.is(value = reader.float(), 0))
                                 message.bytes_percentage = value;
                             else
                                 delete message.bytes_percentage;
@@ -249873,15 +248919,8 @@ export const vtctldata = $root.vtctldata = (() => {
                     if (typeof message.bytes_percentage !== "number")
                         return "bytes_percentage: number expected";
                 if (message.phase != null && $Object.hasOwnProperty.call(message, "phase"))
-                    switch (message.phase) {
-                    default:
+                    if (typeof message.phase !== "number" || (message.phase | 0) !== message.phase)
                         return "phase: enum value expected";
-                    case 0:
-                    case 1:
-                    case 2:
-                    case 3:
-                        break;
-                    }
                 return null;
             };
 
@@ -249924,7 +248963,7 @@ export const vtctldata = $root.vtctldata = (() => {
                         else if (typeof object.rows_total === "object")
                             message.rows_total = new $util.LongBits(object.rows_total.low >>> 0, object.rows_total.high >>> 0).toNumber();
                 if (object.rows_percentage != null)
-                    if ($Number(object.rows_percentage) !== 0)
+                    if (!$Object.is($Number(object.rows_percentage), 0))
                         message.rows_percentage = $Number(object.rows_percentage);
                 if (object.bytes_copied != null)
                     if (typeof object.bytes_copied === "object" ? object.bytes_copied.low || object.bytes_copied.high : $Number(object.bytes_copied) !== 0)
@@ -249947,16 +248986,10 @@ export const vtctldata = $root.vtctldata = (() => {
                         else if (typeof object.bytes_total === "object")
                             message.bytes_total = new $util.LongBits(object.bytes_total.low >>> 0, object.bytes_total.high >>> 0).toNumber();
                 if (object.bytes_percentage != null)
-                    if ($Number(object.bytes_percentage) !== 0)
+                    if (!$Object.is($Number(object.bytes_percentage), 0))
                         message.bytes_percentage = $Number(object.bytes_percentage);
                 if (object.phase !== 0 && (typeof object.phase !== "string" || $root.vtctldata.TableCopyPhase[object.phase] !== 0))
                     switch (object.phase) {
-                    default:
-                        if (typeof object.phase === "number") {
-                            message.phase = object.phase;
-                            break;
-                        }
-                        break;
                     case "UNKNOWN":
                     case 0:
                         message.phase = 0;
@@ -249973,6 +249006,9 @@ export const vtctldata = $root.vtctldata = (() => {
                     case 3:
                         message.phase = 3;
                         break;
+                    default:
+                        if (typeof object.phase === "number" && (object.phase | 0) === object.phase)
+                            message.phase = object.phase;
                     }
                 return message;
             };
@@ -250206,17 +249242,17 @@ export const vtctldata = $root.vtctldata = (() => {
                     _depth = 0;
                 if (_depth > $util.recursionLimit)
                     throw $Error("max depth exceeded");
-                if (message.id != null && $Object.hasOwnProperty.call(message, "id"))
+                if (message.id != null && $Object.hasOwnProperty.call(message, "id") && message.id !== 0)
                     writer.uint32(/* id 1, wireType 0 =*/8).int32(message.id);
                 if (message.tablet != null && $Object.hasOwnProperty.call(message, "tablet"))
                     $root.topodata.TabletAlias.encode(message.tablet, writer.uint32(/* id 2, wireType 2 =*/18).fork(), _depth + 1).ldelim();
-                if (message.source_shard != null && $Object.hasOwnProperty.call(message, "source_shard"))
+                if (message.source_shard != null && $Object.hasOwnProperty.call(message, "source_shard") && message.source_shard !== "")
                     writer.uint32(/* id 3, wireType 2 =*/26).string(message.source_shard);
-                if (message.position != null && $Object.hasOwnProperty.call(message, "position"))
+                if (message.position != null && $Object.hasOwnProperty.call(message, "position") && message.position !== "")
                     writer.uint32(/* id 4, wireType 2 =*/34).string(message.position);
-                if (message.status != null && $Object.hasOwnProperty.call(message, "status"))
+                if (message.status != null && $Object.hasOwnProperty.call(message, "status") && message.status !== "")
                     writer.uint32(/* id 5, wireType 2 =*/42).string(message.status);
-                if (message.info != null && $Object.hasOwnProperty.call(message, "info"))
+                if (message.info != null && $Object.hasOwnProperty.call(message, "info") && message.info !== "")
                     writer.uint32(/* id 6, wireType 2 =*/50).string(message.info);
                 if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                     for (let i = 0; i < message.$unknowns.length; ++i)
@@ -250950,35 +249986,31 @@ export const vtctldata = $root.vtctldata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
+            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace") && message.keyspace !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.keyspace);
-            if (message.workflow != null && $Object.hasOwnProperty.call(message, "workflow"))
+            if (message.workflow != null && $Object.hasOwnProperty.call(message, "workflow") && message.workflow !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.workflow);
             if (message.cells != null && message.cells.length)
                 for (let i = 0; i < message.cells.length; ++i)
                     writer.uint32(/* id 3, wireType 2 =*/26).string(message.cells[i]);
-            if (message.tablet_types != null && message.tablet_types.length) {
-                writer.uint32(/* id 4, wireType 2 =*/34).fork();
-                for (let i = 0; i < message.tablet_types.length; ++i)
-                    writer.int32(message.tablet_types[i]);
-                writer.ldelim();
-            }
+            if (message.tablet_types != null && message.tablet_types.length)
+                writer.uint32(/* id 4, wireType 2 =*/34).int32s(message.tablet_types);
             if (message.max_replication_lag_allowed != null && $Object.hasOwnProperty.call(message, "max_replication_lag_allowed"))
                 $root.vttime.Duration.encode(message.max_replication_lag_allowed, writer.uint32(/* id 5, wireType 2 =*/42).fork(), _depth + 1).ldelim();
-            if (message.enable_reverse_replication != null && $Object.hasOwnProperty.call(message, "enable_reverse_replication"))
+            if (message.enable_reverse_replication != null && $Object.hasOwnProperty.call(message, "enable_reverse_replication") && message.enable_reverse_replication !== false)
                 writer.uint32(/* id 6, wireType 0 =*/48).bool(message.enable_reverse_replication);
-            if (message.direction != null && $Object.hasOwnProperty.call(message, "direction"))
+            if (message.direction != null && $Object.hasOwnProperty.call(message, "direction") && message.direction !== 0)
                 writer.uint32(/* id 7, wireType 0 =*/56).int32(message.direction);
             if (message.timeout != null && $Object.hasOwnProperty.call(message, "timeout"))
                 $root.vttime.Duration.encode(message.timeout, writer.uint32(/* id 8, wireType 2 =*/66).fork(), _depth + 1).ldelim();
-            if (message.dry_run != null && $Object.hasOwnProperty.call(message, "dry_run"))
+            if (message.dry_run != null && $Object.hasOwnProperty.call(message, "dry_run") && message.dry_run !== false)
                 writer.uint32(/* id 9, wireType 0 =*/72).bool(message.dry_run);
-            if (message.initialize_target_sequences != null && $Object.hasOwnProperty.call(message, "initialize_target_sequences"))
+            if (message.initialize_target_sequences != null && $Object.hasOwnProperty.call(message, "initialize_target_sequences") && message.initialize_target_sequences !== false)
                 writer.uint32(/* id 10, wireType 0 =*/80).bool(message.initialize_target_sequences);
             if (message.shards != null && message.shards.length)
                 for (let i = 0; i < message.shards.length; ++i)
                     writer.uint32(/* id 11, wireType 2 =*/90).string(message.shards[i]);
-            if (message.force != null && $Object.hasOwnProperty.call(message, "force"))
+            if (message.force != null && $Object.hasOwnProperty.call(message, "force") && message.force !== false)
                 writer.uint32(/* id 12, wireType 0 =*/96).bool(message.force);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -251057,9 +250089,7 @@ export const vtctldata = $root.vtctldata = (() => {
                         if (wireType === 2) {
                             if (!(message.tablet_types && message.tablet_types.length))
                                 message.tablet_types = [];
-                            let end2 = reader.uint32() + reader.pos;
-                            while (reader.pos < end2)
-                                message.tablet_types.push(reader.int32());
+                            reader.int32s(message.tablet_types);
                             continue;
                         }
                         if (wireType !== 0)
@@ -251194,22 +250224,8 @@ export const vtctldata = $root.vtctldata = (() => {
                 if (!$Array.isArray(message.tablet_types))
                     return "tablet_types: array expected";
                 for (let i = 0; i < message.tablet_types.length; ++i)
-                    switch (message.tablet_types[i]) {
-                    default:
+                    if (typeof message.tablet_types[i] !== "number" || (message.tablet_types[i] | 0) !== message.tablet_types[i])
                         return "tablet_types: enum value[] expected";
-                    case 0:
-                    case 1:
-                    case 1:
-                    case 2:
-                    case 3:
-                    case 3:
-                    case 4:
-                    case 5:
-                    case 6:
-                    case 7:
-                    case 8:
-                        break;
-                    }
             }
             if (message.max_replication_lag_allowed != null && $Object.hasOwnProperty.call(message, "max_replication_lag_allowed")) {
                 let error = $root.vttime.Duration.verify(message.max_replication_lag_allowed, _depth + 1);
@@ -251280,58 +250296,56 @@ export const vtctldata = $root.vtctldata = (() => {
             if (object.tablet_types) {
                 if (!$Array.isArray(object.tablet_types))
                     throw $TypeError(".vtctldata.WorkflowSwitchTrafficRequest.tablet_types: array expected");
-                message.tablet_types = $Array(object.tablet_types.length);
+                message.tablet_types = [];
                 for (let i = 0; i < object.tablet_types.length; ++i)
                     switch (object.tablet_types[i]) {
-                    default:
-                        if (typeof object.tablet_types[i] === "number") {
-                            message.tablet_types[i] = object.tablet_types[i];
-                            break;
-                        }
                     case "UNKNOWN":
                     case 0:
-                        message.tablet_types[i] = 0;
+                        message.tablet_types[message.tablet_types.length] = 0;
                         break;
                     case "PRIMARY":
                     case 1:
-                        message.tablet_types[i] = 1;
+                        message.tablet_types[message.tablet_types.length] = 1;
                         break;
                     case "MASTER":
                     case 1:
-                        message.tablet_types[i] = 1;
+                        message.tablet_types[message.tablet_types.length] = 1;
                         break;
                     case "REPLICA":
                     case 2:
-                        message.tablet_types[i] = 2;
+                        message.tablet_types[message.tablet_types.length] = 2;
                         break;
                     case "RDONLY":
                     case 3:
-                        message.tablet_types[i] = 3;
+                        message.tablet_types[message.tablet_types.length] = 3;
                         break;
                     case "BATCH":
                     case 3:
-                        message.tablet_types[i] = 3;
+                        message.tablet_types[message.tablet_types.length] = 3;
                         break;
                     case "SPARE":
                     case 4:
-                        message.tablet_types[i] = 4;
+                        message.tablet_types[message.tablet_types.length] = 4;
                         break;
                     case "EXPERIMENTAL":
                     case 5:
-                        message.tablet_types[i] = 5;
+                        message.tablet_types[message.tablet_types.length] = 5;
                         break;
                     case "BACKUP":
                     case 6:
-                        message.tablet_types[i] = 6;
+                        message.tablet_types[message.tablet_types.length] = 6;
                         break;
                     case "RESTORE":
                     case 7:
-                        message.tablet_types[i] = 7;
+                        message.tablet_types[message.tablet_types.length] = 7;
                         break;
                     case "DRAINED":
                     case 8:
-                        message.tablet_types[i] = 8;
+                        message.tablet_types[message.tablet_types.length] = 8;
                         break;
+                    default:
+                        if (typeof object.tablet_types[i] === "number" && (object.tablet_types[i] | 0) === object.tablet_types[i])
+                            message.tablet_types[message.tablet_types.length] = object.tablet_types[i];
                     }
             }
             if (object.max_replication_lag_allowed != null) {
@@ -251571,11 +250585,11 @@ export const vtctldata = $root.vtctldata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.summary != null && $Object.hasOwnProperty.call(message, "summary"))
+            if (message.summary != null && $Object.hasOwnProperty.call(message, "summary") && message.summary !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.summary);
-            if (message.start_state != null && $Object.hasOwnProperty.call(message, "start_state"))
+            if (message.start_state != null && $Object.hasOwnProperty.call(message, "start_state") && message.start_state !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.start_state);
-            if (message.current_state != null && $Object.hasOwnProperty.call(message, "current_state"))
+            if (message.current_state != null && $Object.hasOwnProperty.call(message, "current_state") && message.current_state !== "")
                 writer.uint32(/* id 3, wireType 2 =*/26).string(message.current_state);
             if (message.dry_run_results != null && message.dry_run_results.length)
                 for (let i = 0; i < message.dry_run_results.length; ++i)
@@ -251913,7 +250927,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
+            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace") && message.keyspace !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.keyspace);
             if (message.tablet_request != null && $Object.hasOwnProperty.call(message, "tablet_request"))
                 $root.tabletmanagerdata.UpdateVReplicationWorkflowRequest.encode(message.tablet_request, writer.uint32(/* id 2, wireType 2 =*/18).fork(), _depth + 1).ldelim();
@@ -252205,7 +251219,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.summary != null && $Object.hasOwnProperty.call(message, "summary"))
+            if (message.summary != null && $Object.hasOwnProperty.call(message, "summary") && message.summary !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.summary);
             if (message.details != null && message.details.length)
                 for (let i = 0; i < message.details.length; ++i)
@@ -252510,7 +251524,7 @@ export const vtctldata = $root.vtctldata = (() => {
                     throw $Error("max depth exceeded");
                 if (message.tablet != null && $Object.hasOwnProperty.call(message, "tablet"))
                     $root.topodata.TabletAlias.encode(message.tablet, writer.uint32(/* id 1, wireType 2 =*/10).fork(), _depth + 1).ldelim();
-                if (message.changed != null && $Object.hasOwnProperty.call(message, "changed"))
+                if (message.changed != null && $Object.hasOwnProperty.call(message, "changed") && message.changed !== false)
                     writer.uint32(/* id 2, wireType 0 =*/16).bool(message.changed);
                 if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                     for (let i = 0; i < message.$unknowns.length; ++i)
@@ -253301,17 +252315,13 @@ export const vtctldata = $root.vtctldata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
+            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace") && message.keyspace !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.keyspace);
-            if (message.workflow != null && $Object.hasOwnProperty.call(message, "workflow"))
+            if (message.workflow != null && $Object.hasOwnProperty.call(message, "workflow") && message.workflow !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.workflow);
-            if (message.tablet_types != null && message.tablet_types.length) {
-                writer.uint32(/* id 3, wireType 2 =*/26).fork();
-                for (let i = 0; i < message.tablet_types.length; ++i)
-                    writer.int32(message.tablet_types[i]);
-                writer.ldelim();
-            }
-            if (message.percent != null && $Object.hasOwnProperty.call(message, "percent"))
+            if (message.tablet_types != null && message.tablet_types.length)
+                writer.uint32(/* id 3, wireType 2 =*/26).int32s(message.tablet_types);
+            if (message.percent != null && $Object.hasOwnProperty.call(message, "percent") && !$Object.is(message.percent, 0))
                 writer.uint32(/* id 4, wireType 5 =*/37).float(message.percent);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -253382,9 +252392,7 @@ export const vtctldata = $root.vtctldata = (() => {
                         if (wireType === 2) {
                             if (!(message.tablet_types && message.tablet_types.length))
                                 message.tablet_types = [];
-                            let end2 = reader.uint32() + reader.pos;
-                            while (reader.pos < end2)
-                                message.tablet_types.push(reader.int32());
+                            reader.int32s(message.tablet_types);
                             continue;
                         }
                         if (wireType !== 0)
@@ -253397,7 +252405,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 4: {
                         if (wireType !== 5)
                             break;
-                        if ((value = reader.float()) !== 0)
+                        if (!$Object.is(value = reader.float(), 0))
                             message.percent = value;
                         else
                             delete message.percent;
@@ -253456,22 +252464,8 @@ export const vtctldata = $root.vtctldata = (() => {
                 if (!$Array.isArray(message.tablet_types))
                     return "tablet_types: array expected";
                 for (let i = 0; i < message.tablet_types.length; ++i)
-                    switch (message.tablet_types[i]) {
-                    default:
+                    if (typeof message.tablet_types[i] !== "number" || (message.tablet_types[i] | 0) !== message.tablet_types[i])
                         return "tablet_types: enum value[] expected";
-                    case 0:
-                    case 1:
-                    case 1:
-                    case 2:
-                    case 3:
-                    case 3:
-                    case 4:
-                    case 5:
-                    case 6:
-                    case 7:
-                    case 8:
-                        break;
-                    }
             }
             if (message.percent != null && $Object.hasOwnProperty.call(message, "percent"))
                 if (typeof message.percent !== "number")
@@ -253506,62 +252500,60 @@ export const vtctldata = $root.vtctldata = (() => {
             if (object.tablet_types) {
                 if (!$Array.isArray(object.tablet_types))
                     throw $TypeError(".vtctldata.WorkflowMirrorTrafficRequest.tablet_types: array expected");
-                message.tablet_types = $Array(object.tablet_types.length);
+                message.tablet_types = [];
                 for (let i = 0; i < object.tablet_types.length; ++i)
                     switch (object.tablet_types[i]) {
-                    default:
-                        if (typeof object.tablet_types[i] === "number") {
-                            message.tablet_types[i] = object.tablet_types[i];
-                            break;
-                        }
                     case "UNKNOWN":
                     case 0:
-                        message.tablet_types[i] = 0;
+                        message.tablet_types[message.tablet_types.length] = 0;
                         break;
                     case "PRIMARY":
                     case 1:
-                        message.tablet_types[i] = 1;
+                        message.tablet_types[message.tablet_types.length] = 1;
                         break;
                     case "MASTER":
                     case 1:
-                        message.tablet_types[i] = 1;
+                        message.tablet_types[message.tablet_types.length] = 1;
                         break;
                     case "REPLICA":
                     case 2:
-                        message.tablet_types[i] = 2;
+                        message.tablet_types[message.tablet_types.length] = 2;
                         break;
                     case "RDONLY":
                     case 3:
-                        message.tablet_types[i] = 3;
+                        message.tablet_types[message.tablet_types.length] = 3;
                         break;
                     case "BATCH":
                     case 3:
-                        message.tablet_types[i] = 3;
+                        message.tablet_types[message.tablet_types.length] = 3;
                         break;
                     case "SPARE":
                     case 4:
-                        message.tablet_types[i] = 4;
+                        message.tablet_types[message.tablet_types.length] = 4;
                         break;
                     case "EXPERIMENTAL":
                     case 5:
-                        message.tablet_types[i] = 5;
+                        message.tablet_types[message.tablet_types.length] = 5;
                         break;
                     case "BACKUP":
                     case 6:
-                        message.tablet_types[i] = 6;
+                        message.tablet_types[message.tablet_types.length] = 6;
                         break;
                     case "RESTORE":
                     case 7:
-                        message.tablet_types[i] = 7;
+                        message.tablet_types[message.tablet_types.length] = 7;
                         break;
                     case "DRAINED":
                     case 8:
-                        message.tablet_types[i] = 8;
+                        message.tablet_types[message.tablet_types.length] = 8;
                         break;
+                    default:
+                        if (typeof object.tablet_types[i] === "number" && (object.tablet_types[i] | 0) === object.tablet_types[i])
+                            message.tablet_types[message.tablet_types.length] = object.tablet_types[i];
                     }
             }
             if (object.percent != null)
-                if ($Number(object.percent) !== 0)
+                if (!$Object.is($Number(object.percent), 0))
                     message.percent = $Number(object.percent);
             return message;
         };
@@ -253727,11 +252719,11 @@ export const vtctldata = $root.vtctldata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.summary != null && $Object.hasOwnProperty.call(message, "summary"))
+            if (message.summary != null && $Object.hasOwnProperty.call(message, "summary") && message.summary !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.summary);
-            if (message.start_state != null && $Object.hasOwnProperty.call(message, "start_state"))
+            if (message.start_state != null && $Object.hasOwnProperty.call(message, "start_state") && message.start_state !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.start_state);
-            if (message.current_state != null && $Object.hasOwnProperty.call(message, "current_state"))
+            if (message.current_state != null && $Object.hasOwnProperty.call(message, "current_state") && message.current_state !== "")
                 writer.uint32(/* id 3, wireType 2 =*/26).string(message.current_state);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -254046,11 +253038,11 @@ export const vtctldata = $root.vtctldata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
+            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace") && message.keyspace !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.keyspace);
-            if (message.shard != null && $Object.hasOwnProperty.call(message, "shard"))
+            if (message.shard != null && $Object.hasOwnProperty.call(message, "shard") && message.shard !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.shard);
-            if (message.disable != null && $Object.hasOwnProperty.call(message, "disable"))
+            if (message.disable != null && $Object.hasOwnProperty.call(message, "disable") && message.disable !== false)
                 writer.uint32(/* id 3, wireType 0 =*/24).bool(message.disable);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
