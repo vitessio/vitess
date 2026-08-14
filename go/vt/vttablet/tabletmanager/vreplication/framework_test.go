@@ -100,11 +100,6 @@ var (
 	mockSchema   = make(map[string]*mockTable)
 )
 
-type LogExpectation struct {
-	Type   string
-	Detail string
-}
-
 var heartbeatRe *regexp.Regexp
 
 // setFlag() sets a flag for a test in a non-racy way:
@@ -1212,41 +1207,6 @@ func deleteAllVReplicationStreams(t *testing.T) {
 	}
 	_, err = playerEngine.Exec(fmt.Sprintf("delete from _vt.vreplication where id in (%s)", strings.Join(ids, ",")))
 	require.NoError(t, err, "failed to delete vreplication rows: %v", err)
-}
-
-func expectLogsAndUnsubscribe(t *testing.T, logs []LogExpectation, logCh chan *VrLogStats) {
-	t.Helper()
-	defer vrLogStatsLogger.Unsubscribe(logCh)
-	failed := false
-	for i, log := range logs {
-		if failed {
-			t.Errorf("no logs received")
-			continue
-		}
-		select {
-		case got := <-logCh:
-			var match bool
-			match = (log.Type == got.Type)
-			if match {
-				if log.Detail[0] == '/' {
-					result, err := regexp.MatchString(log.Detail[1:], got.Detail)
-					if err != nil {
-						panic(err)
-					}
-					match = result
-				} else {
-					match = (got.Detail == log.Detail)
-				}
-			}
-
-			if !match {
-				t.Errorf("log:\n%v, does not match log %d:\n%q", got, i, log)
-			}
-		case <-time.After(5 * time.Second):
-			t.Errorf("no logs received, expecting %s", log)
-			failed = true
-		}
-	}
 }
 
 func shouldIgnoreQuery(query string) bool {

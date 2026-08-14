@@ -57,9 +57,6 @@ var (
 	VStreamerBinlogRotationThreshold = int64(64 * 1024 * 1024) // 64MiB
 	VStreamerDefaultPacketSize       = 250000
 	VStreamerUseDynamicPacketSize    = true
-
-	// Enable the /debug/vrlog HTTP endpoint.
-	vreplicationEnableHttpLog = false
 )
 
 func GetVReplicationNetReadTimeout() int {
@@ -102,5 +99,6 @@ func registerFlags(fs *pflag.FlagSet) {
 
 	fs.Uint64Var(&mysql.ZstdInMemoryDecompressorMaxSize, "binlog-in-memory-decompressor-max-size", mysql.ZstdInMemoryDecompressorMaxSize, "This value sets the uncompressed transaction payload size at which we switch from in-memory buffer based decompression to the slower streaming mode.")
 
-	fs.BoolVar(&vreplicationEnableHttpLog, "vreplication-enable-http-log", vreplicationEnableHttpLog, "Enable the /debug/vrlog HTTP endpoint, which will produce a log of the events replicated on primary tablets in the target keyspace by all VReplication workflows that are in the running/replicating phase.")
+	fs.Bool("vreplication-enable-http-log", false, "(DEPRECATED) This flag is a no-op: the /debug/vrlog HTTP endpoint it enabled has been removed.")
+	_ = fs.MarkDeprecated("vreplication-enable-http-log", "this flag is a no-op and will be removed in v26")
 }
