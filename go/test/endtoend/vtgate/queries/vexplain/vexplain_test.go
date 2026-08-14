@@ -208,6 +208,8 @@ func TestVExplainMySQLPlanReservedConn(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
+	// Temporary tables are only allowed on an unsharded keyspace.
+	utils.Exec(t, conn, "use "+unshardedKs)
 	utils.Exec(t, conn, `create temporary table temp_user(id bigint primary key)`)
 	utils.Exec(t, conn, `insert into temp_user(id) values (1)`)
 
