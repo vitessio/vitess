@@ -10408,17 +10408,18 @@ func TestEmergencyReparenterFindErrantGTIDs_MissingJournalTableNewShard(t *testi
 }
 
 // TestEmergencyReparenterFindErrantGTIDs_AllZeroPositionsInitializedShard covers a shard
-// that lost both its GTID state and its sidecar tables on every reachable candidate: the
-// journal counts alone cannot distinguish this from a brand-new shard, so the topology
-// must agree the shard was never initialized before anyone is treated as a valid first
-// primary. Here the topology records a previous primary, so ERS fails closed.
+// whose GTID state was wiped on every reachable candidate while the journal tables
+// survived empty: readable zero counts alone cannot distinguish this from a brand-new
+// shard, so the topology must agree the shard was never initialized before anyone is
+// treated as a valid first primary. Here the topology records a previous primary, so
+// ERS fails closed.
 func TestEmergencyReparenterFindErrantGTIDs_AllZeroPositionsInitializedShard(t *testing.T) {
 	tabletMap, emptyPos := findErrantGTIDsWipedShardFixture(t)
 
 	erp := NewEmergencyReparenter(nil, &testutil.TabletManagerClient{
-		ReadReparentJournalInfoErrors: map[string]error{
-			"zone1-0000000100": errors.New("rpc error: code = Unknown desc = Table '_vt.reparent_journal' doesn't exist (errno 1146) (sqlstate 42S02) during query: SELECT COUNT(*) FROM _vt.reparent_journal"),
-			"zone1-0000000101": errors.New("rpc error: code = Unknown desc = Table '_vt.reparent_journal' doesn't exist (errno 1146) (sqlstate 42S02) during query: SELECT COUNT(*) FROM _vt.reparent_journal"),
+		ReadReparentJournalInfoResults: map[string]int32{
+			"zone1-0000000100": 0,
+			"zone1-0000000101": 0,
 		},
 	}, nil)
 	validCandidates := map[string]*RelayLogPositions{
@@ -10428,4 +10429,32 @@ func TestEmergencyReparenterFindErrantGTIDs_AllZeroPositionsInitializedShard(t *
 
 	_, _, err := erp.findErrantGTIDs(t.Context(), validCandidates, map[string]*replicationdatapb.StopReplicationStatus{}, tabletMap, 10*time.Second, nil, false)
 	require.ErrorContains(t, err, "topology records a previous primary")
+}
+
+// TestEmergencyReparenterFindErrantGTIDs_MissingJournalTableInitializedShard covers a
+// wiped tablet on an initialized shard that also lost its sidecar tables: the missing
+// journal table hides an unknown journal depth, which must not be converted to zero
+// entries, or a survivor with a potentially older visible journal would form the
+// evidence tier alone and be promoted. The gather must fail instead.
+func TestEmergencyReparenterFindErrantGTIDs_MissingJournalTableInitializedShard(t *testing.T) {
+	u1 := "00000000-0000-0000-0000-000000000001"
+	tabletMap, emptyPos := findErrantGTIDsWipedShardFixture(t)
+
+	erp := NewEmergencyReparenter(nil, &testutil.TabletManagerClient{
+		ReadReparentJournalInfoErrors: map[string]error{
+			"zone1-0000000100": errors.New("rpc error: code = Unknown desc = Table '_vt.reparent_journal' doesn't exist (errno 1146) (sqlstate 42S02) during query: SELECT COUNT(*) FROM _vt.reparent_journal"),
+		},
+		ReadReparentJournalInfoResults: map[string]int32{
+			"zone1-0000000101": 1,
+		},
+	}, nil)
+	validCandidates := map[string]*RelayLogPositions{
+		"zone1-0000000100": {Combined: emptyPos},
+		"zone1-0000000101": {
+			Combined: replication.MustParsePosition(replication.Mysql56FlavorID, u1+":1-100"),
+		},
+	}
+
+	_, _, err := erp.findErrantGTIDs(t.Context(), validCandidates, map[string]*replicationdatapb.StopReplicationStatus{}, tabletMap, 10*time.Second, nil, false)
+	require.ErrorContains(t, err, "could not read reparent journal information")
 }
