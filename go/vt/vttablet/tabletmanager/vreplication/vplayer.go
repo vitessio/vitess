@@ -787,16 +787,6 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 			if _, err := vp.query(ctx, event.Statement); err != nil {
 				return err
 			}
-<<<<<<< HEAD
-			if stats != nil {
-				stats.Send(fmt.Sprintf("%v", event.Statement))
-			}
-||||||| parent of 657662e78b (VReplication: Remove internal undocumented VRLog feature (#20467))
-			if stats != nil {
-				stats.Send(event.Statement)
-			}
-=======
->>>>>>> 657662e78b (VReplication: Remove internal undocumented VRLog feature (#20467))
 			posReached, err := vp.updatePos(ctx, event.Timestamp)
 			if err != nil {
 				return err
@@ -808,16 +798,6 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 			if _, err := vp.query(ctx, event.Statement); err != nil {
 				log.Infof("Ignoring error: %v for DDL: %s", err, event.Statement)
 			}
-<<<<<<< HEAD
-			if stats != nil {
-				stats.Send(fmt.Sprintf("%v", event.Statement))
-			}
-||||||| parent of 657662e78b (VReplication: Remove internal undocumented VRLog feature (#20467))
-			if stats != nil {
-				stats.Send(event.Statement)
-			}
-=======
->>>>>>> 657662e78b (VReplication: Remove internal undocumented VRLog feature (#20467))
 			posReached, err := vp.updatePos(ctx, event.Timestamp)
 			if err != nil {
 				return err
