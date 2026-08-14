@@ -10458,3 +10458,32 @@ func TestEmergencyReparenterFindErrantGTIDs_MissingJournalTableInitializedShard(
 	_, _, err := erp.findErrantGTIDs(t.Context(), validCandidates, map[string]*replicationdatapb.StopReplicationStatus{}, tabletMap, 10*time.Second, nil, false)
 	require.ErrorContains(t, err, "could not read reparent journal information")
 }
+
+// TestEmergencyReparenterFindErrantGTIDs_MissingJournalTableMixedStateShard covers a
+// contradictory state: the topology says the shard was never initialized, but a
+// reachable candidate has a nonzero GTID position and journal history, proving it was.
+// The missing journal table on the wiped tablet still hides an unknown journal depth,
+// so it must not be converted to zero entries on the topology's word alone; the gather
+// must fail instead of letting the visible journal form the evidence tier.
+func TestEmergencyReparenterFindErrantGTIDs_MissingJournalTableMixedStateShard(t *testing.T) {
+	u1 := "00000000-0000-0000-0000-000000000001"
+	tabletMap, emptyPos := findErrantGTIDsWipedShardFixture(t)
+
+	erp := NewEmergencyReparenter(nil, &testutil.TabletManagerClient{
+		ReadReparentJournalInfoErrors: map[string]error{
+			"zone1-0000000100": errors.New("rpc error: code = Unknown desc = Table '_vt.reparent_journal' doesn't exist (errno 1146) (sqlstate 42S02) during query: SELECT COUNT(*) FROM _vt.reparent_journal"),
+		},
+		ReadReparentJournalInfoResults: map[string]int32{
+			"zone1-0000000101": 1,
+		},
+	}, nil)
+	validCandidates := map[string]*RelayLogPositions{
+		"zone1-0000000100": {Combined: emptyPos},
+		"zone1-0000000101": {
+			Combined: replication.MustParsePosition(replication.Mysql56FlavorID, u1+":1-100"),
+		},
+	}
+
+	_, _, err := erp.findErrantGTIDs(t.Context(), validCandidates, map[string]*replicationdatapb.StopReplicationStatus{}, tabletMap, 10*time.Second, nil, true)
+	require.ErrorContains(t, err, "could not read reparent journal information")
+}

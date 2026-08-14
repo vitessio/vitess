@@ -1357,7 +1357,10 @@ func (erp *EmergencyReparenter) findErrantGTIDs(
 	// Such severely lagging tablets cannot be used to find errant GTIDs in other tablets, seeing that they themselves don't have enough information.
 	// Zero-position candidates are included: their journal rows survive a GTID wipe and
 	// prove the shard has promotion history even when no GTID state is left to compare.
-	reparentJournalLen, err := erp.gatherReparenJournalInfo(ctx, validCandidates, tabletMap, waitReplicasTimeout, shardNeverInitialized)
+	// A missing journal table is only tolerated when the topology says never initialized
+	// and no candidate has any GTIDs; a nonzero position anywhere proves history, so an
+	// unreadable journal depth must fail the gather
+	reparentJournalLen, err := erp.gatherReparenJournalInfo(ctx, validCandidates, tabletMap, waitReplicasTimeout, shardNeverInitialized && allPositionsZero)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1522,7 +1525,7 @@ func (erp *EmergencyReparenter) gatherReparenJournalInfo(
 	validCandidates map[string]*RelayLogPositions,
 	tabletMap map[string]*topo.TabletInfo,
 	waitReplicasTimeout time.Duration,
-	shardNeverInitialized bool,
+	tolerateMissingJournal bool,
 ) (map[string]int32, error) {
 	reparentJournalLen := make(map[string]int32)
 	var mu sync.Mutex
@@ -1544,19 +1547,13 @@ func (erp *EmergencyReparenter) gatherReparenJournalInfo(
 				}
 			}()
 			length, err = erp.tmc.ReadReparentJournalInfo(groupCtx, tabletMap[alias].Tablet)
-			if err != nil && shardNeverInitialized {
-				// On a shard the topology has never seen initialized, a tablet with no
-				// GTIDs and no sidecar reparent journal table has never seen a promotion:
-				// treat it as zero journal entries instead of failing the gather, so ERS
-				// can still initialize a brand-new shard. On an initialized shard a
-				// missing journal table hides an unknown journal depth and stays an
-				// error, as does a tablet with real GTIDs but no journal table.
-				if positions := validCandidates[alias]; positions == nil || positions.IsZero() {
-					if sqlErr, ok := sqlerror.NewSQLErrorFromError(err).(*sqlerror.SQLError); ok &&
-						(sqlErr.Number() == sqlerror.ERNoSuchTable || sqlErr.Number() == sqlerror.ERBadDb) {
-						erp.logger.Warningf("treating missing reparent journal table on %s as zero entries during errant GTID detection: %v", alias, err)
-						length, err = 0, nil
-					}
+			if err != nil && tolerateMissingJournal {
+				// A brand-new shard has no sidecar tables yet: treat a missing journal
+				// table as zero entries so ERS can still initialize it
+				if sqlErr, ok := sqlerror.NewSQLErrorFromError(err).(*sqlerror.SQLError); ok &&
+					(sqlErr.Number() == sqlerror.ERNoSuchTable || sqlErr.Number() == sqlerror.ERBadDb) {
+					erp.logger.Warningf("treating missing reparent journal table on %s as zero entries during errant GTID detection: %v", alias, err)
+					length, err = 0, nil
 				}
 			}
 			mu.Lock()
