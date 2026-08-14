@@ -2952,6 +2952,67 @@ func TestScheduleItems_CopyStateForceGlobal(t *testing.T) {
 	assert.True(t, got.forceGlobal)
 }
 
+func TestScheduleItems_CascadeUnsafeTableForceGlobal(t *testing.T) {
+	vp, _ := testVPlayer(t)
+	ctx := testCtx(t)
+	scheduler := newApplyScheduler(ctx)
+	state := &parallelScheduleState{lastFlushTime: time.Now(), lastHeartbeatRefresh: time.Now()}
+
+	// grandparent sits at the top of a multi-level cascading FK chain: its
+	// cascades can implicitly touch rows the writeset cannot see, so its
+	// transactions must serialize. safe has no such reach and stays parallel.
+	vp.cascadeUnsafeTables = map[string]struct{}{"grandparent": {}}
+	for _, table := range []string{"grandparent", "safe"} {
+		vp.tablePlans[table] = &TablePlan{
+			TargetName: table,
+			Fields:     []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}},
+			PKIndices:  []bool{true},
+		}
+	}
+	vp.tablePlansVersion.Store(1)
+
+	rowEvent := func(table string) *binlogdatapb.VEvent {
+		return &binlogdatapb.VEvent{
+			Type: binlogdatapb.VEventType_ROW,
+			RowEvent: &binlogdatapb.RowEvent{
+				TableName: table,
+				RowChanges: []*binlogdatapb.RowChange{
+					{After: &querypb.Row{Values: []byte("1"), Lengths: []int64{1}}},
+				},
+			},
+			Timestamp: 100,
+		}
+	}
+	gtidEvent := func(seq int) *binlogdatapb.VEvent {
+		return &binlogdatapb.VEvent{
+			Type: binlogdatapb.VEventType_GTID,
+			Gtid: fmt.Sprintf("MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-%d", seq),
+		}
+	}
+	commitEvent := &binlogdatapb.VEvent{Type: binlogdatapb.VEventType_COMMIT}
+
+	// Schedule the two transactions in separate calls: consecutive commits
+	// within one relay fetch merge into a single batched transaction, and
+	// this test needs two distinct txns to compare their classification.
+	for _, item := range [][]*binlogdatapb.VEvent{
+		{gtidEvent(5), rowEvent("grandparent"), commitEvent},
+		{gtidEvent(6), rowEvent("safe"), commitEvent},
+	} {
+		err := vp.scheduleItems(ctx, scheduler, state, [][]*binlogdatapb.VEvent{item})
+		require.NoError(t, err)
+	}
+
+	got, err := scheduler.nextReady(ctx)
+	require.NoError(t, err)
+	assert.True(t, got.forceGlobal, "txn touching a cascade-unsafe table must serialize")
+
+	require.NoError(t, scheduler.markCommitted(got))
+	got, err = scheduler.nextReady(ctx)
+	require.NoError(t, err)
+	assert.False(t, got.forceGlobal, "txn touching only cascade-safe tables must stay parallel")
+	assert.NotEmpty(t, got.writeset)
+}
+
 // targetCharsetField returns a streamed text field carrying the target
 // column's real collation, the way an actual vstreamer FIELD event always
 // does (vstreamer populates Field.Charset from the source column, falling

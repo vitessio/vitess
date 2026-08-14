@@ -172,6 +172,8 @@ type fkConstraintRef struct {
 	ParentTable           string   // referenced parent table name
 	ChildColumnNames      []string // child column names, in FK ordinal order
 	ReferencedColumnNames []string // parent column names, in FK ordinal order
+	DeleteRule            string   // referential DELETE_RULE, uppercase (e.g. "CASCADE", "NO ACTION")
+	UpdateRule            string   // referential UPDATE_RULE, uppercase
 }
 
 // parentFKRef represents a foreign key constraint from the parent table's
@@ -1137,12 +1139,17 @@ func queryFKRefs(dbClient *vdbClient, dbName string) (map[string][]fkConstraintR
 	query := fmt.Sprintf(
 		"SELECT kcu.TABLE_NAME, kcu.CONSTRAINT_NAME, kcu.COLUMN_NAME, kcu.REFERENCED_TABLE_NAME, kcu.REFERENCED_COLUMN_NAME, "+
 			"child_cols.DATA_TYPE, COALESCE(child_cols.CHARACTER_SET_NAME, ''), COALESCE(child_cols.COLLATION_NAME, ''), COALESCE(child_cols.COLUMN_TYPE, ''), "+
-			"parent_cols.DATA_TYPE, COALESCE(parent_cols.CHARACTER_SET_NAME, ''), COALESCE(parent_cols.COLLATION_NAME, ''), COALESCE(parent_cols.COLUMN_TYPE, '') "+
+			"parent_cols.DATA_TYPE, COALESCE(parent_cols.CHARACTER_SET_NAME, ''), COALESCE(parent_cols.COLLATION_NAME, ''), COALESCE(parent_cols.COLUMN_TYPE, ''), "+
+			"COALESCE(rc.DELETE_RULE, ''), COALESCE(rc.UPDATE_RULE, '') "+
 			"FROM information_schema.KEY_COLUMN_USAGE kcu "+
 			"JOIN information_schema.COLUMNS child_cols "+
 			"ON child_cols.TABLE_SCHEMA = kcu.TABLE_SCHEMA AND child_cols.TABLE_NAME = kcu.TABLE_NAME AND child_cols.COLUMN_NAME = kcu.COLUMN_NAME "+
 			"JOIN information_schema.COLUMNS parent_cols "+
 			"ON parent_cols.TABLE_SCHEMA = kcu.TABLE_SCHEMA AND parent_cols.TABLE_NAME = kcu.REFERENCED_TABLE_NAME AND parent_cols.COLUMN_NAME = kcu.REFERENCED_COLUMN_NAME "+
+			// LEFT JOIN so a missing REFERENTIAL_CONSTRAINTS row can never drop the FK
+			// edge itself; an empty rule is treated as cascading (fail closed) instead.
+			"LEFT JOIN information_schema.REFERENTIAL_CONSTRAINTS rc "+
+			"ON rc.CONSTRAINT_SCHEMA = kcu.CONSTRAINT_SCHEMA AND rc.CONSTRAINT_NAME = kcu.CONSTRAINT_NAME AND rc.TABLE_NAME = kcu.TABLE_NAME "+
 			"WHERE kcu.TABLE_SCHEMA = %s AND kcu.REFERENCED_TABLE_NAME IS NOT NULL "+
 			"ORDER BY kcu.TABLE_NAME, kcu.CONSTRAINT_NAME, kcu.ORDINAL_POSITION",
 		encodeString(dbName),
@@ -1169,6 +1176,8 @@ func queryFKRefs(dbClient *vdbClient, dbName string) (map[string][]fkConstraintR
 		parentTable    string
 		cols           []string // child column names in ordinal order
 		referencedCols []string // parent column names in ordinal order
+		deleteRule     string   // uppercase referential DELETE_RULE
+		updateRule     string   // uppercase referential UPDATE_RULE
 	}
 
 	// Use a slice to preserve order; there are typically very few FK constraints.
@@ -1235,6 +1244,8 @@ func queryFKRefs(dbClient *vdbClient, dbName string) (map[string][]fkConstraintR
 				parentTable:    parentTable,
 				cols:           []string{colName},
 				referencedCols: []string{referencedColName},
+				deleteRule:     strings.ToUpper(row[13].ToString()),
+				updateRule:     strings.ToUpper(row[14].ToString()),
 			})
 		}
 	}
@@ -1245,8 +1256,113 @@ func queryFKRefs(dbClient *vdbClient, dbName string) (map[string][]fkConstraintR
 			ParentTable:           c.parentTable,
 			ChildColumnNames:      c.cols,
 			ReferencedColumnNames: c.referencedCols,
+			DeleteRule:            c.deleteRule,
+			UpdateRule:            c.updateRule,
 		})
 	}
 
 	return result, nil
+}
+
+// fkRuleMayModifyChildRows reports whether a referential action rule can make
+// InnoDB implicitly modify child rows when a parent row changes. Those
+// implicit child modifications never appear in the binlog row-event stream
+// (InnoDB performs them below the server layer), so writeset keys built from
+// the parent's row events cannot see them. An empty rule means the rule could
+// not be read from REFERENTIAL_CONSTRAINTS; fail closed and assume it
+// modifies child rows.
+func fkRuleMayModifyChildRows(rule string) bool {
+	switch rule {
+	case "RESTRICT", "NO ACTION":
+		return false
+	default:
+		// CASCADE, SET NULL, SET DEFAULT, or unknown/unreadable.
+		return true
+	}
+}
+
+// buildCascadeUnsafeTableSet returns the tables whose changes can implicitly
+// modify rows more than one FK edge away. A parent table of a cascading
+// constraint (child → parent with CASCADE / SET NULL / SET DEFAULT rules) is
+// unsafe when that child is itself the parent of any FK constraint: a change
+// to the table cascades into child rows below the server layer — never
+// row-logged — and those implicit child changes then lock or modify the
+// child's own children, tables the writeset built from the original row
+// events knows nothing about. The scheduler must force such transactions
+// through the global path.
+//
+// Single-edge cascades stay parallel: the child rows InnoDB implicitly
+// touches are exactly the ones whose FK values reference the changed parent
+// row, and the child/parent FK writeset keys already make those conflict.
+// SET NULL and ON UPDATE CASCADE only rewrite the child's FK columns, but we
+// treat them like ON DELETE CASCADE rather than proving the rewritten columns
+// cannot themselves be referenced by a grandchild — the precision would cost
+// column-level analysis for schemas that are rare in practice.
+func buildCascadeUnsafeTableSet(fkRefs map[string][]fkConstraintRef) map[string]struct{} {
+	if len(fkRefs) == 0 {
+		return nil
+	}
+	parents := make(map[string]struct{})
+	for _, refs := range fkRefs {
+		for _, ref := range refs {
+			parents[ref.ParentTable] = struct{}{}
+		}
+	}
+	var unsafeTables map[string]struct{}
+	for childTable, refs := range fkRefs {
+		if _, childIsParent := parents[childTable]; !childIsParent {
+			continue
+		}
+		for _, ref := range refs {
+			if !fkRuleMayModifyChildRows(ref.DeleteRule) && !fkRuleMayModifyChildRows(ref.UpdateRule) {
+				continue
+			}
+			if unsafeTables == nil {
+				unsafeTables = make(map[string]struct{})
+			}
+			unsafeTables[ref.ParentTable] = struct{}{}
+		}
+	}
+	return unsafeTables
+}
+
+// resolveCascadeUnsafeTableSet canonicalizes the cascade-unsafe table names
+// (as read from information_schema) into the target-table casing used by the
+// given table plans, so membership checks line up with plan TargetName values.
+func resolveCascadeUnsafeTableSet(unsafeTables map[string]struct{}, tablePlans map[string]*TablePlan) map[string]struct{} {
+	if len(unsafeTables) == 0 {
+		return nil
+	}
+	canonical := buildCanonicalTargetTableNames(tablePlans)
+	resolved := make(map[string]struct{}, len(unsafeTables))
+	for name := range unsafeTables {
+		resolved[canonicalTargetTableName(name, canonical)] = struct{}{}
+	}
+	return resolved
+}
+
+// txnTouchesCascadeUnsafeTables reports whether any ROW event in the txn
+// targets a table from which a multi-edge FK cascade can depart (see
+// buildCascadeUnsafeTableSet). Those transactions must serialize through the
+// global path: their writeset cannot include keys for the grandchild rows the
+// cascade implicitly locks, so conflict detection would otherwise let a
+// competing transaction run in parallel and deadlock against the cascade
+// under ordered commit.
+func txnTouchesCascadeUnsafeTables(events []*binlogdatapb.VEvent, tablePlans map[string]*TablePlan, unsafeTables map[string]struct{}) bool {
+	if len(unsafeTables) == 0 {
+		return false
+	}
+	for _, event := range events {
+		if event.Type != binlogdatapb.VEventType_ROW || event.RowEvent == nil {
+			continue
+		}
+		name := event.RowEvent.TableName
+		if plan := tablePlans[name]; plan != nil && plan.TargetName != "" {
+			name = plan.TargetName
+		}
+		if _, ok := unsafeTables[name]; ok {
+			return true
+		}
+	}
+	return false
 }

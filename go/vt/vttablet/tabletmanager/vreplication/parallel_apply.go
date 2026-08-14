@@ -919,6 +919,10 @@ func (vp *vplayer) applyEventsParallel(ctx context.Context, relay *relayLog) err
 	}
 	vp.fkRefs = fkRefs
 	vp.parentFKRefs = buildParentFKRefs(fkRefs)
+	vp.cascadeUnsafeTables = buildCascadeUnsafeTableSet(fkRefs)
+	for table := range vp.cascadeUnsafeTables {
+		log.Info("Parallel apply: transactions on this table will serialize; its cascading FK actions can reach tables beyond writeset conflict detection", slog.String("table", table))
+	}
 
 	// sendWorkerErr is a non-blocking send to workerErr. The channel is
 	// buffered to workerCount, so in normal operation this always succeeds;
@@ -1316,6 +1320,7 @@ func (vp *vplayer) scheduleItems(ctx context.Context, scheduler *applyScheduler,
 	vp.serialMu.Lock()
 	fkRefs := vp.fkRefs
 	parentFKRefs := vp.parentFKRefs
+	cascadeUnsafeTables := vp.cascadeUnsafeTables
 	pendingFieldRefreshTables := maps.Clone(vp.pendingFieldRefreshTables)
 	if ddlExecEnabled {
 		state.postDDLDroppedTables = cloneDroppedTables(vp.postDDLDroppedTables)
@@ -1366,6 +1371,8 @@ func (vp *vplayer) scheduleItems(ctx context.Context, scheduler *applyScheduler,
 	state.ddlSeen = false
 	var fkBatchingResolvedTables map[string]struct{}
 	fkBatchingResolvedVersion := int64(-1)
+	var cascadeUnsafeResolved map[string]struct{}
+	cascadeUnsafeResolvedVersion := int64(-1)
 	writesetCache := &txnWritesetCache{fieldIdxCache: state.fieldIdxCache}
 	getFKBatchingSnapshot := func() (map[string]*TablePlan, map[string]struct{}) {
 		planSnapshot := snapshotTablePlans(vp.tablePlansMu, vp.tablePlans, vp.tablePlansVersion, &state.cachedPlanVersion, state.cachedPlanSnapshot)
@@ -1436,9 +1443,14 @@ func (vp *vplayer) scheduleItems(ctx context.Context, scheduler *applyScheduler,
 				}
 				state.planFlagsVersion = state.cachedPlanVersion
 			}
+			if len(cascadeUnsafeTables) > 0 && cascadeUnsafeResolvedVersion != state.cachedPlanVersion {
+				cascadeUnsafeResolved = resolveCascadeUnsafeTableSet(cascadeUnsafeTables, planSnapshot)
+				cascadeUnsafeResolvedVersion = state.cachedPlanVersion
+			}
 			extraUniqueTouched := state.planHasExtraUniqueSecondary && txnTouchesExtraUniqueSecondary(state.curEvents, planSnapshot)
 			unsupportedTouched := state.planHasUnsupportedWritesetMapping && txnTouchesUnsupportedWritesetMapping(state.curEvents, planSnapshot)
-			if extraUniqueTouched || unsupportedTouched {
+			cascadeTouched := txnTouchesCascadeUnsafeTables(state.curEvents, planSnapshot, cascadeUnsafeResolved)
+			if extraUniqueTouched || unsupportedTouched || cascadeTouched {
 				txn.forceGlobal = true
 			} else {
 				// Invalidate fieldIdxCache when table plans change (new FIELD events).
@@ -2385,6 +2397,7 @@ func (vp *vplayer) commitLoop(ctx context.Context, scheduler *applyScheduler, co
 			}
 			vp.fkRefs = newRefs
 			vp.parentFKRefs = buildParentFKRefs(newRefs)
+			vp.cascadeUnsafeTables = buildCascadeUnsafeTableSet(newRefs)
 		}
 		if event.Type == binlogdatapb.VEventType_DDL && (ddlExecuted || publishExecIgnoreDDLBarrier) {
 			vp.tablePlansMu.RLock()

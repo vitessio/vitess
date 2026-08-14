@@ -114,6 +114,12 @@ type vplayer struct {
 	// match child FK keys, ensuring correct conflict detection even when
 	// FKs reference non-PK unique keys.
 	parentFKRefs map[string][]parentFKRef
+	// cascadeUnsafeTables holds tables whose changes can implicitly modify
+	// rows more than one FK edge away via cascading referential actions.
+	// Transactions touching them must go through the global path — their
+	// writeset cannot cover the grandchild rows the cascade locks. See
+	// buildCascadeUnsafeTableSet.
+	cascadeUnsafeTables map[string]struct{}
 	// postDDLDroppedTables records dropped table names from executed DDLs so the
 	// parallel scheduler can clear post-DDL barriers without mutating tablePlans.
 	postDDLDroppedTables map[string]struct{}

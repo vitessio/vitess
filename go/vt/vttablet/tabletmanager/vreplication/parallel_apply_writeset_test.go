@@ -672,12 +672,12 @@ func TestQueryFKRefs(t *testing.T) {
 
 	qr := sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
-			"TABLE_NAME|CONSTRAINT_NAME|COLUMN_NAME|REFERENCED_TABLE_NAME|REFERENCED_COLUMN_NAME|CHILD_DATA_TYPE|CHILD_CHARACTER_SET_NAME|CHILD_COLLATION_NAME|CHILD_COLUMN_TYPE|PARENT_DATA_TYPE|PARENT_CHARACTER_SET_NAME|PARENT_COLLATION_NAME|PARENT_COLUMN_TYPE",
-			"varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar",
+			"TABLE_NAME|CONSTRAINT_NAME|COLUMN_NAME|REFERENCED_TABLE_NAME|REFERENCED_COLUMN_NAME|CHILD_DATA_TYPE|CHILD_CHARACTER_SET_NAME|CHILD_COLLATION_NAME|CHILD_COLUMN_TYPE|PARENT_DATA_TYPE|PARENT_CHARACTER_SET_NAME|PARENT_COLLATION_NAME|PARENT_COLUMN_TYPE|DELETE_RULE|UPDATE_RULE",
+			"varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar",
 		),
-		"child|fk_child_parent|parent_id|parent|id|int|||int|int|||int",
-		"child|fk_child_parent|parent_id2|parent|id2|int|||int|int|||int",
-		"other|fk_other_parent|parent_id|parent|id|int|||int|int|||int",
+		"child|fk_child_parent|parent_id|parent|id|int|||int|int|||int|CASCADE|NO ACTION",
+		"child|fk_child_parent|parent_id2|parent|id2|int|||int|int|||int|CASCADE|NO ACTION",
+		"other|fk_other_parent|parent_id|parent|id|int|||int|int|||int|NO ACTION|NO ACTION",
 	)
 	client := newVDBClient(&stubDBClient{result: qr}, stats, 100)
 	refs, err := queryFKRefs(client, "db")
@@ -687,6 +687,104 @@ func TestQueryFKRefs(t *testing.T) {
 	require.Equal(t, "parent", refs["child"][0].ParentTable)
 	require.Equal(t, []string{"parent_id", "parent_id2"}, refs["child"][0].ChildColumnNames)
 	require.Equal(t, []string{"id", "id2"}, refs["child"][0].ReferencedColumnNames)
+	require.Equal(t, "CASCADE", refs["child"][0].DeleteRule)
+	require.Equal(t, "NO ACTION", refs["child"][0].UpdateRule)
+	require.Equal(t, "NO ACTION", refs["other"][0].DeleteRule)
+	require.Equal(t, "NO ACTION", refs["other"][0].UpdateRule)
+}
+
+func TestBuildCascadeUnsafeTableSet(t *testing.T) {
+	edge := func(parent, deleteRule, updateRule string) fkConstraintRef {
+		return fkConstraintRef{
+			ParentTable:           parent,
+			ChildColumnNames:      []string{"fk"},
+			ReferencedColumnNames: []string{"id"},
+			DeleteRule:            deleteRule,
+			UpdateRule:            updateRule,
+		}
+	}
+	tcases := []struct {
+		name   string
+		fkRefs map[string][]fkConstraintRef
+		want   []string
+	}{
+		{
+			name:   "no FKs",
+			fkRefs: nil,
+		},
+		{
+			// b references a with CASCADE, but b has no children of its own:
+			// the cascade cannot reach past the direct edge, which the
+			// child/parent FK writeset keys already cover.
+			name: "single-level cascade stays parallel",
+			fkRefs: map[string][]fkConstraintRef{
+				"b": {edge("a", "CASCADE", "NO ACTION")},
+			},
+		},
+		{
+			// c -> b -> a, both edges CASCADE: deleting a rows implicitly
+			// deletes b rows, which implicitly touches c — invisible to a's
+			// writeset. b-direct changes still see c via the direct edge.
+			name: "two-level cascade marks the top parent only",
+			fkRefs: map[string][]fkConstraintRef{
+				"b": {edge("a", "CASCADE", "NO ACTION")},
+				"c": {edge("b", "CASCADE", "NO ACTION")},
+			},
+			want: []string{"a"},
+		},
+		{
+			// The grandchild edge's rule doesn't matter: even RESTRICT makes
+			// InnoDB inspect/lock c when the cascade deletes b rows.
+			name: "cascade into a child that has a RESTRICT child",
+			fkRefs: map[string][]fkConstraintRef{
+				"b": {edge("a", "CASCADE", "NO ACTION")},
+				"c": {edge("b", "RESTRICT", "RESTRICT")},
+			},
+			want: []string{"a"},
+		},
+		{
+			name: "restrict-only chain stays parallel",
+			fkRefs: map[string][]fkConstraintRef{
+				"b": {edge("a", "NO ACTION", "RESTRICT")},
+				"c": {edge("b", "RESTRICT", "NO ACTION")},
+			},
+		},
+		{
+			name: "set null on the mid edge is treated like cascade",
+			fkRefs: map[string][]fkConstraintRef{
+				"b": {edge("a", "SET NULL", "NO ACTION")},
+				"c": {edge("b", "NO ACTION", "NO ACTION")},
+			},
+			want: []string{"a"},
+		},
+		{
+			// Unreadable rules fail closed.
+			name: "unknown rule is treated as cascading",
+			fkRefs: map[string][]fkConstraintRef{
+				"b": {edge("a", "", "")},
+				"c": {edge("b", "NO ACTION", "NO ACTION")},
+			},
+			want: []string{"a"},
+		},
+		{
+			name: "three-level cascade marks every parent with reach past its child",
+			fkRefs: map[string][]fkConstraintRef{
+				"b": {edge("a", "CASCADE", "NO ACTION")},
+				"c": {edge("b", "CASCADE", "NO ACTION")},
+				"d": {edge("c", "CASCADE", "NO ACTION")},
+			},
+			want: []string{"a", "b"},
+		},
+	}
+	for _, tcase := range tcases {
+		t.Run(tcase.name, func(t *testing.T) {
+			got := buildCascadeUnsafeTableSet(tcase.fkRefs)
+			require.Len(t, got, len(tcase.want))
+			for _, table := range tcase.want {
+				assert.Contains(t, got, table)
+			}
+		})
+	}
 }
 
 func TestQueryFKRefsError(t *testing.T) {
@@ -748,16 +846,17 @@ func TestQueryFKRefsFetchesAllRows(t *testing.T) {
 
 	qr := sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
-			"TABLE_NAME|CONSTRAINT_NAME|COLUMN_NAME|REFERENCED_TABLE_NAME|REFERENCED_COLUMN_NAME|CHILD_DATA_TYPE|CHILD_CHARACTER_SET_NAME|CHILD_COLLATION_NAME|CHILD_COLUMN_TYPE|PARENT_DATA_TYPE|PARENT_CHARACTER_SET_NAME|PARENT_COLLATION_NAME|PARENT_COLUMN_TYPE",
-			"varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar",
+			"TABLE_NAME|CONSTRAINT_NAME|COLUMN_NAME|REFERENCED_TABLE_NAME|REFERENCED_COLUMN_NAME|CHILD_DATA_TYPE|CHILD_CHARACTER_SET_NAME|CHILD_COLLATION_NAME|CHILD_COLUMN_TYPE|PARENT_DATA_TYPE|PARENT_CHARACTER_SET_NAME|PARENT_COLLATION_NAME|PARENT_COLUMN_TYPE|DELETE_RULE|UPDATE_RULE",
+			"varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar",
 		),
-		"child|fk_child_parent|parent_id|parent|id|int|||int|int|||int",
+		"child|fk_child_parent|parent_id|parent|id|int|||int|int|||int|NO ACTION|NO ACTION",
 	)
 	client := newVDBClient(&maxRowsAssertingDBClient{
 		result: qr,
 		assertQuery: func(query string) {
 			require.Contains(t, query, "JOIN information_schema.COLUMNS child_cols")
 			require.Contains(t, query, "JOIN information_schema.COLUMNS parent_cols")
+			require.Contains(t, query, "LEFT JOIN information_schema.REFERENTIAL_CONSTRAINTS rc")
 			require.NotContains(t, query, "FROM information_schema.COLUMNS WHERE TABLE_SCHEMA")
 		},
 		assertRows: func(maxrows int) error {
@@ -783,10 +882,10 @@ func TestQueryFKRefsRejectsHashIncompatibleFKColumnDefinitions(t *testing.T) {
 
 	qr := sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
-			"TABLE_NAME|CONSTRAINT_NAME|COLUMN_NAME|REFERENCED_TABLE_NAME|REFERENCED_COLUMN_NAME|CHILD_DATA_TYPE|CHILD_CHARACTER_SET_NAME|CHILD_COLLATION_NAME|CHILD_COLUMN_TYPE|PARENT_DATA_TYPE|PARENT_CHARACTER_SET_NAME|PARENT_COLLATION_NAME|PARENT_COLUMN_TYPE",
-			"varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar",
+			"TABLE_NAME|CONSTRAINT_NAME|COLUMN_NAME|REFERENCED_TABLE_NAME|REFERENCED_COLUMN_NAME|CHILD_DATA_TYPE|CHILD_CHARACTER_SET_NAME|CHILD_COLLATION_NAME|CHILD_COLUMN_TYPE|PARENT_DATA_TYPE|PARENT_CHARACTER_SET_NAME|PARENT_COLLATION_NAME|PARENT_COLUMN_TYPE|DELETE_RULE|UPDATE_RULE",
+			"varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar",
 		),
-		"child|fk_child_parent|parent_id|parent|id|int|||int|bigint|||bigint",
+		"child|fk_child_parent|parent_id|parent|id|int|||int|bigint|||bigint|NO ACTION|NO ACTION",
 	)
 
 	client := newVDBClient(&stubDBClient{result: qr}, stats, 100)
@@ -803,10 +902,10 @@ func TestQueryFKRefsAllowsCompatibleCharacterFKColumns(t *testing.T) {
 
 	qr := sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
-			"TABLE_NAME|CONSTRAINT_NAME|COLUMN_NAME|REFERENCED_TABLE_NAME|REFERENCED_COLUMN_NAME|CHILD_DATA_TYPE|CHILD_CHARACTER_SET_NAME|CHILD_COLLATION_NAME|CHILD_COLUMN_TYPE|PARENT_DATA_TYPE|PARENT_CHARACTER_SET_NAME|PARENT_COLLATION_NAME|PARENT_COLUMN_TYPE",
-			"varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar",
+			"TABLE_NAME|CONSTRAINT_NAME|COLUMN_NAME|REFERENCED_TABLE_NAME|REFERENCED_COLUMN_NAME|CHILD_DATA_TYPE|CHILD_CHARACTER_SET_NAME|CHILD_COLLATION_NAME|CHILD_COLUMN_TYPE|PARENT_DATA_TYPE|PARENT_CHARACTER_SET_NAME|PARENT_COLLATION_NAME|PARENT_COLUMN_TYPE|DELETE_RULE|UPDATE_RULE",
+			"varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar",
 		),
-		"child|fk_child_parent|parent_code|parent|code|varchar|utf8mb4|utf8mb4_0900_ai_ci|varchar(64)|char|utf8mb4|utf8mb4_0900_ai_ci|char(32)",
+		"child|fk_child_parent|parent_code|parent|code|varchar|utf8mb4|utf8mb4_0900_ai_ci|varchar(64)|char|utf8mb4|utf8mb4_0900_ai_ci|char(32)|NO ACTION|NO ACTION",
 	)
 
 	client := newVDBClient(&stubDBClient{result: qr}, stats, 100)
