@@ -871,7 +871,7 @@ func TestCutOverVReplMigrationBuffersBeforeParallelApplyCatchUpWait(t *testing.T
 	bufferMu.Unlock()
 	assert.Equal(t, []bool{true, false}, bufferEventsCopy)
 	assert.Equal(t, 1, tmClient.RefreshStateCalled())
-	assert.Len(t, tmClient.WaitCalls(), 0)
+	assert.Empty(t, tmClient.WaitCalls())
 }
 
 func TestCutOverVReplMigrationWaitsForParallelApplyAfterLocking(t *testing.T) {

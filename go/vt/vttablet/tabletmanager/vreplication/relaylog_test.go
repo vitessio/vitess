@@ -82,7 +82,7 @@ func TestRelayLogSendTimeout(t *testing.T) {
 	select {
 	case err := <-errCh:
 		require.Error(t, err)
-		assert.ErrorContains(t, err, relayLogIOStalledMsg)
+		require.ErrorContains(t, err, relayLogIOStalledMsg)
 	case <-time.After(5 * time.Second):
 		t.Fatal("timed out waiting for send")
 	}
@@ -100,7 +100,7 @@ func TestRelayLogFetchTimeout(t *testing.T) {
 
 	items, err := rl.Fetch()
 	require.NoError(t, err)
-	assert.Len(t, items, 0)
+	assert.Empty(t, items)
 }
 
 func TestRelayLogDoneReturnsEOF(t *testing.T) {
@@ -110,7 +110,7 @@ func TestRelayLogDoneReturnsEOF(t *testing.T) {
 	rl := newRelayLog(ctx, 1, 1)
 
 	items, err := rl.Fetch()
-	assert.ErrorIs(t, err, io.EOF)
+	require.ErrorIs(t, err, io.EOF)
 	assert.Nil(t, items)
 }
 

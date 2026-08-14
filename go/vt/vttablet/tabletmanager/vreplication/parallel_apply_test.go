@@ -6732,7 +6732,7 @@ func TestSetState_BatchedTransactionExecutesImmediatelyWithoutReplay(t *testing.
 	// The later batch commit must replay nothing: only "commit" goes out.
 	preCommit := len(recording.queries)
 	require.NoError(t, vp.vr.dbClient.CommitTrxQueryBatch())
-	require.Equal(t, preCommit+1, len(recording.queries))
+	require.Len(t, recording.queries, preCommit+1)
 	assert.Equal(t, "commit", recording.queries[len(recording.queries)-1])
 	// Still exactly one state UPDATE — no double execution.
 	sawStateUpdate = 0
