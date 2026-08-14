@@ -452,7 +452,7 @@ func (sm *StreamMigrator) legacyReadSourceStreams(ctx context.Context, cancelMig
 			// If so, we request the operator to clean them up, or restart them before going ahead.
 			// This allows us to assume that all stopped streams can be safely restarted
 			// if we cancel the operation.
-			stoppedStreams, err := sm.legacyReadTabletStreams(ctx, source.GetPrimary(), "state = 'Stopped' and message != 'FROZEN'")
+			stoppedStreams, err := sm.legacyReadTabletStreams(ctx, source.GetPrimary(), "state = 'Stopped' and message != 'FROZEN' and message != 'stopped for online DDL cutover'")
 			if err != nil {
 				return err
 			}
@@ -564,7 +564,13 @@ func (sm *StreamMigrator) readSourceStreams(ctx context.Context, cancelMigrate b
 				return err
 			}
 
-			if len(stoppedStreams) != 0 {
+			nonOnlineDDLStopped := make([]*VReplicationStream, 0, len(stoppedStreams))
+			for _, stream := range stoppedStreams {
+				if stream.WorkflowType != binlogdatapb.VReplicationWorkflowType_OnlineDDL {
+					nonOnlineDDLStopped = append(nonOnlineDDLStopped, stream)
+				}
+			}
+			if len(nonOnlineDDLStopped) != 0 {
 				return fmt.Errorf("cannot migrate until all streams are running: %s: %d", source.GetShard().ShardName(), source.GetPrimary().Alias.Uid)
 			}
 		}
