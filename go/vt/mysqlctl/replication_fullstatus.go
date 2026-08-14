@@ -40,16 +40,6 @@ const (
 	fullStatusGlobalStatusQuery    = "SELECT variable_name, variable_value FROM performance_schema.global_status WHERE variable_name IN %a"
 )
 
-type (
-	// FullStatusResult contains the FullStatus proto assembled by
-	// CollectFullStatusData along with any non-fatal errors collected while
-	// reading semi-sync data.
-	FullStatusResult struct {
-		Status     *replicationdatapb.FullStatus
-		SoftErrors []error
-	}
-)
-
 var (
 	fullStatusSemiSyncVariables = []string{
 		"rpl_semi_sync_source_enabled",
@@ -74,7 +64,7 @@ var (
 // CollectFullStatusData collects FullStatus data on one connection. MariaDB is
 // not supported, because the mandatory variables include server_uuid, gtid_mode,
 // and super_read_only, none of which MariaDB has.
-func (mysqld *Mysqld) CollectFullStatusData(ctx context.Context) (*FullStatusResult, error) {
+func (mysqld *Mysqld) CollectFullStatusData(ctx context.Context) (*replicationdatapb.FullStatus, error) {
 	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
 	if err != nil {
 		return nil, err
@@ -100,22 +90,19 @@ func (mysqld *Mysqld) CollectFullStatusData(ctx context.Context) (*FullStatusRes
 		return nil, err
 	}
 
-	result := &FullStatusResult{
-		Status: &replicationdatapb.FullStatus{
-			ServerId:          variables.ServerID,
-			ServerUuid:        variables.ServerUUID,
-			Version:           fmt.Sprintf("%d.%d.%d", parsedVersion.Major, parsedVersion.Minor, parsedVersion.Patch),
-			VersionComment:    variables.VersionComment,
-			ReadOnly:          variables.ReadOnly,
-			SuperReadOnly:     variables.SuperReadOnly,
-			GtidMode:          variables.GTIDMode,
-			BinlogFormat:      variables.BinlogFormat,
-			BinlogRowImage:    variables.BinlogRowImage,
-			LogBinEnabled:     variables.LogBin,
-			LogReplicaUpdates: variables.LogReplicaUpdates,
-		},
+	status := &replicationdatapb.FullStatus{
+		ServerId:          variables.ServerID,
+		ServerUuid:        variables.ServerUUID,
+		Version:           fmt.Sprintf("%d.%d.%d", parsedVersion.Major, parsedVersion.Minor, parsedVersion.Patch),
+		VersionComment:    variables.VersionComment,
+		ReadOnly:          variables.ReadOnly,
+		SuperReadOnly:     variables.SuperReadOnly,
+		GtidMode:          variables.GTIDMode,
+		BinlogFormat:      variables.BinlogFormat,
+		BinlogRowImage:    variables.BinlogRowImage,
+		LogBinEnabled:     variables.LogBin,
+		LogReplicaUpdates: variables.LogReplicaUpdates,
 	}
-	status := result.Status
 
 	var replicationStatus replication.ReplicationStatus
 	err = runFullStatusQuery(ctx, conn, "replication status", func() error {
@@ -150,20 +137,20 @@ func (mysqld *Mysqld) CollectFullStatusData(ctx context.Context) (*FullStatusRes
 		status.GtidPurged = replication.EncodePosition(variables.GTIDPurged)
 	}
 
-	if err := mysqld.collectFullStatusSemiSync(ctx, conn, result); err != nil {
+	if err := mysqld.collectFullStatusSemiSync(ctx, conn, status); err != nil {
 		return nil, err
 	}
 
 	err = runFullStatusQuery(ctx, conn, "replication configuration", func() error {
 		var queryErr error
-		status.ReplicationConfiguration, queryErr = conn.Conn.ReplicationConfiguration()
+		status.ReplicationConfiguration, queryErr = conn.Conn.ReplicationConfiguration(variables.ReplicaNetTimeout)
 		return queryErr
 	})
 	if err != nil {
 		return nil, err
 	}
 
-	return result, nil
+	return status, nil
 }
 
 // runFullStatusQuery runs a FullStatus query and retries once after reconnecting
@@ -214,11 +201,13 @@ func (mysqld *Mysqld) fetchFullStatusVariables(ctx context.Context, conn *dbconn
 	return mysql.ParseFullStatusVariables(qr)
 }
 
-// collectFullStatusSemiSync fills the optional semi-sync fields. Query and
-// parsing errors are retained as soft errors, while context cancellation is fatal.
-// Both reads retry after a reconnect like the mandatory queries do, so that a
-// dropped connection does not report semi-sync as disabled and off.
-func (mysqld *Mysqld) collectFullStatusSemiSync(ctx context.Context, conn *dbconnpool.PooledDBConnection, result *FullStatusResult) error {
+// collectFullStatusSemiSync fills the semi-sync fields. A server without the
+// semi-sync plugin answers both reads with an empty result and no error, so a
+// query or parsing failure here means the values are unknown rather than off.
+// Reporting them as disabled and off would hand VTOrc a fabricated state it
+// acts on, so the failure is fatal. Both reads retry after a reconnect like the
+// mandatory queries do.
+func (mysqld *Mysqld) collectFullStatusSemiSync(ctx context.Context, conn *dbconnpool.PooledDBConnection, status *replicationdatapb.FullStatus) error {
 	var variables map[string]string
 	err := runFullStatusQuery(ctx, conn, "semi-sync variables", func() error {
 		var queryErr error
@@ -229,9 +218,10 @@ func (mysqld *Mysqld) collectFullStatusSemiSync(ctx context.Context, conn *dbcon
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
-		result.SoftErrors = append(result.SoftErrors, vterrors.Wrap(err, "failed to read semi-sync variables"))
-	} else {
-		result.parseSemiSyncVariables(variables)
+		return vterrors.Wrap(err, "failed to read semi-sync variables")
+	}
+	if err := parseSemiSyncVariables(status, variables); err != nil {
+		return err
 	}
 
 	var statuses map[string]string
@@ -244,11 +234,9 @@ func (mysqld *Mysqld) collectFullStatusSemiSync(ctx context.Context, conn *dbcon
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
-		result.SoftErrors = append(result.SoftErrors, vterrors.Wrap(err, "failed to read semi-sync status"))
-	} else {
-		result.parseSemiSyncStatuses(statuses)
+		return vterrors.Wrap(err, "failed to read semi-sync status")
 	}
-	return nil
+	return parseSemiSyncStatuses(status, statuses)
 }
 
 // fetchFullStatusValues reads the requested variables or status values from
@@ -278,51 +266,74 @@ func (mysqld *Mysqld) fetchFullStatusValues(ctx context.Context, conn *dbconnpoo
 
 // parseSemiSyncVariables fills the semi-sync settings using either source/replica
 // or the legacy master/slave names.
-func (result *FullStatusResult) parseSemiSyncVariables(values map[string]string) {
-	status := result.Status
+func parseSemiSyncVariables(status *replicationdatapb.FullStatus, values map[string]string) error {
 	if _, ok := values["rpl_semi_sync_source_enabled"]; ok {
+		timeout, err := parseOptionalUint(values, "rpl_semi_sync_source_timeout", 64)
+		if err != nil {
+			return err
+		}
+		waitForReplicaCount, err := parseOptionalUint(values, "rpl_semi_sync_source_wait_for_replica_count", 32)
+		if err != nil {
+			return err
+		}
 		status.SemiSyncPrimaryEnabled = values["rpl_semi_sync_source_enabled"] == "ON"
 		status.SemiSyncReplicaEnabled = values["rpl_semi_sync_replica_enabled"] == "ON"
-		status.SemiSyncPrimaryTimeout = result.parseOptionalUint(values, "rpl_semi_sync_source_timeout", 64)
-		status.SemiSyncWaitForReplicaCount = uint32(result.parseOptionalUint(values, "rpl_semi_sync_source_wait_for_replica_count", 32))
-		return
+		status.SemiSyncPrimaryTimeout = timeout
+		status.SemiSyncWaitForReplicaCount = uint32(waitForReplicaCount)
+		return nil
 	}
 	if _, ok := values["rpl_semi_sync_master_enabled"]; ok {
+		timeout, err := parseOptionalUint(values, "rpl_semi_sync_master_timeout", 64)
+		if err != nil {
+			return err
+		}
+		waitForReplicaCount, err := parseOptionalUint(values, "rpl_semi_sync_master_wait_for_slave_count", 32)
+		if err != nil {
+			return err
+		}
 		status.SemiSyncPrimaryEnabled = values["rpl_semi_sync_master_enabled"] == "ON"
 		status.SemiSyncReplicaEnabled = values["rpl_semi_sync_slave_enabled"] == "ON"
-		status.SemiSyncPrimaryTimeout = result.parseOptionalUint(values, "rpl_semi_sync_master_timeout", 64)
-		status.SemiSyncWaitForReplicaCount = uint32(result.parseOptionalUint(values, "rpl_semi_sync_master_wait_for_slave_count", 32))
+		status.SemiSyncPrimaryTimeout = timeout
+		status.SemiSyncWaitForReplicaCount = uint32(waitForReplicaCount)
 	}
+	return nil
 }
 
 // parseSemiSyncStatuses fills the semi-sync status using either source/replica
 // or the legacy master/slave names.
-func (result *FullStatusResult) parseSemiSyncStatuses(values map[string]string) {
-	status := result.Status
+func parseSemiSyncStatuses(status *replicationdatapb.FullStatus, values map[string]string) error {
 	if _, ok := values["Rpl_semi_sync_source_status"]; ok {
+		clients, err := parseOptionalUint(values, "Rpl_semi_sync_source_clients", 32)
+		if err != nil {
+			return err
+		}
 		status.SemiSyncPrimaryStatus = values["Rpl_semi_sync_source_status"] == "ON"
 		status.SemiSyncReplicaStatus = values["Rpl_semi_sync_replica_status"] == "ON"
-		status.SemiSyncPrimaryClients = uint32(result.parseOptionalUint(values, "Rpl_semi_sync_source_clients", 32))
-		return
+		status.SemiSyncPrimaryClients = uint32(clients)
+		return nil
 	}
 	if _, ok := values["Rpl_semi_sync_master_status"]; ok {
+		clients, err := parseOptionalUint(values, "Rpl_semi_sync_master_clients", 32)
+		if err != nil {
+			return err
+		}
 		status.SemiSyncPrimaryStatus = values["Rpl_semi_sync_master_status"] == "ON"
 		status.SemiSyncReplicaStatus = values["Rpl_semi_sync_slave_status"] == "ON"
-		status.SemiSyncPrimaryClients = uint32(result.parseOptionalUint(values, "Rpl_semi_sync_master_clients", 32))
+		status.SemiSyncPrimaryClients = uint32(clients)
 	}
+	return nil
 }
 
-// parseOptionalUint returns zero for a missing value and records malformed
-// values as soft errors.
-func (result *FullStatusResult) parseOptionalUint(values map[string]string, name string, bitSize int) uint64 {
+// parseOptionalUint returns zero for a missing value and an error for a
+// malformed one.
+func parseOptionalUint(values map[string]string, name string, bitSize int) (uint64, error) {
 	value, ok := values[name]
 	if !ok {
-		return 0
+		return 0, nil
 	}
 	parsed, err := strconv.ParseUint(value, 10, bitSize)
 	if err != nil {
-		result.SoftErrors = append(result.SoftErrors, vterrors.Wrapf(err, "failed to parse %s", name))
-		return 0
+		return 0, vterrors.Wrapf(err, "failed to parse %s", name)
 	}
-	return parsed
+	return parsed, nil
 }

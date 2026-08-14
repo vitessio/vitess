@@ -28,6 +28,7 @@ import (
 
 	mysqlctlpb "vitess.io/vitess/go/vt/proto/mysqlctl"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 )
 
@@ -62,7 +63,7 @@ type MysqlDaemon interface {
 	StopIOThread(ctx context.Context) error
 	ReplicationStatus(ctx context.Context) (replication.ReplicationStatus, error)
 	PrimaryStatus(ctx context.Context) (replication.PrimaryStatus, error)
-	CollectFullStatusData(ctx context.Context) (*FullStatusResult, error)
+	CollectFullStatusData(ctx context.Context) (*replicationdatapb.FullStatus, error)
 	GetGTIDPurged(ctx context.Context) (replication.Position, error)
 	SetSemiSyncEnabled(ctx context.Context, source, replica bool) error
 	SemiSyncEnabled(ctx context.Context) (source, replica bool)

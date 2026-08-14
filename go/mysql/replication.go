@@ -226,6 +226,7 @@ type FullStatusVariables struct {
 	LogReplicaUpdates bool
 	BinlogRowImage    string
 	GTIDPurged        replication.Position
+	ReplicaNetTimeout int32
 }
 
 const (
@@ -315,6 +316,10 @@ func ParseFullStatusVariables(qr *sqltypes.Result) (*FullStatusVariables, error)
 	if err != nil {
 		return nil, vterrors.Wrapf(err, "failed to parse gtid_purged")
 	}
+	replicaNetTimeout, err := row.ToInt32("replica_net_timeout")
+	if err != nil {
+		return nil, vterrors.Wrapf(err, "failed to read replica_net_timeout")
+	}
 
 	return &FullStatusVariables{
 		ServerID:          uint32(serverID),
@@ -329,6 +334,7 @@ func ParseFullStatusVariables(qr *sqltypes.Result) (*FullStatusVariables, error)
 		LogReplicaUpdates: logReplicaUpdates == 1,
 		BinlogRowImage:    binlogRowImage,
 		GTIDPurged:        replication.Position{GTIDSet: purgedGTIDSet},
+		ReplicaNetTimeout: replicaNetTimeout,
 	}, nil
 }
 
@@ -346,7 +352,8 @@ func (c *Conn) FullStatusVariablesQuery() string {
 	@@global.log_bin AS log_bin,
 	%s AS log_replica_updates,
 	@@global.binlog_row_image AS binlog_row_image,
-	@@global.gtid_purged AS gtid_purged`, c.flavor.binlogReplicatedUpdates())
+	@@global.gtid_purged AS gtid_purged,
+	%s AS replica_net_timeout`, c.flavor.binlogReplicatedUpdates(), c.flavor.replicationNetTimeoutVariable())
 }
 
 // ResetBinaryLogsCommand returns the command used to reset the

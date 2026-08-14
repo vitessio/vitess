@@ -103,7 +103,7 @@ type (
 
 	fullStatusMysqlDaemon struct {
 		*mysqlctl.FakeMysqlDaemon
-		result *mysqlctl.FullStatusResult
+		status *replicationdatapb.FullStatus
 		err    error
 		calls  int
 	}
@@ -142,9 +142,9 @@ func (rmd *restartReplicationMysqlDaemon) SemiSyncExtensionLoaded(ctx context.Co
 	return mysql.SemiSyncTypeOff, nil
 }
 
-func (fmd *fullStatusMysqlDaemon) CollectFullStatusData(context.Context) (*mysqlctl.FullStatusResult, error) {
+func (fmd *fullStatusMysqlDaemon) CollectFullStatusData(context.Context) (*replicationdatapb.FullStatus, error) {
 	fmd.calls++
-	return fmd.result, fmd.err
+	return fmd.status, fmd.err
 }
 
 func TestFullStatusUsesCollectedData(t *testing.T) {
@@ -152,22 +152,20 @@ func TestFullStatusUsesCollectedData(t *testing.T) {
 	t.Cleanup(fakeMysqlDaemon.DB().Close)
 	mysqlDaemon := &fullStatusMysqlDaemon{
 		FakeMysqlDaemon: fakeMysqlDaemon,
-		result: &mysqlctl.FullStatusResult{
-			Status: &replicationdatapb.FullStatus{
-				ServerId:               42,
-				ServerUuid:             "test-uuid",
-				Version:                "8.0.35",
-				VersionComment:         "MySQL Community Server - GPL",
-				ReadOnly:               true,
-				SuperReadOnly:          true,
-				GtidMode:               "ON",
-				BinlogFormat:           "ROW",
-				BinlogRowImage:         "FULL",
-				LogBinEnabled:          true,
-				LogReplicaUpdates:      true,
-				SemiSyncPrimaryEnabled: true,
-				SemiSyncPrimaryStatus:  true,
-			},
+		status: &replicationdatapb.FullStatus{
+			ServerId:               42,
+			ServerUuid:             "test-uuid",
+			Version:                "8.0.35",
+			VersionComment:         "MySQL Community Server - GPL",
+			ReadOnly:               true,
+			SuperReadOnly:          true,
+			GtidMode:               "ON",
+			BinlogFormat:           "ROW",
+			BinlogRowImage:         "FULL",
+			LogBinEnabled:          true,
+			LogReplicaUpdates:      true,
+			SemiSyncPrimaryEnabled: true,
+			SemiSyncPrimaryStatus:  true,
 		},
 	}
 	tablet := newTestTablet(t, 100, "ks", "0", nil)
@@ -252,8 +250,8 @@ func TestFullStatusCollectsEveryField(t *testing.T) {
 	db.AddQueryPattern(
 		"SELECT @@global.server_id AS server_id,.*",
 		sqltypes.MakeTestResult(
-			sqltypes.MakeTestFields("server_id|server_uuid|version|version_comment|read_only|super_read_only|gtid_mode|binlog_format|log_bin|log_replica_updates|binlog_row_image|gtid_purged", "uint64|varchar|varchar|varchar|int64|int64|varchar|varchar|int64|int64|varchar|varchar"),
-			"42|test-uuid|8.0.35|MySQL Community Server - GPL|1|1|ON|ROW|1|1|FULL|8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-5",
+			sqltypes.MakeTestFields("server_id|server_uuid|version|version_comment|read_only|super_read_only|gtid_mode|binlog_format|log_bin|log_replica_updates|binlog_row_image|gtid_purged|replica_net_timeout", "uint64|varchar|varchar|varchar|int64|int64|varchar|varchar|int64|int64|varchar|varchar|int64"),
+			"42|test-uuid|8.0.35|MySQL Community Server - GPL|1|1|ON|ROW|1|1|FULL|8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-5|9",
 		),
 	)
 	db.AddQueryPattern(
@@ -289,7 +287,6 @@ func TestFullStatusCollectsEveryField(t *testing.T) {
 		sqltypes.MakeTestFields("HEARTBEAT_INTERVAL", "float64"),
 		"4.5",
 	))
-	db.AddQuery("select @@global.replica_net_timeout", sqltypes.MakeTestResult(sqltypes.MakeTestFields("replica_net_timeout", "int64"), "9"))
 
 	tablet := newTestTablet(t, 100, "ks", "0", nil)
 	tm := newTestReplicationTM(tablet, mysqld, nil)

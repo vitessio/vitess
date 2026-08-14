@@ -413,7 +413,7 @@ func TestSetAndResetReplication(t *testing.T) {
 
 	conn, err := mysqld.GetDbaConnection(t.Context())
 	require.NoError(t, err)
-	replConfig, err := conn.ReplicationConfiguration()
+	replConfig, err := conn.ReplicationConfiguration(0)
 	conn.Close()
 	require.NoError(t, err)
 	assert.Equal(t, heartbeatInterval, replConfig.HeartbeatInterval)

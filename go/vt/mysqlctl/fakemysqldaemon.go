@@ -38,6 +38,7 @@ import (
 
 	mysqlctlpb "vitess.io/vitess/go/vt/proto/mysqlctl"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 )
 
@@ -403,7 +404,7 @@ func (fmd *FakeMysqlDaemon) PrimaryStatus(ctx context.Context) (replication.Prim
 }
 
 // CollectFullStatusData is part of the MysqlDaemon interface.
-func (fmd *FakeMysqlDaemon) CollectFullStatusData(context.Context) (*FullStatusResult, error) {
+func (fmd *FakeMysqlDaemon) CollectFullStatusData(context.Context) (*replicationdatapb.FullStatus, error) {
 	return nil, nil
 }
 

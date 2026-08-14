@@ -76,20 +76,14 @@ func (tm *TabletManager) FullStatus(ctx context.Context) (*replicationdatapb.Ful
 	}
 
 	// Collect mysql state using CollectFullStatusData.
-	result, err := tm.MysqlDaemon.CollectFullStatusData(ctx)
+	status, err := tm.MysqlDaemon.CollectFullStatusData(ctx)
 	if err != nil {
 		return nil, err
 	}
-	if result == nil || result.Status == nil {
+	if status == nil {
 		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "FullStatus collector returned no data")
 	}
-	for _, err := range result.SoftErrors {
-		log.Warn("FullStatus collected partial semi-sync data",
-			slog.String("tablet_alias", topoproto.TabletAliasString(tm.Tablet().Alias)),
-			slog.Any("error", err))
-	}
 
-	status := result.Status
 	status.SemiSyncBlocked = tm.SemiSyncMonitor.AllWritesBlocked()
 	status.TabletType = tm.Tablet().Type
 	status.ShardPeerHealth = tm.shardPeerHealthSnapshot()

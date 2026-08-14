@@ -298,18 +298,6 @@ func (mariadbFlavor) replicationConfiguration(c *Conn) (*replicationdata.Configu
 	}, nil
 }
 
-// replicationNetTimeout is part of the Flavor interface.
-func (mariadbFlavor) replicationNetTimeout(c *Conn) (int32, error) {
-	qr, err := c.ExecuteFetch("select @@global.slave_net_timeout", 1, false)
-	if err != nil {
-		return 0, err
-	}
-	if len(qr.Rows) != 1 || len(qr.Rows[0]) != 1 {
-		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected result format for slave_net_timeout: %#v", qr)
-	}
-	return qr.Rows[0][0].ToInt32()
-}
-
 // waitUntilPosition is part of the Flavor interface.
 //
 // Note: Unlike MASTER_POS_WAIT(), MASTER_GTID_WAIT() will continue waiting even
@@ -385,4 +373,8 @@ func (mariadbFlavor) catchupToGTIDCommands(_ *ConnParams, _ replication.Position
 
 func (mariadbFlavor) binlogReplicatedUpdates() string {
 	return "@@global.log_slave_updates"
+}
+
+func (mariadbFlavor) replicationNetTimeoutVariable() string {
+	return "@@global.slave_net_timeout"
 }
