@@ -28,7 +28,7 @@ import (
 	"github.com/google/shlex"
 	"github.com/klauspost/compress/zstd"
 	"github.com/klauspost/pgzip"
-	"github.com/pierrec/lz4"
+	"github.com/pierrec/lz4/v4"
 	"github.com/planetscale/pargzip"
 	"github.com/spf13/pflag"
 
@@ -65,6 +65,22 @@ var (
 		".lz4": {Lz4Compressor},
 		".zst": {ZstdCompressor},
 	}
+)
+
+type (
+	// writeCloserOnly hides every method of the wrapped writer except
+	// Write and Close. The lz4 writer's ReadFrom only accepts a writer
+	// with nothing written to it yet, while io.Copy and io.CopyN select
+	// the destination's ReadFrom whenever the source has no visible
+	// WriteTo; repeated copies into one compressor — the striped
+	// xtrabackup backup round-robins io.CopyN over its destination
+	// writers — would then fail after the first copy. Hiding the method
+	// keeps every copy on the plain Write path.
+	writeCloserOnly struct{ io.WriteCloser }
+	// readCloserOnly hides every method of the wrapped reader except
+	// Read and Close; the lz4 reader's WriteTo carries the same
+	// fresh-stream restriction as the writer's ReadFrom.
+	readCloserOnly struct{ io.ReadCloser }
 )
 
 func init() {
@@ -222,7 +238,7 @@ func newBuiltinDecompressor(engine string, reader io.Reader, logger logutil.Logg
 		}
 		decompressor = d
 	case Lz4Compressor:
-		decompressor = io.NopCloser(lz4.NewReader(reader))
+		decompressor = readCloserOnly{io.NopCloser(lz4.NewReader(reader))}
 	case ZstdCompressor:
 		d, err := zstd.NewReader(reader)
 		if err != nil {
@@ -236,6 +252,39 @@ func newBuiltinDecompressor(engine string, reader io.Reader, logger logutil.Logg
 
 	logger.Infof("Decompressing backup using engine %q", engine)
 	return decompressor, err
+}
+
+// lz4ConcurrencyBlocks maps the --backup-storage-number-blocks value to
+// the lz4 concurrency option. A value of 0 selected serial compression
+// in the lz4 v2 writer, while the v4 option reads any non-positive value
+// as GOMAXPROCS, so 0 maps to 1 — the value the v4 writer treats as
+// serial. A negative value means GOMAXPROCS in both versions and passes
+// through.
+func lz4ConcurrencyBlocks(blocks int) int {
+	if blocks == 0 {
+		return 1
+	}
+	return blocks
+}
+
+// lz4CompressionLevel maps the numeric --compression-level value onto the
+// lz4 level enum; lz4.CompressionLevelOption rejects any value outside the
+// named constants. A negative value selected an unlimited hash-chain
+// search depth in the lz4 v2 writer, so it maps to the deepest named
+// level. Values 0 and 1 map to the fast compressor: the hash-chain search
+// depth of 1 that a value of 1 previously requested does almost no
+// searching, so the fast compressor is the closest match. Values from 2
+// through 9 map onto the matching hash-chain levels, whose fixed search
+// depths grow from 1024 (Level2) to 131072 (Level9).
+func lz4CompressionLevel(level int) lz4.CompressionLevel {
+	switch {
+	case level < 0 || level >= 9:
+		return lz4.Level9
+	case level <= 1:
+		return lz4.Fast
+	default:
+		return lz4.Level1 << (level - 1)
+	}
 }
 
 // This returns a writer that will compress the data using the specified engine before writing to the underlying writer.
@@ -255,11 +304,14 @@ func newBuiltinCompressor(engine string, writer io.Writer, logger logutil.Logger
 		gzip.CompressionLevel = compressionLevel
 		compressor = gzip
 	case Lz4Compressor:
-		lz4Writer := lz4.NewWriter(writer).WithConcurrency(backupCompressBlocks)
-		lz4Writer.Header = lz4.Header{
-			CompressionLevel: compressionLevel,
+		lz4Writer := lz4.NewWriter(writer)
+		if err := lz4Writer.Apply(
+			lz4.ConcurrencyOption(lz4ConcurrencyBlocks(backupCompressBlocks)),
+			lz4.CompressionLevelOption(lz4CompressionLevel(compressionLevel)),
+		); err != nil {
+			return compressor, vterrors.Wrap(err, "cannot create lz4 compressor")
 		}
-		compressor = lz4Writer
+		compressor = writeCloserOnly{lz4Writer}
 	case ZstdCompressor:
 		zst, err := zstd.NewWriter(writer, zstd.WithEncoderLevel(zstd.EncoderLevel(compressionLevel)))
 		if err != nil {

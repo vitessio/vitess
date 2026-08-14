@@ -19,12 +19,16 @@ package mysqlctl
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/binary"
 	"fmt"
 	"io"
+	"math/rand/v2"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/pierrec/lz4/v4"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -77,6 +81,108 @@ func TestBuiltinCompressors(t *testing.T) {
 			assert.Equal(t, data, decompressed.Bytes())
 		})
 	}
+}
+
+// TestBuiltinCompressorsMultiBlock round-trips a payload larger than one
+// lz4 block (4 MiB) that alternates incompressible pages with zero pages,
+// the shape a database file gives the backup engine. This drives the
+// decompressors through their multi-block paths, with long literal runs
+// followed by matches inside every block; a round trip of a few bytes
+// never leaves the first block.
+func TestBuiltinCompressorsMultiBlock(t *testing.T) {
+	logger := logutil.NewMemoryLogger()
+	rnd := rand.New(rand.NewPCG(1, 2))
+	const pageSize = 16 * 1024
+	data := make([]byte, 9*1024*1024)
+	for page := 0; page < len(data)/pageSize; page += 2 {
+		pageBytes := data[page*pageSize : (page+1)*pageSize]
+		for i := 0; i < len(pageBytes); i += 8 {
+			binary.LittleEndian.PutUint64(pageBytes[i:], rnd.Uint64())
+		}
+	}
+
+	for _, engine := range []string{"pgzip", "pargzip", "lz4", "zstd"} {
+		t.Run(engine, func(t *testing.T) {
+			var compressed, decompressed bytes.Buffer
+			compressor, err := newBuiltinCompressor(engine, &compressed, logger)
+			require.NoError(t, err)
+			_, err = io.Copy(compressor, bytes.NewReader(data))
+			require.NoError(t, err)
+			require.NoError(t, compressor.Close())
+
+			decompressor, err := newBuiltinDecompressor(engine, &compressed, logger)
+			require.NoError(t, err)
+			_, err = io.Copy(&decompressed, decompressor)
+			require.NoError(t, err)
+			require.NoError(t, decompressor.Close())
+
+			require.Equal(t, len(data), decompressed.Len())
+			require.Equal(t, sha256.Sum256(data), sha256.Sum256(decompressed.Bytes()))
+		})
+	}
+}
+
+// TestBuiltinCompressorsSequentialCopyN writes through the compressor with
+// two sequential io.CopyN calls, the shape the striped xtrabackup backup
+// produces when it round-robins blocks across destination writers. io.CopyN
+// hides the source's WriteTo, so io.Copy selects the destination's ReadFrom
+// when one exists; a compressor must therefore accept writes through any
+// mix of entry points, not only a single one on a fresh writer.
+func TestBuiltinCompressorsSequentialCopyN(t *testing.T) {
+	logger := logutil.NewMemoryLogger()
+	rnd := rand.New(rand.NewPCG(3, 4))
+	data := make([]byte, 512*1024)
+	for i := 0; i < len(data); i += 8 {
+		binary.LittleEndian.PutUint64(data[i:], rnd.Uint64())
+	}
+
+	for _, engine := range []string{"pgzip", "pargzip", "lz4", "zstd"} {
+		t.Run(engine, func(t *testing.T) {
+			var compressed, decompressed bytes.Buffer
+			compressor, err := newBuiltinCompressor(engine, &compressed, logger)
+			require.NoError(t, err)
+			reader := bytes.NewReader(data)
+			half := int64(len(data) / 2)
+			_, err = io.CopyN(compressor, reader, half)
+			require.NoError(t, err)
+			_, err = io.CopyN(compressor, reader, int64(len(data))-half)
+			require.NoError(t, err)
+			require.NoError(t, compressor.Close())
+
+			decompressor, err := newBuiltinDecompressor(engine, &compressed, logger)
+			require.NoError(t, err)
+			_, err = io.Copy(&decompressed, decompressor)
+			require.NoError(t, err)
+			require.NoError(t, decompressor.Close())
+			require.Equal(t, sha256.Sum256(data), sha256.Sum256(decompressed.Bytes()))
+		})
+	}
+}
+
+func TestLz4CompressionLevelMapping(t *testing.T) {
+	// A negative --compression-level selected an unlimited hash-chain
+	// search depth in the lz4 v2 writer, so it maps to the deepest named
+	// level; 0 and 1 keep the fast profile, and 2 through 9 select the
+	// matching named levels.
+	require.Equal(t, lz4.Level9, lz4CompressionLevel(-1))
+	require.Equal(t, lz4.Fast, lz4CompressionLevel(0))
+	require.Equal(t, lz4.Fast, lz4CompressionLevel(1))
+	require.Equal(t, lz4.Level2, lz4CompressionLevel(2))
+	require.Equal(t, lz4.Level5, lz4CompressionLevel(5))
+	require.Equal(t, lz4.Level9, lz4CompressionLevel(9))
+	require.Equal(t, lz4.Level9, lz4CompressionLevel(10))
+}
+
+func TestLz4ConcurrencyBlocksMapping(t *testing.T) {
+	// A --backup-storage-number-blocks value of 0 selected serial
+	// compression in the lz4 v2 writer, while the v4 concurrency option
+	// reads any non-positive value as GOMAXPROCS, so 0 maps to 1 — the
+	// value the v4 writer treats as serial. Other values pass through:
+	// negative means GOMAXPROCS in both versions.
+	require.Equal(t, 1, lz4ConcurrencyBlocks(0))
+	require.Equal(t, -1, lz4ConcurrencyBlocks(-1))
+	require.Equal(t, 1, lz4ConcurrencyBlocks(1))
+	require.Equal(t, 2, lz4ConcurrencyBlocks(2))
 }
 
 func TestUnSupportedBuiltinCompressors(t *testing.T) {
