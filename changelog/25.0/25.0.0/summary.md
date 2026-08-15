@@ -32,7 +32,7 @@
         - [`EmergencyReparentShard` no longer waits on replicas that cannot win the election](#ers-lagging-relay-log-wait)
         - [`EmergencyReparentShard` can explicitly recover from split brain](#ers-allow-split-brain-promotion)
         - [Reparent candidate ordering now respects partially ordered GTID histories](#reparent-gtid-candidate-ordering)
-        - [Reparents refuse shards containing unmanaged tablets](#ers-unmanaged-tablets)
+        - [Reparents refuse shards containing unmanaged tablets](#reparent-unmanaged-tablets)
     - **[VTOrc](#minor-changes-vtorc)**
         - [VTOrc no longer watches `--unmanaged` tablets](#vtorc-unmanaged-tablets)
     - **[VTTablet](#minor-changes-vttablet)**
@@ -302,7 +302,7 @@ Candidates are now ordered by GTID dominance before the existing promotion-rule,
 
 See [#20579](https://github.com/vitessio/vitess/issues/20579).
 
-#### <a id="ers-unmanaged-tablets"/>Reparents refuse shards containing unmanaged tablets</a>
+#### <a id="reparent-unmanaged-tablets"/>Reparents refuse shards containing unmanaged tablets</a>
 
 `EmergencyReparentShard` and `PlannedReparentShard` now error, before issuing any RPC, if a tablet in the shard was started with `--unmanaged`. Vitess cannot revoke writes from or repoint a tablet it does not manage, so ERS cannot guarantee no other tablet still accepts writes, and PRS would promote the new primary and only then report failure. This only affects a shard mixing unmanaged and managed tablets, which is not a supported layout; a tablet record written before this release reports itself as managed, so a shard part-way through an upgrade is unaffected.
 
