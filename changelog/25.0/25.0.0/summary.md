@@ -323,7 +323,7 @@ Independently of the VTOrc change above, a `vttablet` started with `--unmanaged`
 
 The refused RPCs are `StopReplication`, `StopReplicationMinimum`, `StartReplication`, `RestartReplication`, `StartReplicationUntilAfter`, `ResetReplication`, `ResetReplicationParameters`, `SetReplicationSource`, `StopReplicationAndGetStatus`, `InitPrimary`, `InitReplica`, `PopulateReparentJournal`, `DemotePrimary`, `UndoDemotePrimary`, `PromoteReplica`, `SetReadOnly` and `SetReadWrite`.
 
-Read-only RPCs such as `FullStatus` and `ReplicationStatus` are unaffected, and `ChangeType` is deliberately still allowed so that `TabletExternallyReparented` keeps working — external reparents are the reason this mode exists.
+Read-only RPCs such as `FullStatus` and `ReplicationStatus` are unaffected. `ChangeType` also remains available, so that `TabletExternallyReparented` keeps working — external reparents are the reason this mode exists — but on an unmanaged tablet it now only moves the topology record. It no longer configures semi-sync or restarts replication, which it would otherwise do when changing to a non-`PRIMARY` type.
 
 **Impact**: anyone deliberately driving these RPCs against an unmanaged tablet, for example via `vtctldclient`, now gets an error instead of a silent change to the external MySQL.
 

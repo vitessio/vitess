@@ -1027,3 +1027,60 @@ func TestManagedTabletAllowsReplicationRPCs(t *testing.T) {
 		})
 	}
 }
+
+// TestChangeTypeUnmanagedIsTopoOnly checks that ChangeType stays available on an unmanaged tablet,
+// which TabletExternallyReparented needs, but only moves the topo record. With a semi-sync action
+// fixSemiSyncAndReplication reconfigures semi-sync and can stop and restart replication on a MySQL
+// Vitess does not manage, so an unmanaged tablet must always resolve to SemiSyncActionNone.
+func TestChangeTypeUnmanagedIsTopoOnly(t *testing.T) {
+	tests := []struct {
+		name              string
+		mode              topodatapb.TabletMode
+		tabletType        topodatapb.TabletType
+		wantSemiSyncTouch bool
+	}{
+		{
+			name:              "unmanaged replica-typed change leaves MySQL alone",
+			mode:              topodatapb.TabletMode_UNMANAGED,
+			tabletType:        topodatapb.TabletType_RDONLY,
+			wantSemiSyncTouch: false,
+		}, {
+			// The external reparent path. It is already safe because fixSemiSyncAndReplication
+			// returns early for PRIMARY, so forcing the action to None costs it nothing.
+			name:              "unmanaged promotion to primary still works",
+			mode:              topodatapb.TabletMode_UNMANAGED,
+			tabletType:        topodatapb.TabletType_PRIMARY,
+			wantSemiSyncTouch: false,
+		}, {
+			// Control: without the unmanaged guard the same call does reach MySQL.
+			name:              "managed replica-typed change still fixes semi-sync",
+			mode:              topodatapb.TabletMode_MANAGED,
+			tabletType:        topodatapb.TabletType_RDONLY,
+			wantSemiSyncTouch: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := t.Context()
+			ts := memorytopo.NewServer(ctx, "cell1")
+			t.Cleanup(func() { ts.Close() })
+
+			tm := newTestTM(t, ts, 1, "ks", "0", nil)
+			t.Cleanup(tm.Stop)
+
+			fakeDb, ok := tm.MysqlDaemon.(*mysqlctl.FakeMysqlDaemon)
+			require.True(t, ok)
+			fakeDb.SemiSyncPrimaryEnabled = true
+			fakeDb.SemiSyncReplicaEnabled = true
+			tm.mode = tt.mode
+
+			require.NoError(t, tm.ChangeType(ctx, tt.tabletType, false))
+			assert.Equal(t, tt.tabletType, tm.Tablet().Type, "the topo record must always change type")
+
+			semiSyncTouched := !fakeDb.SemiSyncPrimaryEnabled || !fakeDb.SemiSyncReplicaEnabled
+			assert.Equal(t, tt.wantSemiSyncTouch, semiSyncTouched,
+				"semi-sync state on the external MySQL")
+		})
+	}
+}
