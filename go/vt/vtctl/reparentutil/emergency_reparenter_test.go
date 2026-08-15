@@ -10109,10 +10109,10 @@ func TestEmergencyReparenterFindErrantGTIDs_NilPosition(t *testing.T) {
 	assert.ElementsMatch(t, []string{"zone1-0000000102"}, starved)
 }
 
-// TestCheckNoUnmanagedTablets checks the preflight that stops ERS reparenting a shard holding a
+// TestValidateAllTabletsManaged checks the preflight that stops ERS reparenting a shard holding a
 // tablet Vitess cannot revoke writes from. A tablet written before TabletMode existed reports the
 // MANAGED zero value, so a shard part-way through an upgrade must not trip it.
-func TestCheckNoUnmanagedTablets(t *testing.T) {
+func TestValidateAllTabletsManaged(t *testing.T) {
 	t.Parallel()
 
 	tablet := func(uid uint32, mode topodatapb.TabletMode) *topo.TabletInfo {
@@ -10165,7 +10165,7 @@ func TestCheckNoUnmanagedTablets(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			err := checkNoUnmanagedTablets(tt.tabletMap)
+			err := validateAllTabletsManaged(tt.tabletMap)
 			if tt.errShouldContain == "" {
 				require.NoError(t, err)
 				return
