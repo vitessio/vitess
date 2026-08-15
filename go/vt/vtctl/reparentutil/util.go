@@ -431,3 +431,24 @@ func GetBackupCandidates(tablets []*topo.TabletInfo, stats []*replicationdatapb.
 	}
 	return res
 }
+
+// validateAllTabletsManaged errors when any tablet in the shard reports TabletMode_UNMANAGED.
+// Vitess cannot stop replication on such a tablet or revoke its writes, so it cannot establish the
+// invariant a reparent reports, and a promotion could leave the shard with two writers. Tablets
+// written before TabletMode existed report MANAGED, so a shard mid-upgrade never trips this.
+func validateAllTabletsManaged(tabletMap map[string]*topo.TabletInfo) error {
+	var unmanaged []string
+	for alias, tabletInfo := range tabletMap {
+		if tabletInfo.GetMode() == topodatapb.TabletMode_UNMANAGED {
+			unmanaged = append(unmanaged, alias)
+		}
+	}
+	if len(unmanaged) == 0 {
+		return nil
+	}
+	// Map iteration order is random, so sort to keep the error stable.
+	slices.Sort(unmanaged)
+	return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION,
+		"shard has unmanaged tablets %v that Vitess cannot revoke writes from, so it cannot be reparented safely; "+
+			"unmanaged tablets belong in a keyspace of their own", unmanaged)
+}
