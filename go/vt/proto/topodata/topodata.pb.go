@@ -193,15 +193,12 @@ func (TabletType) EnumDescriptor() ([]byte, []int) {
 type TabletMode int32
 
 const (
-	// MANAGED means Vitess manages the tablet's MySQL instance.
-	//
-	// This is deliberately the zero value: a vttablet too old to know about this
-	// field writes a record without it, which reads back as MANAGED and so keeps
-	// behaving exactly as it did before the field existed.
+	// MANAGED means Vitess manages the tablet's MySQL instance. This is the zero
+	// value on purpose: a record written before this field existed reads back as
+	// MANAGED, so an upgrade changes nothing.
 	TabletMode_MANAGED TabletMode = 0
-	// UNMANAGED means the tablet runs against an external MySQL that Vitess does
-	// not manage, i.e. vttablet was started with --unmanaged. Vitess must not
-	// change its replication or primaryship.
+	// UNMANAGED means vttablet was started with --unmanaged, against an external
+	// MySQL. Vitess must not change its replication or primaryship.
 	TabletMode_UNMANAGED TabletMode = 1
 )
 

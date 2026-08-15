@@ -189,9 +189,8 @@ type TabletManager struct {
 	// when we transition back from something like PRIMARY.
 	baseTabletType topodatapb.TabletType
 
-	// mode is the TabletMode this vttablet runs in, derived from --unmanaged
-	// at startup. It is stamped onto the tablet record and gates the
-	// replication and reparent RPCs.
+	// mode is derived from --unmanaged at startup, stamped onto the tablet
+	// record and used to gate the replication and reparent RPCs.
 	mode topodatapb.TabletMode
 
 	// actionSema is there to run only one action at a time.

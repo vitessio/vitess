@@ -20,7 +20,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log/slog"
 	"os"
 	"slices"
 	"strings"
@@ -45,7 +44,6 @@ import (
 	"vitess.io/vitess/go/vt/vtorc/config"
 	"vitess.io/vitess/go/vt/vtorc/db"
 	"vitess.io/vitess/go/vt/vtorc/inst"
-	"vitess.io/vitess/go/vt/vtorc/util"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 )
 
@@ -342,63 +340,17 @@ func getShardTabletsByCell(ctx context.Context, keyspace, shard string, cells []
 	return ts.GetTabletsByShardCell(ctx, keyspace, shard, cells)
 }
 
-// unmanagedTabletsInManagedShards returns, per keyspace/shard, the unmanaged tablets that share a
-// shard with managed ones. Unmanaged tablets are meant to have a keyspace to themselves, typically
-// an external import source. Sharing a shard is not supported: VTOrc stops watching the unmanaged
-// tablet, but a reparent still reaches it and cannot stop its replication or revoke its writes, so
-// the shard has no failover path Vitess can carry out safely.
-//
-// Detection is per refresh batch, which covers a whole shard on the keyspace/shard path but only
-// one cell on the per-cell path. A shard whose unmanaged and managed tablets live in different
-// cells is missed there.
-func unmanagedTabletsInManagedShards(unmanagedByShard map[string][]string, managedByShard map[string]int) map[string][]string {
-	var offenders map[string][]string
-	for keyspaceShard, aliases := range unmanagedByShard {
-		if managedByShard[keyspaceShard] == 0 {
-			continue
-		}
-		if offenders == nil {
-			offenders = make(map[string][]string, len(unmanagedByShard))
-		}
-		offenders[keyspaceShard] = aliases
-	}
-	return offenders
-}
-
-// warnOnUnmanagedTabletsInManagedShard logs the unsupported layout found by
-// unmanagedTabletsInManagedShards. It is otherwise entirely silent, so say so.
-func warnOnUnmanagedTabletsInManagedShard(unmanagedByShard map[string][]string, managedByShard map[string]int) {
-	for keyspaceShard, aliases := range unmanagedTabletsInManagedShards(unmanagedByShard, managedByShard) {
-		if !util.ClearToLog("unmanaged_in_managed_shard", keyspaceShard) {
-			continue
-		}
-		log.Warn("shard holds both unmanaged and managed tablets, which is not supported. "+
-			"The unmanaged tablets are not watched by VTOrc, but a reparent of this shard still reaches "+
-			"them and cannot revoke their writes. Move them to a keyspace of their own",
-			slog.String("keyspace_shard", keyspaceShard),
-			slog.Any("unmanaged_tablets", aliases))
-	}
-}
-
 func refreshTablets(tablets []*topo.TabletInfo, query string, args []any, loader func(*topodatapb.TabletAlias), forceRefresh bool, tabletsToIgnore []*topodatapb.TabletAlias) {
 	// Discover new tablets.
 	latestInstances := make(map[string]bool, len(tablets))
-	unmanagedByShard := make(map[string][]string)
-	managedByShard := make(map[string]int)
 	var wg sync.WaitGroup
 	for _, tabletInfo := range tablets {
 		tablet := tabletInfo.Tablet
-		keyspaceShard := topoproto.KeyspaceShardString(tablet.Keyspace, tablet.Shard)
-		// A tablet started with --unmanaged runs against a MySQL that Vitess does not manage.
-		// Keeping it out of vitess_tablet keeps it out of analysis and out of every recovery,
-		// and leaving it out of latestInstances means one that flips to unmanaged is forgotten
-		// below like any other tablet that went away. A tablet too old to report a mode reads
-		// as MANAGED, so an upgrade never changes what VTOrc watches.
+		// Vitess doesn't manage this tablet's MySQL, so keep it out of vitess_tablet entirely.
+		// Skipping latestInstances also forgets one that flips to unmanaged, below.
 		if tablet.GetMode() == topodatapb.TabletMode_UNMANAGED {
-			unmanagedByShard[keyspaceShard] = append(unmanagedByShard[keyspaceShard], topoproto.TabletAliasString(tablet.Alias))
 			continue
 		}
-		managedByShard[keyspaceShard]++
 		tabletAliasString := topoproto.TabletAliasString(tablet.Alias)
 		latestInstances[tabletAliasString] = true
 		old, err := inst.ReadTablet(tablet.Alias)
@@ -424,8 +376,6 @@ func refreshTablets(tablets []*topo.TabletInfo, query string, args []any, loader
 		log.Info(fmt.Sprintf("Discovered: %v", tablet))
 	}
 	wg.Wait()
-
-	warnOnUnmanagedTabletsInManagedShard(unmanagedByShard, managedByShard)
 
 	// Forget tablets that were removed.
 	toForget := make([]*topodatapb.TabletAlias, 0)

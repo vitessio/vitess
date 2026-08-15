@@ -1470,10 +1470,8 @@ func (tm *TabletManager) handleRecoverableReplicationInitError(ctx context.Conte
 	return err
 }
 
-// checkManaged returns an error when this vttablet was started with --unmanaged. Callers use it
-// to refuse RPCs that would write to the replication state of a MySQL that Vitess was explicitly
-// told not to manage. Read-only RPCs, and the ChangeType RPC that external reparents rely on,
-// stay available.
+// checkManaged returns an error when this vttablet was started with --unmanaged, so that RPCs
+// writing to replication state refuse. Read-only RPCs and ChangeType stay available.
 func (tm *TabletManager) checkManaged() error {
 	if tm.mode == topodatapb.TabletMode_UNMANAGED {
 		return vterrors.New(vtrpc.Code_FAILED_PRECONDITION,

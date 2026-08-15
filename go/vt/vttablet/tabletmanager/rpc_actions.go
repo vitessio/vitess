@@ -130,12 +130,10 @@ func (tm *TabletManager) ChangeType(ctx context.Context, tabletType topodatapb.T
 	}
 	defer tm.unlock()
 
+	// An unmanaged tablet gets a topo-only change: a semi-sync action would let
+	// fixSemiSyncAndReplication restart replication on a MySQL we don't manage. External
+	// reparents ask for PRIMARY, which that func skips anyway, so they lose nothing.
 	semiSyncAction := SemiSyncActionNone
-	// ChangeType stays available on an unmanaged tablet because TabletExternallyReparented needs
-	// it, but only to move the topo record. A semi-sync action would let fixSemiSyncAndReplication
-	// reconfigure semi-sync and stop and restart replication on a MySQL Vitess does not manage.
-	// Forcing None costs the external reparent nothing: that path asks for PRIMARY, which
-	// fixSemiSyncAndReplication returns early on regardless of the action.
 	if tm.mode != topodatapb.TabletMode_UNMANAGED {
 		var err error
 		semiSyncAction, err = tm.convertBoolToSemiSyncAction(ctx, semiSync)

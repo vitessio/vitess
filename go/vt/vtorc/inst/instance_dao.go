@@ -1196,8 +1196,8 @@ func ForgetInstance(tabletAlias *topodatapb.TabletAlias) error {
 		log.Error(err.Error())
 		return err
 	}
-	// A tablet read from the topo but never probed has no database_instance row, so removing it
-	// is still a real forget. Only an absence from both tables means it was never here.
+	// A tablet read from the topo but never probed has no database_instance row, so only an
+	// absence from both tables means it was never here.
 	if tabletRows == 0 && instanceRows == 0 {
 		errMsg := fmt.Sprintf("ForgetInstance(): tablet %+v not found", tabletAliasString)
 		log.Error(errMsg)

@@ -311,7 +311,7 @@ Previously nothing outside the `vttablet` process knew a tablet was unmanaged. V
 
 **Impact**: the workaround of carving unmanaged keyspaces out with `--clusters-to-watch` is no longer needed. Unmanaged tablets also disappear from VTOrc's API, UI and per-cell/per-shard tablet counts.
 
-Unmanaged tablets are expected to occupy a keyspace of their own, which is how they are used in practice: an external MySQL serving as an import source. Mixing unmanaged and managed tablets inside one shard is not supported. Vitess cannot stop replication on, or revoke writes from, a tablet it does not manage, so a reparent of such a shard cannot establish the safety invariant it reports. VTOrc logs a warning when it sees that layout.
+Unmanaged tablets are expected to occupy a keyspace of their own, which is how they are used in practice: an external MySQL serving as an import source. Mixing unmanaged and managed tablets inside one shard is not supported. Vitess cannot stop replication on, or revoke writes from, a tablet it does not manage, so a reparent of such a shard cannot establish the safety invariant it reports.
 
 `MANAGED` is the zero value of the new field, so a v24 tablet record that predates it reads back as managed. Upgrade order therefore does not matter: VTOrc keeps managing every tablet exactly as before until that tablet restarts into v25 and declares itself unmanaged.
 
