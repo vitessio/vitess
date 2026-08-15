@@ -2305,6 +2305,17 @@ func TestValidateAllTabletsManaged(t *testing.T) {
 				}},
 			},
 		}, {
+			// A newer peer can write a mode this build has no name for; protobuf keeps the numeric
+			// value, and anything that is not MANAGED must fail closed.
+			name: "unrecognised mode from a newer peer",
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {Tablet: &topodatapb.Tablet{
+					Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+					Mode:  topodatapb.TabletMode(99),
+				}},
+			},
+			errShouldContain: "shard has unmanaged tablets [zone1-0000000100]",
+		}, {
 			name: "one unmanaged tablet",
 			tabletMap: map[string]*topo.TabletInfo{
 				"zone1-0000000100": tablet(100, topodatapb.TabletMode_UNMANAGED),
@@ -2325,7 +2336,7 @@ func TestValidateAllTabletsManaged(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			err := validateAllTabletsManaged(tt.tabletMap)
+			err := ValidateAllTabletsManaged(tt.tabletMap)
 			if tt.errShouldContain == "" {
 				require.NoError(t, err)
 				return

@@ -282,7 +282,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	// Refuse before we touch anything. We cannot stop replication on, or revoke writes from, a
 	// tablet Vitess does not manage, so promoting here would report a safety guarantee we never
 	// established and could leave the shard with a second writer.
-	if err := validateAllTabletsManaged(tabletMap); err != nil {
+	if err := ValidateAllTabletsManaged(tabletMap); err != nil {
 		return err
 	}
 

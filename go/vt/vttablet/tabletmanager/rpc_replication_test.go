@@ -916,8 +916,9 @@ func TestShardPeerHealthSnapshot(t *testing.T) {
 }
 
 // guardedReplicationRPCs are the RPCs an unmanaged tablet must refuse, because each one changes
-// replication on a MySQL we don't manage, or promotes or demotes it. Read-only RPCs and ChangeType
-// (which external reparents rely on) are deliberately absent.
+// replication on a MySQL we don't manage, or promotes or demotes it. Deliberately absent are the
+// read-only RPCs, and the topo-only ones the external reparent flows use: ChangeType,
+// ReplicaWasPromoted and ReplicaWasRestarted, none of which touch MySQL.
 func guardedReplicationRPCs(tm *TabletManager, ctx context.Context) map[string]func() error {
 	return map[string]func() error{
 		// Backs both the SetReadOnly and SetReadWrite RPCs, which vtadmin exposes as a button.

@@ -347,8 +347,9 @@ func refreshTablets(tablets []*topo.TabletInfo, query string, args []any, loader
 	for _, tabletInfo := range tablets {
 		tablet := tabletInfo.Tablet
 		// Vitess doesn't manage this tablet's MySQL, so keep it out of vitess_tablet entirely.
-		// Skipping latestInstances also forgets one that flips to unmanaged, below.
-		if tablet.GetMode() == topodatapb.TabletMode_UNMANAGED {
+		// Skipping latestInstances also forgets one that flips to unmanaged, below. Anything but
+		// MANAGED is skipped, so a mode a newer vttablet knows and this build does not fails closed.
+		if tablet.GetMode() != topodatapb.TabletMode_MANAGED {
 			continue
 		}
 		tabletAliasString := topoproto.TabletAliasString(tablet.Alias)
