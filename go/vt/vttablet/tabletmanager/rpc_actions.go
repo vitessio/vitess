@@ -75,7 +75,7 @@ func (tm *TabletManager) GetGlobalStatusVars(ctx context.Context, variables []st
 // SetReadOnly makes the mysql instance read-only or read-write.
 // It backs both the SetReadOnly and SetReadWrite RPCs.
 func (tm *TabletManager) SetReadOnly(ctx context.Context, rdonly bool) error {
-	if err := tm.checkManaged(); err != nil {
+	if err := tm.checkIsManaged(); err != nil {
 		return err
 	}
 	if err := tm.lock(ctx); err != nil {
