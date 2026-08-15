@@ -141,6 +141,42 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 		wantNewPrimary         *topodatapb.TabletAlias
 	}{
 		{
+			// The tmc has no responses configured, so if the guard did not fire first the run
+			// would fail on a stop-replication RPC instead, with a different error.
+			name:       "refuses a shard containing an unmanaged tablet",
+			durability: policy.DurabilityNone,
+			tmc:        &testutil.TabletManagerClient{},
+			shards: []*vtctldatapb.Shard{
+				{
+					Keyspace: "testkeyspace",
+					Name:     "-",
+					Shard: &topodatapb.Shard{
+						PrimaryAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+					},
+				},
+			},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+					Type:     topodatapb.TabletType_PRIMARY,
+					Mode:     topodatapb.TabletMode_UNMANAGED,
+				},
+				{
+					Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+					Mode:     topodatapb.TabletMode_MANAGED,
+				},
+			},
+			cells:            []string{"zone1"},
+			keyspace:         "testkeyspace",
+			shard:            "-",
+			shouldErr:        true,
+			errShouldContain: "shard has unmanaged tablets [zone1-0000000100]",
+		},
+		{
 			name:       "success with matching expected primary",
 			durability: policy.DurabilityNone,
 			emergencyReparentOps: EmergencyReparentOptions{
@@ -10071,4 +10107,71 @@ func TestEmergencyReparenterFindErrantGTIDs_NilPosition(t *testing.T) {
 	// the nil peer at maxLen contributed no evidence, so the surviving candidate was
 	// accepted without any comparison
 	assert.ElementsMatch(t, []string{"zone1-0000000102"}, starved)
+}
+
+// TestCheckNoUnmanagedTablets checks the preflight that stops ERS reparenting a shard holding a
+// tablet Vitess cannot revoke writes from. A tablet written before TabletMode existed reports the
+// MANAGED zero value, so a shard part-way through an upgrade must not trip it.
+func TestCheckNoUnmanagedTablets(t *testing.T) {
+	t.Parallel()
+
+	tablet := func(uid uint32, mode topodatapb.TabletMode) *topo.TabletInfo {
+		return &topo.TabletInfo{Tablet: &topodatapb.Tablet{
+			Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: uid},
+			Mode:  mode,
+		}}
+	}
+
+	tests := []struct {
+		name             string
+		tabletMap        map[string]*topo.TabletInfo
+		errShouldContain string
+	}{
+		{
+			name:      "empty shard",
+			tabletMap: map[string]*topo.TabletInfo{},
+		}, {
+			name: "all managed",
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": tablet(100, topodatapb.TabletMode_MANAGED),
+				"zone1-0000000101": tablet(101, topodatapb.TabletMode_MANAGED),
+			},
+		}, {
+			// A v24 record carries no mode, which decodes to the MANAGED zero value.
+			name: "mode unset by an older vttablet",
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {Tablet: &topodatapb.Tablet{
+					Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+				}},
+			},
+		}, {
+			name: "one unmanaged tablet",
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": tablet(100, topodatapb.TabletMode_UNMANAGED),
+				"zone1-0000000101": tablet(101, topodatapb.TabletMode_MANAGED),
+			},
+			errShouldContain: "shard has unmanaged tablets [zone1-0000000100]",
+		}, {
+			// Sorted, because map iteration order is random.
+			name: "several unmanaged tablets are listed in order",
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000101": tablet(101, topodatapb.TabletMode_UNMANAGED),
+				"zone1-0000000100": tablet(100, topodatapb.TabletMode_UNMANAGED),
+			},
+			errShouldContain: "shard has unmanaged tablets [zone1-0000000100 zone1-0000000101]",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			err := checkNoUnmanagedTablets(tt.tabletMap)
+			if tt.errShouldContain == "" {
+				require.NoError(t, err)
+				return
+			}
+			require.ErrorContains(t, err, tt.errShouldContain)
+			assert.Equal(t, vtrpc.Code_FAILED_PRECONDITION, vterrors.Code(err))
+		})
+	}
 }

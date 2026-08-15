@@ -32,6 +32,7 @@
         - [`EmergencyReparentShard` no longer waits on replicas that cannot win the election](#ers-lagging-relay-log-wait)
         - [`EmergencyReparentShard` can explicitly recover from split brain](#ers-allow-split-brain-promotion)
         - [Reparent candidate ordering now respects partially ordered GTID histories](#reparent-gtid-candidate-ordering)
+        - [`EmergencyReparentShard` refuses shards containing unmanaged tablets](#ers-unmanaged-tablets)
     - **[VTOrc](#minor-changes-vtorc)**
         - [VTOrc no longer watches `--unmanaged` tablets](#vtorc-unmanaged-tablets)
     - **[VTTablet](#minor-changes-vttablet)**
@@ -300,6 +301,12 @@ GTID containment is pairwise, so a candidate set can mix comparable and divergen
 Candidates are now ordered by GTID dominance before the existing promotion-rule, buffer-pool, and tablet-alias tiebreakers, so a dominated candidate can never rank ahead of its dominator regardless of input order. `EmergencyReparentShard` still rejects incomparable candidates as split brain, and `PlannedReparentShard` still chooses among incomparable maximal candidates. Positions that contain each other without being equal (possible with MariaDB GTIDs, where containment ignores the origin server) are now also rejected by `EmergencyReparentShard` as split brain, wherever the pair sits among the candidates; previously a leading pair failed with an internal sorting error, while a pair behind a more advanced candidate was not detected at all.
 
 See [#20579](https://github.com/vitessio/vitess/issues/20579).
+
+#### <a id="ers-unmanaged-tablets"/>`EmergencyReparentShard` refuses shards containing unmanaged tablets</a>
+
+`EmergencyReparentShard` now errors if any tablet in the shard was started with `--unmanaged`, before it issues its first RPC. Vitess cannot stop replication on, or revoke writes from, a tablet it does not manage, so it cannot guarantee no other tablet still accepts writes, and promoting one anyway could leave the shard with two writers.
+
+Unmanaged tablets are expected to occupy a keyspace of their own, so this should only be hit by a shard that mixes them with managed tablets, which is not a supported layout. A tablet record written before this release reports itself as managed, so a shard part-way through an upgrade is unaffected.
 
 ### <a id="minor-changes-vtorc"/>VTOrc</a>
 
