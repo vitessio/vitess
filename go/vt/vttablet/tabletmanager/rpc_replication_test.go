@@ -1089,3 +1089,48 @@ func TestChangeTypeUnmanagedIsTopoOnly(t *testing.T) {
 		})
 	}
 }
+
+// TestReparentsDisabledForYAMLUnmanagedTablet covers --unmanaged supplied through
+// --tablet-config rather than the flag. cli.initConfig runs config.Verify() before it unmarshals
+// the YAML, so that path never sets mysqlctl.DisableActiveReparents, and the internal paths that
+// touch replication at startup and during shard sync must fall back on tm.mode instead.
+func TestReparentsDisabledForYAMLUnmanagedTablet(t *testing.T) {
+	// The global stays false throughout, which is exactly the YAML-configured case.
+	require.False(t, mysqlctl.DisableActiveReparents, "test assumes the global is unset")
+
+	tests := []struct {
+		name string
+		mode topodatapb.TabletMode
+		want bool
+	}{
+		{
+			name: "unmanaged tablet leaves replication alone",
+			mode: topodatapb.TabletMode_UNMANAGED,
+			want: true,
+		}, {
+			name: "managed tablet still manages replication",
+			mode: topodatapb.TabletMode_MANAGED,
+			want: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tm := &TabletManager{mode: tt.mode}
+			assert.Equal(t, tt.want, tm.reparentsDisabled())
+		})
+	}
+}
+
+// TestReparentsDisabledByGlobal checks the older signal still counts on its own, so a managed
+// tablet started with --disable-active-reparents keeps the behaviour it has always had.
+func TestReparentsDisabledByGlobal(t *testing.T) {
+	old := mysqlctl.DisableActiveReparents
+	t.Cleanup(func() { mysqlctl.DisableActiveReparents = old })
+
+	tm := &TabletManager{mode: topodatapb.TabletMode_MANAGED}
+	require.False(t, tm.reparentsDisabled())
+
+	mysqlctl.DisableActiveReparents = true
+	assert.True(t, tm.reparentsDisabled())
+}

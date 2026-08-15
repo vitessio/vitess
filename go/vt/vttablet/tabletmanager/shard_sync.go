@@ -25,7 +25,6 @@ import (
 
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -224,7 +223,7 @@ func (tm *TabletManager) endPrimaryTerm(ctx context.Context, primaryAlias *topod
 	primaryAliasStr := topoproto.TabletAliasString(primaryAlias)
 	log.Warn(fmt.Sprintf("Another tablet (%v) has won primary election. Stepping down to %v.", primaryAliasStr, tm.baseTabletType))
 
-	if mysqlctl.DisableActiveReparents {
+	if tm.reparentsDisabled() {
 		// Don't touch anything at the MySQL level. Just update tablet state.
 		log.Info("Active reparents are disabled; updating tablet state only.")
 		changeTypeCtx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
