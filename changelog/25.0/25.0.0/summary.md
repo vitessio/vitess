@@ -305,25 +305,19 @@ See [#20579](https://github.com/vitessio/vitess/issues/20579).
 
 #### <a id="vtorc-unmanaged-tablets"/>VTOrc no longer watches `--unmanaged` tablets</a>
 
-A `vttablet` started with `--unmanaged` now records that in its topology record, via a new `mode` field on the tablet record. VTOrc skips those tablets entirely: they are never written to its backend, never probed, never analyzed, and never recovered.
+A `vttablet` started with `--unmanaged` now records that in its topology record, via a new `mode` field. VTOrc skips those tablets entirely: they are never written to its backend, never probed, never analysed, and never recovered.
 
-Previously nothing outside the `vttablet` process knew a tablet was unmanaged. VTOrc filtered only on `--clusters-to-watch`, so any unmanaged tablet in scope was probed like any other, and one replicating from outside Vitess would be flagged (`ReplicaIsWritable`, `NotConnectedToPrimary`) and "repaired" — VTOrc issued `SetReadOnly` and `SetReplicationSource` against a MySQL that Vitess had been explicitly told not to manage.
+Previously nothing outside the `vttablet` process knew a tablet was unmanaged, so VTOrc, which filters only on `--clusters-to-watch`, would flag one replicating from outside Vitess (`ReplicaIsWritable`, `NotConnectedToPrimary`) and "repair" it, issuing `SetReadOnly` and `SetReplicationSource` against a MySQL it had been told not to manage.
 
-**Impact**: the workaround of carving unmanaged keyspaces out with `--clusters-to-watch` is no longer needed. Unmanaged tablets also disappear from VTOrc's API, UI and per-cell/per-shard tablet counts.
-
-Unmanaged tablets are expected to occupy a keyspace of their own, which is how they are used in practice: an external MySQL serving as an import source. Mixing unmanaged and managed tablets inside one shard is not supported. Vitess cannot stop replication on, or revoke writes from, a tablet it does not manage, so a reparent of such a shard cannot establish the safety invariant it reports.
-
-`MANAGED` is the zero value of the new field, so a v24 tablet record that predates it reads back as managed. Upgrade order therefore does not matter: VTOrc keeps managing every tablet exactly as before until that tablet restarts into v25 and declares itself unmanaged.
+**Impact**: carving unmanaged keyspaces out with `--clusters-to-watch` is no longer needed, and these tablets disappear from VTOrc's API, UI and tablet counts. `MANAGED` is the zero value of the new field, so a v24 record reads back as managed and upgrade order does not matter. Unmanaged tablets are expected to occupy a keyspace of their own; mixing them with managed tablets in one shard is not supported, since Vitess cannot revoke writes from a tablet it does not manage.
 
 ### <a id="minor-changes-vttablet"/>VTTablet</a>
 
 #### <a id="vttablet-unmanaged-rpc-guard"/>Unmanaged tablets reject replication and reparent RPCs</a>
 
-Independently of the VTOrc change above, a `vttablet` started with `--unmanaged` now refuses the tabletmanager RPCs that would write to the replication state or primaryship of its external MySQL, returning `FAILED_PRECONDITION`. This applies to every caller, not just VTOrc.
+A `vttablet` started with `--unmanaged` now refuses the tabletmanager RPCs that would write to the replication state or primaryship of its external MySQL, returning `FAILED_PRECONDITION` to every caller, not just VTOrc.
 
-The refused RPCs are `StopReplication`, `StopReplicationMinimum`, `StartReplication`, `RestartReplication`, `StartReplicationUntilAfter`, `ResetReplication`, `ResetReplicationParameters`, `SetReplicationSource`, `StopReplicationAndGetStatus`, `InitPrimary`, `InitReplica`, `PopulateReparentJournal`, `DemotePrimary`, `UndoDemotePrimary`, `PromoteReplica`, `SetReadOnly` and `SetReadWrite`.
-
-Read-only RPCs such as `FullStatus` and `ReplicationStatus` are unaffected. `ChangeType` also remains available, so that `TabletExternallyReparented` keeps working — external reparents are the reason this mode exists — but on an unmanaged tablet it now only moves the topology record. It no longer configures semi-sync or restarts replication, which it would otherwise do when changing to a non-`PRIMARY` type.
+The refused RPCs are `StopReplication`, `StopReplicationMinimum`, `StartReplication`, `RestartReplication`, `StartReplicationUntilAfter`, `ResetReplication`, `ResetReplicationParameters`, `SetReplicationSource`, `StopReplicationAndGetStatus`, `InitPrimary`, `InitReplica`, `PopulateReparentJournal`, `DemotePrimary`, `UndoDemotePrimary`, `PromoteReplica`, `SetReadOnly` and `SetReadWrite`. Read-only RPCs are unaffected, and `ChangeType` stays available so `TabletExternallyReparented` keeps working, though on an unmanaged tablet it now only moves the topology record rather than configuring semi-sync or restarting replication.
 
 **Impact**: anyone deliberately driving these RPCs against an unmanaged tablet, for example via `vtctldclient`, now gets an error instead of a silent change to the external MySQL.
 
