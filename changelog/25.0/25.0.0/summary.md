@@ -315,7 +315,7 @@ Previously nothing outside the `vttablet` process knew a tablet was unmanaged, s
 
 #### <a id="vttablet-unmanaged-rpc-guard"/>Unmanaged tablets reject replication and reparent RPCs</a>
 
-A `vttablet` started with `--unmanaged` now refuses the tabletmanager RPCs that would write to the replication state or primaryship of its external MySQL, returning `FAILED_PRECONDITION` to every caller, not just VTOrc.
+A `vttablet` started with `--unmanaged` now refuses the tabletmanager RPCs that would change replication on its external MySQL, or promote or demote it, returning `FAILED_PRECONDITION` to every caller, not just VTOrc.
 
 The refused RPCs are `StopReplication`, `StopReplicationMinimum`, `StartReplication`, `RestartReplication`, `StartReplicationUntilAfter`, `ResetReplication`, `ResetReplicationParameters`, `SetReplicationSource`, `StopReplicationAndGetStatus`, `InitPrimary`, `InitReplica`, `PopulateReparentJournal`, `DemotePrimary`, `UndoDemotePrimary`, `PromoteReplica`, `SetReadOnly` and `SetReadWrite`. Read-only RPCs are unaffected, and `ChangeType` stays available so `TabletExternallyReparented` keeps working, though on an unmanaged tablet it now only moves the topology record rather than configuring semi-sync or restarting replication.
 

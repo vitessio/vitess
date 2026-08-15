@@ -915,9 +915,9 @@ func TestShardPeerHealthSnapshot(t *testing.T) {
 	assert.Equal(t, int64(1), snap[0].ConsecutivePingFailures)
 }
 
-// guardedReplicationRPCs are the RPCs an unmanaged tablet must refuse, because each one writes to
-// the replication state or primaryship of a MySQL that Vitess does not manage. Read-only RPCs and
-// ChangeType (which external reparents rely on) are deliberately absent.
+// guardedReplicationRPCs are the RPCs an unmanaged tablet must refuse, because each one changes
+// replication on a MySQL we don't manage, or promotes or demotes it. Read-only RPCs and ChangeType
+// (which external reparents rely on) are deliberately absent.
 func guardedReplicationRPCs(tm *TabletManager, ctx context.Context) map[string]func() error {
 	return map[string]func() error{
 		// Backs both the SetReadOnly and SetReadWrite RPCs, which vtadmin exposes as a button.

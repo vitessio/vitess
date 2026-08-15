@@ -198,7 +198,7 @@ const (
 	// MANAGED, so an upgrade changes nothing.
 	TabletMode_MANAGED TabletMode = 0
 	// UNMANAGED means vttablet was started with --unmanaged, against an external
-	// MySQL. Vitess must not change its replication or primaryship.
+	// MySQL. Vitess must not change its replication, or promote or demote it.
 	TabletMode_UNMANAGED TabletMode = 1
 )
 
