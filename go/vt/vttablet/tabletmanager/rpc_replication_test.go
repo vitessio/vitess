@@ -980,7 +980,9 @@ func newUnstartedReplicationTM(t *testing.T, mode topodatapb.TabletMode) *Tablet
 // refuses every RPC that would reconfigure the replication of its external MySQL, and that it
 // refuses before taking the action semaphore or touching MySQL at all.
 func TestUnmanagedTabletRejectsReplicationRPCs(t *testing.T) {
-	ctx, cancel := context.WithTimeout(t.Context(), time.Second)
+	// The guard returns before anything blocks, so this deadline is only a safety net against a
+	// regression that lets a call through to the never-closed grants channel.
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 	defer cancel()
 
 	tm := newUnstartedReplicationTM(t, topodatapb.TabletMode_UNMANAGED)
@@ -1007,8 +1009,11 @@ func TestManagedTabletAllowsReplicationRPCs(t *testing.T) {
 	} {
 		t.Run(mode.String(), func(t *testing.T) {
 			require.Zero(t, mode, "MANAGED must stay the zero value so an absent mode reads as managed")
-			ctx, cancel := context.WithTimeout(t.Context(), 100*time.Millisecond)
-			defer cancel()
+			// Already cancelled: every call here is expected to get past the guard and then stop
+			// on the context, so cancelling up front makes that immediate and deterministic
+			// rather than waiting out a deadline.
+			ctx, cancel := context.WithCancel(t.Context())
+			cancel()
 
 			tm := newUnstartedReplicationTM(t, mode)
 
