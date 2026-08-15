@@ -2584,6 +2584,40 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 		expectedEvent    *events.Reparent
 	}{
 		{
+			// The tmc has nothing configured, so if the guard did not fire first this would fail
+			// on a reachability or demote RPC instead, with a different error.
+			name: "refuses a shard containing an unmanaged tablet",
+			tmc:  &testutil.TabletManagerClient{},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+					Type:     topodatapb.TabletType_PRIMARY,
+				},
+				{
+					Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 200},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+					Mode:     topodatapb.TabletMode_UNMANAGED,
+				},
+			},
+			shards: []*vtctldatapb.Shard{
+				{
+					Keyspace: "testkeyspace",
+					Name:     "-",
+					Shard: &topodatapb.Shard{
+						PrimaryAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+					},
+				},
+			},
+			ev:               &events.Reparent{},
+			keyspace:         "testkeyspace",
+			shard:            "-",
+			shouldErr:        true,
+			errShouldContain: "shard has unmanaged tablets [zone1-0000000200]",
+		},
+		{
 			name: "success: current primary cannot be determined", // "Case (1)"
 			tmc: &testutil.TabletManagerClient{
 				DemotePrimaryResults: map[string]struct {

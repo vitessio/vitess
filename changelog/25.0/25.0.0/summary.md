@@ -32,7 +32,7 @@
         - [`EmergencyReparentShard` no longer waits on replicas that cannot win the election](#ers-lagging-relay-log-wait)
         - [`EmergencyReparentShard` can explicitly recover from split brain](#ers-allow-split-brain-promotion)
         - [Reparent candidate ordering now respects partially ordered GTID histories](#reparent-gtid-candidate-ordering)
-        - [`EmergencyReparentShard` refuses shards containing unmanaged tablets](#ers-unmanaged-tablets)
+        - [Reparents refuse shards containing unmanaged tablets](#ers-unmanaged-tablets)
     - **[VTOrc](#minor-changes-vtorc)**
         - [VTOrc no longer watches `--unmanaged` tablets](#vtorc-unmanaged-tablets)
     - **[VTTablet](#minor-changes-vttablet)**
@@ -302,29 +302,23 @@ Candidates are now ordered by GTID dominance before the existing promotion-rule,
 
 See [#20579](https://github.com/vitessio/vitess/issues/20579).
 
-#### <a id="ers-unmanaged-tablets"/>`EmergencyReparentShard` refuses shards containing unmanaged tablets</a>
+#### <a id="ers-unmanaged-tablets"/>Reparents refuse shards containing unmanaged tablets</a>
 
-`EmergencyReparentShard` now errors if any tablet in the shard was started with `--unmanaged`, before it issues its first RPC. Vitess cannot stop replication on, or revoke writes from, a tablet it does not manage, so it cannot guarantee no other tablet still accepts writes, and promoting one anyway could leave the shard with two writers.
-
-Unmanaged tablets are expected to occupy a keyspace of their own, so this should only be hit by a shard that mixes them with managed tablets, which is not a supported layout. A tablet record written before this release reports itself as managed, so a shard part-way through an upgrade is unaffected.
+`EmergencyReparentShard` and `PlannedReparentShard` now error, before issuing any RPC, if a tablet in the shard was started with `--unmanaged`. Vitess cannot revoke writes from or repoint a tablet it does not manage, so ERS cannot guarantee no other tablet still accepts writes, and PRS would promote the new primary and only then report failure. This only affects a shard mixing unmanaged and managed tablets, which is not a supported layout; a tablet record written before this release reports itself as managed, so a shard part-way through an upgrade is unaffected.
 
 ### <a id="minor-changes-vtorc"/>VTOrc</a>
 
 #### <a id="vtorc-unmanaged-tablets"/>VTOrc no longer watches `--unmanaged` tablets</a>
 
-A `vttablet` started with `--unmanaged` now records that in its topology record, via a new `mode` field. VTOrc skips those tablets entirely: they are never written to its backend, never probed, never analysed, and never recovered.
+A `vttablet` started with `--unmanaged` now records that in its topology record, via a new `mode` field, and VTOrc skips those tablets entirely: never written to its backend, never probed, analysed or recovered. Previously nothing outside the `vttablet` process knew a tablet was unmanaged, so VTOrc, which filters only on `--clusters-to-watch`, would flag one replicating from outside Vitess (`ReplicaIsWritable`, `NotConnectedToPrimary`) and "repair" it, issuing `SetReadOnly` and `SetReplicationSource` against a MySQL it had been told not to manage.
 
-Previously nothing outside the `vttablet` process knew a tablet was unmanaged, so VTOrc, which filters only on `--clusters-to-watch`, would flag one replicating from outside Vitess (`ReplicaIsWritable`, `NotConnectedToPrimary`) and "repair" it, issuing `SetReadOnly` and `SetReplicationSource` against a MySQL it had been told not to manage.
-
-**Impact**: carving unmanaged keyspaces out with `--clusters-to-watch` is no longer needed, and these tablets disappear from VTOrc's API, UI and tablet counts. `MANAGED` is the zero value of the new field, so a v24 record reads back as managed and upgrade order does not matter. Unmanaged tablets are expected to occupy a keyspace of their own; mixing them with managed tablets in one shard is not supported, since Vitess cannot revoke writes from a tablet it does not manage.
+**Impact**: carving unmanaged keyspaces out with `--clusters-to-watch` is no longer needed, and these tablets disappear from VTOrc's API, UI and tablet counts. `MANAGED` is the zero value of the new field, so a v24 record reads back as managed and upgrade order does not matter.
 
 ### <a id="minor-changes-vttablet"/>VTTablet</a>
 
 #### <a id="vttablet-unmanaged-rpc-guard"/>Unmanaged tablets reject replication and reparent RPCs</a>
 
-A `vttablet` started with `--unmanaged` now refuses the tabletmanager RPCs that would change replication on its external MySQL, or promote or demote it, returning `FAILED_PRECONDITION` to every caller, not just VTOrc.
-
-The refused RPCs are `StopReplication`, `StopReplicationMinimum`, `StartReplication`, `RestartReplication`, `StartReplicationUntilAfter`, `ResetReplication`, `ResetReplicationParameters`, `SetReplicationSource`, `StopReplicationAndGetStatus`, `InitPrimary`, `InitReplica`, `PopulateReparentJournal`, `DemotePrimary`, `UndoDemotePrimary`, `PromoteReplica`, `SetReadOnly` and `SetReadWrite`. Read-only RPCs are unaffected, and `ChangeType` stays available so `TabletExternallyReparented` keeps working, though on an unmanaged tablet it now only moves the topology record rather than configuring semi-sync or restarting replication.
+A `vttablet` started with `--unmanaged` now refuses the tabletmanager RPCs that would change replication on its external MySQL, or promote or demote it, returning `FAILED_PRECONDITION` to every caller. Those are `StopReplication`, `StopReplicationMinimum`, `StartReplication`, `RestartReplication`, `StartReplicationUntilAfter`, `ResetReplication`, `ResetReplicationParameters`, `SetReplicationSource`, `StopReplicationAndGetStatus`, `InitPrimary`, `InitReplica`, `PopulateReparentJournal`, `DemotePrimary`, `UndoDemotePrimary`, `PromoteReplica`, `SetReadOnly` and `SetReadWrite`. Read-only RPCs are unaffected, and `ChangeType` stays available so `TabletExternallyReparented` keeps working, though it now only moves the topology record rather than configuring semi-sync or restarting replication.
 
 **Impact**: anyone deliberately driving these RPCs against an unmanaged tablet, for example via `vtctldclient`, now gets an error instead of a silent change to the external MySQL.
 
