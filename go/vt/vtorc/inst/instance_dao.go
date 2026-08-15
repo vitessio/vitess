@@ -1164,7 +1164,7 @@ func ForgetInstance(tabletAlias *topodatapb.TabletAlias) error {
 	RemoveShardPeerObserver(tabletAliasString)
 
 	// Delete from the 'vitess_tablet' table.
-	_, err := db.ExecVTOrc(`DELETE FROM
+	tabletResult, err := db.ExecVTOrc(`DELETE FROM
 			vitess_tablet
 		WHERE
 			alias = ?`,
@@ -1174,9 +1174,14 @@ func ForgetInstance(tabletAlias *topodatapb.TabletAlias) error {
 		log.Error(err.Error())
 		return err
 	}
+	tabletRows, err := tabletResult.RowsAffected()
+	if err != nil {
+		log.Error(err.Error())
+		return err
+	}
 
 	// Also delete from the 'database_instance' table.
-	sqlResult, err := db.ExecVTOrc(`DELETE FROM
+	instanceResult, err := db.ExecVTOrc(`DELETE FROM
 			database_instance
 		WHERE
 			alias = ?`,
@@ -1186,13 +1191,14 @@ func ForgetInstance(tabletAlias *topodatapb.TabletAlias) error {
 		log.Error(err.Error())
 		return err
 	}
-	// Get the number of rows affected. If they are zero, then we tried to forget an instance that doesn't exist.
-	rows, err := sqlResult.RowsAffected()
+	instanceRows, err := instanceResult.RowsAffected()
 	if err != nil {
 		log.Error(err.Error())
 		return err
 	}
-	if rows == 0 {
+	// A tablet read from the topo but never probed has no database_instance row, so removing it
+	// is still a real forget. Only an absence from both tables means it was never here.
+	if tabletRows == 0 && instanceRows == 0 {
 		errMsg := fmt.Sprintf("ForgetInstance(): tablet %+v not found", tabletAliasString)
 		log.Error(errMsg)
 		return errors.New(errMsg)

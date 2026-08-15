@@ -32,7 +32,10 @@
         - [`EmergencyReparentShard` no longer waits on replicas that cannot win the election](#ers-lagging-relay-log-wait)
         - [`EmergencyReparentShard` can explicitly recover from split brain](#ers-allow-split-brain-promotion)
         - [Reparent candidate ordering now respects partially ordered GTID histories](#reparent-gtid-candidate-ordering)
+    - **[VTOrc](#minor-changes-vtorc)**
+        - [VTOrc no longer watches `--unmanaged` tablets](#vtorc-unmanaged-tablets)
     - **[VTTablet](#minor-changes-vttablet)**
+        - [Unmanaged tablets reject replication and reparent RPCs](#vttablet-unmanaged-rpc-guard)
         - [Consolidator Reject on Waiter Cap](#vttablet-consolidator-reject-on-cap)
         - [Query timeout for state-changing statements on the streaming path](#vttablet-stream-query-timeout)
         - [Query rules now apply to queries on the streaming path](#vttablet-rules-apply-to-streaming)
@@ -298,7 +301,31 @@ Candidates are now ordered by GTID dominance before the existing promotion-rule,
 
 See [#20579](https://github.com/vitessio/vitess/issues/20579).
 
+### <a id="minor-changes-vtorc"/>VTOrc</a>
+
+#### <a id="vtorc-unmanaged-tablets"/>VTOrc no longer watches `--unmanaged` tablets</a>
+
+A `vttablet` started with `--unmanaged` now records that in its topology record, via a new `mode` field on the tablet record. VTOrc skips those tablets entirely: they are never written to its backend, never probed, never analyzed, and never recovered.
+
+Previously nothing outside the `vttablet` process knew a tablet was unmanaged. VTOrc filtered only on `--clusters-to-watch`, so any unmanaged tablet in scope was probed like any other, and one replicating from outside Vitess would be flagged (`ReplicaIsWritable`, `NotConnectedToPrimary`) and "repaired" — VTOrc issued `SetReadOnly` and `SetReplicationSource` against a MySQL that Vitess had been explicitly told not to manage.
+
+**Impact**: the workaround of carving unmanaged keyspaces out with `--clusters-to-watch` is no longer needed. Unmanaged tablets also disappear from VTOrc's API, UI and per-cell/per-shard tablet counts.
+
+Unmanaged tablets are expected to occupy a keyspace of their own, which is how they are used in practice: an external MySQL serving as an import source. Mixing unmanaged and managed tablets inside one shard is not supported. Vitess cannot stop replication on, or revoke writes from, a tablet it does not manage, so a reparent of such a shard cannot establish the safety invariant it reports. VTOrc logs a warning when it sees that layout.
+
+`MANAGED` is the zero value of the new field, so a v24 tablet record that predates it reads back as managed. Upgrade order therefore does not matter: VTOrc keeps managing every tablet exactly as before until that tablet restarts into v25 and declares itself unmanaged.
+
 ### <a id="minor-changes-vttablet"/>VTTablet</a>
+
+#### <a id="vttablet-unmanaged-rpc-guard"/>Unmanaged tablets reject replication and reparent RPCs</a>
+
+Independently of the VTOrc change above, a `vttablet` started with `--unmanaged` now refuses the tabletmanager RPCs that would write to the replication state or primaryship of its external MySQL, returning `FAILED_PRECONDITION`. This applies to every caller, not just VTOrc.
+
+The refused RPCs are `StopReplication`, `StopReplicationMinimum`, `StartReplication`, `RestartReplication`, `StartReplicationUntilAfter`, `ResetReplication`, `ResetReplicationParameters`, `SetReplicationSource`, `StopReplicationAndGetStatus`, `InitPrimary`, `InitReplica`, `PopulateReparentJournal`, `DemotePrimary`, `UndoDemotePrimary`, `PromoteReplica`, `SetReadOnly` and `SetReadWrite`.
+
+Read-only RPCs such as `FullStatus` and `ReplicationStatus` are unaffected, and `ChangeType` is deliberately still allowed so that `TabletExternallyReparented` keeps working — external reparents are the reason this mode exists.
+
+**Impact**: anyone deliberately driving these RPCs against an unmanaged tablet, for example via `vtctldclient`, now gets an error instead of a silent change to the external MySQL.
 
 #### <a id="vttablet-consolidator-reject-on-cap"/>Consolidator Reject on Waiter Cap</a>
 

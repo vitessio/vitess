@@ -36,11 +36,14 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/semisyncmonitor"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver"
 	"vitess.io/vitess/go/vt/vttablet/tabletservermock"
 
+	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 func newTestReplicationTM(tablet *topodatapb.Tablet, mysqlDaemon *mysqlctl.FakeMysqlDaemon, ts *topo.Server) *TabletManager {
@@ -910,4 +913,117 @@ func TestShardPeerHealthSnapshot(t *testing.T) {
 	snap := tm.shardPeerHealthSnapshot()
 	require.Len(t, snap, 1)
 	assert.Equal(t, int64(1), snap[0].ConsecutivePingFailures)
+}
+
+// guardedReplicationRPCs are the RPCs an unmanaged tablet must refuse, because each one writes to
+// the replication state or primaryship of a MySQL that Vitess does not manage. Read-only RPCs and
+// ChangeType (which external reparents rely on) are deliberately absent.
+func guardedReplicationRPCs(tm *TabletManager, ctx context.Context) map[string]func() error {
+	return map[string]func() error{
+		// Backs both the SetReadOnly and SetReadWrite RPCs, which vtadmin exposes as a button.
+		"SetReadOnly":            func() error { return tm.SetReadOnly(ctx, true) },
+		"SetReadWrite":           func() error { return tm.SetReadOnly(ctx, false) },
+		"StopReplication":        func() error { return tm.StopReplication(ctx) },
+		"StopReplicationMinimum": func() error { _, err := tm.StopReplicationMinimum(ctx, "", 0); return err },
+		"StartReplication":       func() error { return tm.StartReplication(ctx, false) },
+		"RestartReplication":     func() error { return tm.RestartReplication(ctx, false) },
+		"StartReplicationUntilAfter": func() error {
+			return tm.StartReplicationUntilAfter(ctx, "", 0)
+		},
+		"ResetReplication": func() error { return tm.ResetReplication(ctx) },
+		"InitPrimary":      func() error { _, err := tm.InitPrimary(ctx, false); return err },
+		"PopulateReparentJournal": func() error {
+			return tm.PopulateReparentJournal(ctx, 0, "action", nil, "")
+		},
+		"InitReplica":                func() error { return tm.InitReplica(ctx, nil, "", 0, false) },
+		"DemotePrimary":              func() error { _, err := tm.DemotePrimary(ctx, false); return err },
+		"UndoDemotePrimary":          func() error { return tm.UndoDemotePrimary(ctx, false) },
+		"ResetReplicationParameters": func() error { return tm.ResetReplicationParameters(ctx) },
+		"SetReplicationSource": func() error {
+			return tm.SetReplicationSource(ctx, nil, 0, "", false, false, 0)
+		},
+		"StopReplicationAndGetStatus": func() error {
+			_, err := tm.StopReplicationAndGetStatus(ctx, replicationdatapb.StopReplicationMode_IOANDSQLTHREAD)
+			return err
+		},
+		"PromoteReplica": func() error { _, err := tm.PromoteReplica(ctx, false); return err },
+	}
+}
+
+// newUnstartedReplicationTM builds a TabletManager whose grants have deliberately NOT been
+// applied, so a guarded RPC that gets past the unmanaged check stalls on the context instead of
+// doing real work. It still gets a fake MysqlDaemon, because not every guarded RPC waits for
+// grants -- SetReadOnly goes straight for MySQL, and a nil daemon would panic rather than fail.
+func newUnstartedReplicationTM(t *testing.T, mode topodatapb.TabletMode) *TabletManager {
+	t.Helper()
+
+	fakeDb := newTestMysqlDaemon(t, 1)
+	tm := &TabletManager{
+		actionSema:             semaphore.NewWeighted(1),
+		MysqlDaemon:            fakeDb,
+		QueryServiceControl:    tabletservermock.NewController(),
+		SemiSyncMonitor:        semisyncmonitor.CreateTestSemiSyncMonitor(fakeDb.DB(), exporter),
+		_waitForGrantsComplete: make(chan struct{}),
+		mode:                   mode,
+		tmState: &tmState{
+			displayState: displayState{
+				tablet: &topodatapb.Tablet{
+					Alias: &topodatapb.TabletAlias{Cell: "cell1", Uid: 100},
+				},
+			},
+		},
+	}
+	return tm
+}
+
+// TestUnmanagedTabletRejectsReplicationRPCs checks that a vttablet started with --unmanaged
+// refuses every RPC that would reconfigure the replication of its external MySQL, and that it
+// refuses before taking the action semaphore or touching MySQL at all.
+func TestUnmanagedTabletRejectsReplicationRPCs(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), time.Second)
+	defer cancel()
+
+	tm := newUnstartedReplicationTM(t, topodatapb.TabletMode_UNMANAGED)
+
+	for name, call := range guardedReplicationRPCs(tm, ctx) {
+		t.Run(name, func(t *testing.T) {
+			err := call()
+			require.ErrorContains(t, err, "tablet is unmanaged")
+			assert.Equal(t, vtrpc.Code_FAILED_PRECONDITION, vterrors.Code(err))
+
+			// The guard runs before tm.lock(), so the action semaphore was never taken.
+			require.True(t, tm.actionSema.TryAcquire(1), "%s acquired the action semaphore", name)
+			tm.actionSema.Release(1)
+		})
+	}
+}
+
+// TestManagedTabletAllowsReplicationRPCs is the other half of the guard: a managed tablet must be
+// left alone. MANAGED is the zero value, which is also what a vttablet too old to set the field
+// leaves behind, so this doubles as the check that an upgrade does not stop managing replication.
+func TestManagedTabletAllowsReplicationRPCs(t *testing.T) {
+	for _, mode := range []topodatapb.TabletMode{
+		topodatapb.TabletMode_MANAGED,
+	} {
+		t.Run(mode.String(), func(t *testing.T) {
+			require.Zero(t, mode, "MANAGED must stay the zero value so an absent mode reads as managed")
+			ctx, cancel := context.WithTimeout(t.Context(), 100*time.Millisecond)
+			defer cancel()
+
+			tm := newUnstartedReplicationTM(t, mode)
+
+			for name, call := range guardedReplicationRPCs(tm, ctx) {
+				t.Run(name, func(t *testing.T) {
+					// What each RPC does after the guard differs, and several of them fail for
+					// their own reasons against a fake daemon. The only property under test is
+					// that the unmanaged guard did not fire.
+					err := call()
+					if err != nil {
+						require.NotContains(t, err.Error(), "tablet is unmanaged",
+							"guard fired for mode %v", mode)
+					}
+				})
+			}
+		})
+	}
 }

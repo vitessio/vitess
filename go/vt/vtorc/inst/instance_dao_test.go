@@ -1263,3 +1263,52 @@ func TestErrantGTIDCountGaugeIsResetWhenResolved(t *testing.T) {
 	require.EqualValues(t, 0, currentErrantGTIDCount.Counts()[replicaAlias],
 		"gauge should be reset to 0 after errant GTIDs are resolved")
 }
+
+// TestForgetInstanceTopologyOnlyTablet checks that forgetting a tablet VTOrc read from the topo
+// but never probed reports success. It has no database_instance row, and treating that as
+// "not found" logged an error and skipped the audit for a removal that actually happened.
+func TestForgetInstanceTopologyOnlyTablet(t *testing.T) {
+	InitializeForgetAliasesCache()
+	oldCache := forgetAliases
+	t.Cleanup(func() {
+		forgetAliases = oldCache
+		db.ClearVTOrcDatabase()
+	})
+	forgetAliases = cache.New(time.Minute, time.Minute)
+	db.ClearVTOrcDatabase()
+
+	tablet := &topodatapb.Tablet{
+		Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 500},
+		Hostname:      "localhost",
+		Keyspace:      "external",
+		Shard:         "0",
+		Type:          topodatapb.TabletType_REPLICA,
+		MysqlHostname: "localhost",
+		MysqlPort:     500,
+	}
+	require.NoError(t, SaveTablet(tablet))
+	_, err := ReadTablet(tablet.Alias)
+	require.NoError(t, err, "tablet must be present before forgetting it")
+
+	require.NoError(t, ForgetInstance(tablet.Alias))
+
+	_, err = ReadTablet(tablet.Alias)
+	require.EqualError(t, err, ErrTabletAliasNil.Error(), "tablet must be gone after forgetting it")
+	require.True(t, InstanceIsForgotten(tablet.Alias))
+}
+
+// TestForgetInstanceUnknownTablet checks that a tablet in neither table is still reported as
+// not found, so the fix above does not turn every bogus forget into a silent success.
+func TestForgetInstanceUnknownTablet(t *testing.T) {
+	InitializeForgetAliasesCache()
+	oldCache := forgetAliases
+	t.Cleanup(func() {
+		forgetAliases = oldCache
+		db.ClearVTOrcDatabase()
+	})
+	forgetAliases = cache.New(time.Minute, time.Minute)
+	db.ClearVTOrcDatabase()
+
+	alias := &topodatapb.TabletAlias{Cell: "zone1", Uid: 501}
+	require.ErrorContains(t, ForgetInstance(alias), "not found")
+}

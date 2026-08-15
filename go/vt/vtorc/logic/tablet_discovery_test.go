@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -1076,4 +1077,130 @@ func TestRefreshTabletsUsingCellsToWatch_InvalidCell(t *testing.T) {
 	err = refreshTabletsUsing(ctx, func(tabletAlias *topodatapb.TabletAlias) {}, true)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "does not exist in the topo")
+}
+
+// TestRefreshTabletsSkipsUnmanaged checks that a tablet started with --unmanaged never enters
+// VTOrc's backend at all. Staying out of vitess_tablet is what keeps it out of analysis and out of
+// every recovery, so VTOrc can never issue a reparent RPC against the external MySQL behind it.
+func TestRefreshTabletsSkipsUnmanaged(t *testing.T) {
+	oldTs := ts
+	t.Cleanup(func() {
+		ts = oldTs
+		db.ClearVTOrcDatabase()
+	})
+
+	inst.InitializeForgetAliasesCache()
+
+	ctx := t.Context()
+	ts = memorytopo.NewServer(ctx, cell1)
+	_, err := ts.GetOrCreateShard(ctx, keyspace, shard)
+	require.NoError(t, err)
+
+	managed := tab100.CloneVT()
+	managed.Mode = topodatapb.TabletMode_MANAGED
+	unmanaged := tab101.CloneVT()
+	unmanaged.Mode = topodatapb.TabletMode_UNMANAGED
+	// A tablet record written by a vttablet too old to set the mode carries no mode at all, which
+	// reads back as MANAGED. VTOrc must keep watching it, otherwise an upgrade would silently stop
+	// managing every tablet that has not restarted yet.
+	modeUnset := tab102.CloneVT()
+	require.Equal(t, topodatapb.TabletMode_MANAGED, modeUnset.GetMode())
+
+	for _, tablet := range []*topodatapb.Tablet{managed, unmanaged, modeUnset} {
+		require.NoError(t, ts.CreateTablet(ctx, tablet))
+	}
+
+	var refreshed atomic.Int32
+	var refreshedAliases sync.Map
+	refreshTabletsInKeyspaceShard(ctx, keyspace, shard, func(alias *topodatapb.TabletAlias) {
+		refreshed.Add(1)
+		refreshedAliases.Store(topoproto.TabletAliasString(alias), true)
+	}, false, nil)
+
+	assert.EqualValues(t, 2, refreshed.Load())
+	_, probedUnmanaged := refreshedAliases.Load(topoproto.TabletAliasString(unmanaged.Alias))
+	assert.False(t, probedUnmanaged, "VTOrc probed the unmanaged tablet")
+
+	verifyTabletCount(t, 2)
+	verifyTabletInfo(t, managed, "")
+	verifyTabletInfo(t, modeUnset, "")
+	verifyTabletInfo(t, unmanaged, inst.ErrTabletAliasNil.Error())
+}
+
+// TestRefreshTabletsForgetsTabletThatBecomesUnmanaged checks the flip case: a tablet VTOrc already
+// watches, restarted with --unmanaged, is dropped from the backend rather than left behind as a
+// stale row that analysis would keep acting on.
+func TestRefreshTabletsForgetsTabletThatBecomesUnmanaged(t *testing.T) {
+	oldTs := ts
+	t.Cleanup(func() {
+		ts = oldTs
+		db.ClearVTOrcDatabase()
+	})
+
+	inst.InitializeForgetAliasesCache()
+
+	ctx := t.Context()
+	ts = memorytopo.NewServer(ctx, cell1)
+	_, err := ts.GetOrCreateShard(ctx, keyspace, shard)
+	require.NoError(t, err)
+
+	tablet := tab100.CloneVT()
+	tablet.Mode = topodatapb.TabletMode_MANAGED
+	require.NoError(t, ts.CreateTablet(ctx, tablet))
+
+	refreshTabletsInKeyspaceShard(ctx, keyspace, shard, func(*topodatapb.TabletAlias) {}, false, nil)
+	verifyTabletCount(t, 1)
+	verifyTabletInfo(t, tablet, "")
+
+	_, err = ts.UpdateTabletFields(ctx, tablet.Alias, func(t *topodatapb.Tablet) error {
+		t.Mode = topodatapb.TabletMode_UNMANAGED
+		return nil
+	})
+	require.NoError(t, err)
+
+	refreshTabletsInKeyspaceShard(ctx, keyspace, shard, func(*topodatapb.TabletAlias) {}, false, nil)
+	verifyTabletCount(t, 0)
+	verifyTabletInfo(t, tablet, inst.ErrTabletAliasNil.Error())
+}
+
+// TestUnmanagedTabletsInManagedShards checks that VTOrc only flags the unsupported layout. An
+// unmanaged tablet in a keyspace of its own is the expected deployment and must stay silent, or
+// the warning is noise nobody reads.
+func TestUnmanagedTabletsInManagedShards(t *testing.T) {
+	tests := []struct {
+		name      string
+		unmanaged map[string][]string
+		managed   map[string]int
+		want      map[string][]string
+	}{
+		{
+			name:      "unmanaged keyspace of its own",
+			unmanaged: map[string][]string{"external/0": {"zone-1-0000000100"}},
+			managed:   map[string]int{"ks/0": 3},
+			want:      nil,
+		}, {
+			name:      "no unmanaged tablets at all",
+			unmanaged: map[string][]string{},
+			managed:   map[string]int{"ks/0": 3},
+			want:      nil,
+		}, {
+			name:      "unmanaged tablet sharing a shard with managed ones",
+			unmanaged: map[string][]string{"ks/0": {"zone-1-0000000100"}},
+			managed:   map[string]int{"ks/0": 2},
+			want:      map[string][]string{"ks/0": {"zone-1-0000000100"}},
+		}, {
+			name:      "only the shared shard is flagged",
+			unmanaged: map[string][]string{"ks/0": {"zone-1-0000000100"}, "external/0": {"zone-1-0000000200"}},
+			managed:   map[string]int{"ks/0": 2},
+			want:      map[string][]string{"ks/0": {"zone-1-0000000100"}},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, unmanagedTabletsInManagedShards(tt.unmanaged, tt.managed))
+			// The logging wrapper must tolerate every shape above.
+			warnOnUnmanagedTabletsInManagedShard(tt.unmanaged, tt.managed)
+		})
+	}
 }

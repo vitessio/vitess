@@ -51880,6 +51880,20 @@ export const topodata = $root.topodata = (() => {
         return values;
     })();
 
+    /**
+     * TabletMode enum.
+     * @name topodata.TabletMode
+     * @enum {number}
+     * @property {number} MANAGED=0 MANAGED value
+     * @property {number} UNMANAGED=1 UNMANAGED value
+     */
+    topodata.TabletMode = (function() {
+        const valuesById = {}, values = $Object.create(valuesById);
+        values[valuesById[0] = "MANAGED"] = 0;
+        values[valuesById[1] = "UNMANAGED"] = 1;
+        return values;
+    })();
+
     topodata.Tablet = (function() {
 
         /**
@@ -51900,6 +51914,7 @@ export const topodata = $root.topodata = (() => {
          * @property {number|null} [default_conn_collation] Tablet default_conn_collation
          * @property {vttime.Time.$Properties|null} [tablet_start_time] Tablet tablet_start_time
          * @property {vttime.Time.$Properties|null} [tablet_shutdown_time] Tablet tablet_shutdown_time
+         * @property {topodata.TabletMode|null} [mode] Tablet mode
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
@@ -52054,6 +52069,14 @@ export const topodata = $root.topodata = (() => {
         Tablet.prototype.tablet_shutdown_time = null;
 
         /**
+         * Tablet mode.
+         * @member {topodata.TabletMode} mode
+         * @memberof topodata.Tablet
+         * @instance
+         */
+        Tablet.prototype.mode = 0;
+
+        /**
          * Creates a new Tablet instance using the specified properties.
          * @function create
          * @memberof topodata.Tablet
@@ -52117,6 +52140,8 @@ export const topodata = $root.topodata = (() => {
                 $root.vttime.Time.encode(message.tablet_start_time, writer.uint32(/* id 17, wireType 2 =*/138).fork(), _depth + 1).ldelim();
             if (message.tablet_shutdown_time != null && $Object.hasOwnProperty.call(message, "tablet_shutdown_time"))
                 $root.vttime.Time.encode(message.tablet_shutdown_time, writer.uint32(/* id 18, wireType 2 =*/146).fork(), _depth + 1).ldelim();
+            if (message.mode != null && $Object.hasOwnProperty.call(message, "mode") && message.mode !== 0)
+                writer.uint32(/* id 19, wireType 0 =*/152).int32(message.mode);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
                     writer.raw(message.$unknowns[i]);
@@ -52326,6 +52351,15 @@ export const topodata = $root.topodata = (() => {
                         message.tablet_shutdown_time = $root.vttime.Time.decode(reader, reader.uint32(), $undefined, _depth + 1, message.tablet_shutdown_time);
                         continue;
                     }
+                case 19: {
+                        if (wireType !== 0)
+                            break;
+                        if (value = reader.int32())
+                            message.mode = value;
+                        else
+                            delete message.mode;
+                        continue;
+                    }
                 }
                 reader.skipType(wireType, _depth, tag);
                 if (!reader.discardUnknown) {
@@ -52434,6 +52468,9 @@ export const topodata = $root.topodata = (() => {
                 if (error)
                     return "tablet_shutdown_time." + error;
             }
+            if (message.mode != null && $Object.hasOwnProperty.call(message, "mode"))
+                if (typeof message.mode !== "number" || (message.mode | 0) !== message.mode)
+                    return "mode: enum value expected";
             return null;
         };
 
@@ -52571,6 +52608,20 @@ export const topodata = $root.topodata = (() => {
                     throw $TypeError(".topodata.Tablet.tablet_shutdown_time: object expected");
                 message.tablet_shutdown_time = $root.vttime.Time.fromObject(object.tablet_shutdown_time, _depth + 1);
             }
+            if (object.mode !== 0 && (typeof object.mode !== "string" || $root.topodata.TabletMode[object.mode] !== 0))
+                switch (object.mode) {
+                case "MANAGED":
+                case 0:
+                    message.mode = 0;
+                    break;
+                case "UNMANAGED":
+                case 1:
+                    message.mode = 1;
+                    break;
+                default:
+                    if (typeof object.mode === "number" && (object.mode | 0) === object.mode)
+                        message.mode = object.mode;
+                }
             return message;
         };
 
@@ -52609,6 +52660,7 @@ export const topodata = $root.topodata = (() => {
                 object.default_conn_collation = 0;
                 object.tablet_start_time = null;
                 object.tablet_shutdown_time = null;
+                object.mode = options.enums === $String ? "MANAGED" : 0;
             }
             if (message.alias != null && $Object.hasOwnProperty.call(message, "alias"))
                 object.alias = $root.topodata.TabletAlias.toObject(message.alias, options, _depth + 1);
@@ -52653,6 +52705,8 @@ export const topodata = $root.topodata = (() => {
                 object.tablet_start_time = $root.vttime.Time.toObject(message.tablet_start_time, options, _depth + 1);
             if (message.tablet_shutdown_time != null && $Object.hasOwnProperty.call(message, "tablet_shutdown_time"))
                 object.tablet_shutdown_time = $root.vttime.Time.toObject(message.tablet_shutdown_time, options, _depth + 1);
+            if (message.mode != null && $Object.hasOwnProperty.call(message, "mode"))
+                object.mode = options.enums === $String ? $root.topodata.TabletMode[message.mode] === $undefined ? message.mode : $root.topodata.TabletMode[message.mode] : message.mode;
             return object;
         };
 

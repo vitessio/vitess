@@ -189,6 +189,11 @@ type TabletManager struct {
 	// when we transition back from something like PRIMARY.
 	baseTabletType topodatapb.TabletType
 
+	// mode is the TabletMode this vttablet runs in, derived from --unmanaged
+	// at startup. It is stamped onto the tablet record and gates the
+	// replication and reparent RPCs.
+	mode topodatapb.TabletMode
+
 	// actionSema is there to run only one action at a time.
 	// This semaphore can be held for long periods of time (hours),
 	// like in the case of a restore. This semaphore must be obtained
@@ -379,6 +384,16 @@ func validateFlags() error {
 	return nil
 }
 
+// tabletModeFromConfig returns the TabletMode a vttablet started with the given config runs in.
+// A nil config comes from vtcombo (which never runs TabletConfig.Verify(), so --unmanaged never
+// reaches mysqlctl.DisableActiveReparents there) and from tests. MANAGED is correct for both.
+func tabletModeFromConfig(config *tabletenv.TabletConfig) topodatapb.TabletMode {
+	if config != nil && config.Unmanaged {
+		return topodatapb.TabletMode_UNMANAGED
+	}
+	return topodatapb.TabletMode_MANAGED
+}
+
 // Start starts the TabletManager.
 func (tm *TabletManager) Start(tablet *topodatapb.Tablet, config *tabletenv.TabletConfig) error {
 	if err := validateFlags(); err != nil {
@@ -425,6 +440,9 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, config *tabletenv.Tabl
 	} else {
 		log.Info(fmt.Sprintf("Using init-tablet-type %v", tablet.Type))
 	}
+
+	tm.mode = tabletModeFromConfig(config)
+	tablet.Mode = tm.mode
 
 	tm.tmState = newTMState(tm, tablet)
 	tm.actionSema = semaphore.NewWeighted(1)

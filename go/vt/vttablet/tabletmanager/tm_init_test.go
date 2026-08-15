@@ -1364,3 +1364,64 @@ func TestValidateFlags(t *testing.T) {
 	demotePrimaryLockWaitTimeout = time.Second
 	require.NoError(t, validateFlags())
 }
+
+// TestStartStampsTabletMode checks that Start() records the tablet's mode in its topo record, so
+// that remote callers such as VTOrc can tell an unmanaged tablet from a managed one.
+func TestStartStampsTabletMode(t *testing.T) {
+	testcases := []struct {
+		name   string
+		config *tabletenv.TabletConfig
+		want   topodatapb.TabletMode
+	}{
+		{
+			name:   "no config",
+			config: nil,
+			want:   topodatapb.TabletMode_MANAGED,
+		}, {
+			name:   "managed",
+			config: &tabletenv.TabletConfig{DB: &dbconfigs.DBConfigs{}},
+			want:   topodatapb.TabletMode_MANAGED,
+		}, {
+			name:   "unmanaged",
+			config: &tabletenv.TabletConfig{DB: &dbconfigs.DBConfigs{}, Unmanaged: true},
+			want:   topodatapb.TabletMode_UNMANAGED,
+		},
+	}
+
+	for i, testcase := range testcases {
+		t.Run(testcase.name, func(t *testing.T) {
+			ctx := t.Context()
+			ts := memorytopo.NewServer(ctx, "cell1")
+			t.Cleanup(func() { ts.Close() })
+
+			tablet := newTestTablet(t, i+1, "ks", "0", nil)
+			require.Equal(t, topodatapb.TabletMode_MANAGED, tablet.GetMode(), "a tablet with no mode set must read as managed")
+
+			// Seed the opposite of the expected mode. MANAGED is the zero value, so a record that
+			// Start() never stamped would read as MANAGED anyway and the managed cases below would
+			// pass without proving anything.
+			tablet.Mode = topodatapb.TabletMode_UNMANAGED
+			if testcase.want == topodatapb.TabletMode_UNMANAGED {
+				tablet.Mode = topodatapb.TabletMode_MANAGED
+			}
+
+			fakeDb := newTestMysqlDaemon(t, 1)
+			tm := &TabletManager{
+				BatchCtx:            ctx,
+				TopoServer:          ts,
+				MysqlDaemon:         fakeDb,
+				DBConfigs:           &dbconfigs.DBConfigs{},
+				SemiSyncMonitor:     semisyncmonitor.CreateTestSemiSyncMonitor(fakeDb.DB(), exporter),
+				QueryServiceControl: tabletservermock.NewController(),
+			}
+			require.NoError(t, tm.Start(tablet, testcase.config))
+			t.Cleanup(tm.Stop)
+
+			assert.Equal(t, testcase.want, tm.mode)
+
+			ti, err := ts.GetTablet(ctx, tablet.Alias)
+			require.NoError(t, err)
+			assert.Equal(t, testcase.want, ti.GetMode())
+		})
+	}
+}
