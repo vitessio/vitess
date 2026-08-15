@@ -440,7 +440,7 @@ func GetBackupCandidates(tablets []*topo.TabletInfo, stats []*replicationdatapb.
 func ValidateAllTabletsManaged(tabletMap map[string]*topo.TabletInfo) error {
 	var unmanaged []string
 	for alias, tabletInfo := range tabletMap {
-		if tabletInfo.GetMode() != topodatapb.TabletMode_MANAGED {
+		if tabletInfo.GetMysqlMode() != topodatapb.TabletMySQLMode_MANAGED {
 			unmanaged = append(unmanaged, alias)
 		}
 	}

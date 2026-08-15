@@ -310,7 +310,7 @@ See [#20579](https://github.com/vitessio/vitess/issues/20579).
 
 #### <a id="vtorc-unmanaged-tablets"/>VTOrc no longer watches `--unmanaged` tablets</a>
 
-A `vttablet` started with `--unmanaged` now records that in its topology record, via a new `mode` field, and VTOrc skips those tablets entirely: never written to its backend, never probed, analysed or recovered. Previously nothing outside the `vttablet` process knew a tablet was unmanaged, so VTOrc, which filters only on `--clusters-to-watch`, would flag one replicating from outside Vitess (`ReplicaIsWritable`, `NotConnectedToPrimary`) and "repair" it, issuing `SetReadOnly` and `SetReplicationSource` against a MySQL it had been told not to manage.
+A `vttablet` started with `--unmanaged` now records that in its topology record, via a new `mysql_mode` field, and VTOrc skips those tablets entirely: never written to its backend, never probed, analysed or recovered. Previously nothing outside the `vttablet` process knew a tablet was unmanaged, so VTOrc, which filters only on `--clusters-to-watch`, would flag one replicating from outside Vitess (`ReplicaIsWritable`, `NotConnectedToPrimary`) and "repair" it, issuing `SetReadOnly` and `SetReplicationSource` against a MySQL it had been told not to manage.
 
 **Impact**: these tablets disappear from VTOrc's API, UI and tablet counts. The `--clusters-to-watch` exclusions used to carve them out are only safe to remove once every unmanaged `vttablet` and every VTOrc watching them run v25, since a tablet only declares itself unmanaged when it restarts, a record written by an older `vttablet` reads back as managed, and an older VTOrc ignores the field entirely. Restore the exclusions before downgrading either component.
 

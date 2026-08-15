@@ -2596,10 +2596,10 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 					Type:     topodatapb.TabletType_PRIMARY,
 				},
 				{
-					Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 200},
-					Keyspace: "testkeyspace",
-					Shard:    "-",
-					Mode:     topodatapb.TabletMode_UNMANAGED,
+					Alias:     &topodatapb.TabletAlias{Cell: "zone1", Uid: 200},
+					Keyspace:  "testkeyspace",
+					Shard:     "-",
+					MysqlMode: topodatapb.TabletMySQLMode_UNMANAGED,
 				},
 			},
 			shards: []*vtctldatapb.Shard{

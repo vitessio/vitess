@@ -1097,14 +1097,14 @@ func TestRefreshTabletsSkipsUnmanaged(t *testing.T) {
 	require.NoError(t, err)
 
 	managed := tab100.CloneVT()
-	managed.Mode = topodatapb.TabletMode_MANAGED
+	managed.MysqlMode = topodatapb.TabletMySQLMode_MANAGED
 	unmanaged := tab101.CloneVT()
-	unmanaged.Mode = topodatapb.TabletMode_UNMANAGED
+	unmanaged.MysqlMode = topodatapb.TabletMySQLMode_UNMANAGED
 	// A tablet record written by a vttablet too old to set the mode carries no mode at all, which
 	// reads back as MANAGED. VTOrc must keep watching it, otherwise an upgrade would silently stop
 	// managing every tablet that has not restarted yet.
 	modeUnset := tab102.CloneVT()
-	require.Equal(t, topodatapb.TabletMode_MANAGED, modeUnset.GetMode())
+	require.Equal(t, topodatapb.TabletMySQLMode_MANAGED, modeUnset.GetMysqlMode())
 
 	for _, tablet := range []*topodatapb.Tablet{managed, unmanaged, modeUnset} {
 		require.NoError(t, ts.CreateTablet(ctx, tablet))
@@ -1145,7 +1145,7 @@ func TestRefreshTabletsForgetsTabletThatBecomesUnmanaged(t *testing.T) {
 	require.NoError(t, err)
 
 	tablet := tab100.CloneVT()
-	tablet.Mode = topodatapb.TabletMode_MANAGED
+	tablet.MysqlMode = topodatapb.TabletMySQLMode_MANAGED
 	require.NoError(t, ts.CreateTablet(ctx, tablet))
 
 	refreshTabletsInKeyspaceShard(ctx, keyspace, shard, func(*topodatapb.TabletAlias) {}, false, nil)
@@ -1153,7 +1153,7 @@ func TestRefreshTabletsForgetsTabletThatBecomesUnmanaged(t *testing.T) {
 	verifyTabletInfo(t, tablet, "")
 
 	_, err = ts.UpdateTabletFields(ctx, tablet.Alias, func(t *topodatapb.Tablet) error {
-		t.Mode = topodatapb.TabletMode_UNMANAGED
+		t.MysqlMode = topodatapb.TabletMySQLMode_UNMANAGED
 		return nil
 	})
 	require.NoError(t, err)

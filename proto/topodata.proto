@@ -105,8 +105,8 @@ enum TabletType {
   DRAINED = 8;
 }
 
-// TabletMode describes how much of a tablet's MySQL instance Vitess manages.
-enum TabletMode {
+// TabletMySQLMode describes how much of a tablet's MySQL instance Vitess manages.
+enum TabletMySQLMode {
   // MANAGED means Vitess manages the tablet's MySQL instance. This is the zero
   // value on purpose: a record written before this field existed reads back as
   // MANAGED, so an upgrade changes nothing.
@@ -185,8 +185,9 @@ message Tablet {
   // when in-reality the tablet has been stopped/killed/crashed.
   vttime.Time tablet_shutdown_time = 18;
 
-  // mode is how much of this tablet's MySQL instance Vitess manages. See TabletMode.
-  TabletMode mode = 19;
+  // mysql_mode is how much of this tablet's MySQL instance Vitess manages.
+  // See TabletMySQLMode.
+  TabletMySQLMode mysql_mode = 19;
 
   // OBSOLETE: ip and tablet health information
   // string ip = 3;

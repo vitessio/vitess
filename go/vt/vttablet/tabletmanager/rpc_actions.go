@@ -134,7 +134,7 @@ func (tm *TabletManager) ChangeType(ctx context.Context, tabletType topodatapb.T
 	// fixSemiSyncAndReplication restart replication on a MySQL we don't manage. External
 	// reparents ask for PRIMARY, which that func skips anyway, so they lose nothing.
 	semiSyncAction := SemiSyncActionNone
-	if tm.mode != topodatapb.TabletMode_UNMANAGED {
+	if tm.mysqlMode != topodatapb.TabletMySQLMode_UNMANAGED {
 		var err error
 		semiSyncAction, err = tm.convertBoolToSemiSyncAction(ctx, semiSync)
 		if err != nil {

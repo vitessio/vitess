@@ -21674,8 +21674,8 @@ export namespace topodata {
         DRAINED = 8
     }
 
-    /** TabletMode enum. */
-    enum TabletMode {
+    /** TabletMySQLMode enum. */
+    enum TabletMySQLMode {
 
         /** MANAGED value */
         MANAGED = 0,
@@ -21748,8 +21748,8 @@ export namespace topodata {
         /** Tablet tablet_shutdown_time. */
         tablet_shutdown_time?: (vttime.Time.$Properties|null);
 
-        /** Tablet mode. */
-        mode: topodata.TabletMode;
+        /** Tablet mysql_mode. */
+        mysql_mode: topodata.TabletMySQLMode;
 
         /**
          * Creates a new Tablet instance using the specified properties.
@@ -21880,8 +21880,8 @@ export namespace topodata {
             /** Tablet tablet_shutdown_time */
             tablet_shutdown_time?: (vttime.Time.$Properties|null);
 
-            /** Tablet mode */
-            mode?: (topodata.TabletMode|null);
+            /** Tablet mysql_mode */
+            mysql_mode?: (topodata.TabletMySQLMode|null);
 
             /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];

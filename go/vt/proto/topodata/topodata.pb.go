@@ -189,55 +189,55 @@ func (TabletType) EnumDescriptor() ([]byte, []int) {
 	return file_topodata_proto_rawDescGZIP(), []int{1}
 }
 
-// TabletMode describes how much of a tablet's MySQL instance Vitess manages.
-type TabletMode int32
+// TabletMySQLMode describes how much of a tablet's MySQL instance Vitess manages.
+type TabletMySQLMode int32
 
 const (
 	// MANAGED means Vitess manages the tablet's MySQL instance. This is the zero
 	// value on purpose: a record written before this field existed reads back as
 	// MANAGED, so an upgrade changes nothing.
-	TabletMode_MANAGED TabletMode = 0
+	TabletMySQLMode_MANAGED TabletMySQLMode = 0
 	// UNMANAGED means vttablet was started with --unmanaged, against an external
 	// MySQL. Vitess must not change its replication, or promote or demote it.
-	TabletMode_UNMANAGED TabletMode = 1
+	TabletMySQLMode_UNMANAGED TabletMySQLMode = 1
 )
 
-// Enum value maps for TabletMode.
+// Enum value maps for TabletMySQLMode.
 var (
-	TabletMode_name = map[int32]string{
+	TabletMySQLMode_name = map[int32]string{
 		0: "MANAGED",
 		1: "UNMANAGED",
 	}
-	TabletMode_value = map[string]int32{
+	TabletMySQLMode_value = map[string]int32{
 		"MANAGED":   0,
 		"UNMANAGED": 1,
 	}
 )
 
-func (x TabletMode) Enum() *TabletMode {
-	p := new(TabletMode)
+func (x TabletMySQLMode) Enum() *TabletMySQLMode {
+	p := new(TabletMySQLMode)
 	*p = x
 	return p
 }
 
-func (x TabletMode) String() string {
+func (x TabletMySQLMode) String() string {
 	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
 }
 
-func (TabletMode) Descriptor() protoreflect.EnumDescriptor {
+func (TabletMySQLMode) Descriptor() protoreflect.EnumDescriptor {
 	return file_topodata_proto_enumTypes[2].Descriptor()
 }
 
-func (TabletMode) Type() protoreflect.EnumType {
+func (TabletMySQLMode) Type() protoreflect.EnumType {
 	return &file_topodata_proto_enumTypes[2]
 }
 
-func (x TabletMode) Number() protoreflect.EnumNumber {
+func (x TabletMySQLMode) Number() protoreflect.EnumNumber {
 	return protoreflect.EnumNumber(x)
 }
 
-// Deprecated: Use TabletMode.Descriptor instead.
-func (TabletMode) EnumDescriptor() ([]byte, []int) {
+// Deprecated: Use TabletMySQLMode.Descriptor instead.
+func (TabletMySQLMode) EnumDescriptor() ([]byte, []int) {
 	return file_topodata_proto_rawDescGZIP(), []int{2}
 }
 
@@ -459,8 +459,9 @@ type Tablet struct {
 	// to be killed before it can set this time, so in some scenarios the value will report nil
 	// when in-reality the tablet has been stopped/killed/crashed.
 	TabletShutdownTime *vttime.Time `protobuf:"bytes,18,opt,name=tablet_shutdown_time,json=tabletShutdownTime,proto3" json:"tablet_shutdown_time,omitempty"`
-	// mode is how much of this tablet's MySQL instance Vitess manages. See TabletMode.
-	Mode          TabletMode `protobuf:"varint,19,opt,name=mode,proto3,enum=topodata.TabletMode" json:"mode,omitempty"`
+	// mysql_mode is how much of this tablet's MySQL instance Vitess manages.
+	// See TabletMySQLMode.
+	MysqlMode     TabletMySQLMode `protobuf:"varint,19,opt,name=mysql_mode,json=mysqlMode,proto3,enum=topodata.TabletMySQLMode" json:"mysql_mode,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -600,11 +601,11 @@ func (x *Tablet) GetTabletShutdownTime() *vttime.Time {
 	return nil
 }
 
-func (x *Tablet) GetMode() TabletMode {
+func (x *Tablet) GetMysqlMode() TabletMySQLMode {
 	if x != nil {
-		return x.Mode
+		return x.MysqlMode
 	}
-	return TabletMode_MANAGED
+	return TabletMySQLMode_MANAGED
 }
 
 // A Shard contains data about a subset of the data whithin a keyspace.
@@ -1902,7 +1903,7 @@ const file_topodata_proto_rawDesc = "" +
 	"\x03end\x18\x02 \x01(\fR\x03end\"3\n" +
 	"\vTabletAlias\x12\x12\n" +
 	"\x04cell\x18\x01 \x01(\tR\x04cell\x12\x10\n" +
-	"\x03uid\x18\x02 \x01(\rR\x03uid\"\xde\x06\n" +
+	"\x03uid\x18\x02 \x01(\rR\x03uid\"\xee\x06\n" +
 	"\x06Tablet\x12+\n" +
 	"\x05alias\x18\x01 \x01(\v2\x15.topodata.TabletAliasR\x05alias\x12\x1a\n" +
 	"\bhostname\x18\x02 \x01(\tR\bhostname\x128\n" +
@@ -1920,8 +1921,9 @@ const file_topodata_proto_rawDesc = "" +
 	"\x17primary_term_start_time\x18\x0e \x01(\v2\f.vttime.TimeR\x14primaryTermStartTime\x124\n" +
 	"\x16default_conn_collation\x18\x10 \x01(\rR\x14defaultConnCollation\x128\n" +
 	"\x11tablet_start_time\x18\x11 \x01(\v2\f.vttime.TimeR\x0ftabletStartTime\x12>\n" +
-	"\x14tablet_shutdown_time\x18\x12 \x01(\v2\f.vttime.TimeR\x12tabletShutdownTime\x12(\n" +
-	"\x04mode\x18\x13 \x01(\x0e2\x14.topodata.TabletModeR\x04mode\x1a:\n" +
+	"\x14tablet_shutdown_time\x18\x12 \x01(\v2\f.vttime.TimeR\x12tabletShutdownTime\x128\n" +
+	"\n" +
+	"mysql_mode\x18\x13 \x01(\x0e2\x19.topodata.TabletMySQLModeR\tmysqlMode\x1a:\n" +
 	"\fPortMapEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\x05R\x05value:\x028\x01\x1a7\n" +
@@ -2051,9 +2053,8 @@ const file_topodata_proto_rawDesc = "" +
 	"\n" +
 	"\x06BACKUP\x10\x06\x12\v\n" +
 	"\aRESTORE\x10\a\x12\v\n" +
-	"\aDRAINED\x10\b\x1a\x02\x10\x01*(\n" +
-	"\n" +
-	"TabletMode\x12\v\n" +
+	"\aDRAINED\x10\b\x1a\x02\x10\x01*-\n" +
+	"\x0fTabletMySQLMode\x12\v\n" +
 	"\aMANAGED\x10\x00\x12\r\n" +
 	"\tUNMANAGED\x10\x01B8\n" +
 	"\x0fio.vitess.protoZ%vitess.io/vitess/go/vt/proto/topodatab\x06proto3"
@@ -2075,7 +2076,7 @@ var file_topodata_proto_msgTypes = make([]protoimpl.MessageInfo, 27)
 var file_topodata_proto_goTypes = []any{
 	(KeyspaceType)(0),                     // 0: topodata.KeyspaceType
 	(TabletType)(0),                       // 1: topodata.TabletType
-	(TabletMode)(0),                       // 2: topodata.TabletMode
+	(TabletMySQLMode)(0),                  // 2: topodata.TabletMySQLMode
 	(ShardReplicationError_Type)(0),       // 3: topodata.ShardReplicationError.Type
 	(*KeyRange)(nil),                      // 4: topodata.KeyRange
 	(*TabletAlias)(nil),                   // 5: topodata.TabletAlias
@@ -2118,7 +2119,7 @@ var file_topodata_proto_depIdxs = []int32{
 	31, // 5: topodata.Tablet.primary_term_start_time:type_name -> vttime.Time
 	31, // 6: topodata.Tablet.tablet_start_time:type_name -> vttime.Time
 	31, // 7: topodata.Tablet.tablet_shutdown_time:type_name -> vttime.Time
-	2,  // 8: topodata.Tablet.mode:type_name -> topodata.TabletMode
+	2,  // 8: topodata.Tablet.mysql_mode:type_name -> topodata.TabletMySQLMode
 	5,  // 9: topodata.Shard.primary_alias:type_name -> topodata.TabletAlias
 	31, // 10: topodata.Shard.primary_term_start_time:type_name -> vttime.Time
 	4,  // 11: topodata.Shard.key_range:type_name -> topodata.KeyRange

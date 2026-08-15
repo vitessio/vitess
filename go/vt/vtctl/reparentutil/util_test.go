@@ -2275,10 +2275,10 @@ func TestGetBackupCandidates(t *testing.T) {
 func TestValidateAllTabletsManaged(t *testing.T) {
 	t.Parallel()
 
-	tablet := func(uid uint32, mode topodatapb.TabletMode) *topo.TabletInfo {
+	tablet := func(uid uint32, mysqlMode topodatapb.TabletMySQLMode) *topo.TabletInfo {
 		return &topo.TabletInfo{Tablet: &topodatapb.Tablet{
-			Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: uid},
-			Mode:  mode,
+			Alias:     &topodatapb.TabletAlias{Cell: "zone1", Uid: uid},
+			MysqlMode: mysqlMode,
 		}}
 	}
 
@@ -2293,8 +2293,8 @@ func TestValidateAllTabletsManaged(t *testing.T) {
 		}, {
 			name: "all managed",
 			tabletMap: map[string]*topo.TabletInfo{
-				"zone1-0000000100": tablet(100, topodatapb.TabletMode_MANAGED),
-				"zone1-0000000101": tablet(101, topodatapb.TabletMode_MANAGED),
+				"zone1-0000000100": tablet(100, topodatapb.TabletMySQLMode_MANAGED),
+				"zone1-0000000101": tablet(101, topodatapb.TabletMySQLMode_MANAGED),
 			},
 		}, {
 			// A v24 record carries no mode, which decodes to the MANAGED zero value.
@@ -2310,24 +2310,24 @@ func TestValidateAllTabletsManaged(t *testing.T) {
 			name: "unrecognised mode from a newer peer",
 			tabletMap: map[string]*topo.TabletInfo{
 				"zone1-0000000100": {Tablet: &topodatapb.Tablet{
-					Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
-					Mode:  topodatapb.TabletMode(99),
+					Alias:     &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+					MysqlMode: topodatapb.TabletMySQLMode(99),
 				}},
 			},
 			errShouldContain: "shard has unmanaged tablets [zone1-0000000100]",
 		}, {
 			name: "one unmanaged tablet",
 			tabletMap: map[string]*topo.TabletInfo{
-				"zone1-0000000100": tablet(100, topodatapb.TabletMode_UNMANAGED),
-				"zone1-0000000101": tablet(101, topodatapb.TabletMode_MANAGED),
+				"zone1-0000000100": tablet(100, topodatapb.TabletMySQLMode_UNMANAGED),
+				"zone1-0000000101": tablet(101, topodatapb.TabletMySQLMode_MANAGED),
 			},
 			errShouldContain: "shard has unmanaged tablets [zone1-0000000100]",
 		}, {
 			// Sorted, because map iteration order is random.
 			name: "several unmanaged tablets are listed in order",
 			tabletMap: map[string]*topo.TabletInfo{
-				"zone1-0000000101": tablet(101, topodatapb.TabletMode_UNMANAGED),
-				"zone1-0000000100": tablet(100, topodatapb.TabletMode_UNMANAGED),
+				"zone1-0000000101": tablet(101, topodatapb.TabletMySQLMode_UNMANAGED),
+				"zone1-0000000100": tablet(100, topodatapb.TabletMySQLMode_UNMANAGED),
 			},
 			errShouldContain: "shard has unmanaged tablets [zone1-0000000100 zone1-0000000101]",
 		},
