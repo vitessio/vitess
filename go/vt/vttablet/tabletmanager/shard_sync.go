@@ -223,7 +223,7 @@ func (tm *TabletManager) endPrimaryTerm(ctx context.Context, primaryAlias *topod
 	primaryAliasStr := topoproto.TabletAliasString(primaryAlias)
 	log.Warn(fmt.Sprintf("Another tablet (%v) has won primary election. Stepping down to %v.", primaryAliasStr, tm.baseTabletType))
 
-	if tm.reparentsDisabled() {
+	if tm.isReparentsDisabled() {
 		// Don't touch anything at the MySQL level. Just update tablet state.
 		log.Info("Active reparents are disabled; updating tablet state only.")
 		changeTypeCtx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)

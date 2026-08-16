@@ -1118,7 +1118,7 @@ func TestReparentsDisabledForYAMLUnmanagedTablet(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			tm := &TabletManager{mysqlMode: tt.mysqlMode}
-			assert.Equal(t, tt.want, tm.reparentsDisabled())
+			assert.Equal(t, tt.want, tm.isReparentsDisabled())
 		})
 	}
 }
@@ -1130,8 +1130,8 @@ func TestReparentsDisabledByGlobal(t *testing.T) {
 	t.Cleanup(func() { mysqlctl.DisableActiveReparents = old })
 
 	tm := &TabletManager{mysqlMode: topodatapb.TabletMySQLMode_MANAGED}
-	require.False(t, tm.reparentsDisabled())
+	require.False(t, tm.isReparentsDisabled())
 
 	mysqlctl.DisableActiveReparents = true
-	assert.True(t, tm.reparentsDisabled())
+	assert.True(t, tm.isReparentsDisabled())
 }
