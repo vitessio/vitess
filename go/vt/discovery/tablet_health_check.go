@@ -100,14 +100,19 @@ func (thc *tabletHealthCheck) SimpleCopy() *TabletHealth {
 
 // setServingState sets the tablet state to the given value.
 //
-// If the state changes, it logs the change so that failures
-// from the health check connection are logged the first time,
-// but don't continue to log if the connection stays down.
+// If the state changes, it returns a function that logs the change so that
+// failures from the health check connection are logged the first time, but
+// don't continue to log if the connection stays down. It returns nil when
+// there is nothing to log.
 //
-// thc.connMu must be locked before calling this function.
-func (thc *tabletHealthCheck) setServingState(serving bool, reason string) {
+// thc.connMu must be locked before calling this function. The returned log
+// function must be called only after connMu has been released: the logger can
+// be a CallbackLogger whose callback re-enters the healthcheck (e.g. via
+// GetTabletHealthByAlias) and would deadlock on connMu.
+func (thc *tabletHealthCheck) setServingState(serving bool, reason string) func() {
+	var logServingChange func()
 	if !thc.loggedServingState || (serving != thc.Serving) {
-		thc.logger.Infof("HealthCheckUpdate(Serving State): tablet: %v serving %v => %v for %v/%v (%v) reason: %s",
+		msg := fmt.Sprintf("HealthCheckUpdate(Serving State): tablet: %v serving %v => %v for %v/%v (%v) reason: %s",
 			topotools.TabletIdent(thc.Tablet),
 			thc.Serving,
 			serving,
@@ -116,9 +121,13 @@ func (thc *tabletHealthCheck) setServingState(serving bool, reason string) {
 			thc.Target.GetTabletType(),
 			reason,
 		)
+		logServingChange = func() {
+			thc.logger.Infof("%s", msg)
+		}
 		thc.loggedServingState = true
 	}
 	thc.Serving = serving
+	return logServingChange
 }
 
 // stream streams healthcheck responses to callback.
@@ -207,8 +216,11 @@ func (thc *tabletHealthCheck) processResponse(hc *HealthCheckImpl, shr *query.St
 	if healthErr != nil {
 		reason = "healthCheck update error: " + healthErr.Error()
 	}
-	thc.setServingState(serving, reason)
+	logServingChange := thc.setServingState(serving, reason)
 	thc.connMu.Unlock()
+	if logServingChange != nil {
+		logServingChange()
+	}
 
 	// notify downstream for primary change
 	hc.updateHealth(thc, prevTarget, trivialUpdate, serving)
@@ -320,9 +332,12 @@ func (thc *tabletHealthCheck) checkConn(hc *HealthCheckImpl) {
 		if timedout.Load() {
 			thc.connMu.Lock()
 			thc.LastError = fmt.Errorf("healthcheck timed out (latest %v)", thc.lastResponseTimestamp)
-			thc.setServingState(false, thc.LastError.Error())
+			logServingChange := thc.setServingState(false, thc.LastError.Error())
 			target := thc.Target
 			thc.connMu.Unlock()
+			if logServingChange != nil {
+				logServingChange()
+			}
 			hcErrorCounters.Add([]string{target.Keyspace, target.Shard, topoproto.TabletTypeLString(target.TabletType)}, 1)
 			// trivialUpdate = false because this is an error
 			// up = false because we did not get a healthy response within the timeout
@@ -348,11 +363,14 @@ func (thc *tabletHealthCheck) checkConn(hc *HealthCheckImpl) {
 func (thc *tabletHealthCheck) closeConnection(ctx context.Context, err error) {
 	thc.logger.Warningf("tablet %v healthcheck stream error: %v", thc.Tablet, err)
 	thc.connMu.Lock()
-	thc.setServingState(false, err.Error())
+	logServingChange := thc.setServingState(false, err.Error())
 	thc.LastError = err
 	conn := thc.Conn
 	thc.Conn = nil
 	thc.connMu.Unlock()
+	if logServingChange != nil {
+		logServingChange()
+	}
 	_ = conn.Close(ctx)
 }
 
@@ -360,13 +378,16 @@ func (thc *tabletHealthCheck) closeConnection(ctx context.Context, err error) {
 // To be called only on exit from checkConn().
 func (thc *tabletHealthCheck) finalizeConn() {
 	thc.connMu.Lock()
-	thc.setServingState(false, "finalizeConn closing connection")
+	logServingChange := thc.setServingState(false, "finalizeConn closing connection")
 	// Note: checkConn() exits only when thc.ctx.Done() is closed. Thus it's
 	// safe to simply get Err() value here and assign to LastError.
 	thc.LastError = thc.ctx.Err()
 	conn := thc.Conn
 	thc.Conn = nil
 	thc.connMu.Unlock()
+	if logServingChange != nil {
+		logServingChange()
+	}
 	if conn != nil {
 		// Don't use thc.ctx because it's already closed.
 		// Use a separate context, and add a timeout to prevent unbounded waits.
