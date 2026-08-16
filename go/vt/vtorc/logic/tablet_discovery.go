@@ -211,13 +211,9 @@ func OpenTabletDiscovery() <-chan time.Time {
 	if err := refreshAllInformation(ctx); err != nil {
 		log.Error(fmt.Sprintf("failed to initialize topo information: %+v", err))
 	}
-	// vitess_tablet now holds what we watch, so anything left in database_instance belongs to a
-	// tablet we don't. Those rows survived the wipe above and the forget path, which is driven by
-	// vitess_tablet, will never see them, yet the analysis query joins replicas straight off
-	// database_instance and would keep counting them. A refresh that reached no cells leaves
-	// vitess_tablet empty, which ForgetUnwatchedInstances declines to act on. One that skipped an
-	// unreachable cell does purge that cell's rows, which is harmless: those tablets are missing
-	// from vitess_tablet too, so nothing analyses them until the cell returns and they re-probe.
+	// Anything left in database_instance now belongs to a tablet we don't watch. A refresh that
+	// skipped a cell purges that cell's rows too, which is harmless: they're missing from
+	// vitess_tablet either way, so nothing analyses them until the cell returns and they re-probe.
 	if err := inst.ForgetUnwatchedInstances(); err != nil {
 		log.Error(err.Error())
 	}

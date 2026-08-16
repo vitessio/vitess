@@ -189,7 +189,7 @@ type TabletManager struct {
 	// when we transition back from something like PRIMARY.
 	baseTabletType topodatapb.TabletType
 
-	// mode is derived from --unmanaged at startup, stamped onto the tablet
+	// mysqlMode is derived from --unmanaged at startup, stamped onto the tablet
 	// record and used to gate the replication and reparent RPCs.
 	mysqlMode topodatapb.TabletMySQLMode
 
@@ -383,10 +383,9 @@ func validateFlags() error {
 	return nil
 }
 
-// tabletMySQLModeFromConfig returns the TabletMySQLMode a vttablet started with the given config
-// runs in.
-// A nil config comes from vtcombo (which never runs TabletConfig.Verify(), so --unmanaged never
-// reaches mysqlctl.DisableActiveReparents there) and from tests. MANAGED is correct for both.
+// tabletMySQLModeFromConfig returns the mode a vttablet started with this config runs in. A nil
+// config comes from vtcombo, which never runs TabletConfig.Verify() so --unmanaged never reaches
+// mysqlctl.DisableActiveReparents there, and from tests. MANAGED is correct for both.
 func tabletMySQLModeFromConfig(config *tabletenv.TabletConfig) topodatapb.TabletMySQLMode {
 	if config != nil && config.Unmanaged {
 		return topodatapb.TabletMySQLMode_UNMANAGED

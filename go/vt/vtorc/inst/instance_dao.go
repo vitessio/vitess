@@ -1209,16 +1209,13 @@ func ForgetInstance(tabletAlias *topodatapb.TabletAlias) error {
 }
 
 // ForgetLongUnseenInstances will remove entries of all instances that have long since been last seen.
-// ForgetUnwatchedInstances removes database_instance rows whose alias has no vitess_tablet row,
-// i.e. tablets VTOrc no longer watches. OpenTabletDiscovery clears vitess_tablet on startup but
-// deliberately keeps database_instance, so a tablet that stopped being watched while VTOrc was
-// down leaves a row that the vitess_tablet-driven forget path can never reach, and the analysis
-// query counts replicas straight off database_instance.
+// ForgetUnwatchedInstances removes database_instance rows with no vitess_tablet row, i.e. tablets
+// we no longer watch. OpenTabletDiscovery wipes vitess_tablet on startup but keeps
+// database_instance, so a tablet dropped while VTOrc was down leaves a row the forget path never
+// reaches, and analysis counts replicas straight off database_instance.
 //
-// It does nothing while vitess_tablet is empty, because then every alias looks unwatched and this
-// would empty database_instance instead. That is not hypothetical: OpenTabletDiscovery wipes
-// vitess_tablet before repopulating it, and a refresh that reaches no cells at all logs the
-// failure and returns nil, so the caller cannot tell from the error alone.
+// It skips an empty vitess_tablet, where every alias looks unwatched and this would empty
+// database_instance instead. A refresh that reached no cells returns nil, so the caller can't tell.
 func ForgetUnwatchedInstances() error {
 	var watched int
 	if err := db.QueryVTOrc("SELECT COUNT(*) AS watched FROM vitess_tablet", nil, func(m sqlutils.RowMap) error {
