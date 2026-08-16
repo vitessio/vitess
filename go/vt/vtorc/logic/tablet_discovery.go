@@ -211,6 +211,13 @@ func OpenTabletDiscovery() <-chan time.Time {
 	if err := refreshAllInformation(ctx); err != nil {
 		log.Error(fmt.Sprintf("failed to initialize topo information: %+v", err))
 	}
+	// vitess_tablet now holds exactly what we watch, so anything left in database_instance
+	// belongs to a tablet we don't. Those rows survived the wipe above and the forget path,
+	// which is driven by vitess_tablet, will never see them, yet the analysis query joins
+	// replicas straight off database_instance and would keep counting them.
+	if err := inst.ForgetUnwatchedInstances(); err != nil {
+		log.Error(err.Error())
+	}
 	return time.Tick(config.GetTopoInformationRefreshDuration())
 }
 

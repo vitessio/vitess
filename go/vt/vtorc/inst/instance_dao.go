@@ -1208,6 +1208,32 @@ func ForgetInstance(tabletAlias *topodatapb.TabletAlias) error {
 }
 
 // ForgetLongUnseenInstances will remove entries of all instances that have long since been last seen.
+// ForgetUnwatchedInstances removes database_instance rows whose alias has no vitess_tablet row,
+// i.e. tablets VTOrc no longer watches. OpenTabletDiscovery clears vitess_tablet on startup but
+// deliberately keeps database_instance, so a tablet that stopped being watched while VTOrc was
+// down leaves a row that the vitess_tablet-driven forget path can never reach, and the analysis
+// query counts replicas straight off database_instance.
+func ForgetUnwatchedInstances() error {
+	sqlResult, err := db.ExecVTOrc(`DELETE
+		FROM database_instance
+		WHERE
+			alias NOT IN (SELECT alias FROM vitess_tablet)
+		`)
+	if err != nil {
+		log.Error(err.Error())
+		return err
+	}
+	rows, err := sqlResult.RowsAffected()
+	if err != nil {
+		log.Error(err.Error())
+		return err
+	}
+	if rows > 0 {
+		log.Info(fmt.Sprintf("ForgetUnwatchedInstances: removed %d instances no longer watched", rows))
+	}
+	return nil
+}
+
 func ForgetLongUnseenInstances() error {
 	sqlResult, err := db.ExecVTOrc(`DELETE
 		FROM database_instance
