@@ -208,23 +208,16 @@ func OpenTabletDiscovery() <-chan time.Time {
 	// it on a timer.
 	ctx, cancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
 	defer cancel()
-	refreshErr := refreshAllInformation(ctx)
-	if refreshErr != nil {
-		log.Error(fmt.Sprintf("failed to initialize topo information: %+v", refreshErr))
+	if err := refreshAllInformation(ctx); err != nil {
+		log.Error(fmt.Sprintf("failed to initialize topo information: %+v", err))
 	}
-	if refreshErr == nil {
-		// vitess_tablet now holds exactly what we watch, so anything left in database_instance
-		// belongs to a tablet we don't. Those rows survived the wipe above and the forget path,
-		// which is driven by vitess_tablet, will never see them, yet the analysis query joins
-		// replicas straight off database_instance and would keep counting them.
-		//
-		// Only after a clean refresh: on a failed one vitess_tablet is still empty, and the purge
-		// would take every row with it. A refresh that skipped an unreachable cell still returns
-		// nil, so rows for that cell are purged too. They are re-probed once the cell comes back,
-		// since it is absent from vitess_tablet either way.
-		if err := inst.ForgetUnwatchedInstances(); err != nil {
-			log.Error(err.Error())
-		}
+	// vitess_tablet now holds what we watch, so anything left in database_instance belongs to a
+	// tablet we don't. Those rows survived the wipe above and the forget path, which is driven by
+	// vitess_tablet, will never see them, yet the analysis query joins replicas straight off
+	// database_instance and would keep counting them. A refresh that reached no cells leaves
+	// vitess_tablet empty, which ForgetUnwatchedInstances declines to act on.
+	if err := inst.ForgetUnwatchedInstances(); err != nil {
+		log.Error(err.Error())
 	}
 	return time.Tick(config.GetTopoInformationRefreshDuration())
 }

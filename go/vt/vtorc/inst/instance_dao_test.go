@@ -1372,10 +1372,10 @@ func countDatabaseInstanceRows(t *testing.T) int {
 	return n
 }
 
-// TestForgetUnwatchedInstancesEmptyTabletTable documents the sharp edge of the purge: with no
-// vitess_tablet rows every alias is unwatched, so it empties database_instance. That is the state
-// OpenTabletDiscovery is in when the initial topo refresh fails, which is why it only runs the
-// purge after a refresh that succeeded.
+// TestForgetUnwatchedInstancesEmptyTabletTable checks the purge declines to run while no tablets
+// are watched. Every alias looks unwatched in that state, so acting on it would empty
+// database_instance. OpenTabletDiscovery wipes vitess_tablet before repopulating it, and a refresh
+// that reaches no cells logs the failure and returns nil, so this cannot be left to the caller.
 func TestForgetUnwatchedInstancesEmptyTabletTable(t *testing.T) {
 	t.Cleanup(func() { db.ClearVTOrcDatabase() })
 	db.ClearVTOrcDatabase()
@@ -1392,6 +1392,6 @@ func TestForgetUnwatchedInstancesEmptyTabletTable(t *testing.T) {
 	require.Equal(t, 1, countDatabaseInstanceRows(t))
 
 	require.NoError(t, ForgetUnwatchedInstances())
-	require.Zero(t, countDatabaseInstanceRows(t),
-		"an empty vitess_tablet makes every instance unwatched, so callers must only purge after a successful refresh")
+	require.Equal(t, 1, countDatabaseInstanceRows(t),
+		"with nothing watched the purge must leave database_instance alone")
 }

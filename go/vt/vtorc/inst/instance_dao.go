@@ -1213,7 +1213,25 @@ func ForgetInstance(tabletAlias *topodatapb.TabletAlias) error {
 // deliberately keeps database_instance, so a tablet that stopped being watched while VTOrc was
 // down leaves a row that the vitess_tablet-driven forget path can never reach, and the analysis
 // query counts replicas straight off database_instance.
+//
+// It does nothing while vitess_tablet is empty, because then every alias looks unwatched and this
+// would empty database_instance instead. That is not hypothetical: OpenTabletDiscovery wipes
+// vitess_tablet before repopulating it, and a refresh that reaches no cells at all logs the
+// failure and returns nil, so the caller cannot tell from the error alone.
 func ForgetUnwatchedInstances() error {
+	var watched int
+	if err := db.QueryVTOrc("SELECT COUNT(*) AS watched FROM vitess_tablet", nil, func(m sqlutils.RowMap) error {
+		watched = m.GetInt("watched")
+		return nil
+	}); err != nil {
+		log.Error(err.Error())
+		return err
+	}
+	if watched == 0 {
+		log.Warn("ForgetUnwatchedInstances: no tablets are being watched, skipping to avoid removing every instance")
+		return nil
+	}
+
 	sqlResult, err := db.ExecVTOrc(`DELETE
 		FROM database_instance
 		WHERE
