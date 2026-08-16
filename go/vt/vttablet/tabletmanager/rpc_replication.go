@@ -1473,6 +1473,11 @@ func (tm *TabletManager) handleRecoverableReplicationInitError(ctx context.Conte
 // reparentsDisabled reports whether this vttablet must leave its MySQL's replication alone. It
 // checks tm.mysqlMode as well as the older global because --unmanaged supplied through --tablet-config
 // never reaches Verify(), which is what sets the global (see cli.initConfig).
+//
+// Both this and checkIsManaged compare against UNMANAGED, while the callers that read a mode off
+// another tablet's record compare against MANAGED so an unrecognised value fails closed. The
+// difference is deliberate: tm.mysqlMode comes from our own config via tabletMySQLModeFromConfig,
+// so it only ever holds a mode this build knows.
 func (tm *TabletManager) reparentsDisabled() bool {
 	return mysqlctl.DisableActiveReparents || tm.mysqlMode == topodatapb.TabletMySQLMode_UNMANAGED
 }
