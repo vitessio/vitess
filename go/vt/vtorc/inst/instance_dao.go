@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"regexp"
 	"runtime"
 	"strconv"
@@ -1247,7 +1248,7 @@ func ForgetUnwatchedInstances() error {
 		return err
 	}
 	if rows > 0 {
-		log.Info(fmt.Sprintf("ForgetUnwatchedInstances: removed %d instances no longer watched", rows))
+		log.Info("ForgetUnwatchedInstances removed instances no longer watched", slog.Int64("removed", rows))
 	}
 	return nil
 }

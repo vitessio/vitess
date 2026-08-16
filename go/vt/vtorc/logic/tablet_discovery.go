@@ -215,7 +215,9 @@ func OpenTabletDiscovery() <-chan time.Time {
 	// tablet we don't. Those rows survived the wipe above and the forget path, which is driven by
 	// vitess_tablet, will never see them, yet the analysis query joins replicas straight off
 	// database_instance and would keep counting them. A refresh that reached no cells leaves
-	// vitess_tablet empty, which ForgetUnwatchedInstances declines to act on.
+	// vitess_tablet empty, which ForgetUnwatchedInstances declines to act on. One that skipped an
+	// unreachable cell does purge that cell's rows, which is harmless: those tablets are missing
+	// from vitess_tablet too, so nothing analyses them until the cell returns and they re-probe.
 	if err := inst.ForgetUnwatchedInstances(); err != nil {
 		log.Error(err.Error())
 	}
