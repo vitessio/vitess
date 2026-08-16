@@ -435,7 +435,7 @@ func GetBackupCandidates(tablets []*topo.TabletInfo, stats []*replicationdatapb.
 // ValidateAllTabletsManaged errors unless every tablet in the shard reports TabletMode_MANAGED.
 // Vitess cannot stop replication on a tablet it does not manage or revoke its writes, so it cannot
 // establish the invariant a reparent reports, and a promotion could leave the shard with two
-// writers. Tablets written before TabletMode existed report MANAGED, so a shard mid-upgrade never
+// writers. Tablets written before TabletMySQLMode existed report MANAGED, so a shard mid-upgrade never
 // trips this, while a mode a newer peer knows and this build does not fails closed.
 func ValidateAllTabletsManaged(tabletMap map[string]*topo.TabletInfo) error {
 	var unmanaged []string

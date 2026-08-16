@@ -2270,8 +2270,8 @@ func TestGetBackupCandidates(t *testing.T) {
 }
 
 // TestValidateAllTabletsManaged checks the preflight that stops ERS reparenting a shard holding a
-// tablet Vitess cannot revoke writes from. A tablet written before TabletMode existed reports the
-// MANAGED zero value, so a shard part-way through an upgrade must not trip it.
+// tablet Vitess cannot revoke writes from. A tablet written before TabletMySQLMode existed reports
+// the MANAGED zero value, so a shard part-way through an upgrade must not trip it.
 func TestValidateAllTabletsManaged(t *testing.T) {
 	t.Parallel()
 

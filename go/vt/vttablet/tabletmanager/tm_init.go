@@ -383,7 +383,8 @@ func validateFlags() error {
 	return nil
 }
 
-// tabletMySQLModeFromConfig returns the TabletMode a vttablet started with the given config runs in.
+// tabletMySQLModeFromConfig returns the TabletMySQLMode a vttablet started with the given config
+// runs in.
 // A nil config comes from vtcombo (which never runs TabletConfig.Verify(), so --unmanaged never
 // reaches mysqlctl.DisableActiveReparents there) and from tests. MANAGED is correct for both.
 func tabletMySQLModeFromConfig(config *tabletenv.TabletConfig) topodatapb.TabletMySQLMode {
