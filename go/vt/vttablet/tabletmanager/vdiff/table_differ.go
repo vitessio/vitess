@@ -1167,26 +1167,13 @@ func underlyingSourceColumn(expr sqlparser.Expr) (string, bool) {
 	case *sqlparser.ColName:
 		return e.Name.String(), true
 	case *sqlparser.ConvertUsingExpr:
-		// e.g. "convert(c1 using utf8mb4) as c2" or a nested form like
-		// "convert(cast(c1 as char) using utf8mb4) as c2": the inner column is
-		// the physical source column. We walk the whole expression to find it,
-		// mirroring the row streamer planner (see the ConvertUsingExpr case in
-		// vstreamer/planbuilder.go). We only treat it as a physical PK column if
-		// the walk resolves to exactly one distinct column; zero or multiple
-		// (an ambiguous expression combining columns) yields no match.
-		var name string
-		distinct := 0
-		_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
-			if col, ok := node.(*sqlparser.ColName); ok {
-				if colName := col.Name.String(); !strings.EqualFold(colName, name) {
-					name = colName
-					distinct++
-				}
-			}
-			return true, nil
-		}, e.Expr)
-		if distinct == 1 {
-			return name, true
+		// Only a direct column rename like "convert(c1 using utf8mb4) as c2"
+		// is a physical source column. Anything wrapped in a computation
+		// (concat, cast, arithmetic, etc.) is NOT a physical column and must
+		// fail closed so we never persist a derived value as the source
+		// checkpoint. Mirrors the fail-closed contract for computed aliases.
+		if inner, ok := e.Expr.(*sqlparser.ColName); ok {
+			return inner.Name.String(), true
 		}
 	}
 	return "", false

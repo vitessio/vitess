@@ -229,13 +229,24 @@ func TestSourcePKSelectIndices(t *testing.T) {
 			wantIndices: []int{0},
 		},
 		{
-			// A nested CONVERT (e.g. wrapping a CAST) must still resolve the
-			// single inner physical column, matching how the row streamer
-			// planner walks the whole ConvertUsingExpr.
-			name:        "nested convert using unwraps to source column",
-			sourceQuery: "select convert(cast(c1 as char) using utf8mb4) as c2, c3 from t order by c2 asc",
+			// A nested CONVERT (e.g. wrapping a CAST) is NOT a direct column
+			// rename, so it is not treated as a physical PK column and fails
+			// closed. Here c1 is entirely absent otherwise, so the whole key is
+			// reported as not projected.
+			name:             "nested convert using is not a physical column",
+			sourceQuery:      "select convert(cast(c1 as char) using utf8mb4) as c2, c3 from t order by c2 asc",
+			pkColumns:        []string{"c1"},
+			wantNotProjected: true,
+		},
+		{
+			// A computed expression wrapped in CONVERT that is aliased back to
+			// the PK name must NOT satisfy the PK lookup: it is a derived value,
+			// not the physical column. Since the alias names the PK column, this
+			// is the present-but-non-physical case and must fail closed.
+			name:        "computed convert aliased to PK name fails closed",
+			sourceQuery: "select convert(concat(c1, 'x') using utf8mb4) as c1, c2 from t order by c1 asc",
 			pkColumns:   []string{"c1"},
-			wantIndices: []int{0},
+			wantErr:     true,
 		},
 		{
 			name:        "function expression with alias",
