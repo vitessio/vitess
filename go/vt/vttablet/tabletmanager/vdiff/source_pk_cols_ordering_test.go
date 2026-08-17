@@ -229,6 +229,15 @@ func TestSourcePKSelectIndices(t *testing.T) {
 			wantIndices: []int{0},
 		},
 		{
+			// A nested CONVERT (e.g. wrapping a CAST) must still resolve the
+			// single inner physical column, matching how the row streamer
+			// planner walks the whole ConvertUsingExpr.
+			name:        "nested convert using unwraps to source column",
+			sourceQuery: "select convert(cast(c1 as char) using utf8mb4) as c2, c3 from t order by c2 asc",
+			pkColumns:   []string{"c1"},
+			wantIndices: []int{0},
+		},
+		{
 			name:        "function expression with alias",
 			sourceQuery: "select c1, c2, count(*) as c3, sum(c4) as c4 from t group by c1 order by c1 asc",
 			pkColumns:   []string{"c1"},
