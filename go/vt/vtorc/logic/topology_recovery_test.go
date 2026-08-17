@@ -1803,6 +1803,50 @@ func TestInsertRecoveryDetectionNewIncident(t *testing.T) {
 		"each poll should refresh detection_timestamp")
 }
 
+// TestInsertRecoveryDetectionReturningClosesDeleteRace is a regression guard for the
+// race that existed when InsertRecoveryDetection used two separate statements: an
+// INSERT … ON CONFLICT DO UPDATE followed by a SELECT to retrieve detection_id.
+// A concurrent successful ERS could call deleteResolvedDetection between those two
+// statements; QueryVTOrc treats zero rows as success, so RecoveryId would stay 0
+// and propagate into topology_recovery.detection_id = 0.
+//
+// With RETURNING the detection_id is captured atomically from the UPSERT result
+// itself — no separate SELECT exists for a concurrent delete to race. This test
+// exercises the post-delete re-insert path: after deleteResolvedDetection establishes
+// an incident boundary, InsertRecoveryDetection must produce a non-zero detection_id
+// strictly greater than the deleted one (AUTOINCREMENT prevents ID reuse).
+func TestInsertRecoveryDetectionReturningClosesDeleteRace(t *testing.T) {
+	orcDb, _, err := db.OpenVTOrcWithCache()
+	require.NoError(t, err)
+	defer func() { _, _ = orcDb.Exec("DELETE FROM recovery_detection") }()
+
+	entry := &inst.DetectionAnalysis{
+		AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 200},
+		Analysis:              inst.ReplicationStopped,
+		AnalyzedKeyspace:      "ks",
+		AnalyzedShard:         "0",
+	}
+	require.NoError(t, InsertRecoveryDetection(entry))
+	firstID := entry.RecoveryId
+	require.NotZero(t, firstID)
+
+	// Simulate a successful ERS establishing an incident boundary.
+	deleteResolvedDetection(firstID)
+
+	// A recurrence must get a fresh non-zero detection_id. RETURNING captures the
+	// ID from the UPSERT result itself, so there is no SELECT for a concurrent
+	// delete to race between.
+	entry2 := &inst.DetectionAnalysis{
+		AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 200},
+		Analysis:              inst.ReplicationStopped,
+		AnalyzedKeyspace:      "ks",
+		AnalyzedShard:         "0",
+	}
+	require.NoError(t, InsertRecoveryDetection(entry2))
+	require.NotZero(t, entry2.RecoveryId, "RecoveryId must not be 0 after incident boundary")
+	require.Greater(t, entry2.RecoveryId, firstID, "recurrence after successful recovery must get a fresh detection_id")
+}
+
 func TestExpireRecoveryDetectionActiveIncidentSurvives(t *testing.T) {
 	orcDb, fromCache, err := db.OpenVTOrcWithCache()
 	require.NoError(t, err)

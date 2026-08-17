@@ -34,10 +34,15 @@ import (
 // detection_id) and detection_timestamp is refreshed to "now". This keeps the
 // row visible in audit queries and prevents ExpireRecoveryDetectionHistory from
 // deleting an actively-detected incident.
+//
+// RETURNING is used to capture detection_id atomically from the UPSERT itself.
+// A separate SELECT would introduce a window where a concurrent successful
+// recovery could delete the row between the INSERT and the SELECT, leaving
+// RecoveryId == 0 and producing a topology_recovery row with detection_id = 0.
 func InsertRecoveryDetection(analysisEntry *inst.DetectionAnalysis) error {
 	aliasStr := topoproto.TabletAliasString(analysisEntry.AnalyzedInstanceAlias)
 	analysisStr := string(analysisEntry.Analysis)
-	_, err := db.ExecVTOrc(`INSERT INTO recovery_detection (
+	err := db.QueryVTOrc(`INSERT INTO recovery_detection (
 			alias,
 			analysis,
 			keyspace,
@@ -53,27 +58,19 @@ func InsertRecoveryDetection(analysisEntry *inst.DetectionAnalysis) error {
 		ON CONFLICT(alias, analysis) DO UPDATE
 		SET detection_timestamp = DATETIME('now'),
 		    keyspace = excluded.keyspace,
-		    shard = excluded.shard`,
-		aliasStr,
-		analysisStr,
-		analysisEntry.AnalyzedKeyspace,
-		analysisEntry.AnalyzedShard,
-	)
-	if err != nil {
-		log.Error(err.Error())
-		return err
-	}
-	// Always SELECT the detection_id rather than relying on LastInsertId():
-	// SQLite's last_insert_rowid() behaviour for ON CONFLICT DO UPDATE varies
-	// by version (reliable only since 3.35.0).
-	err = db.QueryVTOrc(
-		`SELECT detection_id FROM recovery_detection WHERE alias = ? AND analysis = ?`,
-		sqlutils.Args(aliasStr, analysisStr),
+		    shard = excluded.shard
+		RETURNING detection_id`,
+		sqlutils.Args(aliasStr, analysisStr, analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard),
 		func(m sqlutils.RowMap) error {
 			analysisEntry.RecoveryId = m.GetInt64("detection_id")
 			return nil
 		})
 	if err != nil {
+		log.Error(err.Error())
+		return err
+	}
+	if analysisEntry.RecoveryId == 0 {
+		err = fmt.Errorf("InsertRecoveryDetection: no detection_id returned for alias=%s analysis=%s", aliasStr, analysisStr)
 		log.Error(err.Error())
 		return err
 	}
