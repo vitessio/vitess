@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -32,12 +33,12 @@ func TestInit(t *testing.T) {
 	tl.Init(false)
 	assert.Nil(t, tl.b)
 	assert.Equal(t, 0, tl.n)
-	assert.Equal(t, false, tl.json)
+	assert.False(t, tl.json)
 
 	tl.Init(true)
 	assert.Equal(t, []byte{'{'}, tl.b)
 	assert.Equal(t, 0, tl.n)
-	assert.Equal(t, true, tl.json)
+	assert.True(t, tl.json)
 }
 
 func TestRedacted(t *testing.T) {
@@ -240,7 +241,7 @@ func TestFlush(t *testing.T) {
 	tw := mockWriter{}
 
 	err := tl.Flush(&tw)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, []byte("{\"testKey\": \"testValue\"}\n"), calledValue)
 }
 

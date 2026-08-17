@@ -24,7 +24,6 @@ import (
 	"path"
 	"reflect"
 	"strconv"
-	"strings"
 	"testing"
 	"time"
 
@@ -121,7 +120,7 @@ func testWithInitialSchema(t *testing.T) {
 	for i := range totalTableCount {
 		sqlQuery = fmt.Sprintf(createTable, fmt.Sprintf("vt_select_test_%02d", i))
 		err := clusterInstance.VtctldClientProcess.ApplySchema(keyspaceName, sqlQuery)
-		require.Nil(t, err)
+		require.NoError(t, err)
 	}
 
 	// Check if 4 tables are created
@@ -135,7 +134,7 @@ func testWithInitialSchema(t *testing.T) {
 func testWithAlterSchema(t *testing.T) {
 	sqlQuery := fmt.Sprintf(alterTable, fmt.Sprintf("vt_select_test_%02d", 3), "msg")
 	err := clusterInstance.VtctldClientProcess.ApplySchema(keyspaceName, sqlQuery)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	matchSchema(t, clusterInstance.Keyspaces[0].Shards[0].Vttablets[0].VttabletProcess.TabletPath, clusterInstance.Keyspaces[0].Shards[1].Vttablets[0].VttabletProcess.TabletPath)
 }
 
@@ -167,7 +166,7 @@ func testWithAutoSchemaFromChangeDir(t *testing.T) {
 	_ = os.Mkdir(path.Join(schemaChangeDirectory, keyspaceName, "input"), 0o700)
 	sqlFile := path.Join(schemaChangeDirectory, keyspaceName, "input/create_test_table_x.sql")
 	err := os.WriteFile(sqlFile, []byte("create table test_table_x (id int)"), 0o644)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	timeout := time.Now().Add(10 * time.Second)
 	matchFoundAfterAutoSchemaApply := false
 	for time.Now().Before(timeout) {
@@ -184,10 +183,10 @@ func testWithAutoSchemaFromChangeDir(t *testing.T) {
 // matchSchema schema for supplied tablets should match
 func matchSchema(t *testing.T, firstTablet string, secondTablet string) {
 	firstShardSchema, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("GetSchema", firstTablet)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	secondShardSchema, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("GetSchema", secondTablet)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	assert.Equal(t, firstShardSchema, secondShardSchema)
 }
@@ -202,11 +201,11 @@ func testDropNonExistentTables(t *testing.T) {
 	dropNonExistentTable := "DROP TABLE nonexistent_table;"
 	output, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("ApplySchema", "--sql", dropNonExistentTable, keyspaceName)
 	require.Error(t, err)
-	assert.True(t, strings.Contains(output, "Unknown table"))
+	assert.Contains(t, output, "Unknown table")
 
 	dropIfExists := "DROP TABLE IF EXISTS nonexistent_table;"
 	err = clusterInstance.VtctldClientProcess.ApplySchema(keyspaceName, dropIfExists)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	checkTables(t, totalTableCount)
 }
@@ -256,7 +255,7 @@ func testUnsafeAllowForeignKeys(t *testing.T) {
 	`
 	{
 		_, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("ApplySchema", "--ddl-strategy", "direct --allow-zero-in-date", "--sql", sqls, keyspaceName)
-		assert.Error(t, err)
+		require.Error(t, err)
 		checkTables(t, totalTableCount)
 	}
 	{
@@ -280,7 +279,7 @@ func checkTables(t *testing.T, count int) {
 // checkTablesCount checks the number of tables in the given tablet
 func checkTablesCount(t *testing.T, tablet *cluster.Vttablet, count int) {
 	queryResult, err := tablet.VttabletProcess.QueryTablet("show tables;", keyspaceName, true)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, len(queryResult.Rows), count)
 }
 
@@ -293,7 +292,7 @@ func testCopySchemaShards(t *testing.T, source string, shard int) {
 	// Run the command twice to make sure it's idempotent.
 	for range 2 {
 		err := clusterInstance.VtctldClientProcess.ExecuteCommand("CopySchemaShard", source, fmt.Sprintf("%s/%d", keyspaceName, shard))
-		require.Nil(t, err)
+		require.NoError(t, err)
 	}
 	// shard2 primary should look the same as the replica we copied from
 	checkTablesCount(t, clusterInstance.Keyspaces[0].Shards[shard].Vttablets[0], totalTableCount)
@@ -311,13 +310,13 @@ func testCopySchemaShardWithDifferentDB(t *testing.T, shard int) {
 
 	tabletAlias := clusterInstance.Keyspaces[0].Shards[shard].Vttablets[0].VttabletProcess.TabletPath
 	schema, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("GetSchema", tabletAlias)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	resultMap := make(map[string]any)
 	err = json.Unmarshal([]byte(schema), &resultMap)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	dbSchema := reflect.ValueOf(resultMap["database_schema"])
-	assert.True(t, strings.Contains(dbSchema.String(), "utf8"))
+	assert.Contains(t, dbSchema.String(), "utf8")
 
 	// Change the db charset on the destination shard from utf8 to latin1.
 	// This will make CopySchemaShard fail during its final diff.
@@ -325,11 +324,11 @@ func testCopySchemaShardWithDifferentDB(t *testing.T, shard int) {
 	//  because we use "CREATE DATABASE IF NOT EXISTS" and this doesn't fail if
 	//  there are differences in the options e.g. the character set.)
 	err = clusterInstance.VtctldClientProcess.ExecuteCommand("ExecuteFetchAsDBA", "--json", tabletAlias, "ALTER DATABASE vt_ks CHARACTER SET latin1")
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	output, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("CopySchemaShard", source, fmt.Sprintf("%s/%d", keyspaceName, shard))
 	require.Error(t, err)
-	assert.True(t, strings.Contains(output, "schemas are different"))
+	assert.Contains(t, output, "schemas are different")
 
 	// shard2 primary should have the same number of tables. Only the db
 	// character set is different.
@@ -342,5 +341,5 @@ func addNewShard(t *testing.T, shard int) {
 		Name: keyspaceName,
 	}
 	err := clusterInstance.StartKeyspace(*keyspace, []string{strconv.Itoa(shard)}, 1, false, clusterInstance.Cell)
-	require.Nil(t, err)
+	require.NoError(t, err)
 }

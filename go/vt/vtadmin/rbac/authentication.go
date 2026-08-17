@@ -24,7 +24,7 @@ import (
 	"plugin"
 	"sync"
 
-	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
+	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware/v2"
 	"google.golang.org/grpc"
 
 	"vitess.io/vitess/go/vt/proto/vtrpc"

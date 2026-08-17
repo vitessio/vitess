@@ -65,7 +65,7 @@ func TestReplTracker(t *testing.T) {
 		assert.True(t, rt.isPrimary)
 
 		lag, err := rt.Status()
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Equal(t, time.Duration(0), lag)
 
 		rt.MakeNonPrimary()
@@ -75,7 +75,7 @@ func TestReplTracker(t *testing.T) {
 
 		rt.hr.lastKnownLag = 1 * time.Second
 		lag, err = rt.Status()
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Equal(t, 1*time.Second, lag)
 
 		rt.Close()
@@ -119,7 +119,7 @@ func TestReplTracker(t *testing.T) {
 		assert.True(t, rt.isPrimary)
 
 		lag, err := rt.Status()
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Equal(t, time.Duration(0), lag)
 
 		rt.MakeNonPrimary()
@@ -129,7 +129,7 @@ func TestReplTracker(t *testing.T) {
 
 		rt.hr.lastKnownLag = 1 * time.Second
 		lag, err = rt.Status()
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Equal(t, 1*time.Second, lag)
 
 		rt.Close()
@@ -177,7 +177,7 @@ func TestReplTracker(t *testing.T) {
 
 		// Call Status() which should reset the metric
 		lag, err := rt.Status()
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Equal(t, time.Duration(0), lag)
 
 		// Verify metric is reset

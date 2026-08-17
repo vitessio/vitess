@@ -756,6 +756,10 @@ message EmergencyReparentShardRequest {
   // ExpectedPrimary is the optional alias we expect to be the current primary in order for
   // the reparent operation to succeed.
   topodata.TabletAlias expected_primary = 8;
+  // AllowSplitBrainPromotion permits promoting NewPrimary when divergent GTID histories
+  // are detected. NewPrimary is required and must be an upfront undominated candidate.
+  // Transactions only present on losing histories will not be preserved.
+  bool allow_split_brain_promotion = 9;
 }
 
 message EmergencyReparentShardResponse {

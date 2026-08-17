@@ -25,6 +25,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strings"
 
 	"github.com/spf13/pflag"
 	"golang.org/x/tools/go/packages"
@@ -78,8 +79,11 @@ func main() {
 		panic(fmt.Errorf("error getting %s in %s: %w", *typeName, *source, err))
 	}
 
+	// Pre-seeded imports are hardcoded in the codegen template; seeding them
+	// here keeps them out of the generated dynamic import block.
 	imports := map[string]string{
 		"context": "context",
+		"grpc":    "google.golang.org/grpc",
 	}
 	importNames := []string{}
 	funcs := make(map[string]*Func, iface.NumExplicitMethods())
@@ -143,7 +147,13 @@ func main() {
 			switch result.Type().Underlying().(type) {
 			case *types.Interface:
 				f.IsStreaming = true
-				localType, localImport, pkgPath, err = extractLocalNamedType(result)
+				var argImports []typeArgImport
+				localType, localImport, pkgPath, argImports, err = extractLocalNamedType(result)
+				if err == nil {
+					for _, imp := range argImports {
+						importNames = addImport(imp.localImport, imp.pkgPath, importNames, imports)
+					}
+				}
 				if err == nil && *local {
 					// We need to get the pointer type returned by `stream.Recv()`
 					// in the local case for the stream adapter.
@@ -342,17 +352,64 @@ func rewriteProtoImports(pkg *types.Package) string {
 	return pkg.Name()
 }
 
-func extractLocalNamedType(v *types.Var) (name string, localImport string, pkgPath string, err error) {
+func extractLocalNamedType(v *types.Var) (name string, localImport string, pkgPath string, argImports []typeArgImport, err error) {
 	named, ok := v.Type().(*types.Named)
 	if !ok {
-		return "", "", "", fmt.Errorf("expected a named type for %s, got %v", v.Name(), v.Type())
+		return "", "", "", nil, fmt.Errorf("expected a named type for %s, got %v", v.Name(), v.Type())
 	}
 
-	name = named.Obj().Name()
+	typeArgs, argImports, err := renderTypeArgs(named)
+	if err != nil {
+		return "", "", "", nil, err
+	}
+
+	name = named.Obj().Name() + typeArgs
 	localImport = rewriteProtoImports(named.Obj().Pkg())
 	pkgPath = named.Obj().Pkg().Path()
 
-	return name, localImport, pkgPath, nil
+	return name, localImport, pkgPath, argImports, nil
+}
+
+// typeArgImport describes an import required by a type argument of an
+// instantiated generic type.
+type typeArgImport struct {
+	localImport string
+	pkgPath     string
+}
+
+// renderTypeArgs renders the bracketed type-argument list of an instantiated
+// generic type (e.g. "[vtctldatapb.BackupResponse]"), along with the imports
+// the type arguments require. It returns an empty string for non-generic
+// types.
+func renderTypeArgs(named *types.Named) (string, []typeArgImport, error) {
+	typeArgs := named.TypeArgs()
+	if typeArgs.Len() == 0 {
+		return "", nil, nil
+	}
+
+	args := make([]string, 0, typeArgs.Len())
+	argImports := make([]typeArgImport, 0, typeArgs.Len())
+
+	for i := 0; i < typeArgs.Len(); i++ {
+		arg := typeArgs.At(i)
+
+		var prefix string
+		if ptr, ok := arg.(*types.Pointer); ok {
+			prefix = "*"
+			arg = ptr.Elem()
+		}
+
+		argNamed, ok := arg.(*types.Named)
+		if !ok {
+			return "", nil, fmt.Errorf("expected a named type for type argument %d of %s, got %v", i, named.Obj().Name(), arg)
+		}
+
+		localImport := rewriteProtoImports(argNamed.Obj().Pkg())
+		args = append(args, prefix+localImport+"."+argNamed.Obj().Name())
+		argImports = append(argImports, typeArgImport{localImport: localImport, pkgPath: argNamed.Obj().Pkg().Path()})
+	}
+
+	return "[" + strings.Join(args, ", ") + "]", argImports, nil
 }
 
 func extractLocalPointerType(v *types.Var) (name string, localImport string, pkgPath string, err error) {

@@ -49,7 +49,7 @@ func TestGenerateInfoSchemaMap(t *testing.T) {
 			continue
 		}
 		defer result.Close()
-		b.WriteString("cols = []vindexes.Column{}\n")
+		var appends []string
 		for result.Next() {
 			var r row
 			result.Scan(&r.Field, &r.Type, &r.Null, &r.Key, &r.Default, &r.Extra)
@@ -84,7 +84,11 @@ func TestGenerateInfoSchemaMap(t *testing.T) {
 				}
 			}
 			//  createCol(name string, typ int, collation string, def string, invisible bool, size, scale int32, notNullable bool)
-			fmt.Fprintf(b, "cols = append(cols, createCol(\"%s\", %d, \"%s\", \"%s\", %d, %d, %t, \"%s\"))\n", r.Field, int(i2), collationName, r.Default, size, scale, r.Null == "NO", values)
+			appends = append(appends, fmt.Sprintf("cols = append(cols, createCol(\"%s\", %d, \"%s\", \"%s\", %d, %d, %t, \"%s\"))\n", r.Field, int(i2), collationName, r.Default, size, scale, r.Null == "NO", values))
+		}
+		fmt.Fprintf(b, "cols = make([]vindexes.Column, 0, %d)\n", len(appends))
+		for _, a := range appends {
+			b.WriteString(a)
 		}
 		fmt.Fprintf(b, "infSchema[\"%s\"] = cols\n", tbl)
 	}

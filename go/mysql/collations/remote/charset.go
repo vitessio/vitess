@@ -68,7 +68,7 @@ func (c *Charset) EncodeRune(dst []byte, r rune) int {
 	panic("unsupported: EncodeRune in remote.Charset (use Charset.Convert directly)")
 }
 
-func (c *Charset) DecodeRune(bytes []byte) (rune, int) {
+func (c *Charset) DecodeRune(bytes []byte) (rune, int, bool) {
 	panic("unsupported: DecodeRune in remote.Charset (use Charset.Convert directly)")
 }
 

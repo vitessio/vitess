@@ -100,11 +100,11 @@ func (c *callerIDClient) ExecuteBatch(ctx context.Context, session *vtgatepb.Ses
 	return c.fallbackClient.ExecuteBatch(ctx, session, sqlList, bindVariablesList)
 }
 
-func (c *callerIDClient) StreamExecute(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable, callback func(*sqltypes.Result) error) (*vtgatepb.Session, error) {
+func (c *callerIDClient) StreamExecute(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable, prepared bool, callback func(*sqltypes.Result) error) (*vtgatepb.Session, error) {
 	if ok, err := c.checkCallerID(ctx, sql); ok {
 		return session, err
 	}
-	return c.fallbackClient.StreamExecute(ctx, mysqlCtx, session, sql, bindVariables, callback)
+	return c.fallbackClient.StreamExecute(ctx, mysqlCtx, session, sql, bindVariables, prepared, callback)
 }
 
 // ExecuteMulti is part of the VTGateService interface
@@ -132,7 +132,7 @@ func (c *callerIDClient) StreamExecuteMulti(ctx context.Context, mysqlCtx vtgate
 	}
 	for idx, query := range queries {
 		firstPacket := true
-		session, err = c.StreamExecute(ctx, mysqlCtx, session, query, nil, func(result *sqltypes.Result) error {
+		session, err = c.StreamExecute(ctx, mysqlCtx, session, query, nil, false, func(result *sqltypes.Result) error {
 			err = callback(sqltypes.QueryResponse{QueryResult: result}, idx < len(queries)-1, firstPacket)
 			firstPacket = false
 			return err

@@ -17,13 +17,20 @@ limitations under the License.
 package inst
 
 import (
+	"fmt"
+	"log/slog"
 	"math"
 	"slices"
+	"time"
 
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
+	"vitess.io/vitess/go/vt/vtorc/config"
+	"vitess.io/vitess/go/vt/vtorc/util"
+
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 const (
@@ -185,6 +192,19 @@ var detectionAnalysisProblems = []*DetectionAnalysisProblem{
 		},
 		MatchFunc: func(a *DetectionAnalysis, ca *clusterAnalysis, primary, tablet *topodatapb.Tablet, isInvalid, isStaleBinlogCoordinates bool) bool {
 			return a.IsClusterPrimary && !a.LastCheckValid && a.CountValidReplicas < a.CountReplicas && a.CountValidReplicas > 0 && a.CountValidReplicatingReplicas == 0
+		},
+	},
+	{
+		Meta: &DetectionAnalysisProblemMeta{
+			Analysis:    PrimaryTabletUnreachableByQuorum,
+			Description: "Primary vttablet is unreachable by VTOrc and confirmed down by a quorum of the shard's replicas",
+			Priority:    detectionAnalysisPriorityShardWideAction,
+		},
+		MatchFunc: func(a *DetectionAnalysis, ca *clusterAnalysis, primary, tablet *topodatapb.Tablet, isInvalid, isStaleBinlogCoordinates bool) bool {
+			if !config.ERSOnTabletUnreachableEnabled() {
+				return false
+			}
+			return matchPrimaryTabletUnreachableByQuorum(a, time.Now())
 		},
 	},
 
@@ -424,25 +444,17 @@ var detectionAnalysisProblems = []*DetectionAnalysisProblem{
 		},
 	},
 
-	// Locked semi-sync primary
-	{
-		Meta: &DetectionAnalysisProblemMeta{
-			Analysis:    LockedSemiSyncPrimary,
-			Description: "Semi sync primary is locked since it doesn't get enough replica acknowledgements",
-			Priority:    detectionAnalysisPriorityMedium,
-		},
-		MatchFunc: func(a *DetectionAnalysis, ca *clusterAnalysis, primary, tablet *topodatapb.Tablet, isInvalid, isStaleBinlogCoordinates bool) bool {
-			return a.IsPrimary && a.SemiSyncPrimaryEnabled && a.SemiSyncPrimaryStatus && a.SemiSyncPrimaryWaitForReplicaCount > 0 && a.SemiSyncPrimaryClients < a.SemiSyncPrimaryWaitForReplicaCount && isStaleBinlogCoordinates
-		},
-	},
+	// Locked semi-sync primary hypothesis. Detection only; no recovery is
+	// wired. The actionable case (MySQL itself reports
+	// Rpl_semi_sync_master_blocked) is covered by PrimarySemiSyncBlocked.
 	{
 		Meta: &DetectionAnalysisProblemMeta{
 			Analysis:    LockedSemiSyncPrimaryHypothesis,
-			Description: "Semi sync primary seems to be locked, more samplings needed to validate",
+			Description: "Semi sync primary has fewer connected semi-sync clients than required",
 			Priority:    detectionAnalysisPriorityMedium,
 		},
 		MatchFunc: func(a *DetectionAnalysis, ca *clusterAnalysis, primary, tablet *topodatapb.Tablet, isInvalid, isStaleBinlogCoordinates bool) bool {
-			return a.IsPrimary && a.SemiSyncPrimaryEnabled && a.SemiSyncPrimaryStatus && a.SemiSyncPrimaryWaitForReplicaCount > 0 && a.SemiSyncPrimaryClients < a.SemiSyncPrimaryWaitForReplicaCount && !isStaleBinlogCoordinates
+			return a.IsPrimary && a.SemiSyncPrimaryEnabled && a.SemiSyncPrimaryStatus && a.SemiSyncPrimaryWaitForReplicaCount > 0 && a.SemiSyncPrimaryClients < a.SemiSyncPrimaryWaitForReplicaCount
 		},
 	},
 
@@ -487,6 +499,74 @@ var detectionAnalysisProblems = []*DetectionAnalysisProblem{
 			return a.IsPrimary && a.LastCheckValid && a.CountReplicas > 1 && a.CountValidReplicas < a.CountReplicas && a.CountValidReplicas > 0 && a.CountValidReplicatingReplicas == 0
 		},
 	},
+}
+
+// matchPrimaryTabletUnreachableByQuorum evaluates the replica-observed tablet liveness quorum.
+func matchPrimaryTabletUnreachableByQuorum(a *DetectionAnalysis, now time.Time) bool {
+	if !a.IsClusterPrimary || a.LastCheckValid {
+		return false
+	}
+	// Fail closed for an intentionally shut down primary: a graceful vttablet shutdown stamps
+	// TabletShutdownTime, and its shard peers will correctly report the vttablet down, but the
+	// operator took it down deliberately so we must not fail it over. Only a crash (no shutdown
+	// time) should drive quorum ERS.
+	if a.IsTabletShutdown {
+		return false
+	}
+	// ShardEligibleObservers (REPLICA/RDONLY count from topo) is the expected observer population
+	// that matches the quorum voters. CountReplicas is derived from the database_instance
+	// replication join and can include non-voting tablet types, so it is not used here.
+	result := evaluateAndLogPrimaryQuorum(a.AnalyzedInstanceAlias, a.AnalyzedKeyspace, a.AnalyzedShard, int(a.ShardEligibleObservers), now)
+	if result.Down {
+		a.QuorumDetail = &result
+	}
+	return result.Down
+}
+
+// evaluateAndLogPrimaryQuorum evaluates the quorum for a primary and logs the decision,
+// rate-limited per verdict so a verdict change (not-down -> down) logs immediately.
+func evaluateAndLogPrimaryQuorum(primaryAlias *topodatapb.TabletAlias, keyspace, shard string, expectedObservers int, now time.Time) QuorumResult {
+	result := EvaluatePrimaryQuorum(primaryAlias, keyspace, shard, expectedObservers, QuorumOptionsFromConfig(), now)
+	logKey := fmt.Sprintf("%s/%s:%t", keyspace, shard, result.Down)
+	if util.ClearToLog("shard_quorum", logKey) {
+		log.Info("shard quorum decision",
+			slog.String("keyspace", keyspace),
+			slog.String("shard", shard),
+			slog.Bool("down", result.Down),
+			slog.String("detail", result.Summary()),
+		)
+	}
+	return result
+}
+
+// QuorumOptionsFromConfig builds QuorumOptions from the current VTOrc configuration. The values
+// are dynamic, so they cannot all be rejected at startup; configurations that silently disable
+// quorum detection (fail closed) are warned about here, rate-limited.
+func QuorumOptionsFromConfig() QuorumOptions {
+	opts := QuorumOptions{
+		FailureThreshold: config.GetShardTabletHealthFailureThreshold(),
+		Freshness:        config.GetShardTabletHealthFreshness(),
+		Fraction:         config.GetShardQuorumFraction(),
+		MinObservers:     config.GetShardQuorumMinObservers(),
+	}
+	if !opts.valid() {
+		if util.ClearToLog("shard_quorum_config", "invalid") {
+			log.Warn("invalid shard quorum configuration; quorum detection is disabled (failing closed)",
+				slog.Int("failure_threshold", opts.FailureThreshold),
+				slog.Duration("freshness", opts.Freshness),
+				slog.Float64("fraction", opts.Fraction),
+				slog.Int("min_observers", opts.MinObservers),
+			)
+		}
+	} else if pollTime := config.GetInstancePollTime(); opts.Freshness <= pollTime {
+		if util.ClearToLog("shard_quorum_config", "freshness") {
+			log.Warn("--shard-tablet-health-freshness does not exceed --instance-poll-time; observer reports go stale between polls and quorum detection may never fire",
+				slog.Duration("freshness", opts.Freshness),
+				slog.Duration("instance_poll_time", pollTime),
+			)
+		}
+	}
+	return opts
 }
 
 func sortDetectionAnalysisMatchedProblems(allProblems []*DetectionAnalysisProblem) {

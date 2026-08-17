@@ -286,7 +286,7 @@ func TestStripAutoIncrement(t *testing.T) {
 	for _, tc := range tcs {
 		strippedDDL, err := stripAutoIncrement(tc.ddl, parser, nil)
 		require.Equal(t, tc.expectErr, (err != nil), "unexpected error result", "expected error %t, got: %v", tc.expectErr, err)
-		require.Equal(t, tc.want, strippedDDL, fmt.Sprintf("stripped DDL %q does not match our expected result: %q", strippedDDL, tc.want))
+		require.Equal(t, tc.want, strippedDDL, "stripped DDL %q does not match our expected result: %q", strippedDDL, tc.want)
 	}
 }
 
@@ -1018,10 +1018,10 @@ func TestMoveTablesNoRoutingRules(t *testing.T) {
 		NoRoutingRules: true,
 	})
 	require.NoError(t, err)
-	require.EqualValues(t, want, res, "got: %+v, want: %+v", res, want)
+	require.Equal(t, want, res, "got: %+v, want: %+v", res, want)
 	rr, err := env.ws.ts.GetRoutingRules(ctx)
 	require.NoError(t, err)
-	require.Zerof(t, len(rr.Rules), "routing rules should be empty, found %+v", rr.Rules)
+	require.Emptyf(t, rr.Rules, "routing rules should be empty, found %+v", rr.Rules)
 }
 
 func TestMoveTablesCreateShardedVSchemaRollback(t *testing.T) {
@@ -2440,7 +2440,7 @@ func TestCreateLookupVindexTargetVSchema(t *testing.T) {
 			require.NoError(t, err)
 			// withTable is a vschema that already contains the table and thus
 			// we don't make any vschema changes and there's nothing to cancel.
-			require.True(t, (cancelFunc != nil) == (tcase.targetVSchema != withTable))
+			require.Equal(t, (cancelFunc != nil), (tcase.targetVSchema != withTable))
 			utils.MustMatch(t, tcase.out, got.Keyspace, tcase.description)
 		})
 	}
@@ -2880,11 +2880,11 @@ func TestStopAfterCopyFlag(t *testing.T) {
 	lv := newLookupVindex(env.ws)
 	ms1, _, _, _, err := lv.prepareCreate(ctx, "workflow", ms.TargetKeyspace, specs, false)
 	require.NoError(t, err)
-	require.Equal(t, ms1.StopAfterCopy, true)
+	require.True(t, ms1.StopAfterCopy)
 
 	ms2, _, _, _, err := lv.prepareCreate(ctx, "workflow", ms.TargetKeyspace, specs, true)
 	require.NoError(t, err)
-	require.Equal(t, ms2.StopAfterCopy, false)
+	require.False(t, ms2.StopAfterCopy)
 }
 
 func TestCreateLookupVindexFailures(t *testing.T) {
@@ -3701,8 +3701,8 @@ func TestValidateEmptyTables(t *testing.T) {
 
 	err = mz.validateEmptyTables()
 
-	assert.ErrorContains(t, err, "table1")
+	require.ErrorContains(t, err, "table1")
 	assert.NotContains(t, err.Error(), "table2")
 	// Check if the error message doesn't include duplicate tables
-	assert.Equal(t, strings.Count(err.Error(), "table3"), 1)
+	assert.Equal(t, 1, strings.Count(err.Error(), "table3"))
 }

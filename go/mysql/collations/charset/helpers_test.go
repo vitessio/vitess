@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestSlice(t *testing.T) {
@@ -66,6 +67,34 @@ func TestSlice(t *testing.T) {
 			to:   4,
 			want: []byte("😊😂🤢"),
 		},
+		{
+			in:   []byte{0x00, 0x61, 0xD8, 0x00},
+			cs:   Charset_utf16{},
+			from: 0,
+			to:   5,
+			want: []byte{0x00, 0x61},
+		},
+		{
+			in:   []byte{0x00, 0x61, 0xD8, 0x00, 0x00, 0x31},
+			cs:   Charset_utf16{},
+			from: 0,
+			to:   5,
+			want: []byte{0x00, 0x61},
+		},
+		{
+			in:   []byte{0x61, 0x81},
+			cs:   Charset_sjis{},
+			from: 0,
+			to:   5,
+			want: []byte{0x61},
+		},
+		{
+			in:   []byte{0x00, 0x61, 0xFF, 0xFD, 0x00, 0x62},
+			cs:   Charset_utf16{},
+			from: 0,
+			to:   2,
+			want: []byte{0x00, 0x61, 0xFF, 0xFD},
+		},
 	}
 
 	for _, tc := range testCases {
@@ -87,6 +116,9 @@ func TestValidate(t *testing.T) {
 
 	ok = Validate(Charset_utf16le{}, []byte{0x41})
 	assert.False(t, ok, "%v should not be valid for utf16le charset", []byte{0x41})
+
+	ok = Validate(Charset_utf16{}, []byte{0xFF, 0xFD})
+	require.True(t, ok, "%v should be valid for utf16 charset", []byte{0xFF, 0xFD})
 }
 
 func TestLength(t *testing.T) {
@@ -100,6 +132,7 @@ func TestLength(t *testing.T) {
 		// Multibyte cases
 		{[]byte("😊😂🤢"), Charset_utf8mb4{}, 3},
 		{[]byte("한국어 시험"), Charset_utf8mb4{}, 6},
+		{[]byte{0xD8, 0x00, 0x00, 0x31}, Charset_utf16{}, 2},
 	}
 
 	for _, tc := range testCases {

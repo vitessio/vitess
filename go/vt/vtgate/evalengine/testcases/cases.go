@@ -267,6 +267,10 @@ func JSONArray(yield Query) {
 			yield(fmt.Sprintf("JSON_ARRAY(%s, %s)", a, b), nil, false)
 		}
 	}
+	for _, b := range inputJSONBinaryValues {
+		yield(fmt.Sprintf("JSON_ARRAY(%s)", b), nil, false)
+		yield(fmt.Sprintf("JSON_ARRAY('a', %s)", b), nil, false)
+	}
 	yield("JSON_ARRAY()", nil, false)
 }
 
@@ -275,6 +279,9 @@ func JSONObject(yield Query) {
 		for _, b := range inputJSONPrimitives {
 			yield(fmt.Sprintf("JSON_OBJECT(%s, %s)", a, b), nil, false)
 		}
+	}
+	for _, b := range inputJSONBinaryValues {
+		yield(fmt.Sprintf("JSON_OBJECT('k', %s)", b), nil, false)
 	}
 	yield("JSON_OBJECT()", nil, false)
 }
@@ -308,7 +315,7 @@ func CaseExprWithPredicate(yield Query) {
 		"1=2",
 	}
 
-	var elements []string
+	elements := make([]string, 0, len(inputBitwise)+len(inputComparisonElement))
 	elements = append(elements, inputBitwise...)
 	elements = append(elements, inputComparisonElement...)
 
@@ -322,7 +329,8 @@ func CaseExprWithPredicate(yield Query) {
 
 	genSubsets(predicates, 3, func(predicates []string) {
 		genSubsets(elements, 3, func(values []string) {
-			yield(fmt.Sprintf("case when %s then %s when %s then %s when %s then %s end",
+			yield(fmt.Sprintf(
+				"case when %s then %s when %s then %s when %s then %s end",
 				predicates[0], values[0], predicates[1], values[1], predicates[2], values[2],
 			), nil, false)
 		})
@@ -818,7 +826,7 @@ func FnRandomBytes(yield Query) {
 }
 
 func CaseExprWithValue(yield Query) {
-	var elements []string
+	elements := make([]string, 0, len(inputBitwise)+len(inputComparisonElement))
 	elements = append(elements, inputBitwise...)
 	elements = append(elements, inputComparisonElement...)
 
@@ -833,7 +841,7 @@ func CaseExprWithValue(yield Query) {
 }
 
 func If(yield Query) {
-	var elements []string
+	elements := make([]string, 0, len(inputBitwise)+len(inputComparisonElement))
 	elements = append(elements, inputBitwise...)
 	elements = append(elements, inputComparisonElement...)
 
@@ -847,13 +855,15 @@ func If(yield Query) {
 }
 
 func Base64(yield Query) {
-	inputs := []string{
+	inputs := make([]string, 0, 4+len(inputConversions)*2)
+	inputs = append(
+		inputs,
 		`'bGlnaHQgdw=='`,
 		`'bGlnaHQgd28='`,
 		`'bGlnaHQgd29y'`,
 		// MySQL trims whitespace
 		`'  \t\r\n  bGlnaHQgd28=  \n \t '`,
-	}
+	)
 
 	inputs = append(inputs, inputConversions...)
 	for _, input := range inputConversions {
@@ -1872,14 +1882,16 @@ func FnHex(yield Query) {
 }
 
 func FnUnhex(yield Query) {
-	inputs := []string{
+	inputs := make([]string, 0, 5+len(inputConversions)*2)
+	inputs = append(
+		inputs,
 		`'f'`,
 		`'fe'`,
 		`'fea'`,
 		`'666F6F626172'`,
 		// MySQL trims whitespace
 		`'  \t\r\n  4f  \n \t '`,
-	}
+	)
 
 	inputs = append(inputs, inputConversions...)
 	for _, input := range inputConversions {

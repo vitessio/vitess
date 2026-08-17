@@ -173,7 +173,7 @@ func checkDurabilityPolicy(t *testing.T, durabilityPolicy string) {
 
 func TestGetSrvKeyspaceNames(t *testing.T) {
 	data, err := clusterForKSTest.VtctldClientProcess.ExecuteCommandWithOutput("GetSrvKeyspaceNames", cell)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	namesByCell := map[string]*vtctldatapb.GetSrvKeyspaceNamesResponse_NameList{}
 	err = json2.Unmarshal([]byte(data), &namesByCell)
@@ -195,20 +195,20 @@ func TestGetSrvKeyspacePartitions(t *testing.T) {
 			otherShardRefFound = true
 		}
 	}
-	assert.True(t, !otherShardRefFound)
+	assert.False(t, otherShardRefFound)
 
 	unShardedSrvKeyspace := getSrvKeyspace(t, cell, keyspaceUnshardedName)
 	otherShardRefFound = false
 	for _, partition := range unShardedSrvKeyspace.Partitions {
 		if servedTypes[partition.ServedType] {
 			for _, shardRef := range partition.ShardReferences {
-				assert.True(t, shardRef.Name == keyspaceUnshardedName)
+				assert.Equal(t, shardRef.Name, keyspaceUnshardedName)
 			}
 		} else {
 			otherShardRefFound = true
 		}
 	}
-	assert.True(t, !otherShardRefFound)
+	assert.False(t, otherShardRefFound)
 }
 
 func TestShardNames(t *testing.T) {
@@ -219,7 +219,7 @@ func TestShardNames(t *testing.T) {
 
 func TestGetKeyspace(t *testing.T) {
 	_, err := clusterForKSTest.VtctldClientProcess.GetKeyspace(keyspaceUnshardedName)
-	require.Nil(t, err)
+	require.NoError(t, err)
 }
 
 func TestDeleteKeyspace(t *testing.T) {

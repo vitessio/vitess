@@ -89,6 +89,6 @@ func TestPromote(t *testing.T) {
 	defer testMysqld.Close()
 
 	pos, err := testMysqld.Promote(t.Context(), map[string]string{})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8:12-17", pos.String())
 }

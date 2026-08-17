@@ -107,7 +107,7 @@ func TestKeyspaceRoutingRulesRoundTrip(t *testing.T) {
 
 	roundtripRulesMap, err := GetKeyspaceRoutingRules(ctx, ts)
 	require.NoError(t, err, "could not fetch keyspace routing rules from topo")
-	assert.EqualValues(t, rulesMap, roundtripRulesMap)
+	assert.Equal(t, rulesMap, roundtripRulesMap)
 }
 
 // TestSaveKeyspaceRoutingRulesLocked confirms that saveKeyspaceRoutingRulesLocked() can only be called

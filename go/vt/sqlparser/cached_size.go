@@ -75,7 +75,7 @@ func (cached *AliasedExpr) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(48)
+		size += int64(64)
 	}
 	// field Expr vitess.io/vitess/go/vt/sqlparser.Expr
 	if cc, ok := cached.Expr.(cachedObject); ok {
@@ -83,6 +83,8 @@ func (cached *AliasedExpr) CachedSize(alloc bool) int64 {
 	}
 	// field As vitess.io/vitess/go/vt/sqlparser.IdentifierCI
 	size += cached.As.CachedSize(false)
+	// field InputExpression string
+	size += hack.RuntimeAllocSize(int64(len(cached.InputExpression)))
 	return size
 }
 

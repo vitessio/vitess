@@ -139,7 +139,7 @@ func TestNewVReplicationConfig(t *testing.T) {
 			InitVReplicationConfigDefaults()
 			got, err := NewVReplicationConfig(tt.config)
 			if tt.wantErr == 0 {
-				require.EqualValuesf(t, tt.config, got.Overrides,
+				require.Equalf(t, tt.config, got.Overrides,
 					"NewVReplicationConfig() overrides got = %v, want %v", got.Overrides, tt.config)
 			}
 			assert.Falsef(t, tt.wantErr > 0 && err == nil || tt.wantErr == 0 && err != nil,
@@ -149,11 +149,11 @@ func TestNewVReplicationConfig(t *testing.T) {
 				assert.Lenf(t, errors, tt.wantErr, "NewVReplicationConfig() got num errors = %v, want %v", len(errors), tt.wantErr)
 			}
 			if tt.want == nil {
-				require.EqualValuesf(t, DefaultVReplicationConfig.Map(), got.Map(),
+				require.Equalf(t, DefaultVReplicationConfig.Map(), got.Map(),
 					"NewVReplicationConfig() Map got = %v, want %v", got.Map(), DefaultVReplicationConfig.Map())
 			} else {
 				tt.want.Overrides = tt.config
-				require.EqualValues(t, tt.want.Map(), got.Map(),
+				require.Equal(t, tt.want.Map(), got.Map(),
 					"NewVReplicationConfig() Map got = %v, want %v", got.Map(), tt.want.Map())
 			}
 		})
@@ -164,7 +164,7 @@ func TestMaxRowJSONBytesOverride(t *testing.T) {
 	InitVReplicationConfigDefaults()
 	cfg, err := NewVReplicationConfig(map[string]string{"max-row-json-bytes": "1048576"})
 	require.NoError(t, err)
-	require.EqualValues(t, int64(1048576), cfg.MaxRowJSONBytes)
+	require.Equal(t, int64(1048576), cfg.MaxRowJSONBytes)
 	m := cfg.Map()
 	require.Equal(t, "1048576", m["max-row-json-bytes"])
 	require.NotContains(t, m, "max_row_json_bytes")
@@ -172,7 +172,7 @@ func TestMaxRowJSONBytesOverride(t *testing.T) {
 	t.Run("zero preserves default", func(t *testing.T) {
 		cfg, err := NewVReplicationConfig(map[string]string{"max-row-json-bytes": "0"})
 		require.NoError(t, err)
-		require.EqualValues(t, int64(0), cfg.MaxRowJSONBytes)
+		require.Equal(t, int64(0), cfg.MaxRowJSONBytes)
 	})
 	t.Run("invalid value returns error", func(t *testing.T) {
 		_, err := NewVReplicationConfig(map[string]string{"max-row-json-bytes": "notanumber"})

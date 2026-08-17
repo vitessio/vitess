@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestIsDirect(t *testing.T) {
@@ -92,7 +93,7 @@ func TestIsCutOverThresholdFlag(t *testing.T) {
 				return
 			}
 
-			assert.NoError(t, err)
+			require.NoError(t, err)
 
 			val, isCutOver := isCutOverThresholdFlag(ts.s)
 			assert.Equal(t, ts.expect, isCutOver)
@@ -100,7 +101,7 @@ func TestIsCutOverThresholdFlag(t *testing.T) {
 
 			if ts.expect {
 				d, err := setting.CutOverThreshold()
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.Equal(t, ts.d, d)
 			}
 		})
@@ -163,7 +164,7 @@ func TestIsExpireArtifactsFlag(t *testing.T) {
 				assert.ErrorContains(t, err, ts.expectError)
 				return
 			}
-			assert.NoError(t, err)
+			require.NoError(t, err)
 
 			val, isRetainArtifacts := isRetainArtifactsFlag(ts.s)
 			assert.Equal(t, ts.expect, isRetainArtifacts)
@@ -171,13 +172,15 @@ func TestIsExpireArtifactsFlag(t *testing.T) {
 
 			if ts.expect {
 				d, err := setting.RetainArtifactsDuration()
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.Equal(t, ts.d, d)
 			}
 		})
 	}
 }
 
+// TestParseDDLStrategy verifies strategy parsing, including validation and
+// ordering of repeatable session variables.
 func TestParseDDLStrategy(t *testing.T) {
 	tt := []struct {
 		strategyVariable     string
@@ -198,6 +201,7 @@ func TestParseDDLStrategy(t *testing.T) {
 		cutOverThreshold     time.Duration
 		forceCutOverAfter    time.Duration
 		expireArtifacts      time.Duration
+		sessionVariables     []SessionVariable
 		runtimeOptions       string
 		expectError          string
 	}{
@@ -352,7 +356,55 @@ func TestParseDDLStrategy(t *testing.T) {
 			runtimeOptions:   "",
 			analyzeTable:     true,
 		},
-
+		{
+			strategyVariable: "online --session-variable innodb_strict_mode=off --session-variable 'sql_mode=STRICT_TRANS_TABLES,NO_ZERO_DATE'",
+			strategy:         DDLStrategyOnline,
+			options:          "--session-variable innodb_strict_mode=off --session-variable 'sql_mode=STRICT_TRANS_TABLES,NO_ZERO_DATE'",
+			runtimeOptions:   "",
+			sessionVariables: []SessionVariable{
+				{Name: "innodb_strict_mode", Value: "off"},
+				{Name: "sql_mode", Value: "STRICT_TRANS_TABLES,NO_ZERO_DATE"},
+			},
+		},
+		{
+			strategyVariable: "direct --session-variable sql_mode='ANSI QUOTES'",
+			strategy:         DDLStrategyDirect,
+			options:          "--session-variable sql_mode='ANSI QUOTES'",
+			runtimeOptions:   "",
+			sessionVariables: []SessionVariable{{Name: "sql_mode", Value: "ANSI QUOTES"}},
+		},
+		{
+			strategyVariable: "direct --session-variable",
+			expectError:      "--session-variable requires name=value",
+		},
+		{
+			strategyVariable: "online --session-variable --allow-concurrent",
+			expectError:      `invalid --session-variable value "--allow-concurrent": expected name=value`,
+		},
+		{
+			strategyVariable: "direct --session-variable sql_mode",
+			expectError:      "expected name=value",
+		},
+		{
+			strategyVariable: "direct --session-variable 1sql_mode=ANSI",
+			expectError:      "invalid session variable name",
+		},
+		{
+			strategyVariable: "direct --session-variable sql-mode=ANSI",
+			expectError:      "invalid session variable name",
+		},
+		{
+			strategyVariable: "direct --session-variable SQL_LOG_BIN=off",
+			expectError:      `session variable "SQL_LOG_BIN" is not allowed`,
+		},
+		{
+			strategyVariable: "online --session-variable FOREIGN_KEY_CHECKS=off",
+			expectError:      `session variable "FOREIGN_KEY_CHECKS" is not allowed`,
+		},
+		{
+			strategyVariable: "direct --session-variable sql_mode=ANSI --session-variable SQL_MODE=TRADITIONAL",
+			expectError:      "duplicate session variable name",
+		},
 		{
 			strategyVariable: "vitess --alow-concrrnt", // intentional typo
 			strategy:         DDLStrategyVitess,
@@ -373,7 +425,7 @@ func TestParseDDLStrategy(t *testing.T) {
 				assert.ErrorContains(t, err, ts.expectError)
 				return
 			}
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.Equal(t, ts.strategy, setting.Strategy)
 			assert.Equal(t, ts.options, setting.Options)
 			assert.Equal(t, ts.isDeclarative, setting.IsDeclarative())
@@ -386,11 +438,14 @@ func TestParseDDLStrategy(t *testing.T) {
 			assert.Equal(t, ts.fastOverRevertible, setting.IsPreferInstantDDL())
 			assert.Equal(t, ts.allowForeignKeys, setting.IsAllowForeignKeysFlag())
 			assert.Equal(t, ts.analyzeTable, setting.IsAnalyzeTableFlag())
+			sessionVariables, err := setting.SessionVariables()
+			require.NoError(t, err)
+			assert.Equal(t, ts.sessionVariables, sessionVariables)
 			cutOverThreshold, err := setting.CutOverThreshold()
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.Equal(t, ts.cutOverThreshold, cutOverThreshold)
 			forceCutOverAfter, err := setting.ForceCutOverAfter()
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.Equal(t, ts.forceCutOverAfter, forceCutOverAfter)
 
 			runtimeOptions := strings.Join(setting.RuntimeOptions(), " ")
@@ -399,18 +454,42 @@ func TestParseDDLStrategy(t *testing.T) {
 	}
 	{
 		_, err := ParseDDLStrategy("other")
-		assert.Error(t, err)
+		require.Error(t, err)
 	}
 	{
 		_, err := ParseDDLStrategy("online --cut-over-threshold=X")
-		assert.Error(t, err)
+		require.Error(t, err)
 	}
 	{
 		_, err := ParseDDLStrategy("online --cut-over-threshold=3")
-		assert.Error(t, err)
+		require.Error(t, err)
 	}
 	{
 		_, err := ParseDDLStrategy("online --retain-artifacts=3")
 		assert.Error(t, err)
 	}
+}
+
+// TestSessionVariableSetStatement verifies values are safely encoded.
+func TestSessionVariableSetStatement(t *testing.T) {
+	t.Run("hex value", func(t *testing.T) {
+		query, err := (SessionVariable{
+			Name:  "innodb_strict_mode",
+			Value: "off'; drop table t; --",
+		}).SetStatement()
+		require.NoError(t, err)
+		assert.Equal(t, "set @@session.innodb_strict_mode=X'6f6666273b2064726f70207461626c6520743b202d2d'", query)
+	})
+	t.Run("invalid name", func(t *testing.T) {
+		query, err := (SessionVariable{Name: "sql-mode", Value: "ANSI"}).SetStatement()
+		require.EqualError(t, err, `invalid session variable name: "sql-mode"`)
+		assert.Empty(t, query)
+	})
+}
+
+// TestSessionVariablesInvalidSyntax verifies malformed options return an error.
+func TestSessionVariablesInvalidSyntax(t *testing.T) {
+	setting := &DDLStrategySetting{Options: `--session-variable "sql_mode=ANSI`}
+	_, err := setting.SessionVariables()
+	require.Error(t, err)
 }

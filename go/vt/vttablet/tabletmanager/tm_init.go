@@ -175,6 +175,10 @@ type TabletManager struct {
 	// tmc is used to run an RPC against other vttablets.
 	tmc tmclient.TabletManagerClient
 
+	// shardHealthMonitor pings the shard's current primary and reports its vttablet liveness in
+	// FullStatus. It is nil unless --track-shard-tablet-health is set.
+	shardHealthMonitor *shardHealthMonitor
+
 	// tmState manages the TabletManager state.
 	tmState *tmState
 
@@ -365,8 +369,22 @@ func setTabletTagsStats(tablet *topodatapb.Tablet) {
 	}
 }
 
+// validateFlags returns an error when a tabletmanager flag has an invalid value.
+func validateFlags() error {
+	if demotePrimaryLockWaitTimeout < 0 {
+		return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION,
+			"--demote-primary-lock-wait-timeout cannot be negative, got %v", demotePrimaryLockWaitTimeout)
+	}
+
+	return nil
+}
+
 // Start starts the TabletManager.
 func (tm *TabletManager) Start(tablet *topodatapb.Tablet, config *tabletenv.TabletConfig) error {
+	if err := validateFlags(); err != nil {
+		return err
+	}
+
 	defer func() {
 		log.Info(fmt.Sprintf("TabletManager Start took ~%d ms", time.Since(servenv.GetInitStartTime()).Milliseconds()))
 	}()
@@ -462,6 +480,63 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, config *tabletenv.Tabl
 	tm.exportStats()
 	servenv.OnRun(tm.registerTabletManager)
 
+	// Start the shard-peer health monitor before the restore handling below,
+	// which returns early when --restore-from-backup is set (even when there is
+	// no backup and the tablet starts up empty). Wiring it here ensures tablets
+	// that use --restore-from-backup still run the monitor.
+	if trackShardTabletHealth {
+		// Fail startup on an invalid configuration rather than silently running
+		// without the monitor: an operator who opted in expects the shard health
+		// reports (and the quorum protection built on them) to actually exist.
+		if shardTabletHealthInterval <= 0 {
+			return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION,
+				"--shard-tablet-health-interval must be positive when --track-shard-tablet-health is set, got %v",
+				shardTabletHealthInterval)
+		}
+		keyspace := tablet.Keyspace
+		shard := tablet.Shard
+		listPeers := func(ctx context.Context) (map[string]*topo.TabletInfo, error) {
+			return tm.TopoServer.GetTabletMapForShard(ctx, keyspace, shard)
+		}
+		// The shard record's PrimaryAlias is the authoritative current primary (the alias VTOrc
+		// evaluates quorum for), so the monitor probes exactly that tablet rather than relying on
+		// the possibly-lagging tablet-record Type.
+		shardPrimaryAlias := func(ctx context.Context) (*topodatapb.TabletAlias, error) {
+			si, err := tm.TopoServer.GetShard(ctx, keyspace, shard)
+			if err != nil {
+				return nil, err
+			}
+			return si.PrimaryAlias, nil
+		}
+		tm.shardHealthMonitor = newShardHealthMonitor(
+			monitorPinger(tm.tmc),
+			listPeers,
+			shardPrimaryAlias,
+			topoproto.TabletAliasString(tablet.Alias),
+			shardTabletHealthInterval,
+			// Ping timeout is decoupled from (and larger than) the interval: a momentarily slow but
+			// alive primary should not accrue failures from a too-tight deadline, while a genuinely
+			// dead vttablet fails fast (connection refused) regardless of the timeout.
+			2*shardTabletHealthInterval,
+		)
+		// Let the monitor release the pooled ping connection of a peer that
+		// leaves its probe set (e.g. a demoted primary): nothing will ping it
+		// again, so nothing else would ever close it. Set before Start so the
+		// refresh loop observes it without synchronization.
+		if closer, ok := tm.tmc.(interface {
+			CloseShardHealthPoolEntry(tablet *topodatapb.Tablet)
+		}); ok {
+			tm.shardHealthMonitor.evictPooledConn = closer.CloseShardHealthPoolEntry
+		}
+		tm.shardHealthMonitor.Start(tm.BatchCtx)
+	}
+	startSucceeded := false
+	defer func() {
+		if !startSucceeded {
+			tm.stopShardHealthMonitor()
+		}
+	}()
+
 	restoring, err := tm.handleRestore(tm.BatchCtx, config)
 	if err != nil {
 		return err
@@ -469,6 +544,7 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, config *tabletenv.Tabl
 	if restoring {
 		// If restore was triggered, it will take care
 		// of updating the tablet state and initializing replication.
+		startSucceeded = true
 		return nil
 	}
 	// We should be re-read the tablet from tabletManager and use the type specified there.
@@ -485,6 +561,8 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, config *tabletenv.Tabl
 		return err
 	}
 	tm.tmState.Open()
+
+	startSucceeded = true
 	return nil
 }
 
@@ -492,6 +570,8 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, config *tabletenv.Tabl
 // then prune the tablet topology entry of all post-init fields. This prevents
 // stale identifiers from hanging around in topology.
 func (tm *TabletManager) Close() {
+	tm.stopShardHealthMonitor()
+
 	// Stop the shard sync loop and wait for it to exit. We do this in Close()
 	// rather than registering it as an OnTerm hook so the shard sync loop keeps
 	// running during lame duck.
@@ -526,6 +606,8 @@ func (tm *TabletManager) Close() {
 // while taking lameduck into account. However, this may be useful for tests,
 // when you want to clean up a tm immediately.
 func (tm *TabletManager) Stop() {
+	tm.stopShardHealthMonitor()
+
 	// Stop the shard sync loop and wait for it to exit. This needs to be done
 	// here in addition to in Close() because tests do not call Close().
 	tm.stopShardSync()
@@ -549,6 +631,22 @@ func (tm *TabletManager) Stop() {
 
 	tm.MysqlDaemon.Close()
 	tm.tmState.Close()
+}
+
+// stopShardHealthMonitor drains shard-peer health work on failed startup, shutdown, and test
+// cleanup paths. It intentionally leaves tm.shardHealthMonitor set: FullStatus reads the field
+// without synchronization and can run concurrently during lame-duck, so the field must be
+// write-once. Calling snapshot() on a stopped monitor is safe; Stop() is idempotent.
+func (tm *TabletManager) stopShardHealthMonitor() {
+	if tm.shardHealthMonitor == nil {
+		return
+	}
+	tm.shardHealthMonitor.Stop()
+	// Stop() drains the ping/refresh loops but leaves the monitor's pooled connection to the primary
+	// open in the tmclient; release it so it is not held until the whole tmclient is closed.
+	if closer, ok := tm.tmc.(interface{ CloseShardHealthPool() }); ok {
+		closer.CloseShardHealthPool()
+	}
 }
 
 func (tm *TabletManager) createKeyspaceShard(ctx context.Context) (*topo.ShardInfo, error) {

@@ -324,10 +324,10 @@ func generateRenameStatement(fromTableName string, state schema.TableGCState, tm
 func TestHold(t *testing.T) {
 	populateTable(t)
 	query, tableName, err := generateRenameStatement("t1", schema.HoldTableGCState, time.Now().UTC().Add(tableTransitionExpiration))
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	_, err = primaryTablet.VttabletProcess.QueryTablet(query, keyspaceName, true)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	validateTableDoesNotExist(t, "t1")
 	validateTableExists(t, tableName)
@@ -357,10 +357,10 @@ func TestEvac(t *testing.T) {
 		var query string
 		var err error
 		query, tableName, err = generateRenameStatement("t1", schema.EvacTableGCState, time.Now().UTC().Add(tableTransitionExpiration))
-		assert.NoError(t, err)
+		require.NoError(t, err)
 
 		_, err = primaryTablet.VttabletProcess.QueryTablet(query, keyspaceName, true)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 
 		validateTableDoesNotExist(t, "t1")
 	})
@@ -388,10 +388,10 @@ func TestEvac(t *testing.T) {
 func TestDrop(t *testing.T) {
 	populateTable(t)
 	query, tableName, err := generateRenameStatement("t1", schema.DropTableGCState, time.Now().UTC().Add(tableTransitionExpiration))
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	_, err = primaryTablet.VttabletProcess.QueryTablet(query, keyspaceName, true)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	validateTableDoesNotExist(t, "t1")
 

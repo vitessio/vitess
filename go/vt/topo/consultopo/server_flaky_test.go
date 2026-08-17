@@ -26,7 +26,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hashicorp/consul/api"
+	"github.com/hashicorp/consul/api/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -430,7 +430,7 @@ func TestConsulWatcherStormPrevention(t *testing.T) {
 
 	// Get should still work from cache during outage
 	vschema, err = rs.GetSrvVSchema(ctx, cellName)
-	assert.NoError(t, err, "GetSrvVSchema() should work from cache during outage")
+	require.NoError(t, err, "GetSrvVSchema() should work from cache during outage")
 	assert.NotNil(t, vschema, "GetSrvVSchema() should return cached value during outage")
 
 	// Wait during outage period - this is when storms would occur without our fix
@@ -448,7 +448,7 @@ func TestConsulWatcherStormPrevention(t *testing.T) {
 
 	// Get operations should continue working from cache
 	vschema, err = rs.GetSrvVSchema(ctx, cellName)
-	assert.NoError(t, err, "GetSrvVSchema() should continue working from cache")
+	require.NoError(t, err, "GetSrvVSchema() should continue working from cache")
 	assert.NotNil(t, vschema, "GetSrvVSchema() should continue returning cached value")
 
 	t.Log("Consul storm prevention test completed - watchers remained quiet during outage")

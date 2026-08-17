@@ -109,7 +109,7 @@
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select * from `user` where 1 != 1",
+        "FieldQuery": "select /*vt+ QUERY_TIMEOUT_MS=1000 */ * from `user` where 1 != 1",
         "Query": "select /*vt+ QUERY_TIMEOUT_MS=1000 */ * from `user`",
         "QueryTimeout": 1000
       },
@@ -137,7 +137,7 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select count(*) from `user` where 1 != 1",
+            "FieldQuery": "select /*vt+ QUERY_TIMEOUT_MS=1000 */ count(*) from `user` where 1 != 1",
             "Query": "select /*vt+ QUERY_TIMEOUT_MS=1000 */ count(*) from `user`",
             "QueryTimeout": 1000
           }
@@ -166,7 +166,7 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select * from `user` where 1 != 1",
+            "FieldQuery": "select /*vt+ QUERY_TIMEOUT_MS=1000 */ * from `user` where 1 != 1",
             "Query": "select /*vt+ QUERY_TIMEOUT_MS=1000 */ * from `user` limit 10",
             "QueryTimeout": 1000
           }
@@ -191,7 +191,7 @@
           "Name": "main",
           "Sharded": false
         },
-        "FieldQuery": "select * from unsharded where 1 != 1",
+        "FieldQuery": "select /*vt+ QUERY_TIMEOUT_MS=1000 */ * from unsharded where 1 != 1",
         "Query": "select /*vt+ QUERY_TIMEOUT_MS=1000 */ * from unsharded limit 10",
         "QueryTimeout": 1000
       },
@@ -215,7 +215,7 @@
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select * from `user` where 1 != 1",
+        "FieldQuery": "select /*vt+ SCATTER_ERRORS_AS_WARNINGS */ * from `user` where 1 != 1",
         "Query": "select /*vt+ SCATTER_ERRORS_AS_WARNINGS */ * from `user`",
         "ScatterErrorsAsWarnings": true
       },
@@ -243,7 +243,7 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select count(*) from `user` where 1 != 1",
+            "FieldQuery": "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ count(*) from `user` where 1 != 1",
             "Query": "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ count(*) from `user`",
             "ScatterErrorsAsWarnings": true
           }
@@ -273,7 +273,7 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select count(*) from `user` where 1 != 1",
+            "FieldQuery": "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ count(*) from `user` where 1 != 1",
             "Query": "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ count(*) from `user`",
             "ScatterErrorsAsWarnings": true
           }
@@ -302,7 +302,7 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select * from `user` where 1 != 1",
+            "FieldQuery": "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ * from `user` where 1 != 1",
             "Query": "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ * from `user` limit 10",
             "ScatterErrorsAsWarnings": true
           }
@@ -913,7 +913,7 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select `user`.col from `user` where 1 != 1",
+            "FieldQuery": "select /* comment */ `user`.col from `user` where 1 != 1",
             "Query": "select /* comment */ `user`.col from `user`"
           },
           {
@@ -923,7 +923,7 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select 1 from user_extra where 1 != 1",
+            "FieldQuery": "select /* comment */ 1 from user_extra where 1 != 1",
             "Query": "select /* comment */ 1 from user_extra"
           }
         ]
@@ -949,7 +949,7 @@
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select `user`.col from `user` where 1 != 1",
+        "FieldQuery": "select /* comment */ `user`.col from `user` where 1 != 1",
         "Query": "select /* comment */ `user`.col from `user` where id in (select id from `user` where id > 1 and id < 10)"
       },
       "TablesUsed": [
@@ -981,7 +981,7 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select id from `user` where 1 != 1",
+            "FieldQuery": "select /* comment */ id from `user` where 1 != 1",
             "Query": "select /* comment */ id from `user` where id > 1 and id < 10"
           },
           {
@@ -992,7 +992,7 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select `user`.col from `user` where 1 != 1",
+            "FieldQuery": "select /* comment */ `user`.col from `user` where 1 != 1",
             "Query": "select /* comment */ `user`.col from `user` where :__sq_has_values and foo in ::__sq1"
           }
         ]
@@ -1076,8 +1076,8 @@
               "Name": "main",
               "Sharded": false
             },
-            "FieldQuery": "select (select :user_id + outm.m + unsharded.m from unsharded where 1 != 1) as `(select ``user``.id + outm.m + unsharded.m from unsharded)` from unsharded as outm where 1 != 1",
-            "Query": "select (select :user_id + outm.m + unsharded.m from unsharded) as `(select ``user``.id + outm.m + unsharded.m from unsharded)` from unsharded as outm"
+            "FieldQuery": "select (select :user_id + outm.m + unsharded.m from unsharded where 1 != 1) as `(select user.id+outm.m+unsharded.m from unsharded)` from unsharded as outm where 1 != 1",
+            "Query": "select (select :user_id + outm.m + unsharded.m from unsharded) as `(select user.id+outm.m+unsharded.m from unsharded)` from unsharded as outm"
           }
         ]
       },
@@ -1603,8 +1603,8 @@
               "Name": "main",
               "Sharded": false
             },
-            "FieldQuery": "select a, :__sq1 /* INT16 */ as `(select col from ``user``)` from unsharded where 1 != 1",
-            "Query": "select a, :__sq1 /* INT16 */ as `(select col from ``user``)` from unsharded"
+            "FieldQuery": "select a, :__sq1 /* INT16 */ as `(select col from user)` from unsharded where 1 != 1",
+            "Query": "select a, :__sq1 /* INT16 */ as `(select col from user)` from unsharded"
           }
         ]
       },
@@ -1648,8 +1648,8 @@
               "Name": "main",
               "Sharded": false
             },
-            "FieldQuery": "select a, 1 + :__sq1 /* INT16 */ as `1 + (select col from ``user``)` from unsharded where 1 != 1",
-            "Query": "select a, 1 + :__sq1 /* INT16 */ as `1 + (select col from ``user``)` from unsharded"
+            "FieldQuery": "select a, 1 + :__sq1 /* INT16 */ as `1+(select col from user)` from unsharded where 1 != 1",
+            "Query": "select a, 1 + :__sq1 /* INT16 */ as `1+(select col from user)` from unsharded"
           }
         ]
       },
@@ -2015,7 +2015,7 @@
           "Name": "main",
           "Sharded": false
         },
-        "FieldQuery": "select * from unsharded as route2 where 1 != 1",
+        "FieldQuery": "select /*vt+ QUERY_TIMEOUT_MS=1000 */ * from unsharded as route2 where 1 != 1",
         "Query": "select /*vt+ QUERY_TIMEOUT_MS=1000 */ * from unsharded as route2",
         "QueryTimeout": 1000
       },
@@ -3133,8 +3133,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select CAST(:__sq1 AS DECIMAL(0, 0)) as `(select sum(col) from ``user``)` from user_extra where 1 != 1",
-            "Query": "select CAST(:__sq1 AS DECIMAL(0, 0)) as `(select sum(col) from ``user``)` from user_extra"
+            "FieldQuery": "select CAST(:__sq1 AS DECIMAL(0, 0)) as `(select sum(col) from user)` from user_extra where 1 != 1",
+            "Query": "select CAST(:__sq1 AS DECIMAL(0, 0)) as `(select sum(col) from user)` from user_extra"
           }
         ]
       },
@@ -3533,8 +3533,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select :user_extra_col /* INT16 */ + `user`.col as `user_extra.col + ``user``.col` from `user` where 1 != 1",
-            "Query": "select :user_extra_col /* INT16 */ + `user`.col as `user_extra.col + ``user``.col` from `user` where `user`.id = :user_extra_id",
+            "FieldQuery": "select :user_extra_col /* INT16 */ + `user`.col as `user_extra.col + user.col` from `user` where 1 != 1",
+            "Query": "select :user_extra_col /* INT16 */ + `user`.col as `user_extra.col + user.col` from `user` where `user`.id = :user_extra_id",
             "Values": [
               ":user_extra_id"
             ],
@@ -3721,8 +3721,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select :__sq1 as `(select id from ``user`` order by ``user``.id asc limit 1)` from user_extra where 1 != 1",
-            "Query": "select :__sq1 as `(select id from ``user`` order by ``user``.id asc limit 1)` from user_extra"
+            "FieldQuery": "select :__sq1 as `(select id from user order by id limit 1)` from user_extra where 1 != 1",
+            "Query": "select :__sq1 as `(select id from user order by id limit 1)` from user_extra"
           }
         ]
       },
@@ -3979,8 +3979,8 @@
               "Name": "main",
               "Sharded": false
             },
-            "FieldQuery": "select :__sq_has_values2 as `exists (select 1 from ``user``)` from dual where 1 != 1",
-            "Query": "select :__sq_has_values2 as `exists (select 1 from ``user``)` from dual"
+            "FieldQuery": "select :__sq_has_values2 as `exists(select * from user)` from dual where 1 != 1",
+            "Query": "select :__sq_has_values2 as `exists(select * from user)` from dual"
           }
         ]
       },
@@ -4787,7 +4787,7 @@
             "InputName": "SubQuery",
             "OperatorType": "Aggregate",
             "Variant": "Scalar",
-            "Aggregates": "max(0|1) AS max(music.id)",
+            "Aggregates": "max(0|1) AS MAX(music.id)",
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -5494,8 +5494,8 @@
           "Name": "main",
           "Sharded": false
         },
-        "FieldQuery": "select 1 as x, (select x from dual where 1 != 1), (select x from dual where 1 != 1) as `(select (select x from dual) from dual)` from dual where 1 != 1",
-        "Query": "select 1 as x, (select x from dual), (select x from dual) as `(select (select x from dual) from dual)` from dual"
+        "FieldQuery": "select 1 as x, (select x from dual where 1 != 1), (select x from dual where 1 != 1) as `(SELECT (SELECT x FROM DUAL) FROM dual)` from dual where 1 != 1",
+        "Query": "select 1 as x, (select x from dual), (select x from dual) as `(SELECT (SELECT x FROM DUAL) FROM dual)` from dual"
       }
     }
   },
@@ -5595,8 +5595,8 @@
               "Name": "main",
               "Sharded": false
             },
-            "FieldQuery": "select 1 as x, :__sq1 /* INT64 */ as `(select x from authoritative)` from dual where 1 != 1",
-            "Query": "select 1 as x, :__sq1 /* INT64 */ as `(select x from authoritative)` from dual"
+            "FieldQuery": "select 1 as x, :__sq1 /* INT64 */ as `(SELECT x FROM authoritative)` from dual where 1 != 1",
+            "Query": "select 1 as x, :__sq1 /* INT64 */ as `(SELECT x FROM authoritative)` from dual"
           }
         ]
       },
@@ -5665,8 +5665,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select id as foobar, :__sq1 as `(select foobar from user_extra where foobar = 1)` from `user` where 1 != 1",
-            "Query": "select id as foobar, :__sq1 as `(select foobar from user_extra where foobar = 1)` from `user` where id = 1",
+            "FieldQuery": "select id as foobar, :__sq1 as `(SELECT foobar FROM user_extra WHERE foobar = 1)` from `user` where 1 != 1",
+            "Query": "select id as foobar, :__sq1 as `(SELECT foobar FROM user_extra WHERE foobar = 1)` from `user` where id = 1",
             "Values": [
               "1"
             ],
@@ -5713,8 +5713,8 @@
           "Name": "main",
           "Sharded": false
         },
-        "FieldQuery": "select 1 as foobar, (select foobar from dual where 1 != 1) as `(select (select foobar from dual) as barbaz from dual)` from dual where 1 != 1",
-        "Query": "select 1 as foobar, (select foobar from dual) as `(select (select foobar from dual) as barbaz from dual)` from dual"
+        "FieldQuery": "select 1 as foobar, (select foobar from dual where 1 != 1) as `(SELECT (SELECT foobar) AS barbaz)` from dual where 1 != 1",
+        "Query": "select 1 as foobar, (select foobar from dual) as `(SELECT (SELECT foobar) AS barbaz)` from dual"
       }
     }
   },
@@ -5990,8 +5990,8 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select :__sq1 /* INT64 */ as `(select count(*) from user_extra)`, :__sq2 /* INT64 */ as `(select count(*) from user_extra)` from `user` where 1 != 1",
-                "Query": "select :__sq1 /* INT64 */ as `(select count(*) from user_extra)`, :__sq2 /* INT64 */ as `(select count(*) from user_extra)` from `user` where id = 1",
+                "FieldQuery": "select :__sq1 /* INT64 */ as `(SELECT count(*) FROM user_extra)`, :__sq2 /* INT64 */ as `(SELECT count(*) FROM user_extra)` from `user` where 1 != 1",
+                "Query": "select :__sq1 /* INT64 */ as `(SELECT count(*) FROM user_extra)`, :__sq2 /* INT64 */ as `(SELECT count(*) FROM user_extra)` from `user` where id = 1",
                 "Values": [
                   "1"
                 ],

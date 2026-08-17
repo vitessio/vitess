@@ -342,7 +342,7 @@ func TestUpdateSourceDeniedTables(t *testing.T) {
 			if tcase.wantTabletControl == nil {
 				require.Nil(t, si.GetTabletControl(tcase.tabletType))
 			} else {
-				require.EqualValuesf(t, tcase.wantTabletControl, si.GetTabletControl(tcase.tabletType),
+				require.Equalf(t, tcase.wantTabletControl, si.GetTabletControl(tcase.tabletType),
 					"want: %v, got: %v", tcase.wantTabletControl, si.GetTabletControl(tcase.tabletType))
 			}
 		})

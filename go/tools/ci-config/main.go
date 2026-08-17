@@ -1,5 +1,5 @@
 /*
-Copyright 2022 The Vitess Authors.
+Copyright 2026 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,61 +14,38 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+// Command ci-config validates the CI end-to-end test configuration in
+// test/config*.json against the test functions that actually exist in the
+// tree, so that tests cannot be silently orphaned by a stale or mistyped
+// -run regex. See https://github.com/vitessio/vitess/issues/20261.
+//
+// It must be run from the repository root.
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"log"
 	"os"
-	"strings"
+	"path/filepath"
 )
 
-type Test struct {
-	Args []string
-}
-
-type Config struct {
-	Tests map[string]*Test
-}
-
 func main() {
-	content, err := os.ReadFile("./test/config.json")
+	// The same glob test.go uses to load the configs.
+	configPaths, err := filepath.Glob("test/config*.json")
 	if err != nil {
 		log.Fatal(err)
 	}
-
-	tests := &Config{}
-	err = json.Unmarshal(content, tests)
-	if err != nil {
-		log.Fatal(err)
+	if len(configPaths) == 0 {
+		log.Fatal("no test/config*.json files found; run this tool from the repository root")
 	}
 
-	var failedConfig []string
-	for name, test := range tests.Tests {
-		if len(test.Args) == 0 {
-			continue
+	problems := run(".", configPaths)
+	if len(problems) > 0 {
+		fmt.Println("Problems found in the CI test configuration:")
+		for _, problem := range problems {
+			fmt.Println("\t" + problem)
 		}
-		path := test.Args[0]
-		if !strings.HasPrefix(path, "vitess.io/vitess/") {
-			continue
-		}
-		path = path[len("vitess.io/vitess/"):]
-
-		stat, err := os.Stat(path)
-		if err != nil || !stat.IsDir() {
-			failedConfig = append(failedConfig, fmt.Sprintf("%s: %s", name, path))
-			continue
-		}
-	}
-
-	if len(failedConfig) > 0 {
-		fmt.Println("Some packages in test/config.json were not found in the codebase:")
-		for _, failed := range failedConfig {
-			fmt.Println("\t" + failed)
-		}
-		fmt.Println("\nYou must remove them from test/config.json to avoid unnecessary CI load.")
 		os.Exit(1)
 	}
-	fmt.Println("The file: test/config.json is clean.")
+	fmt.Println("The CI test configuration is clean.")
 }

@@ -24,7 +24,7 @@ import (
 	"text/template"
 	"time"
 
-	consul "github.com/hashicorp/consul/api"
+	consul "github.com/hashicorp/consul/api/v2"
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/textutil"

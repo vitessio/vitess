@@ -479,7 +479,7 @@ func TestPlannedReparenter_ReparentShard(t *testing.T) {
 			pr := NewPlannedReparenter(ts, tt.tmc, logger)
 			ev, err := pr.ReparentShard(ctx, tt.keyspace, tt.shard, tt.opts)
 			if tt.shouldErr {
-				assert.Error(t, err)
+				require.Error(t, err)
 				AssertReparentEventsEqual(t, tt.expectedEvent, ev)
 
 				if ev != nil {
@@ -489,7 +489,7 @@ func TestPlannedReparenter_ReparentShard(t *testing.T) {
 				return
 			}
 
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			AssertReparentEventsEqual(t, tt.expectedEvent, ev)
 			assert.Contains(t, ev.Status, "finished PlannedReparentShard", "expected event status to indicate successful PRS")
 		})
@@ -1193,13 +1193,13 @@ func TestPlannedReparenter_preflightChecks(t *testing.T) {
 			}
 			isNoop, err := pr.preflightChecks(ctx, tt.ev, tt.tabletMap, tt.innodbBufferPoolData, tt.opts)
 			if tt.shouldErr {
-				assert.Error(t, err)
+				require.Error(t, err)
 				assert.Equal(t, tt.expectedIsNoop, isNoop, "preflightChecks returned wrong isNoop signal")
 
 				return
 			}
 
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.Equal(t, tt.expectedIsNoop, isNoop, "preflightChecks returned wrong isNoop signal")
 		})
 	}
@@ -1958,7 +1958,7 @@ func TestPlannedReparenter_performInitialPromotion(t *testing.T) {
 				return
 			}
 
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.Equal(t, tt.expectedPos, pos)
 		})
 	}
@@ -2112,7 +2112,7 @@ func TestPlannedReparenter_performPartialPromotionRecovery(t *testing.T) {
 				return
 			}
 
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.Equal(t, tt.expectedPos, rp, "performPartialPromotionRecovery gave unexpected reparent journal position")
 		})
 	}
@@ -3454,7 +3454,7 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 
 			err := pr.reparentShardLocked(ctx, tt.ev, tt.keyspace, tt.shard, tt.opts)
 			if tt.shouldErr {
-				assert.Error(t, err)
+				require.Error(t, err)
 				assert.ErrorContains(t, err, tt.errShouldContain)
 				return
 			}
@@ -4335,6 +4335,90 @@ func TestPlannedReparenter_verifyAllTabletsReachable(t *testing.T) {
 			},
 			wantErr: "context deadline exceeded",
 		}, {
+			// Mixed status-variable shapes that the buffer-pool tiebreaking
+			// fallback must omit from the returned map:
+			//   - missing key (e.g. MariaDB doesn't expose this status variable)
+			//   - present but empty string (variant returns the row with no value)
+			//   - present but non-numeric (logged as a warning, then omitted)
+			//   - present and numeric (kept)
+			// Each omitted tablet still participates in PRS — only its
+			// buffer-pool warmth score is dropped so the sorter's all-or-nothing
+			// gate falls back to durability ordering instead of treating the
+			// missing tablet as a legitimate zero.
+			name: "Missing, empty, and non-numeric values are omitted",
+			tmc: &testutil.TabletManagerClient{
+				GetGlobalStatusVarsResults: map[string]struct {
+					Statuses map[string]string
+					Error    error
+				}{
+					"zone1-0000000100": {
+						Statuses: map[string]string{
+							InnodbBufferPoolsDataVar: "1231",
+						},
+					},
+					"zone1-0000000200": {
+						// Missing key: variant doesn't expose the status variable.
+						Statuses: map[string]string{},
+					},
+					"zone1-0000000201": {
+						// Present but empty.
+						Statuses: map[string]string{
+							InnodbBufferPoolsDataVar: "",
+						},
+					},
+					"zone1-0000000202": {
+						// Present but non-numeric.
+						Statuses: map[string]string{
+							InnodbBufferPoolsDataVar: "not-a-number",
+						},
+					},
+				},
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+						Type: topodatapb.TabletType_PRIMARY,
+					},
+				},
+				"zone1-0000000200": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  200,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+				"zone1-0000000201": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  201,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+				"zone1-0000000202": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  202,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+			},
+			// Only the numeric value survives. The other three are reachable
+			// (no RPC error) so the function still returns nil — verifyAllTabletsReachable
+			// is about reachability, not about populating every tablet's score.
+			wantBufferPoolsData: map[string]int{
+				"zone1-0000000100": 1231,
+			},
+		}, {
 			name: "Restore tablet skipped before RPC",
 			tmc: &testutil.TabletManagerClient{
 				GetGlobalStatusVarsDelays: map[string]time.Duration{
@@ -4402,8 +4486,9 @@ func TestPlannedReparenter_verifyAllTabletsReachable(t *testing.T) {
 			defer ts.Close()
 
 			pr := &PlannedReparenter{
-				ts:  ts,
-				tmc: tt.tmc,
+				ts:     ts,
+				tmc:    tt.tmc,
+				logger: logutil.NewMemoryLogger(),
 			}
 			if tt.remoteOpTime != 0 {
 				oldTime := topo.RemoteOperationTimeout
@@ -4415,9 +4500,9 @@ func TestPlannedReparenter_verifyAllTabletsReachable(t *testing.T) {
 			innodbBufferPoolsData, err := pr.verifyAllTabletsReachable(t.Context(), tt.tabletMap)
 			if tt.wantErr == "" {
 				require.NoError(t, err)
-				require.EqualValues(t, len(tt.wantBufferPoolsData), len(innodbBufferPoolsData))
+				require.Len(t, innodbBufferPoolsData, len(tt.wantBufferPoolsData))
 				for str, val := range tt.wantBufferPoolsData {
-					require.EqualValues(t, val, innodbBufferPoolsData[str])
+					require.Equal(t, val, innodbBufferPoolsData[str])
 				}
 				return
 			}
@@ -4516,8 +4601,8 @@ func TestPlannedReparenterStats(t *testing.T) {
 	require.NoError(t, err)
 
 	// check the counter values
-	require.EqualValues(t, map[string]int64{"testkeyspace.-.success": 1}, prsCounter.Counts())
-	require.EqualValues(t, map[string]int64{"All": 1, "PlannedReparentShard": 1}, reparentShardOpTimings.Counts())
+	require.Equal(t, map[string]int64{"testkeyspace.-.success": 1}, prsCounter.Counts())
+	require.Equal(t, map[string]int64{"All": 1, "PlannedReparentShard": 1}, reparentShardOpTimings.Counts())
 
 	// set plannedReparentOps to request a non existent tablet
 	plannedReparentOps.NewPrimaryAlias = &topodatapb.TabletAlias{
@@ -4530,6 +4615,6 @@ func TestPlannedReparenterStats(t *testing.T) {
 	require.Error(t, err)
 
 	// check the counter values
-	require.EqualValues(t, map[string]int64{"testkeyspace.-.success": 1, "testkeyspace.-.failure": 1}, prsCounter.Counts())
-	require.EqualValues(t, map[string]int64{"All": 2, "PlannedReparentShard": 2}, reparentShardOpTimings.Counts())
+	require.Equal(t, map[string]int64{"testkeyspace.-.success": 1, "testkeyspace.-.failure": 1}, prsCounter.Counts())
+	require.Equal(t, map[string]int64{"All": 2, "PlannedReparentShard": 2}, reparentShardOpTimings.Counts())
 }

@@ -825,7 +825,7 @@ func TestBuildPlayerPlanExclude(t *testing.T) {
 		workflowConfig: vttablet.DefaultVReplicationConfig,
 	}
 	plan, err := vr.buildReplicatorPlan(getSource(input), PrimaryKeyInfos, nil, binlogplayer.NewStats(), collations.MySQL8(), sqlparser.NewTestParser())
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	want := &TestReplicatorPlan{
 		VStreamFilter: &binlogdatapb.Filter{
@@ -845,7 +845,7 @@ func TestBuildPlayerPlanExclude(t *testing.T) {
 
 	gotPlan, _ := json.Marshal(plan)
 	wantPlan, _ := json.Marshal(want)
-	assert.Equal(t, string(gotPlan), string(wantPlan))
+	assert.Equal(t, string(wantPlan), string(gotPlan))
 }
 
 func TestAppendFromRow(t *testing.T) {
@@ -1219,6 +1219,228 @@ func TestApplyBulkInsertChangesMaxQuerySize(t *testing.T) {
 		require.Len(t, executed, 1)
 		assert.Contains(t, executed[0], "insert into t(j) values")
 		assert.NotContains(t, executed[0], "not-json")
+	})
+}
+
+func TestApplyBulkDeleteChanges(t *testing.T) {
+	newTablePlan := func() *TablePlan {
+		return &TablePlan{
+			TargetName:  "t",
+			MultiDelete: sqlparser.BuildParsedQuery("delete from t where id in %a", "::bulk_pks"),
+			Fields: []*querypb.Field{
+				{Name: "id", Type: querypb.Type_INT64},
+				{Name: "v", Type: querypb.Type_VARCHAR},
+			},
+			PKIndices: []bool{true, false},
+			TablePlanBuilder: &tablePlanBuilder{
+				pkCols: []*colExpr{{}},
+				stats:  binlogplayer.NewStats(),
+			},
+		}
+	}
+	makeRowDelete := func(id int64, v string) *binlogdatapb.RowChange {
+		return &binlogdatapb.RowChange{
+			Before: sqltypes.RowToProto3([]sqltypes.Value{
+				sqltypes.NewInt64(id),
+				sqltypes.NewVarChar(v),
+			}),
+		}
+	}
+
+	t.Run("happy path batches into single query", func(t *testing.T) {
+		tp := newTablePlan()
+		rowDeletes := []*binlogdatapb.RowChange{
+			makeRowDelete(1, "a"),
+			makeRowDelete(2, "b"),
+		}
+		var executed []string
+		_, err := tp.applyBulkDeleteChanges(rowDeletes, func(sql string) (*sqltypes.Result, error) {
+			executed = append(executed, sql)
+			return &sqltypes.Result{RowsAffected: 1}, nil
+		}, 1024)
+		require.NoError(t, err)
+		require.Len(t, executed, 1)
+		assert.Equal(t, "delete from t where id in (1, 2)", executed[0])
+	})
+
+	t.Run("insert-shaped change returns an error instead of panicking", func(t *testing.T) {
+		// A change with no Before image (an insert) riding in a bulk-delete
+		// event used to panic with a nil pointer dereference in MakeRowTrusted,
+		// killing the entire vttablet process.
+		tp := newTablePlan()
+		rowChanges := []*binlogdatapb.RowChange{
+			makeRowDelete(1, "a"),
+			{After: sqltypes.RowToProto3([]sqltypes.Value{
+				sqltypes.NewInt64(2),
+				sqltypes.NewVarChar("b"),
+			})},
+		}
+		var executed []string
+		_, err := tp.applyBulkDeleteChanges(rowChanges, func(sql string) (*sqltypes.Result, error) {
+			executed = append(executed, sql)
+			return &sqltypes.Result{RowsAffected: 1}, nil
+		}, 1024)
+		require.ErrorContains(t, err, "not delete-shaped")
+		assert.True(t, isUnrecoverableError(err), "error must be terminal")
+		assert.Empty(t, executed)
+	})
+
+	t.Run("update-shaped change returns an error instead of being applied as a delete", func(t *testing.T) {
+		// A change with both images (an update) riding in a bulk-delete event
+		// passes a nil-Before check and is silently applied as a DELETE,
+		// discarding its After image. The guard must require the exact
+		// delete shape: Before image only.
+		tp := newTablePlan()
+		rowChanges := []*binlogdatapb.RowChange{
+			makeRowDelete(1, "a"),
+			{
+				Before: sqltypes.RowToProto3([]sqltypes.Value{
+					sqltypes.NewInt64(2),
+					sqltypes.NewVarChar("b"),
+				}),
+				After: sqltypes.RowToProto3([]sqltypes.Value{
+					sqltypes.NewInt64(2),
+					sqltypes.NewVarChar("c"),
+				}),
+			},
+		}
+		var executed []string
+		_, err := tp.applyBulkDeleteChanges(rowChanges, func(sql string) (*sqltypes.Result, error) {
+			executed = append(executed, sql)
+			return &sqltypes.Result{RowsAffected: 1}, nil
+		}, 1024)
+		require.ErrorContains(t, err, "not delete-shaped")
+		assert.True(t, isUnrecoverableError(err), "error must be terminal")
+		assert.Empty(t, executed)
+	})
+
+	t.Run("empty Before image returns an error instead of panicking", func(t *testing.T) {
+		// The malformed shape from issue #20360: a Before image that is
+		// present but has no column values. MakeRowTrusted returns an empty
+		// row and vals[pkIndex] used to panic with index out of range.
+		tp := newTablePlan()
+		rowChanges := []*binlogdatapb.RowChange{
+			makeRowDelete(1, "a"),
+			{Before: &querypb.Row{}},
+		}
+		var executed []string
+		_, err := tp.applyBulkDeleteChanges(rowChanges, func(sql string) (*sqltypes.Result, error) {
+			executed = append(executed, sql)
+			return &sqltypes.Result{RowsAffected: 1}, nil
+		}, 1024)
+		require.ErrorContains(t, err, "not delete-shaped")
+		assert.True(t, isUnrecoverableError(err), "error must be terminal")
+		assert.Empty(t, executed)
+	})
+
+	t.Run("nil change returns an error instead of panicking", func(t *testing.T) {
+		tp := newTablePlan()
+		rowChanges := []*binlogdatapb.RowChange{
+			makeRowDelete(1, "a"),
+			nil,
+		}
+		var executed []string
+		_, err := tp.applyBulkDeleteChanges(rowChanges, func(sql string) (*sqltypes.Result, error) {
+			executed = append(executed, sql)
+			return &sqltypes.Result{RowsAffected: 1}, nil
+		}, 1024)
+		require.ErrorContains(t, err, "not delete-shaped")
+		assert.True(t, isUnrecoverableError(err), "error must be terminal")
+		assert.Empty(t, executed)
+	})
+}
+
+func TestApplyBulkInsertChangesMixedShapes(t *testing.T) {
+	tp := &TablePlan{
+		TargetName:      "t",
+		BulkInsertFront: sqlparser.BuildParsedQuery("insert into t(c1, c2)"),
+		BulkInsertValues: sqlparser.BuildParsedQuery("(%a, %a)",
+			":a_c1", ":a_c2",
+		),
+		Fields: []*querypb.Field{
+			{Name: "c1", Type: querypb.Type_INT32},
+			{Name: "c2", Type: querypb.Type_VARCHAR},
+		},
+		FieldsToSkip:     map[string]bool{},
+		TablePlanBuilder: &tablePlanBuilder{stats: binlogplayer.NewStats()},
+	}
+	makeRow := func(id int, val string) *querypb.Row {
+		return sqltypes.RowToProto3([]sqltypes.Value{
+			sqltypes.NewInt64(int64(id)),
+			sqltypes.NewVarChar(val),
+		})
+	}
+
+	t.Run("delete-shaped change returns an error instead of panicking", func(t *testing.T) {
+		// A change with no After image (a delete) riding in a bulk-insert
+		// event used to panic with a nil pointer dereference in MakeRowTrusted,
+		// killing the entire vttablet process. This is what a mixed row event
+		// produced by a sharding-key update crossing an in_keyrange filter
+		// boundary looks like by the time it reaches the bulk-insert path.
+		rowChanges := []*binlogdatapb.RowChange{
+			{After: makeRow(1, "a")},
+			{Before: makeRow(2, "b")},
+		}
+		var executed []string
+		_, err := tp.applyBulkInsertChanges(rowChanges, func(sql string) (*sqltypes.Result, error) {
+			executed = append(executed, sql)
+			return &sqltypes.Result{RowsAffected: 1}, nil
+		}, 1024)
+		require.ErrorContains(t, err, "not insert-shaped")
+		assert.True(t, isUnrecoverableError(err), "error must be terminal")
+		assert.Empty(t, executed)
+	})
+
+	t.Run("update-shaped change returns an error instead of being applied as an insert", func(t *testing.T) {
+		// A change with both images (an update) riding in a bulk-insert event
+		// passes a nil-After check and is silently applied as an INSERT,
+		// discarding its Before image. The guard must require the exact
+		// insert shape: After image only.
+		rowChanges := []*binlogdatapb.RowChange{
+			{After: makeRow(1, "a")},
+			{Before: makeRow(2, "b"), After: makeRow(2, "c")},
+		}
+		var executed []string
+		_, err := tp.applyBulkInsertChanges(rowChanges, func(sql string) (*sqltypes.Result, error) {
+			executed = append(executed, sql)
+			return &sqltypes.Result{RowsAffected: 1}, nil
+		}, 1024)
+		require.ErrorContains(t, err, "not insert-shaped")
+		assert.True(t, isUnrecoverableError(err), "error must be terminal")
+		assert.Empty(t, executed)
+	})
+
+	t.Run("empty After image returns an error instead of panicking", func(t *testing.T) {
+		// Mirror of the #20360 shape on the insert side: an After image that
+		// is present but has no column values used to panic with index out of
+		// range when the field loop indexed the empty row.
+		rowChanges := []*binlogdatapb.RowChange{
+			{After: makeRow(1, "a")},
+			{After: &querypb.Row{}},
+		}
+		var executed []string
+		_, err := tp.applyBulkInsertChanges(rowChanges, func(sql string) (*sqltypes.Result, error) {
+			executed = append(executed, sql)
+			return &sqltypes.Result{RowsAffected: 1}, nil
+		}, 1024)
+		require.ErrorContains(t, err, "not insert-shaped")
+		assert.True(t, isUnrecoverableError(err), "error must be terminal")
+		assert.Empty(t, executed)
+	})
+
+	t.Run("nil change returns an error instead of panicking", func(t *testing.T) {
+		rowChanges := []*binlogdatapb.RowChange{
+			{After: makeRow(1, "a")},
+			nil,
+		}
+		var executed []string
+		_, err := tp.applyBulkInsertChanges(rowChanges, func(sql string) (*sqltypes.Result, error) {
+			executed = append(executed, sql)
+			return &sqltypes.Result{RowsAffected: 1}, nil
+		}, 1024)
+		require.ErrorContains(t, err, "not insert-shaped")
+		assert.True(t, isUnrecoverableError(err), "error must be terminal")
+		assert.Empty(t, executed)
 	})
 }
 

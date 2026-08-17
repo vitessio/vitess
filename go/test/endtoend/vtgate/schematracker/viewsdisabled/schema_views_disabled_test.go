@@ -150,12 +150,12 @@ func TestViewOperationsWithViewsDisabled(t *testing.T) {
 	// These should work because VTGate treats views as regular tables
 	// when it cannot load their definitions
 	qr := utils.Exec(t, conn, "SELECT COUNT(*) FROM active_users")
-	require.Equal(t, 1, len(qr.Rows))
+	require.Len(t, qr.Rows, 1)
 	// Should return count of active users (3 out of 4 users are active)
 	assert.Equal(t, "3", qr.Rows[0][0].ToString())
 
 	qr = utils.Exec(t, conn, "SELECT COUNT(*) FROM expensive_products")
-	require.Equal(t, 1, len(qr.Rows))
+	require.Len(t, qr.Rows, 1)
 	// Should return count of expensive products (price > 100): Laptop(1299.99) + Monitor(299.99) = 2
 	assert.Equal(t, "2", qr.Rows[0][0].ToString())
 
@@ -165,7 +165,7 @@ func TestViewOperationsWithViewsDisabled(t *testing.T) {
 
 	// Verify the insert worked by checking the underlying table
 	qr = utils.Exec(t, conn, "SELECT name FROM users WHERE id = 5")
-	require.Equal(t, 1, len(qr.Rows))
+	require.Len(t, qr.Rows, 1)
 	assert.Equal(t, "Eve Wilson", qr.Rows[0][0].ToString())
 
 	// Test UPDATE operations through views
@@ -173,7 +173,7 @@ func TestViewOperationsWithViewsDisabled(t *testing.T) {
 
 	// Verify the update worked
 	qr = utils.Exec(t, conn, "SELECT email FROM users WHERE id = 5")
-	require.Equal(t, 1, len(qr.Rows))
+	require.Len(t, qr.Rows, 1)
 	assert.Equal(t, "eve.wilson@example.com", qr.Rows[0][0].ToString())
 
 	// Test DELETE operations through views
@@ -181,12 +181,12 @@ func TestViewOperationsWithViewsDisabled(t *testing.T) {
 
 	// Verify the delete worked
 	qr = utils.Exec(t, conn, "SELECT COUNT(*) FROM users WHERE id = 5")
-	require.Equal(t, 1, len(qr.Rows))
+	require.Len(t, qr.Rows, 1)
 	assert.Equal(t, "0", qr.Rows[0][0].ToString())
 
 	// Test complex JOIN view operations
 	qr = utils.Exec(t, conn, "SELECT user_name, product_name FROM user_orders ORDER BY order_id")
-	require.Equal(t, 4, len(qr.Rows))
+	require.Len(t, qr.Rows, 4)
 	assert.Equal(t, "Alice Johnson", qr.Rows[0][0].ToString())
 	assert.Equal(t, "Laptop", qr.Rows[0][1].ToString())
 }
@@ -221,7 +221,7 @@ func TestSchemaTrackingWithViewsDisabled(t *testing.T) {
 
 	// But operations through the view should still work
 	qr := utils.Exec(t, conn, "SELECT COUNT(*) FROM recent_orders")
-	require.Equal(t, 1, len(qr.Rows))
+	require.Len(t, qr.Rows, 1)
 
 	// Drop the view - this also should not cause issues
 	utils.Exec(t, conn, "DROP VIEW recent_orders")
@@ -248,19 +248,19 @@ func TestTableOperationsStillWork(t *testing.T) {
 	utils.Exec(t, conn, "INSERT INTO users (id, name, email, status) VALUES (10, 'Test User', 'test@example.com', 'active')")
 
 	qr := utils.Exec(t, conn, "SELECT name FROM users WHERE id = 10")
-	require.Equal(t, 1, len(qr.Rows))
+	require.Len(t, qr.Rows, 1)
 	assert.Equal(t, "Test User", qr.Rows[0][0].ToString())
 
 	utils.Exec(t, conn, "UPDATE users SET email = 'updated@example.com' WHERE id = 10")
 
 	qr = utils.Exec(t, conn, "SELECT email FROM users WHERE id = 10")
-	require.Equal(t, 1, len(qr.Rows))
+	require.Len(t, qr.Rows, 1)
 	assert.Equal(t, "updated@example.com", qr.Rows[0][0].ToString())
 
 	utils.Exec(t, conn, "DELETE FROM users WHERE id = 10")
 
 	qr = utils.Exec(t, conn, "SELECT COUNT(*) FROM users WHERE id = 10")
-	require.Equal(t, 1, len(qr.Rows))
+	require.Len(t, qr.Rows, 1)
 	assert.Equal(t, "0", qr.Rows[0][0].ToString())
 }
 

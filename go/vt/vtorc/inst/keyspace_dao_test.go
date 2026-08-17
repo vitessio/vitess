@@ -147,7 +147,7 @@ func TestSaveAndReadKeyspace(t *testing.T) {
 				return
 			}
 			require.NoError(t, err)
-			require.EqualValues(t, tt.semiSyncAckersWanted, policy.SemiSyncAckers(durabilityPolicy, nil))
+			require.Equal(t, tt.semiSyncAckersWanted, policy.SemiSyncAckers(durabilityPolicy, nil))
 		})
 	}
 }

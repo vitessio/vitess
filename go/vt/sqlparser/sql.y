@@ -50,6 +50,9 @@ func markBindVariable(yylex yyLexer, bvar string) {
 
 %}
 
+%locations
+%loctype location
+
 %union {
   empty         struct{}
   LengthScaleOption LengthScaleOption
@@ -5524,7 +5527,7 @@ distinct_opt:
   }
 
 prepare_statement:
-  PREPARE comment_opt sql_id FROM text_literal_or_arg
+  PREPARE comment_opt sql_id FROM text_literal
   {
     $$ = &PrepareStmt{Name:$3, Comments: Comments($2).Parsed(), Statement:$5}
   }
@@ -5646,7 +5649,24 @@ select_expression_list:
 select_expression:
   expression as_ci_opt
   {
-    $$ = &AliasedExpr{Expr: $1, As: $2}
+    ae := &AliasedExpr{Expr: $1, As: $2}
+    if !$2.NotEmpty() {
+      switch expr := $1.(type) {
+      case *ColName:
+        // ColName already has deterministic ColumnName() output
+      case *Literal:
+        switch expr.Type {
+        case DateVal, TimeVal, TimestampVal, HexVal, BitNum:
+          // These literal types need InputExpression because the formatter
+          // doesn't preserve the original input form (e.g. DATE '2022-08-06',
+          // x'48' vs X'48', b'1010' vs 0b1010)
+          ae.InputExpression = yylex.(*Tokenizer).GetInputExpression(@1.start, @1.end)
+        }
+      default:
+        ae.InputExpression = yylex.(*Tokenizer).GetInputExpression(@1.start, @1.end)
+      }
+    }
+    $$ = ae
   }
 | table_id '.' '*'
   {

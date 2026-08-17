@@ -1,0 +1,185 @@
+# Regenerates the error code documentation on the website whenever
+# go/vt/vterrors/code.go changes on main or a release branch.
+name: Error code docs
+
+on:
+  push:
+    branches:
+      - "main"
+      - "release-[0-9]+.[0-9]"
+    paths:
+      - "go/vt/vterrors/code.go"
+
+# Runs for one branch share a website branch and force-push to it, so let the
+# newest run win rather than racing an older one.
+concurrency:
+  group: format('{0}-{1}', ${{ github.ref }}, 'Error code docs')
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  error_code_docs:
+    name: Update error code docs
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
+        with:
+          egress-policy: audit
+
+      - name: Checkout vitess
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: 'false'
+
+      - name: Set up Go
+        uses: ./.github/actions/setup-go
+
+      - name: Generate error codes
+        run: |
+          go run ./go/vt/vterrors/vterrorsgen > /tmp/error_codes.txt
+          echo "Error codes generated successfully"
+
+      - name: Generate GitHub App token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        id: app-token
+        with:
+          app-id: ${{ vars.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: website
+          permission-contents: write
+          permission-pull-requests: write
+
+      - name: Determine docs version
+        id: docs_version
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          REF_NAME: ${{ github.ref_name }}
+          REPO_OWNER: ${{ github.repository_owner }}
+        run: |
+          if [[ "$REF_NAME" == "main" ]]; then
+            # Get the "next" version from website config.toml.
+            VERSION=$(gh api "repos/${REPO_OWNER}/website/contents/config.toml" \
+              --jq '.content' | base64 -d | grep 'next = ' | sed 's/.*"\([0-9.]*\)".*/\1/')
+          elif [[ "$REF_NAME" =~ ^release-([0-9]+\.[0-9]+)$ ]]; then
+            VERSION="${BASH_REMATCH[1]}"
+          else
+            echo "Unexpected ref: $REF_NAME"
+            exit 1
+          fi
+
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Docs version: $VERSION"
+
+      - name: Clone website repository
+        id: website
+        env:
+          REPO_OWNER: ${{ github.repository_owner }}
+          VERSION: ${{ steps.docs_version.outputs.version }}
+        run: |
+          BRANCH_NAME="update-error-code-${VERSION}"
+
+          # The branch is always rebuilt from prod and force-pushed, so the
+          # remote copy of a previous run's branch is never needed here.
+          git clone --depth 1 --branch prod "https://github.com/${REPO_OWNER}/website.git" /tmp/website
+          git -C /tmp/website checkout -b "${BRANCH_NAME}"
+
+          echo "branch=${BRANCH_NAME}" >> "$GITHUB_OUTPUT"
+
+      - name: Update error documentation
+        id: update_docs
+        env:
+          VERSION: ${{ steps.docs_version.outputs.version }}
+        run: |
+          DOC_PATH="/tmp/website/content/en/docs/${VERSION}/reference/errors/query-serving.md"
+
+          if [[ ! -f "$DOC_PATH" ]]; then
+            echo "Documentation file not found: $DOC_PATH"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Read the generated error codes.
+          ERROR_CODES=$(cat /tmp/error_codes.txt)
+
+          # Update the documentation between <!-- start --> and <!-- end --> markers.
+          awk -v codes="$ERROR_CODES" '
+            /<!-- start -->/ { print; print codes; skip=1; next }
+            /<!-- end -->/ { skip=0 }
+            !skip { print }
+          ' "$DOC_PATH" > /tmp/query-serving-new.md
+
+          mv /tmp/query-serving-new.md "$DOC_PATH"
+
+          # Check if there are actual changes.
+          cd /tmp/website
+          if git diff --quiet; then
+            echo "No changes detected in error code documentation"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Changes detected in error code documentation"
+            echo "doc_path=content/en/docs/${VERSION}/reference/errors/query-serving.md" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Get GitHub App user ID
+        if: steps.update_docs.outputs.skip != 'true'
+        id: get-user-id
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
+        run: |
+          echo "user-id=$(gh api "/users/${APP_SLUG}[bot]" --jq .id)" >> "$GITHUB_OUTPUT"
+
+      - name: Configure Git
+        if: steps.update_docs.outputs.skip != 'true'
+        env:
+          APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
+          USER_ID: ${{ steps.get-user-id.outputs.user-id }}
+        run: |
+          git config --global user.name "${APP_SLUG}[bot]"
+          git config --global user.email "${USER_ID}+${APP_SLUG}[bot]@users.noreply.github.com"
+
+      - name: Create or update PR on website
+        if: steps.update_docs.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          VERSION: ${{ steps.docs_version.outputs.version }}
+          BRANCH_NAME: ${{ steps.website.outputs.branch }}
+          DOC_PATH: ${{ steps.update_docs.outputs.doc_path }}
+          REPO_OWNER: ${{ github.repository_owner }}
+          REPOSITORY: ${{ github.repository }}
+          COMMIT_SHA: ${{ github.sha }}
+        run: |
+          cd /tmp/website
+
+          # Stage and commit changes.
+          git add "$DOC_PATH"
+          git commit -m "Updated the query-serving error code"
+
+          # Push changes.
+          git push -f "https://x-access-token:${GH_TOKEN}@github.com/${REPO_OWNER}/website.git" "${BRANCH_NAME}"
+
+          PR_BODY="## Description
+          This Pull Request updates the error code documentation based on https://github.com/${REPOSITORY}/commit/${COMMIT_SHA}"
+
+          # Check if PR already exists.
+          EXISTING_PR=$(gh pr list --repo "${REPO_OWNER}/website" --head "${BRANCH_NAME}" --json number --jq '.[0].number' 2>/dev/null || echo "")
+
+          if [[ -n "$EXISTING_PR" ]]; then
+            # Point the description at the commit the branch was just rebuilt from.
+            gh pr edit "$EXISTING_PR" --repo "${REPO_OWNER}/website" --body "$PR_BODY"
+            echo "Updated existing pull request:"
+            echo "https://github.com/${REPO_OWNER}/website/pull/${EXISTING_PR}"
+          else
+            # Create new PR.
+            gh pr create \
+              --repo "${REPO_OWNER}/website" \
+              --title "Update error code documentation (v${VERSION})" \
+              --body "$PR_BODY" \
+              --base prod \
+              --head "${BRANCH_NAME}"
+          fi

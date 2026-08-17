@@ -17,7 +17,10 @@ limitations under the License.
 package vtctlbackup
 
 import (
+	"strconv"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/mysqlctl"
 )
@@ -65,6 +68,47 @@ func TestBuiltinBackupWithExternalZstdCompressionAndManifestedDecompressor(t *te
 	}
 
 	TestBackup(t, BuiltinBackup, "xbstream", 0, cDetails, []string{"TestReplicaBackup", "TestPrimaryBackup"})
+}
+
+// TestBuiltinBackupChunked uses a low chunk threshold and chunk size (4MiB each) to force
+// InnoDB files (ibdata1, undo tablespaces) to be split into multiple chunks during backup.
+// This verifies that MySQL can start successfully and read back rows after a chunked restore.
+func TestBuiltinBackupChunked(t *testing.T) {
+	defer setDefaultCommonArgs()
+	const chunkSizeBytes = 4194304 // 4MiB
+	commonTabletArg = append(
+		getDefaultCommonArgs(),
+		"--builtinbackup-file-chunk-threshold", strconv.Itoa(chunkSizeBytes),
+		"--builtinbackup-file-chunk-size", strconv.Itoa(chunkSizeBytes),
+	)
+
+	code, err := LaunchCluster(BuiltinBackup, "xbstream", 0, nil)
+	require.NoErrorf(t, err, "setup failed with status code %d", code)
+	defer TearDownCluster()
+
+	t.Run("TestChunkedBackup", chunkedBackup)
+}
+
+// TestBuiltinBackupNonChunked verifies that with the default threshold of 0, no chunking
+// occurs and the MANIFEST remains compatible with older Vitess versions.
+func TestBuiltinBackupNonChunked(t *testing.T) {
+	defer setDefaultCommonArgs()
+	code, err := LaunchCluster(BuiltinBackup, "xbstream", 0, nil)
+	require.NoErrorf(t, err, "setup failed with status code %d", code)
+	defer TearDownCluster()
+
+	t.Run("TestNonChunkedBackup", nonChunkedBackup)
+}
+
+// TestBuiltinBackupChunkedRestoreNonChunked verifies that a tablet configured with
+// chunking can restore a non-chunked backup (forward compatibility).
+func TestBuiltinBackupChunkedRestoreNonChunked(t *testing.T) {
+	defer setDefaultCommonArgs()
+	code, err := LaunchCluster(BuiltinBackup, "xbstream", 0, nil)
+	require.NoErrorf(t, err, "setup failed with status code %d", code)
+	defer TearDownCluster()
+
+	t.Run("TestChunkedRestoreNonChunked", chunkedRestoreNonChunkedBackup)
 }
 
 func setDefaultCompressionFlag() {

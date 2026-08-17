@@ -75,7 +75,7 @@ func TestHandlePathKeyspace(t *testing.T) {
 	// Test the shards path.
 	input = path.Join("/global", "keyspaces", "test_keyspace", "shards")
 	result = ex.HandlePath(input, nil)
-	assert.Equalf(t, "", result.Data, "HandlePath(%q)", input)
+	assert.Emptyf(t, result.Data, "HandlePath(%q)", input)
 	assert.Equal(t, []string{"10-20", "20-30"}, result.Children, "Children")
 	assert.Emptyf(t, result.Error, "HandlePath(%q).Error", input)
 }
