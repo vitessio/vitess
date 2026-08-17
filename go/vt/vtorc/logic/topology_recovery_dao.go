@@ -151,9 +151,9 @@ func AttemptRecoveryRegistration(analysisEntry *inst.DetectionAnalysis) (*Topolo
 // It does not clear the "active period" as this still takes place in order to avoid flapping.
 // The recovery_detection row is NOT deleted here: if the recovery failed, the problem is still
 // active and the detection row must survive so subsequent retry attempts share the same
-// detection_id. The incident boundary is established by executeCheckAndRecoverFunction when
-// checkIfAlreadyFixed confirms the topology is healthy; at that point the detection row is
-// deleted so any future recurrence creates a fresh detection_id.
+// detection_id. The incident boundary is established by resolveRecovery when IsSuccessful=true
+// (i.e. a new primary was promoted via ERS/PRS); at that point the detection row is deleted so
+// any future recurrence creates a fresh detection_id.
 func writeResolveRecovery(topologyRecovery *TopologyRecovery) error {
 	_, err := db.ExecVTOrc(`UPDATE topology_recovery
 		SET
@@ -176,8 +176,8 @@ func writeResolveRecovery(topologyRecovery *TopologyRecovery) error {
 }
 
 // deleteResolvedDetection removes a recovery_detection row by its detection_id.
-// It is called when checkIfAlreadyFixed confirms the topology is healthy, establishing
-// the incident boundary so any future recurrence creates a fresh detection_id.
+// It is called by resolveRecovery when IsSuccessful=true (a new primary was promoted),
+// establishing the incident boundary so any future recurrence creates a fresh detection_id.
 func deleteResolvedDetection(detectionID int64) {
 	if detectionID == 0 {
 		return

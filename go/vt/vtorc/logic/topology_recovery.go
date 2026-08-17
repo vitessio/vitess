@@ -279,7 +279,20 @@ func resolveRecovery(topologyRecovery *TopologyRecovery, successorInstance *inst
 		topologyRecovery.SuccessorAlias = successorInstance.InstanceAlias
 		topologyRecovery.IsSuccessful = true
 	}
-	return writeResolveRecovery(topologyRecovery)
+	if err := writeResolveRecovery(topologyRecovery); err != nil {
+		return err
+	}
+	// Establish the incident boundary on a successful recovery: delete the detection row
+	// so any future recurrence creates a fresh detection_id. Failed attempts intentionally
+	// leave the row intact so retries within the same incident share the same detection_id.
+	//
+	// IsSuccessful is true only when a new primary is promoted (successorInstance != nil).
+	// Recoveries that don't elect a new primary (fixReplica, fixPrimary, etc.) always pass
+	// nil and never set IsSuccessful, so those detection rows expire naturally.
+	if topologyRecovery.IsSuccessful {
+		deleteResolvedDetection(topologyRecovery.AnalysisEntry.RecoveryId)
+	}
+	return nil
 }
 
 // recoverPrimaryHasPrimary resets the replication on the primary instance
@@ -1090,13 +1103,11 @@ func executeCheckAndRecoverFunction(analysisEntry *inst.DetectionAnalysis) (err 
 			return err
 		}
 		if alreadyFixed {
-			// The topology is healthy: establish the incident boundary by deleting the
-			// detection row. Future recurrences of the same failure will insert a fresh row
-			// (AUTOINCREMENT detection_id), so topology_recovery rows always reference a
-			// detection from the correct incident. Best-effort — if the DELETE fails, expiry
-			// cleans it up. Failed recovery attempts do NOT delete the row (writeResolveRecovery
-			// deliberately leaves it intact so retries share the same detection_id).
-			deleteResolvedDetection(analysisEntry.RecoveryId)
+			// The problem is no longer visible in analysis. This can mean it was resolved by
+			// another agent, but it can also mean GetDetectionAnalysis suppressed it because
+			// a shard-wide ordered action is active (see checkIfAlreadyFixed comment). We
+			// cannot distinguish the two here, so we do not establish an incident boundary;
+			// the detection row will expire naturally once the analysis stops being detected.
 			logger.Info(fmt.Sprintf("Analysis: %v on tablet %v - No longer valid, some other agent must have fixed the problem.", analysisEntry.Analysis, analyzedInstanceAliasString))
 			recoveriesSkippedCounter.Add(append(recoveryLabels, RecoverySkipStaleAnalysis.String()), 1)
 			return nil
