@@ -1066,15 +1066,15 @@ func (td *tableDiffer) getSourcePKCols() error {
 // and must be used for all source schema/PK lookups.
 func sourceTableNameFromSelect(sourceSelect *sqlparser.Select) (string, error) {
 	if len(sourceSelect.From) != 1 {
-		return "", fmt.Errorf("unsupported source query, expected a single table in the FROM clause: %s", sqlparser.String(sourceSelect))
+		return "", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported source query, expected a single table in the FROM clause: %s", sqlparser.String(sourceSelect))
 	}
 	aliased, ok := sourceSelect.From[0].(*sqlparser.AliasedTableExpr)
 	if !ok {
-		return "", fmt.Errorf("unsupported source query, expected a simple table reference: %s", sqlparser.String(sourceSelect))
+		return "", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported source query, expected a simple table reference: %s", sqlparser.String(sourceSelect))
 	}
 	tableName := sqlparser.GetTableName(aliased.Expr)
 	if tableName.IsEmpty() {
-		return "", fmt.Errorf("unsupported source query, could not resolve the source table: %s", sqlparser.String(sourceSelect))
+		return "", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported source query, could not resolve the source table: %s", sqlparser.String(sourceSelect))
 	}
 	return tableName.String(), nil
 }
@@ -1124,7 +1124,7 @@ func sourcePKSelectIndices(sourceSelect *sqlparser.Select, pkColumns []string) (
 			// projected (which would corrupt resume checkpoints). We do NOT expand
 			// the star here; that logic belongs in buildTablePlan.
 			if _, isStar := selExpr.(*sqlparser.StarExpr); isStar {
-				return nil, false, fmt.Errorf("unexpected '*' in vdiff source query SELECT list; expected columns to be expanded by buildTablePlan: %s", sqlparser.String(sourceSelect))
+				return nil, false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected '*' in vdiff source query SELECT list; expected columns to be expanded by buildTablePlan: %s", sqlparser.String(sourceSelect))
 			}
 			aliasedExpr, ok := selExpr.(*sqlparser.AliasedExpr)
 			if !ok {
@@ -1147,7 +1147,7 @@ func sourcePKSelectIndices(sourceSelect *sqlparser.Select, pkColumns []string) (
 		}
 		if aliasedButNotPhysical {
 			// Present-but-non-physical: fail closed.
-			return nil, false, fmt.Errorf("source PK column %s is projected only via a non-physical expression in the source query SELECT list", pkc)
+			return nil, false, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "source PK column %s is projected only via a non-physical expression in the source query SELECT list", pkc)
 		}
 		// Entirely absent: report to the caller instead of returning a partial
 		// (and therefore unusable) source key.
