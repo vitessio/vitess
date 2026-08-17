@@ -352,6 +352,44 @@ func TestVExplainMySQLPlanRejectsSequence(t *testing.T) {
 	}
 }
 
+// TestVExplainMySQLPlanRejectsSubqueries verifies that a query containing a
+// subquery, derived table, or common table expression is rejected at plan time,
+// before any shard RPC. Such a query can merge into a single Route that the
+// primitive allowlist would accept, but EXPLAIN FORMAT=JSON of a derived table can
+// execute a stored function during optimization, so MYSQLPLAN must never send it to
+// the shards. A non-recursive CTE is inlined as a derived table during planning
+// (unlike a recursive CTE, which is rejected by the primitive allowlist), so it
+// must be caught at the AST level before that inlining runs.
+func TestVExplainMySQLPlanRejectsSubqueries(t *testing.T) {
+	testCases := []struct {
+		name  string
+		query string
+	}{
+		{"derived table in from", "vexplain mysqlplan select id from `user`, (select 1 as f1) as dt where user.id = dt.f1"},
+		{"scalar subquery in select", "vexplain mysqlplan select id, (select 1 from `user` u2 where u2.id = `user`.id) from `user`"},
+		{"subquery in where", "vexplain mysqlplan select id from `user` where id in (select id from `user` where id = 5)"},
+		{"non-recursive cte", "vexplain mysqlplan with t as (select id, textcol from `user` where id = 5) select id from t"},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			conns := map[string]*sandboxconn.SandboxConn{}
+			executor, ctx := createExecutorEnvCallback(t, createExecutorConfig(), func(shard, ks string, tabletType topodatapb.TabletType, conn *sandboxconn.SandboxConn) {
+				conns[ks+"/"+shard] = conn
+			})
+
+			session := &vtgatepb.Session{TargetString: "@primary"}
+			_, err := executorExec(ctx, executor, session, tc.query, nil)
+			require.ErrorContains(t, err, "cannot resolve the target shards without executing the query")
+			require.ErrorContains(t, err, "use VEXPLAIN ALL instead")
+
+			// Rejection happens at plan time, so no tablet query is ever sent.
+			for target, conn := range conns {
+				assert.Empty(t, conn.Queries, "no query should be sent to %s", target)
+			}
+		})
+	}
+}
+
 // TestVExplainMySQLPlanRequiresExecution verifies that plans whose target shards
 // cannot be resolved without running the query (lookup vindex, cross-shard join,
 // recursive CTE) and DML statements are rejected at plan time, each pointing the

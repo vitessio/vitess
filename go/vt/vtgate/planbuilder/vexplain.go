@@ -61,6 +61,10 @@ func buildVExplainPlan(
 // from a vindex without reading cluster data; any other plan is rejected here with a
 // message pointing the user to VEXPLAIN ALL.
 func buildVExplainMySQLPlan(ctx context.Context, explainStatement sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, cfg dynamicconfig.DDL) (*planResult, error) {
+	if err := checkVExplainMySQLNoNestedQuery(explainStatement); err != nil {
+		return nil, err
+	}
+
 	innerInstruction, err := createInstructionFor(ctx, sqlparser.String(explainStatement), explainStatement, reservedVars, vschema, cfg)
 	if err != nil {
 		return nil, err
@@ -86,6 +90,29 @@ const (
 	vexplainMySQLSequenceError = "VEXPLAIN MYSQLPLAN does not support sequence next value queries, " +
 		"because the 'select next ... values' syntax is Vitess-specific and cannot be sent to MySQL as EXPLAIN"
 )
+
+// checkVExplainMySQLNoNestedQuery rejects a statement that contains a subquery,
+// derived table, or common table expression. Such a query can merge into a single
+// Route that the primitive allowlist would accept, but EXPLAIN FORMAT=JSON
+// materializes a derived table during optimization - executing any stored function
+// inside it once per shard - which would violate MYSQLPLAN's promise never to run
+// the wrapped query. A CTE is inlined as a derived table during planning, so it
+// carries the same risk. A view reference is already rewritten into a
+// *sqlparser.DerivedTable by the normalizer before this walk runs, so it is caught
+// by the DerivedTable case. UNION is not a nested query block (it is a
+// *sqlparser.Union, not a Subquery/DerivedTable/With), so it is not rejected here.
+func checkVExplainMySQLNoNestedQuery(statement sqlparser.Statement) error {
+	var nestedErr error
+	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
+		switch node.(type) {
+		case *sqlparser.Subquery, *sqlparser.DerivedTable, *sqlparser.With:
+			nestedErr = vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, vexplainMySQLUnresolvableError)
+			return false, nil
+		}
+		return true, nil
+	}, statement)
+	return nestedErr
+}
 
 // checkVExplainMySQLSupported returns an error if any primitive in the tree cannot
 // be handled by VEXPLAIN MYSQLPLAN. It is an allowlist: only primitives whose target
