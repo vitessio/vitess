@@ -459,10 +459,26 @@ func (pr *PlannedReparenter) checkPrimaryElectContainsAllPositions(
 // chose the primary, we honor that choice and skip it (the standard PRS contract
 // for promoting a non-GTID shard). It does not relax the GTID dominance check,
 // which remains a real data-loss safeguard the explicit alias must still pass.
+//
+// The escape hatch is only valid on a *uniformly* file-position shard. A shard
+// that mixes GTID-based and file-position tablets is rejected outright (before the
+// escape hatch), because a GTID elect's transactions cannot be compared against a
+// file-position peer's and skipping that peer could silently discard its history —
+// and vice versa. This mirrors the ERS rule that a mixed GTID/non-GTID shard is
+// unsafe to reparent.
 func verifyPrimaryElectDominates(primaryElectAliasStr string, positions map[string]replication.Position, primaryElectExplicit bool) error {
 	electPos, ok := positions[primaryElectAliasStr]
 	if !ok {
 		return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "primary-elect tablet %v not found in tablet map", primaryElectAliasStr)
+	}
+
+	// A shard must not mix GTID-based and file-position replication: their position
+	// semantics differ and the two are not comparable across tablets, so we cannot
+	// prove the elect contains a peer's transactions. Reject such a shard before the
+	// per-peer loop, so the explicit-primary escape hatch below cannot let a GTID
+	// elect wave through an incomparable file-position peer (or vice versa).
+	if err := rejectMixedPositionFlavors(positions); err != nil {
+		return err
 	}
 
 	for alias, pos := range positions {
@@ -492,6 +508,39 @@ func verifyPrimaryElectDominates(primaryElectAliasStr string, positions map[stri
 		if !electPos.AtLeast(pos) {
 			return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "tablet %v (position: %v) contains transactions not found in primary-elect %v (position: %v)", alias, pos, primaryElectAliasStr, electPos)
 		}
+	}
+
+	return nil
+}
+
+// rejectMixedPositionFlavors returns an error if positions contains both a
+// file-position (non-GTID) tablet and a GTID-based one. Such a shard cannot be
+// safely reparented on the no-catch-up paths: file positions are local per-tablet
+// binlog coordinates that are not comparable against a GTID position, so there is
+// no way to prove the elect contains a peer's transactions across the two modes.
+//
+// Only a position with no GTIDSet at all (a fresh tablet on a never-initialized
+// shard, encoded as "") is skipped: it carries no flavor and so does not count
+// toward either group, leaving the fresh-init path unaffected. A typed-but-empty
+// GTID position such as "MySQL56/" (empty gtid_executed on a provisioned tablet)
+// has a non-nil GTIDSet and IS GTID-based, so it must count toward the GTID group —
+// testing pos.IsZero() here would wrongly skip it and let a "MySQL56/" elect wave
+// through an incomparable file-position peer.
+func rejectMixedPositionFlavors(positions map[string]replication.Position) error {
+	var filePosAlias, gtidAlias string
+	for alias, pos := range positions {
+		if pos.GTIDSet == nil {
+			continue
+		}
+		if _, isFilePos := pos.GTIDSet.(replication.FilePosGTID); isFilePos {
+			filePosAlias = alias
+		} else {
+			gtidAlias = alias
+		}
+	}
+
+	if filePosAlias != "" && gtidAlias != "" {
+		return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "shard mixes GTID-based and file-position replication (tablet %v is file-position, tablet %v is GTID-based), which cannot be safely reparented; positions are not comparable across the two modes", filePosAlias, gtidAlias)
 	}
 
 	return nil

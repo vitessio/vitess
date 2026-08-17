@@ -2271,6 +2271,120 @@ func TestCheckPrimaryElectContainsAllPositions_SingleFilePosCandidate(t *testing
 	require.NoError(t, err)
 }
 
+// TestCheckPrimaryElectContainsAllPositions_MixedPositionFlavors verifies that a
+// shard mixing GTID-based and file-position tablets is rejected, even when the
+// operator explicitly named the primary. The file-position escape hatch is only
+// valid on a uniformly file-position shard: a GTID elect's transactions cannot be
+// compared against a file-position peer's, so skipping that peer would let the
+// promotion silently discard the peer's history. Both directions (GTID elect with a
+// file-position peer, and a file-position elect with a GTID peer) must fail closed.
+func TestCheckPrimaryElectContainsAllPositions_MixedPositionFlavors(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+
+	// GTID elect (200), file-position peer (201).
+	tmc := &testutil.TabletManagerClient{
+		PrimaryPositionResults: map[string]struct {
+			Position string
+			Error    error
+		}{
+			"zone1-0000000200": {Position: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5"},
+			"zone1-0000000201": {Position: "FilePos/vt-bin.000009:5000"},
+		},
+	}
+	pr := NewPlannedReparenter(nil, tmc, logutil.NewMemoryLogger())
+
+	primaryElect := &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 200}}
+	tabletMap := map[string]*topo.TabletInfo{
+		"zone1-0000000200": {Tablet: primaryElect},
+		"zone1-0000000201": {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 201}}},
+	}
+
+	// Auto-election fails closed on the mixed shard.
+	err := pr.checkPrimaryElectContainsAllPositions(ctx, primaryElect, tabletMap, false /* primaryElectExplicit */)
+	require.ErrorContains(t, err, "mixes GTID-based and file-position replication")
+
+	// Explicit --new-primary must NOT bypass the mixed-shard rejection: the escape
+	// hatch only applies to a uniformly file-position shard.
+	err = pr.checkPrimaryElectContainsAllPositions(ctx, primaryElect, tabletMap, true /* primaryElectExplicit */)
+	require.ErrorContains(t, err, "mixes GTID-based and file-position replication")
+
+	// The mirror case (file-position elect, GTID peer) is likewise rejected.
+	tmcMirror := &testutil.TabletManagerClient{
+		PrimaryPositionResults: map[string]struct {
+			Position string
+			Error    error
+		}{
+			"zone1-0000000200": {Position: "FilePos/vt-bin.000002:100"},
+			"zone1-0000000201": {Position: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5"},
+		},
+	}
+	prMirror := NewPlannedReparenter(nil, tmcMirror, logutil.NewMemoryLogger())
+
+	err = prMirror.checkPrimaryElectContainsAllPositions(ctx, primaryElect, tabletMap, true /* primaryElectExplicit */)
+	require.ErrorContains(t, err, "mixes GTID-based and file-position replication")
+}
+
+// TestCheckPrimaryElectContainsAllPositions_EmptyVsTypedEmpty pins the distinction
+// the mixed-flavor check turns on: only a position with no GTIDSet at all is
+// flavor-less, and a typed-but-empty GTID position is still GTID-based.
+//
+//   - A genuinely empty peer position ("", nil GTIDSet) is a fresh, never-initialized
+//     tablet: it counts as neither GTID nor file-position, so it must not trip the
+//     mixed-flavor rejection against a GTID elect. The fresh-init path stays unaffected.
+//   - A typed-but-empty GTID elect ("MySQL56/", empty gtid_executed on a provisioned
+//     tablet) has a non-nil GTIDSet and IS GTID-based, so a shard pairing it with a
+//     file-position peer must be rejected as mixed — even with an explicit primary.
+//     Skipping it (as testing pos.IsZero() would) lets the empty elect wave through and
+//     silently discard the file-position peer's history.
+func TestCheckPrimaryElectContainsAllPositions_EmptyVsTypedEmpty(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+
+	// A fresh peer with no transactions yet ("") does not make the shard mixed.
+	tmcFresh := &testutil.TabletManagerClient{
+		PrimaryPositionResults: map[string]struct {
+			Position string
+			Error    error
+		}{
+			// GTID elect that contains the (empty) peer.
+			"zone1-0000000200": {Position: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5"},
+			// Fresh peer with no transactions yet: empty position, no GTIDSet.
+			"zone1-0000000201": {Position: ""},
+		},
+	}
+	prFresh := NewPlannedReparenter(nil, tmcFresh, logutil.NewMemoryLogger())
+
+	primaryElect := &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 200}}
+	tabletMap := map[string]*topo.TabletInfo{
+		"zone1-0000000200": {Tablet: primaryElect},
+		"zone1-0000000201": {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 201}}},
+	}
+
+	// An empty peer is neither GTID nor file-position, so no mixed-flavor rejection,
+	// and the GTID elect contains the empty peer, so the check passes.
+	err := prFresh.checkPrimaryElectContainsAllPositions(ctx, primaryElect, tabletMap, false /* primaryElectExplicit */)
+	require.NoError(t, err)
+
+	// A typed-but-empty GTID elect ("MySQL56/") is still GTID-based, so a file-position
+	// peer makes the shard mixed and must be rejected even with an explicit primary.
+	tmcTypedEmpty := &testutil.TabletManagerClient{
+		PrimaryPositionResults: map[string]struct {
+			Position string
+			Error    error
+		}{
+			"zone1-0000000200": {Position: "MySQL56/"},
+			"zone1-0000000201": {Position: "FilePos/vt-bin.000009:5000"},
+		},
+	}
+	prTypedEmpty := NewPlannedReparenter(nil, tmcTypedEmpty, logutil.NewMemoryLogger())
+
+	err = prTypedEmpty.checkPrimaryElectContainsAllPositions(ctx, primaryElect, tabletMap, true /* primaryElectExplicit */)
+	require.ErrorContains(t, err, "mixes GTID-based and file-position replication")
+}
+
 func TestPlannedReparenter_performPartialPromotionRecovery(t *testing.T) {
 	t.Parallel()
 
