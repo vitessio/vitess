@@ -401,10 +401,15 @@ func runMySQLExplainTasks(ctx context.Context, vcursor VCursor, tasks []mysqlExp
 			return nil
 		})
 	}
-	if err := g.Wait(); err != nil {
+	// g.Wait blocks until every task has finished, so queried is final here.
+	// Record it before propagating any error so the shards that did complete
+	// their EXPLAIN are still accounted for in ShardQueries, matching how the
+	// normal shard path counts attempted shards regardless of shard-level errors.
+	err := g.Wait()
+	vcursor.RecordShardsQueried(queried)
+	if err != nil {
 		return nil, err
 	}
-	vcursor.RecordShardsQueried(queried)
 	return explainResults, nil
 }
 

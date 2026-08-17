@@ -22,6 +22,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 
@@ -35,6 +36,7 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vttablet/sandboxconn"
 )
 
@@ -221,6 +223,39 @@ func TestVExplainMySQLPlanShardQueriesAccountingSkipsEmpty(t *testing.T) {
 	session := &vtgatepb.Session{TargetString: "@primary"}
 	_, err := executorExec(ctx, executor, session, "vexplain mysqlplan select id from `user`", nil)
 	require.NoError(t, err)
+
+	logStats := getQueryLog(logChan)
+	require.NotNil(t, logStats)
+	assert.EqualValues(t, wantShards, logStats.ShardQueries)
+}
+
+// TestVExplainMySQLPlanShardQueriesAccountingOnError verifies that when one
+// shard's EXPLAIN fails, the shards that already completed are still counted in
+// ShardQueries. The failing shard is delayed so it errors after the others have
+// succeeded; the whole VEXPLAIN then fails, but the seven completed EXPLAINs must
+// not be dropped from the accounting.
+func TestVExplainMySQLPlanShardQueriesAccountingOnError(t *testing.T) {
+	const failingShard = "-20"
+	const wantShards = 7
+	executor, ctx := createExecutorEnvCallback(t, createExecutorConfig(), func(shard, ks string, tabletType topodatapb.TabletType, conn *sandboxconn.SandboxConn) {
+		if ks == KsTestSharded && tabletType == topodatapb.TabletType_PRIMARY {
+			if shard == failingShard {
+				// Fail this shard's EXPLAIN, but only after the others have had time
+				// to complete and increment the counter, so the count is deterministic.
+				conn.ExecDelayResponse = 100 * time.Millisecond
+				conn.MustFailExecute[sqlparser.StmtExplain] = 1
+				return
+			}
+			conn.SetResults([]*sqltypes.Result{explainResultForShard(shard)})
+		}
+	})
+
+	logChan := executor.queryLogger.Subscribe("Test")
+	defer executor.queryLogger.Unsubscribe(logChan)
+
+	session := &vtgatepb.Session{TargetString: "@primary"}
+	_, err := executorExec(ctx, executor, session, "vexplain mysqlplan select id from `user`", nil)
+	require.Error(t, err)
 
 	logStats := getQueryLog(logChan)
 	require.NotNil(t, logStats)
