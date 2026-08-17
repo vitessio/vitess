@@ -65,6 +65,10 @@ func buildVExplainMySQLPlan(ctx context.Context, explainStatement sqlparser.Stat
 		return nil, err
 	}
 
+	if err := checkVExplainMySQLNoSequence(explainStatement); err != nil {
+		return nil, err
+	}
+
 	innerInstruction, err := createInstructionFor(ctx, sqlparser.String(explainStatement), explainStatement, reservedVars, vschema, cfg)
 	if err != nil {
 		return nil, err
@@ -114,6 +118,27 @@ func checkVExplainMySQLNoNestedQuery(statement sqlparser.Statement) error {
 	return nestedErr
 }
 
+// checkVExplainMySQLNoSequence rejects a sequence next-value query. Its
+// Vitess-specific 'select next ... values' syntax cannot be parsed by MySQL as
+// EXPLAIN. Detection must happen on the AST before planning: an untargeted
+// session plans this as a Route with Opcode == Next, but a session with an
+// explicit shard/keyrange target routes through bypass planning, which
+// represents it as a read Send that the primitive allowlist would otherwise
+// accept. Catching the *sqlparser.Nextval node here rejects both the same way,
+// before any tablet RPC. The rejection does not point at VEXPLAIN ALL, which
+// would execute the query and consume sequence values.
+func checkVExplainMySQLNoSequence(statement sqlparser.Statement) error {
+	var seqErr error
+	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
+		if _, ok := node.(*sqlparser.Nextval); ok {
+			seqErr = vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, vexplainMySQLSequenceError)
+			return false, nil
+		}
+		return true, nil
+	}, statement)
+	return seqErr
+}
+
 // checkVExplainMySQLSupported returns an error if any primitive in the tree cannot
 // be handled by VEXPLAIN MYSQLPLAN. It is an allowlist: only primitives whose target
 // shards can be resolved from a vindex without reading cluster data are permitted -
@@ -128,12 +153,6 @@ func checkVExplainMySQLNoNestedQuery(statement sqlparser.Statement) error {
 func checkVExplainMySQLSupported(primitive engine.Primitive) error {
 	switch prim := primitive.(type) {
 	case *engine.Route:
-		// A sequence next-value route carries Vitess-specific 'select next ... values'
-		// syntax that MySQL cannot parse as EXPLAIN. VEXPLAIN ALL would execute it and
-		// consume sequence values, so we do not point the user there.
-		if prim.Opcode == engine.Next {
-			return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, vexplainMySQLSequenceError)
-		}
 		if prim.Vindex != nil && prim.Vindex.NeedsVCursor() {
 			return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, vexplainMySQLUnresolvableError)
 		}

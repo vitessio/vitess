@@ -352,6 +352,32 @@ func TestVExplainMySQLPlanRejectsSequence(t *testing.T) {
 	}
 }
 
+// TestVExplainMySQLPlanRejectsTargetedSequence verifies that a sequence
+// next-value query is rejected even when the session has an explicit shard
+// target. A targeted session routes through bypass planning, which represents
+// the query as a read Send (not a Route with Opcode == Next), so the primitive
+// allowlist would otherwise accept it and send the Vitess-specific
+// 'select next ... values' syntax to MySQL as EXPLAIN. The rejection must happen
+// at plan time before any tablet RPC, must not point at VEXPLAIN ALL (which would
+// consume sequence values), and must match the untargeted rejection.
+func TestVExplainMySQLPlanRejectsTargetedSequence(t *testing.T) {
+	conns := map[string]*sandboxconn.SandboxConn{}
+	executor, ctx := createExecutorEnvCallback(t, createExecutorConfig(), func(shard, ks string, tabletType topodatapb.TabletType, conn *sandboxconn.SandboxConn) {
+		conns[ks+"/"+shard] = conn
+	})
+
+	session := &vtgatepb.Session{TargetString: KsTestUnsharded + "/0@primary"}
+	_, err := executorExec(ctx, executor, session, "vexplain mysqlplan select next 2 values from user_seq", nil)
+	require.ErrorContains(t, err, "does not support sequence next value queries")
+	// The sequence case must not point at VEXPLAIN ALL, which would consume values.
+	require.NotContains(t, err.Error(), "VEXPLAIN ALL")
+
+	// Rejection happens at plan time, so no tablet query is ever sent.
+	for target, conn := range conns {
+		assert.Empty(t, conn.Queries, "no query should be sent to %s", target)
+	}
+}
+
 // TestVExplainMySQLPlanRejectsSubqueries verifies that a query containing a
 // subquery, derived table, or common table expression is rejected at plan time,
 // before any shard RPC. Such a query can merge into a single Route that the
