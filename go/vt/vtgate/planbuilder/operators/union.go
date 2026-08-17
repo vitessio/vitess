@@ -95,8 +95,47 @@ The first SELECT of the union dictates the column names, and the second is whate
 can be found on the same offset. The names of the RHS are discarded.
 */
 func (u *Union) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) Operator {
-	offsets := make(map[string]int)
+	offsets := u.columnOffsets()
+
+	exprPerSource := u.predicatePerSource(ctx, expr, offsets)
+	for i, src := range u.Sources {
+		u.Sources[i] = src.AddPredicate(ctx, exprPerSource[i])
+	}
+
+	return u
+}
+
+// canPushPredicate reports whether AddPredicate can push the predicate into every source.
+// A source that can't take it gets wrapped in a Filter, which breaks the invariant that all
+// sources of a UNION are horizons.
+func (u *Union) canPushPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) bool {
+	horizons := make([]*Horizon, 0, len(u.Sources))
+	for i := range u.Sources {
+		horizon, ok := u.horizonFor(i)
+		if !ok {
+			return false
+		}
+		horizons = append(horizons, horizon)
+	}
+
+	if jp, ok := expr.(*predicates.JoinPredicate); ok {
+		// rewriting the JoinPredicate itself would overwrite the expression the tracker keeps for it
+		expr = jp.Current()
+	}
+
+	offsets := u.columnOffsets()
+	for i, horizon := range horizons {
+		if !horizon.canAbsorbPredicate(ctx, u.predicateForSource(i, expr, offsets)) {
+			return false
+		}
+	}
+
+	return true
+}
+
+func (u *Union) columnOffsets() map[string]int {
 	sel := u.GetSelectFor(0)
+	offsets := make(map[string]int, len(sel.GetColumns()))
 	for i, selectExpr := range sel.GetColumns() {
 		ae, ok := selectExpr.(*sqlparser.AliasedExpr)
 		if !ok {
@@ -105,12 +144,7 @@ func (u *Union) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Ex
 		offsets[strings.ToLower(ae.ColumnName())] = i
 	}
 
-	exprPerSource := u.predicatePerSource(ctx, expr, offsets)
-	for i, src := range u.Sources {
-		u.Sources[i] = src.AddPredicate(ctx, exprPerSource[i])
-	}
-
-	return u
+	return offsets
 }
 
 func (u *Union) predicatePerSource(ctx *plancontext.PlanningContext, expr sqlparser.Expr, offsets map[string]int) []sqlparser.Expr {
@@ -126,42 +160,53 @@ func (u *Union) predicatePerSource(ctx *plancontext.PlanningContext, expr sqlpar
 			predicate = ctx.PredTracker.NewJoinPredicate(jp.Current())
 		}
 
-		predicate = sqlparser.CopyOnRewrite(predicate, nil, func(cursor *sqlparser.CopyOnWriteCursor) {
-			col, ok := cursor.Node().(*sqlparser.ColName)
-			if !ok {
-				return
-			}
-
-			idx, ok := offsets[col.Name.Lowered()]
-			if !ok {
-				panic(vterrors.VT13001(fmt.Sprintf("could not find the column '%s' on the UNION", sqlparser.String(col))))
-			}
-
-			sel := u.GetSelectFor(i)
-			ae, ok := sel.GetColumns()[idx].(*sqlparser.AliasedExpr)
-			if !ok {
-				panic(vterrors.VT09015())
-			}
-
-			cursor.Replace(ae.Expr)
-		}, nil).(sqlparser.Expr)
-
-		exprPerSource[i] = predicate
+		exprPerSource[i] = u.predicateForSource(i, predicate, offsets)
 	}
 
 	return exprPerSource
 }
 
+func (u *Union) predicateForSource(source int, expr sqlparser.Expr, offsets map[string]int) sqlparser.Expr {
+	return sqlparser.CopyOnRewrite(expr, nil, func(cursor *sqlparser.CopyOnWriteCursor) {
+		col, ok := cursor.Node().(*sqlparser.ColName)
+		if !ok {
+			return
+		}
+
+		idx, ok := offsets[col.Name.Lowered()]
+		if !ok {
+			panic(vterrors.VT13001(fmt.Sprintf("could not find the column '%s' on the UNION", sqlparser.String(col))))
+		}
+
+		sel := u.GetSelectFor(source)
+		ae, ok := sel.GetColumns()[idx].(*sqlparser.AliasedExpr)
+		if !ok {
+			panic(vterrors.VT09015())
+		}
+
+		cursor.Replace(ae.Expr)
+	}, nil).(sqlparser.Expr)
+}
+
 func (u *Union) GetSelectFor(source int) *sqlparser.Select {
+	horizon, ok := u.horizonFor(source)
+	if !ok {
+		panic(vterrors.VT13001("expected all sources of the UNION to be horizons"))
+	}
+
+	return getFirstSelect(horizon.Query)
+}
+
+func (u *Union) horizonFor(source int) (*Horizon, bool) {
 	src := u.Sources[source]
 	for {
 		switch op := src.(type) {
 		case *Horizon:
-			return getFirstSelect(op.Query)
+			return op, true
 		case *Route:
 			src = op.Source
 		default:
-			panic(vterrors.VT13001("expected all sources of the UNION to be horizons"))
+			return nil, false
 		}
 	}
 }

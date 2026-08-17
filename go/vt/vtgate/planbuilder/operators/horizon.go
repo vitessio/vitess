@@ -82,25 +82,50 @@ func (h *Horizon) IsMergeable(ctx *plancontext.PlanningContext) bool {
 }
 
 func (h *Horizon) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) Operator {
-	if _, isUNion := h.Source.(*Union); isUNion {
+	if union, isUnion := h.Source.(*Union); isUnion {
+		if !union.canPushPredicate(ctx, expr) {
+			return newFilter(h, expr)
+		}
 		// If we have a derived table on top of a UNION, we can let the UNION do the expression rewriting
-		h.Source = h.Source.AddPredicate(ctx, expr)
+		h.Source = union.AddPredicate(ctx, expr)
 		return h
 	}
+
+	newExpr, ok := h.rewriteForSource(ctx, expr)
+	if !ok {
+		return newFilter(h, expr)
+	}
+	h.Source = h.Source.AddPredicate(ctx, newExpr)
+	return h
+}
+
+// canAbsorbPredicate reports whether AddPredicate pushes the predicate into the source
+// instead of wrapping the horizon in a Filter.
+func (h *Horizon) canAbsorbPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) bool {
+	if union, isUnion := h.Source.(*Union); isUnion {
+		return union.canPushPredicate(ctx, expr)
+	}
+
+	_, ok := h.rewriteForSource(ctx, expr)
+	return ok
+}
+
+// rewriteForSource rewrites the predicate into the scope of the source,
+// returning false if it can't be pushed there.
+func (h *Horizon) rewriteForSource(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (sqlparser.Expr, bool) {
 	tableInfo, err := ctx.SemTable.TableInfoForExpr(expr)
 	if err != nil {
 		if errors.Is(err, semantics.ErrNotSingleTable) {
-			return newFilter(h, expr)
+			return nil, false
 		}
 		panic(err)
 	}
 
 	newExpr := semantics.RewriteDerivedTableExpression(expr, tableInfo)
 	if ctx.ContainsAggr(newExpr) {
-		return newFilter(h, expr)
+		return nil, false
 	}
-	h.Source = h.Source.AddPredicate(ctx, newExpr)
-	return h
+	return newExpr, true
 }
 
 func (h *Horizon) AddColumn(ctx *plancontext.PlanningContext, reuse bool, _ bool, expr *sqlparser.AliasedExpr) int {
