@@ -151608,7 +151608,7 @@ export const replicationdata = $root.replicationdata = (() => {
                 writer.uint32(/* id 28, wireType 0 =*/224).bool(message.semi_sync_primary_status);
             if (message.semi_sync_replica_status != null && $Object.hasOwnProperty.call(message, "semi_sync_replica_status") && message.semi_sync_replica_status !== false)
                 writer.uint32(/* id 29, wireType 0 =*/232).bool(message.semi_sync_replica_status);
-            if (message.server_version != null && $Object.hasOwnProperty.call(message, "server_version"))
+            if (message.server_version != null && $Object.hasOwnProperty.call(message, "server_version") && message.server_version !== "")
                 writer.uint32(/* id 30, wireType 2 =*/242).string(message.server_version);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -152984,7 +152984,7 @@ export const replicationdata = $root.replicationdata = (() => {
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.file_position);
             if (message.server_uuid != null && $Object.hasOwnProperty.call(message, "server_uuid") && message.server_uuid !== "")
                 writer.uint32(/* id 3, wireType 2 =*/26).string(message.server_uuid);
-            if (message.server_version != null && $Object.hasOwnProperty.call(message, "server_version"))
+            if (message.server_version != null && $Object.hasOwnProperty.call(message, "server_version") && message.server_version !== "")
                 writer.uint32(/* id 4, wireType 2 =*/34).string(message.server_version);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
