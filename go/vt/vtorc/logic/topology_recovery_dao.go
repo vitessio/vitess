@@ -51,7 +51,9 @@ func InsertRecoveryDetection(analysisEntry *inst.DetectionAnalysis) error {
 			DATETIME('now')
 		)
 		ON CONFLICT(alias, analysis) DO UPDATE
-		SET detection_timestamp = DATETIME('now')`,
+		SET detection_timestamp = DATETIME('now'),
+		    keyspace = excluded.keyspace,
+		    shard = excluded.shard`,
 		aliasStr,
 		analysisStr,
 		analysisEntry.AnalyzedKeyspace,
