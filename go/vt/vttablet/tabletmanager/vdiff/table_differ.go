@@ -1117,6 +1117,15 @@ func sourcePKSelectIndices(sourceSelect *sqlparser.Select, pkColumns []string) (
 		physicalIdx := -1
 		aliasedButNotPhysical := false
 		for i, selExpr := range sourceSelect.SelectExprs.Exprs {
+			// Invariant: buildTablePlan expands "*" into explicit columns before
+			// this runs, so the SELECT list must contain only AliasedExprs. If a
+			// StarExpr ever reaches here it means a caller passed an unexpanded
+			// query; fail loud rather than silently treating PK columns as not
+			// projected (which would corrupt resume checkpoints). We do NOT expand
+			// the star here; that logic belongs in buildTablePlan.
+			if _, isStar := selExpr.(*sqlparser.StarExpr); isStar {
+				return nil, false, fmt.Errorf("unexpected '*' in vdiff source query SELECT list; expected columns to be expanded by buildTablePlan: %s", sqlparser.String(sourceSelect))
+			}
 			aliasedExpr, ok := selExpr.(*sqlparser.AliasedExpr)
 			if !ok {
 				continue

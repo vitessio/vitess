@@ -302,6 +302,16 @@ func TestSourcePKSelectIndices(t *testing.T) {
 			wantErr:     true,
 		},
 		{
+			// Invariant guard: buildTablePlan must expand "*" into explicit
+			// columns before sourcePKSelectIndices runs. A StarExpr reaching this
+			// function means a caller violated that invariant, so we fail loud
+			// rather than silently treating PK columns as not projected.
+			name:        "unexpanded star fails loud (invariant guard)",
+			sourceQuery: "select * from t order by a asc",
+			pkColumns:   []string{"a"},
+			wantErr:     true,
+		},
+		{
 			name:        "column swap alias does not shadow real PK",
 			sourceQuery: "select b as a, a as b from t order by a asc",
 			pkColumns:   []string{"a"},
