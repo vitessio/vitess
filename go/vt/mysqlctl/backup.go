@@ -210,7 +210,7 @@ func Backup(ctx context.Context, params BackupParams) (manifest string, result B
 	if finishErr != nil {
 		// The backup engine succeeded but finalizing the backup (EndBackup/
 		// AbortBackup) failed, so the backup is not usable.
-		return "", backupResult, finishErr
+		return "", BackupUnusable, finishErr
 	}
 
 	// The backup worked.

@@ -14,6 +14,7 @@
         - [VTOrc `--cell` flag is now required](#vtorc-cell-required)
         - [`BackupHandle` interface gains `Wait()` method](#backup-handle-wait-method)
         - [VTOrc: `--cells-to-watch` removed in favor of `--cells-no-recovery`](#vtorc-cells-no-recovery)
+        - [`TabletManagerClient.Backup` now returns a manifest/status stream](#tmclient-backup-stream)
     - **[Deprecations](#deprecations)**
         - [CLI Flags](#deprecated-cli-flags)
         - [Legacy streaming-path plan types in query rules](#deprecated-selectstream-rule-plan)
@@ -58,6 +59,7 @@
         - [Slow clean mysqld shutdowns no longer fail backups](#backup-mysqld-shutdown-timeout)
         - [Parallel S3 downloads during restore](#vttablet-s3-parallel-downloads)
         - [lz4 engine: library upgrade and `--compression-level` mapping](#backup-lz4-v4)
+        - [Backup commands surface the MANIFEST and empty-incremental status](#backup-manifest-output)
     - **[General](#minor-changes-general)**
         - [Build version metadata now sourced from VCS stamping](#build-info-from-vcs)
 
@@ -151,6 +153,15 @@ The replacement, `--cells-no-recovery`, is a deny-list for *recovery actions onl
 **Migration:** drop `--cells-to-watch` from your vtorc invocation. If you previously used it for true cell-isolated deployments, the new flag is not a like-for-like replacement (vtorc will now discover and watch all cells); discuss your scenario in the linked issue if the new flag does not cover your needs. If you are upgrading from v24.0.0 specifically and have `--cells-to-watch` in your vtorc flags, note that this flag was already removed in v24.0.1; replace it with `--cells-no-recovery` before upgrading.
 
 See [#20021](https://github.com/vitessio/vitess/issues/20021) for details.
+#### <a id="tmclient-backup-stream"/>`TabletManagerClient.Backup` now returns a manifest/status stream</a>
+
+The `tmclient.TabletManagerClient.Backup` method now returns a `tmclient.BackupStream` instead of a `logutil.EventStream`. Each message on the stream is either a log-event message (as before) or a terminal message carrying the backup's raw MANIFEST JSON and an outcome `Status` (`USABLE` or `EMPTY`). Correspondingly, the internal `RPCTM.Backup` method now returns `(manifest string, result mysqlctl.BackupResult, err error)` instead of just `error`.
+
+The wire protocol is backward and forward compatible: the new `BackupResponse.manifest` and `BackupResponse.status` proto fields are additive, and an older server that never sets them leaves `status` at `STATUS_UNSPECIFIED`, which callers treat as "unknown / unchanged behaviour".
+
+**Impact**: This is a source-level change for Go code only. Any out-of-tree implementation or caller of `tmclient.TabletManagerClient` or `tabletmanager.RPCTM` must update the `Backup` signature. Callers that only consumed log events can call `Recv()` on the new stream and read `resp.Event` exactly as before.
+
+See [#XXXXX](https://github.com/vitessio/vitess/pull/XXXXX) for details.
 
 ### <a id="deprecations"/>Deprecations</a>
 
@@ -620,6 +631,17 @@ The `lz4` compression engine now uses the `pierrec/lz4/v4` library instead of `p
 The upgrade changes how `--compression-level` is interpreted for the lz4 engine. Values `0` and `1`, including the default of `1`, select the fast compressor. Values `2` through `9` now select lz4's named hash-chain levels (`Level2` through `Level9`) instead of using the raw value as the hash-chain search depth, so higher values produce a better ratio at more CPU cost. Values above `9` and negative values, which previously requested an unlimited search, select `Level9`. Other compression engines are not affected.
 
 See [#20778](https://github.com/vitessio/vitess/pull/20778) for details.
+#### <a id="backup-manifest-output"/>Backup commands surface the MANIFEST and empty-incremental status</a>
+
+The `vtctldclient Backup` and `BackupShard` commands now report the outcome of a backup directly, instead of requiring callers to scrape it from the log stream:
+
+- On successful completion the backup's MANIFEST is printed.
+- With the new `--json`/`-j` flag, a JSON object with the backup's outcome status (`USABLE`, `EMPTY`, or `UNKNOWN`) and its MANIFEST is written to stdout, while log events go to stderr, so the output can be parsed by tooling.
+- An incremental backup that finds no new data to back up (an "empty" backup) completes successfully and prints no MANIFEST. In `--json` mode it also exits with **code 2** so scripts can skip follow-up work by checking `$?`. Without `--json`, an empty backup still exits `0`, so existing automation is unaffected.
+
+This is carried by two additive fields on the `BackupResponse` proto messages (`manifest` and `status`); see the [related breaking change](#tmclient-backup-stream) for the Go API impact. When talking to an older server that does not populate these fields, the status is reported as `UNKNOWN` and the previous behaviour is preserved.
+
+See [#XXXXX](https://github.com/vitessio/vitess/pull/XXXXX) for details.
 
 ### <a id="minor-changes-general"/>General</a>
 

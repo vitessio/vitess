@@ -38,27 +38,45 @@ import (
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
-// emptyBackupExitCode is returned by the Backup/BackupShard commands when an
-// incremental backup completes with no new data to back up. It lets callers skip
-// follow-up operations by checking $? without parsing output.
+// emptyBackupExitCode is returned by the Backup/BackupShard commands in --json
+// mode when an incremental backup completes with no new data to back up. It lets
+// tooling skip follow-up operations by checking $?. Without --json the commands
+// keep exiting 0 for an empty backup, preserving pre-existing behaviour.
 const emptyBackupExitCode = 2
 
 var (
 	// Backup makes a Backup gRPC call to a vtctld.
 	Backup = &cobra.Command{
-		Use:                   "Backup [--concurrency <concurrency>] [--allow-primary] [--incremental-from-pos=<pos>|<backup-name>|auto] [--upgrade-safe] [--backup-engine=enginename] <tablet_alias>",
-		Short:                 "Uses the BackupStorage service on the given tablet to create and store a new backup.",
+		Use:   "Backup [--concurrency <concurrency>] [--allow-primary] [--incremental-from-pos=<pos>|<backup-name>|auto] [--upgrade-safe] [--backup-engine=enginename] [--json] <tablet_alias>",
+		Short: "Uses the BackupStorage service on the given tablet to create and store a new backup.",
+		Long: `Uses the BackupStorage service on the given tablet to create and store a new backup.
+
+On successful completion the backup's MANIFEST is printed. With --json, a JSON object
+with the backup's outcome status ("USABLE", "EMPTY", or "UNKNOWN") and its MANIFEST is
+printed to stdout, while log events are written to stderr.
+
+An incremental backup that finds no new data to back up completes successfully and prints
+no MANIFEST. In --json mode it also exits with code 2 so callers can skip follow-up work
+by checking $?; without --json an empty backup still exits 0.`,
 		DisableFlagsInUseLine: true,
 		Args:                  cobra.ExactArgs(1),
 		RunE:                  commandBackup,
 	}
 	// BackupShard makes a BackupShard gRPC call to a vtctld.
 	BackupShard = &cobra.Command{
-		Use:   "BackupShard [--concurrency <concurrency>] [--allow-primary] [--incremental-from-pos=<pos>|<backup-name>|auto] [--upgrade-safe] <keyspace/shard>",
+		Use:   "BackupShard [--concurrency <concurrency>] [--allow-primary] [--incremental-from-pos=<pos>|<backup-name>|auto] [--upgrade-safe] [--json] <keyspace/shard>",
 		Short: "Finds the most up-to-date REPLICA, RDONLY, or SPARE tablet in the given shard and uses the BackupStorage service on that tablet to create and store a new backup.",
 		Long: `Finds the most up-to-date REPLICA, RDONLY, or SPARE tablet in the given shard and uses the BackupStorage service on that tablet to create and store a new backup.
 
-If no replica-type tablet can be found, the backup can be taken on the primary if --allow-primary is specified.`,
+If no replica-type tablet can be found, the backup can be taken on the primary if --allow-primary is specified.
+
+On successful completion the backup's MANIFEST is printed. With --json, a JSON object
+with the backup's outcome status ("USABLE", "EMPTY", or "UNKNOWN") and its MANIFEST is
+printed to stdout, while log events are written to stderr.
+
+An incremental backup that finds no new data to back up completes successfully and prints
+no MANIFEST. In --json mode it also exits with code 2 so callers can skip follow-up work
+by checking $?; without --json an empty backup still exits 0.`,
 		DisableFlagsInUseLine: true,
 		Args:                  cobra.ExactArgs(1),
 		RunE:                  commandBackupShard,
@@ -212,15 +230,18 @@ type backupJSONOutput struct {
 }
 
 // handleBackupStream drains a Backup/BackupShard stream, printing progress and,
-// on completion, the backup's MANIFEST and outcome. When the backup is an empty
-// (no-op) incremental backup it exits the process with emptyBackupExitCode so
-// callers can skip follow-up work by checking $?.
+// on completion, the backup's MANIFEST and outcome. In --json mode, when the
+// backup is an empty (no-op) incremental backup it exits the process with
+// emptyBackupExitCode so callers can skip follow-up work by checking $?.
 func handleBackupStream(stream backupResponseStream, outputJSON bool) error {
 	status, err := consumeBackupStream(stream, outputJSON, os.Stdout, os.Stderr)
 	if err != nil {
 		return err
 	}
-	if status == tabletmanagerdatapb.BackupResponse_EMPTY {
+	// The distinct exit code for an empty incremental backup is opt-in via
+	// --json, so existing (non-JSON) callers keep seeing a zero exit code and
+	// their scripts are unaffected.
+	if outputJSON && status == tabletmanagerdatapb.BackupResponse_EMPTY {
 		exit.Return(emptyBackupExitCode)
 	}
 	return nil
@@ -283,13 +304,11 @@ func printBackupResult(out io.Writer, outputJSON bool, manifest string, status t
 		return nil
 	}
 
-	switch status {
-	case tabletmanagerdatapb.BackupResponse_EMPTY:
-		fmt.Fprintln(out, mysqlctl.EmptyBackupMessage)
-	default:
-		if manifest != "" {
-			fmt.Fprintf(out, "%s\n", manifest)
-		}
+	// Not JSON: print the MANIFEST of a usable backup. An empty incremental
+	// backup has no manifest and its outcome was already reported as a log event
+	// (mysqlctl.EmptyBackupMessage), so nothing more is printed here.
+	if manifest != "" {
+		fmt.Fprintf(out, "%s\n", manifest)
 	}
 	return nil
 }
@@ -437,7 +456,7 @@ func init() {
 
 	Backup.Flags().BoolVar(&backupOptions.UpgradeSafe, "upgrade-safe", false, "Whether to use innodb_fast_shutdown=0 for the backup so it is safe to use for MySQL upgrades.")
 	Backup.Flags().DurationVar(&backupOptions.MysqlShutdownTimeout, "mysql-shutdown-timeout", mysqlctl.DefaultShutdownTimeout, "Timeout to use when MySQL is being shut down.")
-	Backup.Flags().BoolVarP(&backupOptions.OutputJSON, "json", "j", false, "Output, on completion, the backup's MANIFEST and outcome status as JSON on stdout (log events go to stderr). An empty incremental backup exits with a distinct code.")
+	Backup.Flags().BoolVarP(&backupOptions.OutputJSON, "json", "j", false, "Output, on completion, the backup's MANIFEST and outcome status as JSON on stdout (log events go to stderr). An empty incremental backup exits with code 2.")
 	addInitSQLFlags(Backup)
 	Root.AddCommand(Backup)
 
@@ -446,7 +465,7 @@ func init() {
 	BackupShard.Flags().StringVar(&backupShardOptions.IncrementalFromPos, "incremental-from-pos", "", "Position, or name of backup from which to create an incremental backup. Default: empty. If given, then this backup becomes an incremental backup from given position or given backup. If value is 'auto', this backup will be taken from the last successful backup position.")
 	BackupShard.Flags().BoolVar(&backupShardOptions.UpgradeSafe, "upgrade-safe", false, "Whether to use innodb_fast_shutdown=0 for the backup so it is safe to use for MySQL upgrades.")
 	BackupShard.Flags().DurationVar(&backupShardOptions.MysqlShutdownTimeout, "mysql-shutdown-timeout", mysqlctl.DefaultShutdownTimeout, "Timeout to use when MySQL is being shut down.")
-	BackupShard.Flags().BoolVarP(&backupShardOptions.OutputJSON, "json", "j", false, "Output, on completion, the backup's MANIFEST and outcome status as JSON on stdout (log events go to stderr). An empty incremental backup exits with a distinct code.")
+	BackupShard.Flags().BoolVarP(&backupShardOptions.OutputJSON, "json", "j", false, "Output, on completion, the backup's MANIFEST and outcome status as JSON on stdout (log events go to stderr). An empty incremental backup exits with code 2.")
 	addInitSQLFlags(BackupShard)
 	Root.AddCommand(BackupShard)
 

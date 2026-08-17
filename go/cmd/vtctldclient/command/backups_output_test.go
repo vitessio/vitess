@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -124,7 +125,17 @@ func TestConsumeBackupStream_TextUsable(t *testing.T) {
 }
 
 func TestConsumeBackupStream_TextEmpty(t *testing.T) {
+	// A real empty incremental backup reports "no new data" as a log event, then
+	// sends a terminal EMPTY message. In text mode the terminal message must not
+	// print a duplicate summary line: the outcome is already in the log stream.
+	emptyEvent := &vtctldatapb.BackupResponse{
+		TabletAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+		Keyspace:    "ks",
+		Shard:       "-",
+		Event:       &logutilpb.Event{Value: mysqlctl.EmptyBackupMessage},
+	}
 	stream := &fakeBackupStream{resps: []*vtctldatapb.BackupResponse{
+		emptyEvent,
 		{Status: tabletmanagerdatapb.BackupResponse_EMPTY},
 	}}
 
@@ -132,7 +143,11 @@ func TestConsumeBackupStream_TextEmpty(t *testing.T) {
 	status, err := consumeBackupStream(stream, false /* outputJSON */, &out, &errOut)
 	require.NoError(t, err)
 	assert.Equal(t, tabletmanagerdatapb.BackupResponse_EMPTY, status)
-	assert.Contains(t, out.String(), mysqlctl.EmptyBackupMessage)
+
+	// The empty message appears exactly once (from the log event), not duplicated
+	// by a terminal summary line.
+	assert.Equal(t, 1, strings.Count(out.String(), mysqlctl.EmptyBackupMessage))
+	assert.Empty(t, errOut.String())
 }
 
 func TestConsumeBackupStream_Error(t *testing.T) {
