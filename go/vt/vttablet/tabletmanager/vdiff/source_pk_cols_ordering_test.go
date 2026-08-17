@@ -173,7 +173,13 @@ func TestSourcePKSelectIndices(t *testing.T) {
 		sourceQuery string
 		pkColumns   []string
 		wantIndices []int
-		wantErr     bool
+		// wantErr is for the present-but-non-physical case (a PK name is
+		// projected only via a computed/unrelated expression): fail closed.
+		wantErr bool
+		// wantNotProjected is for the entirely-absent case (a PK column is not
+		// projected at all): no error, allProjected == false, and no partial
+		// index slice is produced.
+		wantNotProjected bool
 	}{
 		{
 			name:        "natural order single PK",
@@ -241,10 +247,22 @@ func TestSourcePKSelectIndices(t *testing.T) {
 			wantIndices: []int{0},
 		},
 		{
-			name:        "PK not found in select list",
-			sourceQuery: "select a, b from t order by a asc",
-			pkColumns:   []string{"missing_col"},
-			wantErr:     true,
+			// A PK column entirely absent from the SELECT list is a valid
+			// subset-projection filter: no error, and allProjected is false so
+			// the caller does not build a partial source key.
+			name:             "PK entirely absent from select list is not projected",
+			sourceQuery:      "select a, b from t order by a asc",
+			pkColumns:        []string{"missing_col"},
+			wantNotProjected: true,
+		},
+		{
+			// Mirrors the customer CI case: composite source PK (cid, typ) with
+			// a filter that projects only cid. typ is entirely absent, so the
+			// whole key is treated as not projected (never a partial [0] slice).
+			name:             "composite PK with one column absent is not projected",
+			sourceQuery:      "select cid, name from customer order by cid asc",
+			pkColumns:        []string{"cid", "typ"},
+			wantNotProjected: true,
 		},
 		{
 			name:        "in_keyrange filter preserves column positions",
@@ -306,12 +324,18 @@ func TestSourcePKSelectIndices(t *testing.T) {
 			sourceSelect, ok := statement.(*sqlparser.Select)
 			require.True(t, ok)
 
-			indices, err := sourcePKSelectIndices(sourceSelect, tc.pkColumns)
+			indices, allProjected, err := sourcePKSelectIndices(sourceSelect, tc.pkColumns)
 			if tc.wantErr {
 				require.Error(t, err)
 				return
 			}
 			require.NoError(t, err)
+			if tc.wantNotProjected {
+				assert.False(t, allProjected)
+				assert.Empty(t, indices, "must not return a partial index slice when a PK column is absent")
+				return
+			}
+			assert.True(t, allProjected)
 			assert.Equal(t, tc.wantIndices, indices)
 		})
 	}

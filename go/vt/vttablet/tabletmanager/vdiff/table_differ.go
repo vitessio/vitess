@@ -1035,9 +1035,25 @@ func (td *tableDiffer) getSourcePKCols() error {
 
 	// Map each source PK column to its position in the SELECT expression order,
 	// which is the actual layout of the streamed rows.
-	indices, err := sourcePKSelectIndices(sourceSelect, sourceTable.PrimaryKeyColumns)
+	indices, allProjected, err := sourcePKSelectIndices(sourceSelect, sourceTable.PrimaryKeyColumns)
 	if err != nil {
 		return vterrors.Wrapf(err, "table %s", sourceTableName)
+	}
+	if !allProjected {
+		// At least one source PK column is not projected by the filter's SELECT
+		// list at all (e.g. source PK (cid, typ) with a filter of
+		// "select cid, name from customer"). The row streamer always resumes on
+		// the full source PK and requires the lastpk to contain exactly as many
+		// values as the source table has PK columns (see buildSelect in
+		// rowstreamer.go, which errors if len(lastpk) != len(pkColumns)). A
+		// partial source key would therefore be rejected on resume, and an empty
+		// one would silently make the source restart from the beginning while the
+		// target resumes. So we must never persist a partial source key. Instead
+		// we reuse the target pkCols, which makes lastPKFromRow leave
+		// lastPK.Source nil so the target key is used for both sides. This matches
+		// the pre-existing behavior for such subset-projection filters.
+		td.tablePlan.sourcePkCols = td.tablePlan.pkCols
+		return nil
 	}
 	td.tablePlan.sourcePkCols = indices
 
@@ -1067,44 +1083,68 @@ func sourceTableNameFromSelect(sourceSelect *sqlparser.Select) (string, error) {
 // expression list (the physical row layout the row streamer produces). The
 // indices are returned in PK definition order.
 //
-// Because the schema lookup now uses the real source table (see
-// sourceTableNameFromSelect), every source PK column is expected to appear in
-// the SELECT list as a direct reference to that physical column. We resolve each
-// PK against the underlying column of the expression:
+// Because the schema lookup uses the real source table (see
+// sourceTableNameFromSelect), a projected source PK column appears in the SELECT
+// list as a direct reference to that physical column. We resolve each PK against
+// the underlying column of the expression:
 //   - a plain ColName ("select c1, c2 ..." or reordered "select c2, c1 ..."),
 //   - a renamed column ("select source_id as target_id ...", underlying ColName), or
 //   - a CONVERT(col USING charset) rename, unwrapping to the inner ColName,
 //     mirroring how the row streamer's planner resolves the physical column.
 //
-// We deliberately do NOT accept an alias that resolves to a computed or
-// unrelated expression (e.g. "select a + b as c1" or "select other_col as c1").
-// The row streamer resumes using the physical source PK value, so persisting a
-// derived value as the source checkpoint would skip or repeat rows on resume.
-// Such cases fail closed with an error rather than corrupting the checkpoint.
-func sourcePKSelectIndices(sourceSelect *sqlparser.Select, pkColumns []string) ([]int, error) {
-	indices := make([]int, 0, len(pkColumns))
+// A source PK column can be missing in two distinct ways, handled differently:
+//
+//   - Present-but-non-physical: an expression whose output column is named after
+//     the PK column (via an alias) but that does not resolve to the physical PK
+//     column, e.g. "select a + b as id" or "select other_col as id". This fails
+//     closed with an error. The row streamer resumes using the physical source
+//     PK value, so persisting a derived value as the source checkpoint would
+//     skip or repeat rows on resume.
+//
+//   - Entirely absent: the PK column is not projected at all, e.g. source PK
+//     (cid, typ) with a filter of "select cid, name from customer". This is a
+//     valid subset-projection filter, so we return allProjected == false and no
+//     error. The caller must then avoid building a source resume key. We never
+//     return a partial-length index slice: the row streamer always resumes on
+//     the full source PK and rejects a lastpk whose length does not match the
+//     table's PK column count (see buildSelect in rowstreamer.go).
+//
+// allProjected is true only when every source PK column resolved to a physical
+// SELECT column, in which case indices holds all of their SELECT-order indices.
+func sourcePKSelectIndices(sourceSelect *sqlparser.Select, pkColumns []string) (indices []int, allProjected bool, err error) {
+	indices = make([]int, 0, len(pkColumns))
 	for _, pkc := range pkColumns {
-		found := false
+		physicalIdx := -1
+		aliasedButNotPhysical := false
 		for i, selExpr := range sourceSelect.SelectExprs.Exprs {
 			aliasedExpr, ok := selExpr.(*sqlparser.AliasedExpr)
 			if !ok {
 				continue
 			}
-			colName, ok := underlyingSourceColumn(aliasedExpr.Expr)
-			if !ok {
-				continue
-			}
-			if strings.EqualFold(pkc, colName) {
-				indices = append(indices, i)
-				found = true
+			// A physical match always wins, even if it appears after an alias
+			// that shadows the PK name. This preserves correct resolution for
+			// queries like "select b as a, a as b" (PK a -> the real a).
+			if colName, ok := underlyingSourceColumn(aliasedExpr.Expr); ok && strings.EqualFold(pkc, colName) {
+				physicalIdx = i
 				break
 			}
+			if !aliasedExpr.As.IsEmpty() && strings.EqualFold(pkc, aliasedExpr.As.String()) {
+				aliasedButNotPhysical = true
+			}
 		}
-		if !found {
-			return nil, fmt.Errorf("source PK column %s not found as a physical column in the source query SELECT list", pkc)
+		if physicalIdx >= 0 {
+			indices = append(indices, physicalIdx)
+			continue
 		}
+		if aliasedButNotPhysical {
+			// Present-but-non-physical: fail closed.
+			return nil, false, fmt.Errorf("source PK column %s is projected only via a non-physical expression in the source query SELECT list", pkc)
+		}
+		// Entirely absent: report to the caller instead of returning a partial
+		// (and therefore unusable) source key.
+		return nil, false, nil
 	}
-	return indices, nil
+	return indices, true, nil
 }
 
 // underlyingSourceColumn returns the name of the physical source column that a

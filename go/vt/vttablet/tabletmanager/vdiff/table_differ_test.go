@@ -200,8 +200,59 @@ func TestGetSourcePKCols_ComputedAliasFailsClosed(t *testing.T) {
 
 	err := td.getSourcePKCols()
 	require.Error(t, err)
-	require.ErrorContains(t, err, "source PK column textcol not found as a physical column")
+	require.ErrorContains(t, err, "source PK column textcol is projected only via a non-physical expression")
 	require.Nil(t, td.tablePlan.sourcePkCols)
+}
+
+// TestGetSourcePKCols_SubsetProjectionNoSourceKey mirrors the customer
+// materialize CI regression: the source table has a composite PK (cid, typ) but
+// the filter projects only a subset that omits the trailing PK column typ
+// ("select cid, name from customer"). getSourcePKCols must NOT fail closed for
+// this valid subset-projection filter, and it must NOT build a partial source
+// key. Instead it falls back to the target pkCols so that lastPKFromRow leaves
+// lastPK.Source nil (the row streamer resumes on the full source PK and rejects
+// a partial-length lastpk, so a distinct partial source key can never be used).
+func TestGetSourcePKCols_SubsetProjectionNoSourceKey(t *testing.T) {
+	tvde := newTestVDiffEnv(t)
+	defer tvde.close()
+
+	ct := tvde.createController(t, 1)
+
+	sourceTable := &tabletmanagerdatapb.TableDefinition{
+		Name:              "customer",
+		Columns:           []string{"cid", "name", "typ"},
+		PrimaryKeyColumns: []string{"cid", "typ"},
+		Fields:            sqltypes.MakeTestFields("cid|name|typ", "int64|varchar|varchar"),
+	}
+	tvde.tmc.schema = &tabletmanagerdatapb.SchemaDefinition{
+		TableDefinitions: []*tabletmanagerdatapb.TableDefinition{sourceTable},
+	}
+
+	td := &tableDiffer{
+		wd: &workflowDiffer{
+			ct: ct,
+		},
+		table: sourceTable,
+		tablePlan: &tablePlan{
+			table:       sourceTable,
+			sourceQuery: "select cid, name from customer order by cid asc",
+			// The target has cid as its (single) PK at SELECT index 0.
+			pkCols: []int{0},
+		},
+	}
+
+	err := td.getSourcePKCols()
+	require.NoError(t, err)
+	// sourcePkCols falls back to the target pkCols, which makes lastPKFromRow
+	// treat the source key as identical to the target and leave Source nil.
+	require.Equal(t, td.tablePlan.pkCols, td.tablePlan.sourcePkCols)
+
+	// Confirm no distinct (and no partial) source key is persisted: with
+	// sourcePkCols == pkCols, lastPK.Source is nil.
+	row := []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewVarChar("acme")}
+	lastPK := td.lastPKFromRow(row)
+	require.Nil(t, lastPK.Source, "must not persist a partial or distinct source key for a subset-projection filter")
+	require.NotNil(t, lastPK.Target)
 }
 
 // TestGetSourcePKCols_ResumeCheckpointReorderedPK is a resume regression test.
