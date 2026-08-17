@@ -482,7 +482,16 @@ func TestReparentSorter_MySQLVersion(t *testing.T) {
 			sortedTablets: []*topodatapb.Tablet{tabletRdonly, tabletA},
 		},
 		{
-			name:          "PRS: lower release wins even when slightly behind in position",
+			// Pins the version-first contract: on SortByVersion the lower release wins
+			// over a candidate that strictly dominates it in position (posAdvanced =
+			// {sid1:9, sid2:10} dominates posBehind = {sid1:9}), and it is version doing
+			// it, not the alias tiebreak — the winner tabletB has the *higher* alias, so
+			// an alias tiebreak would elect tabletA instead. The sorter compares a binary
+			// dominance count, not a position magnitude, so this holds regardless of how
+			// far behind the lower-version candidate is; that unbounded-gap behavior is a
+			// user-facing decision documented in the v25 changelog ("no bound on the
+			// position gap").
+			name:          "PRS: lower release wins over a strictly-dominated position (unbounded gap)",
 			tablets:       []*topodatapb.Tablet{tabletA, tabletB},
 			positions:     []*RelayLogPositions{posAdvanced, posBehind},
 			mysqlVersions: []mysqlctl.ServerVersion{mysql84, mysql80},
