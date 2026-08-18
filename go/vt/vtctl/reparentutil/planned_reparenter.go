@@ -27,6 +27,7 @@ import (
 
 	"vitess.io/vitess/go/event"
 	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/logutil"
@@ -411,14 +412,52 @@ func (pr *PlannedReparenter) checkPrimaryElectContainsAllPositions(
 		go func(alias string, tablet *topodatapb.Tablet) {
 			defer wg.Done()
 
-			posStr, err := pr.tmc.PrimaryPosition(posCtx, tablet)
+			status, err := pr.tmc.ReplicationStatus(posCtx, tablet)
 			if err != nil {
-				rec.RecordError(vterrors.Wrapf(err, "cannot get replication position of tablet %v; all tablets must be reachable to safely promote primary-elect %v during initial promotion", alias, primaryElectAliasStr))
+				// A tablet that is not replicating (the common case on a
+				// never-initialized shard, where every candidate hits this path) has
+				// no relay log and so no received position to lose. Recover its
+				// executed position from PrimaryStatus and use that as its received
+				// position, so the dominance check still sees a real position instead
+				// of failing closed on a legitimately fresh tablet.
+				sqlErr, isSQLErr := sqlerror.NewSQLErrorFromError(err).(*sqlerror.SQLError)
+				if !isSQLErr || sqlErr == nil || sqlErr.Number() != sqlerror.ERNotReplica {
+					rec.RecordError(vterrors.Wrapf(err, "cannot get replication status of tablet %v; all tablets must be reachable to safely promote primary-elect %v during initial promotion", alias, primaryElectAliasStr))
+					return
+				}
+
+				primaryStatus, psErr := pr.tmc.PrimaryStatus(posCtx, tablet)
+				if psErr != nil {
+					rec.RecordError(vterrors.Wrapf(psErr, "cannot get primary status of non-replicating tablet %v; all tablets must be reachable to safely promote primary-elect %v during initial promotion", alias, primaryElectAliasStr))
+					return
+				}
+				pos, decErr := replication.DecodePosition(primaryStatus.Position)
+				if decErr != nil {
+					rec.RecordError(vterrors.Wrapf(decErr, "cannot decode replication position (%v) for tablet %v", primaryStatus.Position, alias))
+					return
+				}
+
+				mu.Lock()
+				positions[alias] = pos
+				mu.Unlock()
 				return
 			}
-			pos, err := replication.DecodePosition(posStr)
+
+			// The elect is promoted here via InitPrimary, which does NOT apply the
+			// relay log: any received-but-unapplied transactions the elect holds are
+			// discarded at promotion, so the history that actually survives is its
+			// executed position. Key the elect on Position (executed) and every peer
+			// on RelayLogPosition (Combined = received), so the dominance check proves
+			// what the elect will truly retain contains everything a peer could lose —
+			// elect.Executed >= peer.Combined — rather than crediting the elect with
+			// transactions InitPrimary is about to drop.
+			encoded := status.RelayLogPosition
+			if alias == primaryElectAliasStr {
+				encoded = status.Position
+			}
+			pos, err := replication.DecodePosition(encoded)
 			if err != nil {
-				rec.RecordError(vterrors.Wrapf(err, "cannot decode replication position (%v) for tablet %v", posStr, alias))
+				rec.RecordError(vterrors.Wrapf(err, "cannot decode replication position (%v) for tablet %v", encoded, alias))
 				return
 			}
 
