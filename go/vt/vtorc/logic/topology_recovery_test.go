@@ -1803,22 +1803,39 @@ func TestInsertRecoveryDetectionNewIncident(t *testing.T) {
 		"each poll should refresh detection_timestamp")
 }
 
-// TestInsertRecoveryDetectionReturningClosesDeleteRace is a regression guard for the
-// race that existed when InsertRecoveryDetection used two separate statements: an
-// INSERT … ON CONFLICT DO UPDATE followed by a SELECT to retrieve detection_id.
-// A concurrent successful ERS could call deleteResolvedDetection between those two
-// statements; QueryVTOrc treats zero rows as success, so RecoveryId would stay 0
-// and propagate into topology_recovery.detection_id = 0.
+// returningOnlyDB is a test double for db.DB that returns a detection_id only when
+// the query contains RETURNING (i.e. the UPSERT itself). Any other query (e.g. a
+// separate SELECT) gets an empty result, leaving RecoveryId == 0.
 //
-// With RETURNING the detection_id is captured atomically from the UPSERT result
-// itself — no separate SELECT exists for a concurrent delete to race. This test
-// exercises the post-delete re-insert path: after deleteResolvedDetection establishes
-// an incident boundary, InsertRecoveryDetection must produce a non-zero detection_id
-// strictly greater than the deleted one (AUTOINCREMENT prevents ID reuse).
+// This is used by TestInsertRecoveryDetectionReturningClosesDeleteRace to verify
+// that InsertRecoveryDetection captures its ID from the UPSERT's RETURNING clause,
+// not a subsequent SELECT. If the function is reverted to two separate statements,
+// the SELECT hits this mock with an empty result, the RecoveryId == 0 guard fires,
+// and the test fails.
+type returningOnlyDB struct{}
+
+func (r *returningOnlyDB) QueryVTOrc(query string, _ []any, onRow func(sqlutils.RowMap) error) error {
+	if strings.Contains(query, "RETURNING") {
+		return onRow(sqlutils.RowMap{"detection_id": sqlutils.CellData{String: "42", Valid: true}})
+	}
+	return nil
+}
+
+// TestInsertRecoveryDetectionReturningClosesDeleteRace verifies that InsertRecoveryDetection
+// captures detection_id from the UPSERT's RETURNING clause rather than a separate SELECT.
+//
+// The race this closes: the old two-statement implementation ran INSERT … ON CONFLICT DO UPDATE
+// then a separate SELECT. A concurrent successful ERS/PRS could call deleteResolvedDetection
+// between those two statements; QueryVTOrc treats zero rows as success, leaving RecoveryId == 0.
+//
+// The test uses a fake DB (returningOnlyDB) that returns a detection_id only for queries
+// containing RETURNING. A separate SELECT query gets an empty result. If the function is
+// reverted to two statements, the SELECT returns nothing, the RecoveryId == 0 guard fires,
+// and the test fails.
 func TestInsertRecoveryDetectionReturningClosesDeleteRace(t *testing.T) {
-	orcDb, _, err := db.OpenVTOrcWithCache()
-	require.NoError(t, err)
-	defer func() { _, _ = orcDb.Exec("DELETE FROM recovery_detection") }()
+	oldDB := db.Db
+	defer func() { db.Db = oldDB }()
+	db.Db = &returningOnlyDB{}
 
 	entry := &inst.DetectionAnalysis{
 		AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 200},
@@ -1827,24 +1844,8 @@ func TestInsertRecoveryDetectionReturningClosesDeleteRace(t *testing.T) {
 		AnalyzedShard:         "0",
 	}
 	require.NoError(t, InsertRecoveryDetection(entry))
-	firstID := entry.RecoveryId
-	require.NotZero(t, firstID)
-
-	// Simulate a successful ERS establishing an incident boundary.
-	deleteResolvedDetection(firstID)
-
-	// A recurrence must get a fresh non-zero detection_id. RETURNING captures the
-	// ID from the UPSERT result itself, so there is no SELECT for a concurrent
-	// delete to race between.
-	entry2 := &inst.DetectionAnalysis{
-		AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 200},
-		Analysis:              inst.ReplicationStopped,
-		AnalyzedKeyspace:      "ks",
-		AnalyzedShard:         "0",
-	}
-	require.NoError(t, InsertRecoveryDetection(entry2))
-	require.NotZero(t, entry2.RecoveryId, "RecoveryId must not be 0 after incident boundary")
-	require.Greater(t, entry2.RecoveryId, firstID, "recurrence after successful recovery must get a fresh detection_id")
+	require.EqualValues(t, 42, entry.RecoveryId,
+		"RecoveryId must come from the RETURNING clause of the UPSERT, not a subsequent SELECT")
 }
 
 func TestExpireRecoveryDetectionActiveIncidentSurvives(t *testing.T) {

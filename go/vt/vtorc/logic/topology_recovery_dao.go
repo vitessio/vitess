@@ -42,7 +42,7 @@ import (
 func InsertRecoveryDetection(analysisEntry *inst.DetectionAnalysis) error {
 	aliasStr := topoproto.TabletAliasString(analysisEntry.AnalyzedInstanceAlias)
 	analysisStr := string(analysisEntry.Analysis)
-	err := db.QueryVTOrc(`INSERT INTO recovery_detection (
+	err := db.Db.QueryVTOrc(`INSERT INTO recovery_detection (
 			alias,
 			analysis,
 			keyspace,

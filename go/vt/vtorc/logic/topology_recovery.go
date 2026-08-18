@@ -78,6 +78,10 @@ const (
 	RecoverySkipStaleAnalysis
 	RecoverySkipPrimaryRecovery
 	RecoverySkipCellNoRecovery
+	// RecoverySkipCellNoRecoveryUnvalidated is used when --cells-no-recovery was set but
+	// could not be validated against the topology at startup (topology unreachable). Recovery
+	// is held until a subsequent refresh cycle completes validation.
+	RecoverySkipCellNoRecoveryUnvalidated
 )
 
 // String represents a RecoverySkip as a string.
@@ -95,6 +99,8 @@ func (rsc RecoverySkipCode) String() string {
 		return "PrimaryRecovery"
 	case RecoverySkipCellNoRecovery:
 		return "CellNoRecovery"
+	case RecoverySkipCellNoRecoveryUnvalidated:
+		return "CellNoRecoveryUnvalidated"
 	default:
 		return "None"
 	}
@@ -962,6 +968,7 @@ func executeCheckAndRecoverFunction(analysisEntry *inst.DetectionAnalysis) (err 
 			if util.ClearToLog("executeCheckAndRecoverFunction: cells-no-recovery-unvalidated", analyzedInstanceAliasString) {
 				logger.Warn("--cells-no-recovery not yet validated against topology; holding recovery until validation succeeds")
 			}
+			recoveriesSkippedCounter.Add(append(recoveryLabels, RecoverySkipCellNoRecoveryUnvalidated.String()), 1)
 			return nil
 		}
 		// Tablet-level cell check: skip recovery when the failed tablet's cell is denied.
