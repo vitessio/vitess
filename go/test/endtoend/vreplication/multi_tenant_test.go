@@ -259,10 +259,11 @@ func TestMultiTenantSimple(t *testing.T) {
 		require.Equal(t, "completed", previous.State)
 		previousCompletedAt, err := time.Parse(vdiff2.TimestampFormat, previous.CompletedAt)
 		require.NoError(t, err)
+		completedAtMin := previousCompletedAt.Add(-time.Nanosecond)
 		lastIndex = insertRows(lastIndex, sourceKeyspace)
 		_, _, err = performVDiff2Action(t, ksWorkflow, defaultCellName, "resume", uuid, false)
 		require.NoError(t, err)
-		info := waitForVDiff2ToComplete(t, ksWorkflow, defaultCellName, uuid, previousCompletedAt)
+		info := waitForVDiff2ToComplete(t, ksWorkflow, defaultCellName, uuid, completedAtMin)
 		require.NotNil(t, info)
 		require.False(t, info.HasMismatch)
 
