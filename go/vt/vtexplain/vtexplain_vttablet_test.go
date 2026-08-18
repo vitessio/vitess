@@ -17,6 +17,7 @@ limitations under the License.
 package vtexplain
 
 import (
+	"context"
 	"encoding/json"
 	"testing"
 	"time"
@@ -78,7 +79,7 @@ create table t2 (
 	srvTopoCounts := stats.NewCountersWithSingleLabel("", "Resilient srvtopo server operations", "type")
 	vte, err := Init(ctx, vtenv.NewTestEnv(), ts, testVSchema, testSchema, "", opts, srvTopoCounts)
 	require.NoError(t, err)
-	defer vte.Stop()
+	defer vte.StopContext(ctx)
 
 	// Check if the correct schema query is registered.
 	_, found := vte.globalTabletEnv.schemaQueries["SELECT COLUMN_NAME as column_name\n\t\tFROM INFORMATION_SCHEMA.COLUMNS\n\t\tWHERE TABLE_SCHEMA = database() AND TABLE_NAME = 't1'\n\t\tORDER BY ORDINAL_POSITION"]
@@ -86,8 +87,13 @@ create table t2 (
 
 	sql := "SELECT * FROM t1 INNER JOIN t2 ON t1.id = t2.id"
 
-	_, err = vte.Run(sql)
+	_, err = vte.RunContext(ctx, sql)
 	require.NoError(t, err)
+
+	cancelledCtx, cancel := context.WithCancel(ctx)
+	cancel()
+	_, err = vte.RunContext(cancelledCtx, sql)
+	require.ErrorContains(t, err, "context already expired")
 }
 
 // TestAnalyzeWhereFromlessSelect guards against a panic in analyzeWhere

@@ -119,8 +119,8 @@ func (mz *materializer) getOptionsJSON() (string, error) {
 	return string(optionsJSON), nil
 }
 
-func (mz *materializer) createWorkflowStreams(req *tabletmanagerdatapb.CreateVReplicationWorkflowRequest) error {
-	if err := validateNewWorkflow(mz.ctx, mz.ts, mz.tmc, mz.ms.TargetKeyspace, mz.ms.Workflow); err != nil {
+func (mz *materializer) createWorkflowStreams(ctx context.Context, req *tabletmanagerdatapb.CreateVReplicationWorkflowRequest) error {
+	if err := validateNewWorkflow(ctx, mz.ts, mz.tmc, mz.ms.TargetKeyspace, mz.ms.Workflow); err != nil {
 		return err
 	}
 
@@ -141,12 +141,12 @@ func (mz *materializer) createWorkflowStreams(req *tabletmanagerdatapb.CreateVRe
 	}
 	req.Options = optionsJSON
 
-	if err := mz.deploySchema(); err != nil {
+	if err := mz.deploySchema(ctx); err != nil {
 		return err
 	}
 
 	return forAllShards(mz.targetShards, func(target *topo.ShardInfo) error {
-		targetPrimary, err := mz.ts.GetTablet(mz.ctx, target.PrimaryAlias)
+		targetPrimary, err := mz.ts.GetTablet(ctx, target.PrimaryAlias)
 		if err != nil {
 			return vterrors.Wrapf(err, "GetTablet(%v) failed", target.PrimaryAlias)
 		}
@@ -168,7 +168,7 @@ func (mz *materializer) createWorkflowStreams(req *tabletmanagerdatapb.CreateVRe
 			return err
 		}
 
-		_, err = mz.tmc.CreateVReplicationWorkflow(mz.ctx, targetPrimary.Tablet, tabletReq)
+		_, err = mz.tmc.CreateVReplicationWorkflow(ctx, targetPrimary.Tablet, tabletReq)
 		return err
 	})
 }
@@ -273,7 +273,7 @@ func (mz *materializer) generateRule(ts *vtctldatapb.TableMaterializeSettings, t
 	return rule, nil
 }
 
-func (mz *materializer) deploySchema() error {
+func (mz *materializer) deploySchema(ctx context.Context) error {
 	var sourceDDLs map[string]string
 	var mu sync.Mutex
 
@@ -292,7 +292,7 @@ func (mz *materializer) deploySchema() error {
 		(mz.ms.GetWorkflowOptions() != nil && mz.ms.GetWorkflowOptions().ShardedAutoIncrementHandling != vtctldatapb.ShardedAutoIncrementHandling_LEAVE) {
 		removeAutoInc = true
 		var err error
-		targetVSchema, err = mz.ts.GetVSchema(mz.ctx, mz.ms.TargetKeyspace)
+		targetVSchema, err = mz.ts.GetVSchema(ctx, mz.ms.TargetKeyspace)
 		if err != nil {
 			return err
 		}
@@ -301,7 +301,7 @@ func (mz *materializer) deploySchema() error {
 	// Check if any table being moved is already non-empty in the target keyspace.
 	// Skip this check for multi-tenant migrations.
 	if !mz.IsMultiTenantMigration() {
-		err := mz.validateEmptyTables()
+		err := mz.validateEmptyTables(ctx)
 		if err != nil {
 			return vterrors.Wrap(err, "failed to validate that all target tables are empty")
 		}
@@ -312,7 +312,7 @@ func (mz *materializer) deploySchema() error {
 
 		hasTargetTable := map[string]bool{}
 		req := &tabletmanagerdatapb.GetSchemaRequest{Tables: allTables}
-		targetSchema, err := schematools.GetSchema(mz.ctx, mz.ts, mz.tmc, target.PrimaryAlias, req)
+		targetSchema, err := schematools.GetSchema(ctx, mz.ts, mz.tmc, target.PrimaryAlias, req)
 		if err != nil {
 			return err
 		}
@@ -321,7 +321,7 @@ func (mz *materializer) deploySchema() error {
 			hasTargetTable[td.Name] = true
 		}
 
-		targetTablet, err := mz.ts.GetTablet(mz.ctx, target.PrimaryAlias)
+		targetTablet, err := mz.ts.GetTablet(ctx, target.PrimaryAlias)
 		if err != nil {
 			return err
 		}
@@ -342,7 +342,7 @@ func (mz *materializer) deploySchema() error {
 				// Only get DDLs for tables once and lazily: if we need to copy the schema from source
 				// to target then we copy schemas from primaries on the source keyspace; we have found
 				// use cases where the user just has a replica (no primary) in the source keyspace.
-				sourceDDLs, err = getSourceTableDDLs(mz.ctx, mz.sourceTs, mz.tmc, mz.sourceShards)
+				sourceDDLs, err = getSourceTableDDLs(ctx, mz.sourceTs, mz.tmc, mz.sourceShards)
 			}
 			mu.Unlock()
 			if err != nil {
@@ -455,7 +455,7 @@ func (mz *materializer) deploySchema() error {
 			}
 			sql := strings.Join(applyDDLs, ";\n")
 
-			_, err = mz.tmc.ApplySchema(mz.ctx, targetTablet.Tablet, &tmutils.SchemaChange{
+			_, err = mz.tmc.ApplySchema(ctx, targetTablet.Tablet, &tmutils.SchemaChange{
 				SQL:                     sql,
 				Force:                   false,
 				AllowReplication:        true,
@@ -474,7 +474,7 @@ func (mz *materializer) deploySchema() error {
 	}
 
 	if updatedVSchema {
-		return mz.ts.SaveVSchema(mz.ctx, targetVSchema)
+		return mz.ts.SaveVSchema(ctx, targetVSchema)
 	}
 
 	return nil
@@ -572,7 +572,7 @@ func (mz *materializer) buildMaterializer() error {
 // validateEmptyTables checks if all tables are empty across all target shards.
 // It queries each shard's primary tablet and if any non-empty table is found,
 // returns an error containing a list of non-empty tables.
-func (mz *materializer) validateEmptyTables() error {
+func (mz *materializer) validateEmptyTables(ctx context.Context) error {
 	var mu sync.Mutex
 	isNonEmptyTable := map[string]bool{}
 
@@ -582,12 +582,12 @@ func (mz *materializer) validateEmptyTables() error {
 			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "no primary tablet found for shard %s/%s", shard.Keyspace(), shard.ShardName())
 		}
 
-		ti, err := mz.ts.GetTablet(mz.ctx, primary)
+		ti, err := mz.ts.GetTablet(ctx, primary)
 		if err != nil {
 			return err
 		}
 
-		eg, groupCtx := errgroup.WithContext(mz.ctx)
+		eg, groupCtx := errgroup.WithContext(ctx)
 		eg.SetLimit(20)
 
 		for _, ts := range mz.ms.TableSettings {

@@ -846,7 +846,7 @@ func (s *Server) Materialize(ctx context.Context, ms *vtctldatapb.MaterializeSet
 		})
 	}
 
-	err = mz.createWorkflowStreams(&tabletmanagerdatapb.CreateVReplicationWorkflowRequest{
+	err = mz.createWorkflowStreams(ctx, &tabletmanagerdatapb.CreateVReplicationWorkflowRequest{
 		Workflow:                  ms.Workflow,
 		Cells:                     strings.Split(ms.Cell, ","),
 		TabletTypes:               tt,
@@ -955,7 +955,7 @@ func (s *Server) WorkflowAddTables(ctx context.Context, req *vtctldatapb.Workflo
 	if err := mz.buildMaterializer(); err != nil {
 		return err
 	}
-	if err := mz.deploySchema(); err != nil {
+	if err := mz.deploySchema(ctx); err != nil {
 		// If there was an error while deploying schema, we should restart the
 		// streams before returning the error.
 		if startStreamsErr := mz.startStreams(ctx); startStreamsErr != nil {
@@ -1235,7 +1235,7 @@ func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 		workflowType: workflowType,
 		env:          s.env,
 	}
-	err = mz.createWorkflowStreams(&tabletmanagerdatapb.CreateVReplicationWorkflowRequest{
+	err = mz.createWorkflowStreams(ctx, &tabletmanagerdatapb.CreateVReplicationWorkflowRequest{
 		Workflow:                  req.Workflow,
 		Cells:                     req.Cells,
 		TabletTypes:               req.TabletTypes,
@@ -1408,7 +1408,7 @@ func (s *Server) setupInitialRoutingRules(ctx context.Context, req *vtctldatapb.
 	// Save routing rules before vschema. If we save vschema first, and routing
 	// rules fails to save, we may generate duplicate table errors.
 	if mz.isPartial {
-		if err := createDefaultShardRoutingRules(mz.ctx, mz.ms, mz.ts); err != nil {
+		if err := createDefaultShardRoutingRules(ctx, mz.ms, mz.ts); err != nil {
 			return err
 		}
 	}
@@ -1648,7 +1648,7 @@ func (s *Server) WorkflowDelete(ctx context.Context, req *vtctldatapb.WorkflowDe
 		}
 		// Best effort cleanup and optimization of related data.
 		s.deleteWorkflowVDiffData(ctx, tablet.Tablet, req.Workflow)
-		s.optimizeCopyStateTable(tablet.Tablet)
+		s.optimizeCopyStateTable(ctx, tablet.Tablet)
 		return res.Result, err
 	}
 
@@ -2133,7 +2133,7 @@ func (s *Server) deleteWorkflowVDiffData(ctx context.Context, tablet *topodatapb
 // logged as warnings. Because it's done in the background we use the AllPrivs
 // account to be sure that we don't execute the writes if READ_ONLY is set on
 // the MySQL instance.
-func (s *Server) optimizeCopyStateTable(tablet *topodatapb.Tablet) {
+func (s *Server) optimizeCopyStateTable(ctx context.Context, tablet *topodatapb.Tablet) {
 	if s.sem != nil {
 		if !s.sem.TryAcquire(1) {
 			s.Logger().Warningf("Deferring work to optimize the copy_state table on %q due to hitting the maximum concurrent background job limit.",
@@ -2141,13 +2141,13 @@ func (s *Server) optimizeCopyStateTable(tablet *topodatapb.Tablet) {
 			return
 		}
 	}
-	go func() {
+	go func(ctx context.Context) {
 		defer func() {
 			if s.sem != nil {
 				s.sem.Release(1)
 			}
 		}()
-		ctx, cancel := context.WithTimeout(context.Background(), DefaultTimeout)
+		ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), DefaultTimeout)
 		defer cancel()
 		sqlOptimizeTable := "optimize table _vt.copy_state"
 		if _, err := s.tmc.ExecuteFetchAsAllPrivs(ctx, tablet, &tabletmanagerdatapb.ExecuteFetchAsAllPrivsRequest{
@@ -2169,7 +2169,7 @@ func (s *Server) optimizeCopyStateTable(tablet *topodatapb.Tablet) {
 			s.Logger().Warningf("Failed to reset the auto_increment value for the copy_state table on %q: %v",
 				tablet.Alias.String(), err)
 		}
-	}()
+	}(ctx)
 }
 
 // dropTargets cleans up target tables, shards and denied tables if a MoveTables/Reshard

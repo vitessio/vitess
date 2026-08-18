@@ -229,6 +229,12 @@ func TestCopyProgress(t *testing.T) {
 	require.Equal(t, int64(400), (*cp)["t2"].TargetRowCount)
 	require.Equal(t, int64(4000), (*cp)["t2"].SourceTableSize)
 	require.Equal(t, int64(1000), (*cp)["t2"].TargetTableSize)
+
+	cancelledCtx, cancel := context.WithCancel(ctx)
+	cancel()
+	wf.ctx = cancelledCtx
+	_, err = wf.GetCopyProgress()
+	require.ErrorContains(t, err, context.Canceled.Error())
 }
 
 func expectCopyProgressQueries(t *testing.T, tme *testMigraterEnv) {

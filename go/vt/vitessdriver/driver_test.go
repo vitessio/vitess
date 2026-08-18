@@ -135,7 +135,7 @@ func TestOpen(t *testing.T) {
 		defer c.Close()
 
 		wantc := tc.conn
-		newc := *(c.(*conn))
+		newc := *c.(*conn)
 		newc.cfg.Address = ""
 		newc.conn = nil
 		newc.session = nil
@@ -159,6 +159,29 @@ func TestBeginIsolation(t *testing.T) {
 	defer db.Close()
 	_, err = db.BeginTx(t.Context(), &sql.TxOptions{Isolation: sql.LevelRepeatableRead})
 	require.EqualError(t, err, errIsolationUnsupported.Error())
+}
+
+func TestBeginTxPropagatesCancellation(t *testing.T) {
+	c, err := drv{}.Open(fmt.Sprintf(`{"address": %q, "target": "@primary"}`, testAddress))
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		require.NoError(t, c.Close())
+	})
+
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	_, err = c.(*conn).BeginTx(ctx, driver.TxOptions{})
+	require.ErrorContains(t, err, context.Canceled.Error())
+}
+
+func TestBeginTxWithSessionTokenPropagatesCancellation(t *testing.T) {
+	c := &conn{cfg: Configuration{SessionToken: "session-token"}}
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	tx, err := c.BeginTx(ctx, driver.TxOptions{})
+	require.Nil(t, tx)
+	require.ErrorIs(t, err, context.Canceled)
 }
 
 func TestExec(t *testing.T) {

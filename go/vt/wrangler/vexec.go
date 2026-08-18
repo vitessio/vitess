@@ -185,9 +185,9 @@ func (wr *Wrangler) runVexec(ctx context.Context, workflow, keyspace, query stri
 		if dryRun {
 			return nil, vx.outputDryRunInfo(ctx)
 		}
-		return vx.exec()
+		return vx.exec(ctx)
 	} else { // Using new (RPC) callback path
-		return vx.execCallback(callback)
+		return vx.execCallback(ctx, callback)
 	}
 }
 
@@ -212,12 +212,12 @@ func (vx *vexec) outputDryRunInfo(ctx context.Context) error {
 
 // exec runs our planned query on backend shard primaries. It collects query results from all
 // shards and returns an aggregate (UNION ALL -like) result.
-func (vx *vexec) exec() (map[*topo.TabletInfo]*querypb.QueryResult, error) {
+func (vx *vexec) exec(ctx context.Context) (map[*topo.TabletInfo]*querypb.QueryResult, error) {
 	var wg sync.WaitGroup
 	allErrors := &concurrency.AllErrorRecorder{}
 	results := make(map[*topo.TabletInfo]*querypb.QueryResult)
 	var mu sync.Mutex
-	ctx, cancel := context.WithTimeout(vx.ctx, execTimeout)
+	ctx, cancel := context.WithTimeout(ctx, execTimeout)
 	defer cancel()
 	for _, primary := range vx.primaries {
 		wg.Add(1)
@@ -231,7 +231,7 @@ func (vx *vexec) exec() (map[*topo.TabletInfo]*querypb.QueryResult, error) {
 				// up any related data.
 				if vx.query == sqlVReplicationDelete {
 					vx.wr.deleteWorkflowVDiffData(ctx, primary.Tablet, vx.workflow)
-					vx.wr.optimizeCopyStateTable(primary.Tablet)
+					vx.wr.optimizeCopyStateTable(ctx, primary.Tablet)
 				}
 				mu.Lock()
 				results[primary] = qr
@@ -247,12 +247,12 @@ func (vx *vexec) exec() (map[*topo.TabletInfo]*querypb.QueryResult, error) {
 // It collects query results from all shards and returns an aggregate (UNION
 // ALL -like) result.
 // Note: any nil results from the callback are ignored.
-func (vx *vexec) execCallback(callback func(context.Context, *topo.TabletInfo) (*querypb.QueryResult, error)) (map[*topo.TabletInfo]*querypb.QueryResult, error) {
+func (vx *vexec) execCallback(ctx context.Context, callback func(context.Context, *topo.TabletInfo) (*querypb.QueryResult, error)) (map[*topo.TabletInfo]*querypb.QueryResult, error) {
 	var wg sync.WaitGroup
 	allErrors := &concurrency.AllErrorRecorder{}
 	results := make(map[*topo.TabletInfo]*querypb.QueryResult)
 	var mu sync.Mutex
-	ctx, cancel := context.WithTimeout(vx.ctx, execTimeout)
+	ctx, cancel := context.WithTimeout(ctx, execTimeout)
 	defer cancel()
 	for _, primary := range vx.primaries {
 		wg.Add(1)

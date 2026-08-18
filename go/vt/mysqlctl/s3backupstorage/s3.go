@@ -412,7 +412,7 @@ func newS3BackupStorage() *S3BackupStorage {
 // ListBackups is part of the backupstorage.BackupStorage interface.
 func (bs *S3BackupStorage) ListBackups(ctx context.Context, dir string) ([]backupstorage.BackupHandle, error) {
 	log.Info(fmt.Sprintf("ListBackups: [s3] dir: %v, bucket: %v", dir, bucket))
-	c, err := bs.client()
+	c, err := bs.client(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -468,7 +468,7 @@ func (bs *S3BackupStorage) ListBackups(ctx context.Context, dir string) ([]backu
 // StartBackup is part of the backupstorage.BackupStorage interface.
 func (bs *S3BackupStorage) StartBackup(ctx context.Context, dir, name string) (backupstorage.BackupHandle, error) {
 	log.Info(fmt.Sprintf("StartBackup: [s3] dir: %v, name: %v, bucket: %v", dir, name, bucket))
-	c, err := bs.client()
+	c, err := bs.client(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -486,7 +486,7 @@ func (bs *S3BackupStorage) StartBackup(ctx context.Context, dir, name string) (b
 func (bs *S3BackupStorage) RemoveBackup(ctx context.Context, dir, name string) error {
 	log.Info(fmt.Sprintf("RemoveBackup: [s3] dir: %v, name: %v, bucket: %v", dir, name, bucket))
 
-	c, err := bs.client()
+	c, err := bs.client(ctx)
 	if err != nil {
 		return err
 	}
@@ -560,7 +560,7 @@ func getLogLevel() aws.ClientLogMode {
 	return l
 }
 
-func (bs *S3BackupStorage) client() (*s3.Client, error) {
+func (bs *S3BackupStorage) client(ctx context.Context) (*s3.Client, error) {
 	bs.mu.Lock()
 	defer bs.mu.Unlock()
 	if bs._client == nil {
@@ -569,7 +569,7 @@ func (bs *S3BackupStorage) client() (*s3.Client, error) {
 		httpClient := &http.Client{Transport: bs.transport}
 
 		cfg, err := config.LoadDefaultConfig(
-			context.Background(),
+			ctx,
 			config.WithRegion(region),
 			config.WithClientLogMode(logLevel),
 			config.WithHTTPClient(httpClient),
@@ -595,19 +595,21 @@ func (bs *S3BackupStorage) client() (*s3.Client, error) {
 			options = append(options, s3.WithEndpointResolverV2(newEndpointResolver()))
 		}
 
-		bs._client = s3.NewFromConfig(cfg, options...)
+		client := s3.NewFromConfig(cfg, options...)
 
 		if len(bucket) == 0 {
 			return nil, errors.New("--s3-backup-storage-bucket required")
 		}
 
-		if _, err := bs._client.HeadBucket(context.Background(), &s3.HeadBucketInput{Bucket: &bucket}); err != nil {
+		if _, err := client.HeadBucket(ctx, &s3.HeadBucketInput{Bucket: &bucket}); err != nil {
 			return nil, err
 		}
 
 		if err := bs.s3SSE.init(); err != nil {
 			return nil, err
 		}
+
+		bs._client = client
 	}
 	return bs._client, nil
 }

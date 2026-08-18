@@ -18,6 +18,7 @@ package s3backupstorage
 
 import (
 	"bytes"
+	"context"
 	"crypto/md5"
 	"crypto/rand"
 	"encoding/base64"
@@ -1413,7 +1414,7 @@ func TestClientCaching(t *testing.T) {
 	}
 
 	// Calling client() should return the cached client
-	client2, err := bs.client()
+	client2, err := bs.client(t.Context())
 	require.NoError(t, err)
 	require.Same(t, client, client2, "client() should return cached client")
 }
@@ -1428,9 +1429,44 @@ func TestClientInitializationEmptyBucket(t *testing.T) {
 		params: backupstorage.NoParams(),
 	}
 
-	_, err := bs.client()
+	_, err := bs.client(t.Context())
 	require.Error(t, err, "client() should error with empty bucket")
 	require.Contains(t, err.Error(), "--s3-backup-storage-bucket required")
+}
+
+func TestClientInitializationHonoursContextCancellation(t *testing.T) {
+	mockServer := newMockS3Server()
+	t.Cleanup(mockServer.Close)
+
+	originalBucket := bucket
+	originalEndpoint := endpoint
+	originalForcePath := forcePath
+	originalRegion := region
+	t.Cleanup(func() {
+		bucket = originalBucket
+		endpoint = originalEndpoint
+		forcePath = originalForcePath
+		region = originalRegion
+	})
+
+	bucket = "test-bucket"
+	endpoint = mockServer.URL()
+	forcePath = true
+	region = "us-east-1"
+	t.Setenv("AWS_ACCESS_KEY_ID", "test-access-key")
+	t.Setenv("AWS_SECRET_ACCESS_KEY", "test-secret-key")
+
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	bs := newS3BackupStorage()
+	_, err := bs.StartBackup(ctx, "testdir", "newbackup")
+	require.ErrorIs(t, err, context.Canceled)
+	require.Nil(t, bs._client)
+
+	client, err := bs.client(t.Context())
+	require.NoError(t, err)
+	require.NotNil(t, client)
 }
 
 func TestListBackupsError(t *testing.T) {

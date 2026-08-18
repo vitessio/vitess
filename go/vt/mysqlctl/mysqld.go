@@ -373,7 +373,7 @@ func (mysqld *Mysqld) Start(ctx context.Context, cnf *Mycnf, mysqldArgs ...strin
 		return client.Start(ctx, mysqldArgs...)
 	}
 
-	if err := mysqld.startNoWait(cnf, mysqldArgs...); err != nil {
+	if err := mysqld.startNoWait(ctx, cnf, mysqldArgs...); err != nil {
 		return err
 	}
 
@@ -381,12 +381,12 @@ func (mysqld *Mysqld) Start(ctx context.Context, cnf *Mycnf, mysqldArgs ...strin
 }
 
 // startNoWait is the internal version of Start, and it doesn't wait.
-func (mysqld *Mysqld) startNoWait(cnf *Mycnf, mysqldArgs ...string) error {
+func (mysqld *Mysqld) startNoWait(ctx context.Context, cnf *Mycnf, mysqldArgs ...string) error {
 	var name string
 	ts := fmt.Sprintf("Mysqld.Start(%v)", time.Now().Unix())
 
 	// try the mysqld start hook, if any
-	switch hr := hook.NewHook("mysqld_start", mysqldArgs).Execute(); hr.ExitStatus {
+	switch hr := hook.NewHook("mysqld_start", mysqldArgs).ExecuteContext(ctx); hr.ExitStatus {
 	case hook.HOOK_SUCCESS:
 		// hook exists and worked, we can keep going
 		name = "mysqld_start hook" //nolint:ineffassign
@@ -484,7 +484,7 @@ func (mysqld *Mysqld) startNoWait(cnf *Mycnf, mysqldArgs ...string) error {
 	}
 
 	// try the postflight mysqld start hook, if any
-	switch hr := hook.NewHook("postflight_mysqld_start", mysqldArgs).Execute(); hr.ExitStatus {
+	switch hr := hook.NewHook("postflight_mysqld_start", mysqldArgs).ExecuteContext(ctx); hr.ExitStatus {
 	case hook.HOOK_SUCCESS, hook.HOOK_DOES_NOT_EXIST:
 		// hook exists and worked, or does not exist, we can keep going
 	default:
@@ -842,6 +842,10 @@ func binaryPath(root, binary string) (string, error) {
 // InitConfig will create the default directory structure for the mysqld process,
 // generate / configure a my.cnf file.
 func (mysqld *Mysqld) InitConfig(cnf *Mycnf) error {
+	return mysqld.initConfigWithContext(context.Background(), cnf)
+}
+
+func (mysqld *Mysqld) initConfigWithContext(ctx context.Context, cnf *Mycnf) error {
 	log.Info("mysqlctl.InitConfig")
 	err := mysqld.createDirs(cnf)
 	if err != nil {
@@ -849,7 +853,7 @@ func (mysqld *Mysqld) InitConfig(cnf *Mycnf) error {
 		return err
 	}
 	// Set up config files.
-	if err = mysqld.initConfig(cnf, cnf.Path); err != nil {
+	if err = mysqld.initConfig(ctx, cnf, cnf.Path); err != nil {
 		log.Error(fmt.Sprintf("failed creating %v: %v", cnf.Path, err))
 		return err
 	}
@@ -861,7 +865,7 @@ func (mysqld *Mysqld) InitConfig(cnf *Mycnf) error {
 // and apply the provided initial SQL file.
 func (mysqld *Mysqld) Init(ctx context.Context, cnf *Mycnf, initDBSQLFile string) error {
 	log.Info("mysqlctl.Init running with contents previously embedded from " + initDBSQLFile)
-	err := mysqld.InitConfig(cnf)
+	err := mysqld.initConfigWithContext(ctx, cnf)
 	if err != nil {
 		log.Error(err.Error())
 		return err
@@ -873,7 +877,7 @@ func (mysqld *Mysqld) Init(ctx context.Context, cnf *Mycnf, initDBSQLFile string
 
 	// Start mysqld. We do not use Start, as we have to wait using
 	// the root user.
-	if err = mysqld.startNoWait(cnf); err != nil {
+	if err = mysqld.startNoWait(ctx, cnf); err != nil {
 		log.Error(fmt.Sprintf("failed starting mysqld: %v\n%v", err, readTailOfMysqldErrorLog(cnf.ErrorLogPath)))
 		return err
 	}
@@ -994,7 +998,7 @@ func (mysqld *Mysqld) installDataDir(cnf *Mycnf) error {
 	return nil
 }
 
-func (mysqld *Mysqld) initConfig(cnf *Mycnf, outFile string) error {
+func (mysqld *Mysqld) initConfig(ctx context.Context, cnf *Mycnf, outFile string) error {
 	var err error
 	var configData string
 
@@ -1004,7 +1008,7 @@ func (mysqld *Mysqld) initConfig(cnf *Mycnf, outFile string) error {
 		env[v] = os.Getenv(v)
 	}
 
-	switch hr := hook.NewHookWithEnv("make_mycnf", nil, env).Execute(); hr.ExitStatus {
+	switch hr := hook.NewHookWithEnv("make_mycnf", nil, env).ExecuteContext(ctx); hr.ExitStatus {
 	case hook.HOOK_DOES_NOT_EXIST:
 		log.Info("make_mycnf hook doesn't exist, reading template files")
 		configData, err = cnf.makeMycnf(mysqld.getMycnfTemplate())
@@ -1122,7 +1126,7 @@ func (mysqld *Mysqld) RefreshConfig(ctx context.Context, cnf *Mycnf) error {
 	}
 
 	defer os.Remove(f.Name())
-	err = mysqld.initConfig(cnf, f.Name())
+	err = mysqld.initConfig(ctx, cnf, f.Name())
 	if err != nil {
 		return fmt.Errorf("could not initConfig in %v: %v", f.Name(), err)
 	}
@@ -1176,7 +1180,7 @@ func (mysqld *Mysqld) ReinitConfig(ctx context.Context, cnf *Mycnf) error {
 	if err := cnf.RandomizeMysqlServerID(); err != nil {
 		return err
 	}
-	return mysqld.initConfig(cnf, cnf.Path)
+	return mysqld.initConfig(ctx, cnf, cnf.Path)
 }
 
 func (mysqld *Mysqld) createDirs(cnf *Mycnf) error {

@@ -17,6 +17,7 @@ limitations under the License.
 package common
 
 import (
+	"context"
 	"fmt"
 	"sort"
 	"strings"
@@ -26,6 +27,7 @@ import (
 	"vitess.io/vitess/go/cmd/vtctldclient/cli"
 	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vtctl/vtctldclient"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -81,8 +83,8 @@ func GetStopCommand(opts *SubCommandsOpts) *cobra.Command {
 	return cmd
 }
 
-func getWorkflow(keyspace, workflow string) (*vtctldatapb.GetWorkflowsResponse, error) {
-	resp, err := GetClient().GetWorkflows(GetCommandCtx(), &vtctldatapb.GetWorkflowsRequest{
+func getWorkflow(ctx context.Context, client vtctldclient.VtctldClient, keyspace, workflow string) (*vtctldatapb.GetWorkflowsResponse, error) {
+	resp, err := client.GetWorkflows(ctx, &vtctldatapb.GetWorkflowsRequest{
 		Keyspace: keyspace,
 		Workflow: workflow,
 	})
@@ -95,7 +97,12 @@ func getWorkflow(keyspace, workflow string) (*vtctldatapb.GetWorkflowsResponse, 
 // CanRestartWorkflow validates that, for an atomic copy workflow, none of the streams are still in the copy phase.
 // Since we copy all tables in a single snapshot, we cannot restart a workflow which broke before all tables were copied.
 func CanRestartWorkflow(keyspace, workflow string) error {
-	resp, err := getWorkflow(keyspace, workflow)
+	return CanRestartWorkflowWithContext(GetCommandCtx(), GetClient(), keyspace, workflow)
+}
+
+// CanRestartWorkflowWithContext avoids command-global state for non-CLI callers.
+func CanRestartWorkflowWithContext(ctx context.Context, client vtctldclient.VtctldClient, keyspace, workflow string) error {
+	resp, err := getWorkflow(ctx, client, keyspace, workflow)
 	if err != nil {
 		return err
 	}

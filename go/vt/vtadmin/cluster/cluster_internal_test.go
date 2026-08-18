@@ -34,6 +34,7 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vitessdriver"
+	"vitess.io/vitess/go/vt/vtadmin/cluster/discovery"
 	"vitess.io/vitess/go/vt/vtadmin/cluster/resolver"
 	"vitess.io/vitess/go/vt/vtadmin/vtctldclient/fakevtctldclient"
 	"vitess.io/vitess/go/vt/vtadmin/vtsql"
@@ -52,6 +53,23 @@ type vtctldProxy struct {
 }
 
 func (fake *vtctldProxy) Dial(ctx context.Context) error { return fake.dialErr }
+
+type contextCheckingDiscovery struct {
+	discovery.Discovery
+}
+
+func (d *contextCheckingDiscovery) DiscoverVTGateAddrs(ctx context.Context, _ []string) ([]string, error) {
+	return nil, ctx.Err()
+}
+
+func TestEqualPropagatesCancellation(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	c := &Cluster{Discovery: &contextCheckingDiscovery{}}
+	_, err := c.EqualContext(ctx, &Cluster{Discovery: &contextCheckingDiscovery{}})
+	require.ErrorIs(t, err, context.Canceled)
+}
 
 func TestDeleteTablets(t *testing.T) {
 	t.Parallel()

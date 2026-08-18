@@ -66,7 +66,12 @@ func getRandomInitialServerID() uint32 {
 
 // NewBinlogConnection creates a new binlog connection to the mysqld instance.
 func NewBinlogConnection(cp dbconfigs.Connector) (*BinlogConnection, error) {
-	conn, err := connectForReplication(cp)
+	return NewBinlogConnectionContext(context.Background(), cp)
+}
+
+// NewBinlogConnectionContext bounds the initial connection and handshake with ctx.
+func NewBinlogConnectionContext(ctx context.Context, cp dbconfigs.Connector) (*BinlogConnection, error) {
+	conn, err := connectForReplication(ctx, cp)
 	if err != nil {
 		return nil, err
 	}
@@ -86,15 +91,22 @@ func (bc *BinlogConnection) ServerID() uint32 {
 }
 
 // connectForReplication create a MySQL connection ready to use for replication.
-func connectForReplication(cp dbconfigs.Connector) (*mysql.Conn, error) {
-	ctx := context.Background()
+func connectForReplication(ctx context.Context, cp dbconfigs.Connector) (*mysql.Conn, error) {
 	conn, err := cp.Connect(ctx)
 	if err != nil {
 		return nil, err
 	}
 	// Tell the server that we understand the format of events
 	// that will be used if binlog_checksum is enabled on the server.
-	if _, err := conn.ExecuteFetch("SET @source_binlog_checksum = @@global.binlog_checksum, @master_binlog_checksum=@@global.binlog_checksum", 0, false); err != nil {
+	stopClose := context.AfterFunc(ctx, conn.Close)
+	_, err = conn.ExecuteFetch("SET @source_binlog_checksum = @@global.binlog_checksum, @master_binlog_checksum=@@global.binlog_checksum", 0, false)
+	stopClose()
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		conn.Close()
+		return nil, ctxErr
+	}
+	if err != nil {
+		conn.Close()
 		return nil, fmt.Errorf("failed to set @source_binlog_checksum=@@global.binlog_checksum: %v", err)
 	}
 
@@ -245,7 +257,7 @@ func (bc *BinlogConnection) findFileBeforeTimestamp(ctx context.Context, timesta
 		}
 
 		filename := row[0].ToString()
-		blTimestamp, err := bc.getBinlogTimeStamp(filename)
+		blTimestamp, err := bc.getBinlogTimeStamp(ctx, filename)
 		if err != nil {
 			return "", err
 		}
@@ -259,8 +271,8 @@ func (bc *BinlogConnection) findFileBeforeTimestamp(ctx context.Context, timesta
 	return "", ErrBinlogUnavailable
 }
 
-func (bc *BinlogConnection) getBinlogTimeStamp(filename string) (blTimestamp int64, err error) {
-	conn, err := connectForReplication(bc.cp)
+func (bc *BinlogConnection) getBinlogTimeStamp(ctx context.Context, filename string) (blTimestamp int64, err error) {
+	conn, err := connectForReplication(ctx, bc.cp)
 	if err != nil {
 		return 0, err
 	}

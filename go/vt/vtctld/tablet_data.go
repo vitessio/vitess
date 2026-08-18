@@ -164,7 +164,7 @@ func (thc *tabletHealthCache) Get(ctx context.Context, tabletAlias *topodatapb.T
 		th = newTabletHealth()
 		thc.tabletMap[tabletAliasStr] = th
 
-		go func() {
+		go func() { //nolint:contextcheck // The cached health stream outlives the request that starts it.
 			log.Info(fmt.Sprintf("starting health stream for tablet %v", tabletAlias))
 			err := th.stream(context.Background(), thc.ts, tabletAlias)
 			log.Info(fmt.Sprintf("tablet %v health stream ended, error: %v", tabletAlias, err))

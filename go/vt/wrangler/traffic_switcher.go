@@ -141,15 +141,21 @@ type trafficSwitcher struct {
 func (ts *trafficSwitcher) TopoServer() *topo.Server                          { return ts.wr.ts }
 func (ts *trafficSwitcher) TabletManagerClient() tmclient.TabletManagerClient { return ts.wr.tmc }
 func (ts *trafficSwitcher) Logger() logutil.Logger                            { return ts.wr.logger }
+
 func (ts *trafficSwitcher) VReplicationExec(ctx context.Context, alias *topodatapb.TabletAlias, query string) (*querypb.QueryResult, error) {
 	return ts.wr.VReplicationExec(ctx, alias, query)
 }
 
-func (ts *trafficSwitcher) ExternalTopo() *topo.Server                     { return ts.externalTopo }
-func (ts *trafficSwitcher) MigrationType() binlogdatapb.MigrationType      { return ts.migrationType }
-func (ts *trafficSwitcher) IsPartialMigration() bool                       { return ts.isPartialMigration }
-func (ts *trafficSwitcher) ReverseWorkflowName() string                    { return ts.reverseWorkflow }
-func (ts *trafficSwitcher) SourceKeyspaceName() string                     { return ts.sourceKSSchema.Keyspace.Name }
+func (ts *trafficSwitcher) ExternalTopo() *topo.Server { return ts.externalTopo }
+
+func (ts *trafficSwitcher) MigrationType() binlogdatapb.MigrationType { return ts.migrationType }
+
+func (ts *trafficSwitcher) IsPartialMigration() bool { return ts.isPartialMigration }
+
+func (ts *trafficSwitcher) ReverseWorkflowName() string { return ts.reverseWorkflow }
+
+func (ts *trafficSwitcher) SourceKeyspaceName() string { return ts.sourceKSSchema.Keyspace.Name }
+
 func (ts *trafficSwitcher) SourceKeyspaceSchema() *vindexes.KeyspaceSchema { return ts.sourceKSSchema }
 func (ts *trafficSwitcher) Sources() map[string]*workflow.MigrationSource  { return ts.sources }
 func (ts *trafficSwitcher) Tables() []string                               { return ts.tables }
@@ -157,7 +163,8 @@ func (ts *trafficSwitcher) TargetKeyspaceName() string                     { ret
 func (ts *trafficSwitcher) Targets() map[string]*workflow.MigrationTarget  { return ts.targets }
 func (ts *trafficSwitcher) WorkflowName() string                           { return ts.workflow }
 func (ts *trafficSwitcher) SourceTimeZone() string                         { return ts.sourceTimeZone }
-func (ts *trafficSwitcher) TargetTimeZone() string                         { return ts.targetTimeZone }
+
+func (ts *trafficSwitcher) TargetTimeZone() string { return ts.targetTimeZone }
 
 func (ts *trafficSwitcher) ForAllSources(f func(source *workflow.MigrationSource) error) error {
 	var wg sync.WaitGroup
@@ -1484,7 +1491,7 @@ func (ts *trafficSwitcher) deleteReverseVReplication(ctx context.Context) error 
 			return err
 		}
 		ts.wr.deleteWorkflowVDiffData(ctx, source.GetPrimary().Tablet, ts.reverseWorkflow)
-		ts.wr.optimizeCopyStateTable(source.GetPrimary().Tablet)
+		ts.wr.optimizeCopyStateTable(ctx, source.GetPrimary().Tablet)
 		return nil
 	})
 }
@@ -1889,7 +1896,7 @@ func (ts *trafficSwitcher) dropTargetVReplicationStreams(ctx context.Context) er
 			return err
 		}
 		ts.wr.deleteWorkflowVDiffData(ctx, target.GetPrimary().Tablet, ts.WorkflowName())
-		ts.wr.optimizeCopyStateTable(target.GetPrimary().Tablet)
+		ts.wr.optimizeCopyStateTable(ctx, target.GetPrimary().Tablet)
 		return nil
 	})
 }
@@ -1902,7 +1909,7 @@ func (ts *trafficSwitcher) dropSourceReverseVReplicationStreams(ctx context.Cont
 			return err
 		}
 		ts.wr.deleteWorkflowVDiffData(ctx, source.GetPrimary().Tablet, workflow.ReverseWorkflowName(ts.WorkflowName()))
-		ts.wr.optimizeCopyStateTable(source.GetPrimary().Tablet)
+		ts.wr.optimizeCopyStateTable(ctx, source.GetPrimary().Tablet)
 		return nil
 	})
 }

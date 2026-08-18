@@ -118,7 +118,7 @@ func (mysqld *Mysqld) StartReplication(ctx context.Context, hookExtraEnv map[str
 
 	h := hook.NewSimpleHook("postflight_start_slave")
 	h.ExtraEnv = hookExtraEnv
-	return h.ExecuteOptional()
+	return h.ExecuteOptionalContext(ctx)
 }
 
 // StartReplicationUntilAfter starts replication until replication has come to `targetPos`, then it stops replication
@@ -151,7 +151,7 @@ func (mysqld *Mysqld) StartSQLThreadUntilAfter(ctx context.Context, targetPos re
 func (mysqld *Mysqld) StopReplication(ctx context.Context, hookExtraEnv map[string]string) error {
 	h := hook.NewSimpleHook("preflight_stop_slave")
 	h.ExtraEnv = hookExtraEnv
-	if err := h.ExecuteOptional(); err != nil {
+	if err := h.ExecuteOptionalContext(ctx); err != nil {
 		return err
 	}
 	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
@@ -189,7 +189,7 @@ func (mysqld *Mysqld) StopSQLThread(ctx context.Context) error {
 func (mysqld *Mysqld) RestartReplication(ctx context.Context, hookExtraEnv map[string]string) error {
 	h := hook.NewSimpleHook("preflight_stop_slave")
 	h.ExtraEnv = hookExtraEnv
-	if err := h.ExecuteOptional(); err != nil {
+	if err := h.ExecuteOptionalContext(ctx); err != nil {
 		return err
 	}
 	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
@@ -204,7 +204,7 @@ func (mysqld *Mysqld) RestartReplication(ctx context.Context, hookExtraEnv map[s
 
 	h = hook.NewSimpleHook("postflight_start_slave")
 	h.ExtraEnv = hookExtraEnv
-	return h.ExecuteOptional()
+	return h.ExecuteOptionalContext(ctx)
 }
 
 // GetMysqlPort returns mysql port

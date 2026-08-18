@@ -191,9 +191,9 @@ func parseAndRun(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	defer vte.Stop()
+	defer vte.StopContext(ctx)
 
-	plans, err := vte.Run(sql)
+	plans, err := vte.RunContext(ctx, sql)
 	if err != nil {
 		return err
 	}

@@ -2345,7 +2345,7 @@ func commandVReplicationWorkflow(ctx context.Context, wr *wrangler.Wrangler, sub
 		}
 	}
 
-	printCopyProgress := func() error {
+	printCopyProgress := func() error { //nolint:contextcheck,nolintlint // The workflow retains the command context.
 		copyProgress, err := wf.GetCopyProgress()
 		if err != nil {
 			return err
@@ -2477,9 +2477,9 @@ func commandVReplicationWorkflow(ctx context.Context, wr *wrangler.Wrangler, sub
 			}
 		}
 	case vReplicationWorkflowActionSwitchTraffic:
-		dryRunResults, err = wf.SwitchTraffic(workflow.DirectionForward)
+		dryRunResults, err = wf.SwitchTraffic(workflow.DirectionForward) //nolint:contextcheck,nolintlint // The workflow retains the command context.
 	case vReplicationWorkflowActionReverseTraffic:
-		dryRunResults, err = wf.ReverseTraffic()
+		dryRunResults, err = wf.ReverseTraffic() //nolint:contextcheck,nolintlint // The workflow retains the command context.
 	case vReplicationWorkflowActionComplete:
 		dryRunResults, err = wf.Complete()
 	case vReplicationWorkflowActionCancel:
@@ -4054,12 +4054,12 @@ func RunCommand(ctx context.Context, wr *wrangler.Wrangler, args []string) error
 }
 
 func PrintDoubleDashDeprecationNotice(wr *wrangler.Wrangler) {
-	msg := (`DEPRECATION NOTICE: in v14, users needed to add a double-dash ("--") separator to split up top-level and sub-command arguments/flags.
+	msg := `DEPRECATION NOTICE: in v14, users needed to add a double-dash ("--") separator to split up top-level and sub-command arguments/flags.
 Beginning in v16, this will no longer work properly. Please remove any double-dashes that preceed sub-command **flags** only.
 	
 Note that this does not mean you do not need a separator to split up position arguments.
 For example, to pass a flag to a hook via ExecuteHook, "vtctl ExecuteHook myhook.sh -- --hook-flag 5" is the correct formation.
-For v1 Reshard commands, you will also need a separator if your shard names begin with a hyphen, i.e. "Reshard ks.workflow -- -80,80-" needs a double-dash, but "Reshard ks.workflow 40-80,80-c0" does not.`)
+For v1 Reshard commands, you will also need a separator if your shard names begin with a hyphen, i.e. "Reshard ks.workflow -- -80,80-" needs a double-dash, but "Reshard ks.workflow 40-80,80-c0" does not.`
 
 	wr.Logger().Warningf(msg)
 }

@@ -609,7 +609,7 @@ func (vrw *VReplicationWorkflow) canSwitch(keyspace, workflowName string) (reaso
 
 // GetCopyProgress returns the progress of all tables being copied in the workflow
 func (vrw *VReplicationWorkflow) GetCopyProgress() (*CopyProgress, error) {
-	ctx := context.Background()
+	ctx := vrw.ctx
 	getTablesQuery := "select distinct table_name from _vt.copy_state cs, _vt.vreplication vr where vr.id = cs.vrepl_id and vr.id = %d"
 	getRowCountQuery := "select table_name, table_rows, data_length from information_schema.tables where table_schema = %s and table_name in (%s)"
 	tables := make(map[string]bool)
@@ -768,20 +768,20 @@ func (wr *Wrangler) deleteWorkflowVDiffData(ctx context.Context, tablet *topodat
 // logged as warnings. Because it's done in the background we use the AllPrivs
 // account to be sure that we don't execute the writes if READ_ONLY is set on
 // the MySQL instance.
-func (wr *Wrangler) optimizeCopyStateTable(tablet *topodatapb.Tablet) {
+func (wr *Wrangler) optimizeCopyStateTable(ctx context.Context, tablet *topodatapb.Tablet) {
 	if wr.sem != nil {
 		if !wr.sem.TryAcquire(1) {
 			log.Warn(fmt.Sprintf("Deferring work to optimize the copy_state table on %q due to hitting the maximum concurrent background job limit.", tablet.Alias.String()))
 			return
 		}
 	}
-	go func() {
+	go func(ctx context.Context) {
 		defer func() {
 			if wr.sem != nil {
 				wr.sem.Release(1)
 			}
 		}()
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
+		ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Minute)
 		defer cancel()
 		sqlOptimizeTable := "optimize table _vt.copy_state"
 		if _, err := wr.tmc.ExecuteFetchAsAllPrivs(ctx, tablet, &tabletmanagerdatapb.ExecuteFetchAsAllPrivsRequest{
@@ -801,7 +801,7 @@ func (wr *Wrangler) optimizeCopyStateTable(tablet *topodatapb.Tablet) {
 		}); err != nil {
 			log.Warn(fmt.Sprintf("Failed to reset the auto_increment value for the copy_state table on %q: %v", tablet.Alias.String(), err))
 		}
-	}()
+	}(ctx)
 }
 
 // endregion

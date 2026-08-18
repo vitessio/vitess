@@ -19,7 +19,9 @@ package vtadmin
 import (
 	"context"
 	"encoding/json"
+	stderrors "errors"
 	"fmt"
+	"log/slog"
 	"maps"
 	"math"
 	"net/http"
@@ -287,7 +289,7 @@ func (api *API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					log.Warn(fmt.Sprintf("failed to extract valid cluster from cookie; attempting to use existing cluster with id=%s; error: %s", id, err))
 				}
 
-				dynamicAPI = api.WithCluster(c, id)
+				dynamicAPI = api.WithClusterContext(r.Context(), c, id)
 			} else {
 				log.Warn(fmt.Sprintf("failed to unmarshal dynamic cluster spec from cookie; falling back to static API; error: %s", err))
 			}
@@ -297,7 +299,12 @@ func (api *API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	dynamicAPI.Handler().ServeHTTP(w, r)
 }
 
-// WithCluster returns a dynamic API with the given cluster. If `c` is non-nil,
+// WithCluster preserves the original no-context API for callers outside request paths.
+func (api *API) WithCluster(c *cluster.Cluster, id string) dynamic.API {
+	return api.WithClusterContext(context.Background(), c, id)
+}
+
+// WithClusterContext returns a dynamic API with the given cluster. If `c` is non-nil,
 // it is used as the selected cluster. If the cluster is nil, then a cluster
 // with the given id is retrieved from the API and used in the dynamic API.
 //
@@ -307,9 +314,17 @@ func (api *API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 //
 // Note that using dynamic.ClusterFromString ensures both of these
 // preconditions.
-func (api *API) WithCluster(c *cluster.Cluster, id string) dynamic.API {
+func (api *API) WithClusterContext(ctx context.Context, c *cluster.Cluster, id string) dynamic.API {
 	api.clusterMu.Lock()
-	defer api.clusterMu.Unlock()
+	var rejectedCluster *cluster.Cluster
+	defer func() {
+		api.clusterMu.Unlock()
+		if rejectedCluster != nil {
+			if err := rejectedCluster.Close(); err != nil {
+				log.Error("Failed to close rejected dynamic cluster", slog.String("cluster_id", id), slog.Any("error", err))
+			}
+		}
+	}()
 
 	dynamicAPI := &API{
 		router:  api.router,
@@ -323,11 +338,23 @@ func (api *API) WithCluster(c *cluster.Cluster, id string) dynamic.API {
 		existingCluster, exists := api.clusterMap[id]
 		shouldAddCluster := !exists
 		if exists {
-			isEqual, err := existingCluster.Equal(c)
-			if err != nil {
-				log.Error(fmt.Sprintf("Error checking for existing cluster %s equality with new cluster %s: %v", existingCluster.ID, id, err))
+			comparisonErr := ctx.Err()
+			var isEqual bool
+			if comparisonErr == nil {
+				isEqual, comparisonErr = existingCluster.EqualContext(ctx, c)
 			}
-			shouldAddCluster = shouldAddCluster || !isEqual
+			if comparisonErr != nil {
+				log.Error("Failed to compare dynamic clusters", slog.String("existing_cluster_id", existingCluster.ID), slog.String("new_cluster_id", id), slog.Any("error", comparisonErr))
+				if stderrors.Is(comparisonErr, context.Canceled) || stderrors.Is(comparisonErr, context.DeadlineExceeded) {
+					if c != existingCluster {
+						rejectedCluster = c
+					}
+				} else {
+					shouldAddCluster = true
+				}
+			} else {
+				shouldAddCluster = !isEqual
+			}
 		}
 		if shouldAddCluster {
 			if existingCluster != nil {
@@ -1909,10 +1936,7 @@ func (api *API) StartWorkflow(ctx context.Context, req *vtadminpb.StartWorkflowR
 		return nil, nil
 	}
 
-	vreplcommon.SetClient(c.Vtctld)
-	vreplcommon.SetCommandCtx(ctx)
-
-	if err := vreplcommon.CanRestartWorkflow(req.Keyspace, req.Workflow); err != nil {
+	if err := vreplcommon.CanRestartWorkflowWithContext(ctx, c.Vtctld, req.Keyspace, req.Workflow); err != nil {
 		return nil, err
 	}
 
@@ -2811,9 +2835,9 @@ func (api *API) VTExplain(ctx context.Context, req *vtadminpb.VTExplainRequest) 
 	if err != nil {
 		return nil, fmt.Errorf("error initilaizing vtexplain: %w", err)
 	}
-	defer vte.Stop()
+	defer vte.StopContext(ctx)
 
-	plans, err := vte.Run(req.Sql)
+	plans, err := vte.RunContext(ctx, req.Sql)
 	if err != nil {
 		return nil, fmt.Errorf("error running vtexplain: %w", err)
 	}

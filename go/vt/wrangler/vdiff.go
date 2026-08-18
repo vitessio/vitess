@@ -261,10 +261,9 @@ func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflowName, sou
 		return nil, vterrors.Wrap(err, "selectTablets")
 	}
 	defer func() {
-		// We use a new context as we want to reset the state even
-		// when the parent context has timed out or been canceled.
+		// Reset the state even when the parent context has timed out or been cancelled.
 		log.Info(fmt.Sprintf("Restarting the %q VReplication workflow on target tablets in keyspace %q", df.workflow, df.targetKeyspace))
-		restartCtx, restartCancel := context.WithTimeout(context.Background(), DefaultActionTimeout)
+		restartCtx, restartCancel := context.WithTimeout(context.WithoutCancel(ctx), DefaultActionTimeout)
 		defer restartCancel()
 		if err := df.restartTargets(restartCtx); err != nil {
 			wr.Logger().Errorf("Could not restart workflow %q on target tablets in keyspace %q: %v, please restart it manually",

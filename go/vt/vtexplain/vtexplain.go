@@ -218,6 +218,11 @@ func Init(ctx context.Context, env *vtenv.Environment, ts *topo.Server, vSchemaS
 
 // Stop and cleans up fake execution environment
 func (vte *VTExplain) Stop() {
+	vte.StopContext(context.Background())
+}
+
+// StopContext cleans up the fake execution environment using ctx.
+func (vte *VTExplain) StopContext(ctx context.Context) {
 	if vte.vtgateExecutor != nil {
 		vte.vtgateExecutor.Close()
 	}
@@ -226,7 +231,7 @@ func (vte *VTExplain) Stop() {
 	if vte.explainTopo != nil {
 		for _, conn := range vte.explainTopo.TabletConns {
 			conn.tsv.StopService()
-			conn.tsv.Close(context.Background())
+			conn.tsv.Close(ctx)
 		}
 		for _, conn := range vte.explainTopo.TabletConns {
 			conn.db.Close()
@@ -283,6 +288,11 @@ func parseSchema(sqlSchema string, opts *Options, parser *sqlparser.Parser) ([]s
 
 // Run the explain analysis on the given queries
 func (vte *VTExplain) Run(sql string) ([]*Explain, error) {
+	return vte.RunContext(context.Background(), sql)
+}
+
+// RunContext runs the explain analysis on the given queries using ctx.
+func (vte *VTExplain) RunContext(ctx context.Context, sql string) ([]*Explain, error) {
 	explains := make([]*Explain, 0, 16)
 
 	var (
@@ -312,7 +322,7 @@ func (vte *VTExplain) Run(sql string) ([]*Explain, error) {
 			if vte.vtgateSession == nil || !vte.vtgateSession.GetInTransaction() {
 				vte.batchTime = sync2.NewBatcher(batchInterval)
 			}
-			e, err := vte.explain(sql)
+			e, err := vte.explain(ctx, sql)
 			if err != nil {
 				return nil, err
 			}
@@ -328,8 +338,8 @@ func (vte *VTExplain) Run(sql string) ([]*Explain, error) {
 	return explains, nil
 }
 
-func (vte *VTExplain) explain(sql string) (*Explain, error) {
-	plans, tabletActions, err := vte.vtgateExecute(sql)
+func (vte *VTExplain) explain(ctx context.Context, sql string) (*Explain, error) {
+	plans, tabletActions, err := vte.vtgateExecute(ctx, sql)
 	if err != nil {
 		return nil, err
 	}

@@ -17,6 +17,7 @@ limitations under the License.
 package wrangler
 
 import (
+	"context"
 	_ "embed"
 	"errors"
 	"fmt"
@@ -33,9 +34,11 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtenv"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
@@ -89,7 +92,7 @@ func TestVExec(t *testing.T) {
 	require.Equal(t, want, plan.parsedQuery.Query)
 
 	vx.plannedQuery = plan.parsedQuery.Query
-	vx.exec()
+	vx.exec(ctx)
 
 	res, err := wr.getStreams(ctx, workflow, keyspace, nil)
 	require.NoError(t, err)
@@ -181,6 +184,24 @@ func TestVExec(t *testing.T) {
 	}
 	require.Equal(t, strings.Join(dryRunResults, "\n")+"\n\n\n\n\n", logger.String())
 	logger.Clear()
+}
+
+func TestVExecCallbackUsesCallerContext(t *testing.T) {
+	key := new(int)
+	want := "caller context"
+	ctx := context.WithValue(t.Context(), key, want)
+	primary := &topo.TabletInfo{Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}}}
+	vx := &vexec{primaries: []*topo.TabletInfo{primary}}
+	received := make(chan any, 1)
+
+	results, err := vx.execCallback(ctx, func(ctx context.Context, _ *topo.TabletInfo) (*querypb.QueryResult, error) {
+		received <- ctx.Value(key)
+		return &querypb.QueryResult{}, nil
+	})
+
+	require.NoError(t, err)
+	require.Equal(t, want, <-received)
+	require.Contains(t, results, primary)
 }
 
 func TestWorkflowStatusUpdate(t *testing.T) {

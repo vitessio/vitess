@@ -17,6 +17,7 @@ limitations under the License.
 package vtadmin
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -32,6 +33,7 @@ import (
 
 	"vitess.io/vitess/go/vt/vtenv"
 
+	vreplcommon "vitess.io/vitess/go/cmd/vtctldclient/command/vreplication/common"
 	_flag "vitess.io/vitess/go/internal/flag"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/topo"
@@ -4834,6 +4836,119 @@ func TestGetWorkflows(t *testing.T) {
 			vtadmintestutil.AssertGetWorkflowsResponsesEqual(t, tt.expected, resp)
 		})
 	}
+}
+
+func TestStartWorkflowDoesNotChangeCommandGlobals(t *testing.T) {
+	previousClient := vreplcommon.GetClient()
+	previousCtx := vreplcommon.GetCommandCtx()
+	t.Cleanup(func() {
+		vreplcommon.SetClient(previousClient)
+		vreplcommon.SetCommandCtx(previousCtx)
+	})
+
+	sentinelClient := &fakevtctldclient.VtctldClient{}
+	type contextKey struct{}
+	sentinelCtx := context.WithValue(t.Context(), contextKey{}, true)
+	vreplcommon.SetClient(sentinelClient)
+	vreplcommon.SetCommandCtx(sentinelCtx)
+
+	client := &fakevtctldclient.VtctldClient{
+		GetWorkflowsResults: map[string]struct {
+			Response *vtctldatapb.GetWorkflowsResponse
+			Error    error
+		}{
+			"testkeyspace": {
+				Response: &vtctldatapb.GetWorkflowsResponse{
+					Workflows: []*vtctldatapb.Workflow{{Name: "workflow1"}},
+				},
+			},
+		},
+		WorkflowUpdateResults: map[string]struct {
+			Response *vtctldatapb.WorkflowUpdateResponse
+			Error    error
+		}{
+			"testkeyspace": {Response: &vtctldatapb.WorkflowUpdateResponse{}},
+		},
+	}
+	api := NewAPI(vtenv.NewTestEnv(), []*cluster.Cluster{vtadmintestutil.BuildCluster(t, vtadmintestutil.TestClusterConfig{
+		Cluster:      &vtadminpb.Cluster{Id: "c1", Name: "cluster1"},
+		VtctldClient: client,
+	})}, Options{})
+	t.Cleanup(func() {
+		require.NoError(t, api.Close())
+	})
+
+	_, err := api.StartWorkflow(t.Context(), &vtadminpb.StartWorkflowRequest{
+		ClusterId: "c1",
+		Keyspace:  "testkeyspace",
+		Workflow:  "workflow1",
+	})
+	require.NoError(t, err)
+	assert.Same(t, sentinelClient, vreplcommon.GetClient())
+	assert.Equal(t, sentinelCtx, vreplcommon.GetCommandCtx())
+}
+
+func TestWithClusterContextPreservesExistingClusterOnCancellation(t *testing.T) {
+	const id = "c1"
+	existing := vtadmintestutil.BuildCluster(t, vtadmintestutil.TestClusterConfig{
+		Cluster:      &vtadminpb.Cluster{Id: id, Name: "existing"},
+		VtctldClient: &fakevtctldclient.VtctldClient{},
+	})
+	replacement := vtadmintestutil.BuildCluster(t, vtadmintestutil.TestClusterConfig{
+		Cluster:      &vtadminpb.Cluster{Id: id, Name: "replacement"},
+		VtctldClient: &fakevtctldclient.VtctldClient{},
+	})
+	api := NewAPI(vtenv.NewTestEnv(), []*cluster.Cluster{existing}, Options{EnableDynamicClusters: true})
+	t.Cleanup(func() {
+		selected := api.clusterMap[id]
+		require.NoError(t, api.Close())
+		if selected != existing && existing.DB.Ping() == nil {
+			require.NoError(t, existing.Close())
+		}
+		if selected != replacement && replacement.DB.Ping() == nil {
+			require.NoError(t, replacement.Close())
+		}
+	})
+
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	dynamicAPI, ok := api.WithClusterContext(ctx, replacement, id).(*API)
+	require.True(t, ok)
+	assert.Same(t, existing, api.clusterMap[id])
+	assert.Same(t, existing, dynamicAPI.clusterMap[id])
+	require.Error(t, replacement.DB.Ping())
+}
+
+func TestWithClusterContextReplacesExistingClusterOnDiscoveryError(t *testing.T) {
+	const id = "c1"
+	existing := vtadmintestutil.BuildCluster(t, vtadmintestutil.TestClusterConfig{
+		Cluster:      &vtadminpb.Cluster{Id: id, Name: "existing"},
+		VtctldClient: &fakevtctldclient.VtctldClient{},
+	})
+	discovery := fakediscovery.New()
+	discovery.SetGatesError(true)
+	existing.Discovery = discovery
+	replacement := vtadmintestutil.BuildCluster(t, vtadmintestutil.TestClusterConfig{
+		Cluster:      &vtadminpb.Cluster{Id: id, Name: "replacement"},
+		VtctldClient: &fakevtctldclient.VtctldClient{},
+	})
+	api := NewAPI(vtenv.NewTestEnv(), []*cluster.Cluster{existing}, Options{EnableDynamicClusters: true})
+	t.Cleanup(func() {
+		selected := api.clusterMap[id]
+		require.NoError(t, api.Close())
+		if selected != existing && existing.DB.Ping() == nil {
+			require.NoError(t, existing.Close())
+		}
+		if selected != replacement && replacement.DB.Ping() == nil {
+			require.NoError(t, replacement.Close())
+		}
+	})
+
+	dynamicAPI, ok := api.WithClusterContext(t.Context(), replacement, id).(*API)
+	require.True(t, ok)
+	assert.Same(t, replacement, api.clusterMap[id])
+	assert.Same(t, replacement, dynamicAPI.clusterMap[id])
+	require.Error(t, existing.DB.Ping())
 }
 
 func TestVTExplain(t *testing.T) {
