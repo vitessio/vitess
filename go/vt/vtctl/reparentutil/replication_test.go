@@ -478,6 +478,48 @@ func TestFindPositionsOfAllCandidates_FlavorFromPrimaryStatus(t *testing.T) {
 	}
 }
 
+// TestFindPositionsOfAllCandidates_EmptyMysqlGTIDReplicaStaysGTIDBased pins that a
+// MySQL/Percona replica with GTID enabled but no transactions yet is classified as
+// GTID-based, not non-GTID. The status is produced by the real MySQL flavor parser
+// (ParseMysqlReplicationStatus), so it reflects exactly what a fresh 8.0 replica
+// reports: an empty Executed_Gtid_Set and Retrieved_Gtid_Set decode to a typed-but-
+// empty Mysql56GTIDSet (encoded "MySQL56/"), whose GTIDSet is non-nil — so the
+// classifier keys on it as GTID-based. Because every relay-log position is empty,
+// the shard then fails closed on the empty-relay-log guard rather than falling
+// through to non-GTID handling; that UNAVAILABLE error is only reachable when the
+// shard was detected GTID-based.
+func TestFindPositionsOfAllCandidates_EmptyMysqlGTIDReplicaStaysGTIDBased(t *testing.T) {
+	t.Parallel()
+
+	// A real MySQL 8.0 replica, GTID on, zero transactions.
+	status, err := replication.ParseMysqlReplicationStatus(map[string]string{
+		"Using_Gtid":         "ON",
+		"Executed_Gtid_Set":  "",
+		"Retrieved_Gtid_Set": "",
+	}, true /* replicaTerminology */)
+	require.NoError(t, err)
+
+	// The parsed relay-log position is a typed-but-empty MySQL56 set, not nil, and
+	// encodes as "MySQL56/" — never the empty string that would classify as non-GTID.
+	require.NotNil(t, status.RelayLogPosition.GTIDSet)
+	assert.Equal(t, "MySQL56/", replication.EncodePosition(status.RelayLogPosition))
+	assert.True(t, hasMysql56GTIDSet(status.RelayLogPosition),
+		"an empty MySQL GTID relay position must still classify as GTID-based")
+
+	// Through the proto round-trip and the real classifier: detected GTID-based, so
+	// the all-empty relay logs fail closed instead of proceeding as non-GTID.
+	pb := replication.ReplicationStatusToProto(status)
+	_, _, err = FindPositionsOfAllCandidates(
+		map[string]*replicationdatapb.StopReplicationStatus{
+			"r1": {After: pb},
+			"r2": {After: pb},
+		},
+		nil,
+	)
+	require.Error(t, err, "a GTID-based shard with empty relay logs must fail closed")
+	assert.ErrorContains(t, err, "no relay log position")
+}
+
 // TestFindPositionsOfAllCandidates_ErrorNotDuplicated verifies that when
 // FindPositionsOfAllCandidates wraps an error the underlying cause message is
 // not repeated twice in the output. vterrors.Wrapf already appends the cause
