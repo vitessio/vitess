@@ -1360,7 +1360,7 @@ func (erp *EmergencyReparenter) findErrantGTIDs(
 	// A missing journal table is only tolerated when the topology says never initialized
 	// and no candidate has any GTIDs; a nonzero position anywhere proves history, so an
 	// unreadable journal depth must fail the gather
-	reparentJournalLen, err := erp.gatherReparenJournalInfo(ctx, validCandidates, tabletMap, waitReplicasTimeout, shardNeverInitialized && allPositionsZero)
+	reparentJournalLen, err := erp.gatherReparentJournalInfo(ctx, validCandidates, tabletMap, waitReplicasTimeout, shardNeverInitialized && allPositionsZero)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1519,8 +1519,8 @@ func (erp *EmergencyReparenter) findErrantGTIDs(
 	return updatedValidCandidates, starvedCandidates, nil
 }
 
-// gatherReparenJournalInfo reads the reparent journal information from all the tablets in the valid candidates list.
-func (erp *EmergencyReparenter) gatherReparenJournalInfo(
+// gatherReparentJournalInfo reads the reparent journal information from all the tablets in the valid candidates list.
+func (erp *EmergencyReparenter) gatherReparentJournalInfo(
 	ctx context.Context,
 	validCandidates map[string]*RelayLogPositions,
 	tabletMap map[string]*topo.TabletInfo,
