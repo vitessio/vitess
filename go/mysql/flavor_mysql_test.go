@@ -22,6 +22,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/vt/vttls"
 )
 
 func TestMysql8SetReplicationSourceCommand(t *testing.T) {
@@ -89,6 +90,52 @@ func TestMysql8SetReplicationSourceCommandSSL(t *testing.T) {
 	conn := &Conn{flavor: mysqlFlavor8{}}
 	got := conn.SetReplicationSourceCommand(params, host, port, 0, connectRetry)
 	assert.Equal(t, want, got, "mysqlFlavor.SetReplicationSourceCommand(%#v, %#v, %#v, %#v) = %#v, want %#v", params, host, port, connectRetry, got, want)
+}
+
+// TestMysql8SetReplicationSourceCommandPreferredSSLWithUnixSocket verifies that
+// a Unix socket for direct connections does not disable TLS for TCP replication.
+func TestMysql8SetReplicationSourceCommandPreferredSSLWithUnixSocket(t *testing.T) {
+	params := &ConnParams{
+		Uname:      "username",
+		Pass:       "password",
+		UnixSocket: "/var/run/mysqld/mysqld.sock",
+		SslMode:    vttls.Preferred,
+	}
+	want := `CHANGE REPLICATION SOURCE TO
+  SOURCE_HOST = 'primary.example.com',
+  SOURCE_PORT = 3306,
+  SOURCE_USER = 'username',
+  SOURCE_PASSWORD = 'password',
+  SOURCE_CONNECT_RETRY = 10,
+  SOURCE_SSL = 1,
+  SOURCE_AUTO_POSITION = 1`
+
+	conn := &Conn{flavor: mysqlFlavor8{}}
+	got := conn.SetReplicationSourceCommand(params, "primary.example.com", 3306, 0, 10)
+	assert.Equal(t, want, got)
+}
+
+// TestMysqlLegacySetReplicationSourceCommandPreferredSSLWithUnixSocket verifies
+// the same behavior for MySQL versions that use legacy replication terminology.
+func TestMysqlLegacySetReplicationSourceCommandPreferredSSLWithUnixSocket(t *testing.T) {
+	params := &ConnParams{
+		Uname:      "username",
+		Pass:       "password",
+		UnixSocket: "/var/run/mysqld/mysqld.sock",
+		SslMode:    vttls.Preferred,
+	}
+	want := `CHANGE MASTER TO
+  MASTER_HOST = 'primary.example.com',
+  MASTER_PORT = 3306,
+  MASTER_USER = 'username',
+  MASTER_PASSWORD = 'password',
+  MASTER_CONNECT_RETRY = 10,
+  MASTER_SSL = 1,
+  MASTER_AUTO_POSITION = 1`
+
+	conn := &Conn{flavor: mysqlFlavor57{}}
+	got := conn.SetReplicationSourceCommand(params, "primary.example.com", 3306, 0, 10)
+	assert.Equal(t, want, got)
 }
 
 func TestMysql8SetReplicationPositionCommands(t *testing.T) {
