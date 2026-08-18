@@ -45,6 +45,7 @@ import (
 
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/proto/vtctldata"
+	vdiff2 "vitess.io/vitess/go/vt/vttablet/tabletmanager/vdiff"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
@@ -254,12 +255,14 @@ func TestMultiTenantSimple(t *testing.T) {
 		ksWorkflow := fmt.Sprintf("%s.%s", targetKeyspace, defaultWorkflowName)
 		uuid, output, err := performVDiff2Action(t, ksWorkflow, defaultCellName, "show", "last", false)
 		require.NoError(t, err)
-		require.Equal(t, "completed", getVDiffInfo(output).State)
-		ogTime := time.Now() // The resumed run's completed_at should be later than this.
+		previous := getVDiffInfo(output)
+		require.Equal(t, "completed", previous.State)
+		previousCompletedAt, err := time.Parse(vdiff2.TimestampFormat, previous.CompletedAt)
+		require.NoError(t, err)
 		lastIndex = insertRows(lastIndex, sourceKeyspace)
 		_, _, err = performVDiff2Action(t, ksWorkflow, defaultCellName, "resume", uuid, false)
 		require.NoError(t, err)
-		info := waitForVDiff2ToComplete(t, ksWorkflow, defaultCellName, uuid, ogTime)
+		info := waitForVDiff2ToComplete(t, ksWorkflow, defaultCellName, uuid, previousCompletedAt)
 		require.NotNil(t, info)
 		require.False(t, info.HasMismatch)
 
