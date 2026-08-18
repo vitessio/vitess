@@ -22,7 +22,6 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 
@@ -200,13 +199,14 @@ func TestVExplainMySQLPlanShardQueriesAccounting(t *testing.T) {
 	assert.EqualValues(t, wantShards, logStats.ShardQueries)
 }
 
-// TestVExplainMySQLPlanShardQueriesAccountingSkipsEmpty verifies that a shard
-// whose EXPLAIN returns no rows (so it contributes no plan and is skipped) is not
-// counted in ShardQueries. Of an eight-shard scatter, one shard returns an empty
-// result, so only the seven shards that produced a plan are counted.
-func TestVExplainMySQLPlanShardQueriesAccountingSkipsEmpty(t *testing.T) {
+// TestVExplainMySQLPlanShardQueriesAccountingCountsEmpty verifies that a shard
+// whose EXPLAIN returns no rows (so it contributes no plan) is still counted in
+// ShardQueries: the shard query was attempted regardless of its result. Of an
+// eight-shard scatter, one shard returns an empty result, but all eight attempted
+// shards are counted.
+func TestVExplainMySQLPlanShardQueriesAccountingCountsEmpty(t *testing.T) {
 	const emptyShard = "-20"
-	const wantShards = 7
+	const wantShards = 8
 	executor, ctx := createExecutorEnvCallback(t, createExecutorConfig(), func(shard, ks string, tabletType topodatapb.TabletType, conn *sandboxconn.SandboxConn) {
 		if ks == KsTestSharded && tabletType == topodatapb.TabletType_PRIMARY {
 			if shard == emptyShard {
@@ -230,19 +230,15 @@ func TestVExplainMySQLPlanShardQueriesAccountingSkipsEmpty(t *testing.T) {
 }
 
 // TestVExplainMySQLPlanShardQueriesAccountingOnError verifies that when one
-// shard's EXPLAIN fails, the shards that already completed are still counted in
-// ShardQueries. The failing shard is delayed so it errors after the others have
-// succeeded; the whole VEXPLAIN then fails, but the seven completed EXPLAINs must
-// not be dropped from the accounting.
+// shard's EXPLAIN fails, every attempted shard is still counted in ShardQueries.
+// Of an eight-shard scatter one shard errors and the whole VEXPLAIN fails, but
+// all eight attempted shard queries must be accounted for.
 func TestVExplainMySQLPlanShardQueriesAccountingOnError(t *testing.T) {
 	const failingShard = "-20"
-	const wantShards = 7
+	const wantShards = 8
 	executor, ctx := createExecutorEnvCallback(t, createExecutorConfig(), func(shard, ks string, tabletType topodatapb.TabletType, conn *sandboxconn.SandboxConn) {
 		if ks == KsTestSharded && tabletType == topodatapb.TabletType_PRIMARY {
 			if shard == failingShard {
-				// Fail this shard's EXPLAIN, but only after the others have had time
-				// to complete and increment the counter, so the count is deterministic.
-				conn.ExecDelayResponse = 100 * time.Millisecond
 				conn.MustFailExecute[sqlparser.StmtExplain] = 1
 				return
 			}

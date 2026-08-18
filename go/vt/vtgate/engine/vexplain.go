@@ -365,18 +365,19 @@ func appendMySQLExplainTasks(tasks *[]mysqlExplainTask, primitive Primitive, rss
 // runMySQLExplainTasks runs the given EXPLAIN FORMAT=JSON tasks against their
 // shards concurrently, bounded by maxParallelMySQLExplains, and returns the
 // per-shard results keyed by shard against the primitive that owns each. Every
-// shard that returns an EXPLAIN plan is accounted for in ShardQueries, since
-// ExecuteStandalone (unlike the normal shard path) does not increment it.
+// attempted shard is accounted for in ShardQueries (including ones whose EXPLAIN
+// errors or returns no rows), since ExecuteStandalone - unlike the normal shard
+// path - does not increment it. This mirrors VCursorImpl.ExecuteMultiShard,
+// which counts the targeted shards regardless of per-shard outcome.
 func runMySQLExplainTasks(ctx context.Context, vcursor VCursor, tasks []mysqlExplainTask) (map[Primitive]map[string]json.RawMessage, error) {
 	explainResults := make(map[Primitive]map[string]json.RawMessage)
 	if len(tasks) == 0 {
 		return explainResults, nil
 	}
+	// One task is one attempted shard query, so record them all up front.
+	vcursor.RecordShardsQueried(len(tasks))
 
-	var (
-		mu      sync.Mutex
-		queried int
-	)
+	var mu sync.Mutex
 	g, gctx := errgroup.WithContext(ctx)
 	g.SetLimit(maxParallelMySQLExplains)
 	for _, task := range tasks {
@@ -391,7 +392,6 @@ func runMySQLExplainTasks(ctx context.Context, vcursor VCursor, tasks []mysqlExp
 			}
 			mu.Lock()
 			defer mu.Unlock()
-			queried++
 			perShard := explainResults[task.primitive]
 			if perShard == nil {
 				perShard = make(map[string]json.RawMessage)
@@ -401,13 +401,7 @@ func runMySQLExplainTasks(ctx context.Context, vcursor VCursor, tasks []mysqlExp
 			return nil
 		})
 	}
-	// g.Wait blocks until every task has finished, so queried is final here.
-	// Record it before propagating any error so the shards that did complete
-	// their EXPLAIN are still accounted for in ShardQueries, matching how the
-	// normal shard path counts attempted shards regardless of shard-level errors.
-	err := g.Wait()
-	vcursor.RecordShardsQueried(queried)
-	if err != nil {
+	if err := g.Wait(); err != nil {
 		return nil, err
 	}
 	return explainResults, nil
