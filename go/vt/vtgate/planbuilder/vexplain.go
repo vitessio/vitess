@@ -69,6 +69,10 @@ func buildVExplainMySQLPlan(ctx context.Context, explainStatement sqlparser.Stat
 		return nil, err
 	}
 
+	if err := checkVExplainMySQLNoLockFunc(explainStatement); err != nil {
+		return nil, err
+	}
+
 	innerInstruction, err := createInstructionFor(ctx, sqlparser.String(explainStatement), explainStatement, reservedVars, vschema, cfg)
 	if err != nil {
 		return nil, err
@@ -93,6 +97,9 @@ const (
 
 	vexplainMySQLSequenceError = "VEXPLAIN MYSQLPLAN does not support sequence next value queries, " +
 		"because the 'select next ... values' syntax is Vitess-specific and cannot be sent to MySQL as EXPLAIN"
+
+	vexplainMySQLLockError = "VEXPLAIN MYSQLPLAN does not support advisory lock functions " +
+		"(get_lock, release_lock, release_all_locks, is_free_lock, is_used_lock)"
 )
 
 // checkVExplainMySQLNoNestedQuery rejects a statement that contains a subquery,
@@ -137,6 +144,26 @@ func checkVExplainMySQLNoSequence(statement sqlparser.Statement) error {
 		return true, nil
 	}, statement)
 	return seqErr
+}
+
+// checkVExplainMySQLNoLockFunc rejects a SELECT of an advisory lock function.
+// Such a SELECT plans as an engine.Lock primitive rather than a Route or Send,
+// so MYSQLPLAN cannot resolve its shards from a vindex and EXPLAIN it. Detection
+// must happen on the AST before planning so the rejection does not point at
+// VEXPLAIN ALL: running the query would execute the lock function and acquire or
+// release advisory locks as a side effect. The read-only variants
+// (is_free_lock, is_used_lock) are rejected the same way for a consistent
+// message; they are equally unexplainable through MYSQLPLAN.
+func checkVExplainMySQLNoLockFunc(statement sqlparser.Statement) error {
+	var lockErr error
+	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
+		if _, ok := node.(*sqlparser.LockingFunc); ok {
+			lockErr = vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, vexplainMySQLLockError)
+			return false, nil
+		}
+		return true, nil
+	}, statement)
+	return lockErr
 }
 
 // checkVExplainMySQLSupported returns an error if any primitive in the tree cannot

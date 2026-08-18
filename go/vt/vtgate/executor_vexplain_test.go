@@ -409,6 +409,43 @@ func TestVExplainMySQLPlanRejectsTargetedSequence(t *testing.T) {
 	}
 }
 
+// TestVExplainMySQLPlanRejectsLockFunctions verifies that a SELECT of an advisory
+// lock function is rejected at plan time. Such a SELECT plans as an engine.Lock
+// primitive that MYSQLPLAN cannot EXPLAIN, and the rejection must not point at
+// VEXPLAIN ALL: running it would execute the lock function and acquire or release
+// advisory locks as a side effect. No tablet query must be sent.
+func TestVExplainMySQLPlanRejectsLockFunctions(t *testing.T) {
+	testCases := []struct {
+		name  string
+		query string
+	}{
+		{"get_lock", "vexplain mysqlplan select get_lock('foo', 10)"},
+		{"release_lock", "vexplain mysqlplan select release_lock('foo')"},
+		{"release_all_locks", "vexplain mysqlplan select release_all_locks()"},
+		{"is_free_lock", "vexplain mysqlplan select is_free_lock('foo')"},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			conns := map[string]*sandboxconn.SandboxConn{}
+			executor, ctx := createExecutorEnvCallback(t, createExecutorConfig(), func(shard, ks string, tabletType topodatapb.TabletType, conn *sandboxconn.SandboxConn) {
+				conns[ks+"/"+shard] = conn
+			})
+
+			session := &vtgatepb.Session{TargetString: "@primary"}
+			_, err := executorExec(ctx, executor, session, tc.query, nil)
+			require.ErrorContains(t, err, "does not support advisory lock functions")
+			// The lock case must not point at VEXPLAIN ALL, which would run the
+			// function and acquire or release advisory locks.
+			require.NotContains(t, err.Error(), "VEXPLAIN ALL")
+
+			// Rejection happens at plan time, so no tablet query is ever sent.
+			for target, conn := range conns {
+				assert.Empty(t, conn.Queries, "no query should be sent to %s", target)
+			}
+		})
+	}
+}
+
 // TestVExplainMySQLPlanRejectsSubqueries verifies that a query containing a
 // subquery, derived table, or common table expression is rejected at plan time,
 // before any shard RPC. Such a query can merge into a single Route that the
