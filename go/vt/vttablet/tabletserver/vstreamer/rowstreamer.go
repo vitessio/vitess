@@ -289,22 +289,16 @@ func (rs *rowStreamer) buildSelect(st *binlogdatapb.MinimalTable) (string, error
 	buf.Myprintf(" from %v%s", sqlparser.NewIdentifierCS(rs.plan.Table.Name), indexHint)
 	if len(rs.lastpk) != 0 { // We're in the Nth copy phase cycle and need to resume
 		if len(rs.lastpk) != len(rs.pkColumns) {
-			return "", fmt.Errorf("cannot build a row streamer plan for the %s table as a lastpk value was provided and the number of primary key values within it (%v) does not match the number of primary key columns in the table (%d)",
-				st.Name, rs.lastpk, rs.pkColumns)
+			return "", fmt.Errorf("cannot build a row streamer plan for the %s table as a lastpk value was provided (%v) and the number of primary key values within it (%d) does not match the number of primary key columns in the table (%d)",
+				st.Name, rs.lastpk, len(rs.lastpk), len(rs.pkColumns))
 		}
 		buf.WriteString(" where ")
-		// First we add any predicates that should be pushed down.
-		if len(rs.plan.whereExprsToPushDown) > 0 {
-			addPushdownExpressions()
-			// Only AND expressions are supported.
-			buf.Myprintf(" and ")
-		}
-		prefix := ""
-		// This loop handles the case for composite PKs. For example,
+		// This closure handles the case for composite PKs. For example,
 		// if lastpk was (1,2), the where clause would be:
 		// (col1 = 1 and col2 > 2) or (col1 > 1).
 		// A tuple inequality like (col1,col2) > (1,2) ends up
 		// being a full table scan for MySQL.
+<<<<<<< HEAD
 		for lastcol := len(rs.pkColumns) - 1; lastcol >= 0; lastcol-- {
 			buf.Myprintf("%s(", prefix)
 			prefix = " or "
@@ -312,10 +306,54 @@ func (rs *rowStreamer) buildSelect(st *binlogdatapb.MinimalTable) (string, error
 				buf.Myprintf("%v = ", sqlparser.NewIdentifierCI(rs.plan.Table.Fields[pk].Name))
 				rs.lastpk[i].EncodeSQL(buf)
 				buf.Myprintf(" and ")
+||||||| parent of bd205baff8 (Properly handle vstream filter predicates with multi-col PKs (#20858))
+		for lastcol, pkCol := range slices.Backward(rs.pkColumns) {
+			buf.Myprintf("%s(", prefix)
+			prefix = " or "
+			for i, pk := range rs.pkColumns[:lastcol] {
+				buf.Myprintf("%v = ", sqlparser.NewIdentifierCI(rs.plan.Table.Fields[pk].Name))
+				rs.lastpk[i].EncodeSQL(buf)
+				buf.Myprintf(" and ")
+=======
+		addLastPKExpressions := func() {
+			prefix := ""
+			for lastcol, pkCol := range slices.Backward(rs.pkColumns) {
+				buf.Myprintf("%s(", prefix)
+				prefix = " or "
+				for i, pk := range rs.pkColumns[:lastcol] {
+					buf.Myprintf("%v = ", sqlparser.NewIdentifierCI(rs.plan.Table.Fields[pk].Name))
+					rs.lastpk[i].EncodeSQL(buf)
+					buf.Myprintf(" and ")
+				}
+				buf.Myprintf("%v > ", sqlparser.NewIdentifierCI(rs.plan.Table.Fields[pkCol].Name))
+				rs.lastpk[lastcol].EncodeSQL(buf)
+				buf.Myprintf(")")
+>>>>>>> bd205baff8 (Properly handle vstream filter predicates with multi-col PKs (#20858))
 			}
+<<<<<<< HEAD
 			buf.Myprintf("%v > ", sqlparser.NewIdentifierCI(rs.plan.Table.Fields[rs.pkColumns[lastcol]].Name))
 			rs.lastpk[lastcol].EncodeSQL(buf)
+||||||| parent of bd205baff8 (Properly handle vstream filter predicates with multi-col PKs (#20858))
+			buf.Myprintf("%v > ", sqlparser.NewIdentifierCI(rs.plan.Table.Fields[pkCol].Name))
+			rs.lastpk[lastcol].EncodeSQL(buf)
+=======
+		}
+		if len(rs.plan.whereExprsToPushDown) > 0 {
+			// First we add any predicates that should be pushed down.
+			addPushdownExpressions()
+			// The lastpk clause is a disjunction, so it has to be parenthesized
+			// as a single unit before being ANDed with the pushed down
+			// predicates; otherwise AND binds more tightly than OR and the
+			// trailing OR terms match rows that the pushed down predicates are
+			// meant to exclude. Those rows would later be dropped in memory by
+			// the plan's filters, but only after being needlessly scanned and
+			// streamed by mysqld.
+			buf.Myprintf(" and (")
+			addLastPKExpressions()
+>>>>>>> bd205baff8 (Properly handle vstream filter predicates with multi-col PKs (#20858))
 			buf.Myprintf(")")
+		} else {
+			addLastPKExpressions()
 		}
 	} else if len(rs.plan.whereExprsToPushDown) > 0 { // We're in the first copy phase cycle
 		buf.Myprintf(" where ")
