@@ -66,15 +66,25 @@ func resumeLastVDiff(t *testing.T, keyspace, workflow, cells string) error {
 	if err != nil {
 		return err
 	}
-	if state := getVDiffInfo(output).State; state != "completed" {
-		return fmt.Errorf("expected the last VDiff for %s to be completed before resuming it, but it was %s", ksWorkflow, state)
+	previous := getVDiffInfo(output)
+	if previous.State != "completed" {
+		return fmt.Errorf("expected the last VDiff for %s to be completed before resuming it, but it was %s", ksWorkflow, previous.State)
 	}
-	// The resumed run's completed_at must be later than this.
-	ogTime := time.Now()
+	// Anchor the "has it finished again?" threshold to the previous run's own
+	// completed_at rather than to time.Now(). completed_at is stored with second
+	// precision, so a wall clock threshold carrying sub-second precision could
+	// never be beaten by a resumed run that finishes within the same second,
+	// and rounding that threshold down instead risks accepting the previous
+	// run's completion before the resume has taken effect.
+	previousCompletedAt, err := time.Parse(vdiff2.TimestampFormat, previous.CompletedAt)
+	if err != nil {
+		return fmt.Errorf("failed to parse the completed_at value %q for VDiff %s on %s: %v",
+			previous.CompletedAt, uuid, ksWorkflow, err)
+	}
 	if _, _, err := performVDiff2Action(t, ksWorkflow, cells, "resume", uuid, false); err != nil {
 		return err
 	}
-	info := waitForVDiff2ToComplete(t, ksWorkflow, cells, uuid, ogTime)
+	info := waitForVDiff2ToComplete(t, ksWorkflow, cells, uuid, previousCompletedAt)
 	if info == nil {
 		return fmt.Errorf("failed to get info for the resumed VDiff %s on %s", uuid, ksWorkflow)
 	}
