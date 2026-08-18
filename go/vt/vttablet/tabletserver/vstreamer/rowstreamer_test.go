@@ -454,6 +454,10 @@ func TestStreamRowsFilterIn(t *testing.T) {
 // The lastpk clause for a composite PK is a disjunction, so it has to be
 // parenthesized as a unit; otherwise AND binds more tightly than OR and the
 // trailing OR terms match rows that the pushed down predicates exclude.
+// Such rows are dropped in memory by the plan's filters before being
+// streamed, so the row output is identical either way and the generated
+// query assertion below is what guards the fix: the cost of the bug is
+// mysqld needlessly scanning and returning the excluded rows.
 func TestStreamRowsFilterWithLastPK(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
@@ -464,8 +468,9 @@ func TestStreamRowsFilterWithLastPK(t *testing.T) {
 
 	execStatements(t, []string{
 		"create table t1(id1 int, id2 int, val varbinary(128), primary key(id1, id2))",
-		// (2,1) is the row that leaks when the lastpk disjunction is not
-		// parenthesized: it fails the filter but satisfies `id1 > 1`.
+		// (2,1) is the row that the unparenthesized lastpk disjunction lets
+		// escape the filter in the generated query: it fails the filter but
+		// satisfies `id1 > 1`.
 		"insert into t1 values (1, 1, 'include'), (1, 2, 'include'), (1, 3, 'exclude'), (2, 1, 'exclude'), (2, 2, 'include')",
 	})
 
