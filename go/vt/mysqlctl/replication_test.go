@@ -218,11 +218,21 @@ func TestPrepareReplicaForShutdown(t *testing.T) {
 		syncRelayLog:        "10000",
 		cycleReceiver:       true,
 	}
+	// Distinct from the relaxedDurability values the probes would read, so the
+	// takeover case pins that nothing is re-captured.
+	inheritedState := &replicaShutdownState{
+		startReceiver:       true,
+		startApplier:        true,
+		flushLogAtTrxCommit: "0",
+		syncBinlog:          "1000",
+		syncRelayLog:        "0",
+	}
 
 	testCases := []struct {
 		name            string
 		status          *sqltypes.Result
 		durability      *sqltypes.Result
+		inherited       *replicaShutdownState
 		rejectedQuery   string
 		rejectedError   error
 		wantError       string
@@ -427,6 +437,27 @@ func TestPrepareReplicaForShutdown(t *testing.T) {
 			wantStop:        1,
 			wantStopSQL:     1,
 		},
+		// A takeover (inherited != nil) re-applies the fence directly on the
+		// inherited state without re-probing: the probes would read the
+		// half-restored state, and the role is deliberately not re-checked --
+		// the fence only tightens durability, which is safe for any role, and
+		// the thread stops fail harmlessly on a server that is no longer a
+		// replica. No status result is registered, so any re-probe fails the
+		// case, and the distinct inherited values pin that the durability
+		// settings are not re-captured.
+		{
+			name:            "takeover re-fences on inherited state without re-probing",
+			inherited:       inheritedState,
+			wantState:       inheritedState,
+			wantFlushLog:    1,
+			wantSyncBinlog:  1,
+			wantSet:         1,
+			wantFlushEngine: 1,
+			wantFlushBinary: 1,
+			wantFlush:       1,
+			wantStop:        1,
+			wantStopSQL:     1,
+		},
 	}
 
 	for _, testCase := range testCases {
@@ -434,7 +465,9 @@ func TestPrepareReplicaForShutdown(t *testing.T) {
 			db := fakesqldb.New(t)
 			defer db.Close()
 			db.AddQuery("SELECT 1", &sqltypes.Result{})
-			db.AddQuery("SHOW REPLICA STATUS", testCase.status)
+			if testCase.status != nil {
+				db.AddQuery("SHOW REPLICA STATUS", testCase.status)
+			}
 			if testCase.rejectedQuery == readDurability {
 				db.AddRejectedQuery(readDurability, testCase.rejectedError)
 			} else if testCase.durability != nil {
@@ -457,7 +490,7 @@ func TestPrepareReplicaForShutdown(t *testing.T) {
 			defer testMysqld.Close()
 
 			var capturedState *replicaShutdownState
-			state, err := testMysqld.prepareReplicaForShutdown(t.Context(), nil, func(state *replicaShutdownState) {
+			state, err := testMysqld.prepareReplicaForShutdown(t.Context(), testCase.inherited, func(state *replicaShutdownState) {
 				capturedState = state
 			})
 			if testCase.wantError == "" {
@@ -475,6 +508,10 @@ func TestPrepareReplicaForShutdown(t *testing.T) {
 			assert.Equal(t, testCase.wantFlush, db.GetQueryCalledNum(flushRelayLogs))
 			assert.Equal(t, testCase.wantStop, db.GetQueryCalledNum(stopIOThread))
 			assert.Equal(t, testCase.wantStopSQL, db.GetQueryCalledNum(stopSQLThread))
+			if testCase.inherited != nil {
+				assert.Zero(t, db.GetQueryCalledNum("SHOW REPLICA STATUS"), "the takeover path must not re-probe the replication status")
+				assert.Zero(t, db.GetQueryCalledNum(readDurability), "the takeover path must not re-read the durability settings")
+			}
 		})
 	}
 }

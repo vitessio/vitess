@@ -241,13 +241,19 @@ func (mysqld *Mysqld) StopIOThread(ctx context.Context) error {
 // restoration: inherited is the replica's true prior state, recorded before
 // the first fence. Re-capturing here would read the half-restored state
 // instead, so the read-only probes are skipped and the fence is re-applied
-// directly on the inherited state. The inherited state is published (and on
-// failure returned) before anything that can fail: the previous restoration
-// was cancelled when it was inherited, so this preparation owns the state now
-// and must hand it back even when it never reaches mysqld -- otherwise a
-// subsequently failed shutdown would have nothing to arm a replacement
-// restoration from, and the replica would stay fenced with replication
-// stopped.
+// directly on the inherited state. Skipping the probes also skips the role
+// re-check, deliberately: the fence only tightens durability -- safe for any
+// role, on a server this call is about to shut down -- and its thread stops
+// fail harmlessly on a server that is no longer a replica, while the
+// role-sensitive direction (relaxing the settings) stays guarded by the
+// restore's per-pass probe. A role probe here would only narrow the promotion
+// race while adding a failure mode of its own. The inherited state is
+// published (and on failure returned) before anything that can fail: the
+// previous restoration was cancelled when it was inherited, so this
+// preparation owns the state now and must hand it back even when it never
+// reaches mysqld -- otherwise a subsequently failed shutdown would have
+// nothing to arm a replacement restoration from, and the replica would stay
+// fenced with replication stopped.
 //
 // It uses a dedicated connection rather than the pools -- killed on ctx expiry
 // by the context-aware executors -- so that a preparation hung in mysqld can
@@ -381,12 +387,12 @@ func (mysqld *Mysqld) prepareReplicaForShutdown(ctx context.Context, inherited *
 // replication-thread command can actually be executed. Flavors that do not
 // use classic replication threads return "" (e.g. MySQL Group Replication,
 // whose members are managed by an external orchestrator), and the file
-// position flavor for unmanaged servers returns "unsupported": neither is a
-// statement worth sending, so the crash-safety preparation and restoration
-// skip their thread stops and starts rather than issue queries that always
-// fail.
+// position flavor for unmanaged servers returns mysql.UnsupportedCommand:
+// neither is a statement worth sending, so the crash-safety preparation and
+// restoration skip their thread stops and starts rather than issue queries
+// that always fail.
 func replicationThreadCommandAvailable(cmd string) bool {
-	return cmd != "" && cmd != "unsupported"
+	return cmd != "" && cmd != mysql.UnsupportedCommand
 }
 
 // stopInterrupted reports whether a failed replication-thread stop may have

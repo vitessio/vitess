@@ -384,7 +384,7 @@ func (mariadbFlavor) supportsCapability(capability capabilities.FlavorCapability
 }
 
 func (mariadbFlavor) catchupToGTIDCommands(_ *ConnParams, _ replication.Position) []string {
-	return []string{"unsupported"}
+	return []string{UnsupportedCommand}
 }
 
 func (mariadbFlavor) binlogReplicatedUpdates() string {

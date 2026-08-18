@@ -41,6 +41,13 @@ var (
 	ErrNoPrimaryStatus = errors.New("no master status")
 )
 
+// UnsupportedCommand is the sentinel returned by flavor command constructors
+// for statements the flavor cannot provide (e.g. the file-position flavor has
+// no replication-thread commands). It is not executable SQL: executing it
+// fails with a syntax error, so callers that must tolerate such flavors check
+// for it before executing a flavor-provided command.
+const UnsupportedCommand = "unsupported"
+
 const (
 	// mariaDBReplicationHackPrefix is the prefix of a version for MariaDB 10.0
 	// versions, to work around replication bugs.
