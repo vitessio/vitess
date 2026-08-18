@@ -49,6 +49,41 @@ func vdiff(t *testing.T, keyspace, workflow, cells string, wantV2Result *expecte
 	doVtctldclientVDiff(t, keyspace, workflow, cells, wantV2Result)
 }
 
+// resumeLastVDiff resumes the workflow's most recent VDiff and waits for it to
+// complete, returning an error rather than asserting so that it is safe to call
+// from a goroutine (go-require).
+//
+// Resuming restarts the diff from the LastPK recorded by the previous run, so
+// this is the only path that combines a workflow's row filter (for example the
+// tenant predicate added for a multi-tenant MoveTables) with the keyset
+// pagination predicate built from the LastPK. Those have to be ANDed as
+// separate units; otherwise the filter governs only one branch of the
+// pagination OR and unrelated rows leak into the comparison, which surfaces
+// here as a mismatch. See https://github.com/vitessio/vitess/issues/20857.
+func resumeLastVDiff(t *testing.T, keyspace, workflow, cells string) error {
+	ksWorkflow := fmt.Sprintf("%s.%s", keyspace, workflow)
+	uuid, output, err := performVDiff2Action(t, ksWorkflow, cells, "show", "last", false)
+	if err != nil {
+		return err
+	}
+	if state := getVDiffInfo(output).State; state != "completed" {
+		return fmt.Errorf("expected the last VDiff for %s to be completed before resuming it, but it was %s", ksWorkflow, state)
+	}
+	// The resumed run's completed_at must be later than this.
+	ogTime := time.Now()
+	if _, _, err := performVDiff2Action(t, ksWorkflow, cells, "resume", uuid, false); err != nil {
+		return err
+	}
+	info := waitForVDiff2ToComplete(t, ksWorkflow, cells, uuid, ogTime)
+	if info == nil {
+		return fmt.Errorf("failed to get info for the resumed VDiff %s on %s", uuid, ksWorkflow)
+	}
+	if info.HasMismatch {
+		return fmt.Errorf("resumed VDiff %s on %s reported a mismatch: %+v", uuid, ksWorkflow, info)
+	}
+	return nil
+}
+
 func doVDiff(t *testing.T, ksWorkflow, cells string) {
 	arr := strings.Split(ksWorkflow, ".")
 	keyspace := arr[0]

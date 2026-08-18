@@ -598,6 +598,11 @@ func (mtm *multiTenantMigration) switchTraffic(tenantId int64) {
 	require.NoError(t, waitForWorkflowState(vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String()))
 	vdiff(t, mt.targetKeyspace, mt.workflowName, defaultCellName, nil)
 	mtm.insertSomeData(t, tenantId, sourceKeyspaceName, numAdditionalRowsPerTenant)
+	// Resuming the VDiff restarts it from the LastPK, which is what combines the
+	// tenant filter with the keyset pagination predicate against the target's
+	// composite primary key. Any other tenant's rows leaking into the comparison
+	// shows up as a mismatch.
+	require.NoError(t, resumeLastVDiff(t, mt.targetKeyspace, mt.workflowName, defaultCellName))
 	mt.SwitchReadsAndWrites()
 	mtm.insertSomeData(t, tenantId, sourceKeyspaceName, numAdditionalRowsPerTenant)
 }

@@ -295,10 +295,17 @@ func (rs *rowStreamer) buildSelect(st *binlogdatapb.MinimalTable) (string, error
 		}
 		buf.WriteString(" where ")
 		// First we add any predicates that should be pushed down.
-		if len(rs.plan.whereExprsToPushDown) > 0 {
+		pushingDownExprs := len(rs.plan.whereExprsToPushDown) > 0
+		if pushingDownExprs {
 			addPushdownExpressions()
 			// Only AND expressions are supported.
 			buf.Myprintf(" and ")
+			// The lastpk clause built below is a disjunction, so it has to be
+			// parenthesized as a single unit before being ANDed with the
+			// pushed down predicates. Without this, AND binding more tightly
+			// than OR would let the trailing OR terms match rows that the
+			// pushed down predicates are meant to exclude.
+			buf.Myprintf("(")
 		}
 		prefix := ""
 		// This loop handles the case for composite PKs. For example,
@@ -316,6 +323,9 @@ func (rs *rowStreamer) buildSelect(st *binlogdatapb.MinimalTable) (string, error
 			}
 			buf.Myprintf("%v > ", sqlparser.NewIdentifierCI(rs.plan.Table.Fields[pkCol].Name))
 			rs.lastpk[lastcol].EncodeSQL(buf)
+			buf.Myprintf(")")
+		}
+		if pushingDownExprs {
 			buf.Myprintf(")")
 		}
 	} else if len(rs.plan.whereExprsToPushDown) > 0 { // We're in the first copy phase cycle
