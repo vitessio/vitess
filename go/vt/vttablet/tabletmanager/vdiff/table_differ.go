@@ -634,42 +634,55 @@ func (td *tableDiffer) diff(ctx context.Context, coreOpts *tabletmanagerdatapb.V
 			// reconcileExtraRows can match them against any extra source rows.
 			// Counting drained rows without saving a sample makes them impossible
 			// to reconcile, producing false positive extra rows in the report.
+			// The drained rows are merged into the report only after the full
+			// drain succeeds: they are beyond the persisted lastpk, so partially
+			// counted rows would be counted again when a failed diff is resumed.
+			drainedRows := int64(0)
+			var drainedDiffs []*RowDiff
 			for targetRow != nil {
-				if dr.ExtraRowsTarget < maxExtraRowsToCompare {
+				if dr.ExtraRowsTarget+drainedRows < maxExtraRowsToCompare {
 					diffRow, err := td.genRowDiff(td.tablePlan.targetQuery, targetRow, reportOpts)
 					if err != nil {
 						return nil, vterrors.Wrap(err, "unexpected error generating diff")
 					}
-					dr.ExtraRowsTargetDiffs = append(dr.ExtraRowsTargetDiffs, diffRow)
+					drainedDiffs = append(drainedDiffs, diffRow)
 				}
-				dr.ExtraRowsTarget++
-				dr.ProcessedRows++
+				drainedRows++
 				targetRow, err = targetExecutor.next()
 				if err != nil {
 					return nil, err
 				}
 			}
+			dr.ExtraRowsTarget += drainedRows
+			dr.ProcessedRows += drainedRows
+			dr.ExtraRowsTargetDiffs = append(dr.ExtraRowsTargetDiffs, drainedDiffs...)
 			return dr, nil
 		}
 		if targetRow == nil {
 			// No more rows from the target; drain the remaining source rows,
 			// saving a sample for each one (up to maxExtraRowsToCompare) so that
 			// reconcileExtraRows can match them against any extra target rows.
+			// As above, the drained rows are merged into the report only after
+			// the full drain succeeds.
+			drainedRows := int64(0)
+			var drainedDiffs []*RowDiff
 			for sourceRow != nil {
-				if dr.ExtraRowsSource < maxExtraRowsToCompare {
+				if dr.ExtraRowsSource+drainedRows < maxExtraRowsToCompare {
 					diffRow, err := td.genRowDiff(td.tablePlan.sourceQuery, sourceRow, reportOpts)
 					if err != nil {
 						return nil, vterrors.Wrap(err, "unexpected error generating diff")
 					}
-					dr.ExtraRowsSourceDiffs = append(dr.ExtraRowsSourceDiffs, diffRow)
+					drainedDiffs = append(drainedDiffs, diffRow)
 				}
-				dr.ExtraRowsSource++
-				dr.ProcessedRows++
+				drainedRows++
 				sourceRow, err = sourceExecutor.next()
 				if err != nil {
 					return nil, err
 				}
 			}
+			dr.ExtraRowsSource += drainedRows
+			dr.ProcessedRows += drainedRows
+			dr.ExtraRowsSourceDiffs = append(dr.ExtraRowsSourceDiffs, drainedDiffs...)
 			return dr, nil
 		}
 

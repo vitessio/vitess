@@ -19,6 +19,7 @@
 - **[Minor Changes](#minor-changes)**
     - **[VReplication](#minor-changes-vreplication)**
         - [Default data protection for `_reverse` workflow cancel/complete](#vreplication-reverse-workflow-data-protection)
+        - [VDiff reconciles all drained extra rows](#vreplication-vdiff-drained-row-sampling)
     - **[VTGate](#minor-changes-vtgate)**
         - [Ingress bytes in query LogStats](#vtgate-logstats-ingress-bytes)
         - [New controls for cross-keyspace reads](#vtgate-cross-keyspace-reads)
@@ -169,6 +170,14 @@ When calling `cancel` or `complete` on an auto-generated `_reverse` workflow wit
 The `--keep-data` flag help text has been updated to note this default explicitly. This change applies to MoveTables, Reshard, and other VReplication workflow types that use the shared cancel/complete paths.
 
 See [#19906](https://github.com/vitessio/vitess/pull/19906) for details.
+
+#### <a id="vreplication-vdiff-drained-row-sampling"/>VDiff reconciles all drained extra rows</a>
+
+When one side of a VDiff table diff was exhausted before the other, the remaining rows drained from the other side were counted as extra rows, but no row sample was saved for them (except for the first one), so extra-row reconciliation could never match them. On tables where the source and target streams return the same rows in a different order (e.g. because of differing PK collations), completed vdiffs falsely reported extra rows on both sides and `HasMismatch: true` even though the data matched.
+
+VDiff now saves a sample for every drained row, subject to the existing `--max-extra-rows-to-compare` limit, so matching rows are reconciled and no longer reported as mismatches. Genuine data differences are still reported.
+
+See [#20855](https://github.com/vitessio/vitess/pull/20855) for details.
 
 ### <a id="minor-changes-vtgate"/>VTGate</a>
 
