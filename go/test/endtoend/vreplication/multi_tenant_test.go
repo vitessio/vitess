@@ -31,6 +31,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/rand/v2"
+	"os"
+	"path"
+	"regexp"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -96,7 +99,7 @@ const (
 	// PK requires a full table rebuild. So as a practical matter in production the
 	// source schema will likely have the tenant_id column, but NOT have it be part of
 	// the PK.
-	mtSchema = "create table t1(id int, tenant_id int, primary key(id)) Engine=InnoDB"
+	mtSchema = "create table t1(id int, tenant_id int, primary key(id, tenant_id)) Engine=InnoDB"
 	// The target/st schema must have the tenant_id column in the PK and the primary
 	// vindex.
 	stSchema  = "create table t1(id int, tenant_id int, primary key(id, tenant_id)) Engine=InnoDB"
@@ -237,6 +240,42 @@ func TestMultiTenantSimple(t *testing.T) {
 	createFunc()
 
 	vdiff(t, targetKeyspace, defaultWorkflowName, defaultCellName, nil)
+
+	// Confirm that a resumed VDiff ANDs the workflow's tenant filter with the
+	// entire lastpk clause built from the target's composite primary key. All
+	// we need to verify is the query shape passed down to MySQL: rows matched
+	// by an unparenthesized lastpk disjunction are dropped in memory by the
+	// vstreamer's own filters, so the bug cannot surface as a mismatch and
+	// the cost is wasted work at the MySQL layer. We wait for the resumed
+	// VDiff to complete only so that we know the row streamer queries have
+	// been issued and logged before we read the tablet logs.
+	// See https://github.com/vitessio/vitess/issues/20857.
+	t.Run("resume vdiff from lastpk", func(t *testing.T) {
+		ksWorkflow := fmt.Sprintf("%s.%s", targetKeyspace, defaultWorkflowName)
+		uuid, output, err := performVDiff2Action(t, ksWorkflow, defaultCellName, "show", "last", false)
+		require.NoError(t, err)
+		require.Equal(t, "completed", getVDiffInfo(output).State)
+		ogTime := time.Now() // The resumed run's completed_at should be later than this.
+		lastIndex = insertRows(lastIndex, sourceKeyspace)
+		_, _, err = performVDiff2Action(t, ksWorkflow, defaultCellName, "resume", uuid, false)
+		require.NoError(t, err)
+		info := waitForVDiff2ToComplete(t, ksWorkflow, defaultCellName, uuid, ogTime)
+		require.NotNil(t, info)
+		require.False(t, info.HasMismatch)
+
+		resumedQuery := regexp.MustCompile(`Streaming rows for query: select .* from t1 where \(tenant_id = 1\) and \(\(id = \d+ and tenant_id > \d+\) or \(id > \d+\)\) order by id, tenant_id`)
+		found := false
+		for _, tablet := range vc.Cells["zone1"].Keyspaces[targetKeyspace].Shards["0"].Tablets {
+			logBytes, err := os.ReadFile(path.Join(tablet.Vttablet.LogDir, tablet.Vttablet.TabletPath+"-vttablet-stderr.txt"))
+			require.NoError(t, err)
+			if resumedQuery.Match(logBytes) {
+				found = true
+				break
+			}
+		}
+		require.True(t, found, "did not find a resumed row streamer query that ANDs the tenant filter with the parenthesized lastpk clause in the target tablet logs")
+	})
+
 	mt.SwitchReads()
 	confirmOnlyReadsSwitched(t)
 
