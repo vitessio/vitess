@@ -629,35 +629,47 @@ func (td *tableDiffer) diff(ctx context.Context, coreOpts *tabletmanagerdatapb.V
 		advanceSource = true
 		advanceTarget = true
 		if sourceRow == nil {
-			diffRow, err := td.genRowDiff(td.tablePlan.sourceQuery, targetRow, reportOpts)
-			if err != nil {
-				return nil, vterrors.Wrap(err, "unexpected error generating diff")
+			// No more rows from the source; drain the remaining target rows,
+			// saving a sample for each one (up to maxExtraRowsToCompare) so that
+			// reconcileExtraRows can match them against any extra source rows.
+			// Counting drained rows without saving a sample makes them impossible
+			// to reconcile, producing false positive extra rows in the report.
+			for targetRow != nil {
+				if dr.ExtraRowsTarget < maxExtraRowsToCompare {
+					diffRow, err := td.genRowDiff(td.tablePlan.targetQuery, targetRow, reportOpts)
+					if err != nil {
+						return nil, vterrors.Wrap(err, "unexpected error generating diff")
+					}
+					dr.ExtraRowsTargetDiffs = append(dr.ExtraRowsTargetDiffs, diffRow)
+				}
+				dr.ExtraRowsTarget++
+				dr.ProcessedRows++
+				targetRow, err = targetExecutor.next()
+				if err != nil {
+					return nil, err
+				}
 			}
-			dr.ExtraRowsTargetDiffs = append(dr.ExtraRowsTargetDiffs, diffRow)
-
-			// Drain target, update count.
-			count, err := targetExecutor.drain(ctx)
-			if err != nil {
-				return nil, err
-			}
-			dr.ExtraRowsTarget += 1 + count
-			dr.ProcessedRows += 1 + count
 			return dr, nil
 		}
 		if targetRow == nil {
-			// No more rows from the target but we know we have more rows from
-			// source, so drain them and update the counts.
-			diffRow, err := td.genRowDiff(td.tablePlan.sourceQuery, sourceRow, reportOpts)
-			if err != nil {
-				return nil, vterrors.Wrap(err, "unexpected error generating diff")
+			// No more rows from the target; drain the remaining source rows,
+			// saving a sample for each one (up to maxExtraRowsToCompare) so that
+			// reconcileExtraRows can match them against any extra target rows.
+			for sourceRow != nil {
+				if dr.ExtraRowsSource < maxExtraRowsToCompare {
+					diffRow, err := td.genRowDiff(td.tablePlan.sourceQuery, sourceRow, reportOpts)
+					if err != nil {
+						return nil, vterrors.Wrap(err, "unexpected error generating diff")
+					}
+					dr.ExtraRowsSourceDiffs = append(dr.ExtraRowsSourceDiffs, diffRow)
+				}
+				dr.ExtraRowsSource++
+				dr.ProcessedRows++
+				sourceRow, err = sourceExecutor.next()
+				if err != nil {
+					return nil, err
+				}
 			}
-			dr.ExtraRowsSourceDiffs = append(dr.ExtraRowsSourceDiffs, diffRow)
-			count, err := sourceExecutor.drain(ctx)
-			if err != nil {
-				return nil, err
-			}
-			dr.ExtraRowsSource += 1 + count
-			dr.ProcessedRows += 1 + count
 			return dr, nil
 		}
 

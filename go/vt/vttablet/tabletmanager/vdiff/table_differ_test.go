@@ -22,9 +22,12 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
+	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtgate/engine"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
@@ -126,6 +129,166 @@ func TestUpdateTableProgress(t *testing.T) {
 				require.FailNowf(t, "tableDiffer.updateTableProgress() error =", "%v, wantErr %v",
 					err, tc.wantErr)
 			}
+		})
+	}
+}
+
+// TestDiffDrainedRowSampling tests that when one side's rows are exhausted
+// first, the remaining rows drained from the other side are each saved as an
+// extra-row sample (up to max-extra-rows-to-compare) so that
+// reconcileExtraRows can later match them against the extra rows found on the
+// exhausted side. Previously only the first drained row was given a sample,
+// so any remaining drained rows could never be reconciled and were falsely
+// reported as extra rows even when the data matched.
+func TestDiffDrainedRowSampling(t *testing.T) {
+	fields := sqltypes.MakeTestFields("c1|c2", "int64|varchar")
+	makeRow := func(id int64, val string) []sqltypes.Value {
+		return []sqltypes.Value{sqltypes.NewInt64(id), sqltypes.NewVarChar(val)}
+	}
+	// Both sides contain the same four rows, but the streams disagree on
+	// the order (e.g. because of differing PK collations between the source
+	// and target): rows 3 and 4 arrive first on one side, so rows 1 and 2
+	// are drained from it after the other side is exhausted.
+	inOrderRows := [][]sqltypes.Value{makeRow(1, "a"), makeRow(2, "b"), makeRow(3, "c"), makeRow(4, "d")}
+	outOfOrderRows := [][]sqltypes.Value{makeRow(3, "c"), makeRow(4, "d"), makeRow(1, "a"), makeRow(2, "b")}
+
+	testCases := []struct {
+		name                  string
+		sourceRows            [][]sqltypes.Value
+		targetRows            [][]sqltypes.Value
+		maxExtraRowsToCompare int64
+		wantExtraRowsSource   int64
+		wantExtraRowsTarget   int64
+		wantSourceSamples     int
+		wantTargetSamples     int
+		// Wanted values after reconciling the extra rows.
+		wantReconciledExtraRowsSource int64
+		wantReconciledExtraRowsTarget int64
+		wantReconciledMatchingRows    int64
+	}{
+		{
+			name:                          "drain target rows",
+			sourceRows:                    inOrderRows,
+			targetRows:                    outOfOrderRows,
+			maxExtraRowsToCompare:         1000,
+			wantExtraRowsSource:           2,
+			wantExtraRowsTarget:           2,
+			wantSourceSamples:             2,
+			wantTargetSamples:             2,
+			wantReconciledExtraRowsSource: 0,
+			wantReconciledExtraRowsTarget: 0,
+			wantReconciledMatchingRows:    4,
+		},
+		{
+			name:                          "drain source rows",
+			sourceRows:                    outOfOrderRows,
+			targetRows:                    inOrderRows,
+			maxExtraRowsToCompare:         1000,
+			wantExtraRowsSource:           2,
+			wantExtraRowsTarget:           2,
+			wantSourceSamples:             2,
+			wantTargetSamples:             2,
+			wantReconciledExtraRowsSource: 0,
+			wantReconciledExtraRowsTarget: 0,
+			wantReconciledMatchingRows:    4,
+		},
+		{
+			name:                  "drained samples capped by max-extra-rows-to-compare",
+			sourceRows:            inOrderRows,
+			targetRows:            outOfOrderRows,
+			maxExtraRowsToCompare: 1,
+			wantExtraRowsSource:   2,
+			wantExtraRowsTarget:   2,
+			wantSourceSamples:     1,
+			wantTargetSamples:     1,
+			// Only the first extra row on each side has a sample, so only
+			// that pair can be reconciled.
+			wantReconciledExtraRowsSource: 1,
+			wantReconciledExtraRowsTarget: 1,
+			wantReconciledMatchingRows:    3,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			dbc := binlogplayer.NewMockDBClient(t)
+			ct := &controller{
+				id:                    1,
+				uuid:                  "62b5b1de-561b-4b3b-a138-2be9d0f46f78",
+				vde:                   &Engine{parser: sqlparser.NewTestParser()},
+				done:                  make(chan struct{}),
+				dbClientFactory:       func() binlogplayer.DBClient { return dbc },
+				TableDiffRowCounts:    stats.NewCountersWithSingleLabel("", "", "Rows"),
+				TableDiffPhaseTimings: stats.NewTimings("", "", ""),
+			}
+			wd := &workflowDiffer{
+				ct:           ct,
+				collationEnv: collations.MySQL8(),
+				opts: &tabletmanagerdatapb.VDiffOptions{
+					CoreOptions:   &tabletmanagerdatapb.VDiffCoreOptions{},
+					ReportOptions: &tabletmanagerdatapb.VDiffReportOptions{},
+				},
+			}
+			table := &tabletmanagerdatapb.TableDefinition{
+				Name:   "t1",
+				Fields: fields,
+			}
+			td := &tableDiffer{
+				wd:    wd,
+				table: table,
+				tablePlan: &tablePlan{
+					table:        table,
+					sourceQuery:  "select c1, c2 from t1",
+					targetQuery:  "select c1, c2 from t1",
+					pkCols:       []int{0},
+					sourcePkCols: []int{0},
+					selectPks:    []int{0},
+					comparePKs: []compareColInfo{
+						{colIndex: 0, isPK: true, colName: "c1"},
+					},
+					compareCols: []compareColInfo{
+						{colIndex: 0, isPK: true, colName: "c1"},
+						{colIndex: 1, isPK: false, colName: "c2"},
+					},
+				},
+				sourcePrimitive: engine.NewRowsPrimitive(tc.sourceRows, fields),
+				targetPrimitive: engine.NewRowsPrimitive(tc.targetRows, fields),
+			}
+
+			stateQuery, err := sqlparser.ParseAndBind(sqlGetVDiffTable,
+				sqltypes.Int64BindVariable(ct.id),
+				sqltypes.StringBindVariable(table.Name),
+			)
+			require.NoError(t, err)
+			dbc.ExpectRequest(stateQuery, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+				"lastpk|mismatch|report",
+				"varbinary|int64|varbinary",
+			), "|0|{}"), nil)
+			dbc.ExpectRequestRE("update _vt.vdiff_table set rows_compared = .*", &sqltypes.Result{}, nil)
+
+			coreOpts := &tabletmanagerdatapb.VDiffCoreOptions{
+				MaxRows:               100,
+				MaxExtraRowsToCompare: tc.maxExtraRowsToCompare,
+			}
+			reportOpts := &tabletmanagerdatapb.VDiffReportOptions{
+				MaxSampleRows: 10,
+			}
+			dr, err := td.diff(t.Context(), coreOpts, reportOpts, nil)
+			require.NoError(t, err)
+			require.Equal(t, int64(6), dr.ProcessedRows)
+			require.Equal(t, int64(2), dr.MatchingRows)
+			require.Equal(t, int64(0), dr.MismatchedRows)
+			require.Equal(t, tc.wantExtraRowsSource, dr.ExtraRowsSource)
+			require.Equal(t, tc.wantExtraRowsTarget, dr.ExtraRowsTarget)
+			require.Len(t, dr.ExtraRowsSourceDiffs, tc.wantSourceSamples)
+			require.Len(t, dr.ExtraRowsTargetDiffs, tc.wantTargetSamples)
+
+			require.NoError(t, wd.doReconcileExtraRows(dr, tc.maxExtraRowsToCompare, reportOpts.MaxSampleRows))
+			require.Equal(t, tc.wantReconciledExtraRowsSource, dr.ExtraRowsSource)
+			require.Equal(t, tc.wantReconciledExtraRowsTarget, dr.ExtraRowsTarget)
+			require.Equal(t, tc.wantReconciledMatchingRows, dr.MatchingRows)
+			require.Equal(t, int64(6), dr.ProcessedRows)
+			require.Equal(t, int64(0), dr.MismatchedRows)
 		})
 	}
 }
