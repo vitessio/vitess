@@ -920,7 +920,7 @@ func (hc *HealthCheckImpl) TabletConnection(ctx context.Context, alias *topodata
 	}
 	conn := thc.currentConnection()
 	if conn == nil {
-		return nil, vterrors.Errorf(vtrpc.Code_NOT_FOUND, "tablet: %v is either down or nonexistent", alias)
+		return nil, vterrors.Errorf(vtrpc.Code_NOT_FOUND, "tablet: %v is either down or nonexistent (no health check connection)", alias)
 	}
 	return conn, nil
 }

@@ -48,7 +48,12 @@ type tabletHealthCheck struct {
 	cancelFunc context.CancelFunc
 	// Tablet is the tablet object that was sent to HealthCheck.AddTablet.
 	Tablet *topodata.Tablet
-	// mutex to protect Conn
+	// connMu protects Conn and all the mutable health fields below
+	// (Target, Serving, PrimaryTermStartTime, Stats, LastError): the
+	// checkConn goroutine writes them while readers such as SimpleCopy
+	// and currentConnection copy them from other goroutines. It must
+	// not be held across network IO (connection Close or dialing) or
+	// while invoking the logger.
 	connMu sync.Mutex
 	// Conn is the connection associated with the tablet.
 	Conn queryservice.QueryService
