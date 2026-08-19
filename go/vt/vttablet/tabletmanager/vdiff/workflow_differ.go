@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"reflect"
 	"slices"
 	"strings"
@@ -226,8 +227,9 @@ func (wd *workflowDiffer) diffTable(ctx context.Context, dbClient binlogplayer.D
 			// it cannot be checkpointed (see getSourcePKCols). Applying the limit
 			// would restart it from the beginning on every window and it could
 			// never finish, so we run it as a single uninterrupted pass instead.
-			log.Warn(fmt.Sprintf("Ignoring --max-diff-duration for table %s in vdiff %s: its filter does not project the full source primary key, so it cannot be checkpointed and must be diffed in a single pass",
-				td.table.Name, wd.ct.uuid))
+			log.Warn("Ignoring --max-diff-duration for this table because its filter does not project the full source primary key, so it cannot be checkpointed and must be diffed in a single pass",
+				slog.String("table", td.table.Name),
+				slog.String("vdiff", wd.ct.uuid))
 		} else {
 			// Restart the diff if it takes longer than the specified max diff time.
 			maxDiffRuntime = time.Duration(wd.ct.options.CoreOptions.MaxDiffSeconds) * time.Second
