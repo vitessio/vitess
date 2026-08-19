@@ -19,6 +19,7 @@
 - **[Minor Changes](#minor-changes)**
     - **[VReplication](#minor-changes-vreplication)**
         - [Default data protection for `_reverse` workflow cancel/complete](#vreplication-reverse-workflow-data-protection)
+        - [`vdiff show --only-summary` omits the per-table row-sample report](#vreplication-vdiff-only-summary)
     - **[VTGate](#minor-changes-vtgate)**
         - [Ingress bytes in query LogStats](#vtgate-logstats-ingress-bytes)
         - [New controls for cross-keyspace reads](#vtgate-cross-keyspace-reads)
@@ -169,6 +170,16 @@ When calling `cancel` or `complete` on an auto-generated `_reverse` workflow wit
 The `--keep-data` flag help text has been updated to note this default explicitly. This change applies to MoveTables, Reshard, and other VReplication workflow types that use the shared cancel/complete paths.
 
 See [#19906](https://github.com/vitessio/vitess/pull/19906) for details.
+
+#### <a id="vreplication-vdiff-only-summary"/>`vdiff show --only-summary` omits the per-table row-sample report</a>
+
+`vtctldclient vdiff ... show` now accepts an `--only-summary` flag. When set, the per-table diff report has its sampled-row arrays (`MismatchedRowsSample`, `ExtraRowsSourceSample`, `ExtraRowsTargetSample`) stripped on the tablet before the response is built, while the scalar counters (processed, matching, mismatched, and extra rows) and all other summary fields are preserved.
+
+The sampled-row arrays carry actual row data, including large `BLOB`/`JSON` columns, and `vdiff show` aggregates them across every target shard. For diffs over tables with large rows this could push the aggregated response past gRPC message limits and make `vdiff show` fail outright, leaving no way to read the summary or mismatch state. `--only-summary` lets callers that only need progress and the mismatch state avoid transferring the samples while keeping the reported counts accurate.
+
+The option is exposed as `only_summary` on the `VDiffShowRequest` (vtctld) and `VDiffReportOptions` (tablet) protobuf messages. It is opt-in and backward compatible: without the flag, the full report is returned as before.
+
+See [#20870](https://github.com/vitessio/vitess/pull/20870) for details.
 
 ### <a id="minor-changes-vtgate"/>VTGate</a>
 

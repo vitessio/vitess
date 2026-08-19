@@ -6610,8 +6610,15 @@ type VDiffReportOptions struct {
 	Format                  string                 `protobuf:"bytes,3,opt,name=format,proto3" json:"format,omitempty"`
 	MaxSampleRows           int64                  `protobuf:"varint,4,opt,name=max_sample_rows,json=maxSampleRows,proto3" json:"max_sample_rows,omitempty"`
 	RowDiffColumnTruncateAt int64                  `protobuf:"varint,5,opt,name=row_diff_column_truncate_at,json=rowDiffColumnTruncateAt,proto3" json:"row_diff_column_truncate_at,omitempty"`
-	unknownFields           protoimpl.UnknownFields
-	sizeCache               protoimpl.SizeCache
+	// only_summary requests that the show action return only the vdiff and
+	// per-table summary state (progress, mismatch flag, etc.) and omit the
+	// potentially very large per-table diff report body. The report can exceed
+	// gRPC message limits for tables with large blob/JSON rows, so callers that
+	// only need progress and the has_mismatch flag can set this to avoid reading
+	// and transferring it.
+	OnlySummary   bool `protobuf:"varint,6,opt,name=only_summary,json=onlySummary,proto3" json:"only_summary,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *VDiffReportOptions) Reset() {
@@ -6677,6 +6684,13 @@ func (x *VDiffReportOptions) GetRowDiffColumnTruncateAt() int64 {
 		return x.RowDiffColumnTruncateAt
 	}
 	return 0
+}
+
+func (x *VDiffReportOptions) GetOnlySummary() bool {
+	if x != nil {
+		return x.OnlySummary
+	}
+	return false
 }
 
 type VDiffCoreOptions struct {
@@ -8997,14 +9011,15 @@ const file_tabletmanagerdata_proto_rawDesc = "" +
 	"\vsource_cell\x18\x02 \x01(\tR\n" +
 	"sourceCell\x12\x1f\n" +
 	"\vtarget_cell\x18\x03 \x01(\tR\n" +
-	"targetCell\"\xce\x01\n" +
+	"targetCell\"\xf1\x01\n" +
 	"\x12VDiffReportOptions\x12\x19\n" +
 	"\bonly_pks\x18\x01 \x01(\bR\aonlyPks\x12\x1f\n" +
 	"\vdebug_query\x18\x02 \x01(\bR\n" +
 	"debugQuery\x12\x16\n" +
 	"\x06format\x18\x03 \x01(\tR\x06format\x12&\n" +
 	"\x0fmax_sample_rows\x18\x04 \x01(\x03R\rmaxSampleRows\x12<\n" +
-	"\x1brow_diff_column_truncate_at\x18\x05 \x01(\x03R\x17rowDiffColumnTruncateAt\"\x8d\x03\n" +
+	"\x1brow_diff_column_truncate_at\x18\x05 \x01(\x03R\x17rowDiffColumnTruncateAt\x12!\n" +
+	"\fonly_summary\x18\x06 \x01(\bR\vonlySummary\"\x8d\x03\n" +
 	"\x10VDiffCoreOptions\x12\x16\n" +
 	"\x06tables\x18\x01 \x01(\tR\x06tables\x12\x1d\n" +
 	"\n" +

@@ -2142,6 +2142,11 @@ message VDiffShowRequest {
   string target_keyspace = 2;
   // This will be 'all', 'last', or a UUID.
   string arg = 3;
+  // only_summary omits the per-table diff report body from the response,
+  // returning only the vdiff and per-table summary state. This avoids reading
+  // and transferring reports that can be very large for tables with big
+  // blob/JSON rows.
+  bool only_summary = 4;
 }
 
 message VDiffShowResponse {

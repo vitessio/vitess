@@ -5556,6 +5556,7 @@ func (m *VDiffShowRequest) CloneVT() *VDiffShowRequest {
 	r.Workflow = m.Workflow
 	r.TargetKeyspace = m.TargetKeyspace
 	r.Arg = m.Arg
+	r.OnlySummary = m.OnlySummary
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -21248,6 +21249,16 @@ func (m *VDiffShowRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if m.OnlySummary {
+		i--
+		if m.OnlySummary {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x20
+	}
 	if len(m.Arg) > 0 {
 		i -= len(m.Arg)
 		copy(dAtA[i:], m.Arg)
@@ -28324,6 +28335,9 @@ func (m *VDiffShowRequest) SizeVT() (n int) {
 	l = len(m.Arg)
 	if l > 0 {
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
+	}
+	if m.OnlySummary {
+		n += 2
 	}
 	n += len(m.unknownFields)
 	return n
@@ -66221,6 +66235,26 @@ func (m *VDiffShowRequest) UnmarshalVT(dAtA []byte) error {
 			}
 			m.Arg = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
+		case 4:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field OnlySummary", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.OnlySummary = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])

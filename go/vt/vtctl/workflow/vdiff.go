@@ -566,6 +566,11 @@ func (s *Server) VDiffShow(ctx context.Context, req *vtctldatapb.VDiffShowReques
 		Workflow:  req.Workflow,
 		Action:    string(vdiff.ShowAction),
 		ActionArg: req.Arg,
+		Options: &tabletmanagerdatapb.VDiffOptions{
+			ReportOptions: &tabletmanagerdatapb.VDiffReportOptions{
+				OnlySummary: req.GetOnlySummary(),
+			},
+		},
 	}
 
 	ts, err := s.buildTrafficSwitcher(ctx, req.TargetKeyspace, req.Workflow)
