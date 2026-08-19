@@ -550,7 +550,13 @@ func (td *tableDiffer) diff(ctx context.Context, coreOpts *tabletmanagerdatapb.V
 	curState := cs.Named().Row()
 	mismatch := curState.AsBool("mismatch", false)
 	dr := &DiffReport{}
-	if rpt := curState.AsBytes("report", []byte("{}")); json.Valid(rpt) {
+	if td.tablePlan.sourceCheckpointUnavailable {
+		// This table has no resumable checkpoint and restarts from the beginning
+		// on every run (see getSourcePKCols). Carrying over the persisted partial
+		// report or mismatch flag would double-count rows and duplicate mismatch
+		// samples across restarts, so we start fresh instead.
+		mismatch = false
+	} else if rpt := curState.AsBytes("report", []byte("{}")); json.Valid(rpt) {
 		if err = json.Unmarshal(rpt, dr); err != nil {
 			return nil, err
 		}
@@ -766,14 +772,27 @@ func (td *tableDiffer) updateTableProgress(dbClient binlogplayer.DBClient, dr *D
 		return err
 	}
 
-	if lastRow == nil || td.tablePlan.sourceCheckpointUnavailable {
-		// lastRow == nil: no rows were processed, so there is nothing to
-		// checkpoint. sourceCheckpointUnavailable: the source PK cannot be
-		// represented as a resumable checkpoint (see getSourcePKCols), so we
-		// deliberately persist no lastpk and leave the in-memory retry PKs unset.
-		// Any resume then restarts the whole table from the beginning for both
-		// streams, which avoids the false ExtraRowsSource that a source-only
-		// restart against a resumed target would produce.
+	switch {
+	case td.tablePlan.sourceCheckpointUnavailable:
+		// The source PK cannot be represented as a resumable checkpoint (see
+		// getSourcePKCols). Persist progress but explicitly clear lastpk (to NULL,
+		// which also discards any stale value written before this fix) and leave
+		// the in-memory retry PKs unset. Any resume then restarts the whole table
+		// from the beginning for both streams, which avoids the false
+		// ExtraRowsSource that a source-only restart against a resumed target
+		// would produce.
+		query, err = sqlparser.ParseAndBind(sqlUpdateTableProgress,
+			sqltypes.Int64BindVariable(dr.ProcessedRows),
+			sqltypes.NullBindVariable,
+			sqltypes.StringBindVariable(string(rpt)),
+			sqltypes.Int64BindVariable(td.wd.ct.id),
+			sqltypes.StringBindVariable(td.table.Name),
+		)
+		if err != nil {
+			return err
+		}
+	case lastRow == nil:
+		// No rows were processed, so there is nothing to checkpoint.
 		query, err = sqlparser.ParseAndBind(sqlUpdateTableNoProgress,
 			sqltypes.Int64BindVariable(dr.ProcessedRows),
 			sqltypes.StringBindVariable(string(rpt)),
@@ -783,7 +802,7 @@ func (td *tableDiffer) updateTableProgress(dbClient binlogplayer.DBClient, dr *D
 		if err != nil {
 			return err
 		}
-	} else {
+	default:
 		lastPK := td.lastPKFromRow(lastRow)
 		if td.wd.opts.CoreOptions.MaxDiffSeconds > 0 {
 			// Update the in-memory lastPK as well so that we can restart the table
@@ -1062,7 +1081,7 @@ func (td *tableDiffer) getSourcePKCols() error {
 		// ExtraRowsSource, producing a false mismatch on every retry.
 		//
 		// So we record an explicit "source checkpoint unavailable" state. This
-		// makes updateTableProgress persist no lastpk at all and leave the
+		// makes updateTableProgress clear any persisted lastpk and leave the
 		// in-memory retry PKs unset, so any resume (auto-retry, max-diff-duration
 		// restart, or manual resume) restarts the whole table from the beginning
 		// for both the source and target streams. That is correct (no false
@@ -1070,6 +1089,12 @@ func (td *tableDiffer) getSourcePKCols() error {
 		// filter shape cannot make incremental progress across max-diff-duration
 		// windows and must complete within a single window.
 		td.tablePlan.sourceCheckpointUnavailable = true
+		// Discard any checkpoint that buildPlan already loaded from the database
+		// via getTableLastPK (e.g. a stale, possibly wrong-length lastpk written
+		// before this fix and then resumed after an upgrade). Leaving it set would
+		// resume the streams on that stale key instead of restarting the table.
+		td.lastSourcePK = nil
+		td.lastTargetPK = nil
 		return nil
 	}
 	td.tablePlan.sourcePkCols = indices

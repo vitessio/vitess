@@ -357,13 +357,13 @@ func TestGetSourcePKCols_SubsetProjectionPersistReloadResume(t *testing.T) {
 	require.NoError(t, td.getSourcePKCols())
 	require.True(t, td.tablePlan.sourceCheckpointUnavailable)
 
-	// --- Persist: even with a processed row, updateTableProgress must persist NO
-	// lastpk for a source-checkpoint-unavailable table. The expected query is the
-	// no-progress form (rows_compared + report, no "lastpk =" clause); a lastpk
-	// clause here would mean a resumable (and unsafe) checkpoint was persisted.
+	// --- Persist: even with a processed row, updateTableProgress must explicitly
+	// clear lastpk (to NULL) for a source-checkpoint-unavailable table, so no
+	// resumable (and unsafe) checkpoint remains, including any stale value from
+	// before this fix.
 	persistClient := binlogplayer.NewMockDBClient(t)
 	persistClient.ExpectRequestRE(
-		`^update _vt\.vdiff_table set rows_compared = 100, report = '.*' where vdiff_id = 1 and table_name = 'customer'$`,
+		`^update _vt\.vdiff_table set rows_compared = 100, lastpk = null, report = '.*' where vdiff_id = 1 and table_name = 'customer'$`,
 		&sqltypes.Result{}, nil)
 	dr := &DiffReport{TableName: sourceTable.Name, ProcessedRows: 100}
 	row := []sqltypes.Value{sqltypes.NewInt64(42), sqltypes.NewVarChar("acme")}
