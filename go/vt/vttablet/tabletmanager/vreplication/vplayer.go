@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/tb"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
@@ -76,6 +77,10 @@ type vplayer struct {
 	// If the VPlayer is in batch mode, we accumulate each transaction's statements
 	// that are then sent as a single multi-statement protocol request to the database.
 	batchMode bool
+	// maxBatchSize is the size a transaction's batch may reach before it is sent,
+	// and is zero when this player does not batch. It is handed to the client by
+	// setConnectionBatchMode, once the connection is known to accept a batch.
+	maxBatchSize int64
 
 	pos replication.Position
 	// unsavedEvent is set any time we skip an event without
@@ -151,8 +156,9 @@ func newVPlayer(vr *vreplicator, settings binlogplayer.VRSettings, copyState map
 	// We only do batching in the running/replicating phase.
 	batchMode := len(copyState) == 0 && vr.workflowConfig.ExperimentalFlags&vttablet.VReplicationExperimentalFlagVPlayerBatching != 0
 
+	var maxBatchSize int64
 	if batchMode {
-		maxAllowedPacket := vr.maxQuerySize(vr.dbClient)
+		maxBatchSize = vr.maxQuerySize(vr.dbClient)
 		queryFunc = func(ctx context.Context, sql string) (*sqltypes.Result, error) {
 			if !vr.dbClient.InTransaction { // Should be sent down the wire immediately
 				return vr.dbClient.Execute(sql)
@@ -162,7 +168,6 @@ func newVPlayer(vr *vreplicator, settings binlogplayer.VRSettings, copyState map
 		commitFunc = func() error {
 			return vr.dbClient.CommitTrxQueryBatch() // Commit the current trx batch
 		}
-		vr.dbClient.maxBatchSize = maxAllowedPacket
 	}
 
 	return &vplayer{
@@ -179,11 +184,84 @@ func newVPlayer(vr *vreplicator, settings binlogplayer.VRSettings, copyState map
 		query:            queryFunc,
 		commit:           commitFunc,
 		batchMode:        batchMode,
+		maxBatchSize:     maxBatchSize,
+	}
+}
+
+// setConnectionBatchMode lets the connection send several statements in a
+// single query while, and only while, this player batches transactions, and
+// hands the client the batch size to match.
+//
+// The connection is shared by the copy and the replicate phase, which do not
+// batch alike, and a re-created connection comes back through here when the
+// controller restarts the workflow, so the state is set for every run rather
+// than once per connection.
+//
+// The client is only allowed to build a batch after the connection has accepted
+// one, so that the two can never disagree: an error here leaves the client
+// unable to batch rather than batching onto a connection that would reject it.
+// A player that batches gives the capability back with clearConnectionBatchMode
+// once it is done with it, and a player that does not batch takes it away here,
+// so a connection only carries it while a batch can actually be sent.
+func (vp *vplayer) setConnectionBatchMode() error {
+	// Take the ability to build a batch away for the duration of the exchange,
+	// so that a failure can never leave the client batching onto a connection
+	// whose state we did not get to set.
+	vp.vr.dbClient.maxBatchSize = 0
+
+	if err := vp.vr.dbClient.SetMultiStatements(vp.batchMode); err != nil {
+		if sqlerror.IsConnErr(err) {
+			// Losing the connection says nothing about whether it could have
+			// batched. The client already dropped it, so the workflow gets a new
+			// one on the next run: keep the error as it came so that it is
+			// retried rather than ending the workflow.
+			return vterrors.Wrapf(err, "failed to configure multi statement support for the vplayer")
+		}
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "failed to configure multi statement support for the vplayer (%v); clear the vplayer batching bit (%d) of --vreplication-experimental-flags to replay without batching",
+			err, vttablet.VReplicationExperimentalFlagVPlayerBatching)
+	}
+
+	vp.vr.dbClient.maxBatchSize = vp.maxBatchSize
+	return nil
+}
+
+// clearConnectionBatchMode takes the ability to send several statements in a
+// single query away again, once this player is done with it, so that a
+// connection outlives the capability by as little as possible.
+//
+// The client loses the ability to build a batch before the connection loses the
+// ability to run one, so that the two can never disagree. A failure is logged
+// rather than returned: the player is on its way out and has an error of its own
+// to report, and the next one sets the state it needs from scratch.
+func (vp *vplayer) clearConnectionBatchMode() {
+	vp.vr.dbClient.maxBatchSize = 0
+
+	// A connection that is already gone took the capability with it, and closing
+	// it leaves the capability it negotiated on record, so asking would write to
+	// a dead connection for nothing. This is the ordinary outcome whenever the
+	// query that ended the run is what killed the connection.
+	if vp.vr.dbClient.IsClosed() {
+		return
+	}
+
+	if err := vp.vr.dbClient.SetMultiStatements(false); err != nil {
+		log.Warn("failed to disable multi statement support",
+			slog.String("workflow", vp.vr.WorkflowName),
+			slog.Any("error", err),
+		)
 	}
 }
 
 // play is the entry point for playing binlogs.
 func (vp *vplayer) play(ctx context.Context) error {
+	if err := vp.setConnectionBatchMode(); err != nil {
+		return err
+	}
+	if vp.batchMode {
+		// A player that does not batch has already turned the capability off
+		// above, so only the one that turned it on has something to give back.
+		defer vp.clearConnectionBatchMode()
+	}
 	if !vp.stopPos.IsZero() && vp.startPos.AtLeast(vp.stopPos) {
 		log.Info(fmt.Sprintf("Stop position %v already reached: %v", vp.startPos, vp.stopPos))
 		if vp.saveStop {

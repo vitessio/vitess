@@ -24,6 +24,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+
 	"vitess.io/vitess/go/mysql/capabilities"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -37,6 +39,11 @@ const (
 // MockDBClient mocks a DBClient.
 // It must be configured to expect requests in a specific order.
 type MockDBClient struct {
+	// AllowMultiStatements lets the code under test turn multi statement support
+	// on and off. It is off by default so that a caller which needs the
+	// capability cannot go unnoticed against a mock that would never provide it.
+	AllowMultiStatements bool
+
 	t             *testing.T
 	UName         string
 	expect        []*mockExpect
@@ -176,6 +183,31 @@ func (dc *MockDBClient) Commit() error {
 // Rollback is part of the DBClient interface
 func (dc *MockDBClient) Rollback() error {
 	_, err := dc.ExecuteFetch("rollback", 1)
+	return err
+}
+
+// SetMultiStatements is part of the DBClient interface. Answering it quietly
+// would let a test watch a caller turn multi statement support on and off while
+// nothing happens, so a test whose subject does that has to say so by setting
+// AllowMultiStatements.
+//
+// It marks the test failed and returns the error rather than ending the test on
+// the spot: the callers that set the capability run on their own goroutines, and
+// failing fatally from one of those would stop it by way of runtime.Goexit,
+// leaving whoever waits for its result waiting for a timeout instead of reading
+// this.
+func (dc *MockDBClient) SetMultiStatements(on bool) error {
+	if dc.AllowMultiStatements {
+		return nil
+	}
+
+	dc.t.Helper()
+	msg := "DBClientMock: unexpected SetMultiStatements(%v), set AllowMultiStatements if the code under test is meant to"
+	if dc.Tag != "" {
+		msg = fmt.Sprintf("[%s] %s", dc.Tag, msg)
+	}
+	err := fmt.Errorf(msg, on)
+	assert.Fail(dc.t, err.Error())
 	return err
 }
 

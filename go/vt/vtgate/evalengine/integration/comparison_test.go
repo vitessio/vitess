@@ -236,6 +236,15 @@ func initTimezoneData(t *testing.T, conn *mysql.Conn) {
 	out, err := exec.Command("mysql_tzinfo_to_sql", "/usr/share/zoneinfo").Output()
 	require.NoError(t, err)
 
+	// What mysql_tzinfo_to_sql writes is a script, so the connection has to be
+	// able to send several statements at once for as long as it takes to load
+	// it, and no longer: the comparisons that follow send one statement at a
+	// time.
+	require.NoError(t, conn.SetMultiStatements(true))
+	defer func() {
+		assert.NoError(t, conn.SetMultiStatements(false))
+	}()
+
 	_, more, err := conn.ExecuteFetchMulti(fmt.Sprintf("USE mysql; %s\n", string(out)), -1, false)
 	require.NoError(t, err)
 	for more {

@@ -18,7 +18,10 @@ package tabletmanager
 
 import (
 	"errors"
+	"slices"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -282,6 +285,154 @@ func TestTabletManager_ExecuteMultiFetchAsDbaDeniedSessionVariables(t *testing.T
 			assert.NotContains(t, db.QueryLog(), "create table t")
 		})
 	}
+}
+
+// multiStatementRecorder is a fakesqldb query handler that records whether the
+// connections it serves queries on negotiated multi statement support.
+type multiStatementRecorder struct {
+	db *fakesqldb.DB
+	// enabled is written on the connection goroutine of the fake server, and
+	// read by the test once the request it belongs to is done.
+	enabled atomic.Bool
+
+	// mu guards enabledQueries, which the connection goroutine of the fake
+	// server appends to and the test reads once the request is done.
+	mu sync.Mutex
+	// enabledQueries are the queries that were executed while the connection
+	// could send several statements at once.
+	enabledQueries []string
+}
+
+func (r *multiStatementRecorder) HandleQuery(c *mysql.Conn, query string, callback func(*sqltypes.Result) error) error {
+	if c.Capabilities&mysql.CapabilityClientMultiStatements != 0 {
+		r.enabled.Store(true)
+		r.mu.Lock()
+		r.enabledQueries = append(r.enabledQueries, query)
+		r.mu.Unlock()
+	}
+	return r.db.HandleQuery(c, query, callback)
+}
+
+func (r *multiStatementRecorder) queriesRunWithMultiStatements() []string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return slices.Clone(r.enabledQueries)
+}
+
+// TestTabletManager_ExecuteMultiFetchAsDbaMultiStatements checks that only a
+// request carrying several statements turns multi statement support on for the
+// connection it runs on.
+func TestTabletManager_ExecuteMultiFetchAsDbaMultiStatements(t *testing.T) {
+	testCases := []struct {
+		name string
+		sql  string
+		// statements the fake server is expected to execute, one by one.
+		statements  []string
+		wantEnabled bool
+	}{{
+		name:        "single statement",
+		sql:         "create table t1 (id int primary key)",
+		statements:  []string{"create table t1 (id int primary key)"},
+		wantEnabled: false,
+	}, {
+		name: "several statements",
+		// The pieces the server executes are the text between the semicolons,
+		// so keep the statements free of surrounding whitespace.
+		sql:         "create table t1 (id int primary key);create table t2 (id int primary key)",
+		statements:  []string{"create table t1 (id int primary key)", "create table t2 (id int primary key)"},
+		wantEnabled: true,
+	}}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := t.Context()
+			cp := mysql.ConnParams{}
+			db := fakesqldb.New(t)
+			db.AddQueryPattern(".*", &sqltypes.Result{})
+			recorder := &multiStatementRecorder{db: db}
+			db.Handler = recorder
+			daemon := mysqlctl.NewFakeMysqlDaemon(db)
+
+			dbName := "testdb"
+			tm := &TabletManager{
+				MysqlDaemon:            daemon,
+				DBConfigs:              dbconfigs.NewTestDBConfigs(cp, cp, dbName),
+				QueryServiceControl:    tabletservermock.NewController(),
+				_waitForGrantsComplete: make(chan struct{}),
+				Env:                    vtenv.NewTestEnv(),
+			}
+			close(tm._waitForGrantsComplete)
+
+			results, err := tm.ExecuteMultiFetchAsDba(ctx, &tabletmanagerdatapb.ExecuteMultiFetchAsDbaRequest{
+				Sql:     []byte(tc.sql),
+				DbName:  dbName,
+				MaxRows: 10,
+			})
+			require.NoError(t, err)
+			require.Len(t, results, len(tc.statements))
+			// Each statement must reach the server on its own. A batch that was
+			// sent without the capability is counted under the joined query.
+			for _, statement := range tc.statements {
+				require.Equal(t, 1, db.GetQueryCalledNum(statement), "statement %q was not executed on its own, query log: %v", statement, db.QueryLog())
+			}
+			require.Equal(t, tc.wantEnabled, recorder.enabled.Load())
+			// The capability is asked for as late as possible, so the only
+			// thing that ever runs on a connection that can send a batch is the
+			// batch itself. Everything before it -- the session variables, the
+			// USE, the sql_log_bin and foreign key checks -- is a single
+			// statement and has no need for the capability.
+			if tc.wantEnabled {
+				require.Equal(t, tc.statements, recorder.queriesRunWithMultiStatements())
+			} else {
+				require.Empty(t, recorder.queriesRunWithMultiStatements())
+			}
+		})
+	}
+}
+
+// TestTabletManager_ExecuteFetchCompoundStatement checks that the RPCs which run
+// a single statement do not decide for themselves what one statement is. Our
+// splitter cuts a CREATE TRIGGER body at its semicolons and cannot parse the
+// statement at all, so anything counting statements here would turn valid SQL
+// away; MySQL is what says whether a query holds one statement or several.
+func TestTabletManager_ExecuteFetchCompoundStatement(t *testing.T) {
+	ctx := t.Context()
+	cp := mysql.ConnParams{}
+	db := fakesqldb.New(t)
+	db.AddQueryPattern(".*", &sqltypes.Result{})
+	daemon := mysqlctl.NewFakeMysqlDaemon(db)
+
+	const dbName = "vt_test"
+	tm := &TabletManager{
+		MysqlDaemon:            daemon,
+		DBConfigs:              dbconfigs.NewTestDBConfigs(cp, cp, dbName),
+		QueryServiceControl:    tabletservermock.NewController(),
+		_waitForGrantsComplete: make(chan struct{}),
+		Env:                    vtenv.NewTestEnv(),
+	}
+	close(tm._waitForGrantsComplete)
+
+	const trigger = "create trigger t1_bi before insert on t1 for each row begin set @x = 1; set @y = 2; end"
+	// Three pieces, none of them valid on its own.
+	pieces, err := tm.Env.Parser().SplitStatementToPieces(trigger)
+	require.NoError(t, err)
+	require.Len(t, pieces, 3, "this test is pointless if the splitter stops cutting the trigger body")
+
+	_, err = tm.ExecuteFetchAsApp(ctx, &tabletmanagerdatapb.ExecuteFetchAsAppRequest{
+		Query:   []byte(trigger),
+		MaxRows: 10,
+	})
+	require.NoError(t, err)
+
+	_, err = tm.ExecuteFetchAsAllPrivs(ctx, &tabletmanagerdatapb.ExecuteFetchAsAllPrivsRequest{
+		Query:   []byte(trigger),
+		DbName:  dbName,
+		MaxRows: 10,
+	})
+	require.NoError(t, err)
+
+	// It reaches the server whole, for MySQL to parse.
+	require.Contains(t, db.QueryLog(), trigger)
 }
 
 func TestTabletManager_ExecuteFetchAsDba(t *testing.T) {

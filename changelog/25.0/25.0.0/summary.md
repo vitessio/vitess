@@ -57,6 +57,7 @@
         - [ApplySchema session variables](#vttablet-applyschema-session-variables)
         - [Table ACL: statements whose tables cannot be determined are denied under strict table ACL](#vttablet-table-acl-undetermined-table-set)
         - [Table ACL: reads embedded in non-SELECT statements are now checked](#vttablet-table-acl-embedded-reads)
+        - [Multi statement support is no longer negotiated on every tablet connection to MySQL](#vttablet-multi-statements)
     - **[VTCtld](#minor-changes-vtctld)**
         - [MySQL version-aware reparent candidate election](#vtctld-version-aware-reparent)
     - **[Backup/Restore](#minor-changes-backup)**
@@ -646,6 +647,46 @@ Connection settings — the SET statements vtgate attaches to a session's querie
 **Compatibility note:** a v24 vtgate still stores a targeted session's `SET` expression as written. Against a vttablet with this change running strict table ACL, a v24 vtgate session that runs `SET @@var = (<subquery>)` while targeted has that setting rejected on every later query until the client reconnects. Upgrade vtgate before vttablet, or avoid subqueries in targeted `SET` statements during the upgrade. Without strict table ACL nothing changes for such a session.
 
 See [#21139](https://github.com/vitessio/vitess/pull/21139) for details.
+
+#### <a id="vttablet-multi-statements"/>Multi statement support is no longer negotiated on every tablet connection to MySQL</a>
+
+Every connection a tablet opened to its MySQL used to negotiate
+`CLIENT_MULTI_STATEMENTS`, whether or not it ever sent a query holding several
+statements. Almost none of them do, so the capability is now off by default and
+only the paths that deliberately send batches turn it on, on the connection they
+own, for as long as they own it:
+
+- `ExecuteMultiFetchAsDba`, and only when the request really carries more than
+  one statement;
+- the connections that run schema scripts for `mysqlctl`;
+- the VReplication player, while transaction batching is enabled;
+- the init SQL of a backup (see below).
+
+Everywhere else — the app, appdebug, allprivs, dba, filtered, replication,
+external replication and clone connections — a query holding several statements
+now fails with a parse error at the semicolon. A trailing semicolon is not a
+second statement and keeps working. Statements still reach MySQL as they were
+written, so compound statements such as `CREATE TRIGGER`, whose body carries
+semicolons of its own, are unaffected. Stored procedure calls returning several
+result sets rely on a different capability and are unaffected as well.
+
+`ExecuteFetchAsApp` and `ExecuteFetchAsAllPrivs` run a single statement and can
+only report one result. A request holding several used to run every statement it
+held and then fail with `unexpected multiple results`, having reported none of
+them; it now fails with a MySQL parse error, having run nothing. Neither has a
+multi statement variant, so multi statement queries are not supported.
+
+**Impact**: No supported path loses functionality. `ExecuteMultiFetchAsDba`
+still runs batches, and `ExecuteFetchAsDba` already rejected them.
+
+The init SQL of a backup — each entry of `--init-backup-sql-queries`, and of
+`InitSQL` in a `BackupRequest` — is operator written, so it keeps running as it
+was written, including an entry that holds several statements separated by a
+semicolon. Such an entry is also no longer reported as having failed: it used to
+run every statement it held and then report `unexpected multiple results`, which
+counted as a failure and stopped every entry after it from running at all.
+Whether a failure fails the backup is still up to
+`--init-backup-sql-fail-on-error`, which defaults to `false`.
 
 
 ### <a id="minor-changes-vtctld"/>VTCtld</a>
