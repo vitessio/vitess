@@ -766,7 +766,14 @@ func (td *tableDiffer) updateTableProgress(dbClient binlogplayer.DBClient, dr *D
 		return err
 	}
 
-	if lastRow == nil {
+	if lastRow == nil || td.tablePlan.sourceCheckpointUnavailable {
+		// lastRow == nil: no rows were processed, so there is nothing to
+		// checkpoint. sourceCheckpointUnavailable: the source PK cannot be
+		// represented as a resumable checkpoint (see getSourcePKCols), so we
+		// deliberately persist no lastpk and leave the in-memory retry PKs unset.
+		// Any resume then restarts the whole table from the beginning for both
+		// streams, which avoids the false ExtraRowsSource that a source-only
+		// restart against a resumed target would produce.
 		query, err = sqlparser.ParseAndBind(sqlUpdateTableNoProgress,
 			sqltypes.Int64BindVariable(dr.ProcessedRows),
 			sqltypes.StringBindVariable(string(rpt)),
@@ -1042,27 +1049,27 @@ func (td *tableDiffer) getSourcePKCols() error {
 	if !allProjected {
 		// At least one source PK column is not projected by the filter's SELECT
 		// list at all (e.g. source PK (cid, typ) with a filter of
-		// "select cid, name from customer"). We cannot build a valid source
-		// resume checkpoint for such a subset-projection filter: the row streamer
-		// always resumes on the full source PK and rejects a lastpk whose length
-		// does not match the source table's PK column count (see buildSelect in
-		// rowstreamer.go, which errors if len(lastpk) != len(pkColumns)).
+		// "select cid, name from customer"). We cannot build a resumable source
+		// checkpoint for such a subset-projection (or cross-table) filter: the
+		// row streamer always resumes on the full source PK and rejects a lastpk
+		// whose length does not match the source table's PK column count (see
+		// buildSelect in rowstreamer.go).
 		//
-		// We must record an explicit "source checkpoint unavailable" state rather
-		// than a nil source key. A nil lastPK.Source is overloaded to mean "the
-		// same as the target" (see getTableLastPK), which on resume substitutes
-		// the target checkpoint for the source. For this case that target key has
-		// the wrong number of columns (e.g. one value for a two-column source PK),
-		// so the source stream would fail its length check before streaming any
-		// rows. Reusing the target pkCols here would produce exactly that nil
-		// Source and break resume.
+		// Persisting only a target checkpoint (leaving the source key nil or
+		// empty) is not safe either: on resume the target would resume mid-table
+		// while the source restarts from the beginning, so the merge loop would
+		// classify every source row before the target's resume point as
+		// ExtraRowsSource, producing a false mismatch on every retry.
 		//
-		// An empty sourcePkCols instead makes lastPKFromRow emit an explicit empty
-		// source QueryResult (non-nil, with zero PK values). getTableLastPK leaves
-		// it as-is (it is not nil), and the row streamer sees a zero-length lastpk
-		// and safely restarts the source table from the beginning on resume. This
-		// preserves the pre-existing behavior for such subset-projection filters.
-		td.tablePlan.sourcePkCols = []int{}
+		// So we record an explicit "source checkpoint unavailable" state. This
+		// makes updateTableProgress persist no lastpk at all and leave the
+		// in-memory retry PKs unset, so any resume (auto-retry, max-diff-duration
+		// restart, or manual resume) restarts the whole table from the beginning
+		// for both the source and target streams. That is correct (no false
+		// extra-row reports); the tradeoff is that a table matching this niche
+		// filter shape cannot make incremental progress across max-diff-duration
+		// windows and must complete within a single window.
+		td.tablePlan.sourceCheckpointUnavailable = true
 		return nil
 	}
 	td.tablePlan.sourcePkCols = indices
@@ -1114,8 +1121,9 @@ func sourceTableNameFromSelect(sourceSelect *sqlparser.Select) (string, error) {
 //   - Entirely absent: the PK column is not projected at all, e.g. source PK
 //     (cid, typ) with a filter of "select cid, name from customer". This is a
 //     valid subset-projection filter, so we return allProjected == false and no
-//     error. The caller must then record an explicit empty source checkpoint
-//     rather than a partial (or nil) source key. We never return a partial-length
+//     error. The caller must then treat the source checkpoint as unavailable and
+//     persist no resumable checkpoint (restarting the whole table on resume)
+//     rather than building a partial source key. We never return a partial-length
 //     index slice: the row streamer always resumes on the full source PK and
 //     rejects a lastpk whose length does not match the table's PK column count
 //     (see buildSelect in rowstreamer.go).

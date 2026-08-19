@@ -21,7 +21,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	"google.golang.org/protobuf/encoding/prototext"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
@@ -206,19 +205,14 @@ func TestGetSourcePKCols_ComputedAliasFailsClosed(t *testing.T) {
 	require.Nil(t, td.tablePlan.sourcePkCols)
 }
 
-// TestGetSourcePKCols_SubsetProjectionNoSourceKey mirrors the customer
+// TestGetSourcePKCols_SubsetProjectionUnavailable mirrors the customer
 // materialize CI regression: the source table has a composite PK (cid, typ) but
 // the filter projects only a subset that omits the trailing PK column typ
 // ("select cid, name from customer"). getSourcePKCols must NOT fail closed for
 // this valid subset-projection filter, and it must NOT build a partial source
-// key. Instead it records an explicit "source checkpoint unavailable" state by
-// setting an empty sourcePkCols, so that lastPKFromRow emits an explicit empty
-// source checkpoint (non-nil, zero PK values) rather than a nil Source. A nil
-// Source is overloaded to mean "same as the target", which on resume would
-// substitute the (wrong-length) target key for the source and fail the row
-// streamer's length check. The explicit empty checkpoint instead makes the
-// source restart safely from the beginning on resume.
-func TestGetSourcePKCols_SubsetProjectionNoSourceKey(t *testing.T) {
+// key. Instead it flags the source checkpoint as unavailable so that no
+// resumable checkpoint is persisted and the whole table restarts on resume.
+func TestGetSourcePKCols_SubsetProjectionUnavailable(t *testing.T) {
 	tvde := newTestVDiffEnv(t)
 	defer tvde.close()
 
@@ -249,22 +243,10 @@ func TestGetSourcePKCols_SubsetProjectionNoSourceKey(t *testing.T) {
 
 	err := td.getSourcePKCols()
 	require.NoError(t, err)
-	// sourcePkCols is set to an explicit empty (non-nil) slice, which differs
-	// from the target pkCols so that lastPKFromRow builds a distinct but empty
-	// source checkpoint.
-	require.Equal(t, []int{}, td.tablePlan.sourcePkCols)
-
-	// The persisted source checkpoint must be an explicit empty QueryResult
-	// (non-nil, zero PK values), NOT nil. A nil Source would be substituted with
-	// the (single-column) target key on resume and fail the source row streamer's
-	// length check against the two-column source PK.
-	row := []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewVarChar("acme")}
-	lastPK := td.lastPKFromRow(row)
-	require.NotNil(t, lastPK.Target)
-	require.NotNil(t, lastPK.Source, "must persist an explicit empty source checkpoint, not a nil (same-as-target) Source")
-	sourceResult := sqltypes.Proto3ToResult(lastPK.Source)
-	require.Len(t, sourceResult.Rows, 1)
-	require.Empty(t, sourceResult.Rows[0], "explicit empty source checkpoint must carry zero PK values")
+	// The source checkpoint is flagged unavailable and no partial source key is
+	// built.
+	require.True(t, td.tablePlan.sourceCheckpointUnavailable)
+	require.Empty(t, td.tablePlan.sourcePkCols)
 }
 
 // TestGetSourcePKCols_ResumeCheckpointReorderedPK is a resume regression test.
@@ -332,21 +314,18 @@ func TestGetSourcePKCols_ResumeCheckpointReorderedPK(t *testing.T) {
 // TestGetSourcePKCols_SubsetProjectionPersistReloadResume is the persist/reload/
 // resume regression test for the subset-projection case (source PK (cid, typ),
 // target PK cid, filter "select cid, name from customer"). It exercises the full
-// lifecycle where the failure actually occurs:
+// lifecycle where the failure would otherwise occur:
 //
-//  1. Persist: lastPKFromRow builds the checkpoint saved during the copy phase.
-//  2. Reload: getTableLastPK reads it back on resume, applying the nil-Source
-//     substitution rule.
-//  3. Resume: the source stream decodes the reloaded checkpoint exactly as
-//     TabletServer.VStreamRows does.
+//  1. Persist: updateTableProgress runs after rows have been processed.
+//  2. Reload: getTableLastPK reads the persisted state back on resume.
 //
-// The fix records an explicit empty source checkpoint (non-nil, zero PK values)
-// rather than a nil Source. A nil Source would be substituted with the
-// single-column target key on reload and, when handed to the source row streamer
-// whose table has a two-column PK, would fail the length check in buildSelect
-// (rowstreamer.go) before streaming any rows. The explicit empty checkpoint
-// instead decodes to a zero-length lastpk, so the source restarts safely from
-// the beginning while the target resumes from its own checkpoint.
+// Because the source checkpoint is unavailable for this filter, no lastpk may be
+// persisted: a target-only checkpoint would resume the target mid-table while
+// the source restarts from the beginning, so the merge loop would report every
+// earlier source row as ExtraRowsSource. The fix persists no lastpk (an explicit
+// "source checkpoint unavailable" state), so getTableLastPK returns nil on resume
+// and the whole table restarts from the beginning for both the source and target
+// streams.
 func TestGetSourcePKCols_SubsetProjectionPersistReloadResume(t *testing.T) {
 	tvde := newTestVDiffEnv(t)
 	defer tvde.close()
@@ -376,50 +355,39 @@ func TestGetSourcePKCols_SubsetProjectionPersistReloadResume(t *testing.T) {
 	}
 
 	require.NoError(t, td.getSourcePKCols())
-	require.Equal(t, []int{}, td.tablePlan.sourcePkCols)
+	require.True(t, td.tablePlan.sourceCheckpointUnavailable)
 
-	// --- Persist: the checkpoint lastPKFromRow saves during the copy phase. ---
+	// --- Persist: even with a processed row, updateTableProgress must persist NO
+	// lastpk for a source-checkpoint-unavailable table. The expected query is the
+	// no-progress form (rows_compared + report, no "lastpk =" clause); a lastpk
+	// clause here would mean a resumable (and unsafe) checkpoint was persisted.
+	persistClient := binlogplayer.NewMockDBClient(t)
+	persistClient.ExpectRequestRE(
+		`^update _vt\.vdiff_table set rows_compared = 100, report = '.*' where vdiff_id = 1 and table_name = 'customer'$`,
+		&sqltypes.Result{}, nil)
+	dr := &DiffReport{TableName: sourceTable.Name, ProcessedRows: 100}
 	row := []sqltypes.Value{sqltypes.NewInt64(42), sqltypes.NewVarChar("acme")}
-	lastPK := td.lastPKFromRow(row)
-	require.NotNil(t, lastPK.Source, "subset-projection must persist an explicit empty source checkpoint")
-	lastPKTxt, err := prototext.Marshal(lastPK)
-	require.NoError(t, err)
+	require.NoError(t, td.updateTableProgress(persistClient, dr, row))
+	// The in-memory retry PKs must remain unset so a same-process
+	// max-diff-duration restart also restarts both streams from the beginning.
+	require.Nil(t, td.lastSourcePK)
+	require.Nil(t, td.lastTargetPK)
 
-	// --- Reload: getTableLastPK reads the persisted checkpoint on resume. ---
-	dbClient := binlogplayer.NewMockDBClient(t)
+	// --- Reload: with no lastpk persisted, getTableLastPK returns nil, so on
+	// resume both td.lastSourcePK and td.lastTargetPK stay nil and the whole
+	// table restarts from the beginning for both streams.
+	reloadClient := binlogplayer.NewMockDBClient(t)
 	getQuery, err := sqlparser.ParseAndBind(sqlGetVDiffTable,
 		sqltypes.Int64BindVariable(ct.id),
 		sqltypes.StringBindVariable(sourceTable.Name),
 	)
 	require.NoError(t, err)
-	dbClient.ExpectRequest(getQuery, sqltypes.MakeTestResult(
+	reloadClient.ExpectRequest(getQuery, sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields("lastpk|mismatch|report", "varbinary|int64|varbinary"),
-		fmt.Sprintf("%s|0|", string(lastPKTxt)),
+		"|0|", // empty lastpk
 	), nil)
 
-	reloaded, err := wd.getTableLastPK(dbClient, sourceTable.Name)
+	reloaded, err := wd.getTableLastPK(reloadClient, sourceTable.Name)
 	require.NoError(t, err)
-	require.NotNil(t, reloaded)
-	// The explicit empty source checkpoint is non-nil, so getTableLastPK must NOT
-	// substitute it with the target key.
-	require.NotNil(t, reloaded.Source)
-	require.NotNil(t, reloaded.Target)
-
-	// --- Resume: decode the reloaded source checkpoint exactly as
-	// TabletServer.VStreamRows does before handing it to the row streamer. An
-	// explicit empty checkpoint has a single row with zero PK values, which the
-	// row streamer treats as "no lastpk" and restarts the source from the
-	// beginning, avoiding the length-mismatch failure against the two-column
-	// source PK.
-	sourceResume := sqltypes.Proto3ToResult(reloaded.Source)
-	require.Len(t, sourceResume.Rows, 1)
-	require.Empty(t, sourceResume.Rows[0],
-		"resumed source lastpk must carry zero PK values so the source restarts from the beginning")
-
-	// The target checkpoint is preserved with its single PK value, so only the
-	// source restarts while the target resumes from where it left off.
-	targetResume := sqltypes.Proto3ToResult(reloaded.Target)
-	require.Len(t, targetResume.Rows, 1)
-	require.Len(t, targetResume.Rows[0], 1)
-	require.Equal(t, "42", targetResume.Rows[0][0].ToString())
+	require.Nil(t, reloaded, "no lastpk persisted, so resume must restart the whole table for both streams")
 }
