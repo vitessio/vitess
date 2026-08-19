@@ -31,8 +31,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/rand/v2"
+	"net/http"
 	"os"
 	"path"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"sync"
@@ -264,17 +266,39 @@ func TestMultiTenantSimple(t *testing.T) {
 		require.NotNil(t, info)
 		require.False(t, info.HasMismatch)
 
-		resumedQuery := regexp.MustCompile(`Streaming rows for query select .* from t1 where \(tenant_id = 1\) and \(\(id = \d+ and tenant_id > \d+\) or \(id > \d+\)\) order by id, tenant_id`)
-		found := false
-		for _, tablet := range vc.Cells["zone1"].Keyspaces[sourceKeyspace].Shards["0"].Tablets {
-			logBytes, err := os.ReadFile(path.Join(tablet.Vttablet.LogDir, tablet.Vttablet.TabletPath+"-vttablet-stderr.txt"))
-			require.NoError(t, err)
-			if resumedQuery.Match(logBytes) {
-				found = true
-				break
+		resumedQuery := regexp.MustCompile(`Streaming query: select .* from t1 where \(tenant_id = 1\) and \(\(id = \d+ and tenant_id > \d+\) or \(id > \d+\)\) order by id, tenant_id`)
+		// On this release the vttablet glog INFO lines -- which include the
+		// row streamer's generated query -- are written to vttablet INFO log
+		// files in the cluster's shared log directory rather than to the
+		// per-tablet stderr file. Only the source side builds the composite-PK
+		// disjunction (the target PK is a single column), so scanning all of
+		// the vttablet INFO logs still only matches the source-side query.
+		// The glog INFO file writes are also buffered, so we explicitly flush
+		// the source tablets' logs via the /debug/flushlogs endpoint and poll
+		// in case the log write itself is still in flight.
+		require.Eventually(t, func() bool {
+			for _, tablet := range vc.Cells["zone1"].Keyspaces[sourceKeyspace].Shards["0"].Tablets {
+				resp, err := http.Get(fmt.Sprintf("http://%s:%d/debug/flushlogs", tablet.Vttablet.TabletHostname, tablet.Vttablet.Port))
+				if err == nil {
+					resp.Body.Close()
+				}
 			}
-		}
-		require.True(t, found, "did not find a resumed row streamer query that ANDs the tenant filter with the parenthesized lastpk clause in the source tablet logs")
+			logFiles, err := filepath.Glob(path.Join(vc.ClusterConfig.tmpDir, "vttablet.*.log.INFO.*"))
+			if err != nil {
+				return false
+			}
+			for _, logFile := range logFiles {
+				logBytes, err := os.ReadFile(logFile)
+				if err != nil {
+					continue
+				}
+				if resumedQuery.Match(logBytes) {
+					return true
+				}
+			}
+			return false
+		}, 90*time.Second, 1*time.Second,
+			"did not find a resumed row streamer query that ANDs the tenant filter with the parenthesized lastpk clause in the vttablet logs")
 	})
 
 	mt.SwitchReads()
