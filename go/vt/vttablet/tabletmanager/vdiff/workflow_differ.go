@@ -264,6 +264,16 @@ func (wd *workflowDiffer) diffTable(ctx context.Context, dbClient binlogplayer.D
 		if !errors.Is(diffErr, ErrMaxDiffDurationExceeded) { // We only want to retry if we hit the max-diff-duration
 			return diffErr
 		}
+		if td.tablePlan.sourceCheckpointUnavailable {
+			// This table cannot be checkpointed because its filter does not
+			// project the full source primary key (see getSourcePKCols), so every
+			// retry restarts from the beginning and would hit the same timeout,
+			// looping forever. Fail explicitly with an actionable message instead
+			// of retrying.
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
+				"table %s exceeded the max-diff-duration and cannot be resumed because its filter does not project the full source primary key; increase or unset --max-diff-duration so it can complete within a single window",
+				td.table.Name)
+		}
 	}
 	log.Info(fmt.Sprintf("Table diff done on table %s for vdiff %s with report: %+v", td.table.Name, wd.ct.uuid, diffReport))
 

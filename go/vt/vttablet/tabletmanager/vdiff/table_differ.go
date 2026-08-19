@@ -554,8 +554,13 @@ func (td *tableDiffer) diff(ctx context.Context, coreOpts *tabletmanagerdatapb.V
 		// This table has no resumable checkpoint and restarts from the beginning
 		// on every run (see getSourcePKCols). Carrying over the persisted partial
 		// report or mismatch flag would double-count rows and duplicate mismatch
-		// samples across restarts, so we start fresh instead.
+		// samples across restarts, so we start fresh instead. Also clear the
+		// persisted mismatch bit so a mismatch recorded by a discarded partial
+		// attempt does not stick after a clean full-table pass.
 		mismatch = false
+		if err = clearTableMismatch(dbClient, td.wd.ct.id, td.table.Name); err != nil {
+			return nil, err
+		}
 	} else if rpt := curState.AsBytes("report", []byte("{}")); json.Valid(rpt) {
 		if err = json.Unmarshal(rpt, dr); err != nil {
 			return nil, err
@@ -886,6 +891,24 @@ func (td *tableDiffer) updateTableStateAndReport(ctx context.Context, dbClient b
 
 func updateTableMismatch(dbClient binlogplayer.DBClient, vdiffID int64, table string) error {
 	query, err := sqlparser.ParseAndBind(sqlUpdateTableMismatch,
+		sqltypes.Int64BindVariable(vdiffID),
+		sqltypes.StringBindVariable(table),
+	)
+	if err != nil {
+		return err
+	}
+	if _, err = dbClient.ExecuteFetch(query, 1); err != nil {
+		return err
+	}
+	return nil
+}
+
+// clearTableMismatch resets the persisted mismatch bit for a table. It is used
+// when a table with no resumable checkpoint restarts from the beginning, so a
+// mismatch recorded by a discarded partial attempt does not stick after a clean
+// full-table pass.
+func clearTableMismatch(dbClient binlogplayer.DBClient, vdiffID int64, table string) error {
+	query, err := sqlparser.ParseAndBind(sqlClearTableMismatch,
 		sqltypes.Int64BindVariable(vdiffID),
 		sqltypes.StringBindVariable(table),
 	)
