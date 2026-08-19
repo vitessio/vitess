@@ -1042,17 +1042,27 @@ func (td *tableDiffer) getSourcePKCols() error {
 	if !allProjected {
 		// At least one source PK column is not projected by the filter's SELECT
 		// list at all (e.g. source PK (cid, typ) with a filter of
-		// "select cid, name from customer"). The row streamer always resumes on
-		// the full source PK and requires the lastpk to contain exactly as many
-		// values as the source table has PK columns (see buildSelect in
-		// rowstreamer.go, which errors if len(lastpk) != len(pkColumns)). A
-		// partial source key would therefore be rejected on resume, and an empty
-		// one would silently make the source restart from the beginning while the
-		// target resumes. So we must never persist a partial source key. Instead
-		// we reuse the target pkCols, which makes lastPKFromRow leave
-		// lastPK.Source nil so the target key is used for both sides. This matches
-		// the pre-existing behavior for such subset-projection filters.
-		td.tablePlan.sourcePkCols = td.tablePlan.pkCols
+		// "select cid, name from customer"). We cannot build a valid source
+		// resume checkpoint for such a subset-projection filter: the row streamer
+		// always resumes on the full source PK and rejects a lastpk whose length
+		// does not match the source table's PK column count (see buildSelect in
+		// rowstreamer.go, which errors if len(lastpk) != len(pkColumns)).
+		//
+		// We must record an explicit "source checkpoint unavailable" state rather
+		// than a nil source key. A nil lastPK.Source is overloaded to mean "the
+		// same as the target" (see getTableLastPK), which on resume substitutes
+		// the target checkpoint for the source. For this case that target key has
+		// the wrong number of columns (e.g. one value for a two-column source PK),
+		// so the source stream would fail its length check before streaming any
+		// rows. Reusing the target pkCols here would produce exactly that nil
+		// Source and break resume.
+		//
+		// An empty sourcePkCols instead makes lastPKFromRow emit an explicit empty
+		// source QueryResult (non-nil, with zero PK values). getTableLastPK leaves
+		// it as-is (it is not nil), and the row streamer sees a zero-length lastpk
+		// and safely restarts the source table from the beginning on resume. This
+		// preserves the pre-existing behavior for such subset-projection filters.
+		td.tablePlan.sourcePkCols = []int{}
 		return nil
 	}
 	td.tablePlan.sourcePkCols = indices
@@ -1104,10 +1114,11 @@ func sourceTableNameFromSelect(sourceSelect *sqlparser.Select) (string, error) {
 //   - Entirely absent: the PK column is not projected at all, e.g. source PK
 //     (cid, typ) with a filter of "select cid, name from customer". This is a
 //     valid subset-projection filter, so we return allProjected == false and no
-//     error. The caller must then avoid building a source resume key. We never
-//     return a partial-length index slice: the row streamer always resumes on
-//     the full source PK and rejects a lastpk whose length does not match the
-//     table's PK column count (see buildSelect in rowstreamer.go).
+//     error. The caller must then record an explicit empty source checkpoint
+//     rather than a partial (or nil) source key. We never return a partial-length
+//     index slice: the row streamer always resumes on the full source PK and
+//     rejects a lastpk whose length does not match the table's PK column count
+//     (see buildSelect in rowstreamer.go).
 //
 // allProjected is true only when every source PK column resolved to a physical
 // SELECT column, in which case indices holds all of their SELECT-order indices.
