@@ -44,7 +44,6 @@
         - [Chunked backup/restore for the builtinbackupengine](#backup-chunked-builtin)
         - [Slow clean mysqld shutdowns no longer fail backups](#backup-mysqld-shutdown-timeout)
     - **[General](#minor-changes-general)**
-        - [Administrative operations now honor caller cancellation](#general-context-cancellation)
         - [Build version metadata now sourced from VCS stamping](#build-info-from-vcs)
 
 ## <a id="major-changes"/>Major Changes</a>
@@ -409,10 +408,6 @@ The builtin backup engine's shutdown deadline (`--builtinbackup-mysqld-timeout`)
 In addition, when `mysqladmin` gives up waiting for mysqld to stop, the shutdown is no longer failed immediately: the `SHUTDOWN` command has already been delivered at that point, so Vitess keeps waiting on the pid/socket files until the caller's deadline expires (or for a 30 second grace period, when the caller has no deadline). Slow-but-clean shutdowns, such as upgrade-safe backups running with `innodb_fast_shutdown=0` on large databases, previously failed with `Aborted waiting on pid file` even though mysqld was stopping normally.
 
 ### <a id="minor-changes-general"/>General</a>
-
-#### <a id="general-context-cancellation"/>Administrative operations now honor caller cancellation</a>
-
-Several control-plane operations now stop when their caller disconnects or its deadline expires. This includes VTAdmin requests, database/sql transaction startup, hooks, binlog streamer connection setup, schema materialization checks, S3 backup-storage initialization, and vtctld health checks. Requests that time out may therefore return earlier instead of continuing work in the background; safety-critical rollback and cleanup paths remain detached from caller cancellation.
 
 #### <a id="build-info-from-vcs"/>Build version metadata now sourced from VCS stamping</a>
 

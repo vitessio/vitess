@@ -299,10 +299,10 @@ func (pr *PlannedReparenter) performGracefulPromotion(
 
 	if finalWaitErr != nil {
 		// It's possible that we've used up the calling context's timeout, or
-		// that not enough time is left on it to finish the rollback.
-		// We detach cancellation to avoid a partial rollback, which
+		// that not enough time is left on the it to finish the rollback.
+		// We create a new background context to avoid a partial rollback, which
 		// could leave the cluster in a worse state than when we started.
-		undoCtx, undoCancel := context.WithTimeout(context.WithoutCancel(ctx), topo.RemoteOperationTimeout)
+		undoCtx, undoCancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
 		defer undoCancel()
 
 		if undoErr := pr.tmc.UndoDemotePrimary(undoCtx, currentPrimary.Tablet, policy.SemiSyncAckers(opts.durability, currentPrimary.Tablet) > 0); undoErr != nil {

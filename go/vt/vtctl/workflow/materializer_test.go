@@ -3574,7 +3574,7 @@ func TestKeyRangesEqualOptimization(t *testing.T) {
 				workflowType: workflowType,
 				env:          vtenv.NewTestEnv(),
 			}
-			err = mz.createWorkflowStreams(ctx, &tabletmanagerdatapb.CreateVReplicationWorkflowRequest{
+			err = mz.createWorkflowStreams(&tabletmanagerdatapb.CreateVReplicationWorkflowRequest{
 				Workflow:                  tc.moveTablesReq.Workflow,
 				Cells:                     tc.moveTablesReq.Cells,
 				TabletTypes:               tc.moveTablesReq.TabletTypes,
@@ -3699,15 +3699,10 @@ func TestValidateEmptyTables(t *testing.T) {
 		targetShards: []*topo.ShardInfo{s1, s2, s3},
 	}
 
-	err = mz.validateEmptyTables(ctx)
+	err = mz.validateEmptyTables()
 
 	require.ErrorContains(t, err, "table1")
 	assert.NotContains(t, err.Error(), "table2")
 	// Check if the error message doesn't include duplicate tables
 	assert.Equal(t, 1, strings.Count(err.Error(), "table3"))
-
-	cancelledCtx, cancel := context.WithCancel(ctx)
-	cancel()
-	err = mz.validateEmptyTables(cancelledCtx)
-	require.ErrorContains(t, err, context.Canceled.Error())
 }

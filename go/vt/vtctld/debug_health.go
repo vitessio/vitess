@@ -35,7 +35,7 @@ func RegisterDebugHealthHandler(ts *topo.Server) {
 			return
 		}
 		w.Header().Set("Content-Type", "text/plain")
-		if err := isHealthy(r.Context(), ts); err != nil {
+		if err := isHealthy(ts); err != nil {
 			w.Write([]byte("not ok"))
 			return
 		}
@@ -43,7 +43,7 @@ func RegisterDebugHealthHandler(ts *topo.Server) {
 	})
 }
 
-func isHealthy(ctx context.Context, ts *topo.Server) error {
-	_, err := ts.GetKeyspaces(ctx)
+func isHealthy(ts *topo.Server) error {
+	_, err := ts.GetKeyspaces(context.Background())
 	return err
 }

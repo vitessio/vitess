@@ -4919,19 +4919,34 @@ func TestWithClusterContextPreservesExistingClusterOnCancellation(t *testing.T) 
 	require.Error(t, replacement.DB.Ping())
 }
 
-func TestWithClusterContextReplacesExistingClusterOnDiscoveryError(t *testing.T) {
+type cancelAfterVtctldDiscovery struct {
+	*fakediscovery.Fake
+	cancel context.CancelFunc
+}
+
+func (d *cancelAfterVtctldDiscovery) DiscoverVtctldAddrs(ctx context.Context, tags []string) ([]string, error) {
+	addrs, err := d.Fake.DiscoverVtctldAddrs(ctx, tags)
+	d.cancel()
+	return addrs, err
+}
+
+func TestWithClusterContextPreservesExistingClusterWhenCanceledDuringComparison(t *testing.T) {
 	const id = "c1"
 	existing := vtadmintestutil.BuildCluster(t, vtadmintestutil.TestClusterConfig{
 		Cluster:      &vtadminpb.Cluster{Id: id, Name: "existing"},
 		VtctldClient: &fakevtctldclient.VtctldClient{},
 	})
-	discovery := fakediscovery.New()
-	discovery.SetGatesError(true)
-	existing.Discovery = discovery
 	replacement := vtadmintestutil.BuildCluster(t, vtadmintestutil.TestClusterConfig{
 		Cluster:      &vtadminpb.Cluster{Id: id, Name: "replacement"},
 		VtctldClient: &fakevtctldclient.VtctldClient{},
 	})
+	ctx, cancel := context.WithCancel(t.Context())
+	replacementDiscovery, ok := replacement.Discovery.(*fakediscovery.Fake)
+	require.True(t, ok)
+	replacement.Discovery = &cancelAfterVtctldDiscovery{
+		Fake:   replacementDiscovery,
+		cancel: cancel,
+	}
 	api := NewAPI(vtenv.NewTestEnv(), []*cluster.Cluster{existing}, Options{EnableDynamicClusters: true})
 	t.Cleanup(func() {
 		selected := api.clusterMap[id]
@@ -4944,11 +4959,11 @@ func TestWithClusterContextReplacesExistingClusterOnDiscoveryError(t *testing.T)
 		}
 	})
 
-	dynamicAPI, ok := api.WithClusterContext(t.Context(), replacement, id).(*API)
+	dynamicAPI, ok := api.WithClusterContext(ctx, replacement, id).(*API)
 	require.True(t, ok)
-	assert.Same(t, replacement, api.clusterMap[id])
-	assert.Same(t, replacement, dynamicAPI.clusterMap[id])
-	require.Error(t, existing.DB.Ping())
+	assert.Same(t, existing, api.clusterMap[id])
+	assert.Same(t, existing, dynamicAPI.clusterMap[id])
+	require.Error(t, replacement.DB.Ping())
 }
 
 func TestVTExplain(t *testing.T) {

@@ -137,6 +137,11 @@ func (hook *Hook) ExecuteContext(ctx context.Context) (result *HookResult) {
 
 	// Find the hook.
 	cmd, status, err := hook.findHook(ctx)
+	if ctx.Err() != nil {
+		result.ExitStatus = HOOK_TIMEOUT_ERROR
+		result.Stderr = ctx.Err().Error() + "\n"
+		return result
+	}
 	if err != nil {
 		result.ExitStatus = status
 		result.Stderr = err.Error() + "\n"

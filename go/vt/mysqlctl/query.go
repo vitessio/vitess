@@ -150,7 +150,7 @@ func (mysqld *Mysqld) executeFetchContext(ctx context.Context, conn *dbconnpool.
 		// Try to kill the connection to effectively cancel the ExecuteFetch().
 		connID := conn.Conn.ID()
 		log.Info(fmt.Sprintf("Mysqld.executeFetchContext(): killing connID %v due to timeout of query: %v", connID, query))
-		if killErr := mysqld.killConnection(ctx, connID); killErr != nil {
+		if killErr := mysqld.killConnection(connID); killErr != nil {
 			// Log it, but go ahead and wait for the query anyway.
 			log.Warn(fmt.Sprintf("Mysqld.executeFetchContext(): failed to kill connID %v: %v", connID, killErr))
 		}
@@ -169,7 +169,7 @@ func (mysqld *Mysqld) executeFetchContext(ctx context.Context, conn *dbconnpool.
 }
 
 // killConnection issues a MySQL KILL command for the given connection ID.
-func (mysqld *Mysqld) killConnection(ctx context.Context, connID int64) error {
+func (mysqld *Mysqld) killConnection(connID int64) error {
 	// There's no other interface that both types of connection implement.
 	// We only care about one method anyway.
 	var killConn interface {
@@ -177,8 +177,9 @@ func (mysqld *Mysqld) killConnection(ctx context.Context, connID int64) error {
 	}
 
 	// Get another connection with which to kill.
-	// The caller's context has expired, so detach cancellation while preserving its values.
-	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+	// Use background context because the caller's context is likely expired,
+	// which is the reason we're being asked to kill the connection.
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	if poolConn, connErr := getPoolReconnect(ctx, mysqld.dbaPool); connErr == nil {
 		// We got a pool connection.

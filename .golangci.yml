@@ -173,6 +173,16 @@ linters:
           - contextcheck
         path: ^go/(vtbench|vt/(discovery|schemamanager|topo|topotools|vtcombo|vtexplain|vtgate|vtorc|vttablet))/
       - linters:
+          - contextcheck
+        path: ^go/(cmd/vtexplain|vt/(vtctl/(reparentutil|workflow)|vtctld))/
+      - linters:
+          - contextcheck
+        path: ^go/vt/(mysqlctl/(builtinbackupengine|mysqlshellbackupengine|query)|wrangler/(traffic_switcher|vdiff|vexec|vexec_plan))\.go$
+      - linters:
+          - contextcheck
+        path: ^go/vt/vtadmin/api\.go$
+        text: ^Function `(Run|Stop)->
+      - linters:
           - errcheck
         path: ^go/vt/proto/
       - linters:

@@ -87,7 +87,7 @@ func (p vreplicationPlanner) exec(
 }
 
 func (p vreplicationPlanner) dryRun(ctx context.Context) error {
-	rsr, err := p.vx.wr.getStreams(ctx, p.vx.workflow, p.vx.keyspace, nil)
+	rsr, err := p.vx.wr.getStreams(p.vx.ctx, p.vx.workflow, p.vx.keyspace, nil)
 	if err != nil {
 		return err
 	}

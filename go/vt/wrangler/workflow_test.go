@@ -30,16 +30,35 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/proto/vschema"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtctl/workflow"
+	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 )
 
 var noResult = &sqltypes.Result{}
+
+type cancelCopyProgressTMClient struct {
+	tmclient.TabletManagerClient
+	cancel                 context.CancelFunc
+	remainingTargetQueries int
+}
+
+func (tmc *cancelCopyProgressTMClient) ExecuteFetchAsDba(ctx context.Context, tablet *topodata.Tablet, usePool bool, req *tabletmanagerdatapb.ExecuteFetchAsDbaRequest) (*query.QueryResult, error) {
+	result, err := tmc.TabletManagerClient.ExecuteFetchAsDba(ctx, tablet, usePool, req)
+	if err == nil && tablet.Keyspace == "ks2" && strings.Contains(string(req.Query), "information_schema.tables") {
+		tmc.remainingTargetQueries--
+		if tmc.remainingTargetQueries == 0 {
+			tmc.cancel()
+		}
+	}
+	return result, err
+}
 
 func getMoveTablesWorkflow(t *testing.T, cells, tabletTypes string) *VReplicationWorkflow {
 	p := &VReplicationWorkflowParams{
@@ -230,11 +249,18 @@ func TestCopyProgress(t *testing.T) {
 	require.Equal(t, int64(4000), (*cp)["t2"].SourceTableSize)
 	require.Equal(t, int64(1000), (*cp)["t2"].TargetTableSize)
 
+	expectCopyProgressQueries(t, tme)
 	cancelledCtx, cancel := context.WithCancel(ctx)
-	cancel()
+	tme.wr.tmc = &cancelCopyProgressTMClient{
+		TabletManagerClient:    tme.wr.tmc,
+		cancel:                 cancel,
+		remainingTargetQueries: len(tme.targetPrimaries),
+	}
 	wf.ctx = cancelledCtx
-	_, err = wf.GetCopyProgress()
-	require.ErrorContains(t, err, context.Canceled.Error())
+	require.NotPanics(t, func() {
+		_, err = wf.GetCopyProgress()
+	})
+	require.ErrorIs(t, err, context.Canceled)
 }
 
 func expectCopyProgressQueries(t *testing.T, tme *testMigraterEnv) {

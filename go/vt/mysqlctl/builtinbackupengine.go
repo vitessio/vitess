@@ -610,8 +610,8 @@ func (be *BuiltinBackupEngine) executeFullBackup(ctx context.Context, params Bac
 		backupResult = BackupUsable
 	}
 
-	// Try to restart mysqld even if the original context timed out.
-	err = params.Mysqld.Start(context.WithoutCancel(ctx), params.Cnf)
+	// Try to restart mysqld, use background context in case we timed out the original context
+	err = params.Mysqld.Start(context.Background(), params.Cnf)
 	if err != nil {
 		return backupResult, vterrors.Wrap(err, "can't restart mysqld")
 	}

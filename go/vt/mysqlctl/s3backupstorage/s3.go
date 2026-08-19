@@ -392,11 +392,12 @@ func (s3ServerSideEncryption *S3ServerSideEncryption) reset() {
 
 // S3BackupStorage implements the backupstorage.BackupStorage interface.
 type S3BackupStorage struct {
-	_client   *s3.Client
-	mu        sync.Mutex
-	s3SSE     S3ServerSideEncryption
-	params    backupstorage.Params
-	transport *http.Transport
+	_client        *s3.Client
+	clientInitDone chan struct{}
+	mu             sync.Mutex
+	s3SSE          S3ServerSideEncryption
+	params         backupstorage.Params
+	transport      *http.Transport
 }
 
 func newS3BackupStorage() *S3BackupStorage {
@@ -538,11 +539,18 @@ func (bs *S3BackupStorage) RemoveBackup(ctx context.Context, dir, name string) e
 
 // Close is part of the backupstorage.BackupStorage interface.
 func (bs *S3BackupStorage) Close() error {
-	bs.mu.Lock()
-	defer bs.mu.Unlock()
-	bs._client = nil
-	bs.s3SSE.reset()
-	return nil
+	for {
+		bs.mu.Lock()
+		if bs.clientInitDone == nil {
+			bs._client = nil
+			bs.s3SSE.reset()
+			bs.mu.Unlock()
+			return nil
+		}
+		clientInitDone := bs.clientInitDone
+		bs.mu.Unlock()
+		<-clientInitDone
+	}
 }
 
 func (bs *S3BackupStorage) WithParams(params backupstorage.Params) backupstorage.BackupStorage {
@@ -561,57 +569,90 @@ func getLogLevel() aws.ClientLogMode {
 }
 
 func (bs *S3BackupStorage) client(ctx context.Context) (*s3.Client, error) {
+	for {
+		bs.mu.Lock()
+		if bs._client != nil {
+			client := bs._client
+			bs.mu.Unlock()
+			return client, nil
+		}
+		if bs.clientInitDone == nil {
+			bs.clientInitDone = make(chan struct{})
+			bs.mu.Unlock()
+			break
+		}
+		clientInitDone := bs.clientInitDone
+		bs.mu.Unlock()
+
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-clientInitDone:
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	client, err := bs.initializeClient(ctx)
+
 	bs.mu.Lock()
-	defer bs.mu.Unlock()
-	if bs._client == nil {
-		logLevel := getLogLevel()
-
-		httpClient := &http.Client{Transport: bs.transport}
-
-		cfg, err := config.LoadDefaultConfig(
-			ctx,
-			config.WithRegion(region),
-			config.WithClientLogMode(logLevel),
-			config.WithHTTPClient(httpClient),
-		)
-		if err != nil {
-			return nil, err
-		}
-
-		options := []func(options *s3.Options){
-			func(o *s3.Options) {
-				o.UsePathStyle = forcePath
-				if retryCount >= 0 {
-					o.RetryMaxAttempts = retryCount
-					o.Retryer = &ClosedConnectionRetryer{
-						awsRetryer: retry.NewStandard(func(options *retry.StandardOptions) {
-							options.MaxAttempts = retryCount
-						}),
-					}
-				}
-			},
-		}
-		if endpoint != "" {
-			options = append(options, s3.WithEndpointResolverV2(newEndpointResolver()))
-		}
-
-		client := s3.NewFromConfig(cfg, options...)
-
-		if len(bucket) == 0 {
-			return nil, errors.New("--s3-backup-storage-bucket required")
-		}
-
-		if _, err := client.HeadBucket(ctx, &s3.HeadBucketInput{Bucket: &bucket}); err != nil {
-			return nil, err
-		}
-
-		if err := bs.s3SSE.init(); err != nil {
-			return nil, err
-		}
-
+	if err == nil {
 		bs._client = client
 	}
-	return bs._client, nil
+	close(bs.clientInitDone)
+	bs.clientInitDone = nil
+	bs.mu.Unlock()
+	return client, err
+}
+
+func (bs *S3BackupStorage) initializeClient(ctx context.Context) (*s3.Client, error) {
+	logLevel := getLogLevel()
+
+	httpClient := &http.Client{Transport: bs.transport}
+
+	cfg, err := config.LoadDefaultConfig(
+		ctx,
+		config.WithRegion(region),
+		config.WithClientLogMode(logLevel),
+		config.WithHTTPClient(httpClient),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	options := []func(options *s3.Options){
+		func(o *s3.Options) {
+			o.UsePathStyle = forcePath
+			if retryCount >= 0 {
+				o.RetryMaxAttempts = retryCount
+				o.Retryer = &ClosedConnectionRetryer{
+					awsRetryer: retry.NewStandard(func(options *retry.StandardOptions) {
+						options.MaxAttempts = retryCount
+					}),
+				}
+			}
+		},
+	}
+	if endpoint != "" {
+		options = append(options, s3.WithEndpointResolverV2(newEndpointResolver()))
+	}
+
+	client := s3.NewFromConfig(cfg, options...)
+
+	if len(bucket) == 0 {
+		return nil, errors.New("--s3-backup-storage-bucket required")
+	}
+
+	if _, err := client.HeadBucket(ctx, &s3.HeadBucketInput{Bucket: &bucket}); err != nil {
+		return nil, err
+	}
+
+	if err := bs.s3SSE.init(); err != nil {
+		return nil, err
+	}
+
+	return client, nil
 }
 
 func objName(parts ...string) string {

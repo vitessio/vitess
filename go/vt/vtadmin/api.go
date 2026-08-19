@@ -342,6 +342,9 @@ func (api *API) WithClusterContext(ctx context.Context, c *cluster.Cluster, id s
 			var isEqual bool
 			if comparisonErr == nil {
 				isEqual, comparisonErr = existingCluster.EqualContext(ctx, c)
+				if ctxErr := ctx.Err(); ctxErr != nil {
+					comparisonErr = ctxErr
+				}
 			}
 			if comparisonErr != nil {
 				log.Error("Failed to compare dynamic clusters", slog.String("existing_cluster_id", existingCluster.ID), slog.String("new_cluster_id", id), slog.Any("error", comparisonErr))
@@ -2835,9 +2838,9 @@ func (api *API) VTExplain(ctx context.Context, req *vtadminpb.VTExplainRequest) 
 	if err != nil {
 		return nil, fmt.Errorf("error initilaizing vtexplain: %w", err)
 	}
-	defer vte.StopContext(ctx)
+	defer vte.Stop()
 
-	plans, err := vte.RunContext(ctx, req.Sql)
+	plans, err := vte.Run(req.Sql)
 	if err != nil {
 		return nil, fmt.Errorf("error running vtexplain: %w", err)
 	}

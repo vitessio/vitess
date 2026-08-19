@@ -153,6 +153,15 @@ func TestExecuteOptionalContext(t *testing.T) {
 	assert.ErrorContains(t, hookErr, hookName+" hook failed(-7)")
 }
 
+func TestExecuteContextCanceledWithMissingHook(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	hr := NewSimpleHook("nonexistent-hook").ExecuteContext(ctx)
+	assert.Equal(t, HOOK_TIMEOUT_ERROR, hr.ExitStatus)
+	assert.Contains(t, hr.Stderr, context.Canceled.Error())
+}
+
 func TestNewHook(t *testing.T) {
 	h := NewHook("test-hook", []string{"arg1", "arg2"})
 	assert.Equal(t, "test-hook", h.Name)

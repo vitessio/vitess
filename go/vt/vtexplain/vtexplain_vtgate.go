@@ -237,12 +237,12 @@ func getShardRanges(ks string, vschema *vschemapb.Keyspace, ksShardMap map[strin
 	return shards, nil
 }
 
-func (vte *VTExplain) vtgateExecute(ctx context.Context, sql string) ([]*engine.Plan, map[string]*TabletActions, error) {
+func (vte *VTExplain) vtgateExecute(sql string) ([]*engine.Plan, map[string]*TabletActions, error) {
 	// This method will sort the shard session lexicographically.
 	// This will ensure that the commit/rollback order is predictable.
 	vte.sortShardSession()
 
-	_, err := vte.vtgateExecutor.Execute(ctx, nil, "VtexplainExecute", econtext.NewSafeSession(vte.vtgateSession), sql, nil, false)
+	_, err := vte.vtgateExecutor.Execute(context.Background(), nil, "VtexplainExecute", econtext.NewSafeSession(vte.vtgateSession), sql, nil, false)
 	if err != nil {
 		for _, tc := range vte.explainTopo.TabletConns {
 			tc.tabletQueries = nil

@@ -1437,6 +1437,27 @@ func TestClientInitializationEmptyBucket(t *testing.T) {
 func TestClientInitializationHonoursContextCancellation(t *testing.T) {
 	mockServer := newMockS3Server()
 	t.Cleanup(mockServer.Close)
+	headBucketStarted := make(chan struct{})
+	releaseHeadBucket := make(chan struct{})
+	t.Cleanup(func() {
+		close(releaseHeadBucket)
+	})
+	var blockFirstHeadBucket sync.Once
+	mockServer.SetHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		blocked := false
+		blockFirstHeadBucket.Do(func() {
+			blocked = true
+			close(headBucketStarted)
+			select {
+			case <-r.Context().Done():
+			case <-releaseHeadBucket:
+			}
+		})
+		if blocked {
+			return
+		}
+		mockServer.serveDefault(w, r)
+	}))
 
 	originalBucket := bucket
 	originalEndpoint := endpoint
@@ -1457,16 +1478,136 @@ func TestClientInitializationHonoursContextCancellation(t *testing.T) {
 	t.Setenv("AWS_SECRET_ACCESS_KEY", "test-secret-key")
 
 	ctx, cancel := context.WithCancel(t.Context())
+	t.Cleanup(cancel)
+	bs := newS3BackupStorage()
+	errCh := make(chan error, 1)
+	go func() {
+		_, err := bs.StartBackup(ctx, "testdir", "newbackup")
+		errCh <- err
+	}()
+
+	require.Eventually(t, func() bool {
+		select {
+		case <-headBucketStarted:
+			return true
+		default:
+			return false
+		}
+	}, 30*time.Second, 10*time.Millisecond)
 	cancel()
 
-	bs := newS3BackupStorage()
-	_, err := bs.StartBackup(ctx, "testdir", "newbackup")
+	var err error
+	require.Eventually(t, func() bool {
+		select {
+		case err = <-errCh:
+			return true
+		default:
+			return false
+		}
+	}, 30*time.Second, 10*time.Millisecond)
 	require.ErrorIs(t, err, context.Canceled)
 	require.Nil(t, bs._client)
 
 	client, err := bs.client(t.Context())
 	require.NoError(t, err)
 	require.NotNil(t, client)
+	require.Same(t, client, bs._client)
+	require.Equal(t, 2, mockServer.RequestCount())
+}
+
+func TestClientInitializationWaiterHonoursContextCancellation(t *testing.T) {
+	mockServer := newMockS3Server()
+	t.Cleanup(mockServer.Close)
+	headBucketStarted := make(chan struct{})
+	releaseHeadBucket := make(chan struct{})
+	var releaseOnce sync.Once
+	release := func() {
+		releaseOnce.Do(func() {
+			close(releaseHeadBucket)
+		})
+	}
+	t.Cleanup(release)
+	var blockFirstHeadBucket sync.Once
+	mockServer.SetHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		blocked := false
+		blockFirstHeadBucket.Do(func() {
+			blocked = true
+			close(headBucketStarted)
+			<-releaseHeadBucket
+		})
+		if blocked {
+			return
+		}
+		mockServer.serveDefault(w, r)
+	}))
+
+	originalBucket := bucket
+	originalEndpoint := endpoint
+	originalForcePath := forcePath
+	originalRegion := region
+	t.Cleanup(func() {
+		bucket = originalBucket
+		endpoint = originalEndpoint
+		forcePath = originalForcePath
+		region = originalRegion
+	})
+
+	bucket = "test-bucket"
+	endpoint = mockServer.URL()
+	forcePath = true
+	region = "us-east-1"
+	t.Setenv("AWS_ACCESS_KEY_ID", "test-access-key")
+	t.Setenv("AWS_SECRET_ACCESS_KEY", "test-secret-key")
+
+	bs := newS3BackupStorage()
+	initializerErrCh := make(chan error, 1)
+	go func() {
+		_, err := bs.client(t.Context())
+		initializerErrCh <- err
+	}()
+
+	require.Eventually(t, func() bool {
+		select {
+		case <-headBucketStarted:
+			return true
+		default:
+			return false
+		}
+	}, 30*time.Second, 10*time.Millisecond)
+
+	ctx, cancel := context.WithCancel(t.Context())
+	waiterStarted := make(chan struct{})
+	waiterErrCh := make(chan error, 1)
+	go func() {
+		close(waiterStarted)
+		_, err := bs.ListBackups(ctx, "testdir")
+		waiterErrCh <- err
+	}()
+	<-waiterStarted
+	cancel()
+
+	var waiterErr error
+	require.Eventually(t, func() bool {
+		select {
+		case waiterErr = <-waiterErrCh:
+			return true
+		default:
+			return false
+		}
+	}, 30*time.Second, 10*time.Millisecond)
+	require.ErrorIs(t, waiterErr, context.Canceled)
+
+	release()
+	var initializerErr error
+	require.Eventually(t, func() bool {
+		select {
+		case initializerErr = <-initializerErrCh:
+			return true
+		default:
+			return false
+		}
+	}, 30*time.Second, 10*time.Millisecond)
+	require.NoError(t, initializerErr)
 }
 
 func TestListBackupsError(t *testing.T) {
