@@ -220,8 +220,18 @@ func (wd *workflowDiffer) diffTable(ctx context.Context, dbClient binlogplayer.D
 
 	maxDiffRuntime := time.Duration(24 * time.Hour * 365) // 1 year (effectively forever)
 	if wd.ct.options.CoreOptions.MaxDiffSeconds > 0 {
-		// Restart the diff if it takes longer than the specified max diff time.
-		maxDiffRuntime = time.Duration(wd.ct.options.CoreOptions.MaxDiffSeconds) * time.Second
+		if td.tablePlan.sourceCheckpointUnavailable {
+			// max-diff-duration works by checkpointing progress and resuming, but
+			// this table's filter does not project the full source primary key so
+			// it cannot be checkpointed (see getSourcePKCols). Applying the limit
+			// would restart it from the beginning on every window and it could
+			// never finish, so we run it as a single uninterrupted pass instead.
+			log.Warn(fmt.Sprintf("Ignoring --max-diff-duration for table %s in vdiff %s: its filter does not project the full source primary key, so it cannot be checkpointed and must be diffed in a single pass",
+				td.table.Name, wd.ct.uuid))
+		} else {
+			// Restart the diff if it takes longer than the specified max diff time.
+			maxDiffRuntime = time.Duration(wd.ct.options.CoreOptions.MaxDiffSeconds) * time.Second
+		}
 	}
 
 	log.Info(fmt.Sprintf("Starting differ on table %s for vdiff %s", td.table.Name, wd.ct.uuid))
@@ -263,16 +273,6 @@ func (wd *workflowDiffer) diffTable(ctx context.Context, dbClient binlogplayer.D
 		log.Error(fmt.Sprintf("Encountered an error diffing table %s for vdiff %s: %v", td.table.Name, wd.ct.uuid, diffErr))
 		if !errors.Is(diffErr, ErrMaxDiffDurationExceeded) { // We only want to retry if we hit the max-diff-duration
 			return diffErr
-		}
-		if td.tablePlan.sourceCheckpointUnavailable {
-			// This table cannot be checkpointed because its filter does not
-			// project the full source primary key (see getSourcePKCols), so every
-			// retry restarts from the beginning and would hit the same timeout,
-			// looping forever. Fail explicitly with an actionable message instead
-			// of retrying.
-			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
-				"table %s exceeded the max-diff-duration and cannot be resumed because its filter does not project the full source primary key; increase or unset --max-diff-duration so it can complete within a single window",
-				td.table.Name)
 		}
 	}
 	log.Info(fmt.Sprintf("Table diff done on table %s for vdiff %s with report: %+v", td.table.Name, wd.ct.uuid, diffReport))

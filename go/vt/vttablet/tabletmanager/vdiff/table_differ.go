@@ -1105,12 +1105,11 @@ func (td *tableDiffer) getSourcePKCols() error {
 		//
 		// So we record an explicit "source checkpoint unavailable" state. This
 		// makes updateTableProgress clear any persisted lastpk and leave the
-		// in-memory retry PKs unset, so any resume (auto-retry, max-diff-duration
-		// restart, or manual resume) restarts the whole table from the beginning
-		// for both the source and target streams. That is correct (no false
-		// extra-row reports); the tradeoff is that a table matching this niche
-		// filter shape cannot make incremental progress across max-diff-duration
-		// windows and must complete within a single window.
+		// in-memory retry PKs unset, so any resume (auto-retry or manual resume)
+		// restarts the whole table from the beginning for both the source and
+		// target streams. That is correct (no false extra-row reports). Because
+		// such a table cannot be checkpointed, --max-diff-duration is also ignored
+		// for it (see differ) and it is diffed in a single uninterrupted pass.
 		td.tablePlan.sourceCheckpointUnavailable = true
 		// Discard any checkpoint that buildPlan already loaded from the database
 		// via getTableLastPK (e.g. a stale, possibly wrong-length lastpk written
