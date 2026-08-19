@@ -264,7 +264,7 @@ func TestMultiTenantSimple(t *testing.T) {
 		require.NotNil(t, info)
 		require.False(t, info.HasMismatch)
 
-		resumedQuery := regexp.MustCompile(`Streaming rows for query: select .* from t1 where \(tenant_id = 1\) and \(\(id = \d+ and tenant_id > \d+\) or \(id > \d+\)\) order by id, tenant_id`)
+		resumedQuery := regexp.MustCompile(`Streaming rows for query select .* from t1 where \(tenant_id = 1\) and \(\(id = \d+ and tenant_id > \d+\) or \(id > \d+\)\) order by id, tenant_id`)
 		found := false
 		for _, tablet := range vc.Cells["zone1"].Keyspaces[sourceKeyspace].Shards["0"].Tablets {
 			logBytes, err := os.ReadFile(path.Join(tablet.Vttablet.LogDir, tablet.Vttablet.TabletPath+"-vttablet-stderr.txt"))
