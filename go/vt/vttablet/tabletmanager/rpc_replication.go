@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"log/slog"
 	"runtime"
+	"sync"
 	"time"
 
 	"github.com/spf13/pflag"
@@ -44,6 +45,108 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
+// mysqlVersionCacheTTL bounds how long a cached MySQL version string is served
+// before it is refetched. The server version only changes across a mysqld
+// restart (e.g. an upgrade), so a short TTL is enough to pick up a change while
+// collapsing the many per-RPC lookups down to roughly one query per TTL.
+const mysqlVersionCacheTTL = 10 * time.Second
+
+// mysqlVersionCache caches the MySQL server version string behind its own lock
+// so lookups never contend with unrelated TabletManager operations.
+type mysqlVersionCache struct {
+	mu        sync.Mutex
+	version   string
+	fetchedAt time.Time
+}
+
+// getMySQLVersionString returns the MySQL server version string, caching it for
+// mysqlVersionCacheTTL. GetVersionString runs a live query against mysqld (and,
+// on failure, dials mysqlctld or shells out to mysqld --version), so it is
+// deliberately not called on every RPC: via getMySQLVersionStringBounded it feeds
+// ReplicationStatus/PrimaryStatus (polled fleet-wide by vtorc) and
+// StopReplicationAndGetStatus (on the per-tablet ERS critical path). A stale value
+// is harmless — the version only changes across a mysqld restart, and reparent
+// degrades gracefully to position-only ordering until the cache refreshes. Errors
+// are logged and surface as "", and are not cached so the next call retries.
+//
+// Callers should generally use getMySQLVersionStringBounded rather than calling
+// this directly, so a cold-cache fetch against a slow mysqld cannot consume the
+// caller's whole RPC deadline (or, for action-lock holders, pin the lock).
+//
+// The lock is intentionally not held across GetVersionString, so concurrent
+// callers arriving on a cold or expired cache may each fetch once before the
+// first write lands; the result is a small, bounded burst rather than a strict
+// single query. Single-flighting is deliberately omitted: the fetch is cheap
+// and rare, so the extra machinery is not worth it.
+func (tm *TabletManager) getMySQLVersionString(ctx context.Context) string {
+	c := &tm.mysqlVersion
+
+	c.mu.Lock()
+	if c.version != "" && time.Since(c.fetchedAt) < mysqlVersionCacheTTL {
+		version := c.version
+		c.mu.Unlock()
+		return version
+	}
+	c.mu.Unlock()
+
+	version, err := tm.MysqlDaemon.GetVersionString(ctx)
+	if err != nil {
+		log.Warn("failed to get MySQL version string", slog.Any("error", err))
+		return ""
+	}
+
+	c.mu.Lock()
+	c.version = version
+	c.fetchedAt = time.Now()
+	c.mu.Unlock()
+
+	return version
+}
+
+// maxVersionLookupBudget caps how long a bounded version lookup may run
+// regardless of how much RPC budget remains. On a cold or expired cache the
+// underlying GetVersionString query can be slow (it may shell out to
+// mysqld --version), so reusing the caller's full context risks two harms: for
+// callers that hold the TabletManager action lock (StopReplicationAndGetStatus,
+// demotePrimary), a hung fetch keeps that lock and blocks other TabletManager
+// operations; and for any caller, it can consume the whole RPC deadline so the
+// client sees DEADLINE_EXCEEDED and loses a result that was already ready. The cap
+// bounds both. (This is distinct from the version cache's own mutex, which
+// getMySQLVersionString deliberately drops before querying mysqld.)
+const maxVersionLookupBudget = 2 * time.Second
+
+// getMySQLVersionStringBounded is a best-effort version lookup for callers that
+// must return a result even if the version is unavailable — the mutation callers
+// that have already applied a state change (StopReplicationAndGetStatus,
+// demotePrimary) and still need to return the resulting status, and the read
+// callers polled fleet-wide (ReplicationStatus, PrimaryStatus) whose status must
+// not be lost to a slow version fetch. Reusing the caller's context unbounded
+// risks consuming the remaining deadline so the client sees DEADLINE_EXCEEDED even
+// though the response is ready — which in ERS can drop the tablet from the status
+// map (so cleanup may not restart it), in PRS can report a demotion that happened
+// as failed, and for a vtorc poll simply fails the poll. The lookup is therefore
+// always capped at maxVersionLookupBudget — including for a deadline-less caller
+// (e.g. an in-process DemotePrimary/StopReplicationAndGetStatus), where an
+// unbounded hung fetch would otherwise hold the action lock indefinitely — and is
+// tightened further to half the remaining deadline when one exists, reserving the
+// other half to return the response. On timeout it returns "" like any other
+// lookup failure, degrading to position-only ordering.
+func (tm *TabletManager) getMySQLVersionStringBounded(ctx context.Context) string {
+	budget := maxVersionLookupBudget
+	if deadline, ok := ctx.Deadline(); ok {
+		budget = min(time.Until(deadline)/2, budget)
+	}
+	if budget <= 0 {
+		// No budget left; skip the best-effort lookup rather than risk the response.
+		return ""
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, budget)
+	defer cancel()
+
+	return tm.getMySQLVersionString(ctx)
+}
+
 // ReplicationStatus returns the replication status
 func (tm *TabletManager) ReplicationStatus(ctx context.Context) (*replicationdatapb.Status, error) {
 	if err := tm.waitForGrantsToHaveApplied(ctx); err != nil {
@@ -56,6 +159,7 @@ func (tm *TabletManager) ReplicationStatus(ctx context.Context) (*replicationdat
 
 	protoStatus := replication.ReplicationStatusToProto(status)
 	protoStatus.BackupRunning = tm.IsBackupRunning()
+	protoStatus.ServerVersion = tm.getMySQLVersionStringBounded(ctx)
 
 	return protoStatus, nil
 }
@@ -108,7 +212,10 @@ func (tm *TabletManager) PrimaryStatus(ctx context.Context) (*replicationdatapb.
 	if err != nil {
 		return nil, err
 	}
-	return replication.PrimaryStatusToProto(status), nil
+	protoStatus := replication.PrimaryStatusToProto(status)
+	protoStatus.ServerVersion = tm.getMySQLVersionStringBounded(ctx)
+
+	return protoStatus, nil
 }
 
 // PrimaryPosition returns the position of a primary database
@@ -690,6 +797,8 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 	}
 
 	protoStatus := replication.PrimaryStatusToProto(status)
+	protoStatus.ServerVersion = tm.getMySQLVersionStringBounded(ctx)
+
 	log.Info("demoted primary", slog.String("position", protoStatus.Position))
 
 	return protoStatus, nil
@@ -1006,6 +1115,7 @@ func (tm *TabletManager) StopReplicationAndGetStatus(ctx context.Context, stopRe
 
 	if stopReplicationMode == replicationdatapb.StopReplicationMode_IOTHREADONLY {
 		if !rs.IOHealthy() {
+			before.ServerVersion = tm.getMySQLVersionStringBounded(ctx)
 			return StopReplicationAndGetStatusResponse{
 				Status: &replicationdatapb.StopReplicationStatus{
 					Before: before,
@@ -1023,6 +1133,7 @@ func (tm *TabletManager) StopReplicationAndGetStatus(ctx context.Context, stopRe
 	} else {
 		if !rs.Healthy() {
 			// no replication is running, just return what we got
+			before.ServerVersion = tm.getMySQLVersionStringBounded(ctx)
 			return StopReplicationAndGetStatusResponse{
 				Status: &replicationdatapb.StopReplicationStatus{
 					Before: before,
@@ -1055,6 +1166,9 @@ func (tm *TabletManager) StopReplicationAndGetStatus(ctx context.Context, stopRe
 	rs.RelayLogPosition = rsAfter.RelayLogPosition
 	rs.FilePosition = rsAfter.FilePosition
 	rs.RelayLogSourceBinlogEquivalentPosition = rsAfter.RelayLogSourceBinlogEquivalentPosition
+
+	before.ServerVersion = tm.getMySQLVersionStringBounded(ctx)
+	after.ServerVersion = before.ServerVersion
 
 	return StopReplicationAndGetStatusResponse{
 		Status: &replicationdatapb.StopReplicationStatus{

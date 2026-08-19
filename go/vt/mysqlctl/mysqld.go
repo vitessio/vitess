@@ -240,8 +240,17 @@ func NewMysqld(dbcfgs *dbconfigs.DBConfigs) *Mysqld {
 	return result
 }
 
-// GetVersionString runs mysqld --version and returns its output as a string
+// GetVersionString returns the MySQL version by shelling out to `mysqld
+// --version`, without a deadline. Prefer GetVersionStringWithContext when a
+// caller-supplied context should bound the shell-out.
 func GetVersionString() (string, error) {
+	return GetVersionStringWithContext(context.Background())
+}
+
+// GetVersionStringWithContext returns the MySQL version by shelling out to
+// `mysqld --version`. If ctx is cancelled or its deadline passes, the command is
+// killed and the call returns promptly rather than blocking on a stalled binary.
+func GetVersionStringWithContext(ctx context.Context) (string, error) {
 	noSocketFile()
 	mysqlRoot, err := vtenv.VtMysqlRoot()
 	if err != nil {
@@ -251,7 +260,7 @@ func GetVersionString() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	_, version, err := execCmd(mysqldPath, []string{"--version"}, nil, mysqlRoot, nil)
+	_, version, err := execCmdWithContext(ctx, mysqldPath, []string{"--version"}, nil, mysqlRoot, nil)
 	if err != nil {
 		return "", err
 	}
@@ -805,11 +814,20 @@ func waitForMysqldExit(ctx context.Context, socketFile, pidFile string) error {
 }
 
 // execCmd searches the PATH for a command and runs it, logging the output.
-// If input is not nil, pipe it to the command's stdin.
+// If input is not nil, pipe it to the command's stdin. It runs without a
+// deadline; use execCmdWithContext to bound the command by a context.
 func execCmd(name string, args, env []string, dir string, input io.Reader) (cmd *exec.Cmd, output string, err error) {
+	return execCmdWithContext(context.Background(), name, args, env, dir, input)
+}
+
+// execCmdWithContext searches the PATH for a command and runs it, logging the
+// output. If input is not nil, pipe it to the command's stdin. If ctx is
+// cancelled or its deadline passes, the command is killed and the call returns
+// promptly rather than blocking on a stalled process.
+func execCmdWithContext(ctx context.Context, name string, args, env []string, dir string, input io.Reader) (cmd *exec.Cmd, output string, err error) {
 	cmdPath, _ := exec.LookPath(name)
 
-	cmd = exec.Command(cmdPath, args...)
+	cmd = exec.CommandContext(ctx, cmdPath, args...)
 	cmd.Env = env
 	cmd.Dir = dir
 	if input != nil {
@@ -1416,8 +1434,9 @@ func (mysqld *Mysqld) GetVersionString(ctx context.Context) (string, error) {
 		defer client.Close()
 		return client.VersionString(ctx)
 	}
-	// Fall back to the sys exec method using mysqld --version.
-	return GetVersionString()
+	// Fall back to the sys exec method using mysqld --version, bounded by ctx so a
+	// stalled binary can't outlive the caller's deadline.
+	return GetVersionStringWithContext(ctx)
 }
 
 // hostMetrics returns several OS metrics to be used by the tablet throttler.
