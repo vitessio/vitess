@@ -374,8 +374,12 @@ func runMySQLExplainTasks(ctx context.Context, vcursor VCursor, tasks []mysqlExp
 	if len(tasks) == 0 {
 		return explainResults, nil
 	}
-	// One task is one attempted shard query, so record them all up front.
-	vcursor.RecordShardsQueried(len(tasks))
+	// One task is one attempted shard query, so record them all up front. The
+	// recorder is optional: a VCursor that does not track shard-query stats simply
+	// skips the accounting.
+	if recorder, ok := vcursor.(ShardsQueriedRecorder); ok {
+		recorder.RecordShardsQueried(len(tasks))
+	}
 
 	var mu sync.Mutex
 	g, gctx := errgroup.WithContext(ctx)

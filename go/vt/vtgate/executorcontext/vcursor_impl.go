@@ -945,7 +945,7 @@ func (vc *VCursorImpl) ExecuteStandalone(ctx context.Context, primitive engine.P
 	return qr, vterrors.Aggregate(errs)
 }
 
-// RecordShardsQueried is part of the engine.VCursor interface.
+// RecordShardsQueried is part of the engine.ShardsQueriedRecorder interface.
 func (vc *VCursorImpl) RecordShardsQueried(noOfShards int) {
 	atomic.AddUint64(&vc.logStats.ShardQueries, uint64(noOfShards))
 }

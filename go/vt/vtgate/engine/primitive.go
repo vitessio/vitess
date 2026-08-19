@@ -76,12 +76,6 @@ type (
 		ExecuteStandalone(ctx context.Context, primitive Primitive, query string, bindVars map[string]*querypb.BindVariable, rs *srvtopo.ResolvedShard, fetchLastInsertID bool) (*sqltypes.Result, error)
 		StreamExecuteMulti(ctx context.Context, primitive Primitive, query string, rss []*srvtopo.ResolvedShard, bindVars []map[string]*querypb.BindVariable, rollbackOnError, autocommit, fetchLastInsertID bool, callback func(reply *sqltypes.Result) error) []error
 
-		// RecordShardsQueried adds noOfShards to the query-stats shard-query
-		// counter. ExecuteStandalone does not increment it, so callers that fan
-		// out shard-level work through that path (e.g. VEXPLAIN MYSQLPLAN) use
-		// this to account for the shards they queried.
-		RecordShardsQueried(noOfShards int)
-
 		// Keyspace ID level functions.
 		ExecuteKeyspaceID(ctx context.Context, keyspace string, ksid []byte, query string, bindVars map[string]*querypb.BindVariable, rollbackOnError, autocommit bool) (*sqltypes.Result, error)
 
@@ -302,6 +296,17 @@ type (
 		// description is the description, sans the inputs, of this Primitive.
 		// to get the plan description with all children, use PrimitiveToPlanDescription()
 		description() PrimitiveDescription
+	}
+
+	// ShardsQueriedRecorder is an optional interface a VCursor may implement to
+	// account for shard-level work issued outside the normal shard path.
+	// RecordShardsQueried adds noOfShards to the query-stats shard-query counter.
+	// ExecuteStandalone does not increment that counter, so callers that fan out
+	// shard-level work through it (e.g. VEXPLAIN MYSQLPLAN) type-assert to this
+	// interface to record the shards they queried. It is kept separate from
+	// VCursor so that adding it does not break out-of-tree VCursor implementations.
+	ShardsQueriedRecorder interface {
+		RecordShardsQueried(noOfShards int)
 	}
 
 	// noInputs default implementation for Primitives that are leaves
