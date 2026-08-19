@@ -99,6 +99,10 @@ const (
 	vexplainMySQLUnresolvableError = "VEXPLAIN MYSQLPLAN cannot resolve the target shards without executing the query " +
 		"(the query uses a cross-shard join, subquery, or lookup vindex); use VEXPLAIN ALL instead"
 
+	vexplainMySQLDerivedTableError = "VEXPLAIN MYSQLPLAN does not support derived tables or views, " +
+		"because EXPLAIN FORMAT=JSON can materialize a derived table during optimization - running any stored function " +
+		"inside it once per shard - which would violate MYSQLPLAN's promise never to run the wrapped query; use VEXPLAIN ALL instead"
+
 	vexplainMySQLSequenceError = "VEXPLAIN MYSQLPLAN does not support sequence next value queries, " +
 		"because the 'select next ... values' syntax is Vitess-specific and cannot be sent to MySQL as EXPLAIN"
 
@@ -117,13 +121,19 @@ const (
 // the wrapped query. A CTE is inlined as a derived table during planning, so it
 // carries the same risk. A view reference is already rewritten into a
 // *sqlparser.DerivedTable by the normalizer before this walk runs, so it is caught
-// by the DerivedTable case. UNION is not a nested query block (it is a
-// *sqlparser.Union, not a Subquery/DerivedTable/With), so it is not rejected here.
+// by the DerivedTable case; that case gets its own message that names derived tables
+// and views, because the generic unresolvable-shards message (cross-shard join,
+// subquery, lookup vindex) does not describe why an otherwise-routable derived table
+// or view is rejected. UNION is not a nested query block (it is a *sqlparser.Union,
+// not a Subquery/DerivedTable/With), so it is not rejected here.
 func checkVExplainMySQLNoNestedQuery(statement sqlparser.Statement) error {
 	var nestedErr error
 	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
 		switch node.(type) {
-		case *sqlparser.Subquery, *sqlparser.DerivedTable, *sqlparser.With:
+		case *sqlparser.DerivedTable:
+			nestedErr = vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, vexplainMySQLDerivedTableError)
+			return false, nil
+		case *sqlparser.Subquery, *sqlparser.With:
 			nestedErr = vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, vexplainMySQLUnresolvableError)
 			return false, nil
 		}

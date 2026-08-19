@@ -456,13 +456,14 @@ func TestVExplainMySQLPlanRejectsLockFunctions(t *testing.T) {
 // must be caught at the AST level before that inlining runs.
 func TestVExplainMySQLPlanRejectsSubqueries(t *testing.T) {
 	testCases := []struct {
-		name  string
-		query string
+		name    string
+		query   string
+		wantMsg string
 	}{
-		{"derived table in from", "vexplain mysqlplan select id from `user`, (select 1 as f1) as dt where user.id = dt.f1"},
-		{"scalar subquery in select", "vexplain mysqlplan select id, (select 1 from `user` u2 where u2.id = `user`.id) from `user`"},
-		{"subquery in where", "vexplain mysqlplan select id from `user` where id in (select id from `user` where id = 5)"},
-		{"non-recursive cte", "vexplain mysqlplan with t as (select id, textcol from `user` where id = 5) select id from t"},
+		{"derived table in from", "vexplain mysqlplan select id from `user`, (select 1 as f1) as dt where user.id = dt.f1", "does not support derived tables or views"},
+		{"scalar subquery in select", "vexplain mysqlplan select id, (select 1 from `user` u2 where u2.id = `user`.id) from `user`", "cannot resolve the target shards without executing the query"},
+		{"subquery in where", "vexplain mysqlplan select id from `user` where id in (select id from `user` where id = 5)", "cannot resolve the target shards without executing the query"},
+		{"non-recursive cte", "vexplain mysqlplan with t as (select id, textcol from `user` where id = 5) select id from t", "cannot resolve the target shards without executing the query"},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -473,7 +474,7 @@ func TestVExplainMySQLPlanRejectsSubqueries(t *testing.T) {
 
 			session := &vtgatepb.Session{TargetString: "@primary"}
 			_, err := executorExec(ctx, executor, session, tc.query, nil)
-			require.ErrorContains(t, err, "cannot resolve the target shards without executing the query")
+			require.ErrorContains(t, err, tc.wantMsg)
 			require.ErrorContains(t, err, "use VEXPLAIN ALL instead")
 
 			// Rejection happens at plan time, so no tablet query is ever sent.
