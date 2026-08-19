@@ -19,6 +19,7 @@
 - **[Minor Changes](#minor-changes)**
     - **[VReplication](#minor-changes-vreplication)**
         - [Default data protection for `_reverse` workflow cancel/complete](#vreplication-reverse-workflow-data-protection)
+        - [New `--only-summary` flag for `vdiff show`](#vreplication-vdiff-only-summary)
     - **[VTGate](#minor-changes-vtgate)**
         - [Ingress bytes in query LogStats](#vtgate-logstats-ingress-bytes)
         - [New controls for cross-keyspace reads](#vtgate-cross-keyspace-reads)
@@ -169,6 +170,12 @@ When calling `cancel` or `complete` on an auto-generated `_reverse` workflow wit
 The `--keep-data` flag help text has been updated to note this default explicitly. This change applies to MoveTables, Reshard, and other VReplication workflow types that use the shared cancel/complete paths.
 
 See [#19906](https://github.com/vitessio/vitess/pull/19906) for details.
+
+#### <a id="vreplication-vdiff-only-summary"/>New `--only-summary` flag for `vdiff show`</a>
+
+`vtctldclient vdiff ... show` gains an `--only-summary` flag, off by default, so existing behavior is unchanged unless you opt in. `vdiff show` always returns the full per-table diff report, regardless of `--format`. Because it fans out to every target shard primary and aggregates the results, a large diff can exceed gRPC message limits and fail. With `--only-summary` set, the response keeps the summary information — progress and mismatch status — but omits the detailed per-table diff report. Use it to poll a VDiff for progress and mismatches when you do not need the detailed report.
+
+See [#20870](https://github.com/vitessio/vitess/pull/20870) for details.
 
 ### <a id="minor-changes-vtgate"/>VTGate</a>
 
