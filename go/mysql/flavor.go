@@ -146,10 +146,8 @@ type flavor interface {
 	// with parsed executed position.
 	primaryStatus(c *Conn) (replication.PrimaryStatus, error)
 
-	// replicationConfiguration reads the right global variables and performance schema information.
+	// replicationConfiguration reads the right performance schema information.
 	replicationConfiguration(c *Conn) (*replicationdata.Configuration, error)
-
-	replicationNetTimeout(c *Conn) (int32, error)
 
 	// waitUntilPosition waits until the given position is reached or
 	// until the context expires. It returns an error if we did not
@@ -160,6 +158,10 @@ type flavor interface {
 
 	// binlogReplicatedUpdates returns the field to use to check replica updates.
 	binlogReplicatedUpdates() string
+
+	// replicationNetTimeoutVariable returns the field to use to read the
+	// replication network timeout.
+	replicationNetTimeoutVariable() string
 
 	baseShowTables() string
 	baseShowTablesWithSizes() string
@@ -265,6 +267,13 @@ func (c *Conn) IsMariaDB() bool {
 		return true
 	}
 	return false
+}
+
+// IsFilePos returns true iff the connection is using the FilePos flavor,
+// which tracks positions by binlog file and offset rather than by GTID.
+func (c *Conn) IsFilePos() bool {
+	_, ok := c.flavor.(*filePosFlavor)
+	return ok
 }
 
 // PrimaryPosition returns the current primary's replication position.
@@ -438,8 +447,10 @@ func (c *Conn) ShowPrimaryStatus() (replication.PrimaryStatus, error) {
 	return c.flavor.primaryStatus(c)
 }
 
-// ReplicationConfiguration reads the right global variables and performance schema information.
-func (c *Conn) ReplicationConfiguration() (*replicationdata.Configuration, error) {
+// ReplicationConfiguration reads the right performance schema information.
+// replicaNetTimeout is a global variable rather than performance schema data,
+// so the caller reads it separately and passes it in.
+func (c *Conn) ReplicationConfiguration(replicaNetTimeout int32) (*replicationdata.Configuration, error) {
 	replConfiguration, err := c.flavor.replicationConfiguration(c)
 	// We don't want to fail this call if it called on a primary tablet.
 	// There just isn't any replication configuration to return since it is a primary tablet.
@@ -449,9 +460,13 @@ func (c *Conn) ReplicationConfiguration() (*replicationdata.Configuration, error
 	if err != nil {
 		return nil, err
 	}
-	replNetTimeout, err := c.flavor.replicationNetTimeout(c)
-	replConfiguration.ReplicaNetTimeout = replNetTimeout
-	return replConfiguration, err
+	// Flavors that do not track a replication configuration, such as FilePos,
+	// report none rather than an error.
+	if replConfiguration == nil {
+		return nil, nil
+	}
+	replConfiguration.ReplicaNetTimeout = replicaNetTimeout
+	return replConfiguration, nil
 }
 
 // WaitUntilPosition waits until the given position is reached or until the

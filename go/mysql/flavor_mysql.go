@@ -319,18 +319,6 @@ func (mysqlFlavor) replicationConfiguration(c *Conn) (*replicationdata.Configura
 	}, nil
 }
 
-// replicationNetTimeout is part of the Flavor interface.
-func (mysqlFlavor) replicationNetTimeout(c *Conn) (int32, error) {
-	qr, err := c.ExecuteFetch("select @@global.replica_net_timeout", 1, false)
-	if err != nil {
-		return 0, err
-	}
-	if len(qr.Rows) != 1 || len(qr.Rows[0]) != 1 {
-		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected result format for replica_net_timeout: %#v", qr)
-	}
-	return qr.Rows[0][0].ToInt32()
-}
-
 // status is part of the Flavor interface.
 func (mysqlFlavor) status(c *Conn) (replication.ReplicationStatus, error) {
 	qr, err := c.ExecuteFetch("SHOW REPLICA STATUS", 100, true /* wantfields */)
@@ -627,4 +615,8 @@ func (mysqlFlavor) catchupToGTIDCommands(params *ConnParams, replPos replication
 
 func (mysqlFlavor) binlogReplicatedUpdates() string {
 	return "@@global.log_replica_updates"
+}
+
+func (mysqlFlavor) replicationNetTimeoutVariable() string {
+	return "@@global.replica_net_timeout"
 }
