@@ -252,16 +252,14 @@ func TestMultiTenantSimple(t *testing.T) {
 	// tablet logs. See https://github.com/vitessio/vitess/issues/20857.
 	t.Run("resume vdiff from lastpk", func(t *testing.T) {
 		ksWorkflow := fmt.Sprintf("%s.%s", targetKeyspace, defaultWorkflowName)
-		uuid, output, err := performVDiff2Action(t, ksWorkflow, defaultCellName, "show", "last", false)
-		require.NoError(t, err)
+		uuid, output := performVDiff2Action(t, ksWorkflow, defaultCellName, "show", "last", false)
 		previous := getVDiffInfo(output)
 		require.Equal(t, "completed", previous.State)
 		previousCompletedAt, err := time.Parse(vdiff2.TimestampFormat, previous.CompletedAt)
 		require.NoError(t, err)
 		completedAtMin := previousCompletedAt.Add(-time.Nanosecond)
 		lastIndex = insertRows(lastIndex, sourceKeyspace)
-		_, _, err = performVDiff2Action(t, ksWorkflow, defaultCellName, "resume", uuid, false)
-		require.NoError(t, err)
+		performVDiff2Action(t, ksWorkflow, defaultCellName, "resume", uuid, false)
 		info := waitForVDiff2ToComplete(t, ksWorkflow, defaultCellName, uuid, completedAtMin)
 		require.NotNil(t, info)
 		require.False(t, info.HasMismatch)

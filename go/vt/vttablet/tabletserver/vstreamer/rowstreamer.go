@@ -297,26 +297,9 @@ func (rs *rowStreamer) buildSelect(st *binlogdatapb.MinimalTable) (string, error
 		// (col1 = 1 and col2 > 2) or (col1 > 1).
 		// A tuple inequality like (col1,col2) > (1,2) ends up
 		// being a full table scan for MySQL.
-<<<<<<< HEAD
-		for lastcol := len(rs.pkColumns) - 1; lastcol >= 0; lastcol-- {
-			buf.Myprintf("%s(", prefix)
-			prefix = " or "
-			for i, pk := range rs.pkColumns[:lastcol] {
-				buf.Myprintf("%v = ", sqlparser.NewIdentifierCI(rs.plan.Table.Fields[pk].Name))
-				rs.lastpk[i].EncodeSQL(buf)
-				buf.Myprintf(" and ")
-||||||| parent of bd205baff8 (Properly handle vstream filter predicates with multi-col PKs (#20858))
-		for lastcol, pkCol := range slices.Backward(rs.pkColumns) {
-			buf.Myprintf("%s(", prefix)
-			prefix = " or "
-			for i, pk := range rs.pkColumns[:lastcol] {
-				buf.Myprintf("%v = ", sqlparser.NewIdentifierCI(rs.plan.Table.Fields[pk].Name))
-				rs.lastpk[i].EncodeSQL(buf)
-				buf.Myprintf(" and ")
-=======
 		addLastPKExpressions := func() {
 			prefix := ""
-			for lastcol, pkCol := range slices.Backward(rs.pkColumns) {
+			for lastcol := len(rs.pkColumns) - 1; lastcol >= 0; lastcol-- {
 				buf.Myprintf("%s(", prefix)
 				prefix = " or "
 				for i, pk := range rs.pkColumns[:lastcol] {
@@ -324,18 +307,10 @@ func (rs *rowStreamer) buildSelect(st *binlogdatapb.MinimalTable) (string, error
 					rs.lastpk[i].EncodeSQL(buf)
 					buf.Myprintf(" and ")
 				}
-				buf.Myprintf("%v > ", sqlparser.NewIdentifierCI(rs.plan.Table.Fields[pkCol].Name))
+				buf.Myprintf("%v > ", sqlparser.NewIdentifierCI(rs.plan.Table.Fields[rs.pkColumns[lastcol]].Name))
 				rs.lastpk[lastcol].EncodeSQL(buf)
 				buf.Myprintf(")")
->>>>>>> bd205baff8 (Properly handle vstream filter predicates with multi-col PKs (#20858))
 			}
-<<<<<<< HEAD
-			buf.Myprintf("%v > ", sqlparser.NewIdentifierCI(rs.plan.Table.Fields[rs.pkColumns[lastcol]].Name))
-			rs.lastpk[lastcol].EncodeSQL(buf)
-||||||| parent of bd205baff8 (Properly handle vstream filter predicates with multi-col PKs (#20858))
-			buf.Myprintf("%v > ", sqlparser.NewIdentifierCI(rs.plan.Table.Fields[pkCol].Name))
-			rs.lastpk[lastcol].EncodeSQL(buf)
-=======
 		}
 		if len(rs.plan.whereExprsToPushDown) > 0 {
 			// First we add any predicates that should be pushed down.
@@ -349,7 +324,6 @@ func (rs *rowStreamer) buildSelect(st *binlogdatapb.MinimalTable) (string, error
 			// streamed by mysqld.
 			buf.Myprintf(" and (")
 			addLastPKExpressions()
->>>>>>> bd205baff8 (Properly handle vstream filter predicates with multi-col PKs (#20858))
 			buf.Myprintf(")")
 		} else {
 			addLastPKExpressions()

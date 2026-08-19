@@ -469,7 +469,7 @@ func TestStreamRowsFilterWithLastPK(t *testing.T) {
 	}
 	wantQuery := "select /*+ MAX_EXECUTION_TIME(3600000) */ id1, id2, val from t1 where (val = 'include') and ((id1 = 1 and id2 > 1) or (id1 > 1)) order by id1, id2"
 	checkStream(t, "select id1, id2, val from t1 where (val = 'include')",
-		[]sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(1)}, wantQuery, wantStream, nil)
+		[]sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(1)}, wantQuery, wantStream)
 }
 
 func TestStreamRowsFilterVarBinary(t *testing.T) {
