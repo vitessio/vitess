@@ -452,6 +452,16 @@ func (pr *PlannedReparenter) checkPrimaryElectContainsAllPositions(
 			// elect.Executed >= peer.Combined — rather than crediting the elect with
 			// transactions InitPrimary is about to drop.
 			encoded := status.RelayLogPosition
+			if encoded == "" {
+				// MariaDB reports no relay-log GTID position (ParseMariadbReplicationStatus
+				// leaves RelayLogPosition empty while populating Position), so fall back to
+				// the executed position — the only cross-tablet-comparable position that
+				// flavor exposes. Without this the peer would decode to a zero position and
+				// the dominance check would trivially pass, letting InitPrimary discard the
+				// peer's executed transactions. For MySQL, RelayLogPosition is empty only
+				// when Position is too, so the fallback is a no-op there.
+				encoded = status.Position
+			}
 			if alias == primaryElectAliasStr {
 				encoded = status.Position
 			}

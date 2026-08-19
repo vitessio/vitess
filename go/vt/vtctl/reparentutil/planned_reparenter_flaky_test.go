@@ -1957,6 +1957,46 @@ func TestPlannedReparenter_performInitialPromotion(t *testing.T) {
 			expectedErr: "contains transactions not found in primary-elect",
 		},
 		{
+			// A uniform MariaDB shard. MariaDB reports its executed position in
+			// Position but leaves RelayLogPosition empty (ParseMariadbReplicationStatus),
+			// so keying the peer on RelayLogPosition alone would decode to a zero
+			// position that any elect trivially dominates. The peer's executed position
+			// (seq 100) is ahead of the elect's (seq 50), so the guard must fall back to
+			// the peer's executed position and reject rather than let InitPrimary discard
+			// the peer's transactions.
+			name: "mariadb peer ahead on executed is rejected",
+			tmc: &testutil.TabletManagerClient{
+				ReplicationStatusResults: map[string]struct {
+					Position *replicationdatapb.Status
+					Error    error
+				}{
+					"zone1-0000000200": {Position: &replicationdatapb.Status{Position: "MariaDB/1-1-50", RelayLogPosition: "MariaDB/1-1-50"}},
+					"zone1-0000000201": {Position: &replicationdatapb.Status{Position: "MariaDB/1-1-100"}},
+				},
+				InitPrimaryResults: map[string]struct {
+					Result string
+					Error  error
+				}{
+					"zone1-0000000200": {Result: "should not be reached"},
+				},
+			},
+			ev:       &events.Reparent{},
+			keyspace: "testkeyspace",
+			shard:    "-",
+			primaryElect: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  200,
+				},
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000200": {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 200}}},
+				"zone1-0000000201": {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 201}}},
+			},
+			shouldErr:   true,
+			expectedErr: "contains transactions not found in primary-elect",
+		},
+		{
 			// A peer's position fetch fails during the concurrent scan. The error
 			// must be aggregated across the goroutines and abort the promotion — we
 			// can't prove the elect dominates a tablet we couldn't reach. Uses three
