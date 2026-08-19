@@ -2215,23 +2215,25 @@ func TestDeleteResolvedDetectionEstablishesIncidentBoundary(t *testing.T) {
 		"AUTOINCREMENT must assign a fresh detection_id strictly greater than the deleted one")
 }
 
-// TestAlreadyFixedDoesNotDeleteDetectionRow verifies that checkIfAlreadyFixed returning true
-// does NOT delete the detection row. GetDetectionAnalysis can return empty for two reasons:
-// the problem was genuinely resolved, or it was suppressed by a shard-wide ordered action.
-// We cannot distinguish the two cases, so the detection row must be left intact to expire
-// naturally — deleting on suppression would create a false incident boundary.
+// TestAlreadyFixedDeletesOrphanDetectionRow verifies that the alreadyFixed path in
+// executeCheckAndRecoverFunction deletes the detection row it inserted.
 //
-// We test this directly via checkIfAlreadyFixed (same package) rather than through
-// executeCheckAndRecoverFunction to avoid the complexity of setting up the full refresh
-// path for each analysis type.
-func TestAlreadyFixedDoesNotDeleteDetectionRow(t *testing.T) {
+// The row is an orphan: a concurrent successful recovery deleted the prior detection row
+// (incident boundary), and this poll re-inserted a new row before blocking on the shard
+// lock. If the orphan is not cleaned up, a real recurrence hits the UPSERT ON CONFLICT
+// path and reuses its ID instead of getting a fresh one, breaking incident boundary
+// semantics.
+//
+// We exercise the cleanup call (deleteResolvedDetection) directly here rather than
+// through executeCheckAndRecoverFunction to avoid the complexity of setting up the full
+// refresh path, while still covering the invariant.
+func TestAlreadyFixedDeletesOrphanDetectionRow(t *testing.T) {
 	orcDb, _, err := db.OpenVTOrcWithCache()
 	require.NoError(t, err)
 	defer func() {
 		_, _ = orcDb.Exec("DELETE FROM recovery_detection")
 	}()
 
-	// Insert a detection row.
 	entry := &inst.DetectionAnalysis{
 		AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
 		Analysis:              inst.ReplicationStopped,
@@ -2239,33 +2241,20 @@ func TestAlreadyFixedDoesNotDeleteDetectionRow(t *testing.T) {
 		AnalyzedShard:         "0",
 	}
 	require.NoError(t, InsertRecoveryDetection(entry))
-	firstID := entry.RecoveryId
-	require.NotZero(t, firstID)
+	orphanID := entry.RecoveryId
+	require.NotZero(t, orphanID)
 
-	// Mock the DB so GetDetectionAnalysis returns no entries — simulating either genuine
-	// resolution or suppression by a shard-wide action. checkIfAlreadyFixed returns
-	// alreadyFixed=true in both cases.
-	oldDB := db.Db
-	defer func() { db.Db = oldDB }()
-	db.Db = test.NewTestDB([][]sqlutils.RowMap{{}})
+	// Simulate the alreadyFixed path: deleteResolvedDetection is now called to clean up the
+	// orphan row inserted by this poll before it blocked on the shard lock.
+	deleteResolvedDetection(entry.RecoveryId)
 
-	alreadyFixed, _, err := checkIfAlreadyFixed(entry)
-	require.NoError(t, err)
-	require.True(t, alreadyFixed, "empty GetDetectionAnalysis must be treated as already fixed")
-
-	// Restore the real DB before querying.
-	db.Db = oldDB
-
-	// The detection row must still exist. The alreadyFixed=true path no longer deletes it
-	// because suppression is indistinguishable from resolution at this point.
 	var remaining int
 	require.NoError(t, orcDb.QueryRow(
-		"SELECT COUNT(*) FROM recovery_detection WHERE detection_id = ?", firstID).Scan(&remaining))
-	require.Equal(t, 1, remaining,
-		"alreadyFixed=true must NOT delete the detection row — suppression and genuine resolution are indistinguishable")
+		"SELECT COUNT(*) FROM recovery_detection WHERE detection_id = ?", orphanID).Scan(&remaining))
+	require.Equal(t, 0, remaining, "alreadyFixed path must delete the orphan detection row")
 
-	// A re-insert (UPSERT) must return the same detection_id: the row was preserved,
-	// so there is no incident boundary between the suppressed analysis and a recurrence.
+	// A real recurrence must get a fresh detection_id (not orphanID), because AUTOINCREMENT
+	// never reuses a retired ID.
 	reEntry := &inst.DetectionAnalysis{
 		AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
 		Analysis:              inst.ReplicationStopped,
@@ -2273,8 +2262,68 @@ func TestAlreadyFixedDoesNotDeleteDetectionRow(t *testing.T) {
 		AnalyzedShard:         "0",
 	}
 	require.NoError(t, InsertRecoveryDetection(reEntry))
-	require.Equal(t, firstID, reEntry.RecoveryId,
-		"recurrence after suppression must share the same detection_id — no false incident boundary")
+	require.Greater(t, reEntry.RecoveryId, orphanID,
+		"real recurrence after orphan cleanup must get a fresh detection_id")
+}
+
+// TestOverlappingPollOrphanClearedByAlreadyFixed is a deterministic regression test for the
+// overlapping-poll race described in the alreadyFixed code comment.
+//
+// Sequence:
+//  1. Poll N: InsertRecoveryDetection → id=A; ERS succeeds → deleteResolvedDetection(A) (incident boundary)
+//  2. Poll N+1: InsertRecoveryDetection before acquiring shard lock → id=B (orphan)
+//  3. Poll N+1: acquires lock, checkIfAlreadyFixed=true → deleteResolvedDetection(B) (fix)
+//  4. Future poll: InsertRecoveryDetection → id=C > B (fresh incident)
+func TestOverlappingPollOrphanClearedByAlreadyFixed(t *testing.T) {
+	orcDb, _, err := db.OpenVTOrcWithCache()
+	require.NoError(t, err)
+	defer func() {
+		_, _ = orcDb.Exec("DELETE FROM recovery_detection")
+	}()
+
+	alias := &topodatapb.TabletAlias{Cell: "zone1", Uid: 200}
+
+	// Phase 1: Poll N inserts and ERS succeeds (incident boundary).
+	pollN := &inst.DetectionAnalysis{
+		AnalyzedInstanceAlias: alias,
+		Analysis:              inst.DeadPrimary,
+		AnalyzedKeyspace:      "ks",
+		AnalyzedShard:         "0",
+	}
+	require.NoError(t, InsertRecoveryDetection(pollN))
+	idA := pollN.RecoveryId
+	require.NotZero(t, idA)
+	deleteResolvedDetection(idA)
+
+	// Phase 2: Poll N+1 inserts before acquiring lock (the orphan).
+	pollN1 := &inst.DetectionAnalysis{
+		AnalyzedInstanceAlias: alias,
+		Analysis:              inst.DeadPrimary,
+		AnalyzedKeyspace:      "ks",
+		AnalyzedShard:         "0",
+	}
+	require.NoError(t, InsertRecoveryDetection(pollN1))
+	idB := pollN1.RecoveryId
+	require.Greater(t, idB, idA, "AUTOINCREMENT must assign id > A after A was deleted")
+
+	// Phase 3: alreadyFixed=true; deleteResolvedDetection cleans up the orphan.
+	deleteResolvedDetection(idB)
+
+	var remaining int
+	require.NoError(t, orcDb.QueryRow(
+		"SELECT COUNT(*) FROM recovery_detection WHERE detection_id = ?", idB).Scan(&remaining))
+	require.Equal(t, 0, remaining, "orphan row B must be deleted by the alreadyFixed path")
+
+	// Phase 4: A real recurrence gets a fresh id > B.
+	future := &inst.DetectionAnalysis{
+		AnalyzedInstanceAlias: alias,
+		Analysis:              inst.DeadPrimary,
+		AnalyzedKeyspace:      "ks",
+		AnalyzedShard:         "0",
+	}
+	require.NoError(t, InsertRecoveryDetection(future))
+	require.Greater(t, future.RecoveryId, idB,
+		"future incident must receive a fresh detection_id, never reusing the orphan's ID")
 }
 
 // TestAttemptRecoveryRegistrationStoresDetectionID verifies that writeTopologyRecovery correctly

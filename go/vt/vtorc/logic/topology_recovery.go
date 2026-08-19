@@ -395,6 +395,13 @@ func runEmergencyReparentOp(ctx context.Context, analysisEntry *inst.DetectionAn
 
 	if ev != nil && ev.NewPrimary != nil {
 		promotedReplica, _, _ = inst.ReadInstance(ev.NewPrimary.Alias)
+		if promotedReplica == nil {
+			// Cache miss: ERS succeeded but the new primary is not yet in the instance cache.
+			// The event alias is authoritative for success; the cache lookup is only needed for
+			// optional audit detail. Synthesize a minimal instance so resolveRecovery marks the
+			// recovery successful and establishes the incident boundary via deleteResolvedDetection.
+			promotedReplica = &inst.Instance{InstanceAlias: ev.NewPrimary.Alias}
+		}
 	}
 	postErsCompletion(topologyRecovery, analysisEntry, recoveryName, promotedReplica)
 	return true, topologyRecovery, err
@@ -979,8 +986,10 @@ func executeCheckAndRecoverFunction(analysisEntry *inst.DetectionAnalysis) (err 
 				// The failed tablet's cell is unknown (e.g. PrimaryTabletDeleted after
 				// DeleteTablets --allow-primary nils the shard's primary alias). Fail
 				// closed: we cannot determine whether the cell is denied.
-				logger.Info(fmt.Sprintf("CheckAndRecover: Tablet: %+v: NOT Recovering host (failed tablet's cell is unknown; --cells-no-recovery fail-closed)",
-					analyzedInstanceAliasString))
+				if util.ClearToLog("executeCheckAndRecoverFunction: unknown-cell", analyzedInstanceAliasString) {
+					logger.Info(fmt.Sprintf("CheckAndRecover: Tablet: %+v: NOT Recovering host (failed tablet's cell is unknown; --cells-no-recovery fail-closed)",
+						analyzedInstanceAliasString))
+				}
 				recoveriesSkippedCounter.Add(append(recoveryLabels, RecoverySkipCellNoRecovery.String()), 1)
 				return nil
 			}
@@ -1110,11 +1119,14 @@ func executeCheckAndRecoverFunction(analysisEntry *inst.DetectionAnalysis) (err 
 			return err
 		}
 		if alreadyFixed {
-			// The problem is no longer visible in analysis. This can mean it was resolved by
-			// another agent, but it can also mean GetDetectionAnalysis suppressed it because
-			// a shard-wide ordered action is active (see checkIfAlreadyFixed comment). We
-			// cannot distinguish the two here, so we do not establish an incident boundary;
-			// the detection row will expire naturally once the analysis stops being detected.
+			// The detection row inserted above is an orphan: a concurrent successful recovery
+			// already deleted the previous detection row (incident boundary), and this poll
+			// re-inserted a new row before blocking on the shard lock. Remove the orphan so a
+			// real recurrence gets a fresh detection_id instead of reusing this stale ID.
+			// This is safe whether alreadyFixed is true due to genuine resolution or due to
+			// GetDetectionAnalysis suppressing this analysis for a shard-wide ordered action:
+			// in either case no recovery will proceed from this poll, and the row is spurious.
+			deleteResolvedDetection(analysisEntry.RecoveryId)
 			logger.Info(fmt.Sprintf("Analysis: %v on tablet %v - No longer valid, some other agent must have fixed the problem.", analysisEntry.Analysis, analyzedInstanceAliasString))
 			recoveriesSkippedCounter.Add(append(recoveryLabels, RecoverySkipStaleAnalysis.String()), 1)
 			return nil
@@ -1389,6 +1401,11 @@ func runPlannedReparentOp(ctx context.Context, analysisEntry *inst.DetectionAnal
 
 	if ev != nil && ev.NewPrimary != nil {
 		promotedReplica, _, _ = inst.ReadInstance(ev.NewPrimary.Alias)
+		if promotedReplica == nil {
+			// Cache miss: PRS succeeded but the new primary is not yet in the instance cache.
+			// Synthesize a minimal instance so resolveRecovery marks the recovery successful.
+			promotedReplica = &inst.Instance{InstanceAlias: ev.NewPrimary.Alias}
+		}
 	}
 	postPrsCompletion(topologyRecovery, analysisEntry, promotedReplica)
 	return true, topologyRecovery, err
