@@ -1109,6 +1109,13 @@ func (vc *VCursorImpl) CheckForReservedConnection(setVarComment string, stmt sql
 	if setVarComment == "" {
 		return
 	}
+	// A VEXPLAIN wraps an inner statement that carries the SET_VAR hint; decide
+	// against that inner statement so, for example, VEXPLAIN of a SELECT is treated
+	// like the SELECT and does not spuriously pin the session to a reserved
+	// connection.
+	if vexplain, ok := stmt.(*sqlparser.VExplainStmt); ok {
+		stmt = vexplain.Statement
+	}
 	switch stmt.(type) {
 	// If the statement supports optimizer hints or a transaction statement or a SET statement
 	// no reserved connection is needed

@@ -515,6 +515,34 @@ func TestVExplainMySQLPlanRequiresExecution(t *testing.T) {
 	}
 }
 
+// TestVExplainMySQLPlanSysVarSessionNotPinned verifies that a session which has
+// only set a SET_VAR-eligible system variable (as JDBC/ORM clients do at connect)
+// is not misclassified as holding a reserved connection when it runs VEXPLAIN
+// MYSQLPLAN. Planning the VEXPLAIN produces a non-empty SET_VAR comment, but the
+// SET_VAR hint rides on the inner SELECT, so the standalone EXPLAIN honours the
+// sysvar and no reserved connection is needed. The VEXPLAIN must succeed, and the
+// session must not be left pinned afterwards.
+func TestVExplainMySQLPlanSysVarSessionNotPinned(t *testing.T) {
+	executor, ctx := createExecutorEnvCallback(t, createExecutorConfig(), func(shard, ks string, tabletType topodatapb.TabletType, conn *sandboxconn.SandboxConn) {
+		if ks == KsTestSharded && tabletType == topodatapb.TabletType_PRIMARY {
+			conn.SetResults([]*sqltypes.Result{explainResultForShard(shard)})
+		}
+	})
+
+	// A session that only set a SET_VAR-eligible sysvar (e.g. SET sql_mode=...);
+	// SupportSetVar is true for sql_mode, so this does not pin the session on its
+	// own on MySQL 8.0+ with the default enable-set-var.
+	session := econtext.NewSafeSession(&vtgatepb.Session{
+		TargetString:         "@primary",
+		EnableSystemSettings: true,
+		SystemVariables:      map[string]string{"sql_mode": "'STRICT_ALL_TABLES'"},
+	})
+
+	_, err := executorExecSession(ctx, executor, session, "vexplain mysqlplan select id from `user`", nil)
+	require.NoError(t, err)
+	assert.False(t, session.InReservedConn(), "session must not be pinned to a reserved connection")
+}
+
 func TestVExplainKeys(t *testing.T) {
 	type testCase struct {
 		Query    string          `json:"query"`
