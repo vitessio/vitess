@@ -386,32 +386,6 @@ func TestExecCmdWithContext(t *testing.T) {
 	})
 }
 
-func TestGetVersionComment(t *testing.T) {
-	db := fakesqldb.New(t)
-	defer db.Close()
-
-	params := db.ConnParams()
-	cp := *params
-	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb")
-
-	db.AddQuery("SELECT 1", &sqltypes.Result{})
-	db.AddQuery("select @@global.version_comment", sqltypes.MakeTestResult(sqltypes.MakeTestFields("@@global.version_comment", "varchar"), "test_version1", "test_version2"))
-
-	testMysqld := NewMysqld(dbc)
-	defer testMysqld.Close()
-
-	ctx := t.Context()
-	_, err := testMysqld.GetVersionComment(ctx)
-	require.ErrorContains(t, err, "unexpected result length")
-
-	ver := "test_version"
-	db.AddQuery("select @@global.version_comment", sqltypes.MakeTestResult(sqltypes.MakeTestFields("@@global.version_comment", "varchar"), ver))
-
-	str, err := testMysqld.GetVersionComment(ctx)
-	require.NoError(t, err)
-	assert.Equal(t, ver, str)
-}
-
 func TestHostMetrics(t *testing.T) {
 	ctx := t.Context()
 	cnf := &Mycnf{

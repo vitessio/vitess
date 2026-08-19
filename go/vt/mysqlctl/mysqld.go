@@ -1439,19 +1439,6 @@ func (mysqld *Mysqld) GetVersionString(ctx context.Context) (string, error) {
 	return GetVersionStringWithContext(ctx)
 }
 
-// GetVersionComment gets the version comment.
-func (mysqld *Mysqld) GetVersionComment(ctx context.Context) (string, error) {
-	qr, err := mysqld.FetchSuperQuery(ctx, "select @@global.version_comment")
-	if err != nil {
-		return "", err
-	}
-	if len(qr.Rows) != 1 {
-		return "", fmt.Errorf("unexpected result length: %v", len(qr.Rows))
-	}
-	res := qr.Named().Row()
-	return res.ToString("@@global.version_comment")
-}
-
 // hostMetrics returns several OS metrics to be used by the tablet throttler.
 func hostMetrics(ctx context.Context, cnf *Mycnf) (*mysqlctlpb.HostMetricsResponse, error) {
 	resp := &mysqlctlpb.HostMetricsResponse{

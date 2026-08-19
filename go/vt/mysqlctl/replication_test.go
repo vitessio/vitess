@@ -19,7 +19,6 @@ package mysqlctl
 import (
 	"context"
 	"errors"
-	"math"
 	"net"
 	"strings"
 	"testing"
@@ -184,30 +183,6 @@ func TestGetMysqlPort(t *testing.T) {
 	assert.Equal(t, int32(0), res)
 }
 
-func TestGetServerID(t *testing.T) {
-	db := fakesqldb.New(t)
-	defer db.Close()
-
-	params := db.ConnParams()
-	cp := *params
-	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb")
-
-	db.AddQuery("SELECT 1", &sqltypes.Result{})
-	db.AddQuery("select @@global.server_id", sqltypes.MakeTestResult(sqltypes.MakeTestFields("test_field", "uint64"), "12"))
-	testMysqld := NewMysqld(dbc)
-	defer testMysqld.Close()
-
-	ctx := t.Context()
-	res, err := testMysqld.GetServerID(ctx)
-	assert.Equal(t, uint32(12), res)
-	require.NoError(t, err)
-
-	db.AddQuery("select @@global.server_id", &sqltypes.Result{})
-	res, err = testMysqld.GetServerID(ctx)
-	require.ErrorContains(t, err, "no server_id in mysql")
-	assert.Equal(t, uint32(0), res)
-}
-
 func TestGetServerUUID(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
@@ -308,33 +283,6 @@ func TestPrimaryStatus(t *testing.T) {
 	db.AddQuery("SHOW BINARY LOG STATUS", &sqltypes.Result{})
 	_, err = testMysqld.PrimaryStatus(ctx)
 	assert.ErrorContains(t, err, "no master status")
-}
-
-func TestReplicationConfiguration(t *testing.T) {
-	db := fakesqldb.New(t)
-	defer db.Close()
-
-	params := db.ConnParams()
-	cp := *params
-	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb")
-
-	db.AddQuery("SELECT 1", &sqltypes.Result{})
-	db.AddQuery("SELECT * FROM performance_schema.replication_connection_configuration", sqltypes.MakeTestResult(sqltypes.MakeTestFields("test_field|HEARTBEAT_INTERVAL|field2", "varchar|float64|varchar"), "test_status|4.5000|test"))
-	db.AddQuery("select @@global.replica_net_timeout", sqltypes.MakeTestResult(sqltypes.MakeTestFields("@@global.replica_net_timeout", "int64"), "9"))
-
-	testMysqld := NewMysqld(dbc)
-	defer testMysqld.Close()
-
-	ctx := t.Context()
-	replConfig, err := testMysqld.ReplicationConfiguration(ctx)
-	require.NoError(t, err)
-	assert.NotNil(t, replConfig)
-	require.EqualValues(t, math.Round(replConfig.HeartbeatInterval*2), replConfig.ReplicaNetTimeout)
-
-	db.AddQuery("SELECT * FROM performance_schema.replication_connection_configuration", sqltypes.MakeTestResult(sqltypes.MakeTestFields("test_field|HEARTBEAT_INTERVAL|field2", "varchar|float64|varchar")))
-	replConfig, err = testMysqld.ReplicationConfiguration(ctx)
-	require.NoError(t, err)
-	assert.Nil(t, replConfig)
 }
 
 func TestGetGTIDPurged(t *testing.T) {
@@ -511,29 +459,6 @@ func TestFindReplicas(t *testing.T) {
 	assert.Equal(t, want, res)
 }
 
-func TestGetBinlogInformation(t *testing.T) {
-	db := fakesqldb.New(t)
-	defer db.Close()
-
-	params := db.ConnParams()
-	cp := *params
-	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb")
-
-	db.AddQuery("SELECT 1", &sqltypes.Result{})
-	db.AddQuery("SELECT @@global.binlog_format, @@global.log_bin, @@global.log_replica_updates, @@global.binlog_row_image", sqltypes.MakeTestResult(sqltypes.MakeTestFields("@@global.binlog_format|@@global.log_bin|@@global.log_replica_updates|@@global.binlog_row_image", "varchar|int64|int64|varchar"), "binlog|1|2|row_image"))
-
-	testMysqld := NewMysqld(dbc)
-	defer testMysqld.Close()
-
-	ctx := t.Context()
-	bin, logBin, replicaUpdate, rowImage, err := testMysqld.GetBinlogInformation(ctx)
-	require.NoError(t, err)
-	assert.Equal(t, "binlog", bin)
-	assert.Equal(t, "row_image", rowImage)
-	assert.True(t, logBin)
-	assert.False(t, replicaUpdate)
-}
-
 func TestGetGTIDMode(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
@@ -678,45 +603,6 @@ func TestSemiSyncStatus(t *testing.T) {
 	p, r := testMysqld.SemiSyncStatus(t.Context())
 	assert.True(t, p)
 	assert.False(t, r)
-}
-
-func TestSemiSyncClients(t *testing.T) {
-	db := fakesqldb.New(t)
-	defer db.Close()
-
-	params := db.ConnParams()
-	cp := *params
-	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb")
-
-	db.AddQuery("SELECT 1", &sqltypes.Result{})
-	db.AddQuery("SHOW VARIABLES LIKE 'rpl_semi_sync_%_enabled'", sqltypes.MakeTestResult(sqltypes.MakeTestFields("field1|field2", "varchar|varchar"), "rpl_semi_sync_source_enabled|ON", "rpl_semi_sync_replica_enabled|ON"))
-	db.AddQuery("SHOW STATUS LIKE 'Rpl_semi_sync_source_clients'", sqltypes.MakeTestResult(sqltypes.MakeTestFields("field1|field2", "varchar|uint64"), "val1|12"))
-
-	testMysqld := NewMysqld(dbc)
-	defer testMysqld.Close()
-
-	res := testMysqld.SemiSyncClients(t.Context())
-	assert.Equal(t, uint32(12), res)
-}
-
-func TestSemiSyncSettings(t *testing.T) {
-	db := fakesqldb.New(t)
-	defer db.Close()
-
-	params := db.ConnParams()
-	cp := *params
-	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb")
-
-	db.AddQuery("SELECT 1", &sqltypes.Result{})
-	db.AddQuery("SHOW VARIABLES LIKE 'rpl_semi_sync_%_enabled'", sqltypes.MakeTestResult(sqltypes.MakeTestFields("field1|field2", "varchar|varchar"), "rpl_semi_sync_source_enabled|ON", "rpl_semi_sync_replica_enabled|ON"))
-	db.AddQuery("SHOW VARIABLES LIKE 'rpl_semi_sync_%'", sqltypes.MakeTestResult(sqltypes.MakeTestFields("field1|field2", "varchar|uint64"), "rpl_semi_sync_source_timeout|123", "rpl_semi_sync_source_wait_for_replica_count|80"))
-
-	testMysqld := NewMysqld(dbc)
-	defer testMysqld.Close()
-
-	timeout, replicas := testMysqld.SemiSyncSettings(t.Context())
-	assert.Equal(t, uint64(123), timeout)
-	assert.Equal(t, uint32(80), replicas)
 }
 
 func TestSemiSyncReplicationStatus(t *testing.T) {

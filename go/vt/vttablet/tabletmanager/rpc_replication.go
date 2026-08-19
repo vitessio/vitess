@@ -179,129 +179,19 @@ func (tm *TabletManager) FullStatus(ctx context.Context) (*replicationdatapb.Ful
 		}, nil
 	}
 
-	// Server ID - "select @@global.server_id"
-	serverID, err := tm.MysqlDaemon.GetServerID(ctx)
+	// Collect mysql state using CollectFullStatusData.
+	status, err := tm.MysqlDaemon.CollectFullStatusData(ctx)
 	if err != nil {
 		return nil, err
 	}
-
-	// Server UUID - "select @@global.server_uuid"
-	serverUUID, err := tm.MysqlDaemon.GetServerUUID(ctx)
-	if err != nil {
-		return nil, err
+	if status == nil {
+		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "FullStatus collector returned no data")
 	}
 
-	// Replication status - "SHOW REPLICA STATUS"
-	replicationStatus, err := tm.MysqlDaemon.ReplicationStatus(ctx)
-	var replicationStatusProto *replicationdatapb.Status
-	if err != nil && err != mysql.ErrNotReplica {
-		return nil, err
-	}
-	if err == nil {
-		replicationStatusProto = replication.ReplicationStatusToProto(replicationStatus)
-	}
-
-	// Primary status - "SHOW BINARY LOG STATUS"
-	primaryStatus, err := tm.MysqlDaemon.PrimaryStatus(ctx)
-	var primaryStatusProto *replicationdatapb.PrimaryStatus
-	if err != nil && err != mysql.ErrNoPrimaryStatus {
-		return nil, err
-	}
-	if err == nil {
-		primaryStatusProto = replication.PrimaryStatusToProto(primaryStatus)
-	}
-
-	// Purged GTID set
-	purgedGTIDs, err := tm.MysqlDaemon.GetGTIDPurged(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	// Version string "majorVersion.minorVersion.patchRelease"
-	version, err := tm.MysqlDaemon.GetVersionString(ctx)
-	if err != nil {
-		return nil, err
-	}
-	_, v, err := mysqlctl.ParseVersionString(version)
-	if err != nil {
-		return nil, err
-	}
-	version = fmt.Sprintf("%d.%d.%d", v.Major, v.Minor, v.Patch)
-
-	// Version comment "select @@global.version_comment"
-	versionComment, err := tm.MysqlDaemon.GetVersionComment(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	// Read only - "SHOW VARIABLES LIKE 'read_only'"
-	readOnly, err := tm.MysqlDaemon.IsReadOnly(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	// superReadOnly - "SELECT @@global.super_read_only"
-	superReadOnly, err := tm.MysqlDaemon.IsSuperReadOnly(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	// Binlog Information - "select @@global.binlog_format, @@global.log_bin, @@global.log_replica_updates, @@global.binlog_row_image"
-	binlogFormat, logBin, logReplicaUpdates, binlogRowImage, err := tm.MysqlDaemon.GetBinlogInformation(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	// GTID Mode - "select @@global.gtid_mode" - Only applicable for MySQL variants
-	gtidMode, err := tm.MysqlDaemon.GetGTIDMode(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	// Semi sync settings - "show global variables like 'rpl_semi_sync_%_enabled'"
-	primarySemiSync, replicaSemiSync := tm.MysqlDaemon.SemiSyncEnabled(ctx)
-
-	// Semi sync status - "show status like 'Rpl_semi_sync_%_status'"
-	primarySemiSyncStatus, replicaSemiSyncStatus := tm.MysqlDaemon.SemiSyncStatus(ctx)
-
-	//  Semi sync clients count - "show status like 'semi_sync_source_clients'"
-	semiSyncClients := tm.MysqlDaemon.SemiSyncClients(ctx)
-
-	// Semi sync settings - "show status like 'rpl_semi_sync_%'
-	semiSyncTimeout, semiSyncNumReplicas := tm.MysqlDaemon.SemiSyncSettings(ctx)
-
-	replConfiguration, err := tm.MysqlDaemon.ReplicationConfiguration(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	return &replicationdatapb.FullStatus{
-		ServerId:                    serverID,
-		ServerUuid:                  serverUUID,
-		ReplicationStatus:           replicationStatusProto,
-		PrimaryStatus:               primaryStatusProto,
-		GtidPurged:                  replication.EncodePosition(purgedGTIDs),
-		Version:                     version,
-		VersionComment:              versionComment,
-		ReadOnly:                    readOnly,
-		GtidMode:                    gtidMode,
-		BinlogFormat:                binlogFormat,
-		BinlogRowImage:              binlogRowImage,
-		LogBinEnabled:               logBin,
-		LogReplicaUpdates:           logReplicaUpdates,
-		SemiSyncPrimaryEnabled:      primarySemiSync,
-		SemiSyncReplicaEnabled:      replicaSemiSync,
-		SemiSyncPrimaryStatus:       primarySemiSyncStatus,
-		SemiSyncReplicaStatus:       replicaSemiSyncStatus,
-		SemiSyncPrimaryClients:      semiSyncClients,
-		SemiSyncPrimaryTimeout:      semiSyncTimeout,
-		SemiSyncWaitForReplicaCount: semiSyncNumReplicas,
-		SemiSyncBlocked:             tm.SemiSyncMonitor.AllWritesBlocked(),
-		SuperReadOnly:               superReadOnly,
-		ReplicationConfiguration:    replConfiguration,
-		TabletType:                  tm.Tablet().Type,
-		ShardPeerHealth:             tm.shardPeerHealthSnapshot(),
-	}, nil
+	status.SemiSyncBlocked = tm.SemiSyncMonitor.AllWritesBlocked()
+	status.TabletType = tm.Tablet().Type
+	status.ShardPeerHealth = tm.shardPeerHealthSnapshot()
+	return status, nil
 }
 
 // shardPeerHealthSnapshot returns the latest shard-peer liveness signals, or nil when

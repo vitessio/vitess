@@ -294,10 +294,6 @@ func (flv *filePosFlavor) replicationConfiguration(c *Conn) (*replicationdata.Co
 	return nil, nil
 }
 
-func (flv *filePosFlavor) replicationNetTimeout(c *Conn) (int32, error) {
-	return 0, nil
-}
-
 // waitUntilPosition is part of the Flavor interface.
 func (flv *filePosFlavor) waitUntilPosition(ctx context.Context, c *Conn, pos replication.Position) error {
 	filePosPos, ok := pos.GTIDSet.(replication.FilePosGTID)
@@ -409,4 +405,8 @@ func (*filePosFlavor) catchupToGTIDCommands(_ *ConnParams, _ replication.Positio
 
 func (*filePosFlavor) binlogReplicatedUpdates() string {
 	return "@@global.log_slave_updates"
+}
+
+func (*filePosFlavor) replicationNetTimeoutVariable() string {
+	return "@@global.slave_net_timeout"
 }
