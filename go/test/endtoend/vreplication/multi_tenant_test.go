@@ -31,6 +31,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/rand/v2"
+	"net/http"
+	"os"
+	"path"
+	"path/filepath"
+	"regexp"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -42,6 +47,7 @@ import (
 
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/proto/vtctldata"
+	vdiff2 "vitess.io/vitess/go/vt/vttablet/tabletmanager/vdiff"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
@@ -91,14 +97,12 @@ type multiTenantMigration struct {
 }
 
 const (
-	// The source/mt schema does not have the tenant_id column in the PK as adding a
-	// column to a table can be done as an INSTANT operation whereas modifying a table's
-	// PK requires a full table rebuild. So as a practical matter in production the
-	// source schema will likely have the tenant_id column, but NOT have it be part of
-	// the PK.
 	mtSchema = "create table t1(id int, tenant_id int, primary key(id)) Engine=InnoDB"
-	// The target/st schema must have the tenant_id column in the PK and the primary
-	// vindex.
+	// The source PK deliberately differs from the target PK and includes the
+	// tenant_id column. This exercises the VDiff path that stores a separate
+	// source lastpk when the two differ, and it gives the source-side resumed
+	// row streamer query the composite-PK disjunction that the resume subtest
+	// in TestMultiTenantSimple asserts on.
 	stSchema  = "create table t1(id int, tenant_id int, primary key(id, tenant_id)) Engine=InnoDB"
 	mtVSchema = `
 {
@@ -237,6 +241,66 @@ func TestMultiTenantSimple(t *testing.T) {
 	createFunc()
 
 	vdiff(t, targetKeyspace, defaultWorkflowName, defaultCellName, nil)
+
+	// Confirm that a resumed VDiff ANDs the workflow's tenant filter with the
+	// entire lastpk clause built from the source's composite primary key.
+	// Because the source and target PKs differ, the resume uses the separately
+	// stored source lastpk. All we need to verify is the query shape passed
+	// down to MySQL: rows matched by an unparenthesized lastpk disjunction are
+	// dropped in memory by the vstreamer's own filters, so the bug cannot
+	// surface as a mismatch and the cost is wasted work at the MySQL layer. We
+	// wait for the resumed VDiff to complete only so that we know the row
+	// streamer queries have been issued and logged before we read the source
+	// tablet logs. See https://github.com/vitessio/vitess/issues/20857.
+	t.Run("resume vdiff from lastpk", func(t *testing.T) {
+		ksWorkflow := fmt.Sprintf("%s.%s", targetKeyspace, defaultWorkflowName)
+		uuid, output := performVDiff2Action(t, ksWorkflow, defaultCellName, "show", "last", false)
+		previous := getVDiffInfo(output)
+		require.Equal(t, "completed", previous.State)
+		previousCompletedAt, err := time.Parse(vdiff2.TimestampFormat, previous.CompletedAt)
+		require.NoError(t, err)
+		completedAtMin := previousCompletedAt.Add(-time.Nanosecond)
+		lastIndex = insertRows(lastIndex, sourceKeyspace)
+		performVDiff2Action(t, ksWorkflow, defaultCellName, "resume", uuid, false)
+		info := waitForVDiff2ToComplete(t, ksWorkflow, defaultCellName, uuid, completedAtMin)
+		require.NotNil(t, info)
+		require.False(t, info.HasMismatch)
+
+		resumedQuery := regexp.MustCompile(`Streaming query: select .* from t1 where \(tenant_id = 1\) and \(\(id = \d+ and tenant_id > \d+\) or \(id > \d+\)\) order by id, tenant_id`)
+		// On this release the vttablet glog INFO lines -- which include the
+		// row streamer's generated query -- are written to vttablet INFO log
+		// files in the cluster's shared log directory rather than to the
+		// per-tablet stderr file. Only the source side builds the composite-PK
+		// disjunction (the target PK is a single column), so scanning all of
+		// the vttablet INFO logs still only matches the source-side query.
+		// The glog INFO file writes are also buffered, so we explicitly flush
+		// the source tablets' logs via the /debug/flushlogs endpoint and poll
+		// in case the log write itself is still in flight.
+		require.Eventually(t, func() bool {
+			for _, tablet := range vc.Cells["zone1"].Keyspaces[sourceKeyspace].Shards["0"].Tablets {
+				resp, err := http.Get(fmt.Sprintf("http://%s:%d/debug/flushlogs", tablet.Vttablet.TabletHostname, tablet.Vttablet.Port))
+				if err == nil {
+					resp.Body.Close()
+				}
+			}
+			logFiles, err := filepath.Glob(path.Join(vc.ClusterConfig.tmpDir, "vttablet.*.log.INFO.*"))
+			if err != nil {
+				return false
+			}
+			for _, logFile := range logFiles {
+				logBytes, err := os.ReadFile(logFile)
+				if err != nil {
+					continue
+				}
+				if resumedQuery.Match(logBytes) {
+					return true
+				}
+			}
+			return false
+		}, 90*time.Second, 1*time.Second,
+			"did not find a resumed row streamer query that ANDs the tenant filter with the parenthesized lastpk clause in the vttablet logs")
+	})
+
 	mt.SwitchReads()
 	confirmOnlyReadsSwitched(t)
 

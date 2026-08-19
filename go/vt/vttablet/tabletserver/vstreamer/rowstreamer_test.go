@@ -434,6 +434,44 @@ func TestStreamRowsFilterIn(t *testing.T) {
 	require.NotZero(t, engine.vstreamerPacketSize.Get())
 }
 
+// TestStreamRowsFilterWithLastPK confirms that pushed down predicates are
+// ANDed with the *entire* lastpk clause when a copy phase cycle resumes.
+// The lastpk clause for a composite PK is a disjunction, so it has to be
+// parenthesized as a unit; otherwise AND binds more tightly than OR and the
+// trailing OR terms match rows that the pushed down predicates exclude.
+// Such rows are dropped in memory by the plan's filters before being
+// streamed, so the row output is identical either way and the generated
+// query assertion below is what guards the fix: the cost of the bug is
+// mysqld needlessly scanning and returning the excluded rows.
+func TestStreamRowsFilterWithLastPK(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+
+	require.NoError(t, env.SetVSchema(shardedVSchema))
+	defer env.SetVSchema("{}")
+
+	execStatements(t, []string{
+		"create table t1(id1 int, id2 int, val varbinary(128), primary key(id1, id2))",
+		// (2,1) is the row that the unparenthesized lastpk disjunction lets
+		// escape the filter in the generated query: it fails the filter but
+		// satisfies `id1 > 1`.
+		"insert into t1 values (1, 1, 'include'), (1, 2, 'include'), (1, 3, 'exclude'), (2, 1, 'exclude'), (2, 2, 'include')",
+	})
+
+	defer execStatements(t, []string{
+		"drop table t1",
+	})
+
+	wantStream := []string{
+		`fields:{name:"id1" type:INT32 table:"t1" org_table:"t1" database:"vttest" org_name:"id1" column_length:11 charset:63 column_type:"int(11)"} fields:{name:"id2" type:INT32 table:"t1" org_table:"t1" database:"vttest" org_name:"id2" column_length:11 charset:63 column_type:"int(11)"} fields:{name:"val" type:VARBINARY table:"t1" org_table:"t1" database:"vttest" org_name:"val" column_length:128 charset:63 column_type:"varbinary(128)"} pkfields:{name:"id1" type:INT32 charset:63} pkfields:{name:"id2" type:INT32 charset:63}`,
+		`rows:{lengths:1 lengths:1 lengths:7 values:"12include"} rows:{lengths:1 lengths:1 lengths:7 values:"22include"} lastpk:{lengths:1 lengths:1 values:"22"}`,
+	}
+	wantQuery := "select /*+ MAX_EXECUTION_TIME(3600000) */ id1, id2, val from t1 where (val = 'include') and ((id1 = 1 and id2 > 1) or (id1 > 1)) order by id1, id2"
+	checkStream(t, "select id1, id2, val from t1 where (val = 'include')",
+		[]sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(1)}, wantQuery, wantStream)
+}
+
 func TestStreamRowsFilterVarBinary(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
