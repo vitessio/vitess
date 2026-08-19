@@ -73,6 +73,10 @@ func buildVExplainMySQLPlan(ctx context.Context, explainStatement sqlparser.Stat
 		return nil, err
 	}
 
+	if err := checkVExplainMySQLNoCalcFoundRows(explainStatement); err != nil {
+		return nil, err
+	}
+
 	innerInstruction, err := createInstructionFor(ctx, sqlparser.String(explainStatement), explainStatement, reservedVars, vschema, cfg)
 	if err != nil {
 		return nil, err
@@ -100,6 +104,9 @@ const (
 
 	vexplainMySQLLockError = "VEXPLAIN MYSQLPLAN does not support advisory lock functions " +
 		"(get_lock, release_lock, release_all_locks, is_free_lock, is_used_lock)"
+
+	vexplainMySQLCalcFoundRowsError = "VEXPLAIN MYSQLPLAN does not support SELECT SQL_CALC_FOUND_ROWS with GROUP BY or HAVING, " +
+		"because the planner rewrites the row count into a derived table that EXPLAIN could materialize; use VEXPLAIN ALL instead"
 )
 
 // checkVExplainMySQLNoNestedQuery rejects a statement that contains a subquery,
@@ -164,6 +171,28 @@ func checkVExplainMySQLNoLockFunc(statement sqlparser.Statement) error {
 		return true, nil
 	}, statement)
 	return lockErr
+}
+
+// checkVExplainMySQLNoCalcFoundRows rejects a SELECT SQL_CALC_FOUND_ROWS with a
+// LIMIT that also carries GROUP BY or HAVING. The nested-query walk above runs on
+// the original AST, where no derived table is present, but for exactly this shape
+// the planner rewrites the row-count half into `select count(*) from (select ...) as t`
+// (see buildSQLCalcFoundRowsPlan). That derived-table query would ship to every shard
+// inside EXPLAIN FORMAT=JSON, which can materialize the derived table during
+// optimization - running any stored function inside it once per shard - violating
+// MYSQLPLAN's promise never to run the wrapped query. Without a LIMIT the directive
+// is ignored, and without GROUP BY/HAVING the count query reuses the original SELECT
+// with a single count(*), so neither introduces a derived table. It must be caught on
+// the AST before planning, since SQLCalcFoundRows is on the primitive allowlist.
+func checkVExplainMySQLNoCalcFoundRows(statement sqlparser.Statement) error {
+	sel, ok := statement.(*sqlparser.Select)
+	if !ok {
+		return nil
+	}
+	if sel.SQLCalcFoundRows && sel.Limit != nil && (sel.GroupBy != nil || sel.Having != nil) {
+		return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, vexplainMySQLCalcFoundRowsError)
+	}
+	return nil
 }
 
 // checkVExplainMySQLSupported returns an error if any primitive in the tree cannot

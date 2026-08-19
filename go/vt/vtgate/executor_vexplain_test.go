@@ -484,6 +484,30 @@ func TestVExplainMySQLPlanRejectsSubqueries(t *testing.T) {
 	}
 }
 
+// TestVExplainMySQLPlanRejectsCalcFoundRows verifies that SELECT SQL_CALC_FOUND_ROWS
+// with a LIMIT and GROUP BY/HAVING is rejected before any shard RPC. Its original AST
+// contains no nested query block, so the up-front nested-query walk accepts it, but
+// the planner rewrites the row-count half into `select count(*) from (select ...) as t`,
+// wrapping the original SELECT in a derived table that EXPLAIN FORMAT=JSON could
+// materialize (running a stored function once per shard). The dedicated guard catches
+// this shape on the AST before planning, and points the user at VEXPLAIN ALL.
+func TestVExplainMySQLPlanRejectsCalcFoundRows(t *testing.T) {
+	conns := map[string]*sandboxconn.SandboxConn{}
+	executor, ctx := createExecutorEnvCallback(t, createExecutorConfig(), func(shard, ks string, tabletType topodatapb.TabletType, conn *sandboxconn.SandboxConn) {
+		conns[ks+"/"+shard] = conn
+	})
+
+	session := &vtgatepb.Session{TargetString: "@primary"}
+	_, err := executorExec(ctx, executor, session, "vexplain mysqlplan select sql_calc_found_rows user_id, count(id) from music group by user_id having count(user_id) = 1 limit 2", nil)
+	require.ErrorContains(t, err, "does not support SELECT SQL_CALC_FOUND_ROWS with GROUP BY or HAVING")
+	require.ErrorContains(t, err, "use VEXPLAIN ALL instead")
+
+	// Rejection happens at plan time, so no tablet query is ever sent.
+	for target, conn := range conns {
+		assert.Empty(t, conn.Queries, "no query should be sent to %s", target)
+	}
+}
+
 // TestVExplainMySQLPlanRequiresExecution verifies that plans whose target shards
 // cannot be resolved without running the query (lookup vindex, cross-shard join,
 // recursive CTE) and DML statements are rejected at plan time, each pointing the
