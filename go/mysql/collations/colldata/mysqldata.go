@@ -2819,7 +2819,7 @@ type contractor_utf16_czech_ci struct{}
 func (contractor_utf16_czech_ci) Find(cs charset.Charset, cp0 rune, b0 []byte) ([]uint16, []byte, int) {
 	switch cp0 {
 	case 67:
-		cp1, width1 := cs.DecodeRune(b0)
+		cp1, width1, _ := cs.DecodeRune(b0)
 		switch cp1 {
 		case 72:
 			return contractor_utf16_czech_ci_weights[0:3], b0[width1:], 2
@@ -2827,7 +2827,7 @@ func (contractor_utf16_czech_ci) Find(cs charset.Charset, cp0 rune, b0 []byte) (
 			return contractor_utf16_czech_ci_weights[3:6], b0[width1:], 2
 		}
 	case 99:
-		cp1, width1 := cs.DecodeRune(b0)
+		cp1, width1, _ := cs.DecodeRune(b0)
 		switch cp1 {
 		case 104:
 			return contractor_utf16_czech_ci_weights[6:9], b0[width1:], 2
@@ -2848,7 +2848,7 @@ type contractor_utf16_danish_ci struct{}
 func (contractor_utf16_danish_ci) Find(cs charset.Charset, cp0 rune, b0 []byte) ([]uint16, []byte, int) {
 	switch cp0 {
 	case 65:
-		cp1, width1 := cs.DecodeRune(b0)
+		cp1, width1, _ := cs.DecodeRune(b0)
 		switch cp1 {
 		case 65:
 			return contractor_utf16_danish_ci_weights[0:3], b0[width1:], 2
@@ -2856,7 +2856,7 @@ func (contractor_utf16_danish_ci) Find(cs charset.Charset, cp0 rune, b0 []byte) 
 			return contractor_utf16_danish_ci_weights[3:6], b0[width1:], 2
 		}
 	case 97:
-		cp1, width1 := cs.DecodeRune(b0)
+		cp1, width1, _ := cs.DecodeRune(b0)
 		switch cp1 {
 		case 97:
 			return contractor_utf16_danish_ci_weights[6:9], b0[width1:], 2
@@ -2877,7 +2877,7 @@ type contractor_utf16_lithuanian_ci struct{}
 func (contractor_utf16_lithuanian_ci) Find(cs charset.Charset, cp0 rune, b0 []byte) ([]uint16, []byte, int) {
 	switch cp0 {
 	case 67:
-		cp1, width1 := cs.DecodeRune(b0)
+		cp1, width1, _ := cs.DecodeRune(b0)
 		switch cp1 {
 		case 72:
 			return contractor_utf16_lithuanian_ci_weights[0:3], b0[width1:], 2
@@ -2885,7 +2885,7 @@ func (contractor_utf16_lithuanian_ci) Find(cs charset.Charset, cp0 rune, b0 []by
 			return contractor_utf16_lithuanian_ci_weights[3:6], b0[width1:], 2
 		}
 	case 99:
-		cp1, width1 := cs.DecodeRune(b0)
+		cp1, width1, _ := cs.DecodeRune(b0)
 		switch cp1 {
 		case 104:
 			return contractor_utf16_lithuanian_ci_weights[6:9], b0[width1:], 2
@@ -2906,7 +2906,7 @@ type contractor_utf16_spanish2_ci struct{}
 func (contractor_utf16_spanish2_ci) Find(cs charset.Charset, cp0 rune, b0 []byte) ([]uint16, []byte, int) {
 	switch cp0 {
 	case 67:
-		cp1, width1 := cs.DecodeRune(b0)
+		cp1, width1, _ := cs.DecodeRune(b0)
 		switch cp1 {
 		case 72:
 			return contractor_utf16_spanish2_ci_weights[0:3], b0[width1:], 2
@@ -2914,7 +2914,7 @@ func (contractor_utf16_spanish2_ci) Find(cs charset.Charset, cp0 rune, b0 []byte
 			return contractor_utf16_spanish2_ci_weights[3:6], b0[width1:], 2
 		}
 	case 76:
-		cp1, width1 := cs.DecodeRune(b0)
+		cp1, width1, _ := cs.DecodeRune(b0)
 		switch cp1 {
 		case 76:
 			return contractor_utf16_spanish2_ci_weights[6:9], b0[width1:], 2
@@ -2922,13 +2922,13 @@ func (contractor_utf16_spanish2_ci) Find(cs charset.Charset, cp0 rune, b0 []byte
 			return contractor_utf16_spanish2_ci_weights[9:12], b0[width1:], 2
 		}
 	case 99:
-		cp1, width1 := cs.DecodeRune(b0)
+		cp1, width1, _ := cs.DecodeRune(b0)
 		switch cp1 {
 		case 104:
 			return contractor_utf16_spanish2_ci_weights[12:15], b0[width1:], 2
 		}
 	case 108:
-		cp1, width1 := cs.DecodeRune(b0)
+		cp1, width1, _ := cs.DecodeRune(b0)
 		switch cp1 {
 		case 108:
 			return contractor_utf16_spanish2_ci_weights[15:18], b0[width1:], 2
@@ -2961,7 +2961,7 @@ type contractor_utf16_croatian_ci struct{}
 func (contractor_utf16_croatian_ci) Find(cs charset.Charset, cp0 rune, b0 []byte) ([]uint16, []byte, int) {
 	switch cp0 {
 	case 68:
-		cp1, width1 := cs.DecodeRune(b0)
+		cp1, width1, _ := cs.DecodeRune(b0)
 		switch cp1 {
 		case 381:
 			return contractor_utf16_croatian_ci_weights[0:3], b0[width1:], 2
@@ -2969,7 +2969,7 @@ func (contractor_utf16_croatian_ci) Find(cs charset.Charset, cp0 rune, b0 []byte
 			return contractor_utf16_croatian_ci_weights[3:6], b0[width1:], 2
 		}
 	case 76:
-		cp1, width1 := cs.DecodeRune(b0)
+		cp1, width1, _ := cs.DecodeRune(b0)
 		switch cp1 {
 		case 74:
 			return contractor_utf16_croatian_ci_weights[6:9], b0[width1:], 2
@@ -2977,7 +2977,7 @@ func (contractor_utf16_croatian_ci) Find(cs charset.Charset, cp0 rune, b0 []byte
 			return contractor_utf16_croatian_ci_weights[9:12], b0[width1:], 2
 		}
 	case 78:
-		cp1, width1 := cs.DecodeRune(b0)
+		cp1, width1, _ := cs.DecodeRune(b0)
 		switch cp1 {
 		case 74:
 			return contractor_utf16_croatian_ci_weights[12:15], b0[width1:], 2
@@ -2985,7 +2985,7 @@ func (contractor_utf16_croatian_ci) Find(cs charset.Charset, cp0 rune, b0 []byte
 			return contractor_utf16_croatian_ci_weights[15:18], b0[width1:], 2
 		}
 	case 100:
-		cp1, width1 := cs.DecodeRune(b0)
+		cp1, width1, _ := cs.DecodeRune(b0)
 		switch cp1 {
 		case 381:
 			return contractor_utf16_croatian_ci_weights[18:21], b0[width1:], 2
@@ -2993,7 +2993,7 @@ func (contractor_utf16_croatian_ci) Find(cs charset.Charset, cp0 rune, b0 []byte
 			return contractor_utf16_croatian_ci_weights[21:24], b0[width1:], 2
 		}
 	case 108:
-		cp1, width1 := cs.DecodeRune(b0)
+		cp1, width1, _ := cs.DecodeRune(b0)
 		switch cp1 {
 		case 74:
 			return contractor_utf16_croatian_ci_weights[24:27], b0[width1:], 2
@@ -3001,7 +3001,7 @@ func (contractor_utf16_croatian_ci) Find(cs charset.Charset, cp0 rune, b0 []byte
 			return contractor_utf16_croatian_ci_weights[27:30], b0[width1:], 2
 		}
 	case 110:
-		cp1, width1 := cs.DecodeRune(b0)
+		cp1, width1, _ := cs.DecodeRune(b0)
 		switch cp1 {
 		case 74:
 			return contractor_utf16_croatian_ci_weights[30:33], b0[width1:], 2
@@ -3046,7 +3046,7 @@ type contractor_utf8mb4_cs_0900_ai_ci struct{}
 func (contractor_utf8mb4_cs_0900_ai_ci) Find(cs charset.Charset, cp0 rune, b0 []byte) ([]uint16, []byte, int) {
 	switch cp0 {
 	case 67:
-		cp1, width1 := cs.DecodeRune(b0)
+		cp1, width1, _ := cs.DecodeRune(b0)
 		switch cp1 {
 		case 72:
 			return contractor_utf8mb4_cs_0900_ai_ci_weights[0:6], b0[width1:], 2
@@ -3054,7 +3054,7 @@ func (contractor_utf8mb4_cs_0900_ai_ci) Find(cs charset.Charset, cp0 rune, b0 []
 			return contractor_utf8mb4_cs_0900_ai_ci_weights[6:12], b0[width1:], 2
 		}
 	case 99:
-		cp1, width1 := cs.DecodeRune(b0)
+		cp1, width1, _ := cs.DecodeRune(b0)
 		switch cp1 {
 		case 72:
 			return contractor_utf8mb4_cs_0900_ai_ci_weights[12:18], b0[width1:], 2
@@ -3081,7 +3081,7 @@ type contractor_utf8mb4_da_0900_ai_ci struct{}
 func (contractor_utf8mb4_da_0900_ai_ci) Find(cs charset.Charset, cp0 rune, b0 []byte) ([]uint16, []byte, int) {
 	switch cp0 {
 	case 65:
-		cp1, width1 := cs.DecodeRune(b0)
+		cp1, width1, _ := cs.DecodeRune(b0)
 		switch cp1 {
 		case 65:
 			return contractor_utf8mb4_da_0900_ai_ci_weights[0:6], b0[width1:], 2
@@ -3089,7 +3089,7 @@ func (contractor_utf8mb4_da_0900_ai_ci) Find(cs charset.Charset, cp0 rune, b0 []
 			return contractor_utf8mb4_da_0900_ai_ci_weights[6:12], b0[width1:], 2
 		}
 	case 97:
-		cp1, width1 := cs.DecodeRune(b0)
+		cp1, width1, _ := cs.DecodeRune(b0)
 		switch cp1 {
 		case 97:
 			return contractor_utf8mb4_da_0900_ai_ci_weights[12:18], b0[width1:], 2
@@ -3110,7 +3110,7 @@ type contractor_utf8mb4_lt_0900_ai_ci struct{}
 func (contractor_utf8mb4_lt_0900_ai_ci) Find(cs charset.Charset, cp0 rune, b0 []byte) ([]uint16, []byte, int) {
 	switch cp0 {
 	case 775:
-		cp1, width1 := cs.DecodeRune(b0)
+		cp1, width1, _ := cs.DecodeRune(b0)
 		switch cp1 {
 		case 768:
 			return contractor_utf8mb4_lt_0900_ai_ci_weights[0:3], b0[width1:], 2
@@ -3135,7 +3135,7 @@ type contractor_utf8mb4_es_trad_0900_ai_ci struct{}
 func (contractor_utf8mb4_es_trad_0900_ai_ci) Find(cs charset.Charset, cp0 rune, b0 []byte) ([]uint16, []byte, int) {
 	switch cp0 {
 	case 67:
-		cp1, width1 := cs.DecodeRune(b0)
+		cp1, width1, _ := cs.DecodeRune(b0)
 		switch cp1 {
 		case 72:
 			return contractor_utf8mb4_es_trad_0900_ai_ci_weights[0:6], b0[width1:], 2
@@ -3143,7 +3143,7 @@ func (contractor_utf8mb4_es_trad_0900_ai_ci) Find(cs charset.Charset, cp0 rune, 
 			return contractor_utf8mb4_es_trad_0900_ai_ci_weights[6:12], b0[width1:], 2
 		}
 	case 76:
-		cp1, width1 := cs.DecodeRune(b0)
+		cp1, width1, _ := cs.DecodeRune(b0)
 		switch cp1 {
 		case 76:
 			return contractor_utf8mb4_es_trad_0900_ai_ci_weights[12:18], b0[width1:], 2
@@ -3151,13 +3151,13 @@ func (contractor_utf8mb4_es_trad_0900_ai_ci) Find(cs charset.Charset, cp0 rune, 
 			return contractor_utf8mb4_es_trad_0900_ai_ci_weights[18:24], b0[width1:], 2
 		}
 	case 99:
-		cp1, width1 := cs.DecodeRune(b0)
+		cp1, width1, _ := cs.DecodeRune(b0)
 		switch cp1 {
 		case 104:
 			return contractor_utf8mb4_es_trad_0900_ai_ci_weights[24:30], b0[width1:], 2
 		}
 	case 108:
-		cp1, width1 := cs.DecodeRune(b0)
+		cp1, width1, _ := cs.DecodeRune(b0)
 		switch cp1 {
 		case 108:
 			return contractor_utf8mb4_es_trad_0900_ai_ci_weights[30:36], b0[width1:], 2
@@ -3182,11 +3182,11 @@ type contractor_utf8mb4_hu_0900_ai_ci struct{}
 func (contractor_utf8mb4_hu_0900_ai_ci) Find(cs charset.Charset, cp0 rune, b0 []byte) ([]uint16, []byte, int) {
 	switch cp0 {
 	case 67:
-		cp1, width1 := cs.DecodeRune(b0)
+		cp1, width1, _ := cs.DecodeRune(b0)
 		switch cp1 {
 		case 67:
 			b1 := b0[width1:]
-			cp2, width2 := cs.DecodeRune(b1)
+			cp2, width2, _ := cs.DecodeRune(b1)
 			switch cp2 {
 			case 83:
 				return contractor_utf8mb4_hu_0900_ai_ci_weights[0:15], b1[width2:], 3
@@ -3195,7 +3195,7 @@ func (contractor_utf8mb4_hu_0900_ai_ci) Find(cs charset.Charset, cp0 rune, b0 []
 			return contractor_utf8mb4_hu_0900_ai_ci_weights[15:21], b0[width1:], 2
 		case 99:
 			b1 := b0[width1:]
-			cp2, width2 := cs.DecodeRune(b1)
+			cp2, width2, _ := cs.DecodeRune(b1)
 			switch cp2 {
 			case 115:
 				return contractor_utf8mb4_hu_0900_ai_ci_weights[21:36], b1[width2:], 3
@@ -3204,15 +3204,15 @@ func (contractor_utf8mb4_hu_0900_ai_ci) Find(cs charset.Charset, cp0 rune, b0 []
 			return contractor_utf8mb4_hu_0900_ai_ci_weights[36:42], b0[width1:], 2
 		}
 	case 68:
-		cp1, width1 := cs.DecodeRune(b0)
+		cp1, width1, _ := cs.DecodeRune(b0)
 		switch cp1 {
 		case 68:
 			b1 := b0[width1:]
-			cp2, width2 := cs.DecodeRune(b1)
+			cp2, width2, _ := cs.DecodeRune(b1)
 			switch cp2 {
 			case 90:
 				b2 := b1[width2:]
-				cp3, width3 := cs.DecodeRune(b2)
+				cp3, width3, _ := cs.DecodeRune(b2)
 				switch cp3 {
 				case 83:
 					return contractor_utf8mb4_hu_0900_ai_ci_weights[42:63], b2[width3:], 4
@@ -3221,7 +3221,7 @@ func (contractor_utf8mb4_hu_0900_ai_ci) Find(cs charset.Charset, cp0 rune, b0 []
 			}
 		case 90:
 			b1 := b0[width1:]
-			cp2, width2 := cs.DecodeRune(b1)
+			cp2, width2, _ := cs.DecodeRune(b1)
 			switch cp2 {
 			case 83:
 				return contractor_utf8mb4_hu_0900_ai_ci_weights[78:87], b1[width2:], 3
@@ -3229,11 +3229,11 @@ func (contractor_utf8mb4_hu_0900_ai_ci) Find(cs charset.Charset, cp0 rune, b0 []
 			return contractor_utf8mb4_hu_0900_ai_ci_weights[87:93], b1, 2
 		case 100:
 			b1 := b0[width1:]
-			cp2, width2 := cs.DecodeRune(b1)
+			cp2, width2, _ := cs.DecodeRune(b1)
 			switch cp2 {
 			case 122:
 				b2 := b1[width2:]
-				cp3, width3 := cs.DecodeRune(b2)
+				cp3, width3, _ := cs.DecodeRune(b2)
 				switch cp3 {
 				case 115:
 					return contractor_utf8mb4_hu_0900_ai_ci_weights[93:114], b2[width3:], 4
@@ -3242,7 +3242,7 @@ func (contractor_utf8mb4_hu_0900_ai_ci) Find(cs charset.Charset, cp0 rune, b0 []
 			}
 		case 122:
 			b1 := b0[width1:]
-			cp2, width2 := cs.DecodeRune(b1)
+			cp2, width2, _ := cs.DecodeRune(b1)
 			switch cp2 {
 			case 115:
 				return contractor_utf8mb4_hu_0900_ai_ci_weights[129:138], b1[width2:], 3
@@ -3250,11 +3250,11 @@ func (contractor_utf8mb4_hu_0900_ai_ci) Find(cs charset.Charset, cp0 rune, b0 []
 			return contractor_utf8mb4_hu_0900_ai_ci_weights[138:144], b1, 2
 		}
 	case 71:
-		cp1, width1 := cs.DecodeRune(b0)
+		cp1, width1, _ := cs.DecodeRune(b0)
 		switch cp1 {
 		case 71:
 			b1 := b0[width1:]
-			cp2, width2 := cs.DecodeRune(b1)
+			cp2, width2, _ := cs.DecodeRune(b1)
 			switch cp2 {
 			case 89:
 				return contractor_utf8mb4_hu_0900_ai_ci_weights[144:159], b1[width2:], 3
@@ -3263,7 +3263,7 @@ func (contractor_utf8mb4_hu_0900_ai_ci) Find(cs charset.Charset, cp0 rune, b0 []
 			return contractor_utf8mb4_hu_0900_ai_ci_weights[159:165], b0[width1:], 2
 		case 103:
 			b1 := b0[width1:]
-			cp2, width2 := cs.DecodeRune(b1)
+			cp2, width2, _ := cs.DecodeRune(b1)
 			switch cp2 {
 			case 121:
 				return contractor_utf8mb4_hu_0900_ai_ci_weights[165:180], b1[width2:], 3
@@ -3272,11 +3272,11 @@ func (contractor_utf8mb4_hu_0900_ai_ci) Find(cs charset.Charset, cp0 rune, b0 []
 			return contractor_utf8mb4_hu_0900_ai_ci_weights[180:186], b0[width1:], 2
 		}
 	case 76:
-		cp1, width1 := cs.DecodeRune(b0)
+		cp1, width1, _ := cs.DecodeRune(b0)
 		switch cp1 {
 		case 76:
 			b1 := b0[width1:]
-			cp2, width2 := cs.DecodeRune(b1)
+			cp2, width2, _ := cs.DecodeRune(b1)
 			switch cp2 {
 			case 89:
 				return contractor_utf8mb4_hu_0900_ai_ci_weights[186:201], b1[width2:], 3
@@ -3285,7 +3285,7 @@ func (contractor_utf8mb4_hu_0900_ai_ci) Find(cs charset.Charset, cp0 rune, b0 []
 			return contractor_utf8mb4_hu_0900_ai_ci_weights[201:207], b0[width1:], 2
 		case 108:
 			b1 := b0[width1:]
-			cp2, width2 := cs.DecodeRune(b1)
+			cp2, width2, _ := cs.DecodeRune(b1)
 			switch cp2 {
 			case 121:
 				return contractor_utf8mb4_hu_0900_ai_ci_weights[207:222], b1[width2:], 3
@@ -3294,11 +3294,11 @@ func (contractor_utf8mb4_hu_0900_ai_ci) Find(cs charset.Charset, cp0 rune, b0 []
 			return contractor_utf8mb4_hu_0900_ai_ci_weights[222:228], b0[width1:], 2
 		}
 	case 78:
-		cp1, width1 := cs.DecodeRune(b0)
+		cp1, width1, _ := cs.DecodeRune(b0)
 		switch cp1 {
 		case 78:
 			b1 := b0[width1:]
-			cp2, width2 := cs.DecodeRune(b1)
+			cp2, width2, _ := cs.DecodeRune(b1)
 			switch cp2 {
 			case 89:
 				return contractor_utf8mb4_hu_0900_ai_ci_weights[228:243], b1[width2:], 3
@@ -3307,7 +3307,7 @@ func (contractor_utf8mb4_hu_0900_ai_ci) Find(cs charset.Charset, cp0 rune, b0 []
 			return contractor_utf8mb4_hu_0900_ai_ci_weights[243:249], b0[width1:], 2
 		case 110:
 			b1 := b0[width1:]
-			cp2, width2 := cs.DecodeRune(b1)
+			cp2, width2, _ := cs.DecodeRune(b1)
 			switch cp2 {
 			case 121:
 				return contractor_utf8mb4_hu_0900_ai_ci_weights[249:264], b1[width2:], 3
@@ -3316,11 +3316,11 @@ func (contractor_utf8mb4_hu_0900_ai_ci) Find(cs charset.Charset, cp0 rune, b0 []
 			return contractor_utf8mb4_hu_0900_ai_ci_weights[264:270], b0[width1:], 2
 		}
 	case 83:
-		cp1, width1 := cs.DecodeRune(b0)
+		cp1, width1, _ := cs.DecodeRune(b0)
 		switch cp1 {
 		case 83:
 			b1 := b0[width1:]
-			cp2, width2 := cs.DecodeRune(b1)
+			cp2, width2, _ := cs.DecodeRune(b1)
 			switch cp2 {
 			case 90:
 				return contractor_utf8mb4_hu_0900_ai_ci_weights[270:285], b1[width2:], 3
@@ -3329,7 +3329,7 @@ func (contractor_utf8mb4_hu_0900_ai_ci) Find(cs charset.Charset, cp0 rune, b0 []
 			return contractor_utf8mb4_hu_0900_ai_ci_weights[285:291], b0[width1:], 2
 		case 115:
 			b1 := b0[width1:]
-			cp2, width2 := cs.DecodeRune(b1)
+			cp2, width2, _ := cs.DecodeRune(b1)
 			switch cp2 {
 			case 122:
 				return contractor_utf8mb4_hu_0900_ai_ci_weights[291:306], b1[width2:], 3
@@ -3338,11 +3338,11 @@ func (contractor_utf8mb4_hu_0900_ai_ci) Find(cs charset.Charset, cp0 rune, b0 []
 			return contractor_utf8mb4_hu_0900_ai_ci_weights[306:312], b0[width1:], 2
 		}
 	case 84:
-		cp1, width1 := cs.DecodeRune(b0)
+		cp1, width1, _ := cs.DecodeRune(b0)
 		switch cp1 {
 		case 84:
 			b1 := b0[width1:]
-			cp2, width2 := cs.DecodeRune(b1)
+			cp2, width2, _ := cs.DecodeRune(b1)
 			switch cp2 {
 			case 89:
 				return contractor_utf8mb4_hu_0900_ai_ci_weights[312:327], b1[width2:], 3
@@ -3351,7 +3351,7 @@ func (contractor_utf8mb4_hu_0900_ai_ci) Find(cs charset.Charset, cp0 rune, b0 []
 			return contractor_utf8mb4_hu_0900_ai_ci_weights[327:333], b0[width1:], 2
 		case 116:
 			b1 := b0[width1:]
-			cp2, width2 := cs.DecodeRune(b1)
+			cp2, width2, _ := cs.DecodeRune(b1)
 			switch cp2 {
 			case 121:
 				return contractor_utf8mb4_hu_0900_ai_ci_weights[333:348], b1[width2:], 3
@@ -3360,13 +3360,13 @@ func (contractor_utf8mb4_hu_0900_ai_ci) Find(cs charset.Charset, cp0 rune, b0 []
 			return contractor_utf8mb4_hu_0900_ai_ci_weights[348:354], b0[width1:], 2
 		}
 	case 90:
-		cp1, width1 := cs.DecodeRune(b0)
+		cp1, width1, _ := cs.DecodeRune(b0)
 		switch cp1 {
 		case 83:
 			return contractor_utf8mb4_hu_0900_ai_ci_weights[354:360], b0[width1:], 2
 		case 90:
 			b1 := b0[width1:]
-			cp2, width2 := cs.DecodeRune(b1)
+			cp2, width2, _ := cs.DecodeRune(b1)
 			switch cp2 {
 			case 83:
 				return contractor_utf8mb4_hu_0900_ai_ci_weights[360:375], b1[width2:], 3
@@ -3375,18 +3375,18 @@ func (contractor_utf8mb4_hu_0900_ai_ci) Find(cs charset.Charset, cp0 rune, b0 []
 			return contractor_utf8mb4_hu_0900_ai_ci_weights[375:381], b0[width1:], 2
 		case 122:
 			b1 := b0[width1:]
-			cp2, width2 := cs.DecodeRune(b1)
+			cp2, width2, _ := cs.DecodeRune(b1)
 			switch cp2 {
 			case 115:
 				return contractor_utf8mb4_hu_0900_ai_ci_weights[381:396], b1[width2:], 3
 			}
 		}
 	case 99:
-		cp1, width1 := cs.DecodeRune(b0)
+		cp1, width1, _ := cs.DecodeRune(b0)
 		switch cp1 {
 		case 99:
 			b1 := b0[width1:]
-			cp2, width2 := cs.DecodeRune(b1)
+			cp2, width2, _ := cs.DecodeRune(b1)
 			switch cp2 {
 			case 115:
 				return contractor_utf8mb4_hu_0900_ai_ci_weights[396:411], b1[width2:], 3
@@ -3395,15 +3395,15 @@ func (contractor_utf8mb4_hu_0900_ai_ci) Find(cs charset.Charset, cp0 rune, b0 []
 			return contractor_utf8mb4_hu_0900_ai_ci_weights[411:417], b0[width1:], 2
 		}
 	case 100:
-		cp1, width1 := cs.DecodeRune(b0)
+		cp1, width1, _ := cs.DecodeRune(b0)
 		switch cp1 {
 		case 100:
 			b1 := b0[width1:]
-			cp2, width2 := cs.DecodeRune(b1)
+			cp2, width2, _ := cs.DecodeRune(b1)
 			switch cp2 {
 			case 122:
 				b2 := b1[width2:]
-				cp3, width3 := cs.DecodeRune(b2)
+				cp3, width3, _ := cs.DecodeRune(b2)
 				switch cp3 {
 				case 115:
 					return contractor_utf8mb4_hu_0900_ai_ci_weights[417:438], b2[width3:], 4
@@ -3412,7 +3412,7 @@ func (contractor_utf8mb4_hu_0900_ai_ci) Find(cs charset.Charset, cp0 rune, b0 []
 			}
 		case 122:
 			b1 := b0[width1:]
-			cp2, width2 := cs.DecodeRune(b1)
+			cp2, width2, _ := cs.DecodeRune(b1)
 			switch cp2 {
 			case 115:
 				return contractor_utf8mb4_hu_0900_ai_ci_weights[453:462], b1[width2:], 3
@@ -3420,11 +3420,11 @@ func (contractor_utf8mb4_hu_0900_ai_ci) Find(cs charset.Charset, cp0 rune, b0 []
 			return contractor_utf8mb4_hu_0900_ai_ci_weights[462:468], b1, 2
 		}
 	case 103:
-		cp1, width1 := cs.DecodeRune(b0)
+		cp1, width1, _ := cs.DecodeRune(b0)
 		switch cp1 {
 		case 103:
 			b1 := b0[width1:]
-			cp2, width2 := cs.DecodeRune(b1)
+			cp2, width2, _ := cs.DecodeRune(b1)
 			switch cp2 {
 			case 121:
 				return contractor_utf8mb4_hu_0900_ai_ci_weights[468:483], b1[width2:], 3
@@ -3433,11 +3433,11 @@ func (contractor_utf8mb4_hu_0900_ai_ci) Find(cs charset.Charset, cp0 rune, b0 []
 			return contractor_utf8mb4_hu_0900_ai_ci_weights[483:489], b0[width1:], 2
 		}
 	case 108:
-		cp1, width1 := cs.DecodeRune(b0)
+		cp1, width1, _ := cs.DecodeRune(b0)
 		switch cp1 {
 		case 108:
 			b1 := b0[width1:]
-			cp2, width2 := cs.DecodeRune(b1)
+			cp2, width2, _ := cs.DecodeRune(b1)
 			switch cp2 {
 			case 121:
 				return contractor_utf8mb4_hu_0900_ai_ci_weights[489:504], b1[width2:], 3
@@ -3446,11 +3446,11 @@ func (contractor_utf8mb4_hu_0900_ai_ci) Find(cs charset.Charset, cp0 rune, b0 []
 			return contractor_utf8mb4_hu_0900_ai_ci_weights[504:510], b0[width1:], 2
 		}
 	case 110:
-		cp1, width1 := cs.DecodeRune(b0)
+		cp1, width1, _ := cs.DecodeRune(b0)
 		switch cp1 {
 		case 110:
 			b1 := b0[width1:]
-			cp2, width2 := cs.DecodeRune(b1)
+			cp2, width2, _ := cs.DecodeRune(b1)
 			switch cp2 {
 			case 121:
 				return contractor_utf8mb4_hu_0900_ai_ci_weights[510:525], b1[width2:], 3
@@ -3459,11 +3459,11 @@ func (contractor_utf8mb4_hu_0900_ai_ci) Find(cs charset.Charset, cp0 rune, b0 []
 			return contractor_utf8mb4_hu_0900_ai_ci_weights[525:531], b0[width1:], 2
 		}
 	case 115:
-		cp1, width1 := cs.DecodeRune(b0)
+		cp1, width1, _ := cs.DecodeRune(b0)
 		switch cp1 {
 		case 115:
 			b1 := b0[width1:]
-			cp2, width2 := cs.DecodeRune(b1)
+			cp2, width2, _ := cs.DecodeRune(b1)
 			switch cp2 {
 			case 122:
 				return contractor_utf8mb4_hu_0900_ai_ci_weights[531:546], b1[width2:], 3
@@ -3472,11 +3472,11 @@ func (contractor_utf8mb4_hu_0900_ai_ci) Find(cs charset.Charset, cp0 rune, b0 []
 			return contractor_utf8mb4_hu_0900_ai_ci_weights[546:552], b0[width1:], 2
 		}
 	case 116:
-		cp1, width1 := cs.DecodeRune(b0)
+		cp1, width1, _ := cs.DecodeRune(b0)
 		switch cp1 {
 		case 116:
 			b1 := b0[width1:]
-			cp2, width2 := cs.DecodeRune(b1)
+			cp2, width2, _ := cs.DecodeRune(b1)
 			switch cp2 {
 			case 121:
 				return contractor_utf8mb4_hu_0900_ai_ci_weights[552:567], b1[width2:], 3
@@ -3485,13 +3485,13 @@ func (contractor_utf8mb4_hu_0900_ai_ci) Find(cs charset.Charset, cp0 rune, b0 []
 			return contractor_utf8mb4_hu_0900_ai_ci_weights[567:573], b0[width1:], 2
 		}
 	case 122:
-		cp1, width1 := cs.DecodeRune(b0)
+		cp1, width1, _ := cs.DecodeRune(b0)
 		switch cp1 {
 		case 115:
 			return contractor_utf8mb4_hu_0900_ai_ci_weights[573:579], b0[width1:], 2
 		case 122:
 			b1 := b0[width1:]
-			cp2, width2 := cs.DecodeRune(b1)
+			cp2, width2, _ := cs.DecodeRune(b1)
 			switch cp2 {
 			case 115:
 				return contractor_utf8mb4_hu_0900_ai_ci_weights[579:594], b1[width2:], 3
@@ -3513,7 +3513,7 @@ type contractor_utf8mb4_hr_0900_ai_ci struct{}
 func (contractor_utf8mb4_hr_0900_ai_ci) Find(cs charset.Charset, cp0 rune, b0 []byte) ([]uint16, []byte, int) {
 	switch cp0 {
 	case 68:
-		cp1, width1 := cs.DecodeRune(b0)
+		cp1, width1, _ := cs.DecodeRune(b0)
 		switch cp1 {
 		case 381:
 			return contractor_utf8mb4_hr_0900_ai_ci_weights[0:6], b0[width1:], 2
@@ -3521,7 +3521,7 @@ func (contractor_utf8mb4_hr_0900_ai_ci) Find(cs charset.Charset, cp0 rune, b0 []
 			return contractor_utf8mb4_hr_0900_ai_ci_weights[6:12], b0[width1:], 2
 		}
 	case 76:
-		cp1, width1 := cs.DecodeRune(b0)
+		cp1, width1, _ := cs.DecodeRune(b0)
 		switch cp1 {
 		case 74:
 			return contractor_utf8mb4_hr_0900_ai_ci_weights[12:18], b0[width1:], 2
@@ -3529,7 +3529,7 @@ func (contractor_utf8mb4_hr_0900_ai_ci) Find(cs charset.Charset, cp0 rune, b0 []
 			return contractor_utf8mb4_hr_0900_ai_ci_weights[18:24], b0[width1:], 2
 		}
 	case 78:
-		cp1, width1 := cs.DecodeRune(b0)
+		cp1, width1, _ := cs.DecodeRune(b0)
 		switch cp1 {
 		case 74:
 			return contractor_utf8mb4_hr_0900_ai_ci_weights[24:30], b0[width1:], 2
@@ -3537,19 +3537,19 @@ func (contractor_utf8mb4_hr_0900_ai_ci) Find(cs charset.Charset, cp0 rune, b0 []
 			return contractor_utf8mb4_hr_0900_ai_ci_weights[30:36], b0[width1:], 2
 		}
 	case 100:
-		cp1, width1 := cs.DecodeRune(b0)
+		cp1, width1, _ := cs.DecodeRune(b0)
 		switch cp1 {
 		case 382:
 			return contractor_utf8mb4_hr_0900_ai_ci_weights[36:42], b0[width1:], 2
 		}
 	case 108:
-		cp1, width1 := cs.DecodeRune(b0)
+		cp1, width1, _ := cs.DecodeRune(b0)
 		switch cp1 {
 		case 106:
 			return contractor_utf8mb4_hr_0900_ai_ci_weights[42:48], b0[width1:], 2
 		}
 	case 110:
-		cp1, width1 := cs.DecodeRune(b0)
+		cp1, width1, _ := cs.DecodeRune(b0)
 		switch cp1 {
 		case 106:
 			return contractor_utf8mb4_hr_0900_ai_ci_weights[48:54], b0[width1:], 2
@@ -3574,7 +3574,7 @@ type contractor_utf8mb4_da_0900_as_cs struct{}
 func (contractor_utf8mb4_da_0900_as_cs) Find(cs charset.Charset, cp0 rune, b0 []byte) ([]uint16, []byte, int) {
 	switch cp0 {
 	case 65:
-		cp1, width1 := cs.DecodeRune(b0)
+		cp1, width1, _ := cs.DecodeRune(b0)
 		switch cp1 {
 		case 65:
 			return contractor_utf8mb4_da_0900_as_cs_weights[0:6], b0[width1:], 2
@@ -3582,7 +3582,7 @@ func (contractor_utf8mb4_da_0900_as_cs) Find(cs charset.Charset, cp0 rune, b0 []
 			return contractor_utf8mb4_da_0900_as_cs_weights[6:12], b0[width1:], 2
 		}
 	case 97:
-		cp1, width1 := cs.DecodeRune(b0)
+		cp1, width1, _ := cs.DecodeRune(b0)
 		switch cp1 {
 		case 97:
 			return contractor_utf8mb4_da_0900_as_cs_weights[12:18], b0[width1:], 2
@@ -3622,11 +3622,11 @@ type contractor_utf8mb4_zh_0900_as_cs struct{}
 func (contractor_utf8mb4_zh_0900_as_cs) Find(cs charset.Charset, cp0 rune, b0 []byte) ([]uint16, []byte, int) {
 	switch cp0 {
 	case 69:
-		cp1, width1 := cs.DecodeRune(b0)
+		cp1, width1, _ := cs.DecodeRune(b0)
 		switch cp1 {
 		case 770:
 			b1 := b0[width1:]
-			cp2, width2 := cs.DecodeRune(b1)
+			cp2, width2, _ := cs.DecodeRune(b1)
 			switch cp2 {
 			case 768:
 				return contractor_utf8mb4_zh_0900_as_cs_weights[0:6], b1[width2:], 3
@@ -3639,7 +3639,7 @@ func (contractor_utf8mb4_zh_0900_as_cs) Find(cs charset.Charset, cp0 rune, b0 []
 			}
 		}
 	case 77:
-		cp1, width1 := cs.DecodeRune(b0)
+		cp1, width1, _ := cs.DecodeRune(b0)
 		switch cp1 {
 		case 768:
 			return contractor_utf8mb4_zh_0900_as_cs_weights[24:30], b0[width1:], 2
@@ -3649,17 +3649,17 @@ func (contractor_utf8mb4_zh_0900_as_cs) Find(cs charset.Charset, cp0 rune, b0 []
 			return contractor_utf8mb4_zh_0900_as_cs_weights[36:42], b0[width1:], 2
 		}
 	case 78:
-		cp1, width1 := cs.DecodeRune(b0)
+		cp1, width1, _ := cs.DecodeRune(b0)
 		switch cp1 {
 		case 772:
 			return contractor_utf8mb4_zh_0900_as_cs_weights[42:48], b0[width1:], 2
 		}
 	case 101:
-		cp1, width1 := cs.DecodeRune(b0)
+		cp1, width1, _ := cs.DecodeRune(b0)
 		switch cp1 {
 		case 770:
 			b1 := b0[width1:]
-			cp2, width2 := cs.DecodeRune(b1)
+			cp2, width2, _ := cs.DecodeRune(b1)
 			switch cp2 {
 			case 768:
 				return contractor_utf8mb4_zh_0900_as_cs_weights[48:54], b1[width2:], 3
@@ -3672,7 +3672,7 @@ func (contractor_utf8mb4_zh_0900_as_cs) Find(cs charset.Charset, cp0 rune, b0 []
 			}
 		}
 	case 109:
-		cp1, width1 := cs.DecodeRune(b0)
+		cp1, width1, _ := cs.DecodeRune(b0)
 		switch cp1 {
 		case 768:
 			return contractor_utf8mb4_zh_0900_as_cs_weights[72:78], b0[width1:], 2
@@ -3682,25 +3682,25 @@ func (contractor_utf8mb4_zh_0900_as_cs) Find(cs charset.Charset, cp0 rune, b0 []
 			return contractor_utf8mb4_zh_0900_as_cs_weights[84:90], b0[width1:], 2
 		}
 	case 110:
-		cp1, width1 := cs.DecodeRune(b0)
+		cp1, width1, _ := cs.DecodeRune(b0)
 		switch cp1 {
 		case 772:
 			return contractor_utf8mb4_zh_0900_as_cs_weights[90:96], b0[width1:], 2
 		}
 	case 27784:
-		cp1, width1 := cs.DecodeRune(b0)
+		cp1, width1, _ := cs.DecodeRune(b0)
 		switch cp1 {
 		case 38451:
 			return contractor_utf8mb4_zh_0900_as_cs_weights[96:105], b0[width1:], 2
 		}
 	case 34255:
-		cp1, width1 := cs.DecodeRune(b0)
+		cp1, width1, _ := cs.DecodeRune(b0)
 		switch cp1 {
 		case 25991:
 			return contractor_utf8mb4_zh_0900_as_cs_weights[105:114], b0[width1:], 2
 		}
 	case 37325:
-		cp1, width1 := cs.DecodeRune(b0)
+		cp1, width1, _ := cs.DecodeRune(b0)
 		switch cp1 {
 		case 24198:
 			return contractor_utf8mb4_zh_0900_as_cs_weights[114:123], b0[width1:], 2
