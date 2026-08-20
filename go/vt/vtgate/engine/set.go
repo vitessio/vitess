@@ -391,9 +391,10 @@ func sqlModeJudgmentQuery(expr string) string {
 
 // sqlModeChangedValue reports whether the sql_mode assignment changes the session's
 // current value, after validating the assigned value the way MySQL validates a SET (see
-// sqlmode.Validate). Validation runs before the change detection, so an invalid or
-// unsupported value is rejected even when the assignment would not change the value —
-// name lists, numeric bitmasks, and combination modes like ANSI included.
+// sqlmode.Validate). The returned value is the canonical form MySQL would report back
+// for @@sql_mode — names uppercased, combination modes expanded, in canonical order —
+// so the session stores a value the parser and the transports can decode regardless of
+// how the assignment spelled it (e.g. as a numeric bitmask).
 func sqlModeChangedValue(qr *sqltypes.Result) (bool, sqltypes.Value, error) {
 	if len(qr.Fields) != 2 || len(qr.Rows) != 1 || len(qr.Rows[0]) != 2 {
 		// the verification query selects exactly two columns of one row; anything else
@@ -404,13 +405,14 @@ func sqlModeChangedValue(qr *sqltypes.Result) (bool, sqltypes.Value, error) {
 	if err != nil {
 		return false, sqltypes.Value{}, err
 	}
+	canonical := sqltypes.NewVarChar(newMode.String())
 	orig, err := sqlmode.Parse(qr.Rows[0][0].ToString())
 	if err != nil {
 		// The backend reported a value these semantics cannot parse; treat the
 		// assignment as a change and let the backend judge it.
-		return true, qr.Rows[0][1], nil
+		return true, canonical, nil
 	}
-	return orig.Expand() != newMode, qr.Rows[0][1], nil
+	return orig.Expand() != newMode, canonical, nil
 }
 
 var _ SetOp = (*SysVarSetAware)(nil)
