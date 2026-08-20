@@ -24,7 +24,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/vt/mysqlctl"
+	"vitess.io/vitess/go/vt/vterrors"
+
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 func TestPoller(t *testing.T) {
@@ -52,4 +56,55 @@ func TestPoller(t *testing.T) {
 	lag, err = poller.Status()
 	require.NoError(t, err)
 	assert.Less(t, int64(1*time.Second), int64(lag))
+}
+
+func TestPollerReturnsFatalReplicationError(t *testing.T) {
+	poller := &poller{
+		lag:          time.Second,
+		timeRecorded: time.Now().Add(-10 * time.Millisecond),
+	}
+	mysqld := mysqlctl.NewFakeMysqlDaemon(nil)
+	poller.InitDBConfig(mysqld)
+
+	// MySQL 8.0.26+ records the server-side code 13114 in Last_IO_Errno
+	// while the message text still references the source's error 1236.
+	mysqld.LastIOError = "Got fatal error 1236 from source when reading data from binary log"
+	mysqld.LastIOErrno = uint32(sqlerror.ERServerSourceFatalErrorReadingBinlog)
+
+	lag, err := poller.Status()
+	require.ErrorContains(t, err, mysqld.LastIOError)
+	// The point of this path is the CODE, not just the text: healthcheck keys
+	// off UNAVAILABLE to take the tablet out of rotation.
+	assert.Equal(t, vtrpcpb.Code_UNAVAILABLE, vterrors.Code(err))
+	assert.GreaterOrEqual(t, lag, time.Second)
+}
+
+func TestPollerReturnsFatalReplicationErrorWithoutCachedLag(t *testing.T) {
+	poller := &poller{}
+	mysqld := mysqlctl.NewFakeMysqlDaemon(nil)
+	poller.InitDBConfig(mysqld)
+
+	mysqld.LastIOError = "Got fatal error 1236 from source when reading data from binary log"
+	mysqld.LastIOErrno = uint32(sqlerror.ERMasterFatalReadingBinlog)
+
+	lag, err := poller.Status()
+	require.ErrorContains(t, err, mysqld.LastIOError)
+	assert.Equal(t, vtrpcpb.Code_UNAVAILABLE, vterrors.Code(err))
+	assert.Zero(t, lag)
+}
+
+func TestPollerKeepsEstimatedLagForNonFatalReplicationError(t *testing.T) {
+	poller := &poller{
+		lag:          time.Second,
+		timeRecorded: time.Now().Add(-10 * time.Millisecond),
+	}
+	mysqld := mysqlctl.NewFakeMysqlDaemon(nil)
+	poller.InitDBConfig(mysqld)
+
+	mysqld.LastIOError = "error connecting to source"
+	mysqld.LastIOErrno = uint32(sqlerror.ERAccessDeniedError)
+
+	lag, err := poller.Status()
+	require.NoError(t, err)
+	assert.GreaterOrEqual(t, lag, time.Second)
 }
