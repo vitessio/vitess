@@ -445,26 +445,6 @@
     "plan": "VT12001: unsupported: window functions are only supported for single-shard queries"
   },
   {
-    "comment": "sql_mode with a mode the parser does not support is rejected at plan time",
-    "query": "set sql_mode = 'ANSI_QUOTES'",
-    "plan": "setting the ANSI_QUOTES sql_mode is unsupported"
-  },
-  {
-    "comment": "constant sql_mode expressions are folded and validated at plan time",
-    "query": "set sql_mode = concat('AN', 'SI')",
-    "plan": "setting the ANSI sql_mode is unsupported"
-  },
-  {
-    "comment": "numeric sql_mode values decode against MySQL's bitmask",
-    "query": "set sql_mode = 1048576",
-    "plan": "setting the NO_BACKSLASH_ESCAPES sql_mode is unsupported"
-  },
-  {
-    "comment": "sql_mode names the parser does not honor are rejected",
-    "query": "set sql_mode = 'HIGH_NOT_PRECEDENCE'",
-    "plan": "setting the HIGH_NOT_PRECEDENCE sql_mode is unsupported"
-  },
-  {
     "comment": "unknown sql_mode names fail with MySQL's error",
     "query": "set sql_mode = 'BOGUS'",
     "plan": "Variable 'sql_mode' can't be set to the value of 'BOGUS'"

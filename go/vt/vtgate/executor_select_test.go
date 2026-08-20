@@ -292,6 +292,133 @@ func TestSetSystemVariablesTx(t *testing.T) {
 	utils.MustMatch(t, wantQueries, sbc1.Queries)
 }
 
+func TestSessionSQLModeParsingReservedConn(t *testing.T) {
+	executor, sbc1, _, _, _ := createExecutorEnv(t)
+	executor.config.Normalize = true
+	executor.vConfig.SetVarEnabled = false
+	session := econtext.NewAutocommitSession(&vtgatepb.Session{EnableSystemSettings: true, TargetString: "TestExecutor"})
+
+	sbc1.SetResults([]*sqltypes.Result{{
+		Fields: []*querypb.Field{
+			{Name: "orig", Type: sqltypes.VarChar, Charset: uint32(collations.MySQL8().DefaultConnectionCharset())},
+			{Name: "new", Type: sqltypes.VarChar, Charset: uint32(collations.MySQL8().DefaultConnectionCharset())},
+		},
+		Rows: [][]sqltypes.Value{{
+			sqltypes.NewVarChar(""),
+			sqltypes.NewVarChar("PIPES_AS_CONCAT,STRICT_TRANS_TABLES"),
+		}},
+	}})
+
+	_, err := executorExecSession(t.Context(), executor, session, "set @@sql_mode = 'PIPES_AS_CONCAT,STRICT_TRANS_TABLES'", map[string]*querypb.BindVariable{})
+	require.NoError(t, err)
+	require.True(t, session.InReservedConn())
+
+	_, err = executorExecSession(t.Context(), executor, session, "select 'a' || 'b' from information_schema.table", map[string]*querypb.BindVariable{})
+	require.NoError(t, err)
+
+	// The reserved connection receives only the execution-relevant modes,
+	// while the query is parsed under the session's full mode: || lowers to
+	// concat().
+	wantQueries := []*querypb.BoundQuery{
+		{Sql: "select @@sql_mode orig, 'PIPES_AS_CONCAT,STRICT_TRANS_TABLES' new"},
+		{Sql: "set sql_mode = 'STRICT_TRANS_TABLES'", BindVariables: map[string]*querypb.BindVariable{
+			"vtg1": sqltypes.StringBindVariable("a"),
+			"vtg2": sqltypes.StringBindVariable("b"),
+		}},
+		{Sql: "select concat(:vtg1 /* VARCHAR */, :vtg2 /* VARCHAR */) from information_schema.`table`", BindVariables: map[string]*querypb.BindVariable{
+			"vtg1": sqltypes.StringBindVariable("a"),
+			"vtg2": sqltypes.StringBindVariable("b"),
+		}},
+	}
+	utils.MustMatch(t, wantQueries, sbc1.Queries)
+}
+
+func TestSessionSQLModeReadBack(t *testing.T) {
+	setAndRead := func(t *testing.T, targetString string) (*sandboxconn.SandboxConn, *sqltypes.Result) {
+		executor, sbc1, _, _, _ := createExecutorEnv(t)
+		executor.config.Normalize = true
+		executor.vConfig.SetVarEnabled = false
+		session := econtext.NewAutocommitSession(&vtgatepb.Session{EnableSystemSettings: true, TargetString: targetString})
+
+		sbc1.SetResults([]*sqltypes.Result{{
+			Fields: []*querypb.Field{
+				{Name: "orig", Type: sqltypes.VarChar, Charset: uint32(collations.MySQL8().DefaultConnectionCharset())},
+				{Name: "new", Type: sqltypes.VarChar, Charset: uint32(collations.MySQL8().DefaultConnectionCharset())},
+			},
+			Rows: [][]sqltypes.Value{{
+				sqltypes.NewVarChar(""),
+				sqltypes.NewVarChar("PIPES_AS_CONCAT,STRICT_TRANS_TABLES"),
+			}},
+		}})
+
+		_, err := executorExecSession(t.Context(), executor, session, "set @@sql_mode = 'PIPES_AS_CONCAT,STRICT_TRANS_TABLES'", map[string]*querypb.BindVariable{})
+		require.NoError(t, err)
+		sbc1.Queries = nil
+
+		qr, err := executorExecSession(t.Context(), executor, session, "select @@sql_mode", map[string]*querypb.BindVariable{})
+		require.NoError(t, err)
+		return sbc1, qr
+	}
+
+	t.Run("reserved connection", func(t *testing.T) {
+		// Reading @@sql_mode returns the full session value, parse-relevant
+		// modes included, answered from session state at vtgate even though
+		// the backend connection was given the stripped value.
+		sbc1, qr := setAndRead(t, "TestExecutor")
+		require.Len(t, qr.Rows, 1)
+		assert.Equal(t, "PIPES_AS_CONCAT,STRICT_TRANS_TABLES", qr.Rows[0][0].ToString())
+		for _, q := range sbc1.Queries {
+			assert.NotContains(t, q.Sql, "@@sql_mode")
+		}
+	})
+
+	t.Run("shard targeted", func(t *testing.T) {
+		// Shard-targeted sessions bypass planning, but the normalizer still
+		// rewrites @@sql_mode to a bind variable filled from session state,
+		// so the routed query carries the full value and the user reads it
+		// back unstripped.
+		sbc1, _ := setAndRead(t, "TestExecutor/-20")
+		require.Len(t, sbc1.Queries, 1)
+		assert.Equal(t, "select :__vtsql_mode as `@@sql_mode` from dual", sbc1.Queries[0].Sql)
+		assert.Equal(t, "PIPES_AS_CONCAT,STRICT_TRANS_TABLES", string(sbc1.Queries[0].BindVariables["__vtsql_mode"].Value))
+	})
+}
+
+func TestSessionSQLModeParsing(t *testing.T) {
+	executor, _, _, lookup, _ := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
+	session := econtext.NewAutocommitSession(&vtgatepb.Session{EnableSystemSettings: true, TargetString: KsTestUnsharded, SystemVariables: map[string]string{}})
+
+	// Set a parse-relevant sql_mode on the session.
+	lookup.SetResults([]*sqltypes.Result{{
+		Fields: []*querypb.Field{
+			{Name: "orig", Type: sqltypes.VarChar, Charset: uint32(collations.MySQL8().DefaultConnectionCharset())},
+			{Name: "new", Type: sqltypes.VarChar, Charset: uint32(collations.MySQL8().DefaultConnectionCharset())},
+		},
+		Rows: [][]sqltypes.Value{{
+			sqltypes.NewVarChar(""),
+			sqltypes.NewVarChar("PIPES_AS_CONCAT"),
+		}},
+	}})
+	_, err := executor.Execute(t.Context(), nil, "TestSetStmt", session, "set @@sql_mode = 'PIPES_AS_CONCAT'", map[string]*querypb.BindVariable{}, false)
+	require.NoError(t, err)
+	lookup.Queries = nil
+
+	// The query must now be parsed under PIPES_AS_CONCAT: || lowers to
+	// concat() in the routed query, and the parse-relevant mode is stripped
+	// from what is forwarded to the backend (leaving the empty mode, spelled
+	// ' ' to satisfy SET_VAR's parser).
+	_, err = executor.Execute(t.Context(), nil, "TestSelect", session, "select 'a' || 'b' from information_schema.table", map[string]*querypb.BindVariable{}, false)
+	require.NoError(t, err)
+	require.False(t, session.InReservedConn())
+	wantQueries := []*querypb.BoundQuery{
+		{Sql: "select /*+ SET_VAR(sql_mode = ' ') */ concat(:vtg1 /* VARCHAR */, :vtg2 /* VARCHAR */) from information_schema.`table`", BindVariables: map[string]*querypb.BindVariable{
+			"vtg1": sqltypes.StringBindVariable("a"),
+			"vtg2": sqltypes.StringBindVariable("b"),
+		}},
+	}
+	utils.MustMatch(t, wantQueries, lookup.Queries)
+}
+
 func TestSetSystemVariables(t *testing.T) {
 	executor, _, _, lookup, _ := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
 	session := econtext.NewAutocommitSession(&vtgatepb.Session{EnableSystemSettings: true, TargetString: KsTestUnsharded, SystemVariables: map[string]string{}})

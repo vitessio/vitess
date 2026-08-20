@@ -28,6 +28,7 @@ type Setting struct {
 	queryApply string
 	queryReset string
 	bucket     uint32
+	sqlMode    uint32
 }
 
 func (s *Setting) ApplyQuery() string {
@@ -38,8 +39,22 @@ func (s *Setting) ResetQuery() string {
 	return s.queryReset
 }
 
+// SQLMode returns the parse-relevant sql_mode bits these settings put the
+// session in (a sqlparser.SQLMode bitmask, opaque to this package). The apply
+// query itself carries a value with those modes removed: the caller parses SQL
+// under them and sends mode-independent text over the connection.
+func (s *Setting) SQLMode() uint32 {
+	return s.sqlMode
+}
+
 var globalSettingsCounter atomic.Uint32
 
 func NewSetting(apply, reset string) *Setting {
-	return &Setting{apply, reset, globalSettingsCounter.Add(1)}
+	return &Setting{queryApply: apply, queryReset: reset, bucket: globalSettingsCounter.Add(1)}
+}
+
+// NewSettingWithSQLMode is NewSetting for settings whose session carries the
+// given parse-relevant sql_mode bits.
+func NewSettingWithSQLMode(apply, reset string, sqlMode uint32) *Setting {
+	return &Setting{queryApply: apply, queryReset: reset, bucket: globalSettingsCounter.Add(1), sqlMode: sqlMode}
 }

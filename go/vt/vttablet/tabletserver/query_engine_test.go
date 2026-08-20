@@ -101,7 +101,7 @@ func TestGetPlanPanicDuetoEmptyQuery(t *testing.T) {
 
 	ctx := t.Context()
 	logStats := tabletenv.NewLogStats(ctx, "GetPlanStats", streamlog.NewQueryLogConfigForTest())
-	_, err := qe.GetPlan(ctx, logStats, "", false, false)
+	_, err := qe.GetPlan(ctx, logStats, "", 0, false, false)
 	require.EqualError(t, err, "Query was empty")
 }
 
@@ -188,7 +188,7 @@ func TestQueryPlanCache(t *testing.T) {
 	initialHits := qe.queryEnginePlanCacheHits.Get()
 	initialMisses := qe.queryEnginePlanCacheMisses.Get()
 
-	firstPlan, err := qe.GetPlan(ctx, logStats, firstQuery, false, false)
+	firstPlan, err := qe.GetPlan(ctx, logStats, firstQuery, 0, false, false)
 	require.NoError(t, err)
 	require.NotNil(t, firstPlan, "plan should not be nil")
 
@@ -197,7 +197,7 @@ func TestQueryPlanCache(t *testing.T) {
 	require.Equal(t, int64(0), qe.queryEnginePlanCacheHits.Get()-initialHits)
 	require.Equal(t, int64(1), qe.queryEnginePlanCacheMisses.Get()-initialMisses)
 
-	secondPlan, err := qe.GetPlan(ctx, logStats, firstQuery, false, false)
+	secondPlan, err := qe.GetPlan(ctx, logStats, firstQuery, 0, false, false)
 	require.NoError(t, err)
 	require.NotNil(t, secondPlan, "plan should not be nil")
 
@@ -205,6 +205,47 @@ func TestQueryPlanCache(t *testing.T) {
 
 	require.Equal(t, int64(1), qe.queryEnginePlanCacheHits.Get()-initialHits)
 	require.Equal(t, int64(1), qe.queryEnginePlanCacheMisses.Get()-initialMisses)
+
+	qe.ClearQueryPlanCache()
+}
+
+// The same SQL text can mean different statements under different parse-relevant
+// sql_modes, so plans are built with the session's mode and cached separately per mode.
+func TestQueryPlanCacheParseSQLMode(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	schematest.AddDefaultQueries(db)
+
+	qe := newTestQueryEngine(10*time.Second, true, newDBConfigs(db))
+	qe.se.Open()
+	qe.Open()
+	defer qe.Close()
+
+	ctx := t.Context()
+	logStats := tabletenv.NewLogStats(ctx, "GetPlanStats", streamlog.NewQueryLogConfigForTest())
+
+	query := "select 'a' || 'b' from test_table_01"
+
+	defaultPlan, err := qe.GetPlan(ctx, logStats, query, 0, false, false)
+	require.NoError(t, err)
+	// || is logical OR under the default mode
+	assert.Equal(t, "select 'a' or 'b' from test_table_01 limit :#maxLimit", defaultPlan.FullQuery.Query)
+	assertPlanCacheSize(t, qe, 1)
+
+	pipesPlan, err := qe.GetPlan(ctx, logStats, query, sqlparser.SQLModePipesAsConcat, false, false)
+	require.NoError(t, err)
+	// || is string concatenation under PIPES_AS_CONCAT
+	assert.Equal(t, "select concat('a', 'b') from test_table_01 limit :#maxLimit", pipesPlan.FullQuery.Query)
+	assertPlanCacheSize(t, qe, 2)
+
+	// each mode's plan is cached under its own key
+	cachedDefault, err := qe.GetPlan(ctx, logStats, query, 0, false, false)
+	require.NoError(t, err)
+	assert.Same(t, defaultPlan, cachedDefault)
+	cachedPipes, err := qe.GetPlan(ctx, logStats, query, sqlparser.SQLModePipesAsConcat, false, false)
+	require.NoError(t, err)
+	assert.Same(t, pipesPlan, cachedPipes)
+	assertPlanCacheSize(t, qe, 2)
 
 	qe.ClearQueryPlanCache()
 }
@@ -226,7 +267,7 @@ func TestNoQueryPlanCache(t *testing.T) {
 	ctx := t.Context()
 	logStats := tabletenv.NewLogStats(ctx, "GetPlanStats", streamlog.NewQueryLogConfigForTest())
 
-	firstPlan, err := qe.GetPlan(ctx, logStats, firstQuery, true, false)
+	firstPlan, err := qe.GetPlan(ctx, logStats, firstQuery, 0, true, false)
 	require.NoError(t, err)
 	require.NotNil(t, firstPlan, "plan should not be nil")
 	assertPlanCacheSize(t, qe, 0)
@@ -251,7 +292,7 @@ func TestNoQueryPlanCacheDirective(t *testing.T) {
 	ctx := t.Context()
 	logStats := tabletenv.NewLogStats(ctx, "GetPlanStats", streamlog.NewQueryLogConfigForTest())
 
-	firstPlan, err := qe.GetPlan(ctx, logStats, firstQuery, false, false)
+	firstPlan, err := qe.GetPlan(ctx, logStats, firstQuery, 0, false, false)
 	require.NoError(t, err)
 	require.NotNil(t, firstPlan, "plan should not be nil")
 	assertPlanCacheSize(t, qe, 0)
@@ -275,7 +316,7 @@ func TestStreamQueryPlanCache(t *testing.T) {
 	ctx := t.Context()
 	logStats := tabletenv.NewLogStats(ctx, "GetPlanStats", streamlog.NewQueryLogConfigForTest())
 
-	firstPlan, err := qe.GetStreamPlan(ctx, logStats, firstQuery, false)
+	firstPlan, err := qe.GetStreamPlan(ctx, logStats, firstQuery, 0, false)
 	require.NoError(t, err)
 	require.NotNil(t, firstPlan, "plan should not be nil")
 	assertPlanCacheSize(t, qe, 1)
@@ -328,7 +369,7 @@ func TestGetStreamPlanFiltersRulesByAllTables(t *testing.T) {
 	}
 	for _, tcase := range testcases {
 		t.Run(tcase.name, func(t *testing.T) {
-			plan, err := qe.getStreamPlan(curSchema, tcase.sql)
+			plan, err := qe.getStreamPlan(curSchema, tcase.sql, 0)
 			require.NoError(t, err)
 			require.Nil(t, plan.Table, "expected a multi-table plan with no single table")
 			require.NotNil(t, plan.Rules.Find("deny_t2"), "table-scoped query rule must apply to multi-table streamed query")
@@ -387,7 +428,7 @@ func TestSelectStreamRuleAppliesOnlyToStreamingPlans(t *testing.T) {
 			// The private helpers return the plan together with the errNoCache
 			// sentinel for non-cacheable statements like SHOW; the public
 			// GetPlan/GetStreamPlan wrappers strip it the same way.
-			streamPlan, err := qe.getStreamPlan(curSchema, tcase.sql)
+			streamPlan, err := qe.getStreamPlan(curSchema, tcase.sql, 0)
 			if err != nil {
 				require.ErrorIs(t, err, errNoCache)
 			}
@@ -395,7 +436,7 @@ func TestSelectStreamRuleAppliesOnlyToStreamingPlans(t *testing.T) {
 			require.NotNil(t, streamPlan.Rules.Find("deny_streamed_reads"),
 				"SelectStream rule must apply to the streaming-path plan")
 
-			execPlan, err := qe.getPlan(curSchema, tcase.sql, false)
+			execPlan, err := qe.getPlan(curSchema, tcase.sql, false, 0)
 			if err != nil {
 				require.ErrorIs(t, err, errNoCache)
 			}
@@ -438,7 +479,7 @@ func TestStreamedAnalyzeLegacyRuleMatching(t *testing.T) {
 		},
 	}
 
-	streamPlan, err := qe.getStreamPlan(curSchema, "analyze table test_table_01")
+	streamPlan, err := qe.getStreamPlan(curSchema, "analyze table test_table_01", 0)
 	if err != nil {
 		require.ErrorIs(t, err, errNoCache)
 	}
@@ -448,7 +489,7 @@ func TestStreamedAnalyzeLegacyRuleMatching(t *testing.T) {
 	require.Nil(t, streamPlan.Rules.Find("deny_streamed_reads"),
 		"a SelectStream rule must not apply to streamed ANALYZE")
 
-	execPlan, err := qe.getPlan(curSchema, "analyze table test_table_01", false)
+	execPlan, err := qe.getPlan(curSchema, "analyze table test_table_01", false, 0)
 	if err != nil {
 		require.ErrorIs(t, err, errNoCache)
 	}
@@ -475,7 +516,7 @@ func TestNoStreamQueryPlanCache(t *testing.T) {
 
 	ctx := t.Context()
 	logStats := tabletenv.NewLogStats(ctx, "GetPlanStats", streamlog.NewQueryLogConfigForTest())
-	firstPlan, err := qe.GetStreamPlan(ctx, logStats, firstQuery, true)
+	firstPlan, err := qe.GetStreamPlan(ctx, logStats, firstQuery, 0, true)
 	require.NoError(t, err)
 	require.NotNil(t, firstPlan)
 	assertPlanCacheSize(t, qe, 0)
@@ -499,7 +540,7 @@ func TestNoStreamQueryPlanCacheDirective(t *testing.T) {
 
 	ctx := t.Context()
 	logStats := tabletenv.NewLogStats(ctx, "GetPlanStats", streamlog.NewQueryLogConfigForTest())
-	firstPlan, err := qe.GetStreamPlan(ctx, logStats, firstQuery, false)
+	firstPlan, err := qe.GetStreamPlan(ctx, logStats, firstQuery, 0, false)
 	require.NoError(t, err)
 	require.NotNil(t, firstPlan)
 	assertPlanCacheSize(t, qe, 0)
@@ -519,7 +560,7 @@ func TestStatsURL(t *testing.T) {
 	// warm up cache
 	ctx := t.Context()
 	logStats := tabletenv.NewLogStats(ctx, "GetPlanStats", streamlog.NewQueryLogConfigForTest())
-	qe.GetPlan(ctx, logStats, query, false, false)
+	qe.GetPlan(ctx, logStats, query, 0, false, false)
 
 	request, _ := http.NewRequest("GET", "/debug/tablet_plans", nil)
 	response := httptest.NewRecorder()
@@ -609,7 +650,7 @@ func BenchmarkPlanCacheThroughput(b *testing.B) {
 
 	for b.Loop() {
 		query := fmt.Sprintf("SELECT (a, b, c) FROM test_table_%d", rand.IntN(500))
-		_, err := qe.GetPlan(ctx, logStats, query, false, false)
+		_, err := qe.GetPlan(ctx, logStats, query, 0, false, false)
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -639,7 +680,7 @@ func benchmarkPlanCache(b *testing.B, db *fakesqldb.DB, par int) {
 
 		for pb.Next() {
 			query := fmt.Sprintf("SELECT (a, b, c) FROM test_table_%d", rand.IntN(500))
-			_, err := qe.GetPlan(ctx, logStats, query, false, false)
+			_, err := qe.GetPlan(ctx, logStats, query, 0, false, false)
 			require.NoErrorf(b, err, "bad query: %s", query)
 		}
 	})
@@ -756,7 +797,7 @@ func TestPlanCachePollution(t *testing.T) {
 			query := sample()
 
 			start := time.Now()
-			_, err := qe.GetPlan(ctx, logStats, query, false, false)
+			_, err := qe.GetPlan(ctx, logStats, query, 0, false, false)
 			require.NoErrorf(t, err, "bad query: %s", query)
 			stats.interval += time.Since(start)
 

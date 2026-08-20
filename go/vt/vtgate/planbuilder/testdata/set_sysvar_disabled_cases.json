@@ -39,8 +39,32 @@
     }
   },
   {
-    "comment": "unsupported sql_mode values are rejected even with system settings disabled",
+    "comment": "parse-relevant sql_mode values get a check and ignore plan with system settings disabled",
     "query": "set sql_mode = 'NO_BACKSLASH_ESCAPES'",
-    "plan": "setting the NO_BACKSLASH_ESCAPES sql_mode is unsupported"
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SET",
+      "Original": "set sql_mode = 'NO_BACKSLASH_ESCAPES'",
+      "Instructions": {
+        "OperatorType": "Set",
+        "Ops": [
+          {
+            "Type": "SysVarCheckAndIgnore",
+            "Name": "sql_mode",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "TargetDestination": {},
+            "Expr": "'NO_BACKSLASH_ESCAPES'"
+          }
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "SingleRow"
+          }
+        ]
+      }
+    }
   }
 ]

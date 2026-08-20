@@ -142,6 +142,122 @@
     }
   },
   {
+    "comment": "parse-relevant sql_mode names are accepted",
+    "query": "set sql_mode = 'ANSI_QUOTES'",
+    "plan": {
+      "Type": "MultiShard",
+      "QueryType": "SET",
+      "Original": "set sql_mode = 'ANSI_QUOTES'",
+      "Instructions": {
+        "OperatorType": "Set",
+        "Ops": [
+          {
+            "Type": "SysVarSet",
+            "Name": "sql_mode",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "Expr": "'ANSI_QUOTES'",
+            "SupportSetVar": true
+          }
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "SingleRow"
+          }
+        ]
+      }
+    }
+  },
+  {
+    "comment": "constant sql_mode expressions are folded and validated at plan time",
+    "query": "set sql_mode = concat('AN', 'SI')",
+    "plan": {
+      "Type": "MultiShard",
+      "QueryType": "SET",
+      "Original": "set sql_mode = concat('AN', 'SI')",
+      "Instructions": {
+        "OperatorType": "Set",
+        "Ops": [
+          {
+            "Type": "SysVarSet",
+            "Name": "sql_mode",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "Expr": "concat('AN', 'SI')",
+            "SupportSetVar": true
+          }
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "SingleRow"
+          }
+        ]
+      }
+    }
+  },
+  {
+    "comment": "numeric sql_mode values decode against MySQL's bitmask",
+    "query": "set sql_mode = 1048576",
+    "plan": {
+      "Type": "MultiShard",
+      "QueryType": "SET",
+      "Original": "set sql_mode = 1048576",
+      "Instructions": {
+        "OperatorType": "Set",
+        "Ops": [
+          {
+            "Type": "SysVarSet",
+            "Name": "sql_mode",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "Expr": "1048576",
+            "SupportSetVar": true
+          }
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "SingleRow"
+          }
+        ]
+      }
+    }
+  },
+  {
+    "comment": "sql_mode names the parser honors are accepted",
+    "query": "set sql_mode = 'HIGH_NOT_PRECEDENCE'",
+    "plan": {
+      "Type": "MultiShard",
+      "QueryType": "SET",
+      "Original": "set sql_mode = 'HIGH_NOT_PRECEDENCE'",
+      "Instructions": {
+        "OperatorType": "Set",
+        "Ops": [
+          {
+            "Type": "SysVarSet",
+            "Name": "sql_mode",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "Expr": "'HIGH_NOT_PRECEDENCE'",
+            "SupportSetVar": true
+          }
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "SingleRow"
+          }
+        ]
+      }
+    }
+  },
+  {
     "comment": "multiple sysvar cases",
     "query": "SET @@SESSION.sql_mode = CONCAT(CONCAT(@@sql_mode, ',STRICT_ALL_TABLES'), ',NO_AUTO_VALUE_ON_ZERO'), @@SESSION.sql_safe_updates = 0",
     "plan": {
