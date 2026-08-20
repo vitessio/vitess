@@ -409,8 +409,8 @@ func (bh *S3BackupHandle) ReadFile(ctx context.Context, filename string) (io.Rea
 	// into a part-sized read for the SDK.
 	//
 	// NOTE: the SDK's dispatch loop busy-spins while a download window is in
-	// flight (~71% CPU/wall on network-bound transfers). With restore-concurrency
-	// defaulting to 4 files, that's up to 4× cores competing with decompression.
+	// flight. With restore-concurrency defaulting to 4 files, that's up to 4
+	// busy-spinning goroutines (one per file) competing with decompression.
 	// This is upstream SDK behaviour (aws-sdk-go-v2 transfermanager).
 	body := io.Reader(out.Body)
 	if testBodyWrapHook != nil {

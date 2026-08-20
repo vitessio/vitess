@@ -425,7 +425,7 @@ The `BUILD_GIT_REV`, `BUILD_GIT_BRANCH`, and `BUILD_TIME` environment-variable o
 
 S3 backup restores now use the AWS SDK v2 transfer manager for parallel downloads. Each file is fetched via concurrent byte-range GETs instead of a single sequential stream, significantly reducing restore wall-clock time for large backups.
 
-**Behavioral changes for all `--backup_storage_implementation=s3` users:**
+**Behavioral changes for all `--backup-storage-implementation=s3` users:**
 
 - A `HeadObject` call is issued per file to determine object size before downloading.
 - Downloads use ranged GETs sized by `--s3-backup-download-part-size` (default 8 MiB) with `--s3-backup-download-concurrency` (default 5) parallel workers per file.
@@ -438,6 +438,6 @@ S3 backup restores now use the AWS SDK v2 transfer manager for parallel download
 | `--s3-backup-download-part-size` | `8388608` (8 MiB) | Part size in bytes for parallel S3 downloads. |
 | `--s3-backup-download-concurrency` | `5` | Number of parallel goroutines per file download. |
 
-**CPU note:** The SDK transfer manager's dispatch loop busy-spins while a download window is in flight, consuming meaningful CPU even when the workload is network-bound. With `--restore-concurrency=4` (the default), up to 4 × cores may be active during restores, competing with decompression. This is an upstream SDK behaviour; a tracking issue has been filed.
+**CPU note:** The SDK transfer manager's dispatch loop busy-spins while a download window is in flight, consuming meaningful CPU even when the workload is network-bound. With `--restore-concurrency=4` (the default), up to 4 busy-spinning goroutines (one per file) compete with decompression for CPU. This is upstream SDK behaviour.
 
 See [#20225](https://github.com/vitessio/vitess/pull/20225) for details.
