@@ -157,14 +157,29 @@ func (wd *workflowDiffer) doReconcileExtraRows(dr *DiffReport, maxExtraRowsToCom
 	log.Info(fmt.Sprintf("Reconciling extra rows for table %s in vdiff %s, extra source rows %d, extra target rows %d, max rows %d", dr.TableName, wd.ct.uuid, dr.ExtraRowsSource, dr.ExtraRowsTarget, maxRows))
 
 	// Samples persisted by an older binary and reloaded on resume lack the
-	// LosslessValues marker. They are still provably complete when this
-	// vdiff's report options could not have produced a lossy sample: no
-	// configured truncation, and either no PK-only sampling or a projection
-	// consisting entirely of PK columns (whose values are never truncated).
-	legacyLossless := wd.opts.GetReportOptions().GetRowDiffColumnTruncateAt() <= 0 &&
-		(!wd.opts.GetReportOptions().GetOnlyPks() || wd.tableProjectionIsAllPKs(dr.TableName))
+	// LosslessValues marker but may still be provably complete:
+	// - a PK-only sample is complete when the comparison projection consists
+	//   entirely of PK columns (whose values are never truncated);
+	// - with truncation configured, a sample is complete when none of its
+	//   values carries the truncation marker, which truncation always
+	//   appends. A genuine value ending in the marker is indistinguishable
+	//   from a truncated one and stays excluded, which errs on the safe side.
+	allPKs := wd.tableProjectionIsAllPKs(dr.TableName)
 	isLossless := func(rd *RowDiff) bool {
-		return rd.LosslessValues || legacyLossless
+		if rd.LosslessValues {
+			return true
+		}
+		if wd.opts.GetReportOptions().GetOnlyPks() && !allPKs {
+			return false
+		}
+		if wd.opts.GetReportOptions().GetRowDiffColumnTruncateAt() > 0 {
+			for _, v := range rd.Row {
+				if strings.HasSuffix(v, truncatedNotation) {
+					return false
+				}
+			}
+		}
+		return true
 	}
 
 	// Find the matching extra rows. The extra row counts (dr.ExtraRowsSource/dr.ExtraRowsTarget)

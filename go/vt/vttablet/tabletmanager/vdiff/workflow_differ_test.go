@@ -335,6 +335,7 @@ func TestReconcileExtraRowsSkippedForLossySamples(t *testing.T) {
 		name          string
 		reportOptions *tabletmanagerdatapb.VDiffReportOptions
 		truncated     bool
+		value         string // sample value for c2; defaults to "a"
 		wantExtras    int64
 	}{
 		{
@@ -367,7 +368,18 @@ func TestReconcileExtraRowsSkippedForLossySamples(t *testing.T) {
 			name:          "samples with truncated values are not reconciled",
 			reportOptions: &tabletmanagerdatapb.VDiffReportOptions{MaxSampleRows: 10, RowDiffColumnTruncateAt: 128},
 			truncated:     true,
+			value:         "aaaaaaaa" + truncatedNotation,
 			wantExtras:    1,
+		},
+		{
+			// Samples persisted by an older binary lack the lossless marker,
+			// but values that were actually truncated always carry the
+			// truncation marker, so unmarked samples without it are complete
+			// even when truncation is configured (as it is by default).
+			name:          "unmarked legacy samples without truncated values reconcile",
+			reportOptions: &tabletmanagerdatapb.VDiffReportOptions{MaxSampleRows: 10, RowDiffColumnTruncateAt: 128},
+			truncated:     true,
+			wantExtras:    0,
 		},
 		{
 			// Samples persisted by an older binary lack the lossless marker,
@@ -388,14 +400,18 @@ func TestReconcileExtraRowsSkippedForLossySamples(t *testing.T) {
 					ReportOptions: tc.reportOptions,
 				},
 			}
+			value := tc.value
+			if value == "" {
+				value = "a"
+			}
 			dr := &DiffReport{
 				TableName:            "t1",
 				ProcessedRows:        4,
 				MatchingRows:         2,
 				ExtraRowsSource:      1,
-				ExtraRowsSourceDiffs: []*RowDiff{{Row: map[string]string{"c1": "1", "c2": "a"}, LosslessValues: !tc.truncated}},
+				ExtraRowsSourceDiffs: []*RowDiff{{Row: map[string]string{"c1": "1", "c2": value}, LosslessValues: !tc.truncated}},
 				ExtraRowsTarget:      1,
-				ExtraRowsTargetDiffs: []*RowDiff{{Row: map[string]string{"c1": "1", "c2": "a"}, LosslessValues: !tc.truncated}},
+				ExtraRowsTargetDiffs: []*RowDiff{{Row: map[string]string{"c1": "1", "c2": value}, LosslessValues: !tc.truncated}},
 			}
 			require.NoError(t, wd.doReconcileExtraRows(dr, 10, tc.reportOptions.MaxSampleRows))
 			require.Equal(t, tc.wantExtras, dr.ExtraRowsSource)
