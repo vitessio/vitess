@@ -2191,6 +2191,23 @@ func TestQueryExecutorSetSQLMode(t *testing.T) {
 		assert.Equal(t, sqlparser.SQLMode(0), tsv.te.ConnParseSQLMode(txID))
 	})
 
+	t.Run("the connection is closed when the read-back fails", func(t *testing.T) {
+		// the statement may have put the session in a parse-relevant mode; without the
+		// read-back there is no telling what the connection lexes under
+		db.DeleteQuery(readQuery)
+		db.AddRejectedQuery(readQuery, errRejected)
+		txID := newTransaction(tsv, nil)
+		qre := newTestQueryExecutor(ctx, tsv, setQuery, txID)
+		_, err := qre.Execute()
+		require.ErrorContains(t, err, errRejected.Error())
+		db.DeleteRejectedQuery(readQuery)
+		// the connection is gone: the transaction cannot be used again
+		followUp := "set @@sql_mode = 'STRICT_ALL_TABLES'"
+		qre = newTestQueryExecutor(ctx, tsv, followUp, txID)
+		_, err = qre.Execute()
+		require.Error(t, err)
+	})
+
 	t.Run("the connection is closed when stripping fails", func(t *testing.T) {
 		// rather than leaving it running under a mode that changes how it lexes the
 		// SQL the vttablet sends

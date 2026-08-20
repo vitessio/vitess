@@ -1250,6 +1250,12 @@ func (qre *QueryExecutor) execSet(conn *StatefulConnection) (*sqltypes.Result, e
 	case qre.plan.ReadBackSQLMode:
 		applied, err := qre.readSQLMode(conn)
 		if err != nil {
+			// The statement may have put the session in a parse-relevant mode; without
+			// the read-back there is no telling what the connection would now lex the
+			// vttablet's SQL under, so it cannot be reused.
+			log.Warn("closing connection: could not read back the applied sql_mode",
+				slog.Any("error", err), slog.Int64("connID", conn.ID()))
+			conn.Close()
 			return nil, err
 		}
 		mode, err := sqlmode.Parse(applied.ToString())
