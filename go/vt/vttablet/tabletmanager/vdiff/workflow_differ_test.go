@@ -417,8 +417,8 @@ func TestReconcileExtraRowsTrimsSamplesOnEveryPath(t *testing.T) {
 				ExtraRowsTargetDiffs: tc.targetDiffs,
 			}
 			require.NoError(t, wd.doReconcileExtraRows(dr, 1000, tc.reportOptions.MaxSampleRows))
-			require.LessOrEqual(t, int64(len(dr.ExtraRowsSourceDiffs)), tc.reportOptions.MaxSampleRows)
-			require.LessOrEqual(t, int64(len(dr.ExtraRowsTargetDiffs)), tc.reportOptions.MaxSampleRows)
+			require.Equal(t, min(int64(len(tc.sourceDiffs)), tc.reportOptions.MaxSampleRows), int64(len(dr.ExtraRowsSourceDiffs)))
+			require.Equal(t, min(int64(len(tc.targetDiffs)), tc.reportOptions.MaxSampleRows), int64(len(dr.ExtraRowsTargetDiffs)))
 			// The counts are not affected by the report trimming.
 			require.Equal(t, int64(len(tc.sourceDiffs)), dr.ExtraRowsSource)
 			require.Equal(t, int64(len(tc.targetDiffs)), dr.ExtraRowsTarget)
