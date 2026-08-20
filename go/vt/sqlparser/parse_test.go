@@ -4409,6 +4409,52 @@ func TestSQLModeParsing(t *testing.T) {
 	assert.Equal(t, "select 'a' from t", String(stmt))
 }
 
+// Formatted SQL must read identically whether or not the consumer runs with
+// sql_mode=IGNORE_SPACE: the names MySQL's parser recognizes as function
+// keywords are reserved words under that mode, so as identifiers they must
+// always be quoted, and as function calls they must be written bare with no
+// whitespace before the parenthesis. The list is MySQL's (see "Function Name
+// Parsing and Resolution" in the reference manual), not Vitess's keyword
+// table.
+func TestFormatIgnoreSpaceIndependence(t *testing.T) {
+	names := []string{
+		"ADDDATE", "BIT_AND", "BIT_OR", "BIT_XOR", "CAST", "COUNT", "CURDATE",
+		"CURTIME", "DATE_ADD", "DATE_SUB", "EXTRACT", "GROUP_CONCAT", "MAX",
+		"MID", "MIN", "NOW", "POSITION", "SESSION_USER", "STD", "STDDEV",
+		"STDDEV_POP", "STDDEV_SAMP", "SUBDATE", "SUBSTR", "SUBSTRING", "SUM",
+		"SYSDATE", "SYSTEM_USER", "TRIM", "VARIANCE", "VAR_POP", "VAR_SAMP",
+	}
+	parser := NewTestParser()
+	for _, name := range names {
+		t.Run(name, func(t *testing.T) {
+			lower := strings.ToLower(name)
+			// as an identifier the name is always quoted
+			stmt, err := parser.Parse("select " + lower + " from t")
+			require.NoError(t, err)
+			assert.Equal(t, "select `"+lower+"` from t", String(stmt))
+		})
+	}
+	// function calls print the bare name with no whitespace before the
+	// parenthesis, under which they lex as the function keyword either way
+	calls := []string{
+		"select count(*), max(a), min(a), sum(a), std(a), stddev(a), variance(a), var_pop(a), var_samp(a) from t",
+		"select bit_and(a), bit_or(a), bit_xor(a), group_concat(a) from t",
+		"select cast(a as char), now(), curdate(), curtime(), sysdate(), session_user(), system_user() from t",
+		"select adddate(d, 1), subdate(d, 1), date_add(d, interval 1 day), date_sub(d, interval 1 day) from t",
+		"select extract(year from d), position('a' in b), mid(a, 1, 2), substr(a, 1), substring(a, 1), trim(a) from t",
+	}
+	for _, call := range calls {
+		stmt, err := parser.Parse(call)
+		require.NoError(t, err)
+		out := String(stmt)
+		for _, name := range names {
+			lower := strings.ToLower(name)
+			assert.NotContains(t, out, "`"+lower+"`(", "quoted function name in %s", out)
+			assert.NotContains(t, out, lower+" (", "whitespace before parenthesis in %s", out)
+		}
+	}
+}
+
 func TestValid(t *testing.T) {
 	parser := NewTestParser()
 	for _, tcase := range validSQL {
