@@ -424,6 +424,12 @@ func (tkn *Tokenizer) scanIdentifier(isVariable bool) (int, string) {
 		if isFuncCallKeyword(keywordID) && !tkn.funcCallParenAhead() {
 			return ID, keywordName
 		}
+		if keywordID == NOT && tkn.parser.sqlMode&SQLModeHighNotPrecedence != 0 {
+			// Under HIGH_NOT_PRECEDENCE, NOT binds like the unary
+			// operators; the grammar accepts NOT_HIGH wherever a composite
+			// NOT appears, mirroring MySQL's NOT2_SYM.
+			return NOT_HIGH, keywordName
+		}
 		return keywordID, keywordName
 	}
 	return ID, keywordName

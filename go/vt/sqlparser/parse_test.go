@@ -4234,9 +4234,11 @@ func TestParseSQLMode(t *testing.T) {
 		{in: "STRICT_TRANS_TABLES,NO_ZERO_DATE", mode: 0},
 		{in: "IGNORE_SPACE", mode: SQLModeIgnoreSpace},
 		{in: "NO_BACKSLASH_ESCAPES", mode: SQLModeNoBackslashEscapes},
-		// the ANSI combination mode includes ANSI_QUOTES, PIPES_AS_CONCAT
-		// and IGNORE_SPACE
-		{in: "ANSI", mode: SQLModeANSIQuotes | SQLModePipesAsConcat | SQLModeIgnoreSpace},
+		{in: "HIGH_NOT_PRECEDENCE", mode: SQLModeHighNotPrecedence},
+		{in: "REAL_AS_FLOAT", mode: SQLModeRealAsFloat},
+		// the ANSI combination mode includes REAL_AS_FLOAT, ANSI_QUOTES,
+		// PIPES_AS_CONCAT and IGNORE_SPACE
+		{in: "ANSI", mode: SQLModeRealAsFloat | SQLModeANSIQuotes | SQLModePipesAsConcat | SQLModeIgnoreSpace},
 		// ANSI_QUOTES must not be mistaken for the ANSI combination mode
 		{in: "ANSI_QUOTES,ONLY_FULL_GROUP_BY", mode: SQLModeANSIQuotes},
 		// tolerate quoting and expression noise around the mode names
@@ -4245,6 +4247,56 @@ func TestParseSQLMode(t *testing.T) {
 	for _, tcase := range testcases {
 		t.Run(tcase.in, func(t *testing.T) {
 			assert.Equal(t, tcase.mode, ParseSQLMode(tcase.in))
+		})
+	}
+}
+
+func TestStripParseRelevantModes(t *testing.T) {
+	testcases := []struct {
+		in  string
+		out string
+	}{
+		{in: "", out: ""},
+		{in: "ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES", out: "ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES"},
+		{in: "PIPES_AS_CONCAT", out: ""},
+		{in: "ansi_quotes,STRICT_TRANS_TABLES", out: "STRICT_TRANS_TABLES"},
+		{in: "STRICT_TRANS_TABLES,IGNORE_SPACE,NO_BACKSLASH_ESCAPES", out: "STRICT_TRANS_TABLES"},
+		{in: "HIGH_NOT_PRECEDENCE,NO_ZERO_DATE", out: "NO_ZERO_DATE"},
+		// REAL_AS_FLOAT stays execution-relevant for the backend (DDL type
+		// mapping) and must not be stripped
+		{in: "REAL_AS_FLOAT,STRICT_TRANS_TABLES", out: "REAL_AS_FLOAT,STRICT_TRANS_TABLES"},
+		// the ANSI combination mode keeps its execution-relevant parts
+		{in: "ANSI,STRICT_ALL_TABLES", out: "REAL_AS_FLOAT,ONLY_FULL_GROUP_BY,STRICT_ALL_TABLES"},
+		{in: " PIPES_AS_CONCAT , NO_ZERO_DATE ", out: "NO_ZERO_DATE"},
+	}
+	for _, tcase := range testcases {
+		t.Run(tcase.in, func(t *testing.T) {
+			assert.Equal(t, tcase.out, StripParseRelevantModes(tcase.in))
+		})
+	}
+}
+
+func TestCanonicalizeSQLModeValue(t *testing.T) {
+	testcases := []struct {
+		in  string
+		out string
+	}{
+		{in: "", out: ""},
+		{in: "''", out: "''"},
+		// MySQL's documented read-back for the combination modes
+		{in: "ANSI", out: "REAL_AS_FLOAT,PIPES_AS_CONCAT,ANSI_QUOTES,IGNORE_SPACE,ONLY_FULL_GROUP_BY,ANSI"},
+		{in: "TRADITIONAL", out: "STRICT_TRANS_TABLES,STRICT_ALL_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,TRADITIONAL,NO_ENGINE_SUBSTITUTION"},
+		// canonical ordering, uppercasing and deduplication
+		{in: "strict_trans_tables,pipes_as_concat", out: "PIPES_AS_CONCAT,STRICT_TRANS_TABLES"},
+		{in: "'STRICT_TRANS_TABLES,STRICT_TRANS_TABLES'", out: "'STRICT_TRANS_TABLES'"},
+		{in: "'ANSI,STRICT_TRANS_TABLES'", out: "'REAL_AS_FLOAT,PIPES_AS_CONCAT,ANSI_QUOTES,IGNORE_SPACE,ONLY_FULL_GROUP_BY,ANSI,STRICT_TRANS_TABLES'"},
+		// unknown names and non-list values stay untouched
+		{in: "'NOT_A_REAL_MODE'", out: "'NOT_A_REAL_MODE'"},
+		{in: "CONCAT(@@sql_mode, ',ANSI')", out: "CONCAT(@@sql_mode, ',ANSI')"},
+	}
+	for _, tcase := range testcases {
+		t.Run(tcase.in, func(t *testing.T) {
+			assert.Equal(t, tcase.out, CanonicalizeSQLModeValue(tcase.in))
 		})
 	}
 }
@@ -4311,6 +4363,24 @@ func TestSQLModeParsing(t *testing.T) {
 		mode:   SQLModeNoBackslashEscapes,
 		input:  `select 'it''s \ here' from dual`,
 		output: `select 'it\'s \\ here' from dual`,
+	}, {
+		// HIGH_NOT_PRECEDENCE binds NOT like a unary operator
+		mode:   SQLModeHighNotPrecedence,
+		input:  "select not a between b and c from t",
+		output: "select (not a) between b and c from t",
+	}, {
+		mode:   SQLModeHighNotPrecedence,
+		input:  "select not a = b from t",
+		output: "select (not a) = b from t",
+	}, {
+		// composite NOT constructs keep working under the mode
+		mode:   SQLModeHighNotPrecedence,
+		input:  "select * from t where a not like 'x' and b not in (1, 2) and c is not null",
+		output: "select * from t where a not like 'x' and b not in (1, 2) and c is not null",
+	}, {
+		mode:   SQLModeHighNotPrecedence,
+		input:  "create table if not exists t (\n\ta int not null\n)",
+		output: "create table if not exists t (\n\ta int not null\n)",
 	}}
 	for _, tcase := range testcases {
 		t.Run(tcase.input, func(t *testing.T) {
