@@ -18,6 +18,8 @@ package vexplain
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -261,4 +263,60 @@ func TestVExplainMySQLPlanReservedConn(t *testing.T) {
 	_, err = utils.ExecAllowError(t, conn, `vexplain mysqlplan select id from temp_user`)
 	require.ErrorContains(t, err, "reserved connection")
 	require.NotContains(t, err.Error(), "VEXPLAIN ALL")
+}
+
+// TestVExplainMySQLPlanIntoOutfileNoSideEffect verifies that VEXPLAIN MYSQLPLAN of a
+// SELECT ... INTO OUTFILE / INTO DUMPFILE returns a plan without error and, crucially,
+// writes no file - proving that wrapping the query in EXPLAIN FORMAT=JSON does not
+// execute its INTO clause. This is the end-to-end (vtgate -> vttablet -> mysqld)
+// counterpart of the standalone MySQL check that motivated leaving INTO OUTFILE
+// unguarded: it never runs the wrapped query, so there is no side effect to guard.
+func TestVExplainMySQLPlanIntoOutfileNoSideEffect(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 25, "vtgate")
+
+	// The unsharded keyspace has a single tablet, so its mysqld exposes one
+	// unambiguous secure_file_priv directory that this test - running on the same
+	// host - can inspect directly.
+	tablet := keyspaceByName(t, unshardedKs).Shards[0].PrimaryTablet()
+	res, err := tablet.VttabletProcess.QueryTablet(`select @@secure_file_priv`, unshardedKs, false)
+	require.NoError(t, err)
+	secureFilePriv := res.Named().Row().AsString("@@secure_file_priv", "")
+	if secureFilePriv == "" {
+		t.Skip("secure_file_priv is empty; INTO OUTFILE is disabled on this mysqld")
+	}
+
+	ctx := t.Context()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	utils.Exec(t, conn, "use "+unshardedKs)
+
+	// A control real SELECT ... INTO OUTFILE must write a file, proving the write
+	// path works on this mysqld - so a missing file after EXPLAIN below genuinely
+	// means "not executed", not "OUTFILE is broken here".
+	controlPath := filepath.Join(secureFilePriv, "vexplain_control.txt")
+	utils.Exec(t, conn, `select id from u_user into outfile `+sqltypes.EncodeStringSQL(controlPath))
+	t.Cleanup(func() { _ = os.Remove(controlPath) })
+	require.FileExists(t, controlPath, "control real SELECT ... INTO OUTFILE did not write a file; the rest of this test is meaningless")
+
+	// VEXPLAIN MYSQLPLAN of INTO OUTFILE / INTO DUMPFILE must return a plan and
+	// write nothing: EXPLAIN FORMAT=JSON never executes the wrapped query.
+	for _, tc := range []struct {
+		name string
+		into string
+	}{
+		{"outfile", "into outfile"},
+		{"dumpfile", "into dumpfile"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			path := filepath.Join(secureFilePriv, "vexplain_explain_"+tc.name+".txt")
+			t.Cleanup(func() { _ = os.Remove(path) })
+
+			utils.AssertMatchesContains(t, conn,
+				fmt.Sprintf(`vexplain mysqlplan select id from u_user %s %s`, tc.into, sqltypes.EncodeStringSQL(path)),
+				"mysql_explain_json_by_shard")
+			require.NoFileExists(t, path, "VEXPLAIN MYSQLPLAN executed the wrapped query: %s was written", path)
+		})
+	}
 }
