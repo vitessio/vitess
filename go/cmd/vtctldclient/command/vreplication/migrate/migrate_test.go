@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package movetables
+package migrate
 
 import (
 	"sync"
@@ -39,14 +39,6 @@ func testCommand(t *testing.T, path ...string) *cobra.Command {
 	return cmd
 }
 
-func TestKeepDataHelpMentionsReverseWorkflowDefault(t *testing.T) {
-	completeCmd := testCommand(t, "MoveTables", "complete")
-	require.Contains(t, completeCmd.Flags().Lookup("keep-data").Usage, "Defaults to true for an explicitly specified _reverse workflow unless --keep-data=false is provided.")
-
-	cancelCmd := testCommand(t, "MoveTables", "cancel")
-	require.Contains(t, cancelCmd.Flags().Lookup("keep-data").Usage, "Defaults to true for an explicitly specified _reverse workflow unless --keep-data=false is provided.")
-}
-
 // TestCreatePreRunETableSelection runs the create command's PreRunE with the
 // flag forms an operator or automation actually passes. pflag marks --tables=
 // and --all-tables=false as changed while producing an empty list and false,
@@ -54,7 +46,7 @@ func TestKeepDataHelpMentionsReverseWorkflowDefault(t *testing.T) {
 // rejected here rather than reaching the server-side guard (or, against an
 // older vtctld, the late "no tables to move" failure).
 func TestCreatePreRunETableSelection(t *testing.T) {
-	cmd := testCommand(t, "MoveTables", "create")
+	cmd := testCommand(t, "Migrate", "create")
 
 	tests := []struct {
 		name    string
