@@ -52,6 +52,15 @@ type (
 		InterOpStats map[Primitive]RowsReceived
 		ShardsStats  map[Primitive]ShardsQueried
 	}
+
+	// mysqlExplainTask is the set of EXPLAIN FORMAT=JSON queries to run against the
+	// resolved shards of a single primitive (a Route or read Send). rss and queries
+	// are aligned by index, one entry per targeted shard.
+	mysqlExplainTask struct {
+		primitive Primitive
+		rss       []*srvtopo.ResolvedShard
+		queries   []*querypb.BoundQuery
+	}
 )
 
 // vexplainMySQLReservedConnError is returned when VEXPLAIN MYSQLPLAN runs in a
@@ -241,15 +250,6 @@ func (v *VExplain) convertToVExplainAllResult(ctx context.Context, vcursor VCurs
 		Rows:   rows,
 	}
 	return qr, nil
-}
-
-// mysqlExplainTask is the set of EXPLAIN FORMAT=JSON queries to run against the
-// resolved shards of a single primitive (a Route or read Send). rss and queries
-// are aligned by index, one entry per targeted shard.
-type mysqlExplainTask struct {
-	primitive Primitive
-	rss       []*srvtopo.ResolvedShard
-	queries   []*querypb.BoundQuery
 }
 
 // convertToVExplainMySQLResult resolves the target shards of each Route in the
