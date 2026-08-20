@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"regexp"
 	"testing"
 	"time"
 
@@ -31,6 +32,10 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 )
+
+// optimizerHintRE matches optimizer hint comments (e.g. /*+ SET_VAR(...) */) that
+// newer vtgate versions may inject into the queries sent to the shards.
+var optimizerHintRE = regexp.MustCompile(`\s*/\*\+.*?\*/`)
 
 func TestNormalizeAllFields(t *testing.T) {
 	conn, err := mysql.Connect(t.Context(), &vtParams)
@@ -47,7 +52,11 @@ func TestNormalizeAllFields(t *testing.T) {
 
 	// Now need to figure out the best way to check the normalized query in the planner cache...
 	results := getPlanCache(t, fmt.Sprintf("%s:%d", vtParams.Host, clusterInstance.VtgateProcess.Port))
-	assert.Contains(t, results, normalizedInsertQuery)
+	keys := make([]string, 0, len(results))
+	for key := range results {
+		keys = append(keys, optimizerHintRE.ReplaceAllString(key, ""))
+	}
+	assert.Contains(t, keys, normalizedInsertQuery)
 }
 
 func getPlanCache(t *testing.T, vtgateHostPort string) map[string]any {
