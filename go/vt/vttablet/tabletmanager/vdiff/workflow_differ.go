@@ -175,7 +175,11 @@ func (wd *workflowDiffer) doReconcileExtraRows(dr *DiffReport, maxExtraRowsToCom
 				// Previously matched, or not provably identical.
 				continue
 			}
-			if reflect.DeepEqual(dr.ExtraRowsSourceDiffs[i], dr.ExtraRowsTargetDiffs[j]) {
+			// Compare only the row data: the other RowDiff fields describe the
+			// sample's provenance (the side-specific debug query, the lossless
+			// marker which differs between samples persisted by older binaries
+			// and current ones), not the row itself.
+			if reflect.DeepEqual(dr.ExtraRowsSourceDiffs[i].Row, dr.ExtraRowsTargetDiffs[j].Row) {
 				matchedSourceDiffs[i] = true
 				matchedTargetDiffs[j] = true
 				matchedDiffs++
