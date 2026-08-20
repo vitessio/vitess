@@ -368,6 +368,64 @@ func TestReconcileExtraRowsSkippedForLossySamples(t *testing.T) {
 	}
 }
 
+// TestReconcileExtraRowsTrimsSamplesOnEveryPath tests that the extra-row
+// samples are trimmed to max-report-sample-rows even when reconciliation
+// returns early (one side has no extras, or the samples are lossy): the diff
+// collects samples up to max-extra-rows-to-compare, which can far exceed the
+// report limit.
+func TestReconcileExtraRowsTrimsSamplesOnEveryPath(t *testing.T) {
+	makeDiffs := func(n int) []*RowDiff {
+		diffs := make([]*RowDiff, n)
+		for i := range diffs {
+			diffs[i] = &RowDiff{Row: map[string]string{"c1": fmt.Sprintf("%d", i)}}
+		}
+		return diffs
+	}
+	testCases := []struct {
+		name          string
+		reportOptions *tabletmanagerdatapb.VDiffReportOptions
+		sourceDiffs   []*RowDiff
+		targetDiffs   []*RowDiff
+	}{
+		{
+			name:          "one side without extras",
+			reportOptions: &tabletmanagerdatapb.VDiffReportOptions{MaxSampleRows: 10},
+			sourceDiffs:   makeDiffs(50),
+			targetDiffs:   nil,
+		},
+		{
+			name:          "lossy only-pks samples",
+			reportOptions: &tabletmanagerdatapb.VDiffReportOptions{MaxSampleRows: 10, OnlyPks: true},
+			sourceDiffs:   makeDiffs(50),
+			targetDiffs:   makeDiffs(50),
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			wd := &workflowDiffer{
+				ct: &controller{uuid: "d99795d9-8bb1-4741-b25f-b3a2a1edee0b"},
+				opts: &tabletmanagerdatapb.VDiffOptions{
+					CoreOptions:   &tabletmanagerdatapb.VDiffCoreOptions{},
+					ReportOptions: tc.reportOptions,
+				},
+			}
+			dr := &DiffReport{
+				TableName:            "t1",
+				ExtraRowsSource:      int64(len(tc.sourceDiffs)),
+				ExtraRowsSourceDiffs: tc.sourceDiffs,
+				ExtraRowsTarget:      int64(len(tc.targetDiffs)),
+				ExtraRowsTargetDiffs: tc.targetDiffs,
+			}
+			require.NoError(t, wd.doReconcileExtraRows(dr, 1000, tc.reportOptions.MaxSampleRows))
+			require.LessOrEqual(t, int64(len(dr.ExtraRowsSourceDiffs)), tc.reportOptions.MaxSampleRows)
+			require.LessOrEqual(t, int64(len(dr.ExtraRowsTargetDiffs)), tc.reportOptions.MaxSampleRows)
+			// The counts are not affected by the report trimming.
+			require.Equal(t, int64(len(tc.sourceDiffs)), dr.ExtraRowsSource)
+			require.Equal(t, int64(len(tc.targetDiffs)), dr.ExtraRowsTarget)
+		})
+	}
+}
+
 func TestReconcileReferenceTables(t *testing.T) {
 	ctx := t.Context()
 	vdenv := newTestVDiffEnv(t)

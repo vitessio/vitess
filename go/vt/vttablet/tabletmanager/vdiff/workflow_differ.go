@@ -116,6 +116,18 @@ func (wd *workflowDiffer) reconcileReferenceTables(dr *DiffReport) error {
 }
 
 func (wd *workflowDiffer) doReconcileExtraRows(dr *DiffReport, maxExtraRowsToCompare int64, maxReportSampleRows int64) error {
+	// Trim the extra rows diffs to the maxReportSampleRows value on every exit
+	// path: the diff collects samples up to maxExtraRowsToCompare per side,
+	// which can be greater than maxReportSampleRows. When rows are reconciled,
+	// this must happen after the slices and counts have been updated.
+	defer func() {
+		if int64(len(dr.ExtraRowsSourceDiffs)) > maxReportSampleRows && maxReportSampleRows > 0 {
+			dr.ExtraRowsSourceDiffs = dr.ExtraRowsSourceDiffs[:maxReportSampleRows-1]
+		}
+		if int64(len(dr.ExtraRowsTargetDiffs)) > maxReportSampleRows && maxReportSampleRows > 0 {
+			dr.ExtraRowsTargetDiffs = dr.ExtraRowsTargetDiffs[:maxReportSampleRows-1]
+		}
+	}()
 	if dr.ExtraRowsSource == 0 || dr.ExtraRowsTarget == 0 {
 		return nil
 	}
@@ -196,14 +208,6 @@ func (wd *workflowDiffer) doReconcileExtraRows(dr *DiffReport, maxExtraRowsToCom
 		log.Info(fmt.Sprintf("Reconciled extra rows for table %s in vdiff %s, matching rows %d, extra source rows %d, extra target rows %d. Max compared rows %d", dr.TableName, wd.ct.uuid, matchedDiffs, dr.ExtraRowsSource, dr.ExtraRowsTarget, maxRows))
 	}
 
-	// Trim the extra rows diffs to the maxReportSampleRows value. Note we need to do this after updating
-	// the slices and counts above, since maxExtraRowsToCompare can be greater than maxVDiffReportSampleRows.
-	if int64(len(dr.ExtraRowsSourceDiffs)) > maxReportSampleRows && maxReportSampleRows > 0 {
-		dr.ExtraRowsSourceDiffs = dr.ExtraRowsSourceDiffs[:maxReportSampleRows-1]
-	}
-	if int64(len(dr.ExtraRowsTargetDiffs)) > maxReportSampleRows && maxReportSampleRows > 0 {
-		dr.ExtraRowsTargetDiffs = dr.ExtraRowsTargetDiffs[:maxReportSampleRows-1]
-	}
 	return nil
 }
 
