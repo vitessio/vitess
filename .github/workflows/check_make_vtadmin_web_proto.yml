@@ -57,7 +57,14 @@ jobs:
 
     - name: Setup Node
       if: steps.changes.outputs.proto_changes == 'true'
+<<<<<<< HEAD
       uses: actions/setup-node@1e60f620b9541d16bece96c5465dc8ee9832be0b # v4.0.3
+||||||| parent of 489e008512 (CI: move zizmor ignore comments off action version-pin lines (#20820))
+      uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0  # zizmor: ignore[cache-poisoning] this workflow publishes no artifacts
+=======
+      # zizmor: ignore[cache-poisoning] this workflow publishes no artifacts
+      uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+>>>>>>> 489e008512 (CI: move zizmor ignore comments off action version-pin lines (#20820))
       with:
         # node-version should match package.json
         node-version: '22.13.1'
