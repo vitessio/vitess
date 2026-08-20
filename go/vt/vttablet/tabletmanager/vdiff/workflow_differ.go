@@ -152,18 +152,26 @@ func (wd *workflowDiffer) doReconcileExtraRows(dr *DiffReport, maxExtraRowsToCom
 	maxRows := min(len(dr.ExtraRowsSourceDiffs), int(maxExtraRowsToCompare))
 	log.Info(fmt.Sprintf("Reconciling extra rows for table %s in vdiff %s, extra source rows %d, extra target rows %d, max rows %d", dr.TableName, wd.ct.uuid, dr.ExtraRowsSource, dr.ExtraRowsTarget, maxRows))
 
+	// Samples persisted by an older binary and reloaded on resume lack the
+	// LosslessValues marker. They are still provably complete when this
+	// vdiff's report options could not have produced a lossy sample: only-pks
+	// is already handled above, so only configured truncation remains.
+	legacyLossless := wd.opts.GetReportOptions().GetRowDiffColumnTruncateAt() <= 0
+	isLossless := func(rd *RowDiff) bool {
+		return rd.LosslessValues || legacyLossless
+	}
+
 	// Find the matching extra rows. The extra row counts (dr.ExtraRowsSource/dr.ExtraRowsTarget)
 	// can be higher than the number of saved sample rows -- e.g. when the counts exceed
 	// maxExtraRowsToCompare -- so all indexing must be bounded by the slice lengths, never by
-	// the counts. Only samples affirmatively marked lossless take part: samples with truncated
-	// values, and samples persisted by older binaries that did not record the marker, cannot
+	// the counts. Only lossless samples take part: samples with truncated values cannot
 	// prove that two rows are identical, and reconciling them could hide a real difference.
 	for i := 0; i < len(dr.ExtraRowsSourceDiffs); i++ {
-		if !dr.ExtraRowsSourceDiffs[i].LosslessValues {
+		if !isLossless(dr.ExtraRowsSourceDiffs[i]) {
 			continue
 		}
 		for j := 0; j < len(dr.ExtraRowsTargetDiffs); j++ {
-			if matchedTargetDiffs[j] || !dr.ExtraRowsTargetDiffs[j].LosslessValues {
+			if matchedTargetDiffs[j] || !isLossless(dr.ExtraRowsTargetDiffs[j]) {
 				// Previously matched, or not provably identical.
 				continue
 			}

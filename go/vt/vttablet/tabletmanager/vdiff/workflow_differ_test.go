@@ -358,6 +358,14 @@ func TestReconcileExtraRowsSkippedForLossySamples(t *testing.T) {
 			truncated:     true,
 			wantExtras:    1,
 		},
+		{
+			// Samples persisted by an older binary lack the lossless marker,
+			// but are provably complete when no truncation was configured.
+			name:          "unmarked legacy samples reconcile when truncation is not configured",
+			reportOptions: &tabletmanagerdatapb.VDiffReportOptions{MaxSampleRows: 10},
+			truncated:     true,
+			wantExtras:    0,
+		},
 	}
 
 	for _, tc := range testCases {
