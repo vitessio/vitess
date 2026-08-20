@@ -27,9 +27,25 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/capabilities"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/onlineddl"
 	"vitess.io/vitess/go/test/endtoend/utils"
 )
+
+// keyspaceByName returns the started keyspace with the given name. Tests must
+// look keyspaces up by name rather than by position in clusterInstance.Keyspaces,
+// whose order follows keyspace startup order in TestMain and is not stable (the
+// unsharded keyspace starts first, so Keyspaces[0] is not the sharded one).
+func keyspaceByName(t *testing.T, name string) *cluster.Keyspace {
+	t.Helper()
+	for i := range clusterInstance.Keyspaces {
+		if clusterInstance.Keyspaces[i].Name == name {
+			return &clusterInstance.Keyspaces[i]
+		}
+	}
+	require.Failf(t, "keyspace not found", "keyspace %q not found in cluster", name)
+	return nil
+}
 
 func start(t *testing.T) (*mysql.Conn, func()) {
 	ctx := t.Context()
@@ -170,7 +186,8 @@ func TestVExplainMySQLPlan(t *testing.T) {
 	// query_block is a key emitted only by a genuine MySQL EXPLAIN FORMAT=JSON, so it
 	// proves we actually reached MySQL. MariaDB's EXPLAIN JSON does not use it, so gate
 	// this assertion to MySQL/Percona 8.0+ (which covers the 8.0 and 8.4 CI flavors).
-	mysqlVersion := onlineddl.GetMySQLVersion(t, clusterInstance.Keyspaces[0].Shards[0].PrimaryTablet())
+	shardedKeyspace := keyspaceByName(t, shardedKs)
+	mysqlVersion := onlineddl.GetMySQLVersion(t, shardedKeyspace.Shards[0].PrimaryTablet())
 	require.NotEmpty(t, mysqlVersion)
 	atLeast80, err := capabilities.ServerVersionAtLeast(mysqlVersion, 8, 0, 0)
 	require.NoError(t, err)
@@ -209,7 +226,7 @@ func TestVExplainMySQLPlanReservedConn(t *testing.T) {
 	defer conn.Close()
 
 	// Temporary tables are only allowed on an unsharded keyspace.
-	utils.Exec(t, conn, "use "+unshardedKs)
+	utils.Exec(t, conn, "use "+keyspaceByName(t, unshardedKs).Name)
 	utils.Exec(t, conn, `create temporary table temp_user(id bigint primary key)`)
 	utils.Exec(t, conn, `insert into temp_user(id) values (1)`)
 
