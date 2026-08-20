@@ -274,6 +274,29 @@
     }
   },
   {
+    "comment": "DEFAULT restores the configured default sql_mode",
+    "query": "SET sql_mode = DEFAULT",
+    "plan": {
+      "Type": "Local",
+      "QueryType": "SET",
+      "Original": "SET sql_mode = DEFAULT",
+      "Instructions": {
+        "OperatorType": "Set",
+        "Ops": [
+          {
+            "Type": "SysVarSQLMode",
+            "Expr": "'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'"
+          }
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "SingleRow"
+          }
+        ]
+      }
+    }
+  },
+  {
     "comment": "multiple sysvar cases",
     "query": "SET @@SESSION.sql_mode = CONCAT(CONCAT(@@sql_mode, ',STRICT_ALL_TABLES'), ',NO_AUTO_VALUE_ON_ZERO'), @@SESSION.sql_safe_updates = 0",
     "plan": {

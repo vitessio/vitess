@@ -439,6 +439,12 @@ func (vc *VCursorImpl) SQLMode() string {
 	if mode, ok := vc.SafeSession.SQLMode(); ok {
 		return mode
 	}
+	return vc.DefaultSQLMode()
+}
+
+// DefaultSQLMode returns the sql_mode sessions start with: the value of the --sql-mode
+// flag, or the compiled-in default when the flag is unset.
+func (vc *VCursorImpl) DefaultSQLMode() string {
 	if vc.config.SQLMode != "" {
 		return vc.config.SQLMode
 	}

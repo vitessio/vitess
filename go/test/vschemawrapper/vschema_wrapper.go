@@ -236,6 +236,10 @@ func (vw *VSchemaWrapper) SysVarSetEnabled() bool {
 	return vw.SysVarEnabled
 }
 
+func (vw *VSchemaWrapper) DefaultSQLMode() string {
+	return config.DefaultSQLMode
+}
+
 func (vw *VSchemaWrapper) IsSystemVariableDenied(name string) bool {
 	if len(vw.DeniedSysVars) == 0 {
 		return false

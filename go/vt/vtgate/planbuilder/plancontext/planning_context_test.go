@@ -248,6 +248,11 @@ func (v *vschema) SysVarSetEnabled() bool {
 	panic("implement me")
 }
 
+func (v *vschema) DefaultSQLMode() string {
+	// TODO implement me
+	panic("implement me")
+}
+
 func (v *vschema) IsSystemVariableDenied(string) bool {
 	return false
 }

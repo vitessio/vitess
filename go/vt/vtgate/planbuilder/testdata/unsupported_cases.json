@@ -140,11 +140,6 @@
     "plan": "VT12001: unsupported: DEFAULT for @@workload"
   },
   {
-    "comment": "set with DEFAULT - reserved connection",
-    "query": "set sql_mode = default",
-    "plan": "VT12001: unsupported: DEFAULT for @@sql_mode"
-  },
-  {
     "comment": "unknown sql_mode name is rejected the way MySQL rejects it",
     "query": "set sql_mode = 'BOGUS'",
     "plan": "Variable 'sql_mode' can't be set to the value of 'BOGUS'"
