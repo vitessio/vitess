@@ -68,8 +68,6 @@ func (t *noopVCursor) GetExecutionMetrics() *Metrics {
 
 func (t *noopVCursor) SetExecutedPrimitive(Primitive) {}
 
-func (t *noopVCursor) RecordShardsQueried(int) {}
-
 func (t *noopVCursor) ExecutedPrimitive() Primitive { return nil }
 
 func (t *noopVCursor) SetExecQueryTimeout(timeout *int) {
@@ -676,6 +674,21 @@ func (f *loggingVCursor) ExecuteMultiShard(ctx context.Context, primitive Primit
 	}
 
 	return res, f.multiShardErrs
+}
+
+func (f *loggingVCursor) ExecuteMultiShardPerShard(ctx context.Context, primitive Primitive, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery) ([]*sqltypes.Result, []error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	results := make([]*sqltypes.Result, len(rss))
+	for i, rs := range rss {
+		f.log = append(f.log, fmt.Sprintf("ExecuteMultiShardPerShard %s %v %s %s", queries[i].Sql, deprecatedPrintBindVars(queries[i].BindVariables), rs.Target.Keyspace, rs.Target.Shard))
+		res, err := f.nextResult()
+		if err != nil {
+			return nil, []error{err}
+		}
+		results[i] = res
+	}
+	return results, f.multiShardErrs
 }
 
 func (f *loggingVCursor) AutocommitApproval() bool {

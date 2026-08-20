@@ -298,15 +298,15 @@ type (
 		description() PrimitiveDescription
 	}
 
-	// ShardsQueriedRecorder is an optional interface a VCursor may implement to
-	// account for shard-level work issued outside the normal shard path.
-	// RecordShardsQueried adds noOfShards to the query-stats shard-query counter.
-	// ExecuteStandalone does not increment that counter, so callers that fan out
-	// shard-level work through it (e.g. VEXPLAIN MYSQLPLAN) type-assert to this
-	// interface to record the shards they queried. It is kept separate from
-	// VCursor so that adding it does not break out-of-tree VCursor implementations.
-	ShardsQueriedRecorder interface {
-		RecordShardsQueried(noOfShards int)
+	// MultiShardPerShardExecutor is an optional interface a VCursor may implement
+	// to run one read query per shard and get each shard's result back separately
+	// (rather than merged, as ExecuteMultiShard returns them). VEXPLAIN MYSQLPLAN
+	// type-asserts to this interface to run EXPLAIN FORMAT=JSON against every
+	// resolved shard and attribute each plan to its shard. Its shard queries are
+	// counted in the normal ShardQueries stats. It is kept separate from VCursor so
+	// that adding it does not break out-of-tree VCursor implementations.
+	MultiShardPerShardExecutor interface {
+		ExecuteMultiShardPerShard(ctx context.Context, primitive Primitive, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery) ([]*sqltypes.Result, []error)
 	}
 
 	// noInputs default implementation for Primitives that are leaves
