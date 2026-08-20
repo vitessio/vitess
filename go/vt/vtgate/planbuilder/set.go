@@ -176,30 +176,6 @@ func planSysVarCheckIgnore(expr *sqlparser.SetExpr, schema plancontext.VSchema, 
 	}, nil
 }
 
-// validateSQLModePlan wraps sql_mode's planFunc with plan-time validation of constant
-// values: literals and constant expressions (e.g. CONCAT over literals) are evaluated and
-// validated the way MySQL validates a SET sql_mode, and modes the Vitess parser cannot
-// support are rejected (see sqlmode.Validate). Non-constant expressions are validated at
-// execution time, once their value is known.
-func validateSQLModePlan(inner planFunc) planFunc {
-	return func(expr *sqlparser.SetExpr, vschema plancontext.VSchema, ec *expressionConverter) (engine.SetOp, error) {
-		evalExpr, err := evalengine.Translate(expr.Expr, &evalengine.Config{
-			Collation:   vschema.ConnCollation(),
-			Environment: vschema.Environment(),
-		})
-		if err == nil {
-			if lit, ok := evalExpr.(*evalengine.Literal); ok {
-				if res, err := evalengine.EmptyExpressionEnv(vschema.Environment()).Evaluate(lit); err == nil {
-					if _, err := sqlmode.Validate(res.Value(vschema.ConnCollation())); err != nil {
-						return nil, err
-					}
-				}
-			}
-		}
-		return inner(expr, vschema, ec)
-	}
-}
-
 func buildSetOpReservedConn(s setting) planFunc {
 	return func(expr *sqlparser.SetExpr, vschema plancontext.VSchema, _ *expressionConverter) (engine.SetOp, error) {
 		if !vschema.SysVarSetEnabled() {
@@ -224,6 +200,55 @@ func buildSetOpReservedConn(s setting) planFunc {
 			SupportSetVar:     s.supportSetVar,
 		}, nil
 	}
+}
+
+// buildSetOpSQLMode plans SET statements for the sql_mode system variable. The value is
+// evaluated entirely at the vtgate: references to @@sql_mode resolve to the session's
+// current value and @@global.sql_mode to the configured default, so only expressions
+// referencing backend state are fetched from a shard through the Set primitive's input.
+// Constant values are validated at planning time, so that an invalid constant fails the
+// whole SET statement before any assignment is applied, like in MySQL.
+func buildSetOpSQLMode(s setting) planFunc {
+	return func(expr *sqlparser.SetExpr, vschema plancontext.VSchema, ec *expressionConverter) (engine.SetOp, error) {
+		if _, isDefault := expr.Expr.(*sqlparser.Default); isDefault {
+			return nil, vterrors.VT12001(fmt.Sprintf(defaultNotSupportedErrFmt, expr.Var.Name))
+		}
+		if !vschema.SysVarSetEnabled() {
+			if evalExpr, err := evalengine.Translate(expr.Expr, &evalengine.Config{
+				Collation:   vschema.ConnCollation(),
+				Environment: vschema.Environment(),
+			}); err == nil {
+				if err := validateConstantSQLMode(evalExpr, vschema); err != nil {
+					return nil, err
+				}
+			}
+			return planSysVarCheckIgnore(expr, vschema, s.boolean)
+		}
+		evalExpr, err := ec.convert(expr.Expr, false /*boolean*/, true /*identifierAsString*/)
+		if err != nil {
+			return nil, err
+		}
+		if err := validateConstantSQLMode(evalExpr, vschema); err != nil {
+			return nil, err
+		}
+		return &engine.SysVarSQLMode{Expr: evalExpr}, nil
+	}
+}
+
+// validateConstantSQLMode rejects invalid or unsupported sql_mode values at planning time
+// when the expression is a constant. Non-constant expressions are validated at execution
+// time by the SysVarSQLMode primitive.
+func validateConstantSQLMode(evalExpr evalengine.Expr, vschema plancontext.VSchema) error {
+	lit, ok := evalExpr.(*evalengine.Literal)
+	if !ok {
+		return nil
+	}
+	res, err := evalengine.EmptyExpressionEnv(vschema.Environment()).Evaluate(lit)
+	if err != nil {
+		return nil
+	}
+	_, err = sqlmode.Validate(res.Value(vschema.ConnCollation()))
+	return err
 }
 
 func provideAppliedCase(value string, storageCase sysvars.StorageCase) string {

@@ -1,18 +1,18 @@
 ----------------------------------------------------------------------
 select * from user
 
-1 ks_sharded/-20: select * from `user` limit 10001
-1 ks_sharded/20-40: select * from `user` limit 10001
-1 ks_sharded/40-60: select * from `user` limit 10001
-1 ks_sharded/60-80: select * from `user` limit 10001
-1 ks_sharded/80-a0: select * from `user` limit 10001
-1 ks_sharded/a0-c0: select * from `user` limit 10001
-1 ks_sharded/c0-e0: select * from `user` limit 10001
-1 ks_sharded/e0-: select * from `user` limit 10001
+1 ks_sharded/-20: select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ * from `user` limit 10001
+1 ks_sharded/20-40: select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ * from `user` limit 10001
+1 ks_sharded/40-60: select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ * from `user` limit 10001
+1 ks_sharded/60-80: select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ * from `user` limit 10001
+1 ks_sharded/80-a0: select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ * from `user` limit 10001
+1 ks_sharded/a0-c0: select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ * from `user` limit 10001
+1 ks_sharded/c0-e0: select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ * from `user` limit 10001
+1 ks_sharded/e0-: select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ * from `user` limit 10001
 
 ----------------------------------------------------------------------
 select * from user where id in (1, 2)
 
-1 ks_sharded/-20: select * from `user` where id in (1, 2) limit 10001
+1 ks_sharded/-20: select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ * from `user` where id in (1, 2) limit 10001
 
 ----------------------------------------------------------------------

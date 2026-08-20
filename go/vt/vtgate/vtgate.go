@@ -417,6 +417,7 @@ func Init(
 		PreventCrossKeyspaceReads: preventCrossKeyspaceReads,
 		WarmingReadsPercent:       warmingReadsPercent,
 		QueryLogToFile:            queryLogToFile,
+		SystemSettingsDisabled:    !sysVarSetEnabled,
 	}
 
 	executor := NewExecutor(ctx, env, serv, cell, resolver, eConfig, warnShardedOnly, plans, si, pv, dynamicConfig)

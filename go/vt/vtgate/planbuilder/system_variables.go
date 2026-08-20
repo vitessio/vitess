@@ -82,10 +82,13 @@ func (pc *sysvarPlanCache) init(env *vtenv.Environment) {
 		pc.initForSettings(sysvars.CheckAndIgnore, buildSetOpCheckAndIgnore)
 		pc.initForSettings(sysvars.NotSupported, buildNotSupported)
 		pc.initForSettings(sysvars.VitessAware, buildSetOpVitessAware)
-		// sql_mode assignments get MySQL-faithful validation of constant values at
-		// planning time, so an invalid or unsupported value fails the SET before any
-		// assignment executes, regardless of whether system settings are enabled.
-		pc.funcs[sysvars.SQLMode.Name] = validateSQLModePlan(pc.funcs[sysvars.SQLMode.Name])
+
+		// sql_mode is evaluated and validated at the vtgate instead of on a reserved
+		// connection, so it overrides the generic UseReservedConn plan func.
+		pc.funcs[sysvars.SQLMode.Name] = buildSetOpSQLMode(setting{
+			name:          sysvars.SQLMode.Name,
+			supportSetVar: sysvars.SQLMode.SupportSetVar,
+		})
 	})
 }
 

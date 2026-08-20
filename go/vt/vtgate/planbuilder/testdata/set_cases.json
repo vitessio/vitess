@@ -116,21 +116,61 @@
     "comment": "single sysvar cases",
     "query": "SET sql_mode = 'STRICT_ALL_TABLES,NO_AUTO_VALUE_ON_ZERO'",
     "plan": {
-      "Type": "MultiShard",
+      "Type": "Local",
       "QueryType": "SET",
       "Original": "SET sql_mode = 'STRICT_ALL_TABLES,NO_AUTO_VALUE_ON_ZERO'",
       "Instructions": {
         "OperatorType": "Set",
         "Ops": [
           {
-            "Type": "SysVarSet",
-            "Name": "sql_mode",
-            "Keyspace": {
-              "Name": "main",
-              "Sharded": false
-            },
-            "Expr": "'STRICT_ALL_TABLES,NO_AUTO_VALUE_ON_ZERO'",
-            "SupportSetVar": true
+            "Type": "SysVarSQLMode",
+            "Expr": "'STRICT_ALL_TABLES,NO_AUTO_VALUE_ON_ZERO'"
+          }
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "SingleRow"
+          }
+        ]
+      }
+    }
+  },
+  {
+    "comment": "constant sql_mode expression is folded at planning time",
+    "query": "SET sql_mode = CONCAT('STRICT_TRANS_TABLES', ',NO_ZERO_DATE')",
+    "plan": {
+      "Type": "Local",
+      "QueryType": "SET",
+      "Original": "SET sql_mode = CONCAT('STRICT_TRANS_TABLES', ',NO_ZERO_DATE')",
+      "Instructions": {
+        "OperatorType": "Set",
+        "Ops": [
+          {
+            "Type": "SysVarSQLMode",
+            "Expr": "'STRICT_TRANS_TABLES,NO_ZERO_DATE'"
+          }
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "SingleRow"
+          }
+        ]
+      }
+    }
+  },
+  {
+    "comment": "numeric sql_mode without unsupported bits is allowed",
+    "query": "SET sql_mode = 2097152",
+    "plan": {
+      "Type": "Local",
+      "QueryType": "SET",
+      "Original": "SET sql_mode = 2097152",
+      "Instructions": {
+        "OperatorType": "Set",
+        "Ops": [
+          {
+            "Type": "SysVarSQLMode",
+            "Expr": "2097152"
           }
         ],
         "Inputs": [
@@ -145,21 +185,15 @@
     "comment": "parse-relevant sql_mode names are accepted",
     "query": "set sql_mode = 'ANSI_QUOTES'",
     "plan": {
-      "Type": "MultiShard",
+      "Type": "Local",
       "QueryType": "SET",
       "Original": "set sql_mode = 'ANSI_QUOTES'",
       "Instructions": {
         "OperatorType": "Set",
         "Ops": [
           {
-            "Type": "SysVarSet",
-            "Name": "sql_mode",
-            "Keyspace": {
-              "Name": "main",
-              "Sharded": false
-            },
-            "Expr": "'ANSI_QUOTES'",
-            "SupportSetVar": true
+            "Type": "SysVarSQLMode",
+            "Expr": "'ANSI_QUOTES'"
           }
         ],
         "Inputs": [
@@ -174,21 +208,15 @@
     "comment": "constant sql_mode expressions are folded and validated at plan time",
     "query": "set sql_mode = concat('AN', 'SI')",
     "plan": {
-      "Type": "MultiShard",
+      "Type": "Local",
       "QueryType": "SET",
       "Original": "set sql_mode = concat('AN', 'SI')",
       "Instructions": {
         "OperatorType": "Set",
         "Ops": [
           {
-            "Type": "SysVarSet",
-            "Name": "sql_mode",
-            "Keyspace": {
-              "Name": "main",
-              "Sharded": false
-            },
-            "Expr": "concat('AN', 'SI')",
-            "SupportSetVar": true
+            "Type": "SysVarSQLMode",
+            "Expr": "'ANSI'"
           }
         ],
         "Inputs": [
@@ -203,21 +231,15 @@
     "comment": "numeric sql_mode values decode against MySQL's bitmask",
     "query": "set sql_mode = 1048576",
     "plan": {
-      "Type": "MultiShard",
+      "Type": "Local",
       "QueryType": "SET",
       "Original": "set sql_mode = 1048576",
       "Instructions": {
         "OperatorType": "Set",
         "Ops": [
           {
-            "Type": "SysVarSet",
-            "Name": "sql_mode",
-            "Keyspace": {
-              "Name": "main",
-              "Sharded": false
-            },
-            "Expr": "1048576",
-            "SupportSetVar": true
+            "Type": "SysVarSQLMode",
+            "Expr": "1048576"
           }
         ],
         "Inputs": [
@@ -232,21 +254,15 @@
     "comment": "sql_mode names the parser honors are accepted",
     "query": "set sql_mode = 'HIGH_NOT_PRECEDENCE'",
     "plan": {
-      "Type": "MultiShard",
+      "Type": "Local",
       "QueryType": "SET",
       "Original": "set sql_mode = 'HIGH_NOT_PRECEDENCE'",
       "Instructions": {
         "OperatorType": "Set",
         "Ops": [
           {
-            "Type": "SysVarSet",
-            "Name": "sql_mode",
-            "Keyspace": {
-              "Name": "main",
-              "Sharded": false
-            },
-            "Expr": "'HIGH_NOT_PRECEDENCE'",
-            "SupportSetVar": true
+            "Type": "SysVarSQLMode",
+            "Expr": "'HIGH_NOT_PRECEDENCE'"
           }
         ],
         "Inputs": [
@@ -268,14 +284,8 @@
         "OperatorType": "Set",
         "Ops": [
           {
-            "Type": "SysVarSet",
-            "Name": "sql_mode",
-            "Keyspace": {
-              "Name": "main",
-              "Sharded": false
-            },
-            "Expr": "CONCAT(CONCAT(@@sql_mode, ',STRICT_ALL_TABLES'), ',NO_AUTO_VALUE_ON_ZERO')",
-            "SupportSetVar": true
+            "Type": "SysVarSQLMode",
+            "Expr": "concat(concat(:__vtsql_mode, ',STRICT_ALL_TABLES'), ',NO_AUTO_VALUE_ON_ZERO')"
           },
           {
             "Type": "SysVarSet",
@@ -373,21 +383,15 @@
     "comment": "set check and ignore plan",
     "query": "set @@sql_mode = concat(@@sql_mode, ',NO_AUTO_CREATE_USER')",
     "plan": {
-      "Type": "MultiShard",
+      "Type": "Local",
       "QueryType": "SET",
       "Original": "set @@sql_mode = concat(@@sql_mode, ',NO_AUTO_CREATE_USER')",
       "Instructions": {
         "OperatorType": "Set",
         "Ops": [
           {
-            "Type": "SysVarSet",
-            "Name": "sql_mode",
-            "Keyspace": {
-              "Name": "main",
-              "Sharded": false
-            },
-            "Expr": "concat(@@sql_mode, ',NO_AUTO_CREATE_USER')",
-            "SupportSetVar": true
+            "Type": "SysVarSQLMode",
+            "Expr": "concat(:__vtsql_mode, ',NO_AUTO_CREATE_USER')"
           }
         ],
         "Inputs": [

@@ -797,8 +797,16 @@ func (sbc *SandboxConn) ReserveStreamExecute(ctx context.Context, session querys
 
 func (sbc *SandboxConn) reserve(ctx context.Context, session queryservice.Session, target *querypb.Target, preQueries []string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions) int64 {
 	sbc.ReserveCount.Add(1)
+	// Record the settings queries without consuming queued results or errors: like on a
+	// real vttablet, settings are applied to the connection rather than executed as
+	// application queries.
 	for _, query := range preQueries {
-		sbc.Execute(ctx, session, target, query, bindVariables, transactionID, 0, options)
+		bv := make(map[string]*querypb.BindVariable)
+		maps.Copy(bv, bindVariables)
+		sbc.appendToQueries(&querypb.BoundQuery{
+			Sql:           query,
+			BindVariables: bv,
+		})
 	}
 	if transactionID != 0 {
 		return transactionID

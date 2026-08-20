@@ -47,7 +47,6 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/srvtopo"
-	"vitess.io/vitess/go/vt/sysvars"
 	"vitess.io/vitess/go/vt/topo"
 	topoprotopb "vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
@@ -89,6 +88,10 @@ type (
 		EnableViews        bool
 		WarnShardedOnly    bool
 		PlannerVersion     plancontext.PlannerVersion
+
+		// SQLMode is the sql_mode every session starts with, in canonical form. An empty
+		// value falls back to config.DefaultSQLMode, preserving existing behavior.
+		SQLMode string
 
 		PreventCrossKeyspaceReads bool
 
@@ -268,19 +271,7 @@ func (vc *VCursorImpl) GetSafeSession() *SafeSession {
 }
 
 func (vc *VCursorImpl) PrepareSetVarComment() string {
-	var res []string
-	vc.Session().GetSystemVariables(func(k, v string) {
-		if sysvars.SupportsSetVar(k) {
-			if k == "sql_mode" && v == "''" {
-				// SET_VAR(sql_mode, '') is not accepted by MySQL, giving a warning:
-				// | Warning | 1064 | Optimizer hint syntax error near ''') */
-				v = "' '"
-			}
-			res = append(res, fmt.Sprintf("SET_VAR(%s = %s)", k, v))
-		}
-	})
-
-	return strings.Join(res, " ")
+	return vc.SafeSession.SetVarComment()
 }
 
 func (vc *VCursorImpl) CloneForMirroring(ctx context.Context) engine.VCursor {
@@ -439,9 +430,17 @@ func (vc *VCursorImpl) ParseSQLMode() sqlparser.SQLMode {
 	return sqlparser.ParseSQLMode(vc.SQLMode())
 }
 
+// SQLMode returns the session's current sql_mode: the value the session has set, or the
+// configured default the session started with.
 func (vc *VCursorImpl) SQLMode() string {
 	if mode, ok := vc.SafeSession.SQLMode(); ok {
 		return mode
+	}
+	if mode, ok := vc.SafeSession.SQLMode(); ok {
+		return mode
+	}
+	if vc.config.SQLMode != "" {
+		return vc.config.SQLMode
 	}
 	return config.DefaultSQLMode
 }
@@ -1149,10 +1148,11 @@ func (vc *VCursorImpl) CheckForReservedConnection(setVarComment string, stmt sql
 	}
 	switch stmt.(type) {
 	// If the statement supports optimizer hints or a transaction statement or a SET statement
-	// no reserved connection is needed
+	// or a USE statement (which never reaches a tablet), no reserved connection is needed.
+	// EXPLAIN and VEXPLAIN don't take hints themselves, but the statement they wrap does.
 	case *sqlparser.Begin, *sqlparser.Commit, *sqlparser.Rollback, *sqlparser.Savepoint,
 		*sqlparser.SRollback, *sqlparser.Release, *sqlparser.Set, *sqlparser.Show,
-		sqlparser.SupportOptimizerHint:
+		*sqlparser.Use, *sqlparser.ExplainStmt, *sqlparser.VExplainStmt, sqlparser.SupportOptimizerHint:
 	default:
 		vc.NeedsReservedConn()
 	}

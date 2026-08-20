@@ -32,6 +32,8 @@
         - [Stricter validation of SQL-level PREPARE statements](#vtgate-prepare-stricter-validation)
         - [Stricter PROXY protocol v1 header validation](#vtgate-proxy-protocol-v1-strictness)
         - [MySQL-faithful `sql_mode` validation, and support for the parse-relevant modes](#vtgate-sql-mode-validation)
+        - [Sessions start with a well-defined default `sql_mode` (new `--sql-mode` flag)](#vtgate-sql-mode-session-default)
+        - [The session's `sql_mode` is applied to every backend query](#vtgate-sql-mode-always-sent)
         - [MySQL-faithful lexing of built-in function names](#sqlparser-function-name-keywords)
         - [New `VEXPLAIN MYSQLPLAN` statement](#vtgate-vexplain-mysqlplan)
         - [Multi-statement queries are split the way MySQL splits them](#vtgate-multi-statement-splitting)
@@ -365,6 +367,27 @@ Incoming v25-canonical query text is unaffected: it parses identically under v24
 
 **Impact**: Clients can now `SET sql_mode` to any value their MySQL version accepts, and VTGate honors it for parsing. Invalid values fail with the same errors MySQL returns.
 
+**Impact**: Clients that issue `SET sql_mode` with an unsupported mode now receive an error, also when the `SET` is a no-op that matches the backend's existing `sql_mode`. Clients that set mode names the backend MySQL would itself reject receive an error as well. Such sessions were already unreliable, because VTGate parses queries without honoring these modes. Clients that read `@@sql_mode` back will see MySQL's canonical form instead of their original spelling.
+
+#### <a id="vtgate-sql-mode-session-default"/>Sessions start with a well-defined default `sql_mode` (new `--sql-mode` flag)</a>
+
+VTGate sessions now start with a well-defined `sql_mode` instead of implicitly inheriting whatever each backend happens to be configured with. A new `--sql-mode` flag (named after MySQL's flag, validated the same way as a `SET sql_mode` statement) sets this session default, which defaults to MySQL 8.x's factory default — the mode Vitess-managed `mysqld` instances run with. As a result:
+
+- `SELECT @@sql_mode`, `SHOW VARIABLES LIKE 'sql_mode'`, and expressions referencing `@@sql_mode` are answered by VTGate from the session, never by asking an arbitrary shard — previously, reads and `SET sql_mode` change-detection queried one shard and assumed all backends agreed on `sql_mode`, which nothing guarantees in a multi-backend cluster.
+- `SET sql_mode = <expr>` is evaluated entirely at the VTGate, including expressions like `CONCAT(@@sql_mode, '...')`, with no shard round trip. `SET` statements no longer force a reserved connection on MySQL 8.0+ where `SET_VAR` is available.
+- `@@global.sql_mode` resolves to the configured default (the `--sql-mode` value), never to a backend's global — in this model the VTGate owns the global `sql_mode`, so `SET sql_mode = @@global.sql_mode` restores the session default.
+
+**Impact**: Sessions that never set `sql_mode` will read the configured session default rather than the value of whichever shard happened to answer. Deployments whose backends intentionally run a non-default global `sql_mode` should set `--sql-mode` to that value so VTGate's session semantics match their backends, or opt out entirely with `--enable-system-settings=false` (see the next section).
+
+#### <a id="vtgate-sql-mode-always-sent"/>The session's `sql_mode` is applied to every backend query</a>
+
+The session's `sql_mode` is now applied to every query sent to the backends, whether or not the session ever set it: statements that can carry optimizer hints get a `SET_VAR(sql_mode = ...)` hint, and statements that cannot (e.g. DDL) run on a connection with the session's settings applied through the tablet's settings pool. Previously, sessions that never set `sql_mode` ran queries under whatever mode each backend happened to be configured with — while VTGate reported a different mode to the client. Relatedly, the `SET_VAR` comment is now only placed in the top-level statement comment (where MySQL honors it) instead of also being duplicated into subqueries, and `vexplain`/`explain` hint the statement they wrap.
+
+Modes that change how SQL text is interpreted (`ANSI_QUOTES`, `NO_BACKSLASH_ESCAPES`, `PIPES_AS_CONCAT`, `REAL_AS_FLOAT`, `IGNORE_SPACE`, `HIGH_NOT_PRECEDENCE`, and the `ANSI` combination) are never part of the `sql_mode` sent to the backends. A session's `sql_mode` governs how the client's SQL is interpreted; the queries a backend receives are always serialized in VTGate's canonical, default-lexer format, which those modes could make MySQL parse differently than VTGate intended (e.g. `IGNORE_SPACE` reserving builtin function names). This split also means such modes can be supported for incoming queries in the future as a pure parser change, without backend query serialization having to account for them.
+
+Deployments that run with `--enable-system-settings=false` are exempt: their sessions are not seeded with a `sql_mode` and no `SET_VAR` hint is sent, so queries keep running under each backend's configured mode, as before. This is the opt-out for deployments whose backends intentionally run a `sql_mode` the Vitess parser does not support (e.g. `ANSI_QUOTES`), which `--sql-mode` would reject.
+
+**Impact**: Queries now run under the `sql_mode` VTGate reports to the client, instead of each backend's configured mode. Note that a `sql_mode` without a strict mode (e.g. bare `NO_ZERO_DATE`) makes MySQL attach deprecation warning 3135 to every query that carries the mode as a `SET_VAR` hint — this was already the case for sessions that `SET` such a mode, but now also applies to every session when `--sql-mode` is configured to a non-strict combination.
 #### <a id="vtgate-vexplain-mysqlplan"/>New `VEXPLAIN MYSQLPLAN` statement</a>
 
 A new `VEXPLAIN MYSQLPLAN <query>` statement runs MySQL's `EXPLAIN FORMAT=JSON` against the shards a `SELECT` would target, **without executing the query itself**. It resolves each `Route`'s target shards from its vindex at resolution time and issues `EXPLAIN` against every resolved shard, attaching the per-shard MySQL plan to the VTGate plan tree keyed by shard, so per-shard plan and cost differences are visible.

@@ -51,6 +51,10 @@ const (
 	SCLower
 )
 
+// GlobalSQLMode is the pseudo system variable name used to resolve @@global.sql_mode at
+// the vtgate: it maps to the configured default sql_mode, never to a backend's value.
+const GlobalSQLMode = "global_sql_mode"
+
 // System Settings
 var (
 	on      = "1"

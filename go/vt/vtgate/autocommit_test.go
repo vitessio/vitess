@@ -40,7 +40,7 @@ func TestAutocommitUpdateSharded(t *testing.T) {
 	require.NoError(t, err)
 
 	assertQueries(t, sbc1, []*querypb.BoundQuery{{
-		Sql:           "update `user` set a = 2 where id = 1",
+		Sql:           "update /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ `user` set a = 2 where id = 1",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}})
 	testCommitCount(t, "sbc1", sbc1, 0)
@@ -64,7 +64,7 @@ func TestAutocommitUpdateLookup(t *testing.T) {
 	require.NoError(t, err)
 
 	assertQueries(t, sbclookup, []*querypb.BoundQuery{{
-		Sql: "select music_id, user_id from music_user_map where music_id in ::music_id for update",
+		Sql: "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ music_id, user_id from music_user_map where music_id in ::music_id for update",
 		BindVariables: map[string]*querypb.BindVariable{
 			"music_id": vars,
 		},
@@ -72,7 +72,7 @@ func TestAutocommitUpdateLookup(t *testing.T) {
 	testCommitCount(t, "sbclookup", sbclookup, 1)
 
 	assertQueries(t, sbc1, []*querypb.BoundQuery{{
-		Sql:           "update music set a = 2 where id = 2",
+		Sql:           "update /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ music set a = 2 where id = 2",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}})
 	testCommitCount(t, "sbc1", sbc1, 1)
@@ -92,14 +92,14 @@ func TestAutocommitUpdateVindexChange(t *testing.T) {
 	require.NoError(t, err)
 
 	assertQueries(t, sbclookup, []*querypb.BoundQuery{{
-		Sql: "delete from name_lastname_keyspace_id_map where `name` = :name and lastname = :lastname and keyspace_id = :keyspace_id",
+		Sql: "delete /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ from name_lastname_keyspace_id_map where `name` = :name and lastname = :lastname and keyspace_id = :keyspace_id",
 		BindVariables: map[string]*querypb.BindVariable{
 			"lastname":    sqltypes.StringBindVariable("foo"),
 			"name":        sqltypes.Int32BindVariable(1),
 			"keyspace_id": sqltypes.BytesBindVariable([]byte("\x16k@\xb4J\xbaK\xd6")),
 		},
 	}, {
-		Sql: "insert into name_lastname_keyspace_id_map(`name`, lastname, keyspace_id) values (:name_0, :lastname_0, :keyspace_id_0)",
+		Sql: "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into name_lastname_keyspace_id_map(`name`, lastname, keyspace_id) values (:name_0, :lastname_0, :keyspace_id_0)",
 		BindVariables: map[string]*querypb.BindVariable{
 			"name_0":        sqltypes.StringBindVariable("myname"),
 			"lastname_0":    sqltypes.StringBindVariable("mylastname"),
@@ -112,7 +112,7 @@ func TestAutocommitUpdateVindexChange(t *testing.T) {
 		Sql:           "select id, `name`, lastname, `name` = 'myname' and lastname = 'mylastname' from user2 where id = 1 for update",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}, {
-		Sql:           "update user2 set `name` = 'myname', lastname = 'mylastname' where id = 1",
+		Sql:           "update /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ user2 set `name` = 'myname', lastname = 'mylastname' where id = 1",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}})
 	testCommitCount(t, "sbc", sbc, 1)
@@ -126,7 +126,7 @@ func TestAutocommitDeleteSharded(t *testing.T) {
 	require.NoError(t, err)
 
 	assertQueries(t, sbc1, []*querypb.BoundQuery{{
-		Sql:           "delete from user_extra where user_id = 1",
+		Sql:           "delete /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ from user_extra where user_id = 1",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}})
 	testCommitCount(t, "sbc1", sbc1, 0)
@@ -155,12 +155,12 @@ func TestAutocommitDeleteLookup(t *testing.T) {
 	require.NoError(t, err)
 
 	assertQueries(t, sbclookup, []*querypb.BoundQuery{{
-		Sql: "select music_id, user_id from music_user_map where music_id in ::music_id for update",
+		Sql: "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ music_id, user_id from music_user_map where music_id in ::music_id for update",
 		BindVariables: map[string]*querypb.BindVariable{
 			"music_id": vars,
 		},
 	}, {
-		Sql: "delete from music_user_map where music_id = :music_id and user_id = :user_id",
+		Sql: "delete /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ from music_user_map where music_id = :music_id and user_id = :user_id",
 		BindVariables: map[string]*querypb.BindVariable{
 			"music_id": sqltypes.Int32BindVariable(1),
 			"user_id":  sqltypes.Uint64BindVariable(1),
@@ -172,7 +172,7 @@ func TestAutocommitDeleteLookup(t *testing.T) {
 		Sql:           "select user_id, id from music where id = 1 for update",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}, {
-		Sql:           "delete from music where id = 1",
+		Sql:           "delete /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ from music where id = 1",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}})
 	testCommitCount(t, "sbc1", sbc1, 1)
@@ -186,7 +186,7 @@ func TestAutocommitDeleteIn(t *testing.T) {
 	require.NoError(t, err)
 
 	assertQueries(t, sbc1, []*querypb.BoundQuery{{
-		Sql: "delete from user_extra where user_id in ::__vals",
+		Sql: "delete /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ from user_extra where user_id in ::__vals",
 		BindVariables: map[string]*querypb.BindVariable{
 			"__vals": sqltypes.TestBindVariable([]any{int64(1), int64(2)}),
 		},
@@ -205,13 +205,13 @@ func TestAutocommitDeleteMultiShard(t *testing.T) {
 	require.NoError(t, err)
 
 	assertQueries(t, sbc1, []*querypb.BoundQuery{{
-		Sql:           "delete from user_extra where user_id = user_id + 1",
+		Sql:           "delete /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ from user_extra where user_id = user_id + 1",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}})
 	testCommitCount(t, "sbc1", sbc1, 1)
 
 	assertQueries(t, sbc2, []*querypb.BoundQuery{{
-		Sql:           "delete from user_extra where user_id = user_id + 1",
+		Sql:           "delete /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ from user_extra where user_id = user_id + 1",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}})
 	testCommitCount(t, "sbc2", sbc2, 1)
@@ -225,13 +225,13 @@ func TestAutocommitDeleteMultiShardAutoCommit(t *testing.T) {
 	require.NoError(t, err)
 
 	assertQueries(t, sbc1, []*querypb.BoundQuery{{
-		Sql:           "delete /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ from user_extra where user_id = user_id + 1",
+		Sql:           "delete /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ from user_extra where user_id = user_id + 1",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}})
 	testCommitCount(t, "sbc1", sbc1, 0)
 
 	assertQueries(t, sbc2, []*querypb.BoundQuery{{
-		Sql:           "delete /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ from user_extra where user_id = user_id + 1",
+		Sql:           "delete /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ from user_extra where user_id = user_id + 1",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}})
 	testCommitCount(t, "sbc1", sbc1, 0)
@@ -245,7 +245,7 @@ func TestAutocommitInsertSharded(t *testing.T) {
 	require.NoError(t, err)
 
 	assertQueries(t, sbc1, []*querypb.BoundQuery{{
-		Sql: "insert into user_extra(user_id, v) values (:_user_id_0, 2)",
+		Sql: "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into user_extra(user_id, v) values (:_user_id_0, 2)",
 		BindVariables: map[string]*querypb.BindVariable{
 			"_user_id_0": sqltypes.Int64BindVariable(1),
 		},
@@ -264,7 +264,7 @@ func TestAutocommitInsertLookup(t *testing.T) {
 	require.NoError(t, err)
 
 	assertQueries(t, sbclookup, []*querypb.BoundQuery{{
-		Sql: "insert into name_user_map(`name`, user_id) values (:name_0, :user_id_0)",
+		Sql: "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into name_user_map(`name`, user_id) values (:name_0, :user_id_0)",
 		BindVariables: map[string]*querypb.BindVariable{
 			"name_0":    sqltypes.StringBindVariable("myname"),
 			"user_id_0": sqltypes.Uint64BindVariable(1),
@@ -273,7 +273,7 @@ func TestAutocommitInsertLookup(t *testing.T) {
 	testCommitCount(t, "sbclookup", sbclookup, 1)
 
 	assertQueries(t, sbc1, []*querypb.BoundQuery{{
-		Sql: "insert into `user`(id, v, `name`) values (:_Id_0, 2, :_name_0)",
+		Sql: "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into `user`(id, v, `name`) values (:_Id_0, 2, :_name_0)",
 		BindVariables: map[string]*querypb.BindVariable{
 			"_Id_0":   sqltypes.Int64BindVariable(1),
 			"_name_0": sqltypes.StringBindVariable("myname"),
@@ -291,7 +291,7 @@ func TestAutocommitInsertMultishardAutoCommit(t *testing.T) {
 		require.NoError(t, err)
 
 		assertQueries(t, sbc1, []*querypb.BoundQuery{{
-			Sql: "insert /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ into user_extra(user_id, v) values (:_user_id_0, 2)",
+			Sql: "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ into user_extra(user_id, v) values (:_user_id_0, 2)",
 			BindVariables: map[string]*querypb.BindVariable{
 				"_user_id_0": sqltypes.Int64BindVariable(1),
 			},
@@ -299,7 +299,7 @@ func TestAutocommitInsertMultishardAutoCommit(t *testing.T) {
 		testCommitCount(t, "sbc1", sbc1, 0)
 
 		assertQueries(t, sbc2, []*querypb.BoundQuery{{
-			Sql: "insert /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ into user_extra(user_id, v) values (:_user_id_1, 4)",
+			Sql: "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ into user_extra(user_id, v) values (:_user_id_1, 4)",
 			BindVariables: map[string]*querypb.BindVariable{
 				"_user_id_1": sqltypes.Int64BindVariable(3),
 			},
@@ -319,7 +319,7 @@ func TestAutocommitInsertMultishardAutoCommit(t *testing.T) {
 		testCommitCount(t, "sbc1", sbc1, 0)
 
 		assertQueries(t, sbc2, []*querypb.BoundQuery{{
-			Sql: "insert /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ into user_extra(user_id, v) values (:_user_id_1, 4)",
+			Sql: "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ into user_extra(user_id, v) values (:_user_id_1, 4)",
 			BindVariables: map[string]*querypb.BindVariable{
 				"_user_id_1": sqltypes.Int64BindVariable(3),
 			},
@@ -335,7 +335,7 @@ func TestAutocommitInsertMultishard(t *testing.T) {
 	require.NoError(t, err)
 
 	assertQueries(t, sbc1, []*querypb.BoundQuery{{
-		Sql: "insert into user_extra(user_id, v) values (:_user_id_0, 2)",
+		Sql: "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into user_extra(user_id, v) values (:_user_id_0, 2)",
 		BindVariables: map[string]*querypb.BindVariable{
 			"_user_id_0": sqltypes.Int64BindVariable(1),
 		},
@@ -343,7 +343,7 @@ func TestAutocommitInsertMultishard(t *testing.T) {
 	testCommitCount(t, "sbc1", sbc1, 1)
 
 	assertQueries(t, sbc2, []*querypb.BoundQuery{{
-		Sql: "insert into user_extra(user_id, v) values (:_user_id_1, 4)",
+		Sql: "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into user_extra(user_id, v) values (:_user_id_1, 4)",
 		BindVariables: map[string]*querypb.BindVariable{
 			"_user_id_1": sqltypes.Int64BindVariable(3),
 		},
@@ -362,7 +362,7 @@ func TestAutocommitInsertAutoinc(t *testing.T) {
 		Sql:           "select next :n /* INT64 */ values from user_seq",
 		BindVariables: map[string]*querypb.BindVariable{"n": sqltypes.Int64BindVariable(1)},
 	}, {
-		Sql: "insert into main1(id, `name`) values (:__seq0, 'myname')",
+		Sql: "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into main1(id, `name`) values (:__seq0, 'myname')",
 		BindVariables: map[string]*querypb.BindVariable{
 			"__seq0": sqltypes.Int64BindVariable(1),
 		},
@@ -382,7 +382,7 @@ func TestAutocommitTransactionStarted(t *testing.T) {
 	}
 
 	// single shard query - no savepoint needed
-	sql := "update `user` set a = 2 where id = 1"
+	sql := "update /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ `user` set a = 2 where id = 1"
 	_, err := executorExec(t.Context(), executor, session, sql, map[string]*querypb.BindVariable{})
 	require.NoError(t, err)
 	require.Len(t, sbc1.Queries, 1)
@@ -394,7 +394,7 @@ func TestAutocommitTransactionStarted(t *testing.T) {
 
 	// multi shard query - savepoint needed
 	sql = "update `user` set a = 2 where id in (1, 4)"
-	expectedSql := "update `user` set a = 2 where id in ::__vals"
+	expectedSql := "update /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ `user` set a = 2 where id in ::__vals"
 	_, err = executorExec(t.Context(), executor, session, sql, map[string]*querypb.BindVariable{})
 	require.NoError(t, err)
 	require.Len(t, sbc1.Queries, 2)
@@ -412,7 +412,7 @@ func TestAutocommitDirectTarget(t *testing.T) {
 		Autocommit:      true,
 		TransactionMode: vtgatepb.TransactionMode_MULTI,
 	}
-	sql := "insert into `simple`(val) values ('val')"
+	sql := "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into `simple`(val) values ('val')"
 
 	_, err := executorExec(t.Context(), executor, session, sql, map[string]*querypb.BindVariable{})
 	require.NoError(t, err)
@@ -433,7 +433,7 @@ func TestAutocommitDirectRangeTarget(t *testing.T) {
 		Autocommit:      true,
 		TransactionMode: vtgatepb.TransactionMode_MULTI,
 	}
-	sql := "delete from sharded_user_msgs limit 1000"
+	sql := "delete /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ from sharded_user_msgs limit 1000"
 
 	_, err := executorExec(t.Context(), executor, session, sql, map[string]*querypb.BindVariable{})
 	require.NoError(t, err)

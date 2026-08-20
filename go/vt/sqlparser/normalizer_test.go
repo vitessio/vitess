@@ -968,8 +968,10 @@ func TestRewritesWithSetVarComment(in *testing.T) {
 		expected:      "insert /*+ AA(a) */ /* toto */ into t(id) values(1)",
 		setVarComment: "AA(a)",
 	}, {
+		// SET_VAR is only honored in the top-level statement comment, so only the first
+		// select of the union carries it
 		in:            "select  /* toto */ * from t union select * from s",
-		expected:      "select /*+ AA(a) */ /* toto */ * from t union select /*+ AA(a) */ * from s",
+		expected:      "select /*+ AA(a) */ /* toto */ * from t union select * from s",
 		setVarComment: "AA(a)",
 	}, {
 		in:            "vstream /* toto */ * from t1",
@@ -1021,8 +1023,17 @@ func TestRewritesWithSetVarComment(in *testing.T) {
 
 func TestRewritesSysVar(in *testing.T) {
 	tests := []testCaseSysVar{{
+		// sql_mode is always resolved at the vtgate, whether the session has set it or not
 		in:       "select @x = @@sql_mode",
-		expected: "select :__vtudvx = @@sql_mode as `@x = @@sql_mode` from dual",
+		expected: "select :__vtudvx = :__vtsql_mode as `@x = @@sql_mode` from dual",
+	}, {
+		// the global sql_mode is the vtgate's configured default, never a backend's value
+		in:       "select @@global.sql_mode",
+		expected: "select :__vtglobal_sql_mode as `@@global.sql_mode` from dual",
+	}, {
+		// other global variables are still resolved by the backend
+		in:       "select @@global.max_connections",
+		expected: "select @@global.max_connections from dual",
 	}, {
 		in:       "select @x = @@sql_mode",
 		expected: "select :__vtudvx = :__vtsql_mode as `@x = @@sql_mode` from dual",

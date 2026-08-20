@@ -17,7 +17,7 @@
               "Sharded": false
             },
             "TargetDestination": {},
-            "Expr": "concat(@@sql_mode, ',NO_AUTO_CREATE_USER')"
+            "Expr": "concat(:__vtsql_mode, ',NO_AUTO_CREATE_USER')"
           },
           {
             "Type": "SysVarCheckAndIgnore",
