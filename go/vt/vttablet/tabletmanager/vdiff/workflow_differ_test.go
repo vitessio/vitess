@@ -343,9 +343,20 @@ func TestReconcileExtraRowsSkippedForLossySamples(t *testing.T) {
 			wantExtras:    0,
 		},
 		{
-			name:          "only-pks samples are not reconciled",
+			// genRowDiff leaves PK-only samples unmarked when the projection
+			// has non-PK columns, and the legacy fallback does not apply to
+			// only-pks vdiffs.
+			name:          "only-pks samples with non-PK columns are not reconciled",
 			reportOptions: &tabletmanagerdatapb.VDiffReportOptions{MaxSampleRows: 10, OnlyPks: true},
+			truncated:     true,
 			wantExtras:    1,
+		},
+		{
+			// genRowDiff marks PK-only samples lossless when the PK columns
+			// cover the entire projection.
+			name:          "only-pks samples covering the projection are reconciled",
+			reportOptions: &tabletmanagerdatapb.VDiffReportOptions{MaxSampleRows: 10, OnlyPks: true},
+			wantExtras:    0,
 		},
 		{
 			name:          "truncate option alone does not disable reconciliation",

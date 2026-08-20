@@ -135,6 +135,9 @@ func (td *tableDiffer) genRowDiff(queryStmt string, row []sqltypes.Value, opts *
 	}
 
 	if opts.GetOnlyPks() {
+		// A PK-only sample is still lossless when the PK columns cover the
+		// entire projection, since PK values are never truncated.
+		rd.LosslessValues = len(pks) == len(sel.SelectExprs.Exprs)
 		return rd, nil
 	}
 

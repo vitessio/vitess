@@ -354,6 +354,23 @@ func TestGenRowDiffMarksLosslessValues(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, rd.LosslessValues)
 	require.Equal(t, "short", rd.Row["c2"])
+
+	// A PK-only sample omits the non-PK columns and is not lossless...
+	onlyPksOpts := &tabletmanagerdatapb.VDiffReportOptions{
+		MaxSampleRows: 10,
+		OnlyPks:       true,
+	}
+	rd, err = td.genRowDiff(td.tablePlan.sourceQuery, drainTestRow(1, "short"), onlyPksOpts)
+	require.NoError(t, err)
+	require.False(t, rd.LosslessValues)
+	require.Equal(t, map[string]string{"c1": "1"}, rd.Row)
+
+	// ...unless the PK columns cover the entire projection.
+	td.tablePlan.selectPks = []int{0, 1}
+	rd, err = td.genRowDiff(td.tablePlan.sourceQuery, drainTestRow(1, "short"), onlyPksOpts)
+	require.NoError(t, err)
+	require.True(t, rd.LosslessValues)
+	require.Equal(t, map[string]string{"c1": "1", "c2": "short"}, rd.Row)
 }
 
 // TestDiffDrainStreamError tests that when the stream fails in the middle of

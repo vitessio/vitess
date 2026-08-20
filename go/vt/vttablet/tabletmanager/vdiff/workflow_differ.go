@@ -20,7 +20,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log/slog"
 	"reflect"
 	"slices"
 	"strings"
@@ -132,17 +131,6 @@ func (wd *workflowDiffer) doReconcileExtraRows(dr *DiffReport, maxExtraRowsToCom
 	if dr.ExtraRowsSource == 0 || dr.ExtraRowsTarget == 0 {
 		return nil
 	}
-	if wd.opts.GetReportOptions().GetOnlyPks() {
-		// The saved row samples contain only the PK columns. Comparing them
-		// could reconcile rows whose non-PK values actually differ, so leave
-		// the extra rows unreconciled rather than risk hiding a real
-		// difference.
-		log.Info("not reconciling extra rows: the saved samples are limited to the PK columns by the only-pks option and cannot prove that rows are identical",
-			slog.String("table", dr.TableName),
-			slog.String("vdiff", wd.ct.uuid),
-		)
-		return nil
-	}
 	matchedSourceDiffs := make([]bool, len(dr.ExtraRowsSourceDiffs))
 	matchedTargetDiffs := make([]bool, len(dr.ExtraRowsTargetDiffs))
 	matchedDiffs := int64(0)
@@ -154,9 +142,10 @@ func (wd *workflowDiffer) doReconcileExtraRows(dr *DiffReport, maxExtraRowsToCom
 
 	// Samples persisted by an older binary and reloaded on resume lack the
 	// LosslessValues marker. They are still provably complete when this
-	// vdiff's report options could not have produced a lossy sample: only-pks
-	// is already handled above, so only configured truncation remains.
-	legacyLossless := wd.opts.GetReportOptions().GetRowDiffColumnTruncateAt() <= 0
+	// vdiff's report options could not have produced a lossy sample: no
+	// PK-only samples and no configured truncation.
+	legacyLossless := !wd.opts.GetReportOptions().GetOnlyPks() &&
+		wd.opts.GetReportOptions().GetRowDiffColumnTruncateAt() <= 0
 	isLossless := func(rd *RowDiff) bool {
 		return rd.LosslessValues || legacyLossless
 	}
