@@ -1350,7 +1350,8 @@ func (e *Executor) getCachedOrBuildPlan(
 	planKey engine.PlanKey,
 	ignoreCache bool,
 ) (plan *engine.Plan, cached bool, stmt sqlparser.Statement, err error) {
-	stmt, reservedVars, err := parseAndValidateQuery(query, e.env.Parser())
+	sessionParser := e.env.Parser().WithSQLMode(sqlparser.ParseSQLMode(vcursor.SQLMode()))
+	stmt, reservedVars, err := parseAndValidateQuery(query, sessionParser)
 	if err != nil {
 		return nil, false, nil, err
 	}
@@ -1444,6 +1445,7 @@ func buildPlanKey(ctx context.Context, vcursor *econtext.VCursorImpl, query stri
 		Query:           query,
 		SetVarComment:   setVarComment,
 		Collation:       vcursor.ConnCollation(),
+		SQLMode:         sqlparser.ParseSQLMode(vcursor.SQLMode()),
 	}
 }
 
@@ -1636,7 +1638,8 @@ func (e *Executor) prepare(ctx context.Context, safeSession *econtext.SafeSessio
 		// (WITH ... SELECT/INSERT/REPLACE/UPDATE/DELETE). Anything else stays
 		// unknown and is rejected below, rather than being reported to the
 		// client as a zero-parameter success.
-		stmt, err := e.env.Parser().Parse(sql)
+		sessionSQLMode, _ := safeSession.SQLMode()
+		stmt, err := e.env.Parser().WithSQLMode(sqlparser.ParseSQLMode(sessionSQLMode)).Parse(sql)
 		if err != nil {
 			// The statement stays unknown, and an unparseable statement is
 			// never SHOW, so record the type and clear warnings the way the

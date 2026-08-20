@@ -734,6 +734,7 @@ func makeEvalEngineExpr(ctx *plancontext.PlanningContext, n sqlparser.Expr) eval
 		Collation:   ctx.SemTable.Collation,
 		ResolveType: ctx.TypeForExpr,
 		Environment: ctx.VSchema.Environment(),
+		SQLMode:     ctx.SQLMode(),
 	}
 
 	_ = ctx.SemTable.ForeachExprEquality(n, func(expr sqlparser.Expr) error {

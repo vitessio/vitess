@@ -424,8 +424,9 @@ func (vc *VCursorImpl) TimeZone() *time.Location {
 }
 
 func (vc *VCursorImpl) SQLMode() string {
-	// TODO: Implement return the current sql_mode.
-	// This is currently hardcoded to the default in MySQL 8.0.
+	if mode, ok := vc.SafeSession.SQLMode(); ok {
+		return mode
+	}
 	return config.DefaultSQLMode
 }
 

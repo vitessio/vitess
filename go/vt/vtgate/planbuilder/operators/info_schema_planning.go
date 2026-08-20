@@ -49,6 +49,7 @@ func (isr *InfoSchemaRouting) UpdateRoutingParams(ctx *plancontext.PlanningConte
 			Collation:     collations.SystemCollation.Collation,
 			ResolveColumn: NotImplementedSchemaInfoResolver,
 			Environment:   ctx.VSchema.Environment(),
+			SQLMode:       ctx.SQLMode(),
 		})
 		if err != nil {
 			panic(err)
@@ -62,6 +63,7 @@ func (isr *InfoSchemaRouting) UpdateRoutingParams(ctx *plancontext.PlanningConte
 			Collation:     collations.SystemCollation.Collation,
 			ResolveColumn: NotImplementedSchemaInfoResolver,
 			Environment:   ctx.VSchema.Environment(),
+			SQLMode:       ctx.SQLMode(),
 		})
 		if err != nil {
 			panic(err)
@@ -149,6 +151,7 @@ func extractInfoSchemaRoutingPredicate(ctx *plancontext.PlanningContext, in sqlp
 		Collation:     collations.SystemCollation.Collation,
 		ResolveColumn: NotImplementedSchemaInfoResolver,
 		Environment:   ctx.VSchema.Environment(),
+		SQLMode:       ctx.SQLMode(),
 	})
 	if err != nil {
 		// if we can't translate this to an evalengine expression,

@@ -24,6 +24,7 @@ import (
 	"strings"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/vt/key"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -145,6 +146,10 @@ func (vw *VSchemaWrapper) ConnCollation() collations.ID {
 
 func (vw *VSchemaWrapper) Environment() *vtenv.Environment {
 	return vw.Env
+}
+
+func (vw *VSchemaWrapper) SQLMode() string {
+	return config.DefaultSQLMode
 }
 
 func (vw *VSchemaWrapper) PlannerWarning(_ string) {

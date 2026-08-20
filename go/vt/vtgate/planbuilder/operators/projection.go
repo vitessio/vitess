@@ -591,6 +591,7 @@ func (p *Projection) planOffsets(ctx *plancontext.PlanningContext) Operator {
 			ResolveType: ctx.TypeForExpr,
 			Collation:   ctx.SemTable.Collation,
 			Environment: ctx.VSchema.Environment(),
+			SQLMode:     ctx.SQLMode(),
 		})
 		if err != nil {
 			panic(err)

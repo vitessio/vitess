@@ -350,6 +350,7 @@ func transformAggregator(ctx *plancontext.PlanningContext, op *operators.Aggrega
 			cfg := &evalengine.Config{
 				Collation:     ctx.VSchema.ConnCollation(),
 				Environment:   ctx.VSchema.Environment(),
+				SQLMode:       ctx.SQLMode(),
 				ResolveColumn: func(name *sqlparser.ColName) (int, error) { return aggr.ColOffset, nil },
 			}
 			expr, err := evalengine.Translate(aggr.Original.Expr, cfg)
@@ -932,6 +933,7 @@ func createLimit(ctx *plancontext.PlanningContext, input engine.Primitive, limit
 	cfg := &evalengine.Config{
 		Collation:   ctx.VSchema.ConnCollation(),
 		Environment: ctx.VSchema.Environment(),
+		SQLMode:     ctx.SQLMode(),
 	}
 	count, err := evalengine.Translate(limit.Rowcount, cfg)
 	if err != nil {
@@ -1018,6 +1020,7 @@ func transformVindexPlan(ctx *plancontext.PlanningContext, op *operators.Vindex)
 		Collation:   ctx.SemTable.Collation,
 		ResolveType: ctx.TypeForExpr,
 		Environment: ctx.VSchema.Environment(),
+		SQLMode:     ctx.SQLMode(),
 	})
 	if err != nil {
 		return nil, err

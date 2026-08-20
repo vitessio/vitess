@@ -60,7 +60,8 @@ type (
 	}
 
 	// PlanKey identifies a plan uniquely based on keyspace, destination, query,
-	// SET_VAR comment, and collation. It is primarily used as a cache key.
+	// SET_VAR comment, collation and parse-relevant sql_mode. It is primarily
+	// used as a cache key.
 	PlanKey struct {
 		CurrentKeyspace string                // CurrentKeyspace is the name of the keyspace associated with the plan.
 		TabletType      topodatapb.TabletType // TabletType is the type of tablet (primary, replica, etc.) for the plan.
@@ -68,6 +69,7 @@ type (
 		Query           string                // Query is the original or normalized SQL statement used to build the plan.
 		SetVarComment   string                // SetVarComment holds any embedded SET_VAR hints within the query.
 		Collation       collations.ID         // Collation is the character collation ID that governs string comparison.
+		SQLMode         sqlparser.SQLMode     // SQLMode holds the parse-relevant sql_mode flags the query was parsed with.
 	}
 )
 
@@ -255,13 +257,15 @@ func getPlanTypeForUpsert(prim *Upsert) PlanType {
 }
 
 func (pk PlanKey) DebugString() string {
-	return fmt.Sprintf("CurrentKeyspace: %s, TabletType: %s, Destination: %s, Query: %s, SetVarComment: %s, Collation: %d", pk.CurrentKeyspace, pk.TabletType.String(), pk.Destination, pk.Query, pk.SetVarComment, pk.Collation)
+	return fmt.Sprintf("CurrentKeyspace: %s, TabletType: %s, Destination: %s, Query: %s, SetVarComment: %s, Collation: %d, SQLMode: %d", pk.CurrentKeyspace, pk.TabletType.String(), pk.Destination, pk.Query, pk.SetVarComment, pk.Collation, pk.SQLMode)
 }
 
 func (pk PlanKey) Hash() theine.HashKey256 {
 	hasher := vthash.New256()
 	_, _ = hasher.WriteUint16(uint16(pk.Collation))
 	_, _ = hasher.WriteUint16(uint16(pk.TabletType))
+	_, _ = hasher.WriteUint16(uint16(pk.SQLMode))
+	_, _ = hasher.WriteUint16(uint16(pk.SQLMode >> 16))
 	_, _ = hasher.WriteString(pk.CurrentKeyspace)
 	_, _ = hasher.WriteString(pk.Destination)
 	_, _ = hasher.WriteString(pk.SetVarComment)
