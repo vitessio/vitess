@@ -581,7 +581,14 @@ func (td *tableDiffer) diff(ctx context.Context, coreOpts *tabletmanagerdatapb.V
 	maxReportSampleRows := reportOpts.GetMaxSampleRows()
 
 	for {
-		lastProcessedRow = sourceRow
+		// Only advance the persisted position when the previous iteration
+		// consumed the held source row (advanceSource still holds that
+		// iteration's decision here). After an extra-target-row iteration the
+		// held source row has not been processed yet, and recording it as
+		// lastpk would make a resumed diff skip it permanently.
+		if advanceSource {
+			lastProcessedRow = sourceRow
+		}
 
 		select {
 		case <-ctx.Done():

@@ -434,6 +434,102 @@ func TestDiffDrainStreamError(t *testing.T) {
 	require.Len(t, dr.ExtraRowsTargetDiffs, 2)
 }
 
+// TestDiffSourceDrainStreamError is the source-side counterpart of
+// TestDiffDrainStreamError: the target stream is exhausted first and the
+// source stream fails while its remaining rows are being drained. It also
+// covers the case where the drain is entered with a held, not-yet-processed
+// source row (after an extra-target-row comparison): that row must not be
+// persisted as lastpk, since its count and sample were discarded with the
+// failed drain, and a resumed diff would otherwise skip it permanently.
+func TestDiffSourceDrainStreamError(t *testing.T) {
+	fields := drainTestFields
+	makeRow := drainTestRow
+	streamErr := errors.New("stream terminated unexpectedly")
+	coreOpts := &tabletmanagerdatapb.VDiffCoreOptions{
+		MaxRows:               100,
+		MaxExtraRowsToCompare: 1000,
+	}
+	reportOpts := &tabletmanagerdatapb.VDiffReportOptions{
+		MaxSampleRows: 10,
+	}
+	stateQuery, err := sqlparser.ParseAndBind(sqlGetVDiffTable,
+		sqltypes.Int64BindVariable(1),
+		sqltypes.StringBindVariable("t1"),
+	)
+	require.NoError(t, err)
+	stateFields := sqltypes.MakeTestFields(
+		"lastpk|mismatch|report",
+		"varbinary|int64|varbinary",
+	)
+
+	t.Run("drain error after matched rows", func(t *testing.T) {
+		// Rows 1 and 2 match; rows 3 and 4 are drained from the source and
+		// the drain fails. The persisted report must contain only the two
+		// fully compared rows, with lastpk pointing at row 2.
+		dbc := binlogplayer.NewMockDBClient(t)
+		td := newDrainTestDiffer(dbc,
+			&erroringPrimitive{
+				Primitive: engine.NewRowsPrimitive(nil, fields),
+				results: []*sqltypes.Result{{
+					Fields: fields,
+					Rows:   [][]sqltypes.Value{makeRow(1, "a"), makeRow(2, "b"), makeRow(3, "c"), makeRow(4, "d")},
+				}},
+				err: streamErr,
+			},
+			engine.NewRowsPrimitive([][]sqltypes.Value{makeRow(1, "a"), makeRow(2, "b")}, fields),
+		)
+		dbc.ExpectRequest(stateQuery, sqltypes.MakeTestResult(stateFields, "|0|{}"), nil)
+		wantReport, err := json.Marshal(&DiffReport{
+			TableName:     "t1",
+			ProcessedRows: 2,
+			MatchingRows:  2,
+		})
+		require.NoError(t, err)
+		dbc.ExpectRequestRE(`update _vt\.vdiff_table set rows_compared = 2, lastpk = '.*', report = '`+
+			regexp.QuoteMeta(string(wantReport))+`' where vdiff_id = 1 and table_name = 't1'`,
+			&sqltypes.Result{}, nil)
+
+		_, err = td.diff(t.Context(), coreOpts, reportOpts, nil)
+		require.ErrorIs(t, err, streamErr)
+	})
+
+	t.Run("drain error with a held unprocessed source row", func(t *testing.T) {
+		// The first comparison finds an extra target row (source row 2 vs
+		// target row 1), holding source row 2 unprocessed. The target is then
+		// exhausted and the source drain fails. Since source row 2's count and
+		// sample are discarded with the failed drain, it must not be recorded
+		// as lastpk: the persisted update must carry no position (the report
+		// contains only the extra target row), so that a resumed diff streams
+		// source row 2 again.
+		dbc := binlogplayer.NewMockDBClient(t)
+		td := newDrainTestDiffer(dbc,
+			&erroringPrimitive{
+				Primitive: engine.NewRowsPrimitive(nil, fields),
+				results: []*sqltypes.Result{{
+					Fields: fields,
+					Rows:   [][]sqltypes.Value{makeRow(2, "b"), makeRow(3, "c")},
+				}},
+				err: streamErr,
+			},
+			engine.NewRowsPrimitive([][]sqltypes.Value{makeRow(1, "a")}, fields),
+		)
+		dbc.ExpectRequest(stateQuery, sqltypes.MakeTestResult(stateFields, "|0|{}"), nil)
+		wantReport, err := json.Marshal(&DiffReport{
+			TableName:            "t1",
+			ProcessedRows:        1,
+			ExtraRowsTarget:      1,
+			ExtraRowsTargetDiffs: []*RowDiff{{Row: map[string]string{"c1": "1", "c2": "a"}}},
+		})
+		require.NoError(t, err)
+		dbc.ExpectRequestRE(`update _vt\.vdiff_table set rows_compared = 1, report = '`+
+			regexp.QuoteMeta(string(wantReport))+`' where vdiff_id = 1 and table_name = 't1'`,
+			&sqltypes.Result{}, nil)
+
+		_, err = td.diff(t.Context(), coreOpts, reportOpts, nil)
+		require.ErrorIs(t, err, streamErr)
+	})
+}
+
 func TestGetSourcePKCols_TableDroppedOnSource(t *testing.T) {
 	tvde := newTestVDiffEnv(t)
 	defer tvde.close()
