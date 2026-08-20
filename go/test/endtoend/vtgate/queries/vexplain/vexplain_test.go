@@ -197,6 +197,28 @@ func TestVExplainMySQLPlan(t *testing.T) {
 			"query_block")
 	}
 
+	// A scatter SELECT (no WHERE) fans out to every shard, so MYSQLPLAN must run
+	// EXPLAIN against each and attach per-shard output keyed by shard name. Assert
+	// the output carries at least two distinct shard names to prove the fan-out,
+	// not just a single-shard EXPLAIN. Read the raw cell (real quotes) rather than
+	// the %v-formatted rows (whose quotes the infra escapes) so the shard-key match
+	// is unambiguous.
+	scatter := utils.Exec(t, conn, `vexplain mysqlplan select id from user`)
+	require.Len(t, scatter.Rows, 1)
+	scatterOut := scatter.Rows[0][0].ToString()
+	assert.Contains(t, scatterOut, "mysql_explain_json")
+	distinctShards := 0
+	for _, shard := range shardedKsShards {
+		if strings.Contains(scatterOut, fmt.Sprintf("%q", shard)) {
+			distinctShards++
+		}
+	}
+	assert.GreaterOrEqualf(t, distinctShards, 2,
+		"expected per-shard EXPLAIN for at least 2 of shards %v, got output:\n%s", shardedKsShards, scatterOut)
+	if atLeast80 && !strings.Contains(mysqlVersion, "MariaDB") {
+		assert.Contains(t, scatterOut, "query_block")
+	}
+
 	// DML is not supported (its plans are not Route primitives): it must fail closed
 	// and point the user to VEXPLAIN ALL, not silently produce a plan with no EXPLAIN.
 	utils.AssertContainsError(t, conn,
