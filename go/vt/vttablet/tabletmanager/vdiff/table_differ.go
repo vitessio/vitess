@@ -1108,8 +1108,10 @@ func (td *tableDiffer) getSourcePKCols() error {
 		// in-memory retry PKs unset, so any resume (auto-retry or manual resume)
 		// restarts the whole table from the beginning for both the source and
 		// target streams. That is correct (no false extra-row reports). Because
-		// such a table cannot be checkpointed, --max-diff-duration is also ignored
-		// for it (see differ) and it is diffed in a single uninterrupted pass.
+		// such a table cannot be checkpointed it also cannot honor
+		// --max-diff-duration: if it exceeds that bound the differ stops with a
+		// non-retryable error rather than overriding the operator's bound (see
+		// differ).
 		td.tablePlan.sourceCheckpointUnavailable = true
 		// Discard any checkpoint that buildPlan already loaded from the database
 		// via getTableLastPK (e.g. a stale, possibly wrong-length lastpk written

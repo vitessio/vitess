@@ -20,7 +20,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log/slog"
 	"reflect"
 	"slices"
 	"strings"
@@ -29,6 +28,7 @@ import (
 	"google.golang.org/protobuf/encoding/prototext"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/key"
@@ -221,19 +221,8 @@ func (wd *workflowDiffer) diffTable(ctx context.Context, dbClient binlogplayer.D
 
 	maxDiffRuntime := time.Duration(24 * time.Hour * 365) // 1 year (effectively forever)
 	if wd.ct.options.CoreOptions.MaxDiffSeconds > 0 {
-		if td.tablePlan.sourceCheckpointUnavailable {
-			// max-diff-duration works by checkpointing progress and resuming, but
-			// this table's filter does not project the full source primary key so
-			// it cannot be checkpointed (see getSourcePKCols). Applying the limit
-			// would restart it from the beginning on every window and it could
-			// never finish, so we run it as a single uninterrupted pass instead.
-			log.Warn("Ignoring --max-diff-duration for this table because its filter does not project the full source primary key, so it cannot be checkpointed and must be diffed in a single pass",
-				slog.String("table", td.table.Name),
-				slog.String("vdiff", wd.ct.uuid))
-		} else {
-			// Restart the diff if it takes longer than the specified max diff time.
-			maxDiffRuntime = time.Duration(wd.ct.options.CoreOptions.MaxDiffSeconds) * time.Second
-		}
+		// Restart the diff if it takes longer than the specified max diff time.
+		maxDiffRuntime = time.Duration(wd.ct.options.CoreOptions.MaxDiffSeconds) * time.Second
 	}
 
 	log.Info(fmt.Sprintf("Starting differ on table %s for vdiff %s", td.table.Name, wd.ct.uuid))
@@ -275,6 +264,21 @@ func (wd *workflowDiffer) diffTable(ctx context.Context, dbClient binlogplayer.D
 		log.Error(fmt.Sprintf("Encountered an error diffing table %s for vdiff %s: %v", td.table.Name, wd.ct.uuid, diffErr))
 		if !errors.Is(diffErr, ErrMaxDiffDurationExceeded) { // We only want to retry if we hit the max-diff-duration
 			return diffErr
+		}
+		if td.tablePlan.sourceCheckpointUnavailable {
+			// This table cannot be checkpointed because its filter does not
+			// project the full source primary key (see getSourcePKCols), so it
+			// cannot be resumed and every retry would restart from the beginning
+			// and hit the same timeout. We do not override the operator's
+			// --max-diff-duration bound (long-lived snapshots have real
+			// operational cost), so we stop here. The failure is wrapped as a
+			// MySQL ERNotSupportedYet so that its "(errno 1235)" suffix survives
+			// being persisted as a string and rebuilt by retryVDiffs: that makes
+			// IsEphemeralError classify it as non-ephemeral, so the engine does
+			// not auto-retry it forever.
+			return sqlerror.NewSQLError(sqlerror.ERNotSupportedYet, sqlerror.SSClientError,
+				fmt.Sprintf("table %s exceeded the configured --max-diff-duration and cannot be resumed because its filter does not project the full source primary key; increase or unset --max-diff-duration so it can complete within a single window",
+					td.table.Name))
 		}
 	}
 	log.Info(fmt.Sprintf("Table diff done on table %s for vdiff %s with report: %+v", td.table.Name, wd.ct.uuid, diffReport))
