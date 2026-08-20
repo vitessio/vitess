@@ -467,11 +467,12 @@ func (p *Parser) SetTruncateErrLen(l int) {
 }
 
 // SQLMode holds the sql_mode flags that change how statements are parsed.
-// Only the parse-relevant modes are represented; execution-only modes are
-// ignored by the parser. All flags follow MySQL's lexer behavior: parsing
-// is mode-dependent, but the resulting AST always formats back to
-// mode-independent SQL (e.g. || lowers to concat(), quoted identifiers
-// format with backticks), like MySQL's own normalization of stored views.
+// Only the modes the parser or planner depend on are represented; other
+// execution-only modes are ignored. The lexer flags follow MySQL's lexer
+// behavior: parsing is mode-dependent, but the resulting AST always formats
+// back to mode-independent SQL (e.g. || lowers to concat(), quoted
+// identifiers format with backticks), like MySQL's own normalization of
+// stored views.
 type SQLMode uint32
 
 const (
@@ -487,6 +488,15 @@ const (
 	// SQLModeNoBackslashEscapes treats backslash as an ordinary character
 	// in string literals instead of an escape character.
 	SQLModeNoBackslashEscapes
+	// SQLModeHighNotPrecedence gives NOT the precedence of the unary
+	// operators, so that NOT a BETWEEN b AND c parses as
+	// (NOT a) BETWEEN b AND c.
+	SQLModeHighNotPrecedence
+	// SQLModeRealAsFloat makes the REAL type a synonym for FLOAT instead
+	// of DOUBLE. The lexer ignores it — parsing is identical either way —
+	// but planning depends on it (evalengine types CAST(x AS REAL) by it),
+	// so it is represented here to key plan caches on it.
+	SQLModeRealAsFloat
 )
 
 // ParseSQLMode extracts the parse-relevant flags from a MySQL sql_mode
@@ -507,11 +517,173 @@ func ParseSQLMode(sqlMode string) SQLMode {
 			mode |= SQLModeIgnoreSpace
 		case strings.EqualFold(word, "NO_BACKSLASH_ESCAPES"):
 			mode |= SQLModeNoBackslashEscapes
+		case strings.EqualFold(word, "HIGH_NOT_PRECEDENCE"):
+			mode |= SQLModeHighNotPrecedence
+		case strings.EqualFold(word, "REAL_AS_FLOAT"):
+			mode |= SQLModeRealAsFloat
 		case strings.EqualFold(word, "ANSI"):
-			mode |= SQLModeANSIQuotes | SQLModePipesAsConcat | SQLModeIgnoreSpace
+			mode |= SQLModeRealAsFloat | SQLModeANSIQuotes | SQLModePipesAsConcat | SQLModeIgnoreSpace
 		}
 	}
 	return mode
+}
+
+// StripParseRelevantModes returns the given comma-separated sql_mode list
+// with the parse-relevant modes removed. vtgate parses statements itself
+// using those modes and always regenerates mode-independent SQL, so
+// forwarding them to a backend would make it lex Vitess-generated text
+// incorrectly. The ANSI combination mode is expanded so that its
+// execution-relevant parts survive the stripping. The result is
+// deduplicated, preserving first occurrences.
+func StripParseRelevantModes(sqlMode string) string {
+	var kept []string
+	seen := make(map[string]bool)
+	keep := func(word string) {
+		upper := strings.ToUpper(word)
+		if !seen[upper] {
+			seen[upper] = true
+			kept = append(kept, word)
+		}
+	}
+	for part := range strings.SplitSeq(sqlMode, ",") {
+		word := strings.TrimSpace(part)
+		switch {
+		case word == "":
+		case strings.EqualFold(word, "ANSI_QUOTES"),
+			strings.EqualFold(word, "PIPES_AS_CONCAT"),
+			strings.EqualFold(word, "IGNORE_SPACE"),
+			strings.EqualFold(word, "NO_BACKSLASH_ESCAPES"),
+			strings.EqualFold(word, "HIGH_NOT_PRECEDENCE"):
+		case strings.EqualFold(word, "ANSI"):
+			keep("REAL_AS_FLOAT")
+			keep("ONLY_FULL_GROUP_BY")
+		default:
+			keep(word)
+		}
+	}
+	return strings.Join(kept, ",")
+}
+
+// sqlModeCanonicalOrder lists the sql_mode member names in MySQL's
+// canonical (bit) order, which governs how a stored sql_mode value reads
+// back. Matches sql_mode_names in MySQL 8.0's sys_vars.cc, with the unused
+// placeholder entries omitted.
+var sqlModeCanonicalOrder = []string{
+	"REAL_AS_FLOAT", "PIPES_AS_CONCAT", "ANSI_QUOTES", "IGNORE_SPACE",
+	"ONLY_FULL_GROUP_BY", "NO_UNSIGNED_SUBTRACTION", "NO_DIR_IN_CREATE",
+	"ANSI", "NO_AUTO_VALUE_ON_ZERO", "NO_BACKSLASH_ESCAPES",
+	"STRICT_TRANS_TABLES", "STRICT_ALL_TABLES", "NO_ZERO_IN_DATE",
+	"NO_ZERO_DATE", "ALLOW_INVALID_DATES", "ERROR_FOR_DIVISION_BY_ZERO",
+	"TRADITIONAL", "HIGH_NOT_PRECEDENCE", "NO_ENGINE_SUBSTITUTION",
+	"PAD_CHAR_TO_FULL_LENGTH", "TIME_TRUNCATE_FRACTIONAL",
+}
+
+// sqlModeCombinations maps the combination modes to the member modes they
+// turn on; like in MySQL, the combination's own name stays in the value.
+var sqlModeCombinations = map[string][]string{
+	"ANSI": {
+		"REAL_AS_FLOAT", "PIPES_AS_CONCAT", "ANSI_QUOTES",
+		"IGNORE_SPACE", "ONLY_FULL_GROUP_BY",
+	},
+	"TRADITIONAL": {
+		"STRICT_TRANS_TABLES", "STRICT_ALL_TABLES",
+		"NO_ZERO_IN_DATE", "NO_ZERO_DATE", "ERROR_FOR_DIVISION_BY_ZERO",
+		"NO_ENGINE_SUBSTITUTION",
+	},
+}
+
+var knownSQLModes = func() map[string]bool {
+	known := make(map[string]bool, len(sqlModeCanonicalOrder))
+	for _, name := range sqlModeCanonicalOrder {
+		known[name] = true
+	}
+	return known
+}()
+
+// KnownSQLMode reports whether the given name is a valid sql_mode member or
+// combination name, matched case-insensitively.
+func KnownSQLMode(name string) bool {
+	return knownSQLModes[strings.ToUpper(strings.TrimSpace(name))]
+}
+
+// SQLModeValueList unwraps an optionally quoted sql_mode value and reports
+// whether it is a plain comma-separated mode list.
+func SQLModeValueList(value string) (string, bool) {
+	inner := value
+	if len(inner) >= 2 && inner[0] == '\'' && inner[len(inner)-1] == '\'' {
+		inner = inner[1 : len(inner)-1]
+	}
+	for _, r := range inner {
+		isWordChar := r == '_' || r == ',' || r == ' ' ||
+			(r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9')
+		if !isWordChar {
+			return "", false
+		}
+	}
+	return inner, true
+}
+
+// CanonicalizeSQLModeValue rewrites a (possibly quoted) sql_mode value the
+// way MySQL stores it: names uppercased and deduplicated, combination modes
+// expanded to their members while keeping their own name, and the result
+// ordered canonically, so that reading @@sql_mode back matches MySQL.
+// Values that are not a plain mode list, or that contain unknown mode
+// names, are returned unchanged.
+func CanonicalizeSQLModeValue(value string) string {
+	inner, ok := SQLModeValueList(value)
+	if !ok {
+		return value
+	}
+	quoted := inner != value && len(value) >= 2
+	set := make(map[string]bool)
+	for part := range strings.SplitSeq(inner, ",") {
+		word := strings.ToUpper(strings.TrimSpace(part))
+		if word == "" {
+			continue
+		}
+		if !knownSQLModes[word] {
+			return value
+		}
+		set[word] = true
+		for _, member := range sqlModeCombinations[word] {
+			set[member] = true
+		}
+	}
+	var out []string
+	for _, name := range sqlModeCanonicalOrder {
+		if set[name] {
+			out = append(out, name)
+		}
+	}
+	joined := strings.Join(out, ",")
+	if quoted {
+		return "'" + joined + "'"
+	}
+	return joined
+}
+
+// StripParseRelevantModesValue applies StripParseRelevantModes to a stored
+// sql_mode value that may carry surrounding single quotes. Values that are
+// not a plain (possibly quoted) mode list — e.g. expressions — are returned
+// unchanged.
+func StripParseRelevantModesValue(value string) string {
+	inner := value
+	quoted := len(inner) >= 2 && inner[0] == '\'' && inner[len(inner)-1] == '\''
+	if quoted {
+		inner = inner[1 : len(inner)-1]
+	}
+	for _, r := range inner {
+		isWordChar := r == '_' || r == ',' || r == ' ' ||
+			(r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9')
+		if !isWordChar {
+			return value
+		}
+	}
+	stripped := StripParseRelevantModes(inner)
+	if quoted {
+		return "'" + stripped + "'"
+	}
+	return stripped
 }
 
 type Options struct {
