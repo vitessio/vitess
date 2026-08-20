@@ -61,6 +61,15 @@ func buildVExplainPlan(
 // from a vindex without reading cluster data; any other plan is rejected here with a
 // message pointing the user to VEXPLAIN ALL.
 func buildVExplainMySQLPlan(ctx context.Context, explainStatement sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, cfg dynamicconfig.DDL) (*planResult, error) {
+	// A DML statement can never plan to a Route or read Send whose shards resolve
+	// from a vindex, so reject it up front with a SELECT-only message rather than
+	// after planning. Checking the statement type here avoids a hand-maintained list
+	// of DML engine primitives (Insert, Update, Upsert, FkCascade, ...) that would
+	// drift as new ones are added.
+	if sqlparser.IsDMLStatement(explainStatement) {
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, vexplainMySQLDMLError)
+	}
+
 	if err := checkVExplainMySQLAST(explainStatement); err != nil {
 		return nil, err
 	}
@@ -180,12 +189,13 @@ func checkVExplainMySQLNoCalcFoundRows(statement sqlparser.Statement) error {
 // shards can be resolved from a vindex without reading cluster data are permitted -
 // a Route (with a resolvable vindex), a read Send (whose shards come from an explicit
 // target destination) and the shard-independent container primitives that pass their
-// bind variables through to their inputs unchanged. DML is rejected
-// with a SELECT-only message. Everything else - cross-shard joins, subqueries,
-// recursive CTEs (whose child Routes are parameterized by rows produced at runtime)
-// and lookup vindexes (which resolve shards by querying a lookup table) - is rejected
-// and directed to VEXPLAIN ALL instead. Defaulting to reject keeps the check fail-closed
-// as new primitive types are added.
+// bind variables through to their inputs unchanged. DML statements are already
+// rejected up front by buildVExplainMySQLPlan, so only a DML/DDL bypass Send is
+// rejected here with a SELECT-only message. Everything else - cross-shard joins,
+// subqueries, recursive CTEs (whose child Routes are parameterized by rows produced
+// at runtime) and lookup vindexes (which resolve shards by querying a lookup table) -
+// is rejected and directed to VEXPLAIN ALL instead. Defaulting to reject keeps the
+// check fail-closed as new primitive types are added.
 func checkVExplainMySQLSupported(primitive engine.Primitive) error {
 	switch prim := primitive.(type) {
 	case *engine.Route:
@@ -215,8 +225,6 @@ func checkVExplainMySQLSupported(primitive engine.Primitive) error {
 		// Shard-independent container primitives: they forward bind variables to
 		// their inputs unchanged, so shard resolution is unaffected. Fall through
 		// to recurse into their inputs.
-	case *engine.Insert, *engine.InsertSelect, *engine.Update, *engine.Delete, *engine.Upsert, *engine.DMLWithInput, *engine.FkCascade, *engine.FkVerify:
-		return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, vexplainMySQLDMLError)
 	default:
 		return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, vexplainMySQLUnresolvableError)
 	}
