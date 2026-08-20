@@ -453,6 +453,91 @@ func TestEncodeStringSQL(t *testing.T) {
 	}
 }
 
+// quoteBehindLoneBackslash reports whether any quote in s is preceded by an odd
+// number of backslashes, which is the shape whose reading depends on sql_mode.
+func quoteBehindLoneBackslash(s string) bool {
+	for i := 0; i < len(s); i++ {
+		if s[i] != '\'' {
+			continue
+		}
+		backslashes := 0
+		for j := i - 1; j >= 0 && s[j] == '\\'; j-- {
+			backslashes++
+		}
+		if backslashes%2 == 1 {
+			return true
+		}
+	}
+	return false
+}
+
+func TestEncodeStringSQLAnyMode(t *testing.T) {
+	testcases := []struct {
+		name string
+		in   string
+		out  string
+	}{
+		{
+			name: "empty",
+			in:   "",
+			out:  "''",
+		},
+		{
+			name: "a quote is doubled rather than backslash escaped",
+			in:   "it's",
+			out:  "'it''s'",
+		},
+		{
+			// A byte with a backslash escape form is written raw instead, because
+			// the escape form reads back as a backslash and a letter under
+			// NO_BACKSLASH_ESCAPES. None of them can end a literal.
+			name: "bytes that have an escape form are written raw",
+			in:   "\x00\b\n\r\t\x1A",
+			out:  "'\x00\b\n\r\t\x1A'",
+		},
+		{
+			name: "a double quote needs no escaping inside a single quoted literal",
+			in:   `a"b`,
+			out:  `'a"b'`,
+		},
+		{
+			name: "a backslash before a wildcard is left alone for LIKE",
+			in:   `a\_b\%c`,
+			out:  `'a\_b\%c'`,
+		},
+		{
+			name: "a trailing backslash is doubled, so it cannot swallow the closing quote",
+			in:   `ab\`,
+			out:  `'ab\\'`,
+		},
+		{
+			// Bytes are copied one at a time, so a value that is not valid UTF-8
+			// survives rather than becoming U+FFFD.
+			name: "an invalid UTF-8 byte survives",
+			in:   "caf\xe9",
+			out:  "'caf\xe9'",
+		},
+		{
+			name: "valid multi-byte UTF-8 is unchanged",
+			in:   "café",
+			out:  "'café'",
+		},
+	}
+	for _, tcase := range testcases {
+		t.Run(tcase.name, func(t *testing.T) {
+			assert.Equal(t, tcase.out, EncodeStringSQLAnyMode(tcase.in))
+
+			// The point of the encoding: no quote sits behind a lone backslash.
+			// One backslash makes a quote an escaped quote where backslashes are
+			// escapes and a plain closing quote where they are not, and that
+			// difference is the whole bug. An even run is safe either way, since
+			// the backslashes escape each other or none of them do.
+			assert.False(t, quoteBehindLoneBackslash(EncodeStringSQLAnyMode(tcase.in)),
+				"EncodeStringSQLAnyMode(%q) = %s", tcase.in, EncodeStringSQLAnyMode(tcase.in))
+		})
+	}
+}
+
 func TestDecodeStringSQL(t *testing.T) {
 	testcases := []struct {
 		in  string

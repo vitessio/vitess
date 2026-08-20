@@ -79,6 +79,15 @@ func registerGCFlags(fs *pflag.FlagSet) {
 }
 
 var (
+	// The table name is written into %a as it stands -- sqlparser.BuildParsedQuery
+	// writes the argument verbatim, and sqlPurgeTable does not even quote it -- on a
+	// connection that negotiates CLIENT_MULTI_STATEMENTS. Nothing escapes it because
+	// nothing needs to: the collector only ever operates on a table whose name
+	// schema.AnalyzeGCTableName accepted, which requires the whole
+	// _vt_<hint>_<32 hex>_<14 digits>_ shape (schema.InternalTableNameExpression) and
+	// so cannot hold a back quote. A caller that reaches these without going through
+	// that gate has to escape the name itself, the way
+	// schema.GenerateRenameStatementWithUUID does for the name it builds.
 	sqlPurgeTable   = `delete from %a limit 50`
 	sqlShowVtTables = `show full tables like '\_vt\_%'`
 	sqlDropTable    = "drop table if exists `%a`"

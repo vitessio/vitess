@@ -23,6 +23,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/vt/sqlparser"
 )
 
 func TestGCStates(t *testing.T) {
@@ -267,4 +269,41 @@ func TestGenerateRenameStatementWithUUID(t *testing.T) {
 		toTableNames[toTableName] = true
 	}
 	assert.Len(t, toTableNames, countIterations)
+}
+
+// TestGenerateRenameStatementEscapesNames guards against a table name adding
+// statements to the RENAME this generates.
+//
+// This is the statement the online DDL executor runs for a DROP: for any
+// non-GC table it rewrites the DROP into a rename to a GC table and executes the
+// result directly on the DBA connection, without a re-parse. The table name comes
+// from the tenant's DDL, and MySQL allows a back quote inside one, so wrapping it
+// in back quotes is not enough -- it has to be escaped, or the name closes its own
+// quoting and what follows runs as further statements.
+func TestGenerateRenameStatementEscapesNames(t *testing.T) {
+	parser := sqlparser.NewTestParser()
+	uuid := "6ace8bcef73211ea87e9f875a4d24e90"
+
+	for _, tableName := range []string{
+		"mytbl",
+		"my table",
+		"t1`;INSERT INTO mydb.loot SELECT * FROM mysql.user;show create table `t1",
+	} {
+		t.Run(tableName, func(t *testing.T) {
+			statement, _, err := GenerateRenameStatementWithUUID(tableName, HoldTableGCState, uuid, time.Now().UTC())
+			require.NoError(t, err)
+
+			pieces, err := parser.SplitStatementToPieces(statement)
+			require.NoError(t, err)
+			require.Len(t, pieces, 1, "generated %q, which is %d statements", statement, len(pieces))
+
+			// And the rename still names the table it was asked to rename.
+			stmt, err := parser.Parse(statement)
+			require.NoError(t, err, "generated %q", statement)
+			rename, ok := stmt.(*sqlparser.RenameTable)
+			require.True(t, ok, "generated %q, parsed as %T", statement, stmt)
+			require.Len(t, rename.TablePairs, 1)
+			assert.Equal(t, tableName, rename.TablePairs[0].FromTable.Name.String())
+		})
+	}
 }
