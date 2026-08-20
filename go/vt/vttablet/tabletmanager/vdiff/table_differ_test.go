@@ -37,6 +37,25 @@ import (
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 )
 
+type (
+	// erroringPrimitive is an engine.Primitive for testing that streams the
+	// given results and then fails with err, simulating a mid-stream error.
+	erroringPrimitive struct {
+		engine.Primitive
+		results []*sqltypes.Result
+		err     error
+	}
+)
+
+func (p *erroringPrimitive) TryStreamExecute(ctx context.Context, vcursor engine.VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+	for _, r := range p.results {
+		if err := callback(r); err != nil {
+			return err
+		}
+	}
+	return p.err
+}
+
 func TestUpdateTableProgress(t *testing.T) {
 	wd := &workflowDiffer{
 		ct: &controller{
@@ -309,23 +328,6 @@ func TestDiffDrainedRowSampling(t *testing.T) {
 			require.Equal(t, int64(0), dr.MismatchedRows)
 		})
 	}
-}
-
-// erroringPrimitive is an engine.Primitive for testing that streams the given
-// results and then fails with err, simulating a mid-stream error.
-type erroringPrimitive struct {
-	engine.Primitive
-	results []*sqltypes.Result
-	err     error
-}
-
-func (p *erroringPrimitive) TryStreamExecute(ctx context.Context, vcursor engine.VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	for _, r := range p.results {
-		if err := callback(r); err != nil {
-			return err
-		}
-	}
-	return p.err
 }
 
 // TestGenRowDiffMarksTruncatedValues tests that a row sample whose values were
