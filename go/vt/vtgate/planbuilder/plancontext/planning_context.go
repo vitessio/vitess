@@ -73,9 +73,22 @@ type PlanningContext struct {
 	emptyEnv    *evalengine.ExpressionEnv
 	constantCfg *evalengine.Config
 
+	// sqlMode caches the session's sql_mode parsed into evalengine flags;
+	// use SQLMode() to read it
+	sqlMode evalengine.SQLMode
+
 	PredTracker *predicates.Tracker
 
 	Conditions []engine.Condition
+}
+
+// SQLMode returns the session's sql_mode as evalengine flags, parsed once
+// per planning context.
+func (ctx *PlanningContext) SQLMode() evalengine.SQLMode {
+	if ctx.sqlMode == 0 {
+		ctx.sqlMode = evalengine.ParseSQLMode(ctx.VSchema.SQLMode())
+	}
+	return ctx.sqlMode
 }
 
 // CreatePlanningContext initializes a new PlanningContext with the given parameters.
@@ -165,6 +178,7 @@ func (ctx *PlanningContext) calculateTypeFor(e sqlparser.Expr) evalengine.Type {
 		},
 		Collation:   ctx.SemTable.Collation,
 		Environment: ctx.VSchema.Environment(),
+		SQLMode:     ctx.SQLMode(),
 		ResolveColumn: func(name *sqlparser.ColName) (int, error) {
 			// We don't need to resolve the column for type calculation
 			return 0, nil
@@ -407,6 +421,7 @@ func (ctx *PlanningContext) IsConstantBool(expr sqlparser.Expr) *bool {
 		ctx.constantCfg = &evalengine.Config{
 			Collation:     collation,
 			Environment:   env,
+			SQLMode:       ctx.SQLMode(),
 			NoCompilation: true,
 		}
 	}

@@ -506,6 +506,7 @@ func insertRowsPlan(ctx *plancontext.PlanningContext, insOp *Insert, ins *sqlpar
 					ResolveType: ctx.TypeForExpr,
 					Collation:   ctx.SemTable.Collation,
 					Environment: ctx.VSchema.Environment(),
+					SQLMode:     ctx.SQLMode(),
 				})
 				if err != nil {
 					panic(err)
@@ -637,6 +638,7 @@ func modifyForAutoinc(ctx *plancontext.PlanningContext, ins *sqlparser.Insert, v
 			ResolveType: ctx.TypeForExpr,
 			Collation:   ctx.SemTable.Collation,
 			Environment: ctx.VSchema.Environment(),
+			SQLMode:     ctx.SQLMode(),
 		})
 		if err != nil {
 			panic(err)

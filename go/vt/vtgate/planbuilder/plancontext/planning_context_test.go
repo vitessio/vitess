@@ -27,6 +27,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -292,6 +293,10 @@ func (v *vschema) ConnCollation() collations.ID {
 
 func (v *vschema) Environment() *vtenv.Environment {
 	return vtenv.NewTestEnv()
+}
+
+func (v *vschema) SQLMode() string {
+	return config.DefaultSQLMode
 }
 
 func (v *vschema) ErrorIfShardedF(keyspace *vindexes.Keyspace, warn, errFmt string, params ...any) error {

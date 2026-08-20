@@ -70,6 +70,9 @@ type VSchema interface {
 	ConnCollation() collations.ID
 	Environment() *vtenv.Environment
 
+	// SQLMode returns the session's sql_mode value
+	SQLMode() string
+
 	// ErrorIfShardedF will return an error if the keyspace is sharded,
 	// and produce a warning if the vtgate if configured to do so
 	ErrorIfShardedF(keyspace *vindexes.Keyspace, warn, errFmt string, params ...any) error

@@ -665,7 +665,9 @@ func (session *SafeSession) SetSystemVariable(name string, expr string) {
 
 // GetSystemVariables takes a visitor function that will receive each MySQL system variable in the session.
 // This function will only yield system variables which apply to MySQL itself; Vitess-aware system variables
-// will be skipped.
+// will be skipped. The yielded values are the ones to apply on backend connections: the sql_mode value has
+// its parse-relevant modes stripped, since vtgate parses with those itself and generates mode-independent
+// SQL that backends must lex in the default mode.
 func (session *SafeSession) GetSystemVariables(f func(k string, v string)) {
 	session.mu.Lock()
 	defer session.mu.Unlock()
@@ -673,8 +675,39 @@ func (session *SafeSession) GetSystemVariables(f func(k string, v string)) {
 		if sysvars.IsVitessAware(k) {
 			continue
 		}
+		if k == "sql_mode" {
+			v = stripSQLModeForBackend(v)
+		}
 		f(k, v)
 	}
+}
+
+// SQLMode returns the session's full sql_mode value (as set by the user,
+// including any parse-relevant modes) without surrounding quotes. The
+// second return value is false when the session has no sql_mode set.
+func (session *SafeSession) SQLMode() (string, bool) {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	value, ok := session.SystemVariables["sql_mode"]
+	if !ok {
+		return "", false
+	}
+	return trimQuotes(value), true
+}
+
+func trimQuotes(value string) string {
+	if len(value) >= 2 && value[0] == '\'' && value[len(value)-1] == '\'' {
+		return value[1 : len(value)-1]
+	}
+	return value
+}
+
+// stripSQLModeForBackend removes the parse-relevant modes from a stored
+// sql_mode value. Values that are not a plain (possibly quoted) mode list —
+// e.g. expressions — are forwarded unchanged, preserving the previous
+// behavior for them.
+func stripSQLModeForBackend(value string) string {
+	return sqlparser.StripParseRelevantModesValue(value)
 }
 
 // HasSystemVariables returns whether the session has system variables that would apply to MySQL

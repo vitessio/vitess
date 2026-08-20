@@ -391,6 +391,7 @@ func TestEvaluateTuple(t *testing.T) {
 func TestTranslationFailures(t *testing.T) {
 	testcases := []struct {
 		expression  string
+		sqlMode     SQLMode
 		expectedErr string
 	}{
 		{
@@ -399,6 +400,12 @@ func TestTranslationFailures(t *testing.T) {
 		}, {
 			expression:  "cast('3.4' as FLOAT(3))",
 			expectedErr: "Unsupported type conversion: FLOAT(3)",
+		}, {
+			// under REAL_AS_FLOAT, REAL means FLOAT, which evalengine
+			// declines so the expression is pushed to the backend
+			expression:  "cast('3.4' as REAL)",
+			sqlMode:     ParseSQLMode("REAL_AS_FLOAT"),
+			expectedErr: "Unsupported type conversion: REAL",
 		},
 	}
 
@@ -412,10 +419,28 @@ func TestTranslationFailures(t *testing.T) {
 			_, err = Translate(astExpr, &Config{
 				Collation:   venv.CollationEnv().DefaultConnectionCharset(),
 				Environment: venv,
+				SQLMode:     testcase.sqlMode,
 			})
 			require.EqualError(t, err, testcase.expectedErr)
 		})
 	}
+}
+
+// TestTranslateRealCast pins that CAST(x AS REAL) stays evaluable as DOUBLE
+// when REAL_AS_FLOAT is not in effect.
+func TestTranslateRealCast(t *testing.T) {
+	venv := vtenv.NewTestEnv()
+	stmt, err := sqlparser.NewTestParser().Parse("select cast('3.5' as REAL)")
+	require.NoError(t, err)
+	astExpr := stmt.(*sqlparser.Select).SelectExprs.Exprs[0].(*sqlparser.AliasedExpr).Expr
+	expr, err := Translate(astExpr, &Config{
+		Collation:   venv.CollationEnv().DefaultConnectionCharset(),
+		Environment: venv,
+	})
+	require.NoError(t, err)
+	r, err := EmptyExpressionEnv(venv).Evaluate(expr)
+	require.NoError(t, err)
+	assert.Equal(t, sqltypes.NewFloat64(3.5), r.Value(venv.CollationEnv().DefaultConnectionCharset()))
 }
 
 func TestCardinalityWithBindVariables(t *testing.T) {

@@ -23,6 +23,7 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
@@ -86,4 +87,25 @@ func TestPlanSwitcherRecordsExecutedBranch(t *testing.T) {
 	assert.False(t, isOptimized)
 	assert.Same(t, baseline, vc.ExecutedPrimitive())
 	assert.Equal(t, [][3]string{{"ks", "hash", "Scatter"}}, GetRoutingIndexes(vc.ExecutedPrimitive()))
+}
+
+// TestPlanKeyHashIncludesSQLMode ensures that the same query text parsed
+// under different parse-relevant sql_modes cannot share a plan cache entry.
+func TestPlanKeyHashIncludesSQLMode(t *testing.T) {
+	base := PlanKey{
+		CurrentKeyspace: "ks",
+		Query:           "select 'a' || 'b' from t",
+	}
+	withMode := base
+	withMode.SQLMode = sqlparser.SQLModePipesAsConcat
+	assert.NotEqual(t, base.Hash(), withMode.Hash())
+	same := base
+	assert.Equal(t, base.Hash(), same.Hash())
+
+	// REAL_AS_FLOAT does not change parsing, but planning depends on it
+	// (CAST(x AS REAL) types differently), so it must separate entries too.
+	withRealAsFloat := base
+	withRealAsFloat.SQLMode = sqlparser.SQLModeRealAsFloat
+	assert.NotEqual(t, base.Hash(), withRealAsFloat.Hash())
+	assert.NotEqual(t, withMode.Hash(), withRealAsFloat.Hash())
 }

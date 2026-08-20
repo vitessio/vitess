@@ -265,3 +265,43 @@ func TestPrepareDataConcurrentAccess(t *testing.T) {
 	}
 	wg.Wait()
 }
+
+// TestSQLModeStripping verifies that the sql_mode value applied to backend
+// connections has its parse-relevant modes stripped, while the session keeps
+// the full value for parsing and @@sql_mode reads.
+func TestSQLModeStripping(t *testing.T) {
+	session := NewSafeSession(&vtgatepb.Session{SystemVariables: map[string]string{
+		"sql_mode":         "'PIPES_AS_CONCAT,STRICT_TRANS_TABLES'",
+		"sql_safe_updates": "1",
+	}})
+
+	forwarded := map[string]string{}
+	session.GetSystemVariables(func(k, v string) { forwarded[k] = v })
+	assert.Equal(t, "'STRICT_TRANS_TABLES'", forwarded["sql_mode"])
+	assert.Equal(t, "1", forwarded["sql_safe_updates"])
+
+	mode, ok := session.SQLMode()
+	require.True(t, ok)
+	assert.Equal(t, "PIPES_AS_CONCAT,STRICT_TRANS_TABLES", mode)
+
+	// a value that only contains parse-relevant modes forwards as the empty
+	// mode: the user replaced the whole value, so the backend must drop its
+	// execution modes too
+	session.SetSystemVariable("sql_mode", "'ANSI_QUOTES'")
+	session.GetSystemVariables(func(k, v string) { forwarded[k] = v })
+	assert.Equal(t, "''", forwarded["sql_mode"])
+
+	// non-literal values are forwarded unchanged
+	expr := "CONCAT(@@sql_mode, ',PIPES_AS_CONCAT')"
+	session.SetSystemVariable("sql_mode", expr)
+	session.GetSystemVariables(func(k, v string) { forwarded[k] = v })
+	assert.Equal(t, expr, forwarded["sql_mode"])
+}
+
+// TestSQLModeUnset verifies the accessor reports absence when the session
+// never set sql_mode.
+func TestSQLModeUnset(t *testing.T) {
+	session := NewSafeSession(&vtgatepb.Session{})
+	_, ok := session.SQLMode()
+	assert.False(t, ok)
+}

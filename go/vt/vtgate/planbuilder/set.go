@@ -55,6 +55,7 @@ func buildSetPlan(stmt *sqlparser.Set, vschema plancontext.VSchema) (*planResult
 	ec := &expressionConverter{
 		env:       vschema.Environment(),
 		collation: vschema.ConnCollation(),
+		sqlMode:   evalengine.ParseSQLMode(vschema.SQLMode()),
 	}
 
 	for _, expr := range stmt.Exprs {
