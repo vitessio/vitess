@@ -142,7 +142,62 @@
   {
     "comment": "set with DEFAULT - reserved connection",
     "query": "set sql_mode = default",
-    "plan": "VT12001: unsupported: DEFAULT for @@%s%!(EXTRA sqlparser.IdentifierCI=sql_mode)"
+    "plan": "VT12001: unsupported: DEFAULT for @@sql_mode"
+  },
+  {
+    "comment": "set sql_mode to a mode the Vitess parser does not support",
+    "query": "set sql_mode = 'NO_BACKSLASH_ESCAPES'",
+    "plan": "setting the NO_BACKSLASH_ESCAPES sql_mode is unsupported"
+  },
+  {
+    "comment": "unsupported sql_mode is rejected regardless of case and position in the list",
+    "query": "set sql_mode = 'STRICT_TRANS_TABLES,no_backslash_escapes'",
+    "plan": "setting the NO_BACKSLASH_ESCAPES sql_mode is unsupported"
+  },
+  {
+    "comment": "ANSI is a combination mode that enables ANSI_QUOTES, PIPES_AS_CONCAT and REAL_AS_FLOAT",
+    "query": "set sql_mode = 'ANSI'",
+    "plan": "setting the ANSI sql_mode is unsupported"
+  },
+  {
+    "comment": "numeric sql_mode with the NO_BACKSLASH_ESCAPES bit set",
+    "query": "set sql_mode = 1048576",
+    "plan": "setting the NO_BACKSLASH_ESCAPES sql_mode is unsupported"
+  },
+  {
+    "comment": "numeric sql_mode with the ANSI combination mode bit set",
+    "query": "set sql_mode = 262144",
+    "plan": "setting the ANSI sql_mode is unsupported"
+  },
+  {
+    "comment": "constant sql_mode expression is folded and validated at planning time",
+    "query": "set sql_mode = concat('NO_BACKSLASH', '_ESCAPES')",
+    "plan": "setting the NO_BACKSLASH_ESCAPES sql_mode is unsupported"
+  },
+  {
+    "comment": "unsupported sql_mode with explicit session scope",
+    "query": "set @@session.sql_mode = 'PIPES_AS_CONCAT'",
+    "plan": "setting the PIPES_AS_CONCAT sql_mode is unsupported"
+  },
+  {
+    "comment": "unknown sql_mode name is rejected the way MySQL rejects it",
+    "query": "set sql_mode = 'BOGUS'",
+    "plan": "Variable 'sql_mode' can't be set to the value of 'BOGUS'"
+  },
+  {
+    "comment": "sql_mode removed in MySQL 8.0 is rejected the way MySQL rejects it",
+    "query": "set sql_mode = 'NO_AUTO_CREATE_USER'",
+    "plan": "Variable 'sql_mode' can't be set to the value of 'NO_AUTO_CREATE_USER'"
+  },
+  {
+    "comment": "numeric sql_mode with a bit removed in MySQL 8.0",
+    "query": "set sql_mode = 256",
+    "plan": "sql_mode=0x00000100 is not supported."
+  },
+  {
+    "comment": "numeric sql_mode beyond the valid bitmask range",
+    "query": "set sql_mode = 8589934592",
+    "plan": "Variable 'sql_mode' can't be set to the value of '8589934592'"
   },
   {
     "comment": "Multi shard query using into outfile s3",
@@ -443,30 +498,5 @@
     "comment": "window function in derived table on scatter route",
     "query": "select * from (select rank() over (partition by col) as r from user) as t",
     "plan": "VT12001: unsupported: window functions are only supported for single-shard queries"
-  },
-  {
-    "comment": "sql_mode with a mode the parser does not support is rejected at plan time",
-    "query": "set sql_mode = 'ANSI_QUOTES'",
-    "plan": "setting the ANSI_QUOTES sql_mode is unsupported"
-  },
-  {
-    "comment": "constant sql_mode expressions are folded and validated at plan time",
-    "query": "set sql_mode = concat('AN', 'SI')",
-    "plan": "setting the ANSI sql_mode is unsupported"
-  },
-  {
-    "comment": "numeric sql_mode values decode against MySQL's bitmask",
-    "query": "set sql_mode = 1048576",
-    "plan": "setting the NO_BACKSLASH_ESCAPES sql_mode is unsupported"
-  },
-  {
-    "comment": "sql_mode names the parser does not honor are rejected",
-    "query": "set sql_mode = 'HIGH_NOT_PRECEDENCE'",
-    "plan": "setting the HIGH_NOT_PRECEDENCE sql_mode is unsupported"
-  },
-  {
-    "comment": "unknown sql_mode names fail with MySQL's error",
-    "query": "set sql_mode = 'BOGUS'",
-    "plan": "Variable 'sql_mode' can't be set to the value of 'BOGUS'"
   }
 ]

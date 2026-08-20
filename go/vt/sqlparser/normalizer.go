@@ -239,8 +239,16 @@ func (nz *normalizer) noteAliasedExprName(node *AliasedExpr) {
 // walkUp processes nodes when traversing up the AST.
 // It finalizes normalization logic based on node types.
 func (nz *normalizer) walkUp(cursor *Cursor) bool {
-	// Add SET_VAR comments if applicable.
-	if stmt, supports := cursor.Node().(SupportOptimizerHint); supports {
+	// Add SET_VAR comments if applicable. MySQL only honors SET_VAR in the top-level
+	// statement comment, so nested statements (subqueries, derived tables) are skipped.
+	// The statement wrapped by an EXPLAIN or VEXPLAIN is hinted, since it is the
+	// statement the backend will run.
+	var isRoot bool
+	switch cursor.Parent().(type) {
+	case *RootNode, *VExplainStmt, *ExplainStmt:
+		isRoot = true
+	}
+	if stmt, supports := cursor.Node().(SupportOptimizerHint); supports && isRoot {
 		if nz.setVarComment != "" {
 			newComments, err := stmt.GetParsedComments().AddQueryHint(nz.setVarComment)
 			if err != nil {
@@ -688,9 +696,22 @@ func (nz *normalizer) rewriteVariable(cursor *Cursor, node *Variable) {
 	switch node.Scope {
 	case VariableScope:
 		nz.udvRewrite(cursor, node)
+	case GlobalScope:
+		nz.globalSysVarRewrite(cursor, node)
 	case SessionScope, NextTxScope, NoScope:
 		nz.sysVarRewrite(cursor, node)
 	}
+}
+
+// globalSysVarRewrite replaces global system variables that the vtgate itself owns with
+// bind variables. The global sql_mode is the vtgate's configured default sql_mode; it is
+// never read from a backend.
+func (nz *normalizer) globalSysVarRewrite(cursor *Cursor, node *Variable) {
+	if node.Name.Lowered() != sysvars.SQLMode.Name {
+		return
+	}
+	cursor.Replace(NewArgument("__vt" + sysvars.GlobalSQLMode))
+	nz.bindVarNeeds.AddSysVar(sysvars.GlobalSQLMode)
 }
 
 // inverseOp returns the inverse operator for a given comparison operator.
@@ -748,6 +769,7 @@ func (nz *normalizer) sysVarRewrite(cursor *Cursor, node *Variable) {
 		sysvars.SessionUUID.Name,
 		sysvars.SkipQueryPlanCache.Name,
 		sysvars.Socket.Name,
+		sysvars.SQLMode.Name,
 		sysvars.SQLSelectLimit.Name,
 		sysvars.Version.Name,
 		sysvars.VersionComment.Name,

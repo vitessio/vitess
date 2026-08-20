@@ -116,21 +116,61 @@
     "comment": "single sysvar cases",
     "query": "SET sql_mode = 'STRICT_ALL_TABLES,NO_AUTO_VALUE_ON_ZERO'",
     "plan": {
-      "Type": "MultiShard",
+      "Type": "Local",
       "QueryType": "SET",
       "Original": "SET sql_mode = 'STRICT_ALL_TABLES,NO_AUTO_VALUE_ON_ZERO'",
       "Instructions": {
         "OperatorType": "Set",
         "Ops": [
           {
-            "Type": "SysVarSet",
-            "Name": "sql_mode",
-            "Keyspace": {
-              "Name": "main",
-              "Sharded": false
-            },
-            "Expr": "'STRICT_ALL_TABLES,NO_AUTO_VALUE_ON_ZERO'",
-            "SupportSetVar": true
+            "Type": "SysVarSQLMode",
+            "Expr": "'STRICT_ALL_TABLES,NO_AUTO_VALUE_ON_ZERO'"
+          }
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "SingleRow"
+          }
+        ]
+      }
+    }
+  },
+  {
+    "comment": "constant sql_mode expression is folded at planning time",
+    "query": "SET sql_mode = CONCAT('STRICT_TRANS_TABLES', ',NO_ZERO_DATE')",
+    "plan": {
+      "Type": "Local",
+      "QueryType": "SET",
+      "Original": "SET sql_mode = CONCAT('STRICT_TRANS_TABLES', ',NO_ZERO_DATE')",
+      "Instructions": {
+        "OperatorType": "Set",
+        "Ops": [
+          {
+            "Type": "SysVarSQLMode",
+            "Expr": "'STRICT_TRANS_TABLES,NO_ZERO_DATE'"
+          }
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "SingleRow"
+          }
+        ]
+      }
+    }
+  },
+  {
+    "comment": "numeric sql_mode without unsupported bits is allowed",
+    "query": "SET sql_mode = 2097152",
+    "plan": {
+      "Type": "Local",
+      "QueryType": "SET",
+      "Original": "SET sql_mode = 2097152",
+      "Instructions": {
+        "OperatorType": "Set",
+        "Ops": [
+          {
+            "Type": "SysVarSQLMode",
+            "Expr": "2097152"
           }
         ],
         "Inputs": [
@@ -152,14 +192,8 @@
         "OperatorType": "Set",
         "Ops": [
           {
-            "Type": "SysVarSet",
-            "Name": "sql_mode",
-            "Keyspace": {
-              "Name": "main",
-              "Sharded": false
-            },
-            "Expr": "CONCAT(CONCAT(@@sql_mode, ',STRICT_ALL_TABLES'), ',NO_AUTO_VALUE_ON_ZERO')",
-            "SupportSetVar": true
+            "Type": "SysVarSQLMode",
+            "Expr": "concat(concat(:__vtsql_mode, ',STRICT_ALL_TABLES'), ',NO_AUTO_VALUE_ON_ZERO')"
           },
           {
             "Type": "SysVarSet",
@@ -257,21 +291,15 @@
     "comment": "set check and ignore plan",
     "query": "set @@sql_mode = concat(@@sql_mode, ',NO_AUTO_CREATE_USER')",
     "plan": {
-      "Type": "MultiShard",
+      "Type": "Local",
       "QueryType": "SET",
       "Original": "set @@sql_mode = concat(@@sql_mode, ',NO_AUTO_CREATE_USER')",
       "Instructions": {
         "OperatorType": "Set",
         "Ops": [
           {
-            "Type": "SysVarSet",
-            "Name": "sql_mode",
-            "Keyspace": {
-              "Name": "main",
-              "Sharded": false
-            },
-            "Expr": "concat(@@sql_mode, ',NO_AUTO_CREATE_USER')",
-            "SupportSetVar": true
+            "Type": "SysVarSQLMode",
+            "Expr": "concat(:__vtsql_mode, ',NO_AUTO_CREATE_USER')"
           }
         ],
         "Inputs": [

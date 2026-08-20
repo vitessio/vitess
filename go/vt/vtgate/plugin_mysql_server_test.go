@@ -1932,7 +1932,7 @@ func TestComQueryIngressBytes(t *testing.T) {
 	case sentStats := <-subscriber:
 		require.NotNil(t, sentStats)
 		assert.Equal(t, uint64(mysql.PacketHeaderSize+1+len(query)), sentStats.IngressBytes)
-		assert.Equal(t, "select id from `user` where id = :id /* INT64 */", sentStats.SQL)
+		assert.Equal(t, "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ id from `user` where id = :id /* INT64 */", sentStats.SQL)
 	case <-time.After(30 * time.Second):
 		require.FailNow(t, "LogStats should have been sent to queryLogger")
 	}

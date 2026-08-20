@@ -122,10 +122,10 @@ func TestSystemVariables(t *testing.T) {
 		expectation string
 		comment     string
 	}{
-		{name: "sql_mode", value: "'only_full_group_by'", expectation: `[[VARCHAR("only_full_group_by")]]`},
-		{name: "sql_mode", value: "' '", expectation: `[[VARCHAR(" ")]]`},
-		{name: "sql_mode", value: "'only_full_group_by'", expectation: `[[VARCHAR("only_full_group_by")]]`, comment: "/* comment */"},
-		{name: "sql_mode", value: "' '", expectation: `[[VARCHAR(" ")]]`, comment: "/* comment */"},
+		{name: "sql_mode", value: "'only_full_group_by'", expectation: `[[VARCHAR("ONLY_FULL_GROUP_BY")]]`},
+		{name: "sql_mode", value: "' '", expectation: `[[VARCHAR("")]]`},
+		{name: "sql_mode", value: "'only_full_group_by'", expectation: `[[VARCHAR("ONLY_FULL_GROUP_BY")]]`, comment: "/* comment */"},
+		{name: "sql_mode", value: "' '", expectation: `[[VARCHAR("")]]`, comment: "/* comment */"},
 	}
 
 	for _, tc := range tcs {
@@ -145,12 +145,12 @@ func TestUseSystemAndUserVariables(t *testing.T) {
 	utils.Exec(t, conn, "select 1 from information_schema.table_constraints")
 
 	utils.Exec(t, conn, "set @var = @@sql_mode")
-	utils.AssertMatches(t, conn, "select @var", `[[VARCHAR("only_full_group_by,strict_trans_tables")]]`)
+	utils.AssertMatches(t, conn, "select @var", `[[VARCHAR("ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES")]]`)
 
 	utils.Exec(t, conn, "create table t(name varchar(100))")
 	utils.Exec(t, conn, "insert into t(name) values (@var)")
 
-	utils.AssertMatches(t, conn, "select name from t", `[[VARCHAR("only_full_group_by,strict_trans_tables")]]`)
+	utils.AssertMatches(t, conn, "select name from t", `[[VARCHAR("ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES")]]`)
 
 	utils.Exec(t, conn, "delete from t where name = @var")
 	utils.AssertMatches(t, conn, "select name from t", `[]`)

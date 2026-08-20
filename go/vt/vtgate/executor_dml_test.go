@@ -52,18 +52,18 @@ func TestUpdateEqual(t *testing.T) {
 	_, err := executorExec(ctx, executor, session, "update user set a=2 where id = 1", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "update `user` set a = 2 where id = 1",
+		Sql:           "update /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ `user` set a = 2 where id = 1",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	assertQueries(t, sbc1, wantQueries)
 	assertQueries(t, sbc2, nil)
-	testQueryLog(t, executor, logChan, "TestExecute", "UPDATE", "update `user` set a = 2 where id = 1", 1)
+	testQueryLog(t, executor, logChan, "TestExecute", "UPDATE", "update /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ `user` set a = 2 where id = 1", 1)
 
 	sbc1.Queries = nil
 	_, err = executorExec(ctx, executor, session, "update user set a=2 where id = 3", nil)
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
-		Sql:           "update `user` set a = 2 where id = 3",
+		Sql:           "update /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ `user` set a = 2 where id = 3",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	assertQueries(t, sbc2, wantQueries)
@@ -78,7 +78,7 @@ func TestUpdateEqual(t *testing.T) {
 	vars, err := sqltypes.BuildBindVariable([]any{sqltypes.NewInt64(2)})
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
-		Sql: "select music_id, user_id from music_user_map where music_id in ::music_id for update",
+		Sql: "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ music_id, user_id from music_user_map where music_id in ::music_id for update",
 		BindVariables: map[string]*querypb.BindVariable{
 			"music_id": vars,
 		},
@@ -106,7 +106,7 @@ func TestUpdateEqual(t *testing.T) {
 			BindVariables: map[string]*querypb.BindVariable{},
 		},
 		{
-			Sql:           "update user2 set `name` = 'myname', lastname = 'mylastname' where id = 1",
+			Sql:           "update /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ user2 set `name` = 'myname', lastname = 'mylastname' where id = 1",
 			BindVariables: map[string]*querypb.BindVariable{},
 		},
 	}
@@ -115,7 +115,7 @@ func TestUpdateEqual(t *testing.T) {
 
 	wantQueries = []*querypb.BoundQuery{
 		{
-			Sql: "delete from name_lastname_keyspace_id_map where `name` = :name and lastname = :lastname and keyspace_id = :keyspace_id",
+			Sql: "delete /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ from name_lastname_keyspace_id_map where `name` = :name and lastname = :lastname and keyspace_id = :keyspace_id",
 			BindVariables: map[string]*querypb.BindVariable{
 				"lastname":    sqltypes.StringBindVariable("foo"),
 				"name":        sqltypes.Int32BindVariable(1),
@@ -123,7 +123,7 @@ func TestUpdateEqual(t *testing.T) {
 			},
 		},
 		{
-			Sql: "insert into name_lastname_keyspace_id_map(`name`, lastname, keyspace_id) values (:name_0, :lastname_0, :keyspace_id_0)",
+			Sql: "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into name_lastname_keyspace_id_map(`name`, lastname, keyspace_id) values (:name_0, :lastname_0, :keyspace_id_0)",
 			BindVariables: map[string]*querypb.BindVariable{
 				"name_0":        sqltypes.StringBindVariable("myname"),
 				"lastname_0":    sqltypes.StringBindVariable("mylastname"),
@@ -158,18 +158,18 @@ func TestUpdateFromSubQuery(t *testing.T) {
 	_, err := executorExec(ctx, executor, session, "update user set a=(select count(*) from user where id = 3) where id = 1", nil)
 	require.NoError(t, err)
 	wantQueriesSbc1 := []*querypb.BoundQuery{{
-		Sql: "update `user` set a = :__sq1 where id = 1",
+		Sql: "update /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ `user` set a = :__sq1 where id = 1",
 		BindVariables: map[string]*querypb.BindVariable{
 			"__sq1": sqltypes.Int64BindVariable(4),
 		},
 	}}
 	wantQueriesSbc2 := []*querypb.BoundQuery{{
-		Sql:           "select count(*) from `user` where id = 3 lock in share mode",
+		Sql:           "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ count(*) from `user` where id = 3 lock in share mode",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	assertQueries(t, sbc1, wantQueriesSbc1)
 	assertQueries(t, sbc2, wantQueriesSbc2)
-	testQueryLog(t, executor, logChan, "TestExecute", "UPDATE", "update `user` set a = (select count(*) from `user` where id = 3) where id = 1", 2)
+	testQueryLog(t, executor, logChan, "TestExecute", "UPDATE", "update /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ `user` set a = (select count(*) from `user` where id = 3) where id = 1", 2)
 }
 
 func TestUpdateEqualWithNoVerifyAndWriteOnlyLookupUniqueVindexes(t *testing.T) {
@@ -192,7 +192,7 @@ func TestUpdateEqualWithNoVerifyAndWriteOnlyLookupUniqueVindexes(t *testing.T) {
 			Sql:           "select id, wo_lu_col, erl_lu_col, srl_lu_col, nrl_lu_col, nv_lu_col, lu_col, lu_col = 5 from t2_lookup where wo_lu_col = 2 for update",
 			BindVariables: map[string]*querypb.BindVariable{},
 		}, {
-			Sql:           "update t2_lookup set lu_col = 5 where wo_lu_col = 2",
+			Sql:           "update /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ t2_lookup set lu_col = 5 where wo_lu_col = 2",
 			BindVariables: map[string]*querypb.BindVariable{},
 		},
 	}
@@ -201,14 +201,14 @@ func TestUpdateEqualWithNoVerifyAndWriteOnlyLookupUniqueVindexes(t *testing.T) {
 	assertQueries(t, sbc2, wantQueries)
 
 	bq1 := &querypb.BoundQuery{
-		Sql: "delete from lu_idx where lu_col = :lu_col and keyspace_id = :keyspace_id",
+		Sql: "delete /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ from lu_idx where lu_col = :lu_col and keyspace_id = :keyspace_id",
 		BindVariables: map[string]*querypb.BindVariable{
 			"keyspace_id": sqltypes.Uint64BindVariable(1),
 			"lu_col":      sqltypes.Int64BindVariable(1),
 		},
 	}
 	bq2 := &querypb.BoundQuery{
-		Sql: "insert into lu_idx(lu_col, keyspace_id) values (:lu_col_0, :keyspace_id_0)",
+		Sql: "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into lu_idx(lu_col, keyspace_id) values (:lu_col_0, :keyspace_id_0)",
 		BindVariables: map[string]*querypb.BindVariable{
 			"keyspace_id_0": sqltypes.Uint64BindVariable(1),
 			"lu_col_0":      sqltypes.Int64BindVariable(5),
@@ -263,13 +263,13 @@ func TestUpdateInTransactionLookupDefaultReadLock(t *testing.T) {
 		sqltypes.NewInt64(2),
 	})
 	bq1 := &querypb.BoundQuery{
-		Sql: "select nv_lu_col, keyspace_id from nv_lu_idx where nv_lu_col in ::nv_lu_col for update",
+		Sql: "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ nv_lu_col, keyspace_id from nv_lu_idx where nv_lu_col in ::nv_lu_col for update",
 		BindVariables: map[string]*querypb.BindVariable{
 			"nv_lu_col": vars,
 		},
 	}
 	bq2 := &querypb.BoundQuery{
-		Sql: "insert into lu_idx(lu_col, keyspace_id) values (:lu_col_0, :keyspace_id_0)",
+		Sql: "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into lu_idx(lu_col, keyspace_id) values (:lu_col_0, :keyspace_id_0)",
 		BindVariables: map[string]*querypb.BindVariable{
 			"keyspace_id_0": sqltypes.Uint64BindVariable(1),
 			"lu_col_0":      sqltypes.Int64BindVariable(5),
@@ -325,13 +325,13 @@ func TestUpdateInTransactionLookupExclusiveReadLock(t *testing.T) {
 		sqltypes.NewInt64(2),
 	})
 	bq1 := &querypb.BoundQuery{
-		Sql: "select erl_lu_col, keyspace_id from erl_lu_idx where erl_lu_col in ::erl_lu_col for update",
+		Sql: "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ erl_lu_col, keyspace_id from erl_lu_idx where erl_lu_col in ::erl_lu_col for update",
 		BindVariables: map[string]*querypb.BindVariable{
 			"erl_lu_col": vars,
 		},
 	}
 	bq2 := &querypb.BoundQuery{
-		Sql: "insert into lu_idx(lu_col, keyspace_id) values (:lu_col_0, :keyspace_id_0)",
+		Sql: "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into lu_idx(lu_col, keyspace_id) values (:lu_col_0, :keyspace_id_0)",
 		BindVariables: map[string]*querypb.BindVariable{
 			"keyspace_id_0": sqltypes.Uint64BindVariable(1),
 			"lu_col_0":      sqltypes.Int64BindVariable(5),
@@ -387,13 +387,13 @@ func TestUpdateInTransactionLookupSharedReadLock(t *testing.T) {
 		sqltypes.NewInt64(2),
 	})
 	bq1 := &querypb.BoundQuery{
-		Sql: "select srl_lu_col, keyspace_id from srl_lu_idx where srl_lu_col in ::srl_lu_col lock in share mode",
+		Sql: "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ srl_lu_col, keyspace_id from srl_lu_idx where srl_lu_col in ::srl_lu_col lock in share mode",
 		BindVariables: map[string]*querypb.BindVariable{
 			"srl_lu_col": vars,
 		},
 	}
 	bq2 := &querypb.BoundQuery{
-		Sql: "insert into lu_idx(lu_col, keyspace_id) values (:lu_col_0, :keyspace_id_0)",
+		Sql: "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into lu_idx(lu_col, keyspace_id) values (:lu_col_0, :keyspace_id_0)",
 		BindVariables: map[string]*querypb.BindVariable{
 			"keyspace_id_0": sqltypes.Uint64BindVariable(1),
 			"lu_col_0":      sqltypes.Int64BindVariable(5),
@@ -449,13 +449,13 @@ func TestUpdateInTransactionLookupNoReadLock(t *testing.T) {
 		sqltypes.NewInt64(2),
 	})
 	bq1 := &querypb.BoundQuery{
-		Sql: "select nrl_lu_col, keyspace_id from nrl_lu_idx where nrl_lu_col in ::nrl_lu_col",
+		Sql: "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ nrl_lu_col, keyspace_id from nrl_lu_idx where nrl_lu_col in ::nrl_lu_col",
 		BindVariables: map[string]*querypb.BindVariable{
 			"nrl_lu_col": vars,
 		},
 	}
 	bq2 := &querypb.BoundQuery{
-		Sql: "insert into lu_idx(lu_col, keyspace_id) values (:lu_col_0, :keyspace_id_0)",
+		Sql: "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into lu_idx(lu_col, keyspace_id) values (:lu_col_0, :keyspace_id_0)",
 		BindVariables: map[string]*querypb.BindVariable{
 			"keyspace_id_0": sqltypes.Uint64BindVariable(1),
 			"lu_col_0":      sqltypes.Int64BindVariable(5),
@@ -552,35 +552,35 @@ func TestUpdateMultiOwned(t *testing.T) {
 		Sql:           "select id, a, b, c, d, e, f, a = 1 and b = 2, e = 3 and f = 4 from `user` where id = 1 for update",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}, {
-		Sql:           "update `user` set a = 1, b = 2, f = 4, e = 3 where id = 1",
+		Sql:           "update /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ `user` set a = 1, b = 2, f = 4, e = 3 where id = 1",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	assertQueries(t, sbc1, wantQueries)
 	assertQueries(t, sbc2, nil)
 
 	wantQueries = []*querypb.BoundQuery{{
-		Sql: "delete from music_user_map where from1 = :from1 and from2 = :from2 and user_id = :user_id",
+		Sql: "delete /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ from music_user_map where from1 = :from1 and from2 = :from2 and user_id = :user_id",
 		BindVariables: map[string]*querypb.BindVariable{
 			"from1":   sqltypes.Int64BindVariable(10),
 			"from2":   sqltypes.Int64BindVariable(20),
 			"user_id": sqltypes.Uint64BindVariable(1),
 		},
 	}, {
-		Sql: "insert into music_user_map(from1, from2, user_id) values (:from1_0, :from2_0, :user_id_0)",
+		Sql: "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into music_user_map(from1, from2, user_id) values (:from1_0, :from2_0, :user_id_0)",
 		BindVariables: map[string]*querypb.BindVariable{
 			"from1_0":   sqltypes.Int64BindVariable(1),
 			"from2_0":   sqltypes.Int64BindVariable(2),
 			"user_id_0": sqltypes.Uint64BindVariable(1),
 		},
 	}, {
-		Sql: "delete from music_user_map where from1 = :from1 and from2 = :from2 and user_id = :user_id",
+		Sql: "delete /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ from music_user_map where from1 = :from1 and from2 = :from2 and user_id = :user_id",
 		BindVariables: map[string]*querypb.BindVariable{
 			"from1":   sqltypes.Int64BindVariable(50),
 			"from2":   sqltypes.Int64BindVariable(60),
 			"user_id": sqltypes.Uint64BindVariable(1),
 		},
 	}, {
-		Sql: "insert into music_user_map(from1, from2, user_id) values (:from1_0, :from2_0, :user_id_0)",
+		Sql: "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into music_user_map(from1, from2, user_id) values (:from1_0, :from2_0, :user_id_0)",
 		BindVariables: map[string]*querypb.BindVariable{
 			"from1_0":   sqltypes.Int64BindVariable(3),
 			"from2_0":   sqltypes.Int64BindVariable(4),
@@ -600,7 +600,7 @@ func TestUpdateComments(t *testing.T) {
 	_, err := executorExec(ctx, executor, session, "update user set a=2 where id = 1 /* trailing */", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "update `user` set a = 2 where id = 1 /* trailing */",
+		Sql:           "update /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ `user` set a = 2 where id = 1 /* trailing */",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	assertQueries(t, sbc1, wantQueries)
@@ -616,7 +616,7 @@ func TestUpdateNormalize(t *testing.T) {
 	_, err := executorExec(ctx, executor, session, "/* leading */ update user set a=2 where id = 1 /* trailing */", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
-		Sql: "/* leading */ update `user` set a = :a /* INT64 */ where id = :id /* INT64 */ /* trailing */",
+		Sql: "/* leading */ update /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ `user` set a = :a /* INT64 */ where id = :id /* INT64 */ /* trailing */",
 		BindVariables: map[string]*querypb.BindVariable{
 			"a":  sqltypes.TestBindVariable(int64(2)),
 			"id": sqltypes.TestBindVariable(int64(1)),
@@ -631,7 +631,7 @@ func TestUpdateNormalize(t *testing.T) {
 	_, err = executorExec(ctx, executor, session, "/* leading */ update user set a=2 where id = 1 /* trailing */", nil)
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
-		Sql: "/* leading */ update `user` set a = :a /* INT64 */ where id = :id /* INT64 */ /* trailing */",
+		Sql: "/* leading */ update /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ `user` set a = :a /* INT64 */ where id = :id /* INT64 */ /* trailing */",
 		BindVariables: map[string]*querypb.BindVariable{
 			"a":  sqltypes.TestBindVariable(int64(2)),
 			"id": sqltypes.TestBindVariable(int64(1)),
@@ -666,13 +666,13 @@ func TestDeleteEqual(t *testing.T) {
 		Sql:           "select Id, `name` from `user` where id = 1 for update",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}, {
-		Sql:           "delete from `user` where id = 1",
+		Sql:           "delete /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ from `user` where id = 1",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	assertQueries(t, sbc, wantQueries)
 
 	wantQueries = []*querypb.BoundQuery{{
-		Sql: "delete from name_user_map where `name` = :name and user_id = :user_id",
+		Sql: "delete /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ from name_user_map where `name` = :name and user_id = :user_id",
 		BindVariables: map[string]*querypb.BindVariable{
 			"user_id": sqltypes.Uint64BindVariable(1),
 			"name":    sqltypes.ValueBindVariable(sqltypes.NewVarChar("myname")),
@@ -689,7 +689,7 @@ func TestDeleteEqual(t *testing.T) {
 		Sql:           "select Id, `name` from `user` where id = 1 for update",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}, {
-		Sql:           "delete from `user` where id = 1",
+		Sql:           "delete /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ from `user` where id = 1",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	assertQueries(t, sbc, wantQueries)
@@ -703,7 +703,7 @@ func TestDeleteEqual(t *testing.T) {
 	vars, err := sqltypes.BuildBindVariable([]any{sqltypes.NewInt64(1)})
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
-		Sql: "select music_id, user_id from music_user_map where music_id in ::music_id for update",
+		Sql: "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ music_id, user_id from music_user_map where music_id in ::music_id for update",
 		BindVariables: map[string]*querypb.BindVariable{
 			"music_id": vars,
 		},
@@ -717,7 +717,7 @@ func TestDeleteEqual(t *testing.T) {
 	_, err = executorExec(ctx, executor, session, "delete from user_extra where user_id = 1", nil)
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
-		Sql:           "delete from user_extra where user_id = 1",
+		Sql:           "delete /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ from user_extra where user_id = 1",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	assertQueries(t, sbc, wantQueries)
@@ -739,7 +739,7 @@ func TestDeleteEqual(t *testing.T) {
 			BindVariables: map[string]*querypb.BindVariable{},
 		},
 		{
-			Sql:           "delete from user2 where id = 1",
+			Sql:           "delete /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ from user2 where id = 1",
 			BindVariables: map[string]*querypb.BindVariable{},
 		},
 	}
@@ -747,7 +747,7 @@ func TestDeleteEqual(t *testing.T) {
 
 	wantQueries = []*querypb.BoundQuery{
 		{
-			Sql: "delete from name_lastname_keyspace_id_map where `name` = :name and lastname = :lastname and keyspace_id = :keyspace_id",
+			Sql: "delete /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ from name_lastname_keyspace_id_map where `name` = :name and lastname = :lastname and keyspace_id = :keyspace_id",
 			BindVariables: map[string]*querypb.BindVariable{
 				"lastname":    sqltypes.ValueBindVariable(sqltypes.NewVarChar("foo")),
 				"name":        sqltypes.Int32BindVariable(1),
@@ -769,7 +769,7 @@ func TestUpdateScatter(t *testing.T) {
 	require.NoError(t, err)
 	// Queries get annotatted.
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "update user_extra set col = 2",
+		Sql:           "update /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ user_extra set col = 2",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	assertQueries(t, sbc1, wantQueries)
@@ -786,7 +786,7 @@ func TestDeleteScatter(t *testing.T) {
 	require.NoError(t, err)
 	// Queries get annotatted.
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "delete from user_extra",
+		Sql:           "delete /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ from user_extra",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	assertQueries(t, sbc1, wantQueries)
@@ -819,7 +819,7 @@ func TestUpdateEqualWithMultipleLookupVindex(t *testing.T) {
 			Sql:           "select id, wo_lu_col, erl_lu_col, srl_lu_col, nrl_lu_col, nv_lu_col, lu_col, lu_col = 5 from t2_lookup where wo_lu_col = 2 and lu_col = 1 for update",
 			BindVariables: map[string]*querypb.BindVariable{},
 		}, {
-			Sql:           "update t2_lookup set lu_col = 5 where wo_lu_col = 2 and lu_col = 1",
+			Sql:           "update /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ t2_lookup set lu_col = 5 where wo_lu_col = 2 and lu_col = 1",
 			BindVariables: map[string]*querypb.BindVariable{},
 		},
 	}
@@ -828,18 +828,18 @@ func TestUpdateEqualWithMultipleLookupVindex(t *testing.T) {
 		sqltypes.NewInt64(1),
 	})
 	lookWant := []*querypb.BoundQuery{{
-		Sql: "select lu_col, keyspace_id from lu_idx where lu_col in ::lu_col for update",
+		Sql: "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ lu_col, keyspace_id from lu_idx where lu_col in ::lu_col for update",
 		BindVariables: map[string]*querypb.BindVariable{
 			"lu_col": vars,
 		},
 	}, {
-		Sql: "delete from lu_idx where lu_col = :lu_col and keyspace_id = :keyspace_id",
+		Sql: "delete /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ from lu_idx where lu_col = :lu_col and keyspace_id = :keyspace_id",
 		BindVariables: map[string]*querypb.BindVariable{
 			"keyspace_id": sqltypes.Uint64BindVariable(1),
 			"lu_col":      sqltypes.Int64BindVariable(1),
 		},
 	}, {
-		Sql: "insert into lu_idx(lu_col, keyspace_id) values (:lu_col_0, :keyspace_id_0)",
+		Sql: "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into lu_idx(lu_col, keyspace_id) values (:lu_col_0, :keyspace_id_0)",
 		BindVariables: map[string]*querypb.BindVariable{
 			"keyspace_id_0": sqltypes.Uint64BindVariable(1),
 			"lu_col_0":      sqltypes.Int64BindVariable(5),
@@ -878,7 +878,7 @@ func TestUpdateUseHigherCostVindexIfBackfilling(t *testing.T) {
 			Sql:           "select id, wo_lu_col, erl_lu_col, srl_lu_col, nrl_lu_col, nv_lu_col, lu_col, lu_col = 5 from t2_lookup where wo_lu_col = 2 and lu_col in (1, 2) for update",
 			BindVariables: map[string]*querypb.BindVariable{},
 		}, {
-			Sql: "update t2_lookup set lu_col = 5 where wo_lu_col = 2 and lu_col in ::__vals",
+			Sql: "update /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ t2_lookup set lu_col = 5 where wo_lu_col = 2 and lu_col in ::__vals",
 			BindVariables: map[string]*querypb.BindVariable{
 				"__vals": sqltypes.TestBindVariable([]any{int64(1), int64(2)}),
 			},
@@ -890,30 +890,30 @@ func TestUpdateUseHigherCostVindexIfBackfilling(t *testing.T) {
 		sqltypes.NewInt64(2),
 	})
 	lookWant := []*querypb.BoundQuery{{
-		Sql: "select lu_col, keyspace_id from lu_idx where lu_col in ::lu_col for update",
+		Sql: "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ lu_col, keyspace_id from lu_idx where lu_col in ::lu_col for update",
 		BindVariables: map[string]*querypb.BindVariable{
 			"lu_col": vars,
 		},
 	}, {
-		Sql: "delete from lu_idx where lu_col = :lu_col and keyspace_id = :keyspace_id",
+		Sql: "delete /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ from lu_idx where lu_col = :lu_col and keyspace_id = :keyspace_id",
 		BindVariables: map[string]*querypb.BindVariable{
 			"keyspace_id": sqltypes.Uint64BindVariable(1),
 			"lu_col":      sqltypes.Int64BindVariable(1),
 		},
 	}, {
-		Sql: "insert into lu_idx(lu_col, keyspace_id) values (:lu_col_0, :keyspace_id_0)",
+		Sql: "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into lu_idx(lu_col, keyspace_id) values (:lu_col_0, :keyspace_id_0)",
 		BindVariables: map[string]*querypb.BindVariable{
 			"keyspace_id_0": sqltypes.Uint64BindVariable(1),
 			"lu_col_0":      sqltypes.Int64BindVariable(5),
 		},
 	}, {
-		Sql: "delete from lu_idx where lu_col = :lu_col and keyspace_id = :keyspace_id",
+		Sql: "delete /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ from lu_idx where lu_col = :lu_col and keyspace_id = :keyspace_id",
 		BindVariables: map[string]*querypb.BindVariable{
 			"keyspace_id": sqltypes.Uint64BindVariable(1),
 			"lu_col":      sqltypes.Int64BindVariable(2),
 		},
 	}, {
-		Sql: "insert into lu_idx(lu_col, keyspace_id) values (:lu_col_0, :keyspace_id_0)",
+		Sql: "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into lu_idx(lu_col, keyspace_id) values (:lu_col_0, :keyspace_id_0)",
 		BindVariables: map[string]*querypb.BindVariable{
 			"keyspace_id_0": sqltypes.Uint64BindVariable(1),
 			"lu_col_0":      sqltypes.Int64BindVariable(5),
@@ -944,48 +944,48 @@ func TestDeleteEqualWithNoVerifyAndWriteOnlyLookupUniqueVindex(t *testing.T) {
 			Sql:           "select id, wo_lu_col, erl_lu_col, srl_lu_col, nrl_lu_col, nv_lu_col, lu_col from t2_lookup where wo_lu_col = 1 for update",
 			BindVariables: map[string]*querypb.BindVariable{},
 		}, {
-			Sql:           "delete from t2_lookup where wo_lu_col = 1",
+			Sql:           "delete /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ from t2_lookup where wo_lu_col = 1",
 			BindVariables: map[string]*querypb.BindVariable{},
 		},
 	}
 
 	bq1 := &querypb.BoundQuery{
-		Sql: "delete from wo_lu_idx where wo_lu_col = :wo_lu_col and keyspace_id = :keyspace_id",
+		Sql: "delete /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ from wo_lu_idx where wo_lu_col = :wo_lu_col and keyspace_id = :keyspace_id",
 		BindVariables: map[string]*querypb.BindVariable{
 			"keyspace_id": {Type: querypb.Type_VARBINARY, Value: []byte("\x16k@\xb4J\xbaK\xd6")},
 			"wo_lu_col":   sqltypes.Int64BindVariable(1),
 		},
 	}
 	bq2 := &querypb.BoundQuery{
-		Sql: "delete from erl_lu_idx where erl_lu_col = :erl_lu_col and keyspace_id = :keyspace_id",
+		Sql: "delete /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ from erl_lu_idx where erl_lu_col = :erl_lu_col and keyspace_id = :keyspace_id",
 		BindVariables: map[string]*querypb.BindVariable{
 			"keyspace_id": {Type: querypb.Type_VARBINARY, Value: []byte("\x16k@\xb4J\xbaK\xd6")},
 			"erl_lu_col":  sqltypes.Int64BindVariable(1),
 		},
 	}
 	bq3 := &querypb.BoundQuery{
-		Sql: "delete from srl_lu_idx where srl_lu_col = :srl_lu_col and keyspace_id = :keyspace_id",
+		Sql: "delete /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ from srl_lu_idx where srl_lu_col = :srl_lu_col and keyspace_id = :keyspace_id",
 		BindVariables: map[string]*querypb.BindVariable{
 			"keyspace_id": {Type: querypb.Type_VARBINARY, Value: []byte("\x16k@\xb4J\xbaK\xd6")},
 			"srl_lu_col":  sqltypes.Int64BindVariable(1),
 		},
 	}
 	bq4 := &querypb.BoundQuery{
-		Sql: "delete from nrl_lu_idx where nrl_lu_col = :nrl_lu_col and keyspace_id = :keyspace_id",
+		Sql: "delete /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ from nrl_lu_idx where nrl_lu_col = :nrl_lu_col and keyspace_id = :keyspace_id",
 		BindVariables: map[string]*querypb.BindVariable{
 			"keyspace_id": {Type: querypb.Type_VARBINARY, Value: []byte("\x16k@\xb4J\xbaK\xd6")},
 			"nrl_lu_col":  sqltypes.Int64BindVariable(1),
 		},
 	}
 	bq5 := &querypb.BoundQuery{
-		Sql: "delete from nv_lu_idx where nv_lu_col = :nv_lu_col and keyspace_id = :keyspace_id",
+		Sql: "delete /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ from nv_lu_idx where nv_lu_col = :nv_lu_col and keyspace_id = :keyspace_id",
 		BindVariables: map[string]*querypb.BindVariable{
 			"keyspace_id": {Type: querypb.Type_VARBINARY, Value: []byte("\x16k@\xb4J\xbaK\xd6")},
 			"nv_lu_col":   sqltypes.Int64BindVariable(1),
 		},
 	}
 	bq6 := &querypb.BoundQuery{
-		Sql: "delete from lu_idx where lu_col = :lu_col and keyspace_id = :keyspace_id",
+		Sql: "delete /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ from lu_idx where lu_col = :lu_col and keyspace_id = :keyspace_id",
 		BindVariables: map[string]*querypb.BindVariable{
 			"keyspace_id": sqltypes.Uint64BindVariable(1),
 			"lu_col":      sqltypes.Int64BindVariable(1),
@@ -1032,7 +1032,7 @@ func TestDeleteEqualWithMultipleLookupVindex(t *testing.T) {
 			Sql:           "select id, wo_lu_col, erl_lu_col, srl_lu_col, nrl_lu_col, nv_lu_col, lu_col from t2_lookup where wo_lu_col = 1 and lu_col = 1 for update",
 			BindVariables: map[string]*querypb.BindVariable{},
 		}, {
-			Sql:           "delete from t2_lookup where wo_lu_col = 1 and lu_col = 1",
+			Sql:           "delete /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ from t2_lookup where wo_lu_col = 1 and lu_col = 1",
 			BindVariables: map[string]*querypb.BindVariable{},
 		},
 	}
@@ -1041,42 +1041,42 @@ func TestDeleteEqualWithMultipleLookupVindex(t *testing.T) {
 		sqltypes.NewInt64(1),
 	})
 	lookWant := []*querypb.BoundQuery{{
-		Sql: "select lu_col, keyspace_id from lu_idx where lu_col in ::lu_col for update",
+		Sql: "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ lu_col, keyspace_id from lu_idx where lu_col in ::lu_col for update",
 		BindVariables: map[string]*querypb.BindVariable{
 			"lu_col": vars,
 		},
 	}, {
-		Sql: "delete from wo_lu_idx where wo_lu_col = :wo_lu_col and keyspace_id = :keyspace_id",
+		Sql: "delete /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ from wo_lu_idx where wo_lu_col = :wo_lu_col and keyspace_id = :keyspace_id",
 		BindVariables: map[string]*querypb.BindVariable{
 			"keyspace_id": {Type: querypb.Type_VARBINARY, Value: []byte("\x16k@\xb4J\xbaK\xd6")},
 			"wo_lu_col":   sqltypes.Int64BindVariable(1),
 		},
 	}, {
-		Sql: "delete from erl_lu_idx where erl_lu_col = :erl_lu_col and keyspace_id = :keyspace_id",
+		Sql: "delete /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ from erl_lu_idx where erl_lu_col = :erl_lu_col and keyspace_id = :keyspace_id",
 		BindVariables: map[string]*querypb.BindVariable{
 			"keyspace_id": {Type: querypb.Type_VARBINARY, Value: []byte("\x16k@\xb4J\xbaK\xd6")},
 			"erl_lu_col":  sqltypes.Int64BindVariable(1),
 		},
 	}, {
-		Sql: "delete from srl_lu_idx where srl_lu_col = :srl_lu_col and keyspace_id = :keyspace_id",
+		Sql: "delete /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ from srl_lu_idx where srl_lu_col = :srl_lu_col and keyspace_id = :keyspace_id",
 		BindVariables: map[string]*querypb.BindVariable{
 			"keyspace_id": {Type: querypb.Type_VARBINARY, Value: []byte("\x16k@\xb4J\xbaK\xd6")},
 			"srl_lu_col":  sqltypes.Int64BindVariable(1),
 		},
 	}, {
-		Sql: "delete from nrl_lu_idx where nrl_lu_col = :nrl_lu_col and keyspace_id = :keyspace_id",
+		Sql: "delete /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ from nrl_lu_idx where nrl_lu_col = :nrl_lu_col and keyspace_id = :keyspace_id",
 		BindVariables: map[string]*querypb.BindVariable{
 			"keyspace_id": {Type: querypb.Type_VARBINARY, Value: []byte("\x16k@\xb4J\xbaK\xd6")},
 			"nrl_lu_col":  sqltypes.Int64BindVariable(1),
 		},
 	}, {
-		Sql: "delete from nv_lu_idx where nv_lu_col = :nv_lu_col and keyspace_id = :keyspace_id",
+		Sql: "delete /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ from nv_lu_idx where nv_lu_col = :nv_lu_col and keyspace_id = :keyspace_id",
 		BindVariables: map[string]*querypb.BindVariable{
 			"keyspace_id": {Type: querypb.Type_VARBINARY, Value: []byte("\x16k@\xb4J\xbaK\xd6")},
 			"nv_lu_col":   sqltypes.Int64BindVariable(1),
 		},
 	}, {
-		Sql: "delete from lu_idx where lu_col = :lu_col and keyspace_id = :keyspace_id",
+		Sql: "delete /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ from lu_idx where lu_col = :lu_col and keyspace_id = :keyspace_id",
 		BindVariables: map[string]*querypb.BindVariable{
 			"keyspace_id": sqltypes.Uint64BindVariable(1),
 			"lu_col":      {Type: querypb.Type_INT64, Value: []byte("1")},
@@ -1116,7 +1116,7 @@ func TestDeleteUseHigherCostVindexIfBackfilling(t *testing.T) {
 			Sql:           "select id, wo_lu_col, erl_lu_col, srl_lu_col, nrl_lu_col, nv_lu_col, lu_col from t2_lookup where wo_lu_col = 1 and lu_col in (1, 2) for update",
 			BindVariables: map[string]*querypb.BindVariable{},
 		}, {
-			Sql: "delete from t2_lookup where wo_lu_col = 1 and lu_col in ::__vals",
+			Sql: "delete /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ from t2_lookup where wo_lu_col = 1 and lu_col in ::__vals",
 			BindVariables: map[string]*querypb.BindVariable{
 				"__vals": sqltypes.TestBindVariable([]any{int64(1), int64(2)}),
 			},
@@ -1128,78 +1128,78 @@ func TestDeleteUseHigherCostVindexIfBackfilling(t *testing.T) {
 		sqltypes.NewInt64(2),
 	})
 	lookWant := []*querypb.BoundQuery{{
-		Sql: "select lu_col, keyspace_id from lu_idx where lu_col in ::lu_col for update",
+		Sql: "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ lu_col, keyspace_id from lu_idx where lu_col in ::lu_col for update",
 		BindVariables: map[string]*querypb.BindVariable{
 			"lu_col": vars,
 		},
 	}, {
-		Sql: "delete from wo_lu_idx where wo_lu_col = :wo_lu_col and keyspace_id = :keyspace_id",
+		Sql: "delete /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ from wo_lu_idx where wo_lu_col = :wo_lu_col and keyspace_id = :keyspace_id",
 		BindVariables: map[string]*querypb.BindVariable{
 			"keyspace_id": {Type: querypb.Type_VARBINARY, Value: []byte("\x16k@\xb4J\xbaK\xd6")},
 			"wo_lu_col":   sqltypes.Int64BindVariable(1),
 		},
 	}, {
-		Sql: "delete from erl_lu_idx where erl_lu_col = :erl_lu_col and keyspace_id = :keyspace_id",
+		Sql: "delete /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ from erl_lu_idx where erl_lu_col = :erl_lu_col and keyspace_id = :keyspace_id",
 		BindVariables: map[string]*querypb.BindVariable{
 			"keyspace_id": {Type: querypb.Type_VARBINARY, Value: []byte("\x16k@\xb4J\xbaK\xd6")},
 			"erl_lu_col":  sqltypes.Int64BindVariable(1),
 		},
 	}, {
-		Sql: "delete from srl_lu_idx where srl_lu_col = :srl_lu_col and keyspace_id = :keyspace_id",
+		Sql: "delete /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ from srl_lu_idx where srl_lu_col = :srl_lu_col and keyspace_id = :keyspace_id",
 		BindVariables: map[string]*querypb.BindVariable{
 			"keyspace_id": {Type: querypb.Type_VARBINARY, Value: []byte("\x16k@\xb4J\xbaK\xd6")},
 			"srl_lu_col":  sqltypes.Int64BindVariable(1),
 		},
 	}, {
-		Sql: "delete from nrl_lu_idx where nrl_lu_col = :nrl_lu_col and keyspace_id = :keyspace_id",
+		Sql: "delete /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ from nrl_lu_idx where nrl_lu_col = :nrl_lu_col and keyspace_id = :keyspace_id",
 		BindVariables: map[string]*querypb.BindVariable{
 			"keyspace_id": {Type: querypb.Type_VARBINARY, Value: []byte("\x16k@\xb4J\xbaK\xd6")},
 			"nrl_lu_col":  sqltypes.Int64BindVariable(1),
 		},
 	}, {
-		Sql: "delete from nv_lu_idx where nv_lu_col = :nv_lu_col and keyspace_id = :keyspace_id",
+		Sql: "delete /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ from nv_lu_idx where nv_lu_col = :nv_lu_col and keyspace_id = :keyspace_id",
 		BindVariables: map[string]*querypb.BindVariable{
 			"keyspace_id": {Type: querypb.Type_VARBINARY, Value: []byte("\x16k@\xb4J\xbaK\xd6")},
 			"nv_lu_col":   sqltypes.Int64BindVariable(1),
 		},
 	}, {
-		Sql: "delete from lu_idx where lu_col = :lu_col and keyspace_id = :keyspace_id",
+		Sql: "delete /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ from lu_idx where lu_col = :lu_col and keyspace_id = :keyspace_id",
 		BindVariables: map[string]*querypb.BindVariable{
 			"keyspace_id": sqltypes.Uint64BindVariable(1),
 			"lu_col":      sqltypes.Int64BindVariable(1),
 		},
 	}, {
-		Sql: "delete from wo_lu_idx where wo_lu_col = :wo_lu_col and keyspace_id = :keyspace_id",
+		Sql: "delete /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ from wo_lu_idx where wo_lu_col = :wo_lu_col and keyspace_id = :keyspace_id",
 		BindVariables: map[string]*querypb.BindVariable{
 			"keyspace_id": {Type: querypb.Type_VARBINARY, Value: []byte("\x16k@\xb4J\xbaK\xd6")},
 			"wo_lu_col":   sqltypes.Int64BindVariable(1),
 		},
 	}, {
-		Sql: "delete from erl_lu_idx where erl_lu_col = :erl_lu_col and keyspace_id = :keyspace_id",
+		Sql: "delete /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ from erl_lu_idx where erl_lu_col = :erl_lu_col and keyspace_id = :keyspace_id",
 		BindVariables: map[string]*querypb.BindVariable{
 			"keyspace_id": {Type: querypb.Type_VARBINARY, Value: []byte("\x16k@\xb4J\xbaK\xd6")},
 			"erl_lu_col":  sqltypes.Int64BindVariable(1),
 		},
 	}, {
-		Sql: "delete from srl_lu_idx where srl_lu_col = :srl_lu_col and keyspace_id = :keyspace_id",
+		Sql: "delete /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ from srl_lu_idx where srl_lu_col = :srl_lu_col and keyspace_id = :keyspace_id",
 		BindVariables: map[string]*querypb.BindVariable{
 			"keyspace_id": {Type: querypb.Type_VARBINARY, Value: []byte("\x16k@\xb4J\xbaK\xd6")},
 			"srl_lu_col":  sqltypes.Int64BindVariable(1),
 		},
 	}, {
-		Sql: "delete from nrl_lu_idx where nrl_lu_col = :nrl_lu_col and keyspace_id = :keyspace_id",
+		Sql: "delete /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ from nrl_lu_idx where nrl_lu_col = :nrl_lu_col and keyspace_id = :keyspace_id",
 		BindVariables: map[string]*querypb.BindVariable{
 			"keyspace_id": {Type: querypb.Type_VARBINARY, Value: []byte("\x16k@\xb4J\xbaK\xd6")},
 			"nrl_lu_col":  sqltypes.Int64BindVariable(1),
 		},
 	}, {
-		Sql: "delete from nv_lu_idx where nv_lu_col = :nv_lu_col and keyspace_id = :keyspace_id",
+		Sql: "delete /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ from nv_lu_idx where nv_lu_col = :nv_lu_col and keyspace_id = :keyspace_id",
 		BindVariables: map[string]*querypb.BindVariable{
 			"keyspace_id": {Type: querypb.Type_VARBINARY, Value: []byte("\x16k@\xb4J\xbaK\xd6")},
 			"nv_lu_col":   sqltypes.Int64BindVariable(1),
 		},
 	}, {
-		Sql: "delete from lu_idx where lu_col = :lu_col and keyspace_id = :keyspace_id",
+		Sql: "delete /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ from lu_idx where lu_col = :lu_col and keyspace_id = :keyspace_id",
 		BindVariables: map[string]*querypb.BindVariable{
 			"keyspace_id": sqltypes.Uint64BindVariable(1),
 			"lu_col":      sqltypes.Int64BindVariable(2),
@@ -1221,7 +1221,7 @@ func TestDeleteByDestination(t *testing.T) {
 	require.NoError(t, err)
 	// Queries get annotatted.
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "delete from user_extra limit 10",
+		Sql:           "delete /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ from user_extra limit 10",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	assertQueries(t, sbc1, wantQueries)
@@ -1252,13 +1252,13 @@ func TestDeleteComments(t *testing.T) {
 		Sql:           "select Id, `name` from `user` where id = 1 for update /* trailing */",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}, {
-		Sql:           "delete from `user` where id = 1 /* trailing */",
+		Sql:           "delete /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ from `user` where id = 1 /* trailing */",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	assertQueries(t, sbc, wantQueries)
 
 	wantQueries = []*querypb.BoundQuery{{
-		Sql: "delete from name_user_map where `name` = :name and user_id = :user_id /* trailing */",
+		Sql: "delete /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ from name_user_map where `name` = :name and user_id = :user_id /* trailing */",
 		BindVariables: map[string]*querypb.BindVariable{
 			"user_id": sqltypes.Uint64BindVariable(1),
 			"name":    sqltypes.ValueBindVariable(sqltypes.NewVarChar("myname")),
@@ -1279,7 +1279,7 @@ func TestInsertSharded(t *testing.T) {
 	_, err := executorExec(ctx, executor, session, "insert into user(id, v, name) values (1, 2, 'myname')", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
-		Sql: "insert into `user`(id, v, `name`) values (:_Id_0, 2, :_name_0)",
+		Sql: "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into `user`(id, v, `name`) values (:_Id_0, 2, :_name_0)",
 		BindVariables: map[string]*querypb.BindVariable{
 			"_Id_0":   sqltypes.Int64BindVariable(1),
 			"_name_0": sqltypes.StringBindVariable("myname"),
@@ -1288,7 +1288,7 @@ func TestInsertSharded(t *testing.T) {
 	assertQueries(t, sbc1, wantQueries)
 	assertQueries(t, sbc2, nil)
 	wantQueries = []*querypb.BoundQuery{{
-		Sql: "insert into name_user_map(`name`, user_id) values (:name_0, :user_id_0)",
+		Sql: "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into name_user_map(`name`, user_id) values (:name_0, :user_id_0)",
 		BindVariables: map[string]*querypb.BindVariable{
 			"name_0":    sqltypes.StringBindVariable("myname"),
 			"user_id_0": sqltypes.Uint64BindVariable(1),
@@ -1297,15 +1297,15 @@ func TestInsertSharded(t *testing.T) {
 	assertQueries(t, sbclookup, wantQueries)
 
 	testQueryLog(t, executor, logChan, "MarkSavepoint", "SAVEPOINT", "savepoint x", 0)
-	testQueryLog(t, executor, logChan, "VindexCreate", "INSERT", "insert into name_user_map(`name`, user_id) values (:name_0, :user_id_0)", 1)
-	testQueryLog(t, executor, logChan, "TestExecute", "INSERT", "insert into `user`(id, v, `name`) values (1, 2, 'myname')", 1)
+	testQueryLog(t, executor, logChan, "VindexCreate", "INSERT", "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into name_user_map(`name`, user_id) values (:name_0, :user_id_0)", 1)
+	testQueryLog(t, executor, logChan, "TestExecute", "INSERT", "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into `user`(id, v, `name`) values (1, 2, 'myname')", 1)
 
 	sbc1.Queries = nil
 	sbclookup.Queries = nil
 	_, err = executorExec(ctx, executor, session, "insert into user(id, v, name) values (3, 2, 'myname2')", nil)
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
-		Sql: "insert into `user`(id, v, `name`) values (:_Id_0, 2, :_name_0)",
+		Sql: "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into `user`(id, v, `name`) values (:_Id_0, 2, :_name_0)",
 		BindVariables: map[string]*querypb.BindVariable{
 			"_Id_0":   sqltypes.Int64BindVariable(3),
 			"_name_0": sqltypes.StringBindVariable("myname2"),
@@ -1314,7 +1314,7 @@ func TestInsertSharded(t *testing.T) {
 	assertQueries(t, sbc2, wantQueries)
 	assertQueries(t, sbc1, nil)
 	wantQueries = []*querypb.BoundQuery{{
-		Sql: "insert into name_user_map(`name`, user_id) values (:name_0, :user_id_0)",
+		Sql: "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into name_user_map(`name`, user_id) values (:name_0, :user_id_0)",
 		BindVariables: map[string]*querypb.BindVariable{
 			"name_0":    sqltypes.StringBindVariable("myname2"),
 			"user_id_0": sqltypes.Uint64BindVariable(3),
@@ -1322,14 +1322,14 @@ func TestInsertSharded(t *testing.T) {
 	}}
 	assertQueries(t, sbclookup, wantQueries)
 	testQueryLog(t, executor, logChan, "MarkSavepoint", "SAVEPOINT", "savepoint x", 2)
-	testQueryLog(t, executor, logChan, "VindexCreate", "INSERT", "insert into name_user_map(`name`, user_id) values (:name_0, :user_id_0)", 1)
-	testQueryLog(t, executor, logChan, "TestExecute", "INSERT", "insert into `user`(id, v, `name`) values (3, 2, 'myname2')", 1)
+	testQueryLog(t, executor, logChan, "VindexCreate", "INSERT", "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into name_user_map(`name`, user_id) values (:name_0, :user_id_0)", 1)
+	testQueryLog(t, executor, logChan, "TestExecute", "INSERT", "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into `user`(id, v, `name`) values (3, 2, 'myname2')", 1)
 
 	sbc1.Queries = nil
 	_, err = executorExec(ctx, executor, session, "insert into user2(id, name, lastname) values (2, 'myname', 'mylastname')", nil)
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
-		Sql: "insert into user2(id, `name`, lastname) values (:_id_0, :_name_0, :_lastname_0)",
+		Sql: "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into user2(id, `name`, lastname) values (:_id_0, :_name_0, :_lastname_0)",
 		BindVariables: map[string]*querypb.BindVariable{
 			"_id_0":       sqltypes.Int64BindVariable(2),
 			"_name_0":     sqltypes.StringBindVariable("myname"),
@@ -1338,8 +1338,8 @@ func TestInsertSharded(t *testing.T) {
 	}}
 	assertQueries(t, sbc1, wantQueries)
 	testQueryLog(t, executor, logChan, "MarkSavepoint", "SAVEPOINT", "savepoint x", 3)
-	testQueryLog(t, executor, logChan, "VindexCreate", "INSERT", "insert into name_lastname_keyspace_id_map(`name`, lastname, keyspace_id) values (:name_0, :lastname_0, :keyspace_id_0)", 1)
-	testQueryLog(t, executor, logChan, "TestExecute", "INSERT", "insert into user2(id, `name`, lastname) values (2, 'myname', 'mylastname')", 1)
+	testQueryLog(t, executor, logChan, "VindexCreate", "INSERT", "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into name_lastname_keyspace_id_map(`name`, lastname, keyspace_id) values (:name_0, :lastname_0, :keyspace_id_0)", 1)
+	testQueryLog(t, executor, logChan, "TestExecute", "INSERT", "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into user2(id, `name`, lastname) values (2, 'myname', 'mylastname')", 1)
 
 	// insert with binary values
 	executor.config.Normalize = true
@@ -1349,7 +1349,7 @@ func TestInsertSharded(t *testing.T) {
 	_, err = executorExec(ctx, executor, session, "insert into user(id, v, name) values (1, 2, _binary 'myname')", nil)
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
-		Sql: "insert into `user`(id, v, `name`) values (:_Id_0, :vtg2 /* INT64 */, :_name_0)",
+		Sql: "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into `user`(id, v, `name`) values (:_Id_0, :vtg2 /* INT64 */, :_name_0)",
 		BindVariables: map[string]*querypb.BindVariable{
 			"_Id_0":   sqltypes.Int64BindVariable(1),
 			"_name_0": sqltypes.BytesBindVariable([]byte("myname")),
@@ -1359,7 +1359,7 @@ func TestInsertSharded(t *testing.T) {
 	assertQueries(t, sbc1, wantQueries)
 	assertQueries(t, sbc2, nil)
 	wantQueries = []*querypb.BoundQuery{{
-		Sql: "insert into name_user_map(`name`, user_id) values (:name_0, :user_id_0)",
+		Sql: "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into name_user_map(`name`, user_id) values (:name_0, :user_id_0)",
 		BindVariables: map[string]*querypb.BindVariable{
 			"name_0":    sqltypes.BytesBindVariable([]byte("myname")),
 			"user_id_0": sqltypes.Uint64BindVariable(1),
@@ -1368,8 +1368,8 @@ func TestInsertSharded(t *testing.T) {
 	assertQueries(t, sbclookup, wantQueries)
 
 	testQueryLog(t, executor, logChan, "MarkSavepoint", "SAVEPOINT", "savepoint x", 3)
-	testQueryLog(t, executor, logChan, "VindexCreate", "INSERT", "insert into name_user_map(`name`, user_id) values (:name_0, :user_id_0)", 1)
-	testQueryLog(t, executor, logChan, "TestExecute", "INSERT", "insert into `user`(id, v, `name`) values (:vtg1 /* INT64 */, :vtg2 /* INT64 */, _binary :vtg3 /* VARCHAR */)", 1)
+	testQueryLog(t, executor, logChan, "VindexCreate", "INSERT", "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into name_user_map(`name`, user_id) values (:name_0, :user_id_0)", 1)
+	testQueryLog(t, executor, logChan, "TestExecute", "INSERT", "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into `user`(id, v, `name`) values (:vtg1 /* INT64 */, :vtg2 /* INT64 */, _binary :vtg3 /* VARCHAR */)", 1)
 }
 
 func TestInsertNegativeValue(t *testing.T) {
@@ -1384,7 +1384,7 @@ func TestInsertNegativeValue(t *testing.T) {
 	_, err := executorExec(ctx, executor, session, "insert into user(id, v, name) values (1, -2, 'myname')", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
-		Sql: "insert into `user`(id, v, `name`) values (:_Id_0, -:vtg2 /* INT64 */, :_name_0)",
+		Sql: "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into `user`(id, v, `name`) values (:_Id_0, -:vtg2 /* INT64 */, :_name_0)",
 		BindVariables: map[string]*querypb.BindVariable{
 			"_Id_0":   sqltypes.Int64BindVariable(1),
 			"vtg2":    sqltypes.Int64BindVariable(2),
@@ -1394,7 +1394,7 @@ func TestInsertNegativeValue(t *testing.T) {
 	assertQueries(t, sbc1, wantQueries)
 	assertQueries(t, sbc2, nil)
 	wantQueries = []*querypb.BoundQuery{{
-		Sql: "insert into name_user_map(`name`, user_id) values (:name_0, :user_id_0)",
+		Sql: "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into name_user_map(`name`, user_id) values (:name_0, :user_id_0)",
 		BindVariables: map[string]*querypb.BindVariable{
 			"name_0":    sqltypes.StringBindVariable("myname"),
 			"user_id_0": sqltypes.Uint64BindVariable(1),
@@ -1403,8 +1403,8 @@ func TestInsertNegativeValue(t *testing.T) {
 	assertQueries(t, sbclookup, wantQueries)
 
 	testQueryLog(t, executor, logChan, "MarkSavepoint", "SAVEPOINT", "savepoint x", 0)
-	testQueryLog(t, executor, logChan, "VindexCreate", "INSERT", "insert into name_user_map(`name`, user_id) values (:name_0, :user_id_0)", 1)
-	testQueryLog(t, executor, logChan, "TestExecute", "INSERT", "insert into `user`(id, v, `name`) values (:vtg1 /* INT64 */, -:vtg2 /* INT64 */, :vtg3 /* VARCHAR */)", 1)
+	testQueryLog(t, executor, logChan, "VindexCreate", "INSERT", "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into name_user_map(`name`, user_id) values (:name_0, :user_id_0)", 1)
+	testQueryLog(t, executor, logChan, "TestExecute", "INSERT", "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into `user`(id, v, `name`) values (:vtg1 /* INT64 */, -:vtg2 /* INT64 */, :vtg3 /* VARCHAR */)", 1)
 }
 
 func TestInsertShardedKeyrange(t *testing.T) {
@@ -1482,7 +1482,7 @@ func TestInsertShardedAutocommitLookup(t *testing.T) {
 	_, err := executorExec(ctx, executor, &vtgatepb.Session{}, "insert into user(id, v, name, music) values (1, 2, 'myname', 'star')", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
-		Sql: "insert into `user`(id, v, `name`, music) values (:_Id_0, 2, :_name_0, :_music_0)",
+		Sql: "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into `user`(id, v, `name`, music) values (:_Id_0, 2, :_name_0, :_music_0)",
 		BindVariables: map[string]*querypb.BindVariable{
 			"_Id_0":    sqltypes.Int64BindVariable(1),
 			"_music_0": sqltypes.StringBindVariable("star"),
@@ -1492,13 +1492,13 @@ func TestInsertShardedAutocommitLookup(t *testing.T) {
 	assertQueries(t, sbc1, wantQueries)
 	assertQueries(t, sbc2, nil)
 	wantQueries = []*querypb.BoundQuery{{
-		Sql: "insert into name_user_map(`name`, user_id) values (:name_0, :user_id_0) on duplicate key update `name` = values(`name`), user_id = values(user_id)",
+		Sql: "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into name_user_map(`name`, user_id) values (:name_0, :user_id_0) on duplicate key update `name` = values(`name`), user_id = values(user_id)",
 		BindVariables: map[string]*querypb.BindVariable{
 			"name_0":    sqltypes.StringBindVariable("myname"),
 			"user_id_0": sqltypes.Uint64BindVariable(1),
 		},
 	}, {
-		Sql: "insert /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ into music_user_map(music, user_id) values (:music_0, :user_id_0) on duplicate key update music = values(music), user_id = values(user_id)",
+		Sql: "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ into music_user_map(music, user_id) values (:music_0, :user_id_0) on duplicate key update music = values(music), user_id = values(user_id)",
 		BindVariables: map[string]*querypb.BindVariable{
 			"music_0":   sqltypes.StringBindVariable("star"),
 			"user_id_0": sqltypes.Uint64BindVariable(1),
@@ -1565,18 +1565,18 @@ func TestInsertShardedIgnore(t *testing.T) {
 		},
 		expectedQueries: [3][]*querypb.BoundQuery{
 			{{
-				Sql:           "insert ignore into insert_ignore_test(pv, owned, verify) values (:_pv_0, :_owned_0, :_verify_0)",
+				Sql:           "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ ignore into insert_ignore_test(pv, owned, verify) values (:_pv_0, :_owned_0, :_verify_0)",
 				BindVariables: map[string]*querypb.BindVariable{"_pv_0": int1, "_owned_0": int1, "_verify_0": int1},
 			}},
 			nil,
 			{{
-				Sql:           "select music_id, user_id from music_user_map where music_id in ::music_id for update",
+				Sql:           "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ music_id, user_id from music_user_map where music_id in ::music_id for update",
 				BindVariables: map[string]*querypb.BindVariable{"music_id": var1},
 			}, {
-				Sql:           "insert ignore into ins_lookup(fromcol, tocol) values (:fromcol_0, :tocol_0)",
+				Sql:           "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ ignore into ins_lookup(fromcol, tocol) values (:fromcol_0, :tocol_0)",
 				BindVariables: map[string]*querypb.BindVariable{"fromcol_0": int1, "tocol_0": uint1},
 			}, {
-				Sql:           "select fromcol from ins_lookup where fromcol = :fromcol and tocol = :tocol",
+				Sql:           "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ fromcol from ins_lookup where fromcol = :fromcol and tocol = :tocol",
 				BindVariables: map[string]*querypb.BindVariable{"fromcol": int1, "tocol": uint1},
 			}},
 		},
@@ -1591,7 +1591,7 @@ func TestInsertShardedIgnore(t *testing.T) {
 			nil,
 			nil,
 			{{
-				Sql:           "select music_id, user_id from music_user_map where music_id in ::music_id for update",
+				Sql:           "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ music_id, user_id from music_user_map where music_id in ::music_id for update",
 				BindVariables: map[string]*querypb.BindVariable{"music_id": var2},
 			}},
 		},
@@ -1611,13 +1611,13 @@ func TestInsertShardedIgnore(t *testing.T) {
 			nil,
 			nil,
 			{{
-				Sql:           "select music_id, user_id from music_user_map where music_id in ::music_id for update",
+				Sql:           "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ music_id, user_id from music_user_map where music_id in ::music_id for update",
 				BindVariables: map[string]*querypb.BindVariable{"music_id": var3},
 			}, {
-				Sql:           "insert ignore into ins_lookup(fromcol, tocol) values (:fromcol_0, :tocol_0)",
+				Sql:           "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ ignore into ins_lookup(fromcol, tocol) values (:fromcol_0, :tocol_0)",
 				BindVariables: map[string]*querypb.BindVariable{"fromcol_0": int3, "tocol_0": uint1},
 			}, {
-				Sql:           "select fromcol from ins_lookup where fromcol = :fromcol and tocol = :tocol",
+				Sql:           "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ fromcol from ins_lookup where fromcol = :fromcol and tocol = :tocol",
 				BindVariables: map[string]*querypb.BindVariable{"fromcol": int3, "tocol": uint1},
 			}},
 		},
@@ -1637,13 +1637,13 @@ func TestInsertShardedIgnore(t *testing.T) {
 			nil,
 			nil,
 			{{
-				Sql:           "select music_id, user_id from music_user_map where music_id in ::music_id for update",
+				Sql:           "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ music_id, user_id from music_user_map where music_id in ::music_id for update",
 				BindVariables: map[string]*querypb.BindVariable{"music_id": var4},
 			}, {
-				Sql:           "insert ignore into ins_lookup(fromcol, tocol) values (:fromcol_0, :tocol_0)",
+				Sql:           "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ ignore into ins_lookup(fromcol, tocol) values (:fromcol_0, :tocol_0)",
 				BindVariables: map[string]*querypb.BindVariable{"fromcol_0": int4, "tocol_0": uint1},
 			}, {
-				Sql:           "select fromcol from ins_lookup where fromcol = :fromcol and tocol = :tocol",
+				Sql:           "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ fromcol from ins_lookup where fromcol = :fromcol and tocol = :tocol",
 				BindVariables: map[string]*querypb.BindVariable{"fromcol": int4, "tocol": uint1},
 			}},
 		},
@@ -1658,18 +1658,18 @@ func TestInsertShardedIgnore(t *testing.T) {
 		},
 		expectedQueries: [3][]*querypb.BoundQuery{
 			{{
-				Sql:           "insert ignore into insert_ignore_test(pv, owned, verify) values (:_pv_0, :_owned_0, :_verify_0)",
+				Sql:           "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ ignore into insert_ignore_test(pv, owned, verify) values (:_pv_0, :_owned_0, :_verify_0)",
 				BindVariables: map[string]*querypb.BindVariable{"_pv_0": int5, "_owned_0": int5, "_verify_0": int1},
 			}},
 			nil,
 			{{
-				Sql:           "select music_id, user_id from music_user_map where music_id in ::music_id for update",
+				Sql:           "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ music_id, user_id from music_user_map where music_id in ::music_id for update",
 				BindVariables: map[string]*querypb.BindVariable{"music_id": var5},
 			}, {
-				Sql:           "insert ignore into ins_lookup(fromcol, tocol) values (:fromcol_0, :tocol_0)",
+				Sql:           "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ ignore into ins_lookup(fromcol, tocol) values (:fromcol_0, :tocol_0)",
 				BindVariables: map[string]*querypb.BindVariable{"fromcol_0": int5, "tocol_0": uint1},
 			}, {
-				Sql:           "select fromcol from ins_lookup where fromcol = :fromcol and tocol = :tocol",
+				Sql:           "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ fromcol from ins_lookup where fromcol = :fromcol and tocol = :tocol",
 				BindVariables: map[string]*querypb.BindVariable{"fromcol": int5, "tocol": uint1},
 			}},
 		},
@@ -1685,17 +1685,17 @@ func TestInsertShardedIgnore(t *testing.T) {
 		expectedQueries: [3][]*querypb.BoundQuery{
 			nil,
 			{{
-				Sql:           "insert ignore into insert_ignore_test(pv, owned, verify) values (:_pv_0, :_owned_0, :_verify_0)",
+				Sql:           "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ ignore into insert_ignore_test(pv, owned, verify) values (:_pv_0, :_owned_0, :_verify_0)",
 				BindVariables: map[string]*querypb.BindVariable{"_pv_0": int6, "_owned_0": int6, "_verify_0": int3},
 			}},
 			{{
-				Sql:           "select music_id, user_id from music_user_map where music_id in ::music_id for update",
+				Sql:           "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ music_id, user_id from music_user_map where music_id in ::music_id for update",
 				BindVariables: map[string]*querypb.BindVariable{"music_id": var6},
 			}, {
-				Sql:           "insert ignore into ins_lookup(fromcol, tocol) values (:fromcol_0, :tocol_0)",
+				Sql:           "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ ignore into ins_lookup(fromcol, tocol) values (:fromcol_0, :tocol_0)",
 				BindVariables: map[string]*querypb.BindVariable{"fromcol_0": int6, "tocol_0": uint3},
 			}, {
-				Sql:           "select fromcol from ins_lookup where fromcol = :fromcol and tocol = :tocol",
+				Sql:           "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ fromcol from ins_lookup where fromcol = :fromcol and tocol = :tocol",
 				BindVariables: map[string]*querypb.BindVariable{"fromcol": int6, "tocol": uint3},
 			}},
 		},
@@ -1738,7 +1738,7 @@ func TestInsertOnDupKey(t *testing.T) {
 	_, err := executorExec(ctx, executor, session, query, nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
-		Sql: "insert into insert_ignore_test(pv, owned, verify) values (:_pv_0, :_owned_0, :_verify_0) on duplicate key update col = 2",
+		Sql: "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into insert_ignore_test(pv, owned, verify) values (:_pv_0, :_owned_0, :_verify_0) on duplicate key update col = 2",
 		BindVariables: map[string]*querypb.BindVariable{
 			"_pv_0":     sqltypes.Int64BindVariable(1),
 			"_owned_0":  sqltypes.Int64BindVariable(1),
@@ -1750,18 +1750,18 @@ func TestInsertOnDupKey(t *testing.T) {
 	vars, err := sqltypes.BuildBindVariable([]any{sqltypes.NewInt64(1)})
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
-		Sql: "select music_id, user_id from music_user_map where music_id in ::music_id for update",
+		Sql: "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ music_id, user_id from music_user_map where music_id in ::music_id for update",
 		BindVariables: map[string]*querypb.BindVariable{
 			"music_id": vars,
 		},
 	}, {
-		Sql: "insert ignore into ins_lookup(fromcol, tocol) values (:fromcol_0, :tocol_0)",
+		Sql: "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ ignore into ins_lookup(fromcol, tocol) values (:fromcol_0, :tocol_0)",
 		BindVariables: map[string]*querypb.BindVariable{
 			"fromcol_0": sqltypes.Int64BindVariable(1),
 			"tocol_0":   sqltypes.Uint64BindVariable(1),
 		},
 	}, {
-		Sql: "select fromcol from ins_lookup where fromcol = :fromcol and tocol = :tocol",
+		Sql: "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ fromcol from ins_lookup where fromcol = :fromcol and tocol = :tocol",
 		BindVariables: map[string]*querypb.BindVariable{
 			"fromcol": sqltypes.Int64BindVariable(1),
 			"tocol":   sqltypes.Uint64BindVariable(1),
@@ -1796,7 +1796,7 @@ func TestInsertComments(t *testing.T) {
 	_, err := executorExec(ctx, executor, session, "insert into user(id, v, name) values (1, 2, 'myname') /* trailing */", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
-		Sql: "insert into `user`(id, v, `name`) values (:_Id_0, 2, :_name_0) /* trailing */",
+		Sql: "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into `user`(id, v, `name`) values (:_Id_0, 2, :_name_0) /* trailing */",
 		BindVariables: map[string]*querypb.BindVariable{
 			"_Id_0":   sqltypes.Int64BindVariable(1),
 			"_name_0": sqltypes.StringBindVariable("myname"),
@@ -1805,7 +1805,7 @@ func TestInsertComments(t *testing.T) {
 	assertQueries(t, sbc1, wantQueries)
 	assertQueries(t, sbc2, nil)
 	wantQueries = []*querypb.BoundQuery{{
-		Sql: "insert into name_user_map(`name`, user_id) values (:name_0, :user_id_0) /* trailing */",
+		Sql: "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into name_user_map(`name`, user_id) values (:name_0, :user_id_0) /* trailing */",
 		BindVariables: map[string]*querypb.BindVariable{
 			"name_0":    sqltypes.StringBindVariable("myname"),
 			"user_id_0": sqltypes.Uint64BindVariable(1),
@@ -1831,7 +1831,7 @@ func TestInsertGeneratorSharded(t *testing.T) {
 	result, err := executorExec(ctx, executor, session, "insert into user(v, `name`) values (2, 'myname')", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
-		Sql: "insert into `user`(v, `name`, id) values (2, :_name_0, :_Id_0)",
+		Sql: "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into `user`(v, `name`, id) values (2, :_name_0, :_Id_0)",
 		BindVariables: map[string]*querypb.BindVariable{
 			"_Id_0":   sqltypes.Int64BindVariable(1),
 			"_name_0": sqltypes.StringBindVariable("myname"),
@@ -1842,7 +1842,7 @@ func TestInsertGeneratorSharded(t *testing.T) {
 		Sql:           "select next :n /* INT64 */ values from user_seq",
 		BindVariables: map[string]*querypb.BindVariable{"n": sqltypes.Int64BindVariable(1)},
 	}, {
-		Sql: "insert into name_user_map(`name`, user_id) values (:name_0, :user_id_0)",
+		Sql: "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into name_user_map(`name`, user_id) values (:name_0, :user_id_0)",
 		BindVariables: map[string]*querypb.BindVariable{
 			"name_0":    sqltypes.StringBindVariable("myname"),
 			"user_id_0": sqltypes.Uint64BindVariable(1),
@@ -1878,7 +1878,7 @@ func TestInsertAutoincSharded(t *testing.T) {
 	result, err := executorExec(ctx, router, session, "insert into user_extra(user_id) values (2)", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
-		Sql: "insert into user_extra(user_id) values (:_user_id_0)",
+		Sql: "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into user_extra(user_id) values (:_user_id_0)",
 		BindVariables: map[string]*querypb.BindVariable{
 			"_user_id_0": sqltypes.Int64BindVariable(2),
 		},
@@ -1899,7 +1899,7 @@ func TestInsertGeneratorUnsharded(t *testing.T) {
 		Sql:           "select next :n /* INT64 */ values from user_seq",
 		BindVariables: map[string]*querypb.BindVariable{"n": sqltypes.Int64BindVariable(1)},
 	}, {
-		Sql: "insert into main1(id, `name`) values (:__seq0, 'myname')",
+		Sql: "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into main1(id, `name`) values (:__seq0, 'myname')",
 		BindVariables: map[string]*querypb.BindVariable{
 			"__seq0": sqltypes.Int64BindVariable(1),
 		},
@@ -1922,7 +1922,7 @@ func TestInsertAutoincUnsharded(t *testing.T) {
 	defer router.queryLogger.Unsubscribe(logChan)
 
 	// Fake a mysql auto-inc response.
-	query := "insert into `simple`(val) values ('val')"
+	query := "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into `simple`(val) values ('val')"
 	wantResult := &sqltypes.Result{
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewInt64(1),
@@ -1945,7 +1945,7 @@ func TestInsertAutoincUnsharded(t *testing.T) {
 	assertQueries(t, sbclookup, wantQueries)
 	assert.Equal(t, wantResult, result)
 
-	testQueryLog(t, router, logChan, "TestExecute", "INSERT", "insert into `simple`(val) values ('val')", 1)
+	testQueryLog(t, router, logChan, "TestExecute", "INSERT", "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into `simple`(val) values ('val')", 1)
 }
 
 func TestInsertLookupOwned(t *testing.T) {
@@ -1957,7 +1957,7 @@ func TestInsertLookupOwned(t *testing.T) {
 	_, err := executorExec(ctx, executor, session, "insert into music(user_id, id) values (2, 3)", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
-		Sql: "insert into music(user_id, id) values (:_user_id_0, :_id_0)",
+		Sql: "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into music(user_id, id) values (:_user_id_0, :_id_0)",
 		BindVariables: map[string]*querypb.BindVariable{
 			"_user_id_0": sqltypes.Int64BindVariable(2),
 			"_id_0":      sqltypes.Int64BindVariable(3),
@@ -1965,7 +1965,7 @@ func TestInsertLookupOwned(t *testing.T) {
 	}}
 	assertQueries(t, sbc, wantQueries)
 	wantQueries = []*querypb.BoundQuery{{
-		Sql: "insert into music_user_map(music_id, user_id) values (:music_id_0, :user_id_0)",
+		Sql: "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into music_user_map(music_id, user_id) values (:music_id_0, :user_id_0)",
 		BindVariables: map[string]*querypb.BindVariable{
 			"music_id_0": sqltypes.Int64BindVariable(3),
 			"user_id_0":  sqltypes.Uint64BindVariable(2),
@@ -1991,7 +1991,7 @@ func TestInsertLookupOwnedGenerator(t *testing.T) {
 	result, err := executorExec(ctx, executor, session, "insert into music(user_id) values (2)", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
-		Sql: "insert into music(user_id, id) values (:_user_id_0, :_id_0)",
+		Sql: "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into music(user_id, id) values (:_user_id_0, :_id_0)",
 		BindVariables: map[string]*querypb.BindVariable{
 			"_user_id_0": sqltypes.Int64BindVariable(2),
 			"_id_0":      sqltypes.Int64BindVariable(4),
@@ -2002,7 +2002,7 @@ func TestInsertLookupOwnedGenerator(t *testing.T) {
 		Sql:           "select next :n /* INT64 */ values from user_seq",
 		BindVariables: map[string]*querypb.BindVariable{"n": sqltypes.Int64BindVariable(1)},
 	}, {
-		Sql: "insert into music_user_map(music_id, user_id) values (:music_id_0, :user_id_0)",
+		Sql: "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into music_user_map(music_id, user_id) values (:music_id_0, :user_id_0)",
 		BindVariables: map[string]*querypb.BindVariable{
 			"music_id_0": sqltypes.Int64BindVariable(4),
 			"user_id_0":  sqltypes.Uint64BindVariable(2),
@@ -2026,7 +2026,7 @@ func TestInsertLookupUnowned(t *testing.T) {
 	_, err := executorExec(ctx, executor, session, "insert into music_extra(user_id, music_id) values (2, 3)", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
-		Sql: "insert into music_extra(user_id, music_id) values (:_user_id_0, :_music_id_0)",
+		Sql: "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into music_extra(user_id, music_id) values (:_user_id_0, :_music_id_0)",
 		BindVariables: map[string]*querypb.BindVariable{
 			"_user_id_0":  sqltypes.Int64BindVariable(2),
 			"_music_id_0": sqltypes.Int64BindVariable(3),
@@ -2034,7 +2034,7 @@ func TestInsertLookupUnowned(t *testing.T) {
 	}}
 	assertQueries(t, sbc, wantQueries)
 	wantQueries = []*querypb.BoundQuery{{
-		Sql: "select music_id from music_user_map where music_id = :music_id and user_id = :user_id",
+		Sql: "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ music_id from music_user_map where music_id = :music_id and user_id = :user_id",
 		BindVariables: map[string]*querypb.BindVariable{
 			"music_id": sqltypes.Int64BindVariable(3),
 			"user_id":  sqltypes.Uint64BindVariable(2),
@@ -2055,7 +2055,7 @@ func TestInsertLookupUnownedUnsupplied(t *testing.T) {
 	_, err := executorExec(ctx, executor, session, "insert into music_extra_reversed(music_id) values (3)", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
-		Sql: "insert into music_extra_reversed(music_id, user_id) values (:_music_id_0, :_user_id_0)",
+		Sql: "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into music_extra_reversed(music_id, user_id) values (:_music_id_0, :_user_id_0)",
 		BindVariables: map[string]*querypb.BindVariable{
 			"_user_id_0":  sqltypes.Uint64BindVariable(1),
 			"_music_id_0": sqltypes.Int64BindVariable(3),
@@ -2065,7 +2065,7 @@ func TestInsertLookupUnownedUnsupplied(t *testing.T) {
 	vars, err := sqltypes.BuildBindVariable([]any{sqltypes.NewInt64(3)})
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
-		Sql: "select music_id, user_id from music_user_map where music_id in ::music_id for update",
+		Sql: "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ music_id, user_id from music_user_map where music_id in ::music_id for update",
 		BindVariables: map[string]*querypb.BindVariable{
 			"music_id": vars,
 		},
@@ -2124,7 +2124,7 @@ func TestInsertPartialFail2(t *testing.T) {
 			Sql:           "savepoint x",
 			BindVariables: map[string]*querypb.BindVariable{},
 		}, {
-			Sql: "insert into `user`(id, v, `name`) values (:_Id_0, 2, :_name_0)",
+			Sql: "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into `user`(id, v, `name`) values (:_Id_0, 2, :_name_0)",
 			BindVariables: map[string]*querypb.BindVariable{
 				"_Id_0":   sqltypes.Int64BindVariable(1),
 				"_name_0": sqltypes.StringBindVariable("myname"),
@@ -2146,7 +2146,7 @@ func TestMultiInsertSharded(t *testing.T) {
 	_, err := executorExec(ctx, executor, session, "insert into user(id, v, name) values (1, 1, 'myname1'),(3, 3, 'myname3')", nil)
 	require.NoError(t, err)
 	wantQueries1 := []*querypb.BoundQuery{{
-		Sql: "insert into `user`(id, v, `name`) values (:_Id_0, 1, :_name_0)",
+		Sql: "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into `user`(id, v, `name`) values (:_Id_0, 1, :_name_0)",
 		BindVariables: map[string]*querypb.BindVariable{
 			"_Id_0":   sqltypes.Int64BindVariable(1),
 			"_name_0": sqltypes.StringBindVariable("myname1"),
@@ -2154,7 +2154,7 @@ func TestMultiInsertSharded(t *testing.T) {
 	}}
 
 	wantQueries2 := []*querypb.BoundQuery{{
-		Sql: "insert into `user`(id, v, `name`) values (:_Id_1, 3, :_name_1)",
+		Sql: "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into `user`(id, v, `name`) values (:_Id_1, 3, :_name_1)",
 		BindVariables: map[string]*querypb.BindVariable{
 			"_Id_1":   sqltypes.Int64BindVariable(3),
 			"_name_1": sqltypes.StringBindVariable("myname3"),
@@ -2164,7 +2164,7 @@ func TestMultiInsertSharded(t *testing.T) {
 	assertQueries(t, sbc2, wantQueries2)
 
 	wantQueries1 = []*querypb.BoundQuery{{
-		Sql: "insert into name_user_map(`name`, user_id) values (:name_0, :user_id_0), (:name_1, :user_id_1)",
+		Sql: "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into name_user_map(`name`, user_id) values (:name_0, :user_id_0), (:name_1, :user_id_1)",
 		BindVariables: map[string]*querypb.BindVariable{
 			"name_0":    sqltypes.StringBindVariable("myname1"),
 			"user_id_0": sqltypes.Uint64BindVariable(1),
@@ -2180,7 +2180,7 @@ func TestMultiInsertSharded(t *testing.T) {
 	_, err = executorExec(ctx, executor, session, "insert into user(id, v, name) values (1, 1, 'myname1'),(2, 2, 'myname2')", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
-		Sql: "insert into `user`(id, v, `name`) values (:_Id_0, 1, :_name_0),(:_Id_1, 2, :_name_1)",
+		Sql: "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into `user`(id, v, `name`) values (:_Id_0, 1, :_name_0),(:_Id_1, 2, :_name_1)",
 		BindVariables: map[string]*querypb.BindVariable{
 			"_Id_0":   sqltypes.Int64BindVariable(1),
 			"_name_0": sqltypes.StringBindVariable("myname1"),
@@ -2192,7 +2192,7 @@ func TestMultiInsertSharded(t *testing.T) {
 	assertQueries(t, sbc1, wantQueries)
 	assertQueries(t, sbc2, nil)
 	wantQueries = []*querypb.BoundQuery{{
-		Sql: "insert into name_user_map(`name`, user_id) values (:name_0, :user_id_0), (:name_1, :user_id_1)",
+		Sql: "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into name_user_map(`name`, user_id) values (:name_0, :user_id_0), (:name_1, :user_id_1)",
 		BindVariables: map[string]*querypb.BindVariable{
 			"name_0":    sqltypes.StringBindVariable("myname1"),
 			"user_id_0": sqltypes.Uint64BindVariable(1),
@@ -2209,7 +2209,7 @@ func TestMultiInsertSharded(t *testing.T) {
 	_, err = executorExec(ctx, executor, session, "insert into user2(id, `name`, lastname) values (2, 'myname', 'mylastname'), (3, 'myname2', 'mylastname2')", nil)
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
-		Sql: "insert into user2(id, `name`, lastname) values (:_id_0, :_name_0, :_lastname_0)",
+		Sql: "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into user2(id, `name`, lastname) values (:_id_0, :_name_0, :_lastname_0)",
 		BindVariables: map[string]*querypb.BindVariable{
 			"_id_0":       sqltypes.Int64BindVariable(2),
 			"_name_0":     sqltypes.StringBindVariable("myname"),
@@ -2218,7 +2218,7 @@ func TestMultiInsertSharded(t *testing.T) {
 	}}
 	assertQueries(t, sbc1, wantQueries)
 	wantQueries = []*querypb.BoundQuery{{
-		Sql: "insert into user2(id, `name`, lastname) values (:_id_1, :_name_1, :_lastname_1)",
+		Sql: "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into user2(id, `name`, lastname) values (:_id_1, :_name_1, :_lastname_1)",
 		BindVariables: map[string]*querypb.BindVariable{
 			"_id_1":       sqltypes.Int64BindVariable(3),
 			"_name_1":     sqltypes.StringBindVariable("myname2"),
@@ -2227,7 +2227,7 @@ func TestMultiInsertSharded(t *testing.T) {
 	}}
 	assertQueries(t, sbc2, wantQueries)
 	wantQueries = []*querypb.BoundQuery{{
-		Sql: "insert into name_lastname_keyspace_id_map(`name`, lastname, keyspace_id) values (:name_0, :lastname_0, :keyspace_id_0), (:name_1, :lastname_1, :keyspace_id_1)",
+		Sql: "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into name_lastname_keyspace_id_map(`name`, lastname, keyspace_id) values (:name_0, :lastname_0, :keyspace_id_0), (:name_1, :lastname_1, :keyspace_id_1)",
 		BindVariables: map[string]*querypb.BindVariable{
 			"name_0":        sqltypes.StringBindVariable("myname"),
 			"lastname_0":    sqltypes.StringBindVariable("mylastname"),
@@ -2257,7 +2257,7 @@ func TestMultiInsertGenerator(t *testing.T) {
 	result, err := executorExec(ctx, executor, session, "insert into music(user_id, `name`) values (:u, 'myname1'),(:u, 'myname2')", map[string]*querypb.BindVariable{"u": sqltypes.Int64BindVariable(2)})
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
-		Sql: "insert into music(user_id, `name`, id) values (:_user_id_0, 'myname1', :_id_0),(:_user_id_1, 'myname2', :_id_1)",
+		Sql: "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into music(user_id, `name`, id) values (:_user_id_0, 'myname1', :_id_0),(:_user_id_1, 'myname2', :_id_1)",
 		BindVariables: map[string]*querypb.BindVariable{
 			"_id_0":      sqltypes.Int64BindVariable(1),
 			"_user_id_0": sqltypes.Int64BindVariable(2),
@@ -2270,7 +2270,7 @@ func TestMultiInsertGenerator(t *testing.T) {
 		Sql:           "select next :n /* INT64 */ values from user_seq",
 		BindVariables: map[string]*querypb.BindVariable{"n": sqltypes.Int64BindVariable(2)},
 	}, {
-		Sql: "insert into music_user_map(music_id, user_id) values (:music_id_0, :user_id_0), (:music_id_1, :user_id_1)",
+		Sql: "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into music_user_map(music_id, user_id) values (:music_id_0, :user_id_0), (:music_id_1, :user_id_1)",
 		BindVariables: map[string]*querypb.BindVariable{
 			"user_id_0":  sqltypes.Uint64BindVariable(2),
 			"music_id_0": sqltypes.Int64BindVariable(1),
@@ -2304,7 +2304,7 @@ func TestMultiInsertGeneratorSparse(t *testing.T) {
 	result, err := executorExec(ctx, executor, session, "insert into music(id, user_id, name) values (NULL, :u, 'myname1'),(2, :u, 'myname2'), (NULL, :u, 'myname3')", map[string]*querypb.BindVariable{"u": sqltypes.Int64BindVariable(2)})
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
-		Sql: "insert into music(id, user_id, `name`) values (:_id_0, :_user_id_0, 'myname1'),(:_id_1, :_user_id_1, 'myname2'),(:_id_2, :_user_id_2, 'myname3')",
+		Sql: "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into music(id, user_id, `name`) values (:_id_0, :_user_id_0, 'myname1'),(:_id_1, :_user_id_1, 'myname2'),(:_id_2, :_user_id_2, 'myname3')",
 		BindVariables: map[string]*querypb.BindVariable{
 			"_id_0":      sqltypes.Int64BindVariable(1),
 			"_user_id_0": sqltypes.Int64BindVariable(2),
@@ -2319,7 +2319,7 @@ func TestMultiInsertGeneratorSparse(t *testing.T) {
 		Sql:           "select next :n /* INT64 */ values from user_seq",
 		BindVariables: map[string]*querypb.BindVariable{"n": sqltypes.Int64BindVariable(2)},
 	}, {
-		Sql: "insert into music_user_map(music_id, user_id) values (:music_id_0, :user_id_0), (:music_id_1, :user_id_1), (:music_id_2, :user_id_2)",
+		Sql: "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into music_user_map(music_id, user_id) values (:music_id_0, :user_id_0), (:music_id_1, :user_id_1), (:music_id_2, :user_id_2)",
 		BindVariables: map[string]*querypb.BindVariable{
 			"user_id_0":  sqltypes.Uint64BindVariable(2),
 			"music_id_0": sqltypes.Int64BindVariable(1),
@@ -2381,14 +2381,14 @@ func TestKeyDestRangeQuery(t *testing.T) {
 		expectedSbc2Query        string
 	}
 	deleteInput := "DELETE FROM sharded_user_msgs LIMIT 1000"
-	deleteOutput := "delete from sharded_user_msgs limit 1000"
+	deleteOutput := "delete /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ from sharded_user_msgs limit 1000"
 
 	selectInput := "SELECT * FROM sharded_user_msgs LIMIT 1"
-	selectOutput := "select * from sharded_user_msgs limit 1"
+	selectOutput := "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ * from sharded_user_msgs limit 1"
 	updateInput := "UPDATE sharded_user_msgs set message='test' LIMIT 1"
-	updateOutput := "update sharded_user_msgs set message = 'test' limit 1"
+	updateOutput := "update /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ sharded_user_msgs set message = 'test' limit 1"
 	insertInput := "INSERT INTO sharded_user_msgs(message) VALUES('test')"
-	insertOutput := "insert into sharded_user_msgs(message) values ('test')"
+	insertOutput := "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into sharded_user_msgs(message) values ('test')"
 	tests := []testCase{
 		{
 			inputQuery:        deleteInput,
@@ -2542,7 +2542,7 @@ func TestUpdateLastInsertID(t *testing.T) {
 	_, err := executorExec(ctx, executor, session, sql, map[string]*querypb.BindVariable{})
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
-		Sql: "update `user` set a = :__lastInsertId where id = :id /* INT64 */",
+		Sql: "update /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ `user` set a = :__lastInsertId where id = :id /* INT64 */",
 		BindVariables: map[string]*querypb.BindVariable{
 			"__lastInsertId": sqltypes.Uint64BindVariable(43),
 			"id":             sqltypes.Int64BindVariable(1),
@@ -2564,21 +2564,21 @@ func TestUpdateReference(t *testing.T) {
 	_, err := executorExec(ctx, executor, session, "update zip_detail set status = 'CLOSED' where id = 1", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "update zip_detail set `status` = 'CLOSED' where id = 1",
+		Sql:           "update /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ zip_detail set `status` = 'CLOSED' where id = 1",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	assertQueries(t, sbc1, nil)
 	assertQueries(t, sbc2, nil)
 	assertQueries(t, sbclookup, wantQueries)
 
-	testQueryLog(t, executor, logChan, "TestExecute", "UPDATE", "update zip_detail set `status` = 'CLOSED' where id = 1", 1)
+	testQueryLog(t, executor, logChan, "TestExecute", "UPDATE", "update /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ zip_detail set `status` = 'CLOSED' where id = 1", 1)
 
 	sbclookup.Queries = nil
 
 	_, err = executorExec(ctx, executor, session, "update TestUnsharded.zip_detail set status = 'CLOSED' where id = 1", nil)
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
-		Sql:           "update zip_detail set `status` = 'CLOSED' where id = 1",
+		Sql:           "update /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ zip_detail set `status` = 'CLOSED' where id = 1",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	assertQueries(t, sbc1, nil)
@@ -2586,7 +2586,7 @@ func TestUpdateReference(t *testing.T) {
 	assertQueries(t, sbclookup, wantQueries)
 
 	testQueryLog(t, executor, logChan, "TestExecute", "UPDATE",
-		"update TestUnsharded.zip_detail set `status` = 'CLOSED' where id = 1", 1)
+		"update /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ TestUnsharded.zip_detail set `status` = 'CLOSED' where id = 1", 1)
 
 	sbclookup.Queries = nil
 
@@ -2607,7 +2607,7 @@ func TestDeleteLookupOwnedEqual(t *testing.T) {
 	require.NoError(t, err)
 	tupleBindVar, _ := sqltypes.BuildBindVariable([]int64{1})
 	sbc1wantQueries := []*querypb.BoundQuery{{
-		Sql: "select unq_col, keyspace_id from t1_lkp_idx where unq_col in ::__vals for update",
+		Sql: "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ unq_col, keyspace_id from t1_lkp_idx where unq_col in ::__vals for update",
 		BindVariables: map[string]*querypb.BindVariable{
 			"__vals":  tupleBindVar,
 			"unq_col": tupleBindVar,
@@ -2617,7 +2617,7 @@ func TestDeleteLookupOwnedEqual(t *testing.T) {
 		Sql:           "select id, unq_col from t1 where unq_col = 1 for update",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}, {
-		Sql:           "delete from t1 where unq_col = 1",
+		Sql:           "delete /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ from t1 where unq_col = 1",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	assertQueries(t, sbc1, sbc1wantQueries)
@@ -2636,28 +2636,28 @@ func TestDeleteReference(t *testing.T) {
 	_, err := executorExec(ctx, executor, session, "delete from zip_detail where id = 1", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "delete from zip_detail where id = 1",
+		Sql:           "delete /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ from zip_detail where id = 1",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	assertQueries(t, sbc1, nil)
 	assertQueries(t, sbc2, nil)
 	assertQueries(t, sbclookup, wantQueries)
 
-	testQueryLog(t, executor, logChan, "TestExecute", "DELETE", "delete from zip_detail where id = 1", 1)
+	testQueryLog(t, executor, logChan, "TestExecute", "DELETE", "delete /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ from zip_detail where id = 1", 1)
 
 	sbclookup.Queries = nil
 
 	_, err = executorExec(ctx, executor, session, "delete from zip_detail where id = 1", nil)
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
-		Sql:           "delete from zip_detail where id = 1",
+		Sql:           "delete /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ from zip_detail where id = 1",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	assertQueries(t, sbc1, nil)
 	assertQueries(t, sbc2, nil)
 	assertQueries(t, sbclookup, wantQueries)
 
-	testQueryLog(t, executor, logChan, "TestExecute", "DELETE", "delete from zip_detail where id = 1", 1)
+	testQueryLog(t, executor, logChan, "TestExecute", "DELETE", "delete /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ from zip_detail where id = 1", 1)
 
 	sbclookup.Queries = nil
 
@@ -2690,8 +2690,8 @@ func TestReservedConnDML(t *testing.T) {
 	require.NoError(t, err)
 
 	wantQueries = append(wantQueries,
-		&querypb.BoundQuery{Sql: "set default_week_format = 1", BindVariables: map[string]*querypb.BindVariable{}},
-		&querypb.BoundQuery{Sql: "insert into `simple`() values ()", BindVariables: map[string]*querypb.BindVariable{}})
+		&querypb.BoundQuery{Sql: "set default_week_format = 1, sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'", BindVariables: map[string]*querypb.BindVariable{}},
+		&querypb.BoundQuery{Sql: "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into `simple`() values ()", BindVariables: map[string]*querypb.BindVariable{}})
 	_, err = executor.Execute(ctx, nil, "TestReservedConnDML", session, "insert into `simple`() values ()", nil, false)
 	require.NoError(t, err)
 	assertQueries(t, sbc, wantQueries)
@@ -2705,8 +2705,8 @@ func TestReservedConnDML(t *testing.T) {
 	sbc.EphemeralShardErr = sqlerror.NewSQLError(sqlerror.CRServerGone, sqlerror.SSNetError, "connection gone")
 	// as the first time the query fails due to connection loss i.e. reserved conn lost. It will be recreated to set statement will be executed again.
 	wantQueries = append(wantQueries,
-		&querypb.BoundQuery{Sql: "set default_week_format = 1", BindVariables: map[string]*querypb.BindVariable{}},
-		&querypb.BoundQuery{Sql: "insert into `simple`() values ()", BindVariables: map[string]*querypb.BindVariable{}})
+		&querypb.BoundQuery{Sql: "set default_week_format = 1, sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'", BindVariables: map[string]*querypb.BindVariable{}},
+		&querypb.BoundQuery{Sql: "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into `simple`() values ()", BindVariables: map[string]*querypb.BindVariable{}})
 	_, err = executor.Execute(ctx, nil, "TestReservedConnDML", session, "insert into `simple`() values ()", nil, false)
 	require.NoError(t, err)
 	assertQueries(t, sbc, wantQueries)
@@ -2740,14 +2740,14 @@ func TestStreamingDML(t *testing.T) {
 		inTx:     true,
 		expQuery: []*querypb.BoundQuery{},
 	}, {
-		query:  "insert into `simple`() values ()",
+		query:  "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into `simple`() values ()",
 		result: &sqltypes.Result{RowsAffected: 1},
 
 		inTx:        true,
 		openTx:      true,
 		changedRows: 1,
 		expQuery: []*querypb.BoundQuery{{
-			Sql:           "insert into `simple`() values ()",
+			Sql:           "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into `simple`() values ()",
 			BindVariables: map[string]*querypb.BindVariable{},
 		}},
 	}, {
@@ -2758,18 +2758,18 @@ func TestStreamingDML(t *testing.T) {
 		openTx:      true,
 		changedRows: 3,
 		expQuery: []*querypb.BoundQuery{{
-			Sql:           "update `simple` set `name` = 'V' where col = 2",
+			Sql:           "update /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ `simple` set `name` = 'V' where col = 2",
 			BindVariables: map[string]*querypb.BindVariable{},
 		}},
 	}, {
-		query:  "delete from `simple`",
+		query:  "delete /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ from `simple`",
 		result: &sqltypes.Result{RowsAffected: 12},
 
 		inTx:        true,
 		openTx:      true,
 		changedRows: 12,
 		expQuery: []*querypb.BoundQuery{{
-			Sql:           "delete from `simple`",
+			Sql:           "delete /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ from `simple`",
 			BindVariables: map[string]*querypb.BindVariable{},
 		}},
 	}, {
@@ -2822,7 +2822,7 @@ func TestPartialVindexInsertQueryFailure(t *testing.T) {
 		Sql:           "savepoint x",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}, {
-		Sql: "insert into t1_lkp_idx(unq_col, keyspace_id) values (:_unq_col_0, :keyspace_id_0)",
+		Sql: "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into t1_lkp_idx(unq_col, keyspace_id) values (:_unq_col_0, :keyspace_id_0)",
 		BindVariables: map[string]*querypb.BindVariable{
 			"keyspace_id_0": sqltypes.BytesBindVariable([]byte("\x16k@\xb4J\xbaK\xd6")),
 			"_unq_col_0":    sqltypes.Int64BindVariable(1),
@@ -2832,7 +2832,7 @@ func TestPartialVindexInsertQueryFailure(t *testing.T) {
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 
-	_, err = executorExecSession(ctx, executor, session, "insert into t1(id, unq_col) values (1, 1), (2, 3)", nil)
+	_, err = executorExecSession(ctx, executor, session, "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into t1(id, unq_col) values (1, 1), (2, 3)", nil)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "reverted partial DML execution failure")
 	require.True(t, session.GetAutocommit())
@@ -2841,7 +2841,7 @@ func TestPartialVindexInsertQueryFailure(t *testing.T) {
 	assertQueriesWithSavepoint(t, sbc1, wantQ)
 
 	// only parameter in expected query changes
-	wantQ[1].Sql = "insert into t1_lkp_idx(unq_col, keyspace_id) values (:_unq_col_1, :keyspace_id_1)"
+	wantQ[1].Sql = "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into t1_lkp_idx(unq_col, keyspace_id) values (:_unq_col_1, :keyspace_id_1)"
 	wantQ[1].BindVariables = map[string]*querypb.BindVariable{
 		"keyspace_id_1": sqltypes.BytesBindVariable([]byte("\x06\xe7\xea\"Βp\x8f")),
 		"_unq_col_1":    sqltypes.Int64BindVariable(3),
@@ -2851,7 +2851,7 @@ func TestPartialVindexInsertQueryFailure(t *testing.T) {
 	testQueryLog(t, executor, logChan, "TestExecute", "BEGIN", "begin", 0)
 	testQueryLog(t, executor, logChan, "MarkSavepoint", "SAVEPOINT", "savepoint x", 0)
 	testQueryLog(t, executor, logChan, "VindexCreate", "SAVEPOINT_ROLLBACK", "rollback to x", 0)
-	testQueryLog(t, executor, logChan, "TestExecute", "INSERT", "insert into t1(id, unq_col) values (1, 1), (2, 3)", 0)
+	testQueryLog(t, executor, logChan, "TestExecute", "INSERT", "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into t1(id, unq_col) values (1, 1), (2, 3)", 0)
 }
 
 func TestPartialVindexInsertQueryFailureAutoCommit(t *testing.T) {
@@ -2867,14 +2867,14 @@ func TestPartialVindexInsertQueryFailureAutoCommit(t *testing.T) {
 	// fail the second lookup insert query i.e t1_lkp_idx(3, ksid)
 	sbc2.MustFailExecute[sqlparser.StmtInsert] = 1
 	wantQ := []*querypb.BoundQuery{{
-		Sql: "insert into t1_lkp_idx(unq_col, keyspace_id) values (:_unq_col_0, :keyspace_id_0)",
+		Sql: "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into t1_lkp_idx(unq_col, keyspace_id) values (:_unq_col_0, :keyspace_id_0)",
 		BindVariables: map[string]*querypb.BindVariable{
 			"keyspace_id_0": sqltypes.BytesBindVariable([]byte("\x16k@\xb4J\xbaK\xd6")),
 			"_unq_col_0":    sqltypes.Int64BindVariable(1),
 		},
 	}}
 
-	_, err := executorExecSession(ctx, executor, session, "insert into t1(id, unq_col) values (1, 1), (2, 3)", nil)
+	_, err := executorExecSession(ctx, executor, session, "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into t1(id, unq_col) values (1, 1), (2, 3)", nil)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "transaction rolled back to reverse changes of partial DML execution")
 	assert.True(t, session.GetAutocommit())
@@ -2883,15 +2883,15 @@ func TestPartialVindexInsertQueryFailureAutoCommit(t *testing.T) {
 	assertQueriesWithSavepoint(t, sbc1, wantQ)
 
 	// only parameter in expected query changes
-	wantQ[0].Sql = "insert into t1_lkp_idx(unq_col, keyspace_id) values (:_unq_col_1, :keyspace_id_1)"
+	wantQ[0].Sql = "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into t1_lkp_idx(unq_col, keyspace_id) values (:_unq_col_1, :keyspace_id_1)"
 	wantQ[0].BindVariables = map[string]*querypb.BindVariable{
 		"keyspace_id_1": sqltypes.BytesBindVariable([]byte("\x06\xe7\xea\"Βp\x8f")),
 		"_unq_col_1":    sqltypes.Int64BindVariable(3),
 	}
 	assertQueriesWithSavepoint(t, sbc2, wantQ)
 
-	testQueryLog(t, executor, logChan, "VindexCreate", "INSERT", "insert into t1_lkp_idx(unq_col, keyspace_id) values (:unq_col_0, :keyspace_id_0), (:unq_col_1, :keyspace_id_1)", 2)
-	testQueryLog(t, executor, logChan, "TestExecute", "INSERT", "insert into t1(id, unq_col) values (1, 1), (2, 3)", 0)
+	testQueryLog(t, executor, logChan, "VindexCreate", "INSERT", "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into t1_lkp_idx(unq_col, keyspace_id) values (:unq_col_0, :keyspace_id_0), (:unq_col_1, :keyspace_id_1)", 2)
+	testQueryLog(t, executor, logChan, "TestExecute", "INSERT", "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into t1(id, unq_col) values (1, 1), (2, 3)", 0)
 }
 
 // TestMultiInternalSavepoint shows that the internal savepoint created for rolling back any partial dml changes on a failure is not removed from the savepoint list.
@@ -2913,7 +2913,7 @@ func TestMultiInternalSavepoint(t *testing.T) {
 		Sql:           "savepoint x",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}, {
-		Sql: "insert into user_extra(user_id) values (:_user_id_0)",
+		Sql: "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into user_extra(user_id) values (:_user_id_0)",
 		BindVariables: map[string]*querypb.BindVariable{
 			"_user_id_0": sqltypes.Int64BindVariable(1),
 		},
@@ -2931,7 +2931,7 @@ func TestMultiInternalSavepoint(t *testing.T) {
 		Sql:           "savepoint y",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}, {
-		Sql: "insert into user_extra(user_id) values (:_user_id_0)",
+		Sql: "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into user_extra(user_id) values (:_user_id_0)",
 		BindVariables: map[string]*querypb.BindVariable{
 			"_user_id_0": sqltypes.Int64BindVariable(3),
 		},
@@ -2954,10 +2954,10 @@ func TestInsertSelectFromDual(t *testing.T) {
 
 	query := "insert into user(id, v, name) select 1, 2, 'myname' from dual"
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "select 1, 2, 'myname' from dual lock in share mode",
+		Sql:           "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ 1, 2, 'myname' from dual lock in share mode",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}, {
-		Sql: "insert into `user`(id, v, `name`) values (:_c0_0, :_c0_1, :_c0_2)",
+		Sql: "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into `user`(id, v, `name`) values (:_c0_0, :_c0_1, :_c0_2)",
 		BindVariables: map[string]*querypb.BindVariable{
 			"_c0_0": sqltypes.Int64BindVariable(1),
 			"_c0_1": sqltypes.Int64BindVariable(2),
@@ -2966,7 +2966,7 @@ func TestInsertSelectFromDual(t *testing.T) {
 	}}
 
 	wantlkpQueries := []*querypb.BoundQuery{{
-		Sql: "insert into name_user_map(`name`, user_id) values (:name_0, :user_id_0)",
+		Sql: "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into name_user_map(`name`, user_id) values (:name_0, :user_id_0)",
 		BindVariables: map[string]*querypb.BindVariable{
 			"name_0":    sqltypes.StringBindVariable("myname"),
 			"user_id_0": sqltypes.Uint64BindVariable(1),
@@ -2993,8 +2993,8 @@ func TestInsertSelectFromDual(t *testing.T) {
 			assertQueries(t, sbclookup, wantlkpQueries)
 
 			testQueryLog(t, executor, logChan, "TestExecute", "SET", wQuery, 0)
-			testQueryLog(t, executor, logChan, "VindexCreate", "INSERT", "insert into name_user_map(`name`, user_id) values (:name_0, :user_id_0)", 1)
-			testQueryLog(t, executor, logChan, "TestExecute", "INSERT", "insert into `user`(id, v, `name`) select 1, 2, 'myname' from dual", 2)
+			testQueryLog(t, executor, logChan, "VindexCreate", "INSERT", "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into name_user_map(`name`, user_id) values (:name_0, :user_id_0)", 1)
+			testQueryLog(t, executor, logChan, "TestExecute", "INSERT", "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into `user`(id, v, `name`) select 1, 2, 'myname' from dual", 2)
 		})
 	}
 }
@@ -3009,10 +3009,10 @@ func TestInsertSelectFromTable(t *testing.T) {
 
 	query := "insert into user(id, name) select c1, c2 from music"
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "select c1, c2 from music lock in share mode",
+		Sql:           "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ c1, c2 from music lock in share mode",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}, {
-		Sql: "insert into `user`(id, `name`) values (:_c0_0, :_c0_1), (:_c1_0, :_c1_1), (:_c2_0, :_c2_1), (:_c3_0, :_c3_1), (:_c4_0, :_c4_1), (:_c5_0, :_c5_1), (:_c6_0, :_c6_1), (:_c7_0, :_c7_1)",
+		Sql: "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into `user`(id, `name`) values (:_c0_0, :_c0_1), (:_c1_0, :_c1_1), (:_c2_0, :_c2_1), (:_c3_0, :_c3_1), (:_c4_0, :_c4_1), (:_c5_0, :_c5_1), (:_c6_0, :_c6_1), (:_c7_0, :_c7_1)",
 		BindVariables: map[string]*querypb.BindVariable{
 			"_c0_0": sqltypes.Int32BindVariable(1), "_c0_1": sqltypes.StringBindVariable("foo"),
 			"_c1_0": sqltypes.Int32BindVariable(1), "_c1_1": sqltypes.StringBindVariable("foo"),
@@ -3026,7 +3026,7 @@ func TestInsertSelectFromTable(t *testing.T) {
 	}}
 
 	wantlkpQueries := []*querypb.BoundQuery{{
-		Sql: "insert into name_user_map(`name`, user_id) values (:name_0, :user_id_0), (:name_1, :user_id_1), (:name_2, :user_id_2), (:name_3, :user_id_3), (:name_4, :user_id_4), (:name_5, :user_id_5), (:name_6, :user_id_6), (:name_7, :user_id_7)",
+		Sql: "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into name_user_map(`name`, user_id) values (:name_0, :user_id_0), (:name_1, :user_id_1), (:name_2, :user_id_2), (:name_3, :user_id_3), (:name_4, :user_id_4), (:name_5, :user_id_5), (:name_6, :user_id_6), (:name_7, :user_id_7)",
 		BindVariables: map[string]*querypb.BindVariable{
 			"name_0": sqltypes.StringBindVariable("foo"), "user_id_0": sqltypes.Uint64BindVariable(1),
 			"name_1": sqltypes.StringBindVariable("foo"), "user_id_1": sqltypes.Uint64BindVariable(1),
@@ -3055,8 +3055,8 @@ func TestInsertSelectFromTable(t *testing.T) {
 		assertQueries(t, sbclookup, wantlkpQueries)
 
 		testQueryLog(t, executor, logChan, "TestExecute", "SET", wQuery, 0)
-		testQueryLog(t, executor, logChan, "VindexCreate", "INSERT", "insert into name_user_map(`name`, user_id) values (:name_0, :user_id_0), (:name_1, :user_id_1), (:name_2, :user_id_2), (:name_3, :user_id_3), (:name_4, :user_id_4), (:name_5, :user_id_5), (:name_6, :user_id_6), (:name_7, :user_id_7)", 1)
-		testQueryLog(t, executor, logChan, "TestExecute", "INSERT", "insert into `user`(id, `name`) select c1, c2 from music", 9) // 8 from select and 1 from insert.
+		testQueryLog(t, executor, logChan, "VindexCreate", "INSERT", "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into name_user_map(`name`, user_id) values (:name_0, :user_id_0), (:name_1, :user_id_1), (:name_2, :user_id_2), (:name_3, :user_id_3), (:name_4, :user_id_4), (:name_5, :user_id_5), (:name_6, :user_id_6), (:name_7, :user_id_7)", 1)
+		testQueryLog(t, executor, logChan, "TestExecute", "INSERT", "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into `user`(id, `name`) select c1, c2 from music", 9) // 8 from select and 1 from insert.
 	}
 }
 
@@ -3108,21 +3108,21 @@ func TestInsertReference(t *testing.T) {
 	_, err := executorExec(ctx, executor, session, "insert into zip_detail(id, status) values (1, 'CLOSED')", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "insert into zip_detail(id, `status`) values (1, 'CLOSED')",
+		Sql:           "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into zip_detail(id, `status`) values (1, 'CLOSED')",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	assertQueries(t, sbc1, nil)
 	assertQueries(t, sbc2, nil)
 	assertQueries(t, sbclookup, wantQueries)
 
-	testQueryLog(t, executor, logChan, "TestExecute", "INSERT", "insert into zip_detail(id, `status`) values (1, 'CLOSED')", 1)
+	testQueryLog(t, executor, logChan, "TestExecute", "INSERT", "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into zip_detail(id, `status`) values (1, 'CLOSED')", 1)
 
 	sbclookup.Queries = nil
 
 	_, err = executorExec(ctx, executor, session, "insert into TestUnsharded.zip_detail(id, status) values (1, 'CLOSED')", nil)
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
-		Sql:           "insert into zip_detail(id, `status`) values (1, 'CLOSED')",
+		Sql:           "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into zip_detail(id, `status`) values (1, 'CLOSED')",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	assertQueries(t, sbc1, nil)
@@ -3130,7 +3130,7 @@ func TestInsertReference(t *testing.T) {
 	assertQueries(t, sbclookup, wantQueries)
 
 	testQueryLog(t, executor, logChan, "TestExecute", "INSERT",
-		"insert into TestUnsharded.zip_detail(id, `status`) values (1, 'CLOSED')", 1)
+		"insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into TestUnsharded.zip_detail(id, `status`) values (1, 'CLOSED')", 1)
 
 	sbclookup.Queries = nil
 
@@ -3155,11 +3155,11 @@ func TestDeleteMultiTable(t *testing.T) {
 	}
 
 	bq := &querypb.BoundQuery{
-		Sql:           "select 1 from music where music.user_id = 1 and music.col = :user_col",
+		Sql:           "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ 1 from music where music.user_id = 1 and music.col = :user_col",
 		BindVariables: map[string]*querypb.BindVariable{"user_col": sqltypes.StringBindVariable("foo")},
 	}
 	wantQueries := []*querypb.BoundQuery{
-		{Sql: "select `user`.id, `user`.col from `user`", BindVariables: map[string]*querypb.BindVariable{}},
+		{Sql: "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ `user`.id, `user`.col from `user`", BindVariables: map[string]*querypb.BindVariable{}},
 		bq, bq, bq, bq, bq, bq, bq, bq,
 		{Sql: "select `user`.Id, `user`.`name` from `user` where `user`.id in ::dml_vals for update", BindVariables: map[string]*querypb.BindVariable{"dml_vals": {Type: querypb.Type_TUPLE, Values: dmlVals}}},
 		{Sql: "delete from `user` where `user`.id in ::dml_vals", BindVariables: map[string]*querypb.BindVariable{"__vals": sqltypes.TestBindVariable([]any{int64(1), int64(1), int64(1), int64(1), int64(1), int64(1), int64(1), int64(1)}), "dml_vals": {Type: querypb.Type_TUPLE, Values: dmlVals}}},
@@ -3167,14 +3167,14 @@ func TestDeleteMultiTable(t *testing.T) {
 	assertQueries(t, sbc1, wantQueries)
 
 	wantQueries = []*querypb.BoundQuery{
-		{Sql: "select `user`.id, `user`.col from `user`", BindVariables: map[string]*querypb.BindVariable{}},
+		{Sql: "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ `user`.id, `user`.col from `user`", BindVariables: map[string]*querypb.BindVariable{}},
 		{Sql: "select `user`.Id, `user`.`name` from `user` where `user`.id in ::dml_vals for update", BindVariables: map[string]*querypb.BindVariable{"dml_vals": {Type: querypb.Type_TUPLE, Values: dmlVals}}},
 		{Sql: "delete from `user` where `user`.id in ::dml_vals", BindVariables: map[string]*querypb.BindVariable{"dml_vals": {Type: querypb.Type_TUPLE, Values: dmlVals}}},
 	}
 	assertQueries(t, sbc2, wantQueries)
 
 	bq = &querypb.BoundQuery{
-		Sql: "delete from name_user_map where `name` = :name and user_id = :user_id",
+		Sql: "delete /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ from name_user_map where `name` = :name and user_id = :user_id",
 		BindVariables: map[string]*querypb.BindVariable{
 			"name":    sqltypes.StringBindVariable("foo"),
 			"user_id": sqltypes.Uint64BindVariable(1),
@@ -3186,12 +3186,12 @@ func TestDeleteMultiTable(t *testing.T) {
 	assertQueries(t, sbclookup, wantQueries)
 
 	testQueryLog(t, executor, logChan, "MarkSavepoint", "SAVEPOINT", "savepoint s1", 8)
-	testQueryLog(t, executor, logChan, "VindexDelete", "DELETE", "delete from name_user_map where `name` = :name and user_id = :user_id", 1)
+	testQueryLog(t, executor, logChan, "VindexDelete", "DELETE", "delete /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ from name_user_map where `name` = :name and user_id = :user_id", 1)
 	// select `user`.id, `user`.col from `user` - 8 shard
 	// select 1 from music where music.user_id = 1 and music.col = :user_col - 8 shards
 	// select Id, `name` from `user` where (`user`.id) in ::dml_vals for update - 1 shard
 	// delete from `user` where (`user`.id) in ::dml_vals - 1 shard
-	testQueryLog(t, executor, logChan, "TestExecute", "DELETE", "delete `user` from `user` join music on `user`.col = music.col where music.user_id = 1", 18)
+	testQueryLog(t, executor, logChan, "TestExecute", "DELETE", "delete /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ `user` from `user` join music on `user`.col = music.col where music.user_id = 1", 18)
 }
 
 // TestSessionRowsAffected test that rowsAffected is set correctly for each shard session.
@@ -3278,7 +3278,7 @@ func TestConsistentLookupInsert(t *testing.T) {
 	t.Run("transaction rollback due to partial execution error, no duplicate handling", func(t *testing.T) {
 		sbc1.EphemeralShardErr = sqlerror.NewSQLError(sqlerror.ERDupEntry, sqlerror.SSConstraintViolation, "Duplicate entry '10' for key 't1_lkp_idx.PRIMARY'")
 		sbc2.SetResults([]*sqltypes.Result{{RowsAffected: 1}})
-		_, err := executorExecSession(ctx, executor, session, "insert into t1(id, unq_col) values (1, 10), (4, 10), (50, 4)", nil)
+		_, err := executorExecSession(ctx, executor, session, "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into t1(id, unq_col) values (1, 10), (4, 10), (50, 4)", nil)
 		require.ErrorContains(t, err,
 			"lookup.Create: transaction rolled back to reverse changes of partial DML execution: target: TestExecutor.-80.primary: "+
 				"Duplicate entry '10' for key 't1_lkp_idx.PRIMARY' (errno 1062) (sqlstate 23000)")
@@ -3286,8 +3286,8 @@ func TestConsistentLookupInsert(t *testing.T) {
 		assert.EqualValues(t, 0, sbc1.ExecCount.Load())
 		assert.EqualValues(t, 1, sbc2.ExecCount.Load())
 
-		testQueryLog(t, executor, logChan, "VindexCreate", "INSERT", "insert into t1_lkp_idx(unq_col, keyspace_id) values (:unq_col_0, :keyspace_id_0), (:unq_col_1, :keyspace_id_1), (:unq_col_2, :keyspace_id_2)", 2)
-		testQueryLog(t, executor, logChan, "TestExecute", "INSERT", "insert into t1(id, unq_col) values (1, 10), (4, 10), (50, 4)", 0)
+		testQueryLog(t, executor, logChan, "VindexCreate", "INSERT", "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into t1_lkp_idx(unq_col, keyspace_id) values (:unq_col_0, :keyspace_id_0), (:unq_col_1, :keyspace_id_1), (:unq_col_2, :keyspace_id_2)", 2)
+		testQueryLog(t, executor, logChan, "TestExecute", "INSERT", "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into t1(id, unq_col) values (1, 10), (4, 10), (50, 4)", 0)
 	})
 
 	sbc1.ResetCounter()
@@ -3300,7 +3300,7 @@ func TestConsistentLookupInsert(t *testing.T) {
 			sqltypes.MakeTestResult(sqltypes.MakeTestFields("keyspace_id", "varbinary")),
 			{RowsAffected: 1},
 		})
-		_, err := executorExecSession(ctx, executor, session, "insert into t1(id, unq_col) values (1, 10), (4, 10)", nil)
+		_, err := executorExecSession(ctx, executor, session, "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into t1(id, unq_col) values (1, 10), (4, 10)", nil)
 		require.ErrorContains(t, err,
 			"transaction rolled back to reverse changes of partial DML execution: lookup.Create: target: TestExecutor.-80.primary: "+
 				"Duplicate entry '10' for key 't1_lkp_idx.PRIMARY' (errno 1062) (sqlstate 23000)")
@@ -3308,10 +3308,10 @@ func TestConsistentLookupInsert(t *testing.T) {
 		assert.EqualValues(t, 2, sbc1.ExecCount.Load())
 		assert.EqualValues(t, 0, sbc2.ExecCount.Load())
 
-		testQueryLog(t, executor, logChan, "VindexCreate", "INSERT", "insert into t1_lkp_idx(unq_col, keyspace_id) values (:unq_col_0, :keyspace_id_0), (:unq_col_1, :keyspace_id_1)", 1)
-		testQueryLog(t, executor, logChan, "VindexCreate", "SELECT", "select keyspace_id from t1_lkp_idx where unq_col = :unq_col for update", 1)
-		testQueryLog(t, executor, logChan, "VindexCreate", "INSERT", "insert into t1_lkp_idx(unq_col, keyspace_id) values (:unq_col, :keyspace_id)", 1)
-		testQueryLog(t, executor, logChan, "TestExecute", "INSERT", "insert into t1(id, unq_col) values (1, 10), (4, 10)", 0)
+		testQueryLog(t, executor, logChan, "VindexCreate", "INSERT", "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into t1_lkp_idx(unq_col, keyspace_id) values (:unq_col_0, :keyspace_id_0), (:unq_col_1, :keyspace_id_1)", 1)
+		testQueryLog(t, executor, logChan, "VindexCreate", "SELECT", "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ keyspace_id from t1_lkp_idx where unq_col = :unq_col for update", 1)
+		testQueryLog(t, executor, logChan, "VindexCreate", "INSERT", "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into t1_lkp_idx(unq_col, keyspace_id) values (:unq_col, :keyspace_id)", 1)
+		testQueryLog(t, executor, logChan, "TestExecute", "INSERT", "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into t1(id, unq_col) values (1, 10), (4, 10)", 0)
 	})
 }
 
@@ -3329,7 +3329,7 @@ func TestRoutingIndexesUsed(t *testing.T) {
 	// SELECT routed by primary vindex
 	_, err := executorExec(ctx, executor, session, "select id from user where id = 1", nil)
 	require.NoError(t, err)
-	ls := testQueryLog(t, executor, logChan, "TestExecute", "SELECT", "select id from `user` where id = 1", 1)
+	ls := testQueryLog(t, executor, logChan, "TestExecute", "SELECT", "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ id from `user` where id = 1", 1)
 	assert.Equal(t, wantUser, ls.RoutingIndexesUsed, "SELECT routing indexes")
 
 	sbc1.Queries = nil
@@ -3337,7 +3337,7 @@ func TestRoutingIndexesUsed(t *testing.T) {
 	// UPDATE routed by primary vindex
 	_, err = executorExec(ctx, executor, session, "update user set a = 2 where id = 1", nil)
 	require.NoError(t, err)
-	ls = testQueryLog(t, executor, logChan, "TestExecute", "UPDATE", "update `user` set a = 2 where id = 1", 1)
+	ls = testQueryLog(t, executor, logChan, "TestExecute", "UPDATE", "update /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ `user` set a = 2 where id = 1", 1)
 	assert.Equal(t, wantUser, ls.RoutingIndexesUsed, "UPDATE routing indexes")
 
 	sbc1.Queries = nil
@@ -3347,7 +3347,7 @@ func TestRoutingIndexesUsed(t *testing.T) {
 	// Use user_extra which has no owned vindexes, avoiding extra VindexDelete log entries.
 	_, err = executorExec(ctx, executor, session, "delete from user_extra where user_id = 1", nil)
 	require.NoError(t, err)
-	ls = testQueryLog(t, executor, logChan, "TestExecute", "DELETE", "delete from user_extra where user_id = 1", 1)
+	ls = testQueryLog(t, executor, logChan, "TestExecute", "DELETE", "delete /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ from user_extra where user_id = 1", 1)
 	assert.Equal(t, wantUser, ls.RoutingIndexesUsed, "DELETE routing indexes")
 
 	sbc1.Queries = nil

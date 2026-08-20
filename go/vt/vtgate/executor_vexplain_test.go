@@ -78,7 +78,7 @@ func TestSimpleVexplainTrace(t *testing.T) {
 	require.NoError(t, err)
 
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "select count(*), col2, weight_string(col2) from music group by col2, weight_string(col2) order by col2 asc",
+		Sql:           "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ count(*), col2, weight_string(col2) from music group by col2, weight_string(col2) order by col2 asc",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	for _, conn := range conns {
@@ -106,9 +106,9 @@ func TestSimpleVexplainTrace(t *testing.T) {
 			"AvgNumberOfRows": 16,
 			"MedianNumberOfRows": 16,
 			"ShardsQueried": 8,
-			"FieldQuery": "select count(*), col2, weight_string(col2) from music where 1 != 1 group by col2, weight_string(col2)",
+			"FieldQuery": "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ count(*), col2, weight_string(col2) from music where 1 != 1 group by col2, weight_string(col2)",
 			"OrderBy": "(1|2) ASC",
-			"Query": "select count(*), col2, weight_string(col2) from music group by col2, weight_string(col2) order by col2 asc"
+			"Query": "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ count(*), col2, weight_string(col2) from music group by col2, weight_string(col2) order by col2 asc"
 		}
 	]
 }`
