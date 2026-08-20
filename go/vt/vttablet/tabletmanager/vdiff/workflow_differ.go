@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"reflect"
 	"slices"
 	"strings"
@@ -136,7 +137,10 @@ func (wd *workflowDiffer) doReconcileExtraRows(dr *DiffReport, maxExtraRowsToCom
 		// could reconcile rows whose non-PK values actually differ, so leave
 		// the extra rows unreconciled rather than risk hiding a real
 		// difference.
-		log.Info(fmt.Sprintf("Not reconciling extra rows for table %s in vdiff %s: the saved samples are limited to the PK columns by the only-pks option and cannot prove that rows are identical", dr.TableName, wd.ct.uuid))
+		log.Info("not reconciling extra rows: the saved samples are limited to the PK columns by the only-pks option and cannot prove that rows are identical",
+			slog.String("table", dr.TableName),
+			slog.String("vdiff", wd.ct.uuid),
+		)
 		return nil
 	}
 	matchedSourceDiffs := make([]bool, len(dr.ExtraRowsSourceDiffs))
