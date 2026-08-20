@@ -119,12 +119,12 @@ func (wd *workflowDiffer) doReconcileExtraRows(dr *DiffReport, maxExtraRowsToCom
 	if dr.ExtraRowsSource == 0 || dr.ExtraRowsTarget == 0 {
 		return nil
 	}
-	if wd.opts.GetReportOptions().GetOnlyPks() || wd.opts.GetReportOptions().GetRowDiffColumnTruncateAt() > 0 {
-		// The saved row samples are lossy: they contain only the PK columns or
-		// truncated column values. Comparing them could reconcile rows whose
-		// hidden or truncated values actually differ, so leave the extra rows
-		// unreconciled rather than risk hiding a real difference.
-		log.Info(fmt.Sprintf("Not reconciling extra rows for table %s in vdiff %s: the saved samples are limited by the only-pks or row-diff-column-truncate-at options and cannot prove that rows are identical", dr.TableName, wd.ct.uuid))
+	if wd.opts.GetReportOptions().GetOnlyPks() {
+		// The saved row samples contain only the PK columns. Comparing them
+		// could reconcile rows whose non-PK values actually differ, so leave
+		// the extra rows unreconciled rather than risk hiding a real
+		// difference.
+		log.Info(fmt.Sprintf("Not reconciling extra rows for table %s in vdiff %s: the saved samples are limited to the PK columns by the only-pks option and cannot prove that rows are identical", dr.TableName, wd.ct.uuid))
 		return nil
 	}
 	matchedSourceDiffs := make([]bool, len(dr.ExtraRowsSourceDiffs))
@@ -139,11 +139,15 @@ func (wd *workflowDiffer) doReconcileExtraRows(dr *DiffReport, maxExtraRowsToCom
 	// Find the matching extra rows. The extra row counts (dr.ExtraRowsSource/dr.ExtraRowsTarget)
 	// can be higher than the number of saved sample rows -- e.g. when the counts exceed
 	// maxExtraRowsToCompare -- so all indexing must be bounded by the slice lengths, never by
-	// the counts.
+	// the counts. Samples with truncated values are excluded: they cannot prove that two rows
+	// are identical, and reconciling them could hide a real difference.
 	for i := 0; i < len(dr.ExtraRowsSourceDiffs); i++ {
+		if dr.ExtraRowsSourceDiffs[i].TruncatedValues {
+			continue
+		}
 		for j := 0; j < len(dr.ExtraRowsTargetDiffs); j++ {
-			if matchedTargetDiffs[j] {
-				// previously matched
+			if matchedTargetDiffs[j] || dr.ExtraRowsTargetDiffs[j].TruncatedValues {
+				// Previously matched, or not provably identical.
 				continue
 			}
 			if reflect.DeepEqual(dr.ExtraRowsSourceDiffs[i], dr.ExtraRowsTargetDiffs[j]) {

@@ -328,6 +328,32 @@ func (p *erroringPrimitive) TryStreamExecute(ctx context.Context, vcursor engine
 	return p.err
 }
 
+// TestGenRowDiffMarksTruncatedValues tests that a row sample whose values were
+// actually truncated (per row-diff-column-truncate-at) is marked as truncated,
+// and that a sample with short values is not, since only actually-truncated
+// samples are excluded from extra-row reconciliation.
+func TestGenRowDiffMarksTruncatedValues(t *testing.T) {
+	td := newDrainTestDiffer(binlogplayer.NewMockDBClient(t),
+		engine.NewRowsPrimitive(nil, drainTestFields),
+		engine.NewRowsPrimitive(nil, drainTestFields),
+	)
+	reportOpts := &tabletmanagerdatapb.VDiffReportOptions{
+		MaxSampleRows:           10,
+		RowDiffColumnTruncateAt: 8,
+	}
+
+	longValue := "this value is definitely long enough to get truncated"
+	rd, err := td.genRowDiff(td.tablePlan.sourceQuery, drainTestRow(1, longValue), reportOpts)
+	require.NoError(t, err)
+	require.True(t, rd.TruncatedValues)
+	require.Equal(t, longValue[:8]+truncatedNotation, rd.Row["c2"])
+
+	rd, err = td.genRowDiff(td.tablePlan.sourceQuery, drainTestRow(1, "short"), reportOpts)
+	require.NoError(t, err)
+	require.False(t, rd.TruncatedValues)
+	require.Equal(t, "short", rd.Row["c2"])
+}
+
 // TestDiffDrainStreamError tests that when the stream fails in the middle of
 // draining the remaining rows of one side, none of the partially drained rows
 // are merged into the diff report: the report persisted by the deferred

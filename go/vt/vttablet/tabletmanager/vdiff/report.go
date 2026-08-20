@@ -63,6 +63,11 @@ type DiffMismatch struct {
 type RowDiff struct {
 	Row   map[string]string `json:"Row,omitempty"`
 	Query string            `json:"Query,omitempty"`
+	// TruncatedValues is set when at least one of the values in Row was
+	// truncated per the row-diff-column-truncate-at option. A truncated
+	// sample cannot prove that two rows are identical, so it is excluded
+	// from extra-row reconciliation.
+	TruncatedValues bool `json:"TruncatedValues,omitempty"`
 }
 
 func (td *tableDiffer) genRowDiff(queryStmt string, row []sqltypes.Value, opts *tabletmanagerdatapb.VDiffReportOptions) (*RowDiff, error) {
@@ -88,6 +93,7 @@ func (td *tableDiffer) genRowDiff(queryStmt string, row []sqltypes.Value, opts *
 		// Let's truncate if it's really worth it to avoid losing
 		// value for a few chars.
 		if truncateAt > 0 && row[index].Len() >= truncateAt+len(truncatedNotation)+20 {
+			rd.TruncatedValues = true
 			if row[index].IsBinary() {
 				rb, err := row[index].ToBytes()
 				if err != nil { // Should never happen

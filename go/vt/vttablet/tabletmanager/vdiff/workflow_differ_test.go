@@ -308,13 +308,16 @@ func TestReconcileExtraRows(t *testing.T) {
 }
 
 // TestReconcileExtraRowsSkippedForLossySamples tests that extra rows are not
-// reconciled when the report options make the saved row samples lossy
-// (only-pks or column truncation): lossy samples can be equal even when the
-// full rows differ, so reconciling them could hide a real difference.
+// reconciled from lossy row samples: samples limited to the PK columns
+// (only-pks) or with truncated values can be equal even when the full rows
+// differ, so reconciling them could hide a real difference. Merely setting
+// row-diff-column-truncate-at must not disable reconciliation: only samples
+// whose values were actually truncated are excluded.
 func TestReconcileExtraRowsSkippedForLossySamples(t *testing.T) {
 	testCases := []struct {
 		name          string
 		reportOptions *tabletmanagerdatapb.VDiffReportOptions
+		truncated     bool
 		wantExtras    int64
 	}{
 		{
@@ -328,8 +331,14 @@ func TestReconcileExtraRowsSkippedForLossySamples(t *testing.T) {
 			wantExtras:    1,
 		},
 		{
-			name:          "truncated samples are not reconciled",
-			reportOptions: &tabletmanagerdatapb.VDiffReportOptions{MaxSampleRows: 10, RowDiffColumnTruncateAt: 8},
+			name:          "truncate option alone does not disable reconciliation",
+			reportOptions: &tabletmanagerdatapb.VDiffReportOptions{MaxSampleRows: 10, RowDiffColumnTruncateAt: 128},
+			wantExtras:    0,
+		},
+		{
+			name:          "samples with truncated values are not reconciled",
+			reportOptions: &tabletmanagerdatapb.VDiffReportOptions{MaxSampleRows: 10, RowDiffColumnTruncateAt: 128},
+			truncated:     true,
 			wantExtras:    1,
 		},
 	}
@@ -348,9 +357,9 @@ func TestReconcileExtraRowsSkippedForLossySamples(t *testing.T) {
 				ProcessedRows:        4,
 				MatchingRows:         2,
 				ExtraRowsSource:      1,
-				ExtraRowsSourceDiffs: []*RowDiff{{Row: map[string]string{"c1": "1", "c2": "a"}}},
+				ExtraRowsSourceDiffs: []*RowDiff{{Row: map[string]string{"c1": "1", "c2": "a"}, TruncatedValues: tc.truncated}},
 				ExtraRowsTarget:      1,
-				ExtraRowsTargetDiffs: []*RowDiff{{Row: map[string]string{"c1": "1", "c2": "a"}}},
+				ExtraRowsTargetDiffs: []*RowDiff{{Row: map[string]string{"c1": "1", "c2": "a"}, TruncatedValues: tc.truncated}},
 			}
 			require.NoError(t, wd.doReconcileExtraRows(dr, 10, tc.reportOptions.MaxSampleRows))
 			require.Equal(t, tc.wantExtras, dr.ExtraRowsSource)

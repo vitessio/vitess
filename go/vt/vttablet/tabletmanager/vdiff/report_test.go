@@ -162,6 +162,7 @@ func TestGenRowDiff(t *testing.T) {
 				RowDiffColumnTruncateAt: 5,
 			},
 			want: &RowDiff{
+				TruncatedValues: true,
 				Row: map[string]string{
 					"c1": strings.Repeat("a", 100), // PK fields are not truncated
 					"c2": strings.Repeat("b", 5) + truncatedNotation,
