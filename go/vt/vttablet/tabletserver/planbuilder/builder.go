@@ -181,12 +181,17 @@ func showTableRewrite(show *sqlparser.ShowBasic, dbName string) {
 	})
 }
 
-func analyzeSet(set *sqlparser.Set) (plan *Plan) {
+func analyzeSet(set *sqlparser.Set) (*Plan, error) {
+	verify, err := validateSetExprsSQLMode(set.Exprs)
+	if err != nil {
+		return nil, err
+	}
 	return &Plan{
 		PlanID:            PlanSet,
 		FullQuery:         GenerateFullQuery(set),
 		NeedsReservedConn: true,
-	}
+		VerifySQLMode:     verify,
+	}, nil
 }
 
 func lookupTables(tableExprs sqlparser.TableExprs, tables map[string]*schema.Table) (singleTable *schema.Table) {

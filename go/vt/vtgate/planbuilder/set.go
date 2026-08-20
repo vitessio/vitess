@@ -21,6 +21,7 @@ import (
 	"strconv"
 	"strings"
 
+	"vitess.io/vitess/go/mysql/sqlmode"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/sysvars"
@@ -172,6 +173,30 @@ func planSysVarCheckIgnore(expr *sqlparser.SetExpr, schema plancontext.VSchema, 
 		TargetDestination: dest,
 		Expr:              value,
 	}, nil
+}
+
+// validateSQLModePlan wraps sql_mode's planFunc with plan-time validation of constant
+// values: literals and constant expressions (e.g. CONCAT over literals) are evaluated and
+// validated the way MySQL validates a SET sql_mode, and modes the Vitess parser cannot
+// support are rejected (see sqlmode.Validate). Non-constant expressions are validated at
+// execution time, once their value is known.
+func validateSQLModePlan(inner planFunc) planFunc {
+	return func(expr *sqlparser.SetExpr, vschema plancontext.VSchema, ec *expressionConverter) (engine.SetOp, error) {
+		evalExpr, err := evalengine.Translate(expr.Expr, &evalengine.Config{
+			Collation:   vschema.ConnCollation(),
+			Environment: vschema.Environment(),
+		})
+		if err == nil {
+			if lit, ok := evalExpr.(*evalengine.Literal); ok {
+				if res, err := evalengine.EmptyExpressionEnv(vschema.Environment()).Evaluate(lit); err == nil {
+					if _, err := sqlmode.Validate(res.Value(vschema.ConnCollation())); err != nil {
+						return nil, err
+					}
+				}
+			}
+		}
+		return inner(expr, vschema, ec)
+	}
 }
 
 func buildSetOpReservedConn(s setting) planFunc {

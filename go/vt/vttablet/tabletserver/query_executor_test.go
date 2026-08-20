@@ -2109,6 +2109,119 @@ const (
 )
 
 // newTestQueryExecutor uses a package level variable testTabletServer defined in tabletserver_test.go
+// A SET statement whose sql_mode value cannot be judged at plan time (non-constant
+// expression) is executed and the applied value is read back and validated, so a
+// non-constant expression cannot put a dedicated connection into a mode vtgate
+// rejects. On violation the previous sql_mode is restored, making the failed SET a
+// no-op; the connection is only closed if the restore itself fails.
+func TestQueryExecutorSetSQLModeVerify(t *testing.T) {
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
+	ctx := t.Context()
+	tsv := newTestTabletServer(ctx, noFlags, db)
+	defer tsv.StopService()
+
+	const readQuery = "select @@sql_mode"
+	const prevMode = "ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES"
+	const appliedMode = "REAL_AS_FLOAT,PIPES_AS_CONCAT,ANSI_QUOTES,IGNORE_SPACE,ONLY_FULL_GROUP_BY,ANSI"
+	const restoreQuery = "set sql_mode = '" + prevMode + "'"
+	modeResult := func(mode string) *sqltypes.Result {
+		return sqltypes.MakeTestResult(sqltypes.MakeTestFields("@@sql_mode", "varchar"), mode)
+	}
+
+	setQuery := "set @@sql_mode = concat('AN', 'SI')"
+	db.AddQuery(setQuery, &sqltypes.Result{})
+
+	// a supported applied value passes the verification
+	db.AddQuery(readQuery, modeResult(prevMode))
+	txID := newTransaction(tsv, nil)
+	qre := newTestQueryExecutor(ctx, tsv, setQuery, txID)
+	require.Equal(t, planbuilder.PlanSet, qre.plan.PlanID)
+	require.True(t, qre.plan.VerifySQLMode)
+	_, err := qre.Execute()
+	require.NoError(t, err)
+	_, err = tsv.Rollback(ctx, tsv.sm.Target(), txID)
+	require.NoError(t, err)
+
+	// an unsupported applied value fails with vtgate's error and restores the previous
+	// mode. The exact-match entry serves the snapshot read; the callback swaps in the
+	// applied mode for the read-back after the SET executed.
+	db.AddQuery(restoreQuery, &sqltypes.Result{})
+	db.AddQueryPatternWithCallback("select @@sql_mode", modeResult(prevMode), func(string) {
+		db.AddQuery(readQuery, modeResult(appliedMode))
+	})
+	db.DeleteQuery(readQuery)
+	txID = newTransaction(tsv, nil)
+	qre = newTestQueryExecutor(ctx, tsv, setQuery, txID)
+	_, err = qre.Execute()
+	require.EqualError(t, err, "setting the ANSI sql_mode is unsupported")
+	require.Equal(t, 1, db.GetQueryCalledNum(restoreQuery))
+
+	// the restore kept the connection usable: the transaction is still alive
+	constQuery := "set @@sql_mode = 'STRICT_TRANS_TABLES'"
+	db.AddQuery(constQuery, &sqltypes.Result{})
+	qre = newTestQueryExecutor(ctx, tsv, constQuery, txID)
+	require.False(t, qre.plan.VerifySQLMode)
+	_, err = qre.Execute()
+	require.NoError(t, err)
+	_, err = tsv.Rollback(ctx, tsv.sm.Target(), txID)
+	require.NoError(t, err)
+
+	// when the restore itself fails, the connection is closed rather than left running
+	// under the unsupported mode: the transaction is gone
+	db.DeleteQuery(restoreQuery)
+	db.AddRejectedQuery(restoreQuery, errRejected)
+	db.DeleteQuery(readQuery)
+	txID = newTransaction(tsv, nil)
+	qre = newTestQueryExecutor(ctx, tsv, setQuery, txID)
+	_, err = qre.Execute()
+	require.EqualError(t, err, "setting the ANSI sql_mode is unsupported")
+	qre = newTestQueryExecutor(ctx, tsv, constQuery, txID)
+	_, err = qre.Execute()
+	require.Error(t, err)
+
+	// a read-back that does not parse as MySQL modes comes from a backend flavor whose
+	// sql_mode vocabulary we do not know (e.g. MariaDB): there is no verdict to enforce
+	// on a value we cannot judge, so the SET stands
+	db.ClearQueryPattern()
+	db.AddQuery(readQuery, modeResult("EMPTY_STRING_IS_NULL,STRICT_TRANS_TABLES"))
+	txID = newTransaction(tsv, nil)
+	qre = newTestQueryExecutor(ctx, tsv, setQuery, txID)
+	_, err = qre.Execute()
+	require.NoError(t, err)
+	_, err = tsv.Rollback(ctx, tsv.sm.Target(), txID)
+	require.NoError(t, err)
+
+	// constant assignments are judged at plan time and need no read-back: with no
+	// registered result for the read, any read would fail the statement
+	db.DeleteQuery(readQuery)
+	txID = newTransaction(tsv, nil)
+	defer func() { _, _ = tsv.Rollback(ctx, tsv.sm.Target(), txID) }()
+	qre = newTestQueryExecutor(ctx, tsv, constQuery, txID)
+	_, err = qre.Execute()
+	require.NoError(t, err)
+}
+
+// A true reservation (get_lock, DDL) applies its settings by executing them directly on
+// the tainted connection, without going through the settings pool's BuildSettingQuery —
+// the sql_mode validation must hold on that path too.
+func TestReserveSettingsRejectUnsupportedSQLModes(t *testing.T) {
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
+	ctx := t.Context()
+	tsv := newTestTabletServer(ctx, noFlags, db)
+	defer tsv.StopService()
+
+	_, _, err := tsv.te.ReserveBegin(ctx, &querypb.ExecuteOptions{}, []string{"set sql_mode = 'ANSI'"})
+	require.EqualError(t, err, "setting the ANSI sql_mode is unsupported")
+
+	validSetting := "set sql_mode = 'STRICT_TRANS_TABLES'"
+	db.AddQuery(validSetting, &sqltypes.Result{})
+	connID, _, err := tsv.te.ReserveBegin(ctx, &querypb.ExecuteOptions{}, []string{validSetting})
+	require.NoError(t, err)
+	require.NoError(t, tsv.te.Release(connID))
+}
+
 func newTestTabletServer(ctx context.Context, flags executorFlags, db *fakesqldb.DB) *TabletServer {
 	cfg := tabletenv.NewDefaultConfig()
 	cfg.OltpReadPool.Size = 100

@@ -20,7 +20,9 @@ import (
 	"encoding/json"
 	"strings"
 
+	"vitess.io/vitess/go/mysql/sqlmode"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/sysvars"
 	"vitess.io/vitess/go/vt/tableacl"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -200,6 +202,11 @@ type Plan struct {
 
 	// NeedsReservedConn indicates at a reserved connection is needed to execute this plan
 	NeedsReservedConn bool
+
+	// VerifySQLMode is set on a PlanSet that assigns sql_mode a value that could not be
+	// judged at plan time (a non-constant expression): the executor must read back the
+	// applied value and validate it with sqlmode.Validate.
+	VerifySQLMode bool
 }
 
 // TableName returns the table name for the plan.
@@ -263,6 +270,12 @@ func BuildStreaming(env *vtenv.Environment, statement sqlparser.Statement, table
 	var plan *Plan
 	var err error
 
+	if commented, ok := statement.(sqlparser.Commented); ok {
+		if err := validateSetVarHintSQLMode(env.Parser(), commented.GetParsedComments()); err != nil {
+			return nil, err
+		}
+	}
+
 	switch stmt := statement.(type) {
 	case *sqlparser.Select:
 		plan, err = analyzeSelect(env, stmt, tables)
@@ -283,7 +296,7 @@ func BuildStreaming(env *vtenv.Environment, statement sqlparser.Statement, table
 	case *sqlparser.Delete:
 		plan, err = analyzeDelete(stmt, tables)
 	case *sqlparser.Set:
-		plan = analyzeSet(stmt)
+		plan, err = analyzeSet(stmt)
 	case sqlparser.DDLStatement:
 		plan, err = analyzeDDL(stmt)
 	case *sqlparser.AlterMigration:
@@ -375,13 +388,29 @@ func BuildSettingQuery(settings []string, parser *sqlparser.Parser) (query strin
 		if !ok {
 			return "", "", vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG]: invalid set statement: %s", setting)
 		}
+		// settings are rendered by vtgates as constants, so no verify pass exists here:
+		// a non-constant value simply stays unjudged and MySQL applies its own checks
+		if _, err := validateSetExprsSQLMode(set.Exprs); err != nil {
+			return "", "", err
+		}
 		setExprs = append(setExprs, set.Exprs...)
 		for _, sExpr := range set.Exprs {
 			sysVar := sExpr.Var
 			if sysVar.Scope != sqlparser.SessionScope && sysVar.Scope != sqlparser.NoScope {
 				return "", "", vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG]: session scope expected, got: %s", sysVar.Scope.ToString())
 			}
-			resetSetExprs = append(resetSetExprs, &sqlparser.SetExpr{Var: sysVar, Expr: lDefault})
+			resetExpr := sqlparser.Expr(lDefault)
+			if sysVar.Name.Lowered() == sysvars.SQLMode.Name {
+				// `default` would re-inherit the server's global sql_mode including its
+				// lexer modes, undoing the neutralization every Vitess-created
+				// connection starts with (see sqlmode.NeutralizeSessionQuery); restore
+				// the neutralized global instead
+				resetExpr, err = parser.ParseExpr(sqlmode.NeutralizedGlobalExpr)
+				if err != nil {
+					return "", "", vterrors.Wrapf(err, "[BUG]: failed to parse the sql_mode reset expression")
+				}
+			}
+			resetSetExprs = append(resetSetExprs, &sqlparser.SetExpr{Var: sysVar, Expr: resetExpr})
 		}
 	}
 	return sqlparser.String(&sqlparser.Set{Exprs: setExprs}), sqlparser.String(&sqlparser.Set{Exprs: resetSetExprs}), nil

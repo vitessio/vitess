@@ -20,9 +20,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"slices"
 	"strings"
 
+	"vitess.io/vitess/go/mysql/sqlmode"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
@@ -95,8 +95,6 @@ type (
 		Name, Value string
 	}
 )
-
-var unsupportedSQLModes = []string{"ANSI_QUOTES", "NO_BACKSLASH_ESCAPES", "PIPES_AS_CONCAT", "REAL_AS_FLOAT"}
 
 var _ Primitive = (*Set)(nil)
 
@@ -338,6 +336,11 @@ func (svs *SysVarReservedConn) checkAndUpdateSysVar(ctx context.Context, vcursor
 	return false, nil
 }
 
+// sqlModeChangedValue reports whether the sql_mode assignment changes the session's
+// current value, after validating the assigned value the way MySQL validates a SET (see
+// sqlmode.Validate). Validation runs before the change detection, so an invalid or
+// unsupported value is rejected even when the assignment would not change the value —
+// name lists, numeric bitmasks, and combination modes like ANSI included.
 func sqlModeChangedValue(qr *sqltypes.Result) (bool, sqltypes.Value, error) {
 	if len(qr.Fields) != 2 {
 		return false, sqltypes.Value{}, nil
@@ -345,46 +348,17 @@ func sqlModeChangedValue(qr *sqltypes.Result) (bool, sqltypes.Value, error) {
 	if len(qr.Rows[0]) != 2 {
 		return false, sqltypes.Value{}, nil
 	}
-	orig := qr.Rows[0][0].ToString()
-	newVal := qr.Rows[0][1].ToString()
-
-	origArr := strings.Split(orig, ",")
-	// Keep track of if the value is seen or not.
-	origMap := map[string]bool{}
-	for _, oVal := range origArr {
-		// Default is not seen.
-		origMap[strings.ToUpper(oVal)] = true
+	newMode, err := sqlmode.Validate(qr.Rows[0][1])
+	if err != nil {
+		return false, sqltypes.Value{}, err
 	}
-	uniqOrigVal := len(origMap)
-	origValSeen := 0
-
-	changed := false
-	newValArr := strings.Split(newVal, ",")
-	unsupportedMode := ""
-	for _, nVal := range newValArr {
-		nVal = strings.ToUpper(nVal)
-		if slices.Contains(unsupportedSQLModes, nVal) {
-			unsupportedMode = nVal
-		}
-		notSeen, exists := origMap[nVal]
-		if !exists {
-			changed = true
-			break
-		}
-		if exists && notSeen {
-			// Value seen. Turn it off
-			origMap[nVal] = false
-			origValSeen++
-		}
+	orig, err := sqlmode.Parse(qr.Rows[0][0].ToString())
+	if err != nil {
+		// The backend reported a value these semantics cannot parse; treat the
+		// assignment as a change and let the backend judge it.
+		return true, qr.Rows[0][1], nil
 	}
-	if !changed && uniqOrigVal != origValSeen {
-		changed = true
-	}
-	if changed && unsupportedMode != "" {
-		return false, sqltypes.Value{}, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "setting the %s sql_mode is unsupported", unsupportedMode)
-	}
-
-	return changed, qr.Rows[0][1], nil
+	return orig.Expand() != newMode, qr.Rows[0][1], nil
 }
 
 var _ SetOp = (*SysVarSetAware)(nil)

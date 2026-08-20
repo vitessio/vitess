@@ -139,7 +139,7 @@ func (se *SQLError) VtRpcErrorCode() vtrpcpb.Code {
 		ERCantAggregate3Collations, ERCantAggregateNCollations, ERVariableIsNotStruct, ERUnknownCollation, ERWrongNameForIndex,
 		ERWrongNameForCatalog, ERBadFTColumn, ERTruncatedWrongValue, ERTooMuchAutoTimestampCols, ERInvalidOnUpdate, ERUnknownTimeZone,
 		ERInvalidCharacterString, ERIllegalReference, ERDerivedMustHaveAlias, ERTableNameNotAllowedHere, ERDataTooLong, ERDataOutOfRange,
-		ERTruncatedWrongValueForField, ERIllegalValueForType, ERWrongValue, ERWrongParamcountToNativeFct:
+		ERTruncatedWrongValueForField, ERIllegalValueForType, ERWrongValue, ERWrongParamcountToNativeFct, ERUnsupportedSQLMode:
 		return vtrpcpb.Code_INVALID_ARGUMENT
 	case ERSpecifiedAccessDenied:
 		if strings.Contains(se.Message, "failover in progress") {
@@ -346,6 +346,7 @@ var stateToMysqlCode = map[vterrors.State]mysqlCode{
 	vterrors.CTERecursiveForbidsAggregation:      {num: ERCTERecursiveForbidsAggregation, state: SSUnknownSQLState},
 	vterrors.CTERecursiveForbiddenJoinOrder:      {num: ERCTERecursiveForbiddenJoinOrder, state: SSUnknownSQLState},
 	vterrors.CTEMaxRecursionDepth:                {num: ERCTEMaxRecursionDepth, state: SSUnknownSQLState},
+	vterrors.UnsupportedSQLMode:                  {num: ERUnsupportedSQLMode, state: SSUnknownSQLState},
 }
 
 func getStateToMySQLState(state vterrors.State) mysqlCode {
