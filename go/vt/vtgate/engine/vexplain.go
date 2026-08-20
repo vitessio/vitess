@@ -20,10 +20,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
+	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -389,6 +391,13 @@ func runMySQLExplainTasks(ctx context.Context, vcursor VCursor, tasks []mysqlExp
 		}
 		for i, res := range results {
 			if res == nil || len(res.Rows) == 0 || len(res.Rows[0]) == 0 {
+				// EXPLAIN FORMAT=JSON always returns one row of one column, and a
+				// per-shard failure would already have aborted above, so an empty
+				// result here is anomalous. Warn rather than silently omitting the
+				// shard from the output map.
+				log.Warn("VEXPLAIN MYSQLPLAN got an empty EXPLAIN result; omitting shard from output",
+					slog.String("keyspace", task.rss[i].Target.Keyspace),
+					slog.String("shard", task.rss[i].Target.Shard))
 				continue
 			}
 			perShard := explainResults[task.primitive]

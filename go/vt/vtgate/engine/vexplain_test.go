@@ -17,12 +17,16 @@ limitations under the License.
 package engine
 
 import (
+	"log/slog"
+	"sync"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
@@ -184,4 +188,50 @@ func TestVExplainMySQLReservedConn(t *testing.T) {
 	require.ErrorContains(t, err, "VEXPLAIN MYSQLPLAN is not supported in a session that holds a reserved connection")
 	// It must fail before touching any shard: no destinations resolved, no EXPLAIN sent.
 	vc.ExpectLog(t, nil)
+}
+
+// TestVExplainMySQLEmptyResultWarns verifies that when a shard's EXPLAIN returns an
+// empty result (no rows), that shard is omitted from the output map but a warning is
+// logged rather than dropping it silently. Here two shards are targeted but only one
+// EXPLAIN result is provided, so the second shard yields an empty result.
+func TestVExplainMySQLEmptyResultWarns(t *testing.T) {
+	var (
+		mu       sync.Mutex
+		warnings []string
+	)
+	origWarn := log.Warn
+	log.Warn = func(msg string, attrs ...slog.Attr) {
+		mu.Lock()
+		defer mu.Unlock()
+		warnings = append(warnings, msg)
+	}
+	t.Cleanup(func() { log.Warn = origWarn })
+
+	route := NewRoute(
+		Scatter,
+		&vindexes.Keyspace{Name: "ks", Sharded: true},
+		"dummy_select",
+		"dummy_select_field",
+	)
+
+	vexplain := &VExplain{Input: route, Type: sqlparser.MySQLVExplainType}
+
+	// Two shards, but only one EXPLAIN result: the second shard's result is empty.
+	vc := &loggingVCursor{
+		shards:  []string{"-20", "20-"},
+		results: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("json", "varchar"), `{"plan":"x"}`)},
+	}
+
+	result, err := vexplain.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
+	require.NoError(t, err)
+
+	// The shard with output is present; the empty shard is omitted but warned about.
+	out := result.Rows[0][0].ToString()
+	require.Contains(t, out, `"-20"`)
+	require.NotContains(t, out, `"20-"`)
+
+	mu.Lock()
+	defer mu.Unlock()
+	require.Len(t, warnings, 1)
+	assert.Contains(t, warnings[0], "empty EXPLAIN result")
 }
