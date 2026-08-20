@@ -64,7 +64,7 @@ func TestVExplainMySQLNoRoutesSpecialHandling(t *testing.T) {
 	// The Route node must carry the per-shard EXPLAIN output, keyed by the
 	// fallback shard.
 	require.Len(t, result.Rows, 1)
-	require.Contains(t, result.Rows[0][0].ToString(), "mysql_explain_json")
+	require.Contains(t, result.Rows[0][0].ToString(), "mysql_explain_json_by_shard")
 	require.Contains(t, result.Rows[0][0].ToString(), `"-20"`)
 	require.Contains(t, result.Rows[0][0].ToString(), `"plan": "x"`)
 }

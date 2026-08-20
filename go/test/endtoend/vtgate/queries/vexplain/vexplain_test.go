@@ -181,7 +181,7 @@ func TestVExplainMySQLPlan(t *testing.T) {
 	// EXPLAIN output attached, without executing the query.
 	utils.AssertMatchesContains(t, conn,
 		`vexplain mysqlplan select id from user where id = 1`,
-		"mysql_explain_json", "Route")
+		"mysql_explain_json_by_shard", "Route")
 
 	// query_block is a key emitted only by a genuine MySQL EXPLAIN FORMAT=JSON, so it
 	// proves we actually reached MySQL. MariaDB's EXPLAIN JSON does not use it, so gate
@@ -206,7 +206,7 @@ func TestVExplainMySQLPlan(t *testing.T) {
 	scatter := utils.Exec(t, conn, `vexplain mysqlplan select id from user`)
 	require.Len(t, scatter.Rows, 1)
 	scatterOut := scatter.Rows[0][0].ToString()
-	assert.Contains(t, scatterOut, "mysql_explain_json")
+	assert.Contains(t, scatterOut, "mysql_explain_json_by_shard")
 	distinctShards := 0
 	for _, shard := range shardedKsShards {
 		if strings.Contains(scatterOut, fmt.Sprintf("%q", shard)) {

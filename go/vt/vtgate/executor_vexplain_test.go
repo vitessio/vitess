@@ -157,12 +157,12 @@ func TestVExplainMySQLPlanKeysByShard(t *testing.T) {
 
 	// The plan JSON must attach the per-shard EXPLAIN output keyed by shard.
 	// PrimitiveDescription inlines the entries of Other at the top level, so
-	// mysql_explain_json appears alongside OperatorType.
+	// mysql_explain_json_by_shard appears alongside OperatorType.
 	var plan struct {
 		OperatorType     string `json:"OperatorType"`
 		MySQLExplainJSON map[string]struct {
 			Shard string `json:"shard"`
-		} `json:"mysql_explain_json"`
+		} `json:"mysql_explain_json_by_shard"`
 	}
 	require.NoError(t, json.Unmarshal([]byte(gotResult.Rows[0][0].ToString()), &plan))
 	require.Equal(t, "Route", plan.OperatorType)
@@ -291,7 +291,7 @@ func TestVExplainMySQLPlanTargetedSend(t *testing.T) {
 		OperatorType     string `json:"OperatorType"`
 		MySQLExplainJSON map[string]struct {
 			Shard string `json:"shard"`
-		} `json:"mysql_explain_json"`
+		} `json:"mysql_explain_json_by_shard"`
 	}
 	require.NoError(t, json.Unmarshal([]byte(gotResult.Rows[0][0].ToString()), &plan))
 	require.Equal(t, "Send", plan.OperatorType)
@@ -334,7 +334,7 @@ func TestVExplainMySQLPlanMultipleRoutes(t *testing.T) {
 		OperatorType     string `json:"OperatorType"`
 		MySQLExplainJSON map[string]struct {
 			Shard string `json:"shard"`
-		} `json:"mysql_explain_json"`
+		} `json:"mysql_explain_json_by_shard"`
 		Inputs []json.RawMessage `json:"Inputs"`
 	}
 	var top planNode

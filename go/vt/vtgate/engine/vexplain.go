@@ -408,7 +408,7 @@ func runMySQLExplainTasks(ctx context.Context, vcursor VCursor, tasks []mysqlExp
 func primitiveToPlanDescriptionWithShardedSQLResults(in Primitive, res map[Primitive]map[string]json.RawMessage) PrimitiveDescription {
 	return primitiveToPlanDescriptionWith(in, func(prim Primitive, pd *PrimitiveDescription) {
 		if perShard, found := res[prim]; found {
-			pd.Other["mysql_explain_json"] = perShard
+			pd.Other["mysql_explain_json_by_shard"] = perShard
 		}
 	})
 }
