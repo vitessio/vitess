@@ -119,6 +119,14 @@ func (wd *workflowDiffer) doReconcileExtraRows(dr *DiffReport, maxExtraRowsToCom
 	if dr.ExtraRowsSource == 0 || dr.ExtraRowsTarget == 0 {
 		return nil
 	}
+	if wd.opts.GetReportOptions().GetOnlyPks() || wd.opts.GetReportOptions().GetRowDiffColumnTruncateAt() > 0 {
+		// The saved row samples are lossy: they contain only the PK columns or
+		// truncated column values. Comparing them could reconcile rows whose
+		// hidden or truncated values actually differ, so leave the extra rows
+		// unreconciled rather than risk hiding a real difference.
+		log.Info(fmt.Sprintf("Not reconciling extra rows for table %s in vdiff %s: the saved samples are limited by the only-pks or row-diff-column-truncate-at options and cannot prove that rows are identical", dr.TableName, wd.ct.uuid))
+		return nil
+	}
 	matchedSourceDiffs := make([]bool, len(dr.ExtraRowsSourceDiffs))
 	matchedTargetDiffs := make([]bool, len(dr.ExtraRowsTargetDiffs))
 	matchedDiffs := int64(0)

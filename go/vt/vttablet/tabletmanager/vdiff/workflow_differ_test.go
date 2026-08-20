@@ -56,6 +56,15 @@ func TestReconcileExtraRows(t *testing.T) {
 	ct := vdenv.newController(t, controllerQR)
 	wd, err := newWorkflowDiffer(ct, vdiffenv.opts, collations.MySQL8())
 	require.NoError(t, err)
+	// Extra rows are only reconciled when the saved samples are complete rows,
+	// so use report options without only-pks for this test.
+	wd.opts = &tabletmanagerdatapb.VDiffOptions{
+		CoreOptions: vdiffenv.opts.CoreOptions,
+		ReportOptions: &tabletmanagerdatapb.VDiffReportOptions{
+			Format:     "json",
+			DebugQuery: true,
+		},
+	}
 
 	type testCase struct {
 		name             string
@@ -296,6 +305,58 @@ func TestReconcileExtraRows(t *testing.T) {
 
 		require.Equal(t, int64(2), dr.MatchingRows)
 	})
+}
+
+// TestReconcileExtraRowsSkippedForLossySamples tests that extra rows are not
+// reconciled when the report options make the saved row samples lossy
+// (only-pks or column truncation): lossy samples can be equal even when the
+// full rows differ, so reconciling them could hide a real difference.
+func TestReconcileExtraRowsSkippedForLossySamples(t *testing.T) {
+	testCases := []struct {
+		name          string
+		reportOptions *tabletmanagerdatapb.VDiffReportOptions
+		wantExtras    int64
+	}{
+		{
+			name:          "full samples are reconciled",
+			reportOptions: &tabletmanagerdatapb.VDiffReportOptions{MaxSampleRows: 10},
+			wantExtras:    0,
+		},
+		{
+			name:          "only-pks samples are not reconciled",
+			reportOptions: &tabletmanagerdatapb.VDiffReportOptions{MaxSampleRows: 10, OnlyPks: true},
+			wantExtras:    1,
+		},
+		{
+			name:          "truncated samples are not reconciled",
+			reportOptions: &tabletmanagerdatapb.VDiffReportOptions{MaxSampleRows: 10, RowDiffColumnTruncateAt: 8},
+			wantExtras:    1,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			wd := &workflowDiffer{
+				ct: &controller{uuid: "d99795d9-8bb1-4741-b25f-b3a2a1edee0b"},
+				opts: &tabletmanagerdatapb.VDiffOptions{
+					CoreOptions:   &tabletmanagerdatapb.VDiffCoreOptions{},
+					ReportOptions: tc.reportOptions,
+				},
+			}
+			dr := &DiffReport{
+				TableName:            "t1",
+				ProcessedRows:        4,
+				MatchingRows:         2,
+				ExtraRowsSource:      1,
+				ExtraRowsSourceDiffs: []*RowDiff{{Row: map[string]string{"c1": "1", "c2": "a"}}},
+				ExtraRowsTarget:      1,
+				ExtraRowsTargetDiffs: []*RowDiff{{Row: map[string]string{"c1": "1", "c2": "a"}}},
+			}
+			require.NoError(t, wd.doReconcileExtraRows(dr, 10, tc.reportOptions.MaxSampleRows))
+			require.Equal(t, tc.wantExtras, dr.ExtraRowsSource)
+			require.Equal(t, tc.wantExtras, dr.ExtraRowsTarget)
+		})
+	}
 }
 
 func TestReconcileReferenceTables(t *testing.T) {
