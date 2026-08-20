@@ -23,13 +23,16 @@ import (
 )
 
 // sql_mode reaches the vttablet on three entry points: connection settings, SET
-// statements, and SET_VAR optimizer hints. Each of them validates constant values with
-// MySQL's semantics (see sqlmode.Validate), returning the same errors the vtgate
-// returns. Valid values are accepted in full — parse-relevant modes included: the
-// vttablet parses queries under those modes itself and gives MySQL a value with them
-// stripped, so MySQL always lexes the vttablet-generated text under the default rules.
-// Non-constant expressions cannot be judged or stripped at plan time; MySQL validates
-// them itself and the executor reads back what was applied.
+// statements, and SET_VAR optimizer hints. Settings and SET statements validate
+// constant values with MySQL's semantics (see sqlmode.Validate), returning the same
+// errors the vtgate returns. Valid values are accepted in full — parse-relevant modes
+// included: the vttablet parses queries under those modes itself and gives MySQL a
+// value with them stripped, so MySQL always lexes the vttablet-generated text under
+// the default rules. Non-constant expressions cannot be judged or stripped at plan
+// time; MySQL validates them itself and the executor reads back what was applied.
+// SET_VAR hints are not judged at all: a hint applies to the hinted statement's
+// execution only and cannot change how that statement's own text is lexed, so it is
+// forwarded for MySQL to judge — MySQL warns about and ignores invalid hint values.
 
 // BuildReservedSettings prepares the settings a true reservation executes directly on
 // its tainted connection — the path that does not go through BuildSettingQuery. It
@@ -137,28 +140,4 @@ func validateSetExprsSQLMode(exprs sqlparser.SetExprs) (readBack bool, err error
 		}
 	}
 	return readBack, nil
-}
-
-// validateSetVarHintSQLMode rejects a query whose SET_VAR optimizer hint carries a
-// constant sql_mode value that fails sqlmode.Validate.
-func validateSetVarHintSQLMode(parser *sqlparser.Parser, comments *sqlparser.ParsedComments) error {
-	valText := comments.GetMySQLSetVarValue(sysvars.SQLMode.Name)
-	if valText == "" {
-		return nil
-	}
-	expr, err := parser.ParseExpr(valText)
-	if err != nil {
-		// not judgeable here; MySQL warns about malformed hints and ignores them
-		return nil
-	}
-	lit, ok := expr.(*sqlparser.Literal)
-	if !ok {
-		return nil
-	}
-	value, err := sqlparser.LiteralToValue(lit)
-	if err != nil {
-		return nil
-	}
-	_, err = sqlmode.Validate(value)
-	return err
 }

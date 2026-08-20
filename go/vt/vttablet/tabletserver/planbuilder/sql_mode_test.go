@@ -215,54 +215,30 @@ func TestSetPlanSQLMode(t *testing.T) {
 	}
 }
 
-func TestSetVarHintSQLModes(t *testing.T) {
+// SET_VAR hints are not judged at plan time: a hint applies to the hinted statement's
+// execution only and cannot change how that statement's own text is lexed, so the hint
+// is forwarded for MySQL to judge — MySQL warns about and ignores invalid values,
+// matching how it treats the same hint sent to it directly.
+func TestSetVarHintSQLModesAreNotJudged(t *testing.T) {
 	env := vtenv.NewTestEnv()
 	tables := map[string]*schema.Table{}
 
-	tests := []struct {
-		sql         string
-		expectedErr string
-	}{{
-		sql: "select /*+ SET_VAR(sql_mode = 'STRICT_TRANS_TABLES,NO_ZERO_DATE') */ 1 from dual",
-	}, {
-		// the placeholder for the empty mode
-		sql: "select /*+ SET_VAR(sql_mode = ' ') */ 1 from dual",
-	}, {
-		// parse-relevant modes in a SET_VAR hint are accepted: the hint applies to the
-		// hinted statement's execution only and does not change how that statement's own
-		// text is lexed, so forwarding it is harmless
-		sql: "select /*+ SET_VAR(sql_mode = 'ANSI') */ 1 from dual",
-	}, {
-		sql: "update /*+ SET_VAR(sql_mode = 'NO_BACKSLASH_ESCAPES') */ t set a = 1",
-	}, {
-		sql: "select /*+ SET_VAR(sql_safe_updates = 1) SET_VAR(sql_mode = 'PIPES_AS_CONCAT') */ 1 from dual",
-	}, {
-		// invalid values are still rejected with MySQL's error
-		sql:         "select /*+ SET_VAR(sql_mode = 'BOGUS') */ 1 from dual",
-		expectedErr: "Variable 'sql_mode' can't be set to the value of 'BOGUS'",
-	}, {
-		// other variables are not this check's concern
-		sql: "select /*+ SET_VAR(sql_safe_updates = 1) */ 1 from dual",
-	}}
-	for _, tc := range tests {
-		t.Run(tc.sql, func(t *testing.T) {
-			statement, err := env.Parser().Parse(tc.sql)
+	for _, sql := range []string{
+		"select /*+ SET_VAR(sql_mode = 'STRICT_TRANS_TABLES,NO_ZERO_DATE') */ 1 from dual",
+		"select /*+ SET_VAR(sql_mode = ' ') */ 1 from dual",
+		"select /*+ SET_VAR(sql_mode = 'ANSI') */ 1 from dual",
+		"update /*+ SET_VAR(sql_mode = 'NO_BACKSLASH_ESCAPES') */ t set a = 1",
+		"select /*+ SET_VAR(sql_safe_updates = 1) SET_VAR(sql_mode = 'PIPES_AS_CONCAT') */ 1 from dual",
+		"select /*+ SET_VAR(sql_mode = 'BOGUS') */ 1 from dual",
+	} {
+		t.Run(sql, func(t *testing.T) {
+			statement, err := env.Parser().Parse(sql)
 			require.NoError(t, err)
 
 			_, err = Build(env, statement, tables, "dbName", false)
-			if tc.expectedErr != "" {
-				require.EqualError(t, err, tc.expectedErr)
-			} else {
-				require.NoError(t, err)
-			}
-
-			// the streaming path builds plans separately and must validate as well
+			require.NoError(t, err)
 			_, err = BuildStreaming(env, statement, tables, "dbName")
-			if tc.expectedErr != "" {
-				require.EqualError(t, err, tc.expectedErr)
-			} else {
-				require.NoError(t, err)
-			}
+			require.NoError(t, err)
 		})
 	}
 }
