@@ -221,9 +221,13 @@ func ValidateSessionVariable(variable SessionVariable) error {
 	}
 	if strings.ToLower(variable.Name) == "sql_mode" {
 		// The migration statements executed under this variable are Vitess-formatted
-		// SQL, so modes that change how SQL text is interpreted are rejected the same
-		// way a vtgate session rejects them (see sqlmode.Validate).
-		if _, err := sqlmode.Validate(sqltypes.NewVarChar(variable.Value)); err != nil {
+		// SQL with no parser involved, so modes that change how SQL text is
+		// interpreted cannot be honored and are rejected.
+		mode, err := sqlmode.Validate(sqltypes.NewVarChar(variable.Value))
+		if err != nil {
+			return err
+		}
+		if err := sqlmode.ValidateNoLexerModes(mode); err != nil {
 			return err
 		}
 	}

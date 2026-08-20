@@ -2400,6 +2400,40 @@ func TestReserveExecute_WithoutTx(t *testing.T) {
 	require.NoError(t, err)
 }
 
+// A true reservation whose settings carry a parse-relevant sql_mode gets the stripped
+// value on its MySQL connection, and later queries addressed by reserved ID — which
+// carry no settings of their own — are parsed under the mode recorded on the
+// connection: || serializes as concat() toward MySQL.
+func TestReserveExecute_ParseSQLMode(t *testing.T) {
+	ctx := t.Context()
+	db, tsv := setupTabletServerTest(t, ctx, "")
+	defer tsv.StopService()
+	defer db.Close()
+
+	// the reserving request's settings, stripped of the parse-relevant mode
+	db.AddQuery("set sql_mode = 'STRICT_TRANS_TABLES'", &sqltypes.Result{})
+	// get_lock needs a true reservation, forcing the tainted-connection path
+	db.AddQueryPattern(`select get_lock\(.*`, &sqltypes.Result{})
+	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
+
+	state, _, err := tsv.ReserveExecute(ctx, nil, &target,
+		[]string{"set sql_mode = 'PIPES_AS_CONCAT,STRICT_TRANS_TABLES'"},
+		"select get_lock('l', 10) from dual", nil, 0, &querypb.ExecuteOptions{})
+	require.NoError(t, err)
+	require.NotEqual(t, int64(0), state.ReservedID)
+
+	// under PIPES_AS_CONCAT this query only matches its concat() serialization; the
+	// logical-OR reading would hit an unregistered query and fail
+	concatQuery := "select concat('a', 'b') from dual limit 10001"
+	db.AddQuery(concatQuery, &sqltypes.Result{})
+	_, err = tsv.Execute(ctx, nil, &target, "select 'a' || 'b' from dual", nil, 0, state.ReservedID, &querypb.ExecuteOptions{})
+	require.NoError(t, err)
+	require.Equal(t, 1, db.GetQueryCalledNum(concatQuery))
+
+	err = tsv.Release(ctx, &target, 0, state.ReservedID)
+	require.NoError(t, err)
+}
+
 func TestReserveExecute_WithTx(t *testing.T) {
 	ctx := t.Context()
 	db, tsv := setupTabletServerTest(t, ctx, "")

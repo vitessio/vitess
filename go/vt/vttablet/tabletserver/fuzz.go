@@ -68,6 +68,6 @@ func FuzzGetPlan(data []byte) int {
 	qe.SetQueryPlanCacheCap(1024)
 
 	// Call target
-	_, _ = qe.GetPlan(context.Background(), logStats, query2, true, false)
+	_, _ = qe.GetPlan(context.Background(), logStats, query2, 0, true, false)
 	return 1
 }

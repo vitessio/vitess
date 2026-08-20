@@ -20,61 +20,98 @@ import (
 	"vitess.io/vitess/go/mysql/sqlmode"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/sysvars"
-	"vitess.io/vitess/go/vt/vterrors"
-
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
-// The vtgate rejects sql_mode values that change how SQL text is interpreted (see
-// sqlmode.Validate), but sql_mode can reach the vttablet without passing that check: as
-// connection settings or SET statements from an older vtgate in a mixed-version cluster,
-// or from clients that talk to the query service directly. The checks below mirror the
-// vtgate's validation at each of those entry points, returning the same errors. Only
-// constant values can be judged here — non-constant expressions pass through, and MySQL
-// still applies its own validation to them.
+// sql_mode reaches the vttablet on three entry points: connection settings, SET
+// statements, and SET_VAR optimizer hints. Each of them validates constant values with
+// MySQL's semantics (see sqlmode.Validate), returning the same errors the vtgate
+// returns. Valid values are accepted in full — parse-relevant modes included: the
+// vttablet parses queries under those modes itself and gives MySQL a value with them
+// stripped, so MySQL always lexes the vttablet-generated text under the default rules.
+// Non-constant expressions cannot be judged or stripped at plan time; MySQL validates
+// them itself and the executor reads back what was applied.
 
-// ValidateSettingsSQLMode mirrors BuildSettingQuery's sql_mode validation for settings
-// that are applied without going through BuildSettingQuery — a true reservation executes
-// its settings directly on the tainted connection. Like BuildSettingQuery, every setting
-// must parse as a SET statement, and sql_mode values must be constants: the settings
-// paths apply their statements with no verification afterwards, so a value that cannot
-// be judged upfront is rejected rather than applied unchecked.
-func ValidateSettingsSQLMode(settings []string, parser *sqlparser.Parser) error {
-	for _, setting := range settings {
+// BuildReservedSettings prepares the settings a true reservation executes directly on
+// its tainted connection — the path that does not go through BuildSettingQuery. It
+// mirrors BuildSettingQuery's sql_mode validation and stripping: constant sql_mode
+// assignments are rewritten with their parse-relevant modes removed, and the extracted
+// bits are returned so the reserved connection can parse later queries under them.
+// Strings that do not parse as SET statements are passed through untouched for MySQL to
+// judge, as before.
+func BuildReservedSettings(settings []string, parser *sqlparser.Parser) ([]string, sqlparser.SQLMode, error) {
+	applied := make([]string, len(settings))
+	var parseMode sqlparser.SQLMode
+	for i, setting := range settings {
+		applied[i] = setting
 		stmt, err := parser.Parse(setting)
 		if err != nil {
-			return vterrors.Wrapf(err, "failed to parse connection setting: %s", setting)
+			continue
 		}
 		set, ok := stmt.(*sqlparser.Set)
 		if !ok {
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "connection setting is not a SET statement: %s", setting)
+			continue
 		}
-		if err := validateConstantSetExprsSQLMode(set.Exprs); err != nil {
-			return err
+		if _, err := validateSetExprsSQLMode(set.Exprs); err != nil {
+			return nil, 0, err
+		}
+		mode, sawConstant, rewrote := stripSetExprsSQLMode(set.Exprs)
+		if rewrote {
+			applied[i] = sqlparser.String(set)
+		}
+		if sawConstant {
+			parseMode = mode
 		}
 	}
-	return nil
+	return applied, parseMode, nil
 }
 
-// validateConstantSetExprsSQLMode is validateSetExprsSQLMode for the settings paths,
-// which have no verify-after-execute phase: a session-scope sql_mode assignment whose
-// value is not a constant cannot be judged there at all and is rejected.
-func validateConstantSetExprsSQLMode(exprs sqlparser.SetExprs) error {
-	verify, err := validateSetExprsSQLMode(exprs)
-	if err != nil {
-		return err
+// stripSetExprsSQLMode rewrites constant session-scope sql_mode assignments in place:
+// when the value carries parse-relevant modes, the literal is replaced by its canonical
+// form with those modes removed — the vttablet parses SQL under them itself and sends
+// mode-independent text to MySQL. parseMode holds the parse-relevant bits of the last
+// constant assignment, sawConstant reports whether one was seen (so callers can record
+// the session's bits even when they are zero), and rewrote reports whether any literal
+// changed. Values the caller's validation pass did not reject as invalid are left
+// untouched.
+func stripSetExprsSQLMode(exprs sqlparser.SetExprs) (parseMode sqlparser.SQLMode, sawConstant, rewrote bool) {
+	for _, expr := range exprs {
+		if expr.Var.Name.Lowered() != sysvars.SQLMode.Name {
+			continue
+		}
+		switch expr.Var.Scope {
+		case sqlparser.SessionScope, sqlparser.NoScope, sqlparser.NextTxScope:
+		default:
+			continue
+		}
+		lit, ok := expr.Expr.(*sqlparser.Literal)
+		if !ok {
+			continue
+		}
+		value, err := sqlparser.LiteralToValue(lit)
+		if err != nil {
+			continue
+		}
+		mode, err := sqlmode.Validate(value)
+		if err != nil {
+			continue
+		}
+		canonical := mode.String()
+		parseMode = sqlparser.ParseSQLMode(canonical)
+		sawConstant = true
+		if parseMode != 0 {
+			expr.Expr = sqlparser.NewStrLiteral(sqlparser.StripParseRelevantModes(canonical))
+			rewrote = true
+		}
 	}
-	if verify {
-		return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "non-constant sql_mode value in connection settings: %s", sqlparser.String(&sqlparser.Set{Exprs: exprs}))
-	}
-	return nil
+	return parseMode, sawConstant, rewrote
 }
 
 // validateSetExprsSQLMode rejects session-scope sql_mode assignments whose constant value
 // fails sqlmode.Validate. Assignments whose value is not a constant cannot be judged here;
-// for those it returns verify=true, asking the executor to read back and validate the
-// applied value after the statement runs.
-func validateSetExprsSQLMode(exprs sqlparser.SetExprs) (verify bool, err error) {
+// for those it returns readBack=true, asking the executor to read back the applied value
+// after the statement runs, to record its parse-relevant modes and strip them from the
+// MySQL connection.
+func validateSetExprsSQLMode(exprs sqlparser.SetExprs) (readBack bool, err error) {
 	for _, expr := range exprs {
 		if expr.Var.Name.Lowered() != sysvars.SQLMode.Name {
 			continue
@@ -87,19 +124,19 @@ func validateSetExprsSQLMode(exprs sqlparser.SetExprs) (verify bool, err error) 
 		}
 		lit, ok := expr.Expr.(*sqlparser.Literal)
 		if !ok {
-			verify = true
+			readBack = true
 			continue
 		}
 		value, err := sqlparser.LiteralToValue(lit)
 		if err != nil {
-			verify = true
+			readBack = true
 			continue
 		}
 		if _, err := sqlmode.Validate(value); err != nil {
 			return false, err
 		}
 	}
-	return verify, nil
+	return readBack, nil
 }
 
 // validateSetVarHintSQLMode rejects a query whose SET_VAR optimizer hint carries a

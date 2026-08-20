@@ -203,17 +203,18 @@ type Plan struct {
 	// NeedsReservedConn indicates at a reserved connection is needed to execute this plan
 	NeedsReservedConn bool
 
-	// VerifySQLMode is set on a PlanSet that assigns sql_mode a value that could not be
-	// judged at plan time (a non-constant expression): the executor must read back the
-	// applied value and validate it with sqlmode.Validate.
-	VerifySQLMode bool
+	// ReadBackSQLMode is set on a PlanSet that assigns sql_mode a value that could not
+	// be judged at plan time (a non-constant expression): the executor must read back
+	// the applied value to record its parse-relevant modes and strip them from the
+	// MySQL connection.
+	ReadBackSQLMode bool
 
-	// MultiAssignmentSet is set on a PlanSet whose statement contains more than one
-	// assignment. A failed verification then cannot be undone by restoring sql_mode
-	// alone — the statement changed other variables too — so the executor closes the
-	// connection instead, since MySQL applies none of a SET's assignments when the
-	// statement fails.
-	MultiAssignmentSet bool
+	// SetsSQLMode is set on a PlanSet whose statement assigns sql_mode a constant value.
+	// FullQuery then carries the value with its parse-relevant modes stripped, and
+	// SQLModeParseBits holds the stripped bits: after executing the statement, the
+	// connection parses SQL under those bits while MySQL runs the stripped value.
+	SetsSQLMode      bool
+	SQLModeParseBits sqlparser.SQLMode
 }
 
 // TableName returns the table name for the plan.
@@ -378,10 +379,13 @@ func hasLockFunc(sel *sqlparser.Select) bool {
 	return found
 }
 
-// BuildSettingQuery builds a query for system settings.
-func BuildSettingQuery(settings []string, parser *sqlparser.Parser) (query string, resetQuery string, err error) {
+// BuildSettingQuery builds a query for system settings. The returned parseMode holds
+// the parse-relevant sql_mode bits the settings put the session in; the query itself
+// carries the sql_mode with those modes stripped, since the vttablet parses SQL under
+// them and sends mode-independent text to MySQL.
+func BuildSettingQuery(settings []string, parser *sqlparser.Parser) (query string, resetQuery string, parseMode sqlparser.SQLMode, err error) {
 	if len(settings) == 0 {
-		return "", "", vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG]: plan called for empty system settings")
+		return "", "", 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG]: plan called for empty system settings")
 	}
 	var setExprs sqlparser.SetExprs
 	var resetSetExprs sqlparser.SetExprs
@@ -389,22 +393,25 @@ func BuildSettingQuery(settings []string, parser *sqlparser.Parser) (query strin
 	for _, setting := range settings {
 		stmt, err := parser.Parse(setting)
 		if err != nil {
-			return "", "", vterrors.Wrapf(err, "[BUG]: failed to parse system setting: %s", setting)
+			return "", "", 0, vterrors.Wrapf(err, "[BUG]: failed to parse system setting: %s", setting)
 		}
 		set, ok := stmt.(*sqlparser.Set)
 		if !ok {
-			return "", "", vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG]: invalid set statement: %s", setting)
+			return "", "", 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG]: invalid set statement: %s", setting)
 		}
-		// settings are applied with no verification afterwards, so sql_mode values
-		// must be constants that can be judged here; vtgates only render constants
-		if err := validateConstantSetExprsSQLMode(set.Exprs); err != nil {
-			return "", "", err
+		// settings are rendered by vtgates as constants, so no verify pass exists here:
+		// a non-constant value simply stays unjudged and MySQL applies its own checks
+		if _, err := validateSetExprsSQLMode(set.Exprs); err != nil {
+			return "", "", 0, err
+		}
+		if mode, sawConstant, _ := stripSetExprsSQLMode(set.Exprs); sawConstant {
+			parseMode = mode
 		}
 		setExprs = append(setExprs, set.Exprs...)
 		for _, sExpr := range set.Exprs {
 			sysVar := sExpr.Var
 			if sysVar.Scope != sqlparser.SessionScope && sysVar.Scope != sqlparser.NoScope {
-				return "", "", vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG]: session scope expected, got: %s", sysVar.Scope.ToString())
+				return "", "", 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG]: session scope expected, got: %s", sysVar.Scope.ToString())
 			}
 			resetExpr := sqlparser.Expr(lDefault)
 			if sysVar.Name.Lowered() == sysvars.SQLMode.Name {
@@ -414,11 +421,11 @@ func BuildSettingQuery(settings []string, parser *sqlparser.Parser) (query strin
 				// the neutralized global instead
 				resetExpr, err = parser.ParseExpr(sqlmode.NeutralizedGlobalExpr)
 				if err != nil {
-					return "", "", vterrors.Wrapf(err, "[BUG]: failed to parse the sql_mode reset expression")
+					return "", "", 0, vterrors.Wrapf(err, "[BUG]: failed to parse the sql_mode reset expression")
 				}
 			}
 			resetSetExprs = append(resetSetExprs, &sqlparser.SetExpr{Var: sysVar, Expr: resetExpr})
 		}
 	}
-	return sqlparser.String(&sqlparser.Set{Exprs: setExprs}), sqlparser.String(&sqlparser.Set{Exprs: resetSetExprs}), nil
+	return sqlparser.String(&sqlparser.Set{Exprs: setExprs}), sqlparser.String(&sqlparser.Set{Exprs: resetSetExprs}), parseMode, nil
 }

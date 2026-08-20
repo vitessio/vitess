@@ -19,6 +19,7 @@ package tabletserver
 import (
 	"context"
 	"fmt"
+	"sync/atomic"
 	"time"
 
 	"vitess.io/vitess/go/mysql/sqlerror"
@@ -50,6 +51,11 @@ type StatefulConnection struct {
 	enforceTimeout bool
 	timeout        time.Duration
 	expiryTime     time.Time
+
+	// parseSQLMode holds the parse-relevant sql_mode bits the connection's session is
+	// in (from its settings or SET statements); queries on the connection are parsed
+	// under them. Atomic because the plan path reads it without locking the connection.
+	parseSQLMode atomic.Uint32
 }
 
 // Properties contains meta information about the connection
@@ -328,7 +334,21 @@ func (sc *StatefulConnection) ApplySetting(ctx context.Context, setting *smartco
 	if sc.dbConn.Conn.Setting() == setting {
 		return false, nil
 	}
-	return true, sc.dbConn.Conn.ApplySetting(ctx, setting)
+	if err := sc.dbConn.Conn.ApplySetting(ctx, setting); err != nil {
+		return true, err
+	}
+	sc.SetParseSQLMode(sqlparser.SQLMode(setting.SQLMode()))
+	return true, nil
+}
+
+// ParseSQLMode returns the parse-relevant sql_mode bits the connection's session is in.
+func (sc *StatefulConnection) ParseSQLMode() sqlparser.SQLMode {
+	return sqlparser.SQLMode(sc.parseSQLMode.Load())
+}
+
+// SetParseSQLMode records the parse-relevant sql_mode bits the connection's session is in.
+func (sc *StatefulConnection) SetParseSQLMode(mode sqlparser.SQLMode) {
+	sc.parseSQLMode.Store(uint32(mode))
 }
 
 func (sc *StatefulConnection) resetExpiryTime() {

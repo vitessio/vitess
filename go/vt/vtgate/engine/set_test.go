@@ -518,7 +518,7 @@ func TestSetTable(t *testing.T) {
 		)},
 		disableSetVar: true,
 	}, {
-		testName:     "sql_mode set an unsupported mode",
+		testName:     "sql_mode set a parse-relevant mode",
 		mysqlVersion: "8.0.0",
 		setOps: []SetOp{
 			&SysVarReservedConn{
@@ -531,14 +531,15 @@ func TestSetTable(t *testing.T) {
 		expectedQueryLog: []string{
 			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
 			`ExecuteMultiShard ks.-20: select @@sql_mode orig, 'REAL_AS_FLOAT' new {} false false`,
+			"SysVar set with (sql_mode,'REAL_AS_FLOAT')",
+			"Needs Reserved Conn",
 		},
-		expectedError: "setting the REAL_AS_FLOAT sql_mode is unsupported",
 		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
 			"|REAL_AS_FLOAT",
 		)},
 		disableSetVar: true,
 	}, {
-		testName:     "sql_mode set an unsupported mode the backend already runs with",
+		testName:     "sql_mode set a parse-relevant mode the backend already runs with",
 		mysqlVersion: "8.0.0",
 		setOps: []SetOp{
 			&SysVarReservedConn{
@@ -548,18 +549,16 @@ func TestSetTable(t *testing.T) {
 				SupportSetVar: true,
 			},
 		},
+		// the assignment does not change the value, so nothing is stored
 		expectedQueryLog: []string{
 			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
 			`ExecuteMultiShard ks.-20: select @@sql_mode orig, 'REAL_AS_FLOAT,STRICT_TRANS_TABLES' new {} false false`,
 		},
-		// the assignment would not change the value, but it is rejected regardless:
-		// such sessions were never parsed correctly by the vtgate
-		expectedError: "setting the REAL_AS_FLOAT sql_mode is unsupported",
 		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
 			"REAL_AS_FLOAT,STRICT_TRANS_TABLES|REAL_AS_FLOAT,STRICT_TRANS_TABLES",
 		)},
 	}, {
-		testName:     "sql_mode set to a numeric bitmask decodes to mode names",
+		testName:     "sql_mode set to a numeric bitmask",
 		mysqlVersion: "8.0.0",
 		setOps: []SetOp{
 			&SysVarReservedConn{
@@ -572,8 +571,9 @@ func TestSetTable(t *testing.T) {
 		expectedQueryLog: []string{
 			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
 			`ExecuteMultiShard ks.-20: select @@sql_mode orig, 1048576 new {} false false`,
+			"SysVar set with (sql_mode,1048576)",
+			"SET_VAR can be used",
 		},
-		expectedError: "setting the NO_BACKSLASH_ESCAPES sql_mode is unsupported",
 		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|int64"),
 			"|1048576",
 		)},
@@ -591,8 +591,9 @@ func TestSetTable(t *testing.T) {
 		expectedQueryLog: []string{
 			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
 			`ExecuteMultiShard ks.-20: select @@sql_mode orig, 'ansi' new {} false false`,
+			"SysVar set with (sql_mode,'ansi')",
+			"SET_VAR can be used",
 		},
-		expectedError: "setting the ANSI sql_mode is unsupported",
 		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
 			"|ansi",
 		)},
@@ -610,8 +611,9 @@ func TestSetTable(t *testing.T) {
 		expectedQueryLog: []string{
 			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
 			`ExecuteMultiShard ks.-20: select @@sql_mode orig, 'IGNORE_SPACE' new {} false false`,
+			"SysVar set with (sql_mode,'IGNORE_SPACE')",
+			"SET_VAR can be used",
 		},
-		expectedError: "setting the IGNORE_SPACE sql_mode is unsupported",
 		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
 			"|IGNORE_SPACE",
 		)},

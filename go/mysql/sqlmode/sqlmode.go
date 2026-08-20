@@ -253,10 +253,24 @@ func (m Mode) String() string {
 	return buf.String()
 }
 
-// unsupportedModes are the modes rejected by Validate, reported in this order. This is the
-// same set as LexerModes; ANSI is listed first so that the combination mode is reported
-// under its own name rather than that of one of its members.
-var unsupportedModes = []Mode{
+// Validate parses and validates an sql_mode assignment value the way MySQL does. It
+// returns the expanded mode, whose String form is the canonical value MySQL would report
+// back for @@sql_mode. Both vtgate (SET statements, the --sql-mode flag) and vttablet
+// (settings, SET_VAR hints, SET statements) validate with this, so the same value fails
+// with the same error at either layer. Every valid mode is accepted — the layer that
+// parses SQL honors the LexerModes itself and transports values with them stripped.
+func Validate(value sqltypes.Value) (Mode, error) {
+	mode, err := FromValue(value)
+	if err != nil {
+		return 0, err
+	}
+	return mode.Expand(), nil
+}
+
+// lexerModeList lists the LexerModes members in reporting order, with the ANSI
+// combination first so it is reported under its own name rather than that of one of its
+// members.
+var lexerModeList = []Mode{
 	Ansi,
 	AnsiQuotes,
 	NoBackslashEscapes,
@@ -266,25 +280,18 @@ var unsupportedModes = []Mode{
 	HighNotPrecedence,
 }
 
-// Validate parses and validates an sql_mode assignment value the way MySQL does, and
-// additionally rejects the modes that change how SQL text is interpreted (LexerModes) —
-// the Vitess parser either does not support them or does not honor them. It returns the
-// expanded mode, whose String form is the canonical value MySQL would report back for
-// @@sql_mode. Both vtgate (SET statements, the --sql-mode flag) and vttablet (settings,
-// SET_VAR hints, SET statements from older vtgates or direct clients) validate with this,
-// so the same value fails with the same error at either layer.
-func Validate(value sqltypes.Value) (Mode, error) {
-	mode, err := FromValue(value)
-	if err != nil {
-		return 0, err
-	}
+// ValidateNoLexerModes rejects modes that change how SQL text is interpreted. It is for
+// call sites that run Vitess-formatted SQL under a caller-provided sql_mode with no
+// parser involved — e.g. schema migration session variables — where such a mode cannot
+// be honored and would change what the statements mean.
+func ValidateNoLexerModes(mode Mode) error {
 	expanded := mode.Expand()
-	for _, unsupported := range unsupportedModes {
-		if expanded&unsupported != 0 {
-			return 0, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "setting the %s sql_mode is unsupported", unsupported)
+	for _, lexerMode := range lexerModeList {
+		if expanded&lexerMode != 0 {
+			return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "setting the %s sql_mode is unsupported", lexerMode)
 		}
 	}
-	return expanded, nil
+	return nil
 }
 
 func checkRemoved(mode Mode) error {

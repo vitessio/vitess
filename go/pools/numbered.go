@@ -120,6 +120,19 @@ func (nu *Numbered) Get(id int64, purpose string) (val any, err error) {
 	return nw.val, nil
 }
 
+// Peek returns the resource identified by id without locking it for use, or
+// nil if no such resource is registered. The caller must only read state that
+// is safe to read concurrently with the resource's owner.
+func (nu *Numbered) Peek(id int64) any {
+	nu.mu.Lock()
+	defer nu.mu.Unlock()
+	nw, ok := nu.resources[id]
+	if !ok {
+		return nil
+	}
+	return nw.val
+}
+
 // Put unlocks a resource for someone else to use.
 func (nu *Numbered) Put(id int64) bool {
 	nu.mu.Lock()

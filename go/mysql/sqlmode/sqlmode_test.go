@@ -183,15 +183,17 @@ func TestValidate(t *testing.T) {
 		{value: sqltypes.NewVarChar("TRADITIONAL"), expected: "STRICT_TRANS_TABLES,STRICT_ALL_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,TRADITIONAL,NO_ENGINE_SUBSTITUTION"},
 		{value: sqltypes.NewInt64(1 << 21), expected: "STRICT_TRANS_TABLES"},
 		{value: sqltypes.NewInt64(0), expected: ""},
-		{value: sqltypes.NewVarChar("ANSI"), expectedErr: "setting the ANSI sql_mode is unsupported"},
-		{value: sqltypes.NewInt64(1 << 18), expectedErr: "setting the ANSI sql_mode is unsupported"},
-		{value: sqltypes.NewVarChar("no_backslash_escapes"), expectedErr: "setting the NO_BACKSLASH_ESCAPES sql_mode is unsupported"},
-		{value: sqltypes.NewUint64(1 << 20), expectedErr: "setting the NO_BACKSLASH_ESCAPES sql_mode is unsupported"},
-		{value: sqltypes.NewVarChar("STRICT_TRANS_TABLES,ANSI_QUOTES"), expectedErr: "setting the ANSI_QUOTES sql_mode is unsupported"},
-		{value: sqltypes.NewVarChar("PIPES_AS_CONCAT"), expectedErr: "setting the PIPES_AS_CONCAT sql_mode is unsupported"},
-		{value: sqltypes.NewVarChar("REAL_AS_FLOAT"), expectedErr: "setting the REAL_AS_FLOAT sql_mode is unsupported"},
-		{value: sqltypes.NewVarChar("IGNORE_SPACE"), expectedErr: "setting the IGNORE_SPACE sql_mode is unsupported"},
-		{value: sqltypes.NewVarChar("HIGH_NOT_PRECEDENCE"), expectedErr: "setting the HIGH_NOT_PRECEDENCE sql_mode is unsupported"},
+		// lexer modes are supported for incoming queries: they validate and expand,
+		// while the transport toward backends still strips them
+		{value: sqltypes.NewVarChar("ANSI"), expected: "REAL_AS_FLOAT,PIPES_AS_CONCAT,ANSI_QUOTES,IGNORE_SPACE,ONLY_FULL_GROUP_BY,ANSI"},
+		{value: sqltypes.NewInt64(1 << 18), expected: "REAL_AS_FLOAT,PIPES_AS_CONCAT,ANSI_QUOTES,IGNORE_SPACE,ONLY_FULL_GROUP_BY,ANSI"},
+		{value: sqltypes.NewVarChar("no_backslash_escapes"), expected: "NO_BACKSLASH_ESCAPES"},
+		{value: sqltypes.NewUint64(1 << 20), expected: "NO_BACKSLASH_ESCAPES"},
+		{value: sqltypes.NewVarChar("STRICT_TRANS_TABLES,ANSI_QUOTES"), expected: "ANSI_QUOTES,STRICT_TRANS_TABLES"},
+		{value: sqltypes.NewVarChar("PIPES_AS_CONCAT"), expected: "PIPES_AS_CONCAT"},
+		{value: sqltypes.NewVarChar("REAL_AS_FLOAT"), expected: "REAL_AS_FLOAT"},
+		{value: sqltypes.NewVarChar("IGNORE_SPACE"), expected: "IGNORE_SPACE"},
+		{value: sqltypes.NewVarChar("HIGH_NOT_PRECEDENCE"), expected: "HIGH_NOT_PRECEDENCE"},
 		// invalid values fail with MySQL's own error messages
 		{value: sqltypes.NewVarChar("BOGUS"), expectedErr: "Variable 'sql_mode' can't be set to the value of 'BOGUS'"},
 		{value: sqltypes.NewInt64(256), expectedErr: "sql_mode=0x00000100 is not supported."},
@@ -209,14 +211,20 @@ func TestValidate(t *testing.T) {
 	}
 }
 
-func TestUnsupportedModesAreTheLexerModes(t *testing.T) {
-	// the rejected modes and the lexer modes stripped from backend transports must stay in
-	// sync: both describe "modes that change how SQL text is interpreted"
-	var combined Mode
-	for _, m := range unsupportedModes {
-		combined |= m
+func TestValidateNoLexerModes(t *testing.T) {
+	// the check covers exactly the LexerModes, reporting combination modes under their
+	// own name, and passes everything else
+	for _, mn := range modeNames {
+		err := ValidateNoLexerModes(mn.mode)
+		if LexerModes&mn.mode != 0 {
+			require.EqualError(t, err, "setting the "+mn.name+" sql_mode is unsupported")
+		} else {
+			require.NoError(t, err, "mode %s", mn.name)
+		}
 	}
-	assert.Equal(t, LexerModes, combined)
+	require.EqualError(t, ValidateNoLexerModes(Ansi), "setting the ANSI sql_mode is unsupported")
+	require.EqualError(t, ValidateNoLexerModes(StrictTransTables|IgnoreSpace), "setting the IGNORE_SPACE sql_mode is unsupported")
+	require.NoError(t, ValidateNoLexerModes(StrictTransTables|NoZeroDate))
 }
 
 func TestNeutralizeSessionQuery(t *testing.T) {
