@@ -1289,5 +1289,65 @@
         "SysTableTableSchema": "['ks']"
       }
     }
+  },
+  {
+    "comment": "single-element IN on table_name is treated like an equality comparison",
+    "query": "select column_name from information_schema.statistics where index_name = 'PRIMARY' and table_schema = 'table_schema' and table_name in ('table_name') order by seq_in_index",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select column_name from information_schema.statistics where index_name = 'PRIMARY' and table_schema = 'table_schema' and table_name in ('table_name') order by seq_in_index",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "DBA",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select `column_name` from information_schema.statistics where 1 != 1",
+        "Query": "select `column_name` from information_schema.statistics where index_name = 'PRIMARY' and table_schema = :__vtschemaname /* VARCHAR */ and `table_name` in (:table_name /* VARCHAR */) order by seq_in_index asc",
+        "SysTableTableName": "[table_name:'table_name']",
+        "SysTableTableSchema": "['table_schema']"
+      }
+    }
+  },
+  {
+    "comment": "single-element IN on table_schema is treated like an equality comparison",
+    "query": "select table_name from information_schema.`tables` where table_schema in ('ks')",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select table_name from information_schema.`tables` where table_schema in ('ks')",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "DBA",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select `table_name` from information_schema.`tables` where 1 != 1",
+        "Query": "select `table_name` from information_schema.`tables` where table_schema in (:__vtschemaname /* VARCHAR */)",
+        "SysTableTableSchema": "['ks']"
+      }
+    }
+  },
+  {
+    "comment": "multi-element IN is not used for routing",
+    "query": "select table_name from information_schema.`tables` where table_schema in ('ks1', 'ks2')",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select table_name from information_schema.`tables` where table_schema in ('ks1', 'ks2')",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "DBA",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select `table_name` from information_schema.`tables` where 1 != 1",
+        "Query": "select `table_name` from information_schema.`tables` where table_schema in ('ks1', 'ks2')"
+      }
+    }
   }
 ]

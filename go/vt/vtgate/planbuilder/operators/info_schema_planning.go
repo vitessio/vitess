@@ -133,13 +133,26 @@ func (isr *InfoSchemaRouting) Keyspace() *vindexes.Keyspace {
 
 func extractInfoSchemaRoutingPredicate(ctx *plancontext.PlanningContext, in sqlparser.Expr) (bool, string, sqlparser.Expr) {
 	cmp, ok := in.(*sqlparser.ComparisonExpr)
-	if !ok || cmp.Operator != sqlparser.EqualOp {
+	if !ok || (cmp.Operator != sqlparser.EqualOp && cmp.Operator != sqlparser.InOp) {
 		return false, "", nil
 	}
 
 	isSchemaName, col := isTableOrSchemaRoutable(cmp, ctx.VSchema.Environment().MySQLVersion())
+	if col == nil {
+		return false, "", nil
+	}
+
 	rhs := cmp.Right
-	if col == nil || !shouldRewrite(rhs) {
+	if cmp.Operator == sqlparser.InOp {
+		// a single-element IN is routable like an equality; multi-element
+		// lists could span keyspaces, so we leave them alone
+		tuple, ok := cmp.Right.(sqlparser.ValTuple)
+		if !ok || len(tuple) != 1 {
+			return false, "", nil
+		}
+		rhs = tuple[0]
+	}
+	if !shouldRewrite(rhs) {
 		return false, "", nil
 	}
 
@@ -162,7 +175,12 @@ func extractInfoSchemaRoutingPredicate(ctx *plancontext.PlanningContext, in sqlp
 	} else {
 		name = ctx.GetReservedArgumentFor(col)
 	}
-	cmp.Right = sqlparser.NewTypedArgument(name, sqltypes.VarChar)
+	arg := sqlparser.NewTypedArgument(name, sqltypes.VarChar)
+	if cmp.Operator == sqlparser.InOp {
+		cmp.Right = sqlparser.ValTuple{arg}
+	} else {
+		cmp.Right = arg
+	}
 	return isSchemaName, name, rhs
 }
 
