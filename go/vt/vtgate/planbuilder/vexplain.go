@@ -61,15 +61,7 @@ func buildVExplainPlan(
 // from a vindex without reading cluster data; any other plan is rejected here with a
 // message pointing the user to VEXPLAIN ALL.
 func buildVExplainMySQLPlan(ctx context.Context, explainStatement sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, cfg dynamicconfig.DDL) (*planResult, error) {
-	if err := checkVExplainMySQLNoNestedQuery(explainStatement); err != nil {
-		return nil, err
-	}
-
-	if err := checkVExplainMySQLNoSequence(explainStatement); err != nil {
-		return nil, err
-	}
-
-	if err := checkVExplainMySQLNoLockFunc(explainStatement); err != nil {
+	if err := checkVExplainMySQLAST(explainStatement); err != nil {
 		return nil, err
 	}
 
@@ -113,74 +105,52 @@ const (
 		"because the planner rewrites the row count into a derived table that EXPLAIN could materialize; use VEXPLAIN ALL instead"
 )
 
-// checkVExplainMySQLNoNestedQuery rejects a statement that contains a subquery,
-// derived table, or common table expression. Such a query can merge into a single
-// Route that the primitive allowlist would accept, but EXPLAIN FORMAT=JSON
-// materializes a derived table during optimization - executing any stored function
-// inside it once per shard - which would violate MYSQLPLAN's promise never to run
-// the wrapped query. A CTE is inlined as a derived table during planning, so it
-// carries the same risk. A view reference is already rewritten into a
-// *sqlparser.DerivedTable by the normalizer before this walk runs, so it is caught
-// by the DerivedTable case; that case gets its own message that names derived tables
-// and views, because the generic unresolvable-shards message (cross-shard join,
-// subquery, lookup vindex) does not describe why an otherwise-routable derived table
-// or view is rejected. UNION is not a nested query block (it is a *sqlparser.Union,
-// not a Subquery/DerivedTable/With), so it is not rejected here.
-func checkVExplainMySQLNoNestedQuery(statement sqlparser.Statement) error {
-	var nestedErr error
+// checkVExplainMySQLAST rejects, in a single AST walk, the statement shapes that
+// MYSQLPLAN cannot safely EXPLAIN. All must be caught on the original AST before
+// planning, because each can otherwise reach a Route or Send that the primitive
+// allowlist would accept. The walk aborts on the first offending node, so a nested
+// offender (e.g. a lock function inside a subquery) reports the outer rejection.
+//
+//   - Nested query blocks (subquery, derived table, CTE): EXPLAIN FORMAT=JSON
+//     materializes a derived table during optimization - executing any stored
+//     function inside it once per shard - which would violate MYSQLPLAN's promise
+//     never to run the wrapped query. A CTE is inlined as a derived table during
+//     planning, so it carries the same risk. A view reference is already rewritten
+//     into a *sqlparser.DerivedTable by the normalizer before this walk runs, so it
+//     is caught by the DerivedTable case; that case gets its own message that names
+//     derived tables and views, because the generic unresolvable-shards message
+//     (cross-shard join, subquery, lookup vindex) does not describe why an otherwise
+//     -routable derived table or view is rejected. UNION is not a nested query block
+//     (it is a *sqlparser.Union, not a Subquery/DerivedTable/With), so it is allowed.
+//   - Sequence next-value queries: the Vitess-specific 'select next ... values'
+//     syntax cannot be parsed by MySQL as EXPLAIN. An untargeted session plans this
+//     as a Route with Opcode == Next, but a session with an explicit shard/keyrange
+//     target routes through bypass planning as a read Send that the allowlist would
+//     otherwise accept. The rejection does not point at VEXPLAIN ALL, which would
+//     execute the query and consume sequence values.
+//   - Advisory lock functions: such a SELECT plans as an engine.Lock primitive
+//     rather than a Route or Send. The rejection does not point at VEXPLAIN ALL:
+//     running the query would acquire or release advisory locks as a side effect.
+//     The read-only variants (is_free_lock, is_used_lock) are rejected the same way
+//     for a consistent message; they are equally unexplainable through MYSQLPLAN.
+func checkVExplainMySQLAST(statement sqlparser.Statement) error {
+	var astErr error
 	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
 		switch node.(type) {
 		case *sqlparser.DerivedTable:
-			nestedErr = vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, vexplainMySQLDerivedTableError)
-			return false, nil
+			astErr = vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, vexplainMySQLDerivedTableError)
 		case *sqlparser.Subquery, *sqlparser.With:
-			nestedErr = vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, vexplainMySQLUnresolvableError)
-			return false, nil
+			astErr = vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, vexplainMySQLUnresolvableError)
+		case *sqlparser.Nextval:
+			astErr = vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, vexplainMySQLSequenceError)
+		case *sqlparser.LockingFunc:
+			astErr = vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, vexplainMySQLLockError)
+		default:
+			return true, nil
 		}
-		return true, nil
+		return false, nil
 	}, statement)
-	return nestedErr
-}
-
-// checkVExplainMySQLNoSequence rejects a sequence next-value query. Its
-// Vitess-specific 'select next ... values' syntax cannot be parsed by MySQL as
-// EXPLAIN. Detection must happen on the AST before planning: an untargeted
-// session plans this as a Route with Opcode == Next, but a session with an
-// explicit shard/keyrange target routes through bypass planning, which
-// represents it as a read Send that the primitive allowlist would otherwise
-// accept. Catching the *sqlparser.Nextval node here rejects both the same way,
-// before any tablet RPC. The rejection does not point at VEXPLAIN ALL, which
-// would execute the query and consume sequence values.
-func checkVExplainMySQLNoSequence(statement sqlparser.Statement) error {
-	var seqErr error
-	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
-		if _, ok := node.(*sqlparser.Nextval); ok {
-			seqErr = vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, vexplainMySQLSequenceError)
-			return false, nil
-		}
-		return true, nil
-	}, statement)
-	return seqErr
-}
-
-// checkVExplainMySQLNoLockFunc rejects a SELECT of an advisory lock function.
-// Such a SELECT plans as an engine.Lock primitive rather than a Route or Send,
-// so MYSQLPLAN cannot resolve its shards from a vindex and EXPLAIN it. Detection
-// must happen on the AST before planning so the rejection does not point at
-// VEXPLAIN ALL: running the query would execute the lock function and acquire or
-// release advisory locks as a side effect. The read-only variants
-// (is_free_lock, is_used_lock) are rejected the same way for a consistent
-// message; they are equally unexplainable through MYSQLPLAN.
-func checkVExplainMySQLNoLockFunc(statement sqlparser.Statement) error {
-	var lockErr error
-	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
-		if _, ok := node.(*sqlparser.LockingFunc); ok {
-			lockErr = vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, vexplainMySQLLockError)
-			return false, nil
-		}
-		return true, nil
-	}, statement)
-	return lockErr
+	return astErr
 }
 
 // checkVExplainMySQLNoCalcFoundRows rejects a SELECT SQL_CALC_FOUND_ROWS with a
