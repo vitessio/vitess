@@ -20,6 +20,9 @@ import (
 	"vitess.io/vitess/go/mysql/sqlmode"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/sysvars"
+	"vitess.io/vitess/go/vt/vterrors"
+
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 // The vtgate rejects sql_mode values that change how SQL text is interpreted (see
@@ -32,21 +35,37 @@ import (
 
 // ValidateSettingsSQLMode mirrors BuildSettingQuery's sql_mode validation for settings
 // that are applied without going through BuildSettingQuery — a true reservation executes
-// its settings directly on the tainted connection. Strings that do not parse as SET
-// statements are left for MySQL to judge, as before.
+// its settings directly on the tainted connection. Like BuildSettingQuery, every setting
+// must parse as a SET statement, and sql_mode values must be constants: the settings
+// paths apply their statements with no verification afterwards, so a value that cannot
+// be judged upfront is rejected rather than applied unchecked.
 func ValidateSettingsSQLMode(settings []string, parser *sqlparser.Parser) error {
 	for _, setting := range settings {
 		stmt, err := parser.Parse(setting)
 		if err != nil {
-			continue
+			return vterrors.Wrapf(err, "failed to parse connection setting: %s", setting)
 		}
 		set, ok := stmt.(*sqlparser.Set)
 		if !ok {
-			continue
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "connection setting is not a SET statement: %s", setting)
 		}
-		if _, err := validateSetExprsSQLMode(set.Exprs); err != nil {
+		if err := validateConstantSetExprsSQLMode(set.Exprs); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+// validateConstantSetExprsSQLMode is validateSetExprsSQLMode for the settings paths,
+// which have no verify-after-execute phase: a session-scope sql_mode assignment whose
+// value is not a constant cannot be judged there at all and is rejected.
+func validateConstantSetExprsSQLMode(exprs sqlparser.SetExprs) error {
+	verify, err := validateSetExprsSQLMode(exprs)
+	if err != nil {
+		return err
+	}
+	if verify {
+		return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "non-constant sql_mode value in connection settings: %s", sqlparser.String(&sqlparser.Set{Exprs: exprs}))
 	}
 	return nil
 }

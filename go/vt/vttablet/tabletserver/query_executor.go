@@ -1263,12 +1263,9 @@ func (qre *QueryExecutor) execSet(conn *StatefulConnection) (*sqltypes.Result, e
 	if vErr == nil {
 		return result, nil
 	}
-	if vterrors.Code(vErr) != vtrpcpb.Code_UNIMPLEMENTED {
-		// The applied value does not parse as MySQL 8.x modes: the backend is a flavor
-		// whose sql_mode vocabulary we do not know (e.g. MariaDB reporting its own mode
-		// names). There is no verdict to enforce on a value we cannot judge.
-		return result, nil
-	}
+	// This also fails an applied value that does not decode as MySQL 8.x modes at all:
+	// a constant with an unknown mode name is rejected at plan time, and an expression
+	// producing one must not fare better just because it cannot be judged.
 	qre.undoSQLModeSet(conn, prev, vErr)
 	return nil, vErr
 }

@@ -2180,15 +2180,19 @@ func TestQueryExecutorSetSQLModeVerify(t *testing.T) {
 	_, err = qre.Execute()
 	require.Error(t, err)
 
-	// a read-back that does not parse as MySQL modes comes from a backend flavor whose
-	// sql_mode vocabulary we do not know (e.g. MariaDB): there is no verdict to enforce
-	// on a value we cannot judge, so the SET stands
+	// a read-back that does not decode as MySQL modes fails the same way: a constant
+	// with an unknown mode name is rejected at plan time, and an expression producing
+	// one must not fare better just because it cannot be judged. The single-assignment
+	// restore keeps the connection usable.
 	db.ClearQueryPattern()
 	db.AddQuery(readQuery, modeResult("EMPTY_STRING_IS_NULL,STRICT_TRANS_TABLES"))
+	unknownRestore := "set sql_mode = 'EMPTY_STRING_IS_NULL,STRICT_TRANS_TABLES'"
+	db.AddQuery(unknownRestore, &sqltypes.Result{})
 	txID = newTransaction(tsv, nil)
 	qre = newTestQueryExecutor(ctx, tsv, setQuery, txID)
 	_, err = qre.Execute()
-	require.NoError(t, err)
+	require.EqualError(t, err, "Variable 'sql_mode' can't be set to the value of 'EMPTY_STRING_IS_NULL'")
+	require.Equal(t, 1, db.GetQueryCalledNum(unknownRestore))
 	_, err = tsv.Rollback(ctx, tsv.sm.Target(), txID)
 	require.NoError(t, err)
 
@@ -2275,6 +2279,16 @@ func TestReserveSettingsRejectUnsupportedSQLModes(t *testing.T) {
 
 	_, _, err := tsv.te.ReserveBegin(ctx, &querypb.ExecuteOptions{}, []string{"set sql_mode = 'ANSI'"})
 	require.EqualError(t, err, "setting the ANSI sql_mode is unsupported")
+
+	// the reservation settings are applied with no verification afterwards, so values
+	// that cannot be judged upfront are rejected: non-constant sql_mode expressions,
+	// strings that do not parse, and statements that are not SET statements
+	_, _, err = tsv.te.ReserveBegin(ctx, &querypb.ExecuteOptions{}, []string{"set sql_mode = concat('AN', 'SI')"})
+	require.EqualError(t, err, "non-constant sql_mode value in connection settings: set sql_mode = concat('AN', 'SI')")
+	_, _, err = tsv.te.ReserveBegin(ctx, &querypb.ExecuteOptions{}, []string{"this is not SQL"})
+	require.ErrorContains(t, err, "failed to parse connection setting: this is not SQL")
+	_, _, err = tsv.te.ReserveBegin(ctx, &querypb.ExecuteOptions{}, []string{"select 1 from dual"})
+	require.EqualError(t, err, "connection setting is not a SET statement: select 1 from dual")
 
 	validSetting := "set sql_mode = 'STRICT_TRANS_TABLES'"
 	db.AddQuery(validSetting, &sqltypes.Result{})

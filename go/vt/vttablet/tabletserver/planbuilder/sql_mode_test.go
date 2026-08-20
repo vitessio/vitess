@@ -51,6 +51,11 @@ func TestBuildSettingQueryRejectsUnsupportedSQLModes(t *testing.T) {
 	}, {
 		settings:    []string{"set sql_mode = 'BOGUS'"},
 		expectedErr: "Variable 'sql_mode' can't be set to the value of 'BOGUS'",
+	}, {
+		// settings are applied with no verification afterwards; a value that cannot be
+		// judged upfront is rejected
+		settings:    []string{"set sql_safe_updates = 1", "set sql_mode = concat('AN', 'SI')"},
+		expectedErr: "non-constant sql_mode value in connection settings: set sql_mode = concat('AN', 'SI')",
 	}}
 	for _, tc := range tests {
 		t.Run(tc.settings[len(tc.settings)-1], func(t *testing.T) {

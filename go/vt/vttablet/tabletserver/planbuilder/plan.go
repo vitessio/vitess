@@ -395,9 +395,9 @@ func BuildSettingQuery(settings []string, parser *sqlparser.Parser) (query strin
 		if !ok {
 			return "", "", vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG]: invalid set statement: %s", setting)
 		}
-		// settings are rendered by vtgates as constants, so no verify pass exists here:
-		// a non-constant value simply stays unjudged and MySQL applies its own checks
-		if _, err := validateSetExprsSQLMode(set.Exprs); err != nil {
+		// settings are applied with no verification afterwards, so sql_mode values
+		// must be constants that can be judged here; vtgates only render constants
+		if err := validateConstantSetExprsSQLMode(set.Exprs); err != nil {
 			return "", "", err
 		}
 		setExprs = append(setExprs, set.Exprs...)

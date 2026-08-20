@@ -342,11 +342,10 @@ func (svs *SysVarReservedConn) checkAndUpdateSysVar(ctx context.Context, vcursor
 // unsupported value is rejected even when the assignment would not change the value —
 // name lists, numeric bitmasks, and combination modes like ANSI included.
 func sqlModeChangedValue(qr *sqltypes.Result) (bool, sqltypes.Value, error) {
-	if len(qr.Fields) != 2 {
-		return false, sqltypes.Value{}, nil
-	}
-	if len(qr.Rows[0]) != 2 {
-		return false, sqltypes.Value{}, nil
+	if len(qr.Fields) != 2 || len(qr.Rows[0]) != 2 {
+		// the verification query selects exactly two columns; anything else means the
+		// value cannot be judged, which must fail rather than pass as "no change"
+		return false, sqltypes.Value{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected result reading sql_mode: %d fields, %d columns", len(qr.Fields), len(qr.Rows[0]))
 	}
 	newMode, err := sqlmode.Validate(qr.Rows[0][1])
 	if err != nil {

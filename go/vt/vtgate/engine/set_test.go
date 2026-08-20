@@ -635,6 +635,25 @@ func TestSetTable(t *testing.T) {
 			"|BOGUS",
 		)},
 	}, {
+		testName:     "sql_mode verification result with an unexpected shape fails",
+		mysqlVersion: "8.0.0",
+		setOps: []SetOp{
+			&SysVarReservedConn{
+				Name:          "sql_mode",
+				Keyspace:      &vindexes.Keyspace{Name: "ks", Sharded: true},
+				Expr:          "'STRICT_TRANS_TABLES'",
+				SupportSetVar: true,
+			},
+		},
+		expectedQueryLog: []string{
+			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
+			`ExecuteMultiShard ks.-20: select @@sql_mode orig, 'STRICT_TRANS_TABLES' new {} false false`,
+		},
+		expectedError: "unexpected result reading sql_mode: 1 fields, 1 columns",
+		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig", "varchar"),
+			"whatever",
+		)},
+	}, {
 		testName:     "sql_mode set to a removed mode bit",
 		mysqlVersion: "8.0.0",
 		setOps: []SetOp{
