@@ -69,8 +69,8 @@ func TestBuildSettingQuerySQLMode(t *testing.T) {
 		settings:    []string{"set sql_mode = 'BOGUS'"},
 		expectedErr: "Variable 'sql_mode' can't be set to the value of 'BOGUS'",
 	}, {
-		// settings are applied with no verification afterwards; a value that cannot be
-		// judged upfront is rejected
+		// settings are applied with no read-back afterwards; a value that cannot be
+		// judged and stripped upfront is rejected
 		settings:    []string{"set sql_safe_updates = 1", "set sql_mode = concat('AN', 'SI')"},
 		expectedErr: "non-constant sql_mode value in connection settings: set sql_mode = concat('AN', 'SI')",
 	}}
@@ -130,12 +130,15 @@ func TestBuildReservedSettings(t *testing.T) {
 		assert.Equal(t, sqlparser.SQLMode(0), parseMode)
 	})
 
-	t.Run("strings that do not parse as SET statements are left for MySQL", func(t *testing.T) {
-		settings := []string{"this is not SQL"}
-		applied, parseMode, err := BuildReservedSettings(settings, parser)
-		require.NoError(t, err)
-		assert.Equal(t, settings, applied)
-		assert.Equal(t, sqlparser.SQLMode(0), parseMode)
+	t.Run("values that cannot be judged upfront are rejected", func(t *testing.T) {
+		// the settings are applied with no read-back afterwards, so anything that
+		// cannot be judged and stripped here must not reach the connection
+		_, _, err := BuildReservedSettings([]string{"this is not SQL"}, parser)
+		require.ErrorContains(t, err, "failed to parse connection setting: this is not SQL")
+		_, _, err = BuildReservedSettings([]string{"select 1 from dual"}, parser)
+		require.EqualError(t, err, "connection setting is not a SET statement: select 1 from dual")
+		_, _, err = BuildReservedSettings([]string{"set sql_mode = concat('AN', 'SI')"}, parser)
+		require.EqualError(t, err, "non-constant sql_mode value in connection settings: set sql_mode = concat('AN', 'SI')")
 	})
 
 	t.Run("invalid sql_mode values are rejected", func(t *testing.T) {

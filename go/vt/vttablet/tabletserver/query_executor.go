@@ -1260,11 +1260,14 @@ func (qre *QueryExecutor) execSet(conn *StatefulConnection) (*sqltypes.Result, e
 		}
 		mode, err := sqlmode.Parse(applied.ToString())
 		if err != nil {
-			// The applied value does not parse as MySQL 8.x modes: the backend is a
-			// flavor whose sql_mode vocabulary we do not know (e.g. MariaDB reporting
-			// its own mode names). There is nothing to record on a value we cannot
-			// judge.
-			return result, nil
+			// The applied value does not decode as MySQL 8.x modes, so there is no
+			// telling what parse-relevant modes the connection is in — it cannot be
+			// reused. A constant with an unknown mode name is rejected at plan time,
+			// and an expression producing one must not fare better.
+			log.Warn("closing connection: the applied sql_mode does not decode as MySQL modes",
+				slog.Any("error", err), slog.Int64("connID", conn.ID()))
+			conn.Close()
+			return nil, err
 		}
 		if err := qre.recordAppliedSQLMode(conn, mode); err != nil {
 			return nil, err

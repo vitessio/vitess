@@ -47,8 +47,10 @@ import (
 // mirrors BuildSettingQuery's sql_mode validation and stripping: constant sql_mode
 // assignments are rewritten with their parse-relevant modes removed, and the extracted
 // bits are returned so the reserved connection can parse later queries under them.
-// Strings that do not parse as SET statements are passed through untouched for MySQL to
-// judge, as before.
+// Every setting must parse as a SET statement carrying constant sql_mode values: the
+// settings are applied with no verification afterwards, and a value that cannot be
+// judged and stripped upfront could put the MySQL session in a mode that changes how it
+// lexes the SQL the vttablet sends.
 func BuildReservedSettings(settings []string, parser *sqlparser.Parser) ([]string, sqlparser.SQLMode, error) {
 	applied := make([]string, len(settings))
 	var parseMode sqlparser.SQLMode
@@ -56,13 +58,13 @@ func BuildReservedSettings(settings []string, parser *sqlparser.Parser) ([]strin
 		applied[i] = setting
 		stmt, err := parser.Parse(setting)
 		if err != nil {
-			continue
+			return nil, 0, vterrors.Wrapf(err, "failed to parse connection setting: %s", setting)
 		}
 		set, ok := stmt.(*sqlparser.Set)
 		if !ok {
-			continue
+			return nil, 0, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "connection setting is not a SET statement: %s", setting)
 		}
-		if _, err := validateSetExprsSQLMode(set.Exprs); err != nil {
+		if err := validateConstantSetExprsSQLMode(set.Exprs); err != nil {
 			return nil, 0, err
 		}
 		mode, sawConstant, rewrote := stripSetExprsSQLMode(set.Exprs)
@@ -74,6 +76,20 @@ func BuildReservedSettings(settings []string, parser *sqlparser.Parser) ([]strin
 		}
 	}
 	return applied, parseMode, nil
+}
+
+// validateConstantSetExprsSQLMode is validateSetExprsSQLMode for the settings paths,
+// which have no read-back phase: a session-scope sql_mode assignment whose value is not
+// a constant cannot be judged or stripped there at all and is rejected.
+func validateConstantSetExprsSQLMode(exprs sqlparser.SetExprs) error {
+	readBack, err := validateSetExprsSQLMode(exprs)
+	if err != nil {
+		return err
+	}
+	if readBack {
+		return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "non-constant sql_mode value in connection settings: %s", sqlparser.String(&sqlparser.Set{Exprs: exprs}))
+	}
+	return nil
 }
 
 // stripSetExprsSQLMode rewrites constant session-scope sql_mode assignments in place:
