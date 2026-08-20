@@ -115,6 +115,22 @@ func (wd *workflowDiffer) reconcileReferenceTables(dr *DiffReport) error {
 	return nil
 }
 
+// tableProjectionIsAllPKs reports whether every column in the table's
+// comparison projection is part of the primary key, in which case even a
+// PK-only row sample contains the complete row.
+func (wd *workflowDiffer) tableProjectionIsAllPKs(tableName string) bool {
+	td, ok := wd.tableDiffers[tableName]
+	if !ok || td.tablePlan == nil || len(td.tablePlan.compareCols) == 0 {
+		return false
+	}
+	for _, col := range td.tablePlan.compareCols {
+		if !col.isPK {
+			return false
+		}
+	}
+	return true
+}
+
 func (wd *workflowDiffer) doReconcileExtraRows(dr *DiffReport, maxExtraRowsToCompare int64, maxReportSampleRows int64) error {
 	// Trim the extra rows diffs to the maxReportSampleRows value on every exit
 	// path: the diff collects samples up to maxExtraRowsToCompare per side,
@@ -143,9 +159,10 @@ func (wd *workflowDiffer) doReconcileExtraRows(dr *DiffReport, maxExtraRowsToCom
 	// Samples persisted by an older binary and reloaded on resume lack the
 	// LosslessValues marker. They are still provably complete when this
 	// vdiff's report options could not have produced a lossy sample: no
-	// PK-only samples and no configured truncation.
-	legacyLossless := !wd.opts.GetReportOptions().GetOnlyPks() &&
-		wd.opts.GetReportOptions().GetRowDiffColumnTruncateAt() <= 0
+	// configured truncation, and either no PK-only sampling or a projection
+	// consisting entirely of PK columns (whose values are never truncated).
+	legacyLossless := wd.opts.GetReportOptions().GetRowDiffColumnTruncateAt() <= 0 &&
+		(!wd.opts.GetReportOptions().GetOnlyPks() || wd.tableProjectionIsAllPKs(dr.TableName))
 	isLossless := func(rd *RowDiff) bool {
 		return rd.LosslessValues || legacyLossless
 	}

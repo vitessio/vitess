@@ -403,6 +403,42 @@ func TestReconcileExtraRowsSkippedForLossySamples(t *testing.T) {
 		})
 	}
 
+	t.Run("unmarked legacy PK-only samples reconcile when the projection is all PKs", func(t *testing.T) {
+		// A PK-only sample of a table whose comparison projection consists
+		// entirely of PK columns is complete, so unmarked legacy samples of
+		// such a vdiff can also be reconciled.
+		wd := &workflowDiffer{
+			ct: &controller{uuid: "d99795d9-8bb1-4741-b25f-b3a2a1edee0b"},
+			opts: &tabletmanagerdatapb.VDiffOptions{
+				CoreOptions:   &tabletmanagerdatapb.VDiffCoreOptions{},
+				ReportOptions: &tabletmanagerdatapb.VDiffReportOptions{MaxSampleRows: 10, OnlyPks: true},
+			},
+			tableDiffers: map[string]*tableDiffer{
+				"t1": {
+					tablePlan: &tablePlan{
+						compareCols: []compareColInfo{
+							{colIndex: 0, isPK: true, colName: "c1"},
+							{colIndex: 1, isPK: true, colName: "c2"},
+						},
+					},
+				},
+			},
+		}
+		dr := &DiffReport{
+			TableName:            "t1",
+			ProcessedRows:        4,
+			MatchingRows:         2,
+			ExtraRowsSource:      1,
+			ExtraRowsSourceDiffs: []*RowDiff{{Row: map[string]string{"c1": "1", "c2": "a"}}},
+			ExtraRowsTarget:      1,
+			ExtraRowsTargetDiffs: []*RowDiff{{Row: map[string]string{"c1": "1", "c2": "a"}}},
+		}
+		require.NoError(t, wd.doReconcileExtraRows(dr, 10, 10))
+		require.Equal(t, int64(0), dr.ExtraRowsSource)
+		require.Equal(t, int64(0), dr.ExtraRowsTarget)
+		require.Equal(t, int64(3), dr.MatchingRows)
+	})
+
 	t.Run("mixed legacy and current samples reconcile", func(t *testing.T) {
 		// With no truncation configured, a sample persisted by an older binary
 		// (no lossless marker) must still reconcile against an identical
