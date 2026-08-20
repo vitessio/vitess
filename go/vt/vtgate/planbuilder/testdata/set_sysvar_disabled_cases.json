@@ -1,5 +1,10 @@
 [
   {
+    "comment": "unsupported sql_mode is rejected even when system settings are disabled",
+    "query": "set sql_mode = 'NO_BACKSLASH_ESCAPES'",
+    "plan": "setting the NO_BACKSLASH_ESCAPES sql_mode is unsupported"
+  },
+  {
     "comment": "set passthrough disabled - check and ignore plan",
     "query": "set @@sql_mode = concat(@@sql_mode, ',NO_AUTO_CREATE_USER'), @@sql_safe_updates = 1",
     "plan": {
@@ -17,7 +22,7 @@
               "Sharded": false
             },
             "TargetDestination": {},
-            "Expr": "concat(@@sql_mode, ',NO_AUTO_CREATE_USER')"
+            "Expr": "concat(:__vtsql_mode, ',NO_AUTO_CREATE_USER')"
           },
           {
             "Type": "SysVarCheckAndIgnore",
@@ -37,10 +42,5 @@
         ]
       }
     }
-  },
-  {
-    "comment": "unsupported sql_mode values are rejected even with system settings disabled",
-    "query": "set sql_mode = 'NO_BACKSLASH_ESCAPES'",
-    "plan": "setting the NO_BACKSLASH_ESCAPES sql_mode is unsupported"
   }
 ]

@@ -90,6 +90,13 @@ type (
 		Expr evalengine.Expr
 	}
 
+	// SysVarSQLMode implements the SetOp interface for the sql_mode system variable. The
+	// value is evaluated and validated at the vtgate against the session's current
+	// sql_mode, and the session stores the canonical form MySQL would report back.
+	SysVarSQLMode struct {
+		Expr evalengine.Expr
+	}
+
 	// VitessMetadata implements the SetOp interface and will write the changes variable into the topo server
 	VitessMetadata struct {
 		Name, Value string
@@ -292,11 +299,64 @@ func (svs *SysVarReservedConn) execSetStatement(ctx context.Context, vcursor VCu
 	return vterrors.Aggregate(errs)
 }
 
+var _ SetOp = (*SysVarSQLMode)(nil)
+
+// MarshalJSON provides the type to SetOp for plan json
+func (svsm *SysVarSQLMode) MarshalJSON() ([]byte, error) {
+	return json.Marshal(struct {
+		Type string
+		Expr string
+	}{
+		Type: "SysVarSQLMode",
+		Expr: sqlparser.String(svsm.Expr),
+	})
+}
+
+// VariableName implements the SetOp interface method
+func (svsm *SysVarSQLMode) VariableName() string {
+	return sysvars.SQLMode.Name
+}
+
+// Execute implements the SetOp interface method
+func (svsm *SysVarSQLMode) Execute(ctx context.Context, vcursor VCursor, env *evalengine.ExpressionEnv) error {
+	result, err := env.Evaluate(svsm.Expr)
+	if err != nil {
+		return err
+	}
+	mode, err := sqlmode.Validate(result.Value(vcursor.ConnCollation()))
+	if err != nil {
+		return err
+	}
+	// The canonical value is stored unconditionally — even when it matches the session's
+	// current value — to repair undecodable or non-canonical session state (e.g. written
+	// by an older vtgate).
+	encoded := sqltypes.EncodeStringSQL(mode.String())
+	vcursor.Session().SetSysVar(sysvars.SQLMode.Name, encoded)
+	if vcursor.CanUseSetVar() {
+		// every hint-capable query carries the session's sql_mode in a SET_VAR hint, so
+		// there is nothing to apply here
+		return nil
+	}
+	vcursor.Session().NeedsReservedConn()
+	rss := vcursor.Session().ShardSession()
+	if len(rss) == 0 {
+		return nil
+	}
+	// The statement is sent even when the value did not change: a previous SET may have
+	// updated the session but failed on some of these shard sessions, and a client retry
+	// must converge them instead of short-circuiting as a no-op.
+	queries := make([]*querypb.BoundQuery, len(rss))
+	for i := range rss {
+		queries[i] = &querypb.BoundQuery{
+			Sql: fmt.Sprintf("set %s = %s", sysvars.SQLMode.Name, encoded),
+		}
+	}
+	_, errs := vcursor.ExecuteMultiShard(ctx, nil /*primitive*/, rss, queries, false /*rollbackOnError*/, false /*canAutocommit*/, false /*fetchLastInsertID*/)
+	return vterrors.Aggregate(errs)
+}
+
 func (svs *SysVarReservedConn) checkAndUpdateSysVar(ctx context.Context, vcursor VCursor, res *evalengine.ExpressionEnv) (bool, error) {
 	sysVarExprValidationQuery := fmt.Sprintf("select %s from dual where @@%s != %s", svs.Expr, svs.Name, svs.Expr)
-	if svs.Name == "sql_mode" {
-		sysVarExprValidationQuery = fmt.Sprintf("select @@%s orig, %s new", svs.Name, svs.Expr)
-	}
 	rss, _, err := vcursor.ResolveDestinations(ctx, svs.Keyspace.Name, nil, []key.ShardDestination{key.DestinationKeyspaceID{0}})
 	if err != nil {
 		return false, err
@@ -310,18 +370,7 @@ func (svs *SysVarReservedConn) checkAndUpdateSysVar(ctx context.Context, vcursor
 		return false, nil
 	}
 
-	var value sqltypes.Value
-	if svs.Name == "sql_mode" {
-		changed, value, err = sqlModeChangedValue(qr)
-		if err != nil {
-			return false, err
-		}
-		if !changed {
-			return false, nil
-		}
-	} else {
-		value = qr.Rows[0][0]
-	}
+	value := qr.Rows[0][0]
 	var buf strings.Builder
 	value.EncodeSQL(&buf)
 	s := buf.String()
@@ -334,31 +383,6 @@ func (svs *SysVarReservedConn) checkAndUpdateSysVar(ctx context.Context, vcursor
 		return true, nil
 	}
 	return false, nil
-}
-
-// sqlModeChangedValue reports whether the sql_mode assignment changes the session's
-// current value, after validating the assigned value the way MySQL validates a SET (see
-// sqlmode.Validate). Validation runs before the change detection, so an invalid or
-// unsupported value is rejected even when the assignment would not change the value —
-// name lists, numeric bitmasks, and combination modes like ANSI included.
-func sqlModeChangedValue(qr *sqltypes.Result) (bool, sqltypes.Value, error) {
-	if len(qr.Fields) != 2 {
-		return false, sqltypes.Value{}, nil
-	}
-	if len(qr.Rows[0]) != 2 {
-		return false, sqltypes.Value{}, nil
-	}
-	newMode, err := sqlmode.Validate(qr.Rows[0][1])
-	if err != nil {
-		return false, sqltypes.Value{}, err
-	}
-	orig, err := sqlmode.Parse(qr.Rows[0][0].ToString())
-	if err != nil {
-		// The backend reported a value these semantics cannot parse; treat the
-		// assignment as a change and let the backend judge it.
-		return true, qr.Rows[0][1], nil
-	}
-	return orig.Expand() != newMode, qr.Rows[0][1], nil
 }
 
 var _ SetOp = (*SysVarSetAware)(nil)

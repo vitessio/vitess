@@ -167,6 +167,44 @@ func TestPrequeries(t *testing.T) {
 	assert.Equalf(t, want, preQueries, "got %v but wanted %v", preQueries, want)
 }
 
+func TestPrequeriesStripLexerSQLModes(t *testing.T) {
+	session := NewSafeSession(&vtgatepb.Session{
+		SystemVariables: map[string]string{
+			"sql_mode":         "'IGNORE_SPACE,STRICT_TRANS_TABLES,HIGH_NOT_PRECEDENCE'",
+			"sql_safe_updates": "1",
+		},
+	})
+
+	// lexer modes are stripped from the sql_mode sent to backends: queries reaching the
+	// backend are serialized in vtgate's canonical format, which those modes could break
+	want := []string{"set sql_mode = 'STRICT_TRANS_TABLES', sql_safe_updates = 1"}
+	assert.Equal(t, want, session.SetPreQueries())
+}
+
+func TestSetVarCommentStripsLexerSQLModes(t *testing.T) {
+	session := NewSafeSession(&vtgatepb.Session{
+		SystemVariables: map[string]string{
+			"sql_mode":         "'IGNORE_SPACE,STRICT_TRANS_TABLES,HIGH_NOT_PRECEDENCE'",
+			"sql_safe_updates": "1",
+		},
+	})
+	assert.Equal(t, "SET_VAR(sql_mode = 'STRICT_TRANS_TABLES') SET_VAR(sql_safe_updates = 1)", session.SetVarComment())
+
+	// a sql_mode consisting only of lexer modes is sent as the empty mode, using the
+	// space placeholder MySQL's hint parser requires
+	session = NewSafeSession(&vtgatepb.Session{
+		SystemVariables: map[string]string{"sql_mode": "'IGNORE_SPACE'"},
+	})
+	assert.Equal(t, "SET_VAR(sql_mode = ' ')", session.SetVarComment())
+
+	// a value that does not decode or parse (session state written by another vtgate
+	// version) is rendered as-is
+	session = NewSafeSession(&vtgatepb.Session{
+		SystemVariables: map[string]string{"sql_mode": "'BOGUS'"},
+	})
+	assert.Equal(t, "SET_VAR(sql_mode = 'BOGUS')", session.SetVarComment())
+}
+
 func TestTimeZone(t *testing.T) {
 	testCases := []struct {
 		tz   string

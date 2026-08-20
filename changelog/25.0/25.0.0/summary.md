@@ -29,6 +29,8 @@
         - [Stricter validation of SQL-level PREPARE statements](#vtgate-prepare-stricter-validation)
         - [Stricter PROXY protocol v1 header validation](#vtgate-proxy-protocol-v1-strictness)
         - [MySQL-faithful validation and rejection of unsupported `sql_mode` values](#vtgate-sql-mode-rejection)
+        - [Sessions start with a well-defined default `sql_mode` (new `--sql-mode` flag)](#vtgate-sql-mode-session-default)
+        - [The session's `sql_mode` is applied to every backend query](#vtgate-sql-mode-always-sent)
     - **[Reparent](#minor-changes-reparent)**
         - [`EmergencyReparentShard` no longer waits on replicas that cannot win the election](#ers-lagging-relay-log-wait)
         - [`EmergencyReparentShard` can explicitly recover from split brain](#ers-allow-split-brain-promotion)
@@ -274,15 +276,38 @@ See [#20733](https://github.com/vitessio/vitess/pull/20733) for details.
 
 #### <a id="vtgate-sql-mode-rejection"/>MySQL-faithful validation and rejection of unsupported `sql_mode` values</a>
 
-VTGate already rejected `SET sql_mode = ...` statements that enable a mode the Vitess parser does not support (`ANSI_QUOTES`, `NO_BACKSLASH_ESCAPES`, `PIPES_AS_CONCAT`, `REAL_AS_FLOAT`), but the check compared mode names textually and could be bypassed. VTGate now implements MySQL 8.x's `sql_mode` assignment semantics (verified against MySQL 8.0.46) and validates every assignment against them:
+VTGate already rejected `SET sql_mode = ...` statements that enable a mode the Vitess parser does not support (`ANSI_QUOTES`, `NO_BACKSLASH_ESCAPES`, `PIPES_AS_CONCAT`, `REAL_AS_FLOAT`), but the check could be bypassed. VTGate now implements MySQL 8.x's `sql_mode` assignment semantics (verified against MySQL 8.0.46) and validates every assignment against them:
 
 - Setting an unsupported mode is rejected even when the underlying MySQL already runs with that mode, i.e. when the `SET` would not change the value. Previously such statements succeeded, even though VTGate does not parse queries under these modes. The combination mode `ANSI` is rejected as well, since it enables `ANSI_QUOTES`, `PIPES_AS_CONCAT`, and `REAL_AS_FLOAT`.
 - `IGNORE_SPACE` and `HIGH_NOT_PRECEDENCE` — the two remaining modes that change how SQL text is interpreted — are now also rejected: the Vitess parser does not honor them, so queries would be parsed differently at the VTGate than the session's `sql_mode` promises.
 - Unknown mode names and invalid numeric values fail with MySQL's own errors: `ER_WRONG_VALUE_FOR_VAR` (1231) and, for the bits of modes removed in MySQL 8.0, `ER_UNSUPPORTED_SQL_MODE` (3899).
 - Numeric values are decoded against MySQL's `sql_mode` bitmask, so `SET sql_mode = 1048576` reports that `NO_BACKSLASH_ESCAPES` is unsupported, while valid numeric values are accepted.
-- Constant values — literals, but also constant expressions such as `CONCAT` over literals — are validated at planning time with no shard round trip, including when `--enable-system-settings` is disabled. Non-constant expressions are validated at execution time, once their value is known.
+- Constant values — literals, but also constant expressions such as `CONCAT` over literals — are validated at planning time with no shard round trip, including when `--enable-system-settings` is disabled. Expressions referencing the current value (e.g. `CONCAT(@@sql_mode, '...')`) are validated at execution time, including on sessions targeting a specific shard (e.g. `USE ks:-80@primary`), which previously applied the value unchecked.
+- The session value is normalized the way MySQL normalizes it: combination modes are expanded, names are upper-cased and ordered by bit position, and numeric values map back to names. `SELECT @@sql_mode` through VTGate now returns the same canonical string MySQL would return (previously it echoed the raw text of the `SET`, e.g. lowercase names or the bare number).
 
-**Impact**: Clients that issue `SET sql_mode` with an unsupported mode — even as a no-op matching the backend's existing `sql_mode` — will now receive an error, as will clients setting mode names the backend MySQL would itself reject. Such sessions were already unreliable, as VTGate parses queries without honoring these modes.
+Validation applies to new `SET sql_mode` statements, not to session state that already exists: a gRPC session that set `sql_mode` on an older VTGate carries that value across a rolling upgrade and keeps running with it — including values the new validation would reject — rather than failing mid-session. The next `SET sql_mode` on such a session is validated and stores the canonical form.
+
+**Impact**: Clients that issue `SET sql_mode` with an unsupported mode — even as a no-op matching the backend's existing `sql_mode` — will now receive an error, as will clients setting mode names the backend MySQL would itself reject. Such sessions were already unreliable, as VTGate parses queries without honoring these modes. Clients that read `@@sql_mode` back will see MySQL's canonical form instead of their original spelling.
+
+#### <a id="vtgate-sql-mode-session-default"/>Sessions start with a well-defined default `sql_mode` (new `--sql-mode` flag)</a>
+
+VTGate sessions now start with a well-defined `sql_mode` instead of implicitly inheriting whatever each backend happens to be configured with. A new `--sql-mode` flag (named after MySQL's flag, validated the same way as a `SET sql_mode` statement) sets this session default, which defaults to MySQL 8.x's factory default — the mode Vitess-managed `mysqld` instances run with. As a result:
+
+- `SELECT @@sql_mode`, `SHOW VARIABLES LIKE 'sql_mode'`, and expressions referencing `@@sql_mode` are answered by VTGate from the session, never by asking an arbitrary shard — previously, reads and `SET sql_mode` change-detection queried one shard and assumed all backends agreed on `sql_mode`, which nothing guarantees in a multi-backend cluster.
+- `SET sql_mode = <expr>` is evaluated entirely at the VTGate, including expressions like `CONCAT(@@sql_mode, '...')`, with no shard round trip. `SET` statements no longer force a reserved connection on MySQL 8.0+ where `SET_VAR` is available.
+- `@@global.sql_mode` resolves to the configured default (the `--sql-mode` value), never to a backend's global — in this model the VTGate owns the global `sql_mode`, so `SET sql_mode = @@global.sql_mode` restores the session default.
+
+**Impact**: Sessions that never set `sql_mode` will read the configured session default rather than the value of whichever shard happened to answer. Deployments whose backends intentionally run a non-default global `sql_mode` should set `--sql-mode` to that value so VTGate's session semantics match their backends, or opt out entirely with `--enable-system-settings=false` (see the next section).
+
+#### <a id="vtgate-sql-mode-always-sent"/>The session's `sql_mode` is applied to every backend query</a>
+
+The session's `sql_mode` is now applied to every query sent to the backends, whether or not the session ever set it: statements that can carry optimizer hints get a `SET_VAR(sql_mode = ...)` hint, and statements that cannot (e.g. DDL) run on a connection with the session's settings applied through the tablet's settings pool. Previously, sessions that never set `sql_mode` ran queries under whatever mode each backend happened to be configured with — while VTGate reported a different mode to the client. Relatedly, the `SET_VAR` comment is now only placed in the top-level statement comment (where MySQL honors it) instead of also being duplicated into subqueries, and `vexplain`/`explain` hint the statement they wrap.
+
+Modes that change how SQL text is interpreted (`ANSI_QUOTES`, `NO_BACKSLASH_ESCAPES`, `PIPES_AS_CONCAT`, `REAL_AS_FLOAT`, `IGNORE_SPACE`, `HIGH_NOT_PRECEDENCE`, and the `ANSI` combination) are never part of the `sql_mode` sent to the backends. A session's `sql_mode` governs how the client's SQL is interpreted; the queries a backend receives are always serialized in VTGate's canonical, default-lexer format, which those modes could make MySQL parse differently than VTGate intended (e.g. `IGNORE_SPACE` reserving builtin function names). This split also means such modes can be supported for incoming queries in the future as a pure parser change, without backend query serialization having to account for them.
+
+Deployments that run with `--enable-system-settings=false` are exempt: their sessions are not seeded with a `sql_mode` and no `SET_VAR` hint is sent, so queries keep running under each backend's configured mode, as before. This is the opt-out for deployments whose backends intentionally run a `sql_mode` the Vitess parser does not support (e.g. `ANSI_QUOTES`), which `--sql-mode` would reject.
+
+**Impact**: Queries now run under the `sql_mode` VTGate reports to the client, instead of each backend's configured mode. Note that a `sql_mode` without a strict mode (e.g. bare `NO_ZERO_DATE`) makes MySQL attach deprecation warning 3135 to every query that carries the mode as a `SET_VAR` hint — this was already the case for sessions that `SET` such a mode, but now also applies to every session when `--sql-mode` is configured to a non-strict combination.
 
 ### <a id="minor-changes-reparent"/>Reparent</a>
 
@@ -318,15 +343,15 @@ See [#20579](https://github.com/vitessio/vitess/issues/20579).
 
 #### <a id="vttablet-reject-unsupported-sql-modes"/>VTTablet rejects unsupported `sql_mode` values</a>
 
-VTTablet now applies the same `sql_mode` validation as VTGate (see [the VTGate section](#vtgate-sql-mode-rejection)) at its own entry points, returning the identical errors: connection settings (the settings pool and reserved connections), `SET_VAR` optimizer hints in incoming queries, and session-scope `SET sql_mode` statements. Constant values are judged before execution; a non-constant expression executed on a dedicated connection is verified after execution — the applied `@@sql_mode` is read back and, if it fails validation, the previous mode is restored so the failed `SET` is a no-op (the connection is closed only if that restore fails). The `ApplySchema` `--session-variable` option validates `sql_mode` values the same way, both when the DDL strategy is parsed and on the tablet applying the variables.
+VTTablet now applies the same `sql_mode` validation as VTGate (see [the VTGate section](#vtgate-sql-mode-rejection)) at its own entry points, returning the identical errors: connection settings (the settings pool and reserved connections), `SET_VAR` optimizer hints in incoming queries, and session-scope `SET sql_mode` statements. Constant values are judged before execution; a non-constant expression executed on a dedicated connection is verified after execution — the applied `@@sql_mode` is read back and, if it fails validation, the previous mode is restored so the failed `SET` is a no-op (the connection is closed only if that restore fails).
 
-This check concerns clients that bypass VTGate's validation: older VTGates in a mixed-version cluster and clients that talk to the query service directly.
+An up-to-date VTGate never sends these values (it rejects them at `SET` time and strips lexer modes from the transported `sql_mode`), so this check concerns clients that bypass VTGate's validation: older VTGates in a mixed-version cluster and clients that talk to the query service directly.
 
 The server's own configuration is covered as well: MySQL lexes every statement under the session `sql_mode` in effect *before* the statement — a `SET_VAR` hint cannot influence the parsing of its own statement — so Vitess-formatted SQL should always be lexed under the same rules it was serialized with, regardless of how the backend happens to be configured. Every MySQL connection Vitess creates now strips the lexer modes from the session `sql_mode` it inherits from the server's global value, at the single connector choke point all components dial through — query serving, schema tracking and apply, heartbeats, replication management, Online DDL, vreplication and VDiff, VStream snapshots, and init scripts alike — while preserving all runtime modes (strict modes, zero-date handling, etc.). The settings-pool reset restores this neutralized value rather than `default` for the same reason.
 
 Two deliberate consequences: connections serving `ExecuteFetchAsDba`-style admin RPCs also start neutralized — operator-supplied statements run with the server's lexer modes stripped, and a multi-statement batch can still set the session `sql_mode` explicitly; and connections to *external* MySQL servers (vreplication sources, point-in-time recovery) are neutralized too, since Vitess sends them the same Vitess-formatted SQL. Statements an operator's `sql_mode`-sensitive tooling sends outside Vitess are unaffected — the neutralization is session-scoped and never touches the global value.
 
-**Impact**: During a rolling upgrade (VTTablets are typically upgraded before VTGates), a session that set a now-rejected `sql_mode` — e.g. `ANSI` — through a not-yet-upgraded VTGate will start receiving errors from upgraded VTTablets. Such sessions were already unreliable, as VTGate parses queries without honoring these modes. Queries now always run with the server's lexer modes stripped from the session, so Vitess-formatted SQL parses consistently regardless of the backend's global configuration.
+**Impact**: During a rolling upgrade (VTTablets are typically upgraded before VTGates), a session that set a now-rejected `sql_mode` — e.g. `ANSI` — through a not-yet-upgraded VTGate will start receiving errors from upgraded VTTablets. Such sessions were already unreliable, as VTGate parses queries without honoring these modes.
 
 #### <a id="vttablet-consolidator-reject-on-cap"/>Consolidator Reject on Waiter Cap</a>
 

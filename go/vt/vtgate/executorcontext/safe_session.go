@@ -27,6 +27,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/mysql/datetime"
+	"vitess.io/vitess/go/mysql/sqlmode"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -70,6 +71,11 @@ type (
 		// This causes all queries to route to the specified tablet until cleared.
 		// Note: This is stored in the Go wrapper, not in the protobuf Session.
 		targetTabletAlias *topodatapb.TabletAlias
+
+		// setVarComment caches the rendered SET_VAR query hint content derived from
+		// SystemVariables; invalidated whenever a system variable changes.
+		setVarComment      string
+		setVarCommentBuilt bool
 
 		*vtgatepb.Session
 	}
@@ -661,6 +667,56 @@ func (session *SafeSession) SetSystemVariable(name string, expr string) {
 		session.SystemVariables = make(map[string]string)
 	}
 	session.SystemVariables[name] = expr
+	session.setVarCommentBuilt = false
+}
+
+// SetVarComment returns the SET_VAR query hint content for the session's system
+// variables, e.g. `SET_VAR(sql_mode = '...') SET_VAR(sql_safe_updates = 1)`. The result
+// is cached until a system variable changes, and variables are rendered in sorted order
+// so the comment — and everything derived from it, like plan cache keys — is
+// deterministic.
+func (session *SafeSession) SetVarComment() string {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	if session.setVarCommentBuilt {
+		return session.setVarComment
+	}
+	var keys []string
+	for k := range session.SystemVariables {
+		if sysvars.IsVitessAware(k) || !sysvars.SupportsSetVar(k) {
+			continue
+		}
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	var buf strings.Builder
+	size := 0
+	for _, k := range keys {
+		size += len("SET_VAR( = ) ") + len(k) + len(session.SystemVariables[k])
+	}
+	buf.Grow(size)
+	for i, k := range keys {
+		v := session.SystemVariables[k]
+		if k == sysvars.SQLMode.Name {
+			v = transportSQLMode(v)
+			if v == "''" {
+				// SET_VAR(sql_mode, '') is not accepted by MySQL, giving a warning:
+				// | Warning | 1064 | Optimizer hint syntax error near ''') */
+				v = "' '"
+			}
+		}
+		if i > 0 {
+			buf.WriteByte(' ')
+		}
+		buf.WriteString("SET_VAR(")
+		buf.WriteString(k)
+		buf.WriteString(" = ")
+		buf.WriteString(v)
+		buf.WriteByte(')')
+	}
+	session.setVarComment = buf.String()
+	session.setVarCommentBuilt = true
+	return session.setVarComment
 }
 
 // GetSystemVariables takes a visitor function that will receive each MySQL system variable in the session.
@@ -683,6 +739,62 @@ func (session *SafeSession) HasSystemVariables() (found bool) {
 		found = true
 	})
 	return
+}
+
+// transportSQLMode returns the sql_mode value to send to a backend: the session's value
+// with lexer modes stripped, unconditionally. The session's sql_mode governs how the
+// *client's* SQL is interpreted; queries sent to a backend are always serialized in
+// vtgate's canonical, default-lexer format, so the backend must never parse them under a
+// lexer mode (see sqlmode.LexerModes). Keeping this contract independent of what the
+// session holds is what allows lexer modes to be supported for incoming queries later —
+// as a pure parser change — without backend query serialization ever becoming mode-aware.
+// A value that does not decode or parse is returned unchanged.
+func transportSQLMode(encoded string) string {
+	raw, err := sqltypes.DecodeStringSQL(encoded)
+	if err != nil {
+		return encoded
+	}
+	mode, err := sqlmode.Parse(raw)
+	if err != nil {
+		return encoded
+	}
+	return sqltypes.EncodeStringSQL(mode.Expand().WithoutLexerModes().String())
+}
+
+// SeedSQLMode initializes the session's sql_mode with the given default when the session
+// does not carry one yet. This makes every query run under the sql_mode the vtgate reports
+// to the client — via a SET_VAR query hint, or via the connection settings when SET_VAR is
+// unavailable (canUseSetVar false) — instead of whatever mode each backend happens to be
+// configured with.
+func (session *SafeSession) SeedSQLMode(defaultSQLMode string, canUseSetVar bool) {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	if session.SystemVariables == nil {
+		session.SystemVariables = make(map[string]string)
+	}
+	if _, ok := session.SystemVariables[sysvars.SQLMode.Name]; !ok {
+		session.SystemVariables[sysvars.SQLMode.Name] = sqltypes.EncodeStringSQL(defaultSQLMode)
+		session.setVarCommentBuilt = false
+	}
+	if !canUseSetVar {
+		session.Session.InReservedConn = true
+	}
+}
+
+// SQLMode returns the session's sql_mode value, if the session has set one.
+func (session *SafeSession) SQLMode() (string, bool) {
+	session.mu.Lock()
+	modeSQL, ok := session.SystemVariables[sysvars.SQLMode.Name]
+	session.mu.Unlock()
+
+	if !ok {
+		return "", false
+	}
+	mode, err := sqltypes.DecodeStringSQL(modeSQL)
+	if err != nil {
+		return "", false
+	}
+	return mode, true
 }
 
 func (session *SafeSession) TimeZone() *time.Location {
@@ -760,6 +872,9 @@ func (session *SafeSession) SetPreQueries() []string {
 	var keys []string
 	sysVars := make(map[string]string)
 	session.GetSystemVariables(func(k string, v string) {
+		if k == sysvars.SQLMode.Name {
+			v = transportSQLMode(v)
+		}
 		keys = append(keys, k)
 		sysVars[k] = v
 	})

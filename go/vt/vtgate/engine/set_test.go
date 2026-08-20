@@ -27,6 +27,7 @@ import (
 
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -71,6 +72,28 @@ func TestSetSystemVariableAsString(t *testing.T) {
 	})
 }
 
+func TestSetSQLModeAppliedToOpenShardSessions(t *testing.T) {
+	set := &Set{
+		Ops: []SetOp{
+			&SysVarSQLMode{Expr: evalengine.NewLiteralString([]byte("STRICT_ALL_TABLES"), collations.SystemCollation)},
+		},
+		Input: &SingleRow{},
+	}
+	vc := &loggingVCursor{
+		shards:        []string{"-20", "20-"},
+		shardSession:  []*srvtopo.ResolvedShard{{Target: &querypb.Target{Keyspace: "ks", Shard: "-20"}}},
+		disableSetVar: true,
+	}
+	_, err := set.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
+	require.NoError(t, err)
+
+	vc.ExpectLog(t, []string{
+		"SysVar set with (sql_mode,'STRICT_ALL_TABLES')",
+		"Needs Reserved Conn",
+		"ExecuteMultiShard ks.-20: set sql_mode = 'STRICT_ALL_TABLES' {} false false",
+	})
+}
+
 func TestSetTable(t *testing.T) {
 	type testCase struct {
 		testName         string
@@ -83,6 +106,7 @@ func TestSetTable(t *testing.T) {
 		execErr          error
 		mysqlVersion     string
 		disableSetVar    bool
+		shardSession     []*srvtopo.ResolvedShard
 	}
 
 	ks := &vindexes.Keyspace{Name: "ks", Sharded: true}
@@ -280,379 +304,143 @@ func TestSetTable(t *testing.T) {
 			"123456",
 		)},
 	}, {
-		testName: "sql_mode no change - same",
-		setOps: []SetOp{
-			&SysVarReservedConn{
-				Name:     "sql_mode",
-				Keyspace: &vindexes.Keyspace{Name: "ks", Sharded: true},
-				Expr:     "'STRICT_TRANS_TABLES,NO_ZERO_DATE'",
-			},
-		},
-		expectedQueryLog: []string{
-			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
-			`ExecuteMultiShard ks.-20: select @@sql_mode orig, 'STRICT_TRANS_TABLES,NO_ZERO_DATE' new {} false false`,
-		},
-		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
-			"STRICT_TRANS_TABLES,NO_ZERO_DATE|STRICT_TRANS_TABLES,NO_ZERO_DATE",
-		)},
-	}, {
-		testName: "sql_mode no change - jumbled orig",
-		setOps: []SetOp{
-			&SysVarReservedConn{
-				Name:     "sql_mode",
-				Keyspace: &vindexes.Keyspace{Name: "ks", Sharded: true},
-				Expr:     "'STRICT_TRANS_TABLES,NO_ZERO_DATE'",
-			},
-		},
-		expectedQueryLog: []string{
-			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
-			`ExecuteMultiShard ks.-20: select @@sql_mode orig, 'STRICT_TRANS_TABLES,NO_ZERO_DATE' new {} false false`,
-		},
-		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
-			"NO_ZERO_DATE,STRICT_TRANS_TABLES|STRICT_TRANS_TABLES,NO_ZERO_DATE",
-		)},
-	}, {
-		testName: "sql_mode no change - jumbled new",
-		setOps: []SetOp{
-			&SysVarReservedConn{
-				Name:     "sql_mode",
-				Keyspace: &vindexes.Keyspace{Name: "ks", Sharded: true},
-				Expr:     "'NO_ZERO_DATE,STRICT_TRANS_TABLES'",
-			},
-		},
-		expectedQueryLog: []string{
-			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
-			`ExecuteMultiShard ks.-20: select @@sql_mode orig, 'NO_ZERO_DATE,STRICT_TRANS_TABLES' new {} false false`,
-		},
-		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
-			"STRICT_TRANS_TABLES,NO_ZERO_DATE|NO_ZERO_DATE,STRICT_TRANS_TABLES",
-		)},
-	}, {
-		testName: "sql_mode no change - same mixed case",
-		setOps: []SetOp{
-			&SysVarReservedConn{
-				Name:     "sql_mode",
-				Keyspace: &vindexes.Keyspace{Name: "ks", Sharded: true},
-				Expr:     "'no_zero_date,STRICT_TRANS_TABLES'",
-			},
-		},
-		expectedQueryLog: []string{
-			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
-			`ExecuteMultiShard ks.-20: select @@sql_mode orig, 'no_zero_date,STRICT_TRANS_TABLES' new {} false false`,
-		},
-		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
-			"STRICT_TRANS_TABLES,NO_ZERO_DATE|no_zero_date,STRICT_TRANS_TABLES",
-		)},
-	}, {
-		testName: "sql_mode no change - same multiple",
-		setOps: []SetOp{
-			&SysVarReservedConn{
-				Name:          "sql_mode",
-				Keyspace:      &vindexes.Keyspace{Name: "ks", Sharded: true},
-				Expr:          "'no_zero_date,STRICT_TRANS_TABLES,strict_trans_tables,no_zero_date,NO_ZERO_DATE,STRICT_TRANS_TABLES'",
-				SupportSetVar: true,
-			},
-		},
-		expectedQueryLog: []string{
-			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
-			`ExecuteMultiShard ks.-20: select @@sql_mode orig, 'no_zero_date,STRICT_TRANS_TABLES,strict_trans_tables,no_zero_date,NO_ZERO_DATE,STRICT_TRANS_TABLES' new {} false false`,
-		},
-		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
-			"STRICT_TRANS_TABLES,NO_ZERO_DATE|no_zero_date,STRICT_TRANS_TABLES,strict_trans_tables,no_zero_date,NO_ZERO_DATE,STRICT_TRANS_TABLES",
-		)},
-	}, {
-		testName:     "sql_mode change - changed additional - MySQL57",
-		mysqlVersion: "5.7.9",
-		setOps: []SetOp{
-			&SysVarReservedConn{
-				Name:          "sql_mode",
-				Keyspace:      &vindexes.Keyspace{Name: "ks", Sharded: true},
-				Expr:          "'no_zero_date,STRICT_TRANS_TABLES,strict_trans_tables,NO_ZERO_IN_DATE'",
-				SupportSetVar: true,
-			},
-		},
-		expectedQueryLog: []string{
-			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
-			`ExecuteMultiShard ks.-20: select @@sql_mode orig, 'no_zero_date,STRICT_TRANS_TABLES,strict_trans_tables,NO_ZERO_IN_DATE' new {} false false`,
-			"SysVar set with (sql_mode,'no_zero_date,STRICT_TRANS_TABLES,strict_trans_tables,NO_ZERO_IN_DATE')",
-			"Needs Reserved Conn",
-		},
-		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
-			"STRICT_TRANS_TABLES,NO_ZERO_DATE|no_zero_date,STRICT_TRANS_TABLES,strict_trans_tables,NO_ZERO_IN_DATE",
-		)},
-	}, {
-		testName:     "sql_mode change - changed less - MySQL57",
-		mysqlVersion: "5.7.9",
-		setOps: []SetOp{
-			&SysVarReservedConn{
-				Name:          "sql_mode",
-				Keyspace:      &vindexes.Keyspace{Name: "ks", Sharded: true},
-				Expr:          "'no_zero_date,NO_ZERO_DATE'",
-				SupportSetVar: true,
-			},
-		},
-		expectedQueryLog: []string{
-			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
-			`ExecuteMultiShard ks.-20: select @@sql_mode orig, 'no_zero_date,NO_ZERO_DATE' new {} false false`,
-			"SysVar set with (sql_mode,'no_zero_date,NO_ZERO_DATE')",
-			"Needs Reserved Conn",
-		},
-		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
-			"STRICT_TRANS_TABLES,NO_ZERO_DATE|no_zero_date,NO_ZERO_DATE",
-		)},
-	}, {
-		testName: "sql_mode no change - empty list",
-		setOps: []SetOp{
-			&SysVarReservedConn{
-				Name:          "sql_mode",
-				Keyspace:      &vindexes.Keyspace{Name: "ks", Sharded: true},
-				Expr:          "''",
-				SupportSetVar: true,
-			},
-		},
-		expectedQueryLog: []string{
-			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
-			`ExecuteMultiShard ks.-20: select @@sql_mode orig, '' new {} false false`,
-		},
-		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
-			"|",
-		)},
-	}, {
-		testName:     "sql_mode change - empty orig - MySQL57",
-		mysqlVersion: "5.7.9",
-		setOps: []SetOp{
-			&SysVarReservedConn{
-				Name:          "sql_mode",
-				Keyspace:      &vindexes.Keyspace{Name: "ks", Sharded: true},
-				Expr:          "'STRICT_TRANS_TABLES'",
-				SupportSetVar: true,
-			},
-		},
-		expectedQueryLog: []string{
-			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
-			`ExecuteMultiShard ks.-20: select @@sql_mode orig, 'STRICT_TRANS_TABLES' new {} false false`,
-			"SysVar set with (sql_mode,'STRICT_TRANS_TABLES')",
-			"Needs Reserved Conn",
-		},
-		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
-			"|STRICT_TRANS_TABLES",
-		)},
-	}, {
-		testName: "sql_mode change - empty new",
-		setOps: []SetOp{
-			&SysVarReservedConn{
-				Name:          "sql_mode",
-				Keyspace:      &vindexes.Keyspace{Name: "ks", Sharded: true},
-				Expr:          "''",
-				SupportSetVar: true,
-			},
-		},
-		expectedQueryLog: []string{
-			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
-			`ExecuteMultiShard ks.-20: select @@sql_mode orig, '' new {} false false`,
-			"SysVar set with (sql_mode,'')",
-			"SET_VAR can be used",
-		},
-		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
-			"STRICT_TRANS_TABLES|",
-		)},
-	}, {
-		testName:     "sql_mode change - empty orig - MySQL80",
+		testName:     "sql_mode set to a new value - SET_VAR",
 		mysqlVersion: "8.0.0",
 		setOps: []SetOp{
-			&SysVarReservedConn{
-				Name:          "sql_mode",
-				Keyspace:      &vindexes.Keyspace{Name: "ks", Sharded: true},
-				Expr:          "'STRICT_TRANS_TABLES'",
-				SupportSetVar: true,
-			},
+			&SysVarSQLMode{Expr: evalengine.NewLiteralString([]byte("strict_trans_tables"), collations.SystemCollation)},
 		},
 		expectedQueryLog: []string{
-			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
-			`ExecuteMultiShard ks.-20: select @@sql_mode orig, 'STRICT_TRANS_TABLES' new {} false false`,
-			"SysVar set with (sql_mode,'STRICT_TRANS_TABLES')",
-			"SET_VAR can be used",
+			`SysVar set with (sql_mode,'STRICT_TRANS_TABLES')`,
+			`SET_VAR can be used`,
 		},
-		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
-			"|STRICT_TRANS_TABLES",
-		)},
 	}, {
-		testName:     "sql_mode change to empty - non empty orig - MySQL80 - set_var allowed",
+		testName:     "sql_mode set to the session's current value is re-stored canonically",
 		mysqlVersion: "8.0.0",
 		setOps: []SetOp{
-			&SysVarReservedConn{
-				Name:          "sql_mode",
-				Keyspace:      &vindexes.Keyspace{Name: "ks", Sharded: true},
-				Expr:          "''",
-				SupportSetVar: true,
-			},
+			// the session default, jumbled and lowercased
+			&SysVarSQLMode{Expr: evalengine.NewLiteralString([]byte("no_engine_substitution,only_full_group_by,strict_trans_tables,no_zero_in_date,no_zero_date,error_for_division_by_zero"), collations.SystemCollation)},
 		},
 		expectedQueryLog: []string{
-			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
-			`ExecuteMultiShard ks.-20: select @@sql_mode orig, '' new {} false false`,
-			"SysVar set with (sql_mode,'')",
-			"SET_VAR can be used",
+			`SysVar set with (sql_mode,'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION')`,
+			`SET_VAR can be used`,
 		},
-		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
-			"STRICT_TRANS_TABLES|",
-		)},
 	}, {
-		testName:     "sql_mode change - empty orig - MySQL80 - SET_VAR disabled",
+		testName:      "sql_mode set to the current value still converges open shard sessions when SET_VAR is unavailable",
+		mysqlVersion:  "8.0.0",
+		disableSetVar: true,
+		shardSession:  []*srvtopo.ResolvedShard{{Target: &querypb.Target{Keyspace: "ks", Shard: "-20"}}},
+		setOps: []SetOp{
+			// the session default: an unchanged value must still be sent, because a client
+			// retrying a partially-failed SET needs the statement to reach the shard
+			// sessions the previous attempt did not update
+			&SysVarSQLMode{Expr: evalengine.NewLiteralString([]byte("no_engine_substitution,only_full_group_by,strict_trans_tables,no_zero_in_date,no_zero_date,error_for_division_by_zero"), collations.SystemCollation)},
+		},
+		expectedQueryLog: []string{
+			`SysVar set with (sql_mode,'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION')`,
+			`Needs Reserved Conn`,
+			`ExecuteMultiShard ks.-20: set sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' {} false false`,
+		},
+	}, {
+		testName:     "sql_mode set to a numeric value stores the canonical names",
 		mysqlVersion: "8.0.0",
 		setOps: []SetOp{
-			&SysVarReservedConn{
-				Name:          "sql_mode",
-				Keyspace:      &vindexes.Keyspace{Name: "ks", Sharded: true},
-				Expr:          "'STRICT_TRANS_TABLES'",
-				SupportSetVar: true,
-			},
+			&SysVarSQLMode{Expr: evalengine.NewLiteralInt(1<<21 | 1<<24)},
 		},
 		expectedQueryLog: []string{
-			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
-			`ExecuteMultiShard ks.-20: select @@sql_mode orig, 'STRICT_TRANS_TABLES' new {} false false`,
-			"SysVar set with (sql_mode,'STRICT_TRANS_TABLES')",
-			"Needs Reserved Conn",
+			`SysVar set with (sql_mode,'STRICT_TRANS_TABLES,NO_ZERO_DATE')`,
+			`SET_VAR can be used`,
 		},
-		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
-			"|STRICT_TRANS_TABLES",
-		)},
+	}, {
+		testName:     "sql_mode combination mode is stored expanded",
+		mysqlVersion: "8.0.0",
+		setOps: []SetOp{
+			&SysVarSQLMode{Expr: evalengine.NewLiteralString([]byte("TRADITIONAL"), collations.SystemCollation)},
+		},
+		expectedQueryLog: []string{
+			`SysVar set with (sql_mode,'STRICT_TRANS_TABLES,STRICT_ALL_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,TRADITIONAL,NO_ENGINE_SUBSTITUTION')`,
+			`SET_VAR can be used`,
+		},
+	}, {
+		testName:     "sql_mode needs a reserved connection when SET_VAR is unavailable",
+		mysqlVersion: "8.0.0",
+		setOps: []SetOp{
+			&SysVarSQLMode{Expr: evalengine.NewLiteralString([]byte("STRICT_ALL_TABLES"), collations.SystemCollation)},
+		},
+		expectedQueryLog: []string{
+			`SysVar set with (sql_mode,'STRICT_ALL_TABLES')`,
+			`Needs Reserved Conn`,
+		},
 		disableSetVar: true,
 	}, {
-		testName:     "sql_mode set an unsupported mode",
+		testName:     "sql_mode set from a backend variable fetched through the input",
 		mysqlVersion: "8.0.0",
 		setOps: []SetOp{
-			&SysVarReservedConn{
-				Name:          "sql_mode",
-				Keyspace:      &vindexes.Keyspace{Name: "ks", Sharded: true},
-				Expr:          "'REAL_AS_FLOAT'",
-				SupportSetVar: true,
-			},
+			&SysVarSQLMode{Expr: evalengine.NewColumn(0, evalengine.Type{}, nil)},
+		},
+		qr: []*sqltypes.Result{sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields("orig", "varchar"),
+			"STRICT_TRANS_TABLES,NO_ZERO_DATE",
+		)},
+		input: &Send{
+			Keyspace:          ks,
+			TargetDestination: key.DestinationAnyShard{},
+			Query:             "select @modes from dual",
+			SingleShardOnly:   true,
 		},
 		expectedQueryLog: []string{
-			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
-			`ExecuteMultiShard ks.-20: select @@sql_mode orig, 'REAL_AS_FLOAT' new {} false false`,
+			`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
+			`ExecuteMultiShard ks.-20: select @modes from dual {} false false`,
+			`SysVar set with (sql_mode,'STRICT_TRANS_TABLES,NO_ZERO_DATE')`,
+			`SET_VAR can be used`,
 		},
-		expectedError: "setting the REAL_AS_FLOAT sql_mode is unsupported",
-		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
-			"|REAL_AS_FLOAT",
-		)},
-		disableSetVar: true,
 	}, {
-		testName:     "sql_mode set an unsupported mode the backend already runs with",
+		testName:     "sql_mode set to an unsupported mode",
 		mysqlVersion: "8.0.0",
 		setOps: []SetOp{
-			&SysVarReservedConn{
-				Name:          "sql_mode",
-				Keyspace:      &vindexes.Keyspace{Name: "ks", Sharded: true},
-				Expr:          "'REAL_AS_FLOAT,STRICT_TRANS_TABLES'",
-				SupportSetVar: true,
-			},
+			&SysVarSQLMode{Expr: evalengine.NewLiteralString([]byte("NO_BACKSLASH_ESCAPES"), collations.SystemCollation)},
 		},
-		expectedQueryLog: []string{
-			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
-			`ExecuteMultiShard ks.-20: select @@sql_mode orig, 'REAL_AS_FLOAT,STRICT_TRANS_TABLES' new {} false false`,
-		},
-		// the assignment would not change the value, but it is rejected regardless:
-		// such sessions were never parsed correctly by the vtgate
-		expectedError: "setting the REAL_AS_FLOAT sql_mode is unsupported",
-		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
-			"REAL_AS_FLOAT,STRICT_TRANS_TABLES|REAL_AS_FLOAT,STRICT_TRANS_TABLES",
-		)},
+		expectedQueryLog: []string{},
+		expectedError:    "setting the NO_BACKSLASH_ESCAPES sql_mode is unsupported",
 	}, {
-		testName:     "sql_mode set to a numeric bitmask decodes to mode names",
+		testName:     "sql_mode set to the ANSI combination mode bit",
 		mysqlVersion: "8.0.0",
 		setOps: []SetOp{
-			&SysVarReservedConn{
-				Name:          "sql_mode",
-				Keyspace:      &vindexes.Keyspace{Name: "ks", Sharded: true},
-				Expr:          "1048576",
-				SupportSetVar: true,
-			},
+			&SysVarSQLMode{Expr: evalengine.NewLiteralInt(1 << 18)},
 		},
-		expectedQueryLog: []string{
-			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
-			`ExecuteMultiShard ks.-20: select @@sql_mode orig, 1048576 new {} false false`,
-		},
-		expectedError: "setting the NO_BACKSLASH_ESCAPES sql_mode is unsupported",
-		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|int64"),
-			"|1048576",
-		)},
+		expectedQueryLog: []string{},
+		expectedError:    "setting the ANSI sql_mode is unsupported",
 	}, {
-		testName:     "sql_mode set to the ANSI combination mode",
+		testName:     "sql_mode set to IGNORE_SPACE is unsupported",
 		mysqlVersion: "8.0.0",
 		setOps: []SetOp{
-			&SysVarReservedConn{
-				Name:          "sql_mode",
-				Keyspace:      &vindexes.Keyspace{Name: "ks", Sharded: true},
-				Expr:          "'ansi'",
-				SupportSetVar: true,
-			},
+			&SysVarSQLMode{Expr: evalengine.NewLiteralString([]byte("IGNORE_SPACE"), collations.SystemCollation)},
 		},
-		expectedQueryLog: []string{
-			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
-			`ExecuteMultiShard ks.-20: select @@sql_mode orig, 'ansi' new {} false false`,
-		},
-		expectedError: "setting the ANSI sql_mode is unsupported",
-		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
-			"|ansi",
-		)},
+		expectedQueryLog: []string{},
+		expectedError:    "setting the IGNORE_SPACE sql_mode is unsupported",
 	}, {
-		testName:     "sql_mode set to IGNORE_SPACE",
+		testName:     "sql_mode set to HIGH_NOT_PRECEDENCE is unsupported",
 		mysqlVersion: "8.0.0",
 		setOps: []SetOp{
-			&SysVarReservedConn{
-				Name:          "sql_mode",
-				Keyspace:      &vindexes.Keyspace{Name: "ks", Sharded: true},
-				Expr:          "'IGNORE_SPACE'",
-				SupportSetVar: true,
-			},
+			&SysVarSQLMode{Expr: evalengine.NewLiteralString([]byte("HIGH_NOT_PRECEDENCE"), collations.SystemCollation)},
 		},
-		expectedQueryLog: []string{
-			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
-			`ExecuteMultiShard ks.-20: select @@sql_mode orig, 'IGNORE_SPACE' new {} false false`,
-		},
-		expectedError: "setting the IGNORE_SPACE sql_mode is unsupported",
-		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
-			"|IGNORE_SPACE",
-		)},
+		expectedQueryLog: []string{},
+		expectedError:    "setting the HIGH_NOT_PRECEDENCE sql_mode is unsupported",
 	}, {
 		testName:     "sql_mode set to an unknown mode name",
 		mysqlVersion: "8.0.0",
 		setOps: []SetOp{
-			&SysVarReservedConn{
-				Name:          "sql_mode",
-				Keyspace:      &vindexes.Keyspace{Name: "ks", Sharded: true},
-				Expr:          "'BOGUS'",
-				SupportSetVar: true,
-			},
+			&SysVarSQLMode{Expr: evalengine.NewLiteralString([]byte("BOGUS"), collations.SystemCollation)},
 		},
-		expectedQueryLog: []string{
-			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
-			`ExecuteMultiShard ks.-20: select @@sql_mode orig, 'BOGUS' new {} false false`,
-		},
-		expectedError: "Variable 'sql_mode' can't be set to the value of 'BOGUS'",
-		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
-			"|BOGUS",
-		)},
+		expectedQueryLog: []string{},
+		expectedError:    "Variable 'sql_mode' can't be set to the value of 'BOGUS'",
 	}, {
 		testName:     "sql_mode set to a removed mode bit",
 		mysqlVersion: "8.0.0",
 		setOps: []SetOp{
-			&SysVarReservedConn{
-				Name:          "sql_mode",
-				Keyspace:      &vindexes.Keyspace{Name: "ks", Sharded: true},
-				Expr:          "256",
-				SupportSetVar: true,
-			},
+			&SysVarSQLMode{Expr: evalengine.NewLiteralInt(256)},
 		},
-		expectedQueryLog: []string{
-			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
-			`ExecuteMultiShard ks.-20: select @@sql_mode orig, 256 new {} false false`,
-		},
-		expectedError: "sql_mode=0x00000100 is not supported.",
-		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|int64"),
-			"|256",
-		)},
+		expectedQueryLog: []string{},
+		expectedError:    "sql_mode=0x00000100 is not supported.",
 	}, {
 		testName:     "default_week_format change - empty orig - MySQL80",
 		mysqlVersion: "8.0.0",
@@ -693,6 +481,7 @@ func TestSetTable(t *testing.T) {
 				results:        tc.qr,
 				multiShardErrs: []error{tc.execErr},
 				disableSetVar:  tc.disableSetVar,
+				shardSession:   tc.shardSession,
 				parser:         parser,
 			}
 			_, err = set.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)

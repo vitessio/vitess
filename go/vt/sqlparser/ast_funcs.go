@@ -329,6 +329,10 @@ func (node *ParsedComments) AddQueryHint(queryHint string) (Comments, error) {
 		return node.comments, nil
 	}
 
+	if node == nil || len(node.comments) == 0 {
+		return Comments{queryOptimizerPrefix + " " + queryHint + " */"}, nil
+	}
+
 	var newComments Comments
 	var hasQueryHint bool
 
