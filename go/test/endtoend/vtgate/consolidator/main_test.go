@@ -21,6 +21,8 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"regexp"
+	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -192,6 +194,29 @@ func TestConsolidatorEnabledReplicasWithDirective(t *testing.T) {
 	})
 }
 
+// optimizerHintRE matches /*+ ... */ optimizer hint comments, such as the
+// SET_VAR(sql_mode = '...') hint vtgate injects into queries it sends to vttablet.
+var optimizerHintRE = regexp.MustCompile(`/\*\+.*?\*/`)
+
+// consolidationCount returns the total consolidation count for the given query,
+// matching /debug/consolidations entries irrespective of any optimizer hints in
+// the query text vttablet received.
+func consolidationCount(consolidations map[string]int, query string) int {
+	var count int
+	for consolidatedQuery, consolidatedCount := range consolidations {
+		if stripOptimizerHints(consolidatedQuery) == stripOptimizerHints(query) {
+			count += consolidatedCount
+		}
+	}
+	return count
+}
+
+// stripOptimizerHints removes /*+ ... */ optimizer hint comments from the query
+// and normalizes the surrounding whitespace.
+func stripOptimizerHints(query string) string {
+	return strings.Join(strings.Fields(optimizerHintRE.ReplaceAllString(query, "")), " ")
+}
+
 func testConsolidator(t *testing.T, testCases []consolidatorTestCase) {
 	for _, testCase := range testCases {
 		t.Run(fmt.Sprintf("%s%s", testCase.query, testCase.tabletType), func(t *testing.T) {
@@ -220,7 +245,7 @@ func testConsolidator(t *testing.T, testCases []consolidatorTestCase) {
 			// Check initial consolidations.
 			consolidations, err := testCase.tabletProcess.GetConsolidations()
 			require.NoError(t, err, "Failed to get consolidations.")
-			count := consolidations[testCase.query]
+			count := consolidationCount(consolidations, testCase.query)
 
 			// Send two identical async queries in quick succession.
 			execAsync(conn1, testCase.query, qrCh)
@@ -238,7 +263,7 @@ func testConsolidator(t *testing.T, testCases []consolidatorTestCase) {
 			if testCase.expectConsolidations {
 				require.Greater(
 					t,
-					consolidations[testCase.query],
+					consolidationCount(consolidations, testCase.query),
 					count,
 					"Expected query `%s` to be consolidated on %s tablet.",
 					testCase.query,
@@ -248,7 +273,7 @@ func testConsolidator(t *testing.T, testCases []consolidatorTestCase) {
 				require.Equal(
 					t,
 					count,
-					consolidations[testCase.query],
+					consolidationCount(consolidations, testCase.query),
 					"Did not expect query `%s` to be consolidated on %s tablet.",
 					testCase.query,
 					testCase.tabletType,

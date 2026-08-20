@@ -517,6 +517,10 @@ func getHTTPBody(t *testing.T, url string) []byte {
 	return body
 }
 
+// optimizerHintRE matches optimizer hint comments (`/*+ ... */`) that vtgate
+// injects after the leading verb of queries sent to vttablet.
+var optimizerHintRE = regexp.MustCompile(`\s*/\*\+.*?\*/`)
+
 func getQueryCount(t *testing.T, url string, query string) (int, []byte) {
 	body := getHTTPBody(t, url)
 
@@ -529,7 +533,7 @@ func getQueryCount(t *testing.T, url string, query string) (int, []byte) {
 	require.NoError(t, err)
 
 	for _, q := range queryStats {
-		if strings.Contains(q.Query, query) {
+		if strings.Contains(optimizerHintRE.ReplaceAllString(q.Query, ""), query) {
 			return int(q.QueryCount), body
 		}
 	}
