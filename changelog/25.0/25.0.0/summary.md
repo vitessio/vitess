@@ -34,6 +34,7 @@
         - [Stricter validation of SQL-level PREPARE statements](#vtgate-prepare-stricter-validation)
         - [Stricter PROXY protocol v1 header validation](#vtgate-proxy-protocol-v1-strictness)
         - [MySQL-faithful validation and rejection of unsupported `sql_mode` values](#vtgate-sql-mode-rejection)
+        - [MySQL-faithful lexing of built-in function names](#sqlparser-function-name-keywords)
         - [New `VEXPLAIN MYSQLPLAN` statement](#vtgate-vexplain-mysqlplan)
     - **[Reparent](#minor-changes-reparent)**
         - [`EmergencyReparentShard` no longer waits on replicas that cannot win the election](#ers-lagging-relay-log-wait)
@@ -341,6 +342,17 @@ Specification-conformant v1 headers, as emitted by HAProxy, AWS load balancers, 
 **Impact**: Deployments whose proxy emits one of the forms above — most notably the nginx stream module proxying between IPv6 clients and IPv4 upstreams — will have those connections rejected before the MySQL handshake. Configure the proxy to emit specification-conformant headers (for nginx, listen on a matching address family or on a v4-mapped socket so addresses are rendered in IPv6 form).
 
 See [#20733](https://github.com/vitessio/vitess/pull/20733) for details.
+
+#### <a id="sqlparser-function-name-keywords"/>MySQL-faithful lexing of built-in function names</a>
+
+MySQL's lexer treats a specific list of built-in function names (`CAST`, `CURDATE`, `CURTIME`, `EXTRACT`, `NOW`, `SUBSTR`/`SUBSTRING`, `SYSDATE`) as keywords only when the name is immediately followed by `(` with no whitespace in between; in any other position the name is an ordinary identifier. Vitess reserved these words unconditionally, rejecting valid MySQL DDL like `create table CAST (a int)` or columns named `now`. The Vitess parser now applies the same rule. This also underpins `sql_mode=IGNORE_SPACE` support, which relaxes the no-whitespace requirement.
+
+Each of the following matches MySQL, but removes a Vitess-only leniency:
+
+- `default now` / `on update now` without parentheses no longer parse; write `now()` instead.
+- A bare `now` in an expression is now a column reference, not `now()`.
+- `cast (1 as char)` with whitespace before `(` is now a syntax error.
+- `now ()` / `substr (...)` with whitespace still parse, but as generic function calls rather than the dedicated AST nodes.
 
 #### <a id="vtgate-sql-mode-rejection"/>MySQL-faithful validation and rejection of unsupported `sql_mode` values</a>
 
