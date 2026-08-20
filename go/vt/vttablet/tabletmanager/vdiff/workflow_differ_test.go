@@ -180,6 +180,13 @@ func TestReconcileExtraRows(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			// Only samples affirmatively marked lossless take part in
+			// reconciliation.
+			for _, diffs := range [][]*RowDiff{tc.extraDiffsSource, tc.extraDiffsTarget, tc.wantExtraSource, tc.wantExtraTarget} {
+				for _, d := range diffs {
+					d.LosslessValues = true
+				}
+			}
 			dr := &DiffReport{
 				TableName: "t1",
 
@@ -253,6 +260,11 @@ func TestReconcileExtraRows(t *testing.T) {
 			},
 		}
 
+		for _, diffs := range [][]*RowDiff{dr.ExtraRowsSourceDiffs, dr.ExtraRowsTargetDiffs} {
+			for _, d := range diffs {
+				d.LosslessValues = true
+			}
+		}
 		maxExtras := int64(4)
 		require.NoError(t, wd.doReconcileExtraRows(dr, maxExtras, maxExtras))
 
@@ -293,6 +305,11 @@ func TestReconcileExtraRows(t *testing.T) {
 			},
 		}
 
+		for _, diffs := range [][]*RowDiff{dr.ExtraRowsSourceDiffs, dr.ExtraRowsTargetDiffs} {
+			for _, d := range diffs {
+				d.LosslessValues = true
+			}
+		}
 		maxExtras := int64(4)
 		require.NoError(t, wd.doReconcileExtraRows(dr, maxExtras, maxExtras))
 
@@ -357,9 +374,9 @@ func TestReconcileExtraRowsSkippedForLossySamples(t *testing.T) {
 				ProcessedRows:        4,
 				MatchingRows:         2,
 				ExtraRowsSource:      1,
-				ExtraRowsSourceDiffs: []*RowDiff{{Row: map[string]string{"c1": "1", "c2": "a"}, TruncatedValues: tc.truncated}},
+				ExtraRowsSourceDiffs: []*RowDiff{{Row: map[string]string{"c1": "1", "c2": "a"}, LosslessValues: !tc.truncated}},
 				ExtraRowsTarget:      1,
-				ExtraRowsTargetDiffs: []*RowDiff{{Row: map[string]string{"c1": "1", "c2": "a"}, TruncatedValues: tc.truncated}},
+				ExtraRowsTargetDiffs: []*RowDiff{{Row: map[string]string{"c1": "1", "c2": "a"}, LosslessValues: !tc.truncated}},
 			}
 			require.NoError(t, wd.doReconcileExtraRows(dr, 10, tc.reportOptions.MaxSampleRows))
 			require.Equal(t, tc.wantExtras, dr.ExtraRowsSource)

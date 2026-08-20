@@ -330,11 +330,11 @@ func TestDiffDrainedRowSampling(t *testing.T) {
 	}
 }
 
-// TestGenRowDiffMarksTruncatedValues tests that a row sample whose values were
-// actually truncated (per row-diff-column-truncate-at) is marked as truncated,
-// and that a sample with short values is not, since only actually-truncated
-// samples are excluded from extra-row reconciliation.
-func TestGenRowDiffMarksTruncatedValues(t *testing.T) {
+// TestGenRowDiffMarksLosslessValues tests that a row sample is affirmatively
+// marked lossless only when it contains complete values: a sample whose values
+// were actually truncated (per row-diff-column-truncate-at) is not, since only
+// lossless samples take part in extra-row reconciliation.
+func TestGenRowDiffMarksLosslessValues(t *testing.T) {
 	td := newDrainTestDiffer(binlogplayer.NewMockDBClient(t),
 		engine.NewRowsPrimitive(nil, drainTestFields),
 		engine.NewRowsPrimitive(nil, drainTestFields),
@@ -347,12 +347,12 @@ func TestGenRowDiffMarksTruncatedValues(t *testing.T) {
 	longValue := "this value is definitely long enough to get truncated"
 	rd, err := td.genRowDiff(td.tablePlan.sourceQuery, drainTestRow(1, longValue), reportOpts)
 	require.NoError(t, err)
-	require.True(t, rd.TruncatedValues)
+	require.False(t, rd.LosslessValues)
 	require.Equal(t, longValue[:8]+truncatedNotation, rd.Row["c2"])
 
 	rd, err = td.genRowDiff(td.tablePlan.sourceQuery, drainTestRow(1, "short"), reportOpts)
 	require.NoError(t, err)
-	require.False(t, rd.TruncatedValues)
+	require.True(t, rd.LosslessValues)
 	require.Equal(t, "short", rd.Row["c2"])
 }
 
@@ -518,7 +518,7 @@ func TestDiffSourceDrainStreamError(t *testing.T) {
 			TableName:            "t1",
 			ProcessedRows:        1,
 			ExtraRowsTarget:      1,
-			ExtraRowsTargetDiffs: []*RowDiff{{Row: map[string]string{"c1": "1", "c2": "a"}}},
+			ExtraRowsTargetDiffs: []*RowDiff{{Row: map[string]string{"c1": "1", "c2": "a"}, LosslessValues: true}},
 		})
 		require.NoError(t, err)
 		dbc.ExpectRequestRE(`update _vt\.vdiff_table set rows_compared = 1, report = '`+

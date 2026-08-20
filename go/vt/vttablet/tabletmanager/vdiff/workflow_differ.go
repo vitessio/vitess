@@ -155,14 +155,15 @@ func (wd *workflowDiffer) doReconcileExtraRows(dr *DiffReport, maxExtraRowsToCom
 	// Find the matching extra rows. The extra row counts (dr.ExtraRowsSource/dr.ExtraRowsTarget)
 	// can be higher than the number of saved sample rows -- e.g. when the counts exceed
 	// maxExtraRowsToCompare -- so all indexing must be bounded by the slice lengths, never by
-	// the counts. Samples with truncated values are excluded: they cannot prove that two rows
-	// are identical, and reconciling them could hide a real difference.
+	// the counts. Only samples affirmatively marked lossless take part: samples with truncated
+	// values, and samples persisted by older binaries that did not record the marker, cannot
+	// prove that two rows are identical, and reconciling them could hide a real difference.
 	for i := 0; i < len(dr.ExtraRowsSourceDiffs); i++ {
-		if dr.ExtraRowsSourceDiffs[i].TruncatedValues {
+		if !dr.ExtraRowsSourceDiffs[i].LosslessValues {
 			continue
 		}
 		for j := 0; j < len(dr.ExtraRowsTargetDiffs); j++ {
-			if matchedTargetDiffs[j] || dr.ExtraRowsTargetDiffs[j].TruncatedValues {
+			if matchedTargetDiffs[j] || !dr.ExtraRowsTargetDiffs[j].LosslessValues {
 				// Previously matched, or not provably identical.
 				continue
 			}

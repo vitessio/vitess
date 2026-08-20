@@ -66,6 +66,7 @@ func TestGenRowDiff(t *testing.T) {
 			},
 			reportOptions: &tabletmanagerdatapb.VDiffReportOptions{},
 			want: &RowDiff{
+				LosslessValues: true,
 				Row: map[string]string{ // The two PK cols should be first
 					// mysql> select hex("hi4");
 					// +------------+
@@ -131,6 +132,7 @@ func TestGenRowDiff(t *testing.T) {
 				DebugQuery: true,
 			},
 			want: &RowDiff{
+				LosslessValues: true,
 				Row: map[string]string{
 					"c1": "1",
 					"c2": "2",
@@ -162,7 +164,6 @@ func TestGenRowDiff(t *testing.T) {
 				RowDiffColumnTruncateAt: 5,
 			},
 			want: &RowDiff{
-				TruncatedValues: true,
 				Row: map[string]string{
 					"c1": strings.Repeat("a", 100), // PK fields are not truncated
 					"c2": strings.Repeat("b", 5) + truncatedNotation,
