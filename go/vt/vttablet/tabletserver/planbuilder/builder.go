@@ -187,10 +187,11 @@ func analyzeSet(set *sqlparser.Set) (*Plan, error) {
 		return nil, err
 	}
 	return &Plan{
-		PlanID:            PlanSet,
-		FullQuery:         GenerateFullQuery(set),
-		NeedsReservedConn: true,
-		VerifySQLMode:     verify,
+		PlanID:             PlanSet,
+		FullQuery:          GenerateFullQuery(set),
+		NeedsReservedConn:  true,
+		VerifySQLMode:      verify,
+		MultiAssignmentSet: len(set.Exprs) > 1,
 	}, nil
 }
 

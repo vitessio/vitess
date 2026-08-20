@@ -1253,6 +1253,10 @@ func (qre *QueryExecutor) execSet(conn *StatefulConnection) (*sqltypes.Result, e
 	}
 	applied, err := qre.readSQLMode(conn)
 	if err != nil {
+		// The statement has already run, and without the read-back there is no telling
+		// what sql_mode the connection is in now — undo the statement rather than
+		// returning the connection in an unverified state.
+		qre.undoSQLModeSet(conn, prev, err)
 		return nil, err
 	}
 	vErr := func() error { _, err := sqlmode.Validate(applied); return err }()
@@ -1265,13 +1269,29 @@ func (qre *QueryExecutor) execSet(conn *StatefulConnection) (*sqltypes.Result, e
 		// names). There is no verdict to enforce on a value we cannot judge.
 		return result, nil
 	}
+	qre.undoSQLModeSet(conn, prev, vErr)
+	return nil, vErr
+}
+
+// undoSQLModeSet makes a failed SET behave as if it had not executed, as far as the
+// connection allows. MySQL applies none of a SET's assignments when the statement
+// fails, so a statement that only assigned sql_mode is undone by restoring the previous
+// value; a multi-assignment statement also changed variables the executor has no
+// snapshot of, and the connection is closed instead of being returned with some
+// assignments applied. The connection is also closed when the restore itself fails.
+func (qre *QueryExecutor) undoSQLModeSet(conn *StatefulConnection, prev sqltypes.Value, cause error) {
+	if qre.plan.MultiAssignmentSet {
+		log.Warn("closing connection: a multi-assignment SET failed sql_mode verification and its other assignments cannot be restored",
+			slog.Any("cause", cause), slog.Int64("connID", conn.ID()))
+		conn.Close()
+		return
+	}
 	restore := "set sql_mode = " + sqltypes.EncodeStringSQL(prev.ToString())
 	if _, err := qre.execStatefulConn(conn, restore, false); err != nil {
-		log.Warn("closing connection: applied sql_mode is unsupported and restoring the previous value failed",
-			slog.Any("validationError", vErr), slog.Any("restoreError", err), slog.Int64("connID", conn.ID()))
+		log.Warn("closing connection: a failed SET could not be undone by restoring the previous sql_mode",
+			slog.Any("cause", cause), slog.Any("restoreError", err), slog.Int64("connID", conn.ID()))
 		conn.Close()
 	}
-	return nil, vErr
 }
 
 // readSQLMode reads the connection's current @@sql_mode.

@@ -2200,6 +2200,67 @@ func TestQueryExecutorSetSQLModeVerify(t *testing.T) {
 	qre = newTestQueryExecutor(ctx, tsv, constQuery, txID)
 	_, err = qre.Execute()
 	require.NoError(t, err)
+
+	// a failed multi-assignment SET closes the connection instead of restoring:
+	// the statement changed other variables no snapshot exists for, and MySQL
+	// applies none of a SET's assignments when the statement fails
+	db.DeleteRejectedQuery(restoreQuery)
+	restoreCalls := db.GetQueryCalledNum(restoreQuery)
+	multiSetQuery := "set @@sql_safe_updates = 1, @@sql_mode = concat('AN', 'SI')"
+	db.AddQuery(multiSetQuery, &sqltypes.Result{})
+	db.AddQueryPatternWithCallback("select @@sql_mode", modeResult(prevMode), func(string) {
+		db.AddQuery(readQuery, modeResult(appliedMode))
+	})
+	txID = newTransaction(tsv, nil)
+	qre = newTestQueryExecutor(ctx, tsv, multiSetQuery, txID)
+	require.True(t, qre.plan.VerifySQLMode)
+	require.True(t, qre.plan.MultiAssignmentSet)
+	_, err = qre.Execute()
+	require.EqualError(t, err, "setting the ANSI sql_mode is unsupported")
+	require.Equal(t, restoreCalls, db.GetQueryCalledNum(restoreQuery), "no restore must be attempted")
+	// the connection is gone: the transaction cannot be used again
+	qre = newTestQueryExecutor(ctx, tsv, constQuery, txID)
+	_, err = qre.Execute()
+	require.Error(t, err)
+
+	// a failed read-back of the applied value undoes the statement as well: without
+	// the read-back there is no telling what mode the connection is in
+	db.ClearQueryPattern()
+	db.DeleteQuery(readQuery)
+	db.AddQuery(restoreQuery, &sqltypes.Result{})
+	db.AddQueryPatternWithCallback("select @@sql_mode", modeResult(prevMode), func(string) {
+		db.AddRejectedQuery(readQuery, errRejected)
+	})
+	txID = newTransaction(tsv, nil)
+	qre = newTestQueryExecutor(ctx, tsv, setQuery, txID)
+	_, err = qre.Execute()
+	require.ErrorContains(t, err, errRejected.Error())
+	// re-registering restoreQuery reset its counter, so this is the one restore call
+	require.Equal(t, 1, db.GetQueryCalledNum(restoreQuery))
+	// the restore kept the connection usable: the transaction is still alive
+	db.DeleteRejectedQuery(readQuery)
+	qre = newTestQueryExecutor(ctx, tsv, constQuery, txID)
+	_, err = qre.Execute()
+	require.NoError(t, err)
+	_, err = tsv.Rollback(ctx, tsv.sm.Target(), txID)
+	require.NoError(t, err)
+
+	// and when that restore fails too, the connection is closed
+	db.ClearQueryPattern()
+	db.DeleteQuery(readQuery)
+	db.DeleteQuery(restoreQuery)
+	db.AddRejectedQuery(restoreQuery, errRejected)
+	db.AddQueryPatternWithCallback("select @@sql_mode", modeResult(prevMode), func(string) {
+		db.AddRejectedQuery(readQuery, errRejected)
+	})
+	txID = newTransaction(tsv, nil)
+	qre = newTestQueryExecutor(ctx, tsv, setQuery, txID)
+	_, err = qre.Execute()
+	require.ErrorContains(t, err, errRejected.Error())
+	db.DeleteRejectedQuery(readQuery)
+	qre = newTestQueryExecutor(ctx, tsv, constQuery, txID)
+	_, err = qre.Execute()
+	require.Error(t, err)
 }
 
 // A true reservation (get_lock, DDL) applies its settings by executing them directly on
