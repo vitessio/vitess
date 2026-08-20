@@ -177,6 +177,8 @@ When one side of a VDiff table diff was exhausted before the other, the remainin
 
 VDiff now saves a sample for every drained row, subject to the existing `--max-extra-rows-to-compare` limit, so matching rows are reconciled and no longer reported as mismatches. Genuine data differences are still reported.
 
+Row samples in the VDiff report gain an additional `LosslessValues` boolean field, marking samples that contain the complete row data without truncation; only such samples take part in extra-row reconciliation, since a truncated or PK-only sample cannot prove that two rows are identical. Samples persisted by an older binary and resumed after an upgrade are reconciled when the vdiff's report options could not have produced a lossy sample.
+
 See [#20855](https://github.com/vitessio/vitess/pull/20855) for details.
 
 ### <a id="minor-changes-vtgate"/>VTGate</a>
