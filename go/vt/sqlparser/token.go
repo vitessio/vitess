@@ -59,6 +59,7 @@ type Tokenizer struct {
 	Pos       int
 	buf       string
 	parser    *Parser
+	sqlMode   SQLMode
 	currStart int // start position of current token (set in Scan after skipBlank)
 }
 
@@ -86,11 +87,20 @@ func yyLocDefault(cur *location, rhs []yySymType, n int) {
 // NewStringTokenizer creates a new Tokenizer for the
 // sql string.
 func (p *Parser) NewStringTokenizer(sql string) *Tokenizer {
+	// The parse-relevant sql_mode bits are copied onto the tokenizer: the
+	// lexing hot paths read them per character, and a nil receiver — which
+	// some callers get away with — then lexes under the default modes
+	// instead of dereferencing the nil parser.
+	var sqlMode SQLMode
+	if p != nil {
+		sqlMode = p.sqlMode
+	}
 	return &Tokenizer{
 		buf:      sql,
 		BindVars: make(map[string]struct{}),
 		parser:   p,
 		stmtEnd:  -1,
+		sqlMode:  sqlMode,
 	}
 }
 
@@ -313,7 +323,7 @@ func (tkn *Tokenizer) Scan() (int, string) {
 			case '|':
 				if tkn.cur() == '|' {
 					tkn.skip(1)
-					if tkn.parser.sqlMode&SQLModePipesAsConcat != 0 {
+					if tkn.sqlMode&SQLModePipesAsConcat != 0 {
 						return PIPE_CONCAT, ""
 					}
 					return OR, ""
@@ -417,7 +427,7 @@ func (tkn *Tokenizer) Scan() (int, string) {
 			case '\'':
 				return tkn.scanString(ch, STRING)
 			case '"':
-				if tkn.parser.sqlMode&SQLModeANSIQuotes != 0 {
+				if tkn.sqlMode&SQLModeANSIQuotes != 0 {
 					return tkn.scanLiteralIdentifier('"')
 				}
 				return tkn.scanString(ch, STRING)
@@ -454,7 +464,7 @@ func (tkn *Tokenizer) funcCallParenAhead() bool {
 	if tkn.cur() == '(' {
 		return true
 	}
-	if tkn.parser.sqlMode&SQLModeIgnoreSpace == 0 {
+	if tkn.sqlMode&SQLModeIgnoreSpace == 0 {
 		return false
 	}
 	for i := 0; ; i++ {
@@ -493,7 +503,7 @@ func (tkn *Tokenizer) scanIdentifier(isVariable bool) (int, string) {
 		if isFuncCallKeyword(keywordID) && !tkn.funcCallParenAhead() {
 			return ID, keywordName
 		}
-		if keywordID == NOT && tkn.parser.sqlMode&SQLModeHighNotPrecedence != 0 {
+		if keywordID == NOT && tkn.sqlMode&SQLModeHighNotPrecedence != 0 {
 			// Under HIGH_NOT_PRECEDENCE, NOT binds like the unary
 			// operators; the grammar accepts NOT_HIGH wherever a composite
 			// NOT appears, mirroring MySQL's NOT2_SYM.
@@ -712,7 +722,7 @@ exit:
 // will fall back to scanStringSlow
 func (tkn *Tokenizer) scanString(delim uint16, typ int) (int, string) {
 	start := tkn.Pos
-	noBackslashEscapes := tkn.parser.sqlMode&SQLModeNoBackslashEscapes != 0
+	noBackslashEscapes := tkn.sqlMode&SQLModeNoBackslashEscapes != 0
 
 	for {
 		switch ch := tkn.cur(); {
@@ -742,7 +752,7 @@ func (tkn *Tokenizer) scanString(delim uint16, typ int) (int, string) {
 // sequencse. The given `buffer` contains the contents of the string that have
 // been scanned so far.
 func (tkn *Tokenizer) scanStringSlow(buffer *strings.Builder, delim uint16, typ int) (int, string) {
-	noBackslashEscapes := tkn.parser.sqlMode&SQLModeNoBackslashEscapes != 0
+	noBackslashEscapes := tkn.sqlMode&SQLModeNoBackslashEscapes != 0
 	for {
 		ch := tkn.cur()
 		if ch == eofChar {
