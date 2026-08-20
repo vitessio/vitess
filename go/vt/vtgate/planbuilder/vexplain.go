@@ -234,7 +234,6 @@ func checkVExplainMySQLSupported(primitive engine.Primitive) error {
 		*engine.Filter,
 		*engine.Limit,
 		*engine.MemorySort,
-		*engine.MergeSort,
 		*engine.OrderedAggregate,
 		*engine.Projection,
 		*engine.RenameFields,
