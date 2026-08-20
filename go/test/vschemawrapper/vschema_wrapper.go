@@ -24,6 +24,7 @@ import (
 	"strings"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/vt/key"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -217,6 +218,10 @@ func (vw *VSchemaWrapper) KeyspaceExists(keyspace string) bool {
 
 func (vw *VSchemaWrapper) SysVarSetEnabled() bool {
 	return vw.SysVarEnabled
+}
+
+func (vw *VSchemaWrapper) DefaultSQLMode() string {
+	return config.DefaultSQLMode
 }
 
 func (vw *VSchemaWrapper) IsSystemVariableDenied(name string) bool {

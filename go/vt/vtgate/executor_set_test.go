@@ -675,6 +675,20 @@ func TestSQLModeFlag(t *testing.T) {
 	require.EqualError(t, f.Set("BOGUS"), "Variable 'sql_mode' can't be set to the value of 'BOGUS'")
 }
 
+func TestSetSQLModeDefault(t *testing.T) {
+	executor, _, _, _, ctx := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
+
+	session := econtext.NewAutocommitSession(&vtgatepb.Session{EnableSystemSettings: true, TargetString: KsTestUnsharded})
+	_, err := executorExecSession(ctx, executor, session, "set sql_mode = 'STRICT_ALL_TABLES,NO_ZERO_DATE'", nil)
+	require.NoError(t, err)
+	require.Equal(t, "'STRICT_ALL_TABLES,NO_ZERO_DATE'", session.SystemVariables[sysvars.SQLMode.Name])
+
+	// DEFAULT restores the configured default the session started with, in canonical form
+	_, err = executorExecSession(ctx, executor, session, "set sql_mode = default", nil)
+	require.NoError(t, err)
+	require.Equal(t, sqltypes.EncodeStringSQL(mysqlconfig.DefaultSQLMode), session.SystemVariables[sysvars.SQLMode.Name])
+}
+
 func TestSQLModeLexerModesNotSentToBackends(t *testing.T) {
 	executor, _, _, lookup, ctx := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
 

@@ -210,7 +210,10 @@ func buildSetOpReservedConn(s setting) planFunc {
 func buildSetOpSQLMode(s setting) planFunc {
 	return func(expr *sqlparser.SetExpr, vschema plancontext.VSchema, ec *expressionConverter) (engine.SetOp, error) {
 		if _, isDefault := expr.Expr.(*sqlparser.Default); isDefault {
-			return nil, vterrors.VT12001(fmt.Sprintf(defaultNotSupportedErrFmt, expr.Var.Name))
+			// MySQL's DEFAULT restores the backend's global value, which is per-keyspace
+			// and incoherent under scatter; the session-owned sql_mode defines DEFAULT as
+			// the configured default the session started with instead.
+			expr = &sqlparser.SetExpr{Var: expr.Var, Expr: sqlparser.NewStrLiteral(vschema.DefaultSQLMode())}
 		}
 		if !vschema.SysVarSetEnabled() {
 			if evalExpr, err := evalengine.Translate(expr.Expr, &evalengine.Config{
