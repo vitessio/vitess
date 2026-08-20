@@ -2155,16 +2155,21 @@ func TestQueryExecutorSetSQLMode(t *testing.T) {
 		assert.Equal(t, sqlparser.ParseSQLMode("ANSI"), tsv.te.ConnParseSQLMode(txID))
 	})
 
-	t.Run("a read-back in a foreign mode vocabulary is left alone", func(t *testing.T) {
-		// e.g. MariaDB reporting its own mode names: there is nothing to record on a
-		// value we cannot judge
+	t.Run("a read-back that does not decode as MySQL modes closes the connection", func(t *testing.T) {
+		// there is no telling what parse-relevant modes the connection is in; a
+		// constant with an unknown mode name is rejected at plan time, and an
+		// expression producing one must not fare better
 		db.AddQuery(readQuery, modeResult("EMPTY_STRING_IS_NULL,STRICT_TRANS_TABLES"))
 		txID := newTransaction(tsv, nil)
-		defer func() { _, _ = tsv.Rollback(ctx, tsv.sm.Target(), txID) }()
 		qre := newTestQueryExecutor(ctx, tsv, setQuery, txID)
 		_, err := qre.Execute()
-		require.NoError(t, err)
-		assert.Equal(t, sqlparser.SQLMode(0), tsv.te.ConnParseSQLMode(txID))
+		require.EqualError(t, err, "Variable 'sql_mode' can't be set to the value of 'EMPTY_STRING_IS_NULL'")
+		// the connection is gone: the transaction cannot be used again
+		followUp := "set @@sql_mode = 'STRICT_ALL_TABLES'"
+		db.AddQuery(followUp, &sqltypes.Result{})
+		qre = newTestQueryExecutor(ctx, tsv, followUp, txID)
+		_, err = qre.Execute()
+		require.Error(t, err)
 	})
 
 	t.Run("constant assignments are stripped at plan time without a read-back", func(t *testing.T) {
@@ -2238,6 +2243,13 @@ func TestReserveSettingsSQLMode(t *testing.T) {
 
 	_, _, err := tsv.te.ReserveBegin(ctx, &querypb.ExecuteOptions{}, []string{"set sql_mode = 'BOGUS'"})
 	require.EqualError(t, err, "Variable 'sql_mode' can't be set to the value of 'BOGUS'")
+
+	// the settings are applied with no read-back afterwards, so values that cannot be
+	// judged and stripped upfront are rejected
+	_, _, err = tsv.te.ReserveBegin(ctx, &querypb.ExecuteOptions{}, []string{"set sql_mode = concat('AN', 'SI')"})
+	require.EqualError(t, err, "non-constant sql_mode value in connection settings: set sql_mode = concat('AN', 'SI')")
+	_, _, err = tsv.te.ReserveBegin(ctx, &querypb.ExecuteOptions{}, []string{"this is not SQL"})
+	require.ErrorContains(t, err, "failed to parse connection setting: this is not SQL")
 
 	strippedSetting := "set sql_mode = 'REAL_AS_FLOAT,ONLY_FULL_GROUP_BY'"
 	db.AddQuery(strippedSetting, &sqltypes.Result{})
