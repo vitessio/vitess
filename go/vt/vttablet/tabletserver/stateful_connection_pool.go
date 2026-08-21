@@ -58,6 +58,18 @@ type StatefulConnectionPool struct {
 	foundRowsPool *connpool.Pool
 	active        *pools.Numbered
 	lastID        atomic.Int64
+
+	// mysqlWaitTimeout mirrors this mysqld's @@global.wait_timeout for the
+	// temp-table idle timeout's auto mode. The query engine publishes it when
+	// the query service opens and on the schema-reload cadence; zero means
+	// unknown (a read has not succeeded yet), which disables auto mode.
+	mysqlWaitTimeout atomic.Int64
+
+	// tempTableUnmanaged gauges the connections currently marked as holding
+	// temporary tables without vtgate keepalive coverage — the candidates for
+	// the temp-table idle timeout. Maintained by the connections' mark and
+	// release paths.
+	tempTableUnmanaged atomic.Int64
 }
 
 // NewStatefulConnPool creates an ActivePool
@@ -136,6 +148,19 @@ func (sf *StatefulConnectionPool) AdjustLastID(id int64) {
 	}
 }
 
+// SetMysqlWaitTimeout publishes mysqld's @@global.wait_timeout for the
+// temp-table idle timeout's auto mode. Zero means unknown, disabling auto
+// mode until a later read succeeds.
+func (sf *StatefulConnectionPool) SetMysqlWaitTimeout(waitTimeout time.Duration) {
+	sf.mysqlWaitTimeout.Store(int64(waitTimeout))
+}
+
+// MysqlWaitTimeout returns the last published @@global.wait_timeout, or zero
+// if no read has succeeded yet.
+func (sf *StatefulConnectionPool) MysqlWaitTimeout() time.Duration {
+	return time.Duration(sf.mysqlWaitTimeout.Load())
+}
+
 // GetElapsedTimeout returns sessions older than the timeout stored on the
 // connection. Does not return any connections that are in use.
 // TODO(sougou): deprecate.
@@ -200,7 +225,7 @@ func (sf *StatefulConnectionPool) NewConn(ctx context.Context, options *querypb.
 		env:            sf.env,
 		enforceTimeout: options.GetWorkload() != querypb.ExecuteOptions_DBA,
 	}
-	// This will set both the timeout and initialize the expiryTime.
+	// This will set both the timeout and initialize the last-used time.
 	timeout := getTransactionTimeout(options, sf.env.Config(), options.GetWorkload())
 	sfConn.SetTimeout(timeout)
 
@@ -244,7 +269,7 @@ func (sf *StatefulConnectionPool) markAsNotInUse(sc *StatefulConnection, updateT
 		return
 	}
 	if updateTime {
-		sc.resetExpiryTime()
+		sc.resetLastUsed()
 	}
 	sf.active.Put(sc.ConnID)
 }
@@ -258,6 +283,6 @@ func (sf *StatefulConnectionPool) Capacity() int {
 func (sf *StatefulConnectionPool) renewConn(sc *StatefulConnection) error {
 	sf.active.Unregister(sc.ConnID, "renew existing connection")
 	sc.ConnID = sf.lastID.Add(1)
-	sc.resetExpiryTime()
+	sc.resetLastUsed()
 	return sf.active.Register(sc.ConnID, sc)
 }

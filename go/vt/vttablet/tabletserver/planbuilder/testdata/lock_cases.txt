@@ -14,18 +14,24 @@
   "FullQuery": "select is_used_lock('foo') from dual limit :#maxLimit"
 }
 
-# release_all_locks is safe outside of reserved connection
+# release_all_locks mutates connection-scoped lock state: on a reserved
+# connection a timeout must kill the connection rather than keep it with lock
+# state the session never recorded. It does not require reserving, though —
+# vtgate sends it as a plain execute when the session holds no locks, and a
+# pooled connection can hold no user-level lock, so releasing there is a safe
+# no-op
 "select release_all_locks() from dual"
 {
-  "PlanID": "Select",
+  "PlanID": "SelectLockFunc",
   "TableName": "",
   "FullQuery": "select release_all_locks() from dual limit :#maxLimit"
 }
 
-# release_lock is safe outside of reserved connection
+# release_lock kills the connection on timeout like get_lock, but does not
+# require a reserved connection
 "select release_lock('foo') from dual"
 {
-  "PlanID": "Select",
+  "PlanID": "SelectLockFunc",
   "TableName": "",
   "FullQuery": "select release_lock('foo') from dual limit :#maxLimit"
 }
@@ -45,4 +51,116 @@
   "TableName": "",
   "FullQuery": "select get_lock('foo', 10) from dual limit :#maxLimit",
   "NeedsReservedConn": true
+}
+
+# a mutating lock function counts anywhere in the statement, not just in the
+# select list: a predicate-placed get_lock would otherwise acquire a lock on a
+# pooled connection and leak it to the connection's next borrower
+"select id from t where get_lock('foo', 10) = 1"
+{
+  "PlanID": "SelectLockFunc",
+  "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "t",
+      "Role": 0
+    }
+  ],
+  "FullQuery": "select id from t where get_lock('foo', 10) = 1 limit :#maxLimit",
+  "NeedsReservedConn": true
+}
+
+# a predicate-placed release function classifies too (timeout kills the
+# connection) but stays runnable on a pooled connection
+"select id from t where release_lock('foo') = 1"
+{
+  "PlanID": "SelectLockFunc",
+  "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "t",
+      "Role": 0
+    }
+  ],
+  "FullQuery": "select id from t where release_lock('foo') = 1 limit :#maxLimit"
+}
+
+# the pure reads stay ordinary selects wherever they appear
+"select 1 from dual where is_free_lock('foo') = 1"
+{
+  "PlanID": "Select",
+  "TableName": "",
+  "FullQuery": "select 1 from dual where is_free_lock('foo') = 1 limit :#maxLimit"
+}
+
+# a mutating lock function reached through DML keeps its DML plan but kills
+# the connection on timeout: KILL QUERY rolls the rows back atomically while
+# the lock grant races the kill. get_lock also requires a reserved
+# connection, exactly as in a SELECT predicate
+"update t set id = 1 where get_lock('foo', 10) = 1"
+{
+  "PlanID": "Update",
+  "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "t",
+      "Role": 1
+    }
+  ],
+  "FullQuery": "update t set id = 1 where get_lock('foo', 10) = 1",
+  "WhereClause": " where get_lock('foo', 10) = 1",
+  "NeedsReservedConn": true,
+  "KillsConnOnTimeout": true
+}
+
+# a release function in DML kills the connection on timeout but stays
+# runnable on a pooled connection
+"delete from t where release_lock('foo') = 1"
+{
+  "PlanID": "Delete",
+  "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "t",
+      "Role": 1
+    }
+  ],
+  "FullQuery": "delete from t where release_lock('foo') = 1",
+  "WhereClause": " where release_lock('foo') = 1",
+  "KillsConnOnTimeout": true
+}
+
+# an acquiring lock function reached through insert ... select classifies too
+"insert into t(id) select id from t where get_lock('foo', 10) = 1"
+{
+  "PlanID": "Insert",
+  "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "t",
+      "Role": 1
+    },
+    {
+      "TableName": "t",
+      "Role": 0
+    }
+  ],
+  "FullQuery": "insert into t(id) select id from t where get_lock('foo', 10) = 1",
+  "NeedsReservedConn": true,
+  "KillsConnOnTimeout": true
+}
+
+# the pure reads stay plain DML wherever they appear
+"update t set id = 1 where is_free_lock('foo') = 1"
+{
+  "PlanID": "Update",
+  "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "t",
+      "Role": 1
+    }
+  ],
+  "FullQuery": "update t set id = 1 where is_free_lock('foo') = 1",
+  "WhereClause": " where is_free_lock('foo') = 1"
 }

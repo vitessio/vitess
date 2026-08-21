@@ -20,6 +20,7 @@ import (
 	"context"
 
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/schema"
@@ -45,14 +46,17 @@ type DDL struct {
 
 	Config dynamicconfig.DDL
 
-	CreateTempTable bool
+	// TempTableDDL marks a temporary-table DDL (CREATE or DROP TEMPORARY).
+	// Such statements must run on the session's reserved connection and must
+	// not implicitly commit or take the online-DDL path.
+	TempTableDDL bool
 }
 
 func (ddl *DDL) description() PrimitiveDescription {
 	other := map[string]any{
 		"Query": ddl.SQL,
 	}
-	if ddl.CreateTempTable {
+	if ddl.TempTableDDL {
 		other["TempTable"] = true
 	}
 	return PrimitiveDescription{
@@ -76,10 +80,48 @@ func (ddl *DDL) isOnlineSchemaDDL() bool {
 
 // TryExecute implements the Primitive interface
 func (ddl *DDL) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*query.BindVariable, wantfields bool) (result *sqltypes.Result, err error) {
-	if ddl.CreateTempTable {
-		vcursor.Session().HasCreatedTempTable()
-		vcursor.Session().NeedsReservedConn()
-		return vcursor.ExecutePrimitive(ctx, ddl.NormalDDL, bindVars, wantfields)
+	if ddl.TempTableDDL {
+		// A temporary-table DDL must not implicitly commit the open
+		// transaction (MySQL does not) and must not take the online-DDL
+		// path, so it runs here rather than falling through.
+		_, isCreate := ddl.DDL.(*sqlparser.CreateTable)
+		if isCreate {
+			// A temporary table lives on a single reserved connection, so
+			// the create must target exactly one shard. Resolve before
+			// touching the session: a routing rejection provably executed
+			// nothing, and marking the session for it would force every
+			// subsequent query onto a pointless reserved connection with
+			// plan caching disabled for the rest of the connection's life.
+			// (The Send resolves again below; resolution is a cached
+			// srvtopo lookup.)
+			rss, _, err := vcursor.ResolveDestinations(ctx, ddl.NormalDDL.Keyspace.Name, nil, []key.ShardDestination{ddl.NormalDDL.TargetDestination})
+			if err != nil {
+				return nil, err
+			}
+			if len(rss) != 1 {
+				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+					"temporary table DDL must target exactly one shard (a temporary table lives on a single reserved connection): destination %v resolves to %d shards", ddl.NormalDDL.TargetDestination, len(rss))
+			}
+			// Only a CREATE needs to reserve a connection; a DROP of an
+			// existing temp table is already routed to the session's
+			// reserved connection, and a drop-only session (e.g. DROP
+			// TEMPORARY TABLE IF EXISTS) must not reserve one at all.
+			vcursor.Session().NeedsReservedConn()
+		}
+		result, err = vcursor.ExecutePrimitive(ctx, ddl.NormalDDL, bindVars, wantfields)
+		// Mark the session as holding temp tables for a CREATE even if it
+		// returned an error: the tablet may have reserved a connection and
+		// created the table before failing (the reserved id is recorded on
+		// error), and losing that table to the idle timeout is worse than
+		// the cost of marking. That cost is only that plan caching is
+		// disabled for this connection — heartbeats are keyed on the reserved
+		// connection actually existing (a create that reserved nothing is
+		// never beaten), so a fully-failed create produces no keepalives. A
+		// DROP never marks (a drop-only session created nothing).
+		if isCreate {
+			vcursor.Session().HasCreatedTempTable()
+		}
+		return result, err
 	}
 
 	// Commit any open transaction before executing the ddl query.
