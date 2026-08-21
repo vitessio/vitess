@@ -476,7 +476,10 @@ func (sm *StreamMigrator) getTerminalOnlineDDLMigrations(ctx context.Context, ta
 		encodeString(string(schema.OnlineDDLStatusCancelled)),
 	)
 
-	p3qr, err := sm.ts.TabletManagerClient().VReplicationExec(ctx, tablet, query)
+	p3qr, err := sm.ts.TabletManagerClient().ExecuteFetchAsDba(ctx, tablet, true, &tabletmanagerdatapb.ExecuteFetchAsDbaRequest{
+		Query:   []byte(query),
+		MaxRows: uint64(len(uuids)),
+	})
 	if err != nil {
 		return nil, err
 	}

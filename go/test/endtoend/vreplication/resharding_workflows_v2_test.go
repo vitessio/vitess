@@ -720,6 +720,13 @@ func testRestOfWorkflow(t *testing.T) {
 	validateReadsRouteToTarget(t, "replica,rdonly")
 	validateWritesRouteToSource(t)
 
+	// Inject a fake stopped OnlineDDL VReplication stream on the source shard to
+	// verify that SwitchWrites correctly filters terminal OnlineDDL streams rather
+	// than failing with "cannot migrate until all streams are running".
+	if currentWorkflowType == binlogdatapb.VReplicationWorkflowType_Reshard {
+		injectTerminalOnlineDDLStream(t, sourceTab)
+	}
+
 	tstWorkflowSwitchWrites(t)
 	checkStates(t, wrangler.WorkflowStateReadsSwitched, wrangler.WorkflowStateAllSwitched)
 	validateReadsRouteToTarget(t, "replica,rdonly")
@@ -1000,6 +1007,34 @@ func tstApplySchemaOnlineDDL(t *testing.T, sql string, keyspace string) {
 	err := vc.VtctldClient.ExecuteCommand("ApplySchema", "--ddl-strategy"+"=online",
 		"--sql", sql, keyspace)
 	require.NoError(t, err, "ApplySchema Error: %s", err)
+}
+
+// injectTerminalOnlineDDLStream inserts a fake stopped OnlineDDL VReplication
+// stream and a corresponding terminal schema_migrations row on the given tablet.
+// This simulates a completed OnlineDDL migration whose VReplication stream has
+// not yet been garbage collected.
+func injectTerminalOnlineDDLStream(t *testing.T, tablet *cluster.VttabletProcess) {
+	fakeUUID := "00000000_0000_0000_0000_000000000099"
+	dbName := "vt_" + defaultTargetKs
+
+	insertVRepl := fmt.Sprintf(
+		"insert into %s.vreplication (workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state, db_name, workflow_type, options) "+
+			"values ('%s', '', '', 0, 0, 0, 0, 'Stopped', '%s', %d, '{}')",
+		sidecarDBIdentifier, fakeUUID, dbName, binlogdatapb.VReplicationWorkflowType_OnlineDDL)
+	_, err := tablet.QueryTablet(insertVRepl, "", false)
+	require.NoError(t, err, "failed to insert fake VReplication stream: %v", err)
+
+	insertMigration := fmt.Sprintf(
+		"insert into %s.schema_migrations (migration_uuid, keyspace, shard, mysql_schema, mysql_table, migration_statement, strategy, options, migration_status, log_path, artifacts, message) "+
+			"values ('%s', '%s', '-80', '%s', 'fake_table', 'ALTER TABLE fake_table ADD COLUMN c1 INT', 'online', '', 'complete', '', '', '')",
+		sidecarDBIdentifier, fakeUUID, defaultTargetKs, dbName)
+	_, err = tablet.QueryTablet(insertMigration, "", false)
+	require.NoError(t, err, "failed to insert fake schema_migrations row: %v", err)
+
+	t.Cleanup(func() {
+		tablet.QueryTablet(fmt.Sprintf("delete from %s.vreplication where workflow = '%s'", sidecarDBIdentifier, fakeUUID), "", false)
+		tablet.QueryTablet(fmt.Sprintf("delete from %s.schema_migrations where migration_uuid = '%s'", sidecarDBIdentifier, fakeUUID), "", false)
+	})
 }
 
 func validateTableRoutingRule(t *testing.T, table, tabletType, fromKeyspace, toKeyspace string) {
