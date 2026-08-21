@@ -241,8 +241,76 @@ func TestSetTable(t *testing.T) {
 		expectedQueryLog: []string{
 			`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
 			`Needs Reserved Conn`,
-			`SysVar set with (x,dummy_expr)`,
 			`ExecuteMultiShard ks.-20: set x = dummy_expr {} false false`,
+			`SysVar set with (x,dummy_expr)`,
+		},
+	}, {
+		// a failed targeted SET must not leave its value in the session, where the
+		// settings transport would replay it on every subsequent query
+		testName: "targeted set failure does not store the value",
+		setOps: []SetOp{
+			&SysVarReservedConn{
+				Name:              "x",
+				Keyspace:          ks,
+				TargetDestination: key.DestinationAnyShard{},
+				Expr:              "dummy_expr",
+			},
+		},
+		execErr:       errors.New("some random error"),
+		expectedError: "some random error",
+		expectedQueryLog: []string{
+			`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
+			`Needs Reserved Conn`,
+			`ExecuteMultiShard ks.-20: set x = dummy_expr {} false false`,
+		},
+	}, {
+		// a targeted session's SET gets the same sql_mode judgment as an untargeted
+		// one; a non-constant expression is evaluated on the target shard and judged
+		// before any state changes
+		testName: "targeted sql_mode judges a non-constant value on the target shard",
+		setOps: []SetOp{
+			&SysVarReservedConn{
+				Name:              "sql_mode",
+				Keyspace:          ks,
+				TargetDestination: key.DestinationAnyShard{},
+				Expr:              "concat('AN', 'SI')",
+			},
+		},
+		qr: []*sqltypes.Result{sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields(
+				"orig|new",
+				"varchar|varchar",
+			),
+			"STRICT_TRANS_TABLES|ANSI",
+		)},
+		expectedError: "setting the ANSI sql_mode is unsupported",
+		expectedQueryLog: []string{
+			`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
+			`ExecuteMultiShard ks.-20: select @@sql_mode orig, concat('AN', 'SI') new {} false false`,
+		},
+	}, {
+		testName: "targeted sql_mode stores the judged value after the set",
+		setOps: []SetOp{
+			&SysVarReservedConn{
+				Name:              "sql_mode",
+				Keyspace:          ks,
+				TargetDestination: key.DestinationAnyShard{},
+				Expr:              "concat('STRICT_TRANS', '_TABLES')",
+			},
+		},
+		qr: []*sqltypes.Result{sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields(
+				"orig|new",
+				"varchar|varchar",
+			),
+			"NO_ZERO_DATE|STRICT_TRANS_TABLES",
+		)},
+		expectedQueryLog: []string{
+			`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
+			`ExecuteMultiShard ks.-20: select @@sql_mode orig, concat('STRICT_TRANS', '_TABLES') new {} false false`,
+			`Needs Reserved Conn`,
+			`ExecuteMultiShard ks.-20: set sql_mode = concat('STRICT_TRANS', '_TABLES') {} false false`,
+			`SysVar set with (sql_mode,'STRICT_TRANS_TABLES')`,
 		},
 	}, {
 		testName: "sysvar set not modifying setting",
@@ -740,10 +808,10 @@ func TestSysVarSetErr(t *testing.T) {
 		},
 	}
 
+	// the failed SET must not leave its value in the session: no "SysVar set with"
 	expectedQueryLog := []string{
 		`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
 		"Needs Reserved Conn",
-		"SysVar set with (x,dummy_expr)",
 		`ExecuteMultiShard ks.-20: set x = dummy_expr {} false false`,
 	}
 

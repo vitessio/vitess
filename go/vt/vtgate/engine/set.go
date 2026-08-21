@@ -260,9 +260,33 @@ func (svs *SysVarReservedConn) Execute(ctx context.Context, vcursor VCursor, env
 		if err != nil {
 			return err
 		}
+		storedValue := svs.Expr
+		if svs.Name == "sql_mode" {
+			// A targeted session's SET gets the same sql_mode judgment as an
+			// untargeted one, evaluated on the target shard: constants were judged
+			// at plan time, and a non-constant expression must not reach the
+			// session or the shard unjudged. The judged value is what the session
+			// stores, not the expression.
+			query := fmt.Sprintf("select @@%s orig, %s new", svs.Name, svs.Expr)
+			qr, err := execShard(ctx, nil /*primitive*/, vcursor, query, env.BindVars, rss[0], false /* rollbackOnError */, false /* canAutocommit */, false /*fetchLastInsertID*/)
+			if err != nil {
+				return err
+			}
+			_, value, err := sqlModeChangedValue(qr)
+			if err != nil {
+				return err
+			}
+			var buf strings.Builder
+			value.EncodeSQL(&buf)
+			storedValue = buf.String()
+		}
 		vcursor.Session().NeedsReservedConn()
-		vcursor.Session().SetSysVar(svs.Name, svs.Expr)
-		return svs.execSetStatement(ctx, vcursor, rss, env)
+		if err := svs.execSetStatement(ctx, vcursor, rss, env); err != nil {
+			// the statement failed, so the session must not store its value
+			return err
+		}
+		vcursor.Session().SetSysVar(svs.Name, storedValue)
+		return nil
 	}
 	needReservedConn, err := svs.checkAndUpdateSysVar(ctx, vcursor, env)
 	if err != nil {
