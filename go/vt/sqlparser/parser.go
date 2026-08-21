@@ -430,15 +430,16 @@ func ParseSQLMode(sqlMode string) SQLMode {
 }
 
 // StripUnforwardableModes returns the given comma-separated sql_mode list
-// with NO_BACKSLASH_ESCAPES and HIGH_NOT_PRECEDENCE removed — the two modes
-// whose meaning is fully absorbed by the parse-and-reserialize round trip:
-// serialized SQL escapes string literals with backslashes and prints NOT
-// without defensive parentheses, so a consumer lexing under either mode
-// would read that text differently than it was written. Every other mode is
-// forwarded, the ANSI combination and its members included: their lexer
-// aspects are inert on the mode-independent SQL Vitess serializes, while
-// their resolution- and execution-time semantics (e.g. the ANSI aggregate
-// rule, ONLY_FULL_GROUP_BY) are the consumer's to enforce. The result is
+// with NO_BACKSLASH_ESCAPES removed — the one mode no serialization can be
+// inert under: string literals must escape somehow, and the two backslash
+// regimes read any one escaping differently, so a consumer lexing under the
+// other regime would read the text differently than it was written. Every
+// other mode is forwarded, the ANSI combination, its members, and
+// HIGH_NOT_PRECEDENCE included: their lexer aspects are inert on the
+// mode-independent SQL Vitess serializes (NOT operands that would bind
+// differently under HIGH_NOT_PRECEDENCE are parenthesized), while their
+// resolution- and execution-time semantics (e.g. the ANSI aggregate rule,
+// ONLY_FULL_GROUP_BY) are the consumer's to enforce. The result is
 // deduplicated, preserving first occurrences.
 func StripUnforwardableModes(sqlMode string) string {
 	var kept []string
@@ -447,8 +448,7 @@ func StripUnforwardableModes(sqlMode string) string {
 		word := strings.TrimSpace(part)
 		switch {
 		case word == "":
-		case strings.EqualFold(word, "NO_BACKSLASH_ESCAPES"),
-			strings.EqualFold(word, "HIGH_NOT_PRECEDENCE"):
+		case strings.EqualFold(word, "NO_BACKSLASH_ESCAPES"):
 		default:
 			upper := strings.ToUpper(word)
 			if !seen[upper] {

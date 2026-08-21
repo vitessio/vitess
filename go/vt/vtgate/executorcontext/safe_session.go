@@ -671,9 +671,9 @@ func (session *SafeSession) SetSystemVariable(name string, expr string) {
 // GetSystemVariables takes a visitor function that will receive each MySQL system variable in the session.
 // This function will only yield system variables which apply to MySQL itself; Vitess-aware system variables
 // will be skipped. The yielded values are the ones to apply on backend connections: the sql_mode value has
-// NO_BACKSLASH_ESCAPES and HIGH_NOT_PRECEDENCE removed (see sqlparser.StripUnforwardableModes) — vtgate
-// serializes SQL that a consumer under either of those modes would lex differently than it was written.
-// Every other mode is forwarded for the backend to enforce.
+// NO_BACKSLASH_ESCAPES removed (see sqlparser.StripUnforwardableModes) — vtgate serializes SQL that a
+// consumer under that mode would lex differently than it was written. Every other mode is forwarded for
+// the backend to enforce.
 func (session *SafeSession) GetSystemVariables(f func(k string, v string)) {
 	session.mu.Lock()
 	defer session.mu.Unlock()
