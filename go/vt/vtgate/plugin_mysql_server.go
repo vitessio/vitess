@@ -341,7 +341,7 @@ func (vh *vtgateHandler) ComQuery(c *mysql.Conn, query string, callback func(*sq
 		if err != nil {
 			return sqlerror.NewSQLErrorFromError(err)
 		}
-		fillInTxStatusFlags(c, session)
+		fillInSessionStatusFlags(c, session)
 		if result := deferredResult(); result != nil {
 			return callback(result)
 		}
@@ -352,7 +352,7 @@ func (vh *vtgateHandler) ComQuery(c *mysql.Conn, query string, callback func(*sq
 	if err := sqlerror.NewSQLErrorFromError(err); err != nil {
 		return err
 	}
-	fillInTxStatusFlags(c, session)
+	fillInSessionStatusFlags(c, session)
 	return callback(result)
 }
 
@@ -415,14 +415,14 @@ func (vh *vtgateHandler) ComQueryMulti(c *mysql.Conn, sql string, callback func(
 				return callback(sqltypes.QueryResponse{QueryResult: result}, false, firstPacket)
 			})
 			if err == nil && deferredResult != nil {
-				fillInTxStatusFlags(c, session)
+				fillInSessionStatusFlags(c, session)
 				return callback(sqltypes.QueryResponse{QueryResult: deferredResult}, false, true)
 			}
 		}
 		if err != nil {
 			return sqlerror.NewSQLErrorFromError(err)
 		}
-		fillInTxStatusFlags(c, session)
+		fillInSessionStatusFlags(c, session)
 		return nil
 	}
 	var results []*sqltypes.Result
@@ -441,7 +441,7 @@ func (vh *vtgateHandler) ComQueryMulti(c *mysql.Conn, sql string, callback func(
 		queryResults = append(queryResults, sqltypes.QueryResponse{QueryResult: result, QueryError: sqlerror.NewSQLErrorFromError(err)})
 	}
 
-	fillInTxStatusFlags(c, session)
+	fillInSessionStatusFlags(c, session)
 	for idx, res := range queryResults {
 		applyMultiQueryStatusFlags(c, mysqlCtx.slowQueryStates, idx)
 		if callbackErr := callback(res, idx < len(queryResults)-1, true); callbackErr != nil {
@@ -483,7 +483,7 @@ func (vh *vtgateHandler) streamExecuteMultiQuery(ctx context.Context, c *mysql.C
 		}
 		if deferredResult != nil {
 			previousStatusFlags := c.StatusFlags
-			fillInTxStatusFlags(c, session)
+			fillInSessionStatusFlags(c, session)
 			applyMultiQueryStatusFlagsWithPrevious(c, mysqlCtx.slowQueryStates, idx, previousStatusFlags)
 			if err := callback(sqltypes.QueryResponse{QueryResult: deferredResult}, more, true); err != nil {
 				midStream = true
@@ -503,7 +503,7 @@ func (vh *vtgateHandler) streamExecuteMultiQuery(ctx context.Context, c *mysql.C
 	return session, callback(sqltypes.QueryResponse{QueryError: sqlerror.NewSQLErrorFromError(err)}, false, true)
 }
 
-func fillInTxStatusFlags(c *mysql.Conn, session *vtgatepb.Session) {
+func fillInSessionStatusFlags(c *mysql.Conn, session *vtgatepb.Session) {
 	if session.InTransaction {
 		c.StatusFlags |= mysql.ServerStatusInTrans
 	} else {
@@ -513,6 +513,15 @@ func fillInTxStatusFlags(c *mysql.Conn, session *vtgatepb.Session) {
 		c.StatusFlags |= mysql.ServerStatusAutocommit
 	} else {
 		c.StatusFlags &= mysql.NoServerStatusAutocommit
+	}
+	// MySQL reports NO_BACKSLASH_ESCAPES in every OK packet's status flags, and client
+	// libraries that escape string values themselves (e.g. mysql_real_escape_string)
+	// switch their escaping on it, so the flag must track the session's sql_mode.
+	sqlMode, _ := econtext.NewSafeSession(session).SQLMode()
+	if sqlparser.ParseSQLMode(sqlMode)&sqlparser.SQLModeNoBackslashEscapes != 0 {
+		c.StatusFlags |= mysql.ServerStatusNoBackslashEscapes
+	} else {
+		c.StatusFlags &^= mysql.ServerStatusNoBackslashEscapes
 	}
 }
 
@@ -635,7 +644,7 @@ func (vh *vtgateHandler) ComStmtExecute(c *mysql.Conn, prepare *mysql.PrepareDat
 		if err != nil {
 			return sqlerror.NewSQLErrorFromError(err)
 		}
-		fillInTxStatusFlags(c, session)
+		fillInSessionStatusFlags(c, session)
 		if result := deferredResult(); result != nil {
 			return callback(result)
 		}
@@ -645,7 +654,7 @@ func (vh *vtgateHandler) ComStmtExecute(c *mysql.Conn, prepare *mysql.PrepareDat
 	if err != nil {
 		return sqlerror.NewSQLErrorFromError(err)
 	}
-	fillInTxStatusFlags(c, session)
+	fillInSessionStatusFlags(c, session)
 
 	return callback(qr)
 }
