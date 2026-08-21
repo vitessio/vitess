@@ -200,6 +200,9 @@ func TestMain(m *testing.M) {
 
 	exitCode := func() int {
 		var cfg vttest.Config
+		// sessions own their sql_mode and vtgate applies it to backend
+		// queries; TestSQLModeANSIOuterRefAggregate depends on this
+		cfg.EnableSystemSettings = true
 		cfg.Topology = &vttestpb.VTTestTopology{
 			Keyspaces: []*vttestpb.Keyspace{
 				{
