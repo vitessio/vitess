@@ -79,35 +79,35 @@ func (Charset_sjis) EncodeRune(dst []byte, r rune) int {
 	return encodeSJIS(dst, r, &table_sjisEncode)
 }
 
-func decodeSJIS(src []byte, table *[65536]uint16) (rune, int, bool) {
+func decodeSJIS(src []byte, table *[65536]uint16) (rune, int, types.Decoding) {
 	if len(src) < 1 {
-		return utf8.RuneError, 0, false
+		return utf8.RuneError, 0, types.DecodeInvalid
 	}
 	c0 := src[0]
 	if c0 < utf8.RuneSelf {
-		return rune(c0), 1, true
+		return rune(c0), 1, types.DecodeOK
 	}
 	if c0 >= 0xA1 && c0 <= 0xDF {
-		return rune(table[c0]), 1, true
+		return rune(table[c0]), 1, types.DecodeOK
 	}
 	if c0 < 0x81 || (0x9F < c0 && c0 < 0xE0) || 0xFC < c0 {
-		return utf8.RuneError, 1, false
+		return utf8.RuneError, 1, types.DecodeInvalid
 	}
 	if len(src) < 2 {
-		return utf8.RuneError, 1, false
+		return utf8.RuneError, 1, types.DecodeInvalid
 	}
 	c1 := src[1]
 	if c1 < 0x40 || c1 == 0x7F || 0xFC < c1 {
-		return utf8.RuneError, 1, false
+		return utf8.RuneError, 1, types.DecodeInvalid
 	}
 	sj := uint16(c0)<<8 | uint16(c1)
 	if cp := table[sj]; cp != 0 {
-		return rune(cp), 2, true
+		return rune(cp), 2, types.DecodeOK
 	}
-	return utf8.RuneError, 2, false
+	return utf8.RuneError, 2, types.DecodeUnmappable
 }
 
-func (Charset_sjis) DecodeRune(src []byte) (rune, int, bool) {
+func (Charset_sjis) DecodeRune(src []byte) (rune, int, types.Decoding) {
 	return decodeSJIS(src, &table_sjisDecode)
 }
 
@@ -138,7 +138,7 @@ func (Charset_cp932) EncodeRune(dst []byte, r rune) int {
 	return encodeSJIS(dst, r, &table_cp932Encode)
 }
 
-func (Charset_cp932) DecodeRune(src []byte) (rune, int, bool) {
+func (Charset_cp932) DecodeRune(src []byte) (rune, int, types.Decoding) {
 	return decodeSJIS(src, &table_cp932Decode)
 }
 

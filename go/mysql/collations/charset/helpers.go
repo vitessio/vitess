@@ -16,6 +16,10 @@ limitations under the License.
 
 package charset
 
+import (
+	"vitess.io/vitess/go/mysql/collations/charset/types"
+)
+
 func Slice(charset Charset, input []byte, from, to int) []byte {
 	if charset, ok := charset.(interface{ Slice([]byte, int, int) []byte }); ok {
 		return charset.Slice(input, from, to)
@@ -23,8 +27,8 @@ func Slice(charset Charset, input []byte, from, to int) []byte {
 	iter := input
 	start := 0
 	for i := range to {
-		_, size, ok := charset.DecodeRune(iter)
-		if !ok {
+		_, size, d := charset.DecodeRune(iter)
+		if d == types.DecodeInvalid {
 			break
 		}
 		if i < from {
@@ -40,8 +44,8 @@ func Validate(charset Charset, input []byte) bool {
 		return charset.Validate(input)
 	}
 	for len(input) > 0 {
-		_, size, ok := charset.DecodeRune(input)
-		if !ok {
+		_, size, d := charset.DecodeRune(input)
+		if d == types.DecodeInvalid {
 			return false
 		}
 		input = input[size:]

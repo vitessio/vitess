@@ -22,6 +22,7 @@ import (
 	"unicode/utf8"
 
 	"vitess.io/vitess/go/mysql/collations/charset"
+	"vitess.io/vitess/go/mysql/collations/charset/types"
 	"vitess.io/vitess/go/vt/vthash"
 )
 
@@ -73,28 +74,34 @@ func fuzzCharsets() []charset.Charset {
 func decodeWalk(t *testing.T, cs charset.Charset, input []byte) (runes int, valid bool) {
 	valid = true
 	for in := input; len(in) > 0; {
-		r, width, ok := cs.DecodeRune(in)
+		r, width, d := cs.DecodeRune(in)
 		if width < 1 || width > len(in) || width > cs.MaxWidth() {
 			t.Fatalf("%s.DecodeRune(%#v) = %d, %d, %v: width out of range 1..min(%d, %d)",
-				cs.Name(), in, r, width, ok, len(in), cs.MaxWidth())
+				cs.Name(), in, r, width, d, len(in), cs.MaxWidth())
 		}
-		if !ok {
+		switch d {
+		case types.DecodeInvalid:
 			valid = false
 			if r != charset.RuneError {
 				t.Fatalf("%s.DecodeRune(%#v) = %d, %d, %v: rune is not RuneError for malformed input",
-					cs.Name(), in, r, width, ok)
+					cs.Name(), in, r, width, d)
 			}
-		} else {
+		case types.DecodeUnmappable:
+			if r != charset.RuneError {
+				t.Fatalf("%s.DecodeRune(%#v) = %d, %d, %v: rune is not RuneError for unmappable input",
+					cs.Name(), in, r, width, d)
+			}
+		default:
 			var enc [8]byte
 			encWidth := cs.EncodeRune(enc[:], r)
 			if encWidth < 1 {
 				t.Fatalf("%s.EncodeRune(%U) = %d: decoded rune does not encode",
 					cs.Name(), r, encWidth)
 			}
-			r2, width2, ok2 := cs.DecodeRune(enc[:encWidth])
-			if r2 != r || width2 != encWidth || !ok2 {
+			r2, width2, d2 := cs.DecodeRune(enc[:encWidth])
+			if r2 != r || width2 != encWidth || d2 != types.DecodeOK {
 				t.Fatalf("%s: decode(encode(%U)) = %U, %d, %v: want %U, %d, true",
-					cs.Name(), r, r2, width2, ok2, r, encWidth)
+					cs.Name(), r, r2, width2, d2, r, encWidth)
 			}
 		}
 		in = in[width:]

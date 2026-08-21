@@ -397,3 +397,16 @@ func BenchmarkWildcardMatching(b *testing.B) {
 		}
 	})
 }
+
+func TestUnmappableWildcard(t *testing.T) {
+	const u = "\xE3\x32\x9A\x36"
+	const v = "\xE3\x32\x9A\x37"
+
+	testWildcardMatches(t, "gb18030_unicode_520_ci", 0, 0, 0, []wildcardtest{
+		{u, "%", true},
+		{u, "_", true},
+		{u, "?", false},
+		{u, u, true},
+		{u, v, false},
+	})
+}
