@@ -126,7 +126,7 @@ type DetectionAnalysis struct {
 	// i.e. the population eligible to vote in the shard-peer health quorum. It is the expected
 	// observer count fed to the quorum gate, derived independently of the primary's instance data
 	// so it is available even when VTOrc has never reached the primary (the cold-start case).
-	ShardEligibleObservers                    uint
+	ShardEligibleObservers                    int
 	CountValidReplicas                        uint
 	CountValidReplicatingReplicas             uint
 	CountValidSemiSyncReplicatingReplicas     uint
