@@ -55,6 +55,7 @@ import (
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/binlogacl"
+	econtext "vitess.io/vitess/go/vt/vtgate/executorcontext"
 	"vitess.io/vitess/go/vt/vtgate/vtgateservice"
 	"vitess.io/vitess/go/vt/vttls"
 )
@@ -545,7 +546,7 @@ func slowQueryStatusFlags(statusFlags uint16, slow bool) uint16 {
 }
 
 // ComPrepare is the handler for command prepare.
-func (vh *vtgateHandler) ComPrepare(c *mysql.Conn, query string) ([]*querypb.Field, uint16, error) {
+func (vh *vtgateHandler) ComPrepare(c *mysql.Conn, query string) ([]*querypb.Field, uint16, uint32, error) {
 	var ctx context.Context
 	var cancel context.CancelFunc
 	if mysqlQueryTimeout != 0 {
@@ -583,9 +584,14 @@ func (vh *vtgateHandler) ComPrepare(c *mysql.Conn, query string) ([]*querypb.Fie
 	session, fld, paramsCount, err := vh.vtg.Prepare(ctx, session, query)
 	err = sqlerror.NewSQLErrorFromError(err)
 	if err != nil {
-		return nil, 0, err
+		return nil, 0, 0, err
 	}
-	return fld, paramsCount, nil
+	// The statement was parsed under the session's sql_mode; record the
+	// parse-relevant bits so execution interprets the statement text the
+	// same way, however the session's sql_mode changes in the meantime.
+	// (Runtime modes are the live session's at execute time, like MySQL.)
+	sqlMode, _ := econtext.NewSafeSession(session).SQLMode()
+	return fld, paramsCount, uint32(sqlparser.ParseSQLMode(sqlMode)), nil
 }
 
 func (vh *vtgateHandler) ComStmtExecute(c *mysql.Conn, prepare *mysql.PrepareData, callback func(*sqltypes.Result) error) error {
@@ -630,7 +636,7 @@ func (vh *vtgateHandler) ComStmtExecute(c *mysql.Conn, prepare *mysql.PrepareDat
 
 	if session.Options.Workload == querypb.ExecuteOptions_OLAP {
 		streamCallback, deferredResult := deferFirstOKOnlyResult(callback)
-		_, err := vh.vtg.StreamExecute(ctx, mysqlCtx, session, prepare.PrepareStmt, prepare.BindVars, true, streamCallback)
+		_, err := vh.vtg.StreamExecutePrepared(ctx, mysqlCtx, session, prepare.PrepareStmt, prepare.BindVars, sqlparser.SQLMode(prepare.ParseSQLMode), streamCallback)
 		if err != nil {
 			return sqlerror.NewSQLErrorFromError(err)
 		}
@@ -640,7 +646,7 @@ func (vh *vtgateHandler) ComStmtExecute(c *mysql.Conn, prepare *mysql.PrepareDat
 		}
 		return nil
 	}
-	_, qr, err := vh.vtg.Execute(ctx, mysqlCtx, session, prepare.PrepareStmt, prepare.BindVars, true)
+	_, qr, err := vh.vtg.ExecutePrepared(ctx, mysqlCtx, session, prepare.PrepareStmt, prepare.BindVars, sqlparser.SQLMode(prepare.ParseSQLMode))
 	if err != nil {
 		return sqlerror.NewSQLErrorFromError(err)
 	}

@@ -251,8 +251,8 @@ func (th *testHandler) ComQueryMulti(c *Conn, sql string, callback func(qr sqlty
 	return nil
 }
 
-func (th *testHandler) ComPrepare(*Conn, string) ([]*querypb.Field, uint16, error) {
-	return nil, 0, nil
+func (th *testHandler) ComPrepare(*Conn, string) ([]*querypb.Field, uint16, uint32, error) {
+	return nil, 0, 0, nil
 }
 
 func (th *testHandler) ComStmtExecute(c *Conn, prepare *PrepareData, callback func(*sqltypes.Result) error) error {

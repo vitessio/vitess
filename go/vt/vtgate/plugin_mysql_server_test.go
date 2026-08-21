@@ -88,8 +88,8 @@ func (th *testHandler) ComQueryMulti(c *mysql.Conn, sql string, callback func(qr
 	return nil
 }
 
-func (th *testHandler) ComPrepare(*mysql.Conn, string) ([]*querypb.Field, uint16, error) {
-	return nil, 0, nil
+func (th *testHandler) ComPrepare(*mysql.Conn, string) ([]*querypb.Field, uint16, uint32, error) {
+	return nil, 0, 0, nil
 }
 
 func (th *testHandler) ComStmtExecute(c *mysql.Conn, prepare *mysql.PrepareData, callback func(*sqltypes.Result) error) error {

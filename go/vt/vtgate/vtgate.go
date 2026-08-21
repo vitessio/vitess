@@ -594,6 +594,34 @@ func (vtg *VTGate) Execute(
 	bindVariables map[string]*querypb.BindVariable,
 	prepared bool,
 ) (newSession *vtgatepb.Session, qr *sqltypes.Result, err error) {
+	return vtg.execute(ctx, mysqlCtx, session, sql, bindVariables, prepared, nil)
+}
+
+// ExecutePrepared is Execute for a statement prepared over the binary
+// protocol: parseSQLMode carries the parse-relevant sql_mode bits recorded at
+// prepare time, and the statement is parsed and plan-cached under them
+// instead of the session's current mode. Runtime modes stay the live
+// session's, like MySQL's own execute-time semantics.
+func (vtg *VTGate) ExecutePrepared(
+	ctx context.Context,
+	mysqlCtx vtgateservice.MySQLConnection,
+	session *vtgatepb.Session,
+	sql string,
+	bindVariables map[string]*querypb.BindVariable,
+	parseSQLMode sqlparser.SQLMode,
+) (newSession *vtgatepb.Session, qr *sqltypes.Result, err error) {
+	return vtg.execute(ctx, mysqlCtx, session, sql, bindVariables, true, &parseSQLMode)
+}
+
+func (vtg *VTGate) execute(
+	ctx context.Context,
+	mysqlCtx vtgateservice.MySQLConnection,
+	session *vtgatepb.Session,
+	sql string,
+	bindVariables map[string]*querypb.BindVariable,
+	prepared bool,
+	parseSQLMode *sqlparser.SQLMode,
+) (newSession *vtgatepb.Session, qr *sqltypes.Result, err error) {
 	// In this context, we don't care if we can't fully parse destination
 	destKeyspace, destTabletType, _, _, _ := vtg.executor.ParseDestinationTarget(session.TargetString)
 	statsKey := []string{"Execute", destKeyspace, topoproto.TabletTypeLString(destTabletType)}
@@ -603,6 +631,9 @@ func (vtg *VTGate) Execute(
 		err = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", bvErr)
 	} else {
 		safeSession := econtext.NewSafeSession(session)
+		if parseSQLMode != nil {
+			safeSession.PinParseSQLMode(*parseSQLMode)
+		}
 		qr, err = vtg.executor.Execute(ctx, mysqlCtx, "Execute", safeSession, sql, bindVariables, prepared)
 		safeSession.RemoveInternalSavepoint()
 	}
@@ -750,6 +781,16 @@ func (vtg *VTGate) ExecuteBatch(ctx context.Context, session *vtgatepb.Session, 
 // StreamExecute executes a streaming query.
 // Note we guarantee the callback will not be called concurrently by multiple go routines.
 func (vtg *VTGate) StreamExecute(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable, prepared bool, callback func(*sqltypes.Result) error) (*vtgatepb.Session, error) {
+	return vtg.streamExecute(ctx, mysqlCtx, session, sql, bindVariables, prepared, nil, callback)
+}
+
+// StreamExecutePrepared is StreamExecute for a statement prepared over the
+// binary protocol; see ExecutePrepared.
+func (vtg *VTGate) StreamExecutePrepared(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable, parseSQLMode sqlparser.SQLMode, callback func(*sqltypes.Result) error) (*vtgatepb.Session, error) {
+	return vtg.streamExecute(ctx, mysqlCtx, session, sql, bindVariables, true, &parseSQLMode, callback)
+}
+
+func (vtg *VTGate) streamExecute(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable, prepared bool, parseSQLMode *sqlparser.SQLMode, callback func(*sqltypes.Result) error) (*vtgatepb.Session, error) {
 	// In this context, we don't care if we can't fully parse destination
 	destKeyspace, destTabletType, _, _, _ := vtg.executor.ParseDestinationTarget(session.TargetString)
 	statsKey := []string{"StreamExecute", destKeyspace, topoproto.TabletTypeLString(destTabletType)}
@@ -757,6 +798,9 @@ func (vtg *VTGate) StreamExecute(ctx context.Context, mysqlCtx vtgateservice.MyS
 	defer vtg.timings.Record(statsKey, time.Now())
 
 	safeSession := econtext.NewSafeSession(session)
+	if parseSQLMode != nil {
+		safeSession.PinParseSQLMode(*parseSQLMode)
+	}
 	var err error
 	if bvErr := sqltypes.ValidateBindVariables(bindVariables); bvErr != nil {
 		err = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", bvErr)

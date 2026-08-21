@@ -64,6 +64,11 @@ type (
 		// as the query that started a new transaction on the shard belong to a vindex.
 		execReadQuery bool
 
+		// pinnedParseSQLMode, when set, is the parse-relevant sql_mode bits
+		// queries in this request are parsed and plan-cached under, in place
+		// of the session's current sql_mode; see PinParseSQLMode.
+		pinnedParseSQLMode *sqlparser.SQLMode
+
 		logging *ExecuteLogger
 
 		// targetTabletAlias is set when using tablet-specific routing via USE keyspace:shard@tablet_type|tablet-alias.
@@ -681,6 +686,37 @@ func (session *SafeSession) GetSystemVariables(f func(k string, v string)) {
 		}
 		f(k, v)
 	}
+}
+
+// HasPreparedStatements reports whether the session holds SQL-level prepared
+// statements (PREPARE ... FROM).
+func (session *SafeSession) HasPreparedStatements() bool {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	return len(session.PrepareStatement) > 0
+}
+
+// PinParseSQLMode pins the parse-relevant sql_mode bits queries in this
+// request are parsed and plan-cached under, overriding the session's current
+// sql_mode. The binary-protocol execute path sets it to the bits recorded at
+// prepare time, so a prepared statement keeps its prepare-time meaning
+// however the session's sql_mode changes in between. Not part of the session
+// proto: the pin lives only for the request whose SafeSession this is.
+func (session *SafeSession) PinParseSQLMode(mode sqlparser.SQLMode) {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	session.pinnedParseSQLMode = &mode
+}
+
+// PinnedParseSQLMode returns the parse-relevant sql_mode bits pinned by
+// PinParseSQLMode, if any.
+func (session *SafeSession) PinnedParseSQLMode() (sqlparser.SQLMode, bool) {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	if session.pinnedParseSQLMode == nil {
+		return 0, false
+	}
+	return *session.pinnedParseSQLMode, true
 }
 
 // SQLMode returns the session's full sql_mode value (as set by the user,

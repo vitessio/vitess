@@ -83,6 +83,7 @@ func TestSetTable(t *testing.T) {
 		execErr          error
 		mysqlVersion     string
 		disableSetVar    bool
+		hasPreparedStmts bool
 	}
 
 	ks := &vindexes.Keyspace{Name: "ks", Sharded: true}
@@ -637,7 +638,27 @@ func TestSetTable(t *testing.T) {
 			"|BOGUS",
 		)},
 	}, {
-		testName:     "sql_mode verification result with an unexpected shape fails",
+		testName:     "sql_mode parse-relevant change with prepared statements open fails",
+		mysqlVersion: "8.0.0",
+		setOps: []SetOp{
+			&SysVarReservedConn{
+				Name:          "sql_mode",
+				Keyspace:      &vindexes.Keyspace{Name: "ks", Sharded: true},
+				Expr:          "'ANSI_QUOTES'",
+				SupportSetVar: true,
+			},
+		},
+		expectedQueryLog: []string{
+			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
+			`ExecuteMultiShard ks.-20: select @@sql_mode orig, 'ANSI_QUOTES' new {} false false`,
+		},
+		expectedError:    "VT12001: unsupported: changing the parse-relevant sql_mode with prepared statements open",
+		hasPreparedStmts: true,
+		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
+			"|ANSI_QUOTES",
+		)},
+	}, {
+		testName:     "sql_mode runtime-only change with prepared statements open is allowed",
 		mysqlVersion: "8.0.0",
 		setOps: []SetOp{
 			&SysVarReservedConn{
@@ -650,10 +671,12 @@ func TestSetTable(t *testing.T) {
 		expectedQueryLog: []string{
 			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
 			`ExecuteMultiShard ks.-20: select @@sql_mode orig, 'STRICT_TRANS_TABLES' new {} false false`,
+			"SysVar set with (sql_mode,'STRICT_TRANS_TABLES')",
+			"SET_VAR can be used",
 		},
-		expectedError: "unexpected result reading sql_mode: 1 fields, 1 columns",
-		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig", "varchar"),
-			"whatever",
+		hasPreparedStmts: true,
+		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
+			"|STRICT_TRANS_TABLES",
 		)},
 	}, {
 		testName:     "sql_mode set to a removed mode bit",
@@ -710,11 +733,12 @@ func TestSetTable(t *testing.T) {
 			})
 			require.NoError(t, err)
 			vc := &loggingVCursor{
-				shards:         []string{"-20", "20-"},
-				results:        tc.qr,
-				multiShardErrs: []error{tc.execErr},
-				disableSetVar:  tc.disableSetVar,
-				parser:         parser,
+				shards:                []string{"-20", "20-"},
+				results:               tc.qr,
+				multiShardErrs:        []error{tc.execErr},
+				disableSetVar:         tc.disableSetVar,
+				parser:                parser,
+				hasPreparedStatements: tc.hasPreparedStmts,
 			}
 			_, err = set.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 			if tc.expectedError == "" {

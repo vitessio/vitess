@@ -555,8 +555,8 @@ func (db *DB) comQueryOrdered(query string) (*sqltypes.Result, error) {
 }
 
 // ComPrepare is part of the mysql.Handler interface.
-func (db *DB) ComPrepare(*mysql.Conn, string) ([]*querypb.Field, uint16, error) {
-	return nil, 0, nil
+func (db *DB) ComPrepare(*mysql.Conn, string) ([]*querypb.Field, uint16, uint32, error) {
+	return nil, 0, 0, nil
 }
 
 // ComStmtExecute is part of the mysql.Handler interface.
