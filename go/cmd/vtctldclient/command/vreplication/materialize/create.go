@@ -113,15 +113,6 @@ func commandCreate(cmd *cobra.Command, args []string) error {
 		WorkflowOptions:           workflowOptions,
 	}
 
-	createOptions.TableSettings.parser, err = sqlparser.New(sqlparser.Options{
-		MySQLServerVersion: common.CreateOptions.MySQLServerVersion,
-		TruncateUILen:      common.CreateOptions.TruncateUILen,
-		TruncateErrLen:     common.CreateOptions.TruncateErrLen,
-	})
-	if err != nil {
-		return err
-	}
-
 	req := &vtctldatapb.MaterializeCreateRequest{
 		Settings: ms,
 	}
@@ -162,6 +153,20 @@ func (ts *tableSettings) String() string {
 }
 
 func (ts *tableSettings) Set(v string) error {
+	// Set runs while the command line is being parsed, before the command's
+	// RunE — the parser must be built here, not there, or the table settings
+	// are validated with a nil parser.
+	if ts.parser == nil {
+		var err error
+		ts.parser, err = sqlparser.New(sqlparser.Options{
+			MySQLServerVersion: common.CreateOptions.MySQLServerVersion,
+			TruncateUILen:      common.CreateOptions.TruncateUILen,
+			TruncateErrLen:     common.CreateOptions.TruncateErrLen,
+		})
+		if err != nil {
+			return err
+		}
+	}
 	var err error
 	ts.val, err = common.ParseTableMaterializeSettings(v, ts.parser)
 	return err

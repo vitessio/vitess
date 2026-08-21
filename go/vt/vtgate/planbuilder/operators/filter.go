@@ -105,6 +105,7 @@ func (f *Filter) planOffsets(ctx *plancontext.PlanningContext) Operator {
 		ResolveType: ctx.TypeForExpr,
 		Collation:   ctx.SemTable.Collation,
 		Environment: ctx.VSchema.Environment(),
+		SQLMode:     ctx.SQLMode(),
 	}
 
 	predicate := sqlparser.AndExpressions(f.Predicates...)

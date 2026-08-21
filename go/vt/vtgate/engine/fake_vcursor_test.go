@@ -96,7 +96,7 @@ func (t *noopVCursor) ClearPrepareData(name string) {
 	panic("implement me")
 }
 
-func (t *noopVCursor) PlanPrepareStatement(ctx context.Context, query string) (*Plan, error) {
+func (t *noopVCursor) PlanPrepareStatement(ctx context.Context, query string) (*Plan, string, error) {
 	panic("implement me")
 }
 

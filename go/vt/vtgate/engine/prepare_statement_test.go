@@ -60,9 +60,12 @@ func (f *prepareStmtVCursor) ClearPrepareData(name string) {
 	delete(f.prepareData, name)
 }
 
-func (f *prepareStmtVCursor) PlanPrepareStatement(ctx context.Context, query string) (*Plan, error) {
+func (f *prepareStmtVCursor) PlanPrepareStatement(ctx context.Context, query string) (*Plan, string, error) {
 	f.plannedQuery = query
-	return f.plan, f.planErr
+	if f.planErr != nil {
+		return nil, "", f.planErr
+	}
+	return f.plan, f.plan.Original, nil
 }
 
 func TestPrepareStmtFromLiteral(t *testing.T) {

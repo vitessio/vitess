@@ -122,7 +122,8 @@ type (
 
 		// TODO: remove when resolver is gone
 		VSchema() *vindexes.VSchema
-		PlanPrepareStmt(ctx context.Context, safeSession *SafeSession, query string) (*engine.Plan, error)
+		PlanPrepareStmt(ctx context.Context, safeSession *SafeSession, query string) (*engine.Plan, string, error)
+		PlanStoredStmt(ctx context.Context, safeSession *SafeSession, query string) (*engine.Plan, error)
 
 		Environment() *vtenv.Environment
 		ReadTransaction(ctx context.Context, transactionID string) (*querypb.TransactionMetadata, error)
@@ -423,9 +424,24 @@ func (vc *VCursorImpl) TimeZone() *time.Location {
 	return vc.SafeSession.TimeZone()
 }
 
+// ParseSQLMode returns the parse-relevant sql_mode bits queries in this
+// request are parsed and plan-cached under: the bits pinned at prepare time
+// when a binary-protocol prepared statement is executing, else the bits of
+// the session's current sql_mode. Runtime uses of the sql_mode (@@sql_mode
+// reads, the SET_VAR transport) keep reading SQLMode: like MySQL, a prepared
+// statement's runtime semantics follow the session at execute time while its
+// text keeps its prepare-time meaning.
+func (vc *VCursorImpl) ParseSQLMode() sqlparser.SQLMode {
+	if mode, ok := vc.SafeSession.PinnedParseSQLMode(); ok {
+		return mode
+	}
+	return sqlparser.ParseSQLMode(vc.SQLMode())
+}
+
 func (vc *VCursorImpl) SQLMode() string {
-	// TODO: Implement return the current sql_mode.
-	// This is currently hardcoded to the default in MySQL 8.0.
+	if mode, ok := vc.SafeSession.SQLMode(); ok {
+		return mode
+	}
 	return config.DefaultSQLMode
 }
 
@@ -1676,8 +1692,15 @@ func (vc *VCursorImpl) GetUDV(name string) *querypb.BindVariable {
 	return vc.SafeSession.GetUDV(name)
 }
 
-func (vc *VCursorImpl) PlanPrepareStatement(ctx context.Context, query string) (*engine.Plan, error) {
+func (vc *VCursorImpl) PlanPrepareStatement(ctx context.Context, query string) (*engine.Plan, string, error) {
 	return vc.executor.PlanPrepareStmt(ctx, vc.SafeSession, query)
+}
+
+// PlanStoredStatement plans the stored text of a SQL-level prepared
+// statement — the canonical serialization of its prepare-time parse — under
+// the canonical lexing rules regardless of the session's current sql_mode.
+func (vc *VCursorImpl) PlanStoredStatement(ctx context.Context, query string) (*engine.Plan, error) {
+	return vc.executor.PlanStoredStmt(ctx, vc.SafeSession, query)
 }
 
 func (vc *VCursorImpl) ClearPrepareData(name string) {

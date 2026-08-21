@@ -2224,8 +2224,8 @@ func (t testRun) ComQueryMulti(c *Conn, sql string, callback func(qr sqltypes.Qu
 	return nil
 }
 
-func (t testRun) ComPrepare(c *Conn, query string) ([]*querypb.Field, uint16, error) {
-	return nil, t.paramCounts, nil
+func (t testRun) ComPrepare(c *Conn, query string) ([]*querypb.Field, uint16, uint32, error) {
+	return nil, t.paramCounts, 0, nil
 }
 
 func (t testRun) WarningCount(c *Conn) uint16 {

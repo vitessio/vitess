@@ -532,6 +532,7 @@ func createPushedLimit(ctx *plancontext.PlanningContext, src Operator, orig *Lim
 func getLimitExpression(ctx *plancontext.PlanningContext, expr sqlparser.Expr) sqlparser.Expr {
 	cfg := evalengine.Config{
 		Environment: ctx.VSchema.Environment(),
+		SQLMode:     ctx.SQLMode(),
 	}
 	translated, err := evalengine.Translate(expr, &cfg)
 	if err != nil {

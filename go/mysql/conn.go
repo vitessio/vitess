@@ -254,6 +254,11 @@ type PrepareData struct {
 	BindVars    map[string]*querypb.BindVariable
 	StatementID uint32
 	ParamsCount uint16
+	// ParseSQLMode is the parse-relevant sql_mode bitmask the statement was
+	// prepared under, as reported by the handler's ComPrepare (opaque to this
+	// package; a sqlparser.SQLMode). Execution must interpret the statement
+	// text under these bits, however the session's sql_mode changes later.
+	ParseSQLMode uint32
 	// SpanContext caches the extracted VT_SPAN_CONTEXT value from PrepareStmt.
 	// nil means not yet extracted; non-nil stores the cached value (empty string = no context found).
 	SpanContext *string
@@ -1463,7 +1468,7 @@ func (c *Conn) handleComPrepare(handler Handler, data []byte) (kontinue bool) {
 		query = queries[0]
 	}
 
-	fld, paramsCount, err := handler.ComPrepare(c, query)
+	fld, paramsCount, parseSQLMode, err := handler.ComPrepare(c, query)
 	if err != nil {
 		return c.writeErrorPacketFromErrorAndLog(err)
 	}
@@ -1471,11 +1476,12 @@ func (c *Conn) handleComPrepare(handler Handler, data []byte) (kontinue bool) {
 	// Populate PrepareData
 	c.StatementID++
 	prepare := &PrepareData{
-		StatementID: c.StatementID,
-		PrepareStmt: query,
-		ParamsCount: paramsCount,
-		ParamsType:  make([]int32, paramsCount),
-		BindVars:    make(map[string]*querypb.BindVariable, paramsCount),
+		StatementID:  c.StatementID,
+		PrepareStmt:  query,
+		ParamsCount:  paramsCount,
+		ParamsType:   make([]int32, paramsCount),
+		BindVars:     make(map[string]*querypb.BindVariable, paramsCount),
+		ParseSQLMode: parseSQLMode,
 	}
 	c.PrepareData[c.StatementID] = prepare
 

@@ -166,7 +166,9 @@ type (
 
 		// PlanPrepareStatement plans the given statement text on behalf of a
 		// SQL-level PREPARE or EXECUTE statement.
-		PlanPrepareStatement(ctx context.Context, query string) (*Plan, error)
+		// It returns, alongside the plan, the canonical serialization of the
+		// prepare-time parse — the text stored for later executions.
+		PlanPrepareStatement(ctx context.Context, query string) (*Plan, string, error)
 
 		// SetExecutedPrimitive records the post-PlanSwitcher root primitive that
 		// was actually executed. Per-query state set by PlanSwitcher when it

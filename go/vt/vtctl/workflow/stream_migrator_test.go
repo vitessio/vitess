@@ -318,7 +318,7 @@ func TestTemplatize(t *testing.T) {
 		sourceKeyspaceSchema: ksschema,
 	}
 	for _, tt := range tests {
-		sm := &StreamMigrator{ts: ts}
+		sm := &StreamMigrator{ts: ts, parser: sqlparser.NewTestParser()}
 		out, err := sm.templatize(t.Context(), tt.in)
 		if tt.err != "" {
 			require.Error(t, err, "templatize(%v) expected to get err=%s, got %+v", stringifyVRS(tt.in), tt.err, err)

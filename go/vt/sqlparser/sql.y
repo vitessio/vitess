@@ -335,7 +335,12 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %left <str> '+' '-'
 %left <str> '*' '/' DIV '%' MOD
 %left <str> '^'
-%right <str> '~' UNARY
+// PIPE_CONCAT is || under the PIPES_AS_CONCAT sql_mode; MySQL places its
+// precedence between ^ and the unary operators.
+%left <str> PIPE_CONCAT
+// NOT_HIGH is NOT under the HIGH_NOT_PRECEDENCE sql_mode; it binds like the
+// unary operators, mirroring MySQL's NOT2_SYM.
+%right <str> '~' UNARY NOT_HIGH
 %left <str> COLLATE
 %right <str> BINARY UNDERSCORE_ARMSCII8 UNDERSCORE_ASCII UNDERSCORE_BIG5 UNDERSCORE_BINARY UNDERSCORE_CP1250 UNDERSCORE_CP1251
 %right <str> UNDERSCORE_CP1256 UNDERSCORE_CP1257 UNDERSCORE_CP850 UNDERSCORE_CP852 UNDERSCORE_CP866 UNDERSCORE_CP932
@@ -555,6 +560,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %type <jtColumnList> jt_columns_clause columns_list
 %type <jtOnResponse> on_error on_empty json_on_response
 %type <joinCondition> join_condition join_condition_opt on_expression_opt
+%type <str> not_kw
 %type <tableNames> table_name_list delete_table_list view_name_list
 %type <joinType> inner_join outer_join straight_join natural_join
 %type <tableName> table_name into_table_name delete_table_name
@@ -937,7 +943,7 @@ condition_value:
   {
     $$ = &HandlerConditionSQLWarning{}
   }
-| NOT FOUND
+| not_kw FOUND
   {
     $$ = &HandlerConditionNotFound{}
   }
@@ -1899,7 +1905,7 @@ column_attribute_list_opt:
     $1.Null = ptr.Of(true)
     $$ = $1
   }
-| column_attribute_list_opt NOT NULL
+| column_attribute_list_opt not_kw NULL
   {
     $1.Null = ptr.Of(false)
     $$ = $1
@@ -2014,7 +2020,7 @@ generated_column_attribute_list_opt:
     $1.Null = ptr.Of(true)
     $$ = $1
   }
-| generated_column_attribute_list_opt NOT NULL
+| generated_column_attribute_list_opt not_kw NULL
   {
     $1.Null = ptr.Of(false)
     $$ = $1
@@ -2469,7 +2475,7 @@ int_type:
 decimal_type:
 REAL double_length_opt
   {
-    $$ = &ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: realTypeName(yylex, string($1))}
     $$.Length = $2.Length
     $$.Scale = $2.Scale
   }
@@ -3104,7 +3110,7 @@ enforced:
   {
     $$ = true
   }
-| NOT ENFORCED
+| not_kw ENFORCED
   {
     $$ = false
   }
@@ -5858,6 +5864,14 @@ join_table:
     $$ = &JoinTableExpr{LeftExpr: $1, Join: $2, RightExpr: $3}
   }
 
+// not_kw is a composite-position NOT: it accepts the plain NOT token and,
+// under the HIGH_NOT_PRECEDENCE sql_mode, the NOT_HIGH token the lexer
+// produces instead, so constructs like NOT LIKE and IF NOT EXISTS keep
+// working in that mode.
+not_kw:
+  NOT
+| NOT_HIGH
+
 join_condition:
   ON expression
   { $$ = &JoinCondition{On: $2} }
@@ -6099,7 +6113,7 @@ bool_pri IS null_or_unknown %prec IS
   {
     $$ = &IsExpr{Left: $1, Right: IsNullOp}
   }
-| bool_pri IS NOT null_or_unknown %prec IS
+| bool_pri IS not_kw null_or_unknown %prec IS
   {
     $$ = &IsExpr{Left: $1, Right: IsNotNullOp}
   }
@@ -6129,7 +6143,7 @@ bit_expr IN col_tuple
   {
     $$ = &ComparisonExpr{Left: $1, Operator: InOp, Right: $3}
   }
-| bit_expr NOT IN col_tuple
+| bit_expr not_kw IN col_tuple
   {
     $$ = &ComparisonExpr{Left: $1, Operator: NotInOp, Right: $4}
   }
@@ -6137,7 +6151,7 @@ bit_expr IN col_tuple
   {
 	 $$ = &BetweenExpr{Left: $1, IsBetween: true, From: $3, To: $5}
   }
-| bit_expr NOT BETWEEN bit_expr AND predicate
+| bit_expr not_kw BETWEEN bit_expr AND predicate
   {
     $$ = &BetweenExpr{Left: $1, IsBetween: false, From: $4, To: $6}
   }
@@ -6145,7 +6159,7 @@ bit_expr IN col_tuple
   {
 	    $$ = &ComparisonExpr{Left: $1, Operator: LikeOp, Right: $3}
   }
-| bit_expr NOT LIKE simple_expr
+| bit_expr not_kw LIKE simple_expr
   {
     $$ = &ComparisonExpr{Left: $1, Operator: NotLikeOp, Right: $4}
   }
@@ -6153,7 +6167,7 @@ bit_expr IN col_tuple
   {
 	    $$ = &ComparisonExpr{Left: $1, Operator: LikeOp, Right: $3, Escape: $5}
   }
-| bit_expr NOT LIKE simple_expr ESCAPE simple_expr %prec LIKE
+| bit_expr not_kw LIKE simple_expr ESCAPE simple_expr %prec LIKE
   {
     $$ = &ComparisonExpr{Left: $1, Operator: NotLikeOp, Right: $4, Escape: $6}
   }
@@ -6161,7 +6175,7 @@ bit_expr IN col_tuple
   {
     $$ = &ComparisonExpr{Left: $1, Operator: RegexpOp, Right: $3}
   }
-| bit_expr NOT regexp_symbol bit_expr
+| bit_expr not_kw regexp_symbol bit_expr %prec REGEXP
   {
 	 $$ = &ComparisonExpr{Left: $1, Operator: NotRegexpOp, Right: $4}
   }
@@ -6246,6 +6260,12 @@ function_call_keyword
   {
     $$ = $1
   }
+| simple_expr PIPE_CONCAT simple_expr %prec PIPE_CONCAT
+  {
+    // || under PIPES_AS_CONCAT lowers to concat(), like MySQL does when
+    // normalizing view definitions; the AST stays mode-independent.
+    $$ = &FuncExpr{Name: NewIdentifierCI("concat"), Exprs: []Expr{$1, $3}}
+  }
 | function_call_nonkeyword
   {
     $$ = $1
@@ -6289,6 +6309,10 @@ function_call_keyword
 | '!' simple_expr %prec UNARY
   {
     $$ = &UnaryExpr{Operator: BangOp, Expr: $2}
+  }
+| NOT_HIGH simple_expr %prec UNARY
+  {
+    $$ = &NotExpr{Expr: $2}
   }
 | subquery
   {
@@ -6613,7 +6637,7 @@ is_suffix:
   {
     $$ = IsTrueOp
   }
-| NOT TRUE
+| not_kw TRUE
   {
     $$ = IsNotTrueOp
   }
@@ -6621,7 +6645,7 @@ is_suffix:
   {
     $$ = IsFalseOp
   }
-| NOT FALSE
+| not_kw FALSE
   {
     $$ = IsNotFalseOp
   }
@@ -7998,7 +8022,7 @@ convert_type:
   }
 | REAL
   {
-    $$ = &ConvertType{Type: string($1)}
+    $$ = &ConvertType{Type: realTypeName(yylex, string($1))}
   }
 
 array_opt:
@@ -8827,7 +8851,7 @@ exists_opt:
 
 not_exists_opt:
   { $$ = false }
-| IF NOT EXISTS
+| IF not_kw EXISTS
   { $$ = true }
 
 ignore_opt:
@@ -9048,6 +9072,7 @@ reserved_keyword:
 | NEXT // next should be doable as non-reserved, but is not due to the special `select next num_val` query that vitess supports
 | NO_WRITE_TO_BINLOG
 | NOT
+| NOT_HIGH
 | NOW
 | NTH_VALUE
 | NTILE

@@ -27,6 +27,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -294,6 +295,10 @@ func (v *vschema) Environment() *vtenv.Environment {
 	return vtenv.NewTestEnv()
 }
 
+func (v *vschema) SQLMode() string {
+	return config.DefaultSQLMode
+}
+
 func (v *vschema) ErrorIfShardedF(keyspace *vindexes.Keyspace, warn, errFmt string, params ...any) error {
 	// TODO implement me
 	panic("implement me")
@@ -353,7 +358,12 @@ func (v *vschema) IsViewsEnabled() bool {
 	panic("implement me")
 }
 
-func (v *vschema) PlanPrepareStatement(context.Context, string) (*engine.Plan, error) {
+func (v *vschema) PlanPrepareStatement(context.Context, string) (*engine.Plan, string, error) {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (v *vschema) PlanStoredStatement(context.Context, string) (*engine.Plan, error) {
 	// TODO implement me
 	panic("implement me")
 }

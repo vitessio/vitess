@@ -69,13 +69,17 @@ func (p *PrepareStmt) TryExecute(ctx context.Context, vcursor VCursor, bindVars 
 		return nil, err
 	}
 
-	plan, err := vcursor.PlanPrepareStatement(ctx, query)
+	plan, canonical, err := vcursor.PlanPrepareStatement(ctx, query)
 	if err != nil {
 		return nil, err
 	}
 
+	// The stored text is the canonical serialization of the prepare-time
+	// parse: it spells the statement's meaning in default-mode SQL, so
+	// executions re-parse it under the canonical rules and keep that meaning
+	// however the session's sql_mode changes in between.
 	vcursor.Session().StorePrepareData(p.Name, &vtgatepb.PrepareData{
-		PrepareStatement: plan.Original,
+		PrepareStatement: canonical,
 		ParamsCount:      int32(plan.ParamsCount),
 	})
 	return &sqltypes.Result{}, nil

@@ -442,6 +442,72 @@ func TestExecutorSetOp(t *testing.T) {
 	}
 }
 
+// A SQL-level prepared statement keeps the meaning its text had when it was
+// prepared, across sql_mode changes in either direction: the stored text is
+// the canonical serialization of the prepare-time parse, and executions parse
+// it under the canonical rules regardless of the session's current sql_mode.
+func TestSQLModeChangeWithPreparedStatements(t *testing.T) {
+	executor, _, _, lookup, _ := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
+
+	t.Run("prepared under the default mode, executed under ANSI_QUOTES", func(t *testing.T) {
+		session := econtext.NewAutocommitSession(&vtgatepb.Session{EnableSystemSettings: true, TargetString: KsTestUnsharded})
+		ctx := t.Context()
+
+		_, err := executorExecSession(ctx, executor, session, `prepare stmt1 from 'select "x" from information_schema.table'`, nil)
+		require.NoError(t, err)
+		// the stored text is the canonical serialization of the prepare-time
+		// parse: "x" was a string literal
+		require.Equal(t, `select 'x' from information_schema.`+"`table`", session.PrepareStatement["stmt1"].PrepareStatement)
+
+		lookup.SetResults([]*sqltypes.Result{sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields("orig|new", "varchar|varchar"), "|ANSI_QUOTES")})
+		_, err = executorExecSession(ctx, executor, session, "set sql_mode = 'ANSI_QUOTES'", nil)
+		require.NoError(t, err)
+		lookup.Queries = nil
+
+		// The routed query carries the session's runtime modes in its hint,
+		// while its text keeps the prepare-time meaning: 'x' stays a string
+		// literal. (Preceding queries, if any, are the settings transport of
+		// the reserved connection the non-hintable EXECUTE statement rides.)
+		_, err = executorExecSession(ctx, executor, session, "execute stmt1", nil)
+		require.NoError(t, err)
+		require.NotEmpty(t, lookup.Queries)
+		assert.Equal(t, "select /*+ SET_VAR(sql_mode = 'ANSI_QUOTES') */ 'x' from information_schema.`table`", lookup.Queries[len(lookup.Queries)-1].Sql)
+	})
+
+	t.Run("prepared under ANSI_QUOTES, executed under the default mode", func(t *testing.T) {
+		session := econtext.NewAutocommitSession(&vtgatepb.Session{
+			EnableSystemSettings: true,
+			TargetString:         KsTestUnsharded,
+			SystemVariables:      map[string]string{"sql_mode": "'ANSI_QUOTES'"},
+		})
+		ctx := t.Context()
+
+		_, err := executorExecSession(ctx, executor, session, `prepare stmt2 from 'select "id" from information_schema.table'`, nil)
+		require.NoError(t, err)
+		// "id" was a quoted identifier at prepare time
+		require.Equal(t, "select id from information_schema.`table`", session.PrepareStatement["stmt2"].PrepareStatement)
+
+		// the first queued result is consumed by the settings pre-query of the
+		// reserved connection this session's SET rides on; the second answers
+		// the verification query
+		verifyResult := sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields("orig|new", "varchar|varchar"), "|STRICT_TRANS_TABLES")
+		lookup.SetResults([]*sqltypes.Result{verifyResult, verifyResult})
+		_, err = executorExecSession(ctx, executor, session, "set sql_mode = 'STRICT_TRANS_TABLES'", nil)
+		require.NoError(t, err)
+		require.Equal(t, "'STRICT_TRANS_TABLES'", session.SystemVariables["sql_mode"])
+		lookup.Queries = nil
+
+		// "id" stays the identifier it was at prepare time, and the hint
+		// carries the session's current runtime modes
+		_, err = executorExecSession(ctx, executor, session, "execute stmt2", nil)
+		require.NoError(t, err)
+		require.NotEmpty(t, lookup.Queries)
+		assert.Equal(t, "select /*+ SET_VAR(sql_mode = 'STRICT_TRANS_TABLES') */ id from information_schema.`table`", lookup.Queries[len(lookup.Queries)-1].Sql)
+	})
+}
+
 func TestExecutorSetDeniedSystemVariables(t *testing.T) {
 	cases := []struct {
 		name    string
@@ -624,9 +690,9 @@ func TestSetVar(t *testing.T) {
 
 	sbc.SetResults([]*sqltypes.Result{sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
-		"|only_full_group_by")})
+		"|ONLY_FULL_GROUP_BY")})
 
-	_, err := executorExecSession(ctx, executor, session, "set @@sql_mode = only_full_group_by", map[string]*querypb.BindVariable{})
+	_, err := executorExecSession(ctx, executor, session, "set @@sql_mode = ONLY_FULL_GROUP_BY", map[string]*querypb.BindVariable{})
 	require.NoError(t, err)
 
 	tcases := []struct {
@@ -664,20 +730,20 @@ func TestSetVarShowVariables(t *testing.T) {
 	sbc.SetResults([]*sqltypes.Result{
 		// select query result for checking any change in system settings
 		sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
-			"|only_full_group_by"),
+			"|ONLY_FULL_GROUP_BY"),
 		// show query result
 		sqltypes.MakeTestResult(sqltypes.MakeTestFields("Variable_name|Value", "varchar|varchar"),
 			"sql_mode|ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE"),
 	})
 
-	_, err := executorExecSession(ctx, executor, session, "set @@sql_mode = only_full_group_by", map[string]*querypb.BindVariable{})
+	_, err := executorExecSession(ctx, executor, session, "set @@sql_mode = ONLY_FULL_GROUP_BY", map[string]*querypb.BindVariable{})
 	require.NoError(t, err)
 
 	// this should return the updated value of sql_mode.
 	qr, err := executorExecSession(ctx, executor, session, "show variables like 'sql_mode'", map[string]*querypb.BindVariable{})
 	require.NoError(t, err)
 	assert.False(t, session.InReservedConn(), "reserved connection should not be used")
-	assert.Equal(t, `[[VARCHAR("sql_mode") VARCHAR("only_full_group_by")]]`, fmt.Sprintf("%v", qr.Rows))
+	assert.Equal(t, `[[VARCHAR("sql_mode") VARCHAR("ONLY_FULL_GROUP_BY")]]`, fmt.Sprintf("%v", qr.Rows))
 }
 
 func TestExecutorSetAndSelect(t *testing.T) {
