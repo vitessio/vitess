@@ -628,10 +628,9 @@ func (te *TxEngine) ReserveBegin(ctx context.Context, options *querypb.ExecuteOp
 	span, ctx := trace.NewSpan(ctx, "TxEngine.ReserveBegin")
 	defer span.Finish()
 	// The pre-queries are executed directly on the reserved connection, without the
-	// settings pool's BuildSettingQuery pass, so the sql_mode validation and
-	// parse-relevant mode stripping must run here — before any connection is acquired
-	// or state is changed.
-	preQueries, parseMode, err := planbuilder.BuildReservedSettings(preQueries, te.env.Environment().Parser())
+	// settings pool's BuildSettingQuery pass, so the sql_mode validation must run
+	// here — before any connection is acquired or state is changed.
+	parseMode, err := planbuilder.ValidateReservedSettings(preQueries, te.env.Environment().Parser())
 	if err != nil {
 		return 0, "", err
 	}
@@ -661,8 +660,8 @@ var noop = func(int) {}
 func (te *TxEngine) Reserve(ctx context.Context, options *querypb.ExecuteOptions, txID int64, preQueries []string) (int64, error) {
 	span, ctx := trace.NewSpan(ctx, "TxEngine.Reserve")
 	defer span.Finish()
-	// see ReserveBegin: validate and strip before any connection is acquired or tainted
-	preQueries, parseMode, err := planbuilder.BuildReservedSettings(preQueries, te.env.Environment().Parser())
+	// see ReserveBegin: validate before any connection is acquired or tainted
+	parseMode, err := planbuilder.ValidateReservedSettings(preQueries, te.env.Environment().Parser())
 	if err != nil {
 		return 0, err
 	}

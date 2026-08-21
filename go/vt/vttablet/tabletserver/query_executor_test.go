@@ -2155,17 +2155,21 @@ func TestQueryExecutorSetSQLMode(t *testing.T) {
 		assert.Equal(t, sqlparser.ParseSQLMode("ANSI"), tsv.te.ConnParseSQLMode(txID))
 	})
 
-	t.Run("applied modes the backend must not lex under are moved off MySQL", func(t *testing.T) {
-		const stripQuery = "set sql_mode = 'STRICT_TRANS_TABLES'"
+	t.Run("applied modes the session must not run under close the connection", func(t *testing.T) {
+		// a constant carrying such a mode is rejected at plan time, and an expression
+		// producing one must not fare better; the statement has already run, so the
+		// connection cannot be reused
 		db.AddQuery(readQuery, modeResult("NO_BACKSLASH_ESCAPES,STRICT_TRANS_TABLES"))
-		db.AddQuery(stripQuery, &sqltypes.Result{})
 		txID := newTransaction(tsv, nil)
-		defer func() { _, _ = tsv.Rollback(ctx, tsv.sm.Target(), txID) }()
 		qre := newTestQueryExecutor(ctx, tsv, setQuery, txID)
 		_, err := qre.Execute()
-		require.NoError(t, err)
-		require.Equal(t, 1, db.GetQueryCalledNum(stripQuery))
-		assert.Equal(t, sqlparser.SQLModeNoBackslashEscapes, tsv.te.ConnParseSQLMode(txID))
+		require.EqualError(t, err, "setting the NO_BACKSLASH_ESCAPES sql_mode is unsupported")
+		// the connection is gone: the transaction cannot be used again
+		followUp := "set @@sql_mode = 'STRICT_ALL_TABLES'"
+		db.AddQuery(followUp, &sqltypes.Result{})
+		qre = newTestQueryExecutor(ctx, tsv, followUp, txID)
+		_, err = qre.Execute()
+		require.Error(t, err)
 	})
 
 	t.Run("a read-back that does not decode as MySQL modes closes the connection", func(t *testing.T) {
@@ -2225,27 +2229,23 @@ func TestQueryExecutorSetSQLMode(t *testing.T) {
 		require.Error(t, err)
 	})
 
-	t.Run("the connection is closed when stripping fails", func(t *testing.T) {
-		// rather than leaving it running under a mode that changes how it lexes the
-		// SQL the vttablet sends
-		const stripQuery = "set sql_mode = ''"
+	t.Run("HIGH_NOT_PRECEDENCE in the applied value is recorded and stays on MySQL", func(t *testing.T) {
+		// the serialized SQL parenthesizes NOT operands that would bind
+		// differently under the mode, so MySQL may keep running under it; no
+		// strip statement runs (an unregistered query would fail the test)
 		db.AddQuery(readQuery, modeResult("HIGH_NOT_PRECEDENCE"))
-		db.AddRejectedQuery(stripQuery, errRejected)
 		txID := newTransaction(tsv, nil)
+		defer func() { _, _ = tsv.Rollback(ctx, tsv.sm.Target(), txID) }()
 		qre := newTestQueryExecutor(ctx, tsv, setQuery, txID)
 		_, err := qre.Execute()
-		require.Error(t, err)
-		// the connection is gone: the transaction cannot be used again
-		followUp := "set @@sql_mode = 'STRICT_ALL_TABLES'"
-		qre = newTestQueryExecutor(ctx, tsv, followUp, txID)
-		_, err = qre.Execute()
-		require.Error(t, err)
+		require.NoError(t, err)
+		assert.Equal(t, sqlparser.SQLModeHighNotPrecedence, tsv.te.ConnParseSQLMode(txID))
 	})
 }
 
 // A true reservation (get_lock, DDL) applies its settings by executing them directly on
 // the tainted connection, without going through the settings pool's BuildSettingQuery —
-// the validation and parse-relevant stripping must hold on that path too.
+// the sql_mode validation must hold on that path too.
 func TestReserveSettingsSQLMode(t *testing.T) {
 	db := setUpQueryExecutorTest(t)
 	defer db.Close()
@@ -2257,7 +2257,7 @@ func TestReserveSettingsSQLMode(t *testing.T) {
 	require.EqualError(t, err, "Variable 'sql_mode' can't be set to the value of 'BOGUS'")
 
 	// the settings are applied with no read-back afterwards, so values that cannot be
-	// judged and stripped upfront are rejected
+	// judged upfront are rejected
 	_, _, err = tsv.te.ReserveBegin(ctx, &querypb.ExecuteOptions{}, []string{"set sql_mode = concat('AN', 'SI')"})
 	require.EqualError(t, err, "non-constant sql_mode value in connection settings: set sql_mode = concat('AN', 'SI')")
 	_, _, err = tsv.te.ReserveBegin(ctx, &querypb.ExecuteOptions{}, []string{"this is not SQL"})
@@ -2272,14 +2272,10 @@ func TestReserveSettingsSQLMode(t *testing.T) {
 	assert.Equal(t, sqlparser.ParseSQLMode("ANSI"), tsv.te.ConnParseSQLMode(connID))
 	require.NoError(t, tsv.te.Release(connID))
 
-	// modes the backend must not lex under are stripped from what it executes
-	strippedSetting := "set sql_mode = 'STRICT_TRANS_TABLES'"
-	db.AddQuery(strippedSetting, &sqltypes.Result{})
-	connID, _, err = tsv.te.ReserveBegin(ctx, &querypb.ExecuteOptions{}, []string{"set sql_mode = 'NO_BACKSLASH_ESCAPES,STRICT_TRANS_TABLES'"})
-	require.NoError(t, err)
-	require.Equal(t, 1, db.GetQueryCalledNum(strippedSetting))
-	assert.Equal(t, sqlparser.SQLModeNoBackslashEscapes, tsv.te.ConnParseSQLMode(connID))
-	require.NoError(t, tsv.te.Release(connID))
+	// modes the MySQL session must not run under are rejected before any connection
+	// is acquired
+	_, _, err = tsv.te.ReserveBegin(ctx, &querypb.ExecuteOptions{}, []string{"set sql_mode = 'NO_BACKSLASH_ESCAPES,STRICT_TRANS_TABLES'"})
+	require.EqualError(t, err, "setting the NO_BACKSLASH_ESCAPES sql_mode is unsupported")
 
 	validSetting := "set sql_mode = 'STRICT_TRANS_TABLES'"
 	db.AddQuery(validSetting, &sqltypes.Result{})

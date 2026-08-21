@@ -28,57 +28,51 @@ import (
 // sql_mode reaches the vttablet on three entry points: connection settings, SET
 // statements, and SET_VAR optimizer hints. Settings and SET statements validate
 // constant values with MySQL's semantics (see sqlmode.Validate), returning the same
-// errors the vtgate returns. Valid values are accepted in full — parse-relevant modes
-// included: the vttablet parses queries under those modes itself, and the value MySQL
-// is given has NO_BACKSLASH_ESCAPES and HIGH_NOT_PRECEDENCE removed (see
-// sqlparser.StripUnforwardableModes) — the two modes under which MySQL would lex the
-// vttablet-serialized text differently than it was written. Every other mode is
-// forwarded, so MySQL enforces its resolution- and execution-time semantics itself.
-// Non-constant expressions cannot be judged or stripped at plan time; MySQL validates
+// errors the vtgate returns. NO_BACKSLASH_ESCAPES is rejected (see
+// sqlmode.ValidateNoUnforwardableModes): under that mode MySQL would lex the
+// vttablet-serialized text differently than it was written, so it cannot be applied
+// to the MySQL session — and the vttablet answers @@sql_mode reads from that session,
+// so it rejects a mode it would have to leave out of the applied value. Every other
+// mode is applied as written, parse-relevant modes included: the vttablet parses
+// queries under them itself, and MySQL enforces its resolution- and execution-time
+// semantics. Non-constant expressions cannot be judged at plan time; MySQL validates
 // them itself and the executor reads back what was applied. SET_VAR hints are not
 // judged at all: a hint applies to the hinted statement's execution only and cannot
 // change how that statement's own text is lexed, so it is forwarded for MySQL to
 // judge — MySQL warns about and ignores invalid hint values.
 
-// BuildReservedSettings prepares the settings a true reservation executes directly on
-// its tainted connection — the path that does not go through BuildSettingQuery. It
-// mirrors BuildSettingQuery's sql_mode validation and stripping: constant sql_mode
-// assignments are rewritten with their parse-relevant modes removed, and the extracted
-// bits are returned so the reserved connection can parse later queries under them.
-// Every setting must parse as a SET statement carrying constant sql_mode values: the
-// settings are applied with no verification afterwards, and a value that cannot be
-// judged and stripped upfront could put the MySQL session in a mode that changes how it
-// lexes the SQL the vttablet sends.
-func BuildReservedSettings(settings []string, parser *sqlparser.Parser) ([]string, sqlparser.SQLMode, error) {
-	applied := make([]string, len(settings))
+// ValidateReservedSettings judges the settings a true reservation executes directly on
+// its tainted connection — the path that does not go through BuildSettingQuery — and
+// returns the parse-relevant sql_mode bits they put the session in, so the reserved
+// connection can parse later queries under them. It mirrors BuildSettingQuery's
+// sql_mode validation: every setting must parse as a SET statement carrying constant
+// sql_mode values, because the settings are applied with no verification afterwards
+// and a value that cannot be judged upfront could put the MySQL session in a mode it
+// must not run under.
+func ValidateReservedSettings(settings []string, parser *sqlparser.Parser) (sqlparser.SQLMode, error) {
 	var parseMode sqlparser.SQLMode
-	for i, setting := range settings {
-		applied[i] = setting
+	for _, setting := range settings {
 		stmt, err := parser.Parse(setting)
 		if err != nil {
-			return nil, 0, vterrors.Wrapf(err, "failed to parse connection setting: %s", setting)
+			return 0, vterrors.Wrapf(err, "failed to parse connection setting: %s", setting)
 		}
 		set, ok := stmt.(*sqlparser.Set)
 		if !ok {
-			return nil, 0, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "connection setting is not a SET statement: %s", setting)
+			return 0, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "connection setting is not a SET statement: %s", setting)
 		}
 		if err := validateConstantSetExprsSQLMode(set.Exprs); err != nil {
-			return nil, 0, err
+			return 0, err
 		}
-		mode, sawConstant, rewrote := stripSetExprsSQLMode(set.Exprs)
-		if rewrote {
-			applied[i] = sqlparser.String(set)
-		}
-		if sawConstant {
+		if mode, sawConstant := constantSetExprsSQLModeBits(set.Exprs); sawConstant {
 			parseMode = mode
 		}
 	}
-	return applied, parseMode, nil
+	return parseMode, nil
 }
 
 // validateConstantSetExprsSQLMode is validateSetExprsSQLMode for the settings paths,
 // which have no read-back phase: a session-scope sql_mode assignment whose value is not
-// a constant cannot be judged or stripped there at all and is rejected.
+// a constant cannot be judged there at all and is rejected.
 func validateConstantSetExprsSQLMode(exprs sqlparser.SetExprs) error {
 	readBack, err := validateSetExprsSQLMode(exprs)
 	if err != nil {
@@ -90,16 +84,12 @@ func validateConstantSetExprsSQLMode(exprs sqlparser.SetExprs) error {
 	return nil
 }
 
-// stripSetExprsSQLMode rewrites constant session-scope sql_mode assignments in place:
-// when the value carries a mode MySQL must not lex under (see
-// sqlparser.StripUnforwardableModes), the literal is replaced by its canonical form
-// with those modes removed; every other mode is forwarded as written. parseMode holds
-// the parse-relevant bits of the last constant assignment — the modes the vttablet
-// parses queries under — sawConstant reports whether one was seen (so callers can
-// record the session's bits even when they are zero), and rewrote reports whether any
-// literal changed. Values the caller's validation pass did not reject as invalid are
-// left untouched.
-func stripSetExprsSQLMode(exprs sqlparser.SetExprs) (parseMode sqlparser.SQLMode, sawConstant, rewrote bool) {
+// constantSetExprsSQLModeBits extracts the parse-relevant sql_mode bits of the last
+// constant session-scope sql_mode assignment — the modes the vttablet parses queries on
+// this connection under. sawConstant reports whether one was seen, so callers can
+// record the session's bits even when they are zero. Values the caller's validation
+// pass did not reject as invalid are ignored.
+func constantSetExprsSQLModeBits(exprs sqlparser.SetExprs) (parseMode sqlparser.SQLMode, sawConstant bool) {
 	for _, expr := range exprs {
 		if expr.Var.Name.Lowered() != sysvars.SQLMode.Name {
 			continue
@@ -121,22 +111,17 @@ func stripSetExprsSQLMode(exprs sqlparser.SetExprs) (parseMode sqlparser.SQLMode
 		if err != nil {
 			continue
 		}
-		canonical := mode.String()
-		parseMode = sqlparser.ParseSQLMode(canonical)
+		parseMode = sqlparser.ParseSQLMode(mode.String())
 		sawConstant = true
-		if stripped := sqlparser.StripUnforwardableModes(canonical); stripped != canonical {
-			expr.Expr = sqlparser.NewStrLiteral(stripped)
-			rewrote = true
-		}
 	}
-	return parseMode, sawConstant, rewrote
+	return parseMode, sawConstant
 }
 
-// validateSetExprsSQLMode rejects session-scope sql_mode assignments whose constant value
-// fails sqlmode.Validate. Assignments whose value is not a constant cannot be judged here;
-// for those it returns readBack=true, asking the executor to read back the applied value
-// after the statement runs, to record its parse-relevant modes and strip them from the
-// MySQL connection.
+// validateSetExprsSQLMode rejects session-scope sql_mode assignments whose constant
+// value fails sqlmode.Validate or carries a mode the MySQL session must not run under
+// (sqlmode.ValidateNoUnforwardableModes). Assignments whose value is not a constant
+// cannot be judged here; for those it returns readBack=true, asking the executor to
+// read back the applied value after the statement runs and judge it then.
 func validateSetExprsSQLMode(exprs sqlparser.SetExprs) (readBack bool, err error) {
 	for _, expr := range exprs {
 		if expr.Var.Name.Lowered() != sysvars.SQLMode.Name {
@@ -158,7 +143,11 @@ func validateSetExprsSQLMode(exprs sqlparser.SetExprs) (readBack bool, err error
 			readBack = true
 			continue
 		}
-		if _, err := sqlmode.Validate(value); err != nil {
+		mode, err := sqlmode.Validate(value)
+		if err != nil {
+			return false, err
+		}
+		if err := sqlmode.ValidateNoUnforwardableModes(mode); err != nil {
 			return false, err
 		}
 	}

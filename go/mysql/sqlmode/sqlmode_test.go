@@ -227,6 +227,22 @@ func TestValidateNoLexerModes(t *testing.T) {
 	require.NoError(t, ValidateNoLexerModes(StrictTransTables|NoZeroDate))
 }
 
+func TestValidateNoUnforwardableModes(t *testing.T) {
+	// the check covers exactly NO_BACKSLASH_ESCAPES and passes everything else,
+	// the other lexer modes and the ANSI combination included
+	for _, mn := range modeNames {
+		err := ValidateNoUnforwardableModes(mn.mode)
+		if mn.mode == NoBackslashEscapes {
+			require.EqualError(t, err, "setting the "+mn.name+" sql_mode is unsupported")
+		} else {
+			require.NoError(t, err, "mode %s", mn.name)
+		}
+	}
+	require.NoError(t, ValidateNoUnforwardableModes(Ansi))
+	require.NoError(t, ValidateNoUnforwardableModes(StrictTransTables|IgnoreSpace|HighNotPrecedence))
+	require.EqualError(t, ValidateNoUnforwardableModes(StrictTransTables|NoBackslashEscapes), "setting the NO_BACKSLASH_ESCAPES sql_mode is unsupported")
+}
+
 func TestNeutralizeSessionQuery(t *testing.T) {
 	// the exact statement was verified against MySQL 8.0.46: a global of
 	// 'ANSI_QUOTES,NO_BACKSLASH_ESCAPES,IGNORE_SPACE,HIGH_NOT_PRECEDENCE,PIPES_AS_CONCAT,

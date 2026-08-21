@@ -1233,14 +1233,13 @@ func (qre *QueryExecutor) getStreamConn() (*connpool.PooledConn, error) {
 }
 
 // execSet executes a SET statement on a dedicated transaction or reserved connection.
-// A constant sql_mode assignment was stripped of its parse-relevant modes at plan time:
-// the statement applies the stripped value to MySQL and the parse-relevant bits are
-// recorded on the connection, so later queries parse under them while MySQL keeps
-// lexing the vttablet's text under the default rules. When the assigned value is not a
-// constant, the applied value is read back after the statement runs and its
-// parse-relevant modes are moved off the MySQL connection the same way. MySQL applies
-// its own validation to the assignment, so the read-back only ever sees values it
-// accepted.
+// A constant sql_mode assignment was judged at plan time: the statement applies the
+// value to MySQL as written and the value's parse-relevant bits are recorded on the
+// connection, so later queries parse under them. When the assigned value is not a
+// constant, the statement executes under MySQL's own validation and the applied value
+// is read back afterwards to be judged the same way a constant is at plan time; a
+// value the vttablet must not leave the session in fails the statement and closes the
+// connection.
 func (qre *QueryExecutor) execSet(conn *StatefulConnection) (*sqltypes.Result, error) {
 	result, err := qre.txFetch(conn, false)
 	if err != nil {
@@ -1269,35 +1268,22 @@ func (qre *QueryExecutor) execSet(conn *StatefulConnection) (*sqltypes.Result, e
 			conn.Close()
 			return nil, err
 		}
-		if err := qre.recordAppliedSQLMode(conn, mode); err != nil {
+		if err := sqlmode.ValidateNoUnforwardableModes(mode); err != nil {
+			// The statement has already run, so the MySQL session is in a mode it must
+			// not stay in, and a multi-assignment SET may have changed other variables
+			// there is no snapshot of — the connection cannot be reused. A constant
+			// carrying such a mode is rejected at plan time, and an expression
+			// producing one must not fare better.
+			log.Warn("closing connection: the applied sql_mode carries a mode the session must not run under",
+				slog.Any("error", err), slog.Int64("connID", conn.ID()))
+			conn.Close()
 			return nil, err
 		}
+		conn.SetParseSQLMode(sqlparser.ParseSQLMode(mode.String()))
 	case qre.plan.SetsSQLMode:
 		conn.SetParseSQLMode(qre.plan.SQLModeParseBits)
 	}
 	return result, nil
-}
-
-// recordAppliedSQLMode records the parse-relevant bits of the sql_mode a SET put the
-// connection's session in — the modes later queries on the connection are parsed
-// under. When the applied value carries a mode MySQL must not lex under (see
-// sqlparser.StripUnforwardableModes), MySQL is given the value with those modes
-// removed; every other mode stays applied. Only if that stripping statement fails is
-// the connection closed rather than left running under a mode that changes how it
-// lexes the SQL the vttablet sends.
-func (qre *QueryExecutor) recordAppliedSQLMode(conn *StatefulConnection, mode sqlmode.Mode) error {
-	canonical := mode.String()
-	if stripped := sqlparser.StripUnforwardableModes(canonical); stripped != canonical {
-		strip := "set sql_mode = " + sqltypes.EncodeStringSQL(stripped)
-		if _, err := qre.execStatefulConn(conn, strip, false); err != nil {
-			log.Warn("closing connection: could not strip the applied sql_mode",
-				slog.Any("error", err), slog.Int64("connID", conn.ID()))
-			conn.Close()
-			return err
-		}
-	}
-	conn.SetParseSQLMode(sqlparser.ParseSQLMode(canonical))
-	return nil
 }
 
 // readSQLMode reads the connection's current @@sql_mode.
