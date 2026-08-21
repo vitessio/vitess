@@ -90,6 +90,9 @@ func (bh *GCSBackupHandle) AddFile(ctx context.Context, filename string, filesiz
 }
 
 // EndBackup implements BackupHandle.
+// Wait implements BackupHandle.
+func (bh *GCSBackupHandle) Wait() {}
+
 func (bh *GCSBackupHandle) EndBackup(ctx context.Context) error {
 	if bh.readOnly {
 		return errors.New("EndBackup cannot be called on read-only backup")

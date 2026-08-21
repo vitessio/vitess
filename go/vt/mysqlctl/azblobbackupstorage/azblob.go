@@ -271,14 +271,6 @@ func (bh *AZBlobBackupHandle) AddFile(ctx context.Context, filename string, file
 	return writer, nil
 }
 
-<<<<<<< HEAD
-||||||| parent of 15366bf4b5 (mysqlctl: prevent closeBackupFiles from cancelling context on successful file close, protecting   in-flight S3/Ceph uploads (#20771))
-// Wait implements BackupHandle.
-func (bh *AZBlobBackupHandle) Wait() {
-	bh.waitGroup.Wait()
-}
-
-=======
 // mergeCancel returns a context derived from parent that is also cancelled when
 // other is cancelled, along with a cleanup function that must be called when
 // the work is done to release resources and stop watching other. Context values
@@ -299,7 +291,6 @@ func (bh *AZBlobBackupHandle) Wait() {
 	bh.waitGroup.Wait()
 }
 
->>>>>>> 15366bf4b5 (mysqlctl: prevent closeBackupFiles from cancelling context on successful file close, protecting   in-flight S3/Ceph uploads (#20771))
 // EndBackup implements BackupHandle.
 func (bh *AZBlobBackupHandle) EndBackup(ctx context.Context) error {
 	if bh.readOnly {

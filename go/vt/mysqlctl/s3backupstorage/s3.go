@@ -305,6 +305,11 @@ func calculateUploadPartSize(filesize int64) (partSizeBytes int64, err error) {
 }
 
 // EndBackup is part of the backupstorage.BackupHandle interface.
+// Wait is part of the backupstorage.BackupHandle interface.
+func (bh *S3BackupHandle) Wait() {
+	bh.waitGroup.Wait()
+}
+
 func (bh *S3BackupHandle) EndBackup(ctx context.Context) error {
 	if bh.readOnly {
 		return errors.New("EndBackup cannot be called on read-only backup")
