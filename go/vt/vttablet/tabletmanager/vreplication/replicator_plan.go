@@ -23,6 +23,7 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"sync"
 
 	"vitess.io/vitess/go/bytes2"
 	"vitess.io/vitess/go/mysql/collations"
@@ -88,6 +89,8 @@ func (rp *ReplicatorPlan) buildExecutionPlan(fieldEvent *binlogdatapb.FieldEvent
 			trimmed.Name = strings.Trim(trimmed.Name, "`")
 			tplanv.Fields = append(tplanv.Fields, trimmed)
 		}
+		tplanv.WritesetCollationMismatchColumns = writesetCollationMismatchColumns(tplanv.Fields, rp.ColInfoMap[prelim.TargetName], rp.collationEnv)
+		tplanv.HasUnsupportedWritesetMapping = hasUnsupportedWritesetMapping(&tplanv, tplanv.Fields)
 		return &tplanv, nil
 	}
 	// select * construct was used. We need to use the field names.
@@ -96,7 +99,113 @@ func (rp *ReplicatorPlan) buildExecutionPlan(fieldEvent *binlogdatapb.FieldEvent
 		return nil, vterrors.Wrapf(err, "failed to build replication plan for %s table", fieldEvent.TableName)
 	}
 	tplan.Fields = fieldEvent.Fields
+	tplan.WritesetCollationMismatchColumns = writesetCollationMismatchColumns(tplan.Fields, rp.ColInfoMap[prelim.TargetName], rp.collationEnv)
+	tplan.HasUnsupportedWritesetMapping = hasUnsupportedWritesetMapping(tplan, tplan.Fields)
 	return tplan, nil
+}
+
+// hasUnsupportedWritesetMapping reports whether the plan's source→target
+// column mapping is something the parallel applier's writeset hasher
+// cannot reason about safely. Plans that rewrite, project, or reorder
+// columns produce hash inputs that do not correspond 1:1 with the row
+// image bytes, so the scheduler falls back to serialization rather
+// than compute a misleading writeset that could miss conflicts.
+func hasUnsupportedWritesetMapping(plan *TablePlan, streamedFields []*querypb.Field) bool {
+	if plan == nil || len(streamedFields) == 0 || len(plan.PKIndices) == 0 {
+		return false
+	}
+	if len(streamedFields) != len(plan.PKIndices) {
+		return true
+	}
+	for i, field := range streamedFields {
+		if field == nil || i >= len(plan.TablePlanBuilder.colExprs) {
+			return true
+		}
+		cexpr := plan.TablePlanBuilder.colExprs[i]
+		if cexpr == nil || !cexpr.colName.Equal(sqlparser.NewIdentifierCI(field.Name)) {
+			return true
+		}
+		if cexpr.isGenerated {
+			// The target recomputes generated columns and the DML builders
+			// skip them, so the streamed slot's values are not what the
+			// target enforces: hashing them for a generated unique or FK
+			// member would produce misleading writeset keys.
+			return true
+		}
+		sourceCol, ok := cexpr.expr.(*sqlparser.ColName)
+		if !ok || !sourceCol.Name.Equal(sqlparser.NewIdentifierCI(field.Name)) || !sourceCol.Qualifier.IsEmpty() {
+			return true
+		}
+	}
+	for i, isPK := range plan.PKIndices {
+		if !isPK {
+			continue
+		}
+		// The identity hash must agree with the target's PK equality: a
+		// collation-mismatched identity column could hash target-equal
+		// values apart, so the table serializes.
+		name := strings.ToLower(strings.Trim(streamedFields[i].Name, "`"))
+		if _, ok := plan.WritesetCollationMismatchColumns[name]; ok {
+			return true
+		}
+	}
+	return false
+}
+
+// writesetCollationMismatchColumns returns the lowered names of streamed
+// columns whose hashing collation diverges from the collation the target
+// enforces. The writeset hasher digests text values under the STREAMED
+// field's collation (see writesetDigestAddFieldValue), while the identity,
+// unique-key, and FK constraints it protects are enforced under the TARGET
+// column's collation. When those differ (e.g. a _bin source feeding a _ci
+// target), values the target considers equal can hash apart, so
+// target-conflicting transactions could receive disjoint writesets and
+// execute out of order. Columns recorded here force serialization wherever
+// they participate in a writeset key: identity columns in
+// hasUnsupportedWritesetMapping, unique keys in writesetUniqueKeysFromSpec,
+// and FK-joined columns in validateFKStreamedFieldCompatibility.
+func writesetCollationMismatchColumns(streamedFields []*querypb.Field, colInfos []*ColumnInfo, collationEnv *collations.Environment) map[string]struct{} {
+	if len(streamedFields) == 0 || len(colInfos) == 0 || collationEnv == nil {
+		return nil
+	}
+	targetByName := make(map[string]*ColumnInfo, len(colInfos))
+	for _, colInfo := range colInfos {
+		if colInfo != nil {
+			targetByName[strings.ToLower(colInfo.Name)] = colInfo
+		}
+	}
+	var mismatched map[string]struct{}
+	for _, field := range streamedFields {
+		if field == nil {
+			continue
+		}
+		name := strings.ToLower(strings.Trim(field.Name, "`"))
+		colInfo, ok := targetByName[name]
+		if !ok {
+			// Not a target column: it can never participate in a
+			// target-enforced constraint.
+			continue
+		}
+		// Mirror writesetDigestAddFieldValue: text fields with a charset are
+		// digested under that (streamed) collation, everything else as raw
+		// bytes. buildColInfoMap records a collation only for target text
+		// columns, so an empty target collation means raw target semantics.
+		var mismatch bool
+		if sqltypes.IsText(field.Type) && field.Charset != 0 {
+			// An unknown or empty target collation resolves to Unknown and
+			// conservatively mismatches.
+			mismatch = collationEnv.LookupByName(colInfo.Collation) != collations.ID(field.Charset)
+		} else {
+			mismatch = colInfo.Collation != ""
+		}
+		if mismatch {
+			if mismatched == nil {
+				mismatched = make(map[string]struct{})
+			}
+			mismatched[name] = struct{}{}
+		}
+	}
+	return mismatched
 }
 
 // buildFromFields builds a full TablePlan, but uses the field info as the
@@ -213,17 +322,40 @@ type TablePlan struct {
 	// PKReferences is used to check if an event changed
 	// a primary key column (row move).
 	PKReferences []string
+	// IdentityColumns stores the chosen replication identity columns in key order.
+	IdentityColumns []string
 	// PKIndices is an array, length = #columns, true if column is part of the PK
-	PKIndices               []bool
-	Stats                   *binlogplayer.Stats
-	FieldsToSkip            map[string]bool
-	ConvertCharset          map[string](*binlogdatapb.CharsetConversion)
-	HasExtraSourcePkColumns bool
+	PKIndices []bool
+	// HasExtraUniqueSecondary means the table has uniqueness the writeset
+	// hasher cannot reason about (prefix/expression unique indexes, PK/identity
+	// mismatch); transactions touching it force-serialize.
+	HasExtraUniqueSecondary bool
+	// UniqueKeyColumns holds, per hashable unique secondary index, the ordered
+	// column names whose values get extra writeset keys (MySQL-WRITESET-style)
+	// so cross-row unique-value conflicts serialize against each other.
+	UniqueKeyColumns [][]string
+	// HasUnsupportedWritesetMapping means the streamed FIELD layout cannot be
+	// mapped positionally back to target PK/FK columns for safe writeset hashing.
+	HasUnsupportedWritesetMapping bool
+	// WritesetCollationMismatchColumns holds the lowered names of streamed
+	// columns whose hashing collation diverges from the collation the target
+	// enforces (see writesetCollationMismatchColumns). Any writeset key that
+	// would touch one of them must force serialization instead.
+	WritesetCollationMismatchColumns map[string]struct{}
+	Stats                            *binlogplayer.Stats
+	FieldsToSkip                     map[string]bool
+	ConvertCharset                   map[string](*binlogdatapb.CharsetConversion)
+	HasExtraSourcePkColumns          bool
 
 	TablePlanBuilder *tablePlanBuilder
 	// PartialInserts is a dynamically generated cache of insert ParsedQueries, which update only some columns.
 	// This is when we use a binlog_row_image which is not "full". The key is a serialized bitmap of data columns
 	// which are sent as part of the RowEvent.
+	// partialMu protects PartialInserts and PartialUpdates from concurrent
+	// access when multiple parallel-apply workers process partial-row-image
+	// events for the same table simultaneously. Pointer to avoid copying
+	// the lock when TablePlan values are cloned in buildExecutionPlan.
+	partialMu      *sync.Mutex
 	PartialInserts map[string]*sqlparser.ParsedQuery
 	// PartialUpdates are same as PartialInserts, but for update statements
 	PartialUpdates map[string]*sqlparser.ParsedQuery
@@ -855,6 +987,11 @@ func (tp *TablePlan) applyBulkDeleteChanges(rowDeletes []*binlogdatapb.RowChange
 
 	baseQuerySize := int64(len(tp.MultiDelete.Query))
 	querySize := baseQuerySize
+	// lastQR captures the most recent successful flush. The oversized-row
+	// edge case below can leave pkVals empty at the end of the loop, and
+	// we must not call execQuery on an empty buffer (it would build an
+	// invalid "IN ()" clause). The final check returns lastQR in that case.
+	var lastQR *sqltypes.Result
 
 	execQuery := func(pkVals *[]sqltypes.Value) (*sqltypes.Result, error) {
 		pksBV, err := sqltypes.BuildBindVariable(*pkVals)
@@ -866,7 +1003,12 @@ func (tp *TablePlan) applyBulkDeleteChanges(rowDeletes []*binlogdatapb.RowChange
 			return nil, err
 		}
 		tp.TablePlanBuilder.stats.BulkQueryCount.Add("delete", 1)
-		return executor(query)
+		qr, err := executor(query)
+		if err != nil {
+			return nil, err
+		}
+		lastQR = qr
+		return qr, nil
 	}
 
 	// Derive pkIndex once from the plan, not from per-row vals. PKIndices is sized to
@@ -909,6 +1051,20 @@ func (tp *TablePlan) applyBulkDeleteChanges(rowDeletes []*binlogdatapb.RowChange
 		vals := sqltypes.MakeRowTrusted(tp.Fields, rowDelete.Before)
 		addedSize := int64(len(vals[pkIndex].Raw()) + 2) // Plus 2 for the comma and space
 		if querySize+addedSize > maxQuerySize {
+			// Edge case: a single PK value is large enough to exceed the
+			// query size budget on its own (pkVals is still empty). Flush
+			// it as a one-row query, slightly exceeding maxQuerySize, rather
+			// than flushing an empty pkVals and producing an invalid empty
+			// "IN ()" clause.
+			if len(pkVals) == 0 {
+				pkVals = append(pkVals, vals[pkIndex])
+				if _, err := execQuery(&pkVals); err != nil {
+					return nil, err
+				}
+				pkVals = nil
+				querySize = baseQuerySize
+				continue
+			}
 			if _, err := execQuery(&pkVals); err != nil {
 				return nil, err
 			}
@@ -919,6 +1075,16 @@ func (tp *TablePlan) applyBulkDeleteChanges(rowDeletes []*binlogdatapb.RowChange
 		querySize += addedSize
 	}
 
+	// If pkVals is empty here, every row in this batch was flushed solo via
+	// the oversized-row edge case above. Return the last successful result
+	// instead of calling execQuery on an empty buffer (which would produce
+	// an invalid empty "IN ()" clause).
+	if len(pkVals) == 0 {
+		if lastQR != nil {
+			return lastQR, nil
+		}
+		return &sqltypes.Result{}, nil
+	}
 	return execQuery(&pkVals)
 }
 
@@ -942,12 +1108,23 @@ func (tp *TablePlan) applyBulkInsertChanges(rowInserts []*binlogdatapb.RowChange
 	maxQuerySize -= int64(len(insertPrefix))
 	values := &strings.Builder{}
 
+	// lastQR captures the most recent successful flush. The oversized-row
+	// edge case below can leave the values buffer empty at the end of the
+	// loop, and we must not call execQuery on an empty buffer (it would
+	// build an invalid INSERT with no VALUES). The final check returns
+	// lastQR in that case.
+	var lastQR *sqltypes.Result
 	execQuery := func(vals *strings.Builder) (*sqltypes.Result, error) {
 		if tp.BulkInsertOnDup != nil {
 			vals.WriteString(tp.BulkInsertOnDup.Query)
 		}
 		tp.TablePlanBuilder.stats.BulkQueryCount.Add("insert", 1)
-		return executor(insertPrefix + vals.String())
+		qr, err := executor(insertPrefix + vals.String())
+		if err != nil {
+			return nil, err
+		}
+		lastQR = qr
+		return qr, nil
 	}
 
 	limit := tp.maxRowJSONBytes()
@@ -1002,7 +1179,19 @@ func (tp *TablePlan) applyBulkInsertChanges(rowInserts []*binlogdatapb.RowChange
 		if err := tp.BulkInsertValues.Append(rowValues, bindvars, nil); err != nil {
 			return nil, err
 		}
-		if !newStmt && int64(values.Len()+2+rowValues.Len()) > maxQuerySize { // Plus 2 for the comma and space
+		if int64(values.Len()+2+rowValues.Len()) > maxQuerySize { // Plus 2 for the comma and space
+			// Edge case: a single row's VALUES clause is large enough to
+			// exceed the query size budget on its own (values buffer is
+			// still empty). Flush it as a one-row INSERT, slightly exceeding
+			// maxQuerySize, rather than flushing an empty VALUES buffer and
+			// producing an invalid INSERT with no VALUES.
+			if values.Len() == 0 {
+				if _, err := execQuery(rowValues); err != nil {
+					return nil, err
+				}
+				newStmt = true
+				continue
+			}
 			if _, err := execQuery(values); err != nil {
 				return nil, err
 			}
@@ -1016,6 +1205,16 @@ func (tp *TablePlan) applyBulkInsertChanges(rowInserts []*binlogdatapb.RowChange
 		newStmt = false
 	}
 
+	// If the values buffer is empty here, every row in this batch was flushed
+	// solo via the oversized-row edge case above. Return the last successful
+	// result instead of calling execQuery on an empty buffer (which would
+	// produce an INSERT with no VALUES).
+	if values.Len() == 0 {
+		if lastQR != nil {
+			return lastQR, nil
+		}
+		return &sqltypes.Result{}, nil
+	}
 	return execQuery(values)
 }
 

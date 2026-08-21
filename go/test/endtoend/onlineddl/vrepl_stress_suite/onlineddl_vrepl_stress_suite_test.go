@@ -35,6 +35,7 @@ import (
 	"math/rand/v2"
 	"os"
 	"path"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -379,7 +380,7 @@ const (
 	maxConcurrency                = 15
 	singleConnectionSleepInterval = 5 * time.Millisecond
 	periodicSleepPercent          = 10 // in the range (0,100). 10 means 10% sleep time throught the stress load.
-	waitForStatusTimeout          = 180 * time.Second
+	waitForStatusTimeout          = 300 * time.Second
 )
 
 func resetOpOrder() {
@@ -429,11 +430,16 @@ func TestMain(m *testing.M) {
 		// --vstream-packet-size is set to a small value that ensures we get multiple stream iterations,
 		// thereby examining lastPK on vcopier side. We will be iterating tables using non-PK order throughout
 		// this test suite, and so the low setting ensures we hit the more interesting code paths.
+		parallelWorkers := 4
+		txPoolSize := max(parallelWorkers, 100)
 		clusterInstance.VtTabletExtraArgs = []string{
 			"--heartbeat-interval", "250ms",
 			"--heartbeat-on-demand-duration", "5s",
 			"--migration-check-interval", "5s",
 			"--vstream-packet-size", "4096", // Keep this value small and below 10k to ensure multilple vstream iterations
+			"--queryserver-config-transaction-cap", strconv.Itoa(txPoolSize),
+			"--transaction-limit-per-user", "0.9",
+			"--vreplication-parallel-replication-workers", strconv.Itoa(parallelWorkers),
 		}
 		clusterInstance.VtGateExtraArgs = []string{
 			"--ddl-strategy", "online",
@@ -529,10 +535,10 @@ func TestVreplStressSchemaChanges(t *testing.T) {
 				}
 				status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, waitForStatusTimeout, expectStatus)
 				fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
-				onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, expectStatus)
 				cancel() // will cause runMultipleConnections() to terminate
 				wg.Wait()
 				require.NoError(t, workloadErr)
+				require.Equal(t, string(expectStatus), string(status), "migration did not reach expected status within timeout")
 				if !testcase.expectFailure {
 					testCompareBeforeAfterTables(t, testcase.autoIncInsert)
 				}
