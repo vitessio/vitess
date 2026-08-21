@@ -168,38 +168,117 @@ func (mysqld *Mysqld) executeFetchContext(ctx context.Context, conn *dbconnpool.
 	}
 }
 
-// killConnection issues a MySQL KILL command for the given connection ID.
-func (mysqld *Mysqld) killConnection(connID int64) error {
-	// There's no other interface that both types of connection implement.
-	// We only care about one method anyway.
-	var killConn interface {
-		ExecuteFetch(query string, maxrows int, wantfields bool) (*sqltypes.Result, error)
+// executeFetchDirectContext executes a query on a dedicated (non-pooled)
+// connection, honoring ctx the way executeFetchContext does: if ctx expires,
+// the connection is killed to cancel the in-flight query.
+func (mysqld *Mysqld) executeFetchDirectContext(ctx context.Context, conn *dbconnpool.DBConnection, query string) (*sqltypes.Result, error) {
+	// Fast fail if context is done.
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
 	}
 
-	// Get another connection with which to kill.
-	// Use background context because the caller's context is likely expired,
-	// which is the reason we're being asked to kill the connection.
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	if poolConn, connErr := getPoolReconnect(ctx, mysqld.dbaPool); connErr == nil {
-		// We got a pool connection.
-		defer poolConn.Recycle()
-		killConn = poolConn.Conn
-	} else {
-		// We couldn't get a connection from the pool.
-		// It might be because the connection pool is exhausted,
-		// because some connections need to be killed!
-		// Try to open a new connection without the pool.
-		conn, connErr := mysqld.GetDbaConnection(ctx)
-		if connErr != nil {
-			return connErr
+	// Execute asynchronously so we can select on both it and the context.
+	var qr *sqltypes.Result
+	var executeErr error
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+
+		qr, executeErr = conn.ExecuteFetch(query, 10000, false)
+	}()
+
+	select {
+	case <-done:
+		return qr, executeErr
+	case <-ctx.Done():
+		// If both are done already, we may end up here anyway because select
+		// chooses among multiple ready channels pseudorandomly.
+		// Check the done channel and prefer that one if it's ready.
+		select {
+		case <-done:
+			return qr, executeErr
+		default:
 		}
-		defer conn.Close()
-		killConn = conn
+
+		// The context expired or was canceled.
+		// Try to kill the connection to effectively cancel the ExecuteFetch().
+		connID := conn.ID()
+		log.Info(fmt.Sprintf("Mysqld.executeFetchDirectContext(): killing connID %v due to timeout of query: %v", connID, query))
+		if killErr := mysqld.killConnection(connID); killErr != nil {
+			log.Warn(fmt.Sprintf("Mysqld.executeFetchDirectContext(): failed to kill connID %v: %v", connID, killErr))
+		}
+		// Close the connection before waiting: if the server cannot service
+		// the KILL (it is wedged), closing the socket is what unblocks the
+		// in-flight ExecuteFetch() client-side, so this wait stays bounded.
+		conn.Close()
+		<-done
+		// ExecuteFetch() may have succeeded before we tried to kill it.
+		if executeErr == nil {
+			return qr, executeErr
+		}
+		return nil, ctx.Err()
+	}
+}
+
+// executeSuperQueryListDirectContext executes the queries in order on a
+// dedicated (non-pooled) connection, honoring ctx the way
+// executeFetchDirectContext does.
+func (mysqld *Mysqld) executeSuperQueryListDirectContext(ctx context.Context, conn *dbconnpool.DBConnection, queryList []string) error {
+	const LogQueryLengthLimit = 200
+	for _, query := range queryList {
+		log.Info("exec " + limitString(redactPassword(query), LogQueryLengthLimit))
+		if _, err := mysqld.executeFetchDirectContext(ctx, conn, query); err != nil {
+			msg := fmt.Sprintf("ExecuteFetch(%v) failed: %v", redactPassword(query), redactPassword(err.Error()))
+			log.Error(msg)
+			return &execError{msg: msg, cause: err}
+		}
+	}
+	return nil
+}
+
+// killConnectionTimeout bounds killConnection: both its connect and its KILL
+// execution.
+const killConnectionTimeout = 10 * time.Second
+
+// killConnection issues a MySQL KILL command for the given connection ID. It
+// uses a dedicated connection -- never the DBA pool, whose raw liveness probe
+// could hang on a wedged server and strand a pool slot -- and it bounds its
+// own I/O, so that killing a connection on a wedged server cannot hang its
+// caller either.
+func (mysqld *Mysqld) killConnection(connID int64) error {
+	return mysqld.killConnectionWithTimeout(connID, killConnectionTimeout)
+}
+
+func (mysqld *Mysqld) killConnectionWithTimeout(connID int64, timeout time.Duration) error {
+	// Use a fresh context because the caller's context is likely expired,
+	// which is the reason we're being asked to kill the connection.
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	killConn, err := mysqld.GetDbaConnection(ctx)
+	if err != nil {
+		return err
 	}
 
-	_, err := killConn.ExecuteFetch(fmt.Sprintf("kill %d", connID), 10000, false)
-	return err
+	// Execute asynchronously so we can select on both it and the context. On
+	// expiry, closing the connection unblocks the in-flight ExecuteFetch.
+	var killErr error
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+
+		_, killErr = killConn.ExecuteFetch(fmt.Sprintf("kill %d", connID), 10000, false)
+	}()
+	select {
+	case <-done:
+		killConn.Close()
+		return killErr
+	case <-ctx.Done():
+		killConn.Close()
+		<-done
+		return ctx.Err()
+	}
 }
 
 // fetchVariables returns a map from MySQL variable names to variable value
