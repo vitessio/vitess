@@ -28,6 +28,7 @@
         - [Preparing a statement no longer starts an implicit transaction](#vtgate-prepare-no-implicit-tx)
         - [Stricter validation of SQL-level PREPARE statements](#vtgate-prepare-stricter-validation)
         - [Stricter PROXY protocol v1 header validation](#vtgate-proxy-protocol-v1-strictness)
+        - [Outer joins that preserve a reference table no longer duplicate rows](#vtgate-reference-outer-join-not-merged)
     - **[Reparent](#minor-changes-reparent)**
         - [`EmergencyReparentShard` no longer waits on replicas that cannot win the election](#ers-lagging-relay-log-wait)
         - [`EmergencyReparentShard` can explicitly recover from split brain](#ers-allow-split-brain-promotion)
@@ -269,6 +270,16 @@ Specification-conformant v1 headers, as emitted by HAProxy, AWS load balancers, 
 **Impact**: Deployments whose proxy emits one of the forms above — most notably the nginx stream module proxying between IPv6 clients and IPv4 upstreams — will have those connections rejected before the MySQL handshake. Configure the proxy to emit specification-conformant headers (for nginx, listen on a matching address family or on a v4-mapped socket so addresses are rendered in IPv6 form).
 
 See [#20733](https://github.com/vitessio/vitess/pull/20733) for details.
+
+#### <a id="vtgate-reference-outer-join-not-merged"/>Outer joins that preserve a reference table no longer duplicate rows</a>
+
+An outer join whose preserved side is a reference table is no longer merged into a multi-shard route. A reference table has the same rows on every shard, so a scatter route returned each unmatched preserved row once per shard instead of once. These queries now plan as a join between a route reading the reference table and a route reading the other side, which changes the plan shape and can send more queries than before for the same statement.
+
+The merge still happens when the route reads a single shard, and such a route now runs on an arbitrary shard when its routing resolves to no destination — a unique vindex lookup that finds no mapping, or a `NULL` bind value — so the preserved rows come back with `NULL`s rather than the query returning an empty result.
+
+A multi-table `UPDATE` or `DELETE` whose only target is the other side of the join is also unchanged: it never returns the preserved rows, and an unmatched one has no row to write, so those statements keep the plan they had.
+
+See [#20701](https://github.com/vitessio/vitess/pull/20701) for details.
 
 ### <a id="minor-changes-reparent"/>Reparent</a>
 

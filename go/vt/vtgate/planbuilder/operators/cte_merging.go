@@ -36,17 +36,20 @@ func tryMergeCTE(ctx *plancontext.PlanningContext, seed, term Operator, in *Recu
 		return nil
 	}
 
+	// The routing the merge keeps comes from whichever side is not the dual or reference one, so
+	// half of these take it from the recursive term. mergeCTE has to know: only the term's routing
+	// is rebuilt from a predicate that gets restored afterwards.
 	switch {
 	case a == dual:
-		return mergeCTE(ctx, seedRoute, termRoute, routingB, in, nil)
+		return mergeCTE(ctx, seedRoute, termRoute, routingB, true, in, nil)
 	case b == dual:
-		return mergeCTE(ctx, seedRoute, termRoute, routingA, in, nil)
+		return mergeCTE(ctx, seedRoute, termRoute, routingA, false, in, nil)
 	case !sameKeyspace:
 		return nil
 	case a == anyShard:
-		return mergeCTE(ctx, seedRoute, termRoute, routingB, in, nil)
+		return mergeCTE(ctx, seedRoute, termRoute, routingB, true, in, nil)
 	case b == anyShard:
-		return mergeCTE(ctx, seedRoute, termRoute, routingA, in, nil)
+		return mergeCTE(ctx, seedRoute, termRoute, routingA, false, in, nil)
 	case a == sharded && b == sharded:
 		return tryMergeCTESharded(ctx, seedRoute, termRoute, in)
 	default:
@@ -68,7 +71,7 @@ func tryMergeCTESharded(ctx *plancontext.PlanningContext, seed, term *Route, in 
 			if aVdx == bVdx {
 				equal, conditions := gen4ValuesEqual(ctx, aExpr, bExpr)
 				if equal {
-					return mergeCTE(ctx, seed, term, tblA, in, conditions)
+					return mergeCTE(ctx, seed, term, tblA, false, in, conditions)
 				}
 			}
 		}
@@ -77,7 +80,21 @@ func tryMergeCTESharded(ctx *plancontext.PlanningContext, seed, term *Route, in 
 	return nil
 }
 
-func mergeCTE(ctx *plancontext.PlanningContext, seed, term *Route, r Routing, in *RecurseCTE, conditions []engine.Condition) *Route {
+func mergeCTE(ctx *plancontext.PlanningContext, seed, term *Route, r Routing, routingFromTerm bool, in *RecurseCTE, conditions []engine.Condition) *Route {
+	preserved, canMerge := referenceRowsInvariant(r, false, seed, term)
+	if preserved && routingFromTerm {
+		// The term's routing can be single-shard only because of the recursion's bind predicate,
+		// which the loop below restores to its cross-table shape, and nothing recomputes the routing
+		// afterwards. Rows that a multi-shard route would duplicate do not get to rely on that.
+		// The seed's own routing does not come and go that way, so it is taken at face value.
+		_, sharded := r.(*ShardedRouting)
+		canMerge = canMerge && !sharded
+	}
+	if !canMerge {
+		debugNoRewrite("CTE merge blocked: %s routing cannot honour a route that has to stay single-shard", r.OpCode().String())
+		return nil
+	}
+
 	in.Def.Merged = true
 	hz := in.Horizon
 	hz.Source = term.Source
@@ -97,9 +114,10 @@ func mergeCTE(ctx *plancontext.PlanningContext, seed, term *Route, r Routing, in
 		Distinct:       in.Distinct,
 	}
 	return &Route{
-		Routing:       r,
-		unaryOperator: newUnaryOp(cte),
-		MergedWith:    []*Route{term},
-		Conditions:    conditions,
+		Routing:                r,
+		unaryOperator:          newUnaryOp(cte),
+		MergedWith:             []*Route{term},
+		Conditions:             conditions,
+		PreservesReferenceRows: preserved,
 	}
 }
