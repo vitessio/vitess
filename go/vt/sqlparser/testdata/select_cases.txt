@@ -782,7 +782,7 @@ INPUT
 select * from t1 left join t2 on t1.a=t2.a having not (t2.a <=> t1.a);
 END
 OUTPUT
-select * from t1 left join t2 on t1.a = t2.a having not t2.a <=> t1.a
+select * from t1 left join t2 on t1.a = t2.a having not (t2.a <=> t1.a)
 END
 INPUT
 select format(pi(), NULL);
@@ -1256,7 +1256,7 @@ INPUT
 select * from t1 where not(not(not(a > 10)));
 END
 OUTPUT
-select * from t1 where not not not a > 10
+select * from t1 where not (not (not (a > 10)))
 END
 INPUT
 select 'Glazgo' sounds like 'Liverpool';
@@ -1670,7 +1670,7 @@ INPUT
 select * from t1 where not(a >= 10);
 END
 OUTPUT
-select * from t1 where not a >= 10
+select * from t1 where not (a >= 10)
 END
 INPUT
 select hex(soundex(_utf8 0xD091D092D093));
@@ -5654,7 +5654,7 @@ INPUT
 select * from t1 where not((a < 5 and a < 10) and (not(a > 16) or a > 17));
 END
 OUTPUT
-select * from t1 where not (a < 5 and a < 10 and (not a > 16 or a > 17))
+select * from t1 where not (a < 5 and a < 10 and (not (a > 16) or a > 17))
 END
 INPUT
 select * from t1 where MATCH a,b AGAINST ('"text search" "now support"' IN BOOLEAN MODE);
@@ -6026,7 +6026,7 @@ INPUT
 select ifnull(A=1, 'N') as A, ifnull(B=1, 'N') as B, ifnull(not (A=1), 'N') as nA, ifnull(not (B=1), 'N') as nB, ifnull((A=1) and (B=1), 'N') as AB, ifnull(not ((A=1) and (B=1)), 'N') as `n(AB)`, ifnull((not (A=1) or not (B=1)), 'N') as nAonB, ifnull((A=1) or (B=1), 'N') as AoB, ifnull(not((A=1) or (B=1)), 'N') as `n(AoB)`, ifnull(not (A=1) and not (B=1), 'N') as nAnB from t1;
 END
 OUTPUT
-select ifnull(A = 1, 'N') as A, ifnull(B = 1, 'N') as B, ifnull(not A = 1, 'N') as nA, ifnull(not B = 1, 'N') as nB, ifnull(A = 1 and B = 1, 'N') as AB, ifnull(not (A = 1 and B = 1), 'N') as `n(AB)`, ifnull(not A = 1 or not B = 1, 'N') as nAonB, ifnull(A = 1 or B = 1, 'N') as AoB, ifnull(not (A = 1 or B = 1), 'N') as `n(AoB)`, ifnull(not A = 1 and not B = 1, 'N') as nAnB from t1
+select ifnull(A = 1, 'N') as A, ifnull(B = 1, 'N') as B, ifnull(not (A = 1), 'N') as nA, ifnull(not (B = 1), 'N') as nB, ifnull(A = 1 and B = 1, 'N') as AB, ifnull(not (A = 1 and B = 1), 'N') as `n(AB)`, ifnull(not (A = 1) or not (B = 1), 'N') as nAonB, ifnull(A = 1 or B = 1, 'N') as AoB, ifnull(not (A = 1 or B = 1), 'N') as `n(AoB)`, ifnull(not (A = 1) and not (B = 1), 'N') as nAnB from t1
 END
 INPUT
 select * from (select polygon(t1.a) as p from t1 order by t1.a) d;
@@ -6422,7 +6422,7 @@ INPUT
 select * from t1 where ((a between 5 and 15) and (not(a like 10)));
 END
 OUTPUT
-select * from t1 where a between 5 and 15 and not a like 10
+select * from t1 where a between 5 and 15 and not (a like 10)
 END
 INPUT
 select t1.a, dt.a from t1, lateral (select t2.a as a from t2 having t1.a) dt;
@@ -6998,7 +6998,7 @@ INPUT
 select * from t1 where not(a != 1);
 END
 OUTPUT
-select * from t1 where not a != 1
+select * from t1 where not (a != 1)
 END
 INPUT
 select fld3 FROM t2 order by fld3 desc limit 5,5;
@@ -9692,7 +9692,7 @@ INPUT
 select * from t1 where not a between 2 and 3;
 END
 OUTPUT
-select * from t1 where not a between 2 and 3
+select * from t1 where not (a between 2 and 3)
 END
 INPUT
 select hex(char(0x010203 using ucs2));
@@ -9770,7 +9770,7 @@ INPUT
 select * from t1 where not(a is not null);
 END
 OUTPUT
-select * from t1 where not a is not null
+select * from t1 where not (a is not null)
 END
 INPUT
 select format(pi(), (select 3 from dual));
@@ -14876,7 +14876,7 @@ INPUT
 select * from t1 where not(a is null);
 END
 OUTPUT
-select * from t1 where not a is null
+select * from t1 where not (a is null)
 END
 INPUT
 select table_name, index_type from information_schema.statistics where table_schema = 'test' and table_name = 'tm' and index_name = 'l' order by table_name;
@@ -15170,7 +15170,7 @@ INPUT
 select * from t1 where not((a < 5 or a < 10) and (not(a > 16) or a > 17));
 END
 OUTPUT
-select * from t1 where not ((a < 5 or a < 10) and (not a > 16 or a > 17))
+select * from t1 where not ((a < 5 or a < 10) and (not (a > 16) or a > 17))
 END
 INPUT
 select 1,11,101,1001,10001,100001,1000001,10000001,100000001,1000000001,10000000001,100000000001,1000000000001,10000000000001,100000000000001,1000000000000001,10000000000000001,100000000000000001,1000000000000000001,10000000000000000001;
@@ -15224,7 +15224,7 @@ INPUT
 select * from t1 where a = 2 or not(a < 10);
 END
 OUTPUT
-select * from t1 where a = 2 or not a < 10
+select * from t1 where a = 2 or not (a < 10)
 END
 INPUT
 select grp,group_concat(c order by grp desc) from t1 group by grp order by grp;
@@ -15728,7 +15728,7 @@ INPUT
 select a, not(not(a)) from t1;
 END
 OUTPUT
-select a, not not a from t1
+select a, not (not a) from t1
 END
 INPUT
 select substring_index('aaaaaaaaa1','aaaa',1);
@@ -16880,7 +16880,7 @@ INPUT
 select * from t1 where not(not(not(a < 5) and not(a > 10)));
 END
 OUTPUT
-select * from t1 where not not (not a < 5 and not a > 10)
+select * from t1 where not (not (not (a < 5) and not (a > 10)))
 END
 INPUT
 select min(f3),max(f3) from t1;
@@ -17996,7 +17996,7 @@ INPUT
 select !0,NOT 0=1,!(0=0),1 AND 1,1 && 0,0 OR 1,1 || NULL, 1=1 or 1=1 and 1=0;
 END
 OUTPUT
-select !0, not 0 = 1, !(0 = 0), 1 and 1, 1 and 0, 0 or 1, 1 or null, 1 = 1 or 1 = 1 and 1 = 0 from dual
+select !0, not (0 = 1), !(0 = 0), 1 and 1, 1 and 0, 0 or 1, 1 or null, 1 = 1 or 1 = 1 and 1 = 0 from dual
 END
 INPUT
 select * from t1 left join t2 on (t1.i=t2.i);
@@ -18734,7 +18734,7 @@ INPUT
 select * from t1 where not(a < 10);
 END
 OUTPUT
-select * from t1 where not a < 10
+select * from t1 where not (a < 10)
 END
 INPUT
 select * from t1 where firstname='john' and firstname like binary 'John';
@@ -18950,7 +18950,7 @@ INPUT
 select * from t1 where not(not(a));
 END
 OUTPUT
-select * from t1 where not not a
+select * from t1 where not (not a)
 END
 INPUT
 select bar from t1 having instr(group_concat(bar order by concat(bar,bar) desc), "test2,test1") > 0;
@@ -19346,7 +19346,7 @@ INPUT
 select * from t1 where not(a <= 10);
 END
 OUTPUT
-select * from t1 where not a <= 10
+select * from t1 where not (a <= 10)
 END
 INPUT
 select LAST_DAY('2007-12-06 08:59:19.05') - INTERVAL 1 SECOND;
@@ -20444,7 +20444,7 @@ INPUT
 select * from t1 where not(a > 10);
 END
 OUTPUT
-select * from t1 where not a > 10
+select * from t1 where not (a > 10)
 END
 INPUT
 select * from t1 where word like CAST(0xDF as CHAR);
@@ -21284,7 +21284,7 @@ INPUT
 select * from t1 where not(a = 10);
 END
 OUTPUT
-select * from t1 where not a = 10
+select * from t1 where not (a = 10)
 END
 INPUT
 select TABLE_NAME,COLUMN_NAME,DATA_TYPE,DATETIME_PRECISION from information_schema.columns where TABLE_SCHEMA='mysqltest' order by table_name, column_name;
@@ -22532,7 +22532,7 @@ INPUT
 select * from t1 where a > 5 and not(a > 10);
 END
 OUTPUT
-select * from t1 where a > 5 and not a > 10
+select * from t1 where a > 5 and not (a > 10)
 END
 INPUT
 select _ujis 0xa1a2a1a3 like concat(_ujis'%',_ujis 0xa2a1, _ujis'%');
@@ -22748,7 +22748,7 @@ INPUT
 select * from t1 left join t2 on t1.a=t2.a where not (t2.a <=> t1.a);
 END
 OUTPUT
-select * from t1 left join t2 on t1.a = t2.a where not t2.a <=> t1.a
+select * from t1 left join t2 on t1.a = t2.a where not (t2.a <=> t1.a)
 END
 INPUT
 select 'aa' like 'a%';
