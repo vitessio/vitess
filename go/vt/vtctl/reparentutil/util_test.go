@@ -41,6 +41,7 @@ import (
 
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/proto/vttime"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 )
@@ -2957,6 +2958,84 @@ func TestGetBackupCandidates(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			res := GetBackupCandidates(tt.in, tt.status)
 			require.Equal(t, tt.expected, res)
+		})
+	}
+}
+
+// TestValidateAllTabletsManaged checks the preflight that stops ERS reparenting a shard holding a
+// tablet Vitess cannot revoke writes from. A tablet written before TabletMySQLMode existed reports
+// the MANAGED zero value, so a shard part-way through an upgrade must not trip it.
+func TestValidateAllTabletsManaged(t *testing.T) {
+	t.Parallel()
+
+	tablet := func(uid uint32, mysqlMode topodatapb.TabletMySQLMode) *topo.TabletInfo {
+		return &topo.TabletInfo{Tablet: &topodatapb.Tablet{
+			Alias:     &topodatapb.TabletAlias{Cell: "zone1", Uid: uid},
+			MysqlMode: mysqlMode,
+		}}
+	}
+
+	tests := []struct {
+		name             string
+		tabletMap        map[string]*topo.TabletInfo
+		errShouldContain string
+	}{
+		{
+			name:      "empty shard",
+			tabletMap: map[string]*topo.TabletInfo{},
+		}, {
+			name: "all managed",
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": tablet(100, topodatapb.TabletMySQLMode_MANAGED),
+				"zone1-0000000101": tablet(101, topodatapb.TabletMySQLMode_MANAGED),
+			},
+		}, {
+			// A v24 record carries no mode, which decodes to the MANAGED zero value.
+			name: "mode unset by an older vttablet",
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {Tablet: &topodatapb.Tablet{
+					Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+				}},
+			},
+		}, {
+			// A newer peer can write a mode this build has no name for; protobuf keeps the numeric
+			// value, and anything that is not MANAGED must fail closed.
+			name: "unrecognised mode from a newer peer",
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {Tablet: &topodatapb.Tablet{
+					Alias:     &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+					MysqlMode: topodatapb.TabletMySQLMode(99),
+				}},
+			},
+			errShouldContain: "shard has unmanaged tablets [zone1-0000000100]",
+		}, {
+			name: "one unmanaged tablet",
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": tablet(100, topodatapb.TabletMySQLMode_UNMANAGED),
+				"zone1-0000000101": tablet(101, topodatapb.TabletMySQLMode_MANAGED),
+			},
+			errShouldContain: "shard has unmanaged tablets [zone1-0000000100]",
+		}, {
+			// Sorted, because map iteration order is random.
+			name: "several unmanaged tablets are listed in order",
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000101": tablet(101, topodatapb.TabletMySQLMode_UNMANAGED),
+				"zone1-0000000100": tablet(100, topodatapb.TabletMySQLMode_UNMANAGED),
+			},
+			errShouldContain: "shard has unmanaged tablets [zone1-0000000100 zone1-0000000101]",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			err := ValidateAllTabletsManaged(tt.tabletMap)
+			if tt.errShouldContain == "" {
+				require.NoError(t, err)
+				return
+			}
+			require.ErrorContains(t, err, tt.errShouldContain)
+			assert.Equal(t, vtrpc.Code_FAILED_PRECONDITION, vterrors.Code(err))
 		})
 	}
 }

@@ -211,6 +211,12 @@ func OpenTabletDiscovery() <-chan time.Time {
 	if err := refreshAllInformation(ctx); err != nil {
 		log.Error(fmt.Sprintf("failed to initialize topo information: %+v", err))
 	}
+	// Anything left in database_instance now belongs to a tablet we don't watch. A refresh that
+	// skipped a cell purges that cell's rows too, which is harmless: they're missing from
+	// vitess_tablet either way, so nothing analyses them until the cell returns and they re-probe.
+	if err := inst.ForgetUnwatchedInstances(); err != nil {
+		log.Error(err.Error())
+	}
 	return time.Tick(config.GetTopoInformationRefreshDuration())
 }
 
@@ -346,6 +352,12 @@ func refreshTablets(tablets []*topo.TabletInfo, query string, args []any, loader
 	var wg sync.WaitGroup
 	for _, tabletInfo := range tablets {
 		tablet := tabletInfo.Tablet
+		// Vitess doesn't manage this tablet's MySQL, so keep it out of vitess_tablet entirely.
+		// Skipping latestInstances also forgets one that flips to unmanaged, below. Anything but
+		// MANAGED is skipped, so a mode a newer vttablet knows and this build does not fails closed.
+		if tablet.GetMysqlMode() != topodatapb.TabletMySQLMode_MANAGED {
+			continue
+		}
 		tabletAliasString := topoproto.TabletAliasString(tablet.Alias)
 		latestInstances[tabletAliasString] = true
 		old, err := inst.ReadTablet(tablet.Alias)

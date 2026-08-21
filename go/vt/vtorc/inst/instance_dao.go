@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"regexp"
 	"runtime"
 	"strconv"
@@ -1164,7 +1165,7 @@ func ForgetInstance(tabletAlias *topodatapb.TabletAlias) error {
 	RemoveShardPeerObserver(tabletAliasString)
 
 	// Delete from the 'vitess_tablet' table.
-	_, err := db.ExecVTOrc(`DELETE FROM
+	tabletResult, err := db.ExecVTOrc(`DELETE FROM
 			vitess_tablet
 		WHERE
 			alias = ?`,
@@ -1174,9 +1175,14 @@ func ForgetInstance(tabletAlias *topodatapb.TabletAlias) error {
 		log.Error(err.Error())
 		return err
 	}
+	tabletRows, err := tabletResult.RowsAffected()
+	if err != nil {
+		log.Error(err.Error())
+		return err
+	}
 
 	// Also delete from the 'database_instance' table.
-	sqlResult, err := db.ExecVTOrc(`DELETE FROM
+	instanceResult, err := db.ExecVTOrc(`DELETE FROM
 			database_instance
 		WHERE
 			alias = ?`,
@@ -1186,13 +1192,14 @@ func ForgetInstance(tabletAlias *topodatapb.TabletAlias) error {
 		log.Error(err.Error())
 		return err
 	}
-	// Get the number of rows affected. If they are zero, then we tried to forget an instance that doesn't exist.
-	rows, err := sqlResult.RowsAffected()
+	instanceRows, err := instanceResult.RowsAffected()
 	if err != nil {
 		log.Error(err.Error())
 		return err
 	}
-	if rows == 0 {
+	// A tablet read from the topo but never probed has no database_instance row, so only an
+	// absence from both tables means it was never here.
+	if tabletRows == 0 && instanceRows == 0 {
 		errMsg := fmt.Sprintf("ForgetInstance(): tablet %+v not found", tabletAliasString)
 		log.Error(errMsg)
 		return errors.New(errMsg)
@@ -1202,6 +1209,47 @@ func ForgetInstance(tabletAlias *topodatapb.TabletAlias) error {
 }
 
 // ForgetLongUnseenInstances will remove entries of all instances that have long since been last seen.
+// ForgetUnwatchedInstances removes database_instance rows with no vitess_tablet row, i.e. tablets
+// we no longer watch. OpenTabletDiscovery wipes vitess_tablet on startup but keeps
+// database_instance, so a tablet dropped while VTOrc was down leaves a row the forget path never
+// reaches, and analysis counts replicas straight off database_instance.
+//
+// It skips an empty vitess_tablet, where every alias looks unwatched and this would empty
+// database_instance instead. A refresh that reached no cells returns nil, so the caller can't tell.
+func ForgetUnwatchedInstances() error {
+	var watched int
+	if err := db.QueryVTOrc("SELECT COUNT(*) AS watched FROM vitess_tablet", nil, func(m sqlutils.RowMap) error {
+		watched = m.GetInt("watched")
+		return nil
+	}); err != nil {
+		log.Error(err.Error())
+		return err
+	}
+	if watched == 0 {
+		log.Warn("ForgetUnwatchedInstances: no tablets are being watched, skipping to avoid removing every instance")
+		return nil
+	}
+
+	sqlResult, err := db.ExecVTOrc(`DELETE
+		FROM database_instance
+		WHERE
+			alias NOT IN (SELECT alias FROM vitess_tablet)
+		`)
+	if err != nil {
+		log.Error(err.Error())
+		return err
+	}
+	rows, err := sqlResult.RowsAffected()
+	if err != nil {
+		log.Error(err.Error())
+		return err
+	}
+	if rows > 0 {
+		log.Info("ForgetUnwatchedInstances removed instances no longer watched", slog.Int64("removed", rows))
+	}
+	return nil
+}
+
 func ForgetLongUnseenInstances() error {
 	sqlResult, err := db.ExecVTOrc(`DELETE
 		FROM database_instance

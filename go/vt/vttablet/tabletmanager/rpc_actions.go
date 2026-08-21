@@ -73,7 +73,11 @@ func (tm *TabletManager) GetGlobalStatusVars(ctx context.Context, variables []st
 }
 
 // SetReadOnly makes the mysql instance read-only or read-write.
+// It backs both the SetReadOnly and SetReadWrite RPCs.
 func (tm *TabletManager) SetReadOnly(ctx context.Context, rdonly bool) error {
+	if err := tm.checkIsManaged(); err != nil {
+		return err
+	}
 	if err := tm.lock(ctx); err != nil {
 		return err
 	}
@@ -126,9 +130,16 @@ func (tm *TabletManager) ChangeType(ctx context.Context, tabletType topodatapb.T
 	}
 	defer tm.unlock()
 
-	semiSyncAction, err := tm.convertBoolToSemiSyncAction(ctx, semiSync)
-	if err != nil {
-		return err
+	// An unmanaged tablet gets a topo-only change: a semi-sync action would let
+	// fixSemiSyncAndReplication restart replication on a MySQL we don't manage. External
+	// reparents ask for PRIMARY, which that func skips anyway, so they lose nothing.
+	semiSyncAction := SemiSyncActionNone
+	if tm.mysqlMode != topodatapb.TabletMySQLMode_UNMANAGED {
+		var err error
+		semiSyncAction, err = tm.convertBoolToSemiSyncAction(ctx, semiSync)
+		if err != nil {
+			return err
+		}
 	}
 
 	return tm.changeTypeLocked(ctx, tabletType, DBActionNone, semiSyncAction)

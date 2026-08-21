@@ -247,6 +247,9 @@ func (tm *TabletManager) WaitForPosition(ctx context.Context, pos string) error 
 // replication or not (using hook if not).
 func (tm *TabletManager) StopReplication(ctx context.Context) error {
 	log.Info("StopReplication")
+	if err := tm.checkIsManaged(); err != nil {
+		return err
+	}
 	if err := tm.waitForGrantsToHaveApplied(ctx); err != nil {
 		return err
 	}
@@ -271,6 +274,9 @@ func (tm *TabletManager) stopIOThreadLocked(ctx context.Context) error {
 // replication or not (using hook if not).
 func (tm *TabletManager) StopReplicationMinimum(ctx context.Context, position string, waitTime time.Duration) (string, error) {
 	log.Info(fmt.Sprintf("StopReplicationMinimum: position: %v waitTime: %v", position, waitTime))
+	if err := tm.checkIsManaged(); err != nil {
+		return "", err
+	}
 	if err := tm.waitForGrantsToHaveApplied(ctx); err != nil {
 		return "", err
 	}
@@ -302,6 +308,9 @@ func (tm *TabletManager) StopReplicationMinimum(ctx context.Context, position st
 // replication or not (using hook if not).
 func (tm *TabletManager) StartReplication(ctx context.Context, semiSync bool) error {
 	log.Info("StartReplication")
+	if err := tm.checkIsManaged(); err != nil {
+		return err
+	}
 	if err := tm.waitForGrantsToHaveApplied(ctx); err != nil {
 		return err
 	}
@@ -324,6 +333,9 @@ func (tm *TabletManager) StartReplication(ctx context.Context, semiSync bool) er
 // RestartReplication will stop replication and then start it again
 func (tm *TabletManager) RestartReplication(ctx context.Context, semiSync bool) error {
 	log.Info("RestartReplication")
+	if err := tm.checkIsManaged(); err != nil {
+		return err
+	}
 	if err := tm.waitForGrantsToHaveApplied(ctx); err != nil {
 		return err
 	}
@@ -365,6 +377,9 @@ func (tm *TabletManager) RestartReplication(ctx context.Context, semiSync bool) 
 // until and including the transactions in `position`
 func (tm *TabletManager) StartReplicationUntilAfter(ctx context.Context, position string, waitTime time.Duration) error {
 	log.Info(fmt.Sprintf("StartReplicationUntilAfter: position: %v waitTime: %v", position, waitTime))
+	if err := tm.checkIsManaged(); err != nil {
+		return err
+	}
 	if err := tm.waitForGrantsToHaveApplied(ctx); err != nil {
 		return err
 	}
@@ -396,6 +411,9 @@ func (tm *TabletManager) GetReplicas(ctx context.Context) ([]string, error) {
 // All binary and relay logs are flushed. All replication positions are reset.
 func (tm *TabletManager) ResetReplication(ctx context.Context) error {
 	log.Info("ResetReplication")
+	if err := tm.checkIsManaged(); err != nil {
+		return err
+	}
 	if err := tm.waitForGrantsToHaveApplied(ctx); err != nil {
 		return err
 	}
@@ -410,6 +428,9 @@ func (tm *TabletManager) ResetReplication(ctx context.Context) error {
 // InitPrimary enables writes and returns the replication position.
 func (tm *TabletManager) InitPrimary(ctx context.Context, semiSync bool) (string, error) {
 	log.Info(fmt.Sprintf("InitPrimary with semiSync as %t", semiSync))
+	if err := tm.checkIsManaged(); err != nil {
+		return "", err
+	}
 	if err := tm.waitForGrantsToHaveApplied(ctx); err != nil {
 		return "", err
 	}
@@ -467,6 +488,9 @@ func (tm *TabletManager) InitPrimary(ctx context.Context, semiSync bool) (string
 // PopulateReparentJournal adds an entry into the reparent_journal table.
 func (tm *TabletManager) PopulateReparentJournal(ctx context.Context, timeCreatedNS int64, actionName string, primaryAlias *topodatapb.TabletAlias, position string) error {
 	log.Info(fmt.Sprintf("PopulateReparentJournal: action: %v parent: %v  position: %v timeCreatedNS: %d actionName: %s primaryAlias: %s", actionName, primaryAlias, position, timeCreatedNS, actionName, primaryAlias))
+	if err := tm.checkIsManaged(); err != nil {
+		return err
+	}
 	if err := tm.waitForGrantsToHaveApplied(ctx); err != nil {
 		return err
 	}
@@ -502,6 +526,9 @@ func (tm *TabletManager) ReadReparentJournalInfo(ctx context.Context) (int32, er
 // reparent_journal table entry up to context timeout
 func (tm *TabletManager) InitReplica(ctx context.Context, parent *topodatapb.TabletAlias, position string, timeCreatedNS int64, semiSync bool) error {
 	log.Info(fmt.Sprintf("InitReplica: parent: %v  position: %v  timeCreatedNS: %d  semisync: %t", parent, position, timeCreatedNS, semiSync))
+	if err := tm.checkIsManaged(); err != nil {
+		return err
+	}
 	if err := tm.waitForGrantsToHaveApplied(ctx); err != nil {
 		return err
 	}
@@ -588,6 +615,9 @@ func init() {
 // If a step fails in the middle, it will try to undo any changes it made.
 func (tm *TabletManager) DemotePrimary(ctx context.Context, force bool) (*replicationdatapb.PrimaryStatus, error) {
 	log.Info("demoting primary", slog.Bool("force", force))
+	if err := tm.checkIsManaged(); err != nil {
+		return nil, err
+	}
 	if err := tm.waitForGrantsToHaveApplied(ctx); err != nil {
 		return nil, err
 	}
@@ -809,6 +839,9 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 // and returns its primary position.
 func (tm *TabletManager) UndoDemotePrimary(ctx context.Context, semiSync bool) error {
 	log.Info("UndoDemotePrimary")
+	if err := tm.checkIsManaged(); err != nil {
+		return err
+	}
 	if err := tm.waitForGrantsToHaveApplied(ctx); err != nil {
 		return err
 	}
@@ -874,6 +907,9 @@ func (tm *TabletManager) ReplicaWasPromoted(ctx context.Context) error {
 // ResetReplicationParameters resets the replica replication parameters
 func (tm *TabletManager) ResetReplicationParameters(ctx context.Context) error {
 	log.Info("ResetReplicationParameters")
+	if err := tm.checkIsManaged(); err != nil {
+		return err
+	}
 	if err := tm.waitForGrantsToHaveApplied(ctx); err != nil {
 		return err
 	}
@@ -898,6 +934,9 @@ func (tm *TabletManager) ResetReplicationParameters(ctx context.Context) error {
 // reparent_journal table entry up to context timeout
 func (tm *TabletManager) SetReplicationSource(ctx context.Context, parentAlias *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplication bool, semiSync bool, heartbeatInterval float64) error {
 	log.Info(fmt.Sprintf("SetReplicationSource: parent: %v  position: %s force: %v semiSync: %v timeCreatedNS: %d", parentAlias, waitPosition, forceStartReplication, semiSync, timeCreatedNS))
+	if err := tm.checkIsManaged(); err != nil {
+		return err
+	}
 	if err := tm.waitForGrantsToHaveApplied(ctx); err != nil {
 		return err
 	}
@@ -1091,6 +1130,9 @@ func (tm *TabletManager) ReplicaWasRestarted(ctx context.Context, parent *topoda
 // current status.
 func (tm *TabletManager) StopReplicationAndGetStatus(ctx context.Context, stopReplicationMode replicationdatapb.StopReplicationMode) (StopReplicationAndGetStatusResponse, error) {
 	log.Info(fmt.Sprintf("StopReplicationAndGetStatus: mode: %v", stopReplicationMode))
+	if err := tm.checkIsManaged(); err != nil {
+		return StopReplicationAndGetStatusResponse{}, err
+	}
 	if err := tm.waitForGrantsToHaveApplied(ctx); err != nil {
 		return StopReplicationAndGetStatusResponse{}, err
 	}
@@ -1188,6 +1230,9 @@ type StopReplicationAndGetStatusResponse struct {
 // PromoteReplica makes the current tablet the primary
 func (tm *TabletManager) PromoteReplica(ctx context.Context, semiSync bool) (string, error) {
 	log.Info("PromoteReplica")
+	if err := tm.checkIsManaged(); err != nil {
+		return "", err
+	}
 	if err := tm.waitForGrantsToHaveApplied(ctx); err != nil {
 		return "", err
 	}
@@ -1427,6 +1472,26 @@ func (tm *TabletManager) handleRecoverableReplicationInitError(ctx context.Conte
 		return nil
 	}
 	return err
+}
+
+// isReparentingDisabled reports whether this vttablet must leave its MySQL's replication alone. It
+// checks tm.mysqlMode as well as the older global, since --unmanaged via --tablet-config never
+// reaches Verify() and so never sets it (see cli.initConfig).
+//
+// Comparing against UNMANAGED is safe here, unlike in the callers reading another tablet's record:
+// tm.mysqlMode comes from our own config, so it only holds a mode this build knows.
+func (tm *TabletManager) isReparentingDisabled() bool {
+	return mysqlctl.DisableActiveReparents || tm.mysqlMode == topodatapb.TabletMySQLMode_UNMANAGED
+}
+
+// checkIsManaged returns an error when this vttablet was started with --unmanaged, so that RPCs
+// writing to replication state refuse. Read-only RPCs and ChangeType stay available.
+func (tm *TabletManager) checkIsManaged() error {
+	if tm.mysqlMode == topodatapb.TabletMySQLMode_UNMANAGED {
+		return vterrors.New(vtrpc.Code_FAILED_PRECONDITION,
+			"tablet is unmanaged (started with --unmanaged), replication and reparent operations are not allowed")
+	}
+	return nil
 }
 
 // waitForGrantsToHaveApplied wait for the grants to have applied for.

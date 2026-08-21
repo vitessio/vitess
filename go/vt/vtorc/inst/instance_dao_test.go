@@ -1263,3 +1263,135 @@ func TestErrantGTIDCountGaugeIsResetWhenResolved(t *testing.T) {
 	require.EqualValues(t, 0, currentErrantGTIDCount.Counts()[replicaAlias],
 		"gauge should be reset to 0 after errant GTIDs are resolved")
 }
+
+// TestForgetInstanceTopologyOnlyTablet checks that forgetting a tablet VTOrc read from the topo
+// but never probed reports success. It has no database_instance row, and treating that as
+// "not found" logged an error and skipped the audit for a removal that actually happened.
+func TestForgetInstanceTopologyOnlyTablet(t *testing.T) {
+	InitializeForgetAliasesCache()
+	oldCache := forgetAliases
+	t.Cleanup(func() {
+		forgetAliases = oldCache
+		db.ClearVTOrcDatabase()
+	})
+	forgetAliases = cache.New(time.Minute, time.Minute)
+	db.ClearVTOrcDatabase()
+
+	tablet := &topodatapb.Tablet{
+		Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 500},
+		Hostname:      "localhost",
+		Keyspace:      "external",
+		Shard:         "0",
+		Type:          topodatapb.TabletType_REPLICA,
+		MysqlHostname: "localhost",
+		MysqlPort:     500,
+	}
+	require.NoError(t, SaveTablet(tablet))
+	_, err := ReadTablet(tablet.Alias)
+	require.NoError(t, err, "tablet must be present before forgetting it")
+
+	require.NoError(t, ForgetInstance(tablet.Alias))
+
+	_, err = ReadTablet(tablet.Alias)
+	require.EqualError(t, err, ErrTabletAliasNil.Error(), "tablet must be gone after forgetting it")
+	require.True(t, InstanceIsForgotten(tablet.Alias))
+}
+
+// TestForgetInstanceUnknownTablet checks that a tablet in neither table is still reported as
+// not found, so the fix above does not turn every bogus forget into a silent success.
+func TestForgetInstanceUnknownTablet(t *testing.T) {
+	InitializeForgetAliasesCache()
+	oldCache := forgetAliases
+	t.Cleanup(func() {
+		forgetAliases = oldCache
+		db.ClearVTOrcDatabase()
+	})
+	forgetAliases = cache.New(time.Minute, time.Minute)
+	db.ClearVTOrcDatabase()
+
+	alias := &topodatapb.TabletAlias{Cell: "zone1", Uid: 501}
+	require.ErrorContains(t, ForgetInstance(alias), "not found")
+}
+
+// TestForgetUnwatchedInstances checks the startup purge that removes database_instance rows with
+// no vitess_tablet row. OpenTabletDiscovery clears vitess_tablet but keeps database_instance, so a
+// tablet that stopped being watched while VTOrc was down would otherwise leave a row that the
+// forget path never reaches and that the analysis query still counts as a replica.
+func TestForgetUnwatchedInstances(t *testing.T) {
+	t.Cleanup(func() { db.ClearVTOrcDatabase() })
+	db.ClearVTOrcDatabase()
+
+	watched := &topodatapb.Tablet{
+		Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 600},
+		Hostname:      "localhost",
+		Keyspace:      "ks",
+		Shard:         "0",
+		Type:          topodatapb.TabletType_REPLICA,
+		MysqlHostname: "localhost",
+		MysqlPort:     600,
+	}
+	require.NoError(t, SaveTablet(watched))
+
+	// Two instance rows: one for the watched tablet, one orphaned by a tablet we no longer watch.
+	for _, alias := range []string{"zone1-0000000600", "zone1-0000000601"} {
+		_, err := db.ExecVTOrc(`INSERT INTO database_instance
+			(alias, hostname, port, tablet_type, cell, last_checked, last_seen, server_id, version,
+			 binlog_format, log_bin, log_replica_updates, binary_log_file, binary_log_pos,
+			 source_host, source_port, replica_net_timeout, heartbeat_interval,
+			 replica_sql_running, replica_io_running, source_log_file, read_source_log_pos,
+			 relay_source_log_file, exec_source_log_pos, read_only, last_check_partial_success)
+			VALUES (?, 'localhost',600,2,'zone1', DATETIME('now'), DATETIME('now'), 600,'8.0.40',
+			 'ROW',1,1,'binlog.1',100, '',0,60,1.0, 1,1,'',0, '',0,1,0)`, alias)
+		require.NoError(t, err)
+	}
+	require.Equal(t, 2, countDatabaseInstanceRows(t))
+
+	require.NoError(t, ForgetUnwatchedInstances())
+
+	// Only the orphan is removed.
+	require.Equal(t, 1, countDatabaseInstanceRows(t))
+	var remaining string
+	require.NoError(t, db.QueryVTOrc("select alias from database_instance", nil, func(m sqlutils.RowMap) error {
+		remaining = m.GetString("alias")
+		return nil
+	}))
+	require.Equal(t, "zone1-0000000600", remaining)
+
+	// Idempotent: a second run has nothing left to do and must not error.
+	require.NoError(t, ForgetUnwatchedInstances())
+	require.Equal(t, 1, countDatabaseInstanceRows(t))
+}
+
+func countDatabaseInstanceRows(t *testing.T) int {
+	t.Helper()
+	n := 0
+	require.NoError(t, db.QueryVTOrc("select count(*) as c from database_instance", nil, func(m sqlutils.RowMap) error {
+		n = m.GetInt("c")
+		return nil
+	}))
+	return n
+}
+
+// TestForgetUnwatchedInstancesEmptyTabletTable checks the purge declines to run while no tablets
+// are watched. Every alias looks unwatched in that state, so acting on it would empty
+// database_instance. OpenTabletDiscovery wipes vitess_tablet before repopulating it, and a refresh
+// that reaches no cells logs the failure and returns nil, so this cannot be left to the caller.
+func TestForgetUnwatchedInstancesEmptyTabletTable(t *testing.T) {
+	t.Cleanup(func() { db.ClearVTOrcDatabase() })
+	db.ClearVTOrcDatabase()
+
+	_, err := db.ExecVTOrc(`INSERT INTO database_instance
+		(alias, hostname, port, tablet_type, cell, last_checked, last_seen, server_id, version,
+		 binlog_format, log_bin, log_replica_updates, binary_log_file, binary_log_pos,
+		 source_host, source_port, replica_net_timeout, heartbeat_interval,
+		 replica_sql_running, replica_io_running, source_log_file, read_source_log_pos,
+		 relay_source_log_file, exec_source_log_pos, read_only, last_check_partial_success)
+		VALUES ('zone1-0000000700','localhost',700,2,'zone1', DATETIME('now'), DATETIME('now'), 700,'8.0.40',
+		 'ROW',1,1,'binlog.1',100, '',0,60,1.0, 1,1,'',0, '',0,1,0)`)
+	require.NoError(t, err)
+	require.Equal(t, 1, countDatabaseInstanceRows(t))
+
+	require.NoError(t, ForgetUnwatchedInstances())
+	require.Equal(t, 1, countDatabaseInstanceRows(t),
+		"with nothing watched the purge must leave database_instance alone")
+}

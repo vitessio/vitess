@@ -39,12 +39,14 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/semisyncmonitor"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver"
 	"vitess.io/vitess/go/vt/vttablet/tabletservermock"
 
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 func newTestReplicationTM(tablet *topodatapb.Tablet, mysqlDaemon mysqlctl.MysqlDaemon, ts *topo.Server) *TabletManager {
@@ -1652,4 +1654,225 @@ func TestShardPeerHealthSnapshot(t *testing.T) {
 	snap := tm.shardPeerHealthSnapshot()
 	require.Len(t, snap, 1)
 	assert.Equal(t, int64(1), snap[0].ConsecutivePingFailures)
+}
+
+// guardedReplicationRPCs are the RPCs an unmanaged tablet must refuse, because each one changes
+// replication on a MySQL we don't manage, or promotes or demotes it. Deliberately absent are the
+// read-only RPCs, and the topo-only ones the external reparent flows use: ChangeType,
+// ReplicaWasPromoted and ReplicaWasRestarted, none of which touch MySQL.
+func guardedReplicationRPCs(tm *TabletManager, ctx context.Context) map[string]func() error {
+	return map[string]func() error{
+		// Backs both the SetReadOnly and SetReadWrite RPCs, which vtadmin exposes as a button.
+		"SetReadOnly":            func() error { return tm.SetReadOnly(ctx, true) },
+		"SetReadWrite":           func() error { return tm.SetReadOnly(ctx, false) },
+		"StopReplication":        func() error { return tm.StopReplication(ctx) },
+		"StopReplicationMinimum": func() error { _, err := tm.StopReplicationMinimum(ctx, "", 0); return err },
+		"StartReplication":       func() error { return tm.StartReplication(ctx, false) },
+		"RestartReplication":     func() error { return tm.RestartReplication(ctx, false) },
+		"StartReplicationUntilAfter": func() error {
+			return tm.StartReplicationUntilAfter(ctx, "", 0)
+		},
+		"ResetReplication": func() error { return tm.ResetReplication(ctx) },
+		"InitPrimary":      func() error { _, err := tm.InitPrimary(ctx, false); return err },
+		"PopulateReparentJournal": func() error {
+			return tm.PopulateReparentJournal(ctx, 0, "action", nil, "")
+		},
+		"InitReplica":                func() error { return tm.InitReplica(ctx, nil, "", 0, false) },
+		"DemotePrimary":              func() error { _, err := tm.DemotePrimary(ctx, false); return err },
+		"UndoDemotePrimary":          func() error { return tm.UndoDemotePrimary(ctx, false) },
+		"ResetReplicationParameters": func() error { return tm.ResetReplicationParameters(ctx) },
+		"SetReplicationSource": func() error {
+			return tm.SetReplicationSource(ctx, nil, 0, "", false, false, 0)
+		},
+		"StopReplicationAndGetStatus": func() error {
+			_, err := tm.StopReplicationAndGetStatus(ctx, replicationdatapb.StopReplicationMode_IOANDSQLTHREAD)
+			return err
+		},
+		"PromoteReplica": func() error { _, err := tm.PromoteReplica(ctx, false); return err },
+	}
+}
+
+// newUnstartedReplicationTM builds a TabletManager whose grants have deliberately NOT been
+// applied, so a guarded RPC that gets past the unmanaged check stalls on the context instead of
+// doing real work. It still gets a fake MysqlDaemon, because not every guarded RPC waits for
+// grants -- SetReadOnly goes straight for MySQL, and a nil daemon would panic rather than fail.
+func newUnstartedReplicationTM(t *testing.T, mysqlMode topodatapb.TabletMySQLMode) *TabletManager {
+	t.Helper()
+
+	fakeDb := newTestMysqlDaemon(t, 1)
+	tm := &TabletManager{
+		actionSema:             semaphore.NewWeighted(1),
+		MysqlDaemon:            fakeDb,
+		QueryServiceControl:    tabletservermock.NewController(),
+		SemiSyncMonitor:        semisyncmonitor.CreateTestSemiSyncMonitor(fakeDb.DB(), exporter),
+		_waitForGrantsComplete: make(chan struct{}),
+		mysqlMode:              mysqlMode,
+		tmState: &tmState{
+			displayState: displayState{
+				tablet: &topodatapb.Tablet{
+					Alias: &topodatapb.TabletAlias{Cell: "cell1", Uid: 100},
+				},
+			},
+		},
+	}
+	return tm
+}
+
+// TestUnmanagedTabletRejectsReplicationRPCs checks that a vttablet started with --unmanaged
+// refuses every RPC that would reconfigure the replication of its external MySQL, and that it
+// refuses before taking the action semaphore or touching MySQL at all.
+func TestUnmanagedTabletRejectsReplicationRPCs(t *testing.T) {
+	// The guard returns before anything blocks, so this deadline is only a safety net against a
+	// regression that lets a call through to the never-closed grants channel.
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+	defer cancel()
+
+	tm := newUnstartedReplicationTM(t, topodatapb.TabletMySQLMode_UNMANAGED)
+
+	for name, call := range guardedReplicationRPCs(tm, ctx) {
+		t.Run(name, func(t *testing.T) {
+			err := call()
+			require.ErrorContains(t, err, "tablet is unmanaged")
+			assert.Equal(t, vtrpc.Code_FAILED_PRECONDITION, vterrors.Code(err))
+
+			// The guard runs before tm.lock(), so the action semaphore was never taken.
+			require.True(t, tm.actionSema.TryAcquire(1), "%s acquired the action semaphore", name)
+			tm.actionSema.Release(1)
+		})
+	}
+}
+
+// TestManagedTabletAllowsReplicationRPCs is the other half of the guard: a managed tablet must be
+// left alone. MANAGED is the zero value, which is also what a vttablet too old to set the field
+// leaves behind, so this doubles as the check that an upgrade does not stop managing replication.
+func TestManagedTabletAllowsReplicationRPCs(t *testing.T) {
+	for _, mode := range []topodatapb.TabletMySQLMode{
+		topodatapb.TabletMySQLMode_MANAGED,
+	} {
+		t.Run(mode.String(), func(t *testing.T) {
+			require.Zero(t, mode, "MANAGED must stay the zero value so an absent mode reads as managed")
+			// Already cancelled: every call here is expected to get past the guard and then stop
+			// on the context, so cancelling up front makes that immediate and deterministic
+			// rather than waiting out a deadline.
+			ctx, cancel := context.WithCancel(t.Context())
+			cancel()
+
+			tm := newUnstartedReplicationTM(t, mode)
+
+			for name, call := range guardedReplicationRPCs(tm, ctx) {
+				t.Run(name, func(t *testing.T) {
+					// What each RPC does after the guard differs, and several of them fail for
+					// their own reasons against a fake daemon. The only property under test is
+					// that the unmanaged guard did not fire.
+					err := call()
+					if err != nil {
+						require.NotContains(t, err.Error(), "tablet is unmanaged",
+							"guard fired for mode %v", mode)
+					}
+				})
+			}
+		})
+	}
+}
+
+// TestChangeTypeUnmanagedIsTopoOnly checks that ChangeType stays available on an unmanaged tablet,
+// which TabletExternallyReparented needs, but only moves the topo record. With a semi-sync action
+// fixSemiSyncAndReplication reconfigures semi-sync and can stop and restart replication on a MySQL
+// Vitess does not manage, so an unmanaged tablet must always resolve to SemiSyncActionNone.
+func TestChangeTypeUnmanagedIsTopoOnly(t *testing.T) {
+	tests := []struct {
+		name              string
+		mode              topodatapb.TabletMySQLMode
+		tabletType        topodatapb.TabletType
+		wantSemiSyncTouch bool
+	}{
+		{
+			name:              "unmanaged replica-typed change leaves MySQL alone",
+			mode:              topodatapb.TabletMySQLMode_UNMANAGED,
+			tabletType:        topodatapb.TabletType_RDONLY,
+			wantSemiSyncTouch: false,
+		}, {
+			// The external reparent path. It is already safe because fixSemiSyncAndReplication
+			// returns early for PRIMARY, so forcing the action to None costs it nothing.
+			name:              "unmanaged promotion to primary still works",
+			mode:              topodatapb.TabletMySQLMode_UNMANAGED,
+			tabletType:        topodatapb.TabletType_PRIMARY,
+			wantSemiSyncTouch: false,
+		}, {
+			// Control: without the unmanaged guard the same call does reach MySQL.
+			name:              "managed replica-typed change still fixes semi-sync",
+			mode:              topodatapb.TabletMySQLMode_MANAGED,
+			tabletType:        topodatapb.TabletType_RDONLY,
+			wantSemiSyncTouch: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := t.Context()
+			ts := memorytopo.NewServer(ctx, "cell1")
+			t.Cleanup(func() { ts.Close() })
+
+			tm := newTestTM(t, ts, 1, "ks", "0", nil)
+			t.Cleanup(tm.Stop)
+
+			fakeDb, ok := tm.MysqlDaemon.(*mysqlctl.FakeMysqlDaemon)
+			require.True(t, ok)
+			fakeDb.SemiSyncPrimaryEnabled = true
+			fakeDb.SemiSyncReplicaEnabled = true
+			tm.mysqlMode = tt.mode
+
+			require.NoError(t, tm.ChangeType(ctx, tt.tabletType, false))
+			assert.Equal(t, tt.tabletType, tm.Tablet().Type, "the topo record must always change type")
+
+			semiSyncTouched := !fakeDb.SemiSyncPrimaryEnabled || !fakeDb.SemiSyncReplicaEnabled
+			assert.Equal(t, tt.wantSemiSyncTouch, semiSyncTouched,
+				"semi-sync state on the external MySQL")
+		})
+	}
+}
+
+// TestReparentingDisabledForYAMLUnmanagedTablet covers --unmanaged supplied through
+// --tablet-config rather than the flag. cli.initConfig runs config.Verify() before it unmarshals
+// the YAML, so that path never sets mysqlctl.DisableActiveReparents, and the internal paths that
+// touch replication at startup and during shard sync must fall back on tm.mysqlMode instead.
+func TestReparentingDisabledForYAMLUnmanagedTablet(t *testing.T) {
+	// The global stays false throughout, which is exactly the YAML-configured case.
+	require.False(t, mysqlctl.DisableActiveReparents, "test assumes the global is unset")
+
+	tests := []struct {
+		name      string
+		mysqlMode topodatapb.TabletMySQLMode
+		want      bool
+	}{
+		{
+			name:      "unmanaged tablet leaves replication alone",
+			mysqlMode: topodatapb.TabletMySQLMode_UNMANAGED,
+			want:      true,
+		}, {
+			name:      "managed tablet still manages replication",
+			mysqlMode: topodatapb.TabletMySQLMode_MANAGED,
+			want:      false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tm := &TabletManager{mysqlMode: tt.mysqlMode}
+			assert.Equal(t, tt.want, tm.isReparentingDisabled())
+		})
+	}
+}
+
+// TestReparentingDisabledByGlobal checks the older signal still counts on its own, so a managed
+// tablet started with --disable-active-reparents keeps the behaviour it has always had.
+func TestReparentingDisabledByGlobal(t *testing.T) {
+	old := mysqlctl.DisableActiveReparents
+	t.Cleanup(func() { mysqlctl.DisableActiveReparents = old })
+
+	tm := &TabletManager{mysqlMode: topodatapb.TabletMySQLMode_MANAGED}
+	require.False(t, tm.isReparentingDisabled())
+
+	mysqlctl.DisableActiveReparents = true
+	assert.True(t, tm.isReparentingDisabled())
 }
