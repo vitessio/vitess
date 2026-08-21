@@ -37,6 +37,7 @@ import (
 
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/grpcclient"
+	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -45,6 +46,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
 	"vitess.io/vitess/go/vt/vttablet/tabletconntest"
 
+	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
@@ -279,6 +281,191 @@ func TestHealthCheck(t *testing.T) {
 	// remove tablet
 	hc.deleteTablet(tablet)
 	testChecksum(t, 0, hc.stateChecksum())
+}
+
+// TestHealthCheckConcurrentReadDuringUpdate exercises GetTabletHealthByAlias
+// (which copies the tablet's health fields under connMu via SimpleCopy) while
+// the tablet's checkConn goroutine processes streaming health responses. The
+// field writes in processResponse must hold connMu, otherwise this reports a
+// data race under -race.
+func TestHealthCheckConcurrentReadDuringUpdate(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+	hcErrorCounters.ResetAll()
+	ts := memorytopo.NewServer(ctx, "cell")
+	defer ts.Close()
+	hc := createTestHc(ctx, ts)
+	defer hc.Close()
+	tablet := createTestTablet(0, "cell", "a")
+	tablet.Type = topodatapb.TabletType_REPLICA
+	input := make(chan *querypb.StreamHealthResponse)
+	_ = createFakeConn(tablet, input)
+	hc.AddTablet(tablet)
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+	stop := make(chan struct{})
+
+	// Writer: drive processResponse repeatedly through the checkConn goroutine.
+	go func() {
+		defer wg.Done()
+		for i := 0; ; i++ {
+			shr := &querypb.StreamHealthResponse{
+				TabletAlias:   tablet.Alias,
+				Target:        &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+				Serving:       i%2 == 0,
+				RealtimeStats: &querypb.RealtimeStats{ReplicationLagSeconds: uint32(i % 5)},
+			}
+			select {
+			case input <- shr:
+			case <-stop:
+				return
+			}
+		}
+	}()
+
+	// Reader: copy the same fields under connMu via SimpleCopy.
+	go func() {
+		defer wg.Done()
+		for {
+			select {
+			case <-stop:
+				return
+			default:
+				_, _ = hc.GetTabletHealthByAlias(tablet.Alias)
+			}
+		}
+	}()
+
+	time.Sleep(200 * time.Millisecond)
+	close(stop)
+	wg.Wait()
+}
+
+// TestTabletConnectionConcurrentWithStreamClose exercises TabletConnection,
+// which reads thc.Conn, while the tablet's checkConn goroutine repeatedly
+// closes and re-dials the connection on stream errors. closeConnection and
+// finalizeConn write thc.Conn under connMu, so TabletConnection must read it
+// under connMu too, otherwise this reports a data race under -race.
+func TestTabletConnectionConcurrentWithStreamClose(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+	hcErrorCounters.ResetAll()
+	ts := memorytopo.NewServer(ctx, "cell")
+	defer ts.Close()
+	hc := createTestHc(ctx, ts)
+	defer hc.Close()
+	tablet := createTestTablet(0, "cell", "a")
+	tablet.Type = topodatapb.TabletType_REPLICA
+	input := make(chan *querypb.StreamHealthResponse)
+	fc := createFakeConn(tablet, input)
+	fc.errCh = make(chan error)
+	hc.AddTablet(tablet)
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+	stop := make(chan struct{})
+
+	// Writer: alternate a health response with a stream error so the checkConn
+	// goroutine repeatedly closes and re-dials the connection.
+	go func() {
+		defer wg.Done()
+		shr := &querypb.StreamHealthResponse{
+			TabletAlias:   tablet.Alias,
+			Target:        &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+			Serving:       true,
+			RealtimeStats: &querypb.RealtimeStats{ReplicationLagSeconds: 1},
+		}
+		for {
+			select {
+			case input <- shr:
+			case <-stop:
+				return
+			}
+			select {
+			case fc.errCh <- errors.New("some stream error"):
+			case <-stop:
+				return
+			}
+		}
+	}()
+
+	// Reader: read thc.Conn through TabletConnection.
+	go func() {
+		defer wg.Done()
+		for {
+			select {
+			case <-stop:
+				return
+			default:
+				_, _ = hc.TabletConnection(ctx, tablet.Alias, nil)
+			}
+		}
+	}()
+
+	time.Sleep(200 * time.Millisecond)
+	close(stop)
+	wg.Wait()
+}
+
+// TestHealthCheckReentrantLoggerCallback ensures the serving-state change log
+// is emitted without holding connMu. The configured logger can be a
+// CallbackLogger whose callback calls back into the healthcheck (e.g. via
+// GetTabletHealthByAlias, whose SimpleCopy takes connMu); if setServingState
+// logged with connMu held, that callback would deadlock the checkConn
+// goroutine and this test would time out.
+func TestHealthCheckReentrantLoggerCallback(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+	hcErrorCounters.ResetAll()
+	ts := memorytopo.NewServer(ctx, "cell")
+	defer ts.Close()
+
+	tablet := createTestTablet(0, "cell", "a")
+	tablet.Type = topodatapb.TabletType_REPLICA
+
+	// The healthcheck is created with the logger already set, so the callback
+	// reads it through an atomic pointer stored right after creation.
+	var hcPtr atomic.Pointer[HealthCheckImpl]
+	reentered := make(chan struct{}, 1)
+	logger := logutil.NewCallbackLogger(func(e *logutilpb.Event) {
+		if !strings.Contains(e.Value, "HealthCheckUpdate(Serving State)") {
+			return
+		}
+		hc := hcPtr.Load()
+		if hc == nil {
+			return
+		}
+		_, _ = hc.GetTabletHealthByAlias(tablet.Alias)
+		select {
+		case reentered <- struct{}{}:
+		default:
+		}
+	})
+
+	hc := NewHealthCheck(ctx, 1*time.Millisecond, time.Hour, ts, "cell", "", nil, WithLogger(logger))
+	defer hc.Close()
+	hcPtr.Store(hc)
+
+	input := make(chan *querypb.StreamHealthResponse)
+	_ = createFakeConn(tablet, input)
+	hc.AddTablet(tablet)
+
+	// The first processed response logs the serving-state change from the
+	// checkConn goroutine, which runs the callback above.
+	shr := &querypb.StreamHealthResponse{
+		TabletAlias:   tablet.Alias,
+		Target:        &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+		Serving:       true,
+		RealtimeStats: &querypb.RealtimeStats{ReplicationLagSeconds: 1},
+	}
+	select {
+	case input <- shr:
+	case <-time.After(30 * time.Second):
+		require.FailNow(t, "timed out sending the health response")
+	}
+	select {
+	case <-reentered:
+	case <-time.After(30 * time.Second):
+		require.FailNow(t, "logger callback did not complete; the serving-state log likely ran while holding connMu")
+	}
 }
 
 func TestHealthCheckStreamError(t *testing.T) {
