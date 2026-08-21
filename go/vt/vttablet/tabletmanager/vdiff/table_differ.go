@@ -550,7 +550,18 @@ func (td *tableDiffer) diff(ctx context.Context, coreOpts *tabletmanagerdatapb.V
 	curState := cs.Named().Row()
 	mismatch := curState.AsBool("mismatch", false)
 	dr := &DiffReport{}
-	if rpt := curState.AsBytes("report", []byte("{}")); json.Valid(rpt) {
+	if td.tablePlan.sourceCheckpointUnavailable {
+		// This table has no resumable checkpoint and restarts from the beginning
+		// on every run (see getSourcePKCols). Carrying over the persisted partial
+		// report or mismatch flag would double-count rows and duplicate mismatch
+		// samples across restarts, so we start fresh instead. Also clear the
+		// persisted mismatch bit so a mismatch recorded by a discarded partial
+		// attempt does not stick after a clean full-table pass.
+		mismatch = false
+		if err = clearTableMismatch(dbClient, td.wd.ct.id, td.table.Name); err != nil {
+			return nil, err
+		}
+	} else if rpt := curState.AsBytes("report", []byte("{}")); json.Valid(rpt) {
 		if err = json.Unmarshal(rpt, dr); err != nil {
 			return nil, err
 		}
@@ -766,7 +777,27 @@ func (td *tableDiffer) updateTableProgress(dbClient binlogplayer.DBClient, dr *D
 		return err
 	}
 
-	if lastRow == nil {
+	switch {
+	case td.tablePlan.sourceCheckpointUnavailable:
+		// The source PK cannot be represented as a resumable checkpoint (see
+		// getSourcePKCols). Persist progress but explicitly clear lastpk (to NULL,
+		// which also discards any stale value written before this fix) and leave
+		// the in-memory retry PKs unset. Any resume then restarts the whole table
+		// from the beginning for both streams, which avoids the false
+		// ExtraRowsSource that a source-only restart against a resumed target
+		// would produce.
+		query, err = sqlparser.ParseAndBind(sqlUpdateTableProgress,
+			sqltypes.Int64BindVariable(dr.ProcessedRows),
+			sqltypes.NullBindVariable,
+			sqltypes.StringBindVariable(string(rpt)),
+			sqltypes.Int64BindVariable(td.wd.ct.id),
+			sqltypes.StringBindVariable(td.table.Name),
+		)
+		if err != nil {
+			return err
+		}
+	case lastRow == nil:
+		// No rows were processed, so there is nothing to checkpoint.
 		query, err = sqlparser.ParseAndBind(sqlUpdateTableNoProgress,
 			sqltypes.Int64BindVariable(dr.ProcessedRows),
 			sqltypes.StringBindVariable(string(rpt)),
@@ -776,7 +807,7 @@ func (td *tableDiffer) updateTableProgress(dbClient binlogplayer.DBClient, dr *D
 		if err != nil {
 			return err
 		}
-	} else {
+	default:
 		lastPK := td.lastPKFromRow(lastRow)
 		if td.wd.opts.CoreOptions.MaxDiffSeconds > 0 {
 			// Update the in-memory lastPK as well so that we can restart the table
@@ -872,6 +903,24 @@ func updateTableMismatch(dbClient binlogplayer.DBClient, vdiffID int64, table st
 	return nil
 }
 
+// clearTableMismatch resets the persisted mismatch bit for a table. It is used
+// when a table with no resumable checkpoint restarts from the beginning, so a
+// mismatch recorded by a discarded partial attempt does not stick after a clean
+// full-table pass.
+func clearTableMismatch(dbClient binlogplayer.DBClient, vdiffID int64, table string) error {
+	query, err := sqlparser.ParseAndBind(sqlClearTableMismatch,
+		sqltypes.Int64BindVariable(vdiffID),
+		sqltypes.StringBindVariable(table),
+	)
+	if err != nil {
+		return err
+	}
+	if _, err = dbClient.ExecuteFetch(query, 1); err != nil {
+		return err
+	}
+	return nil
+}
+
 func (td *tableDiffer) lastPKFromRow(row []sqltypes.Value) *tabletmanagerdatapb.VDiffTableLastPK {
 	buildQR := func(pkCols []int) *querypb.QueryResult {
 		pkColCnt := len(pkCols)
@@ -948,6 +997,27 @@ func (td *tableDiffer) getSourcePKCols() error {
 	ctx, cancel := context.WithTimeout(td.wd.ct.vde.ctx, topo.RemoteOperationTimeout*3)
 	defer cancel()
 
+	// Parse the source query first. We need it for two reasons:
+	//  1. The physical source table can differ from the target table name
+	//     (td.table.Name) for cross-table MoveTables filters, e.g. a filter of
+	//     "select ... from t2" for target table t1. The schema, PK-equivalent,
+	//     and PK column lookups must all use the real source table.
+	//  2. We map PK columns against the SELECT expression order (the actual row
+	//     layout) rather than td.table.Columns (column ordinal position),
+	//     because filters can reorder columns (e.g. "select c2, c1 from t1").
+	statement, err := td.wd.ct.vde.parser.Parse(td.tablePlan.sourceQuery)
+	if err != nil {
+		return vterrors.Wrapf(err, "failed to parse source query for table %s", td.table.Name)
+	}
+	sourceSelect, ok := statement.(*sqlparser.Select)
+	if !ok {
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected statement type for source query of table %s", td.table.Name)
+	}
+	sourceTableName, err := sourceTableNameFromSelect(sourceSelect)
+	if err != nil {
+		return vterrors.Wrapf(err, "failed to determine source table for target table %s", td.table.Name)
+	}
+
 	// We use the first sourceShard as all of them should have the same schema.
 	if len(td.wd.ct.sources) == 0 {
 		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "no source shards found in %s keyspace",
@@ -971,16 +1041,16 @@ func (td *tableDiffer) getSourcePKCols() error {
 			td.wd.ct.sourceKeyspace, sourceShardName)
 	}
 	sourceSchema, err := td.wd.ct.tmc.GetSchema(ctx, sourceTablet.Tablet, &tabletmanagerdatapb.GetSchemaRequest{
-		Tables: []string{td.table.Name},
+		Tables: []string{sourceTableName},
 	})
 	if err != nil {
 		return vterrors.Wrapf(err, "failed to get the schema for table %s from source tablet %s",
-			td.table.Name, topoproto.TabletAliasString(sourceTablet.Alias))
+			sourceTableName, topoproto.TabletAliasString(sourceTablet.Alias))
 	}
 	if len(sourceSchema.TableDefinitions) == 0 {
 		// The table no longer exists on the source. Any rows that exist on the target will be
 		// reported as extra rows.
-		log.Warn(fmt.Sprintf("The %s table was not found on source tablet %s during VDiff for the %s workflow; any rows on the target will be reported as extra", td.table.Name, topoproto.TabletAliasString(sourceTablet.Alias), td.wd.ct.workflow))
+		log.Warn(fmt.Sprintf("The %s table was not found on source tablet %s during VDiff for the %s workflow; any rows on the target will be reported as extra", sourceTableName, topoproto.TabletAliasString(sourceTablet.Alias), td.wd.ct.workflow))
 		return nil
 	}
 	sourceTable := sourceSchema.TableDefinitions[0]
@@ -993,37 +1063,188 @@ func (td *tableDiffer) getSourcePKCols() error {
 			})
 			if err != nil {
 				return nil, vterrors.Wrapf(err, "failed to query the %s source tablet in order to get a primary key equivalent for the %s table",
-					topoproto.TabletAliasString(sourceTablet.Alias), td.table.Name)
+					topoproto.TabletAliasString(sourceTablet.Alias), sourceTableName)
 			}
 			return sqltypes.Proto3ToResult(res), nil
 		}
-		pkeCols, _, err := mysqlctl.GetPrimaryKeyEquivalentColumns(ctx, executeFetch, sourceTablet.DbName(), td.table.Name)
+		pkeCols, _, err := mysqlctl.GetPrimaryKeyEquivalentColumns(ctx, executeFetch, sourceTablet.DbName(), sourceTableName)
 		if err != nil {
 			return vterrors.Wrapf(err, "failed to get a primary key equivalent for the %s table from source tablet %s",
-				td.table.Name, topoproto.TabletAliasString(sourceTablet.Alias))
+				sourceTableName, topoproto.TabletAliasString(sourceTablet.Alias))
 		}
 		if len(pkeCols) > 0 {
-			log.Info(fmt.Sprintf("Using primary key equivalent columns %+v for table %s in vdiff %s", pkeCols, td.table.Name, td.wd.ct.uuid))
+			log.Info(fmt.Sprintf("Using primary key equivalent columns %+v for table %s in vdiff %s", pkeCols, sourceTableName, td.wd.ct.uuid))
 			sourceTable.PrimaryKeyColumns = pkeCols
 		} else {
 			// We use every column together as a substitute PK.
-			log.Info(fmt.Sprintf("Using all columns as a substitute primary key for table %s in vdiff %s", td.table.Name, td.wd.ct.uuid))
-			sourceTable.PrimaryKeyColumns = append(sourceTable.PrimaryKeyColumns, td.table.Columns...)
+			log.Info(fmt.Sprintf("Using all columns as a substitute primary key for table %s in vdiff %s", sourceTableName, td.wd.ct.uuid))
+			sourceTable.PrimaryKeyColumns = append(sourceTable.PrimaryKeyColumns, sourceTable.Columns...)
 		}
 	}
 
-	sourcePKColumns := make(map[string]struct{}, len(sourceTable.PrimaryKeyColumns))
-	td.tablePlan.sourcePkCols = make([]int, 0, len(sourceTable.PrimaryKeyColumns))
-	for _, pkc := range sourceTable.PrimaryKeyColumns {
-		sourcePKColumns[pkc] = struct{}{}
+	// Map each source PK column to its position in the SELECT expression order,
+	// which is the actual layout of the streamed rows.
+	indices, allProjected, err := sourcePKSelectIndices(sourceSelect, sourceTable.PrimaryKeyColumns)
+	if err != nil {
+		return vterrors.Wrapf(err, "table %s", sourceTableName)
 	}
-	for i, pkc := range td.table.Columns {
-		if _, ok := sourcePKColumns[pkc]; ok {
-			td.tablePlan.sourcePkCols = append(td.tablePlan.sourcePkCols, i)
-		}
+	if !allProjected {
+		// At least one source PK column is not projected by the filter's SELECT
+		// list at all (e.g. source PK (cid, typ) with a filter of
+		// "select cid, name from customer"). We cannot build a resumable source
+		// checkpoint for such a subset-projection (or cross-table) filter: the
+		// row streamer always resumes on the full source PK and rejects a lastpk
+		// whose length does not match the source table's PK column count (see
+		// buildSelect in rowstreamer.go).
+		//
+		// Persisting only a target checkpoint (leaving the source key nil or
+		// empty) is not safe either: on resume the target would resume mid-table
+		// while the source restarts from the beginning, so the merge loop would
+		// classify every source row before the target's resume point as
+		// ExtraRowsSource, producing a false mismatch on every retry.
+		//
+		// So we record an explicit "source checkpoint unavailable" state. This
+		// makes updateTableProgress clear any persisted lastpk and leave the
+		// in-memory retry PKs unset, so any resume (auto-retry or manual resume)
+		// restarts the whole table from the beginning for both the source and
+		// target streams. That is correct (no false extra-row reports). Because
+		// such a table cannot be checkpointed it also cannot honor
+		// --max-diff-duration: if it exceeds that bound the differ stops with a
+		// non-retryable error rather than overriding the operator's bound (see
+		// differ).
+		td.tablePlan.sourceCheckpointUnavailable = true
+		// Discard any checkpoint that buildPlan already loaded from the database
+		// via getTableLastPK (e.g. a stale, possibly wrong-length lastpk written
+		// before this fix and then resumed after an upgrade). Leaving it set would
+		// resume the streams on that stale key instead of restarting the table.
+		td.lastSourcePK = nil
+		td.lastTargetPK = nil
+		return nil
 	}
+	td.tablePlan.sourcePkCols = indices
 
 	return nil
+}
+
+// sourceTableNameFromSelect returns the physical source table referenced by the
+// VReplication filter's SELECT. This can differ from the VDiff target table name
+// for cross-table MoveTables filters (e.g. "select ... from t2" for target t1),
+// and must be used for all source schema/PK lookups.
+func sourceTableNameFromSelect(sourceSelect *sqlparser.Select) (string, error) {
+	if len(sourceSelect.From) != 1 {
+		return "", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported source query, expected a single table in the FROM clause: %s", sqlparser.String(sourceSelect))
+	}
+	aliased, ok := sourceSelect.From[0].(*sqlparser.AliasedTableExpr)
+	if !ok {
+		return "", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported source query, expected a simple table reference: %s", sqlparser.String(sourceSelect))
+	}
+	tableName := sqlparser.GetTableName(aliased.Expr)
+	if tableName.IsEmpty() {
+		return "", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported source query, could not resolve the source table: %s", sqlparser.String(sourceSelect))
+	}
+	return tableName.String(), nil
+}
+
+// sourcePKSelectIndices maps each source PK column to its position in the SELECT
+// expression list (the physical row layout the row streamer produces). The
+// indices are returned in PK definition order.
+//
+// Because the schema lookup uses the real source table (see
+// sourceTableNameFromSelect), a projected source PK column appears in the SELECT
+// list as a direct reference to that physical column. We resolve each PK against
+// the underlying column of the expression:
+//   - a plain ColName ("select c1, c2 ..." or reordered "select c2, c1 ..."),
+//   - a renamed column ("select source_id as target_id ...", underlying ColName), or
+//   - a CONVERT(col USING charset) rename, unwrapping to the inner ColName,
+//     mirroring how the row streamer's planner resolves the physical column.
+//
+// A source PK column can be missing in two distinct ways, handled differently:
+//
+//   - Present-but-non-physical: an expression whose output column is named after
+//     the PK column (via an alias) but that does not resolve to the physical PK
+//     column, e.g. "select a + b as id" or "select other_col as id". This fails
+//     closed with an error. The row streamer resumes using the physical source
+//     PK value, so persisting a derived value as the source checkpoint would
+//     skip or repeat rows on resume.
+//
+//   - Entirely absent: the PK column is not projected at all, e.g. source PK
+//     (cid, typ) with a filter of "select cid, name from customer". This is a
+//     valid subset-projection filter, so we return allProjected == false and no
+//     error. The caller must then treat the source checkpoint as unavailable and
+//     persist no resumable checkpoint (restarting the whole table on resume)
+//     rather than building a partial source key. We never return a partial-length
+//     index slice: the row streamer always resumes on the full source PK and
+//     rejects a lastpk whose length does not match the table's PK column count
+//     (see buildSelect in rowstreamer.go).
+//
+// allProjected is true only when every source PK column resolved to a physical
+// SELECT column, in which case indices holds all of their SELECT-order indices.
+func sourcePKSelectIndices(sourceSelect *sqlparser.Select, pkColumns []string) (indices []int, allProjected bool, err error) {
+	indices = make([]int, 0, len(pkColumns))
+	for _, pkc := range pkColumns {
+		physicalIdx := -1
+		aliasedButNotPhysical := false
+		for i, selExpr := range sourceSelect.SelectExprs.Exprs {
+			// Invariant: buildTablePlan expands "*" into explicit columns before
+			// this runs, so the SELECT list must contain only AliasedExprs. If a
+			// StarExpr ever reaches here it means a caller passed an unexpanded
+			// query; fail loud rather than silently treating PK columns as not
+			// projected (which would corrupt resume checkpoints). We do NOT expand
+			// the star here; that logic belongs in buildTablePlan.
+			if _, isStar := selExpr.(*sqlparser.StarExpr); isStar {
+				return nil, false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected '*' in vdiff source query SELECT list; expected columns to be expanded by buildTablePlan: %s", sqlparser.String(sourceSelect))
+			}
+			aliasedExpr, ok := selExpr.(*sqlparser.AliasedExpr)
+			if !ok {
+				continue
+			}
+			// A physical match always wins, even if it appears after an alias
+			// that shadows the PK name. This preserves correct resolution for
+			// queries like "select b as a, a as b" (PK a -> the real a).
+			if colName, ok := underlyingSourceColumn(aliasedExpr.Expr); ok && strings.EqualFold(pkc, colName) {
+				physicalIdx = i
+				break
+			}
+			if !aliasedExpr.As.IsEmpty() && strings.EqualFold(pkc, aliasedExpr.As.String()) {
+				aliasedButNotPhysical = true
+			}
+		}
+		if physicalIdx >= 0 {
+			indices = append(indices, physicalIdx)
+			continue
+		}
+		if aliasedButNotPhysical {
+			// Present-but-non-physical: fail closed.
+			return nil, false, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "source PK column %s is projected only via a non-physical expression in the source query SELECT list", pkc)
+		}
+		// Entirely absent: report to the caller instead of returning a partial
+		// (and therefore unusable) source key.
+		return nil, false, nil
+	}
+	return indices, true, nil
+}
+
+// underlyingSourceColumn returns the name of the physical source column that a
+// SELECT expression reads from, and whether the expression resolves to one. It
+// handles plain column references and CONVERT(col USING charset) renames (used
+// for charset conversions where the AS is the renamed target column). Computed
+// expressions, functions, and literals do not resolve to a physical column and
+// return ok == false.
+func underlyingSourceColumn(expr sqlparser.Expr) (string, bool) {
+	switch e := expr.(type) {
+	case *sqlparser.ColName:
+		return e.Name.String(), true
+	case *sqlparser.ConvertUsingExpr:
+		// Only a direct column rename like "convert(c1 using utf8mb4) as c2"
+		// is a physical source column. Anything wrapped in a computation
+		// (concat, cast, arithmetic, etc.) is NOT a physical column and must
+		// fail closed so we never persist a derived value as the source
+		// checkpoint. Mirrors the fail-closed contract for computed aliases.
+		if inner, ok := e.Expr.(*sqlparser.ColName); ok {
+			return inner.Name.String(), true
+		}
+	}
+	return "", false
 }
 
 func getColumnNameForSelectExpr(selectExpression sqlparser.SelectExpr) (string, error) {

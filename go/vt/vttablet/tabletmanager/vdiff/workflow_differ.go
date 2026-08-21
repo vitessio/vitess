@@ -28,6 +28,7 @@ import (
 	"google.golang.org/protobuf/encoding/prototext"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/key"
@@ -263,6 +264,21 @@ func (wd *workflowDiffer) diffTable(ctx context.Context, dbClient binlogplayer.D
 		log.Error(fmt.Sprintf("Encountered an error diffing table %s for vdiff %s: %v", td.table.Name, wd.ct.uuid, diffErr))
 		if !errors.Is(diffErr, ErrMaxDiffDurationExceeded) { // We only want to retry if we hit the max-diff-duration
 			return diffErr
+		}
+		if td.tablePlan.sourceCheckpointUnavailable {
+			// This table cannot be checkpointed because its filter does not
+			// project the full source primary key (see getSourcePKCols), so it
+			// cannot be resumed and every retry would restart from the beginning
+			// and hit the same timeout. We do not override the operator's
+			// --max-diff-duration bound (long-lived snapshots have real
+			// operational cost), so we stop here. The failure is wrapped as a
+			// MySQL ERNotSupportedYet so that its "(errno 1235)" suffix survives
+			// being persisted as a string and rebuilt by retryVDiffs: that makes
+			// IsEphemeralError classify it as non-ephemeral, so the engine does
+			// not auto-retry it forever.
+			return sqlerror.NewSQLError(sqlerror.ERNotSupportedYet, sqlerror.SSClientError,
+				fmt.Sprintf("table %s exceeded the configured --max-diff-duration and cannot be resumed because its filter does not project the full source primary key; increase or unset --max-diff-duration so it can complete within a single window",
+					td.table.Name))
 		}
 	}
 	log.Info(fmt.Sprintf("Table diff done on table %s for vdiff %s with report: %+v", td.table.Name, wd.ct.uuid, diffReport))

@@ -59,6 +59,16 @@ type tablePlan struct {
 	// and target have different PK columns.
 	sourcePkCols []int
 
+	// sourceCheckpointUnavailable is set when a source PK column cannot be
+	// represented in the source query's SELECT list (a subset-projection or
+	// cross-table filter that omits part of the source PK, e.g. source PK
+	// (cid, typ) with "select cid, name from customer"). We then cannot build a
+	// resumable source checkpoint, so no lastpk is persisted for the table and
+	// any resume (auto-retry, max-diff-duration restart, or manual resume)
+	// restarts the whole table from the beginning for both the source and target
+	// streams. See getSourcePKCols and updateTableProgress.
+	sourceCheckpointUnavailable bool
+
 	// selectPks is the list of pk columns as they appear in the select clause for the diff.
 	selectPks      []int
 	dbName         string

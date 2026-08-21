@@ -25,6 +25,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
+	"vitess.io/vitess/go/vt/sqlparser"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
@@ -153,11 +154,240 @@ func TestGetSourcePKCols_TableDroppedOnSource(t *testing.T) {
 		},
 		table: table,
 		tablePlan: &tablePlan{
-			table: table,
+			table:       table,
+			sourceQuery: "select c1, c2 from dropped_table order by c1 asc",
 		},
 	}
 
 	err := td.getSourcePKCols()
 	require.NoError(t, err)
 	require.Nil(t, td.tablePlan.sourcePkCols)
+}
+
+// TestGetSourcePKCols_ComputedAliasFailsClosed verifies that when a source PK
+// column is not projected as a physical column in the source query (only a
+// computed value aliased to the PK name is present), getSourcePKCols fails
+// closed rather than persisting the derived value as the source checkpoint.
+// The row streamer resumes using the physical source PK, so accepting the
+// computed value would skip or repeat rows on resume.
+func TestGetSourcePKCols_ComputedAliasFailsClosed(t *testing.T) {
+	tvde := newTestVDiffEnv(t)
+	defer tvde.close()
+
+	ct := tvde.createController(t, 1)
+
+	// The source table's physical PK is "textcol", but the source query only
+	// projects a computed expression "a + b" aliased to "textcol".
+	sourceTable := &tabletmanagerdatapb.TableDefinition{
+		Name:              "pktext",
+		Columns:           []string{"textcol", "c2"},
+		PrimaryKeyColumns: []string{"textcol"},
+		Fields:            sqltypes.MakeTestFields("textcol|c2", "varchar|int64"),
+	}
+	tvde.tmc.schema = &tabletmanagerdatapb.SchemaDefinition{
+		TableDefinitions: []*tabletmanagerdatapb.TableDefinition{sourceTable},
+	}
+
+	td := &tableDiffer{
+		wd: &workflowDiffer{
+			ct: ct,
+		},
+		table: sourceTable,
+		tablePlan: &tablePlan{
+			table:       sourceTable,
+			sourceQuery: "select c2, a + b as textcol from pktext order by textcol asc",
+		},
+	}
+
+	err := td.getSourcePKCols()
+	require.Error(t, err)
+	require.ErrorContains(t, err, "source PK column textcol is projected only via a non-physical expression")
+	require.Nil(t, td.tablePlan.sourcePkCols)
+}
+
+// TestGetSourcePKCols_SubsetProjectionUnavailable mirrors the customer
+// materialize CI regression: the source table has a composite PK (cid, typ) but
+// the filter projects only a subset that omits the trailing PK column typ
+// ("select cid, name from customer"). getSourcePKCols must NOT fail closed for
+// this valid subset-projection filter, and it must NOT build a partial source
+// key. Instead it flags the source checkpoint as unavailable so that no
+// resumable checkpoint is persisted and the whole table restarts on resume.
+func TestGetSourcePKCols_SubsetProjectionUnavailable(t *testing.T) {
+	tvde := newTestVDiffEnv(t)
+	defer tvde.close()
+
+	ct := tvde.createController(t, 1)
+
+	sourceTable := &tabletmanagerdatapb.TableDefinition{
+		Name:              "customer",
+		Columns:           []string{"cid", "name", "typ"},
+		PrimaryKeyColumns: []string{"cid", "typ"},
+		Fields:            sqltypes.MakeTestFields("cid|name|typ", "int64|varchar|varchar"),
+	}
+	tvde.tmc.schema = &tabletmanagerdatapb.SchemaDefinition{
+		TableDefinitions: []*tabletmanagerdatapb.TableDefinition{sourceTable},
+	}
+
+	td := &tableDiffer{
+		wd: &workflowDiffer{
+			ct: ct,
+		},
+		table: sourceTable,
+		tablePlan: &tablePlan{
+			table:       sourceTable,
+			sourceQuery: "select cid, name from customer order by cid asc",
+			// The target has cid as its (single) PK at SELECT index 0.
+			pkCols: []int{0},
+		},
+	}
+
+	err := td.getSourcePKCols()
+	require.NoError(t, err)
+	// The source checkpoint is flagged unavailable and no partial source key is
+	// built.
+	require.True(t, td.tablePlan.sourceCheckpointUnavailable)
+	require.Empty(t, td.tablePlan.sourcePkCols)
+}
+
+// TestGetSourcePKCols_ResumeCheckpointReorderedPK is a resume regression test.
+// For a composite-PK table whose source query reorders the PK columns
+// (SELECT layout differs from PK definition order), it confirms that the
+// sourcePkCols indices point at the correct SELECT positions so that the
+// persisted source lastpk pairs each PK value with the right column. Before
+// the fix, the indices were in column-ordinal order and lastPKFromRow built a
+// corrupted source checkpoint, causing false ExtraRowsSource on every resume.
+func TestGetSourcePKCols_ResumeCheckpointReorderedPK(t *testing.T) {
+	tvde := newTestVDiffEnv(t)
+	defer tvde.close()
+
+	ct := tvde.createController(t, 1)
+
+	// Physical source table "t" has columns a,b,c with composite PK (c, a).
+	// The source query projects them in a different order: b, c, a.
+	// So source PK "c" is at SELECT index 1 and "a" is at SELECT index 2.
+	// Fields are in DDL order (a,b,c), matching what GetSchema returns.
+	sourceTable := &tabletmanagerdatapb.TableDefinition{
+		Name:              "t",
+		Columns:           []string{"a", "b", "c"},
+		PrimaryKeyColumns: []string{"c", "a"},
+		Fields:            sqltypes.MakeTestFields("a|b|c", "int64|int64|int64"),
+	}
+	tvde.tmc.schema = &tabletmanagerdatapb.SchemaDefinition{
+		TableDefinitions: []*tabletmanagerdatapb.TableDefinition{sourceTable},
+	}
+
+	td := &tableDiffer{
+		wd: &workflowDiffer{
+			ct: ct,
+		},
+		table: sourceTable,
+		tablePlan: &tablePlan{
+			table:       sourceTable,
+			sourceQuery: "select b, c, a from t order by c asc, a asc",
+			// Target PK differs from source PK order so that lastPKFromRow
+			// persists a distinct Source checkpoint.
+			pkCols: []int{2, 1},
+		},
+	}
+
+	err := td.getSourcePKCols()
+	require.NoError(t, err)
+	require.Equal(t, []int{1, 2}, td.tablePlan.sourcePkCols)
+
+	// A streamed row [b=10, c=20, a=30] must serialize the source checkpoint
+	// as PK (c, a) = (20, 30), i.e. taking SELECT indices [1, 2], not the
+	// ordinal-order indices [2, 0] that the buggy code would have produced.
+	row := []sqltypes.Value{sqltypes.NewInt64(10), sqltypes.NewInt64(20), sqltypes.NewInt64(30)}
+	lastPK := td.lastPKFromRow(row)
+	require.NotNil(t, lastPK.Source)
+	sourceResult := sqltypes.Proto3ToResult(lastPK.Source)
+	require.Len(t, sourceResult.Rows, 1)
+	require.Equal(t, "20", sourceResult.Rows[0][0].ToString(), "first source PK value should be column c")
+	require.Equal(t, "30", sourceResult.Rows[0][1].ToString(), "second source PK value should be column a")
+	// Note: the checkpoint field-type metadata is still looked up via colIndex
+	// against table.Fields (DDL order), which is the pre-existing known
+	// limitation documented in the PR; it affects the target pkCols path
+	// equally and is out of scope here. This test pins the value indices, which
+	// is what this change fixes.
+}
+
+// TestGetSourcePKCols_SubsetProjectionPersistReloadResume is the persist/reload/
+// resume regression test for the subset-projection case (source PK (cid, typ),
+// target PK cid, filter "select cid, name from customer"). It exercises the full
+// lifecycle where the failure would otherwise occur:
+//
+//  1. Persist: updateTableProgress runs after rows have been processed.
+//  2. Reload: getTableLastPK reads the persisted state back on resume.
+//
+// Because the source checkpoint is unavailable for this filter, no lastpk may be
+// persisted: a target-only checkpoint would resume the target mid-table while
+// the source restarts from the beginning, so the merge loop would report every
+// earlier source row as ExtraRowsSource. The fix persists no lastpk (an explicit
+// "source checkpoint unavailable" state), so getTableLastPK returns nil on resume
+// and the whole table restarts from the beginning for both the source and target
+// streams.
+func TestGetSourcePKCols_SubsetProjectionPersistReloadResume(t *testing.T) {
+	tvde := newTestVDiffEnv(t)
+	defer tvde.close()
+
+	ct := tvde.createController(t, 1)
+
+	sourceTable := &tabletmanagerdatapb.TableDefinition{
+		Name:              "customer",
+		Columns:           []string{"cid", "name", "typ"},
+		PrimaryKeyColumns: []string{"cid", "typ"},
+		Fields:            sqltypes.MakeTestFields("cid|name|typ", "int64|varchar|varchar"),
+	}
+	tvde.tmc.schema = &tabletmanagerdatapb.SchemaDefinition{
+		TableDefinitions: []*tabletmanagerdatapb.TableDefinition{sourceTable},
+	}
+
+	wd := &workflowDiffer{ct: ct}
+	td := &tableDiffer{
+		wd:    wd,
+		table: sourceTable,
+		tablePlan: &tablePlan{
+			table:       sourceTable,
+			sourceQuery: "select cid, name from customer order by cid asc",
+			// The target has cid as its (single) PK at SELECT index 0.
+			pkCols: []int{0},
+		},
+	}
+
+	require.NoError(t, td.getSourcePKCols())
+	require.True(t, td.tablePlan.sourceCheckpointUnavailable)
+
+	// --- Persist: even with a processed row, updateTableProgress must explicitly
+	// clear lastpk (to NULL) for a source-checkpoint-unavailable table, so no
+	// resumable (and unsafe) checkpoint remains, including any stale value from
+	// before this fix.
+	persistClient := binlogplayer.NewMockDBClient(t)
+	persistClient.ExpectRequestRE(
+		`^update _vt\.vdiff_table set rows_compared = 100, lastpk = null, report = '.*' where vdiff_id = 1 and table_name = 'customer'$`,
+		&sqltypes.Result{}, nil)
+	dr := &DiffReport{TableName: sourceTable.Name, ProcessedRows: 100}
+	row := []sqltypes.Value{sqltypes.NewInt64(42), sqltypes.NewVarChar("acme")}
+	require.NoError(t, td.updateTableProgress(persistClient, dr, row))
+	// The in-memory retry PKs must remain unset so a same-process
+	// max-diff-duration restart also restarts both streams from the beginning.
+	require.Nil(t, td.lastSourcePK)
+	require.Nil(t, td.lastTargetPK)
+
+	// --- Reload: with no lastpk persisted, getTableLastPK returns nil, so on
+	// resume both td.lastSourcePK and td.lastTargetPK stay nil and the whole
+	// table restarts from the beginning for both streams.
+	reloadClient := binlogplayer.NewMockDBClient(t)
+	getQuery, err := sqlparser.ParseAndBind(sqlGetVDiffTable,
+		sqltypes.Int64BindVariable(ct.id),
+		sqltypes.StringBindVariable(sourceTable.Name),
+	)
+	require.NoError(t, err)
+	reloadClient.ExpectRequest(getQuery, sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("lastpk|mismatch|report", "varbinary|int64|varbinary"),
+		"|0|", // empty lastpk
+	), nil)
+
+	reloaded, err := wd.getTableLastPK(reloadClient, sourceTable.Name)
+	require.NoError(t, err)
+	require.Nil(t, reloaded, "no lastpk persisted, so resume must restart the whole table for both streams")
 }
