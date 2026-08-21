@@ -552,8 +552,8 @@ func (h *mockDonorHandler) ComQueryMulti(c *mysql.Conn, sql string, callback fun
 	return errors.New("ComQueryMulti not implemented")
 }
 
-func (h *mockDonorHandler) ComPrepare(c *mysql.Conn, query string) ([]*querypb.Field, uint16, error) {
-	return nil, 0, errors.New("ComPrepare not implemented")
+func (h *mockDonorHandler) ComPrepare(c *mysql.Conn, query string) ([]*querypb.Field, uint16, uint32, error) {
+	return nil, 0, 0, errors.New("ComPrepare not implemented")
 }
 
 func (h *mockDonorHandler) ComStmtExecute(c *mysql.Conn, prepare *mysql.PrepareData, callback func(*sqltypes.Result) error) error {
