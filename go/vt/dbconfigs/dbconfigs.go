@@ -192,10 +192,10 @@ func (c *Connector) Connect(ctx context.Context) (*mysql.Conn, error) {
 	}
 	// This is the choke point every Vitess-created MySQL connection goes through, so
 	// the session setup runs here: MySQL lexes each statement under the session
-	// sql_mode inherited from the server's global value, and Vitess-formatted SQL
-	// must always be lexed under the default rules it was serialized with. Strip
-	// the lexer modes, preserving the server's runtime modes (see
-	// sqlmode.NeutralizeSessionQuery).
+	// sql_mode, and Vitess-formatted SQL must always be lexed under the default
+	// rules it was serialized with. Strip the lexer modes from the session's
+	// current value, preserving its runtime modes — including any the server's own
+	// connection initialization applied (see sqlmode.NeutralizeSessionQuery).
 	if _, err := conn.ExecuteFetch(sqlmode.NeutralizeSessionQuery, 0, false); err != nil {
 		conn.Close()
 		return nil, vterrors.Wrapf(err, "failed to neutralize the connection's sql_mode")

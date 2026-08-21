@@ -220,19 +220,27 @@ func TestUnsupportedModesAreTheLexerModes(t *testing.T) {
 }
 
 func TestNeutralizeSessionQuery(t *testing.T) {
-	// the exact statement was verified against MySQL 8.0.46: a global of
+	// the exact statement was verified against MySQL 8.0.46: a session value of
 	// 'ANSI_QUOTES,NO_BACKSLASH_ESCAPES,IGNORE_SPACE,HIGH_NOT_PRECEDENCE,PIPES_AS_CONCAT,
 	// REAL_AS_FLOAT,STRICT_TRANS_TABLES,NO_ZERO_DATE' neutralizes to
-	// 'STRICT_TRANS_TABLES,NO_ZERO_DATE', and a global containing the expanded ANSI
-	// combination keeps ONLY_FULL_GROUP_BY — matching Expand().WithoutLexerModes()
+	// 'STRICT_TRANS_TABLES,NO_ZERO_DATE', and a value containing the expanded ANSI
+	// combination keeps ONLY_FULL_GROUP_BY — matching Expand().WithoutLexerModes().
+	// The source is the session, not the global value: runtime modes the server's own
+	// connection initialization (init_connect) applied to the session must survive.
 	assert.Equal(t,
-		"set @@session.sql_mode = REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(@@global.sql_mode, 'NO_BACKSLASH_ESCAPES', ''), 'HIGH_NOT_PRECEDENCE', ''), 'PIPES_AS_CONCAT', ''), 'REAL_AS_FLOAT', ''), 'IGNORE_SPACE', ''), 'ANSI_QUOTES', ''), 'ANSI', '')",
+		"set @@session.sql_mode = REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(@@session.sql_mode, 'NO_BACKSLASH_ESCAPES', ''), 'HIGH_NOT_PRECEDENCE', ''), 'PIPES_AS_CONCAT', ''), 'REAL_AS_FLOAT', ''), 'IGNORE_SPACE', ''), 'ANSI_QUOTES', ''), 'ANSI', '')",
 		NeutralizeSessionQuery)
 
-	// every LexerModes member name is stripped
+	// the settings-pool reset keeps restoring the neutralized *global* value, matching
+	// MySQL's `SET sql_mode = default`, which restores the global
+	assert.Contains(t, NeutralizedGlobalExpr, "@@global.sql_mode")
+	assert.NotContains(t, NeutralizedGlobalExpr, "@@session.sql_mode")
+
+	// every LexerModes member name is stripped from both
 	for _, mn := range modeNames {
 		if LexerModes&mn.mode != 0 {
 			assert.Contains(t, NeutralizedGlobalExpr, "'"+mn.name+"'")
+			assert.Contains(t, NeutralizeSessionQuery, "'"+mn.name+"'")
 		}
 	}
 }

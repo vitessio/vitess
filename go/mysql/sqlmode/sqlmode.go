@@ -83,13 +83,13 @@ func (m Mode) WithoutLexerModes() Mode {
 	return m &^ LexerModes
 }
 
-// NeutralizedGlobalExpr is a MySQL expression that evaluates to the server's global
-// sql_mode with all LexerModes member names stripped. It is built with nested REPLACE
+// neutralizedExpr builds a MySQL expression that evaluates to the given sql_mode
+// source with all LexerModes member names stripped. It is built with nested REPLACE
 // calls because MySQL offers no numeric arithmetic on the @@sql_mode system variable
 // (string-to-number coercion of the SET value yields 0). Names are stripped longest
 // first so that no earlier replacement can mangle a longer name it is a substring of
 // (ANSI within ANSI_QUOTES); MySQL ignores the empty list members REPLACE leaves behind.
-var NeutralizedGlobalExpr = func() string {
+func neutralizedExpr(source string) string {
 	var names []string
 	for _, mn := range modeNames {
 		if LexerModes&mn.mode != 0 {
@@ -97,26 +97,38 @@ var NeutralizedGlobalExpr = func() string {
 		}
 	}
 	sort.Slice(names, func(i, j int) bool { return len(names[i]) > len(names[j]) })
-	expr := "@@global.sql_mode"
+	expr := source
 	for _, name := range names {
 		expr = fmt.Sprintf("REPLACE(%s, '%s', '')", expr, name)
 	}
 	return expr
-}()
+}
 
-// NeutralizeSessionQuery sets the connection's session sql_mode to the server's global
-// value with LexerModes stripped. Vitess runs it on every connection it creates for its
-// own SQL: MySQL lexes each statement under the session mode in effect before the
-// statement — a SET_VAR hint cannot influence the parsing of its own statement — so a
-// statement must always be lexed under the same default rules it was serialized
-// with, regardless of the server's global configuration. Runtime modes
-// are preserved. Verified against MySQL 8.0.46, and the guarantee is scoped to MySQL:
-// on MariaDB — a deprecated migration source, not a supported serving backend — the
-// statement executes but MariaDB-only combination modes that imply lexer behavior
-// (ORACLE, MSSQL, POSTGRESQL, DB2, MAXDB) are not stripped and would re-enable their
-// members on assignment, and MariaDB's tolerance of the empty list members REPLACE
-// leaves behind is unverified.
-var NeutralizeSessionQuery = "set @@session.sql_mode = " + NeutralizedGlobalExpr
+// NeutralizedGlobalExpr evaluates to the server's global sql_mode with all LexerModes
+// member names stripped. The settings-pool reset restores it in place of `default`,
+// matching MySQL's semantics for `SET sql_mode = default` — verified against MySQL
+// 8.0.46: `default` resolves to the global value current at the time of the SET, and
+// it discards any adjustments the server's connection initialization (init_connect)
+// made to the session, so the global is the right source here even though the
+// connection-setup neutralization sources from the session.
+var NeutralizedGlobalExpr = neutralizedExpr("@@global.sql_mode")
+
+// NeutralizeSessionQuery sets the connection's session sql_mode to the session's
+// current value with LexerModes stripped. Vitess runs it on every connection it
+// creates for its own SQL: MySQL lexes each statement under the session mode in effect
+// before the statement — a SET_VAR hint cannot influence the parsing of its own
+// statement — so a statement must always be lexed under the same default rules it was
+// serialized with, regardless of the server's configuration. Runtime modes are
+// preserved. The session, not the global value, is the source: at connection setup the
+// session has inherited the global value, except where the server's own connection
+// initialization (init_connect) already adjusted it — those adjustments run before this
+// statement and their runtime modes must survive it. Verified against MySQL 8.0.46,
+// and the guarantee is scoped to MySQL: on MariaDB — a deprecated migration source,
+// not a supported serving backend — the statement executes but MariaDB-only
+// combination modes that imply lexer behavior (ORACLE, MSSQL, POSTGRESQL, DB2, MAXDB)
+// are not stripped and would re-enable their members on assignment, and MariaDB's
+// tolerance of the empty list members REPLACE leaves behind is unverified.
+var NeutralizeSessionQuery = "set @@session.sql_mode = " + neutralizedExpr("@@session.sql_mode")
 
 // modeNames lists all sql_mode set members in MySQL's numeric bit order. The
 // NOT_USED_* placeholders parse to their bit like in MySQL, where validation
