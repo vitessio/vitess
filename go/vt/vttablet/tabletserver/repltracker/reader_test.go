@@ -83,6 +83,55 @@ func TestReaderReadHeartbeat(t *testing.T) {
 	utils.MustMatch(t, expectedHisto, heartbeatLagNsHistogram.Counts(), "wrong counts in histogram")
 }
 
+// TestReaderInitialHeartbeatReadOnOpen tests that Open performs a synchronous
+// initial heartbeat read, so that Status reflects the true lag immediately
+// rather than reporting the zero-value lag until the first tick fires.
+func TestReaderInitialHeartbeatReadOnOpen(t *testing.T) {
+	db := fakesqldb.New(t)
+	t.Cleanup(db.Close)
+
+	now := time.Now()
+	tr := newReader(db, &now)
+	t.Cleanup(tr.Close)
+	// A generous read deadline so a paused CI runner cannot expire the
+	// frozen-clock-based context before Open performs the initial read.
+	tr.interval = 30 * time.Second
+
+	db.AddQuery(fmt.Sprintf("SELECT ts FROM %s.heartbeat WHERE keyspaceShard='%s'", "_vt", tr.keyspaceShard), &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{Name: "ts", Type: sqltypes.Int64},
+		},
+		Rows: [][]sqltypes.Value{{
+			sqltypes.NewInt64(now.Add(-2 * time.Hour).UnixNano()),
+		}},
+	})
+
+	tr.Open()
+	lag, err := tr.Status()
+
+	require.NoError(t, err)
+	assert.Equal(t, 2*time.Hour, lag, "expected the real lag immediately after Open")
+}
+
+// TestReaderInitialHeartbeatReadFailsClosed tests that when the initial
+// heartbeat read on Open fails (e.g. the heartbeat table is empty or
+// unreadable), Status reports the error instead of a zero-value lag.
+func TestReaderInitialHeartbeatReadFailsClosed(t *testing.T) {
+	db := fakesqldb.New(t)
+	t.Cleanup(db.Close)
+
+	now := time.Now()
+	tr := newReader(db, &now)
+	t.Cleanup(tr.Close)
+	tr.interval = 30 * time.Second
+
+	tr.Open()
+	lag, err := tr.Status()
+
+	require.Error(t, err)
+	assert.Equal(t, time.Duration(0), lag, "wrong lastKnownLag")
+}
+
 // TestReaderCloseSetsCurrentLagToZero tests that when closing the heartbeat reader, the current lag is
 // set to zero.
 func TestReaderCloseSetsCurrentLagToZero(t *testing.T) {
