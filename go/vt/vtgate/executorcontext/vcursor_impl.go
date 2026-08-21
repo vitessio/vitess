@@ -424,6 +424,20 @@ func (vc *VCursorImpl) TimeZone() *time.Location {
 	return vc.SafeSession.TimeZone()
 }
 
+// ParseSQLMode returns the parse-relevant sql_mode bits queries in this
+// request are parsed and plan-cached under: the bits pinned at prepare time
+// when a binary-protocol prepared statement is executing, else the bits of
+// the session's current sql_mode. Runtime uses of the sql_mode (@@sql_mode
+// reads, the SET_VAR transport) keep reading SQLMode: like MySQL, a prepared
+// statement's runtime semantics follow the session at execute time while its
+// text keeps its prepare-time meaning.
+func (vc *VCursorImpl) ParseSQLMode() sqlparser.SQLMode {
+	if mode, ok := vc.SafeSession.PinnedParseSQLMode(); ok {
+		return mode
+	}
+	return sqlparser.ParseSQLMode(vc.SQLMode())
+}
+
 func (vc *VCursorImpl) SQLMode() string {
 	if mode, ok := vc.SafeSession.SQLMode(); ok {
 		return mode
@@ -1115,6 +1129,11 @@ func (vc *VCursorImpl) SetUDV(key string, value any) error {
 	}
 	vc.SafeSession.SetUserDefinedVariable(key, bindValue)
 	return nil
+}
+
+// HasPreparedStatements implements the SessionActions interface.
+func (vc *VCursorImpl) HasPreparedStatements() bool {
+	return vc.SafeSession.HasPreparedStatements()
 }
 
 func (vc *VCursorImpl) SetSysVar(name string, expr string) {

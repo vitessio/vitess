@@ -443,6 +443,35 @@ func TestExecutorSetOp(t *testing.T) {
 	}
 }
 
+// A SQL-level prepared statement (PREPARE ... FROM) lives in the session with
+// no pinned parse mode, so its text would be reinterpreted by a parse-relevant
+// sql_mode change; such changes are rejected while any exist. Runtime-only
+// changes stay allowed.
+func TestSetSQLModeWithPreparedStatements(t *testing.T) {
+	executor, _, _, lookup, ctx := createExecutorEnv(t)
+
+	session := econtext.NewAutocommitSession(&vtgatepb.Session{
+		EnableSystemSettings: true,
+		TargetString:         KsTestUnsharded,
+		PrepareStatement: map[string]*vtgatepb.PrepareData{
+			"stmt1": {PrepareStatement: `select "x" from dual`},
+		},
+	})
+
+	modeResult := func(orig, newMode string) *sqltypes.Result {
+		return sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"), orig+"|"+newMode)
+	}
+
+	lookup.SetResults([]*sqltypes.Result{modeResult("", "ANSI_QUOTES")})
+	_, err := executorExecSession(ctx, executor, session, "set sql_mode = 'ANSI_QUOTES'", nil)
+	require.EqualError(t, err, "VT12001: unsupported: changing the parse-relevant sql_mode with prepared statements open")
+
+	lookup.SetResults([]*sqltypes.Result{modeResult("", "STRICT_TRANS_TABLES")})
+	_, err = executorExecSession(ctx, executor, session, "set sql_mode = 'STRICT_TRANS_TABLES'", nil)
+	require.NoError(t, err)
+	require.Equal(t, "'STRICT_TRANS_TABLES'", session.SystemVariables["sql_mode"])
+}
+
 func TestExecutorSetDeniedSystemVariables(t *testing.T) {
 	cases := []struct {
 		name    string

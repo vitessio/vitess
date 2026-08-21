@@ -1350,7 +1350,7 @@ func (e *Executor) getCachedOrBuildPlan(
 	planKey engine.PlanKey,
 	ignoreCache bool,
 ) (plan *engine.Plan, cached bool, stmt sqlparser.Statement, err error) {
-	sessionParser := e.env.Parser().WithSQLMode(sqlparser.ParseSQLMode(vcursor.SQLMode()))
+	sessionParser := e.env.Parser().WithSQLMode(vcursor.ParseSQLMode())
 	stmt, reservedVars, err := parseAndValidateQuery(query, sessionParser)
 	if err != nil {
 		return nil, false, nil, err
@@ -1445,7 +1445,7 @@ func buildPlanKey(ctx context.Context, vcursor *econtext.VCursorImpl, query stri
 		Query:           query,
 		SetVarComment:   setVarComment,
 		Collation:       vcursor.ConnCollation(),
-		SQLMode:         sqlparser.ParseSQLMode(vcursor.SQLMode()),
+		SQLMode:         vcursor.ParseSQLMode(),
 	}
 }
 

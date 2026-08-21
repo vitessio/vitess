@@ -84,6 +84,7 @@ func TestSetTable(t *testing.T) {
 		mysqlVersion     string
 		disableSetVar    bool
 		shardSession     []*srvtopo.ResolvedShard
+		hasPreparedStmts bool
 	}
 
 	ks := &vindexes.Keyspace{Name: "ks", Sharded: true}
@@ -779,6 +780,47 @@ func TestSetTable(t *testing.T) {
 			"|BOGUS",
 		)},
 	}, {
+		testName:     "sql_mode parse-relevant change with prepared statements open fails",
+		mysqlVersion: "8.0.0",
+		setOps: []SetOp{
+			&SysVarReservedConn{
+				Name:          "sql_mode",
+				Keyspace:      &vindexes.Keyspace{Name: "ks", Sharded: true},
+				Expr:          "'ANSI_QUOTES'",
+				SupportSetVar: true,
+			},
+		},
+		expectedQueryLog: []string{
+			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
+			`ExecuteMultiShard ks.-20: select @@sql_mode orig, 'ANSI_QUOTES' new {} false false`,
+		},
+		expectedError:    "VT12001: unsupported: changing the parse-relevant sql_mode with prepared statements open",
+		hasPreparedStmts: true,
+		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
+			"|ANSI_QUOTES",
+		)},
+	}, {
+		testName:     "sql_mode runtime-only change with prepared statements open is allowed",
+		mysqlVersion: "8.0.0",
+		setOps: []SetOp{
+			&SysVarReservedConn{
+				Name:          "sql_mode",
+				Keyspace:      &vindexes.Keyspace{Name: "ks", Sharded: true},
+				Expr:          "'STRICT_TRANS_TABLES'",
+				SupportSetVar: true,
+			},
+		},
+		expectedQueryLog: []string{
+			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
+			`ExecuteMultiShard ks.-20: select @@sql_mode orig, 'STRICT_TRANS_TABLES' new {} false false`,
+			"SysVar set with (sql_mode,'STRICT_TRANS_TABLES')",
+			"SET_VAR can be used",
+		},
+		hasPreparedStmts: true,
+		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
+			"|STRICT_TRANS_TABLES",
+		)},
+	}, {
 		testName:     "sql_mode verification result with an unexpected shape fails",
 		mysqlVersion: "8.0.0",
 		setOps: []SetOp{
@@ -889,12 +931,13 @@ func TestSetTable(t *testing.T) {
 			})
 			require.NoError(t, err)
 			vc := &loggingVCursor{
-				shards:         []string{"-20", "20-"},
-				results:        tc.qr,
-				multiShardErrs: []error{tc.execErr},
-				disableSetVar:  tc.disableSetVar,
-				parser:         parser,
-				shardSession:   tc.shardSession,
+				shards:                []string{"-20", "20-"},
+				results:               tc.qr,
+				multiShardErrs:        []error{tc.execErr},
+				disableSetVar:         tc.disableSetVar,
+				parser:                parser,
+				hasPreparedStatements: tc.hasPreparedStmts,
+				shardSession:          tc.shardSession,
 			}
 			_, err = set.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 			if tc.expectedError == "" {

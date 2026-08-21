@@ -2361,8 +2361,8 @@ func comQueryMulti(parser *sqlparser.Parser, comQuery func(c *Conn, query string
 	return callback(sqltypes.QueryResponse{QueryError: sqlerror.NewSQLErrorFromError(err)}, false, true)
 }
 
-func (t testRun) ComPrepare(c *Conn, query string) ([]*querypb.Field, uint16, error) {
-	return nil, t.paramCounts, nil
+func (t testRun) ComPrepare(c *Conn, query string) ([]*querypb.Field, uint16, uint32, error) {
+	return nil, t.paramCounts, 0, nil
 }
 
 func (t testRun) WarningCount(c *Conn) uint16 {

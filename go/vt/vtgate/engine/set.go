@@ -369,6 +369,18 @@ func (svs *SysVarReservedConn) checkAndUpdateSysVar(ctx context.Context, vcursor
 	if !changed {
 		return false, "", nil
 	}
+	if svs.Name == "sql_mode" {
+		// A prepared statement keeps the meaning its text had when it was
+		// prepared. Statements prepared over the binary protocol pin their
+		// parse mode, but SQL-level PREPARE statements live in the session
+		// with no pin — so a change to the parse-relevant modes is rejected
+		// while any exist, rather than reinterpreting their text on the next
+		// EXECUTE. Runtime-only sql_mode changes stay allowed.
+		if vcursor.Session().HasPreparedStatements() &&
+			sqlparser.ParseSQLMode(value.ToString()) != sqlparser.ParseSQLMode(vcursor.SQLMode()) {
+			return false, "", vterrors.VT12001("changing the parse-relevant sql_mode with prepared statements open")
+		}
+	}
 	var buf strings.Builder
 	value.EncodeSQL(&buf)
 	storedValue = buf.String()

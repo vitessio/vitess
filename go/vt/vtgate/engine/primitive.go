@@ -199,6 +199,11 @@ type (
 
 		SetSysVar(name string, expr string)
 
+		// HasPreparedStatements reports whether the session holds SQL-level
+		// prepared statements (PREPARE ... FROM), whose text is reparsed on
+		// EXECUTE under the session's sql_mode.
+		HasPreparedStatements() bool
+
 		// NeedsReservedConn marks this session as needing a dedicated connection to underlying database
 		NeedsReservedConn()
 

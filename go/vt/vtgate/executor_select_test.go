@@ -43,6 +43,7 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -380,6 +381,45 @@ func TestSessionSQLModeReadBack(t *testing.T) {
 		require.Len(t, sbc1.Queries, 1)
 		assert.Equal(t, "select :__vtsql_mode as `@@sql_mode` from dual", sbc1.Queries[0].Sql)
 		assert.Equal(t, "PIPES_AS_CONCAT,STRICT_TRANS_TABLES", string(sbc1.Queries[0].BindVariables["__vtsql_mode"].Value))
+	})
+}
+
+// A statement prepared over the binary protocol keeps the meaning its text had
+// at prepare time: the parse-relevant sql_mode bits recorded then are pinned
+// for its executes, however the session's sql_mode changes in between. Runtime
+// modes stay the live session's — like MySQL, whose prepared statements are
+// parsed under the prepare-time mode and executed under the current one.
+func TestPreparedStatementKeepsParseMode(t *testing.T) {
+	executor, _, _, lookup, _ := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
+
+	t.Run("prepared under the default mode, executed under ANSI_QUOTES", func(t *testing.T) {
+		// the session moved to ANSI_QUOTES after the prepare; the pinned bits
+		// keep "id" a string literal, while the runtime transport carries the
+		// session's current mode
+		session := econtext.NewAutocommitSession(&vtgatepb.Session{
+			EnableSystemSettings: true,
+			TargetString:         KsTestUnsharded,
+			SystemVariables:      map[string]string{"sql_mode": "'ANSI_QUOTES'"},
+		})
+		session.PinParseSQLMode(0)
+		_, err := executor.Execute(t.Context(), nil, "TestExecute", session, `select "id" from information_schema.table`, nil, true)
+		require.NoError(t, err)
+		require.Len(t, lookup.Queries, 1)
+		assert.Equal(t, "select /*+ SET_VAR(sql_mode = 'ANSI_QUOTES') */ 'id' from information_schema.`table`", lookup.Queries[0].Sql)
+		lookup.Queries = nil
+	})
+
+	t.Run("prepared under ANSI_QUOTES, executed under the default mode", func(t *testing.T) {
+		session := econtext.NewAutocommitSession(&vtgatepb.Session{
+			EnableSystemSettings: true,
+			TargetString:         KsTestUnsharded,
+		})
+		session.PinParseSQLMode(sqlparser.SQLModeANSIQuotes)
+		_, err := executor.Execute(t.Context(), nil, "TestExecute", session, `select "id" from information_schema.table`, nil, true)
+		require.NoError(t, err)
+		require.Len(t, lookup.Queries, 1)
+		assert.Equal(t, "select id from information_schema.`table`", lookup.Queries[0].Sql)
+		lookup.Queries = nil
 	})
 }
 

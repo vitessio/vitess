@@ -121,8 +121,11 @@ type Handler interface {
 	ComQueryMulti(c *Conn, sql string, callback func(qr sqltypes.QueryResponse, more bool, firstPacket bool) error) error
 
 	// ComPrepare is called when a connection receives a prepared
-	// statement query.
-	ComPrepare(c *Conn, query string) ([]*querypb.Field, uint16, error)
+	// statement query. Along with the fields and parameter count it returns
+	// the parse-relevant sql_mode bitmask the statement was prepared under
+	// (opaque to this package; a sqlparser.SQLMode), stored on the
+	// statement's PrepareData and handed back on execute.
+	ComPrepare(c *Conn, query string) (fld []*querypb.Field, paramsCount uint16, parseSQLMode uint32, err error)
 
 	// ComStmtExecute is called when a connection receives a statement
 	// execute query.
