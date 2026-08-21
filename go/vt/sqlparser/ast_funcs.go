@@ -637,6 +637,19 @@ func NewArgument(in string) *Argument {
 	return &Argument{Name: in, Type: sqltypes.Unknown}
 }
 
+// realTypeName resolves the REAL type keyword the way MySQL's parser does:
+// under sql_mode REAL_AS_FLOAT it is a synonym for FLOAT, otherwise for
+// DOUBLE (spelled as written). The resolution happens at parse time — on
+// MySQL too, a SET_VAR hint cannot change it for its own statement — so the
+// AST and the serialized SQL carry the resolved type and mean the same thing
+// under any consumer's sql_mode.
+func realTypeName(yylex yyLexer, asWritten string) string {
+	if yylex.(*Tokenizer).sqlMode&SQLModeRealAsFloat != 0 {
+		return "float"
+	}
+	return asWritten
+}
+
 func parseBindVariable(yylex yyLexer, bvar string) *Argument {
 	markBindVariable(yylex, bvar)
 	return NewArgument(bvar)

@@ -48,17 +48,19 @@ func TestBuildSettingQuerySQLMode(t *testing.T) {
 		settings:      []string{"set sql_mode = ''"},
 		expectedQuery: "set sql_mode = ''",
 	}, {
-		// the ANSI combination expands; its execution-relevant members survive the strip
+		// the ANSI combination and its members are forwarded as written: MySQL
+		// enforces their resolution- and execution-time semantics itself, and their
+		// lexer aspects are inert on the serialized SQL the vttablet sends
 		settings:      []string{"set sql_mode = 'ANSI'"},
-		expectedQuery: "set sql_mode = 'REAL_AS_FLOAT,ONLY_FULL_GROUP_BY'",
+		expectedQuery: "set sql_mode = 'ANSI'",
 		expectedMode:  sqlparser.ParseSQLMode("ANSI"),
 	}, {
 		settings:      []string{"set sql_safe_updates = 1", "set sql_mode = 'STRICT_TRANS_TABLES,ANSI_QUOTES'"},
-		expectedQuery: "set sql_safe_updates = 1, sql_mode = 'STRICT_TRANS_TABLES'",
+		expectedQuery: "set sql_safe_updates = 1, sql_mode = 'STRICT_TRANS_TABLES,ANSI_QUOTES'",
 		expectedMode:  sqlparser.SQLModeANSIQuotes,
 	}, {
 		settings:      []string{"set sql_mode = 'IGNORE_SPACE'"},
-		expectedQuery: "set sql_mode = ''",
+		expectedQuery: "set sql_mode = 'IGNORE_SPACE'",
 		expectedMode:  sqlparser.SQLModeIgnoreSpace,
 	}, {
 		// numeric bitmask for NO_BACKSLASH_ESCAPES
@@ -109,17 +111,24 @@ func TestBuildSettingQueryResetNeutralizesSQLMode(t *testing.T) {
 func TestBuildReservedSettings(t *testing.T) {
 	parser := vtenv.NewTestEnv().Parser()
 
-	t.Run("parse-relevant modes are stripped and returned", func(t *testing.T) {
-		applied, parseMode, err := BuildReservedSettings([]string{
+	t.Run("parse-relevant bits are returned and forwarded modes stay as written", func(t *testing.T) {
+		settings := []string{
 			"set sql_safe_updates = 1",
 			"set sql_mode = 'PIPES_AS_CONCAT,STRICT_TRANS_TABLES'",
+		}
+		applied, parseMode, err := BuildReservedSettings(settings, parser)
+		require.NoError(t, err)
+		assert.Equal(t, settings, applied)
+		assert.Equal(t, sqlparser.SQLModePipesAsConcat, parseMode)
+	})
+
+	t.Run("modes the backend must not lex under are stripped", func(t *testing.T) {
+		applied, parseMode, err := BuildReservedSettings([]string{
+			"set sql_mode = 'NO_BACKSLASH_ESCAPES,STRICT_TRANS_TABLES'",
 		}, parser)
 		require.NoError(t, err)
-		assert.Equal(t, []string{
-			"set sql_safe_updates = 1",
-			"set sql_mode = 'STRICT_TRANS_TABLES'",
-		}, applied)
-		assert.Equal(t, sqlparser.SQLModePipesAsConcat, parseMode)
+		assert.Equal(t, []string{"set sql_mode = 'STRICT_TRANS_TABLES'"}, applied)
+		assert.Equal(t, sqlparser.SQLModeNoBackslashEscapes, parseMode)
 	})
 
 	t.Run("mode-free settings pass through byte-identical", func(t *testing.T) {
@@ -163,10 +172,11 @@ func TestSetPlanSQLMode(t *testing.T) {
 		setsSQLMode: true,
 		fullQuery:   "set @@sql_mode = 'ONLY_FULL_GROUP_BY'",
 	}, {
+		// forwarded modes stay as written; the parse bits are still recorded
 		sql:         "set @@sql_mode = 'ansi_quotes'",
 		setsSQLMode: true,
 		parseBits:   sqlparser.SQLModeANSIQuotes,
-		fullQuery:   "set @@sql_mode = ''",
+		fullQuery:   "set @@sql_mode = 'ansi_quotes'",
 	}, {
 		sql:         "set session sql_mode = 'HIGH_NOT_PRECEDENCE'",
 		setsSQLMode: true,

@@ -4253,27 +4253,31 @@ func TestParseSQLMode(t *testing.T) {
 	}
 }
 
-func TestStripParseRelevantModes(t *testing.T) {
+func TestStripUnforwardableModes(t *testing.T) {
 	testcases := []struct {
 		in  string
 		out string
 	}{
 		{in: "", out: ""},
 		{in: "ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES", out: "ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES"},
-		{in: "PIPES_AS_CONCAT", out: ""},
-		{in: "ansi_quotes,STRICT_TRANS_TABLES", out: "STRICT_TRANS_TABLES"},
-		{in: "STRICT_TRANS_TABLES,IGNORE_SPACE,NO_BACKSLASH_ESCAPES", out: "STRICT_TRANS_TABLES"},
+		// only the modes under which serialized SQL would be lexed differently
+		// than written are removed
+		{in: "NO_BACKSLASH_ESCAPES", out: ""},
+		{in: "STRICT_TRANS_TABLES,no_backslash_escapes", out: "STRICT_TRANS_TABLES"},
 		{in: "HIGH_NOT_PRECEDENCE,NO_ZERO_DATE", out: "NO_ZERO_DATE"},
-		// REAL_AS_FLOAT stays execution-relevant for the backend (DDL type
-		// mapping) and must not be stripped
+		{in: " NO_BACKSLASH_ESCAPES , NO_ZERO_DATE ", out: "NO_ZERO_DATE"},
+		// every other mode is forwarded, the ANSI combination and its members
+		// included: their lexer aspects are inert on serialized SQL, and their
+		// resolution- and execution-time semantics are the consumer's to enforce
+		{in: "PIPES_AS_CONCAT", out: "PIPES_AS_CONCAT"},
+		{in: "ansi_quotes,STRICT_TRANS_TABLES", out: "ansi_quotes,STRICT_TRANS_TABLES"},
+		{in: "IGNORE_SPACE,STRICT_TRANS_TABLES", out: "IGNORE_SPACE,STRICT_TRANS_TABLES"},
 		{in: "REAL_AS_FLOAT,STRICT_TRANS_TABLES", out: "REAL_AS_FLOAT,STRICT_TRANS_TABLES"},
-		// the ANSI combination mode keeps its execution-relevant parts
-		{in: "ANSI,STRICT_ALL_TABLES", out: "REAL_AS_FLOAT,ONLY_FULL_GROUP_BY,STRICT_ALL_TABLES"},
-		{in: " PIPES_AS_CONCAT , NO_ZERO_DATE ", out: "NO_ZERO_DATE"},
+		{in: "ANSI,STRICT_ALL_TABLES", out: "ANSI,STRICT_ALL_TABLES"},
 	}
 	for _, tcase := range testcases {
 		t.Run(tcase.in, func(t *testing.T) {
-			assert.Equal(t, tcase.out, StripParseRelevantModes(tcase.in))
+			assert.Equal(t, tcase.out, StripUnforwardableModes(tcase.in))
 		})
 	}
 }
@@ -4407,6 +4411,107 @@ func TestSQLModeParsing(t *testing.T) {
 	stmt, err = parser.Parse(`select "a" from t`)
 	require.NoError(t, err)
 	assert.Equal(t, "select 'a' from t", String(stmt))
+}
+
+// REAL resolves at parse time the way MySQL's parser does: under sql_mode
+// REAL_AS_FLOAT it is a synonym for FLOAT, otherwise for DOUBLE. On MySQL the
+// resolution is parse-time too — a SET_VAR hint cannot change it for its own
+// statement — so the AST and the serialized SQL carry the resolved type and
+// mean the same thing under any consumer's sql_mode.
+func TestRealAsFloatResolution(t *testing.T) {
+	def := NewTestParser()
+	raf := def.WithSQLMode(SQLModeRealAsFloat)
+	for _, tc := range []struct {
+		parser *Parser
+		in     string
+		out    string
+	}{
+		{def, "create table t (r real, s real(5,2))", "create table t (\n\tr real,\n\ts real(5,2)\n)"},
+		{raf, "create table t (r real, s real(5,2))", "create table t (\n\tr float,\n\ts float(5,2)\n)"},
+		{def, "select cast(1 as real) from t", "select cast(1 as real) from t"},
+		{raf, "select cast(1 as real) from t", "select cast(1 as float) from t"},
+		{raf, "select convert(1, real) from t", "select convert(1, float) from t"},
+		// spelled-out types are untouched by the mode
+		{raf, "select cast(1 as double) from t", "select cast(1 as double) from t"},
+		{raf, "create table t (f float, d double)", "create table t (\n\tf float,\n\td double\n)"},
+	} {
+		stmt, err := tc.parser.Parse(tc.in)
+		require.NoError(t, err)
+		assert.Equal(t, tc.out, String(stmt))
+	}
+}
+
+// Formatted SQL must read identically whether or not the consumer runs with
+// sql_mode=PIPES_AS_CONCAT: serialized text never contains ||. Logical OR
+// prints as the or keyword, and || parsed under PIPES_AS_CONCAT becomes a
+// concat() call.
+func TestFormatPipesAsConcatIndependence(t *testing.T) {
+	def := NewTestParser()
+	pipes := def.WithSQLMode(SQLModePipesAsConcat)
+	for _, tc := range []struct {
+		parser *Parser
+		in     string
+		out    string
+	}{
+		{def, "select 'a' || 'b' from t", "select 'a' or 'b' from t"},
+		{def, "select a or b, a and (b or c) from t", "select a or b, a and (b or c) from t"},
+		{pipes, "select 'a' || 'b' from t", "select concat('a', 'b') from t"},
+		{pipes, "select 'a' || 'b' || 'c' from t", "select concat(concat('a', 'b'), 'c') from t"},
+		{pipes, "select a or b from t", "select a or b from t"},
+	} {
+		stmt, err := tc.parser.Parse(tc.in)
+		require.NoError(t, err)
+		out := String(stmt)
+		assert.Equal(t, tc.out, out)
+		assert.NotContains(t, out, "||")
+	}
+}
+
+// Formatted SQL must read identically whether or not the consumer runs with
+// sql_mode=ANSI_QUOTES: no double-quoted token is ever emitted. Strings print
+// single-quoted (double quotes only ever appear inside a single-quoted
+// literal, where ANSI_QUOTES is inert), and identifiers print backticked or
+// bare.
+func TestFormatAnsiQuotesIndependence(t *testing.T) {
+	def := NewTestParser()
+	ansi := def.WithSQLMode(SQLModeANSIQuotes)
+	for _, tc := range []struct {
+		parser *Parser
+		in     string
+		out    string
+	}{
+		// under the default mode a double-quoted token is a string literal
+		{def, `select "x" from t`, `select 'x' from t`},
+		{def, `select "he said ""hi""" from t`, `select 'he said "hi"' from t`},
+		{def, `select 'contains "quotes"' from t`, `select 'contains "quotes"' from t`},
+		// under ANSI_QUOTES it is an identifier
+		{ansi, `select "id" from t`, `select id from t`},
+		{ansi, `select 'contains "quotes"' from t`, `select 'contains "quotes"' from t`},
+	} {
+		stmt, err := tc.parser.Parse(tc.in)
+		require.NoError(t, err)
+		out := String(stmt)
+		assert.Equal(t, tc.out, out)
+		assert.Empty(t, outsideSingleQuotes(out, '"'), "double quote outside a single-quoted literal in %s", out)
+	}
+}
+
+// outsideSingleQuotes returns the occurrences of ch in s that are not inside
+// a single-quoted SQL string literal.
+func outsideSingleQuotes(s string, ch byte) []int {
+	var hits []int
+	inString := false
+	for i := 0; i < len(s); i++ {
+		switch {
+		case s[i] == '\\' && inString:
+			i++
+		case s[i] == '\'':
+			inString = !inString
+		case s[i] == ch && !inString:
+			hits = append(hits, i)
+		}
+	}
+	return hits
 }
 
 // Formatted SQL must read identically whether or not the consumer runs with

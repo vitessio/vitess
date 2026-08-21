@@ -2129,10 +2129,23 @@ func TestQueryExecutorSetSQLMode(t *testing.T) {
 		assert.Equal(t, sqlparser.SQLMode(0), tsv.te.ConnParseSQLMode(txID))
 	})
 
-	t.Run("applied parse-relevant modes are recorded and stripped from MySQL", func(t *testing.T) {
+	t.Run("applied forwardable modes are recorded and stay on MySQL", func(t *testing.T) {
+		// the ANSI members stay applied — MySQL enforces their semantics itself —
+		// and the parse-relevant bits are recorded for the connection's parses;
+		// no strip statement runs (an unregistered query would fail the test)
 		const appliedMode = "REAL_AS_FLOAT,PIPES_AS_CONCAT,ANSI_QUOTES,IGNORE_SPACE,ONLY_FULL_GROUP_BY,ANSI"
-		const stripQuery = "set sql_mode = 'REAL_AS_FLOAT,ONLY_FULL_GROUP_BY'"
 		db.AddQuery(readQuery, modeResult(appliedMode))
+		txID := newTransaction(tsv, nil)
+		defer func() { _, _ = tsv.Rollback(ctx, tsv.sm.Target(), txID) }()
+		qre := newTestQueryExecutor(ctx, tsv, setQuery, txID)
+		_, err := qre.Execute()
+		require.NoError(t, err)
+		assert.Equal(t, sqlparser.ParseSQLMode("ANSI"), tsv.te.ConnParseSQLMode(txID))
+	})
+
+	t.Run("applied modes the backend must not lex under are moved off MySQL", func(t *testing.T) {
+		const stripQuery = "set sql_mode = 'STRICT_TRANS_TABLES'"
+		db.AddQuery(readQuery, modeResult("NO_BACKSLASH_ESCAPES,STRICT_TRANS_TABLES"))
 		db.AddQuery(stripQuery, &sqltypes.Result{})
 		txID := newTransaction(tsv, nil)
 		defer func() { _, _ = tsv.Rollback(ctx, tsv.sm.Target(), txID) }()
@@ -2140,7 +2153,7 @@ func TestQueryExecutorSetSQLMode(t *testing.T) {
 		_, err := qre.Execute()
 		require.NoError(t, err)
 		require.Equal(t, 1, db.GetQueryCalledNum(stripQuery))
-		assert.Equal(t, sqlparser.ParseSQLMode("ANSI"), tsv.te.ConnParseSQLMode(txID))
+		assert.Equal(t, sqlparser.SQLModeNoBackslashEscapes, tsv.te.ConnParseSQLMode(txID))
 	})
 
 	t.Run("a read-back that does not decode as MySQL modes closes the connection", func(t *testing.T) {
@@ -2168,11 +2181,10 @@ func TestQueryExecutorSetSQLMode(t *testing.T) {
 		require.EqualError(t, err, "non-constant sql_mode value in a multi-assignment SET: "+multiSetQuery)
 	})
 
-	t.Run("constant assignments are stripped at plan time without a read-back", func(t *testing.T) {
+	t.Run("constant assignments are judged at plan time without a read-back", func(t *testing.T) {
 		db.DeleteQuery(readQuery)
 		constQuery := "set @@sql_mode = 'PIPES_AS_CONCAT,STRICT_TRANS_TABLES'"
-		strippedQuery := "set @@sql_mode = 'STRICT_TRANS_TABLES'"
-		db.AddQuery(strippedQuery, &sqltypes.Result{})
+		db.AddQuery(constQuery, &sqltypes.Result{})
 		txID := newTransaction(tsv, nil)
 		defer func() { _, _ = tsv.Rollback(ctx, tsv.sm.Target(), txID) }()
 		qre := newTestQueryExecutor(ctx, tsv, constQuery, txID)
@@ -2180,7 +2192,7 @@ func TestQueryExecutorSetSQLMode(t *testing.T) {
 		require.True(t, qre.plan.SetsSQLMode)
 		_, err := qre.Execute()
 		require.NoError(t, err)
-		require.Equal(t, 1, db.GetQueryCalledNum(strippedQuery))
+		require.Equal(t, 1, db.GetQueryCalledNum(constQuery))
 		assert.Equal(t, sqlparser.SQLModePipesAsConcat, tsv.te.ConnParseSQLMode(txID))
 
 		// a later constant assignment without parse-relevant modes clears the bits
@@ -2213,7 +2225,7 @@ func TestQueryExecutorSetSQLMode(t *testing.T) {
 		// rather than leaving it running under a mode that changes how it lexes the
 		// SQL the vttablet sends
 		const stripQuery = "set sql_mode = ''"
-		db.AddQuery(readQuery, modeResult("PIPES_AS_CONCAT"))
+		db.AddQuery(readQuery, modeResult("HIGH_NOT_PRECEDENCE"))
 		db.AddRejectedQuery(stripQuery, errRejected)
 		txID := newTransaction(tsv, nil)
 		qre := newTestQueryExecutor(ctx, tsv, setQuery, txID)
@@ -2247,12 +2259,22 @@ func TestReserveSettingsSQLMode(t *testing.T) {
 	_, _, err = tsv.te.ReserveBegin(ctx, &querypb.ExecuteOptions{}, []string{"this is not SQL"})
 	require.ErrorContains(t, err, "failed to parse connection setting: this is not SQL")
 
-	strippedSetting := "set sql_mode = 'REAL_AS_FLOAT,ONLY_FULL_GROUP_BY'"
+	// forwarded modes are applied as written; the parse bits are recorded
+	ansiSetting := "set sql_mode = 'ANSI'"
+	db.AddQuery(ansiSetting, &sqltypes.Result{})
+	connID, _, err := tsv.te.ReserveBegin(ctx, &querypb.ExecuteOptions{}, []string{ansiSetting})
+	require.NoError(t, err)
+	require.Equal(t, 1, db.GetQueryCalledNum(ansiSetting))
+	assert.Equal(t, sqlparser.ParseSQLMode("ANSI"), tsv.te.ConnParseSQLMode(connID))
+	require.NoError(t, tsv.te.Release(connID))
+
+	// modes the backend must not lex under are stripped from what it executes
+	strippedSetting := "set sql_mode = 'STRICT_TRANS_TABLES'"
 	db.AddQuery(strippedSetting, &sqltypes.Result{})
-	connID, _, err := tsv.te.ReserveBegin(ctx, &querypb.ExecuteOptions{}, []string{"set sql_mode = 'ANSI'"})
+	connID, _, err = tsv.te.ReserveBegin(ctx, &querypb.ExecuteOptions{}, []string{"set sql_mode = 'NO_BACKSLASH_ESCAPES,STRICT_TRANS_TABLES'"})
 	require.NoError(t, err)
 	require.Equal(t, 1, db.GetQueryCalledNum(strippedSetting))
-	assert.Equal(t, sqlparser.ParseSQLMode("ANSI"), tsv.te.ConnParseSQLMode(connID))
+	assert.Equal(t, sqlparser.SQLModeNoBackslashEscapes, tsv.te.ConnParseSQLMode(connID))
 	require.NoError(t, tsv.te.Release(connID))
 
 	validSetting := "set sql_mode = 'STRICT_TRANS_TABLES'"

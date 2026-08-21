@@ -104,15 +104,10 @@ func (ast *astCompiler) translateConvertExpr(expr sqlparser.Expr, convertType *s
 		if err != nil {
 			return nil, err
 		}
-	case "REAL":
-		if ast.cfg.SQLMode.RealAsFloat() {
-			// under REAL_AS_FLOAT, REAL is a synonym for FLOAT, which is
-			// not supported — decline so the expression is pushed down to
-			// the backend, which has the mode
-			return nil, convert.returnUnsupportedError()
-		}
-	case "BINARY", "DOUBLE", "SIGNED", "SIGNED INTEGER", "UNSIGNED", "UNSIGNED INTEGER", "JSON", "TIME", "DATETIME", "DATE":
-		// Supported types for conv expression
+	case "BINARY", "DOUBLE", "REAL", "SIGNED", "SIGNED INTEGER", "UNSIGNED", "UNSIGNED INTEGER", "JSON", "TIME", "DATETIME", "DATE":
+		// Supported types for conv expression. The parser resolves REAL to FLOAT
+		// under sql_mode REAL_AS_FLOAT, so REAL here always means DOUBLE; FLOAT is
+		// not supported and falls through to the pushdown below.
 	default:
 		// For unsupported types, we should return an error on translation instead of returning an error on runtime.
 		return nil, convert.returnUnsupportedError()

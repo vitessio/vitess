@@ -29,18 +29,21 @@ import (
 // statements, and SET_VAR optimizer hints. Settings and SET statements validate
 // constant values with MySQL's semantics (see sqlmode.Validate), returning the same
 // errors the vtgate returns. Valid values are accepted in full — parse-relevant modes
-// included: the vttablet parses queries under those modes itself and gives MySQL a
-// value with them stripped, so MySQL always lexes the vttablet-generated text under
-// the default rules. A non-constant value cannot be judged or stripped at plan time
-// and is handled by entry point: connection settings reject it, since they are
-// applied with no verification afterwards; a SET statement that assigns other
-// variables alongside it is rejected too, since MySQL applies none of a failing SET's
-// assignments and the others would already be applied by the time the value could be
-// judged; a SET statement whose sole assignment it is runs under MySQL's own
-// validation, and the executor reads back the applied value and judges it the same
-// way (see Plan.ReadBackSQLMode). SET_VAR hints are not judged at all: a hint applies to the hinted statement's
-// execution only and cannot change how that statement's own text is lexed, so it is
-// forwarded for MySQL to judge — MySQL warns about and ignores invalid hint values.
+// included: the vttablet parses queries under those modes itself, and the value MySQL is
+// given has NO_BACKSLASH_ESCAPES and HIGH_NOT_PRECEDENCE removed (see
+// sqlparser.StripUnforwardableModes) — the two modes under which MySQL would lex the
+// vttablet-serialized text differently than it was written. Every other mode is
+// forwarded, so MySQL enforces its resolution- and execution-time semantics itself. A
+// non-constant value cannot be judged or stripped at plan time and is handled by entry
+// point: connection settings reject it, since they are applied with no verification
+// afterwards; a SET statement that assigns other variables alongside it is rejected too,
+// since MySQL applies none of a failing SET's assignments and the others would already
+// be applied by the time the value could be judged; a SET statement whose sole
+// assignment it is runs under MySQL's own validation, and the executor reads back the
+// applied value and judges it the same way (see Plan.ReadBackSQLMode). SET_VAR hints are
+// not judged at all: a hint applies to the hinted statement's execution only and cannot
+// change how that statement's own text is lexed, so it is forwarded for MySQL to judge —
+// MySQL warns about and ignores invalid hint values.
 
 // BuildReservedSettings prepares the settings a true reservation executes directly on
 // its tainted connection — the path that does not go through BuildSettingQuery. It
@@ -93,13 +96,14 @@ func validateConstantSetExprsSQLMode(exprs sqlparser.SetExprs) error {
 }
 
 // stripSetExprsSQLMode rewrites constant session-scope sql_mode assignments in place:
-// when the value carries parse-relevant modes, the literal is replaced by its canonical
-// form with those modes removed — the vttablet parses SQL under them itself and sends
-// mode-independent text to MySQL. parseMode holds the parse-relevant bits of the last
-// constant assignment, sawConstant reports whether one was seen (so callers can record
-// the session's bits even when they are zero), and rewrote reports whether any literal
-// changed. Values the caller's validation pass did not reject as invalid are left
-// untouched.
+// when the value carries a mode MySQL must not lex under (see
+// sqlparser.StripUnforwardableModes), the literal is replaced by its canonical form
+// with those modes removed; every other mode is forwarded as written. parseMode holds
+// the parse-relevant bits of the last constant assignment — the modes the vttablet
+// parses queries under — sawConstant reports whether one was seen (so callers can
+// record the session's bits even when they are zero), and rewrote reports whether any
+// literal changed. Values the caller's validation pass did not reject as invalid are
+// left untouched.
 func stripSetExprsSQLMode(exprs sqlparser.SetExprs) (parseMode sqlparser.SQLMode, sawConstant, rewrote bool) {
 	for _, expr := range exprs {
 		if expr.Var.Name.Lowered() != sysvars.SQLMode.Name {
@@ -125,8 +129,8 @@ func stripSetExprsSQLMode(exprs sqlparser.SetExprs) (parseMode sqlparser.SQLMode
 		canonical := mode.String()
 		parseMode = sqlparser.ParseSQLMode(canonical)
 		sawConstant = true
-		if parseMode != 0 {
-			expr.Expr = sqlparser.NewStrLiteral(sqlparser.StripParseRelevantModes(canonical))
+		if stripped := sqlparser.StripUnforwardableModes(canonical); stripped != canonical {
+			expr.Expr = sqlparser.NewStrLiteral(stripped)
 			rewrote = true
 		}
 	}

@@ -2482,7 +2482,7 @@ int_type:
 decimal_type:
 REAL double_length_opt
   {
-    $$ = &ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: realTypeName(yylex, string($1))}
     $$.Length = $2.Length
     $$.Scale = $2.Scale
   }
@@ -8033,7 +8033,7 @@ convert_type:
   }
 | REAL
   {
-    $$ = &ConvertType{Type: string($1)}
+    $$ = &ConvertType{Type: realTypeName(yylex, string($1))}
   }
 
 array_opt:

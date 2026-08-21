@@ -528,37 +528,32 @@ func ParseSQLMode(sqlMode string) SQLMode {
 	return mode
 }
 
-// StripParseRelevantModes returns the given comma-separated sql_mode list
-// with the parse-relevant modes removed. vtgate parses statements itself
-// using those modes and always regenerates mode-independent SQL, so
-// forwarding them to a backend would make it lex Vitess-generated text
-// incorrectly. The ANSI combination mode is expanded so that its
-// execution-relevant parts survive the stripping. The result is
+// StripUnforwardableModes returns the given comma-separated sql_mode list
+// with NO_BACKSLASH_ESCAPES and HIGH_NOT_PRECEDENCE removed — the two modes
+// whose meaning is fully absorbed by the parse-and-reserialize round trip:
+// serialized SQL escapes string literals with backslashes and prints NOT
+// without defensive parentheses, so a consumer lexing under either mode
+// would read that text differently than it was written. Every other mode is
+// forwarded, the ANSI combination and its members included: their lexer
+// aspects are inert on the mode-independent SQL Vitess serializes, while
+// their resolution- and execution-time semantics (e.g. the ANSI aggregate
+// rule, ONLY_FULL_GROUP_BY) are the consumer's to enforce. The result is
 // deduplicated, preserving first occurrences.
-func StripParseRelevantModes(sqlMode string) string {
+func StripUnforwardableModes(sqlMode string) string {
 	var kept []string
 	seen := make(map[string]bool)
-	keep := func(word string) {
-		upper := strings.ToUpper(word)
-		if !seen[upper] {
-			seen[upper] = true
-			kept = append(kept, word)
-		}
-	}
 	for part := range strings.SplitSeq(sqlMode, ",") {
 		word := strings.TrimSpace(part)
 		switch {
 		case word == "":
-		case strings.EqualFold(word, "ANSI_QUOTES"),
-			strings.EqualFold(word, "PIPES_AS_CONCAT"),
-			strings.EqualFold(word, "IGNORE_SPACE"),
-			strings.EqualFold(word, "NO_BACKSLASH_ESCAPES"),
+		case strings.EqualFold(word, "NO_BACKSLASH_ESCAPES"),
 			strings.EqualFold(word, "HIGH_NOT_PRECEDENCE"):
-		case strings.EqualFold(word, "ANSI"):
-			keep("REAL_AS_FLOAT")
-			keep("ONLY_FULL_GROUP_BY")
 		default:
-			keep(word)
+			upper := strings.ToUpper(word)
+			if !seen[upper] {
+				seen[upper] = true
+				kept = append(kept, word)
+			}
 		}
 	}
 	return strings.Join(kept, ",")
@@ -662,11 +657,11 @@ func CanonicalizeSQLModeValue(value string) string {
 	return joined
 }
 
-// StripParseRelevantModesValue applies StripParseRelevantModes to a stored
+// StripUnforwardableModesValue applies StripUnforwardableModes to a stored
 // sql_mode value that may carry surrounding single quotes. Values that are
 // not a plain (possibly quoted) mode list — e.g. expressions — are returned
 // unchanged.
-func StripParseRelevantModesValue(value string) string {
+func StripUnforwardableModesValue(value string) string {
 	inner := value
 	quoted := len(inner) >= 2 && inner[0] == '\'' && inner[len(inner)-1] == '\''
 	if quoted {
@@ -679,7 +674,7 @@ func StripParseRelevantModesValue(value string) string {
 			return value
 		}
 	}
-	stripped := StripParseRelevantModes(inner)
+	stripped := StripUnforwardableModes(inner)
 	if quoted {
 		return "'" + stripped + "'"
 	}
