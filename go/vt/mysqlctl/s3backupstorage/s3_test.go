@@ -18,16 +18,20 @@ package s3backupstorage
 
 import (
 	"bytes"
+	"context"
 	"crypto/md5"
 	"crypto/rand"
 	"encoding/base64"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -605,6 +609,802 @@ func TestReadFile(t *testing.T) {
 
 	err = rc.Close()
 	require.NoError(t, err, "Close() should not error")
+}
+
+func TestReadFileInvalidDownloadFlags(t *testing.T) {
+	bh := &S3BackupHandle{
+		bs: &S3BackupStorage{
+			params: backupstorage.NoParams(),
+			s3SSE:  S3ServerSideEncryption{},
+		},
+		readOnly: true,
+	}
+
+	origPartSize := downloadPartSize
+	origConcurrency := downloadConcurrency
+	origMinPartSize := minPartSize
+	defer func() {
+		downloadPartSize = origPartSize
+		downloadConcurrency = origConcurrency
+		minPartSize = origMinPartSize
+	}()
+
+	// Part size below download minimum (5MiB)
+	downloadPartSize = 1024
+	downloadConcurrency = 5
+	_, err := bh.ReadFile(t.Context(), "testfile")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "5 MiB")
+
+	// Negative part size
+	downloadPartSize = -1
+	_, err = bh.ReadFile(t.Context(), "testfile")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "5 MiB")
+
+	// Zero concurrency
+	downloadPartSize = 8 * 1024 * 1024
+	downloadConcurrency = 0
+	_, err = bh.ReadFile(t.Context(), "testfile")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), ">= 1")
+
+	// Regression: download part size (8MiB) is valid even when upload minPartSize
+	// is set higher (16MiB). The two thresholds must be independent.
+	// We need a real s3Client to get past validation without a nil-pointer panic.
+	minPartSize = 16 * 1024 * 1024
+	downloadPartSize = 8 * 1024 * 1024
+	downloadConcurrency = 5
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer server.Close()
+
+	originalBucket := bucket
+	originalRoot := root
+	defer func() {
+		bucket = originalBucket
+		root = originalRoot
+	}()
+	bucket = "test-bucket"
+	root = ""
+
+	bhWithClient := &S3BackupHandle{
+		s3Client: s3.New(s3.Options{
+			Region:       "us-east-1",
+			BaseEndpoint: aws.String(server.URL),
+			UsePathStyle: true,
+			Credentials: aws.CredentialsProviderFunc(func(_ context.Context) (aws.Credentials, error) {
+				return aws.Credentials{AccessKeyID: "test", SecretAccessKey: "test"}, nil
+			}),
+			Retryer: func() aws.Retryer {
+				return retry.NewStandard(func(o *retry.StandardOptions) { o.MaxAttempts = 1 })
+			}(),
+		}),
+		bs: &S3BackupStorage{
+			params: backupstorage.NoParams(),
+			s3SSE:  S3ServerSideEncryption{},
+		},
+		readOnly: true,
+	}
+
+	_, err = bhWithClient.ReadFile(t.Context(), "testfile")
+	// Validation passes — error is from S3 (404), not from our part-size check
+	require.Error(t, err)
+	require.NotContains(t, err.Error(), "5 MiB")
+}
+
+func TestReadFileSSECHeaderForwarding(t *testing.T) {
+	testData := []byte("sse-c parallel download test data")
+	sseAlg := "AES256"
+	sseKey := "dGVzdC1lbmNyeXB0aW9uLWtleS0xMjM0NTY3ODk=" // base64 test key
+	sseMD5 := "dGVzdC1tZDU="
+
+	// Mock server that rejects HEAD requests without SSE-C headers (like real S3)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "HEAD" {
+			if r.Header.Get("X-Amz-Server-Side-Encryption-Customer-Algorithm") == "" {
+				w.WriteHeader(http.StatusForbidden)
+				w.Write([]byte(`<?xml version="1.0" encoding="UTF-8"?>
+<Error>
+	<Code>AccessDenied</Code>
+	<Message>Requests specifying Server Side Encryption with Customer provided keys must provide an appropriate secret key.</Message>
+</Error>`))
+				return
+			}
+			w.Header().Set("Content-Length", strconv.Itoa(len(testData)))
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		if r.Method == "GET" {
+			w.Header().Set("Content-Range", fmt.Sprintf("bytes 0-%d/%d", len(testData)-1, len(testData)))
+			w.WriteHeader(http.StatusOK)
+			w.Write(testData)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	originalBucket := bucket
+	originalRoot := root
+	defer func() {
+		bucket = originalBucket
+		root = originalRoot
+	}()
+	bucket = "test-bucket"
+	root = ""
+
+	s3Client := s3.New(s3.Options{
+		Region:       "us-east-1",
+		BaseEndpoint: aws.String(server.URL),
+		UsePathStyle: true,
+		Credentials: aws.CredentialsProviderFunc(func(_ context.Context) (aws.Credentials, error) {
+			return aws.Credentials{AccessKeyID: "test", SecretAccessKey: "test"}, nil
+		}),
+		Retryer: func() aws.Retryer {
+			return retry.NewStandard(func(o *retry.StandardOptions) { o.MaxAttempts = 1 })
+		}(),
+	})
+
+	bh := &S3BackupHandle{
+		s3Client: s3Client,
+		bs: &S3BackupStorage{
+			params: backupstorage.NoParams(),
+			s3SSE: S3ServerSideEncryption{
+				customerAlg: &sseAlg,
+				customerKey: &sseKey,
+				customerMd5: &sseMD5,
+			},
+		},
+		dir:      "testdir",
+		name:     "testbackup",
+		readOnly: true,
+	}
+
+	rc, err := bh.ReadFile(t.Context(), "testfile")
+	require.NoError(t, err, "ReadFile with SSE-C should succeed via header forwarding workaround")
+	require.NotNil(t, rc)
+
+	data, err := io.ReadAll(rc)
+	require.NoError(t, err)
+	require.Equal(t, testData, data)
+	require.NoError(t, rc.Close())
+}
+
+func TestReadFileParallelismSmallReads(t *testing.T) {
+	const objectSize = 40 * 1024 * 1024 // 40MiB
+	testData := bytes.Repeat([]byte("x"), objectSize)
+
+	var (
+		mu          sync.Mutex
+		maxInFlight int
+		curInFlight int
+	)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "HEAD" {
+			w.Header().Set("Content-Length", strconv.Itoa(len(testData)))
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		if r.Method == "GET" {
+			mu.Lock()
+			curInFlight++
+			if curInFlight > maxInFlight {
+				maxInFlight = curInFlight
+			}
+			mu.Unlock()
+
+			time.Sleep(20 * time.Millisecond)
+
+			mu.Lock()
+			curInFlight--
+			mu.Unlock()
+
+			rangeHdr := r.Header.Get("Range")
+			if rangeHdr == "" {
+				w.Header().Set("Content-Length", strconv.Itoa(len(testData)))
+				w.WriteHeader(http.StatusOK)
+				w.Write(testData)
+				return
+			}
+			var start, end int
+			fmt.Sscanf(rangeHdr, "bytes=%d-%d", &start, &end)
+			if end >= len(testData) {
+				end = len(testData) - 1
+			}
+			chunk := testData[start : end+1]
+			w.Header().Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", start, end, len(testData)))
+			w.Header().Set("Content-Length", strconv.Itoa(len(chunk)))
+			w.WriteHeader(http.StatusPartialContent)
+			w.Write(chunk)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	originalBucket := bucket
+	originalRoot := root
+	origPartSize := downloadPartSize
+	origConcurrency := downloadConcurrency
+	defer func() {
+		bucket = originalBucket
+		root = originalRoot
+		downloadPartSize = origPartSize
+		downloadConcurrency = origConcurrency
+	}()
+	bucket = "test-bucket"
+	root = ""
+	downloadPartSize = 8 * 1024 * 1024 // 8MiB parts
+	downloadConcurrency = 4            // expect ~4 parallel GETs
+
+	s3Client := s3.New(s3.Options{
+		Region:       "us-east-1",
+		BaseEndpoint: aws.String(server.URL),
+		UsePathStyle: true,
+		Credentials: aws.CredentialsProviderFunc(func(_ context.Context) (aws.Credentials, error) {
+			return aws.Credentials{AccessKeyID: "test", SecretAccessKey: "test"}, nil
+		}),
+		Retryer: func() aws.Retryer {
+			return retry.NewStandard(func(o *retry.StandardOptions) { o.MaxAttempts = 1 })
+		}(),
+	})
+
+	bh := &S3BackupHandle{
+		s3Client: s3Client,
+		bs: &S3BackupStorage{
+			params: backupstorage.NoParams(),
+			s3SSE:  S3ServerSideEncryption{},
+		},
+		dir:      "testdir",
+		name:     "testbackup",
+		readOnly: true,
+	}
+
+	rc, err := bh.ReadFile(t.Context(), "testfile")
+	require.NoError(t, err)
+
+	// Simulate pgzip's decompression pattern: read through a 4 KiB buffer.
+	// Without the bufio.Reader wrapper, each 4 KiB read would trigger a full
+	// worker pool spin-up in the transfer manager's concurrentReader.
+	buf := make([]byte, 4096)
+	var totalRead int
+	for {
+		n, readErr := rc.Read(buf)
+		totalRead += n
+		if readErr == io.EOF {
+			break
+		}
+		require.NoError(t, readErr)
+	}
+	require.Equal(t, objectSize, totalRead)
+	require.NoError(t, rc.Close())
+
+	assert.GreaterOrEqual(t, maxInFlight, downloadConcurrency-1,
+		"expected at least %d parallel GETs, got %d", downloadConcurrency-1, maxInFlight)
+}
+
+func TestDownloadBufferSizeValidation(t *testing.T) {
+	tests := []struct {
+		name        string
+		partSize    int64
+		concurrency int
+		wantErr     string
+	}{
+		{
+			name:        "valid defaults",
+			partSize:    8 * 1024 * 1024,
+			concurrency: 5,
+		},
+		{
+			name:        "multiplication overflow",
+			partSize:    math.MaxInt64,
+			concurrency: 2,
+			wantErr:     "overflows int64",
+		},
+		{
+			name:        "addition overflow",
+			partSize:    math.MaxInt64/2 + 1,
+			concurrency: 1,
+			wantErr:     "overflows int64",
+		},
+		{
+			name:        "exceeds per-file memory limit",
+			partSize:    128 * 1024 * 1024, // 128MiB
+			concurrency: 8,                 // window=1GiB + part=128MiB = 1152MiB > 1GiB limit
+			wantErr:     "exceeds limit",
+		},
+		{
+			name:        "at boundary - fits exactly",
+			partSize:    100 * 1024 * 1024, // 100MiB
+			concurrency: 9,                 // window=900MiB + part=100MiB = 1000MiB < 1GiB
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			size, err := downloadBufferSize(tt.partSize, tt.concurrency)
+			if tt.wantErr != "" {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.wantErr)
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, tt.partSize*int64(tt.concurrency), size)
+			}
+		})
+	}
+}
+
+// closeTrackingTransport wraps an http.RoundTripper and replaces response
+// bodies with a trackingBody that records Close calls.
+type closeTrackingTransport struct {
+	wrapped    http.RoundTripper
+	bodyClosed atomic.Int32
+}
+
+func (t *closeTrackingTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	resp, err := t.wrapped.RoundTrip(req)
+	if err != nil {
+		return resp, err
+	}
+	if req.Method == "GET" {
+		resp.Body = &trackingBody{ReadCloser: resp.Body, closed: &t.bodyClosed}
+	}
+	return resp, err
+}
+
+type trackingBody struct {
+	io.ReadCloser
+	closed *atomic.Int32
+}
+
+func (b *trackingBody) Close() error {
+	b.closed.Add(1)
+	return b.ReadCloser.Close()
+}
+
+func TestReadFileZeroLengthObjectCloser(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "HEAD" {
+			w.Header().Set("Content-Length", "0")
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		if r.Method == "GET" {
+			w.Header().Set("Content-Length", "0")
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	originalBucket := bucket
+	originalRoot := root
+	origPartSize := downloadPartSize
+	origConcurrency := downloadConcurrency
+	defer func() {
+		bucket = originalBucket
+		root = originalRoot
+		downloadPartSize = origPartSize
+		downloadConcurrency = origConcurrency
+	}()
+	bucket = "test-bucket"
+	root = ""
+	downloadPartSize = 8 * 1024 * 1024
+	downloadConcurrency = 5
+
+	// Use a custom transport that tracks response body Close calls
+	tracker := &closeTrackingTransport{
+		wrapped: &http.Transport{},
+	}
+
+	s3Client := s3.New(s3.Options{
+		Region:       "us-east-1",
+		BaseEndpoint: aws.String(server.URL),
+		UsePathStyle: true,
+		HTTPClient:   &http.Client{Transport: tracker},
+		Credentials: aws.CredentialsProviderFunc(func(_ context.Context) (aws.Credentials, error) {
+			return aws.Credentials{AccessKeyID: "test", SecretAccessKey: "test"}, nil
+		}),
+		Retryer: func() aws.Retryer {
+			return retry.NewStandard(func(o *retry.StandardOptions) { o.MaxAttempts = 1 })
+		}(),
+	})
+
+	bh := &S3BackupHandle{
+		s3Client: s3Client,
+		bs: &S3BackupStorage{
+			params: backupstorage.NoParams(),
+			s3SSE:  S3ServerSideEncryption{},
+		},
+		dir:      "testdir",
+		name:     "testbackup",
+		readOnly: true,
+	}
+
+	rc, err := bh.ReadFile(t.Context(), "empty-object")
+	require.NoError(t, err)
+
+	data, err := io.ReadAll(rc)
+	require.NoError(t, err)
+	require.Empty(t, data)
+
+	// Body must not be closed yet — only our explicit Close should trigger it
+	assert.Equal(t, int32(0), tracker.bodyClosed.Load(),
+		"response body should not be closed before rc.Close()")
+
+	err = rc.Close()
+	require.NoError(t, err)
+
+	// After Close, the underlying response body must have been closed
+	assert.Equal(t, int32(1), tracker.bodyClosed.Load(),
+		"response body should be closed exactly once after rc.Close()")
+}
+
+func TestReadFileCoalescesSmallReads(t *testing.T) {
+	// This test verifies read coalescing behavior: when the caller reads in small
+	// chunks (4 KiB, as pgzip does), the underlying SDK body must see far fewer
+	// Read() calls. Without coalescing, each 4 KiB caller-read maps 1:1 to a
+	// concurrentReader.Read(), each of which spawns Concurrency goroutines.
+	const objectSize = 8 * 1024 * 1024 // 8MiB — exactly one download part
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "HEAD" {
+			w.Header().Set("Content-Length", strconv.Itoa(objectSize))
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		if r.Method == "GET" {
+			w.Header().Set("Content-Length", strconv.Itoa(objectSize))
+			w.WriteHeader(http.StatusOK)
+			w.Write(bytes.Repeat([]byte("y"), objectSize))
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	originalBucket := bucket
+	originalRoot := root
+	origPartSize := downloadPartSize
+	origConcurrency := downloadConcurrency
+	defer func() {
+		bucket = originalBucket
+		root = originalRoot
+		downloadPartSize = origPartSize
+		downloadConcurrency = origConcurrency
+	}()
+	bucket = "test-bucket"
+	root = ""
+	downloadPartSize = 8 * 1024 * 1024
+	downloadConcurrency = 5
+
+	s3Client := s3.New(s3.Options{
+		Region:       "us-east-1",
+		BaseEndpoint: aws.String(server.URL),
+		UsePathStyle: true,
+		Credentials: aws.CredentialsProviderFunc(func(_ context.Context) (aws.Credentials, error) {
+			return aws.Credentials{AccessKeyID: "test", SecretAccessKey: "test"}, nil
+		}),
+		Retryer: func() aws.Retryer {
+			return retry.NewStandard(func(o *retry.StandardOptions) { o.MaxAttempts = 1 })
+		}(),
+	})
+
+	bh := &S3BackupHandle{
+		s3Client: s3Client,
+		bs: &S3BackupStorage{
+			params: backupstorage.NoParams(),
+			s3SSE:  S3ServerSideEncryption{},
+		},
+		dir:      "testdir",
+		name:     "testbackup",
+		readOnly: true,
+	}
+
+	// Install a test hook that counts Read calls on the SDK body BEFORE the
+	// coalescing layer. This lets us observe the actual coalescing ratio without
+	// pinning a specific implementation (bufio vs custom reader).
+	var innerCounter readCounter
+	testBodyWrapHook = func(r io.Reader) io.Reader {
+		innerCounter.reader = r
+		return &innerCounter
+	}
+	t.Cleanup(func() { testBodyWrapHook = nil })
+
+	rc, err := bh.ReadFile(t.Context(), "testfile")
+	require.NoError(t, err)
+
+	// Read in 4 KiB chunks (simulating pgzip)
+	buf := make([]byte, 4096)
+	callerReads := 0
+	var totalRead int
+	for {
+		n, readErr := rc.Read(buf)
+		totalRead += n
+		callerReads++
+		if readErr == io.EOF {
+			break
+		}
+		require.NoError(t, readErr)
+	}
+	require.Equal(t, objectSize, totalRead)
+	require.NoError(t, rc.Close())
+
+	// The caller made ~2048 reads (8MiB / 4KiB). With coalescing, the inner
+	// reader should see a small fraction of that — the coalescing layer batches
+	// many small reads into fewer large reads on the underlying body. Without
+	// coalescing the ratio would be ~1:1.
+	innerReads := innerCounter.count.Load()
+	ratio := float64(callerReads) / float64(innerReads)
+	assert.Greater(t, ratio, float64(10),
+		"expected coalescing ratio >10x (caller=%d, inner=%d) — read coalescing may be missing",
+		callerReads, innerReads)
+}
+
+type readCounter struct {
+	reader io.Reader
+	count  atomic.Int64
+}
+
+func (r *readCounter) Read(p []byte) (int, error) {
+	r.count.Add(1)
+	return r.reader.Read(p)
+}
+
+func TestReadFileMidStreamError(t *testing.T) {
+	// Verifies that a non-EOF error from a later range GET surfaces to the caller.
+	const objectSize = 24 * 1024 * 1024 // 24MiB (3 parts at 8MiB)
+
+	var rangeRequests atomic.Int32
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "HEAD" {
+			w.Header().Set("Content-Length", strconv.Itoa(objectSize))
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		if r.Method == "GET" {
+			reqNum := rangeRequests.Add(1)
+			// Fail the 3rd range request
+			if reqNum >= 3 {
+				w.WriteHeader(http.StatusInternalServerError)
+				w.Write([]byte(`<?xml version="1.0" encoding="UTF-8"?><Error><Code>InternalError</Code><Message>simulated failure</Message></Error>`))
+				return
+			}
+			rangeHdr := r.Header.Get("Range")
+			var start, end int
+			fmt.Sscanf(rangeHdr, "bytes=%d-%d", &start, &end)
+			if end >= objectSize {
+				end = objectSize - 1
+			}
+			chunk := bytes.Repeat([]byte("z"), end-start+1)
+			w.Header().Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", start, end, objectSize))
+			w.Header().Set("Content-Length", strconv.Itoa(len(chunk)))
+			w.WriteHeader(http.StatusPartialContent)
+			w.Write(chunk)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	originalBucket := bucket
+	originalRoot := root
+	origPartSize := downloadPartSize
+	origConcurrency := downloadConcurrency
+	defer func() {
+		bucket = originalBucket
+		root = originalRoot
+		downloadPartSize = origPartSize
+		downloadConcurrency = origConcurrency
+	}()
+	bucket = "test-bucket"
+	root = ""
+	downloadPartSize = 8 * 1024 * 1024
+	downloadConcurrency = 2
+
+	s3Client := s3.New(s3.Options{
+		Region:       "us-east-1",
+		BaseEndpoint: aws.String(server.URL),
+		UsePathStyle: true,
+		Credentials: aws.CredentialsProviderFunc(func(_ context.Context) (aws.Credentials, error) {
+			return aws.Credentials{AccessKeyID: "test", SecretAccessKey: "test"}, nil
+		}),
+		Retryer: func() aws.Retryer {
+			return retry.NewStandard(func(o *retry.StandardOptions) { o.MaxAttempts = 1 })
+		}(),
+	})
+
+	bh := &S3BackupHandle{
+		s3Client: s3Client,
+		bs: &S3BackupStorage{
+			params: backupstorage.NoParams(),
+			s3SSE:  S3ServerSideEncryption{},
+		},
+		dir:      "testdir",
+		name:     "testbackup",
+		readOnly: true,
+	}
+
+	rc, err := bh.ReadFile(t.Context(), "testfile")
+	require.NoError(t, err)
+
+	// Read until we hit the error
+	buf := make([]byte, 64*1024)
+	var sawError bool
+	for {
+		_, readErr := rc.Read(buf)
+		if readErr != nil {
+			if readErr != io.EOF {
+				sawError = true
+			}
+			break
+		}
+	}
+	assert.True(t, sawError, "expected a non-EOF error to surface from failed range GET")
+	rc.Close()
+}
+
+func TestReadFileCloseAfterPartialRead(t *testing.T) {
+	// Verifies that Close() works correctly after only partially reading an object.
+	const objectSize = 24 * 1024 * 1024 // 24MiB
+	testData := bytes.Repeat([]byte("p"), objectSize)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "HEAD" {
+			w.Header().Set("Content-Length", strconv.Itoa(len(testData)))
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		if r.Method == "GET" {
+			rangeHdr := r.Header.Get("Range")
+			if rangeHdr == "" {
+				w.Header().Set("Content-Length", strconv.Itoa(len(testData)))
+				w.WriteHeader(http.StatusOK)
+				w.Write(testData)
+				return
+			}
+			var start, end int
+			fmt.Sscanf(rangeHdr, "bytes=%d-%d", &start, &end)
+			if end >= len(testData) {
+				end = len(testData) - 1
+			}
+			chunk := testData[start : end+1]
+			w.Header().Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", start, end, len(testData)))
+			w.Header().Set("Content-Length", strconv.Itoa(len(chunk)))
+			w.WriteHeader(http.StatusPartialContent)
+			w.Write(chunk)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	originalBucket := bucket
+	originalRoot := root
+	origPartSize := downloadPartSize
+	origConcurrency := downloadConcurrency
+	defer func() {
+		bucket = originalBucket
+		root = originalRoot
+		downloadPartSize = origPartSize
+		downloadConcurrency = origConcurrency
+	}()
+	bucket = "test-bucket"
+	root = ""
+	downloadPartSize = 8 * 1024 * 1024
+	downloadConcurrency = 3
+
+	s3Client := s3.New(s3.Options{
+		Region:       "us-east-1",
+		BaseEndpoint: aws.String(server.URL),
+		UsePathStyle: true,
+		Credentials: aws.CredentialsProviderFunc(func(_ context.Context) (aws.Credentials, error) {
+			return aws.Credentials{AccessKeyID: "test", SecretAccessKey: "test"}, nil
+		}),
+		Retryer: func() aws.Retryer {
+			return retry.NewStandard(func(o *retry.StandardOptions) { o.MaxAttempts = 1 })
+		}(),
+	})
+
+	bh := &S3BackupHandle{
+		s3Client: s3Client,
+		bs: &S3BackupStorage{
+			params: backupstorage.NoParams(),
+			s3SSE:  S3ServerSideEncryption{},
+		},
+		dir:      "testdir",
+		name:     "testbackup",
+		readOnly: true,
+	}
+
+	rc, err := bh.ReadFile(t.Context(), "testfile")
+	require.NoError(t, err)
+
+	// Read only 1 MiB of the 24 MiB object
+	buf := make([]byte, 1024*1024)
+	n, err := io.ReadFull(rc, buf)
+	require.NoError(t, err)
+	require.Equal(t, 1024*1024, n)
+
+	// Close without reading the rest — must not panic or hang
+	err = rc.Close()
+	require.NoError(t, err)
+}
+
+func TestReadFileSubPartObject(t *testing.T) {
+	// Tests reading an object smaller than one download part (e.g. MANIFEST).
+	// The transfer manager may use a single GET or a simpler code path for these.
+	testData := []byte(`{"files": ["file1.xbstream", "file2.xbstream"]}`)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "HEAD" {
+			w.Header().Set("Content-Length", strconv.Itoa(len(testData)))
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		if r.Method == "GET" {
+			w.Header().Set("Content-Length", strconv.Itoa(len(testData)))
+			w.WriteHeader(http.StatusOK)
+			w.Write(testData)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	originalBucket := bucket
+	originalRoot := root
+	origPartSize := downloadPartSize
+	origConcurrency := downloadConcurrency
+	defer func() {
+		bucket = originalBucket
+		root = originalRoot
+		downloadPartSize = origPartSize
+		downloadConcurrency = origConcurrency
+	}()
+	bucket = "test-bucket"
+	root = ""
+	downloadPartSize = 8 * 1024 * 1024 // 8MiB — object is only ~47 bytes
+	downloadConcurrency = 5
+
+	s3Client := s3.New(s3.Options{
+		Region:       "us-east-1",
+		BaseEndpoint: aws.String(server.URL),
+		UsePathStyle: true,
+		Credentials: aws.CredentialsProviderFunc(func(_ context.Context) (aws.Credentials, error) {
+			return aws.Credentials{AccessKeyID: "test", SecretAccessKey: "test"}, nil
+		}),
+		Retryer: func() aws.Retryer {
+			return retry.NewStandard(func(o *retry.StandardOptions) { o.MaxAttempts = 1 })
+		}(),
+	})
+
+	bh := &S3BackupHandle{
+		s3Client: s3Client,
+		bs: &S3BackupStorage{
+			params: backupstorage.NoParams(),
+			s3SSE:  S3ServerSideEncryption{},
+		},
+		dir:      "testdir",
+		name:     "testbackup",
+		readOnly: true,
+	}
+
+	rc, err := bh.ReadFile(t.Context(), "MANIFEST")
+	require.NoError(t, err)
+
+	data, err := io.ReadAll(rc)
+	require.NoError(t, err)
+	require.Equal(t, testData, data)
+
+	err = rc.Close()
+	require.NoError(t, err)
 }
 
 func TestReadFileOnWriteHandle(t *testing.T) {
