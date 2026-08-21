@@ -109,6 +109,9 @@ func (fbh *FileBackupHandle) AddFile(ctx context.Context, filename string, files
 }
 
 // EndBackup is part of the BackupHandle interface
+// Wait is part of the BackupHandle interface.
+func (fbh *FileBackupHandle) Wait() {}
+
 func (fbh *FileBackupHandle) EndBackup(ctx context.Context) error {
 	if fbh.readOnly {
 		return fmt.Errorf("EndBackup cannot be called on read-only backup")

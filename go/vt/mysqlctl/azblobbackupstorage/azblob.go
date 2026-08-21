@@ -249,15 +249,8 @@ func (bh *AZBlobBackupHandle) AddFile(ctx context.Context, filename string, file
 	reader, writer := io.Pipe()
 	bh.waitGroup.Add(1)
 
-<<<<<<< HEAD
 	go func() {
 		defer bh.waitGroup.Done()
-		_, err := azblob.UploadStreamToBlockBlob(bh.ctx, reader, blockBlobURL, azblob.UploadStreamToBlockBlobOptions{
-||||||| parent of 15366bf4b5 (mysqlctl: prevent closeBackupFiles from cancelling context on successful file close, protecting   in-flight S3/Ceph uploads (#20771))
-	bh.waitGroup.Go(func() {
-		_, err := azblob.UploadStreamToBlockBlob(bh.ctx, reader, blockBlobURL, azblob.UploadStreamToBlockBlobOptions{
-=======
-	bh.waitGroup.Go(func() {
 		// The upload must honor both the per-file context and the handle-level
 		// abort context: callers cancel the per-file ctx to stop a failing
 		// backup promptly, while AbortBackup cancels bh.ctx. Waiting on this
@@ -267,7 +260,6 @@ func (bh *AZBlobBackupHandle) AddFile(ctx context.Context, filename string, file
 		defer cleanup()
 
 		_, err := azblob.UploadStreamToBlockBlob(uploadCtx, reader, blockBlobURL, azblob.UploadStreamToBlockBlobOptions{
->>>>>>> 15366bf4b5 (mysqlctl: prevent closeBackupFiles from cancelling context on successful file close, protecting   in-flight S3/Ceph uploads (#20771))
 			BufferSize: azBlobBufferSize.Get(),
 			MaxBuffers: azBlobParallelism.Get(),
 		})
@@ -280,14 +272,6 @@ func (bh *AZBlobBackupHandle) AddFile(ctx context.Context, filename string, file
 	return writer, nil
 }
 
-<<<<<<< HEAD
-||||||| parent of 15366bf4b5 (mysqlctl: prevent closeBackupFiles from cancelling context on successful file close, protecting   in-flight S3/Ceph uploads (#20771))
-// Wait implements BackupHandle.
-func (bh *AZBlobBackupHandle) Wait() {
-	bh.waitGroup.Wait()
-}
-
-=======
 // mergeCancel returns a context derived from parent that is also cancelled when
 // other is cancelled, along with a cleanup function that must be called when
 // the work is done to release resources and stop watching other. Context values
@@ -308,7 +292,6 @@ func (bh *AZBlobBackupHandle) Wait() {
 	bh.waitGroup.Wait()
 }
 
->>>>>>> 15366bf4b5 (mysqlctl: prevent closeBackupFiles from cancelling context on successful file close, protecting   in-flight S3/Ceph uploads (#20771))
 // EndBackup implements BackupHandle.
 func (bh *AZBlobBackupHandle) EndBackup(ctx context.Context) error {
 	if bh.readOnly {
