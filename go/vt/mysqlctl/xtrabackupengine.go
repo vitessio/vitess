@@ -376,6 +376,17 @@ func (be *XtrabackupEngine) executeFullBackup(ctx context.Context, params Backup
 	return BackupUsable, nil
 }
 
+// waitBackupHandle drains in-flight asynchronous uploads for backends that
+// support it. Wait() is deliberately not part of the BackupHandle interface on
+// this release branch: adding it in a patch release would break out-of-tree
+// implementations. Backends without a Wait method keep draining in
+// EndBackup(), as they did before this backport.
+func waitBackupHandle(bh backupstorage.BackupHandle) {
+	if w, ok := bh.(interface{ Wait() }); ok {
+		w.Wait()
+	}
+}
+
 func (be *XtrabackupEngine) backupFiles(
 	ctx context.Context,
 	params BackupParams,
@@ -428,7 +439,7 @@ func (be *XtrabackupEngine) backupFiles(
 			// upload landing after that removal would recreate part of the
 			// backup we're trying to discard.
 			cancelAddFiles()
-			bh.Wait()
+			waitBackupHandle(bh)
 			return
 		}
 
@@ -437,7 +448,7 @@ func (be *XtrabackupEngine) backupFiles(
 		// MANIFEST, for the same reason: the MANIFEST must not be written
 		// (and the backup must not be reported usable) while an upload that
 		// could still fail is outstanding.
-		bh.Wait()
+		waitBackupHandle(bh)
 		if err := bh.Error(); err != nil {
 			finalErr = vterrors.Wrap(err, "error uploading backup file")
 		}
