@@ -890,6 +890,16 @@ func (tpb *tablePlanBuilder) generateMultiDeleteStatement() *sqlparser.ParsedQue
 		(len(tpb.pkCols)+len(tpb.extraSourcePkCols)) != 1 {
 		return nil
 	}
+	// A bulk DELETE is only valid for insertNormal plans. Grouped plans must
+	// stay on the per-row path, which applies the semantics that
+	// generateDeleteStatement chose for them: a count-decrementing UPDATE for
+	// insertOnDup, and a deliberate no-op for insertIgnore (one target row can
+	// be backed by multiple source rows, so deleting it would be incorrect).
+	// Note that these plans also never populate tpb.pkIndices, so the bulk
+	// path could not derive a valid PK index for them anyway.
+	if tpb.onInsert != insertNormal {
+		return nil
+	}
 	return sqlparser.BuildParsedQuery(
 		"delete from %s where %s in %a",
 		sqlparser.String(tpb.name),
