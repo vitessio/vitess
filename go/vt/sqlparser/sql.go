@@ -16010,7 +16010,7 @@ yydefault:
 		var yyLOCAL *ColumnType
 //line sql.y:2477
 		{
-			yyLOCAL = &ColumnType{Type: string(yyDollar[1].str())}
+			yyLOCAL = &ColumnType{Type: realTypeName(yylex, string(yyDollar[1].str()))}
 			yyLOCAL.Length = yyDollar[2].LengthScaleOption().Length
 			yyLOCAL.Scale = yyDollar[2].LengthScaleOption().Scale
 		}
@@ -25770,7 +25770,7 @@ yydefault:
 		var yyLOCAL *ConvertType
 //line sql.y:8024
 		{
-			yyLOCAL = &ConvertType{Type: string(yyDollar[1].str())}
+			yyLOCAL = &ConvertType{Type: realTypeName(yylex, string(yyDollar[1].str()))}
 		}
 		yyVAL.setconvertType(yyLOCAL)
 	case 1602:

@@ -27,7 +27,6 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/callerid"
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtenv"
 )
 
@@ -166,7 +165,6 @@ func NewExpressionEnv(ctx context.Context, bindVars map[string]*querypb.BindVari
 const (
 	sqlModeParsed = 1 << iota
 	sqlModeNoZeroDate
-	sqlModeRealAsFloat
 )
 
 type SQLMode uint32
@@ -179,22 +177,10 @@ func (mode SQLMode) AllowZeroDate() bool {
 	return (mode & sqlModeNoZeroDate) == 0
 }
 
-// RealAsFloat reports whether the REAL type is a synonym for FLOAT instead
-// of DOUBLE.
-func (mode SQLMode) RealAsFloat() bool {
-	return (mode & sqlModeRealAsFloat) != 0
-}
-
 func ParseSQLMode(sqlmode string) SQLMode {
 	var mode SQLMode
 	if strings.Contains(sqlmode, "NO_ZERO_DATE") {
 		mode |= sqlModeNoZeroDate
-	}
-	// word-aware parsing: REAL_AS_FLOAT is also implied by the ANSI
-	// combination mode, which a substring match would confuse with
-	// ANSI_QUOTES
-	if sqlparser.ParseSQLMode(sqlmode)&sqlparser.SQLModeRealAsFloat != 0 {
-		mode |= sqlModeRealAsFloat
 	}
 	mode |= sqlModeParsed
 	return mode

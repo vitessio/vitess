@@ -316,12 +316,11 @@ func TestSessionSQLModeParsingReservedConn(t *testing.T) {
 	_, err = executorExecSession(t.Context(), executor, session, "select 'a' || 'b' from information_schema.table", map[string]*querypb.BindVariable{})
 	require.NoError(t, err)
 
-	// The reserved connection receives only the execution-relevant modes,
-	// while the query is parsed under the session's full mode: || lowers to
-	// concat().
+	// The reserved connection receives the forwarded modes as set, and the
+	// query is parsed under the session's full mode: || lowers to concat().
 	wantQueries := []*querypb.BoundQuery{
 		{Sql: "select @@sql_mode orig, 'PIPES_AS_CONCAT,STRICT_TRANS_TABLES' new"},
-		{Sql: "set sql_mode = 'STRICT_TRANS_TABLES'", BindVariables: map[string]*querypb.BindVariable{
+		{Sql: "set sql_mode = 'PIPES_AS_CONCAT,STRICT_TRANS_TABLES'", BindVariables: map[string]*querypb.BindVariable{
 			"vtg1": sqltypes.StringBindVariable("a"),
 			"vtg2": sqltypes.StringBindVariable("b"),
 		}},
@@ -410,7 +409,7 @@ func TestSessionSQLModeNumericAssignment(t *testing.T) {
 	_, err = executorExecSession(t.Context(), executor, session, `select "id" from information_schema.table`, map[string]*querypb.BindVariable{})
 	require.NoError(t, err)
 	require.Len(t, lookup.Queries, 1)
-	assert.Equal(t, "select /*+ SET_VAR(sql_mode = ' ') */ id from information_schema.`table`", lookup.Queries[0].Sql)
+	assert.Equal(t, "select /*+ SET_VAR(sql_mode = 'ANSI_QUOTES') */ id from information_schema.`table`", lookup.Queries[0].Sql)
 }
 
 func TestSessionSQLModeParsing(t *testing.T) {
@@ -433,14 +432,13 @@ func TestSessionSQLModeParsing(t *testing.T) {
 	lookup.Queries = nil
 
 	// The query must now be parsed under PIPES_AS_CONCAT: || lowers to
-	// concat() in the routed query, and the parse-relevant mode is stripped
-	// from what is forwarded to the backend (leaving the empty mode, spelled
-	// ' ' to satisfy SET_VAR's parser).
+	// concat() in the routed query, and the mode is forwarded to the backend,
+	// where its lexer aspect is inert on the canonical text.
 	_, err = executor.Execute(t.Context(), nil, "TestSelect", session, "select 'a' || 'b' from information_schema.table", map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	require.False(t, session.InReservedConn())
 	wantQueries := []*querypb.BoundQuery{
-		{Sql: "select /*+ SET_VAR(sql_mode = ' ') */ concat(:vtg1 /* VARCHAR */, :vtg2 /* VARCHAR */) from information_schema.`table`", BindVariables: map[string]*querypb.BindVariable{
+		{Sql: "select /*+ SET_VAR(sql_mode = 'PIPES_AS_CONCAT') */ concat(:vtg1 /* VARCHAR */, :vtg2 /* VARCHAR */) from information_schema.`table`", BindVariables: map[string]*querypb.BindVariable{
 			"vtg1": sqltypes.StringBindVariable("a"),
 			"vtg2": sqltypes.StringBindVariable("b"),
 		}},

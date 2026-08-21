@@ -101,24 +101,3 @@ func TestExpressionEnvTypeOf(t *testing.T) {
 		})
 	}
 }
-
-func TestParseSQLModeRealAsFloat(t *testing.T) {
-	testcases := []struct {
-		in          string
-		realAsFloat bool
-	}{
-		{in: "", realAsFloat: false},
-		{in: "REAL_AS_FLOAT", realAsFloat: true},
-		{in: "real_as_float,STRICT_TRANS_TABLES", realAsFloat: true},
-		// the ANSI combination mode includes REAL_AS_FLOAT
-		{in: "ANSI", realAsFloat: true},
-		// ANSI_QUOTES must not be mistaken for the ANSI combination mode
-		{in: "ANSI_QUOTES", realAsFloat: false},
-		{in: "STRICT_TRANS_TABLES,NO_ZERO_DATE", realAsFloat: false},
-	}
-	for _, tc := range testcases {
-		t.Run(tc.in, func(t *testing.T) {
-			require.Equal(t, tc.realAsFloat, ParseSQLMode(tc.in).RealAsFloat())
-		})
-	}
-}

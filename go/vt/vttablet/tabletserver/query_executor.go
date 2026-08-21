@@ -1279,26 +1279,24 @@ func (qre *QueryExecutor) execSet(conn *StatefulConnection) (*sqltypes.Result, e
 }
 
 // recordAppliedSQLMode records the parse-relevant bits of the sql_mode a SET put the
-// connection's session in. When the applied value carries parse-relevant modes, MySQL is
-// given the value with them stripped — the connection parses SQL under those modes
-// itself and must send text MySQL lexes under the default rules. Only if the stripping
-// statement fails is the connection closed rather than left running under a mode that
-// changes how it lexes the SQL the vttablet sends.
+// connection's session in — the modes later queries on the connection are parsed
+// under. When the applied value carries a mode MySQL must not lex under (see
+// sqlparser.StripUnforwardableModes), MySQL is given the value with those modes
+// removed; every other mode stays applied. Only if that stripping statement fails is
+// the connection closed rather than left running under a mode that changes how it
+// lexes the SQL the vttablet sends.
 func (qre *QueryExecutor) recordAppliedSQLMode(conn *StatefulConnection, mode sqlmode.Mode) error {
 	canonical := mode.String()
-	parseBits := sqlparser.ParseSQLMode(canonical)
-	if parseBits == 0 {
-		conn.SetParseSQLMode(0)
-		return nil
+	if stripped := sqlparser.StripUnforwardableModes(canonical); stripped != canonical {
+		strip := "set sql_mode = " + sqltypes.EncodeStringSQL(stripped)
+		if _, err := qre.execStatefulConn(conn, strip, false); err != nil {
+			log.Warn("closing connection: could not strip the applied sql_mode",
+				slog.Any("error", err), slog.Int64("connID", conn.ID()))
+			conn.Close()
+			return err
+		}
 	}
-	strip := "set sql_mode = " + sqltypes.EncodeStringSQL(sqlparser.StripParseRelevantModes(canonical))
-	if _, err := qre.execStatefulConn(conn, strip, false); err != nil {
-		log.Warn("closing connection: could not strip the parse-relevant modes from the applied sql_mode",
-			slog.Any("error", err), slog.Int64("connID", conn.ID()))
-		conn.Close()
-		return err
-	}
-	conn.SetParseSQLMode(parseBits)
+	conn.SetParseSQLMode(sqlparser.ParseSQLMode(canonical))
 	return nil
 }
 

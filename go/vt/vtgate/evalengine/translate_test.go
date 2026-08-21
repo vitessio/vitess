@@ -400,12 +400,6 @@ func TestTranslationFailures(t *testing.T) {
 		}, {
 			expression:  "cast('3.4' as FLOAT(3))",
 			expectedErr: "Unsupported type conversion: FLOAT(3)",
-		}, {
-			// under REAL_AS_FLOAT, REAL means FLOAT, which evalengine
-			// declines so the expression is pushed to the backend
-			expression:  "cast('3.4' as REAL)",
-			sqlMode:     ParseSQLMode("REAL_AS_FLOAT"),
-			expectedErr: "Unsupported type conversion: REAL",
 		},
 	}
 

@@ -2410,8 +2410,9 @@ func TestReserveExecute_ParseSQLMode(t *testing.T) {
 	defer tsv.StopService()
 	defer db.Close()
 
-	// the reserving request's settings, stripped of the parse-relevant mode
-	db.AddQuery("set sql_mode = 'STRICT_TRANS_TABLES'", &sqltypes.Result{})
+	// the reserving request's settings are applied as written — PIPES_AS_CONCAT is
+	// forwarded, its lexer aspect inert on the serialized SQL the vttablet sends
+	db.AddQuery("set sql_mode = 'PIPES_AS_CONCAT,STRICT_TRANS_TABLES'", &sqltypes.Result{})
 	// get_lock needs a true reservation, forcing the tainted-connection path
 	db.AddQueryPattern(`select get_lock\(.*`, &sqltypes.Result{})
 	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}

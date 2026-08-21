@@ -267,27 +267,29 @@ func TestPrepareDataConcurrentAccess(t *testing.T) {
 }
 
 // TestSQLModeStripping verifies that the sql_mode value applied to backend
-// connections has its parse-relevant modes stripped, while the session keeps
-// the full value for parsing and @@sql_mode reads.
+// connections has NO_BACKSLASH_ESCAPES and HIGH_NOT_PRECEDENCE removed — the
+// modes a backend must not lex the vtgate's serialized SQL under — while every
+// other mode is forwarded and the session keeps the full value for parsing and
+// @@sql_mode reads.
 func TestSQLModeStripping(t *testing.T) {
 	session := NewSafeSession(&vtgatepb.Session{SystemVariables: map[string]string{
-		"sql_mode":         "'PIPES_AS_CONCAT,STRICT_TRANS_TABLES'",
+		"sql_mode":         "'NO_BACKSLASH_ESCAPES,PIPES_AS_CONCAT,STRICT_TRANS_TABLES'",
 		"sql_safe_updates": "1",
 	}})
 
 	forwarded := map[string]string{}
 	session.GetSystemVariables(func(k, v string) { forwarded[k] = v })
-	assert.Equal(t, "'STRICT_TRANS_TABLES'", forwarded["sql_mode"])
+	assert.Equal(t, "'PIPES_AS_CONCAT,STRICT_TRANS_TABLES'", forwarded["sql_mode"])
 	assert.Equal(t, "1", forwarded["sql_safe_updates"])
 
 	mode, ok := session.SQLMode()
 	require.True(t, ok)
-	assert.Equal(t, "PIPES_AS_CONCAT,STRICT_TRANS_TABLES", mode)
+	assert.Equal(t, "NO_BACKSLASH_ESCAPES,PIPES_AS_CONCAT,STRICT_TRANS_TABLES", mode)
 
-	// a value that only contains parse-relevant modes forwards as the empty
+	// a value that only contains unforwardable modes forwards as the empty
 	// mode: the user replaced the whole value, so the backend must drop its
 	// execution modes too
-	session.SetSystemVariable("sql_mode", "'ANSI_QUOTES'")
+	session.SetSystemVariable("sql_mode", "'HIGH_NOT_PRECEDENCE'")
 	session.GetSystemVariables(func(k, v string) { forwarded[k] = v })
 	assert.Equal(t, "''", forwarded["sql_mode"])
 
