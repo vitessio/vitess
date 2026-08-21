@@ -890,7 +890,8 @@ func (tpb *tablePlanBuilder) generateMultiDeleteStatement() *sqlparser.ParsedQue
 		(len(tpb.pkCols)+len(tpb.extraSourcePkCols)) != 1 {
 		return nil
 	}
-	return sqlparser.BuildParsedQuery("delete from %s where %s in %a",
+	return sqlparser.BuildParsedQuery(
+		"delete from %s where %s in %a",
 		sqlparser.String(tpb.name),
 		sqlparser.String(tpb.pkCols[0].colName),
 		"::bulk_pks",
@@ -943,7 +944,7 @@ func (tpb *tablePlanBuilder) generatePKConstraint(buf *sqlparser.TrackedBuffer, 
 		charSet   string
 		collation string
 	}
-	var charSetCollations []*charSetCollation
+	charSetCollations := make([]*charSetCollation, 0, len(tpb.lastpk.Fields))
 	separator := "("
 	for _, pkname := range tpb.lastpk.Fields {
 		charSet, collation := tpb.getCharsetAndCollation(pkname.Name)

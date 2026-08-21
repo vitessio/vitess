@@ -1,6 +1,6 @@
 module vitess.io/vitess/tools/goimports
 
-go 1.26.5
+go 1.26.6
 
 tool golang.org/x/tools/cmd/goimports
 

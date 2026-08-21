@@ -21,8 +21,6 @@ import (
 	"strings"
 
 	"vitess.io/vitess/go/mysql/replication"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/vterrors"
 )
 
 // mysqlFlavorLegacy implements the Flavor interface for Mysql for
@@ -185,18 +183,6 @@ func (mysqlFlavorLegacy) status(c *Conn) (replication.ReplicationStatus, error) 
 	return replication.ParseMysqlReplicationStatus(resultMap, false)
 }
 
-// replicationNetTimeout is part of the Flavor interface.
-func (mysqlFlavorLegacy) replicationNetTimeout(c *Conn) (int32, error) {
-	qr, err := c.ExecuteFetch("select @@global.slave_net_timeout", 1, false)
-	if err != nil {
-		return 0, err
-	}
-	if len(qr.Rows) != 1 || len(qr.Rows[0]) != 1 {
-		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected result format for slave_net_timeout: %#v", qr)
-	}
-	return qr.Rows[0][0].ToInt32()
-}
-
 func (mysqlFlavorLegacy) catchupToGTIDCommands(params *ConnParams, replPos replication.Position) []string {
 	cmds := []string{
 		"STOP SLAVE FOR CHANNEL '' ",
@@ -267,6 +253,10 @@ func (mysqlFlavorLegacy) resetBinaryLogsCommand() string {
 
 func (mysqlFlavorLegacy) binlogReplicatedUpdates() string {
 	return "@@global.log_slave_updates"
+}
+
+func (mysqlFlavorLegacy) replicationNetTimeoutVariable() string {
+	return "@@global.slave_net_timeout"
 }
 
 // setReplicationPositionCommands is part of the Flavor interface.
