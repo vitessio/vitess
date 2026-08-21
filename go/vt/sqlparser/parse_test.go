@@ -4260,15 +4260,16 @@ func TestStripUnforwardableModes(t *testing.T) {
 	}{
 		{in: "", out: ""},
 		{in: "ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES", out: "ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES"},
-		// only the modes under which serialized SQL would be lexed differently
-		// than written are removed
+		// only the mode under which serialized SQL would be lexed differently
+		// than written is removed
 		{in: "NO_BACKSLASH_ESCAPES", out: ""},
 		{in: "STRICT_TRANS_TABLES,no_backslash_escapes", out: "STRICT_TRANS_TABLES"},
-		{in: "HIGH_NOT_PRECEDENCE,NO_ZERO_DATE", out: "NO_ZERO_DATE"},
 		{in: " NO_BACKSLASH_ESCAPES , NO_ZERO_DATE ", out: "NO_ZERO_DATE"},
-		// every other mode is forwarded, the ANSI combination and its members
-		// included: their lexer aspects are inert on serialized SQL, and their
-		// resolution- and execution-time semantics are the consumer's to enforce
+		// every other mode is forwarded, the ANSI combination, its members, and
+		// HIGH_NOT_PRECEDENCE included: their lexer aspects are inert on
+		// serialized SQL, and their resolution- and execution-time semantics are
+		// the consumer's to enforce
+		{in: "HIGH_NOT_PRECEDENCE,NO_ZERO_DATE", out: "HIGH_NOT_PRECEDENCE,NO_ZERO_DATE"},
 		{in: "PIPES_AS_CONCAT", out: "PIPES_AS_CONCAT"},
 		{in: "ansi_quotes,STRICT_TRANS_TABLES", out: "ansi_quotes,STRICT_TRANS_TABLES"},
 		{in: "IGNORE_SPACE,STRICT_TRANS_TABLES", out: "IGNORE_SPACE,STRICT_TRANS_TABLES"},
