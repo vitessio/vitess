@@ -427,6 +427,70 @@ func (sm *StreamMigrator) readTabletStreams(ctx context.Context, ti *topo.Tablet
 	return tabletStreams, nil
 }
 
+// filterTerminalOnlineDDL removes VReplication streams belonging to OnlineDDL
+// migrations that have reached a terminal state (complete, failed, or cancelled)
+// in _vt.schema_migrations. These are dead streams waiting for GC and should
+// neither block SwitchWrites nor be migrated to target shards.
+func (sm *StreamMigrator) filterTerminalOnlineDDL(ctx context.Context, tablet *topodatapb.Tablet, streams []*VReplicationStream) ([]*VReplicationStream, error) {
+	var onlineDDLWorkflows []string
+	for _, s := range streams {
+		if s.WorkflowType == binlogdatapb.VReplicationWorkflowType_OnlineDDL {
+			onlineDDLWorkflows = append(onlineDDLWorkflows, s.Workflow)
+		}
+	}
+	if len(onlineDDLWorkflows) == 0 {
+		return streams, nil
+	}
+
+	terminalUUIDs, err := sm.getTerminalOnlineDDLMigrations(ctx, tablet, onlineDDLWorkflows)
+	if err != nil {
+		return nil, err
+	}
+	if len(terminalUUIDs) == 0 {
+		return streams, nil
+	}
+
+	filtered := make([]*VReplicationStream, 0, len(streams))
+	for _, s := range streams {
+		if s.WorkflowType == binlogdatapb.VReplicationWorkflowType_OnlineDDL && terminalUUIDs[s.Workflow] {
+			continue
+		}
+		filtered = append(filtered, s)
+	}
+	return filtered, nil
+}
+
+// getTerminalOnlineDDLMigrations queries _vt.schema_migrations to find which of
+// the given migration UUIDs have reached a terminal state. This uses the same
+// criteria as gcArtifacts() to determine when a migration is done.
+func (sm *StreamMigrator) getTerminalOnlineDDLMigrations(ctx context.Context, tablet *topodatapb.Tablet, uuids []string) (map[string]bool, error) {
+	quotedUUIDs := make([]string, 0, len(uuids))
+	for _, uuid := range uuids {
+		quotedUUIDs = append(quotedUUIDs, encodeString(uuid))
+	}
+	query := fmt.Sprintf(
+		"select migration_uuid from _vt.schema_migrations where migration_uuid in (%s) and migration_status in (%s, %s, %s)",
+		strings.Join(quotedUUIDs, ", "),
+		encodeString(string(schema.OnlineDDLStatusComplete)),
+		encodeString(string(schema.OnlineDDLStatusFailed)),
+		encodeString(string(schema.OnlineDDLStatusCancelled)),
+	)
+
+	p3qr, err := sm.ts.TabletManagerClient().VReplicationExec(ctx, tablet, query)
+	if err != nil {
+		return nil, err
+	}
+
+	qr := sqltypes.Proto3ToResult(p3qr)
+	result := make(map[string]bool, len(qr.Rows))
+	for _, row := range qr.Rows {
+		if len(row) > 0 {
+			result[row[0].ToString()] = true
+		}
+	}
+	return result, nil
+}
+
 /* source streams */
 
 // legacyReadSourceStreams reads all of the VReplication workflow source streams using
@@ -456,12 +520,22 @@ func (sm *StreamMigrator) legacyReadSourceStreams(ctx context.Context, cancelMig
 				return err
 			}
 
+			stoppedStreams, err = sm.filterTerminalOnlineDDL(ctx, source.GetPrimary().Tablet, stoppedStreams)
+			if err != nil {
+				return err
+			}
+
 			if len(stoppedStreams) != 0 {
 				return fmt.Errorf("cannot migrate until all streams are running: %s: %d", source.GetShard().ShardName(), source.GetPrimary().Alias.Uid)
 			}
 		}
 
 		tabletStreams, err := sm.legacyReadTabletStreams(ctx, source.GetPrimary(), "")
+		if err != nil {
+			return err
+		}
+
+		tabletStreams, err = sm.filterTerminalOnlineDDL(ctx, source.GetPrimary().Tablet, tabletStreams)
 		if err != nil {
 			return err
 		}
@@ -561,12 +635,22 @@ func (sm *StreamMigrator) readSourceStreams(ctx context.Context, cancelMigrate b
 				return err
 			}
 
+			stoppedStreams, err = sm.filterTerminalOnlineDDL(ctx, source.GetPrimary().Tablet, stoppedStreams)
+			if err != nil {
+				return err
+			}
+
 			if len(stoppedStreams) != 0 {
 				return fmt.Errorf("cannot migrate until all streams are running: %s: %d", source.GetShard().ShardName(), source.GetPrimary().Alias.Uid)
 			}
 		}
 
 		tabletStreams, err := sm.readTabletStreams(ctx, source.GetPrimary(), nil, nil, false)
+		if err != nil {
+			return err
+		}
+
+		tabletStreams, err = sm.filterTerminalOnlineDDL(ctx, source.GetPrimary().Tablet, tabletStreams)
 		if err != nil {
 			return err
 		}
