@@ -19,6 +19,7 @@ package vdiff
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -33,6 +34,47 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
+
+// TestVDiffSummaryQuery asserts that the two summary-query variants differ only
+// in how they project the report column: the full variant returns the stored
+// report as-is, while the summary-only variant strips just the row-sample
+// arrays and keeps the scalar counters. The assertions are structural (split on
+// the report select-expression and compare the surrounding column list and
+// FROM/WHERE) so harmless SQL formatting changes don't break the test.
+func TestVDiffSummaryQuery(t *testing.T) {
+	const (
+		fullReportExpr    = `vdt.report as report`
+		summaryReportExpr = `JSON_REMOVE(vdt.report, '$.MismatchedRowsSample', '$.ExtraRowsSourceSample', '$.ExtraRowsTargetSample') as report`
+	)
+
+	full := vdiffSummaryQuery(false)
+	summary := vdiffSummaryQuery(true)
+
+	// Both must be bindable (report/columns aside, the FROM/WHERE has the %a
+	// placeholders that ParseAndBind fills).
+	require.Contains(t, full, "%a", "bind placeholders must be preserved for ParseAndBind")
+	require.Contains(t, summary, "%a", "bind placeholders must be preserved for ParseAndBind")
+
+	// Each variant uses its own report select-expression and not the other's.
+	require.Contains(t, full, fullReportExpr, "full query must select the stored report as-is")
+	require.NotContains(t, full, "JSON_REMOVE", "full query must not strip the report")
+	require.Contains(t, summary, summaryReportExpr, "summary-only query must strip the row-sample arrays from the report")
+
+	// The summary-only variant must strip the sample arrays but must not touch
+	// the scalar counters, so the summary counts stay accurate.
+	for _, sample := range []string{"MismatchedRowsSample", "ExtraRowsSourceSample", "ExtraRowsTargetSample"} {
+		require.Contains(t, summaryReportExpr, sample, "expected sample array %q to be stripped", sample)
+	}
+
+	// The two variants must be identical everywhere except the report
+	// select-expression: swapping in the full expression must reproduce the
+	// full query exactly, so no other column or clause can silently differ.
+	require.Equal(t,
+		full,
+		strings.Replace(summary, summaryReportExpr, fullReportExpr, 1),
+		"summary-only must differ from the full query only in the report select-expression",
+	)
+}
 
 func TestPerformVDiffAction(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)

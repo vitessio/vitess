@@ -115,11 +115,27 @@ func (vde *Engine) PerformVDiffAction(ctx context.Context, req *tabletmanagerdat
 	return resp, nil
 }
 
-func (vde *Engine) getVDiffSummary(vdiffID int64, dbClient binlogplayer.DBClient) (*query.QueryResult, error) {
+// vdiffSummaryQuery returns the summary query to run. When onlySummary is true
+// it returns the variant that strips the row-sample arrays from the per-table
+// report, keeping the scalar counters. The samples are the part that can grow
+// very large (they carry sampled row data, including large blob/JSON columns)
+// and, fanned out across many target shards, can push the aggregated response
+// past gRPC message limits. Stripping them lets callers that only need the
+// vdiff/table state, counts and has_mismatch avoid transferring that data while
+// keeping the summary counters accurate. All other summary columns are
+// unaffected.
+func vdiffSummaryQuery(onlySummary bool) string {
+	if onlySummary {
+		return sqlVDiffSummaryOnly
+	}
+	return sqlVDiffSummary
+}
+
+func (vde *Engine) getVDiffSummary(vdiffID int64, dbClient binlogplayer.DBClient, reportOpts *tabletmanagerdatapb.VDiffReportOptions) (*query.QueryResult, error) {
 	var qr *sqltypes.Result
 	var err error
 
-	query, err := sqlparser.ParseAndBind(sqlVDiffSummary, sqltypes.Int64BindVariable(vdiffID), sqltypes.StringBindVariable(vde.dbName))
+	query, err := sqlparser.ParseAndBind(vdiffSummaryQuery(reportOpts.GetOnlySummary()), sqltypes.Int64BindVariable(vdiffID), sqltypes.StringBindVariable(vde.dbName))
 	if err != nil {
 		return nil, err
 	}
@@ -336,7 +352,7 @@ func (vde *Engine) handleShowAction(ctx context.Context, dbClient binlogplayer.D
 		case 1:
 			row := qr.Named().Row()
 			vdiffID, _ := row["id"].ToInt64()
-			summary, err := vde.getVDiffSummary(vdiffID, dbClient)
+			summary, err := vde.getVDiffSummary(vdiffID, dbClient, req.GetOptions().GetReportOptions())
 			resp.Output = summary
 			if err != nil {
 				return err
