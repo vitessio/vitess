@@ -330,6 +330,14 @@ func needParens(op, val Expr, left bool) bool {
 		return false
 	}
 
+	if _, isNot := op.(*NotExpr); isNot {
+		// MySQL's HIGH_NOT_PRECEDENCE sql_mode hoists NOT to the precedence of '!'
+		// (P3). Print NOT's operand against that precedence rather than NOT's
+		// grammar precedence, so the serialized text keeps its meaning under either
+		// setting of the mode.
+		opBinding = P3
+	}
+
 	if left {
 		// for left associative operators, if the value is to the left of the operator,
 		// we only need parens if the order is higher for the value expression

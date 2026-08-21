@@ -32,10 +32,10 @@ func TestSimplifyExpression(in *testing.T) {
 		expected: "A = 3",
 	}, {
 		in:       "not (A = 3 and B = 2)",
-		expected: "not A = 3 or not B = 2",
+		expected: "not (A = 3) or not (B = 2)",
 	}, {
 		in:       "not (A = 3 or B = 2)",
-		expected: "not A = 3 and not B = 2",
+		expected: "not (A = 3) and not (B = 2)",
 	}, {
 		in:       "A xor B",
 		expected: "(A or B) and not (A and B)",

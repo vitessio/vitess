@@ -880,7 +880,8 @@ var validSQL = []struct {
 	input:  "select /* || */ 1 from t where a = b || a = c",
 	output: "select /* || */ 1 from t where a = b or a = c",
 }, {
-	input: "select /* not */ 1 from t where not a = b",
+	input:  "select /* not */ 1 from t where not a = b",
+	output: "select /* not */ 1 from t where not (a = b)",
 }, {
 	input: "select /* ! */ 1 from t where a = !1",
 }, {
@@ -896,8 +897,7 @@ var validSQL = []struct {
 }, {
 	input: "select /* exists */ 1 from t where exists (select 1 from t)",
 }, {
-	input:  "select /* (boolean) */ 1 from t where not (a = b)",
-	output: "select /* (boolean) */ 1 from t where not a = b",
+	input: "select /* (boolean) */ 1 from t where not (a = b)",
 }, {
 	input: "select /* in value list */ 1 from t where a in (b, c)",
 }, {
@@ -4493,6 +4493,54 @@ func TestFormatAnsiQuotesIndependence(t *testing.T) {
 		out := String(stmt)
 		assert.Equal(t, tc.out, out)
 		assert.Empty(t, outsideSingleQuotes(out, '"'), "double quote outside a single-quoted literal in %s", out)
+	}
+}
+
+// Formatted SQL must keep its meaning whether or not the consumer runs with
+// sql_mode=HIGH_NOT_PRECEDENCE, which hoists NOT to the precedence of '!'. The
+// formatter parenthesizes any NOT operand that would bind differently there, so
+// the canonical text parses to the same tree under either precedence.
+func TestFormatHighNotPrecedenceIndependence(t *testing.T) {
+	def := NewTestParser()
+	hnp := def.WithSQLMode(SQLModeHighNotPrecedence)
+
+	// operands binding between '!' and NOT are parenthesized; atoms stay bare
+	for _, tc := range []struct {
+		in  string
+		out string
+	}{
+		{"select not a between 1 and 2 from t", "select not (a between 1 and 2) from t"},
+		{"select not a = b from t", "select not (a = b) from t"},
+		{"select not a like 'x' from t", "select not (a like 'x') from t"},
+		{"select not a is null from t", "select not (a is null) from t"},
+		{"select not a + b from t", "select not (a + b) from t"},
+		{"select not a from t", "select not a from t"},
+		{"select not (a and b) from t", "select not (a and b) from t"},
+	} {
+		t.Run(tc.in, func(t *testing.T) {
+			stmt, err := def.Parse(tc.in)
+			require.NoError(t, err)
+			assert.Equal(t, tc.out, String(stmt))
+		})
+	}
+
+	// the whole corpus: the canonical serialization parses to the same tree under
+	// the default precedence and under HIGH_NOT_PRECEDENCE
+	for _, tcase := range validSQL {
+		canonicalStmt, err := def.Parse(tcase.input)
+		if err != nil {
+			continue
+		}
+		canonical := String(canonicalStmt)
+		defTree, err := def.Parse(canonical)
+		if err != nil {
+			// partially parsed DDL does not round-trip; not this test's concern
+			continue
+		}
+		hnpTree, err := hnp.Parse(canonical)
+		require.NoError(t, err, canonical)
+		assert.True(t, Equals.SQLNode(defTree, hnpTree),
+			"canonical text parses differently under HIGH_NOT_PRECEDENCE: %s", canonical)
 	}
 }
 
