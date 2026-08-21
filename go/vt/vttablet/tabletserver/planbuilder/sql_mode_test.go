@@ -158,6 +158,29 @@ func TestSetVarHintRejectsUnsupportedSQLModes(t *testing.T) {
 	}, {
 		// other variables are not this check's concern
 		sql: "select /*+ SET_VAR(sql_safe_updates = 1) */ 1 from dual",
+	}, {
+		// MySQL's hint grammar reads an unquoted word as a string value, not as a
+		// column reference (verified against MySQL 8.0.46), so unquoted spellings
+		// must be judged exactly like quoted ones
+		sql:         "select /*+ SET_VAR(sql_mode = ANSI) */ 1 from dual",
+		expectedErr: "setting the ANSI sql_mode is unsupported",
+	}, {
+		sql:         "select /*+ SET_VAR(sql_mode = ANSI_QUOTES) */ 1 from dual",
+		expectedErr: "setting the ANSI_QUOTES sql_mode is unsupported",
+	}, {
+		sql:         "update /*+ SET_VAR(sql_mode = NO_BACKSLASH_ESCAPES) */ t set a = 1",
+		expectedErr: "setting the NO_BACKSLASH_ESCAPES sql_mode is unsupported",
+	}, {
+		sql: "select /*+ SET_VAR(sql_mode = STRICT_TRANS_TABLES) */ 1 from dual",
+	}, {
+		sql:         "select /*+ SET_VAR(sql_mode = BOGUS) */ 1 from dual",
+		expectedErr: "Variable 'sql_mode' can't be set to the value of 'BOGUS'",
+	}, {
+		sql:         "select /*+ SET_VAR(sql_mode = 1048576) */ 1 from dual",
+		expectedErr: "setting the NO_BACKSLASH_ESCAPES sql_mode is unsupported",
+	}, {
+		// a qualified name is not valid hint syntax; MySQL warns and ignores it
+		sql: "select /*+ SET_VAR(sql_mode = a.b) */ 1 from dual",
 	}}
 	for _, tc := range tests {
 		t.Run(tc.sql, func(t *testing.T) {

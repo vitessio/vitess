@@ -18,6 +18,7 @@ package planbuilder
 
 import (
 	"vitess.io/vitess/go/mysql/sqlmode"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/sysvars"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -114,12 +115,23 @@ func validateSetVarHintSQLMode(parser *sqlparser.Parser, comments *sqlparser.Par
 		// not judgeable here; MySQL warns about malformed hints and ignores them
 		return nil
 	}
-	lit, ok := expr.(*sqlparser.Literal)
-	if !ok {
-		return nil
-	}
-	value, err := sqlparser.LiteralToValue(lit)
-	if err != nil {
+	var value sqltypes.Value
+	switch node := expr.(type) {
+	case *sqlparser.Literal:
+		value, err = sqlparser.LiteralToValue(node)
+		if err != nil {
+			return nil
+		}
+	case *sqlparser.ColName:
+		// MySQL's hint grammar reads an unquoted word as a string value, not as a
+		// column reference: SET_VAR(sql_mode=ANSI) is the mode ANSI. Verified
+		// against MySQL 8.0.46. A qualified name is not valid hint syntax; MySQL
+		// warns and ignores it.
+		if !node.Qualifier.IsEmpty() {
+			return nil
+		}
+		value = sqltypes.NewVarChar(node.Name.String())
+	default:
 		return nil
 	}
 	_, err = sqlmode.Validate(value)
