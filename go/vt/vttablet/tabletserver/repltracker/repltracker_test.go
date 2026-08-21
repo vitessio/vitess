@@ -40,7 +40,10 @@ func TestReplTracker(t *testing.T) {
 
 	cfg := tabletenv.NewDefaultConfig()
 	cfg.ReplicationTracker.Mode = tabletenv.Heartbeat
-	cfg.ReplicationTracker.HeartbeatInterval = time.Second
+	// A long interval keeps the reader's async ticker from firing during the
+	// test: the initial read on open runs synchronously on this goroutine, so
+	// the direct lastKnownLag mutations below cannot race with a tick.
+	cfg.ReplicationTracker.HeartbeatInterval = 30 * time.Second
 	params := db.ConnParams()
 	cp := *params
 	cfg.DB = dbconfigs.NewTestDBConfigs(cp, cp, "")

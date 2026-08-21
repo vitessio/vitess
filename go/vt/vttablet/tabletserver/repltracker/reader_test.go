@@ -88,11 +88,14 @@ func TestReaderReadHeartbeat(t *testing.T) {
 // rather than reporting the zero-value lag until the first tick fires.
 func TestReaderInitialHeartbeatReadOnOpen(t *testing.T) {
 	db := fakesqldb.New(t)
-	defer db.Close()
+	t.Cleanup(db.Close)
 
 	now := time.Now()
 	tr := newReader(db, &now)
-	defer tr.Close()
+	t.Cleanup(tr.Close)
+	// A generous read deadline so a paused CI runner cannot expire the
+	// frozen-clock-based context before Open performs the initial read.
+	tr.interval = 30 * time.Second
 
 	db.AddQuery(fmt.Sprintf("SELECT ts FROM %s.heartbeat WHERE keyspaceShard='%s'", "_vt", tr.keyspaceShard), &sqltypes.Result{
 		Fields: []*querypb.Field{
@@ -115,11 +118,12 @@ func TestReaderInitialHeartbeatReadOnOpen(t *testing.T) {
 // unreadable), Status reports the error instead of a zero-value lag.
 func TestReaderInitialHeartbeatReadFailsClosed(t *testing.T) {
 	db := fakesqldb.New(t)
-	defer db.Close()
+	t.Cleanup(db.Close)
 
 	now := time.Now()
 	tr := newReader(db, &now)
-	defer tr.Close()
+	t.Cleanup(tr.Close)
+	tr.interval = 30 * time.Second
 
 	tr.Open()
 	lag, err := tr.Status()
