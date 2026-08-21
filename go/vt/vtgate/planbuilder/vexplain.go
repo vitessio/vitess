@@ -117,8 +117,18 @@ const (
 // checkVExplainMySQLAST rejects, in a single AST walk, the statement shapes that
 // MYSQLPLAN cannot safely EXPLAIN. All must be caught on the original AST before
 // planning, because each can otherwise reach a Route or Send that the primitive
-// allowlist would accept. The walk aborts on the first offending node, so a nested
-// offender (e.g. a lock function inside a subquery) reports the outer rejection.
+// allowlist would accept.
+//
+// Two of these rejections - advisory lock functions and sequence next-value
+// queries - must never point the user at VEXPLAIN ALL, because running the query
+// there would acquire or release a lock, or consume a sequence value. The other
+// two - derived tables/views and subqueries/CTEs - do recommend VEXPLAIN ALL. So
+// when a query carries both kinds (e.g. a lock function beside or nested inside a
+// subquery), the lock/sequence rejection must win, or the user would be steered to
+// a VEXPLAIN ALL that runs the very construct MYSQLPLAN refused. The walk therefore
+// aborts immediately on a lock or sequence node by returning its error, and only
+// records the first derived-table/subquery rejection while continuing to descend,
+// so a lock or sequence node anywhere in the tree still overrides it.
 //
 //   - Nested query blocks (subquery, derived table, CTE): EXPLAIN FORMAT=JSON
 //     materializes a derived table during optimization - executing any stored
@@ -143,23 +153,28 @@ const (
 //     The read-only variants (is_free_lock, is_used_lock) are rejected the same way
 //     for a consistent message; they are equally unexplainable through MYSQLPLAN.
 func checkVExplainMySQLAST(statement sqlparser.Statement) error {
-	var astErr error
-	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
+	var recommendAllErr error
+	unsafeErr := sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
 		switch node.(type) {
-		case *sqlparser.DerivedTable:
-			astErr = vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, vexplainMySQLDerivedTableError)
-		case *sqlparser.Subquery, *sqlparser.With:
-			astErr = vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, vexplainMySQLUnresolvableError)
 		case *sqlparser.Nextval:
-			astErr = vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, vexplainMySQLSequenceError)
+			return false, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, vexplainMySQLSequenceError)
 		case *sqlparser.LockingFunc:
-			astErr = vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, vexplainMySQLLockError)
-		default:
-			return true, nil
+			return false, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, vexplainMySQLLockError)
+		case *sqlparser.DerivedTable:
+			if recommendAllErr == nil {
+				recommendAllErr = vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, vexplainMySQLDerivedTableError)
+			}
+		case *sqlparser.Subquery, *sqlparser.With:
+			if recommendAllErr == nil {
+				recommendAllErr = vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, vexplainMySQLUnresolvableError)
+			}
 		}
-		return false, nil
+		return true, nil
 	}, statement)
-	return astErr
+	if unsafeErr != nil {
+		return unsafeErr
+	}
+	return recommendAllErr
 }
 
 // checkVExplainMySQLNoCalcFoundRows rejects a SELECT SQL_CALC_FOUND_ROWS with a
