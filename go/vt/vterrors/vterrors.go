@@ -265,8 +265,7 @@ func Wrapf(err error, format string, args ...any) error {
 // The function indicates whether the error was indeed wrapped. If the error was not wrapped, the function
 // returns the original error.
 func Unwrap(err error) (wasWrapped bool, unwrapped error) {
-	var w *wrapping
-	if errors.As(err, &w) {
+	if w, ok := errors.AsType[*wrapping](err); ok {
 		return true, w.Cause()
 	}
 	return false, err

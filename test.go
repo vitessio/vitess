@@ -401,7 +401,7 @@ func main() {
 	}
 
 	// Duplicate tests for flavors.
-	var dup []*Test
+	dup := make([]*Test, 0, len(tests)*len(flavors))
 	for _, flavor := range flavors {
 		for _, t := range tests {
 			test := *t
@@ -723,7 +723,7 @@ func (a ByPassTime) Less(i, j int) bool { return a[i].PassTime > a[j].PassTime }
 
 func getTestsSorted(names []string, testMap map[string]*Test) []*Test {
 	sort.Strings(names)
-	var tests []*Test
+	tests := make([]*Test, 0, len(names))
 	for _, name := range names {
 		t := testMap[name]
 		t.name = name

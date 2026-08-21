@@ -235,7 +235,7 @@ func (c *Conn) clientHandshake(params *ConnParams, attributes ConnectionAttribut
 	// later in the protocol.
 	c.Capabilities = 0
 	if !params.DisableClientDeprecateEOF {
-		c.Capabilities = capabilities & (CapabilityClientDeprecateEOF)
+		c.Capabilities = capabilities & CapabilityClientDeprecateEOF
 	}
 
 	// Handle switch to SSL if necessary.

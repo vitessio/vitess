@@ -902,8 +902,7 @@ func partitionTaskErrors(errs []error) (root, dependent []error) {
 		if e == nil {
 			continue
 		}
-		var dbf *dependentBatchFailure
-		if errors.As(e, &dbf) {
+		if _, ok := errors.AsType[*dependentBatchFailure](e); ok {
 			dependent = append(dependent, e)
 		} else {
 			root = append(root, e)

@@ -207,6 +207,7 @@ func (*unqLkpVdxBackfill) NeedsVCursor() bool                   { return false }
 func (*unqLkpVdxBackfill) AllowBatch() bool                     { return true }
 func (*unqLkpVdxBackfill) AutoCommitEnabled() bool              { return false }
 func (*unqLkpVdxBackfill) GetCommitOrder() vtgatepb.CommitOrder { return vtgatepb.CommitOrder_NORMAL }
+
 func (*unqLkpVdxBackfill) Verify(context.Context, vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
 	return []bool{}, nil
 }

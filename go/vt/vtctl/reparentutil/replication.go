@@ -589,8 +589,7 @@ func stopReplicationAndBuildStatusMaps(
 	// we don't need to handle them differently — the goal is simply to confirm the
 	// error came from the PRIMARY tablet, not to diagnose why it failed.
 	if primaryAlias != nil && len(errRecorder.Errors) == 1 {
-		var tabletErr *tabletAliasError
-		if errors.As(errRecorder.Errors[0], &tabletErr) {
+		if tabletErr, ok := errors.AsType[*tabletAliasError](errRecorder.Errors[0]); ok {
 			// Failure to reach the PRIMARY tablet is expected, return early.
 			if topoproto.TabletAliasEqual(primaryAlias, tabletErr.GetAlias()) {
 				return res, nil
