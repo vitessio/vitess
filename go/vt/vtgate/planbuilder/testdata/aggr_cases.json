@@ -7408,5 +7408,81 @@
         "user.user"
       ]
     }
+  },
+  {
+    "comment": "distinct count and having with group by col1, col2",
+    "query": "select col1, col2, count(distinct val2) from user group by col1, col2 having min(val1) >= 'a'",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select col1, col2, count(distinct val2) from user group by col1, col2 having min(val1) >= 'a'",
+      "Instructions": {
+        "OperatorType": "Filter",
+        "Predicate": "min(val1) >= 'a'",
+        "ResultColumns": 3,
+        "Inputs": [
+          {
+            "OperatorType": "Aggregate",
+            "Variant": "Ordered",
+            "Aggregates": "count_distinct(2|6) AS count(distinct val2), min(3|7) AS min(val1)",
+            "GroupBy": "(0|4), (1|5)",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select col1, col2, val2, min(val1), weight_string(col1), weight_string(col2), weight_string(val2), weight_string(min(val1)) from `user` where 1 != 1 group by col1, col2, val2, weight_string(col1), weight_string(col2), weight_string(val2)",
+                "OrderBy": "(0|4) ASC, (1|5) ASC, (2|6) ASC",
+                "Query": "select col1, col2, val2, min(val1), weight_string(col1), weight_string(col2), weight_string(val2), weight_string(min(val1)) from `user` group by col1, col2, val2, weight_string(col1), weight_string(col2), weight_string(val2) order by col1 asc, col2 asc, val2 asc"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "distinct count and having with group by col2, col1 (reordered)",
+    "query": "select col1, col2, count(distinct val2) from user group by col2, col1 having min(val1) >= 'a'",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select col1, col2, count(distinct val2) from user group by col2, col1 having min(val1) >= 'a'",
+      "Instructions": {
+        "OperatorType": "Filter",
+        "Predicate": "min(val1) >= 'a'",
+        "ResultColumns": 3,
+        "Inputs": [
+          {
+            "OperatorType": "Aggregate",
+            "Variant": "Ordered",
+            "Aggregates": "count_distinct(2|6) AS count(distinct val2), min(3|7) AS min(val1)",
+            "GroupBy": "(1|4), (0|5)",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select col1, col2, val2, min(val1), weight_string(col2), weight_string(col1), weight_string(val2), weight_string(min(val1)) from `user` where 1 != 1 group by col2, col1, val2, weight_string(col2), weight_string(col1), weight_string(val2)",
+                "OrderBy": "(1|4) ASC, (0|5) ASC, (2|6) ASC",
+                "Query": "select col1, col2, val2, min(val1), weight_string(col2), weight_string(col1), weight_string(val2), weight_string(min(val1)) from `user` group by col2, col1, val2, weight_string(col2), weight_string(col1), weight_string(val2) order by col2 asc, col1 asc, val2 asc"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
   }
 ]
