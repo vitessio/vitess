@@ -358,7 +358,12 @@ func (v *vschema) IsViewsEnabled() bool {
 	panic("implement me")
 }
 
-func (v *vschema) PlanPrepareStatement(context.Context, string) (*engine.Plan, error) {
+func (v *vschema) PlanPrepareStatement(context.Context, string) (*engine.Plan, string, error) {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (v *vschema) PlanStoredStatement(context.Context, string) (*engine.Plan, error) {
 	// TODO implement me
 	panic("implement me")
 }

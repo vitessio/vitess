@@ -688,14 +688,6 @@ func (session *SafeSession) GetSystemVariables(f func(k string, v string)) {
 	}
 }
 
-// HasPreparedStatements reports whether the session holds SQL-level prepared
-// statements (PREPARE ... FROM).
-func (session *SafeSession) HasPreparedStatements() bool {
-	session.mu.Lock()
-	defer session.mu.Unlock()
-	return len(session.PrepareStatement) > 0
-}
-
 // PinParseSQLMode pins the parse-relevant sql_mode bits queries in this
 // request are parsed and plan-cached under, overriding the session's current
 // sql_mode. The binary-protocol execute path sets it to the bits recorded at
@@ -706,6 +698,18 @@ func (session *SafeSession) PinParseSQLMode(mode sqlparser.SQLMode) {
 	session.mu.Lock()
 	defer session.mu.Unlock()
 	session.pinnedParseSQLMode = &mode
+}
+
+// SwapPinnedParseSQLMode replaces the pinned parse mode with the given one
+// (nil clears it) and returns the previous pin, for callers that scope a pin
+// to a sub-plan — the stored text of a SQL-level prepared statement is
+// planned under the canonical rules regardless of the request's pin.
+func (session *SafeSession) SwapPinnedParseSQLMode(mode *sqlparser.SQLMode) *sqlparser.SQLMode {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	prev := session.pinnedParseSQLMode
+	session.pinnedParseSQLMode = mode
+	return prev
 }
 
 // PinnedParseSQLMode returns the parse-relevant sql_mode bits pinned by

@@ -1963,10 +1963,41 @@ func (e *Executor) ReleaseLock(ctx context.Context, session *econtext.SafeSessio
 	return e.txConn.ReleaseLock(ctx, session)
 }
 
-// PlanPrepareStmt implements the IExecutor interface
-func (e *Executor) PlanPrepareStmt(ctx context.Context, safeSession *econtext.SafeSession, query string) (*engine.Plan, error) {
+// PlanPrepareStmt implements the IExecutor interface. The statement text is
+// parsed under the session's sql_mode, and the canonical serialization of
+// that parse is returned alongside the plan: it spells the statement's
+// prepare-time meaning in default-mode SQL, so storing and later re-parsing
+// it under the canonical rules (see PlanStoredStmt) preserves that meaning
+// however the session's sql_mode changes in between.
+func (e *Executor) PlanPrepareStmt(ctx context.Context, safeSession *econtext.SafeSession, query string) (*engine.Plan, string, error) {
 	// creating this log stats to not interfere with the original log stats.
 	lStats := logstats.NewLogStats(ctx, "prepare", query, safeSession.GetSessionUUID(), nil, streamlog.GetQueryLogConfig())
+	plan, _, _, err := e.fetchOrCreatePlan(ctx, safeSession, query, nil, false, true, lStats, false)
+	if err != nil {
+		return nil, "", err
+	}
+	// The canonical text comes from a fresh parse of the client's statement,
+	// not from the planned AST: planning mutates the statement — most
+	// visibly by injecting the session's SET_VAR transport hint — and none
+	// of that belongs in the stored text, which captures only what the
+	// client's statement meant under the prepare-time sql_mode.
+	sqlMode, _ := safeSession.SQLMode()
+	stmt, err := e.env.Parser().WithSQLMode(sqlparser.ParseSQLMode(sqlMode)).Parse(query)
+	if err != nil {
+		return nil, "", err
+	}
+	return plan, sqlparser.String(stmt), nil
+}
+
+// PlanStoredStmt implements the IExecutor interface: it plans the stored text
+// of a SQL-level prepared statement, which is the canonical serialization of
+// its prepare-time parse, and is therefore parsed under the canonical
+// (default) lexing rules regardless of the session's current sql_mode.
+func (e *Executor) PlanStoredStmt(ctx context.Context, safeSession *econtext.SafeSession, query string) (*engine.Plan, error) {
+	lStats := logstats.NewLogStats(ctx, "execute", query, safeSession.GetSessionUUID(), nil, streamlog.GetQueryLogConfig())
+	var canonical sqlparser.SQLMode
+	prev := safeSession.SwapPinnedParseSQLMode(&canonical)
+	defer safeSession.SwapPinnedParseSQLMode(prev)
 	plan, _, _, err := e.fetchOrCreatePlan(ctx, safeSession, query, nil, false, true, lStats, false)
 	if err != nil {
 		return nil, err

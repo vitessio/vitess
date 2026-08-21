@@ -2824,7 +2824,8 @@ func TestExecutorPrepareExecute(t *testing.T) {
 
 		prepData := session.PrepareStatement["prep_user"]
 		require.NotNil(t, prepData)
-		assert.Equal(t, "select * from user where id = ?", prepData.PrepareStatement)
+		// the stored text is the canonical serialization of the prepare-time parse
+		assert.Equal(t, "select * from `user` where id = :v1", prepData.PrepareStatement)
 		assert.EqualValues(t, 1, prepData.ParamsCount)
 	})
 
@@ -2836,7 +2837,8 @@ func TestExecutorPrepareExecute(t *testing.T) {
 
 		prepData := session.PrepareStatement["prep_user2"]
 		require.NotNil(t, prepData)
-		assert.Equal(t, "select * from user where id in (?,?,?)", prepData.PrepareStatement)
+		// the stored text is the canonical serialization of the prepare-time parse
+		assert.Equal(t, "select * from `user` where id in (:v1, :v2, :v3)", prepData.PrepareStatement)
 		assert.EqualValues(t, 3, prepData.ParamsCount)
 	})
 

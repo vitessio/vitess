@@ -122,7 +122,8 @@ type (
 
 		// TODO: remove when resolver is gone
 		VSchema() *vindexes.VSchema
-		PlanPrepareStmt(ctx context.Context, safeSession *SafeSession, query string) (*engine.Plan, error)
+		PlanPrepareStmt(ctx context.Context, safeSession *SafeSession, query string) (*engine.Plan, string, error)
+		PlanStoredStmt(ctx context.Context, safeSession *SafeSession, query string) (*engine.Plan, error)
 
 		Environment() *vtenv.Environment
 		ReadTransaction(ctx context.Context, transactionID string) (*querypb.TransactionMetadata, error)
@@ -1111,11 +1112,6 @@ func (vc *VCursorImpl) SetUDV(key string, value any) error {
 	return nil
 }
 
-// HasPreparedStatements implements the SessionActions interface.
-func (vc *VCursorImpl) HasPreparedStatements() bool {
-	return vc.SafeSession.HasPreparedStatements()
-}
-
 func (vc *VCursorImpl) SetSysVar(name string, expr string) {
 	vc.SafeSession.SetSystemVariable(name, expr)
 }
@@ -1696,8 +1692,15 @@ func (vc *VCursorImpl) GetUDV(name string) *querypb.BindVariable {
 	return vc.SafeSession.GetUDV(name)
 }
 
-func (vc *VCursorImpl) PlanPrepareStatement(ctx context.Context, query string) (*engine.Plan, error) {
+func (vc *VCursorImpl) PlanPrepareStatement(ctx context.Context, query string) (*engine.Plan, string, error) {
 	return vc.executor.PlanPrepareStmt(ctx, vc.SafeSession, query)
+}
+
+// PlanStoredStatement plans the stored text of a SQL-level prepared
+// statement — the canonical serialization of its prepare-time parse — under
+// the canonical lexing rules regardless of the session's current sql_mode.
+func (vc *VCursorImpl) PlanStoredStatement(ctx context.Context, query string) (*engine.Plan, error) {
+	return vc.executor.PlanStoredStmt(ctx, vc.SafeSession, query)
 }
 
 func (vc *VCursorImpl) ClearPrepareData(name string) {

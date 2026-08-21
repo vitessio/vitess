@@ -403,7 +403,12 @@ func (f fakeExecutor) VSchema() *vindexes.VSchema {
 	panic("implement me")
 }
 
-func (f fakeExecutor) PlanPrepareStmt(context.Context, *SafeSession, string) (*engine.Plan, error) {
+func (f fakeExecutor) PlanPrepareStmt(context.Context, *SafeSession, string) (*engine.Plan, string, error) {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (f fakeExecutor) PlanStoredStmt(context.Context, *SafeSession, string) (*engine.Plan, error) {
 	// TODO implement me
 	panic("implement me")
 }
