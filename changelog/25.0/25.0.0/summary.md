@@ -279,7 +279,7 @@ Only `SELECT` statements whose target shards can be resolved from a vindex witho
 
 For queries eligible for deferred plan optimization (where equal bind variable values let the plan collapse to a single shard at execution time), `VEXPLAIN MYSQLPLAN` explains the general (baseline) plan rather than the value-specific optimized one, so it reports the full shard footprint the query can target regardless of the bind variable values supplied.
 
-The per-shard `EXPLAIN` queries are run concurrently. If the `EXPLAIN` against any targeted shard fails (for example, an unreachable shard), the whole `VEXPLAIN MYSQLPLAN` command fails with that error rather than returning a partial result — matching the default all-or-nothing behavior of a scatter query.
+For each `Route` in the plan, the per-shard `EXPLAIN` queries are run concurrently across that `Route`'s shards, reusing the same scatter fan-out a real query would use; plans with multiple `Route` nodes (for example, a `UNION`) explain each `Route` in turn. If the `EXPLAIN` against any targeted shard fails (for example, an unreachable shard), the whole `VEXPLAIN MYSQLPLAN` command fails with that error rather than returning a partial result — matching the default all-or-nothing behavior of a scatter query.
 
 Because each per-shard `EXPLAIN` runs on a separate connection, a `VEXPLAIN MYSQLPLAN` issued inside an open transaction reflects the pre-transaction state of each shard rather than any uncommitted changes made in that transaction — the same limitation as `VEXPLAIN ALL`.
 
