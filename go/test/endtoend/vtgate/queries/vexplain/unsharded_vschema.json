@@ -1,0 +1,6 @@
+{
+  "sharded": false,
+  "tables": {
+    "u_user": {}
+  }
+}
