@@ -30,6 +30,7 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/sqlmode"
 	"vitess.io/vitess/go/vt/log"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/servenv"
@@ -188,6 +189,16 @@ func (c *Connector) Connect(ctx context.Context) (*mysql.Conn, error) {
 	conn, err := mysql.Connect(ctx, params)
 	if err != nil {
 		return nil, err
+	}
+	// This is the choke point every Vitess-created MySQL connection goes through, so
+	// the session setup runs here: MySQL lexes each statement under the session
+	// sql_mode inherited from the server's global value, and Vitess-formatted SQL
+	// must always be lexed under the default rules it was serialized with. Strip
+	// the lexer modes, preserving the server's runtime modes (see
+	// sqlmode.NeutralizeSessionQuery).
+	if _, err := conn.ExecuteFetch(sqlmode.NeutralizeSessionQuery, 0, false); err != nil {
+		conn.Close()
+		return nil, vterrors.Wrapf(err, "failed to neutralize the connection's sql_mode")
 	}
 	return conn, nil
 }

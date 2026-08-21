@@ -736,12 +736,18 @@ func TestTxEngineFailReserve(t *testing.T) {
 
 	te.AcceptReadOnly()
 
-	db.AddRejectedQuery("dummy_query", errors.New("failed executing dummy_query"))
+	// settings must parse as SET statements; an arbitrary string is rejected before
+	// any connection is acquired
 	_, err = te.Reserve(ctx, options, 0, []string{"dummy_query"})
-	require.EqualError(t, err, "unknown error: failed executing dummy_query (errno 1105) (sqlstate HY000) during query: dummy_query")
+	require.ErrorContains(t, err, "failed to parse connection setting: dummy_query")
 
-	_, _, err = te.ReserveBegin(ctx, options, []string{"dummy_query"})
-	require.EqualError(t, err, "unknown error: failed executing dummy_query (errno 1105) (sqlstate HY000) during query: dummy_query")
+	failingSetting := "set @@dummy = 1"
+	db.AddRejectedQuery(failingSetting, errors.New("failed executing set"))
+	_, err = te.Reserve(ctx, options, 0, []string{failingSetting})
+	require.EqualError(t, err, "unknown error: failed executing set (errno 1105) (sqlstate HY000) during query: set @@dummy = 1")
+
+	_, _, err = te.ReserveBegin(ctx, options, []string{failingSetting})
+	require.EqualError(t, err, "unknown error: failed executing set (errno 1105) (sqlstate HY000) during query: set @@dummy = 1")
 
 	nonExistingID := int64(42)
 	_, err = te.Reserve(ctx, options, nonExistingID, nil)
@@ -753,8 +759,8 @@ func TestTxEngineFailReserve(t *testing.T) {
 	require.NoError(t, err)
 	conn.Unlock() // but we keep holding on to it... sneaky....
 
-	_, err = te.Reserve(ctx, options, txID, []string{"dummy_query"})
-	require.EqualError(t, err, "unknown error: failed executing dummy_query (errno 1105) (sqlstate HY000) during query: dummy_query")
+	_, err = te.Reserve(ctx, options, txID, []string{failingSetting})
+	require.EqualError(t, err, "unknown error: failed executing set (errno 1105) (sqlstate HY000) during query: set @@dummy = 1")
 
 	connID, _, err := te.Commit(ctx, txID)
 	require.Error(t, err)

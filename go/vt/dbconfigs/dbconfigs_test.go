@@ -28,6 +28,8 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/fakesqldb"
+	"vitess.io/vitess/go/mysql/sqlmode"
 	"vitess.io/vitess/go/yaml2"
 )
 
@@ -338,4 +340,20 @@ dba:
 	err = yaml2.Unmarshal(inBytes, &gotdb)
 	require.NoError(t, err)
 	assert.Equal(t, &db, &gotdb)
+}
+
+// TestConnectorConnectNeutralizesSQLMode verifies the neutralization runs at the
+// connector layer — the single choke point every Vitess-created MySQL connection goes
+// through — so no caller can dial a connection that lexes Vitess-formatted SQL under
+// the server's global lexer modes.
+func TestConnectorConnectNeutralizesSQLMode(t *testing.T) {
+	db := fakesqldb.New(t)
+	t.Cleanup(db.Close)
+
+	connector := New(db.ConnParams())
+	conn, err := connector.Connect(t.Context())
+	require.NoError(t, err)
+	t.Cleanup(conn.Close)
+
+	require.Equal(t, 1, db.GetQueryCalledNum(sqlmode.NeutralizeSessionQuery))
 }

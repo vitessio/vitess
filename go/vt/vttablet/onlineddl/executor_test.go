@@ -312,20 +312,20 @@ func TestInitMigrationSessionVariables(t *testing.T) {
 	db.AddQuery("set @vt_onlineddl_session_variable_0=@@session.innodb_strict_mode", &sqltypes.Result{})
 	db.AddQuery("set @@session.innodb_strict_mode=X'6f6666'", &sqltypes.Result{})
 	db.AddQuery("set @vt_onlineddl_session_variable_1=@@session.sql_mode", &sqltypes.Result{})
-	db.AddQuery("set @@session.sql_mode=X'414e5349'", &sqltypes.Result{})
+	db.AddQuery("set @@session.sql_mode=X'4e4f5f5a45524f5f44415445'", &sqltypes.Result{})
 	db.AddQuery("set @@session.sql_mode=@vt_onlineddl_session_variable_1", &sqltypes.Result{})
 	db.AddQuery("set @@session.innodb_strict_mode=@vt_onlineddl_session_variable_0", &sqltypes.Result{})
 
 	executor := &Executor{}
 	onlineDDL := &schema.OnlineDDL{
 		Strategy: schema.DDLStrategyOnline,
-		Options:  "--session-variable innodb_strict_mode=off --session-variable sql_mode=ANSI",
+		Options:  "--session-variable innodb_strict_mode=off --session-variable sql_mode=NO_ZERO_DATE",
 	}
 	deferFunc, err := executor.initMigrationSessionVariables(t.Context(), onlineDDL, conn)
 	require.NoError(t, err)
 	queryLog := db.QueryLog()
 	assert.Contains(t, queryLog, "set @@session.innodb_strict_mode=x'6f6666'")
-	assert.Contains(t, queryLog, "set @@session.sql_mode=x'414e5349'")
+	assert.Contains(t, queryLog, "set @@session.sql_mode=x'4e4f5f5a45524f5f44415445'")
 
 	deferFunc()
 	queryLog = db.QueryLog()
@@ -390,14 +390,14 @@ func TestMigrationSessionVariableFailurePreventsDDL(t *testing.T) {
 	defer conn.Close()
 
 	db.AddQuery("set @vt_onlineddl_session_variable_0=@@session.sql_mode", &sqltypes.Result{})
-	db.AddRejectedQuery("set @@session.sql_mode=X'414e5349'", errors.New("cannot set session variable"))
+	db.AddRejectedQuery("set @@session.sql_mode=X'4e4f5f5a45524f5f44415445'", errors.New("cannot set session variable"))
 	db.AddQuery("set @@session.sql_mode=@vt_onlineddl_session_variable_0", &sqltypes.Result{})
 	db.AddQuery("create table _vrepl_shadow (id int primary key)", &sqltypes.Result{})
 
 	executor := &Executor{}
 	onlineDDL := &schema.OnlineDDL{
 		Strategy: schema.DDLStrategyOnline,
-		Options:  "--session-variable sql_mode=ANSI",
+		Options:  "--session-variable sql_mode=NO_ZERO_DATE",
 	}
 	restoreSessionVariablesFunc, err := executor.initMigrationSessionVariables(t.Context(), onlineDDL, conn)
 	defer restoreSessionVariablesFunc()
@@ -424,7 +424,7 @@ func TestInitMigrationSessionVariableReadFailure(t *testing.T) {
 	executor := &Executor{}
 	onlineDDL := &schema.OnlineDDL{
 		Strategy: schema.DDLStrategyOnline,
-		Options:  "--session-variable sql_mode=ANSI",
+		Options:  "--session-variable sql_mode=NO_ZERO_DATE",
 	}
 	restoreSessionVariablesFunc, err := executor.initMigrationSessionVariables(
 		t.Context(),
@@ -463,7 +463,7 @@ func TestAlterViewSessionVariableFailurePreventsDDL(t *testing.T) {
 	cfg.DB = dbconfigs.NewTestDBConfigs(*params, *params, params.DbName)
 
 	db.AddQuery("set @vt_onlineddl_session_variable_0=@@session.sql_mode", &sqltypes.Result{})
-	db.AddRejectedQuery("set @@session.sql_mode=X'414e5349'", errors.New("cannot set session variable"))
+	db.AddRejectedQuery("set @@session.sql_mode=X'4e4f5f5a45524f5f44415445'", errors.New("cannot set session variable"))
 	db.AddQuery("set @@session.sql_mode=@vt_onlineddl_session_variable_0", &sqltypes.Result{})
 
 	executor := &Executor{
@@ -472,7 +472,7 @@ func TestAlterViewSessionVariableFailurePreventsDDL(t *testing.T) {
 	onlineDDL := &schema.OnlineDDL{
 		SQL:      "alter view test_view as select 1",
 		Strategy: schema.DDLStrategyOnline,
-		Options:  "--session-variable sql_mode=ANSI",
+		Options:  "--session-variable sql_mode=NO_ZERO_DATE",
 	}
 	err := executor.executeAlterViewOnline(t.Context(), onlineDDL)
 	require.ErrorContains(t, err, "cannot set session variable")
@@ -489,7 +489,7 @@ func TestAlterViewSessionVariablesAreSetBeforeDDL(t *testing.T) {
 	cfg.DB = dbconfigs.NewTestDBConfigs(*params, *params, params.DbName)
 
 	db.AddQuery("set @vt_onlineddl_session_variable_0=@@session.sql_mode", &sqltypes.Result{})
-	db.AddQuery("set @@session.sql_mode=X'414e5349'", &sqltypes.Result{})
+	db.AddQuery("set @@session.sql_mode=X'4e4f5f5a45524f5f44415445'", &sqltypes.Result{})
 	db.AddQuery("set @@session.sql_mode=@vt_onlineddl_session_variable_0", &sqltypes.Result{})
 	db.RejectQueryPattern("create or replace .*view .*", "view DDL failed")
 
@@ -502,13 +502,13 @@ func TestAlterViewSessionVariablesAreSetBeforeDDL(t *testing.T) {
 	onlineDDL := &schema.OnlineDDL{
 		SQL:      "alter view test_view as select 1",
 		Strategy: schema.DDLStrategyOnline,
-		Options:  "--session-variable sql_mode=ANSI",
+		Options:  "--session-variable sql_mode=NO_ZERO_DATE",
 	}
 	err := executor.executeAlterViewOnline(t.Context(), onlineDDL)
 	require.ErrorContains(t, err, "view DDL failed")
 
 	queryLog := strings.ToLower(db.QueryLog())
-	setIdx := strings.Index(queryLog, "set @@session.sql_mode=x'414e5349'")
+	setIdx := strings.Index(queryLog, "set @@session.sql_mode=x'4e4f5f5a45524f5f44415445'")
 	viewIdx := strings.Index(queryLog, "create or replace")
 	require.NotEqual(t, -1, setIdx)
 	require.NotEqual(t, -1, viewIdx)
@@ -529,19 +529,19 @@ func TestExecuteDirectlyAppliesEnforcedSettingsAfterSessionVariables(t *testing.
 	defer conn.Close()
 
 	db.AddQuery("set @vt_onlineddl_session_variable_0=@@session.sql_mode", &sqltypes.Result{})
-	db.AddQuery("set @@session.sql_mode=X'414e5349'", &sqltypes.Result{})
+	db.AddQuery("set @@session.sql_mode=X'4e4f5f5a45524f5f44415445'", &sqltypes.Result{})
 	db.AddQuery(
 		"select @@session.sql_mode as sql_mode",
 		sqltypes.MakeTestResult(
 			sqltypes.MakeTestFields("sql_mode", "varchar"),
-			"ANSI",
+			"NO_ZERO_DATE",
 		),
 	)
 	db.AddQuery(
-		"set @@session.sql_mode=REPLACE(REPLACE('ANSI', 'NO_ZERO_DATE', ''), 'NO_ZERO_IN_DATE', '')",
+		"set @@session.sql_mode=REPLACE(REPLACE('NO_ZERO_DATE', 'NO_ZERO_DATE', ''), 'NO_ZERO_IN_DATE', '')",
 		&sqltypes.Result{},
 	)
-	db.AddQuery("set @@session.sql_mode='ANSI'", &sqltypes.Result{})
+	db.AddQuery("set @@session.sql_mode='NO_ZERO_DATE'", &sqltypes.Result{})
 	db.AddQuery("set @@session.sql_mode=@vt_onlineddl_session_variable_0", &sqltypes.Result{})
 	db.AddQuery("set @lock_wait_timeout=@@session.lock_wait_timeout", &sqltypes.Result{})
 	db.AddQuery("set @@session.lock_wait_timeout=5", &sqltypes.Result{})
@@ -579,7 +579,7 @@ func TestExecuteDirectlyAppliesEnforcedSettingsAfterSessionVariables(t *testing.
 	onlineDDL := &schema.OnlineDDL{
 		SQL:              "create table test_lock_wait(id int)",
 		Strategy:         schema.DDLStrategyOnline,
-		Options:          "--session-variable sql_mode=ANSI --allow-zero-in-date",
+		Options:          "--session-variable sql_mode=NO_ZERO_DATE --allow-zero-in-date",
 		CutOverThreshold: 5 * time.Second,
 		UUID:             "uuid",
 	}
@@ -587,7 +587,7 @@ func TestExecuteDirectlyAppliesEnforcedSettingsAfterSessionVariables(t *testing.
 	require.NoError(t, err)
 
 	queryLog := db.QueryLog()
-	sessionVariableIdx := strings.Index(queryLog, "set @@session.sql_mode=x'414e5349'")
+	sessionVariableIdx := strings.Index(queryLog, "set @@session.sql_mode=x'4e4f5f5a45524f5f44415445'")
 	allowZeroInDateIdx := strings.Index(queryLog, "set @@session.sql_mode=replace")
 	createIdx := strings.Index(queryLog, "create table test_lock_wait")
 	require.NotEqual(t, -1, sessionVariableIdx)

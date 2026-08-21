@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"strings"
 	"sync"
 	"time"
@@ -28,6 +29,7 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
+	"vitess.io/vitess/go/mysql/sqlmode"
 	"vitess.io/vitess/go/pools/smartconnpool"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/trace"
@@ -294,7 +296,7 @@ func (qre *QueryExecutor) txConnExec(conn *StatefulConnection) (*sqltypes.Result
 	case p.PlanInsert, p.PlanUpdate, p.PlanDelete:
 		return qre.txFetch(conn, true)
 	case p.PlanSet:
-		return qre.txFetch(conn, false)
+		return qre.execSet(conn)
 	case p.PlanInsertMessage:
 		qre.bindVars["#time_now"] = sqltypes.Int64BindVariable(time.Now().UnixNano())
 		return qre.txFetch(conn, true)
@@ -1228,6 +1230,77 @@ func (qre *QueryExecutor) getStreamConn() (*connpool.PooledConn, error) {
 		qre.logStats.WaitingForConnection += time.Since(start)
 	}(time.Now())
 	return qre.tsv.qe.streamConns.Get(ctx, qre.setting)
+}
+
+// execSet executes a SET statement on a dedicated transaction or reserved connection.
+// When the statement assigns sql_mode a value that could not be judged at plan time (a
+// non-constant expression), the applied value is read back and validated, so that such an
+// expression cannot put the connection into a mode the Vitess parser cannot honor (see
+// sqlmode.Validate). On violation the previous sql_mode is restored, making the failed SET
+// a no-op like it would have been at the vtgate; only if the restore itself fails is the
+// connection closed rather than left running under an unsupported mode.
+func (qre *QueryExecutor) execSet(conn *StatefulConnection) (*sqltypes.Result, error) {
+	if !qre.plan.VerifySQLMode {
+		return qre.txFetch(conn, false)
+	}
+	prev, err := qre.readSQLMode(conn)
+	if err != nil {
+		return nil, err
+	}
+	result, err := qre.txFetch(conn, false)
+	if err != nil {
+		return nil, err
+	}
+	applied, err := qre.readSQLMode(conn)
+	if err != nil {
+		// The statement has already run, and without the read-back there is no telling
+		// what sql_mode the connection is in now — undo the statement rather than
+		// returning the connection in an unverified state.
+		qre.undoSQLModeSet(conn, prev, err)
+		return nil, err
+	}
+	vErr := func() error { _, err := sqlmode.Validate(applied); return err }()
+	if vErr == nil {
+		return result, nil
+	}
+	// This also fails an applied value that does not decode as MySQL 8.x modes at all:
+	// a constant with an unknown mode name is rejected at plan time, and an expression
+	// producing one must not fare better just because it cannot be judged.
+	qre.undoSQLModeSet(conn, prev, vErr)
+	return nil, vErr
+}
+
+// undoSQLModeSet makes a failed SET behave as if it had not executed, as far as the
+// connection allows. MySQL applies none of a SET's assignments when the statement
+// fails, so a statement that only assigned sql_mode is undone by restoring the previous
+// value; a multi-assignment statement also changed variables the executor has no
+// snapshot of, and the connection is closed instead of being returned with some
+// assignments applied. The connection is also closed when the restore itself fails.
+func (qre *QueryExecutor) undoSQLModeSet(conn *StatefulConnection, prev sqltypes.Value, cause error) {
+	if qre.plan.MultiAssignmentSet {
+		log.Warn("closing connection: a multi-assignment SET failed sql_mode verification and its other assignments cannot be restored",
+			slog.Any("cause", cause), slog.Int64("connID", conn.ID()))
+		conn.Close()
+		return
+	}
+	restore := "set sql_mode = " + sqltypes.EncodeStringSQL(prev.ToString())
+	if _, err := qre.execStatefulConn(conn, restore, false); err != nil {
+		log.Warn("closing connection: a failed SET could not be undone by restoring the previous sql_mode",
+			slog.Any("cause", cause), slog.Any("restoreError", err), slog.Int64("connID", conn.ID()))
+		conn.Close()
+	}
+}
+
+// readSQLMode reads the connection's current @@sql_mode.
+func (qre *QueryExecutor) readSQLMode(conn *StatefulConnection) (sqltypes.Value, error) {
+	qr, err := qre.execStatefulConn(conn, "select @@sql_mode", false)
+	if err != nil {
+		return sqltypes.Value{}, err
+	}
+	if len(qr.Rows) != 1 || len(qr.Rows[0]) != 1 {
+		return sqltypes.Value{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected result reading @@sql_mode: %v", qr.Rows)
+	}
+	return qr.Rows[0][0], nil
 }
 
 // txFetch fetches from a TxConnection.
