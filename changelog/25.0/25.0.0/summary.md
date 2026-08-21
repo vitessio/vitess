@@ -313,13 +313,14 @@ A prepared statement keeps the meaning its text had at prepare time. Changes to 
 - `IGNORE_SPACE` and `HIGH_NOT_PRECEDENCE`, which v24 accepted without honoring them, now reach a v25 VTTablet. It applies them and parses queries under them. Such sessions were already unreliable in v24: the VTGate parsed their queries without honoring the modes, and the backend MySQL received the modes all the same.
 - Values that passed the v24 check without naming a rejected mode — the comparison was textual, so a numeric value such as `1048576` passed — are now decoded and validated by the v25 VTTablet. A value carrying `NO_BACKSLASH_ESCAPES` is rejected, and the session receives an error where it previously proceeded.
 
-*VTGates first.* This order opens a window. The v25 VTGate accepts the newly supported modes and forwards them, minus `NO_BACKSLASH_ESCAPES`, in connection settings. A v24 VTTablet applies the settings to MySQL without validation, and its own serialized SQL carries none of the v25 mode-independence guarantees:
+*VTGates first.* This mix is not a new exposure. A v24 VTGate already accepted `IGNORE_SPACE`, `HIGH_NOT_PRECEDENCE`, and `ANSI` — and, through its textual check, any numeric value — and forwarded them to its own VTTablets, whose serialized SQL is not inert under those modes. A v25 VTGate narrows this: it never forwards `NO_BACKSLASH_ESCAPES`, however the value spells it, and it rejects invalid values instead of passing them through. The modes it newly forwards — `ANSI_QUOTES`, `PIPES_AS_CONCAT`, `REAL_AS_FLOAT` — are modes v24-serialized SQL is already inert under.
+
+The pre-existing v24 gaps therefore remain, unchanged, until the VTTablets are upgraded. They become likelier to be exercised because the modes are now advertised as supported:
 
 - Under `IGNORE_SPACE` (alone or implied by `ANSI`), MySQL can reject v24-serialized statements that use function-keyword names as identifiers.
-- Under `HIGH_NOT_PRECEDENCE`, MySQL reads v24-serialized `NOT` expressions with the hoisted precedence, because v24 prints no defensive parentheses.
-- Incoming v25-canonical query text is unaffected: it parses identically under v24's default rules. The `SET_VAR` hint transport is unaffected as well: a hint applies to the hinted statement's execution only and cannot change how that statement's own text is read.
+- Under `HIGH_NOT_PRECEDENCE`, MySQL reads v24-serialized `NOT` expressions with the hoisted precedence; v24 prints no defensive parentheses.
 
-Only sessions that explicitly set the newly supported modes during this window are exposed. `NO_BACKSLASH_ESCAPES` is never forwarded, in any version mix.
+Incoming v25-canonical query text is unaffected: it parses identically under v24's default rules. The `SET_VAR` hint transport is unaffected as well: a hint applies to the hinted statement's execution only and cannot change how that statement's own text is read. Only sessions that set the affected modes are exposed. Hold off on adopting the newly supported modes until the VTTablets run v25.
 
 *Mixed order.* The two windows combine, per tablet: each query executes with the behavior of the VTTablet version that serves it. A session using the new modes can succeed on upgraded shards and meet the v24 gaps on others.
 
