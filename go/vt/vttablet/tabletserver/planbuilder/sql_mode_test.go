@@ -27,11 +27,11 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 )
 
-// The vttablet accepts every valid sql_mode on its own inbound entry points — settings,
-// SET statements, SET_VAR hints — parses queries under the parse-relevant modes itself,
-// and applies a value with those modes stripped to MySQL, which must lex the
-// vttablet-generated text under the default rules. Invalid values are still rejected
-// with MySQL's errors.
+// The vttablet accepts valid sql_mode values on its own inbound entry points —
+// settings and SET statements — applies them to MySQL as written, and parses queries
+// under the parse-relevant modes itself. NO_BACKSLASH_ESCAPES is rejected: it cannot
+// be applied to the MySQL session, and the vttablet answers @@sql_mode reads from
+// that session. Invalid values are rejected with MySQL's errors.
 
 func TestBuildSettingQuerySQLMode(t *testing.T) {
 	parser := vtenv.NewTestEnv().Parser()
@@ -63,10 +63,16 @@ func TestBuildSettingQuerySQLMode(t *testing.T) {
 		expectedQuery: "set sql_mode = 'IGNORE_SPACE'",
 		expectedMode:  sqlparser.SQLModeIgnoreSpace,
 	}, {
-		// numeric bitmask for NO_BACKSLASH_ESCAPES
-		settings:      []string{"set sql_mode = 1048576"},
-		expectedQuery: "set sql_mode = ''",
-		expectedMode:  sqlparser.SQLModeNoBackslashEscapes,
+		// the mode the MySQL session must not run under is rejected, however it is
+		// spelled — here the numeric bitmask for NO_BACKSLASH_ESCAPES
+		settings:    []string{"set sql_mode = 1048576"},
+		expectedErr: "setting the NO_BACKSLASH_ESCAPES sql_mode is unsupported",
+	}, {
+		// HIGH_NOT_PRECEDENCE is forwarded: the vttablet-serialized SQL
+		// parenthesizes NOT operands that would bind differently under it
+		settings:      []string{"set sql_mode = 'STRICT_TRANS_TABLES,HIGH_NOT_PRECEDENCE'"},
+		expectedQuery: "set sql_mode = 'STRICT_TRANS_TABLES,HIGH_NOT_PRECEDENCE'",
+		expectedMode:  sqlparser.SQLModeHighNotPrecedence,
 	}, {
 		settings:    []string{"set sql_mode = 'BOGUS'"},
 		expectedErr: "Variable 'sql_mode' can't be set to the value of 'BOGUS'",
@@ -105,53 +111,55 @@ func TestBuildSettingQueryResetNeutralizesSQLMode(t *testing.T) {
 	assert.Contains(t, resetQuery, "sql_safe_updates = 'default'")
 }
 
-// BuildReservedSettings prepares the settings a true reservation executes directly on
-// its tainted connection: same validation and stripping as the settings pool, with
-// non-SET strings passed through untouched for MySQL to judge.
-func TestBuildReservedSettings(t *testing.T) {
+// ValidateReservedSettings judges the settings a true reservation executes directly on
+// its tainted connection: the same validation as the settings pool, returning the
+// parse-relevant bits the settings put the session in.
+func TestValidateReservedSettings(t *testing.T) {
 	parser := vtenv.NewTestEnv().Parser()
 
-	t.Run("parse-relevant bits are returned and forwarded modes stay as written", func(t *testing.T) {
-		settings := []string{
+	t.Run("parse-relevant bits are returned", func(t *testing.T) {
+		parseMode, err := ValidateReservedSettings([]string{
 			"set sql_safe_updates = 1",
 			"set sql_mode = 'PIPES_AS_CONCAT,STRICT_TRANS_TABLES'",
-		}
-		applied, parseMode, err := BuildReservedSettings(settings, parser)
+		}, parser)
 		require.NoError(t, err)
-		assert.Equal(t, settings, applied)
 		assert.Equal(t, sqlparser.SQLModePipesAsConcat, parseMode)
 	})
 
-	t.Run("modes the backend must not lex under are stripped", func(t *testing.T) {
-		applied, parseMode, err := BuildReservedSettings([]string{
+	t.Run("the mode the session must not run under is rejected", func(t *testing.T) {
+		_, err := ValidateReservedSettings([]string{
 			"set sql_mode = 'NO_BACKSLASH_ESCAPES,STRICT_TRANS_TABLES'",
 		}, parser)
-		require.NoError(t, err)
-		assert.Equal(t, []string{"set sql_mode = 'STRICT_TRANS_TABLES'"}, applied)
-		assert.Equal(t, sqlparser.SQLModeNoBackslashEscapes, parseMode)
+		require.EqualError(t, err, "setting the NO_BACKSLASH_ESCAPES sql_mode is unsupported")
 	})
 
-	t.Run("mode-free settings pass through byte-identical", func(t *testing.T) {
-		settings := []string{"SET sql_mode = 'STRICT_TRANS_TABLES'", "set sql_safe_updates=1"}
-		applied, parseMode, err := BuildReservedSettings(settings, parser)
+	t.Run("HIGH_NOT_PRECEDENCE is accepted and carries its parse bit", func(t *testing.T) {
+		parseMode, err := ValidateReservedSettings([]string{
+			"set sql_mode = 'HIGH_NOT_PRECEDENCE'",
+		}, parser)
 		require.NoError(t, err)
-		assert.Equal(t, settings, applied)
+		assert.Equal(t, sqlparser.SQLModeHighNotPrecedence, parseMode)
+	})
+
+	t.Run("mode-free settings carry no parse bits", func(t *testing.T) {
+		parseMode, err := ValidateReservedSettings([]string{"SET sql_mode = 'STRICT_TRANS_TABLES'", "set sql_safe_updates=1"}, parser)
+		require.NoError(t, err)
 		assert.Equal(t, sqlparser.SQLMode(0), parseMode)
 	})
 
 	t.Run("values that cannot be judged upfront are rejected", func(t *testing.T) {
 		// the settings are applied with no read-back afterwards, so anything that
-		// cannot be judged and stripped here must not reach the connection
-		_, _, err := BuildReservedSettings([]string{"this is not SQL"}, parser)
+		// cannot be judged upfront must not reach the connection
+		_, err := ValidateReservedSettings([]string{"this is not SQL"}, parser)
 		require.ErrorContains(t, err, "failed to parse connection setting: this is not SQL")
-		_, _, err = BuildReservedSettings([]string{"select 1 from dual"}, parser)
+		_, err = ValidateReservedSettings([]string{"select 1 from dual"}, parser)
 		require.EqualError(t, err, "connection setting is not a SET statement: select 1 from dual")
-		_, _, err = BuildReservedSettings([]string{"set sql_mode = concat('AN', 'SI')"}, parser)
+		_, err = ValidateReservedSettings([]string{"set sql_mode = concat('AN', 'SI')"}, parser)
 		require.EqualError(t, err, "non-constant sql_mode value in connection settings: set sql_mode = concat('AN', 'SI')")
 	})
 
 	t.Run("invalid sql_mode values are rejected", func(t *testing.T) {
-		_, _, err := BuildReservedSettings([]string{"set sql_mode = 'BOGUS'"}, parser)
+		_, err := ValidateReservedSettings([]string{"set sql_mode = 'BOGUS'"}, parser)
 		require.EqualError(t, err, "Variable 'sql_mode' can't be set to the value of 'BOGUS'")
 	})
 }
@@ -178,15 +186,16 @@ func TestSetPlanSQLMode(t *testing.T) {
 		parseBits:   sqlparser.SQLModeANSIQuotes,
 		fullQuery:   "set @@sql_mode = 'ansi_quotes'",
 	}, {
+		// HIGH_NOT_PRECEDENCE is forwarded and its parse bit recorded
 		sql:         "set session sql_mode = 'HIGH_NOT_PRECEDENCE'",
 		setsSQLMode: true,
 		parseBits:   sqlparser.SQLModeHighNotPrecedence,
-		fullQuery:   "set @@sql_mode = ''",
+		fullQuery:   "set @@sql_mode = 'HIGH_NOT_PRECEDENCE'",
 	}, {
+		// the mode the MySQL session must not run under is rejected, however it
+		// is spelled — here the numeric bitmask for NO_BACKSLASH_ESCAPES
 		sql:         "set sql_mode = 1048576",
-		setsSQLMode: true,
-		parseBits:   sqlparser.SQLModeNoBackslashEscapes,
-		fullQuery:   "set sql_mode = ''",
+		expectedErr: "setting the NO_BACKSLASH_ESCAPES sql_mode is unsupported",
 	}, {
 		sql:         "set sql_mode = 'BOGUS'",
 		expectedErr: "Variable 'sql_mode' can't be set to the value of 'BOGUS'",

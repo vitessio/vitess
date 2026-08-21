@@ -205,15 +205,14 @@ type Plan struct {
 
 	// ReadBackSQLMode is set on a PlanSet that assigns sql_mode a value that could not
 	// be judged at plan time (a non-constant expression): the executor must read back
-	// the applied value to record its parse-relevant modes and strip them from the
-	// MySQL connection. Such a plan has sql_mode as its only assignment (see
+	// the applied value to judge it and record its parse-relevant modes on the
+	// connection. Such a plan has sql_mode as its only assignment (see
 	// validateSetStatementSQLMode).
 	ReadBackSQLMode bool
 
-	// SetsSQLMode is set on a PlanSet whose statement assigns sql_mode a constant value.
-	// FullQuery then carries the value with its parse-relevant modes stripped, and
-	// SQLModeParseBits holds the stripped bits: after executing the statement, the
-	// connection parses SQL under those bits while MySQL runs the stripped value.
+	// SetsSQLMode is set on a PlanSet whose statement assigns sql_mode a constant
+	// value, and SQLModeParseBits holds that value's parse-relevant bits: after
+	// executing the statement, the connection parses SQL under those bits.
 	SetsSQLMode      bool
 	SQLModeParseBits sqlparser.SQLMode
 }
@@ -375,9 +374,9 @@ func hasLockFunc(sel *sqlparser.Select) bool {
 }
 
 // BuildSettingQuery builds a query for system settings. The returned parseMode holds
-// the parse-relevant sql_mode bits the settings put the session in; the query itself
-// carries the sql_mode with those modes stripped, since the vttablet parses SQL under
-// them and sends mode-independent text to MySQL.
+// the parse-relevant sql_mode bits the settings put the session in, so the pooled
+// connection can parse later queries under them; values carrying a mode the MySQL
+// session must not run under are rejected by the validation pass.
 func BuildSettingQuery(settings []string, parser *sqlparser.Parser) (query string, resetQuery string, parseMode sqlparser.SQLMode, err error) {
 	if len(settings) == 0 {
 		return "", "", 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG]: plan called for empty system settings")
@@ -395,11 +394,11 @@ func BuildSettingQuery(settings []string, parser *sqlparser.Parser) (query strin
 			return "", "", 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG]: invalid set statement: %s", setting)
 		}
 		// settings are applied with no read-back afterwards, so sql_mode values must be
-		// constants that can be judged and stripped here; vtgates only render constants
+		// constants that can be judged here; vtgates only render constants
 		if err := validateConstantSetExprsSQLMode(set.Exprs); err != nil {
 			return "", "", 0, err
 		}
-		if mode, sawConstant, _ := stripSetExprsSQLMode(set.Exprs); sawConstant {
+		if mode, sawConstant := constantSetExprsSQLModeBits(set.Exprs); sawConstant {
 			parseMode = mode
 		}
 		setExprs = append(setExprs, set.Exprs...)

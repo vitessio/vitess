@@ -306,6 +306,21 @@ func ValidateNoLexerModes(mode Mode) error {
 	return nil
 }
 
+// ValidateNoUnforwardableModes rejects the mode a vttablet session must not run
+// under: NO_BACKSLASH_ESCAPES changes how MySQL lexes string literals, and the
+// vttablet-serialized SQL a connection carries must be lexed under the same rules it
+// was written with, so this mode cannot be applied to the MySQL session. The vttablet
+// answers @@sql_mode reads from that session, so a mode it cannot apply is rejected
+// upfront rather than left out of the applied value. Every other mode — the
+// parse-relevant ones included — is inert on the serialized text and is applied as
+// written.
+func ValidateNoUnforwardableModes(mode Mode) error {
+	if mode.Expand()&NoBackslashEscapes != 0 {
+		return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "setting the %s sql_mode is unsupported", NoBackslashEscapes)
+	}
+	return nil
+}
+
 func checkRemoved(mode Mode) error {
 	removed := mode & removedModes
 	if removed == 0 {
