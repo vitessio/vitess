@@ -112,8 +112,14 @@ type VSchema interface {
 	// IsViewsEnabled returns true if Vitess manages the views.
 	IsViewsEnabled() bool
 
-	// PlanPrepareStatement plans the prepared statement.
-	PlanPrepareStatement(ctx context.Context, query string) (*engine.Plan, error)
+	// PlanPrepareStatement plans the prepared statement and returns the
+	// canonical serialization of its prepare-time parse.
+	PlanPrepareStatement(ctx context.Context, query string) (*engine.Plan, string, error)
+	// PlanStoredStatement plans the stored text of a SQL-level prepared
+	// statement — the canonical serialization of its prepare-time parse —
+	// under the canonical lexing rules regardless of the session's current
+	// sql_mode.
+	PlanStoredStatement(ctx context.Context, query string) (*engine.Plan, error)
 
 	// GetPrepareData returns the prepared data for the statement from the session.
 	GetPrepareData(stmtName string) *vtgatepb.PrepareData

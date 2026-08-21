@@ -110,7 +110,15 @@ func (vw *VSchemaWrapper) GetPrepareData(stmtName string) *vtgatepb.PrepareData 
 	return nil
 }
 
-func (vw *VSchemaWrapper) PlanPrepareStatement(ctx context.Context, query string) (*engine.Plan, error) {
+func (vw *VSchemaWrapper) PlanPrepareStatement(ctx context.Context, query string) (*engine.Plan, string, error) {
+	plan, err := vw.TestBuilder(query, vw, vw.CurrentDb())
+	if err != nil {
+		return nil, "", err
+	}
+	return plan, plan.Original, nil
+}
+
+func (vw *VSchemaWrapper) PlanStoredStatement(ctx context.Context, query string) (*engine.Plan, error) {
 	plan, err := vw.TestBuilder(query, vw, vw.CurrentDb())
 	if err != nil {
 		return nil, err

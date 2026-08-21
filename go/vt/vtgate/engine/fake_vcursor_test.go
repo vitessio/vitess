@@ -96,7 +96,7 @@ func (t *noopVCursor) ClearPrepareData(name string) {
 	panic("implement me")
 }
 
-func (t *noopVCursor) PlanPrepareStatement(ctx context.Context, query string) (*Plan, error) {
+func (t *noopVCursor) PlanPrepareStatement(ctx context.Context, query string) (*Plan, string, error) {
 	panic("implement me")
 }
 
@@ -319,10 +319,6 @@ func (t *noopVCursor) SetUDV(key string, value any) error {
 	panic("implement me")
 }
 
-func (t *noopVCursor) HasPreparedStatements() bool {
-	return false
-}
-
 func (t *noopVCursor) SetSysVar(name string, expr string) {
 	// panic("implement me")
 }
@@ -477,8 +473,6 @@ type loggingVCursor struct {
 	curResult int
 	resultErr error
 
-	hasPreparedStatements bool
-
 	warnings                []*querypb.QueryWarning
 	transactionStatusOutput []*querypb.TransactionMetadata
 
@@ -584,10 +578,6 @@ func (f *loggingVCursor) LookupRowLockShardSession() vtgatepb.CommitOrder {
 func (f *loggingVCursor) SetUDV(key string, value any) error {
 	f.log = append(f.log, fmt.Sprintf("UDV set with (%s,%v)", key, value))
 	return nil
-}
-
-func (f *loggingVCursor) HasPreparedStatements() bool {
-	return f.hasPreparedStatements
 }
 
 func (f *loggingVCursor) SetSysVar(name string, expr string) {
