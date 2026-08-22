@@ -248,6 +248,175 @@ func TestRecursiveCTEChecking(t *testing.T) {
 	}
 }
 
+func TestColumnListLengthChecking(t *testing.T) {
+	const mismatch = "VT03033: In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+	type testCase struct {
+		name, query, err string
+	}
+	queries := []testCase{{
+		// MySQL reports these three as unknown columns (1054): an unpairable
+		// declared list leaves the recursive reference on the seed select
+		// names, so the term's declared-name reference never resolves. The
+		// unresolved column parks as a sharded error, which strict analysis
+		// only surfaces if no hard error follows, so the count check answers
+		// here; unsharded pass-through still gets MySQL's own error
+		name:  "recursive cte with a declared column list shorter than the seed select list",
+		query: "with recursive x(a) as (select 1, 2 union select a + 1, 2 from x where a < 10) select a from x",
+		err:   mismatch,
+	}, {
+		name:  "recursive cte with a declared column list longer than the seed select list",
+		query: "with recursive x(a, b, c) as (select 1, 2 union select a + 1, b from x where a < 10) select a from x",
+		err:   mismatch,
+	}, {
+		name:  "recursive cte with a declared column list longer than an expanded star seed",
+		query: "with recursive x(a, b) as (select * from t1 union select id + 1 from x where id < 10) select a from x",
+		err:   mismatch,
+	}, {
+		name:  "recursive cte term resolves via seed names under a mismatched column list",
+		query: "with recursive x(a) as (select 1 as b, 2 as c union select b + 1, c from x where b < 3) select a from x",
+		err:   mismatch,
+	}, {
+		name:  "outer query cannot bypass the count check with a seed name",
+		query: "with recursive x(a) as (select 1 as b, 2 as c union select b + 1, c from x where b < 3) select b from x",
+		err:   mismatch,
+	}, {
+		name:  "matched column list hides seed names from the term",
+		query: "with recursive x(a, b) as (select 1 as s, 2 as t union select s + 1, t from x where s < 3) select a from x",
+		err:   "column 's' not found",
+	}, {
+		name:  "matched column list hides seed names from the outer query",
+		query: "with recursive x(a, b) as (select 1 as s, 2 as t union select a + 1, b from x where a < 3) select s from x",
+		err:   "column 's' not found in table 'x'",
+	}, {
+		name:  "recursive keyword without a self-reference",
+		query: "with recursive x(a) as (select 1, 2) select a from x",
+		err:   mismatch,
+	}, {
+		name:  "plain cte with a declared column list shorter than the select list",
+		query: "with x(a) as (select 1, 2) select a from x",
+		err:   mismatch,
+	}, {
+		name:  "plain cte with a declared column list longer than the select list",
+		query: "with x(a, b, c) as (select 1, 2) select a from x",
+		err:   mismatch,
+	}, {
+		name:  "plain cte defined by a union",
+		query: "with x(a) as (select 1, 2 union select 3, 4) select a from x",
+		err:   mismatch,
+	}, {
+		name:  "derived table with a declared column list shorter than the select list",
+		query: "select a from (select 1, 2) as x(a)",
+		err:   mismatch,
+	}, {
+		name:  "derived table with a declared column list longer than the select list",
+		query: "select a from (select 1) as x(a, b)",
+		err:   mismatch,
+	}, {
+		name:  "derived table defined by a union",
+		query: "select a from (select 1, 2 union select 3, 4) as x(a)",
+		err:   mismatch,
+	}, {
+		name:  "derived table with a declared column list shorter than an expanded star",
+		query: "select a from (select * from t2) as x(a)",
+		err:   mismatch,
+	}, {
+		name:  "unexpanded star with more select expressions than declared columns",
+		query: "select a from (select t.*, 1 from t) as x(a)",
+		err:   mismatch,
+	}, {
+		name:  "unexpanded star alone cannot be validated",
+		query: "select a from (select * from t) as x(a)",
+	}, {
+		name:  "derived table with a matching declared column list",
+		query: "select a from (select 1, 2) as x(a, b)",
+	}, {
+		name:  "derived table with a declared column list matching an expanded star",
+		query: "select a from (select * from t2) as x(a, b, c)",
+	}, {
+		name:  "plain cte with a matching declared column list",
+		query: "with x(a, b) as (select uid, name from t2) select a from x",
+	}, {
+		name:  "recursive cte with a matching declared column list",
+		query: "with recursive x(a, b) as (select 1, 2 union select a + 1, b from x where a < 5) select a from x",
+	}, {
+		// MySQL does not validate definitions that are never referenced
+		name:  "unused plain cte with a mismatched column list",
+		query: "with x(a) as (select 1, 2) select 1",
+	}, {
+		name:  "unused recursive cte with a mismatched column list",
+		query: "with recursive x(a) as (select 1, 2) select 1",
+	}, {
+		// a use inside a definition only counts if that definition is used
+		name:  "mismatched cte referenced only by an unused cte",
+		query: "with recursive x(a) as (select 1, 2), y as (select 1 from x) select 1",
+	}, {
+		name:  "mismatched cte referenced through two unused definitions",
+		query: "with recursive x(a) as (select 1, 2), y as (select 1 from x), z as (select 1 from y) select 1",
+	}, {
+		name:  "mismatched cte referenced through a used cte",
+		query: "with recursive x(a) as (select 1, 2), y as (select 1 from x) select * from y",
+		err:   mismatch,
+	}, {
+		name:  "mismatched cte referenced through a two-level used chain",
+		query: "with recursive x(a) as (select 1, 2), y as (select 1 from x), z as (select 1 from y) select * from z",
+		err:   mismatch,
+	}, {
+		name:  "unused cte chain reading the mismatched declared name",
+		query: "with recursive x(a) as (select 1, 2), y as (select a from x) select 1",
+	}, {
+		name:  "used cte chain reading the mismatched declared name",
+		query: "with recursive x(a) as (select 1, 2), y as (select a from x) select * from y",
+		err:   mismatch,
+	}, {
+		name:  "self-referencing mismatched cte reading its declared name while unused",
+		query: "with recursive x(a) as (select 1, 2 union all select a + 1, 2 from x) select 1",
+	}, {
+		name:  "declared column list over an unexpandable star",
+		query: "with recursive x(a, b) as (select * from t) select a from x",
+	}, {
+		name:  "derived table mismatch inside an unused cte",
+		query: "with recursive y as (select * from (select 1, 2) x(a)) select 1",
+	}, {
+		name:  "derived table mismatch read inside an unused cte",
+		query: "with recursive y as (select a from (select 1, 2) x(a)) select 1",
+	}, {
+		name:  "union derived table mismatch inside an unused cte",
+		query: "with recursive y as (select * from (select 1, 2 union select 3, 4) x(a)) select 1",
+	}, {
+		name:  "derived table mismatch inside a used cte",
+		query: "with recursive y as (select * from (select 1, 2) x(a)) select * from y",
+		err:   mismatch,
+	}, {
+		name:  "derived table mismatch inside a two-level used chain",
+		query: "with recursive y as (select * from (select 1, 2) x(a)), z as (select 1 from y) select * from z",
+		err:   mismatch,
+	}, {
+		name:  "derived table mismatch in the executed part of a recursive with",
+		query: "with recursive x(a) as (select 1 union all select a + 1 from x where a < 3) select a from (select 1, 2) d(a)",
+		err:   mismatch,
+	}, {
+		name:  "derived table with a declared column list matching a qualified star after join using",
+		query: "select a from (select r.* from authoritative l join authoritative r using (col1)) x(a, b, c)",
+	}, {
+		name:  "derived table with a declared column list shorter than a qualified star after join using",
+		query: "select a from (select r.* from authoritative l join authoritative r using (col1)) x(a, b)",
+		err:   mismatch,
+	}}
+	for _, tc := range queries {
+		t.Run(tc.name, func(t *testing.T) {
+			parse, err := sqlparser.NewTestParser().Parse(tc.query)
+			require.NoError(t, err)
+
+			_, err = AnalyzeStrict(parse, "user", fakeSchemaInfo())
+			if tc.err == "" {
+				require.NoError(t, err)
+				return
+			}
+			require.ErrorContains(t, err, tc.err)
+		})
+	}
+}
+
 func TestBindingMultiAliasedTablePositive(t *testing.T) {
 	type testCase struct {
 		query          string
@@ -1481,16 +1650,36 @@ var ks3 = &vindexes.Keyspace{
 // create table t(<no column info>)
 // create table t1(id bigint)
 // create table t2(uid bigint, name varchar(255))
+// create table authoritative(col1 bigint, col2 bigint, col3 bigint)
 func fakeSchemaInfo() *FakeSI {
 	si := &FakeSI{
 		Tables: map[string]*vindexes.BaseTable{
-			"t":  tableT(),
-			"t1": tableT1(),
-			"t2": tableT2(),
-			"t3": tableT3(),
+			"t":             tableT(),
+			"t1":            tableT1(),
+			"t2":            tableT2(),
+			"t3":            tableT3(),
+			"authoritative": tableAuthoritative(),
 		},
 	}
 	return si
+}
+
+func tableAuthoritative() *vindexes.BaseTable {
+	return &vindexes.BaseTable{
+		Name: sqlparser.NewIdentifierCS("authoritative"),
+		Columns: []vindexes.Column{{
+			Name: sqlparser.NewIdentifierCI("col1"),
+			Type: querypb.Type_INT64,
+		}, {
+			Name: sqlparser.NewIdentifierCI("col2"),
+			Type: querypb.Type_INT64,
+		}, {
+			Name: sqlparser.NewIdentifierCI("col3"),
+			Type: querypb.Type_INT64,
+		}},
+		ColumnListAuthoritative: true,
+		Keyspace:                unsharded,
+	}
 }
 
 func tableT() *vindexes.BaseTable {
