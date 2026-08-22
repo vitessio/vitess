@@ -516,7 +516,7 @@
         "costly_map": {
           "column_vindexes": [
             {
-              "column": "name",
+              "column": "costly",
               "name": "user_md5_index"
             }
           ]
