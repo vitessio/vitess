@@ -16,7 +16,8 @@ limitations under the License.
 
 CREATE TABLE IF NOT EXISTS redo_statement(
   dtid varbinary(512) NOT NULL,
+  db_name varbinary(256) NOT NULL DEFAULT '',
   id bigint NOT NULL,
   statement mediumblob NOT NULL,
-  primary key(dtid, id)
+  primary key(dtid, db_name, id)
 ) ENGINE = InnoDB CHARSET = utf8mb4
