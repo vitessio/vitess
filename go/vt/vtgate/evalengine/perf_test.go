@@ -36,6 +36,8 @@ func BenchmarkCompilerExpressions(b *testing.B) {
 		{"comparison_u64", "column0 = 12", []sqltypes.Value{sqltypes.NewUint64(666)}},
 		{"comparison_dec", "column0 = 12", []sqltypes.Value{sqltypes.NewDecimal("420")}},
 		{"comparison_f", "column0 = 12", []sqltypes.Value{sqltypes.NewFloat64(420.0)}},
+		{"json_literal_small", "column0 = cast('[1, 2, 3]' as json)", []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`[1]`))}},
+		{"json_literal_nested", `column0 = cast('{"a": [1, 2, {"b": ["x", 4.5, true]}], "c": "foo bar baz", "d": {"e": [6, 7, 8, 9]}}' as json)`, []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`{"a": 1}`))}},
 	}
 
 	venv := vtenv.NewTestEnv()

@@ -28,6 +28,7 @@
         - [Preparing a statement no longer starts an implicit transaction](#vtgate-prepare-no-implicit-tx)
         - [Stricter validation of SQL-level PREPARE statements](#vtgate-prepare-stricter-validation)
         - [Stricter PROXY protocol v1 header validation](#vtgate-proxy-protocol-v1-strictness)
+        - [Cross-shard `JSON_ARRAYAGG` and `JSON_OBJECTAGG`](#vtgate-cross-shard-json-aggregation)
     - **[Reparent](#minor-changes-reparent)**
         - [`EmergencyReparentShard` no longer waits on replicas that cannot win the election](#ers-lagging-relay-log-wait)
         - [`EmergencyReparentShard` can explicitly recover from split brain](#ers-allow-split-brain-promotion)
@@ -269,6 +270,19 @@ Specification-conformant v1 headers, as emitted by HAProxy, AWS load balancers, 
 **Impact**: Deployments whose proxy emits one of the forms above — most notably the nginx stream module proxying between IPv6 clients and IPv4 upstreams — will have those connections rejected before the MySQL handshake. Configure the proxy to emit specification-conformant headers (for nginx, listen on a matching address family or on a v4-mapped socket so addresses are rendered in IPv6 form).
 
 See [#20733](https://github.com/vitessio/vitess/pull/20733) for details.
+
+#### <a id="vtgate-cross-shard-json-aggregation"/>Cross-shard `JSON_ARRAYAGG` and `JSON_OBJECTAGG`</a>
+
+VTGate now plans `JSON_ARRAYAGG` and `JSON_OBJECTAGG` for scatter queries and cross-shard `GROUP BY`. The aggregation functions are executed by MySQL on each shard and VTGate merges the per-shard JSON documents (array concatenation for `JSON_ARRAYAGG`; object union with MySQL's "last duplicate key wins" rule for `JSON_OBJECTAGG`). Previously these queries failed with `VT12001: unsupported: in scatter query: aggregation function`.
+
+Notes:
+
+- MySQL documents `JSON_ARRAYAGG` element order and `JSON_OBJECTAGG` duplicate-key resolution as dependent on row order, which is not guaranteed. In a sharded keyspace the merge order across shards is likewise not guaranteed, so results can interleave differently than on an unsharded MySQL, and may vary between executions for queries with duplicate object keys across shards.
+- The top-level members of a `JSON_OBJECTAGG` result merged at VTGate are serialized in MySQL's normalized key order (key length first, then byte order). Nested objects inside member values can serialize their members in a different byte order (never a different meaning) than MySQL when member keys have unequal lengths — the same behavior as the existing `JSON_OBJECT()` evalengine function.
+- Ordinary comparisons (`=`, `<=>`, `!=`, `<`, `<=`, `>`, `>=`), `NULLIF`, `IN`, `NOT IN`, `BETWEEN`, `NOT BETWEEN`, simple `CASE`, `LIKE` and `REGEXP` over these aggregates are supported: VTGate's expression engine matches MySQL's semantics for them, including MySQL's multi-operand comparison-domain coercion for JSON (a string comparand is treated as a JSON string scalar, not parsed as a JSON document — compare against `CAST('...' AS JSON)` to compare documents). `GREATEST` and `LEAST` are rejected (`VT12001`) conservatively: MySQL evaluates them with warning 1235 and result metadata VTGate does not yet reproduce. Unrelated expressions next to such an aggregate are not restricted; only operands that actually depend on the merge are.
+- MySQL's internal JSON representation can retain binary, bit, decimal, and temporal scalar subtypes that are erased when shard JSON partials cross the query protocol as text. Raw aggregate output over such values remains correct and supported, but any VTGate-level operation that would compare such an aggregate is rejected (`VT12001`) to avoid returning values that differ from a single MySQL server: expression comparisons (including `IN`, `BETWEEN` and simple `CASE`), `GROUP BY`, `DISTINCT`, `ORDER BY`, join comparisons and values a join or correlated subquery would push back into a shard query as a bind variable, VTGate-level `MIN`/`MAX`/`COUNT(DISTINCT)`/`SUM(DISTINCT)`, and scalar or `IN`/`NOT IN` subquery results consumed by an outer query. A value argument whose type is unknown to the planner is treated the same way; an explicit text conversion (`JSON_UNQUOTE`, `CAST(... AS CHAR)`) of the compared expression lifts the restriction.
+- When the planner cannot prove whether a compared value derives from a VTGate-merged JSON aggregate (an unmapped plan shape in a query that contains such a merge), planning fails closed with a `VT12001` error rather than assuming the value is independent.
+- Aggregating these functions over joins that cannot be merged into a single route, or over constructs that cannot be pushed down to MySQL (such as `LIMIT` below the aggregation), now fails with `VT12001: unsupported: aggregation function '<expr>' must be pushed down to MySQL` (previously the generic scatter-aggregation error above).
 
 ### <a id="minor-changes-reparent"/>Reparent</a>
 
