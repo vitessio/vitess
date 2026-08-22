@@ -209,11 +209,11 @@ func compareJSONValue(lj, rj *json.Value) (int, error) {
 	case json.TypeNull:
 		return 0, nil
 	case json.TypeNumber:
-		ld, ok := lj.Decimal()
+		ld, ok := lj.NumericValue()
 		if !ok {
 			return 0, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.DataOutOfRange, "DECIMAL value is out of range")
 		}
-		rd, ok := rj.Decimal()
+		rd, ok := rj.NumericValue()
 		if !ok {
 			return 0, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.DataOutOfRange, "DECIMAL value is out of range")
 		}
