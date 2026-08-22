@@ -871,6 +871,18 @@ func TestCompilerSingle(t *testing.T) {
 			expression: `GREATEST(JSON_OBJECT(), JSON_ARRAY())`,
 			result:     `VARCHAR("{}")`,
 		},
+		{
+			expression: `CAST('0.5' AS DECIMAL(10,0))`,
+			result:     `DECIMAL(1)`,
+		},
+		{
+			expression: `CAST('0.4' AS DECIMAL(10,0)) + 0.3`,
+			result:     `DECIMAL(0.3)`,
+		},
+		{
+			expression: `CAST('1.44' AS DECIMAL(10,1)) + 0.01`,
+			result:     `DECIMAL(1.41)`,
+		},
 	}
 
 	tz, _ := time.LoadLocation("Europe/Madrid")
