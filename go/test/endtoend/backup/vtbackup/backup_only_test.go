@@ -32,6 +32,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/stats/opentsdb"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/utils"
@@ -45,6 +46,102 @@ var vtInsertTest = `
 		msg varchar(64),
 		primary key (id)
 		) Engine=InnoDB;`
+
+// TestErrantGTIDsInBaseBackup verifies that vtbackup rejects a restored backup
+// whose GTID set contains transactions that are absent from the shard primary.
+func TestErrantGTIDsInBaseBackup(t *testing.T) {
+	// Start the shard and create its initial known-good backup.
+	prepareCluster(t)
+
+	// Wait for the replica's background restore before injecting the errant GTID.
+	waitForRestoreComplete(t, replica1.VttabletProcess, 180*time.Second)
+
+	// Build a GTID in the current primary's epoch that is far ahead of its executed transactions.
+	primaryUUID, err := primary.VttabletProcess.QueryTablet("SELECT @@global.server_uuid", keyspaceName, true)
+	require.NoError(t, err)
+	errantGTID := primaryUUID.Rows[0][0].ToString() + ":1000000000"
+
+	// Clean up to allow the rest of the test suite to continue.
+	t.Cleanup(func() {
+		// Disable semi-sync so the primary repair does not wait for an acknowledgement from the
+		// disconnected replica.
+		semisyncType, err := primary.VttabletProcess.SemiSyncExtensionLoaded()
+		assert.NoError(t, err)
+
+		var disableSemiSync string
+		switch semisyncType {
+		case mysql.SemiSyncTypeSource:
+			disableSemiSync = "SET GLOBAL rpl_semi_sync_source_enabled = false"
+		case mysql.SemiSyncTypeMaster:
+			disableSemiSync = "SET GLOBAL rpl_semi_sync_master_enabled = false"
+		}
+		if disableSemiSync != "" {
+			_, err = primary.VttabletProcess.QueryTablet(disableSemiSync, keyspaceName, true)
+			assert.NoError(t, err)
+		}
+
+		// Commit the injected GTID on the primary so the replica can rejoin before the shared teardown.
+		assert.NoError(t, primary.VttabletProcess.QueryTabletMultiple([]string{
+			fmt.Sprintf("SET GTID_NEXT = '%s'", errantGTID),
+			"BEGIN",
+			"COMMIT",
+			"SET GTID_NEXT = 'AUTOMATIC'",
+		}, keyspaceName, true))
+
+		// Remove the test backups and restore the tablets for the remaining test suite.
+		removeBackups(t)
+		tearDownTablets(t, true, primary, replica1)
+	})
+
+	// Execute the GTID only on the replica, then reconnect the replica to the primary.
+	err = replica1.VttabletProcess.QueryTabletMultiple([]string{
+		"STOP REPLICA",
+		fmt.Sprintf("SET GTID_NEXT = '%s'", errantGTID),
+		"BEGIN",
+		"COMMIT",
+		"SET GTID_NEXT = 'AUTOMATIC'",
+		"START REPLICA",
+	}, keyspaceName, true)
+	require.NoError(t, err)
+
+	// Take a backup from the replica so the newest base backup contains the errant GTID.
+	err = localCluster.VtctldClientProcess.ExecuteCommand("Backup", replica1.Alias)
+	require.NoError(t, err)
+
+	// Verify that the new backup records the injected GTID.
+	backups := verifyBackupCount(t, shardKsName, 2)
+	manifestPath := path.Join(
+		localCluster.CurrentVTDATAROOT,
+		"backups",
+		keyspaceName,
+		shardName,
+		backups[len(backups)-1],
+		"MANIFEST",
+	)
+	manifestData, err := os.ReadFile(manifestPath)
+	require.NoError(t, err)
+	var manifest mysqlctl.BackupManifest
+	require.NoError(t, json.Unmarshal(manifestData, &manifest))
+	errantPosition, err := replication.ParsePosition(replication.Mysql56FlavorID, errantGTID)
+	require.NoError(t, err)
+	require.True(t, manifest.Position.AtLeast(errantPosition))
+
+	// Verify that the current primary does not contain the injected GTID.
+	primaryGTIDs, err := primary.VttabletProcess.QueryTablet("SELECT @@global.gtid_executed", keyspaceName, true)
+	require.NoError(t, err)
+	primaryPosition, err := replication.ParsePosition(replication.Mysql56FlavorID, primaryGTIDs.Rows[0][0].ToString())
+	require.NoError(t, err)
+	require.False(t, primaryPosition.AtLeast(errantPosition))
+
+	// Run vtbackup, which restores the newest backup and should reject it before creating another backup.
+	_, err = startVtBackup(t, false, false, false, "--verify-backup-errant-gtids")
+	require.Error(t, err)
+	require.Contains(t, localCluster.VtbackupProcess.Output(), "has errant GTIDs",
+		"vtbackup should have rejected the base backup for its errant GTIDs")
+
+	// Confirm that the failed run did not create a backup from the invalid base.
+	verifyBackupCount(t, shardKsName, len(backups))
+}
 
 func TestFailingReplication(t *testing.T) {
 	prepareCluster(t)
@@ -416,12 +513,21 @@ func resetTabletDirectory(t *testing.T, tablet cluster.Vttablet, initMysql bool)
 }
 
 func tearDown(t *testing.T, initMysql bool) {
+	tearDownTablets(t, initMysql, primary, replica1, replica2)
+}
+
+// tearDownTablets resets the active tablets so later tests can reuse the cluster.
+func tearDownTablets(t *testing.T, initMysql bool, primaryTablet *cluster.Vttablet, replicas ...*cluster.Vttablet) {
 	// reset replication
 	for _, db := range []string{"_vt", "vt_insert_test"} {
-		_, err := primary.VttabletProcess.QueryTablet("drop database if exists "+db, keyspaceName, true)
+		_, err := primaryTablet.VttabletProcess.QueryTablet("drop database if exists "+db, keyspaceName, true)
 		require.NoError(t, err)
 	}
-	caughtUp := waitForReplicationToCatchup([]cluster.Vttablet{*replica1, *replica2})
+	replicaTablets := make([]cluster.Vttablet, 0, len(replicas))
+	for _, replica := range replicas {
+		replicaTablets = append(replicaTablets, *replica)
+	}
+	caughtUp := waitForReplicationToCatchup(replicaTablets)
 	require.True(t, caughtUp, "Timed out waiting for all replicas to catch up")
 
 	promoteCommands := []string{"STOP REPLICA", "RESET REPLICA ALL"}
@@ -429,7 +535,10 @@ func tearDown(t *testing.T, initMysql bool) {
 	disableSemiSyncCommandsSource := []string{"SET GLOBAL rpl_semi_sync_source_enabled = false", " SET GLOBAL rpl_semi_sync_replica_enabled = false"}
 	disableSemiSyncCommandsMaster := []string{"SET GLOBAL rpl_semi_sync_master_enabled = false", " SET GLOBAL rpl_semi_sync_slave_enabled = false"}
 
-	for _, tablet := range []cluster.Vttablet{*primary, *replica1, *replica2} {
+	tablets := make([]*cluster.Vttablet, 0, len(replicas)+1)
+	tablets = append(tablets, primaryTablet)
+	tablets = append(tablets, replicas...)
+	for _, tablet := range tablets {
 		resetCmd, err := tablet.VttabletProcess.ResetBinaryLogsCommand()
 		require.NoError(t, err)
 		cmds := append(promoteCommands, resetCmd)
@@ -448,8 +557,8 @@ func tearDown(t *testing.T, initMysql bool) {
 		}
 	}
 
-	for _, tablet := range []cluster.Vttablet{*primary, *replica1, *replica2} {
-		resetTabletDirectory(t, tablet, initMysql)
+	for _, tablet := range tablets {
+		resetTabletDirectory(t, *tablet, initMysql)
 		// DeleteTablet on a primary will cause tablet to shutdown, so should only call it after tablet is already shut down
 		err := localCluster.VtctldClientProcess.ExecuteCommand("DeleteTablets", "--allow-primary", tablet.Alias)
 		require.NoError(t, err)
