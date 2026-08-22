@@ -336,6 +336,35 @@ func TestGetStreamPlanFiltersRulesByAllTables(t *testing.T) {
 	}
 }
 
+func TestDoPlanRunsWithoutReservedConn(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	schematest.AddDefaultQueries(db)
+
+	qe := newTestQueryEngine(10*time.Second, true, newDBConfigs(db))
+	qe.se.Open()
+	qe.Open()
+	defer qe.Close()
+
+	curSchema := &currentSchema{tables: map[string]*schema.Table{}}
+
+	t.Run("do get_lock", func(t *testing.T) {
+		plan, err := qe.getPlan(curSchema, "do get_lock('x', 0)", false)
+		require.NoError(t, err)
+		require.Equal(t, planbuilder.PlanOtherAdmin, plan.PlanID)
+		require.False(t, plan.NeedsReservedConn)
+		require.NoError(t, plan.IsValid(false, false))
+	})
+
+	t.Run("do without lock", func(t *testing.T) {
+		plan, err := qe.getPlan(curSchema, "do 1", false)
+		require.NoError(t, err)
+		require.Equal(t, planbuilder.PlanOtherAdmin, plan.PlanID)
+		require.False(t, plan.NeedsReservedConn)
+		require.NoError(t, plan.IsValid(false, false))
+	})
+}
+
 // A rule using the deprecated SelectStream plan name applies to streaming-path
 // plans for every statement shape the pre-v25 streaming planner labeled
 // SelectStream, and never to buffered-execution plans of the same statements.

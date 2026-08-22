@@ -1331,6 +1331,10 @@ func (node *OtherAdmin) Format(buf *TrackedBuffer) {
 	buf.literal("otheradmin")
 }
 
+func (node *Do) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "do %v%n", node.Comments, node.Exprs)
+}
+
 // Format formats the node.
 func (node *ParsedComments) Format(buf *TrackedBuffer) {
 	if node == nil {

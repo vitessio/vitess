@@ -161,7 +161,7 @@ func newNormalizer(
 
 func (nz *normalizer) determineQueryRewriteStrategy(in Statement) {
 	switch in.(type) {
-	case *Select, *Union, *Insert, *Update, *Delete, *CallProc, *Stream, *VExplainStmt:
+	case *Select, *Union, *Insert, *Update, *Delete, *CallProc, *Stream, *VExplainStmt, *Do:
 		nz.useASTQuery = true
 	case *Set:
 		nz.useASTQuery = true
@@ -184,6 +184,9 @@ func (nz *normalizer) walkDown(node, _ SQLNode) bool {
 		return false
 	case *DerivedTable:
 		nz.inDerived++
+	case *Do:
+		// DO returns no rows, so sql_select_limit must not be injected into its nested subqueries.
+		nz.inSelect++
 	case *Select:
 		nz.inSelect++
 		if nz.selectLimit > 0 && node.Limit == nil && nz.inSelect == 1 {
@@ -266,6 +269,8 @@ func (nz *normalizer) walkUp(cursor *Cursor) bool {
 	switch node := cursor.node.(type) {
 	case *DerivedTable:
 		nz.inDerived--
+	case *Do:
+		nz.inSelect--
 	case *Select:
 		nz.inSelect--
 	case *AliasedExpr:

@@ -290,8 +290,7 @@ func (e *Executor) startTxIfNecessary(ctx context.Context, plan *engine.Plan, st
 // that don't start implicit transactions.
 func planStartsImplicitTx(plan *engine.Plan, stmt sqlparser.Statement) bool {
 	switch plan.QueryType {
-	case sqlparser.StmtSelect:
-		// Only start an implicit tx if the plan accesses real tables, not just dual.
+	case sqlparser.StmtSelect, sqlparser.StmtDo:
 		return slices.ContainsFunc(plan.TablesUsed, func(table string) bool {
 			return !strings.HasSuffix(table, ".dual")
 		})

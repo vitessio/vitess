@@ -154,6 +154,8 @@ func (c *cow) copyOnRewriteSQLNode(n SQLNode, parent SQLNode) (out SQLNode, chan
 		return c.copyOnRewriteRefOfDelete(n, parent)
 	case *DerivedTable:
 		return c.copyOnRewriteRefOfDerivedTable(n, parent)
+	case *Do:
+		return c.copyOnRewriteRefOfDo(n, parent)
 	case *DropColumn:
 		return c.copyOnRewriteRefOfDropColumn(n, parent)
 	case *DropDatabase:
@@ -2228,6 +2230,39 @@ func (c *cow) copyOnRewriteRefOfDerivedTable(n *DerivedTable, parent SQLNode) (o
 		if changedSelect {
 			res := *n
 			res.Select, _ = _Select.(TableStatement)
+			out = &res
+			if c.cloned != nil {
+				c.cloned(n, out)
+			}
+			changed = true
+		}
+	}
+	if c.post != nil {
+		out, changed = c.postVisit(out, parent, changed)
+	}
+	return
+}
+
+func (c *cow) copyOnRewriteRefOfDo(n *Do, parent SQLNode) (out SQLNode, changed bool) {
+	if n == nil || c.cursor.stop {
+		return n, false
+	}
+	out = n
+	if c.pre == nil || c.pre(n, parent) {
+		_Comments, changedComments := c.copyOnRewriteRefOfParsedComments(n.Comments, n)
+		var changedExprs bool
+		_Exprs := make([]Expr, len(n.Exprs))
+		for x, el := range n.Exprs {
+			this, changed := c.copyOnRewriteExpr(el, n)
+			_Exprs[x] = this.(Expr)
+			if changed {
+				changedExprs = true
+			}
+		}
+		if changedComments || changedExprs {
+			res := *n
+			res.Comments, _ = _Comments.(*ParsedComments)
+			res.Exprs = _Exprs
 			out = &res
 			if c.cloned != nil {
 				c.cloned(n, out)
@@ -8700,6 +8735,8 @@ func (c *cow) copyOnRewriteStatement(n Statement, parent SQLNode) (out SQLNode, 
 		return c.copyOnRewriteRefOfDeallocateStmt(n, parent)
 	case *Delete:
 		return c.copyOnRewriteRefOfDelete(n, parent)
+	case *Do:
+		return c.copyOnRewriteRefOfDo(n, parent)
 	case *DropDatabase:
 		return c.copyOnRewriteRefOfDropDatabase(n, parent)
 	case *DropProcedure:
