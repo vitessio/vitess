@@ -832,6 +832,15 @@ func TestRewrites(in *testing.T) {
 		in:       "SELECT * FROM tbl WHERE exists(select count(*) from other_table where foo > bar)",
 		expected: "SELECT * FROM tbl WHERE true",
 	}, {
+		in:       "SELECT * FROM tbl WHERE exists(select count(*) from other_table where foo > bar limit 0)",
+		expected: "SELECT * FROM tbl WHERE exists(select count(*) from other_table where foo > bar limit 0)",
+	}, {
+		in:       "SELECT * FROM tbl WHERE exists(select count(*) from other_table where foo > bar limit 1 offset 1)",
+		expected: "SELECT * FROM tbl WHERE exists(select count(*) from other_table where foo > bar limit 1 offset 1)",
+	}, {
+		in:       "SELECT * FROM tbl WHERE exists(select count(*) from other_table where foo > bar limit 5)",
+		expected: "SELECT * FROM tbl WHERE exists(select count(*) from other_table where foo > bar limit 5)",
+	}, {
 		in:       "SELECT * FROM tbl WHERE exists(select col1, col2, count(*) from other_table where foo > bar group by col1, col2 having count(*) > 3)",
 		expected: "SELECT * FROM tbl WHERE exists(select col1, col2, count(*) from other_table where foo > bar group by col1, col2 having count(*) > 3)",
 	}, {
