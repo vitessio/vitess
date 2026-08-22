@@ -21,6 +21,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/hack"
@@ -808,5 +809,55 @@ func TestMarshalToBlob(t *testing.T) {
 		var obj Object
 		obj.Add("k", NewBlob("foo"))
 		require.Equal(t, `{"k": `+encoded+`}`, string(NewObject(obj).MarshalTo(nil)))
+	})
+}
+
+// TestResolveNumberTypes verifies that resolving a parsed document classifies
+// every nested number in place, so a later NumberType call never has to write,
+// and that explicitly constructed numbers keep their declared type.
+func TestResolveNumberTypes(t *testing.T) {
+	t.Run("parsed", func(t *testing.T) {
+		v := MustParse(`{"i": -1, "u": 18446744073709551615, "f": 1.5e300, "a": [7, {"n": 2.5}], "s": "no number"}`)
+
+		var rawNumbers func(v *Value) int
+		rawNumbers = func(v *Value) int {
+			switch v.t {
+			case TypeObject:
+				var raw int
+				for _, item := range v.o.kvs {
+					raw += rawNumbers(item.v)
+				}
+				return raw
+			case TypeArray:
+				var raw int
+				for _, item := range v.a {
+					raw += rawNumbers(item)
+				}
+				return raw
+			case TypeNumber:
+				if v.n == numberTypeRaw {
+					return 1
+				}
+				return 0
+			default:
+				return 0
+			}
+		}
+		require.Equal(t, 5, rawNumbers(v), "parsed numbers must start out lazily classified")
+
+		v.ResolveNumberTypes()
+		assert.Zero(t, rawNumbers(v))
+
+		obj, ok := v.Object()
+		require.True(t, ok)
+		assert.Equal(t, NumberTypeSigned, obj.Get("i").NumberType())
+		assert.Equal(t, NumberTypeUnsigned, obj.Get("u").NumberType())
+		assert.Equal(t, NumberTypeFloat, obj.Get("f").NumberType())
+	})
+
+	t.Run("constructed", func(t *testing.T) {
+		v := NewArray([]*Value{NewNumber("1.5", NumberTypeDecimal)})
+		v.ResolveNumberTypes()
+		assert.Equal(t, NumberTypeDecimal, v.a[0].NumberType())
 	})
 }
