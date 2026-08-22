@@ -352,6 +352,14 @@ func (api *API) WithCluster(c *cluster.Cluster, id string) dynamic.API {
 			api.clusterCache.Set(id, c, cache.DefaultExpiration)
 		} else {
 			log.Info(fmt.Sprintf("API already has cluster with id %s, using that instead", id))
+			// Close the candidate cluster to avoid leaking its
+			// schema-cache worker, client proxies, and RPC pools.
+			// The discarded candidate is never stored or used;
+			// without this Close() each rejected candidate leaves
+			// a schema-cache worker running.
+			if err := c.Close(); err != nil {
+				log.Error(fmt.Sprintf("candidate cluster %s leaked resources on close: %v", id, err))
+			}
 		}
 	}
 
