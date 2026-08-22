@@ -18,7 +18,6 @@ package hook
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -138,6 +137,11 @@ func (hook *Hook) ExecuteContext(ctx context.Context) (result *HookResult) {
 
 	// Find the hook.
 	cmd, status, err := hook.findHook(ctx)
+	if ctx.Err() != nil {
+		result.ExitStatus = HOOK_TIMEOUT_ERROR
+		result.Stderr = ctx.Err().Error() + "\n"
+		return result
+	}
 	if err != nil {
 		result.ExitStatus = status
 		result.Stderr = err.Error() + "\n"
@@ -165,7 +169,7 @@ func (hook *Hook) ExecuteContext(ctx context.Context) (result *HookResult) {
 		return result
 	}
 
-	if ctx.Err() != nil && errors.Is(ctx.Err(), context.DeadlineExceeded) {
+	if ctx.Err() != nil {
 		// When (exec.Cmd).Run hits a context cancelled, the process is killed via SIGTERM.
 		// This means:
 		// 	1. cmd.ProcessState.Exited() is false.
@@ -199,7 +203,12 @@ func (hook *Hook) Execute() (result *HookResult) {
 // ExecuteOptional executes an optional hook, logs if it doesn't
 // exist, and returns a printable error.
 func (hook *Hook) ExecuteOptional() error {
-	hr := hook.Execute()
+	return hook.ExecuteOptionalContext(context.Background())
+}
+
+// ExecuteOptionalContext executes an optional hook until ctx is cancelled.
+func (hook *Hook) ExecuteOptionalContext(ctx context.Context) error {
+	hr := hook.ExecuteContext(ctx)
 	switch hr.ExitStatus {
 	case HOOK_DOES_NOT_EXIST:
 		log.Info(fmt.Sprintf("%v hook doesn't exist", hook.Name))
