@@ -1073,3 +1073,67 @@ func TestPlanPoolUnsafe(t *testing.T) {
 		})
 	}
 }
+
+// TestGetPlanFiltersTableRulesForDDL ensures a table-scoped query rule applies to DDL
+// against that table. A DDL statement's target is a bare TableName, not a FROM-clause
+// entry, so it used to be invisible to the table filter and every rule with a TableNames
+// condition was dropped from the plan.
+func TestGetPlanFiltersTableRulesForDDL(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	schematest.AddDefaultQueries(db)
+
+	qe := newTestQueryEngine(10*time.Second, true, newDBConfigs(db))
+	qe.se.Open()
+	qe.Open()
+	defer qe.Close()
+
+	const sourceName = "test ddl rules"
+	qr := rules.NewQueryRule("deny denied tables", "deny_tables", rules.QRFailRetry)
+	qr.AddTableCond("test_table_02")
+	qr.AddTableCond("test_table_03")
+	qrs := rules.New()
+	qrs.Add(qr)
+	qe.queryRuleSources.UnRegisterSource(sourceName)
+	qe.queryRuleSources.RegisterSource(sourceName)
+	defer qe.queryRuleSources.UnRegisterSource(sourceName)
+	require.NoError(t, qe.queryRuleSources.SetRules(sourceName, qrs))
+
+	// The schema engine in this test harness does not populate the table map, so it is
+	// built by hand. test_table_03 is deliberately absent from it: the target of a
+	// CREATE TABLE does not exist in the schema yet, so it can never be resolved through
+	// plan.AllTables, and the rule must still apply.
+	curSchema := &currentSchema{
+		tables: map[string]*schema.Table{
+			"test_table_01": {Name: sqlparser.NewIdentifierCS("test_table_01")},
+			"test_table_02": {Name: sqlparser.NewIdentifierCS("test_table_02")},
+		},
+	}
+
+	testcases := []struct {
+		name  string
+		sql   string
+		match bool
+	}{
+		{"alter on the denied table", "alter table test_table_02 add column v int", true},
+		{"drop on the denied table", "drop table test_table_02", true},
+		{"rename onto the denied table", "rename table test_table_01 to test_table_02", true},
+		{"create the denied table", "create table test_table_02 (id bigint primary key)", true},
+		{"create a denied table absent from the schema", "create table test_table_03 (id bigint primary key)", true},
+		{"alter on another table", "alter table test_table_01 add column v int", false},
+	}
+	for _, tcase := range testcases {
+		t.Run(tcase.name, func(t *testing.T) {
+			// DDL plans are never cached, so getPlan hands back a valid plan
+			// alongside errNoCache. GetPlan swallows it.
+			plan, err := qe.getPlan(curSchema, tcase.sql, false)
+			require.ErrorIs(t, err, errNoCache)
+			require.Equal(t, planbuilder.PlanDDL, plan.PlanID)
+			if tcase.match {
+				require.NotNil(t, plan.Rules.Find("deny_tables"), "table-scoped query rule must apply to DDL against that table")
+			} else {
+				require.Nil(t, plan.Rules.Find("deny_tables"), "table-scoped query rule must not apply to DDL against another table")
+			}
+		})
+	}
+}
