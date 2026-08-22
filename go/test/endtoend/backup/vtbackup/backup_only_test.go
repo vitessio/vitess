@@ -120,8 +120,6 @@ func TestTabletInitialBackup(t *testing.T) {
 }
 
 func prepareCluster(t *testing.T) {
-	waitForReplicationToCatchup([]cluster.Vttablet{*replica1, *replica2})
-
 	dataPointReader := vtBackup(t, true, false, false)
 	verifyBackupCount(t, shardKsName, 1)
 	verifyBackupStats(t, dataPointReader, true /* initialBackup */)
@@ -129,10 +127,8 @@ func prepareCluster(t *testing.T) {
 	// Initialize the tablets
 	initTablets(t, false, false)
 
-	err := primary.VttabletProcess.CreateDB("testDB")
-	require.ErrorContains(t, err, "The MySQL server is running with the --super-read-only option so it cannot execute this statement")
-	err = replica1.VttabletProcess.CreateDB("testDB")
-	require.ErrorContains(t, err, "The MySQL server is running with the --super-read-only option so it cannot execute this statement")
+	assertMysqldIsSuperReadOnly(t, primary)
+	assertMysqldIsSuperReadOnly(t, replica1)
 
 	// Restore the Tablet
 	restore(t, primary, "replica", "NOT_SERVING")
@@ -143,7 +139,7 @@ func prepareCluster(t *testing.T) {
 	waitForRestoreComplete(t, primary.VttabletProcess, 180*time.Second)
 	// Vitess expects that the user has set the database into ReadWrite mode before calling
 	// TabletExternallyReparented
-	err = localCluster.VtctldClientProcess.ExecuteCommand(
+	err := localCluster.VtctldClientProcess.ExecuteCommand(
 		"SetWritable", primary.Alias, "true",
 	)
 	require.NoError(t, err)
@@ -226,9 +222,8 @@ func firstBackupTest(t *testing.T, removeBackup bool) {
 	err = localCluster.InitTablet(replica2, keyspaceName, shardName)
 	require.NoError(t, err)
 	restore(t, replica2, "replica", "SERVING")
-	// Replica2 takes time to serve. Sleeping for 5 sec.
-	time.Sleep(5 * time.Second)
-	// check the new replica has the data
+	// check the new replica has the data; VerifyRowsInTablet polls for up to
+	// 60s, which covers replica2's remaining catch-up time after the restore.
 	cluster.VerifyRowsInTablet(t, replica2, keyspaceName, 2)
 
 	if removeBackup {
@@ -562,6 +557,18 @@ func TestVtBackupWithChunking(t *testing.T) {
 
 	removeBackups(t)
 	tearDown(t, true)
+}
+
+// assertMysqldIsSuperReadOnly verifies that writes against the tablet's
+// mysqld fail because vtbackup left it in super-read-only mode. It uses a
+// direct connection with a single attempt: the QueryTablet helper retries
+// failing statements for ~10s each, but here the failure is the assertion.
+func assertMysqldIsSuperReadOnly(t *testing.T, tablet *cluster.Vttablet) {
+	conn, err := tablet.VttabletProcess.TabletConn(keyspaceName, false)
+	require.NoError(t, err)
+	defer conn.Close()
+	_, err = conn.ExecuteFetch("create database testdb_fail", 1000, true)
+	require.ErrorContains(t, err, "The MySQL server is running with the --super-read-only option so it cannot execute this statement")
 }
 
 // This helper function wait for all replicas to catch-up the replication.
