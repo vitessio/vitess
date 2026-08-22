@@ -1005,7 +1005,7 @@ func NewVariableExpression(str string, at AtCount) *Variable {
 
 func createIdentifierCI(str string) IdentifierCI {
 	size := len(str)
-	if str[0] == '`' && str[size-1] == '`' {
+	if size > 1 && str[0] == '`' && str[size-1] == '`' {
 		str = str[1 : size-1]
 	}
 	return NewIdentifierCI(str)
