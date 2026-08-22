@@ -17,15 +17,19 @@ limitations under the License.
 package endtoend
 
 import (
+	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/vttablet/endtoend/framework"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 var procSQL = []string{
@@ -39,6 +43,11 @@ var procSQL = []string{
 		select intval from vitess_test;
 		select intval from vitess_test;
 		select intval from vitess_test;
+	END;`,
+	`create procedure proc_select_then_sleep()
+	BEGIN
+		select intval from vitess_test;
+		select sleep(60);
 	END;`,
 	`create procedure proc_select2_tx_insert()
 	BEGIN
@@ -80,14 +89,17 @@ var procSQL = []string{
 func TestCallProcedure(t *testing.T) {
 	client := framework.NewClient()
 	type testcases struct {
-		query   string
-		wantErr bool
+		query    string
+		wantErr  bool
+		wantRows bool
 	}
 	tcases := []testcases{{
 		query: "call proc_dml()",
 	}, {
-		query:   "call proc_select1()",
-		wantErr: true,
+		// A single-resultset procedure is accepted and returns its rows, even
+		// though MySQL appends a trailing OK packet after the resultset.
+		query:    "call proc_select1()",
+		wantRows: true,
 	}, {
 		query:   "call proc_select4()",
 		wantErr: true,
@@ -99,14 +111,107 @@ func TestCallProcedure(t *testing.T) {
 
 	for _, tc := range tcases {
 		t.Run(tc.query, func(t *testing.T) {
-			_, err := client.Execute(tc.query, nil)
+			qr, err := client.Execute(tc.query, nil)
 			if tc.wantErr {
 				require.EqualError(t, err, "Multi-Resultset not supported in stored procedure (CallerID: dev)")
 				return
 			}
 			require.NoError(t, err)
+			if tc.wantRows {
+				require.NotEmpty(t, qr.Rows, "single-resultset procedure should return its rows")
+			}
+			assert.False(t, qr.IsMoreResultsExists(), "the returned result must carry the final status, not the first resultset's more-results flag")
 		})
 	}
+}
+
+// A stored procedure call with an OUT/INOUT parameter is reported as unsupported
+// on both the buffered and streaming paths, rather than leaking the raw MySQL
+// "is not a variable" error.
+func TestCallProcedureOutParam(t *testing.T) {
+	client := framework.NewClient()
+
+	_, err := client.Execute("call out_parameter(123)", nil)
+	require.ErrorContains(t, err, "OUT and INOUT parameters are not supported")
+
+	_, err = client.StreamExecute("call out_parameter(123)", nil)
+	require.ErrorContains(t, err, "OUT and INOUT parameters are not supported")
+}
+
+// On a connection reused across the streaming and buffered paths, a buffered
+// single-resultset CALL must drain its own trailing OK packet before returning,
+// even when a previous streamed no-resultset CALL left captured OK-packet state
+// on the connection. If the buffered CALL mistakes that stale state for its own
+// trailing status and skips the drain, the unread trailing packet is consumed by
+// the next query and the connection desyncs.
+func TestCallProcedureBufferedAfterStreamedInTx(t *testing.T) {
+	client := framework.NewClient()
+
+	require.NoError(t, client.Begin(false))
+	t.Cleanup(func() { _ = client.Rollback() })
+
+	// A streamed no-resultset CALL inside the transaction captures the
+	// connection's OK-packet state without concluding the transaction.
+	_, err := client.StreamExecute("call in_parameter(999)", nil)
+	require.NoError(t, err)
+
+	// A buffered single-resultset CALL on the same connection returns its rows.
+	qr, err := client.Execute("call proc_select1()", nil)
+	require.NoError(t, err)
+	require.NotEmpty(t, qr.Rows, "single-resultset procedure should return its rows")
+	assert.False(t, qr.IsMoreResultsExists(), "the returned result must carry the final status, not the first resultset's more-results flag")
+
+	// The next query sees its own result, proving the CALL's trailing packet was
+	// drained rather than left on the connection.
+	qr, err = client.Execute("select 42", nil)
+	require.NoError(t, err)
+	require.Len(t, qr.Rows, 1)
+	require.Equal(t, "42", qr.Rows[0][0].ToString())
+}
+
+// With the FetchLastInsertId option set, a single-resultset CALL fetches the
+// last insert id with a follow-up query. That follow-up must run only after the
+// CALL's trailing OK packet has been drained; issuing it while the trailing
+// packet is still pending desyncs the connection.
+func TestCallProcedureFetchLastInsertID(t *testing.T) {
+	client := framework.NewClient()
+
+	qr, err := client.ExecuteWithOptions("call proc_select1()", nil, &querypb.ExecuteOptions{
+		IncludedFields:    querypb.ExecuteOptions_ALL,
+		FetchLastInsertId: true,
+	})
+	require.NoError(t, err)
+	require.NotEmpty(t, qr.Rows, "single-resultset procedure should return its rows")
+}
+
+// With the FetchLastInsertId option set, a streamed CALL issues follow-up
+// queries on the same connection. Those follow-ups must not clobber the
+// captured OK-packet state that a no-resultset CALL's trailing-status check
+// relies on, and must not run while a single-resultset CALL's trailing OK
+// packet is still pending on the connection.
+func TestCallProcedureStreamingFetchLastInsertID(t *testing.T) {
+	opts := &querypb.ExecuteOptions{
+		IncludedFields:    querypb.ExecuteOptions_ALL,
+		FetchLastInsertId: true,
+	}
+	newClient := func(t *testing.T) *framework.QueryClient {
+		ctx, cancel := context.WithTimeout(
+			callerid.NewContext(context.Background(), &vtrpcpb.CallerID{}, &querypb.VTGateCallerID{Username: "dev"}),
+			30*time.Second)
+		t.Cleanup(cancel)
+		return framework.NewClientWithContext(ctx)
+	}
+
+	t.Run("no resultset", func(t *testing.T) {
+		_, err := newClient(t).StreamExecuteWithOptions("call proc_tx_commit()", nil, opts)
+		require.NoError(t, err)
+	})
+
+	t.Run("single resultset", func(t *testing.T) {
+		qr, err := newClient(t).StreamExecuteWithOptions("call proc_select1()", nil, opts)
+		require.NoError(t, err)
+		require.NotEmpty(t, qr.Rows, "single-resultset procedure should return its rows")
+	})
 }
 
 func TestCallProcedureStreaming(t *testing.T) {
@@ -309,4 +414,56 @@ func TestCallProcedureChangedTx(t *testing.T) {
 	// This passes as this starts a new transaction by committing the old transaction implicitly.
 	_, err = client.BeginExecute(`call proc_tx_begin()`, nil, nil)
 	require.NoError(t, err)
+}
+
+// A multi-resultset procedure that emits a quick first resultset and then
+// blocks must honor the query deadline while its trailing resultsets are being
+// drained, rather than blocking until the procedure finishes on its own.
+func TestCallProcedureDrainHonorsDeadline(t *testing.T) {
+	ctx, cancel := context.WithTimeout(
+		callerid.NewContext(context.Background(), &vtrpcpb.CallerID{}, &querypb.VTGateCallerID{Username: "dev"}),
+		5*time.Second)
+	defer cancel()
+	client := framework.NewClientWithContext(ctx)
+
+	start := time.Now()
+	_, err := client.Execute("call proc_select_then_sleep()", nil)
+	elapsed := time.Since(start)
+
+	require.Error(t, err)
+	require.Less(t, elapsed, 40*time.Second,
+		"draining trailing resultsets must honor the query deadline instead of blocking for the whole procedure")
+}
+
+// A stored procedure call occupies its connection until the trailing
+// resultsets have been drained, which can take arbitrarily long. The live
+// query list and kill diagnostics read the connection's current query, so the
+// CALL must stay visible for that entire window, not just while the first
+// resultset is read.
+func TestCallProcedureDrainKeepsQueryVisible(t *testing.T) {
+	client := framework.NewClient()
+
+	done := make(chan error, 1)
+	go func() {
+		_, err := client.Execute("call proc_select_then_sleep()", nil)
+		done <- err
+	}()
+
+	// Sample the live query list once the CALL has been running for a while:
+	// the first resultset arrives within milliseconds, so a query that has
+	// been running for seconds is blocked draining the trailing resultsets.
+	var call framework.LiveQuery
+	require.Eventually(t, func() bool {
+		for _, q := range framework.LiveQueryz() {
+			if q.Duration > int64(2*time.Second) {
+				call = q
+				return true
+			}
+		}
+		return false
+	}, 30*time.Second, 100*time.Millisecond, "expected the CALL to stay registered in the live query list")
+	assert.Contains(t, call.Query, "proc_select_then_sleep", "the live query list must report the CALL while its trailing resultsets are drained")
+
+	require.NoError(t, framework.StreamTerminate(call.ConnID))
+	require.Error(t, <-done, "terminating the drained CALL must surface an error")
 }

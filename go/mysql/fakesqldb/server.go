@@ -169,8 +169,19 @@ func New(t testing.TB) *DB {
 	return NewWithEnv(t, vtenv.NewTestEnv())
 }
 
+// NewWithMultiQuery creates a server that serves the multi-statement protocol,
+// splitting each incoming query into statements and answering every statement
+// but the last with the more-results flag set. It starts listening.
+func NewWithMultiQuery(t testing.TB) *DB {
+	return newWithEnv(t, vtenv.NewTestEnv(), true)
+}
+
 // NewWithEnv creates a server, and starts listening.
 func NewWithEnv(t testing.TB, env *vtenv.Environment) *DB {
+	return newWithEnv(t, env, false)
+}
+
+func newWithEnv(t testing.TB, env *vtenv.Environment, multiQuery bool) *DB {
 	// Pick a path for our socket.
 	socketDir, err := os.MkdirTemp("", "fakesqldb")
 	if err != nil {
@@ -198,7 +209,7 @@ func NewWithEnv(t testing.TB, env *vtenv.Environment) *DB {
 	authServer := mysql.NewAuthServerNone()
 
 	// Start listening.
-	db.listener, err = mysql.NewListener("unix", socketFile, authServer, db, 0, 0, false, false, 0, 0, false)
+	db.listener, err = mysql.NewListener("unix", socketFile, authServer, db, 0, 0, false, false, 0, 0, multiQuery)
 	if err != nil {
 		t.Fatalf("NewListener failed: %v", err)
 	}

@@ -161,6 +161,93 @@ func TestDBConnExecLost(t *testing.T) {
 	compareTimingCounts(t, "PoolTest.Exec", 1, startCounts, mysqlTimings.Counts())
 }
 
+// ExecMulti reconnects and retries once after a connection error on the
+// initial execute, matching Exec, so a stale pooled connection does not turn
+// into a user-visible failure. Nothing has been read when the execute fails,
+// so the retry cannot duplicate or lose result sets. A server-side query kill
+// (CRServerLost) is not retried, also matching Exec.
+func TestDBConnExecMultiRetryOnConnError(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	connPool := newPool()
+	mysqlTimings := connPool.env.Stats().MySQLTimings
+	params := dbconfigs.New(db.ConnParams())
+	connPool.Open(params, params, params)
+	defer connPool.Close()
+
+	sql := "select * from test_table limit 1000"
+	db.AddQuery(sql, &sqltypes.Result{})
+	dbConn, err := newPooledConn(t.Context(), connPool, params)
+	require.NoError(t, err)
+	defer dbConn.Close()
+
+	// A connection error triggers a reconnect and a second attempt.
+	startCounts := mysqlTimings.Counts()
+	db.AddRejectedQuery(sql, &sqlerror.SQLError{
+		Num:     2012,
+		Message: "connection fail",
+	})
+	_, _, err = dbConn.ExecMulti(t.Context(), sql, 1, false)
+	require.Error(t, err)
+	require.ErrorContains(t, err, "connection fail")
+	compareTimingCounts(t, "PoolTest.Exec", 2, startCounts, mysqlTimings.Counts())
+
+	// The failed attempts above left the connection closed; reconnect so the
+	// next case starts from a healthy connection.
+	require.NoError(t, dbConn.Reconnect(t.Context()))
+
+	// A lost connection during the query (e.g. a server-side kill) is not
+	// retried.
+	startCounts = mysqlTimings.Counts()
+	db.AddRejectedQuery(sql, &sqlerror.SQLError{
+		Num:     2013,
+		Message: "Lost connection to MySQL server during query",
+	})
+	_, _, err = dbConn.ExecMulti(t.Context(), sql, 1, false)
+	require.Error(t, err)
+	require.ErrorContains(t, err, "Lost connection to MySQL server during query")
+	compareTimingCounts(t, "PoolTest.Exec", 1, startCounts, mysqlTimings.Counts())
+}
+
+// When the context is cancelled in the window where ExecuteFetchMulti has
+// already returned its first result with more resultsets pending, the
+// stateless termination path only kills the query, leaving the connection
+// open with unread resultsets on the wire. Such a connection must be closed
+// so it cannot be recycled into the pool and desync the next borrower.
+func TestDBConnExecMultiCancelPendingResults(t *testing.T) {
+	db := fakesqldb.NewWithMultiQuery(t)
+	defer db.Close()
+	connPool := newPool()
+	params := dbconfigs.New(db.ConnParams())
+	connPool.Open(params, params, params)
+	defer connPool.Close()
+
+	db.AddQuery("select 1", &sqltypes.Result{})
+	db.AddQuery("select 2", &sqltypes.Result{})
+	killed := make(chan struct{})
+	db.AddQueryPatternWithCallback(`kill query \d+`, &sqltypes.Result{}, func(string) { close(killed) })
+
+	ctx, cancel := context.WithCancel(t.Context())
+	db.SetBeforeFunc("select 1", func() {
+		cancel()
+		// Hold the first resultset back until the query kill triggered by the
+		// cancellation has reached the server, so the termination callback is
+		// guaranteed to have started when ExecuteFetchMulti returns.
+		select {
+		case <-killed:
+		case <-time.After(30 * time.Second):
+		}
+	})
+
+	dbConn, err := newPooledConn(t.Context(), connPool, params)
+	require.NoError(t, err)
+	defer dbConn.Close()
+
+	_, _, err = dbConn.ExecMulti(ctx, "select 1;select 2", 10, false)
+	require.Error(t, err)
+	require.True(t, dbConn.IsClosed(), "a connection with unread pending resultsets must be closed, not left open for reuse")
+}
+
 func TestDBConnDeadline(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
