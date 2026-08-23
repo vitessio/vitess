@@ -313,8 +313,7 @@ func CreateCRL(root, parent string) {
 	}
 
 	crlList, err := x509.CreateRevocationList(rand.Reader, &x509.RevocationList{
-		RevokedCertificates: nil,
-		Number:              big.NewInt(1),
+		Number: big.NewInt(1),
 	}, caCert, caKey.(crypto.Signer))
 	if err != nil {
 		log.Error(fmt.Sprint(err))

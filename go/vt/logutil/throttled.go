@@ -66,7 +66,7 @@ func (tl *ThrottledLogger) log(logF logFunc, format string, v ...any) {
 	tl.mu.Lock()
 	defer tl.mu.Unlock()
 
-	logWaitTime := tl.maxInterval - (now.Sub(tl.lastlogTime))
+	logWaitTime := tl.maxInterval - now.Sub(tl.lastlogTime)
 	if logWaitTime < 0 {
 		tl.lastlogTime = now
 		logF(2, fmt.Sprintf(tl.name+": "+format, v...))

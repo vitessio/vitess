@@ -230,7 +230,7 @@ func getGrepData() ([]string, []string) {
 	for scanner.Scan() {
 		line := scanner.Text()
 		if strings.Contains(line, "func (") {
-			thePath := strings.Split(line, ":")[0]
+			thePath, _, _ := strings.Cut(line, ":")
 			if !contains(paths, thePath) {
 				paths = append(paths, thePath)
 			}
@@ -240,7 +240,7 @@ func getGrepData() ([]string, []string) {
 			}
 
 			// get name of target struct
-			structName := strings.Split(targetStructTemp[1], ") ")[0]
+			structName, _, _ := strings.Cut(targetStructTemp[1], ") ")
 
 			// get import path and short name
 			importPath := pathToImportPath[thePath]

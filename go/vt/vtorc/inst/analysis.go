@@ -178,8 +178,9 @@ func hasMinSemiSyncAckers(durabler policy.Durabler, primary *topodatapb.Tablet, 
 func (detectionAnalysis *DetectionAnalysis) MarshalJSON() ([]byte, error) {
 	i := struct {
 		DetectionAnalysis
-	}{}
-	i.DetectionAnalysis = *detectionAnalysis
+	}{
+		DetectionAnalysis: *detectionAnalysis,
+	}
 
 	return json.Marshal(i)
 }

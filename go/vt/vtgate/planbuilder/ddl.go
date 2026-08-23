@@ -160,16 +160,18 @@ func buildDDLPlans(ctx context.Context, sql string, ddlStatement sqlparser.DDLSt
 		query = sqlparser.String(ddlStatement)
 	}
 
-	return &engine.Send{
-			Keyspace:          keyspace,
-			TargetDestination: destination,
-			Query:             query,
-		}, &engine.OnlineDDL{
-			Keyspace:          keyspace,
-			TargetDestination: destination,
-			DDL:               ddlStatement,
-			SQL:               query,
-		}, nil
+	send := &engine.Send{
+		Keyspace:          keyspace,
+		TargetDestination: destination,
+		Query:             query,
+	}
+	onlineDDL := &engine.OnlineDDL{
+		Keyspace:          keyspace,
+		TargetDestination: destination,
+		DDL:               ddlStatement,
+		SQL:               query,
+	}
+	return send, onlineDDL, nil
 }
 
 func buildDropProcedurePlan(vschema plancontext.VSchema, dp *sqlparser.DropProcedure) (key.ShardDestination, *vindexes.Keyspace, error) {

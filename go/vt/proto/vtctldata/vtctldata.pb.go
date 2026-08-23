@@ -2296,11 +2296,11 @@ type ApplyVSchemaResponse struct {
 	// UnknownVindexParams is a map of vindex name to params that were not recognized by the vindex
 	// type. E.g.:
 	//
-	//	{
-	//	  "lookup_vdx": {
-	//	    "params": ["raed_lock", "not_verify"]
-	//	  }
-	//	}
+	// {
+	//   "lookup_vdx": {
+	//     "params": ["raed_lock", "not_verify"]
+	//   }
+	// }
 	UnknownVindexParams map[string]*ApplyVSchemaResponse_ParamList `protobuf:"bytes,2,rep,name=unknown_vindex_params,json=unknownVindexParams,proto3" json:"unknown_vindex_params,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	unknownFields       protoimpl.UnknownFields
 	sizeCache           protoimpl.SizeCache

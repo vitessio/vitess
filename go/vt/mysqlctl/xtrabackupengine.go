@@ -334,23 +334,21 @@ func (be *XtrabackupEngine) executeFullBackup(ctx context.Context, params Backup
 	// JSON-encode and write the MANIFEST
 	bm := &xtraBackupManifest{
 		// Common base fields
-		BackupManifest: BackupManifest{
-			BackupName:     bh.Name(),
-			BackupMethod:   xtrabackupEngineName,
-			Position:       replicationPosition,
-			PurgedPosition: replicationPosition,
-			ServerUUID:     serverUUID,
-			TabletAlias:    params.TabletAlias,
-			Hostname:       hostname,
-			Keyspace:       params.Keyspace,
-			Shard:          params.Shard,
-			BackupTime:     FormatRFC3339(params.BackupTime.UTC()),
-			FinishedTime:   FormatRFC3339(time.Now().UTC()),
-			MySQLVersion:   mysqlVersion,
-			// xtrabackup backups are always created such that they
-			// are safe to use for upgrades later on.
-			UpgradeSafe: true,
-		},
+		BackupName:     bh.Name(),
+		BackupMethod:   xtrabackupEngineName,
+		Position:       replicationPosition,
+		PurgedPosition: replicationPosition,
+		ServerUUID:     serverUUID,
+		TabletAlias:    params.TabletAlias,
+		Hostname:       hostname,
+		Keyspace:       params.Keyspace,
+		Shard:          params.Shard,
+		BackupTime:     FormatRFC3339(params.BackupTime.UTC()),
+		FinishedTime:   FormatRFC3339(time.Now().UTC()),
+		MySQLVersion:   mysqlVersion,
+		// xtrabackup backups are always created such that they
+		// are safe to use for upgrades later on.
+		UpgradeSafe: true,
 
 		// XtraBackup-specific fields
 		FileName:        backupFileName,
