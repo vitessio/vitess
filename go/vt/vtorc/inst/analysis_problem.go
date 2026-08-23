@@ -516,7 +516,7 @@ func matchPrimaryTabletUnreachableByQuorum(a *DetectionAnalysis, now time.Time) 
 	// ShardEligibleObservers (REPLICA/RDONLY count from topo) is the expected observer population
 	// that matches the quorum voters. CountReplicas is derived from the database_instance
 	// replication join and can include non-voting tablet types, so it is not used here.
-	result := evaluateAndLogPrimaryQuorum(a.AnalyzedInstanceAlias, a.AnalyzedKeyspace, a.AnalyzedShard, int(a.ShardEligibleObservers), now)
+	result := evaluateAndLogPrimaryQuorum(a.AnalyzedInstanceAlias, a.AnalyzedKeyspace, a.AnalyzedShard, a.ShardEligibleObservers, now)
 	if result.Down {
 		a.QuorumDetail = &result
 	}

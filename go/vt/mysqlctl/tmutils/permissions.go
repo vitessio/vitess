@@ -90,13 +90,13 @@ func UserPermissionPrimaryKey(up *tabletmanagerdatapb.UserPermission) string {
 
 // UserPermissionString pretty-prints a UserPermission
 func UserPermissionString(up *tabletmanagerdatapb.UserPermission) string {
-	var passwd string
+	var checksum string
 	if up.PasswordChecksum == 0 {
-		passwd = "NoPassword"
+		checksum = "NoPassword"
 	} else {
-		passwd = fmt.Sprintf("PasswordChecksum(%v)", up.PasswordChecksum)
+		checksum = fmt.Sprintf("PasswordChecksum(%v)", up.PasswordChecksum)
 	}
-	return "UserPermission " + passwd + printPrivileges(up.Privileges)
+	return "UserPermission " + checksum + printPrivileges(up.Privileges)
 }
 
 type userPermissionList []*tabletmanagerdatapb.UserPermission

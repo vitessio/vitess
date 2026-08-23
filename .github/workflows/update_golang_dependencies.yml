@@ -11,8 +11,7 @@ jobs:
   update_golang_deps:
     if: github.repository == 'vitessio/vitess'
     permissions:
-      contents: write
-      pull-requests: write
+      contents: read
     name: Update Golang Dependencies
     runs-on: ubuntu-24.04
     steps:
