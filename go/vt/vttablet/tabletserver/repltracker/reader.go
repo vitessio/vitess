@@ -105,6 +105,11 @@ func (r *heartbeatReader) Open() {
 
 	r.pool.Open(r.env.Config().DB.AppWithDB(), r.env.Config().DB.DbaWithDB(), r.env.Config().DB.AppDebugWithDB())
 	r.lastKnownTime = r.now()
+	// Read the current heartbeat synchronously so that a real lag measurement
+	// (or error) is available before the first tick fires. Otherwise Status()
+	// reports the zero-value lag until then, and a tablet restored from an old
+	// backup is briefly advertised as healthy despite hours of replication lag.
+	r.readHeartbeat()
 	r.ticks.Start(func() { r.readHeartbeat() })
 	r.isOpen = true
 }
