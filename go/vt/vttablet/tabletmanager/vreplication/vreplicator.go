@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"math"
 	"sort"
 	"strconv"
@@ -922,6 +923,16 @@ func (vr *vreplicator) getTableSecondaryKeys(ctx context.Context, tableName stri
 	return secondaryKeys, err
 }
 
+const (
+	// How many times to attempt to kill the connection executing the
+	// post copy actions when interrupted, and how long to wait between
+	// attempts. The kill must eventually succeed for the controller to
+	// stop promptly, so transient failures are worth retrying, but only
+	// for so long.
+	killActionsConnectionRetries    = 10
+	killActionsConnectionRetryDelay = 1 * time.Second
+)
+
 // execPostCopyActions executes any post copy actions recorded for the given
 // table, e.g. re-adding deferred secondary keys. ctx bounds the work itself
 // and typically carries the copy phase duration timeout, whose expiry must
@@ -1037,9 +1048,36 @@ func (vr *vreplicator) execPostCopyActions(ctx, stopCtx context.Context, tableNa
 			// We're done, so no longer need to listen for cancellation.
 			return
 		}
-		log.Info(fmt.Sprintf("Post copy actions on the %q table in the %q VReplication workflow interrupted as %s", tableName, vr.WorkflowName, reason))
-		if err := killActionsConnection(); err != nil {
-			log.Error(fmt.Sprintf("Failed to kill the connection executing post copy actions on the %q table in the %q VReplication workflow: %v", tableName, vr.WorkflowName, err))
+		log.Info("Interrupting post copy actions",
+			slog.String("table", tableName),
+			slog.String("workflow", vr.WorkflowName),
+			slog.String("reason", reason),
+		)
+		// The KILL can fail transiently, e.g. on a failure to open the
+		// DBA connection. Giving up would leave the controller blocked
+		// until the in-flight action completes -- the very hang the
+		// kill exists to prevent -- so retry a bounded number of times,
+		// stopping early if the actions complete on their own.
+		for attempt := 1; ; attempt++ {
+			err := killActionsConnection()
+			if err == nil {
+				return
+			}
+			log.Error("Failed to kill the connection executing post copy actions",
+				slog.String("table", tableName),
+				slog.String("workflow", vr.WorkflowName),
+				slog.Int("attempt", attempt),
+				slog.Any("error", err),
+			)
+			if attempt == killActionsConnectionRetries {
+				return
+			}
+			select {
+			case <-done:
+				// The actions completed on their own.
+				return
+			case <-time.After(killActionsConnectionRetryDelay):
+			}
 		}
 	}()
 

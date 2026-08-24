@@ -697,6 +697,18 @@ func TestDeferSecondaryKeys(t *testing.T) {
 // copying all rows, is properly killed when the context
 // is cancelled -- e.g. due to the VReplication engine
 // closing for a tablet transition during a PRS.
+type (
+	// failingConnectDBClient fails Connect; no other method is ever
+	// called on it.
+	failingConnectDBClient struct {
+		binlogplayer.DBClient
+	}
+)
+
+func (f *failingConnectDBClient) Connect() error {
+	return errors.New("forced DBA connection failure")
+}
+
 func TestCancelledDeferSecondaryKeys(t *testing.T) {
 	// Skip the test for MariaDB as it does not have
 	// performance_schema enabled by default.
@@ -732,6 +744,20 @@ func TestCancelledDeferSecondaryKeys(t *testing.T) {
 	err = dbaconn.Connect()
 	require.NoError(t, err)
 	defer dbaconn.Close()
+	// Wrap the engine's DBA client factory -- which is used to kill the
+	// connection executing the post copy actions -- so that test cases
+	// can inject transient connection failures. When no failures are
+	// pending it transparently delegates to the real factory.
+	var dbaConnectFailures atomic.Int32
+	realDbaFactory := playerEngine.dbClientFactoryDba
+	playerEngine.dbClientFactoryDba = func() binlogplayer.DBClient {
+		if dbaConnectFailures.Load() > 0 {
+			dbaConnectFailures.Add(-1)
+			return &failingConnectDBClient{}
+		}
+		return realDbaFactory()
+	}
+	defer func() { playerEngine.dbClientFactoryDba = realDbaFactory }()
 	dbClient := playerEngine.dbClientFactoryFiltered()
 	err = dbClient.Connect()
 	require.NoError(t, err)
@@ -795,6 +821,20 @@ func TestCancelledDeferSecondaryKeys(t *testing.T) {
 				return stopCtx, stopCancel
 			},
 			interruptBeforeStart: true,
+		},
+		{
+			// A transient failure to kill the connection executing the
+			// actions must be retried: giving up would leave the
+			// controller blocked until the in-flight action completes,
+			// which is the very hang the kill exists to prevent.
+			name: "workflow stopped with transient kill failure",
+			setup: func(t *testing.T) (context.Context, func()) {
+				stopCtx, stopCancel := context.WithCancel(t.Context())
+				t.Cleanup(stopCancel)
+				dbaConnectFailures.Store(1)
+				t.Cleanup(func() { dbaConnectFailures.Store(0) })
+				return stopCtx, stopCancel
+			},
 		},
 		{
 			// The engine's context is cancelled on tablet shutdown or
