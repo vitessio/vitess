@@ -104,8 +104,7 @@ func registerCommands(root *cobra.Command) {
 		SubCommand: "Materialize",
 		Workflow:   "product_sales",
 	}
-	cancel := common.GetCancelCommand(opts)
-	cancel.Flags().BoolVar(&common.CancelOptions.KeepData, "keep-data", false, "Keep the materialized table data in the target keyspace. Target data is kept by default; pass --keep-data=false to remove it.")
+	cancel.Flags().BoolVar(&cancelOptions.KeepData, "keep-data", true, "Keep the materialized table data in the target keyspace. The target data is kept by default; pass --keep-data=false to drop the materialized tables.")
 	base.AddCommand(cancel)
 	base.AddCommand(common.GetShowCommand(opts))
 	base.AddCommand(common.GetStartCommand(opts))

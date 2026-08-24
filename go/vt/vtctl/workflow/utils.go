@@ -618,19 +618,22 @@ func ReverseWorkflowName(workflow string) string {
 	return workflow + reverseSuffix
 }
 
-// resolveWorkflowKeepData preserves request field presence so callers can
-// choose a safe default while still honoring an explicit false.
-func resolveWorkflowKeepData(workflow string, keepData *bool, defaultKeepData bool) (bool, []string) {
+// resolveWorkflowKeepData preserves request field presence so we can tell the
+// difference between "keep_data was omitted" and "keep_data was explicitly set
+// to false". That matters for reverse workflows: omitting keep_data should take
+// the safer path and keep the data by default, while an explicit false must
+// still be honored so callers can force cleanup.
+func resolveWorkflowKeepData(workflow string, keepData *bool) (bool, []string) {
 	if keepData != nil {
 		return *keepData, nil
 	}
-	if strings.HasSuffix(workflow, reverseSuffix) {
-		return true, []string{
-			fmt.Sprintf("Workflow %s is a reverse workflow; keeping data by default. Explicitly set keep_data=false or pass --keep-data=false to remove the data.", workflow),
-		}
+	if !strings.HasSuffix(workflow, reverseSuffix) {
+		return false, nil
 	}
 
-	return defaultKeepData, nil
+	return true, []string{
+		fmt.Sprintf("Workflow %s is a reverse workflow; keeping data by default. Explicitly set keep_data=false or pass --keep-data=false to remove the data.", workflow),
+	}
 }
 
 // Straight copy-paste of encodeString from wrangler/keyspace.go. I want to make

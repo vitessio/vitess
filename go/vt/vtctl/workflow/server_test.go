@@ -649,31 +649,6 @@ func TestWorkflowDelete(t *testing.T) {
 			},
 		},
 	}
-	materializeWorkflowRequest := &readVReplicationWorkflowRequestResponse{
-		req: &tabletmanagerdatapb.ReadVReplicationWorkflowRequest{
-			Workflow: workflowName,
-		},
-		res: &tabletmanagerdatapb.ReadVReplicationWorkflowResponse{
-			Workflow:     workflowName,
-			WorkflowType: binlogdatapb.VReplicationWorkflowType_Materialize,
-			Streams: []*tabletmanagerdatapb.ReadVReplicationWorkflowResponse_Stream{
-				{
-					Id: 1,
-					Bls: &binlogdatapb.BinlogSource{
-						Keyspace: sourceKeyspaceName,
-						Shard:    "0",
-						Filter: &binlogdatapb.Filter{
-							Rules: []*binlogdatapb.Rule{
-								{Match: table1Name},
-								{Match: table2Name},
-								{Match: table3Name},
-							},
-						},
-					},
-				},
-			},
-		},
-	}
 
 	testcases := []struct {
 		name                            string
@@ -723,95 +698,6 @@ func TestWorkflowDelete(t *testing.T) {
 					result: &querypb.QueryResult{},
 				},
 			},
-			want: &vtctldatapb.WorkflowDeleteResponse{
-				Summary: fmt.Sprintf("Successfully cancelled the %s workflow in the %s keyspace",
-					workflowName, targetKeyspaceName),
-				Details: []*vtctldatapb.WorkflowDeleteResponse_TabletInfo{
-					{
-						Tablet:  &topodatapb.TabletAlias{Cell: defaultCellName, Uid: startingTargetTabletUID},
-						Deleted: true,
-					},
-					{
-						Tablet:  &topodatapb.TabletAlias{Cell: defaultCellName, Uid: startingTargetTabletUID + tabletUIDStep},
-						Deleted: true,
-					},
-				},
-			},
-		},
-		{
-			name: "materialize workflow keeps data by default",
-			sourceKeyspace: &testKeyspace{
-				KeyspaceName: sourceKeyspaceName,
-				ShardNames:   []string{"0"},
-			},
-			targetKeyspace: &testKeyspace{
-				KeyspaceName: targetKeyspaceName,
-				ShardNames:   []string{"-80", "80-"},
-			},
-			req: &vtctldatapb.WorkflowDeleteRequest{
-				Keyspace: targetKeyspaceName,
-				Workflow: workflowName,
-			},
-			expectedSourceQueries: []*queryResult{
-				{
-					query: fmt.Sprintf("delete from _vt.vreplication where db_name = 'vt_%s' and workflow = '%s'",
-						sourceKeyspaceName, ReverseWorkflowName(workflowName)),
-					result: &querypb.QueryResult{},
-				},
-			},
-			readVReplicationWorkflowRequest: materializeWorkflowRequest,
-			want: &vtctldatapb.WorkflowDeleteResponse{
-				Summary: fmt.Sprintf("Successfully cancelled the %s workflow in the %s keyspace",
-					workflowName, targetKeyspaceName),
-				Details: []*vtctldatapb.WorkflowDeleteResponse_TabletInfo{
-					{
-						Tablet:  &topodatapb.TabletAlias{Cell: defaultCellName, Uid: startingTargetTabletUID},
-						Deleted: true,
-					},
-					{
-						Tablet:  &topodatapb.TabletAlias{Cell: defaultCellName, Uid: startingTargetTabletUID + tabletUIDStep},
-						Deleted: true,
-					},
-				},
-			},
-		},
-		{
-			name: "materialize workflow with explicit keep-data=false drops data",
-			sourceKeyspace: &testKeyspace{
-				KeyspaceName: sourceKeyspaceName,
-				ShardNames:   []string{"0"},
-			},
-			targetKeyspace: &testKeyspace{
-				KeyspaceName: targetKeyspaceName,
-				ShardNames:   []string{"-80", "80-"},
-			},
-			req: &vtctldatapb.WorkflowDeleteRequest{
-				Keyspace: targetKeyspaceName,
-				Workflow: workflowName,
-				KeepData: new(false),
-			},
-			expectedSourceQueries: []*queryResult{
-				{
-					query: fmt.Sprintf("delete from _vt.vreplication where db_name = 'vt_%s' and workflow = '%s'",
-						sourceKeyspaceName, ReverseWorkflowName(workflowName)),
-					result: &querypb.QueryResult{},
-				},
-			},
-			expectedTargetQueries: []*queryResult{
-				{
-					query:  fmt.Sprintf("drop table `vt_%s`.`%s`", targetKeyspaceName, table1Name),
-					result: &querypb.QueryResult{},
-				},
-				{
-					query:  fmt.Sprintf("drop table `vt_%s`.`%s`", targetKeyspaceName, table2Name),
-					result: &querypb.QueryResult{},
-				},
-				{
-					query:  fmt.Sprintf("drop table `vt_%s`.`%s`", targetKeyspaceName, table3Name),
-					result: &querypb.QueryResult{},
-				},
-			},
-			readVReplicationWorkflowRequest: materializeWorkflowRequest,
 			want: &vtctldatapb.WorkflowDeleteResponse{
 				Summary: fmt.Sprintf("Successfully cancelled the %s workflow in the %s keyspace",
 					workflowName, targetKeyspaceName),

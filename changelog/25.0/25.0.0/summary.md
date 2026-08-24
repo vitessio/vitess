@@ -170,9 +170,11 @@ See [#19906](https://github.com/vitessio/vitess/pull/19906) for details.
 
 #### <a id="vreplication-materialize-cancel-data-protection"/>Preserve Materialize target data on cancel by default</a>
 
-`vtctldclient Materialize cancel` now preserves the materialized target tables and their data when `--keep-data` is omitted. To remove the target tables when canceling the workflow, explicitly pass `--keep-data=false`.
+`vtctldclient Materialize cancel` now preserves the materialized target tables and their data. To remove the target tables when canceling the workflow, explicitly pass `--keep-data=false`.
 
-The default is applied server-side in `WorkflowDelete`, so it also covers `vtctldclient Workflow delete` when the target workflow is a Materialize workflow. Because `Materialize` is the zero value of the workflow type enum, a workflow record with an unset or unrecognized workflow type is likewise treated as Materialize and has its data preserved. Defaults for all other workflow types are unchanged.
+Previously `Materialize cancel` exposed no `--keep-data` flag and always omitted `keep_data` from the `WorkflowDelete` request. The server resolves an omitted `keep_data` to `false`, so canceling a Materialize workflow always dropped the target tables with no way to opt out. `Materialize cancel` now has its own command that always sends `keep_data` explicitly.
+
+This is a client-side fix. The server and the generic `vtctldclient Workflow delete` command are unchanged, so operators must upgrade `vtctldclient` to pick it up; an older client canceling a Materialize workflow against a newer server still drops the target tables.
 
 See [#20711](https://github.com/vitessio/vitess/issues/20711) for details.
 
