@@ -922,7 +922,17 @@ func (vr *vreplicator) getTableSecondaryKeys(ctx context.Context, tableName stri
 	return secondaryKeys, err
 }
 
-func (vr *vreplicator) execPostCopyActions(ctx context.Context, tableName string) error {
+// execPostCopyActions executes any post copy actions recorded for the given
+// table, e.g. re-adding deferred secondary keys. ctx bounds the work itself
+// and typically carries the copy phase duration timeout, whose expiry must
+// NOT interrupt an action already in progress (it would prevent actions that
+// take longer than the copy phase duration from ever completing). stopCtx's
+// cancellation means that the controller is stopping -- because the engine
+// is closing or the workflow is being stopped, deleted, or updated -- and
+// any in-flight action is then killed so that the controller shuts down
+// promptly instead of blocking, e.g. a PRS or a workflow delete, until the
+// action completes. A killed action is retried when the workflow restarts.
+func (vr *vreplicator) execPostCopyActions(ctx, stopCtx context.Context, tableName string) error {
 	defer vr.stats.PhaseTimings.Record("postCopyActions", time.Now())
 
 	// Use a new DB client to avoid interfering with open transactions
@@ -982,12 +992,15 @@ func (vr *vreplicator) execPostCopyActions(ctx context.Context, tableName string
 	}
 
 	// This could take hours so we start a monitoring goroutine to
-	// listen for context cancellation, which would indicate that
-	// the controller is stopping due to engine shutdown (tablet
-	// shutdown or transition). If that happens we attempt to KILL
-	// the running ALTER statement using a DBA connection.
+	// listen for the cancellations which indicate that the controller
+	// is stopping: engine shutdown (tablet shutdown or transition) or
+	// controller stop (the workflow is being stopped, deleted, or
+	// updated). If either happens we attempt to KILL the running ALTER
+	// statement using a DBA connection.
 	// If we don't do this then we could e.g. cause a PRS to fail as
-	// the running ALTER will block setting [super_]read_only.
+	// the running ALTER will block setting [super_]read_only, or cause
+	// a workflow delete to time out as the engine cannot process it
+	// until the controller has stopped.
 	// A failed/killed ALTER will be tried again when the copy
 	// phase starts up again on the (new) PRIMARY.
 	var action PostCopyAction
@@ -1012,17 +1025,21 @@ func (vr *vreplicator) execPostCopyActions(ctx context.Context, tableName string
 		return nil
 	}
 	go func() {
+		var reason string
 		select {
-		// Only cancel an ongoing ALTER if the engine is closing.
+		// Only cancel an ongoing ALTER if the engine is closing
+		// or the controller is stopping.
 		case <-vr.vre.ctx.Done():
-			log.Info(fmt.Sprintf("Copy of the %q table stopped when performing the following post copy action in the %q VReplication workflow: %+v", tableName, vr.WorkflowName, action))
-			if err := killAction(action); err != nil {
-				log.Error(fmt.Sprintf("Failed to kill post copy action on the %q table in the %q VReplication workflow: %v", tableName, vr.WorkflowName, err))
-			}
-			return
+			reason = "the engine is closing"
+		case <-stopCtx.Done():
+			reason = "the controller is stopping"
 		case <-done:
 			// We're done, so no longer need to listen for cancellation.
 			return
+		}
+		log.Info(fmt.Sprintf("Copy of the %q table stopped as %s when performing the following post copy action in the %q VReplication workflow: %+v", tableName, reason, vr.WorkflowName, action))
+		if err := killAction(action); err != nil {
+			log.Error(fmt.Sprintf("Failed to kill post copy action on the %q table in the %q VReplication workflow: %v", tableName, vr.WorkflowName, err))
 		}
 	}()
 
