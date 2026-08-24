@@ -3949,6 +3949,9 @@ func TestPlayerBatchModeMixedRowEvent(t *testing.T) {
 func TestPlayerBatchModeGroupedPlans(t *testing.T) {
 	oldVreplicationExperimentalFlags := vttablet.DefaultVReplicationConfig.ExperimentalFlags
 	vttablet.DefaultVReplicationConfig.ExperimentalFlags = vttablet.VReplicationExperimentalFlagVPlayerBatching
+	// This test's teardown uses defer, not t.Cleanup: execStatements and the
+	// other framework helpers run on t.Context(), which is already canceled
+	// by the time t.Cleanup callbacks execute.
 	defer func() {
 		vttablet.DefaultVReplicationConfig.ExperimentalFlags = oldVreplicationExperimentalFlags
 	}()
@@ -3995,21 +3998,21 @@ func TestPlayerBatchModeGroupedPlans(t *testing.T) {
 	), recvTimeout)
 	expectData(t, "lkp1", [][]string{{"1", "a"}, {"2", "b"}, {"3", "c"}})
 
-	execStatements(t, []string{"insert into src2 values (1, 'x'), (2, 'x')"})
+	execStatements(t, []string{"insert into src2 values (1, 'x'), (2, 'x'), (3, 'x')"})
 	expectNontxQueries(t, qh.Expect(
-		"insert into lkp2(val,cnt) values (_binary'x',1), (_binary'x',1) on duplicate key update cnt=cnt+1",
+		"insert into lkp2(val,cnt) values (_binary'x',1), (_binary'x',1), (_binary'x',1) on duplicate key update cnt=cnt+1",
 	), recvTimeout)
-	expectData(t, "lkp2", [][]string{{"x", "2"}})
+	expectData(t, "lkp2", [][]string{{"x", "3"}})
 
-	// A multi-row delete produces a single row event with multiple
-	// delete-shaped row changes, which is what the bulk-delete path used to
-	// consume. For the insertIgnore plan the deletes must be a no-op: the
-	// bulk path would have deleted the lookup rows outright.
+	// Each multi-row delete produces one row event with multiple
+	// delete-shaped row changes, which is the shape the bulk-delete path
+	// consumes. insertIgnore deletes must be a no-op; insertOnDup deletes
+	// must decrement per row, leaving the row that still counts source
+	// row 3.
 	execStatements(t, []string{"delete from src1 where id in (1, 2)"})
-	// For the insertOnDup plan each delete must decrement the count: the
-	// bulk path would have deleted the row that still counts source row 2.
-	execStatements(t, []string{"delete from src2 where id = 1"})
+	execStatements(t, []string{"delete from src2 where id in (1, 2)"})
 	expectNontxQueries(t, qh.Expect(
+		"update lkp2 set cnt=cnt-1 where val=_binary'x'",
 		"update lkp2 set cnt=cnt-1 where val=_binary'x'",
 	), recvTimeout)
 	expectData(t, "lkp1", [][]string{{"1", "a"}, {"2", "b"}, {"3", "c"}})
