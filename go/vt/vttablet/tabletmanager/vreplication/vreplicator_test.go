@@ -767,6 +767,11 @@ func TestCancelledDeferSecondaryKeys(t *testing.T) {
 		// the function which triggers the interruption of the in-flight
 		// post copy action.
 		setup func(t *testing.T) (stopCtx context.Context, interrupt func())
+		// interruptBeforeStart interrupts before execPostCopyActions is
+		// even called rather than while the ALTER is known to be running.
+		// The interruption must not be lost when it arrives while no
+		// action is executing.
+		interruptBeforeStart bool
 	}{
 		{
 			// The stop context is cancelled when the controller is
@@ -777,6 +782,19 @@ func TestCancelledDeferSecondaryKeys(t *testing.T) {
 				t.Cleanup(stopCancel)
 				return stopCtx, stopCancel
 			},
+		},
+		{
+			// A cancellation that arrives when no action is currently
+			// executing must still interrupt the actions promptly. If it
+			// were lost, a subsequently started action would block the
+			// controller with nothing left to interrupt it.
+			name: "workflow stopped before actions started",
+			setup: func(t *testing.T) (context.Context, func()) {
+				stopCtx, stopCancel := context.WithCancel(t.Context())
+				t.Cleanup(stopCancel)
+				return stopCtx, stopCancel
+			},
+			interruptBeforeStart: true,
 		},
 		{
 			// The engine's context is cancelled on tablet shutdown or
@@ -831,21 +849,29 @@ func TestCancelledDeferSecondaryKeys(t *testing.T) {
 				require.NoError(t, err)
 			})
 
+			if tc.interruptBeforeStart {
+				interrupt()
+			}
+
 			// The ALTER should block on the table lock.
 			go func() {
 				defer close(done)
 				errCh <- vr.execPostCopyActions(ctx, stopCtx, tableName)
 			}()
 
-			// Confirm that the expected ALTER query is being attempted.
-			query := fmt.Sprintf("select count(*) from performance_schema.events_statements_current where sql_text = '%s'", alter)
-			waitForQueryResult(t, dbaconn, query, "1")
+			if !tc.interruptBeforeStart {
+				// Confirm that the expected ALTER query is being attempted.
+				query := fmt.Sprintf("select count(*) from performance_schema.events_statements_current where sql_text = '%s'", alter)
+				waitForQueryResult(t, dbaconn, query, "1")
 
-			// Interrupt the post copy action while the ALTER is
-			// running/blocked and wait for it to be KILLed off. Use a
-			// generous CI-safe timeout as resource-starved runners can
+				// Interrupt the post copy action while the ALTER is
+				// running/blocked.
+				interrupt()
+			}
+
+			// Wait for the interrupted execPostCopyActions to return. Use
+			// a generous CI-safe timeout as resource-starved runners can
 			// pause things for multiple seconds.
-			interrupt()
 			require.Eventually(t, func() bool {
 				select {
 				case <-done:
@@ -856,8 +882,10 @@ func TestCancelledDeferSecondaryKeys(t *testing.T) {
 			}, 30*time.Second, 10*time.Millisecond)
 			actionErr := <-errCh
 			require.Error(t, actionErr)
-			assert.True(t, strings.EqualFold(actionErr.Error(), "EOF (errno 2013) (sqlstate HY000) during query: "+alter),
-				"unexpected error: %v", actionErr)
+			if !tc.interruptBeforeStart {
+				assert.True(t, strings.EqualFold(actionErr.Error(), "EOF (errno 2013) (sqlstate HY000) during query: "+alter),
+					"unexpected error: %v", actionErr)
+			}
 
 			_, err = dbaconn.ExecuteFetch("unlock tables", 1)
 			require.NoError(t, err)
@@ -869,7 +897,7 @@ func TestCancelledDeferSecondaryKeys(t *testing.T) {
 				"Expected: %s\n     Got: %s", forError(withoutPKs), forError(currentDDL))
 
 			// Confirm that we successfully attempted to kill it.
-			query = "select count(*) from performance_schema.events_statements_history where digest_text = 'KILL ?' and errors = 0"
+			query := "select count(*) from performance_schema.events_statements_history where digest_text = 'KILL ?' and errors = 0"
 			res, err := dbaconn.ExecuteFetch(query, 1)
 			require.NoError(t, err)
 			assert.Len(t, res.Rows, 1)

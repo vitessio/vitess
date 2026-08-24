@@ -995,40 +995,40 @@ func (vr *vreplicator) execPostCopyActions(ctx, stopCtx context.Context, tableNa
 	// listen for the cancellations which indicate that the controller
 	// is stopping: engine shutdown (tablet shutdown or transition) or
 	// controller stop (the workflow is being stopped, deleted, or
-	// updated). If either happens we attempt to KILL the running ALTER
-	// statement using a DBA connection.
+	// updated). If either happens we KILL the connection being used
+	// to execute the actions, using a DBA connection, so that any
+	// in-flight statement (e.g. an ALTER) is aborted and any
+	// subsequent statement on the connection fails immediately.
 	// If we don't do this then we could e.g. cause a PRS to fail as
 	// the running ALTER will block setting [super_]read_only, or cause
 	// a workflow delete to time out as the engine cannot process it
 	// until the controller has stopped.
 	// A failed/killed ALTER will be tried again when the copy
 	// phase starts up again on the (new) PRIMARY.
-	var action PostCopyAction
 	done := make(chan struct{})
 	defer close(done)
-	killAction := func(ak PostCopyAction) error {
-		// If we're executing an SQL query then KILL the
-		// connection being used to execute it.
-		if ak.Type == PostCopyActionSQL {
-			if connID < 1 {
-				return fmt.Errorf("invalid connection ID found (%d) when attempting to kill %q", connID, ak.Task)
-			}
-			killdbc := vr.vre.dbClientFactoryDba()
-			if err := killdbc.Connect(); err != nil {
-				return fmt.Errorf("unable to connect to the database when attempting to kill %q: %v", ak.Task, err)
-			}
-			defer killdbc.Close()
-			_, err = killdbc.ExecuteFetch(fmt.Sprintf("kill %d", connID), 1)
-			return err
+	// killActionsConnection is deliberately independent of which
+	// action -- if any -- is currently executing so that a
+	// cancellation which arrives between actions cannot be lost.
+	// Non-SQL action types, if ever added, will need their own
+	// interruption mechanism.
+	killActionsConnection := func() error {
+		if connID < 1 {
+			return fmt.Errorf("invalid connection ID found (%d) when attempting to kill the connection executing post copy actions", connID)
 		}
-		// We may support non-SQL actions in the future.
-		return nil
+		killdbc := vr.vre.dbClientFactoryDba()
+		if err := killdbc.Connect(); err != nil {
+			return fmt.Errorf("unable to connect to the database when attempting to kill the connection executing post copy actions: %v", err)
+		}
+		defer killdbc.Close()
+		_, kerr := killdbc.ExecuteFetch(fmt.Sprintf("kill %d", connID), 1)
+		return kerr
 	}
 	go func() {
 		var reason string
 		select {
-		// Only cancel an ongoing ALTER if the engine is closing
-		// or the controller is stopping.
+		// Only kill the connection executing the post copy actions
+		// if the engine is closing or the controller is stopping.
 		case <-vr.vre.ctx.Done():
 			reason = "the engine is closing"
 		case <-stopCtx.Done():
@@ -1037,9 +1037,9 @@ func (vr *vreplicator) execPostCopyActions(ctx, stopCtx context.Context, tableNa
 			// We're done, so no longer need to listen for cancellation.
 			return
 		}
-		log.Info(fmt.Sprintf("Copy of the %q table stopped as %s when performing the following post copy action in the %q VReplication workflow: %+v", tableName, reason, vr.WorkflowName, action))
-		if err := killAction(action); err != nil {
-			log.Error(fmt.Sprintf("Failed to kill post copy action on the %q table in the %q VReplication workflow: %v", tableName, vr.WorkflowName, err))
+		log.Info(fmt.Sprintf("Post copy actions on the %q table in the %q VReplication workflow interrupted as %s", tableName, vr.WorkflowName, reason))
+		if err := killActionsConnection(); err != nil {
+			log.Error(fmt.Sprintf("Failed to kill the connection executing post copy actions on the %q table in the %q VReplication workflow: %v", tableName, vr.WorkflowName, err))
 		}
 	}()
 
@@ -1056,7 +1056,7 @@ func (vr *vreplicator) execPostCopyActions(ctx, stopCtx context.Context, tableNa
 		if err != nil {
 			return err
 		}
-		action = PostCopyAction{}
+		action := PostCopyAction{}
 		actionBytes, err := row["action"].ToBytes()
 		if err != nil {
 			return err
