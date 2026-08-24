@@ -923,6 +923,10 @@ func (vr *vreplicator) getTableSecondaryKeys(ctx context.Context, tableName stri
 	return secondaryKeys, err
 }
 
+// killActionsConnectionTimeout bounds the single attempt to kill the
+// connection executing the post copy actions when interrupted.
+const killActionsConnectionTimeout = 10 * time.Second
+
 // execPostCopyActions executes any post copy actions recorded for the given
 // table, e.g. re-adding deferred secondary keys. ctx bounds the work itself
 // and typically carries the copy phase duration timeout, whose expiry must
@@ -1017,12 +1021,26 @@ func (vr *vreplicator) execPostCopyActions(ctx, stopCtx context.Context, tableNa
 		if connID < 1 {
 			return fmt.Errorf("invalid connection ID found (%d) when attempting to kill the connection executing post copy actions", connID)
 		}
-		killdbc := vr.vre.dbClientFactoryDba()
-		if err := killdbc.Connect(); err != nil {
+		// The attempt is bounded: the connection setup honors the
+		// context, and if the KILL query itself stalls the goroutine
+		// below closes the connection, which unblocks it. We don't
+		// parent this context on the ones whose cancellation got us
+		// here -- they are already done -- but we keep their values.
+		killCtx, cancel := context.WithTimeout(context.WithoutCancel(stopCtx), killActionsConnectionTimeout)
+		defer cancel()
+		killdbc, err := vr.mysqld.GetDbaConnection(killCtx)
+		if err != nil {
 			return fmt.Errorf("unable to connect to the database when attempting to kill the connection executing post copy actions: %v", err)
 		}
 		defer killdbc.Close()
-		_, kerr := killdbc.ExecuteFetch(fmt.Sprintf("kill %d", connID), 1)
+		go func() {
+			// killCtx is always cancelled when the attempt returns, so
+			// this goroutine cannot leak. Close is idempotent and safe
+			// to call concurrently with an in-flight query.
+			<-killCtx.Done()
+			killdbc.Close()
+		}()
+		_, kerr := killdbc.ExecuteFetch(fmt.Sprintf("kill %d", connID), 1, false)
 		return kerr
 	}
 	go func() {

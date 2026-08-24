@@ -37,6 +37,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/dbconfigs"
+	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/schemadiff"
 	vttablet "vitess.io/vitess/go/vt/vttablet/common"
@@ -697,6 +698,23 @@ func TestDeferSecondaryKeys(t *testing.T) {
 // copying all rows, is properly killed when the context
 // is cancelled -- e.g. due to the VReplication engine
 // closing for a tablet transition during a PRS.
+type (
+	// stalledDbaDaemon simulates a stalled DBA connection setup:
+	// GetDbaConnection blocks until the given context is done -- so an
+	// unbounded context would block it forever -- and attemptDone is
+	// closed when the attempt ends.
+	stalledDbaDaemon struct {
+		mysqlctl.MysqlDaemon
+		attemptDone chan struct{}
+	}
+)
+
+func (d *stalledDbaDaemon) GetDbaConnection(ctx context.Context) (*dbconnpool.DBConnection, error) {
+	defer close(d.attemptDone)
+	<-ctx.Done()
+	return nil, ctx.Err()
+}
+
 func TestCancelledDeferSecondaryKeys(t *testing.T) {
 	// Skip the test for MariaDB as it does not have
 	// performance_schema enabled by default.
@@ -772,6 +790,11 @@ func TestCancelledDeferSecondaryKeys(t *testing.T) {
 		// The interruption must not be lost when it arrives while no
 		// action is executing.
 		interruptBeforeStart bool
+		// stalledKill simulates a stalled DBA connection setup during
+		// the kill attempt. The attempt must fail once its timeout
+		// expires -- rather than blocking forever -- after which the
+		// in-flight action is simply left to complete.
+		stalledKill bool
 	}{
 		{
 			// The stop context is cancelled when the controller is
@@ -795,6 +818,17 @@ func TestCancelledDeferSecondaryKeys(t *testing.T) {
 				return stopCtx, stopCancel
 			},
 			interruptBeforeStart: true,
+		},
+		{
+			// A stalled DBA connection setup must not leave the kill
+			// attempt blocked forever.
+			name: "workflow stopped with stalled kill connection",
+			setup: func(t *testing.T) (context.Context, func()) {
+				stopCtx, stopCancel := context.WithCancel(t.Context())
+				t.Cleanup(stopCancel)
+				return stopCtx, stopCancel
+			},
+			stalledKill: true,
 		},
 		{
 			// The engine's context is cancelled on tablet shutdown or
@@ -824,6 +858,13 @@ func TestCancelledDeferSecondaryKeys(t *testing.T) {
 			require.NoError(t, err)
 
 			stopCtx, interrupt := tc.setup(t)
+
+			var killAttemptDone chan struct{}
+			if tc.stalledKill {
+				killAttemptDone = make(chan struct{})
+				vr.mysqld = &stalledDbaDaemon{MysqlDaemon: env.Mysqld, attemptDone: killAttemptDone}
+				t.Cleanup(func() { vr.mysqld = env.Mysqld })
+			}
 
 			done := make(chan struct{})
 			errCh := make(chan error, 1)
@@ -869,9 +910,28 @@ func TestCancelledDeferSecondaryKeys(t *testing.T) {
 				interrupt()
 			}
 
-			// Wait for the interrupted execPostCopyActions to return. Use
-			// a generous CI-safe timeout as resource-starved runners can
-			// pause things for multiple seconds.
+			if tc.stalledKill {
+				// The kill attempt is bounded, so the stalled connection
+				// setup must fail on its own once the attempt's timeout
+				// expires.
+				require.Eventually(t, func() bool {
+					select {
+					case <-killAttemptDone:
+						return true
+					default:
+						return false
+					}
+				}, 30*time.Second, 10*time.Millisecond)
+				// The kill failed and there are no retries, so the ALTER
+				// remains; unlock the table to let it -- and with it the
+				// post copy actions -- complete.
+				_, err = dbaconn.ExecuteFetch("unlock tables", 1)
+				require.NoError(t, err)
+			}
+
+			// Wait for execPostCopyActions to return. Use a generous
+			// CI-safe timeout as resource-starved runners can pause
+			// things for multiple seconds.
 			require.Eventually(t, func() bool {
 				select {
 				case <-done:
@@ -881,20 +941,32 @@ func TestCancelledDeferSecondaryKeys(t *testing.T) {
 				}
 			}, 30*time.Second, 10*time.Millisecond)
 			actionErr := <-errCh
-			require.Error(t, actionErr)
-			if !tc.interruptBeforeStart {
-				assert.True(t, strings.EqualFold(actionErr.Error(), "EOF (errno 2013) (sqlstate HY000) during query: "+alter),
-					"unexpected error: %v", actionErr)
+			if tc.stalledKill {
+				// The actions completed normally after the failed kill.
+				require.NoError(t, actionErr)
+			} else {
+				require.Error(t, actionErr)
+				if !tc.interruptBeforeStart {
+					assert.True(t, strings.EqualFold(actionErr.Error(), "EOF (errno 2013) (sqlstate HY000) during query: "+alter),
+						"unexpected error: %v", actionErr)
+				}
 			}
 
 			_, err = dbaconn.ExecuteFetch("unlock tables", 1)
 			require.NoError(t, err)
 
-			// Confirm that the ALTER to re-add the secondary keys
-			// did not succeed.
 			currentDDL := getCurrentDDL(tableName)
-			assert.True(t, strings.EqualFold(stripCruft(withoutPKs), stripCruft(currentDDL)),
-				"Expected: %s\n     Got: %s", forError(withoutPKs), forError(currentDDL))
+			if tc.stalledKill {
+				// Confirm that the ALTER to re-add the secondary keys
+				// succeeded as it was never killed.
+				assert.False(t, strings.EqualFold(stripCruft(withoutPKs), stripCruft(currentDDL)),
+					"Expected the secondary keys to have been re-added, got: %s", forError(currentDDL))
+			} else {
+				// Confirm that the ALTER to re-add the secondary keys
+				// did not succeed.
+				assert.True(t, strings.EqualFold(stripCruft(withoutPKs), stripCruft(currentDDL)),
+					"Expected: %s\n     Got: %s", forError(withoutPKs), forError(currentDDL))
+			}
 
 			// Confirm that we successfully attempted to kill it.
 			query := "select count(*) from performance_schema.events_statements_history where digest_text = 'KILL ?' and errors = 0"
@@ -904,11 +976,16 @@ func TestCancelledDeferSecondaryKeys(t *testing.T) {
 			// TODO: figure out why the KILL never shows up...
 			// require.Equal(t, "1", res.Rows[0][0].ToString())
 
-			// Confirm that the post copy action record still exists
-			// so it will later be retried.
 			res, err = dbClient.ExecuteFetch(fmt.Sprintf(getActionsSQLf, id, tableName), 1)
 			require.NoError(t, err)
-			require.Len(t, res.Rows, 1)
+			if tc.stalledKill {
+				// The completed actions deleted their record.
+				require.Empty(t, res.Rows)
+			} else {
+				// Confirm that the post copy action record still exists
+				// so it will later be retried.
+				require.Len(t, res.Rows, 1)
+			}
 		})
 	}
 }
