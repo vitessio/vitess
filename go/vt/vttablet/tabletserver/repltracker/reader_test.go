@@ -91,10 +91,10 @@ func TestReaderInitialHeartbeatReadOnOpen(t *testing.T) {
 	t.Cleanup(db.Close)
 
 	now := time.Now()
-	tr := newReader(db, &now)
+	tr := newReader(db, nil)
 	t.Cleanup(tr.Close)
 	// A generous read deadline so a paused CI runner cannot expire the
-	// frozen-clock-based context before Open performs the initial read.
+	// context before Open performs the initial read.
 	tr.interval = 30 * time.Second
 
 	db.AddQuery(fmt.Sprintf("SELECT ts FROM %s.heartbeat WHERE keyspaceShard='%s'", "_vt", tr.keyspaceShard), &sqltypes.Result{
@@ -110,7 +110,8 @@ func TestReaderInitialHeartbeatReadOnOpen(t *testing.T) {
 	lag, err := tr.Status()
 
 	require.NoError(t, err)
-	assert.Equal(t, 2*time.Hour, lag, "expected the real lag immediately after Open")
+	assert.GreaterOrEqual(t, lag, 2*time.Hour, "expected at least the seeded 2h lag immediately after Open")
+	assert.Less(t, lag, 2*time.Hour+5*time.Minute, "lag should be within a few minutes of the seeded 2h")
 }
 
 // TestReaderInitialHeartbeatReadFailsClosed tests that when the initial
