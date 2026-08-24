@@ -925,12 +925,13 @@ func (vr *vreplicator) getTableSecondaryKeys(ctx context.Context, tableName stri
 
 const (
 	// How many times to attempt to kill the connection executing the
-	// post copy actions when interrupted, and how long to wait between
-	// attempts. The kill must eventually succeed for the controller to
-	// stop promptly, so transient failures are worth retrying, but only
-	// for so long.
-	killActionsConnectionRetries    = 10
-	killActionsConnectionRetryDelay = 1 * time.Second
+	// post copy actions when interrupted, how long to wait between
+	// attempts, and how long a single attempt may take. The kill must
+	// eventually succeed for the controller to stop promptly, so
+	// transient failures are worth retrying, but only for so long.
+	killActionsConnectionRetries        = 10
+	killActionsConnectionRetryDelay     = 1 * time.Second
+	killActionsConnectionAttemptTimeout = 5 * time.Second
 )
 
 // execPostCopyActions executes any post copy actions recorded for the given
@@ -1059,7 +1060,20 @@ func (vr *vreplicator) execPostCopyActions(ctx, stopCtx context.Context, tableNa
 		// kill exists to prevent -- so retry a bounded number of times,
 		// stopping early if the actions complete on their own.
 		for attempt := 1; ; attempt++ {
-			err := killActionsConnection()
+			// The DBA connection setup and the KILL query have no
+			// inherent timeouts, so bound each attempt as well: a
+			// single hung attempt must not prevent further ones.
+			attemptResult := make(chan error, 1)
+			go func() { attemptResult <- killActionsConnection() }()
+			var err error
+			select {
+			case err = <-attemptResult:
+			case <-time.After(killActionsConnectionAttemptTimeout):
+				err = fmt.Errorf("the attempt timed out after %v", killActionsConnectionAttemptTimeout)
+			case <-done:
+				// The actions completed on their own.
+				return
+			}
 			if err == nil {
 				return
 			}

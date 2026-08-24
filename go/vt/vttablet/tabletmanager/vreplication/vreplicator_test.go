@@ -703,10 +703,21 @@ type (
 	failingConnectDBClient struct {
 		binlogplayer.DBClient
 	}
+	// hangingConnectDBClient blocks in Connect until the unblock
+	// channel is closed; no other method is ever called on it.
+	hangingConnectDBClient struct {
+		binlogplayer.DBClient
+		unblock chan struct{}
+	}
 )
 
 func (f *failingConnectDBClient) Connect() error {
 	return errors.New("forced DBA connection failure")
+}
+
+func (h *hangingConnectDBClient) Connect() error {
+	<-h.unblock
+	return errors.New("forced hung DBA connection failure")
 }
 
 func TestCancelledDeferSecondaryKeys(t *testing.T) {
@@ -746,11 +757,17 @@ func TestCancelledDeferSecondaryKeys(t *testing.T) {
 	defer dbaconn.Close()
 	// Wrap the engine's DBA client factory -- which is used to kill the
 	// connection executing the post copy actions -- so that test cases
-	// can inject transient connection failures. When no failures are
-	// pending it transparently delegates to the real factory.
-	var dbaConnectFailures atomic.Int32
+	// can inject transient connection failures and hangs. When neither
+	// is pending it transparently delegates to the real factory.
+	var dbaConnectFailures, dbaConnectHangs atomic.Int32
+	dbaConnectUnblock := make(chan struct{})
+	defer close(dbaConnectUnblock)
 	realDbaFactory := playerEngine.dbClientFactoryDba
 	playerEngine.dbClientFactoryDba = func() binlogplayer.DBClient {
+		if dbaConnectHangs.Load() > 0 {
+			dbaConnectHangs.Add(-1)
+			return &hangingConnectDBClient{unblock: dbaConnectUnblock}
+		}
 		if dbaConnectFailures.Load() > 0 {
 			dbaConnectFailures.Add(-1)
 			return &failingConnectDBClient{}
@@ -833,6 +850,20 @@ func TestCancelledDeferSecondaryKeys(t *testing.T) {
 				t.Cleanup(stopCancel)
 				dbaConnectFailures.Store(1)
 				t.Cleanup(func() { dbaConnectFailures.Store(0) })
+				return stopCtx, stopCancel
+			},
+		},
+		{
+			// A kill attempt that never returns -- the DBA connection
+			// setup and the KILL query have no inherent timeouts -- must
+			// not block the retries: each attempt is bounded so that a
+			// single hung attempt cannot leave the controller blocked.
+			name: "workflow stopped with hung kill attempt",
+			setup: func(t *testing.T) (context.Context, func()) {
+				stopCtx, stopCancel := context.WithCancel(t.Context())
+				t.Cleanup(stopCancel)
+				dbaConnectHangs.Store(1)
+				t.Cleanup(func() { dbaConnectHangs.Store(0) })
 				return stopCtx, stopCancel
 			},
 		},
