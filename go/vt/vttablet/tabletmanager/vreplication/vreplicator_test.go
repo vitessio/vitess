@@ -697,29 +697,6 @@ func TestDeferSecondaryKeys(t *testing.T) {
 // copying all rows, is properly killed when the context
 // is cancelled -- e.g. due to the VReplication engine
 // closing for a tablet transition during a PRS.
-type (
-	// failingConnectDBClient fails Connect; no other method is ever
-	// called on it.
-	failingConnectDBClient struct {
-		binlogplayer.DBClient
-	}
-	// hangingConnectDBClient blocks in Connect until the unblock
-	// channel is closed; no other method is ever called on it.
-	hangingConnectDBClient struct {
-		binlogplayer.DBClient
-		unblock chan struct{}
-	}
-)
-
-func (f *failingConnectDBClient) Connect() error {
-	return errors.New("forced DBA connection failure")
-}
-
-func (h *hangingConnectDBClient) Connect() error {
-	<-h.unblock
-	return errors.New("forced hung DBA connection failure")
-}
-
 func TestCancelledDeferSecondaryKeys(t *testing.T) {
 	// Skip the test for MariaDB as it does not have
 	// performance_schema enabled by default.
@@ -755,26 +732,6 @@ func TestCancelledDeferSecondaryKeys(t *testing.T) {
 	err = dbaconn.Connect()
 	require.NoError(t, err)
 	defer dbaconn.Close()
-	// Wrap the engine's DBA client factory -- which is used to kill the
-	// connection executing the post copy actions -- so that test cases
-	// can inject transient connection failures and hangs. When neither
-	// is pending it transparently delegates to the real factory.
-	var dbaConnectFailures, dbaConnectHangs atomic.Int32
-	dbaConnectUnblock := make(chan struct{})
-	defer close(dbaConnectUnblock)
-	realDbaFactory := playerEngine.dbClientFactoryDba
-	playerEngine.dbClientFactoryDba = func() binlogplayer.DBClient {
-		if dbaConnectHangs.Load() > 0 {
-			dbaConnectHangs.Add(-1)
-			return &hangingConnectDBClient{unblock: dbaConnectUnblock}
-		}
-		if dbaConnectFailures.Load() > 0 {
-			dbaConnectFailures.Add(-1)
-			return &failingConnectDBClient{}
-		}
-		return realDbaFactory()
-	}
-	defer func() { playerEngine.dbClientFactoryDba = realDbaFactory }()
 	dbClient := playerEngine.dbClientFactoryFiltered()
 	err = dbClient.Connect()
 	require.NoError(t, err)
@@ -838,34 +795,6 @@ func TestCancelledDeferSecondaryKeys(t *testing.T) {
 				return stopCtx, stopCancel
 			},
 			interruptBeforeStart: true,
-		},
-		{
-			// A transient failure to kill the connection executing the
-			// actions must be retried: giving up would leave the
-			// controller blocked until the in-flight action completes,
-			// which is the very hang the kill exists to prevent.
-			name: "workflow stopped with transient kill failure",
-			setup: func(t *testing.T) (context.Context, func()) {
-				stopCtx, stopCancel := context.WithCancel(t.Context())
-				t.Cleanup(stopCancel)
-				dbaConnectFailures.Store(1)
-				t.Cleanup(func() { dbaConnectFailures.Store(0) })
-				return stopCtx, stopCancel
-			},
-		},
-		{
-			// A kill attempt that never returns -- the DBA connection
-			// setup and the KILL query have no inherent timeouts -- must
-			// not block the retries: each attempt is bounded so that a
-			// single hung attempt cannot leave the controller blocked.
-			name: "workflow stopped with hung kill attempt",
-			setup: func(t *testing.T) (context.Context, func()) {
-				stopCtx, stopCancel := context.WithCancel(t.Context())
-				t.Cleanup(stopCancel)
-				dbaConnectHangs.Store(1)
-				t.Cleanup(func() { dbaConnectHangs.Store(0) })
-				return stopCtx, stopCancel
-			},
 		},
 		{
 			// The engine's context is cancelled on tablet shutdown or

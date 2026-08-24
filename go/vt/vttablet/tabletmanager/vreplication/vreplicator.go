@@ -923,17 +923,6 @@ func (vr *vreplicator) getTableSecondaryKeys(ctx context.Context, tableName stri
 	return secondaryKeys, err
 }
 
-const (
-	// How many times to attempt to kill the connection executing the
-	// post copy actions when interrupted, how long to wait between
-	// attempts, and how long a single attempt may take. The kill must
-	// eventually succeed for the controller to stop promptly, so
-	// transient failures are worth retrying, but only for so long.
-	killActionsConnectionRetries        = 10
-	killActionsConnectionRetryDelay     = 1 * time.Second
-	killActionsConnectionAttemptTimeout = 5 * time.Second
-)
-
 // execPostCopyActions executes any post copy actions recorded for the given
 // table, e.g. re-adding deferred secondary keys. ctx bounds the work itself
 // and typically carries the copy phase duration timeout, whose expiry must
@@ -1054,44 +1043,18 @@ func (vr *vreplicator) execPostCopyActions(ctx, stopCtx context.Context, tableNa
 			slog.String("workflow", vr.WorkflowName),
 			slog.String("reason", reason),
 		)
-		// The KILL can fail transiently, e.g. on a failure to open the
-		// DBA connection. Giving up would leave the controller blocked
-		// until the in-flight action completes -- the very hang the
-		// kill exists to prevent -- so retry a bounded number of times,
-		// stopping early if the actions complete on their own.
-		for attempt := 1; ; attempt++ {
-			// The DBA connection setup and the KILL query have no
-			// inherent timeouts, so bound each attempt as well: a
-			// single hung attempt must not prevent further ones.
-			attemptResult := make(chan error, 1)
-			go func() { attemptResult <- killActionsConnection() }()
-			var err error
-			select {
-			case err = <-attemptResult:
-			case <-time.After(killActionsConnectionAttemptTimeout):
-				err = fmt.Errorf("the attempt timed out after %v", killActionsConnectionAttemptTimeout)
-			case <-done:
-				// The actions completed on their own.
-				return
-			}
-			if err == nil {
-				return
-			}
+		// We make a single kill attempt: retrying a failed kill could
+		// exhaust DB connections when the DBA path is stalled -- the
+		// very state a failed kill tends to indicate. On failure we log
+		// the error and leave the in-flight action to complete, as it
+		// would have before the interruption support existed, and the
+		// interrupted operation can be retried by the user/caller.
+		if err := killActionsConnection(); err != nil {
 			log.Error("Failed to kill the connection executing post copy actions",
 				slog.String("table", tableName),
 				slog.String("workflow", vr.WorkflowName),
-				slog.Int("attempt", attempt),
 				slog.Any("error", err),
 			)
-			if attempt == killActionsConnectionRetries {
-				return
-			}
-			select {
-			case <-done:
-				// The actions completed on their own.
-				return
-			case <-time.After(killActionsConnectionRetryDelay):
-			}
 		}
 	}()
 
