@@ -179,6 +179,8 @@ The sampled-row arrays carry actual row data, including large `BLOB`/`JSON` colu
 
 The option is exposed as `only_summary` on the `VDiffShowRequest` (vtctld) and `VDiffReportOptions` (tablet) protobuf messages. It is opt-in and backward compatible: without the flag, the full report is returned as before.
 
+`vdiff create --wait` also uses `only_summary` for its internal progress polls, so the wait loop no longer transfers the sampled-row arrays on every interval and cannot be killed by the gRPC message limit on large diffs. The text output is unchanged; with `--format json`, the per-interval progress output no longer includes the sampled rows (the full samples remain available via `vdiff show --verbose` once the diff completes).
+
 See [#20870](https://github.com/vitessio/vitess/pull/20870) for details.
 
 ### <a id="minor-changes-vtgate"/>VTGate</a>

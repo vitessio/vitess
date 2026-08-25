@@ -319,10 +319,17 @@ func commandCreate(cmd *cobra.Command, args []string) error {
 			case <-ctx.Done():
 				return vterrors.Errorf(vtrpcpb.Code_CANCELED, "context has expired")
 			case <-tkr.C:
+				// This is a progress poll that only renders a single non-verbose
+				// summary (state, counts, has_mismatch), so request only_summary:
+				// the per-row sample arrays are never shown here and fetching them
+				// on every interval can push the aggregated response past the gRPC
+				// message limit for large diffs, killing the wait. The authoritative
+				// samples remain available via `vdiff show --verbose`.
 				resp, err := vtctldClient.VDiffShow(ctx, &vtctldatapb.VDiffShowRequest{
 					Workflow:       common.BaseOptions.Workflow,
 					TargetKeyspace: common.BaseOptions.TargetKeyspace,
 					Arg:            uuidStr,
+					OnlySummary:    true,
 				})
 				if err != nil {
 					return err
