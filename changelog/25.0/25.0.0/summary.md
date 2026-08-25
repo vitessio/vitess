@@ -41,6 +41,7 @@
         - [Replicas are placed in a crash-safe state before shutdown](#vttablet-replica-crash-safe-shutdown)
         - [Skip MySQL version check when restoring from a mysql-shell backup](#vttablet-mysql-shell-restore-skip-version-check)
         - [ApplySchema session variables](#vttablet-applyschema-session-variables)
+        - [New `PrimaryTermStartTimeSeconds` metric](#vttablet-primary-term-start-time-metric)
     - **[VTCtld](#minor-changes-vtctld)**
         - [MySQL version-aware reparent candidate election](#vtctld-version-aware-reparent)
     - **[Backup/Restore](#minor-changes-backup)**
@@ -406,6 +407,27 @@ Upgrade vtctld, vtctldclient, vtgate and vttablet before executing a schema
 change with `--session-variable`.
 
 See [#20654](https://github.com/vitessio/vitess/pull/20654) for details.
+
+#### <a id="vttablet-primary-term-start-time-metric"/>New `PrimaryTermStartTimeSeconds` metric</a>
+
+VTTablet now exports `PrimaryTermStartTimeSeconds`, a gauge holding the Unix time
+at which this tablet's current primary term began, and `0` when the tablet is not
+the primary. It is published to Prometheus as
+`vttablet_primary_term_start_time_seconds`.
+
+Existing reparent signals are counters and timings, so the time at which a
+reparent happened can only be narrowed to the scrape interval that observed the
+increment. This gauge's value is itself a timestamp, taken from the tablet's
+topology record rather than sampled when the tablet is scraped, so a reparent can
+be placed on a time axis regardless of scrape frequency. That makes it usable for
+annotating dashboards and correlating a latency change with a change of primary.
+
+The gauge is maintained for `PlannedReparentShard`, `EmergencyReparentShard`,
+`TabletExternallyReparented` and the initial primary election alike, since all of
+them set `primary_term_start_time` on the tablet record. A tablet that is already
+the primary when it starts up publishes its term as well.
+
+See [#20907](https://github.com/vitessio/vitess/pull/20907) for details.
 
 ### <a id="minor-changes-vtctld"/>VTCtld</a>
 
