@@ -40,7 +40,7 @@ func TestWaitlistPoolCloseWithMultipleWaiters(t *testing.T) {
 
 	for i := 0; i < waiterCount; i++ {
 		go func() {
-			_, err := wait.waitForConn(ctx, nil, poolClose, 0)
+			_, err := wait.waitForConn(ctx, nil, poolClose, 0, false)
 
 			if err != nil {
 				expireCount.Add(1)
@@ -80,7 +80,7 @@ func TestWaitlistWaiterCap(t *testing.T) {
 	errs := make(chan error, maxWaiters)
 	for i := 1; i <= maxWaiters; i++ {
 		go func() {
-			_, err := wl.waitForConn(context.Background(), nil, poolClose, maxWaiters)
+			_, err := wl.waitForConn(context.Background(), nil, poolClose, maxWaiters, false)
 			errs <- err
 		}()
 
@@ -89,13 +89,57 @@ func TestWaitlistWaiterCap(t *testing.T) {
 		}, time.Second, 5*time.Millisecond)
 	}
 
-	_, err := wl.waitForConn(context.Background(), nil, poolClose, maxWaiters)
+	_, err := wl.waitForConn(context.Background(), nil, poolClose, maxWaiters, false)
 	assert.ErrorIs(t, err, ErrPoolWaiterCapReached)
 	assert.Equal(t, maxWaiters, wl.waiting())
 
 	close(poolClose)
 
 	for i := 0; i < maxWaiters; i++ {
+		assert.NotErrorIs(t, <-errs, ErrPoolWaiterCapReached)
+	}
+}
+
+func TestWaitlistWaiterCapDryRun(t *testing.T) {
+	wl := waitlist[*TestConn]{}
+	wl.init()
+
+	capReachedCount := atomic.Int32{}
+	wl.onWaiterCapReached = func() {
+		capReachedCount.Add(1)
+	}
+
+	poolClose := make(chan struct{})
+
+	const maxWaiters = 3
+
+	errs := make(chan error, maxWaiters)
+	for i := 1; i <= maxWaiters; i++ {
+		go func() {
+			_, err := wl.waitForConn(context.Background(), nil, poolClose, maxWaiters, true)
+			errs <- err
+		}()
+
+		assert.Eventually(t, func() bool {
+			return wl.waiting() == i
+		}, time.Second, 5*time.Millisecond)
+	}
+
+	// In dryrun mode, exceeding the cap fires the callback but still lets the waiter through
+	go func() {
+		_, err := wl.waitForConn(context.Background(), nil, poolClose, maxWaiters, true)
+		errs <- err
+	}()
+
+	assert.Eventually(t, func() bool {
+		return wl.waiting() == maxWaiters+1
+	}, time.Second, 5*time.Millisecond)
+
+	assert.Equal(t, int32(1), capReachedCount.Load())
+
+	close(poolClose)
+
+	for i := 0; i < maxWaiters+1; i++ {
 		assert.NotErrorIs(t, <-errs, ErrPoolWaiterCapReached)
 	}
 }

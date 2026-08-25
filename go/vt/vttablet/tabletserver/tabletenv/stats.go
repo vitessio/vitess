@@ -49,6 +49,8 @@ type Stats struct {
 
 	QueryTimingsByTabletType *servenv.TimingsWrapper // Query timings split by current tablet type
 
+	ConsolidatorWaiterCapRejectCount *stats.Counter
+
 	// Atomic Transactions
 	Unresolved         *stats.GaugesWithSingleLabel
 	CommitPreparedFail *stats.CountersWithSingleLabel
@@ -101,6 +103,8 @@ func NewStats(exporter *servenv.Exporter) *Stats {
 		UserReservedTimesNs:     exporter.NewCountersWithSingleLabel("UserReservedTimesNs", "Total reserved connection latency for each CallerID", "CallerID"),
 
 		QueryTimingsByTabletType: exporter.NewTimings("QueryTimingsByTabletType", "Query timings broken down by active tablet type", "TabletType"),
+
+		ConsolidatorWaiterCapRejectCount: exporter.NewCounter("ConsolidatorWaiterCapRejectCount", "Number of queries that hit the consolidator waiter cap with reject method"),
 
 		Unresolved:         exporter.NewGaugesWithSingleLabel("UnresolvedTransaction", "Current unresolved transactions", "ManagerType"),
 		CommitPreparedFail: exporter.NewCountersWithSingleLabel("CommitPreparedFail", "failed prepared transactions commit", "FailureType"),

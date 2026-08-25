@@ -105,6 +105,7 @@ type Config[C Connection] struct {
 	MaxLifetime     time.Duration
 	RefreshInterval time.Duration
 	MaxWaiters      uint
+	WaiterCapDryRun bool
 	LogWait         func(time.Time)
 }
 
@@ -161,7 +162,9 @@ type ConnPool[C Connection] struct {
 		logWait func(time.Time)
 		// maxWaiters is the maximum number of clients that can be waiting for a connection;
 		// 0 means unlimited
-		maxWaiters uint
+		maxWaiters atomic.Uint32
+		// waiterCapDryRun when true, fires the rejection metric but lets the query wait
+		waiterCapDryRun atomic.Bool
 	}
 
 	Metrics Metrics
@@ -178,7 +181,8 @@ func NewPool[C Connection](config *Config[C]) *ConnPool[C] {
 	pool.config.idleTimeout.Store(config.IdleTimeout.Nanoseconds())
 	pool.config.refreshInterval.Store(config.RefreshInterval.Nanoseconds())
 	pool.config.logWait = config.LogWait
-	pool.config.maxWaiters = config.MaxWaiters
+	pool.config.maxWaiters.Store(uint32(config.MaxWaiters))
+	pool.config.waiterCapDryRun.Store(config.WaiterCapDryRun)
 	pool.wait.init()
 	pool.wait.onWait = func() {
 		pool.Metrics.waitCount.Add(1)
@@ -378,12 +382,33 @@ func (pool *ConnPool[C]) Active() int64 {
 	return pool.active.Load()
 }
 
+// WaitersQueued returns the number of clients currently waiting for a connection.
+func (pool *ConnPool[C]) WaitersQueued() int64 {
+	return int64(pool.wait.waiting())
+}
+
 func (pool *ConnPool[D]) IdleTimeout() time.Duration {
 	return time.Duration(pool.config.idleTimeout.Load())
 }
 
 func (pool *ConnPool[C]) SetIdleTimeout(duration time.Duration) {
 	pool.config.idleTimeout.Store(duration.Nanoseconds())
+}
+
+func (pool *ConnPool[C]) MaxWaiters() uint {
+	return uint(pool.config.maxWaiters.Load())
+}
+
+func (pool *ConnPool[C]) SetMaxWaiters(maxWaiters uint) {
+	pool.config.maxWaiters.Store(uint32(maxWaiters))
+}
+
+func (pool *ConnPool[C]) WaiterCapDryRun() bool {
+	return pool.config.waiterCapDryRun.Load()
+}
+
+func (pool *ConnPool[C]) SetWaiterCapDryRun(dryRun bool) {
+	pool.config.waiterCapDryRun.Store(dryRun)
 }
 
 func (pool *ConnPool[D]) IdleCount() int64 {
@@ -631,7 +656,7 @@ func (pool *ConnPool[C]) get(ctx context.Context) (*Pooled[C], error) {
 			return nil, ErrConnPoolClosed
 		}
 
-		conn, err = pool.wait.waitForConn(ctx, nil, *closeChan, pool.config.maxWaiters)
+		conn, err = pool.wait.waitForConn(ctx, nil, *closeChan, uint(pool.config.maxWaiters.Load()), pool.config.waiterCapDryRun.Load())
 		if err != nil {
 			if errors.Is(err, ErrPoolWaiterCapReached) {
 				return nil, err
@@ -697,7 +722,7 @@ func (pool *ConnPool[C]) getWithSetting(ctx context.Context, setting *Setting) (
 			return nil, ErrConnPoolClosed
 		}
 
-		conn, err = pool.wait.waitForConn(ctx, setting, *closeChan, pool.config.maxWaiters)
+		conn, err = pool.wait.waitForConn(ctx, setting, *closeChan, uint(pool.config.maxWaiters.Load()), pool.config.waiterCapDryRun.Load())
 		if err != nil {
 			if errors.Is(err, ErrPoolWaiterCapReached) {
 				return nil, err
@@ -923,6 +948,9 @@ func (pool *ConnPool[C]) RegisterStats(stats *servenv.Exporter, name string) {
 	})
 	stats.NewGaugeFunc(name+"IdleAllowed", "Tablet server conn pool idle allowed limit", func() int64 {
 		return pool.IdleCount()
+	})
+	stats.NewGaugeFunc(name+"WaitersQueued", "Tablet server conn pool waiters currently queued", func() int64 {
+		return pool.WaitersQueued()
 	})
 	stats.NewCounterFunc(name+"WaitCount", "Tablet server conn pool wait count", func() int64 {
 		return pool.Metrics.WaitCount()

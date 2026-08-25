@@ -52,7 +52,7 @@ type waitlist[C Connection] struct {
 // The returned connection may _not_ have the requested Setting. This function can
 // also return a `nil` connection even if our context has expired, if the pool has
 // forced an expiration of all waiters in the waitlist.
-func (wl *waitlist[C]) waitForConn(ctx context.Context, setting *Setting, closeChan <-chan struct{}, maxWaiters uint) (*Pooled[C], error) {
+func (wl *waitlist[C]) waitForConn(ctx context.Context, setting *Setting, closeChan <-chan struct{}, maxWaiters uint, dryRun bool) (*Pooled[C], error) {
 	elem := wl.nodes.Get().(*list.Element[waiter[C]])
 	defer wl.nodes.Put(elem)
 
@@ -70,10 +70,12 @@ func (wl *waitlist[C]) waitForConn(ctx context.Context, setting *Setting, closeC
 	// there when those requests can still get a connection without waiting. The cap
 	// is just for waiting.
 	if wl.aboveWaiterCap(maxWaiters) {
-		if wl.onWaiterCapReached != nil {
-			wl.onWaiterCapReached()
+		if !dryRun {
+			if wl.onWaiterCapReached != nil {
+				wl.onWaiterCapReached()
+			}
+			return nil, ErrPoolWaiterCapReached
 		}
-		return nil, ErrPoolWaiterCapReached
 	}
 
 	// If we reach this point, we are waiting, at the very least on the mutex, likely
@@ -87,11 +89,13 @@ func (wl *waitlist[C]) waitForConn(ctx context.Context, setting *Setting, closeC
 	// above, so we verify again while holding the lock to guarantee the cap is
 	// never exceeded.
 	if wl.aboveWaiterCap(maxWaiters) {
-		wl.mu.Unlock()
 		if wl.onWaiterCapReached != nil {
 			wl.onWaiterCapReached()
 		}
-		return nil, ErrPoolWaiterCapReached
+		if !dryRun {
+			wl.mu.Unlock()
+			return nil, ErrPoolWaiterCapReached
+		}
 	}
 	wl.list.PushBackValue(elem)
 	wl.mu.Unlock()

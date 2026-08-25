@@ -103,6 +103,9 @@ type TabletServer struct {
 	enableHotRowProtection bool
 	topoServer             *topo.Server
 
+	consolidatorWaiterCap       atomic.Int64
+	consolidatorWaiterCapDryRun atomic.Bool
+
 	// These are sub-components of TabletServer.
 	statelessql  *QueryList
 	statefulql   *QueryList
@@ -161,6 +164,8 @@ func NewTabletServer(ctx context.Context, env *vtenv.Environment, name string, c
 		env:                    env,
 	}
 	tsv.QueryTimeout.Store(config.Oltp.QueryTimeout.Nanoseconds())
+	tsv.consolidatorWaiterCap.Store(config.ConsolidatorQueryWaiterCap)
+	tsv.consolidatorWaiterCapDryRun.Store(config.ConsolidatorQueryWaiterCapDryRun)
 
 	srvTopoServer := srvtopo.NewResilientServer(ctx, topoServer, srvTopoCounts)
 
@@ -2022,6 +2027,42 @@ func (tsv *TabletServer) TxPoolSize() int {
 	return tsv.te.txPool.scp.Capacity()
 }
 
+func (tsv *TabletServer) SetReadPoolWaiterCap(val int) {
+	tsv.qe.conns.SetMaxWaiters(uint(val))
+}
+
+func (tsv *TabletServer) ReadPoolWaiterCap() int {
+	return int(tsv.qe.conns.MaxWaiters())
+}
+
+func (tsv *TabletServer) SetPoolWaiterCapDryRun(val bool) {
+	tsv.qe.conns.SetWaiterCapDryRun(val)
+	tsv.qe.streamConns.SetWaiterCapDryRun(val)
+	tsv.te.txPool.scp.conns.SetWaiterCapDryRun(val)
+	tsv.te.txPool.scp.foundRowsPool.SetWaiterCapDryRun(val)
+}
+
+func (tsv *TabletServer) PoolWaiterCapDryRun() bool {
+	return tsv.qe.conns.WaiterCapDryRun()
+}
+
+func (tsv *TabletServer) SetStreamPoolWaiterCap(val int) {
+	tsv.qe.streamConns.SetMaxWaiters(uint(val))
+}
+
+func (tsv *TabletServer) StreamPoolWaiterCap() int {
+	return int(tsv.qe.streamConns.MaxWaiters())
+}
+
+func (tsv *TabletServer) SetTxPoolWaiterCap(val int) {
+	tsv.te.txPool.scp.conns.SetMaxWaiters(uint(val))
+	tsv.te.txPool.scp.foundRowsPool.SetMaxWaiters(uint(val))
+}
+
+func (tsv *TabletServer) TxPoolWaiterCap() int {
+	return int(tsv.te.txPool.scp.conns.MaxWaiters())
+}
+
 // QueryPlanCacheCap returns the plan cache capacity
 func (tsv *TabletServer) QueryPlanCacheCap() int {
 	return tsv.qe.QueryPlanCacheCap()
@@ -2079,6 +2120,22 @@ func (tsv *TabletServer) SetConsolidatorMode(mode string) {
 // ConsolidatorMode returns the consolidator mode.
 func (tsv *TabletServer) ConsolidatorMode() string {
 	return tsv.qe.consolidatorMode.Load().(string)
+}
+
+func (tsv *TabletServer) SetConsolidatorWaiterCap(val int) {
+	tsv.consolidatorWaiterCap.Store(int64(val))
+}
+
+func (tsv *TabletServer) ConsolidatorWaiterCap() int {
+	return int(tsv.consolidatorWaiterCap.Load())
+}
+
+func (tsv *TabletServer) SetConsolidatorWaiterCapDryRun(val bool) {
+	tsv.consolidatorWaiterCapDryRun.Store(val)
+}
+
+func (tsv *TabletServer) ConsolidatorWaiterCapDryRun() bool {
+	return tsv.consolidatorWaiterCapDryRun.Load()
 }
 
 // queryAsString returns a readable normalized version of the query.

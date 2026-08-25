@@ -728,7 +728,7 @@ func (qre *QueryExecutor) execSelect() (*sqltypes.Result, error) {
 				q.SetErr(err)
 			}
 		} else {
-			waiterCap := qre.tsv.config.ConsolidatorQueryWaiterCap
+			waiterCap := qre.tsv.consolidatorWaiterCap.Load()
 			if waiterCap == 0 || qre.tsv.qe.consolidator.TotalWaiterCount() <= waiterCap {
 				qre.logStats.QuerySources |= tabletenv.QuerySourceConsolidator
 				startTime := time.Now()
@@ -737,11 +737,15 @@ func (qre *QueryExecutor) execSelect() (*sqltypes.Result, error) {
 				q.AddWaiterCounter(-1)
 			} else {
 				// Waiter cap exceeded, handle based on configured method
-				q.AddWaiterCounter(-1)
 				if qre.tsv.config.ConsolidatorQueryWaiterCapMethod == "reject" {
-					return nil, vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "consolidator waiter cap (%d) exceeded", waiterCap)
+					qre.tsv.stats.ConsolidatorWaiterCapRejectCount.Add(1)
+					if !qre.tsv.consolidatorWaiterCapDryRun.Load() {
+						q.AddWaiterCounter(-1)
+						return nil, vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "consolidator waiter cap (%d) exceeded", waiterCap)
+					}
 				}
-				// Default to fallback to independent query execution
+				// fallthrough or dryrun: execute independently
+				q.AddWaiterCounter(-1)
 				waiterCapExceeded = true
 			}
 		}

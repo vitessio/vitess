@@ -1478,7 +1478,7 @@ func TestQueryExecutorConsolidatorWaiterCapFallback(t *testing.T) {
 	defer tsv.StopService()
 
 	// Set a waiter cap of 1
-	tsv.config.ConsolidatorQueryWaiterCap = 1
+	tsv.consolidatorWaiterCap.Store(1)
 
 	fakeConsolidator := sync2.NewFakeConsolidator()
 	tsv.qe.consolidator = fakeConsolidator
@@ -1551,7 +1551,7 @@ func TestQueryExecutorConsolidatorWaiterCapReject(t *testing.T) {
 	defer tsv.StopService()
 
 	// Set waiter cap of 1 and method to "reject"
-	tsv.config.ConsolidatorQueryWaiterCap = 1
+	tsv.consolidatorWaiterCap.Store(1)
 	tsv.config.ConsolidatorQueryWaiterCapMethod = "reject"
 
 	fakeConsolidator := sync2.NewFakeConsolidator()
@@ -1609,6 +1609,81 @@ func TestQueryExecutorConsolidatorWaiterCapReject(t *testing.T) {
 
 	// Verify no database query was executed (rejected before fallback)
 	require.Equal(t, 0, db.GetQueryCalledNum(input))
+}
+
+func TestQueryExecutorConsolidatorWaiterCapRejectDryRun(t *testing.T) {
+	// Test that when dryrun is enabled, the reject metric fires but the query
+	// falls through to independent execution instead of being rejected.
+
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
+
+	ctx := context.Background()
+	tsv := newTestTabletServer(ctx, enableConsolidator, db)
+	defer tsv.StopService()
+
+	// Set waiter cap of 1, method to "reject", and enable dryrun
+	tsv.consolidatorWaiterCap.Store(1)
+	tsv.config.ConsolidatorQueryWaiterCapMethod = "reject"
+	tsv.consolidatorWaiterCapDryRun.Store(true)
+
+	fakeConsolidator := sync2.NewFakeConsolidator()
+	tsv.qe.consolidator = fakeConsolidator
+
+	input := "select * from t limit 10001"
+	result := &sqltypes.Result{
+		Fields: getTestTableFields(),
+		Rows: [][]sqltypes.Value{{
+			sqltypes.NewInt32(1),   // pk
+			sqltypes.NewInt32(100), // name
+			sqltypes.NewInt32(200), // addr
+		}},
+	}
+
+	// Set up consolidator to simulate an identical query already running (Created=false)
+	fakePendingResult := &sync2.FakePendingResult{Consolidator: fakeConsolidator}
+	fakePendingResult.SetResult(result)
+	// Start with waiter count above the cap (2 > 1), so the condition fails
+	fakePendingResult.WaiterCount = 2
+	fakeConsolidator.SetTotalWaiterCount(2)
+
+	fakeConsolidator.CreateReturn = &sync2.FakeConsolidatorCreateReturn{
+		Created:       false, // Simulate identical query already running
+		PendingResult: fakePendingResult,
+	}
+
+	// Set up database query/response for independent execution
+	db.AddQuery(input, result)
+
+	qre := newTestQueryExecutor(context.Background(), tsv, input, 0)
+	qre.options = &querypb.ExecuteOptions{Consolidator: querypb.ExecuteOptions_CONSOLIDATOR_ENABLED}
+
+	rejectCountBefore := tsv.stats.ConsolidatorWaiterCapRejectCount.Get()
+
+	// Execute query - should succeed (dryrun falls through to independent execution)
+	actualResult, err := qre.Execute()
+	require.NoError(t, err)
+	require.NotNil(t, actualResult)
+
+	// Verify we got the correct result
+	require.Equal(t, result.Fields, actualResult.Fields)
+	require.Equal(t, result.Rows, actualResult.Rows)
+
+	// Verify the reject metric was incremented
+	require.Equal(t, int64(1), tsv.stats.ConsolidatorWaiterCapRejectCount.Get()-rejectCountBefore)
+
+	// Verify consolidator was attempted exactly once
+	require.Len(t, fakeConsolidator.CreateCalls, 1)
+
+	// Verify we did NOT wait (dryrun falls through like fallthrough method)
+	require.Equal(t, 0, fakePendingResult.WaitCalls)
+
+	// Verify AddWaiterCounter was called once with -1 (cleanup)
+	require.Len(t, fakePendingResult.AddWaiterCounterCalls, 1)
+	require.Equal(t, int64(-1), fakePendingResult.AddWaiterCounterCalls[0])
+
+	// Verify fallback executed the query independently
+	require.Equal(t, 1, db.GetQueryCalledNum(input))
 }
 
 func TestGetConnectionLogStats(t *testing.T) {

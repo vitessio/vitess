@@ -82,6 +82,7 @@ Flags:
       --config-type string                                               Config file type (omit to infer config type from file extension).
       --consolidator-cache-proto3-rows                                   If true, the consolidation leader pre-caches proto3-encoded rows so that waiters avoid redundant encoding work.
       --consolidator-query-waiter-cap int                                Configure the maximum number of clients allowed to wait on the consolidator.
+      --consolidator-query-waiter-cap-dryrun                             If true, consolidator waiter cap rejections are counted in metrics but queries are still allowed to wait on the consolidator.
       --consolidator-query-waiter-cap-method string                      Configure the method when consolidator waiter cap is exceeded. Options: fallthrough, reject. (default "fallthrough")
       --consolidator-stream-query-size int                               Configure the stream consolidator query size in bytes. Setting to 0 disables the stream consolidator. (default 2097152)
       --consolidator-stream-total-size int                               Configure the stream consolidator total size in bytes. Setting to 0 disables the stream consolidator. (default 134217728)
@@ -288,6 +289,7 @@ Flags:
       --queryserver-config-passthrough-dmls                              query server pass through all dml statements without rewriting
       --queryserver-config-pool-conn-max-lifetime duration               query server connection max lifetime, vttablet manages various mysql connection pools. This config means if a connection has lived at least this long, it connection will be removed from pool upon the next time it is returned to the pool.
       --queryserver-config-pool-size int                                 query server read pool size, connection pool is used by regular queries (non streaming, not in a transaction) (default 16)
+      --queryserver-config-pool-waiter-cap-dryrun                        If true, pool waiter cap rejections are logged and counted in metrics but queries are still allowed to wait. Use to observe rejection rates before enforcing.
       --queryserver-config-query-cache-memory int                        query server query cache size in bytes, maximum amount of memory to be used for caching. vttablet analyzes every incoming query and generate a query plan, these plans are being cached in a lru cache. This config controls the capacity of the lru cache. (default 33554432)
       --queryserver-config-query-pool-max-idle-count int                 query server query pool - maximum number of idle connections to retain in the pool. Use this to balance between faster response times during traffic bursts and resource efficiency during low-traffic periods.
       --queryserver-config-query-pool-timeout duration                   query server query pool timeout, it is how long vttablet waits for a connection from the query pool. If set to 0 (default) then the overall query timeout is used instead.
