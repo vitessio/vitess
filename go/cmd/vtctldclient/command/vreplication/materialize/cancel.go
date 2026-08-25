@@ -77,7 +77,7 @@ func commandCancel(cmd *cobra.Command, args []string) error {
 	resp, err := common.GetClient().WorkflowDelete(common.GetCommandCtx(), req)
 	if err != nil {
 		if grpcerr, ok := status.FromError(err); ok && (grpcerr.Code() == codes.DeadlineExceeded) {
-			return errors.New("Cancel action timed out. Please try again and the work will pick back up where it left off. Note that you can control the timeout using the --action_timeout flag.")
+			return errors.New("Cancel action timed out. Please try again and the work will pick back up where it left off. Note that you can control the timeout using the --action-timeout flag.")
 		}
 		return err
 	}
