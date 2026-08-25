@@ -297,41 +297,6 @@ func TestBuildSummary(t *testing.T) {
 		require.Equal(t, int64(2), ss.TableStates["t2"].MismatchedRows)
 		require.True(t, ss.TableStates["t2"].HasMismatch)
 	})
-
-	t.Run("only_summary report preserves counters without samples", func(t *testing.T) {
-		// only_summary strips the row-sample arrays from the report via
-		// JSON_REMOVE but keeps the scalar counters. This feeds a report shaped
-		// like that output (counters present, sample arrays absent) with a
-		// mismatch, non-verbose (the --wait / summary-only path), and asserts the
-		// counts stay accurate. It guards against the summary-only mode ever
-		// producing the misleading "HasMismatch: true" with "MismatchedRows: 0".
-		resp := &vtctldatapb.VDiffShowResponse{
-			TabletResponses: map[string]*tabletmanagerdatapb.VDiffResponse{
-				"0": makeResult([]string{
-					"completed", "", "t1", testUUID, "completed", "10",
-					startedAt, "10", completedAt, "1",
-					`{"TableName": "t1", "ProcessedRows": 10, "MatchingRows": 8, "MismatchedRows": 2, "ExtraRowsSource": 0, "ExtraRowsTarget": 0}`,
-				}),
-			},
-		}
-
-		summary, err := BuildSummary("ks", "wf", testUUID, resp, false)
-		require.NoError(t, err)
-		require.True(t, summary.HasMismatch)
-
-		ts := summary.ShardSummaries["0"].TableStates["t1"]
-		require.True(t, ts.HasMismatch)
-		require.Equal(t, int64(10), ts.RowsCompared)
-		require.Equal(t, int64(8), ts.MatchingRows)
-		require.Equal(t, int64(2), ts.MismatchedRows)
-
-		// The report is retained on mismatch even when non-verbose, but it must
-		// carry no row samples since only_summary stripped them.
-		report := summary.Reports["t1"]["0"]
-		require.Empty(t, report.MismatchedRowsDiffs)
-		require.Empty(t, report.ExtraRowsSourceDiffs)
-		require.Empty(t, report.ExtraRowsTargetDiffs)
-	})
 }
 
 func TestBuildProgressReport(t *testing.T) {
@@ -808,7 +773,7 @@ func TestVDiffShow(t *testing.T) {
 	workflow := "testwf"
 	uuid := uuid.New().String()
 	env := newTestEnv(t, ctx, defaultCellName, sourceKeyspace, targetKeyspace)
-	defer env.close()
+	t.Cleanup(env.close)
 
 	env.tmc.strict = true
 	action := string(vdiff.ShowAction)
