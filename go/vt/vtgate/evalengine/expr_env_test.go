@@ -81,11 +81,9 @@ func TestExpressionEnvTypeOf(t *testing.T) {
 				typed:     nil,
 				needTypes: []typedIR{sumCol, countCol},
 				ir: &ArithmeticExpr{
-					Op: &opArithDiv{},
-					BinaryExpr: BinaryExpr{
-						Left:  sumCol,
-						Right: countCol,
-					},
+					Op:    &opArithDiv{},
+					Left:  sumCol,
+					Right: countCol,
 				},
 			},
 			wantedScale: 6,

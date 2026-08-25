@@ -604,54 +604,42 @@ func TestExecDDLSchemaTableCountLimit(t *testing.T) {
 		setup
 	}{
 		{
-			name: "below_limit_create_passes_gate",
-			setup: setup{
-				limit:           10,
-				preloadedTables: []string{"a", "b"},
-				query:           "create table c (id int primary key)",
-			},
+			name:            "below_limit_create_passes_gate",
+			limit:           10,
+			preloadedTables: []string{"a", "b"},
+			query:           "create table c (id int primary key)",
 		},
 		{
-			name: "at_limit_plain_create_rejected",
-			setup: setup{
-				limit:           2,
-				preloadedTables: []string{"a", "b"},
-				query:           "create table c (id int primary key)",
-				wantErrContains: "schema engine table limit of 2 reached",
-			},
+			name:            "at_limit_plain_create_rejected",
+			limit:           2,
+			preloadedTables: []string{"a", "b"},
+			query:           "create table c (id int primary key)",
+			wantErrContains: "schema engine table limit of 2 reached",
 		},
 		{
-			name: "at_limit_create_view_rejected",
-			setup: setup{
-				limit:           2,
-				preloadedTables: []string{"a", "b"},
-				query:           "create view c as select 1 from dual",
-				wantErrContains: "schema engine table limit of 2 reached",
-			},
+			name:            "at_limit_create_view_rejected",
+			limit:           2,
+			preloadedTables: []string{"a", "b"},
+			query:           "create view c as select 1 from dual",
+			wantErrContains: "schema engine table limit of 2 reached",
 		},
 		{
-			name: "at_limit_if_not_exists_on_existing_passes",
-			setup: setup{
-				limit:           2,
-				preloadedTables: []string{"a", "b"},
-				query:           "create table if not exists a (id int primary key)",
-			},
+			name:            "at_limit_if_not_exists_on_existing_passes",
+			limit:           2,
+			preloadedTables: []string{"a", "b"},
+			query:           "create table if not exists a (id int primary key)",
 		},
 		{
-			name: "at_limit_create_on_existing_passes_gate",
-			setup: setup{
-				limit:           2,
-				preloadedTables: []string{"a", "b"},
-				query:           "create table a (id int primary key)",
-			},
+			name:            "at_limit_create_on_existing_passes_gate",
+			limit:           2,
+			preloadedTables: []string{"a", "b"},
+			query:           "create table a (id int primary key)",
 		},
 		{
-			name: "at_limit_temporary_passes",
-			setup: setup{
-				limit:           2,
-				preloadedTables: []string{"a", "b"},
-				query:           "create temporary table c (id int primary key)",
-			},
+			name:            "at_limit_temporary_passes",
+			limit:           2,
+			preloadedTables: []string{"a", "b"},
+			query:           "create temporary table c (id int primary key)",
 		},
 	}
 

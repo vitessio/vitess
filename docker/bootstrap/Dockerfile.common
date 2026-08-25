@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-ARG image=golang:1.26.5-bookworm@sha256:5ab8e9af080c5f58dab00dd8055ea9309ec54c47722681b5ee8d0a3602f85316
+ARG image=golang:1.27.0-bookworm@sha256:6033334f349f3912236ed6a06c5ed066605e58632dc415779b0d00a1568afa8d
 
 # Build the Vitess Go binaries
 FROM $image

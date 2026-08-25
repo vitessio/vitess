@@ -60345,6 +60345,9 @@ export namespace replicationdata {
         /** Status semi_sync_replica_status. */
         semi_sync_replica_status: boolean;
 
+        /** Status server_version. */
+        server_version: string;
+
         /**
          * Creates a new Status instance using the specified properties.
          * @param [properties] Properties to set
@@ -60509,6 +60512,9 @@ export namespace replicationdata {
 
             /** Status semi_sync_replica_status */
             semi_sync_replica_status?: (boolean|null);
+
+            /** Status server_version */
+            server_version?: (string|null);
 
             /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
@@ -60802,6 +60808,9 @@ export namespace replicationdata {
         /** PrimaryStatus server_uuid. */
         server_uuid: string;
 
+        /** PrimaryStatus server_version. */
+        server_version: string;
+
         /**
          * Creates a new PrimaryStatus instance using the specified properties.
          * @param [properties] Properties to set
@@ -60894,6 +60903,9 @@ export namespace replicationdata {
 
             /** PrimaryStatus server_uuid */
             server_uuid?: (string|null);
+
+            /** PrimaryStatus server_version */
+            server_version?: (string|null);
 
             /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
