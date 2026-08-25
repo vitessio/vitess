@@ -519,6 +519,14 @@ func (ts *tmState) publishForDisplay() {
 	defer ts.displayState.mu.Unlock()
 	ts.displayState.tablet = ts.tablet.CloneVT()
 	ts.displayState.deniedTables = ts.deniedTables[ts.tablet.Type]
+
+	// Set here rather than in ChangeTabletType so that a tablet which is
+	// already the primary at startup publishes its term as well.
+	var primaryTermStart int64
+	if ts.tablet.PrimaryTermStartTime != nil {
+		primaryTermStart = protoutil.TimeFromProto(ts.tablet.PrimaryTermStartTime).Unix()
+	}
+	statsPrimaryTermStartTime.Set(primaryTermStart)
 }
 
 func (ts *tmState) Tablet() *topodatapb.Tablet {

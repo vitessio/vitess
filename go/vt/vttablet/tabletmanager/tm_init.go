@@ -135,6 +135,10 @@ var (
 	// statsTabletTags is set to 1 (true) if a tablet tag exists.
 	statsTabletTags *stats.GaugesWithMultiLabels
 
+	// statsPrimaryTermStartTime is the start of the tablet's current primary
+	// term, or 0 when the tablet is not the primary.
+	statsPrimaryTermStartTime *stats.Gauge
+
 	statsKeyspace      = stats.NewString("TabletKeyspace")
 	statsShard         = stats.NewString("TabletShard")
 	statsKeyRangeStart = stats.NewString("TabletKeyRangeStart")
@@ -155,6 +159,7 @@ func init() {
 	statsBackupIsRunning = stats.NewGaugesWithMultiLabels("BackupIsRunning", "Whether a backup is running", []string{"mode"})
 	statsIsInSrvKeyspace = stats.NewGauge("IsInSrvKeyspace", "Whether the vttablet is in the serving keyspace (1 = true / 0 = false)")
 	statsTabletTags = stats.NewGaugesWithMultiLabels("TabletTags", "Tablet tags key/values", []string{"key", "value"})
+	statsPrimaryTermStartTime = stats.NewGauge("PrimaryTermStartTimeSeconds", "Unix time at which the current primary term of this tablet began, or 0 if this tablet is not the primary")
 }
 
 // TabletManager is the main class for the tablet manager.

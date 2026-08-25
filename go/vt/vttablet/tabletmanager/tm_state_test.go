@@ -26,6 +26,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/mysqlctl"
@@ -481,6 +482,62 @@ func TestStateChangeTabletTypeWithFailure(t *testing.T) {
 	assert.Equal(t, "spare", statsTabletType.Get())
 	assert.Len(t, statsTabletTypeCount.Counts(), 3)
 	assert.Equal(t, int64(1), statsTabletTypeCount.Counts()["spare"])
+}
+
+// TestStatePrimaryTermStartTime verifies that the tablet publishes the start of
+// its current primary term, and clears it on demotion. The value is what lets a
+// reparent be located on a time axis independently of the scrape interval.
+func TestStatePrimaryTermStartTime(t *testing.T) {
+	ctx := t.Context()
+	ts := memorytopo.NewServer(ctx, "cell1")
+
+	// Seed a bogus value so that the assertions below prove the tablet set the
+	// gauge, rather than that it happened to already be zero.
+	statsPrimaryTermStartTime.Set(1)
+
+	tm := newTestTM(t, ts, 2, "ks", "0", nil)
+	defer tm.Stop()
+
+	alias := &topodatapb.TabletAlias{
+		Cell: "cell1",
+		Uid:  2,
+	}
+
+	// A replica holds no primary term.
+	assert.Equal(t, int64(0), statsPrimaryTermStartTime.Get())
+
+	err := tm.tmState.ChangeTabletType(ctx, topodatapb.TabletType_PRIMARY, DBActionSetReadWrite)
+	require.NoError(t, err)
+	ti, err := ts.GetTablet(ctx, alias)
+	require.NoError(t, err)
+	require.NotNil(t, ti.PrimaryTermStartTime)
+	assert.Equal(t, protoutil.TimeFromProto(ti.PrimaryTermStartTime).Unix(), statsPrimaryTermStartTime.Get())
+
+	// Demotion clears the term, marking the far edge of a reparent window.
+	err = tm.tmState.ChangeTabletType(ctx, topodatapb.TabletType_REPLICA, DBActionNone)
+	require.NoError(t, err)
+	assert.Equal(t, int64(0), statsPrimaryTermStartTime.Get())
+}
+
+// TestStatePrimaryTermStartTimeOnOpen verifies that a tablet which is already
+// the primary when it starts up publishes its primary term, even though no
+// tablet type change occurs in this process. This is the vttablet restart case,
+// and it is why the gauge cannot be maintained from ChangeTabletType alone.
+func TestStatePrimaryTermStartTimeOnOpen(t *testing.T) {
+	ctx := t.Context()
+	ts := memorytopo.NewServer(ctx, "cell1")
+	tm := newTestTM(t, ts, 1, "ks", "0", nil)
+	defer tm.Stop()
+
+	primaryTermStart := time.Now().Add(-time.Hour)
+	tm.tmState.mu.Lock()
+	tm.tmState.tablet.Type = topodatapb.TabletType_PRIMARY
+	tm.tmState.tablet.PrimaryTermStartTime = protoutil.TimeToProto(primaryTermStart)
+	err := tm.tmState.updateLocked(ctx)
+	tm.tmState.mu.Unlock()
+	require.NoError(t, err)
+
+	assert.Equal(t, primaryTermStart.Unix(), statsPrimaryTermStartTime.Get())
 }
 
 // TestChangeTypeErrorWhileWritingToTopo tests the case where we fail while writing to the topo-server
