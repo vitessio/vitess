@@ -8668,9 +8668,7 @@ spec:
         - vitess-operator
         env:
         - name: WATCH_NAMESPACE
-          valueFrom:
-            fieldRef:
-              fieldPath: metadata.namespace
+          value: "default,example"
         - name: POD_NAME
           valueFrom:
             fieldRef:
