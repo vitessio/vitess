@@ -131795,15 +131795,11 @@ export const query = $root.query = (() => {
                 $root.query.ExecuteOptions.encode(message.options, writer.uint32(/* id 6, wireType 2 =*/50).fork(), _depth + 1).ldelim();
             if (message.reserved_id != null && $Object.hasOwnProperty.call(message, "reserved_id") && (typeof message.reserved_id === "object" ? message.reserved_id.low || message.reserved_id.high : message.reserved_id !== 0))
                 writer.uint32(/* id 7, wireType 0 =*/56).int64(message.reserved_id);
-            if (message.reserved_conn_keep_alive != null && $Object.hasOwnProperty.call(message, "reserved_conn_keep_alive"))
+            if (message.reserved_conn_keep_alive != null && $Object.hasOwnProperty.call(message, "reserved_conn_keep_alive") && message.reserved_conn_keep_alive !== false)
                 writer.uint32(/* id 8, wireType 0 =*/64).bool(message.reserved_conn_keep_alive);
-            if (message.reserved_conn_keep_alive_ids != null && message.reserved_conn_keep_alive_ids.length) {
-                writer.uint32(/* id 9, wireType 2 =*/74).fork();
-                for (let i = 0; i < message.reserved_conn_keep_alive_ids.length; ++i)
-                    writer.int64(message.reserved_conn_keep_alive_ids[i]);
-                writer.ldelim();
-            }
-            if (message.reserved_conn_activity_refresh != null && $Object.hasOwnProperty.call(message, "reserved_conn_activity_refresh"))
+            if (message.reserved_conn_keep_alive_ids != null && message.reserved_conn_keep_alive_ids.length)
+                writer.uint32(/* id 9, wireType 2 =*/74).int64s(message.reserved_conn_keep_alive_ids);
+            if (message.reserved_conn_activity_refresh != null && $Object.hasOwnProperty.call(message, "reserved_conn_activity_refresh") && message.reserved_conn_activity_refresh !== false)
                 writer.uint32(/* id 10, wireType 0 =*/80).bool(message.reserved_conn_activity_refresh);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -131913,9 +131909,7 @@ export const query = $root.query = (() => {
                         if (wireType === 2) {
                             if (!(message.reserved_conn_keep_alive_ids && message.reserved_conn_keep_alive_ids.length))
                                 message.reserved_conn_keep_alive_ids = [];
-                            let end2 = reader.uint32() + reader.pos;
-                            while (reader.pos < end2)
-                                message.reserved_conn_keep_alive_ids.push(reader.int64());
+                            reader.int64s(message.reserved_conn_keep_alive_ids);
                             continue;
                         }
                         if (wireType !== 0)
