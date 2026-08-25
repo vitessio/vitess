@@ -616,7 +616,9 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) (err error) {
 						return err
 					}
 					defer dbConn.Recycle()
-					return qre.execStreamSQL(dbConn, qre.connID != 0, false /* insideTxn */, sql, func(result *sqltypes.Result) error {
+					// isStateful is false by construction: this branch requires
+					// connID == 0, so the stream conn is never a reserved connection.
+					return qre.execStreamSQL(dbConn, false /* isStateful */, false /* insideTxn */, sql, func(result *sqltypes.Result) error {
 						// this stream result is potentially used by more than one client, so
 						// the consolidator will return it to the pool once it knows it's no longer
 						// being shared

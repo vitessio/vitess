@@ -995,6 +995,27 @@ func (session *SafeSession) GetOrCreateOptions() *querypb.ExecuteOptions {
 	return session.Options
 }
 
+// HasCreatedTempTables reports whether the session has created temporary
+// tables. It reads under the session mutex: the temp-table refresh ticker
+// calls this concurrently with the command execution that marks temp-table
+// creation via SetHasCreatedTempTables.
+func (session *SafeSession) HasCreatedTempTables() bool {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	return session.Options.GetHasCreatedTempTables()
+}
+
+// SetHasCreatedTempTables marks that the session has created temporary
+// tables. It writes under the session mutex: see HasCreatedTempTables.
+func (session *SafeSession) SetHasCreatedTempTables() {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	if session.Options == nil {
+		session.Options = &querypb.ExecuteOptions{}
+	}
+	session.Options.HasCreatedTempTables = true
+}
+
 func (session *SafeSession) CachePlan() bool {
 	if session == nil || session.Options == nil {
 		return true

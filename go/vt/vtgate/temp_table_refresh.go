@@ -160,7 +160,9 @@ func (r *tempTableActivityRefresher) onSessionActivity(ctx context.Context, sess
 // timer for in-transaction activity, so a refresh would only inject a query
 // into the user's transaction — as are sessions without temporary tables.
 func (r *tempTableActivityRefresher) dueTargets(session *econtext.SafeSession) []tempTableRefreshTarget {
-	if !session.GetOptions().GetHasCreatedTempTables() {
+	// The mutex-guarded read matters: the lease ticker calls this while the
+	// foreground command may be marking temp-table creation on the session.
+	if !session.HasCreatedTempTables() {
 		return nil
 	}
 	// A non-positive interval disables vtgate's temp-table keepalive
@@ -226,7 +228,7 @@ func (r *tempTableActivityRefresher) commandLease(ctx context.Context, session *
 	}
 	r.onSessionActivity(ctx, session)
 	var done, exited chan struct{}
-	if interval := tempTableHeartbeatTime; interval > 0 && session.GetOptions().GetHasCreatedTempTables() {
+	if interval := tempTableHeartbeatTime; interval > 0 && session.HasCreatedTempTables() {
 		done = make(chan struct{})
 		exited = make(chan struct{})
 		go func() {

@@ -229,6 +229,28 @@ func TestTempTableActivityRefresh(t *testing.T) {
 		}
 	}()
 	wg.Wait()
+
+	// The ticker also reads the session's Options — the has-temp-tables gate —
+	// concurrently with the command's own execution, which marks temp-table
+	// creation on the live Options proto (a session that already holds temp
+	// tables can create another one mid-command). Both sides must synchronize
+	// on the session mutex: this section fails under the race detector if
+	// either side touches the field directly.
+	var optsWG sync.WaitGroup
+	optsWG.Add(2)
+	go func() {
+		defer optsWG.Done()
+		for range 2000 {
+			racySession.SetHasCreatedTempTables()
+		}
+	}()
+	go func() {
+		defer optsWG.Done()
+		for range 2000 {
+			racy.dueTargets(racySession)
+		}
+	}()
+	optsWG.Wait()
 }
 
 // refreshTestActionInfo is a minimal econtext.ShardActionInfo for driving
