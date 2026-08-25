@@ -297,6 +297,41 @@ func TestBuildSummary(t *testing.T) {
 		require.Equal(t, int64(2), ss.TableStates["t2"].MismatchedRows)
 		require.True(t, ss.TableStates["t2"].HasMismatch)
 	})
+
+	t.Run("only_summary report preserves counters without samples", func(t *testing.T) {
+		// only_summary strips the row-sample arrays from the report via
+		// JSON_REMOVE but keeps the scalar counters. This feeds a report shaped
+		// like that output (counters present, sample arrays absent) with a
+		// mismatch, non-verbose (the --wait / summary-only path), and asserts the
+		// counts stay accurate. It guards against the summary-only mode ever
+		// producing the misleading "HasMismatch: true" with "MismatchedRows: 0".
+		resp := &vtctldatapb.VDiffShowResponse{
+			TabletResponses: map[string]*tabletmanagerdatapb.VDiffResponse{
+				"0": makeResult([]string{
+					"completed", "", "t1", testUUID, "completed", "10",
+					startedAt, "10", completedAt, "1",
+					`{"TableName": "t1", "ProcessedRows": 10, "MatchingRows": 8, "MismatchedRows": 2, "ExtraRowsSource": 0, "ExtraRowsTarget": 0}`,
+				}),
+			},
+		}
+
+		summary, err := BuildSummary("ks", "wf", testUUID, resp, false)
+		require.NoError(t, err)
+		require.True(t, summary.HasMismatch)
+
+		ts := summary.ShardSummaries["0"].TableStates["t1"]
+		require.True(t, ts.HasMismatch)
+		require.Equal(t, int64(10), ts.RowsCompared)
+		require.Equal(t, int64(8), ts.MatchingRows)
+		require.Equal(t, int64(2), ts.MismatchedRows)
+
+		// The report is retained on mismatch even when non-verbose, but it must
+		// carry no row samples since only_summary stripped them.
+		report := summary.Reports["t1"]["0"]
+		require.Empty(t, report.MismatchedRowsDiffs)
+		require.Empty(t, report.ExtraRowsSourceDiffs)
+		require.Empty(t, report.ExtraRowsTargetDiffs)
+	})
 }
 
 func TestBuildProgressReport(t *testing.T) {
@@ -750,6 +785,90 @@ func TestVDiffDelete(t *testing.T) {
 				require.NoError(t, err)
 				require.NotNil(t, got)
 			}
+			env.tmc.confirmVDiffRequests(t)
+		})
+	}
+}
+
+// TestVDiffShow verifies that VDiffShow forwards the only_summary flag from the
+// vtctld request through to the tabletmanager VDiff request sent to every target
+// primary, for both flag values. This exercises the vtctld->tabletmanager
+// plumbing so a regression there is caught rather than relying on query-string
+// comparisons alone.
+func TestVDiffShow(t *testing.T) {
+	ctx := t.Context()
+	sourceKeyspace := &testKeyspace{
+		KeyspaceName: "sourceks",
+		ShardNames:   []string{"0"},
+	}
+	targetKeyspace := &testKeyspace{
+		KeyspaceName: "targetks",
+		ShardNames:   []string{"-80", "80-"},
+	}
+	workflow := "testwf"
+	uuid := uuid.New().String()
+	env := newTestEnv(t, ctx, defaultCellName, sourceKeyspace, targetKeyspace)
+	defer env.close()
+
+	env.tmc.strict = true
+	action := string(vdiff.ShowAction)
+
+	// expectedShowRequest is the tabletmanager request VDiffShow must forward to
+	// each target primary for a given only_summary value.
+	expectedShowRequest := func(onlySummary bool) *tabletmanagerdatapb.VDiffRequest {
+		return &tabletmanagerdatapb.VDiffRequest{
+			Keyspace:  targetKeyspace.KeyspaceName,
+			Workflow:  workflow,
+			Action:    action,
+			ActionArg: uuid,
+			Options: &tabletmanagerdatapb.VDiffOptions{
+				ReportOptions: &tabletmanagerdatapb.VDiffReportOptions{
+					OnlySummary: onlySummary,
+				},
+			},
+		}
+	}
+	// bothTargets expects the same forwarded request on both target shards.
+	bothTargets := func(onlySummary bool) map[*topodatapb.Tablet]*vdiffRequestResponse {
+		return map[*topodatapb.Tablet]*vdiffRequestResponse{
+			env.tablets[targetKeyspace.KeyspaceName][startingTargetTabletUID]:               {req: expectedShowRequest(onlySummary)},
+			env.tablets[targetKeyspace.KeyspaceName][startingTargetTabletUID+tabletUIDStep]: {req: expectedShowRequest(onlySummary)},
+		}
+	}
+
+	tests := []struct {
+		name                  string
+		req                   *vtctldatapb.VDiffShowRequest
+		expectedVDiffRequests map[*topodatapb.Tablet]*vdiffRequestResponse
+	}{
+		{
+			name: "default forwards only_summary=false",
+			req: &vtctldatapb.VDiffShowRequest{
+				TargetKeyspace: targetKeyspace.KeyspaceName,
+				Workflow:       workflow,
+				Arg:            uuid,
+			},
+			expectedVDiffRequests: bothTargets(false),
+		},
+		{
+			name: "only_summary forwards only_summary=true",
+			req: &vtctldatapb.VDiffShowRequest{
+				TargetKeyspace: targetKeyspace.KeyspaceName,
+				Workflow:       workflow,
+				Arg:            uuid,
+				OnlySummary:    true,
+			},
+			expectedVDiffRequests: bothTargets(true),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			for tab, vdr := range tt.expectedVDiffRequests {
+				env.tmc.expectVDiffRequest(tab, vdr)
+			}
+			got, err := env.ws.VDiffShow(ctx, tt.req)
+			require.NoError(t, err)
+			require.NotNil(t, got)
 			env.tmc.confirmVDiffRequests(t)
 		})
 	}

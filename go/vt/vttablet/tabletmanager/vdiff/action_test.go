@@ -28,6 +28,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
@@ -88,6 +89,23 @@ func TestPerformVDiffAction(t *testing.T) {
 		query  string
 		result *sqltypes.Result // Optional if you need a non-empty result
 	}
+
+	// handleShowAction runs the per-table summary query through ParseAndBind, so
+	// build the expected bound query the same way for each variant. A show-by-uuid
+	// request must select the summary-only (JSON_REMOVE) query when only_summary is
+	// set and the full-report query otherwise; asserting the exact executed query
+	// pins that routing so it can't silently regress. (TestVDiffSummaryQuery already
+	// covers how the two variants differ.)
+	boundSummaryQuery := func(onlySummary bool) string {
+		q, err := sqlparser.ParseAndBind(vdiffSummaryQuery(onlySummary),
+			sqltypes.Int64BindVariable(1),
+			sqltypes.StringBindVariable(vdiffDBName))
+		require.NoError(t, err)
+		return q
+	}
+	vdiffByUUIDQuery := fmt.Sprintf("select * from _vt.vdiff where keyspace = %s and workflow = %s and vdiff_uuid = %s and db_name = %s",
+		encodeString(keyspace), encodeString(workflow), encodeString(uuid), encodeString(vdiffDBName))
+	vdiffIDResult := sqltypes.MakeTestResult(sqltypes.MakeTestFields("id", "int64"), "1")
 
 	tests := []struct {
 		name          string
@@ -346,6 +364,41 @@ func TestPerformVDiffAction(t *testing.T) {
 						encodeString(keyspace), encodeString(workflow), encodeString(vdiffDBName), maxVDiffsToReport),
 					result: noResults,
 				},
+			},
+		},
+		{
+			// Show by UUID without only_summary must read the full report.
+			name: "show by uuid full report",
+			req: &tabletmanagerdatapb.VDiffRequest{
+				Action:    string(ShowAction),
+				ActionArg: uuid,
+				Keyspace:  keyspace,
+				Workflow:  workflow,
+				Options: &tabletmanagerdatapb.VDiffOptions{
+					ReportOptions: &tabletmanagerdatapb.VDiffReportOptions{OnlySummary: false},
+				},
+			},
+			expectQueries: []queryAndResult{
+				{query: vdiffByUUIDQuery, result: vdiffIDResult},
+				{query: boundSummaryQuery(false), result: noResults},
+			},
+		},
+		{
+			// Show by UUID with only_summary must run the JSON_REMOVE variant that
+			// strips the row samples, and nothing else about the path may change.
+			name: "show by uuid only summary",
+			req: &tabletmanagerdatapb.VDiffRequest{
+				Action:    string(ShowAction),
+				ActionArg: uuid,
+				Keyspace:  keyspace,
+				Workflow:  workflow,
+				Options: &tabletmanagerdatapb.VDiffOptions{
+					ReportOptions: &tabletmanagerdatapb.VDiffReportOptions{OnlySummary: true},
+				},
+			},
+			expectQueries: []queryAndResult{
+				{query: vdiffByUUIDQuery, result: vdiffIDResult},
+				{query: boundSummaryQuery(true), result: noResults},
 			},
 		},
 	}
