@@ -115,15 +115,6 @@ func (vde *Engine) PerformVDiffAction(ctx context.Context, req *tabletmanagerdat
 	return resp, nil
 }
 
-// vdiffSummaryQuery returns the summary query to run. When onlySummary is true
-// it returns the variant that strips the row-sample arrays from the per-table
-// report, keeping the scalar counters. The samples are the part that can grow
-// very large (they carry sampled row data, including large blob/JSON columns)
-// and, fanned out across many target shards, can push the aggregated response
-// past gRPC message limits. Stripping them lets callers that only need the
-// vdiff/table state, counts and has_mismatch avoid transferring that data while
-// keeping the summary counters accurate. All other summary columns are
-// unaffected.
 func vdiffSummaryQuery(onlySummary bool) string {
 	if onlySummary {
 		return sqlVDiffSummaryOnly

@@ -35,16 +35,6 @@ const (
 										where vd.keyspace = %a and vd.workflow = %a and vd.db_name = %a`
 	sqlDeleteVDiffByUUID = `delete from vd, vdt using _vt.vdiff as vd left join _vt.vdiff_table as vdt on (vd.id = vdt.vdiff_id)
 							where vd.vdiff_uuid = %a and vd.db_name = %a`
-	// The vdiff summary query is composed from shared pieces so the column list
-	// and FROM/WHERE clauses are defined exactly once. The two variants differ
-	// only in the report select-expression: sqlVDiffSummary returns the stored
-	// per-table report as-is, while sqlVDiffSummaryOnly strips the potentially
-	// very large row-sample arrays from the report (the part that can push the
-	// aggregated response past gRPC message limits) while preserving the scalar
-	// counters (ProcessedRows, MatchingRows, MismatchedRows, ExtraRows*) so the
-	// summary counts stay accurate. JSON_REMOVE returns NULL when the report is
-	// NULL (no joined vdiff_table row), matching the plain-column behavior. Go
-	// concatenates these string constants at compile time.
 	vdiffSummaryCols = `select vd.state as vdiff_state, vd.last_error as last_error, vdt.table_name as table_name,
 						vd.vdiff_uuid as 'uuid', vdt.state as table_state, vdt.table_rows as table_rows,
 						vd.started_at as started_at, vdt.rows_compared as rows_compared, vd.completed_at as completed_at,
