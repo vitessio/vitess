@@ -18,10 +18,12 @@ package vdiff
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
@@ -160,4 +162,92 @@ func TestGetSourcePKCols_TableDroppedOnSource(t *testing.T) {
 	err := td.getSourcePKCols()
 	require.NoError(t, err)
 	require.Nil(t, td.tablePlan.sourcePkCols)
+}
+
+// TestUpdateTableProgressDropsQueryEcho confirms that updateTableProgress strips
+// the echoed failing statement from any SQL error raised while persisting the
+// report: the returned error names the table and keeps the SQL error's
+// message/errno/sqlstate, but never carries the (potentially huge) report
+// payload that the statement echoed. The stripping is unconditional (it does not
+// key off the errno); max_allowed_packet (errno 1153) is the motivating case --
+// the one where carrying the echo would make the error itself unpersistable --
+// so it is what this test exercises.
+func TestUpdateTableProgressDropsQueryEcho(t *testing.T) {
+	wd := &workflowDiffer{
+		ct: &controller{
+			id:                 1,
+			TableDiffRowCounts: stats.NewCountersWithSingleLabel("", "", "Rows"),
+		},
+		opts: &tabletmanagerdatapb.VDiffOptions{
+			CoreOptions: &tabletmanagerdatapb.VDiffCoreOptions{},
+		},
+	}
+	table := &tabletmanagerdatapb.TableDefinition{Name: "test"}
+	td := &tableDiffer{
+		wd:        wd,
+		table:     table,
+		tablePlan: &tablePlan{table: table},
+	}
+	dr := &DiffReport{TableName: table.Name, ProcessedRows: 1000}
+
+	huge := strings.Repeat("x", 200000)
+	sqlErr := &sqlerror.SQLError{
+		Num:     sqlerror.ERNetPacketTooLarge,
+		State:   "08S01",
+		Message: "Got a packet bigger than 'max_allowed_packet' bytes",
+		Query:   "update _vt.vdiff_table set rows_compared = 1000, report = '" + huge + "' where vdiff_id = 1 and table_name = 'test'",
+	}
+
+	dbc := binlogplayer.NewMockDBClient(t)
+	dbc.ExpectRequestRE("update _vt.vdiff_table set rows_compared = .*", &sqltypes.Result{}, sqlErr)
+
+	// lastRow == nil exercises the no-lastpk progress update.
+	err := td.updateTableProgress(dbc, dr, nil)
+	require.ErrorContains(t, err, "failed to save diff report for table test")
+	require.ErrorContains(t, err, "Got a packet bigger than 'max_allowed_packet' bytes")
+	require.ErrorContains(t, err, "(errno 1153)")
+	require.NotContains(t, err.Error(), huge, "the report payload must not be carried in the persisted error")
+	dbc.Wait()
+}
+
+// TestUpdateTableStateAndReportDropsQueryEcho is the completion-path counterpart
+// of TestUpdateTableProgressDropsQueryEcho: updateTableStateAndReport also
+// persists the (potentially large) report, so it likewise strips the echoed
+// statement from any SQL error the report write raises. As above, the
+// max_allowed_packet failure is the motivating case exercised here.
+func TestUpdateTableStateAndReportDropsQueryEcho(t *testing.T) {
+	wd := &workflowDiffer{
+		ct: &controller{
+			id:                 1,
+			TableDiffRowCounts: stats.NewCountersWithSingleLabel("", "", "Rows"),
+		},
+		opts: &tabletmanagerdatapb.VDiffOptions{
+			CoreOptions: &tabletmanagerdatapb.VDiffCoreOptions{},
+		},
+	}
+	table := &tabletmanagerdatapb.TableDefinition{Name: "test"}
+	td := &tableDiffer{
+		wd:        wd,
+		table:     table,
+		tablePlan: &tablePlan{table: table},
+	}
+	dr := &DiffReport{TableName: table.Name, ProcessedRows: 1000}
+
+	huge := strings.Repeat("x", 200000)
+	sqlErr := &sqlerror.SQLError{
+		Num:     sqlerror.ERNetPacketTooLarge,
+		State:   "08S01",
+		Message: "Got a packet bigger than 'max_allowed_packet' bytes",
+		Query:   "update _vt.vdiff_table set state = 'completed', rows_compared = 1000, report = '" + huge + "' where vdiff_id = 1 and table_name = 'test'",
+	}
+
+	dbc := binlogplayer.NewMockDBClient(t)
+	dbc.ExpectRequestRE("update _vt.vdiff_table set state = .*", &sqltypes.Result{}, sqlErr)
+
+	err := td.updateTableStateAndReport(t.Context(), dbc, CompletedState, dr)
+	require.ErrorContains(t, err, "failed to save diff report for table test")
+	require.ErrorContains(t, err, "Got a packet bigger than 'max_allowed_packet' bytes")
+	require.ErrorContains(t, err, "(errno 1153)")
+	require.NotContains(t, err.Error(), huge, "the report payload must not be carried in the persisted error")
+	dbc.Wait()
 }
