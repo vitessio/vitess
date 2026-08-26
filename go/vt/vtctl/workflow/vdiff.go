@@ -568,7 +568,7 @@ func (s *Server) VDiffShow(ctx context.Context, req *vtctldatapb.VDiffShowReques
 		ActionArg: req.Arg,
 		Options: &tabletmanagerdatapb.VDiffOptions{
 			ReportOptions: &tabletmanagerdatapb.VDiffReportOptions{
-				OnlySummary: req.GetOnlySummary(),
+				NoSamples: req.GetNoSamples(),
 			},
 		},
 	}

@@ -769,13 +769,10 @@ message VDiffReportOptions {
   string format = 3;
   int64 max_sample_rows = 4;
   int64 row_diff_column_truncate_at = 5;
-  // only_summary requests that the show action return only the vdiff and
-  // per-table summary state (progress, mismatch flag, etc.) and omit the
-  // potentially very large per-table diff report body. The report can exceed
-  // gRPC message limits for tables with large blob/JSON rows, so callers that
-  // only need progress and the has_mismatch flag can set this to avoid reading
-  // and transferring it.
-  bool only_summary = 6;
+  // no_samples strips the row-sample arrays from the per-table diff report
+  // (keeping the scalar counters), avoiding gRPC message-size limits on diffs
+  // with large blob/JSON rows.
+  bool no_samples = 6;
 }
 
 message VDiffCoreOptions {

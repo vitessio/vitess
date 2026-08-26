@@ -115,9 +115,9 @@ func (vde *Engine) PerformVDiffAction(ctx context.Context, req *tabletmanagerdat
 	return resp, nil
 }
 
-func vdiffSummaryQuery(onlySummary bool) string {
-	if onlySummary {
-		return sqlVDiffSummaryOnly
+func vdiffSummaryQuery(noSamples bool) string {
+	if noSamples {
+		return sqlVDiffSummaryNoSamples
 	}
 	return sqlVDiffSummary
 }
@@ -126,7 +126,7 @@ func (vde *Engine) getVDiffSummary(vdiffID int64, dbClient binlogplayer.DBClient
 	var qr *sqltypes.Result
 	var err error
 
-	query, err := sqlparser.ParseAndBind(vdiffSummaryQuery(reportOpts.GetOnlySummary()), sqltypes.Int64BindVariable(vdiffID), sqltypes.StringBindVariable(vde.dbName))
+	query, err := sqlparser.ParseAndBind(vdiffSummaryQuery(reportOpts.GetNoSamples()), sqltypes.Int64BindVariable(vdiffID), sqltypes.StringBindVariable(vde.dbName))
 	if err != nil {
 		return nil, err
 	}

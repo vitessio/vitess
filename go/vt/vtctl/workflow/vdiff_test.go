@@ -755,7 +755,7 @@ func TestVDiffDelete(t *testing.T) {
 	}
 }
 
-// TestVDiffShow verifies that VDiffShow forwards the only_summary flag from the
+// TestVDiffShow verifies that VDiffShow forwards the no_samples flag from the
 // vtctld request through to the tabletmanager VDiff request sent to every target
 // primary, for both flag values. This exercises the vtctld->tabletmanager
 // plumbing so a regression there is caught rather than relying on query-string
@@ -779,8 +779,8 @@ func TestVDiffShow(t *testing.T) {
 	action := string(vdiff.ShowAction)
 
 	// expectedShowRequest is the tabletmanager request VDiffShow must forward to
-	// each target primary for a given only_summary value.
-	expectedShowRequest := func(onlySummary bool) *tabletmanagerdatapb.VDiffRequest {
+	// each target primary for a given no_samples value.
+	expectedShowRequest := func(noSamples bool) *tabletmanagerdatapb.VDiffRequest {
 		return &tabletmanagerdatapb.VDiffRequest{
 			Keyspace:  targetKeyspace.KeyspaceName,
 			Workflow:  workflow,
@@ -788,16 +788,16 @@ func TestVDiffShow(t *testing.T) {
 			ActionArg: uuid,
 			Options: &tabletmanagerdatapb.VDiffOptions{
 				ReportOptions: &tabletmanagerdatapb.VDiffReportOptions{
-					OnlySummary: onlySummary,
+					NoSamples: noSamples,
 				},
 			},
 		}
 	}
 	// bothTargets expects the same forwarded request on both target shards.
-	bothTargets := func(onlySummary bool) map[*topodatapb.Tablet]*vdiffRequestResponse {
+	bothTargets := func(noSamples bool) map[*topodatapb.Tablet]*vdiffRequestResponse {
 		return map[*topodatapb.Tablet]*vdiffRequestResponse{
-			env.tablets[targetKeyspace.KeyspaceName][startingTargetTabletUID]:               {req: expectedShowRequest(onlySummary)},
-			env.tablets[targetKeyspace.KeyspaceName][startingTargetTabletUID+tabletUIDStep]: {req: expectedShowRequest(onlySummary)},
+			env.tablets[targetKeyspace.KeyspaceName][startingTargetTabletUID]:               {req: expectedShowRequest(noSamples)},
+			env.tablets[targetKeyspace.KeyspaceName][startingTargetTabletUID+tabletUIDStep]: {req: expectedShowRequest(noSamples)},
 		}
 	}
 
@@ -807,7 +807,7 @@ func TestVDiffShow(t *testing.T) {
 		expectedVDiffRequests map[*topodatapb.Tablet]*vdiffRequestResponse
 	}{
 		{
-			name: "default forwards only_summary=false",
+			name: "default forwards no_samples=false",
 			req: &vtctldatapb.VDiffShowRequest{
 				TargetKeyspace: targetKeyspace.KeyspaceName,
 				Workflow:       workflow,
@@ -816,12 +816,12 @@ func TestVDiffShow(t *testing.T) {
 			expectedVDiffRequests: bothTargets(false),
 		},
 		{
-			name: "only_summary forwards only_summary=true",
+			name: "no_samples forwards no_samples=true",
 			req: &vtctldatapb.VDiffShowRequest{
 				TargetKeyspace: targetKeyspace.KeyspaceName,
 				Workflow:       workflow,
 				Arg:            uuid,
-				OnlySummary:    true,
+				NoSamples:      true,
 			},
 			expectedVDiffRequests: bothTargets(true),
 		},

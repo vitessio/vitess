@@ -82,9 +82,9 @@ var (
 	}{}
 
 	showOptions = struct {
-		Arg         string
-		Verbose     bool
-		OnlySummary bool
+		Arg       string
+		Verbose   bool
+		NoSamples bool
 	}{}
 
 	stopOptions = struct {
@@ -320,7 +320,7 @@ func commandCreate(cmd *cobra.Command, args []string) error {
 				return vterrors.Errorf(vtrpcpb.Code_CANCELED, "context has expired")
 			case <-tkr.C:
 				// This is a progress poll that only renders a single non-verbose
-				// summary (state, counts, has_mismatch), so request only_summary:
+				// summary (state, counts, has_mismatch), so request no_samples:
 				// the per-row sample arrays are never shown here and fetching them
 				// on every interval can push the aggregated response past the gRPC
 				// message limit for large diffs, killing the wait. The authoritative
@@ -329,7 +329,7 @@ func commandCreate(cmd *cobra.Command, args []string) error {
 					Workflow:       common.BaseOptions.Workflow,
 					TargetKeyspace: common.BaseOptions.TargetKeyspace,
 					Arg:            uuidStr,
-					OnlySummary:    true,
+					NoSamples:      true,
 				})
 				if err != nil {
 					return err
@@ -653,7 +653,7 @@ func commandShow(cmd *cobra.Command, args []string) error {
 		Workflow:       common.BaseOptions.Workflow,
 		TargetKeyspace: common.BaseOptions.TargetKeyspace,
 		Arg:            showOptions.Arg,
-		OnlySummary:    showOptions.OnlySummary,
+		NoSamples:      showOptions.NoSamples,
 	})
 	if err != nil {
 		return err
@@ -718,7 +718,7 @@ func registerCommands(root *cobra.Command) {
 	base.AddCommand(resume)
 
 	show.Flags().BoolVar(&showOptions.Verbose, "verbose", false, "Show verbose output in summaries")
-	show.Flags().BoolVar(&showOptions.OnlySummary, "only-summary", false, "Omit the per-table diff report body and return only the vdiff and per-table summary state. Useful for large diffs where the report can exceed gRPC message limits.")
+	show.Flags().BoolVar(&showOptions.NoSamples, "no-samples", false, "Strip the per-table diff report's row-sample arrays (keeping the scalar counters). Useful for large diffs where the samples can exceed gRPC message limits.")
 	base.AddCommand(show)
 
 	stop.Flags().StringSliceVar(&stopOptions.TargetShards, "target-shards", nil, "The target shards to stop the vdiff on; default is all shards.")

@@ -76,8 +76,8 @@ func TestPerformVDiffAction(t *testing.T) {
 		result *sqltypes.Result // Optional if you need a non-empty result
 	}
 
-	boundSummaryQuery := func(onlySummary bool) string {
-		q, err := sqlparser.ParseAndBind(vdiffSummaryQuery(onlySummary),
+	boundSummaryQuery := func(noSamples bool) string {
+		q, err := sqlparser.ParseAndBind(vdiffSummaryQuery(noSamples),
 			sqltypes.Int64BindVariable(1),
 			sqltypes.StringBindVariable(vdiffDBName))
 		require.NoError(t, err)
@@ -347,7 +347,7 @@ func TestPerformVDiffAction(t *testing.T) {
 			},
 		},
 		{
-			// Show by UUID without only_summary must read the full report.
+			// Show by UUID with no_samples=false reads the full report.
 			name: "show by uuid full report",
 			req: &tabletmanagerdatapb.VDiffRequest{
 				Action:    string(ShowAction),
@@ -355,7 +355,7 @@ func TestPerformVDiffAction(t *testing.T) {
 				Keyspace:  keyspace,
 				Workflow:  workflow,
 				Options: &tabletmanagerdatapb.VDiffOptions{
-					ReportOptions: &tabletmanagerdatapb.VDiffReportOptions{OnlySummary: false},
+					ReportOptions: &tabletmanagerdatapb.VDiffReportOptions{NoSamples: false},
 				},
 			},
 			expectQueries: []queryAndResult{
@@ -364,16 +364,16 @@ func TestPerformVDiffAction(t *testing.T) {
 			},
 		},
 		{
-			// Show by UUID with only_summary must run the JSON_REMOVE variant that
+			// Show by UUID with no_samples must run the JSON_REMOVE variant that
 			// strips the row samples, and nothing else about the path may change.
-			name: "show by uuid only summary",
+			name: "show by uuid no samples",
 			req: &tabletmanagerdatapb.VDiffRequest{
 				Action:    string(ShowAction),
 				ActionArg: uuid,
 				Keyspace:  keyspace,
 				Workflow:  workflow,
 				Options: &tabletmanagerdatapb.VDiffOptions{
-					ReportOptions: &tabletmanagerdatapb.VDiffReportOptions{OnlySummary: true},
+					ReportOptions: &tabletmanagerdatapb.VDiffReportOptions{NoSamples: true},
 				},
 			},
 			expectQueries: []queryAndResult{

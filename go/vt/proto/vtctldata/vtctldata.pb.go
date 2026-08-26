@@ -15365,11 +15365,10 @@ type VDiffShowRequest struct {
 	TargetKeyspace string                 `protobuf:"bytes,2,opt,name=target_keyspace,json=targetKeyspace,proto3" json:"target_keyspace,omitempty"`
 	// This will be 'all', 'last', or a UUID.
 	Arg string `protobuf:"bytes,3,opt,name=arg,proto3" json:"arg,omitempty"`
-	// only_summary omits the per-table diff report body from the response,
-	// returning only the vdiff and per-table summary state. This avoids reading
-	// and transferring reports that can be very large for tables with big
-	// blob/JSON rows.
-	OnlySummary   bool `protobuf:"varint,4,opt,name=only_summary,json=onlySummary,proto3" json:"only_summary,omitempty"`
+	// no_samples strips the per-table report's row-sample arrays from the
+	// response (keeping the scalar counters), avoiding gRPC message-size limits
+	// on diffs with large blob/JSON rows.
+	NoSamples     bool `protobuf:"varint,4,opt,name=no_samples,json=noSamples,proto3" json:"no_samples,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -15425,9 +15424,9 @@ func (x *VDiffShowRequest) GetArg() string {
 	return ""
 }
 
-func (x *VDiffShowRequest) GetOnlySummary() bool {
+func (x *VDiffShowRequest) GetNoSamples() bool {
 	if x != nil {
-		return x.OnlySummary
+		return x.NoSamples
 	}
 	return false
 }
@@ -18615,12 +18614,13 @@ const file_vtctldata_proto_rawDesc = "" +
 	"\x0ftarget_keyspace\x18\x02 \x01(\tR\x0etargetKeyspace\x12\x12\n" +
 	"\x04uuid\x18\x03 \x01(\tR\x04uuid\x12#\n" +
 	"\rtarget_shards\x18\x04 \x03(\tR\ftargetShards\"\x15\n" +
-	"\x13VDiffResumeResponse\"\x8c\x01\n" +
+	"\x13VDiffResumeResponse\"\x88\x01\n" +
 	"\x10VDiffShowRequest\x12\x1a\n" +
 	"\bworkflow\x18\x01 \x01(\tR\bworkflow\x12'\n" +
 	"\x0ftarget_keyspace\x18\x02 \x01(\tR\x0etargetKeyspace\x12\x10\n" +
-	"\x03arg\x18\x03 \x01(\tR\x03arg\x12!\n" +
-	"\fonly_summary\x18\x04 \x01(\bR\vonlySummary\"\xd7\x01\n" +
+	"\x03arg\x18\x03 \x01(\tR\x03arg\x12\x1d\n" +
+	"\n" +
+	"no_samples\x18\x04 \x01(\bR\tnoSamples\"\xd7\x01\n" +
 	"\x11VDiffShowResponse\x12\\\n" +
 	"\x10tablet_responses\x18\x01 \x03(\v21.vtctldata.VDiffShowResponse.TabletResponsesEntryR\x0ftabletResponses\x1ad\n" +
 	"\x14TabletResponsesEntry\x12\x10\n" +
