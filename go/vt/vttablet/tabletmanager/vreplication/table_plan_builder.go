@@ -887,7 +887,22 @@ func (tpb *tablePlanBuilder) generateMultiDeleteStatement() *sqlparser.ParsedQue
 		(len(tpb.pkCols)+len(tpb.extraSourcePkCols)) != 1 {
 		return nil
 	}
+<<<<<<< HEAD
 	return sqlparser.BuildParsedQuery("delete from %s where %s in %a",
+||||||| parent of fd0e84b28e (VReplication: only build a bulk-delete plan for insertNormal table plans (#20889))
+	return sqlparser.BuildParsedQuery(
+		"delete from %s where %s in %a",
+=======
+	// Grouped plans must stay on the per-row path: their delete semantics
+	// are a count-decrementing UPDATE (insertOnDup) or a deliberate no-op
+	// (insertIgnore), never a plain DELETE, and they do not populate
+	// tpb.pkIndices.
+	if tpb.onInsert != insertNormal {
+		return nil
+	}
+	return sqlparser.BuildParsedQuery(
+		"delete from %s where %s in %a",
+>>>>>>> fd0e84b28e (VReplication: only build a bulk-delete plan for insertNormal table plans (#20889))
 		sqlparser.String(tpb.name),
 		sqlparser.String(tpb.pkCols[0].colName),
 		"::bulk_pks",
