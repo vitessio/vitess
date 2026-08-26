@@ -859,8 +859,12 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 			// relocated stream either fails to plan or computes wrong
 			// keyspace_id values and corrupts the lookup table. The
 			// stream's current source keeps receiving the owner table's
-			// writes via the paired workflow after the switch, so we
-			// ignore the journal and keep replicating from it. SHARDS
+			// writes via the paired workflow after the switch -- when
+			// reverse replication is running, which is the default -- so
+			// we ignore the journal and keep replicating from it. With
+			// --enable-reverse-replication=false nothing feeds the
+			// current source and the backfill goes stale until reverse
+			// replication is started or the switch is reversed. SHARDS
 			// (Reshard) journals are still followed: the keyspace -- and
 			// with it the filter's validity -- does not change.
 			if binlogdatapb.VReplicationWorkflowType(vp.vr.WorkflowType) == binlogdatapb.VReplicationWorkflowType_CreateLookupIndex {
