@@ -831,6 +831,62 @@ func TestBuildPlayerPlanExclude(t *testing.T) {
 	assert.Equal(t, string(gotPlan), string(wantPlan))
 }
 
+// TestBuildPlayerPlanMultiDelete confirms that a bulk-delete (MultiDelete)
+// plan is only built for insertNormal plans. Grouped plans -- as built for
+// lookup vindex backfills and aggregating materializations -- must stay on
+// the per-row path, where deletes are applied with the semantics chosen by
+// generateDeleteStatement: a count-decrementing UPDATE for insertOnDup and a
+// no-op for insertIgnore.
+func TestBuildPlayerPlanMultiDelete(t *testing.T) {
+	PrimaryKeyInfos := map[string][]*ColumnInfo{
+		"t1": {&ColumnInfo{Name: "c1", IsPK: true}},
+	}
+
+	vttablet.InitVReplicationConfigDefaults()
+	require.NotZero(t, vttablet.DefaultVReplicationConfig.ExperimentalFlags&vttablet.VReplicationExperimentalFlagVPlayerBatching,
+		"this test requires VPlayer batching to be enabled in the default config")
+
+	testcases := []struct {
+		name            string
+		filter          string
+		wantMultiDelete string
+	}{{
+		name:            "insertNormal builds a bulk delete",
+		filter:          "select c1, c2 from t1",
+		wantMultiDelete: "delete from t1 where c1 in ::bulk_pks",
+	}, {
+		name:   "insertOnDup (partial group by) must not build a bulk delete",
+		filter: "select c1, count(*) as c2 from t1 group by c1",
+	}, {
+		name:   "insertIgnore (full group by) must not build a bulk delete",
+		filter: "select c1, c2 from t1 group by c1, c2",
+	}}
+
+	for _, tcase := range testcases {
+		t.Run(tcase.name, func(t *testing.T) {
+			input := &binlogdatapb.Filter{
+				Rules: []*binlogdatapb.Rule{{
+					Match:  "t1",
+					Filter: tcase.filter,
+				}},
+			}
+			vr := &vreplicator{
+				workflowConfig: vttablet.DefaultVReplicationConfig,
+			}
+			plan, err := vr.buildReplicatorPlan(getSource(input), PrimaryKeyInfos, nil, binlogplayer.NewStats(), collations.MySQL8(), sqlparser.NewTestParser())
+			require.NoError(t, err)
+			tplan := plan.TargetTables["t1"]
+			require.NotNil(t, tplan)
+			if tcase.wantMultiDelete == "" {
+				require.Nil(t, tplan.MultiDelete)
+			} else {
+				require.NotNil(t, tplan.MultiDelete)
+				require.Equal(t, tcase.wantMultiDelete, tplan.MultiDelete.Query)
+			}
+		})
+	}
+}
+
 func TestAppendFromRow(t *testing.T) {
 	testCases := []struct {
 		name    string
