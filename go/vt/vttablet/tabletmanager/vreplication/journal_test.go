@@ -330,6 +330,9 @@ func TestJournalTablesLookupVindexIgnored(t *testing.T) {
 	if runNoBlobTest {
 		t.Skip("CreateLookupIndex workflows do not support binlog_row_image=noblob")
 	}
+	// This test's teardown uses defer, not t.Cleanup: execStatements and
+	// the other framework helpers run on t.Context(), which is already
+	// canceled by the time t.Cleanup callbacks execute.
 	defer deleteTablet(addTablet(100))
 	defer deleteTablet(addOtherTablet(101, "other_keyspace", "0"))
 
@@ -395,6 +398,9 @@ func TestJournalRegisterLookupVindexRefused(t *testing.T) {
 	if runNoBlobTest {
 		t.Skip("CreateLookupIndex workflows do not support binlog_row_image=noblob")
 	}
+	// This test's teardown uses defer, not t.Cleanup: execStatements and
+	// the other framework helpers run on t.Context(), which is already
+	// canceled by the time t.Cleanup callbacks execute.
 	defer deleteTablet(addTablet(100))
 	defer deleteTablet(addOtherTablet(101, "other_keyspace", "0"))
 
