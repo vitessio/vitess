@@ -144,14 +144,18 @@ func (rl *relayLog) checkDone() error {
 // the timer defers the stall verdict until a full vplayerProgressDeadline
 // has elapsed since the applier was last denied.
 func (rl *relayLog) startSendTimer() (cancel func()) {
-	timer := time.NewTimer(vplayerProgressDeadline)
+	// Capture the deadline once, on the caller's goroutine: the timer
+	// goroutine below must not read the package var again, as tests
+	// mutate it.
+	deadline := vplayerProgressDeadline
+	timer := time.NewTimer(deadline)
 	timerDone := make(chan struct{})
 	go func() {
 		defer timer.Stop()
 		for {
 			select {
 			case <-timer.C:
-				if deferral := rl.stallDeferral(); deferral > 0 {
+				if deferral := rl.stallDeferral(deadline); deferral > 0 {
 					timer.Reset(deferral)
 					continue
 				}
@@ -172,11 +176,11 @@ func (rl *relayLog) startSendTimer() (cancel func()) {
 
 // stallDeferral returns how long the stall verdict must be deferred so
 // that only un-throttled time counts toward it: the remainder of a full
-// vplayerProgressDeadline since the applier was last denied by the
-// throttler, capped at vplayerProgressDeadline so that an unusual
-// timestamp (e.g. clock skew) degrades to periodic re-evaluation rather
-// than an unbounded deferral. Zero means the stall verdict is due.
-func (rl *relayLog) stallDeferral() time.Duration {
+// deadline since the applier was last denied by the throttler, capped at
+// the deadline so that an unusual timestamp (e.g. clock skew) degrades to
+// periodic re-evaluation rather than an unbounded deferral. Zero means
+// the stall verdict is due.
+func (rl *relayLog) stallDeferral(deadline time.Duration) time.Duration {
 	if rl.lastThrottledNano == nil {
 		return 0
 	}
@@ -185,10 +189,10 @@ func (rl *relayLog) stallDeferral() time.Duration {
 		return 0
 	}
 	since := time.Since(time.Unix(0, last))
-	if since >= vplayerProgressDeadline {
+	if since >= deadline {
 		return 0
 	}
-	return min(vplayerProgressDeadline-since, vplayerProgressDeadline)
+	return min(deadline-since, deadline)
 }
 
 // startFetchTimer starts a timer that will wake up the fetcher after

@@ -107,7 +107,7 @@ type Engine struct {
 	journaler map[string]*journalEvent
 	ec        *externalConnector
 
-	throttlerClient *throttle.Client
+	throttlerClient ThrottleChecker
 
 	// This should only be set in Test Engines in order to short
 	// circuit functions as needed in unit tests. It's automatically
@@ -122,6 +122,12 @@ type journalEvent struct {
 	journal      *binlogdatapb.Journal
 	participants map[string]int32
 	shardGTIDs   map[string]*binlogdatapb.ShardGtid
+}
+
+// ThrottleChecker is what the engine needs from the tablet throttler: a
+// single check that either passes or briefly waits and denies.
+type ThrottleChecker interface {
+	ThrottleCheckOKOrWaitAppName(ctx context.Context, appName throttlerapp.Name) (checkResult *throttle.CheckResult, throttleCheckOK bool)
 }
 
 type (
@@ -178,6 +184,7 @@ func NewTestEngine(ts *topo.Server, cell string, mysqld mysqlctl.MysqlDaemon, db
 		dbName:                  dbname,
 		journaler:               make(map[string]*journalEvent),
 		ec:                      newExternalConnector(env, externalConfig),
+		throttlerClient:         throttle.NewBackgroundClient(nil, throttlerapp.VReplicationName, base.UndefinedScope),
 	}
 	return vre
 }
@@ -197,6 +204,7 @@ func NewSimpleTestEngine(ts *topo.Server, cell string, mysqld mysqlctl.MysqlDaem
 		dbName:                  dbname,
 		journaler:               make(map[string]*journalEvent),
 		ec:                      newExternalConnector(env, externalConfig),
+		throttlerClient:         throttle.NewBackgroundClient(nil, throttlerapp.VReplicationName, base.UndefinedScope),
 		shortcircuit:            true,
 	}
 	return vre
@@ -232,7 +240,7 @@ func (vre *Engine) Open(ctx context.Context) {
 	log.Info("VReplication engine opened successfully")
 }
 
-func (vre *Engine) ThrottlerClient() *throttle.Client {
+func (vre *Engine) ThrottlerClient() ThrottleChecker {
 	return vre.throttlerClient
 }
 
