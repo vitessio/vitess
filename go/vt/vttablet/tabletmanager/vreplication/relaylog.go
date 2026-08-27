@@ -20,6 +20,7 @@ import (
 	"context"
 	"io"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"vitess.io/vitess/go/vt/vterrors"
@@ -33,6 +34,12 @@ type relayLog struct {
 	ctx      context.Context
 	maxItems int
 	maxSize  int
+	// lastThrottledNano is the applier's report (as unix nanoseconds) of
+	// when it was last denied by the throttler. A throttle-denied applier
+	// does not drain the relay log, so a full relay log is expected
+	// backpressure then: time within vplayerProgressDeadline of the last
+	// denial does not count toward the stall verdict.
+	lastThrottledNano *atomic.Int64
 
 	// mu controls all variables below and is shared by canAccept and hasItems.
 	// Broadcasting must be done while holding mu. This is mainly necessary because both
@@ -47,11 +54,12 @@ type relayLog struct {
 	hasItems sync.Cond
 }
 
-func newRelayLog(ctx context.Context, maxItems, maxSize int) *relayLog {
+func newRelayLog(ctx context.Context, maxItems, maxSize int, lastThrottledNano *atomic.Int64) *relayLog {
 	rl := &relayLog{
-		ctx:      ctx,
-		maxItems: maxItems,
-		maxSize:  maxSize,
+		ctx:               ctx,
+		maxItems:          maxItems,
+		maxSize:           maxSize,
+		lastThrottledNano: lastThrottledNano,
 	}
 	rl.canAccept.L = &rl.mu
 	rl.hasItems.L = &rl.mu
@@ -131,23 +139,56 @@ func (rl *relayLog) checkDone() error {
 // block forever if the vplayer cannot process the previous relay log
 // contents in a timely manner; allowing us to provide the user with a
 // helpful error message.
+// A throttle-denied applier deliberately does not drain the relay log,
+// so time near a throttler denial does not count toward the deadline:
+// the timer defers the stall verdict until a full vplayerProgressDeadline
+// has elapsed since the applier was last denied.
 func (rl *relayLog) startSendTimer() (cancel func()) {
 	timer := time.NewTimer(vplayerProgressDeadline)
 	timerDone := make(chan struct{})
 	go func() {
-		select {
-		case <-timer.C:
-			rl.mu.Lock()
-			defer rl.mu.Unlock()
-			rl.timedout = true
-			rl.canAccept.Broadcast()
-		case <-timerDone:
+		defer timer.Stop()
+		for {
+			select {
+			case <-timer.C:
+				if deferral := rl.stallDeferral(); deferral > 0 {
+					timer.Reset(deferral)
+					continue
+				}
+				rl.mu.Lock()
+				rl.timedout = true
+				rl.canAccept.Broadcast()
+				rl.mu.Unlock()
+				return
+			case <-timerDone:
+				return
+			}
 		}
 	}()
 	return func() {
-		timer.Stop()
 		close(timerDone)
 	}
+}
+
+// stallDeferral returns how long the stall verdict must be deferred so
+// that only un-throttled time counts toward it: the remainder of a full
+// vplayerProgressDeadline since the applier was last denied by the
+// throttler, capped at vplayerProgressDeadline so that an unusual
+// timestamp (e.g. clock skew) degrades to periodic re-evaluation rather
+// than an unbounded deferral. Zero means the stall verdict is due.
+func (rl *relayLog) stallDeferral() time.Duration {
+	if rl.lastThrottledNano == nil {
+		return 0
+	}
+	last := rl.lastThrottledNano.Load()
+	if last == 0 {
+		return 0
+	}
+	since := time.Since(time.Unix(0, last))
+	if since >= vplayerProgressDeadline {
+		return 0
+	}
+	return min(vplayerProgressDeadline-since, vplayerProgressDeadline)
 }
 
 // startFetchTimer starts a timer that will wake up the fetcher after

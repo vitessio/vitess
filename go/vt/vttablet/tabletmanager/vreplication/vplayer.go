@@ -25,6 +25,7 @@ import (
 	"math"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"vitess.io/vitess/go/mysql/replication"
@@ -92,6 +93,11 @@ type vplayer struct {
 	phase string
 
 	throttlerAppName string
+	// lastThrottledNano is when (as unix nanoseconds) applyEvents was last
+	// denied by the throttler. The relay log uses it to defer the stall
+	// verdict: a throttle-denied applier does not drain the relay log, so
+	// that time must not count toward vplayerProgressDeadline.
+	lastThrottledNano atomic.Int64
 
 	// See updateFKCheck for more details on how the two fields below are used.
 
@@ -273,7 +279,7 @@ func (vp *vplayer) fetchAndApply(ctx context.Context) (err error) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	relay := newRelayLog(ctx, vp.vr.workflowConfig.RelayLogMaxItems, vp.vr.workflowConfig.RelayLogMaxSize)
+	relay := newRelayLog(ctx, vp.vr.workflowConfig.RelayLogMaxItems, vp.vr.workflowConfig.RelayLogMaxSize, &vp.lastThrottledNano)
 
 	streamErr := make(chan error, 1)
 	go func() {
@@ -550,6 +556,10 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 		}
 		// Check throttler.
 		if checkResult, ok := vp.vr.vre.throttlerClient.ThrottleCheckOKOrWaitAppName(ctx, throttlerapp.Name(vp.throttlerAppName)); !ok {
+			// While denied we are deliberately not draining the relay log,
+			// so this time must not count toward the relay log's stall
+			// deadline.
+			vp.lastThrottledNano.Store(time.Now().UnixNano())
 			_ = vp.vr.updateTimeThrottled(throttlerapp.VPlayerName, checkResult.Summary())
 			estimateLag()
 			continue
