@@ -578,21 +578,14 @@ func (mysqld *Mysqld) ApplySchemaChange(ctx context.Context, dbName string, chan
 	return &tabletmanagerdatapb.SchemaChangeResult{BeforeSchema: beforeSchema, AfterSchema: afterSchema}, nil
 }
 
-// GetPrimaryKeyEquivalentColumns can be used if the table has
-// no defined PRIMARY KEY. It will return the columns in a
-// viable PRIMARY KEY equivalent (PKE) -- a NON-NULL UNIQUE
-// KEY -- along with that index's name in the specified table.
-// When multiple PKE indexes are available it will attempt to
-// choose the most efficient one based on the column data types
-// and the number of columns in the index. See here for the data
-// type storage sizes:
-//
-//	https://dev.mysql.com/doc/refman/en/storage-requirements.html
-//
-// If this function is used on a table that DOES have a
-// defined PRIMARY KEY then it may return the columns for
-// that index if it is likely the most efficient one amongst
-// the available PKE indexes on the table.
+// GetPrimaryKeyEquivalentColumns returns the columns and name of the
+// best Primary Key Equivalent (PKE) index -- a unique key with no
+// NULLable columns and no functional (expression) key parts -- using an
+// information_schema query. Prefer
+// schemadiff.GetPrimaryKeyEquivalent, which implements the same
+// selection at the SQL parser level; this database-backed variant is
+// retained as the fallback for CREATE TABLE statements the parser
+// cannot handle (e.g. ones using unsupported table options).
 func GetPrimaryKeyEquivalentColumns(ctx context.Context, exec func(string, int, bool) (*sqltypes.Result, error), dbName, table string) ([]string, string, error) {
 	// We use column name aliases to guarantee lower case for our named results.
 	sql := `
@@ -628,7 +621,7 @@ func GetPrimaryKeyEquivalentColumns(ctx context.Context, exec func(string, int, 
                 WHERE stats.TABLE_SCHEMA = %s AND stats.TABLE_NAME = %s AND stats.INDEX_NAME NOT IN
                 (
                     SELECT DISTINCT INDEX_NAME FROM information_schema.STATISTICS
-                    WHERE TABLE_SCHEMA = %s AND TABLE_NAME = %s AND (NON_UNIQUE = 1 OR NULLABLE = 'YES')
+                    WHERE TABLE_SCHEMA = %s AND TABLE_NAME = %s AND (NON_UNIQUE = 1 OR NULLABLE = 'YES' OR COLUMN_NAME IS NULL)
                 )
                 GROUP BY INDEX_NAME ORDER BY type_cost ASC, col_count ASC LIMIT 1
             ) AS pke ON index_cols.INDEX_NAME = pke.INDEX_NAME
