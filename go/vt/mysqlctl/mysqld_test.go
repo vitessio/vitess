@@ -20,6 +20,7 @@ import (
 	"context"
 	"net"
 	"os"
+	"os/exec"
 	"strconv"
 	"strings"
 	"testing"
@@ -352,30 +353,37 @@ func TestGetVersionString(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-func TestGetVersionComment(t *testing.T) {
-	db := fakesqldb.New(t)
-	defer db.Close()
+// TestExecCmdWithContext verifies that execCmdWithContext is actually bound to its
+// context, so the mysqld --version fallback of GetVersionString can no longer
+// outlive a caller's deadline (e.g. holding the TabletManager action lock).
+func TestExecCmdWithContext(t *testing.T) {
+	if _, err := exec.LookPath("sleep"); err != nil {
+		t.Skip("sleep binary not available")
+	}
 
-	params := db.ConnParams()
-	cp := *params
-	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb")
+	t.Run("cancelled context returns promptly", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(t.Context())
+		cancel() // already cancelled
 
-	db.AddQuery("SELECT 1", &sqltypes.Result{})
-	db.AddQuery("select @@global.version_comment", sqltypes.MakeTestResult(sqltypes.MakeTestFields("@@global.version_comment", "varchar"), "test_version1", "test_version2"))
+		start := time.Now()
+		_, _, err := execCmdWithContext(ctx, "sleep", []string{"60"}, nil, "", nil)
+		elapsed := time.Since(start)
 
-	testMysqld := NewMysqld(dbc)
-	defer testMysqld.Close()
+		require.Error(t, err, "a cancelled context must not run the command to completion")
+		require.Less(t, elapsed, 30*time.Second, "the command must be killed rather than sleep for 60s")
+	})
 
-	ctx := t.Context()
-	_, err := testMysqld.GetVersionComment(ctx)
-	require.ErrorContains(t, err, "unexpected result length")
+	t.Run("expired deadline kills a long-running command", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(t.Context(), 100*time.Millisecond)
+		defer cancel()
 
-	ver := "test_version"
-	db.AddQuery("select @@global.version_comment", sqltypes.MakeTestResult(sqltypes.MakeTestFields("@@global.version_comment", "varchar"), ver))
+		start := time.Now()
+		_, _, err := execCmdWithContext(ctx, "sleep", []string{"60"}, nil, "", nil)
+		elapsed := time.Since(start)
 
-	str, err := testMysqld.GetVersionComment(ctx)
-	require.NoError(t, err)
-	assert.Equal(t, ver, str)
+		require.Error(t, err)
+		require.Less(t, elapsed, 30*time.Second, "the command must be killed at the deadline, not run for 60s")
+	})
 }
 
 func TestHostMetrics(t *testing.T) {

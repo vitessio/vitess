@@ -112,7 +112,7 @@ func TablenameToFilename(name string) string {
 		b.WriteByte(hexSequence[(wc>>12)&15])
 		b.WriteByte(hexSequence[(wc>>8)&15])
 		b.WriteByte(hexSequence[(wc>>4)&15])
-		b.WriteByte(hexSequence[(wc)&15])
+		b.WriteByte(hexSequence[wc&15])
 	}
 	return b.String()
 }

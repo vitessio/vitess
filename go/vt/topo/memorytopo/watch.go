@@ -104,11 +104,9 @@ func (c *Conn) WatchRecursive(ctx context.Context, dirpath string) ([]*topo.Watc
 	var initialwd []*topo.WatchDataRecursive
 	n.recurseContents(func(n *node) {
 		initialwd = append(initialwd, &topo.WatchDataRecursive{
-			Path: n.name,
-			WatchData: topo.WatchData{
-				Contents: n.contents,
-				Version:  NodeVersion(n.version),
-			},
+			Path:     n.name,
+			Contents: n.contents,
+			Version:  NodeVersion(n.version),
 		})
 	})
 
@@ -129,7 +127,7 @@ func (c *Conn) WatchRecursive(ctx context.Context, dirpath string) ([]*topo.Watc
 			delete(n.watches, watchIndex)
 		}
 
-		notifications <- &topo.WatchDataRecursive{WatchData: topo.WatchData{Err: topo.NewError(topo.Interrupted, "watch")}}
+		notifications <- &topo.WatchDataRecursive{Err: topo.NewError(topo.Interrupted, "watch")}
 	}()
 
 	return initialwd, notifications, nil

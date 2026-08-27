@@ -403,7 +403,7 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 		a.LastCheckPartialSuccess = m.GetBool("last_check_partial_success")
 		a.PrimaryHealthUnhealthy = IsPrimaryHealthCheckUnhealthy(a.AnalyzedInstanceAlias)
 		a.CountReplicas = m.GetUint("count_replicas")
-		a.ShardEligibleObservers = m.GetUint("shard_eligible_observers")
+		a.ShardEligibleObservers = m.GetInt("shard_eligible_observers")
 		a.CountValidReplicas = m.GetUint("count_valid_replicas")
 		a.CountValidReplicatingReplicas = m.GetUint("count_valid_replicating_replicas")
 		a.ReplicationStopped = m.GetBool("replication_stopped")
@@ -738,7 +738,7 @@ func postProcessAnalyses(result []*DetectionAnalysis, clusters map[string]*clust
 		// form a 1/1 quorum in a larger shard. ShardEligibleObservers is the shard's REPLICA/RDONLY
 		// count straight from topo, so it is the true expected observer population regardless of
 		// whether VTOrc ever reached the primary.
-		quorum := evaluateAndLogPrimaryQuorum(analysis.AnalyzedInstanceAlias, analysis.AnalyzedKeyspace, analysis.AnalyzedShard, int(analysis.ShardEligibleObservers), time.Now())
+		quorum := evaluateAndLogPrimaryQuorum(analysis.AnalyzedInstanceAlias, analysis.AnalyzedKeyspace, analysis.AnalyzedShard, analysis.ShardEligibleObservers, time.Now())
 		if !quorum.Down {
 			continue
 		}

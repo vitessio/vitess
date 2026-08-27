@@ -258,6 +258,30 @@ func ValidateShards(shards []string) error {
 	return nil
 }
 
+// ValidateTableSelection checks the table-selection options by their
+// effective values, mirroring the server-side validation in
+// workflow.Server.moveTablesCreate: a selection is required, a non-empty
+// include list cannot be combined with all-tables, and an exclude list needs
+// a selection to apply to. Checking effective values keeps
+// --tables=t1 --all-tables=false and --tables= --all-tables=true valid, so
+// automation can always emit flags explicitly, while rejecting the
+// selection-less forms (--tables= --exclude-tables=t1) that a flag presence
+// check accepts because pflag marks an empty value as changed.
+//
+// See https://github.com/vitessio/vitess/issues/20566.
+func ValidateTableSelection(includeTables, excludeTables []string, allTables bool) error {
+	if len(includeTables) > 0 && allTables {
+		return errors.New("--tables and --all-tables are mutually exclusive")
+	}
+	if len(includeTables) == 0 && !allTables {
+		if len(excludeTables) > 0 {
+			return errors.New("--exclude-tables requires --all-tables or a non-empty --tables list")
+		}
+		return errors.New("tables or all-tables are required to specify which tables to move")
+	}
+	return nil
+}
+
 func ParseAndValidateCreateOptions(cmd *cobra.Command) error {
 	if err := validateOnDDL(cmd); err != nil {
 		return err

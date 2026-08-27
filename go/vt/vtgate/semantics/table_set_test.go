@@ -42,16 +42,16 @@ func TestTableSet_IsOverlapping(t *testing.T) {
 
 func TestTableSet_IsSolvedBy(t *testing.T) {
 	assert.True(t, F1.IsSolvedBy(F12))
-	assert.False(t, (F12).IsSolvedBy(F1))
+	assert.False(t, F12.IsSolvedBy(F1))
 	assert.False(t, F3.IsSolvedBy(F12))
-	assert.False(t, (F12).IsSolvedBy(F3))
+	assert.False(t, F12.IsSolvedBy(F3))
 }
 
 func TestTableSet_Constituents(t *testing.T) {
-	assert.Equal(t, []TableSet{F1, F2, F3}, (F123).Constituents())
-	assert.Equal(t, []TableSet{F1, F2}, (F12).Constituents())
-	assert.Equal(t, []TableSet{F1, F3}, (F1.Merge(F3)).Constituents())
-	assert.Equal(t, []TableSet{F2, F3}, (F2.Merge(F3)).Constituents())
+	assert.Equal(t, []TableSet{F1, F2, F3}, F123.Constituents())
+	assert.Equal(t, []TableSet{F1, F2}, F12.Constituents())
+	assert.Equal(t, []TableSet{F1, F3}, F1.Merge(F3).Constituents())
+	assert.Equal(t, []TableSet{F2, F3}, F2.Merge(F3).Constituents())
 	assert.Empty(t, EmptyTableSet().Constituents())
 }
 

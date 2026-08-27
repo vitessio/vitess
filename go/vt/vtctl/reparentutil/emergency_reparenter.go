@@ -34,6 +34,7 @@ import (
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools/events"
@@ -527,10 +528,26 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	// Find the intermediate source for replication that we want other tablets to replicate from.
 	// This step chooses the most advanced tablet. Further ties are broken by using the promotion rule.
 	// In case the user has specified a tablet specifically, then it is selected, as long as it is the most advanced.
+	// Version-aware election is restricted to GTID-based (MySQL/Percona) shards. For non-GTID
+	// flavors (MariaDB, file-position), candidate positions are compared on their executed
+	// position and are not reconciled to a common applied position after the relay-log wait, so
+	// two equally-advanced candidates need not compare equal — falling through to a version
+	// tiebreak there would change long-standing election behavior. Passing nil version/flavor
+	// maps disables version-aware ordering for those shards.
+	versionMap := stoppedReplicationSnapshot.mysqlVersions
+	flavorMap := stoppedReplicationSnapshot.mysqlFlavors
+	if !isGTIDBased {
+		versionMap = nil
+		flavorMap = nil
+	}
+
 	// Here we also check for split brain scenarios and check that the selected replica must be more advanced than all the other valid candidates.
 	// We fail in case there is a split brain detected.
 	// The validCandidateTablets list is sorted by the replication positions with ties broken by promotion rules.
-	intermediateSource, validCandidateTablets, err = erp.findMostAdvanced(validCandidates, tabletMap, opts)
+	// Version-aware election is scoped per candidate set: each step below applies the flavor-family guard
+	// to the tablets it actually chooses among, so a non-candidate tablet elsewhere in the shard does not
+	// disable version comparison for the real candidates.
+	intermediateSource, validCandidateTablets, err = erp.findMostAdvanced(validCandidates, tabletMap, versionMap, flavorMap, opts)
 	if err != nil {
 		return err
 	}
@@ -548,7 +565,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 
 	// Check whether the intermediate source candidate selected is ideal or if it can be improved later.
 	// If the intermediateSource is ideal, then we can be certain that it is part of the valid candidates list.
-	isIdeal, err = erp.isIntermediateSourceIdeal(intermediateSource, validCandidateTablets, tabletMap, opts)
+	isIdeal, err = erp.isIntermediateSourceIdeal(intermediateSource, validCandidateTablets, tabletMap, versionMap, flavorMap, opts)
 	if err != nil {
 		return err
 	}
@@ -578,7 +595,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 		// try to find a better candidate using the list we got back
 		// We prefer to choose a candidate which is in the same cell as our previous primary and of the best possible durability rule.
 		// However, if there is an explicit request from the user to promote a specific tablet, then we choose that tablet.
-		betterCandidate, err = erp.identifyPrimaryCandidate(intermediateSource, validReplacementCandidates, tabletMap, opts)
+		betterCandidate, err = erp.identifyPrimaryCandidate(intermediateSource, validReplacementCandidates, tabletMap, versionMap, flavorMap, opts)
 		if err != nil {
 			return err
 		}
@@ -820,9 +837,14 @@ func (erp *EmergencyReparenter) applyRelayLogsAndReconcile(
 }
 
 // findMostAdvanced finds the intermediate source for ERS. We always choose the most advanced one from our valid candidates list. Further ties are broken by looking at the promotion rules.
+//
+// versionMap and flavorMap are keyed by tablet alias over all reachable tablets;
+// the flavor-family guard is applied over only the candidates being sorted here.
 func (erp *EmergencyReparenter) findMostAdvanced(
 	validCandidates map[string]*RelayLogPositions,
 	tabletMap map[string]*topo.TabletInfo,
+	versionMap map[string]mysqlctl.ServerVersion,
+	flavorMap map[string]mysqlctl.MySQLFlavor,
 	opts EmergencyReparentOptions,
 ) (*topodatapb.Tablet, []*topodatapb.Tablet, error) {
 	erp.logger.Infof("started finding the intermediate source")
@@ -835,8 +857,29 @@ func (erp *EmergencyReparenter) findMostAdvanced(
 		return nil, nil, err
 	}
 
-	// sort the tablets for finding the best intermediate source in ERS
-	err = sortTabletsForReparent(validTablets, tabletPositions, nil, opts.durability)
+	// Scope the flavor-family guard to the candidates actually being sorted;
+	// scopedVersion is nil (disabling version ordering) when they span more than
+	// one family.
+	scopedVersion := scopedVersionMap(validTablets, versionMap, flavorMap)
+	if scopedVersion == nil && len(versionMap) > 0 {
+		erp.logger.Warningf("reparent candidates span multiple MySQL flavor families; skipping version-aware election")
+	}
+
+	// build the version slice for sorting; nil scopedVersion disables version ordering
+	var mysqlVersions []mysqlctl.ServerVersion
+	if len(scopedVersion) > 0 {
+		mysqlVersions = make([]mysqlctl.ServerVersion, len(validTablets))
+		for i, tablet := range validTablets {
+			v, ok := scopedVersion[topoproto.TabletAliasString(tablet.Alias)]
+			if !ok {
+				v = unknownVersion
+			}
+			mysqlVersions[i] = v
+		}
+	}
+
+	// sort the tablets for finding the best intermediate source in ERS — position first to minimize data loss
+	err = sortTabletsForReparent(validTablets, tabletPositions, nil, mysqlVersions, opts.durability, SortByPosition)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1207,21 +1250,28 @@ func (erp *EmergencyReparenter) isIntermediateSourceIdeal(
 	intermediateSource *topodatapb.Tablet,
 	validCandidates []*topodatapb.Tablet,
 	tabletMap map[string]*topo.TabletInfo,
+	versionMap map[string]mysqlctl.ServerVersion,
+	flavorMap map[string]mysqlctl.MySQLFlavor,
 	opts EmergencyReparentOptions,
 ) (bool, error) {
-	// we try to find a better candidate with the current list of valid candidates, and if it matches our current primary candidate, then we return true
-	candidate, err := erp.identifyPrimaryCandidate(intermediateSource, validCandidates, tabletMap, opts)
+	candidate, err := erp.identifyPrimaryCandidate(intermediateSource, validCandidates, tabletMap, versionMap, flavorMap, opts)
 	if err != nil {
 		return false, err
 	}
 	return candidate == intermediateSource, nil
 }
 
-// identifyPrimaryCandidate is used to find the final candidate for ERS promotion
+// identifyPrimaryCandidate is used to find the final candidate for ERS promotion.
+//
+// versionMap and flavorMap are keyed by tablet alias over all reachable tablets;
+// the flavor-family guard is applied over only the candidates considered in each
+// promotion tier.
 func (erp *EmergencyReparenter) identifyPrimaryCandidate(
 	intermediateSource *topodatapb.Tablet,
 	validCandidates []*topodatapb.Tablet,
 	tabletMap map[string]*topo.TabletInfo,
+	versionMap map[string]mysqlctl.ServerVersion,
+	flavorMap map[string]mysqlctl.MySQLFlavor,
 	opts EmergencyReparentOptions,
 ) (candidate *topodatapb.Tablet, err error) {
 	defer func() {
@@ -1254,11 +1304,15 @@ func (erp *EmergencyReparenter) identifyPrimaryCandidate(
 	// find here.
 	// We go over all the promotion rules in descending order of priority and try and find a valid candidate with
 	// that promotion rule.
-	// If the intermediate source has the same promotion rules as some other tablets, then we prioritize using
-	// the intermediate source since we won't have to wait for the new candidate to catch up!
+	// If the intermediate source has the same promotion rules as some other tablets, we prefer a
+	// lower-version candidate to maintain replication compatibility, accepting the catch-up cost.
+	// If versions are equal, we still prefer the intermediate source to avoid catch-up.
 	for _, promotionRule := range promotionrule.AllPromotionRules() {
 		candidates := getTabletsWithPromotionRules(opts.durability, validCandidates, promotionRule)
-		candidate = findCandidate(intermediateSource, candidates)
+		// Scope the flavor-family guard to this tier's candidates: nil disables
+		// version comparison when they span more than one family.
+		scopedVersion := scopedVersionMap(candidates, versionMap, flavorMap)
+		candidate = findCandidate(intermediateSource, candidates, scopedVersion)
 		if candidate != nil {
 			return candidate, nil
 		}

@@ -3940,6 +3940,85 @@ func TestPlayerBatchModeMixedRowEvent(t *testing.T) {
 	expectData(t, "t1", [][]string{{"3", "b"}})
 }
 
+// TestPlayerBatchModeGroupedPlans confirms that batch mode keeps deletes for
+// grouped plans -- as built for lookup vindex backfills and aggregating
+// materializations -- on the per-row path. The bulk-delete path would apply a
+// plain multi-row DELETE, but the correct delete handling for these plans is
+// the one generateDeleteStatement chose: a no-op for insertIgnore plans and a
+// count-decrementing UPDATE for insertOnDup plans.
+func TestPlayerBatchModeGroupedPlans(t *testing.T) {
+	oldVreplicationExperimentalFlags := vttablet.DefaultVReplicationConfig.ExperimentalFlags
+	vttablet.DefaultVReplicationConfig.ExperimentalFlags = vttablet.VReplicationExperimentalFlagVPlayerBatching
+	// This test's teardown uses defer, not t.Cleanup: execStatements and the
+	// other framework helpers run on t.Context(), which is already canceled
+	// by the time t.Cleanup callbacks execute.
+	defer func() {
+		vttablet.DefaultVReplicationConfig.ExperimentalFlags = oldVreplicationExperimentalFlags
+	}()
+
+	defer deleteTablet(addTablet(100))
+	execStatements(t, []string{
+		"create table src1(id bigint, val varbinary(128), primary key(id))",
+		// lkp1 mimics the backing table of a unique lookup vindex: every
+		// column is in the group by, so the plan is insertIgnore.
+		fmt.Sprintf("create table %s.lkp1(id bigint, val varbinary(128), primary key(id))", vrepldb),
+		"create table src2(id bigint, val varbinary(128), primary key(id))",
+		// lkp2 mimics the backing table of a non-unique lookup vindex: one
+		// target row counts multiple source rows, so the plan is insertOnDup.
+		fmt.Sprintf("create table %s.lkp2(val varbinary(128), cnt bigint, primary key(val))", vrepldb),
+	})
+	defer execStatements(t, []string{
+		"drop table src1",
+		fmt.Sprintf("drop table %s.lkp1", vrepldb),
+		"drop table src2",
+		fmt.Sprintf("drop table %s.lkp2", vrepldb),
+	})
+
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match:  "lkp1",
+			Filter: "select id, val from src1 group by id, val",
+		}, {
+			Match:  "lkp2",
+			Filter: "select val, count(*) as cnt from src2 group by val",
+		}},
+	}
+	bls := &binlogdatapb.BinlogSource{
+		Keyspace: env.KeyspaceName,
+		Shard:    env.ShardName,
+		Filter:   filter,
+		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
+	}
+	cancel, _ := startVReplication(t, bls, "")
+	defer cancel()
+
+	execStatements(t, []string{"insert into src1 values (1, 'a'), (2, 'b'), (3, 'c')"})
+	expectNontxQueries(t, qh.Expect(
+		"insert ignore into lkp1(id,val) values (1,_binary'a'), (2,_binary'b'), (3,_binary'c')",
+	), recvTimeout)
+	expectData(t, "lkp1", [][]string{{"1", "a"}, {"2", "b"}, {"3", "c"}})
+
+	execStatements(t, []string{"insert into src2 values (1, 'x'), (2, 'x'), (3, 'x')"})
+	expectNontxQueries(t, qh.Expect(
+		"insert into lkp2(val,cnt) values (_binary'x',1), (_binary'x',1), (_binary'x',1) on duplicate key update cnt=cnt+1",
+	), recvTimeout)
+	expectData(t, "lkp2", [][]string{{"x", "3"}})
+
+	// Each multi-row delete produces one row event with multiple
+	// delete-shaped row changes, which is the shape the bulk-delete path
+	// consumes. insertIgnore deletes must be a no-op; insertOnDup deletes
+	// must decrement per row, leaving the row that still counts source
+	// row 3.
+	execStatements(t, []string{"delete from src1 where id in (1, 2)"})
+	execStatements(t, []string{"delete from src2 where id in (1, 2)"})
+	expectNontxQueries(t, qh.Expect(
+		"update lkp2 set cnt=cnt-1 where val=_binary'x'",
+		"update lkp2 set cnt=cnt-1 where val=_binary'x'",
+	), recvTimeout)
+	expectData(t, "lkp1", [][]string{{"1", "a"}, {"2", "b"}, {"3", "c"}})
+	expectData(t, "lkp2", [][]string{{"x", "1"}})
+}
+
 // TestPlayerStalls confirms that the vplayer will detect a stall and generate
 // a meaningful error -- which is stored in the vreplication record and the
 // vreplication_log table as well as being logged -- when it does.
