@@ -589,7 +589,7 @@ func (vre *Engine) registerJournal(journal *binlogdatapb.Journal, id int32) erro
 	// would otherwise irrecoverably delete the streams.
 	if journal.MigrationType == binlogdatapb.MigrationType_TABLES &&
 		binlogdatapb.VReplicationWorkflowType(vre.controllers[id].workflowType) == binlogdatapb.VReplicationWorkflowType_CreateLookupIndex {
-		return fmt.Errorf("cannot follow TABLES journal %d for lookup vindex workflow %s: lookup backfill streams cannot be retargeted to another keyspace", journal.Id, workflow)
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot follow TABLES journal %d for lookup vindex workflow %s: lookup backfill streams cannot be retargeted to another keyspace", journal.Id, workflow)
 	}
 	key := fmt.Sprintf("%s:%d", workflow, journal.Id)
 	ks := fmt.Sprintf("%s:%s", vre.controllers[id].source.Keyspace, vre.controllers[id].source.Shard)
