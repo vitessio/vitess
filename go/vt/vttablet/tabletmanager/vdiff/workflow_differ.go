@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"reflect"
 	"slices"
 	"strings"
@@ -362,7 +363,10 @@ func (wd *workflowDiffer) diff(ctx context.Context) (err error) {
 // markTableErrored returns diffErr; a failure marking the table errored (e.g. a closed connection) must not shadow it.
 func (wd *workflowDiffer) markTableErrored(ctx context.Context, dbClient binlogplayer.DBClient, td *tableDiffer, diffErr error) error {
 	if stateErr := td.updateTableState(ctx, dbClient, ErrorState); stateErr != nil {
-		log.Error(fmt.Sprintf("failed to mark table %s as errored for vdiff %s: %v", td.table.Name, wd.ct.uuid, stateErr))
+		log.Error("failed to mark table as errored",
+			slog.String("table", td.table.Name),
+			slog.String("vdiff", wd.ct.uuid),
+			slog.Any("error", stateErr))
 	}
 	insertVDiffLog(ctx, dbClient, wd.ct.id, fmt.Sprintf("Table %s Error: %s", td.table.Name, diffErr))
 	return diffErr
