@@ -51,6 +51,11 @@ var (
 
 	// The error to return when we have detected a stall in the vplayer.
 	errVPlayerStalled = errors.New("progress stalled; vplayer was unable to replicate the transaction in a timely manner; examine the target mysqld instance health and the replicated queries' EXPLAIN output to see why queries are taking unusually long")
+
+	// vplayerThrottleEpoch is the reference instant for throttle-denial
+	// offsets: it carries a monotonic clock reading, so durations measured
+	// against it are immune to wall clock steps in either direction.
+	vplayerThrottleEpoch = time.Now()
 )
 
 // vplayer replays binlog events by pulling them from a vstreamer.
@@ -93,10 +98,11 @@ type vplayer struct {
 	phase string
 
 	throttlerAppName string
-	// lastThrottledNano is when (as unix nanoseconds) applyEvents was last
-	// denied by the throttler. The relay log uses it to defer the stall
-	// verdict: a throttle-denied applier does not drain the relay log, so
-	// that time must not count toward vplayerProgressDeadline.
+	// lastThrottledNano is when applyEvents was last denied by the
+	// throttler, as monotonic nanoseconds since vplayerThrottleEpoch.
+	// The relay log uses it to defer the stall verdict: a
+	// throttle-denied applier does not drain the relay log, so that
+	// time must not count toward vplayerProgressDeadline.
 	lastThrottledNano atomic.Int64
 
 	// See updateFKCheck for more details on how the two fields below are used.
@@ -559,7 +565,7 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 			// While denied we are deliberately not draining the relay log,
 			// so this time must not count toward the relay log's stall
 			// deadline.
-			vp.lastThrottledNano.Store(time.Now().UnixNano())
+			vp.lastThrottledNano.Store(int64(time.Since(vplayerThrottleEpoch)))
 			_ = vp.vr.updateTimeThrottled(throttlerapp.VPlayerName, checkResult.Summary())
 			estimateLag()
 			continue

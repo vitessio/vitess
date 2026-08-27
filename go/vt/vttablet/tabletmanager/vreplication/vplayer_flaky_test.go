@@ -49,6 +49,34 @@ import (
 	qh "vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication/queryhistory"
 )
 
+type (
+	// fakeThrottleChecker is a throttleChecker whose verdict the test
+	// controls: while deny is set every check is refused, as for a tablet
+	// whose lag-gated throttler checks are being denied.
+	fakeThrottleChecker struct {
+		deny atomic.Bool
+	}
+)
+
+func (f *fakeThrottleChecker) ThrottleCheckOKOrWaitAppName(_ context.Context, appName throttlerapp.Name) (*throttle.CheckResult, bool) {
+	if f.deny.Load() {
+		// Mimic the real client's denial pacing so the caller's check
+		// loop does not spin hot, but pace faster than the real client:
+		// the vplayer refreshes its denial timestamp once per check, and
+		// a wide refresh-to-deadline margin keeps a paused CI runner
+		// from letting the stall timer see a stale denial.
+		time.Sleep(50 * time.Millisecond)
+		return &throttle.CheckResult{
+			ResponseCode: tabletmanagerdatapb.CheckThrottlerResponseCode_THRESHOLD_EXCEEDED,
+			AppName:      appName.String(),
+		}, false
+	}
+	return &throttle.CheckResult{
+		ResponseCode: tabletmanagerdatapb.CheckThrottlerResponseCode_OK,
+		AppName:      appName.String(),
+	}, true
+}
+
 var testGTIDCounter atomic.Uint64
 
 func uniqueTestGTID() string {
@@ -4277,32 +4305,6 @@ func drainDBQueries() {
 			return
 		}
 	}
-}
-
-// fakeThrottleChecker is a ThrottleChecker whose verdict the test controls:
-// while deny is set every check is refused, as for a tablet whose lag-gated
-// throttler checks are being denied.
-type fakeThrottleChecker struct {
-	deny atomic.Bool
-}
-
-func (f *fakeThrottleChecker) ThrottleCheckOKOrWaitAppName(_ context.Context, appName throttlerapp.Name) (*throttle.CheckResult, bool) {
-	if f.deny.Load() {
-		// Mimic the real client's denial pacing so the caller's check
-		// loop does not spin hot, but pace faster than the real client:
-		// the vplayer refreshes its denial timestamp once per check, and
-		// a wide refresh-to-deadline margin keeps a paused CI runner
-		// from letting the stall timer see a stale denial.
-		time.Sleep(50 * time.Millisecond)
-		return &throttle.CheckResult{
-			ResponseCode: tabletmanagerdatapb.CheckThrottlerResponseCode_THRESHOLD_EXCEEDED,
-			AppName:      appName.String(),
-		}, false
-	}
-	return &throttle.CheckResult{
-		ResponseCode: tabletmanagerdatapb.CheckThrottlerResponseCode_OK,
-		AppName:      appName.String(),
-	}, true
 }
 
 // TestPlayerNoStallWhileThrottled exercises the production handoff for

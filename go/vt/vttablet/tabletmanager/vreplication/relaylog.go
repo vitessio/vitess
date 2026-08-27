@@ -34,11 +34,12 @@ type relayLog struct {
 	ctx      context.Context
 	maxItems int
 	maxSize  int
-	// lastThrottledNano is the applier's report (as unix nanoseconds) of
-	// when it was last denied by the throttler. A throttle-denied applier
-	// does not drain the relay log, so a full relay log is expected
-	// backpressure then: time within vplayerProgressDeadline of the last
-	// denial does not count toward the stall verdict.
+	// lastThrottledNano is the applier's report of when it was last
+	// denied by the throttler, as monotonic nanoseconds since
+	// vplayerThrottleEpoch. A throttle-denied applier does not drain the
+	// relay log, so a full relay log is expected backpressure then: time
+	// within vplayerProgressDeadline of the last denial does not count
+	// toward the stall verdict.
 	lastThrottledNano *atomic.Int64
 
 	// mu controls all variables below and is shared by canAccept and hasItems.
@@ -176,10 +177,10 @@ func (rl *relayLog) startSendTimer() (cancel func()) {
 
 // stallDeferral returns how long the stall verdict must be deferred so
 // that only un-throttled time counts toward it: the remainder of a full
-// deadline since the applier was last denied by the throttler, capped at
-// the deadline so that an unusual timestamp (e.g. clock skew) degrades to
-// periodic re-evaluation rather than an unbounded deferral. Zero means
-// the stall verdict is due.
+// deadline since the applier was last denied by the throttler. Both
+// sides of the comparison are monotonic readings against
+// vplayerThrottleEpoch, so wall clock steps cannot skew the verdict in
+// either direction. Zero means the stall verdict is due.
 func (rl *relayLog) stallDeferral(deadline time.Duration) time.Duration {
 	if rl.lastThrottledNano == nil {
 		return 0
@@ -188,7 +189,7 @@ func (rl *relayLog) stallDeferral(deadline time.Duration) time.Duration {
 	if last == 0 {
 		return 0
 	}
-	since := time.Since(time.Unix(0, last))
+	since := time.Since(vplayerThrottleEpoch) - time.Duration(last)
 	if since >= deadline {
 		return 0
 	}

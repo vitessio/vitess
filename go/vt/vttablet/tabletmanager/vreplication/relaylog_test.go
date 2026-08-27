@@ -53,10 +53,10 @@ func TestRelayLogSendStallDeferredWhileThrottled(t *testing.T) {
 	require.NoError(t, rl.Send(events))
 
 	// Simulate an applier that is continuously denied by the throttler: a
-	// denial timestamp that stays fresh for the whole phase. A future
-	// instant is used instead of a timestamp-updater goroutine, which a
+	// denial offset that stays fresh for the whole phase. A far-future
+	// offset is used instead of a timestamp-updater goroutine, which a
 	// paused CI runner could starve into recording a false stall.
-	lastThrottledNano.Store(time.Now().Add(time.Hour).UnixNano())
+	lastThrottledNano.Store(int64(time.Since(vplayerThrottleEpoch) + time.Hour))
 
 	sendResult := make(chan error, 1)
 	go func() {
@@ -76,7 +76,7 @@ func TestRelayLogSendStallDeferredWhileThrottled(t *testing.T) {
 	// The throttling ends: the denial timestamp goes stale. The applier
 	// still isn't draining the log, so the stall must now fire once a full
 	// deadline of un-throttled time has passed.
-	lastThrottledNano.Store(time.Now().UnixNano())
+	lastThrottledNano.Store(int64(time.Since(vplayerThrottleEpoch)))
 	var sendErr error
 	require.Eventually(t, func() bool {
 		select {
