@@ -403,7 +403,8 @@
     "mysqlctl": {
       "File": "unused.go",
       "Packages": [
-        "vitess.io/vitess/go/test/endtoend/mysqlctl"
+        "vitess.io/vitess/go/test/endtoend/mysqlctl",
+        "vitess.io/vitess/go/test/endtoend/mysqlctl/crashsafeshutdown"
       ],
       "Args": [],
       "Command": [],
