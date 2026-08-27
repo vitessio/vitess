@@ -346,8 +346,8 @@ func (wd *workflowDiffer) diff(ctx context.Context) (err error) {
 
 		log.Info(fmt.Sprintf("Starting diff of table %s for vdiff %s", td.table.Name, wd.ct.uuid))
 		if err := wd.diffTable(ctx, dbClient, td); err != nil {
-			if err := td.updateTableState(ctx, dbClient, ErrorState); err != nil {
-				return err
+			if stateErr := td.updateTableState(ctx, dbClient, ErrorState); stateErr != nil {
+				log.Error(fmt.Sprintf("failed to mark table %s as errored for vdiff %s: %v", td.table.Name, wd.ct.uuid, stateErr))
 			}
 			insertVDiffLog(ctx, dbClient, wd.ct.id, fmt.Sprintf("Table %s Error: %s", td.table.Name, err))
 			return err
