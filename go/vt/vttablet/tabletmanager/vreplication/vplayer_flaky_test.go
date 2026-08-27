@@ -4289,8 +4289,11 @@ type fakeThrottleChecker struct {
 func (f *fakeThrottleChecker) ThrottleCheckOKOrWaitAppName(_ context.Context, appName throttlerapp.Name) (*throttle.CheckResult, bool) {
 	if f.deny.Load() {
 		// Mimic the real client's denial pacing so the caller's check
-		// loop does not spin hot.
-		time.Sleep(100 * time.Millisecond)
+		// loop does not spin hot, but pace faster than the real client:
+		// the vplayer refreshes its denial timestamp once per check, and
+		// a wide refresh-to-deadline margin keeps a paused CI runner
+		// from letting the stall timer see a stale denial.
+		time.Sleep(50 * time.Millisecond)
 		return &throttle.CheckResult{
 			ResponseCode: tabletmanagerdatapb.CheckThrottlerResponseCode_THRESHOLD_EXCEEDED,
 			AppName:      appName.String(),
@@ -4329,8 +4332,12 @@ func TestPlayerNoStallWhileThrottled(t *testing.T) {
 		drainDBQueries()
 	}()
 	// Shorten the stall deadline so that an undeferred stall would fire
-	// well within the test's throttled window.
-	vplayerProgressDeadline = 2 * time.Second
+	// well within the test's throttled window, but keep a wide margin
+	// (100x) over the fake checker's denial pacing: a spurious stall
+	// would need a full-process pause longer than the deadline between
+	// two denial-timestamp refreshes, which even a resource-starved CI
+	// runner should not produce.
+	vplayerProgressDeadline = 5 * time.Second
 	// Make each relay log batch a single transaction so the relay log
 	// fills -- and its Send blocks, starting the stall timer -- as soon as
 	// events arrive while the applier is denied.

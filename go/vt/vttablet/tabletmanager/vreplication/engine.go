@@ -124,15 +124,15 @@ type journalEvent struct {
 	shardGTIDs   map[string]*binlogdatapb.ShardGtid
 }
 
-// throttleChecker is what the engine needs from the tablet throttler: a
-// single check that either passes or briefly waits and denies. It is an
-// interface -- rather than the *throttle.Client that production always
-// installs -- so that tests can inject throttler behavior.
-type throttleChecker interface {
-	ThrottleCheckOKOrWaitAppName(ctx context.Context, appName throttlerapp.Name) (checkResult *throttle.CheckResult, throttleCheckOK bool)
-}
-
 type (
+	// throttleChecker is what the engine needs from the tablet throttler:
+	// a single check that either passes or briefly waits and denies. It
+	// is an interface -- rather than the *throttle.Client that production
+	// always installs -- so that tests can inject throttler behavior.
+	throttleChecker interface {
+		ThrottleCheckOKOrWaitAppName(ctx context.Context, appName throttlerapp.Name) (checkResult *throttle.CheckResult, throttleCheckOK bool)
+	}
+
 	PostCopyActionType int
 	PostCopyAction     struct {
 		Type PostCopyActionType `json:"type"`
