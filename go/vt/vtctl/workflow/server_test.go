@@ -2091,6 +2091,71 @@ func TestWorkflowSwitchTrafficFailsForInvalidMoveTablesSourceKeyspace(t *testing
 	require.EqualError(t, err, fmt.Sprintf("workflow %s.%s is invalid: MoveTables source keyspace matches target keyspace (%s)", targetKeyspaceName, workflowName, targetKeyspaceName))
 }
 
+// TestWorkflowSwitchTrafficFailsToSwitchWritesBeforeReads confirms that a
+// forward PRIMARY (write) switch is refused while reads have not been switched,
+// so writes cannot run ahead of reads and leave the source serving stale reads
+// (and, for a Reshard, the workflow uncompletable).
+func TestWorkflowSwitchTrafficFailsToSwitchWritesBeforeReads(t *testing.T) {
+	ctx := t.Context()
+
+	const (
+		workflowName       = "wf1"
+		tableName          = "t1"
+		sourceKeyspaceName = "sourceks"
+		targetKeyspaceName = "targetks"
+	)
+
+	env := newTestEnv(t, ctx, defaultCellName, &testKeyspace{
+		KeyspaceName: sourceKeyspaceName,
+		ShardNames:   []string{"0"},
+	}, &testKeyspace{
+		KeyspaceName: targetKeyspaceName,
+		ShardNames:   []string{"0"},
+	})
+	defer env.close()
+
+	env.tmc.schema = map[string]*tabletmanagerdatapb.SchemaDefinition{
+		tableName: {
+			TableDefinitions: []*tabletmanagerdatapb.TableDefinition{{
+				Name:   tableName,
+				Schema: fmt.Sprintf("CREATE TABLE %s (id BIGINT, name VARCHAR(64), PRIMARY KEY (id))", tableName),
+			}},
+		},
+	}
+
+	env.tmc.expectReadVReplicationWorkflowRequestOnTargetTablets(&readVReplicationWorkflowRequestResponse{
+		req: &tabletmanagerdatapb.ReadVReplicationWorkflowRequest{
+			Workflow: workflowName,
+		},
+		res: &tabletmanagerdatapb.ReadVReplicationWorkflowResponse{
+			Workflow:     workflowName,
+			WorkflowType: binlogdatapb.VReplicationWorkflowType_MoveTables,
+			Streams: []*tabletmanagerdatapb.ReadVReplicationWorkflowResponse_Stream{{
+				Id: 1,
+				Bls: &binlogdatapb.BinlogSource{
+					Keyspace: sourceKeyspaceName,
+					Shard:    "0",
+					Filter: &binlogdatapb.Filter{
+						Rules: []*binlogdatapb.Rule{{
+							Match: tableName,
+						}},
+					},
+				},
+			}},
+		},
+	})
+
+	// Reads have not been switched yet; requesting a PRIMARY-only switch must fail.
+	_, err := env.ws.WorkflowSwitchTraffic(ctx, &vtctldatapb.WorkflowSwitchTrafficRequest{
+		Keyspace:    targetKeyspaceName,
+		Workflow:    workflowName,
+		TabletTypes: []topodatapb.TabletType{topodatapb.TabletType_PRIMARY},
+		Direction:   int32(DirectionForward),
+	})
+	require.ErrorContains(t, err, "cannot switch writes")
+	require.ErrorContains(t, err, "before reads are switched")
+}
+
 func TestMoveTablesTrafficSwitchingDryRun(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
 	defer cancel()

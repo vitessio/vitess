@@ -2878,6 +2878,39 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 
 	ts.force = req.GetForce()
 
+	// Don't switch writes forward while leaving reads on the source. If this request
+	// switches only PRIMARY (no read types) and reads are still on the source, moving
+	// writes strands those reads and, for a Reshard, makes the workflow uncompletable.
+	// Requests that also switch reads are left to switchReads, which normalizes tablet
+	// types (e.g. adding RDONLY when no rdonly tablets exist) and cells. --force overrides.
+	// Evaluated on freshly reloaded state under the workflow lock, so it is serialized
+	// against concurrent switches rather than relying on the pre-lock state.
+	if TrafficSwitchDirection(req.Direction) == DirectionForward && switchPrimary &&
+		!switchReplica && !switchRdonly {
+		_, lockedState, stateErr := s.getWorkflowState(ctx, req.Keyspace, req.Workflow)
+		if stateErr != nil {
+			return nil, stateErr
+		}
+		var readsNotSwitched []string
+		if !lockedState.WritesSwitched {
+			if len(lockedState.ReplicaCellsNotSwitched) > 0 {
+				readsNotSwitched = append(readsNotSwitched, fmt.Sprintf("REPLICA (cells: %s)", strings.Join(lockedState.ReplicaCellsNotSwitched, ",")))
+			}
+			if len(lockedState.RdonlyCellsNotSwitched) > 0 {
+				readsNotSwitched = append(readsNotSwitched, fmt.Sprintf("RDONLY (cells: %s)", strings.Join(lockedState.RdonlyCellsNotSwitched, ",")))
+			}
+		}
+		if len(readsNotSwitched) > 0 {
+			if !req.GetForce() {
+				return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
+					"cannot switch writes for workflow %s before reads are switched; reads still on the source: %s. Switch reads first, or include them in this request (e.g. --tablet-types=rdonly,replica,primary), or use --force to override.",
+					lockedState.Workflow, strings.Join(readsNotSwitched, "; "))
+			}
+			s.Logger().Warningf("Switching writes for workflow %s while reads are not switched (%s); proceeding because --force was specified",
+				lockedState.Workflow, strings.Join(readsNotSwitched, "; "))
+		}
+	}
+
 	if writesAlreadySwitched {
 		s.Logger().Infof("Writes already switched no need to check lag for the %s.%s workflow",
 			ts.targetKeyspace, ts.workflow)
