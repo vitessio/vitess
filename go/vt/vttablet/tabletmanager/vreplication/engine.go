@@ -577,6 +577,15 @@ func (vre *Engine) registerJournal(journal *binlogdatapb.Journal, id int32) erro
 	}
 
 	workflow := vre.controllers[id].workflow
+	// Insurance against callers that bypass the vplayer's gate (see the
+	// VEventType_JOURNAL handling): lookup vindex backfill streams must
+	// never be transitioned by a TABLES journal, as their keyspace_id()
+	// filter is not expressible in another keyspace. transitionJournal
+	// would otherwise irrecoverably delete the streams.
+	if journal.MigrationType == binlogdatapb.MigrationType_TABLES &&
+		binlogdatapb.VReplicationWorkflowType(vre.controllers[id].workflowType) == binlogdatapb.VReplicationWorkflowType_CreateLookupIndex {
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot follow TABLES journal %d for lookup vindex workflow %s: lookup backfill streams cannot be retargeted to another keyspace", journal.Id, workflow)
+	}
 	key := fmt.Sprintf("%s:%d", workflow, journal.Id)
 	ks := fmt.Sprintf("%s:%s", vre.controllers[id].source.Keyspace, vre.controllers[id].source.Shard)
 	log.Infof("Journal encountered for (%s %s): %v", key, ks, journal)
