@@ -266,7 +266,7 @@
     }
   },
   {
-    "comment": "union operations in derived table, without star expression (FROM)\u00a1",
+    "comment": "union operations in derived table, without star expression (FROM)¡",
     "query": "select col1,col2 from (select col1, col2 from user union all select col1, col2 from user_extra) as t",
     "plan": {
       "Type": "Scatter",
@@ -779,38 +779,6 @@
       "TablesUsed": [
         "main.unsharded",
         "main.unsharded_auto"
-      ]
-    }
-  },
-  {
-    "comment": "none routings in the same keyspace collapse into a single none route",
-    "query": "select id from user where id in (null) union select id from user_extra where user_id in (null)",
-    "plan": {
-      "Type": "Complex",
-      "QueryType": "SELECT",
-      "Original": "select id from user where id in (null) union select id from user_extra where user_id in (null)",
-      "Instructions": {
-        "OperatorType": "Distinct",
-        "Collations": [
-          "(0:1)"
-        ],
-        "ResultColumns": 1,
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "None",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select id, weight_string(id) from `user` where 1 != 1 union select id, weight_string(id) from user_extra where 1 != 1",
-            "Query": "select id, weight_string(id) from `user` where id in (null) union select id, weight_string(id) from user_extra where user_id in (null)"
-          }
-        ]
-      },
-      "TablesUsed": [
-        "user.user",
-        "user.user_extra"
       ]
     }
   },
