@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"io"
+	"runtime"
 	"testing"
 
 	"github.com/klauspost/compress/zstd"
@@ -77,7 +78,7 @@ func TestDecoderPool(t *testing.T) {
 
 // compressPayloadForTest zstd-compresses in, the way a MySQL primary would when
 // sending a compressed transaction payload.
-func compressPayloadForTest(t *testing.T, in []byte) []byte {
+func compressPayloadForTest(t testing.TB, in []byte) []byte {
 	enc, err := zstd.NewWriter(nil)
 	require.NoError(t, err)
 	out := enc.EncodeAll(in, nil)
@@ -86,23 +87,73 @@ func compressPayloadForTest(t *testing.T, in []byte) []byte {
 }
 
 // TestTransactionPayloadEventLenBounds checks that an event length taken from the
-// payload cannot size an allocation before it has been validated. The length is a
-// 4 byte field, so without a bound it can ask for up to 4GiB regardless of how
-// large the payload actually is.
+// payload cannot size an allocation before the bytes behind it have arrived. The
+// length is a 4 byte field, so without this the payload can command a multi
+// gigabyte allocation regardless of how much data it actually carries.
+//
+// The assertion is on allocation volume, not merely on getting an error: the
+// pre-existing length-mismatch check further down already errors on this input,
+// so an error alone does not distinguish the fix from its absence.
 func TestTransactionPayloadEventLenBounds(t *testing.T) {
+	inner := make([]byte, headerLen)
+	binary.LittleEndian.PutUint32(inner[binlogEventLenOffset:headerLen], 1<<30)
+	compressed := compressPayloadForTest(t, inner)
+
+	read := func() {
+		tp := &TransactionPayload{
+			uncompressedSize: uint64(len(inner)),
+			compressionType:  TransactionPayloadCompressionZstd,
+		}
+		tp.payload = compressed
+		require.NoError(t, tp.decode())
+		defer tp.Close()
+		_, err := tp.GetNextEvent()
+		require.Error(t, err, "an event length larger than the payload must be rejected")
+	}
+
+	var before, after runtime.MemStats
+	runtime.GC()
+	runtime.ReadMemStats(&before)
+	read()
+	runtime.ReadMemStats(&after)
+
+	// The claimed length is 1GiB. Allocating anywhere near it means the length was
+	// trusted before the data arrived.
+	const limit = 64 << 20
+	allocated := after.TotalAlloc - before.TotalAlloc
+	require.Less(t, allocated, uint64(limit),
+		"reading a payload that claims a 1GiB event allocated %d bytes; the length was trusted before the data arrived",
+		allocated)
+}
+
+// TestTransactionPayloadStreamingInconsistentMetadata covers the case where the
+// event header advertises a large uncompressedSize as well as a large event
+// length, which is what streaming mode does not verify: the allocation must still
+// be bounded by the bytes that actually arrive.
+func TestTransactionPayloadStreamingInconsistentMetadata(t *testing.T) {
 	inner := make([]byte, headerLen)
 	binary.LittleEndian.PutUint32(inner[binlogEventLenOffset:headerLen], 1<<30)
 
 	tp := &TransactionPayload{
-		uncompressedSize: uint64(len(inner)),
+		// Above ZstdInMemoryDecompressorMaxSize, so decompress() takes the
+		// streaming path and never checks this figure against the real size.
+		uncompressedSize: ZstdInMemoryDecompressorMaxSize + 1,
 		compressionType:  TransactionPayloadCompressionZstd,
 	}
 	tp.payload = compressPayloadForTest(t, inner)
 	require.NoError(t, tp.decode())
 	defer tp.Close()
 
+	var before, after runtime.MemStats
+	runtime.GC()
+	runtime.ReadMemStats(&before)
 	_, err := tp.GetNextEvent()
-	require.Error(t, err, "an event length larger than the payload must be rejected")
+	runtime.ReadMemStats(&after)
+
+	require.Error(t, err)
+	allocated := after.TotalAlloc - before.TotalAlloc
+	require.Less(t, allocated, uint64(64<<20),
+		"streaming mode allocated %d bytes for a 13 byte frame claiming a 1GiB event", allocated)
 }
 
 // TestTransactionPayloadSelfConsistent checks that the bound above does not reject

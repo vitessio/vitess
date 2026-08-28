@@ -260,30 +260,54 @@ func (tp *TransactionPayload) decode() error {
 				headerLen, bytesRead)
 		}
 		eventLen := int64(binary.LittleEndian.Uint32(header[binlogEventLenOffset:headerLen]))
-		// The event length is read from the payload itself, so it must be checked
-		// before it is used to size an allocation. No single event can be larger
-		// than the uncompressed payload that contains it, and a 4 byte field can
-		// otherwise ask for 4GiB. The length is verified against the bytes actually
-		// read further down; this only stops the allocation from running ahead of
-		// that check.
-		if eventLen < headerLen || eventLen > int64(tp.uncompressedSize) {
+		// The event length is read from the payload itself, so it must not size an
+		// allocation on its own. Two things are untrusted here: eventLen, and
+		// tp.uncompressedSize, which is taken from the event header and is only
+		// verified against the decoded byte count on the in-memory path -- in
+		// streaming mode a small zstd frame can advertise a huge uncompressed size.
+		// So bound the allocation by what has actually been read rather than by any
+		// advertised figure: read the body into a buffer that grows as bytes arrive.
+		if eventLen < headerLen {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
-				"binlog event length of %d is invalid for an uncompressed transaction payload of %d bytes",
-				eventLen, tp.uncompressedSize)
+				"binlog event length of %d is smaller than the event header", eventLen)
 		}
-		eventData := make([]byte, eventLen)
-		copy(eventData, header) // The event includes the header
-		bytesRead, err = io.ReadFull(tp.reader, eventData[headerLen:])
+		body, err := readAtMost(tp.reader, eventLen-headerLen)
 		if err != nil && err != io.EOF {
 			return nil, vterrors.Wrap(err, "error reading binlog event data from uncompressed transaction payload")
 		}
-		if int64(bytesRead+headerLen) != eventLen {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] expected binlog event length of %d but only read %d bytes",
-				eventLen, bytesRead)
+		if int64(len(body)+headerLen) != eventLen {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+				"expected binlog event length of %d but only read %d bytes",
+				eventLen, len(body)+headerLen)
 		}
+		eventData := make([]byte, 0, eventLen)
+		eventData = append(eventData, header...)
+		eventData = append(eventData, body...)
 		return NewMysql56BinlogEvent(eventData), nil
 	}
 	return nil
+}
+
+// readAtMost reads up to n bytes, growing its buffer as data arrives rather than
+// reserving n up front. n is derived from untrusted input, so reserving it would
+// let a short payload command an arbitrarily large allocation.
+func readAtMost(r io.Reader, n int64) ([]byte, error) {
+	const chunk = 64 * 1024
+	buf := make([]byte, 0, min(n, chunk))
+	for int64(len(buf)) < n {
+		want := min(n-int64(len(buf)), chunk)
+		start := len(buf)
+		buf = append(buf, make([]byte, want)...)
+		read, err := io.ReadFull(r, buf[start:])
+		buf = buf[:start+read]
+		if err != nil {
+			if err == io.ErrUnexpectedEOF {
+				err = io.EOF
+			}
+			return buf, err
+		}
+	}
+	return buf, nil
 }
 
 // decompress decompresses the payload. If the payload is larger than
