@@ -18,6 +18,7 @@ package vdiff
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -63,6 +64,15 @@ func TestReconcileExtraRows(t *testing.T) {
 	ct := vdenv.newController(t, controllerQR)
 	wd, err := newWorkflowDiffer(ct, vdiffenv.opts, collations.MySQL8())
 	require.NoError(t, err)
+	// Extra rows are only reconciled when the saved samples are complete rows,
+	// so use report options without only-pks for this test.
+	wd.opts = &tabletmanagerdatapb.VDiffOptions{
+		CoreOptions: vdiffenv.opts.CoreOptions,
+		ReportOptions: &tabletmanagerdatapb.VDiffReportOptions{
+			Format:     "json",
+			DebugQuery: true,
+		},
+	}
 
 	type testCase struct {
 		name             string
@@ -178,6 +188,13 @@ func TestReconcileExtraRows(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			// Only samples affirmatively marked lossless take part in
+			// reconciliation.
+			for _, diffs := range [][]*RowDiff{tc.extraDiffsSource, tc.extraDiffsTarget, tc.wantExtraSource, tc.wantExtraTarget} {
+				for _, d := range diffs {
+					d.LosslessValues = true
+				}
+			}
 			dr := &DiffReport{
 				TableName: "t1",
 
@@ -251,6 +268,11 @@ func TestReconcileExtraRows(t *testing.T) {
 			},
 		}
 
+		for _, diffs := range [][]*RowDiff{dr.ExtraRowsSourceDiffs, dr.ExtraRowsTargetDiffs} {
+			for _, d := range diffs {
+				d.LosslessValues = true
+			}
+		}
 		maxExtras := int64(4)
 		require.NoError(t, wd.doReconcileExtraRows(dr, maxExtras, maxExtras))
 
@@ -291,6 +313,11 @@ func TestReconcileExtraRows(t *testing.T) {
 			},
 		}
 
+		for _, diffs := range [][]*RowDiff{dr.ExtraRowsSourceDiffs, dr.ExtraRowsTargetDiffs} {
+			for _, d := range diffs {
+				d.LosslessValues = true
+			}
+		}
 		maxExtras := int64(4)
 		require.NoError(t, wd.doReconcileExtraRows(dr, maxExtras, maxExtras))
 
@@ -303,6 +330,223 @@ func TestReconcileExtraRows(t *testing.T) {
 
 		require.Equal(t, int64(2), dr.MatchingRows)
 	})
+}
+
+// TestReconcileExtraRowsSkippedForLossySamples tests that extra rows are not
+// reconciled from lossy row samples: samples limited to the PK columns
+// (only-pks) or with truncated values can be equal even when the full rows
+// differ, so reconciling them could hide a real difference. Merely setting
+// row-diff-column-truncate-at must not disable reconciliation: only samples
+// whose values were actually truncated are excluded.
+func TestReconcileExtraRowsSkippedForLossySamples(t *testing.T) {
+	testCases := []struct {
+		name          string
+		reportOptions *tabletmanagerdatapb.VDiffReportOptions
+		truncated     bool
+		value         string // sample value for c2; defaults to "a"
+		wantExtras    int64
+	}{
+		{
+			name:          "full samples are reconciled",
+			reportOptions: &tabletmanagerdatapb.VDiffReportOptions{MaxSampleRows: 10},
+			wantExtras:    0,
+		},
+		{
+			// genRowDiff leaves PK-only samples unmarked when the projection
+			// has non-PK columns, and the legacy fallback does not apply to
+			// only-pks vdiffs.
+			name:          "only-pks samples with non-PK columns are not reconciled",
+			reportOptions: &tabletmanagerdatapb.VDiffReportOptions{MaxSampleRows: 10, OnlyPks: true},
+			truncated:     true,
+			wantExtras:    1,
+		},
+		{
+			// genRowDiff marks PK-only samples lossless when the PK columns
+			// cover the entire projection.
+			name:          "only-pks samples covering the projection are reconciled",
+			reportOptions: &tabletmanagerdatapb.VDiffReportOptions{MaxSampleRows: 10, OnlyPks: true},
+			wantExtras:    0,
+		},
+		{
+			name:          "truncate option alone does not disable reconciliation",
+			reportOptions: &tabletmanagerdatapb.VDiffReportOptions{MaxSampleRows: 10, RowDiffColumnTruncateAt: 128},
+			wantExtras:    0,
+		},
+		{
+			name:          "samples with truncated values are not reconciled",
+			reportOptions: &tabletmanagerdatapb.VDiffReportOptions{MaxSampleRows: 10, RowDiffColumnTruncateAt: 128},
+			truncated:     true,
+			value:         "aaaaaaaa" + truncatedNotation,
+			wantExtras:    1,
+		},
+		{
+			// Samples persisted by an older binary lack the lossless marker,
+			// but values that were actually truncated always carry the
+			// truncation marker, so unmarked samples without it are complete
+			// even when truncation is configured (as it is by default).
+			name:          "unmarked legacy samples without truncated values reconcile",
+			reportOptions: &tabletmanagerdatapb.VDiffReportOptions{MaxSampleRows: 10, RowDiffColumnTruncateAt: 128},
+			truncated:     true,
+			wantExtras:    0,
+		},
+		{
+			// Samples persisted by an older binary lack the lossless marker,
+			// but are provably complete when no truncation was configured.
+			name:          "unmarked legacy samples reconcile when truncation is not configured",
+			reportOptions: &tabletmanagerdatapb.VDiffReportOptions{MaxSampleRows: 10},
+			truncated:     true,
+			wantExtras:    0,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			wd := &workflowDiffer{
+				ct: &controller{uuid: "d99795d9-8bb1-4741-b25f-b3a2a1edee0b"},
+				opts: &tabletmanagerdatapb.VDiffOptions{
+					CoreOptions:   &tabletmanagerdatapb.VDiffCoreOptions{},
+					ReportOptions: tc.reportOptions,
+				},
+			}
+			value := tc.value
+			if value == "" {
+				value = "a"
+			}
+			dr := &DiffReport{
+				TableName:            "t1",
+				ProcessedRows:        4,
+				MatchingRows:         2,
+				ExtraRowsSource:      1,
+				ExtraRowsSourceDiffs: []*RowDiff{{Row: map[string]string{"c1": "1", "c2": value}, LosslessValues: !tc.truncated}},
+				ExtraRowsTarget:      1,
+				ExtraRowsTargetDiffs: []*RowDiff{{Row: map[string]string{"c1": "1", "c2": value}, LosslessValues: !tc.truncated}},
+			}
+			require.NoError(t, wd.doReconcileExtraRows(dr, 10, tc.reportOptions.MaxSampleRows))
+			require.Equal(t, tc.wantExtras, dr.ExtraRowsSource)
+			require.Equal(t, tc.wantExtras, dr.ExtraRowsTarget)
+		})
+	}
+
+	t.Run("unmarked legacy PK-only samples reconcile when the projection is all PKs", func(t *testing.T) {
+		// A PK-only sample of a table whose comparison projection consists
+		// entirely of PK columns is complete, so unmarked legacy samples of
+		// such a vdiff can also be reconciled.
+		wd := &workflowDiffer{
+			ct: &controller{uuid: "d99795d9-8bb1-4741-b25f-b3a2a1edee0b"},
+			opts: &tabletmanagerdatapb.VDiffOptions{
+				CoreOptions:   &tabletmanagerdatapb.VDiffCoreOptions{},
+				ReportOptions: &tabletmanagerdatapb.VDiffReportOptions{MaxSampleRows: 10, OnlyPks: true},
+			},
+			tableDiffers: map[string]*tableDiffer{
+				"t1": {
+					tablePlan: &tablePlan{
+						compareCols: []compareColInfo{
+							{colIndex: 0, isPK: true, colName: "c1"},
+							{colIndex: 1, isPK: true, colName: "c2"},
+						},
+					},
+				},
+			},
+		}
+		dr := &DiffReport{
+			TableName:            "t1",
+			ProcessedRows:        4,
+			MatchingRows:         2,
+			ExtraRowsSource:      1,
+			ExtraRowsSourceDiffs: []*RowDiff{{Row: map[string]string{"c1": "1", "c2": "a"}}},
+			ExtraRowsTarget:      1,
+			ExtraRowsTargetDiffs: []*RowDiff{{Row: map[string]string{"c1": "1", "c2": "a"}}},
+		}
+		require.NoError(t, wd.doReconcileExtraRows(dr, 10, 10))
+		require.Equal(t, int64(0), dr.ExtraRowsSource)
+		require.Equal(t, int64(0), dr.ExtraRowsTarget)
+		require.Equal(t, int64(3), dr.MatchingRows)
+	})
+
+	t.Run("mixed legacy and current samples reconcile", func(t *testing.T) {
+		// With no truncation configured, a sample persisted by an older binary
+		// (no lossless marker) must still reconcile against an identical
+		// sample generated by the current binary (marker set): the marker
+		// describes the sample's provenance, not the row data.
+		wd := &workflowDiffer{
+			ct: &controller{uuid: "d99795d9-8bb1-4741-b25f-b3a2a1edee0b"},
+			opts: &tabletmanagerdatapb.VDiffOptions{
+				CoreOptions:   &tabletmanagerdatapb.VDiffCoreOptions{},
+				ReportOptions: &tabletmanagerdatapb.VDiffReportOptions{MaxSampleRows: 10},
+			},
+		}
+		dr := &DiffReport{
+			TableName:            "t1",
+			ProcessedRows:        4,
+			MatchingRows:         2,
+			ExtraRowsSource:      1,
+			ExtraRowsSourceDiffs: []*RowDiff{{Row: map[string]string{"c1": "1", "c2": "a"}}},
+			ExtraRowsTarget:      1,
+			ExtraRowsTargetDiffs: []*RowDiff{{Row: map[string]string{"c1": "1", "c2": "a"}, LosslessValues: true}},
+		}
+		require.NoError(t, wd.doReconcileExtraRows(dr, 10, 10))
+		require.Equal(t, int64(0), dr.ExtraRowsSource)
+		require.Equal(t, int64(0), dr.ExtraRowsTarget)
+		require.Equal(t, int64(3), dr.MatchingRows)
+	})
+}
+
+// TestReconcileExtraRowsTrimsSamplesOnEveryPath tests that the extra-row
+// samples are trimmed to max-report-sample-rows even when reconciliation
+// returns early (one side has no extras, or the samples are lossy): the diff
+// collects samples up to max-extra-rows-to-compare, which can far exceed the
+// report limit.
+func TestReconcileExtraRowsTrimsSamplesOnEveryPath(t *testing.T) {
+	makeDiffs := func(n int) []*RowDiff {
+		diffs := make([]*RowDiff, n)
+		for i := range diffs {
+			diffs[i] = &RowDiff{Row: map[string]string{"c1": strconv.Itoa(i)}}
+		}
+		return diffs
+	}
+	testCases := []struct {
+		name          string
+		reportOptions *tabletmanagerdatapb.VDiffReportOptions
+		sourceDiffs   []*RowDiff
+		targetDiffs   []*RowDiff
+	}{
+		{
+			name:          "one side without extras",
+			reportOptions: &tabletmanagerdatapb.VDiffReportOptions{MaxSampleRows: 10},
+			sourceDiffs:   makeDiffs(50),
+			targetDiffs:   nil,
+		},
+		{
+			name:          "lossy only-pks samples",
+			reportOptions: &tabletmanagerdatapb.VDiffReportOptions{MaxSampleRows: 10, OnlyPks: true},
+			sourceDiffs:   makeDiffs(50),
+			targetDiffs:   makeDiffs(50),
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			wd := &workflowDiffer{
+				ct: &controller{uuid: "d99795d9-8bb1-4741-b25f-b3a2a1edee0b"},
+				opts: &tabletmanagerdatapb.VDiffOptions{
+					CoreOptions:   &tabletmanagerdatapb.VDiffCoreOptions{},
+					ReportOptions: tc.reportOptions,
+				},
+			}
+			dr := &DiffReport{
+				TableName:            "t1",
+				ExtraRowsSource:      int64(len(tc.sourceDiffs)),
+				ExtraRowsSourceDiffs: tc.sourceDiffs,
+				ExtraRowsTarget:      int64(len(tc.targetDiffs)),
+				ExtraRowsTargetDiffs: tc.targetDiffs,
+			}
+			require.NoError(t, wd.doReconcileExtraRows(dr, 1000, tc.reportOptions.MaxSampleRows))
+			require.Equal(t, min(int64(len(tc.sourceDiffs)), tc.reportOptions.MaxSampleRows), int64(len(dr.ExtraRowsSourceDiffs)))
+			require.Equal(t, min(int64(len(tc.targetDiffs)), tc.reportOptions.MaxSampleRows), int64(len(dr.ExtraRowsTargetDiffs)))
+			// The counts are not affected by the report trimming.
+			require.Equal(t, int64(len(tc.sourceDiffs)), dr.ExtraRowsSource)
+			require.Equal(t, int64(len(tc.targetDiffs)), dr.ExtraRowsTarget)
+		})
+	}
 }
 
 func TestReconcileReferenceTables(t *testing.T) {

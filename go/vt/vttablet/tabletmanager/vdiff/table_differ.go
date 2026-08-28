@@ -552,7 +552,14 @@ func (td *tableDiffer) diff(ctx context.Context, coreOpts *tabletmanagerdatapb.V
 	maxReportSampleRows := reportOpts.GetMaxSampleRows()
 
 	for {
-		lastProcessedRow = sourceRow
+		// Only advance the persisted position when the previous iteration
+		// consumed the held source row (advanceSource still holds that
+		// iteration's decision here). After an extra-target-row iteration the
+		// held source row has not been processed yet, and recording it as
+		// lastpk would make a resumed diff skip it permanently.
+		if advanceSource {
+			lastProcessedRow = sourceRow
+		}
 
 		select {
 		case <-ctx.Done():
@@ -600,35 +607,60 @@ func (td *tableDiffer) diff(ctx context.Context, coreOpts *tabletmanagerdatapb.V
 		advanceSource = true
 		advanceTarget = true
 		if sourceRow == nil {
-			diffRow, err := td.genRowDiff(td.tablePlan.sourceQuery, targetRow, reportOpts)
-			if err != nil {
-				return nil, vterrors.Wrap(err, "unexpected error generating diff")
+			// No more rows from the source; drain the remaining target rows,
+			// saving a sample for each one (up to maxExtraRowsToCompare) so that
+			// reconcileExtraRows can match them against any extra source rows.
+			// Counting drained rows without saving a sample makes them impossible
+			// to reconcile, producing false positive extra rows in the report.
+			// The drained rows are merged into the report only after the full
+			// drain succeeds: they are beyond the persisted lastpk, so partially
+			// counted rows would be counted again when a failed diff is resumed.
+			drainedRows := int64(0)
+			var drainedDiffs []*RowDiff
+			for targetRow != nil {
+				if dr.ExtraRowsTarget+drainedRows < maxExtraRowsToCompare {
+					diffRow, err := td.genRowDiff(td.tablePlan.targetQuery, targetRow, reportOpts)
+					if err != nil {
+						return nil, vterrors.Wrap(err, "unexpected error generating diff")
+					}
+					drainedDiffs = append(drainedDiffs, diffRow)
+				}
+				drainedRows++
+				targetRow, err = targetExecutor.next()
+				if err != nil {
+					return nil, err
+				}
 			}
-			dr.ExtraRowsTargetDiffs = append(dr.ExtraRowsTargetDiffs, diffRow)
-
-			// Drain target, update count.
-			count, err := targetExecutor.drain(ctx)
-			if err != nil {
-				return nil, err
-			}
-			dr.ExtraRowsTarget += 1 + count
-			dr.ProcessedRows += 1 + count
+			dr.ExtraRowsTarget += drainedRows
+			dr.ProcessedRows += drainedRows
+			dr.ExtraRowsTargetDiffs = append(dr.ExtraRowsTargetDiffs, drainedDiffs...)
 			return dr, nil
 		}
 		if targetRow == nil {
-			// No more rows from the target but we know we have more rows from
-			// source, so drain them and update the counts.
-			diffRow, err := td.genRowDiff(td.tablePlan.sourceQuery, sourceRow, reportOpts)
-			if err != nil {
-				return nil, vterrors.Wrap(err, "unexpected error generating diff")
+			// No more rows from the target; drain the remaining source rows,
+			// saving a sample for each one (up to maxExtraRowsToCompare) so that
+			// reconcileExtraRows can match them against any extra target rows.
+			// As above, the drained rows are merged into the report only after
+			// the full drain succeeds.
+			drainedRows := int64(0)
+			var drainedDiffs []*RowDiff
+			for sourceRow != nil {
+				if dr.ExtraRowsSource+drainedRows < maxExtraRowsToCompare {
+					diffRow, err := td.genRowDiff(td.tablePlan.sourceQuery, sourceRow, reportOpts)
+					if err != nil {
+						return nil, vterrors.Wrap(err, "unexpected error generating diff")
+					}
+					drainedDiffs = append(drainedDiffs, diffRow)
+				}
+				drainedRows++
+				sourceRow, err = sourceExecutor.next()
+				if err != nil {
+					return nil, err
+				}
 			}
-			dr.ExtraRowsSourceDiffs = append(dr.ExtraRowsSourceDiffs, diffRow)
-			count, err := sourceExecutor.drain(ctx)
-			if err != nil {
-				return nil, err
-			}
-			dr.ExtraRowsSource += 1 + count
-			dr.ProcessedRows += 1 + count
+			dr.ExtraRowsSource += drainedRows
+			dr.ProcessedRows += drainedRows
+			dr.ExtraRowsSourceDiffs = append(dr.ExtraRowsSourceDiffs, drainedDiffs...)
 			return dr, nil
 		}
 
