@@ -17,6 +17,7 @@ limitations under the License.
 package vdiff
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -26,10 +27,12 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
 
@@ -1092,5 +1095,31 @@ func TestBuildPlanFailure(t *testing.T) {
 		dbc.ExpectRequestRE("select vdt.lastpk as lastpk, vdt.mismatch as mismatch, vdt.report as report", noResults, nil)
 		err = wd.buildPlan(dbc, filter, testSchema)
 		assert.EqualError(t, err, tcase.err, tcase.input)
+	}
+}
+
+// TestUncheckpointableMaxDiffDurationErrorIsNonEphemeral guards the non-retry
+// guarantee for the diffTable timeout path: an un-checkpointable table that
+// exceeds --max-diff-duration is failed with an ERNotSupportedYet SQL error so
+// that, after being persisted to _vt.vdiff.last_error as a plain string and
+// rebuilt by retryVDiffs (via NewSQLErrorFromError), IsEphemeralError still
+// classifies it as non-ephemeral and the engine does not auto-retry it forever.
+func TestUncheckpointableMaxDiffDurationErrorIsNonEphemeral(t *testing.T) {
+	// The error diffTable returns for an un-checkpointable table that timed out.
+	origErr := sqlerror.NewSQLError(sqlerror.ERNotSupportedYet, sqlerror.SSClientError,
+		"table t1 exceeded the configured --max-diff-duration and cannot be resumed because its filter does not project the full source primary key")
+	require.False(t, sqlerror.IsEphemeralError(origErr), "the original error must be non-ephemeral")
+
+	// retryVDiffs persists last_error as a string and rebuilds it before
+	// classifying (see Engine.retryVDiffs). The reconstruction must preserve the
+	// errno so the error stays non-ephemeral -- both directly and when the error
+	// picked up wrapping context on its way up to being persisted.
+	for _, persisted := range []string{
+		origErr.Error(),
+		vterrors.Wrapf(origErr, "table %s", "t1").Error(),
+	} {
+		reconstructed := sqlerror.NewSQLErrorFromError(errors.New(persisted))
+		require.False(t, sqlerror.IsEphemeralError(reconstructed),
+			"reconstructed error must be non-ephemeral so the engine does not auto-retry it forever: %q", persisted)
 	}
 }
