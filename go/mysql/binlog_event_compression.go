@@ -260,6 +260,17 @@ func (tp *TransactionPayload) decode() error {
 				headerLen, bytesRead)
 		}
 		eventLen := int64(binary.LittleEndian.Uint32(header[binlogEventLenOffset:headerLen]))
+		// The event length is read from the payload itself, so it must be checked
+		// before it is used to size an allocation. No single event can be larger
+		// than the uncompressed payload that contains it, and a 4 byte field can
+		// otherwise ask for 4GiB. The length is verified against the bytes actually
+		// read further down; this only stops the allocation from running ahead of
+		// that check.
+		if eventLen < headerLen || eventLen > int64(tp.uncompressedSize) {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+				"binlog event length of %d is invalid for an uncompressed transaction payload of %d bytes",
+				eventLen, tp.uncompressedSize)
+		}
 		eventData := make([]byte, eventLen)
 		copy(eventData, header) // The event includes the header
 		bytesRead, err = io.ReadFull(tp.reader, eventData[headerLen:])

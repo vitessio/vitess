@@ -18,6 +18,7 @@ package mysql
 
 import (
 	"bytes"
+	"encoding/binary"
 	"io"
 	"testing"
 
@@ -72,4 +73,54 @@ func TestDecoderPool(t *testing.T) {
 			require.True(t, poolingUsed)
 		})
 	}
+}
+
+// compressPayloadForTest zstd-compresses in, the way a MySQL primary would when
+// sending a compressed transaction payload.
+func compressPayloadForTest(t *testing.T, in []byte) []byte {
+	enc, err := zstd.NewWriter(nil)
+	require.NoError(t, err)
+	out := enc.EncodeAll(in, nil)
+	require.NoError(t, enc.Close())
+	return out
+}
+
+// TestTransactionPayloadEventLenBounds checks that an event length taken from the
+// payload cannot size an allocation before it has been validated. The length is a
+// 4 byte field, so without a bound it can ask for up to 4GiB regardless of how
+// large the payload actually is.
+func TestTransactionPayloadEventLenBounds(t *testing.T) {
+	inner := make([]byte, headerLen)
+	binary.LittleEndian.PutUint32(inner[binlogEventLenOffset:headerLen], 1<<30)
+
+	tp := &TransactionPayload{
+		uncompressedSize: uint64(len(inner)),
+		compressionType:  TransactionPayloadCompressionZstd,
+	}
+	tp.payload = compressPayloadForTest(t, inner)
+	require.NoError(t, tp.decode())
+	defer tp.Close()
+
+	_, err := tp.GetNextEvent()
+	require.Error(t, err, "an event length larger than the payload must be rejected")
+}
+
+// TestTransactionPayloadSelfConsistent checks that the bound above does not reject
+// a payload whose event length matches its actual size.
+func TestTransactionPayloadSelfConsistent(t *testing.T) {
+	const eventLen = 40
+	inner := make([]byte, eventLen)
+	binary.LittleEndian.PutUint32(inner[binlogEventLenOffset:headerLen], eventLen)
+
+	tp := &TransactionPayload{
+		uncompressedSize: uint64(len(inner)),
+		compressionType:  TransactionPayloadCompressionZstd,
+	}
+	tp.payload = compressPayloadForTest(t, inner)
+	require.NoError(t, tp.decode())
+	defer tp.Close()
+
+	ev, err := tp.GetNextEvent()
+	require.NoError(t, err)
+	require.NotNil(t, ev)
 }
