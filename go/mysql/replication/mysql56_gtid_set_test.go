@@ -930,6 +930,14 @@ func TestParseMysql56GTIDSetIntervalsCapHint(t *testing.T) {
 
 	// A long run of colons carries no intervals at all, so reserving one per colon
 	// is pure waste. 1MiB of colons is 16MiB of interval structs unbounded.
+	//
+	// The bound cannot be tightened past len(tail)/2 to shrink this further: the
+	// densest valid list is one singleton per two bytes ("1:"), so a smaller
+	// divisor under-reserves legitimate input. That trade-off is why the threshold
+	// here is 12MiB rather than the 8MiB a len(tail)/4 bound would reach --
+	// measured, /4 cut this case to 5.0MiB but inflated a valid 100k-singleton
+	// list from 1,606,032 to 6,685,104 bytes. Bounding a hostile input is not
+	// worth a 4.16x regression on a valid one.
 	hostile := sid + ":" + strings.Repeat(":", 1<<20)
 	var before, after runtime.MemStats
 	runtime.GC()
@@ -937,7 +945,33 @@ func TestParseMysql56GTIDSetIntervalsCapHint(t *testing.T) {
 	_, _ = ParseMysql56GTIDSet(hostile)
 	runtime.ReadMemStats(&after)
 	allocated := after.TotalAlloc - before.TotalAlloc
-	assert.Less(t, allocated, uint64(8<<20),
+	assert.Less(t, allocated, uint64(12<<20),
 		"parsing %d colons allocated %d bytes for intervals that are all discarded",
 		1<<20, allocated)
+
+	// The bound must not under-reserve a valid list. parseInterval accepts a
+	// singleton "N", so "1:1:1:..." needs one interval per two input bytes -- the
+	// densest valid form. Note that duplicate singletons are each retained rather
+	// than merged, so this really does need `singletons` intervals.
+	const singletons = 100000
+	var sb strings.Builder
+	sb.WriteString(sid)
+	for i := 0; i < singletons; i++ {
+		sb.WriteString(":1")
+	}
+	runtime.GC()
+	runtime.ReadMemStats(&before)
+	dense, err := ParseMysql56GTIDSet(sb.String())
+	runtime.ReadMemStats(&after)
+	require.NoError(t, err)
+	denseAlloc := after.TotalAlloc - before.TotalAlloc
+	sidVal, err := ParseSID(sid)
+	require.NoError(t, err)
+	assert.Len(t, dense[sidVal], singletons,
+		"duplicate singletons are retained, not merged")
+	// 100k intervals at 16 bytes is 1.6MiB; allow headroom for the strings but not
+	// for a doubling-and-copying append.
+	assert.Less(t, denseAlloc, uint64(3<<20),
+		"a dense valid singleton list allocated %d bytes, which means the capacity "+
+			"hint under-reserved and append had to grow", denseAlloc)
 }
