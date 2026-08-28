@@ -59,6 +59,10 @@ const (
 	// Length of the binlog event header for internal events within
 	// the transaction payload.
 	headerLen = binlogEventLenOffset + eventLenBytes
+
+	// eventChunkSize is how much of an event body must actually arrive before its
+	// declared length is used to size the final buffer.
+	eventChunkSize = 1 << 20
 )
 
 var (
@@ -274,18 +278,58 @@ func (tp *TransactionPayload) decode() error {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
 				"binlog event length of %d is smaller than the event header", eventLen)
 		}
-		// eventLen comes from the payload, so it must not size an allocation on its
-		// own: a four byte field can ask for 4GiB. The trustworthy bound is how much
-		// of the decompressed stream is left, since every event body must come out of
-		// it -- reject the length before reserving anything when it cannot be
-		// satisfied. Capping the reservation instead and growing as bytes arrive was
-		// measured worse on both axes: growing straight to eventLen once a 1MiB cap
-		// filled still allocated 540,471,168 bytes for 138 compressed bytes, while
-		// growing in 1MiB rounds cost a valid 8MiB event 43.7MiB instead of 18.4MiB.
+		// eventLen is a four byte field from the payload, so it must not size an
+		// allocation unbounded. Two facts settle how to bound it, both measured:
+		//
+		//   - uncompressedSize is ACCURATE for real payloads. The recorded fixture
+		//     large_compressed_trx_payload.bin declares 173,120,239 and its events sum
+		//     to exactly that (78 + 68 + 173,120,066 + 27), so a 173MB row event
+		//     decompressing from 16KB is legitimate traffic. An absolute ceiling is
+		//     therefore wrong: a 64MiB cap rejects that payload.
+		//   - uncompressedSize is NOT VERIFIED against the decoded stream in streaming
+		//     mode, so on its own it is not a bound either: a 26 byte frame can declare
+		//     uncompressedSize 2GiB and eventLen 1GiB and have both accepted, which
+		//     allocated 1,073,746,688 bytes.
+		//
+		// So bound by the bytes of the declared payload not yet consumed -- which keeps
+		// the legitimate case exact -- and additionally refuse to reserve more than
+		// eventChunkSize until that much has actually been read, which is what makes a
+		// lying declaration cheap. Deriving the reservation from arrived data alone was
+		// measured worse on valid input every way it was tried (28.5MiB, 47.2MiB and
+		// 52.5MiB for an 8MiB event against 16.2MiB before), so read the first chunk
+		// into a small buffer and only then commit to the full length.
 		if remaining >= 0 && eventLen-headerLen > remaining {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
 				"binlog event length of %d exceeds the %d bytes left in the transaction payload",
 				eventLen, remaining+headerLen)
+		}
+		if eventLen-headerLen > eventChunkSize {
+			// Prove the claim with real bytes before honouring it.
+			head := make([]byte, eventChunkSize)
+			if _, err := io.ReadFull(tp.reader, head); err != nil {
+				if err == io.EOF || err == io.ErrUnexpectedEOF {
+					return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+						"binlog event claims a length of %d but the payload does not contain it",
+						eventLen)
+				}
+				return nil, vterrors.Wrap(err, "error reading binlog event data from uncompressed transaction payload")
+			}
+			eventData := make([]byte, eventLen)
+			copy(eventData, header)
+			copy(eventData[headerLen:], head)
+			n, err := io.ReadFull(tp.reader, eventData[headerLen+eventChunkSize:])
+			if err != nil && err != io.EOF && err != io.ErrUnexpectedEOF {
+				return nil, vterrors.Wrap(err, "error reading binlog event data from uncompressed transaction payload")
+			}
+			if int64(n)+eventChunkSize+headerLen != eventLen {
+				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+					"expected binlog event length of %d but only read %d bytes",
+					eventLen, int64(n)+eventChunkSize)
+			}
+			if remaining >= 0 {
+				remaining -= int64(n) + eventChunkSize
+			}
+			return NewMysql56BinlogEvent(eventData), nil
 		}
 		eventData := make([]byte, eventLen)
 		copy(eventData, header) // The event includes the header

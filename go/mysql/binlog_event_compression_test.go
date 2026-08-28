@@ -211,3 +211,35 @@ func TestTransactionPayloadSelfConsistent(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, ev)
 }
+
+// TestTransactionPayloadBothLengthsLie covers the hole a reviewer found in the
+// previous bound: uncompressedSize is never verified against the decoded stream
+// in streaming mode, so bounding eventLen by it let a frame lie in BOTH fields.
+// A 26 byte frame advertising uncompressedSize 2GiB and eventLen 1GiB was
+// accepted and allocated 1,073,746,640 bytes on main.
+func TestTransactionPayloadBothLengthsLie(t *testing.T) {
+	inner := make([]byte, headerLen)
+	binary.LittleEndian.PutUint32(inner[binlogEventLenOffset:headerLen], 1<<30)
+
+	tp := &TransactionPayload{
+		// Above ZstdInMemoryDecompressorMaxSize so decompress() streams and never
+		// checks this figure, and large enough that it cannot bound eventLen.
+		uncompressedSize: 2 << 30,
+		compressionType:  TransactionPayloadCompressionZstd,
+	}
+	tp.payload = compressPayloadForTest(t, inner)
+	require.NoError(t, tp.decode())
+	defer tp.Close()
+
+	var before, after runtime.MemStats
+	runtime.GC()
+	runtime.ReadMemStats(&before)
+	_, err := tp.GetNextEvent()
+	runtime.ReadMemStats(&after)
+
+	require.Error(t, err)
+	allocated := after.TotalAlloc - before.TotalAlloc
+	require.Less(t, allocated, uint64(16<<20),
+		"a %d byte frame claiming a 1GiB event inside a 2GiB payload allocated %d bytes",
+		len(tp.payload), allocated)
+}
