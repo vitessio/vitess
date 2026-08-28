@@ -18,6 +18,7 @@ package vdiff
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -492,7 +493,7 @@ func TestReconcileExtraRowsTrimsSamplesOnEveryPath(t *testing.T) {
 	makeDiffs := func(n int) []*RowDiff {
 		diffs := make([]*RowDiff, n)
 		for i := range diffs {
-			diffs[i] = &RowDiff{Row: map[string]string{"c1": fmt.Sprintf("%d", i)}}
+			diffs[i] = &RowDiff{Row: map[string]string{"c1": strconv.Itoa(i)}}
 		}
 		return diffs
 	}
