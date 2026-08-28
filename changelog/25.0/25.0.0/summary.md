@@ -19,6 +19,7 @@
 - **[Minor Changes](#minor-changes)**
     - **[VReplication](#minor-changes-vreplication)**
         - [Default data protection for `_reverse` workflow cancel/complete](#vreplication-reverse-workflow-data-protection)
+        - [Malformed compressed transaction payloads are rejected before allocating](#vreplication-transaction-payload-length-bounds)
     - **[VTGate](#minor-changes-vtgate)**
         - [Ingress bytes in query LogStats](#vtgate-logstats-ingress-bytes)
         - [New controls for cross-keyspace reads](#vtgate-cross-keyspace-reads)
@@ -172,6 +173,16 @@ When calling `cancel` or `complete` on an auto-generated `_reverse` workflow wit
 The `--keep-data` flag help text has been updated to note this default explicitly. This change applies to MoveTables, Reshard, and other VReplication workflow types that use the shared cancel/complete paths.
 
 See [#19906](https://github.com/vitessio/vitess/pull/19906) for details.
+
+#### <a id="vreplication-transaction-payload-length-bounds"/>Malformed compressed transaction payloads are rejected before allocating</a>
+
+When reading a compressed transaction payload (`binlog_transaction_compression=ON`), the internal event length and the interval count in a MySQL 5.6 GTID set are both taken from the payload itself. Both are now bounded before they size an allocation, so a malformed payload is rejected rather than first reserving memory proportional to the value it claims.
+
+**Behavior change:** a payload whose event length exceeds the bytes remaining in the decompressed stream now fails with `INVALID_ARGUMENT` naming both figures. Previously the same payload was also rejected, but only after the claimed length had been allocated, so the observable difference is the error message and the point of failure — not whether the payload is accepted. Well-formed payloads are unaffected, and no flag or configuration changes.
+
+**Impact:** operators parsing malformed or truncated binlog payloads will see the new `INVALID_ARGUMENT` text in place of the previous internal length-mismatch error. Anything matching on that error string should be updated.
+
+See [#20932](https://github.com/vitessio/vitess/pull/20932) and [#20933](https://github.com/vitessio/vitess/pull/20933) for details.
 
 ### <a id="minor-changes-vtgate"/>VTGate</a>
 

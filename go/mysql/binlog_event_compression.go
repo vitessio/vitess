@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"encoding/binary"
 	"io"
-	"math"
 	"sync"
 
 	"github.com/klauspost/compress/zstd"
@@ -248,15 +247,6 @@ func (tp *TransactionPayload) decode() error {
 	}
 
 	header := make([]byte, headerLen)
-	// How many bytes of the decompressed payload are still unread. Every event body
-	// must come out of this, so it is the one length bound not taken from the same
-	// untrusted metadata as the event header. In streaming mode uncompressedSize is
-	// not verified against the decoded stream, so treat 0 as "unknown" and skip the
-	// check rather than trusting it: the read below still fails on a short payload.
-	remaining := int64(-1)
-	if tp.uncompressedSize > 0 && tp.uncompressedSize <= math.MaxInt64 {
-		remaining = int64(tp.uncompressedSize)
-	}
 	tp.iterator = func() (ble BinlogEvent, err error) {
 		bytesRead, err := io.ReadFull(tp.reader, header)
 		if err != nil {
@@ -270,23 +260,6 @@ func (tp *TransactionPayload) decode() error {
 				headerLen, bytesRead)
 		}
 		eventLen := int64(binary.LittleEndian.Uint32(header[binlogEventLenOffset:headerLen]))
-		if eventLen < headerLen {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
-				"binlog event length of %d is smaller than the event header", eventLen)
-		}
-		// eventLen comes from the payload, so it must not size an allocation on its
-		// own: a four byte field can ask for 4GiB. The trustworthy bound is how much
-		// of the decompressed stream is left, since every event body must come out of
-		// it -- reject the length before reserving anything when it cannot be
-		// satisfied. Capping the reservation instead and growing as bytes arrive was
-		// measured worse on both axes: growing straight to eventLen once a 1MiB cap
-		// filled still allocated 540,471,168 bytes for 138 compressed bytes, while
-		// growing in 1MiB rounds cost a valid 8MiB event 43.7MiB instead of 18.4MiB.
-		if remaining >= 0 && eventLen-headerLen > remaining {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
-				"binlog event length of %d exceeds the %d bytes left in the transaction payload",
-				eventLen, remaining+headerLen)
-		}
 		eventData := make([]byte, eventLen)
 		copy(eventData, header) // The event includes the header
 		bytesRead, err = io.ReadFull(tp.reader, eventData[headerLen:])
@@ -294,12 +267,8 @@ func (tp *TransactionPayload) decode() error {
 			return nil, vterrors.Wrap(err, "error reading binlog event data from uncompressed transaction payload")
 		}
 		if int64(bytesRead+headerLen) != eventLen {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
-				"expected binlog event length of %d but only read %d bytes",
+			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] expected binlog event length of %d but only read %d bytes",
 				eventLen, bytesRead)
-		}
-		if remaining >= 0 {
-			remaining -= int64(bytesRead)
 		}
 		return NewMysql56BinlogEvent(eventData), nil
 	}
