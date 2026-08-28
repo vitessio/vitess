@@ -260,54 +260,70 @@ func (tp *TransactionPayload) decode() error {
 				headerLen, bytesRead)
 		}
 		eventLen := int64(binary.LittleEndian.Uint32(header[binlogEventLenOffset:headerLen]))
-		// The event length is read from the payload itself, so it must not size an
-		// allocation on its own. Two things are untrusted here: eventLen, and
-		// tp.uncompressedSize, which is taken from the event header and is only
-		// verified against the decoded byte count on the in-memory path -- in
-		// streaming mode a small zstd frame can advertise a huge uncompressed size.
-		// So bound the allocation by what has actually been read rather than by any
-		// advertised figure: read the body into a buffer that grows as bytes arrive.
+		// eventLen is read from the payload, so it must not size an allocation on its
+		// own: a four byte field can ask for 4GiB. Cap the up-front reservation at a
+		// fixed ceiling and let append grow beyond it only as bytes actually arrive,
+		// so a short payload cannot reserve more than the ceiling while a genuinely
+		// large event still gets a single right-sized buffer once it is read.
 		if eventLen < headerLen {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
 				"binlog event length of %d is smaller than the event header", eventLen)
 		}
-		body, err := readAtMost(tp.reader, eventLen-headerLen)
+		eventData := make([]byte, headerLen, min(eventLen, maxEventPreallocation))
+		copy(eventData, header)
+		eventData, err = appendAtMost(eventData, tp.reader, eventLen-headerLen)
 		if err != nil && err != io.EOF {
 			return nil, vterrors.Wrap(err, "error reading binlog event data from uncompressed transaction payload")
 		}
-		if int64(len(body)+headerLen) != eventLen {
+		if int64(len(eventData)) != eventLen {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
 				"expected binlog event length of %d but only read %d bytes",
-				eventLen, len(body)+headerLen)
+				eventLen, len(eventData))
 		}
-		eventData := make([]byte, 0, eventLen)
-		eventData = append(eventData, header...)
-		eventData = append(eventData, body...)
 		return NewMysql56BinlogEvent(eventData), nil
 	}
 	return nil
 }
 
-// readAtMost reads up to n bytes, growing its buffer as data arrives rather than
-// reserving n up front. n is derived from untrusted input, so reserving it would
-// let a short payload command an arbitrarily large allocation.
-func readAtMost(r io.Reader, n int64) ([]byte, error) {
-	const chunk = 64 * 1024
-	buf := make([]byte, 0, min(n, chunk))
-	for int64(len(buf)) < n {
-		want := min(n-int64(len(buf)), chunk)
-		start := len(buf)
-		buf = append(buf, make([]byte, want)...)
-		read, err := io.ReadFull(r, buf[start:])
-		buf = buf[:start+read]
-		if err != nil {
-			if err == io.ErrUnexpectedEOF {
-				err = io.EOF
-			}
-			return buf, err
+// maxEventPreallocation bounds how much is reserved for an event before any of its
+// bytes have been read. A four byte length field can claim 4GiB, so the initial
+// reservation is capped; once that much has actually arrived the length is credible
+// and the buffer is grown to it in one step, which keeps large valid events at a
+// single right-sized allocation.
+const maxEventPreallocation = 1 << 20
+
+// appendAtMost appends up to n bytes read from r to buf. It reserves at most
+// maxEventPreallocation up front, then grows to the full size once that much has
+// been read, so an overlong claim costs the cap rather than the claim.
+// Returns io.EOF if r held fewer than n bytes.
+func appendAtMost(buf []byte, r io.Reader, n int64) ([]byte, error) {
+	start := len(buf)
+	first := min(n, maxEventPreallocation)
+	buf = append(buf, make([]byte, first)...)
+	read, err := io.ReadFull(r, buf[start:])
+	buf = buf[:start+read]
+	if err != nil {
+		if err == io.ErrUnexpectedEOF {
+			err = io.EOF
 		}
+		return buf, err
 	}
-	return buf, nil
+	if int64(read) == n {
+		return buf, nil
+	}
+	// The cap was filled, so the claimed length is backed by real data this far.
+	// Grow once to the full size rather than doubling repeatedly.
+	rest := n - int64(read)
+	at := len(buf)
+	grown := make([]byte, at+int(rest))
+	copy(grown, buf)
+	buf = grown
+	read2, err := io.ReadFull(r, buf[at:])
+	buf = buf[:at+read2]
+	if err == io.ErrUnexpectedEOF {
+		err = io.EOF
+	}
+	return buf, err
 }
 
 // decompress decompresses the payload. If the payload is larger than
