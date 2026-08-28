@@ -917,7 +917,7 @@ func TestParseMysql56GTIDSetIntervalsCapHint(t *testing.T) {
 	for _, n := range []int{1, 10, 100, 1023, 1024, 1025, 2051, 5000} {
 		var sb strings.Builder
 		sb.WriteString(sid)
-		for i := 0; i < n; i++ {
+		for i := range n {
 			// non-overlapping ascending intervals, so none are merged or discarded
 			fmt.Fprintf(&sb, ":%d-%d", 2*i+1, 2*i+1)
 		}
@@ -956,7 +956,7 @@ func TestParseMysql56GTIDSetIntervalsCapHint(t *testing.T) {
 	const singletons = 100000
 	var sb strings.Builder
 	sb.WriteString(sid)
-	for i := 0; i < singletons; i++ {
+	for range singletons {
 		sb.WriteString(":1")
 	}
 	runtime.GC()
