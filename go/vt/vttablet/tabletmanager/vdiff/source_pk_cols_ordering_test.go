@@ -173,12 +173,12 @@ func TestSourcePKSelectIndices(t *testing.T) {
 		sourceQuery string
 		pkColumns   []string
 		wantIndices []int
-		// wantErr is for the present-but-non-physical case (a PK name is
-		// projected only via a computed/unrelated expression): fail closed.
+		// wantErr is only for the invariant guard: an unexpanded '*' in the
+		// SELECT list that buildTablePlan should already have expanded.
 		wantErr bool
-		// wantNotProjected is for the entirely-absent case (a PK column is not
-		// projected at all): no error, allProjected == false, and no partial
-		// index slice is produced.
+		// wantNotProjected covers a PK column not projected as a physical column
+		// (absent, or present only via a non-physical expression): no error,
+		// allProjected == false, and no partial index slice.
 		wantNotProjected bool
 	}{
 		{
@@ -239,14 +239,13 @@ func TestSourcePKSelectIndices(t *testing.T) {
 			wantNotProjected: true,
 		},
 		{
-			// A computed expression wrapped in CONVERT that is aliased back to
-			// the PK name must NOT satisfy the PK lookup: it is a derived value,
-			// not the physical column. Since the alias names the PK column, this
-			// is the present-but-non-physical case and must fail closed.
-			name:        "computed convert aliased to PK name fails closed",
-			sourceQuery: "select convert(concat(c1, 'x') using utf8mb4) as c1, c2 from t order by c1 asc",
-			pkColumns:   []string{"c1"},
-			wantErr:     true,
+			// A computed expression wrapped in CONVERT aliased back to the PK name
+			// is a derived value, not the physical column, so it is treated as not
+			// projected (the diff runs without a resume checkpoint).
+			name:             "computed convert aliased to PK name is not projected",
+			sourceQuery:      "select convert(concat(c1, 'x') using utf8mb4) as c1, c2 from t order by c1 asc",
+			pkColumns:        []string{"c1"},
+			wantNotProjected: true,
 		},
 		{
 			name:        "function expression with alias",
@@ -305,21 +304,21 @@ func TestSourcePKSelectIndices(t *testing.T) {
 			wantIndices: []int{0, 1},
 		},
 		{
-			// A computed alias must not satisfy a source PK lookup: the row
-			// streamer resumes using the physical PK value, so persisting a
-			// derived value would skip/repeat rows. Fail closed instead.
-			name:        "computed alias does not satisfy source PK (fails closed)",
-			sourceQuery: "select a + b as id, c from t order by id asc",
-			pkColumns:   []string{"id"},
-			wantErr:     true,
+			// A computed alias does not satisfy a source PK lookup: the row
+			// streamer resumes on the physical PK value, so it is treated as not
+			// projected rather than persisting a derived value.
+			name:             "computed alias does not satisfy source PK (not projected)",
+			sourceQuery:      "select a + b as id, c from t order by id asc",
+			pkColumns:        []string{"id"},
+			wantNotProjected: true,
 		},
 		{
-			// An alias mapping an unrelated physical column to the source PK
-			// name must not match; only the real physical PK column may.
-			name:        "unrelated column aliased to source PK name fails closed",
-			sourceQuery: "select other_col as id, c from t order by id asc",
-			pkColumns:   []string{"id"},
-			wantErr:     true,
+			// An alias mapping an unrelated physical column to the source PK name
+			// does not match the physical PK, so it is treated as not projected.
+			name:             "unrelated column aliased to source PK name is not projected",
+			sourceQuery:      "select other_col as id, c from t order by id asc",
+			pkColumns:        []string{"id"},
+			wantNotProjected: true,
 		},
 		{
 			// Invariant guard: buildTablePlan must expand "*" into explicit

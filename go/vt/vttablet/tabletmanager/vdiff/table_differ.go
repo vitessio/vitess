@@ -558,7 +558,7 @@ func (td *tableDiffer) diff(ctx context.Context, coreOpts *tabletmanagerdatapb.V
 		// persisted mismatch bit so a mismatch recorded by a discarded partial
 		// attempt does not stick after a clean full-table pass.
 		mismatch = false
-		if err = clearTableMismatch(dbClient, td.wd.ct.id, td.table.Name); err != nil {
+		if err = setTableMismatch(dbClient, td.wd.ct.id, td.table.Name, false); err != nil {
 			return nil, err
 		}
 	} else if rpt := curState.AsBytes("report", []byte("{}")); json.Valid(rpt) {
@@ -608,7 +608,7 @@ func (td *tableDiffer) diff(ctx context.Context, coreOpts *tabletmanagerdatapb.V
 		if !mismatch && dr.MismatchedRows > 0 {
 			mismatch = true
 			log.Info(fmt.Sprintf("Flagging mismatch in vdiff %s for %s: %+v", td.wd.ct.uuid, td.table.Name, dr))
-			if err := updateTableMismatch(dbClient, td.wd.ct.id, td.table.Name); err != nil {
+			if err := setTableMismatch(dbClient, td.wd.ct.id, td.table.Name, true); err != nil {
 				return nil, err
 			}
 		}
@@ -889,26 +889,13 @@ func (td *tableDiffer) updateTableStateAndReport(ctx context.Context, dbClient b
 	return nil
 }
 
-func updateTableMismatch(dbClient binlogplayer.DBClient, vdiffID int64, table string) error {
+// setTableMismatch sets (mismatch=true) or clears (mismatch=false) the persisted
+// mismatch bit for a table. It is cleared when a table with no resumable
+// checkpoint restarts from the beginning, so a mismatch recorded by a discarded
+// partial attempt does not stick after a clean full-table pass.
+func setTableMismatch(dbClient binlogplayer.DBClient, vdiffID int64, table string, mismatch bool) error {
 	query, err := sqlparser.ParseAndBind(sqlUpdateTableMismatch,
-		sqltypes.Int64BindVariable(vdiffID),
-		sqltypes.StringBindVariable(table),
-	)
-	if err != nil {
-		return err
-	}
-	if _, err = dbClient.ExecuteFetch(query, 1); err != nil {
-		return err
-	}
-	return nil
-}
-
-// clearTableMismatch resets the persisted mismatch bit for a table. It is used
-// when a table with no resumable checkpoint restarts from the beginning, so a
-// mismatch recorded by a discarded partial attempt does not stick after a clean
-// full-table pass.
-func clearTableMismatch(dbClient binlogplayer.DBClient, vdiffID int64, table string) error {
-	query, err := sqlparser.ParseAndBind(sqlClearTableMismatch,
+		sqltypes.BoolBindVariable(mismatch),
 		sqltypes.Int64BindVariable(vdiffID),
 		sqltypes.StringBindVariable(table),
 	)
@@ -1146,44 +1133,20 @@ func sourceTableNameFromSelect(sourceSelect *sqlparser.Select) (string, error) {
 }
 
 // sourcePKSelectIndices maps each source PK column to its position in the SELECT
-// expression list (the physical row layout the row streamer produces). The
-// indices are returned in PK definition order.
+// expression list (the physical row layout the row streamer produces), in PK
+// definition order. A PK column resolves through a plain ColName, a rename
+// (aliased ColName), or a CONVERT(col USING charset) rename.
 //
-// Because the schema lookup uses the real source table (see
-// sourceTableNameFromSelect), a projected source PK column appears in the SELECT
-// list as a direct reference to that physical column. We resolve each PK against
-// the underlying column of the expression:
-//   - a plain ColName ("select c1, c2 ..." or reordered "select c2, c1 ..."),
-//   - a renamed column ("select source_id as target_id ...", underlying ColName), or
-//   - a CONVERT(col USING charset) rename, unwrapping to the inner ColName,
-//     mirroring how the row streamer's planner resolves the physical column.
-//
-// A source PK column can be missing in two distinct ways, handled differently:
-//
-//   - Present-but-non-physical: an expression whose output column is named after
-//     the PK column (via an alias) but that does not resolve to the physical PK
-//     column, e.g. "select a + b as id" or "select other_col as id". This fails
-//     closed with an error. The row streamer resumes using the physical source
-//     PK value, so persisting a derived value as the source checkpoint would
-//     skip or repeat rows on resume.
-//
-//   - Entirely absent: the PK column is not projected at all, e.g. source PK
-//     (cid, typ) with a filter of "select cid, name from customer". This is a
-//     valid subset-projection filter, so we return allProjected == false and no
-//     error. The caller must then treat the source checkpoint as unavailable and
-//     persist no resumable checkpoint (restarting the whole table on resume)
-//     rather than building a partial source key. We never return a partial-length
-//     index slice: the row streamer always resumes on the full source PK and
-//     rejects a lastpk whose length does not match the table's PK column count
-//     (see buildSelect in rowstreamer.go).
-//
-// allProjected is true only when every source PK column resolved to a physical
-// SELECT column, in which case indices holds all of their SELECT-order indices.
+// allProjected is true only when every source PK column resolves to a physical
+// SELECT column. If any PK column is not projected as a physical column -- absent,
+// or present only via a non-physical expression such as "other_col as id" -- it
+// returns allProjected == false with no error and no partial indices, so the
+// caller treats the source checkpoint as unavailable. The row streamer resumes on
+// the full physical source PK, so a partial or derived source key is not usable.
 func sourcePKSelectIndices(sourceSelect *sqlparser.Select, pkColumns []string) (indices []int, allProjected bool, err error) {
 	indices = make([]int, 0, len(pkColumns))
 	for _, pkc := range pkColumns {
 		physicalIdx := -1
-		aliasedButNotPhysical := false
 		for i, selExpr := range sourceSelect.SelectExprs.Exprs {
 			// Invariant: buildTablePlan expands "*" into explicit columns before
 			// this runs, so the SELECT list must contain only AliasedExprs. If a
@@ -1205,21 +1168,14 @@ func sourcePKSelectIndices(sourceSelect *sqlparser.Select, pkColumns []string) (
 				physicalIdx = i
 				break
 			}
-			if !aliasedExpr.As.IsEmpty() && strings.EqualFold(pkc, aliasedExpr.As.String()) {
-				aliasedButNotPhysical = true
-			}
 		}
-		if physicalIdx >= 0 {
-			indices = append(indices, physicalIdx)
-			continue
+		if physicalIdx < 0 {
+			// Not projected as a physical column (absent, or only via a non-physical
+			// expression): report it so the caller runs without a resume checkpoint
+			// rather than returning a partial key or failing.
+			return nil, false, nil
 		}
-		if aliasedButNotPhysical {
-			// Present-but-non-physical: fail closed.
-			return nil, false, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "source PK column %s is projected only via a non-physical expression in the source query SELECT list", pkc)
-		}
-		// Entirely absent: report to the caller instead of returning a partial
-		// (and therefore unusable) source key.
-		return nil, false, nil
+		indices = append(indices, physicalIdx)
 	}
 	return indices, true, nil
 }
@@ -1237,9 +1193,8 @@ func underlyingSourceColumn(expr sqlparser.Expr) (string, bool) {
 	case *sqlparser.ConvertUsingExpr:
 		// Only a direct column rename like "convert(c1 using utf8mb4) as c2"
 		// is a physical source column. Anything wrapped in a computation
-		// (concat, cast, arithmetic, etc.) is NOT a physical column and must
-		// fail closed so we never persist a derived value as the source
-		// checkpoint. Mirrors the fail-closed contract for computed aliases.
+		// (concat, cast, arithmetic, etc.) is not a physical column, so it
+		// resolves to none and the PK is treated as not projected.
 		if inner, ok := e.Expr.(*sqlparser.ColName); ok {
 			return inner.Name.String(), true
 		}

@@ -63,8 +63,7 @@ const (
 	sqlUpdateTableNoProgress     = "update _vt.vdiff_table set rows_compared = %a, report = %a where vdiff_id = %a and table_name = %a"
 	sqlUpdateTableState          = "update _vt.vdiff_table set state = %a where vdiff_id = %a and table_name = %a"
 	sqlUpdateTableStateAndReport = "update _vt.vdiff_table set state = %a, rows_compared = %a, report = %a where vdiff_id = %a and table_name = %a"
-	sqlUpdateTableMismatch       = "update _vt.vdiff_table set mismatch = true where vdiff_id = %a and table_name = %a"
-	sqlClearTableMismatch        = "update _vt.vdiff_table set mismatch = false where vdiff_id = %a and table_name = %a"
+	sqlUpdateTableMismatch       = "update _vt.vdiff_table set mismatch = %a where vdiff_id = %a and table_name = %a"
 
 	sqlGetIncompleteTables = "select table_name as table_name from _vt.vdiff_table where vdiff_id = %a and state != 'completed' order by table_name"
 )

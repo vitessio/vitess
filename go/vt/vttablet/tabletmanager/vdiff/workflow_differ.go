@@ -291,7 +291,7 @@ func (wd *workflowDiffer) diffTable(ctx context.Context, dbClient binlogplayer.D
 	}
 
 	if diffReport.MismatchedRows > 0 || diffReport.ExtraRowsTarget > 0 || diffReport.ExtraRowsSource > 0 {
-		if err := updateTableMismatch(dbClient, wd.ct.id, td.table.Name); err != nil {
+		if err := setTableMismatch(dbClient, wd.ct.id, td.table.Name, true); err != nil {
 			return err
 		}
 	}

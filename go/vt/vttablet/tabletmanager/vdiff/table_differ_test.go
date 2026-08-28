@@ -164,13 +164,13 @@ func TestGetSourcePKCols_TableDroppedOnSource(t *testing.T) {
 	require.Nil(t, td.tablePlan.sourcePkCols)
 }
 
-// TestGetSourcePKCols_ComputedAliasFailsClosed verifies that when a source PK
-// column is not projected as a physical column in the source query (only a
-// computed value aliased to the PK name is present), getSourcePKCols fails
-// closed rather than persisting the derived value as the source checkpoint.
-// The row streamer resumes using the physical source PK, so accepting the
-// computed value would skip or repeat rows on resume.
-func TestGetSourcePKCols_ComputedAliasFailsClosed(t *testing.T) {
+// TestGetSourcePKCols_ComputedAliasUnavailable verifies that when a source PK
+// column is projected only via a non-physical expression (a computed value
+// aliased to the PK name) rather than as a physical column, getSourcePKCols does
+// not fail: it flags the source checkpoint as unavailable so no derived value is
+// persisted and the whole table restarts on resume. The row streamer resumes on
+// the physical source PK, so the diff still runs, just without mid-table resume.
+func TestGetSourcePKCols_ComputedAliasUnavailable(t *testing.T) {
 	tvde := newTestVDiffEnv(t)
 	defer tvde.close()
 
@@ -200,9 +200,9 @@ func TestGetSourcePKCols_ComputedAliasFailsClosed(t *testing.T) {
 	}
 
 	err := td.getSourcePKCols()
-	require.Error(t, err)
-	require.ErrorContains(t, err, "source PK column textcol is projected only via a non-physical expression")
-	require.Nil(t, td.tablePlan.sourcePkCols)
+	require.NoError(t, err)
+	require.True(t, td.tablePlan.sourceCheckpointUnavailable)
+	require.Empty(t, td.tablePlan.sourcePkCols)
 }
 
 // TestGetSourcePKCols_SubsetProjectionUnavailable mirrors the customer
