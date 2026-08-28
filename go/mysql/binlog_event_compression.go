@@ -304,32 +304,44 @@ func (tp *TransactionPayload) decode() error {
 				eventLen, remaining+headerLen)
 		}
 		if eventLen-headerLen > eventChunkSize {
-			// Prove the claim with real bytes before honouring it.
-			head := make([]byte, eventChunkSize)
-			if _, err := io.ReadFull(tp.reader, head); err != nil {
-				if err == io.EOF || err == io.ErrUnexpectedEOF {
-					return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
-						"binlog event claims a length of %d but the payload does not contain it",
-						eventLen)
+			// Grow geometrically and never past what has arrived. Reading one fixed
+			// chunk and then committing to eventLen merely postpones the allocation:
+			// a 142 byte frame delivering 1.1MiB while claiming 4GiB still allocated
+			// 4,305,625,816 bytes. Doubling keeps the reservation within a factor of
+			// two of the bytes actually decoded, so peak memory tracks real data at
+			// every step, and a valid event still reaches its size in log2(n) steps.
+			buf := make([]byte, headerLen, headerLen+eventChunkSize)
+			copy(buf, header)
+			for int64(len(buf)) < eventLen {
+				if len(buf) == cap(buf) {
+					next := int64(cap(buf)) * 2
+					if next > eventLen {
+						next = eventLen
+					}
+					grown := make([]byte, len(buf), next)
+					copy(grown, buf)
+					buf = grown
 				}
-				return nil, vterrors.Wrap(err, "error reading binlog event data from uncompressed transaction payload")
-			}
-			eventData := make([]byte, eventLen)
-			copy(eventData, header)
-			copy(eventData[headerLen:], head)
-			n, err := io.ReadFull(tp.reader, eventData[headerLen+eventChunkSize:])
-			if err != nil && err != io.EOF && err != io.ErrUnexpectedEOF {
-				return nil, vterrors.Wrap(err, "error reading binlog event data from uncompressed transaction payload")
-			}
-			if int64(n)+eventChunkSize+headerLen != eventLen {
-				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
-					"expected binlog event length of %d but only read %d bytes",
-					eventLen, int64(n)+eventChunkSize)
+				want := int64(cap(buf))
+				if want > eventLen {
+					want = eventLen
+				}
+				at := len(buf)
+				buf = buf[:want]
+				n, err := io.ReadFull(tp.reader, buf[at:])
+				if err != nil {
+					if err == io.EOF || err == io.ErrUnexpectedEOF {
+						return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+							"binlog event claims a length of %d but only %d bytes of it arrived",
+							eventLen, int64(at-headerLen)+int64(n))
+					}
+					return nil, vterrors.Wrap(err, "error reading binlog event data from uncompressed transaction payload")
+				}
 			}
 			if remaining >= 0 {
-				remaining -= int64(n) + eventChunkSize
+				remaining -= eventLen - headerLen
 			}
-			return NewMysql56BinlogEvent(eventData), nil
+			return NewMysql56BinlogEvent(buf), nil
 		}
 		eventData := make([]byte, eventLen)
 		copy(eventData, header) // The event includes the header

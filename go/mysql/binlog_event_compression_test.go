@@ -243,3 +243,36 @@ func TestTransactionPayloadBothLengthsLie(t *testing.T) {
 		"a %d byte frame claiming a 1GiB event inside a 2GiB payload allocated %d bytes",
 		len(tp.payload), allocated)
 }
+
+// TestTransactionPayloadPostChunkClaim covers the case a reviewer raised against
+// the fixed-chunk version of this bound: deliver just over the chunk, then claim
+// far more. Reading one chunk and committing to the claimed length only postponed
+// the allocation -- a 398 byte frame delivering 1.1MiB while claiming 4GiB
+// allocated 4,304,566,256 bytes on main and 4,305,625,816 with a fixed chunk.
+func TestTransactionPayloadPostChunkClaim(t *testing.T) {
+	const claim = uint32(4<<30 - 1)
+	body := make([]byte, (1<<20)+65536)
+	inner := make([]byte, headerLen)
+	binary.LittleEndian.PutUint32(inner[binlogEventLenOffset:headerLen], claim)
+	inner = append(inner, body...)
+
+	tp := &TransactionPayload{
+		uncompressedSize: uint64(claim),
+		compressionType:  TransactionPayloadCompressionZstd,
+	}
+	tp.payload = compressPayloadForTest(t, inner)
+	require.NoError(t, tp.decode())
+	defer tp.Close()
+
+	var before, after runtime.MemStats
+	runtime.GC()
+	runtime.ReadMemStats(&before)
+	_, err := tp.GetNextEvent()
+	runtime.ReadMemStats(&after)
+
+	require.Error(t, err)
+	allocated := after.TotalAlloc - before.TotalAlloc
+	require.Less(t, allocated, uint64(64<<20),
+		"a %d byte frame delivering %d bytes while claiming %d allocated %d bytes",
+		len(tp.payload), len(body), claim, allocated)
+}
