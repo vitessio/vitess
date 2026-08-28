@@ -32,4 +32,4 @@ func (v ZKVersion) String() string {
 	return strconv.Itoa(int(int32(v)))
 }
 
-var _ topo.Version = (ZKVersion)(0) // compile-time interface check
+var _ topo.Version = ZKVersion(0) // compile-time interface check

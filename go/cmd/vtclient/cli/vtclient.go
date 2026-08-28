@@ -319,7 +319,7 @@ func execNonDml(ctx context.Context, db *sql.DB, sql string) (*results, error) {
 		// unpack []*string into []string
 		vals := make([]string, 0, len(row))
 		for _, value := range row {
-			vals = append(vals, *(value.(*string)))
+			vals = append(vals, *value.(*string))
 		}
 		qr.Rows = append(qr.Rows, vals)
 	}

@@ -673,7 +673,7 @@ func gen4ValEqual(ctx *plancontext.PlanningContext, a, b sqlparser.Expr) (bool, 
 		case sqlparser.HexVal:
 			return hexEqual(a, b), nil
 		case sqlparser.IntVal:
-			if b.Type == (sqlparser.IntVal) {
+			if b.Type == sqlparser.IntVal {
 				return a.Val == b.Val, nil
 			}
 		}

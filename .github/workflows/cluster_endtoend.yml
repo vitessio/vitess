@@ -78,7 +78,7 @@ jobs:
 
     steps:
       - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
+        uses: step-security/harden-runner@b09bb98e06d4d774595224525879c09bc6e98c40 # v2.20.1
         with:
           egress-policy: audit
 
@@ -192,7 +192,8 @@ jobs:
       # There is no separate 'zookeeper' need, so 'consul' is the correct proxy for "this shard needs ZooKeeper".
       - name: Cache ZooKeeper
         if: steps.changes.outputs.end_to_end == 'true' && contains(matrix.needs, 'consul')
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0  # zizmor: ignore[cache-poisoning] this workflow publishes no artifacts
+        # zizmor: ignore[cache-poisoning] this workflow publishes no artifacts
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: dist/vt-zookeeper-*
           key: zookeeper-${{ hashFiles('build.env', 'bootstrap.sh') }}

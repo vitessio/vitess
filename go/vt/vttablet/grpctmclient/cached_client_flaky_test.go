@@ -318,7 +318,7 @@ func TestCachedConnClient(t *testing.T) {
 					longestDials <- longestDial
 					return
 				case <-time.After(jitter):
-					jitter = time.Millisecond * (time.Duration(rand.IntN(11) + 50))
+					jitter = time.Millisecond * time.Duration(rand.IntN(11)+50)
 					attempts++
 
 					tablet := tablets[rand.IntN(len(tablets))]
