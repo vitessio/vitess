@@ -2121,5 +2121,49 @@
         "user.user"
       ]
     }
+  },
+  {
+    "comment": "join with derived table containing a UNION of literal only SELECTs, predicate on the derived table",
+    "query": "select u.id, r.ordinal from user as u join (select 0 as ordinal, 1 as pid union all select 1, 2) as r on u.id = r.pid where r.ordinal <= 30000",
+    "plan": {
+      "Type": "Scatter",
+      "QueryType": "SELECT",
+      "Original": "select u.id, r.ordinal from user as u join (select 0 as ordinal, 1 as pid union all select 1, 2) as r on u.id = r.pid where r.ordinal <= 30000",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select u.id, r.ordinal from `user` as u, (select 0 as ordinal, 1 as pid from dual where 1 != 1 union all select 1, 2 from dual where 1 != 1) as r where 1 != 1",
+        "Query": "select u.id, r.ordinal from `user` as u, (select 0 as ordinal, 1 as pid from dual union all select 1, 2 from dual) as r where r.ordinal <= 30000 and u.id = r.pid"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "derived table containing a UNION of literal only SELECTs joined with a table, predicate on the derived table",
+    "query": "select u.id, r.ordinal from (select 0 as ordinal, 1 as pid union all select 1, 2) as r join user as u on u.id = r.pid where r.ordinal <= 30000",
+    "plan": {
+      "Type": "Scatter",
+      "QueryType": "SELECT",
+      "Original": "select u.id, r.ordinal from (select 0 as ordinal, 1 as pid union all select 1, 2) as r join user as u on u.id = r.pid where r.ordinal <= 30000",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select u.id, r.ordinal from `user` as u, (select 0 as ordinal, 1 as pid from dual where 1 != 1 union all select 1, 2 from dual where 1 != 1) as r where 1 != 1",
+        "Query": "select u.id, r.ordinal from `user` as u, (select 0 as ordinal, 1 as pid from dual union all select 1, 2 from dual) as r where r.ordinal <= 30000 and u.id = r.pid"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
   }
 ]
