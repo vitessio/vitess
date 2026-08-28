@@ -26,7 +26,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/proto/topodata"
 )
@@ -458,18 +457,16 @@ func TestThrottlerMaxLag(t *testing.T) {
 						return
 					}
 					cache.add(replicationLagRecord{
-						time: time.Now(),
-						TabletHealth: discovery.TabletHealth{
-							Serving: true,
-							Stats: &query.RealtimeStats{
-								ReplicationLagSeconds: 5,
-							},
-							Tablet: &topodata.Tablet{
-								Hostname: t.Name(),
-								Type:     tabletType,
-								PortMap: map[string]int32{
-									"test": 15999,
-								},
+						time:    time.Now(),
+						Serving: true,
+						Stats: &query.RealtimeStats{
+							ReplicationLagSeconds: 5,
+						},
+						Tablet: &topodata.Tablet{
+							Hostname: t.Name(),
+							Type:     tabletType,
+							PortMap: map[string]int32{
+								"test": 15999,
 							},
 						},
 					})

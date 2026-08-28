@@ -18,12 +18,18 @@ limitations under the License.
 
 package servenv
 
-import "errors"
+// Cgroups are a Linux kernel feature, so only host metrics are available here.
 
-func getCgroupCpu() (float64, error) {
-	return -1, errors.New("cgroups not supported on nonlinux platforms")
+func getCpuUsage() float64 {
+	if value, err := getHostCpuUsage(); err == nil {
+		return value
+	}
+	return -1
 }
 
-func getCgroupMemory() (float64, error) {
-	return -1, errors.New("cgroups not supported on nonlinux platforms")
+func getMemoryUsage() float64 {
+	if value, err := getHostMemoryUsage(); err == nil {
+		return value
+	}
+	return -1
 }

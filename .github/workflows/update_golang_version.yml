@@ -10,8 +10,8 @@ jobs:
   update_golang_version:
     if: github.repository == 'vitessio/vitess'
     permissions:
-      contents: write
-      pull-requests: write
+      contents: read
+      pull-requests: read
     strategy:
       matrix:
         branch: [ main, release-24.0, release-23.0 ]
@@ -19,7 +19,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
+        uses: step-security/harden-runner@b09bb98e06d4d774595224525879c09bc6e98c40 # v2.20.1
         with:
           egress-policy: audit
 
@@ -41,15 +41,20 @@ jobs:
         run: echo "user-id=$(gh api "/users/${APP_SLUG}[bot]" --jq .id)" >> "$GITHUB_OUTPUT"
 
       - name: Check out code
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ matrix.branch }}
+          persist-credentials: 'false'
 
       - name: Set up Go
-        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        # The shared setup-go action is resolved from the matrix.branch
+        # checkout, where it may not exist or may be outdated. This job only
+        # compiles the small go-upgrade tool once a day, so caching is not
+        # worth it anyway.
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
-          cache: ${{ (github.base_ref == 'main' || (github.base_ref == '' && github.ref_name == 'main')) && 'true' || 'false' }}
+          cache: false
 
       - name: Detect new version and update codebase
         env:

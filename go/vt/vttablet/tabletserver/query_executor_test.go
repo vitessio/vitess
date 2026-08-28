@@ -577,54 +577,42 @@ func TestExecDDLSchemaTableCountLimit(t *testing.T) {
 		setup
 	}{
 		{
-			name: "below_limit_create_passes_gate",
-			setup: setup{
-				limit:           10,
-				preloadedTables: []string{"a", "b"},
-				query:           "create table c (id int primary key)",
-			},
+			name:            "below_limit_create_passes_gate",
+			limit:           10,
+			preloadedTables: []string{"a", "b"},
+			query:           "create table c (id int primary key)",
 		},
 		{
-			name: "at_limit_plain_create_rejected",
-			setup: setup{
-				limit:           2,
-				preloadedTables: []string{"a", "b"},
-				query:           "create table c (id int primary key)",
-				wantErrContains: "schema engine table limit of 2 reached",
-			},
+			name:            "at_limit_plain_create_rejected",
+			limit:           2,
+			preloadedTables: []string{"a", "b"},
+			query:           "create table c (id int primary key)",
+			wantErrContains: "schema engine table limit of 2 reached",
 		},
 		{
-			name: "at_limit_create_view_rejected",
-			setup: setup{
-				limit:           2,
-				preloadedTables: []string{"a", "b"},
-				query:           "create view c as select 1 from dual",
-				wantErrContains: "schema engine table limit of 2 reached",
-			},
+			name:            "at_limit_create_view_rejected",
+			limit:           2,
+			preloadedTables: []string{"a", "b"},
+			query:           "create view c as select 1 from dual",
+			wantErrContains: "schema engine table limit of 2 reached",
 		},
 		{
-			name: "at_limit_if_not_exists_on_existing_passes",
-			setup: setup{
-				limit:           2,
-				preloadedTables: []string{"a", "b"},
-				query:           "create table if not exists a (id int primary key)",
-			},
+			name:            "at_limit_if_not_exists_on_existing_passes",
+			limit:           2,
+			preloadedTables: []string{"a", "b"},
+			query:           "create table if not exists a (id int primary key)",
 		},
 		{
-			name: "at_limit_create_on_existing_passes_gate",
-			setup: setup{
-				limit:           2,
-				preloadedTables: []string{"a", "b"},
-				query:           "create table a (id int primary key)",
-			},
+			name:            "at_limit_create_on_existing_passes_gate",
+			limit:           2,
+			preloadedTables: []string{"a", "b"},
+			query:           "create table a (id int primary key)",
 		},
 		{
-			name: "at_limit_temporary_passes",
-			setup: setup{
-				limit:           2,
-				preloadedTables: []string{"a", "b"},
-				query:           "create temporary table c (id int primary key)",
-			},
+			name:            "at_limit_temporary_passes",
+			limit:           2,
+			preloadedTables: []string{"a", "b"},
+			query:           "create temporary table c (id int primary key)",
 		},
 	}
 
@@ -1472,8 +1460,8 @@ func TestReplaceSchemaName(t *testing.T) {
 	// Test streaming execute.
 	{
 		qre := newTestQueryExecutorStreaming(ctx, tsv, inQuery, 0)
-		// Stream only replaces schema name when plan is PlanSelectStream.
-		assert.Equal(t, planbuilder.PlanSelectStream, qre.plan.PlanID)
+		// Stream only replaces schema name when plan is PlanSelect.
+		assert.Equal(t, planbuilder.PlanSelect, qre.plan.PlanID)
 		// Any value other than nil should cause QueryExecutor to replace the
 		// schema name.
 		qre.bindVars[sqltypes.BvReplaceSchemaName] = sqltypes.NullBindVariable
@@ -1483,6 +1471,65 @@ func TestReplaceSchemaName(t *testing.T) {
 			return nil
 		})
 		require.NoError(t, err)
+	}
+}
+
+// A SELECT carrying a lock function can also reference an information_schema
+// table rewritten by vtgate, so both execution paths must resolve
+// :__vtschemaname before the query reaches MySQL. Lock functions require a
+// reserved connection, so both paths run on a transaction connection here.
+func TestReplaceSchemaNameSelectLockFunc(t *testing.T) {
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
+
+	queryFmt := "select get_lock('vt_lock', 10) from information_schema.`schema_name` where `schema_name` = %s"
+	inQuery := fmt.Sprintf(queryFmt, ":"+sqltypes.BvSchemaName)
+	wantQueryExec := fmt.Sprintf(queryFmt, fmt.Sprintf(
+		"'%s' limit %d",
+		db.Name(),
+		10001,
+	))
+	wantQueryStream := fmt.Sprintf(queryFmt, fmt.Sprintf(
+		"'%s'",
+		db.Name(),
+	))
+
+	ctx := t.Context()
+	tsv := newTestTabletServer(ctx, noFlags, db)
+	defer tsv.StopService()
+
+	db.AddQuery(wantQueryExec, &sqltypes.Result{
+		Fields: getTestTableFields(),
+	})
+
+	db.AddQuery(wantQueryStream, &sqltypes.Result{
+		Fields: getTestTableFields(),
+	})
+
+	target := tsv.sm.Target()
+
+	// Test non streaming execute.
+	{
+		txID := newTransaction(tsv, nil)
+		defer func() { _, _ = tsv.Rollback(ctx, target, txID) }()
+		qre := newTestQueryExecutor(ctx, tsv, inQuery, txID)
+		require.Equal(t, planbuilder.PlanSelectLockFunc, qre.plan.PlanID)
+		qre.bindVars[sqltypes.BvReplaceSchemaName] = sqltypes.NullBindVariable
+		_, err := qre.Execute()
+		require.NoError(t, err)
+		require.Contains(t, qre.bindVars, sqltypes.BvSchemaName)
+	}
+
+	// Test streaming execute.
+	{
+		txID := newTransaction(tsv, nil)
+		defer func() { _, _ = tsv.Rollback(ctx, target, txID) }()
+		qre := newTestQueryExecutorStreaming(ctx, tsv, inQuery, txID)
+		require.Equal(t, planbuilder.PlanSelectLockFunc, qre.plan.PlanID)
+		qre.bindVars[sqltypes.BvReplaceSchemaName] = sqltypes.NullBindVariable
+		err := qre.Stream(func(_ *sqltypes.Result) error { return nil })
+		require.NoError(t, err)
+		require.Contains(t, qre.bindVars, sqltypes.BvSchemaName)
 	}
 }
 
@@ -1605,6 +1652,56 @@ func TestQueryExecutorStreamDMLErrorStatsOnPermissionDenied(t *testing.T) {
 	errCountAfter := tsv.qe.queryErrorCounts.Counts()["test_table.Insert"]
 	assert.Equal(t, errCountBefore+1, errCountAfter,
 		"streamed DML rejected by checkPermissions must record per-table error stats like Execute")
+}
+
+// TestQueryExecutorStreamErrorStatsOnPermissionDenied verifies that a streamed
+// SELECT rejected by checkPermissions (a QRFail query rule) still records
+// per-table error stats, matching the non-streaming Execute path. Stream's
+// stats defer reads the named error return, so it observes the rejections from
+// the permission and request throttler checks even though they run before any
+// query execution; this test pins the defer being registered ahead of those
+// checks.
+func TestQueryExecutorStreamErrorStatsOnPermissionDenied(t *testing.T) {
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
+
+	query := "select * from test_table"
+
+	bannedAddr := "127.0.0.1"
+	bannedUser := "u2"
+
+	denyRule := rules.NewQueryRule("disable select", "disable select", rules.QRFail)
+	denyRule.SetIPCond(bannedAddr)
+	denyRule.SetUserCond(bannedUser)
+	denyRule.AddPlanCond(planbuilder.PlanSelect)
+	denyRule.AddTableCond("test_table")
+
+	rulesName := "denyListStreamSelectQRFail"
+	qrs := rules.New()
+	qrs.Add(denyRule)
+
+	callInfo := &fakecallinfo.FakeCallInfo{
+		Remote: bannedAddr,
+		User:   bannedUser,
+	}
+	ctx := callinfo.NewContext(t.Context(), callInfo)
+	tsv := newTestTabletServer(ctx, noFlags, db)
+	defer tsv.StopService()
+	tsv.qe.queryRuleSources.UnRegisterSource(rulesName)
+	tsv.qe.queryRuleSources.RegisterSource(rulesName)
+	defer tsv.qe.queryRuleSources.UnRegisterSource(rulesName)
+	require.NoError(t, tsv.qe.queryRuleSources.SetRules(rulesName, qrs))
+
+	qre := newTestQueryExecutorStreaming(ctx, tsv, query, 0)
+	require.Equal(t, planbuilder.PlanSelect, qre.plan.PlanID)
+
+	errCountBefore := tsv.qe.queryErrorCounts.Counts()["test_table.Select"]
+	err := qre.Stream(func(*sqltypes.Result) error { return nil })
+	require.Equal(t, vtrpcpb.Code_INVALID_ARGUMENT, vterrors.Code(err))
+
+	errCountAfter := tsv.qe.queryErrorCounts.Counts()["test_table.Select"]
+	assert.Equal(t, errCountBefore+1, errCountAfter,
+		"streamed SELECT rejected by checkPermissions must record per-table error stats like Execute")
 }
 
 // TestQueryExecutorStreamDMLAppliesQueryTimeout verifies that autocommit DML on

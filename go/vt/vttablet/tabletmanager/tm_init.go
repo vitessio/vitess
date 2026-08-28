@@ -230,6 +230,11 @@ type TabletManager struct {
 	_lockTablesTimer      *time.Timer
 	// _isBackupRunning tells us whether there is a backup that is currently running
 	_isBackupRunning bool
+
+	// mysqlVersion caches the MySQL server version string. It has its own lock
+	// (not tm.mutex) so reads never contend with unrelated TabletManager
+	// operations. See getMySQLVersionString for why this is cached.
+	mysqlVersion mysqlVersionCache
 }
 
 // BuildTabletFromInput builds a tablet record from input parameters.
@@ -369,8 +374,22 @@ func setTabletTagsStats(tablet *topodatapb.Tablet) {
 	}
 }
 
+// validateFlags returns an error when a tabletmanager flag has an invalid value.
+func validateFlags() error {
+	if demotePrimaryLockWaitTimeout < 0 {
+		return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION,
+			"--demote-primary-lock-wait-timeout cannot be negative, got %v", demotePrimaryLockWaitTimeout)
+	}
+
+	return nil
+}
+
 // Start starts the TabletManager.
 func (tm *TabletManager) Start(tablet *topodatapb.Tablet, config *tabletenv.TabletConfig) error {
+	if err := validateFlags(); err != nil {
+		return err
+	}
+
 	defer func() {
 		log.Info(fmt.Sprintf("TabletManager Start took ~%d ms", time.Since(servenv.GetInitStartTime()).Milliseconds()))
 	}()

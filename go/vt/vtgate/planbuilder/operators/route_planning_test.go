@@ -172,7 +172,7 @@ func TestCheckCrossKeyspaceJoin(t *testing.T) {
 		},
 		{
 			name: "composite same-keyspace lhs, cross-keyspace denied",
-			lhs:  &Join{binaryOperator: binaryOperator{LHS: makeRoute(ks1), RHS: makeRoute(ks1)}},
+			lhs:  &Join{LHS: makeRoute(ks1), RHS: makeRoute(ks1)},
 			rhs:  makeRoute(ks2),
 			vschema: &mockVSchema{
 				preventCrossKeyspaceReads: map[string]bool{"ks1": true},
@@ -181,7 +181,7 @@ func TestCheckCrossKeyspaceJoin(t *testing.T) {
 		},
 		{
 			name: "composite mixed-keyspace lhs, rhs denied",
-			lhs:  &Join{binaryOperator: binaryOperator{LHS: makeRoute(ks1), RHS: makeRoute(ks2)}},
+			lhs:  &Join{LHS: makeRoute(ks1), RHS: makeRoute(ks2)},
 			rhs:  makeRoute(&vindexes.Keyspace{Name: "ks3"}),
 			vschema: &mockVSchema{
 				preventCrossKeyspaceReads: map[string]bool{"ks3": true},
@@ -266,12 +266,12 @@ func TestOperatorKeyspaces(t *testing.T) {
 		},
 		{
 			name:     "multi-input same keyspace returns single keyspace",
-			op:       &Join{binaryOperator: binaryOperator{LHS: makeRoute(ks1), RHS: makeRoute(ks1)}},
+			op:       &Join{LHS: makeRoute(ks1), RHS: makeRoute(ks1)},
 			expected: []*vindexes.Keyspace{ks1},
 		},
 		{
 			name:     "multi-input different keyspaces returns both",
-			op:       &Join{binaryOperator: binaryOperator{LHS: makeRoute(ks1), RHS: makeRoute(ks2)}},
+			op:       &Join{LHS: makeRoute(ks1), RHS: makeRoute(ks2)},
 			expected: []*vindexes.Keyspace{ks1, ks2},
 		},
 		{

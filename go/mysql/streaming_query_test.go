@@ -31,8 +31,9 @@ import (
 
 // TestExecuteStreamFetchOKPacket verifies that a streaming query which returns an
 // OK packet instead of a result set (e.g. a CALL of a procedure that performs DML)
-// exposes the OK-packet RowsAffected and InsertID via StreamOKResult. This mirrors
-// the buffered ExecuteFetch path, which builds the same Result from the OK packet.
+// exposes the OK-packet RowsAffected, InsertID and SessionStateChanges via
+// StreamOKResult. This mirrors the buffered ExecuteFetch path, which builds the
+// same Result from the OK packet.
 func TestExecuteStreamFetchOKPacket(t *testing.T) {
 	listener, sConn, cConn := createSocketPair(t)
 	defer func() {
@@ -40,6 +41,11 @@ func TestExecuteStreamFetchOKPacket(t *testing.T) {
 		sConn.Close()
 		cConn.Close()
 	}()
+
+	// Session-state data is only written and parsed when both sides negotiated
+	// session tracking.
+	sConn.Capabilities |= CapabilityClientSessionTrack
+	cConn.Capabilities |= CapabilityClientSessionTrack
 
 	wg := sync.WaitGroup{}
 	var streamErr error
@@ -53,14 +59,16 @@ func TestExecuteStreamFetchOKPacket(t *testing.T) {
 	})
 
 	// The server reads the COM_QUERY and responds with an OK packet carrying
-	// RowsAffected, InsertID and Info but no result set.
+	// RowsAffected, InsertID and session-state data but no result set.
 	data, err := sConn.readEphemeralPacket()
 	require.NoError(t, err)
 	require.EqualValues(t, ComQuery, data[0])
 	sConn.recycleReadPacket()
 	require.NoError(t, sConn.writeOKPacket(&PacketOK{
-		affectedRows: 7,
-		lastInsertID: 99,
+		affectedRows:     7,
+		lastInsertID:     99,
+		statusFlags:      ServerSessionStateChanged,
+		sessionStateData: "8bb25b46-16bd-11ea-8ffa-98af65266957:8",
 	}))
 
 	wg.Wait()
@@ -69,6 +77,8 @@ func TestExecuteStreamFetchOKPacket(t *testing.T) {
 	assert.EqualValues(t, 7, okRes.RowsAffected)
 	assert.EqualValues(t, 99, okRes.InsertID)
 	assert.True(t, okRes.InsertIDChanged)
+	assert.Equal(t, "8bb25b46-16bd-11ea-8ffa-98af65266957:8", okRes.SessionStateChanges,
+		"streaming OK packet must carry the session-state data")
 }
 
 // TestExecuteStreamFetchNoOKResultForRows verifies that a streaming query which

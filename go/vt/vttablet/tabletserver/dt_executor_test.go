@@ -690,15 +690,17 @@ func newTestTxExecutor(t *testing.T, ctx context.Context) (txe *DTExecutor, tsv 
 	db.AddQuery("delete from _vt.redo_statement where dtid = _binary'aa'", &sqltypes.Result{})
 	db.AddQuery("update test_table set `name` = 2 where pk = 1 limit 10001", &sqltypes.Result{})
 	db.AddRejectedQuery("bogus", sqlerror.NewSQLError(sqlerror.ERUnknownError, sqlerror.SSUnknownSQLState, "bogus query"))
-	return &DTExecutor{
-			ctx:      ctx,
-			logStats: logStats,
-			te:       tsv.te,
-			qe:       qe,
-		}, tsv, db, func() {
-			db.Close()
-			tsv.StopService()
-		}
+	txe = &DTExecutor{
+		ctx:      ctx,
+		logStats: logStats,
+		te:       tsv.te,
+		qe:       qe,
+	}
+	closer = func() {
+		db.Close()
+		tsv.StopService()
+	}
+	return txe, tsv, db, closer
 }
 
 // newShortAgeExecutor is same as newTestTxExecutor, but shorter transaction abandon age.

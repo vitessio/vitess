@@ -19,7 +19,6 @@ package utils
 import (
 	"context"
 	"fmt"
-	"math"
 	"os"
 	"testing"
 	"time"
@@ -29,6 +28,7 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/mysqlctl"
@@ -214,6 +214,81 @@ func TestSetSuperReadOnlyMySQL(t *testing.T) {
 	assert.True(t, isReadOnly, "read_only should be set to True")
 }
 
+// TestSetSuperReadOnlyLockWaitTimeoutMySQL checks that enabling super_read_only
+// with a lock_wait_timeout of 1 second fails fast when another session holds a
+// lock that blocks it, instead of waiting for the lock to be released.
+func TestSetSuperReadOnlyLockWaitTimeoutMySQL(t *testing.T) {
+	require.NotNil(t, mysqld)
+
+	// Restore the original read-only state even if an assertion fails mid-test,
+	// so tests that run after this one see the state they expect. t.Context()
+	// is already canceled by the time cleanup runs, so use a fresh context.
+	wasReadOnly, err := mysqld.IsReadOnly(t.Context())
+	require.NoError(t, err)
+	wasSuperReadOnly, err := mysqld.IsSuperReadOnly(t.Context())
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		if wasSuperReadOnly {
+			_, err := mysqld.SetSuperReadOnly(ctx, true)
+			assert.NoError(t, err)
+			return
+		}
+		_, err := mysqld.SetSuperReadOnly(ctx, false)
+		assert.NoError(t, err)
+		assert.NoError(t, mysqld.SetReadOnly(ctx, wasReadOnly))
+	})
+
+	// Make sure the server is writable so the locking connection below can lock.
+	err = mysqld.SetReadOnly(t.Context(), false)
+	require.NoError(t, err)
+
+	// Hold an explicit table lock on a separate connection: enabling
+	// super_read_only blocks until explicit table locks are released.
+	conn, err := mysql.Connect(t.Context(), &mysqlParams)
+	require.NoError(t, err)
+	defer conn.Close()
+	Exec(t, conn, "lock tables t1 write")
+
+	// Bound the call so a regression fails the test instead of hanging it.
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+	defer cancel()
+	start := time.Now()
+	_, err = mysqld.SetSuperReadOnly(ctx, true, mysqlctl.WithLockWaitTimeout(time.Second))
+	elapsed := time.Since(start)
+
+	var sqlErr *sqlerror.SQLError
+	require.ErrorAs(t, err, &sqlErr, "enabling super_read_only while blocked should fail, took %v", elapsed)
+	assert.Equal(t, sqlerror.ERLockWaitTimeout, sqlErr.Number(), "expected a lock wait timeout error, got: %v", err)
+
+	isSuperReadOnly, err := mysqld.IsSuperReadOnly(t.Context())
+	require.NoError(t, err)
+	assert.False(t, isSuperReadOnly, "super_read_only should still be set to False")
+
+	isReadOnly, err := mysqld.IsReadOnly(t.Context())
+	require.NoError(t, err)
+	assert.False(t, isReadOnly, "the failed statement should not leave read_only enabled")
+
+	// Once the lock is released, the same call succeeds.
+	Exec(t, conn, "unlock tables")
+	retFunc, err := mysqld.SetSuperReadOnly(t.Context(), true, mysqlctl.WithLockWaitTimeout(time.Second))
+	require.NoError(t, err)
+	require.NotNil(t, retFunc, "SetSuperReadOnly is supposed to return a defer function")
+
+	isSuperReadOnly, err = mysqld.IsSuperReadOnly(t.Context())
+	require.NoError(t, err)
+	assert.True(t, isSuperReadOnly, "super_read_only should be set to True")
+
+	// The reset function restores the previous value. The t.Cleanup above is
+	// what guarantees the final state for the tests that follow.
+	err = retFunc()
+	require.NoError(t, err)
+	isSuperReadOnly, err = mysqld.IsSuperReadOnly(t.Context())
+	require.NoError(t, err)
+	assert.False(t, isSuperReadOnly, "the reset function should have restored super_read_only to False")
+}
+
 func TestGetMysqlPort(t *testing.T) {
 	require.NotNil(t, mysqld)
 
@@ -226,18 +301,6 @@ func TestGetMysqlPort(t *testing.T) {
 	want := clusterInstance.GetAndReservePort() - 1
 	assert.Equal(t, want, int(port))
 	assert.NoError(t, err)
-}
-
-func TestGetServerID(t *testing.T) {
-	require.NotNil(t, mysqld)
-
-	sid, err := mysqld.GetServerID(t.Context())
-	require.NoError(t, err)
-	assert.Equal(t, mycnf.ServerID, sid)
-
-	suuid, err := mysqld.GetServerUUID(t.Context())
-	require.NoError(t, err)
-	assert.NotEmpty(t, suuid)
 }
 
 func TestReplicationStatus(t *testing.T) {
@@ -284,17 +347,6 @@ func TestPrimaryStatus(t *testing.T) {
 
 	// The server UUID read from primary status and GetServerUUID should match
 	assert.Equal(t, suuid, res.ServerUUID)
-}
-
-func TestReplicationConfiguration(t *testing.T) {
-	require.NotNil(t, mysqld)
-
-	replConfig, err := mysqld.ReplicationConfiguration(t.Context())
-	require.NoError(t, err)
-
-	require.NotNil(t, replConfig)
-	// For a properly configured mysql, the heartbeat interval is half of the replication net timeout.
-	require.EqualValues(t, math.Round(replConfig.HeartbeatInterval*2), replConfig.ReplicaNetTimeout)
 }
 
 func TestGTID(t *testing.T) {
@@ -359,7 +411,10 @@ func TestSetAndResetReplication(t *testing.T) {
 	assert.Equal(t, port, r.SourcePort)
 	assert.Equal(t, host, r.SourceHost)
 
-	replConfig, err := mysqld.ReplicationConfiguration(t.Context())
+	conn, err := mysqld.GetDbaConnection(t.Context())
+	require.NoError(t, err)
+	replConfig, err := conn.ReplicationConfiguration(0)
+	conn.Close()
 	require.NoError(t, err)
 	assert.Equal(t, heartbeatInterval, replConfig.HeartbeatInterval)
 
@@ -386,41 +441,6 @@ func TestSetAndResetReplication(t *testing.T) {
 	require.ErrorContains(t, err, "no replication status")
 	assert.Empty(t, r.SourceHost)
 	assert.Equal(t, int32(0), r.SourcePort)
-}
-
-func TestGetBinlogInformation(t *testing.T) {
-	require.NotNil(t, mysqld)
-
-	// Default values
-	binlogFormat, logBin, logReplicaUpdates, binlogRowImage, err := mysqld.GetBinlogInformation(t.Context())
-	require.NoError(t, err)
-	assert.Equal(t, "ROW", binlogFormat)
-	assert.True(t, logBin)
-	assert.True(t, logReplicaUpdates)
-	assert.Equal(t, "FULL", binlogRowImage)
-
-	conn, err := mysql.Connect(t.Context(), &mysqlParams)
-	require.NoError(t, err)
-
-	res := Exec(t, conn, "SET GLOBAL binlog_format = 'STATEMENT'")
-	require.NotNil(t, res)
-
-	res = Exec(t, conn, "SET GLOBAL binlog_row_image = 'MINIMAL'")
-	require.NotNil(t, res)
-
-	binlogFormat, logBin, logReplicaUpdates, binlogRowImage, err = mysqld.GetBinlogInformation(t.Context())
-	require.NoError(t, err)
-	assert.Equal(t, "STATEMENT", binlogFormat)
-	assert.True(t, logBin)
-	assert.True(t, logReplicaUpdates)
-	assert.Equal(t, "MINIMAL", binlogRowImage)
-
-	// Set to default
-	res = Exec(t, conn, "SET GLOBAL binlog_format = 'ROW'")
-	require.NotNil(t, res)
-
-	res = Exec(t, conn, "SET GLOBAL binlog_row_image = 'FULL'")
-	require.NotNil(t, res)
 }
 
 func TestGetGTIDMode(t *testing.T) {
