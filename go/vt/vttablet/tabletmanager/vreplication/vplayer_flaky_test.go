@@ -4230,12 +4230,19 @@ func expectJSON(t *testing.T, table string, values [][]string, id int, exec func
 
 func startVReplication(t *testing.T, bls *binlogdatapb.BinlogSource, pos string) (cancelFunc func(), id int) {
 	t.Helper()
+	// fake workflow type as MoveTables so that we can test with "noblob" binlog row image
+	return startVReplicationWithWorkflowType(t, bls, pos, binlogdatapb.VReplicationWorkflowType_MoveTables)
+}
+
+func startVReplicationWithWorkflowType(t *testing.T, bls *binlogdatapb.BinlogSource, pos string,
+	workflowType binlogdatapb.VReplicationWorkflowType,
+) (cancelFunc func(), id int) {
+	t.Helper()
 
 	if pos == "" {
 		pos = primaryPosition(t)
 	}
-	// fake workflow type as MoveTables so that we can test with "noblob" binlog row image
-	query := binlogplayer.CreateVReplication("test", bls, pos, 9223372036854775807, 9223372036854775807, 0, vrepldb, binlogdatapb.VReplicationWorkflowType_MoveTables, 0, false)
+	query := binlogplayer.CreateVReplication("test", bls, pos, 9223372036854775807, 9223372036854775807, 0, vrepldb, workflowType, 0, false)
 	qr, err := playerEngine.Exec(query)
 	require.NoError(t, err)
 	expectDBClientQueries(t, qh.Expect(

@@ -852,6 +852,29 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 		case binlogdatapb.MigrationType_SHARDS:
 			// All tables of the source were migrated. So, no validation needed.
 		case binlogdatapb.MigrationType_TABLES:
+			// Lookup vindex backfill streams must never follow a TABLES
+			// journal (written by MoveTables SwitchTraffic/ReverseTraffic):
+			// their filter selects keyspace_id(), which the vstreamer
+			// resolves against the serving keyspace's vschema, so a
+			// relocated stream either fails to plan or computes wrong
+			// keyspace_id values and corrupts the lookup table. The
+			// stream's current source keeps receiving the owner table's
+			// writes via the paired workflow after the switch -- when
+			// reverse replication is running, which is the default -- so
+			// we ignore the journal and keep replicating from it. With
+			// --enable-reverse-replication=false nothing feeds the
+			// current source and the backfill goes stale until reverse
+			// replication is started or the switch is reversed. SHARDS
+			// (Reshard) journals are still followed: the keyspace -- and
+			// with it the filter's validity -- does not change.
+			if binlogdatapb.VReplicationWorkflowType(vp.vr.WorkflowType) == binlogdatapb.VReplicationWorkflowType_CreateLookupIndex {
+				log.Info("Ignoring TABLES journal for lookup vindex workflow",
+					slog.String("workflow", vp.vr.WorkflowName),
+					slog.Int64("journal_id", event.Journal.Id),
+					slog.Any("journal_tables", event.Journal.Tables),
+				)
+				return nil
+			}
 			// Validate that all or none of the tables are in the journal.
 			jtables := make(map[string]bool)
 			for _, table := range event.Journal.Tables {
