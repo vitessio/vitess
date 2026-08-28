@@ -17,6 +17,7 @@ limitations under the License.
 package replication
 
 import (
+	"fmt"
 	"maps"
 	"reflect"
 	"strings"
@@ -901,4 +902,33 @@ func TestSIDs(t *testing.T) {
 	assert.NotNil(t, sids)
 	require.Len(t, sids, 1)
 	assert.Equal(t, "8bc65cca-3fe4-11ed-bbfb-091034d48b3e", sids[0].String())
+}
+
+// TestParseMysql56GTIDSetIntervalsCapHint checks that bounding the preallocation
+// hint for the intervals slice does not change what is parsed. The capacity is only
+// a hint to append, so results must be identical either side of the bound.
+func TestParseMysql56GTIDSetIntervalsCapHint(t *testing.T) {
+	const sid = "00010203-0405-0607-0809-0a0b0c0d0e0f"
+	for _, n := range []int{1, 10, 100, 1023, 1024, 1025, 2051, 5000} {
+		var sb strings.Builder
+		sb.WriteString(sid)
+		for i := 0; i < n; i++ {
+			// non-overlapping ascending intervals, so none are merged or discarded
+			fmt.Fprintf(&sb, ":%d-%d", 2*i+1, 2*i+1)
+		}
+		got, err := ParseMysql56GTIDSet(sb.String())
+		require.NoError(t, err, "n=%d", n)
+		sidVal, err := ParseSID(sid)
+		require.NoError(t, err)
+		assert.Len(t, got[sidVal], n, "n=%d", n)
+	}
+}
+
+// TestParseMysql56GTIDSetColonRun checks that an interval list made only of
+// separators is still rejected: the bound must not turn invalid input into a
+// silent success.
+func TestParseMysql56GTIDSetColonRun(t *testing.T) {
+	s := "00010203-0405-0607-0809-0a0b0c0d0e0f:" + strings.Repeat(":", 64)
+	_, err := ParseMysql56GTIDSet(s)
+	assert.Error(t, err)
 }
