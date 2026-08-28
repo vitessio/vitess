@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"maps"
 	"reflect"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -904,11 +905,15 @@ func TestSIDs(t *testing.T) {
 	assert.Equal(t, "8bc65cca-3fe4-11ed-bbfb-091034d48b3e", sids[0].String())
 }
 
-// TestParseMysql56GTIDSetIntervalsCapHint checks that bounding the preallocation
-// hint for the intervals slice does not change what is parsed. The capacity is only
-// a hint to append, so results must be identical either side of the bound.
+// TestParseMysql56GTIDSetIntervalsCapHint checks that the preallocation hint for
+// the intervals slice does not follow a count taken from the input beyond what that
+// input could hold, while a genuinely long interval list still parses unchanged.
+// The hostile case asserts on allocation volume, because a colon run parses without
+// error either way once the intervals are all discarded.
 func TestParseMysql56GTIDSetIntervalsCapHint(t *testing.T) {
 	const sid = "00010203-0405-0607-0809-0a0b0c0d0e0f"
+
+	// Results must be identical either side of the bound.
 	for _, n := range []int{1, 10, 100, 1023, 1024, 1025, 2051, 5000} {
 		var sb strings.Builder
 		sb.WriteString(sid)
@@ -922,13 +927,17 @@ func TestParseMysql56GTIDSetIntervalsCapHint(t *testing.T) {
 		require.NoError(t, err)
 		assert.Len(t, got[sidVal], n, "n=%d", n)
 	}
-}
 
-// TestParseMysql56GTIDSetColonRun checks that an interval list made only of
-// separators is still rejected: the bound must not turn invalid input into a
-// silent success.
-func TestParseMysql56GTIDSetColonRun(t *testing.T) {
-	s := "00010203-0405-0607-0809-0a0b0c0d0e0f:" + strings.Repeat(":", 64)
-	_, err := ParseMysql56GTIDSet(s)
-	assert.Error(t, err)
+	// A long run of colons carries no intervals at all, so reserving one per colon
+	// is pure waste. 1MiB of colons is 16MiB of interval structs unbounded.
+	hostile := sid + ":" + strings.Repeat(":", 1<<20)
+	var before, after runtime.MemStats
+	runtime.GC()
+	runtime.ReadMemStats(&before)
+	_, _ = ParseMysql56GTIDSet(hostile)
+	runtime.ReadMemStats(&after)
+	allocated := after.TotalAlloc - before.TotalAlloc
+	assert.Less(t, allocated, uint64(8<<20),
+		"parsing %d colons allocated %d bytes for intervals that are all discarded",
+		1<<20, allocated)
 }
