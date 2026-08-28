@@ -296,7 +296,8 @@ func tryAlternateUnionMerge(
 // operators are kept and only the table nodes are swapped, so predicates and
 // projections pushed after route creation are preserved and the semantic
 // analysis of the tree stays authoritative. The returned undo puts the
-// original tables back.
+// original tables back. Reference and unsharded copies are complete on any
+// shard; a single ordinary sharded source keeps its resolved routing.
 func rewriteRouteToAlternate(ctx *plancontext.PlanningContext, route *Route, ks *vindexes.Keyspace) (*Route, func()) {
 	if _, ok := route.Routing.(*AnyShardRouting); !ok {
 		return nil, nil
@@ -313,24 +314,31 @@ func rewriteRouteToAlternate(ctx *plancontext.PlanningContext, route *Route, ks 
 		origVTable *vindexes.BaseTable
 	}
 	var swaps []tableSwap
+	var shardedRouting *ShardedRouting
 	resolvable := true
 	_ = Visit(route.Source, func(op Operator) error {
 		tbl, ok := op.(*Table)
 		if !ok || tbl.VTable == nil || tbl.QTable == nil {
 			return nil
 		}
-		alt := resolveTableCopyIn(ctx, tbl, ks)
-		if alt == nil ||
-			// this route serves rows from a single shard of ks, which only a
-			// reference or unsharded copy can provide in full
-			(alt.VTable.Type != vindexes.TypeReference && alt.VTable.Keyspace.Sharded) {
+		alt, altRouting := resolveTableCopyIn(ctx, tbl, ks)
+		if alt == nil {
 			resolvable = false
 			return io.EOF
+		}
+		if alt.VTable.Type != vindexes.TypeReference && alt.VTable.Keyspace.Sharded {
+			var ok bool
+			shardedRouting, ok = altRouting.(*ShardedRouting)
+			if !ok || shardedRouting.Keyspace() != ks {
+				resolvable = false
+				return io.EOF
+			}
 		}
 		swaps = append(swaps, tableSwap{tbl: tbl, altQTable: alt.QTable, altVTable: alt.VTable, origQTable: tbl.QTable, origVTable: tbl.VTable})
 		return nil
 	})
-	if !resolvable || len(swaps) == 0 {
+	if !resolvable || len(swaps) == 0 ||
+		(shardedRouting != nil && (TableID(route).NumberOfTables() != 1 || len(swaps) != 1)) {
 		return nil, nil
 	}
 
@@ -344,17 +352,20 @@ func rewriteRouteToAlternate(ctx *plancontext.PlanningContext, route *Route, ks 
 	}
 
 	rewritten := *route
-	rewritten.Routing = &AnyShardRouting{keyspace: ks}
+	if shardedRouting != nil {
+		rewritten.Routing = shardedRouting
+	} else {
+		rewritten.Routing = &AnyShardRouting{keyspace: ks}
+	}
 	return &rewritten, undo
 }
 
 // resolveTableCopyIn resolves the physical copy of tbl's table living in ks:
-// the table itself, a reference copy from ReferencedBy, or a reference
-// source, looked up through the VSchema so routing rules and unqualified
-// source declarations are honored. The returned table carries the physical
-// name with the original name preserved as an alias, or nil when ks holds no
-// copy.
-func resolveTableCopyIn(ctx *plancontext.PlanningContext, tbl *Table, ks *vindexes.Keyspace) *Table {
+// the table itself, a reference copy from ReferencedBy, or a declared reference
+// source. Candidates are looked up through the planning VSchema and accepted
+// only when they resolve in ks. The returned table carries the physical name
+// with the original name preserved as an alias, along with its routing.
+func resolveTableCopyIn(ctx *plancontext.PlanningContext, tbl *Table, ks *vindexes.Keyspace) (*Table, Routing) {
 	for _, name := range copyCandidates(tbl.VTable, ks) {
 		src, _, _, _, _, err := ctx.VSchema.FindTableOrVindex(name)
 		if err != nil || src == nil || src.Keyspace != ks {
@@ -365,14 +376,13 @@ func resolveTableCopyIn(ctx *plancontext.PlanningContext, tbl *Table, ks *vindex
 		if !ok || altTbl.VTable == nil || altTbl.VTable.Keyspace != ks {
 			continue
 		}
-		return altTbl
+		return altTbl, altRoute.Routing
 	}
-	return nil
+	return nil, nil
 }
 
 // copyCandidates lists the declared names under which vt's data may also live
-// in ks. The source name is returned as declared — possibly unqualified — so
-// the VSchema lookup resolves it the same way the reference itself was.
+// in ks. A reference source is returned exactly as declared.
 func copyCandidates(vt *vindexes.BaseTable, ks *vindexes.Keyspace) []sqlparser.TableName {
 	var candidates []sqlparser.TableName
 	if vt.Keyspace == ks {

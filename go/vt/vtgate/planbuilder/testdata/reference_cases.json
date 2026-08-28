@@ -1122,6 +1122,30 @@
     "skip_e2e": true
   },
   {
+    "comment": "union all preserves a sharded reference source routing",
+    "query": "select col1 from main_2.sharded_sales_ref union all select cola from user.sales_extra",
+    "plan": {
+      "Type": "Scatter",
+      "QueryType": "SELECT",
+      "Original": "select col1 from main_2.sharded_sales_ref union all select cola from user.sales_extra",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select col1 from sales as sharded_sales_ref where 1 != 1 union all select cola from sales_extra where 1 != 1",
+        "Query": "select col1 from sales as sharded_sales_ref union all select cola from sales_extra"
+      },
+      "TablesUsed": [
+        "user.sales",
+        "user.sales_extra"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
     "comment": "a composite reference union also stays split under union all",
     "query": "select id from main.source_of_ref union all select id from main.rerouted_ref union all select id from user",
     "plan": {
