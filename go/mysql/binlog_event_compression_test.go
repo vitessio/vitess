@@ -156,6 +156,42 @@ func TestTransactionPayloadStreamingInconsistentMetadata(t *testing.T) {
 		"streaming mode allocated %d bytes for a 13 byte frame claiming a 1GiB event", allocated)
 }
 
+// TestTransactionPayloadPostThresholdAmplification covers the case an earlier
+// version of this bound missed: a payload that really does deliver a large amount
+// of data before claiming a much larger event. Capping only the initial
+// reservation and then growing to the claimed length once the cap filled left the
+// original amplification intact past that point -- measured, 138 compressed bytes
+// claiming a 512MiB event still allocated 540,471,168 bytes. The remaining-bytes
+// bound rejects it instead, because no event body can exceed what is left of the
+// decompressed stream.
+func TestTransactionPayloadPostThresholdAmplification(t *testing.T) {
+	const claimed = 512 << 20
+	body := make([]byte, (1<<20)+4096) // comfortably past any fixed cap
+	inner := make([]byte, headerLen)
+	binary.LittleEndian.PutUint32(inner[binlogEventLenOffset:headerLen], uint32(claimed))
+	inner = append(inner, body...)
+
+	tp := &TransactionPayload{
+		uncompressedSize: uint64(len(inner)),
+		compressionType:  TransactionPayloadCompressionZstd,
+	}
+	tp.payload = compressPayloadForTest(t, inner)
+	require.NoError(t, tp.decode())
+	defer tp.Close()
+
+	var before, after runtime.MemStats
+	runtime.GC()
+	runtime.ReadMemStats(&before)
+	_, err := tp.GetNextEvent()
+	runtime.ReadMemStats(&after)
+
+	require.Error(t, err)
+	allocated := after.TotalAlloc - before.TotalAlloc
+	require.Less(t, allocated, uint64(16<<20),
+		"a %d byte frame claiming a %d byte event allocated %d bytes",
+		len(tp.payload), claimed, allocated)
+}
+
 // TestTransactionPayloadSelfConsistent checks that the bound above does not reject
 // a payload whose event length matches its actual size.
 func TestTransactionPayloadSelfConsistent(t *testing.T) {

@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"io"
+	"math"
 	"sync"
 
 	"github.com/klauspost/compress/zstd"
@@ -247,6 +248,15 @@ func (tp *TransactionPayload) decode() error {
 	}
 
 	header := make([]byte, headerLen)
+	// How many bytes of the decompressed payload are still unread. Every event body
+	// must come out of this, so it is the one length bound not taken from the same
+	// untrusted metadata as the event header. In streaming mode uncompressedSize is
+	// not verified against the decoded stream, so treat 0 as "unknown" and skip the
+	// check rather than trusting it: the read below still fails on a short payload.
+	remaining := int64(-1)
+	if tp.uncompressedSize > 0 && tp.uncompressedSize <= math.MaxInt64 {
+		remaining = int64(tp.uncompressedSize)
+	}
 	tp.iterator = func() (ble BinlogEvent, err error) {
 		bytesRead, err := io.ReadFull(tp.reader, header)
 		if err != nil {
@@ -260,70 +270,40 @@ func (tp *TransactionPayload) decode() error {
 				headerLen, bytesRead)
 		}
 		eventLen := int64(binary.LittleEndian.Uint32(header[binlogEventLenOffset:headerLen]))
-		// eventLen is read from the payload, so it must not size an allocation on its
-		// own: a four byte field can ask for 4GiB. Cap the up-front reservation at a
-		// fixed ceiling and let append grow beyond it only as bytes actually arrive,
-		// so a short payload cannot reserve more than the ceiling while a genuinely
-		// large event still gets a single right-sized buffer once it is read.
 		if eventLen < headerLen {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
 				"binlog event length of %d is smaller than the event header", eventLen)
 		}
-		eventData := make([]byte, headerLen, min(eventLen, maxEventPreallocation))
-		copy(eventData, header)
-		eventData, err = appendAtMost(eventData, tp.reader, eventLen-headerLen)
+		// eventLen comes from the payload, so it must not size an allocation on its
+		// own: a four byte field can ask for 4GiB. The trustworthy bound is how much
+		// of the decompressed stream is left, since every event body must come out of
+		// it -- reject the length before reserving anything when it cannot be
+		// satisfied. Capping the reservation instead and growing as bytes arrive was
+		// measured worse on both axes: growing straight to eventLen once a 1MiB cap
+		// filled still allocated 540,471,168 bytes for 138 compressed bytes, while
+		// growing in 1MiB rounds cost a valid 8MiB event 43.7MiB instead of 18.4MiB.
+		if remaining >= 0 && eventLen-headerLen > remaining {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+				"binlog event length of %d exceeds the %d bytes left in the transaction payload",
+				eventLen, remaining+headerLen)
+		}
+		eventData := make([]byte, eventLen)
+		copy(eventData, header) // The event includes the header
+		bytesRead, err = io.ReadFull(tp.reader, eventData[headerLen:])
 		if err != nil && err != io.EOF {
 			return nil, vterrors.Wrap(err, "error reading binlog event data from uncompressed transaction payload")
 		}
-		if int64(len(eventData)) != eventLen {
+		if int64(bytesRead+headerLen) != eventLen {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
 				"expected binlog event length of %d but only read %d bytes",
-				eventLen, len(eventData))
+				eventLen, bytesRead)
+		}
+		if remaining >= 0 {
+			remaining -= int64(bytesRead)
 		}
 		return NewMysql56BinlogEvent(eventData), nil
 	}
 	return nil
-}
-
-// maxEventPreallocation bounds how much is reserved for an event before any of its
-// bytes have been read. A four byte length field can claim 4GiB, so the initial
-// reservation is capped; once that much has actually arrived the length is credible
-// and the buffer is grown to it in one step, which keeps large valid events at a
-// single right-sized allocation.
-const maxEventPreallocation = 1 << 20
-
-// appendAtMost appends up to n bytes read from r to buf. It reserves at most
-// maxEventPreallocation up front, then grows to the full size once that much has
-// been read, so an overlong claim costs the cap rather than the claim.
-// Returns io.EOF if r held fewer than n bytes.
-func appendAtMost(buf []byte, r io.Reader, n int64) ([]byte, error) {
-	start := len(buf)
-	first := min(n, maxEventPreallocation)
-	buf = append(buf, make([]byte, first)...)
-	read, err := io.ReadFull(r, buf[start:])
-	buf = buf[:start+read]
-	if err != nil {
-		if err == io.ErrUnexpectedEOF {
-			err = io.EOF
-		}
-		return buf, err
-	}
-	if int64(read) == n {
-		return buf, nil
-	}
-	// The cap was filled, so the claimed length is backed by real data this far.
-	// Grow once to the full size rather than doubling repeatedly.
-	rest := n - int64(read)
-	at := len(buf)
-	grown := make([]byte, at+int(rest))
-	copy(grown, buf)
-	buf = grown
-	read2, err := io.ReadFull(r, buf[at:])
-	buf = buf[:at+read2]
-	if err == io.ErrUnexpectedEOF {
-		err = io.EOF
-	}
-	return buf, err
 }
 
 // decompress decompresses the payload. If the payload is larger than
