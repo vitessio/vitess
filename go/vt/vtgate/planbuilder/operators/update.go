@@ -255,6 +255,9 @@ func createUpdateOpWithTarget(ctx *plancontext.PlanningContext, updStmt *sqlpars
 	}
 
 	var leftComp sqlparser.ValTuple
+	if len(vTbl.PrimaryKey) > 0 {
+		leftComp = make(sqlparser.ValTuple, 0, len(vTbl.PrimaryKey))
+	}
 	cols := make([]*sqlparser.ColName, 0, len(vTbl.PrimaryKey))
 	for _, col := range vTbl.PrimaryKey {
 		colName := sqlparser.NewColNameWithQualifier(col.String(), tblName)
@@ -269,7 +272,7 @@ func createUpdateOpWithTarget(ctx *plancontext.PlanningContext, updStmt *sqlpars
 	}
 	compExpr := sqlparser.NewComparisonExpr(sqlparser.InOp, lhs, sqlparser.ListArg(engine.DmlVals), nil)
 
-	var updExprs sqlparser.UpdateExprs
+	updExprs := make(sqlparser.UpdateExprs, 0, len(uList))
 	for _, expr := range uList {
 		ue := &sqlparser.UpdateExpr{
 			Name: expr.updCol,
@@ -617,7 +620,7 @@ func getCastTypeForColumn(updatedTable *vindexes.BaseTable, updExpr *sqlparser.U
 // createFkChildForUpdate creates the update query operator for the child table based on the foreign key constraints.
 func createFkChildForUpdate(ctx *plancontext.PlanningContext, fk vindexes.ChildFKInfo, selectOffsets []int, nonLiteralUpdateInfo []engine.NonLiteralUpdateInfo, updatedTable *vindexes.BaseTable) *FkChild {
 	// Create a ValTuple of child column names
-	var valTuple sqlparser.ValTuple
+	valTuple := make(sqlparser.ValTuple, 0, len(fk.ChildColumns))
 	for _, column := range fk.ChildColumns {
 		valTuple = append(valTuple, sqlparser.NewColName(column.String()))
 	}
@@ -710,7 +713,7 @@ func buildChildUpdOpForSetNull(
 	updatedTable *vindexes.BaseTable,
 ) Operator {
 	// For the SET NULL type constraint, we need to set all the child columns to NULL.
-	var childUpdateExprs sqlparser.UpdateExprs
+	childUpdateExprs := make(sqlparser.UpdateExprs, 0, len(fk.ChildColumns))
 	for _, column := range fk.ChildColumns {
 		childUpdateExprs = append(childUpdateExprs, &sqlparser.UpdateExpr{
 			Name: sqlparser.NewColName(column.String()),

@@ -92,12 +92,10 @@ func errOutIfPlanCannotBeConstructed(ctx *plancontext.PlanningContext, vTbl *vin
 
 func insertUnshardedShortcut(ctx *plancontext.PlanningContext, stmt *sqlparser.Insert, ks *vindexes.Keyspace, tables []*vindexes.BaseTable) engine.Primitive {
 	eIns := &engine.Insert{
-		InsertCommon: engine.InsertCommon{
-			Opcode:            engine.InsertUnsharded,
-			Keyspace:          ks,
-			TableName:         tables[0].Name.String(),
-			FetchLastInsertID: ctx.SemTable.ShouldFetchLastInsertID(),
-		},
+		Opcode:            engine.InsertUnsharded,
+		Keyspace:          ks,
+		TableName:         tables[0].Name.String(),
+		FetchLastInsertID: ctx.SemTable.ShouldFetchLastInsertID(),
 	}
 	eIns.Query = generateQuery(stmt)
 	return eIns

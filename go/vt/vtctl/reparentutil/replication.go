@@ -32,6 +32,7 @@ import (
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/mysqlctl"
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
@@ -89,7 +90,7 @@ func (rlp *RelayLogPositions) IsZero() bool {
 // hasDominantPosition returns true if position a is strictly ahead of position b, meaning
 // a contains everything b has, plus more.
 func hasDominantPosition(a, b replication.Position) bool {
-	return a.AtLeast(b) && !a.Equal(b)
+	return a.AtLeast(b) && !b.AtLeast(a)
 }
 
 // haveIncomparablePositions returns true if neither position contains the other. Replication
@@ -97,6 +98,23 @@ func hasDominantPosition(a, b replication.Position) bool {
 // or errant GTIDs).
 func haveIncomparablePositions(a, b replication.Position) bool {
 	return !a.AtLeast(b) && !b.AtLeast(a)
+}
+
+// haveReciprocallyContainedPositions returns true if two unequal positions contain each
+// other. Containment can't order these: MariaDB GTID containment ignores the origin
+// server, so positions like 0-1-10 and 0-2-10 "contain" each other while holding
+// different histories (a split brain).
+func haveReciprocallyContainedPositions(a, b replication.Position) bool {
+	return a.AtLeast(b) && b.AtLeast(a) && !a.Equal(b)
+}
+
+func describeCombinedPositions(candidates map[string]*RelayLogPositions) string {
+	parts := make([]string, 0, len(candidates))
+	for alias, pos := range candidates {
+		parts = append(parts, fmt.Sprintf("%s=%s", alias, pos.Combined.String()))
+	}
+	slices.Sort(parts)
+	return strings.Join(parts, ", ")
 }
 
 // hasUniformCombinedPosition returns true when every candidate has the same Combined position. On the
@@ -165,6 +183,18 @@ func filterToMostAdvancedCombined(candidates map[string]*RelayLogPositions, logg
 	return result
 }
 
+// hasMysql56GTIDSet reports whether pos carries a MySQL 5.6-style GTID set, as
+// opposed to a MariaDB GTID set or a file position. This is the definition of
+// "GTID-based" that ERS uses: its GTID-specific handling (the relay-log reconcile
+// and errant-GTID detection) assumes MySQL56 semantics, where the retrieved
+// (Combined) set is distinct from the executed set. A zero position has a nil
+// GTIDSet and is therefore not MySQL56 here — callers that need to treat an empty
+// position as flavor-agnostic must check IsZero separately.
+func hasMysql56GTIDSet(pos replication.Position) bool {
+	_, ok := pos.GTIDSet.(replication.Mysql56GTIDSet)
+	return ok
+}
+
 // FindPositionsOfAllCandidates will find candidates for an emergency
 // reparent, and, if successful, return a mapping of those tablet aliases (as
 // raw strings) to their replication positions for later comparison.
@@ -173,16 +203,31 @@ func FindPositionsOfAllCandidates(
 	primaryStatusMap map[string]*replicationdatapb.PrimaryStatus,
 ) (map[string]*RelayLogPositions, bool, error) {
 	replicationStatusMap := make(map[string]*replication.ReplicationStatus, len(statusMap))
-	positionMap := make(map[string]*RelayLogPositions)
+	primaryPositions := make(map[string]replication.Position, len(primaryStatusMap))
+	positionMap := make(map[string]*RelayLogPositions, len(statusMap)+len(primaryStatusMap))
 
 	// Build out replication status list from proto types.
 	for alias, statuspb := range statusMap {
 		status := replication.ProtoToReplicationStatus(statuspb.After)
 		replicationStatusMap[alias] = &status
 	}
+	// Decode former-primary executed positions up front so their flavor can
+	// participate in the GTID/non-GTID detection below. A former primary was not
+	// replicating, so it has no relay-log position; its executed position is
+	// authoritative and is what we key its flavor off. It is exempt from the
+	// empty-relay-log check that applies to replicas.
+	for alias, primaryStatus := range primaryStatusMap {
+		executedPosition, err := replication.DecodePosition(primaryStatus.Position)
+		if err != nil {
+			return nil, false, vterrors.Wrapf(err, "could not decode a primary status executed position for tablet %v", alias)
+		}
+		primaryPositions[alias] = executedPosition
+	}
 
 	// Determine if we're GTID-based. If we are, we'll need to look for errant
-	// GTIDs below.
+	// GTIDs below. Both replicas and former primaries contribute to detection so
+	// that a shard whose only reachable candidates are former primaries is still
+	// correctly classified.
 	var (
 		isGTIDBased                bool
 		isNonGTIDBased             bool
@@ -190,7 +235,7 @@ func FindPositionsOfAllCandidates(
 	)
 
 	for alias, status := range replicationStatusMap {
-		if _, ok := status.RelayLogPosition.GTIDSet.(replication.Mysql56GTIDSet); ok {
+		if hasMysql56GTIDSet(status.RelayLogPosition) {
 			isGTIDBased = true
 		} else {
 			isNonGTIDBased = true
@@ -201,6 +246,21 @@ func FindPositionsOfAllCandidates(
 			// GTID-based relay log positions, we will return the error recorded
 			// here.
 			emptyRelayPosErrorRecorder.RecordError(vterrors.Errorf(vtrpc.Code_UNAVAILABLE, "encountered tablet %v with no relay log position, when at least one other tablet in the status map has GTID based relay log positions", alias))
+		}
+	}
+	// Fold former-primary flavors into detection. A position with no decoded GTID
+	// set at all (a former primary whose executed position was empty, e.g. "") is
+	// flavor-agnostic, so skip it rather than treating it as non-GTID. A typed but
+	// empty set (e.g. "MySQL56/" with no transactions) still identifies the flavor
+	// and is counted.
+	for _, pos := range primaryPositions {
+		if pos.GTIDSet == nil {
+			continue
+		}
+		if hasMysql56GTIDSet(pos) {
+			isGTIDBased = true
+		} else {
+			isNonGTIDBased = true
 		}
 	}
 
@@ -225,13 +285,21 @@ func FindPositionsOfAllCandidates(
 		}
 	}
 
-	for alias, primaryStatus := range primaryStatusMap {
-		executedPosition, err := replication.DecodePosition(primaryStatus.Position)
-		if err != nil {
-			return nil, false, vterrors.Wrapf(err, "could not decode a primary status executed position for tablet %v", alias)
-		}
-
+	for alias, executedPosition := range primaryPositions {
+		// A demoted/former primary applies no relay log, so its executed position
+		// is authoritative. For GTID-based shards, initialize Executed as well as
+		// Combined so that in RelayLogPositions.AtLeast it compares equal to an
+		// equally-advanced replica (whose Executed is reconciled up to Combined
+		// after its relay-log wait), letting election fall through to the
+		// promotion-rule/version tiebreakers instead of ranking the former primary
+		// behind. On non-GTID shards there is no such Executed reconcile — replicas
+		// keep Executed zero (their executed position lives in Combined) — so leave
+		// Executed zero here too, matching the replicas and preserving the prior
+		// non-GTID position ordering.
 		positionMap[alias] = &RelayLogPositions{Combined: executedPosition}
+		if isGTIDBased {
+			positionMap[alias].Executed = executedPosition
+		}
 	}
 
 	return positionMap, isGTIDBased, nil
@@ -286,6 +354,8 @@ type replicationSnapshot struct {
 	primaryStatusMap   map[string]*replicationdatapb.PrimaryStatus
 	reachableTablets   []*topodatapb.Tablet
 	tabletsBackupState map[string]bool
+	mysqlVersions      map[string]mysqlctl.ServerVersion
+	mysqlFlavors       map[string]mysqlctl.MySQLFlavor
 }
 
 // replicasWithStoppedIO returns the reachable replicas whose IO threads ERS
@@ -374,6 +444,8 @@ func stopReplicationAndBuildStatusMaps(
 			primaryStatusMap:   map[string]*replicationdatapb.PrimaryStatus{},
 			reachableTablets:   make([]*topodatapb.Tablet, 0, len(tabletMap)),
 			tabletsBackupState: map[string]bool{},
+			mysqlVersions:      map[string]mysqlctl.ServerVersion{},
+			mysqlFlavors:       map[string]mysqlctl.MySQLFlavor{},
 		}
 	)
 
@@ -413,6 +485,16 @@ func stopReplicationAndBuildStatusMaps(
 				m.Lock()
 				res.primaryStatusMap[alias] = primaryStatus
 				res.reachableTablets = append(res.reachableTablets, tabletInfo.Tablet)
+				if primaryStatus.ServerVersion != "" {
+					if flavor, v, parseErr := mysqlctl.ParseVersionString(primaryStatus.ServerVersion); parseErr == nil {
+						res.mysqlVersions[alias] = v
+						res.mysqlFlavors[alias] = flavor
+					} else {
+						logger.Warningf("failed to parse MySQL version %q for tablet %v: %v", primaryStatus.ServerVersion, alias, parseErr)
+					}
+				} else {
+					logger.Warningf("could not determine MySQL version for tablet %v; it will not be preferred by version-aware election", alias)
+				}
 				m.Unlock()
 			} else {
 				logger.Warningf("failed to get replication status from %v: %v", alias, err)
@@ -433,6 +515,16 @@ func stopReplicationAndBuildStatusMaps(
 			res.tabletsBackupState[alias] = isTakingBackup
 			res.statusMap[alias] = stopReplicationStatus
 			res.reachableTablets = append(res.reachableTablets, tabletInfo.Tablet)
+			if stopReplicationStatus.Before != nil && stopReplicationStatus.Before.ServerVersion != "" {
+				if flavor, v, parseErr := mysqlctl.ParseVersionString(stopReplicationStatus.Before.ServerVersion); parseErr == nil {
+					res.mysqlVersions[alias] = v
+					res.mysqlFlavors[alias] = flavor
+				} else {
+					logger.Warningf("failed to parse MySQL version %q for tablet %v: %v", stopReplicationStatus.Before.ServerVersion, alias, parseErr)
+				}
+			} else {
+				logger.Warningf("could not determine MySQL version for tablet %v; it will not be preferred by version-aware election", alias)
+			}
 			m.Unlock()
 		}
 	}
@@ -497,8 +589,7 @@ func stopReplicationAndBuildStatusMaps(
 	// we don't need to handle them differently — the goal is simply to confirm the
 	// error came from the PRIMARY tablet, not to diagnose why it failed.
 	if primaryAlias != nil && len(errRecorder.Errors) == 1 {
-		var tabletErr *tabletAliasError
-		if errors.As(errRecorder.Errors[0], &tabletErr) {
+		if tabletErr, ok := errors.AsType[*tabletAliasError](errRecorder.Errors[0]); ok {
 			// Failure to reach the PRIMARY tablet is expected, return early.
 			if topoproto.TabletAliasEqual(primaryAlias, tabletErr.GetAlias()) {
 				return res, nil
@@ -520,10 +611,17 @@ func stopReplicationAndBuildStatusMaps(
 // Typically a caller will set a timeout of WaitReplicasTimeout on a context and
 // use that context with this function.
 func WaitForRelayLogsToApply(ctx context.Context, tmc tmclient.TabletManagerClient, tabletInfo *topo.TabletInfo, status *replicationdatapb.StopReplicationStatus) error {
-	switch status.After.RelayLogPosition {
-	case "":
-		return tmc.WaitForPosition(ctx, tabletInfo.Tablet, status.After.RelayLogSourceBinlogEquivalentPosition)
-	default:
-		return tmc.WaitForPosition(ctx, tabletInfo.Tablet, status.After.RelayLogPosition)
+	return tmc.WaitForPosition(ctx, tabletInfo.Tablet, appliedPositionAfterWait(status))
+}
+
+// appliedPositionAfterWait returns the position that WaitForRelayLogsToApply
+// waits for — the position the SQL thread is known to have reached once that
+// wait succeeds. It is the relay-log position for GTID-based replication, or the
+// relay-log-equivalent file position when relay-log positions are unavailable
+// (non-GTID replication).
+func appliedPositionAfterWait(status *replicationdatapb.StopReplicationStatus) string {
+	if status.After.RelayLogPosition == "" {
+		return status.After.RelayLogSourceBinlogEquivalentPosition
 	}
+	return status.After.RelayLogPosition
 }

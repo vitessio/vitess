@@ -44,8 +44,7 @@ func convertError(err error, nodePath string) error {
 		return nil
 	}
 
-	var typeErr rpctypes.EtcdError
-	if errors.As(err, &typeErr) {
+	if typeErr, ok := errors.AsType[rpctypes.EtcdError](err); ok {
 		switch typeErr.Code() {
 		case codes.NotFound:
 			return topo.NewError(topo.NoNode, nodePath)

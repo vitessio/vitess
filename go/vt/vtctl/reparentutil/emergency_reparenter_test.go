@@ -41,6 +41,7 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sets"
 	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -134,8 +135,11 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 		shards     []*vtctldatapb.Shard
 		tablets    []*topodatapb.Tablet
 		// results
-		shouldErr        bool
-		errShouldContain string
+		shouldErr              bool
+		errShouldContain       string
+		errShouldContainAll    []string
+		wantSplitBrainOverride int64
+		wantNewPrimary         *topodatapb.TabletAlias
 	}{
 		{
 			name:       "success with matching expected primary",
@@ -4291,16 +4295,29 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 			errShouldContain: "primary <nil> is not equal to expected alias zone1-0000000101",
 		},
 		{
-			// Regression test: if every candidate has mutually errant GTIDs, findErrantGTIDs
-			// returns an empty map, which previously caused findMostAdvanced to panic with
-			// "index out of range [0] with length 0" when indexing the empty tablet slice.
-			name:                 "all candidates filtered out by errant GTID detection",
-			durability:           policy.DurabilityNone,
-			emergencyReparentOps: EmergencyReparentOptions{},
+			name:       "mutually errant leaders do not fall back to a lagging candidate",
+			durability: policy.DurabilityNone,
+			emergencyReparentOps: EmergencyReparentOptions{
+				WaitReplicasTimeout: time.Second,
+			},
 			tmc: &testutil.TabletManagerClient{
+				InitPrimaryResults: map[string]struct {
+					Result string
+					Error  error
+				}{
+					"zone1-0000000102": {Result: "ok"},
+				},
+				PopulateReparentJournalResults: map[string]error{
+					"zone1-0000000102": nil,
+				},
 				ReadReparentJournalInfoResults: map[string]int32{
-					"zone1-0000000100": 3,
-					"zone1-0000000101": 3,
+					"zone1-0000000100": 1,
+					"zone1-0000000101": 1,
+					"zone1-0000000102": 1,
+				},
+				SetReplicationSourceResults: map[string]error{
+					"zone1-0000000100": nil,
+					"zone1-0000000101": nil,
 				},
 				StopReplicationAndGetStatusResults: map[string]struct {
 					StopStatus *replicationdatapb.StopReplicationStatus
@@ -4324,6 +4341,15 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 							},
 						},
 					},
+					"zone1-0000000102": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
+							After: &replicationdatapb.Status{
+								SourceUuid:       "00000000-0000-0000-0000-000000000001",
+								RelayLogPosition: getRelayLogPosition("1-90", "1-30", "1-50"),
+							},
+						},
+					},
 				},
 				WaitForPositionResults: map[string]map[string]error{
 					"zone1-0000000100": {
@@ -4331,6 +4357,9 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 					},
 					"zone1-0000000101": {
 						getRelayLogPosition("1-100", "1-30", "1-51"): nil,
+					},
+					"zone1-0000000102": {
+						getRelayLogPosition("1-90", "1-30", "1-50"): nil,
 					},
 				},
 			},
@@ -4357,12 +4386,338 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 					Keyspace: "testkeyspace",
 					Shard:    "-",
 				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  102,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
 			},
 			keyspace:         "testkeyspace",
 			shard:            "-",
 			cells:            []string{"zone1"},
 			shouldErr:        true,
-			errShouldContain: "no valid candidates for emergency reparent",
+			errShouldContain: "suspected split-brain: leading candidates have incomparable Combined GTID positions",
+			errShouldContainAll: []string{
+				"zone1-0000000100=00000000-0000-0000-0000-000000000001:",
+				"zone1-0000000101=00000000-0000-0000-0000-000000000001:",
+			},
+		},
+		{
+			// A split-brain override only waits on the chosen primary, so if that tablet
+			// cannot apply its own relay logs the override still aborts — even though the
+			// discarded leader (which is not waited on) could have applied. An aborted
+			// override discards nothing, so the override counter must not record it.
+			name:       "split-brain override aborts when the chosen primary cannot apply its relay logs",
+			durability: policy.DurabilityNone,
+			emergencyReparentOps: EmergencyReparentOptions{
+				NewPrimaryAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+				AllowSplitBrainPromotion: true,
+				WaitReplicasTimeout:      time.Millisecond * 50,
+			},
+			tmc: &testutil.TabletManagerClient{
+				StopReplicationAndGetStatusResults: map[string]struct {
+					StopStatus *replicationdatapb.StopReplicationStatus
+					Error      error
+				}{
+					"zone1-0000000100": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
+							After: &replicationdatapb.Status{
+								SourceUuid:       "00000000-0000-0000-0000-000000000001",
+								RelayLogPosition: getRelayLogPosition("1-21", "1-5"),
+							},
+						},
+					},
+					"zone1-0000000101": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
+							After: &replicationdatapb.Status{
+								SourceUuid:       "00000000-0000-0000-0000-000000000001",
+								RelayLogPosition: getRelayLogPosition("1-21", "", "1-5"),
+							},
+						},
+					},
+				},
+				// The chosen primary fails its wait; the discarded leader would apply, but
+				// it is not waited on so it cannot rescue the override.
+				WaitForPositionResults: map[string]map[string]error{
+					"zone1-0000000100": {
+						getRelayLogPosition("1-21"): nil,
+					},
+					"zone1-0000000101": {
+						getRelayLogPosition("1-21", "", "1-5"): nil,
+					},
+				},
+			},
+			shards: []*vtctldatapb.Shard{
+				{
+					Keyspace: "testkeyspace",
+					Name:     "-",
+				},
+			},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+					Hostname: "chosen primary, fails to apply relay logs",
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  101,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+					Hostname: "discarded leader, not waited on",
+				},
+			},
+			shouldErr:              true,
+			keyspace:               "testkeyspace",
+			shard:                  "-",
+			cells:                  []string{"zone1"},
+			errShouldContain:       "could not apply all relay logs",
+			wantSplitBrainOverride: 0,
+		},
+		{
+			// A lone demoted primary (StopReplication reports it is not a replica) with an
+			// empty MySQL GTID position still classifies as GTID-based and is initialized.
+			name:       "initializes an empty GTID shard from a lone demoted primary",
+			durability: policy.DurabilityNone,
+			emergencyReparentOps: EmergencyReparentOptions{
+				WaitReplicasTimeout: time.Second,
+			},
+			tmc: &testutil.TabletManagerClient{
+				// a never-initialized shard has no sidecar reparent journal table yet
+				ReadReparentJournalInfoErrors: map[string]error{
+					"zone1-0000000100": errors.New("rpc error: code = Unknown desc = Table '_vt.reparent_journal' doesn't exist (errno 1146) (sqlstate 42S02) during query: SELECT COUNT(*) FROM _vt.reparent_journal"),
+				},
+				ReadReparentJournalInfoResults: map[string]int32{},
+				DemotePrimaryResults: map[string]struct {
+					Status *replicationdatapb.PrimaryStatus
+					Error  error
+				}{
+					"zone1-0000000100": {
+						Status: &replicationdatapb.PrimaryStatus{Position: "MySQL56/"},
+					},
+				},
+				InitPrimaryResults: map[string]struct {
+					Result string
+					Error  error
+				}{
+					"zone1-0000000100": {Result: "ok"},
+				},
+				PopulateReparentJournalResults: map[string]error{
+					"zone1-0000000100": nil,
+				},
+				StopReplicationAndGetStatusResults: map[string]struct {
+					StopStatus *replicationdatapb.StopReplicationStatus
+					Error      error
+				}{
+					"zone1-0000000100": {Error: mysql.ErrNotReplica},
+				},
+			},
+			shards: []*vtctldatapb.Shard{
+				{Keyspace: "testkeyspace", Name: "-"},
+			},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+					Type:     topodatapb.TabletType_REPLICA,
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+			},
+			keyspace:       "testkeyspace",
+			shard:          "-",
+			cells:          []string{"zone1"},
+			wantNewPrimary: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+		},
+		{
+			// Two divergent leaders: errant-GTID detection convicts the one carrying the
+			// errant transaction and promotes the surviving leader without an override.
+			name:       "errant divergence leaves exactly one leader, which is promoted",
+			durability: policy.DurabilityNone,
+			emergencyReparentOps: EmergencyReparentOptions{
+				WaitReplicasTimeout: time.Second,
+			},
+			tmc: &testutil.TabletManagerClient{
+				InitPrimaryResults: map[string]struct {
+					Result string
+					Error  error
+				}{
+					"zone1-0000000100": {Result: "ok"},
+				},
+				PopulateReparentJournalResults: map[string]error{
+					"zone1-0000000100": nil,
+				},
+				ReadReparentJournalInfoResults: map[string]int32{
+					"zone1-0000000100": 1,
+					"zone1-0000000101": 1,
+				},
+				SetReplicationSourceResults: map[string]error{
+					"zone1-0000000101": nil,
+				},
+				StopReplicationAndGetStatusResults: map[string]struct {
+					StopStatus *replicationdatapb.StopReplicationStatus
+					Error      error
+				}{
+					"zone1-0000000100": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
+							After: &replicationdatapb.Status{
+								SourceUuid:       "00000000-0000-0000-0000-000000000002",
+								RelayLogPosition: getRelayLogPosition("1-100", "1-31", "1-50"),
+							},
+						},
+					},
+					"zone1-0000000101": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
+							After: &replicationdatapb.Status{
+								SourceUuid:       "00000000-0000-0000-0000-000000000001",
+								RelayLogPosition: getRelayLogPosition("1-100", "1-30", "1-51"),
+							},
+						},
+					},
+				},
+				WaitForPositionResults: map[string]map[string]error{
+					"zone1-0000000100": {getRelayLogPosition("1-100", "1-31", "1-50"): nil},
+					"zone1-0000000101": {getRelayLogPosition("1-100", "1-30", "1-51"): nil},
+				},
+			},
+			shards: []*vtctldatapb.Shard{
+				{Keyspace: "testkeyspace", Name: "-"},
+			},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+					Type:     topodatapb.TabletType_REPLICA,
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+				{
+					Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
+					Type:     topodatapb.TabletType_REPLICA,
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+			},
+			keyspace:       "testkeyspace",
+			shard:          "-",
+			cells:          []string{"zone1"},
+			wantNewPrimary: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+		},
+		{
+			// Regression: a MariaDB candidate (uid 102) is dropped by findErrantGTIDs
+			// for an errant GTID, leaving MySQL-only survivors (100 at 8.4, 101 at
+			// 8.0) at equal position. The version guard must be scoped to the reduced
+			// candidate set — {100, 101}, both MySQL — so version-aware election still
+			// runs and promotes the lower version (101). If the guard operated over
+			// the full reachable set (which still includes the MariaDB 102), it would
+			// see mixed families, disable version ordering, and the tie would fall to
+			// the alias tiebreak, promoting 100 — whose PromoteReplica is not mocked,
+			// so the reparent would error. In other words, this case only succeeds if
+			// ERS passes the post-findErrantGTIDs reduced set to the election.
+			name:       "errant-GTID drop leaves same-family survivors that still get version ordering",
+			durability: policy.DurabilityNone,
+			// 102 is the most advanced on Combined (it carries the errant GTID), so it is
+			// the leader ERS waits on first; once errant-GTID detection drops it, ERS
+			// re-waits on the surviving 100/101, which needs a wait budget.
+			emergencyReparentOps: EmergencyReparentOptions{WaitReplicasTimeout: time.Second * 30},
+			tmc: &testutil.TabletManagerClient{
+				// Only 101 (the expected winner) can be promoted; if 100 were elected,
+				// PromoteReplica would return an error and the test would fail.
+				PopulateReparentJournalResults: map[string]error{
+					"zone1-0000000101": nil,
+				},
+				PromoteReplicaResults: map[string]struct {
+					Result string
+					Error  error
+				}{
+					"zone1-0000000101": {Result: "ok", Error: nil},
+				},
+				SetReplicationSourceResults: map[string]error{
+					"zone1-0000000100": nil,
+					"zone1-0000000102": nil,
+				},
+				ReadReparentJournalInfoResults: map[string]int32{
+					"zone1-0000000100": 3,
+					"zone1-0000000101": 3,
+					"zone1-0000000102": 3,
+				},
+				StopReplicationAndGetStatusResults: map[string]struct {
+					StopStatus *replicationdatapb.StopReplicationStatus
+					Error      error
+				}{
+					// 100: MySQL 8.4, same position as 101.
+					"zone1-0000000100": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning), ServerVersion: "Ver 8.4.0"},
+							After: &replicationdatapb.Status{
+								SourceUuid:       "00000000-0000-0000-0000-000000000001",
+								RelayLogPosition: getRelayLogPosition("1-20"),
+							},
+						},
+					},
+					// 101: MySQL 8.0 (lower version), same position as 100 -> should win.
+					"zone1-0000000101": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning), ServerVersion: "Ver 8.0.35"},
+							After: &replicationdatapb.Status{
+								SourceUuid:       "00000000-0000-0000-0000-000000000001",
+								RelayLogPosition: getRelayLogPosition("1-20"),
+							},
+						},
+					},
+					// 102: MariaDB, carries an errant GTID (u2:1-5 that no one else has)
+					// -> dropped by findErrantGTIDs before the election. Only its flavor
+					// (mariadb) matters here — the parsed version is never compared
+					// because the tablet is dropped. The version string is the
+					// @@global.version form ERS actually sees in production.
+					"zone1-0000000102": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning), ServerVersion: "Ver 10.6.16-MariaDB-1:10.6.16+maria~ubu2004"},
+							After: &replicationdatapb.Status{
+								SourceUuid:       "00000000-0000-0000-0000-000000000001",
+								RelayLogPosition: getRelayLogPosition("1-20", "1-5"),
+							},
+						},
+					},
+				},
+				WaitForPositionResults: map[string]map[string]error{
+					"zone1-0000000100": {getRelayLogPosition("1-20"): nil},
+					"zone1-0000000101": {getRelayLogPosition("1-20"): nil},
+					"zone1-0000000102": {getRelayLogPosition("1-20", "1-5"): nil},
+				},
+			},
+			shards: []*vtctldatapb.Shard{
+				{
+					Keyspace: "testkeyspace",
+					Name:     "-",
+					Shard: &topodatapb.Shard{
+						PrimaryAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+					},
+				},
+			},
+			tablets: []*topodatapb.Tablet{
+				{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}, Keyspace: "testkeyspace", Shard: "-"},
+				{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101}, Keyspace: "testkeyspace", Shard: "-"},
+				{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 102}, Keyspace: "testkeyspace", Shard: "-"},
+			},
+			keyspace:  "testkeyspace",
+			shard:     "-",
+			cells:     []string{"zone1"},
+			shouldErr: false,
 		},
 	}
 
@@ -4372,6 +4727,8 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 
 			logger := logutil.NewMemoryLogger()
 			ev := &events.Reparent{}
+			ersSplitBrainOverrides.ResetAll()
+			t.Cleanup(ersSplitBrainOverrides.ResetAll)
 
 			for i, tablet := range tt.tablets {
 				if tablet.Type == topodatapb.TabletType_UNKNOWN {
@@ -4403,11 +4760,217 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 			err := erp.reparentShardLocked(ctx, ev, tt.keyspace, tt.shard, tt.emergencyReparentOps)
 			if tt.shouldErr {
 				require.Error(t, err)
-				assert.ErrorContains(t, err, tt.errShouldContain)
+				require.ErrorContains(t, err, tt.errShouldContain)
+				for _, expected := range tt.errShouldContainAll {
+					require.ErrorContains(t, err, expected)
+				}
+				assert.Equal(t, tt.wantSplitBrainOverride, ersSplitBrainOverrides.Counts()[tt.keyspace+"."+tt.shard])
 				return
 			}
 
-			assert.NoError(t, err)
+			require.NoError(t, err)
+			assert.Equal(t, tt.wantSplitBrainOverride, ersSplitBrainOverrides.Counts()[tt.keyspace+"."+tt.shard])
+			if tt.wantNewPrimary != nil {
+				require.NotNil(t, ev.NewPrimary)
+				assert.True(t, topoproto.TabletAliasEqual(tt.wantNewPrimary, ev.NewPrimary.Alias), "want new primary %v, got %v", tt.wantNewPrimary, ev.NewPrimary.Alias)
+			}
+		})
+	}
+}
+
+func TestERSSplitBrainPromotionRequiresNewPrimary(t *testing.T) {
+	erp := NewEmergencyReparenter(nil, nil, logutil.NewMemoryLogger())
+
+	_, err := erp.ReparentShard(t.Context(), "testkeyspace", "-", EmergencyReparentOptions{
+		AllowSplitBrainPromotion: true,
+	})
+	require.Error(t, err)
+	assert.Equal(t, vtrpc.Code_INVALID_ARGUMENT, vterrors.Code(err))
+	assert.ErrorContains(t, err, "split-brain promotion requires an explicitly requested primary (--new-primary)")
+}
+
+func TestERSSplitBrainPromotionEligibility(t *testing.T) {
+	tests := []struct {
+		name                 string
+		newPrimary           *topodatapb.TabletAlias
+		stuckDiscardedLeader bool
+		replicaRepointsFail  bool
+		wantErr              string
+		wantPrimary          *topodatapb.TabletAlias
+		wantOverrideCount    int64
+	}{
+		{
+			name: "rejects dominated requested primary",
+			newPrimary: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  102,
+			},
+			wantErr: "requested primary zone1-0000000102 is not a leading candidate",
+		},
+		{
+			name: "promotes requested leading primary",
+			newPrimary: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  100,
+			},
+			wantPrimary: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  100,
+			},
+			wantOverrideCount: 1,
+		},
+		{
+			// The override only waits on the chosen primary, so a discarded divergent
+			// leader that cannot apply its relay logs must not block the promotion.
+			name: "promotes chosen leader while a discarded leader is stuck",
+			newPrimary: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  100,
+			},
+			stuckDiscardedLeader: true,
+			wantPrimary: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  100,
+			},
+			wantOverrideCount: 1,
+		},
+		{
+			// The promotion and reparent journal write commit the override's lossy history
+			// before the replicas are repointed, so the override must be counted even when
+			// ERS errors afterwards because every repoint failed.
+			name: "counts override when repoints fail after promotion",
+			newPrimary: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  100,
+			},
+			replicaRepointsFail: true,
+			wantErr:             "replica(s) failed",
+			wantOverrideCount:   1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ersSplitBrainOverrides.ResetAll()
+			t.Cleanup(ersSplitBrainOverrides.ResetAll)
+
+			posA := getRelayLogPosition("1-100", "1-31", "1-50")
+			posB := getRelayLogPosition("1-100", "1-30", "1-51")
+			posLagger := getRelayLogPosition("1-90", "1-30", "1-50")
+			// The discarded divergent leader (101) fails its relay-log wait when stuck. The
+			// override only waits on the chosen primary, so this must not affect the outcome.
+			discardedLeaderWait := map[string]error{posB: nil}
+			if tt.stuckDiscardedLeader {
+				discardedLeaderWait = map[string]error{posB: assert.AnError}
+			}
+			tmc := &testutil.TabletManagerClient{
+				PopulateReparentJournalResults: map[string]error{
+					"zone1-0000000100": nil,
+				},
+				InitPrimaryResults: map[string]struct {
+					Result string
+					Error  error
+				}{
+					"zone1-0000000100": {Result: "ok"},
+				},
+				SetReplicationSourceResults: map[string]error{
+					"zone1-0000000101": nil,
+					"zone1-0000000102": nil,
+				},
+				StopReplicationAndGetStatusResults: map[string]struct {
+					StopStatus *replicationdatapb.StopReplicationStatus
+					Error      error
+				}{
+					"zone1-0000000100": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
+							After: &replicationdatapb.Status{
+								SourceUuid:       "00000000-0000-0000-0000-000000000001",
+								RelayLogPosition: posA,
+							},
+						},
+					},
+					"zone1-0000000101": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
+							After: &replicationdatapb.Status{
+								SourceUuid:       "00000000-0000-0000-0000-000000000001",
+								RelayLogPosition: posB,
+							},
+						},
+					},
+					"zone1-0000000102": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
+							After: &replicationdatapb.Status{
+								SourceUuid:       "00000000-0000-0000-0000-000000000001",
+								RelayLogPosition: posLagger,
+							},
+						},
+					},
+				},
+				WaitForPositionResults: map[string]map[string]error{
+					"zone1-0000000100": {posA: nil},
+					"zone1-0000000101": discardedLeaderWait,
+				},
+				ReadReparentJournalInfoResults: map[string]int32{},
+			}
+			if tt.replicaRepointsFail {
+				tmc.SetReplicationSourceResults = map[string]error{
+					"zone1-0000000101": assert.AnError,
+					"zone1-0000000102": assert.AnError,
+				}
+			}
+
+			ctx := t.Context()
+			ts := memorytopo.NewServer(ctx, "zone1")
+			t.Cleanup(ts.Close)
+			testutil.AddShards(ctx, t, ts, &vtctldatapb.Shard{
+				Keyspace: "testkeyspace",
+				Name:     "-",
+			})
+			testutil.AddTablets(
+				ctx, t, ts, nil,
+				&topodatapb.Tablet{
+					Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+					Type:     topodatapb.TabletType_REPLICA,
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+				&topodatapb.Tablet{
+					Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
+					Type:     topodatapb.TabletType_REPLICA,
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+				&topodatapb.Tablet{
+					Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 102},
+					Type:     topodatapb.TabletType_RDONLY,
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+			)
+			reparenttestutil.SetKeyspaceDurability(ctx, t, ts, "testkeyspace", policy.DurabilityNone)
+
+			lockCtx, unlock, err := ts.LockShard(ctx, "testkeyspace", "-", "test lock")
+			require.NoError(t, err)
+			defer unlock(&err)
+
+			ev := &events.Reparent{}
+			erp := NewEmergencyReparenter(ts, tmc, logutil.NewMemoryLogger())
+			err = erp.reparentShardLocked(lockCtx, ev, "testkeyspace", "-", EmergencyReparentOptions{
+				NewPrimaryAlias:          tt.newPrimary,
+				AllowSplitBrainPromotion: true,
+				WaitReplicasTimeout:      time.Second,
+			})
+			if tt.wantErr != "" {
+				require.ErrorContains(t, err, tt.wantErr)
+			} else {
+				require.NoError(t, err)
+				require.NotNil(t, ev.NewPrimary)
+				assert.True(t, topoproto.TabletAliasEqual(tt.wantPrimary, ev.NewPrimary.Alias))
+			}
+			assert.Equal(t, tt.wantOverrideCount, ersSplitBrainOverrides.Counts()["testkeyspace.-"])
 		})
 	}
 }
@@ -5452,7 +6015,7 @@ func TestEmergencyReparenter_promotionOfNewPrimary(t *testing.T) {
 			tt.emergencyReparentOps.durability = durability
 
 			erp := NewEmergencyReparenter(ts, tt.tmc, logger)
-			_, err := erp.reparentReplicas(ctx, ev, tabletInfo.Tablet, tt.tabletMap, tt.statusMap, tt.emergencyReparentOps, nil /* nonAckers */, false)
+			_, err := erp.reparentReplicas(ctx, ev, tabletInfo.Tablet, tt.tabletMap, tt.statusMap, tt.emergencyReparentOps, nil /* nonAckers */, false /* splitBrainOverrideActive */, false)
 			if tt.shouldErr {
 				require.Error(t, err)
 				assert.Contains(t, err.Error(), tt.errShouldContain)
@@ -6627,10 +7190,27 @@ func TestEmergencyReparenter_findMostAdvanced(t *testing.T) {
 		Executed: replication.Position{GTIDSet: replication.Mysql56GTIDSet{}},
 	}
 
+	// MariaDB GTID containment ignores the origin server, so these two positions contain
+	// each other while holding a different write for sequence 10
+	positionMariadbServer1 := &RelayLogPositions{
+		Combined: replication.MustParsePosition(replication.MariadbFlavorID, "0-1-10"),
+		Executed: replication.MustParsePosition(replication.MariadbFlavorID, "0-1-10"),
+	}
+	positionMariadbServer2 := &RelayLogPositions{
+		Combined: replication.MustParsePosition(replication.MariadbFlavorID, "0-2-10"),
+		Executed: replication.MustParsePosition(replication.MariadbFlavorID, "0-2-10"),
+	}
+	positionMariadbServer1Seq11 := &RelayLogPositions{
+		Combined: replication.MustParsePosition(replication.MariadbFlavorID, "0-1-11"),
+		Executed: replication.MustParsePosition(replication.MariadbFlavorID, "0-1-11"),
+	}
+
 	tests := []struct {
 		name                 string
 		validCandidates      map[string]*RelayLogPositions
 		tabletMap            map[string]*topo.TabletInfo
+		versionMap           map[string]mysqlctl.ServerVersion
+		flavorMap            map[string]mysqlctl.MySQLFlavor
 		emergencyReparentOps EmergencyReparentOptions
 		result               *topodatapb.Tablet
 		err                  string
@@ -6901,6 +7481,219 @@ func TestEmergencyReparenter_findMostAdvanced(t *testing.T) {
 				},
 			},
 			err: "split brain detected between servers",
+		}, {
+			// reciprocally contained but unequal positions (MariaDB GTIDs with the same
+			// domain and sequence from different origin servers) are divergent histories
+			// that containment can't order, so ERS must fail closed instead of picking
+			// a side of the divergence by tiebreak
+			name: "split brain detection on reciprocal but unequal mariadb positions",
+			validCandidates: map[string]*RelayLogPositions{
+				"zone1-0000000100": positionMariadbServer1,
+				"zone1-0000000101": positionMariadbServer2,
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+					},
+				},
+				"zone1-0000000101": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  101,
+						},
+					},
+				},
+			},
+			err: "split brain detected between servers",
+		}, {
+			// the divergent pair can sit behind a candidate that dominates both of them,
+			// so reciprocal containment must be checked between every pair of candidates,
+			// not just against the winning position
+			name: "split brain detection on reciprocal mariadb positions behind the winner",
+			validCandidates: map[string]*RelayLogPositions{
+				"zone1-0000000100": positionMariadbServer1Seq11,
+				"zone1-0000000101": positionMariadbServer1,
+				"zone1-0000000102": positionMariadbServer2,
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+					},
+				},
+				"zone1-0000000101": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  101,
+						},
+					},
+				},
+				"zone1-0000000102": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  102,
+						},
+					},
+				},
+			},
+			err: "split brain detected between servers",
+		}, {
+			name: "lower MySQL version preferred when positions are equal",
+			validCandidates: map[string]*RelayLogPositions{
+				"zone1-0000000100": positionMostAdvanced,
+				"zone1-0000000101": positionMostAdvanced,
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+				"zone1-0000000101": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  101,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+			},
+			versionMap: map[string]mysqlctl.ServerVersion{
+				"zone1-0000000100": {Major: 8, Minor: 4, Patch: 0},
+				"zone1-0000000101": {Major: 8, Minor: 0, Patch: 35},
+			},
+			result: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  101,
+				},
+			},
+		}, {
+			// Mixed flavor families disable version-aware intermediate-source
+			// selection: MariaDB 10.6 (uid 100) and MySQL 8.4 (uid 101) at equal
+			// position. Without the flavor guard, findMostAdvanced would compute
+			// 8.4 < 10.6 and prefer the MySQL tablet; with it, version ordering is
+			// skipped and the tie falls through to the stable alias tiebreak (uid
+			// 100 sorts first).
+			name: "mixed flavor families skip version-aware selection",
+			validCandidates: map[string]*RelayLogPositions{
+				"zone1-0000000100": positionMostAdvanced,
+				"zone1-0000000101": positionMostAdvanced,
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+						Type:  topodatapb.TabletType_REPLICA,
+					},
+				},
+				"zone1-0000000101": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
+						Type:  topodatapb.TabletType_REPLICA,
+					},
+				},
+			},
+			versionMap: map[string]mysqlctl.ServerVersion{
+				"zone1-0000000100": {Major: 10, Minor: 6},
+				"zone1-0000000101": {Major: 8, Minor: 4, Patch: 0},
+			},
+			flavorMap: map[string]mysqlctl.MySQLFlavor{
+				"zone1-0000000100": mysqlctl.FlavorMariaDB,
+				"zone1-0000000101": mysqlctl.FlavorMySQL,
+			},
+			result: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+		}, {
+			name: "same MySQL version falls through to position",
+			validCandidates: map[string]*RelayLogPositions{
+				"zone1-0000000100": positionMostAdvanced,
+				"zone1-0000000101": positionAlmostMostAdvanced,
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+				"zone1-0000000101": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  101,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+			},
+			versionMap: map[string]mysqlctl.ServerVersion{
+				"zone1-0000000100": {Major: 8, Minor: 0, Patch: 35},
+				"zone1-0000000101": {Major: 8, Minor: 0, Patch: 35},
+			},
+			result: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+		}, {
+			name: "unknown MySQL version sorts last",
+			validCandidates: map[string]*RelayLogPositions{
+				"zone1-0000000100": positionMostAdvanced,
+				"zone1-0000000101": positionMostAdvanced,
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+				"zone1-0000000101": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  101,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+			},
+			versionMap: map[string]mysqlctl.ServerVersion{
+				"zone1-0000000101": {Major: 8, Minor: 0, Patch: 35},
+			},
+			result: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  101,
+				},
+			},
 		},
 	}
 
@@ -6911,7 +7704,7 @@ func TestEmergencyReparenter_findMostAdvanced(t *testing.T) {
 			erp := NewEmergencyReparenter(nil, nil, logutil.NewMemoryLogger())
 
 			test.emergencyReparentOps.durability = durability
-			winningTablet, _, err := erp.findMostAdvanced(test.validCandidates, test.tabletMap, test.emergencyReparentOps)
+			winningTablet, _, err := erp.findMostAdvanced(test.validCandidates, test.tabletMap, test.versionMap, test.flavorMap, test.emergencyReparentOps)
 			if test.err != "" {
 				require.Error(t, err)
 				assert.Contains(t, err.Error(), test.err)
@@ -7435,7 +8228,7 @@ func TestEmergencyReparenter_reparentReplicas(t *testing.T) {
 			tt.emergencyReparentOps.durability = durability
 
 			erp := NewEmergencyReparenter(ts, tt.tmc, logger)
-			_, err := erp.reparentReplicas(ctx, ev, tabletInfo.Tablet, tt.tabletMap, tt.statusMap, tt.emergencyReparentOps, nil /* nonAckers */, false /* intermediateReparent */)
+			_, err := erp.reparentReplicas(ctx, ev, tabletInfo.Tablet, tt.tabletMap, tt.statusMap, tt.emergencyReparentOps, nil /* nonAckers */, false /* splitBrainOverrideActive */, false /* intermediateReparent */)
 			if tt.shouldErr {
 				require.Error(t, err)
 				assert.Contains(t, err.Error(), tt.errShouldContain)
@@ -8037,6 +8830,8 @@ func TestEmergencyReparenter_identifyPrimaryCandidate(t *testing.T) {
 		intermediateSource   *topodatapb.Tablet
 		validCandidates      []*topodatapb.Tablet
 		tabletMap            map[string]*topo.TabletInfo
+		versionMap           map[string]mysqlctl.ServerVersion
+		flavorMap            map[string]mysqlctl.MySQLFlavor
 		err                  string
 		result               *topodatapb.Tablet
 	}{
@@ -8216,6 +9011,52 @@ func TestEmergencyReparenter_identifyPrimaryCandidate(t *testing.T) {
 					Uid:  102,
 				},
 			},
+		}, {
+			// Same-family (MySQL) candidates at the same promotion tier: the final
+			// election prefers the lower version, promoting zone1-101 (8.0) over the
+			// 8.4 intermediate source.
+			name:               "lower version preferred among same-family candidates",
+			intermediateSource: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}},
+			validCandidates: []*topodatapb.Tablet{
+				{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}},
+				{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101}},
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}}},
+				"zone1-0000000101": {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101}}},
+			},
+			versionMap: map[string]mysqlctl.ServerVersion{
+				"zone1-0000000100": {Major: 8, Minor: 4, Patch: 0},
+				"zone1-0000000101": {Major: 8, Minor: 0, Patch: 35},
+			},
+			result: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101}},
+		}, {
+			// Regression for the mixed-flavor-family case. The intermediate source is
+			// the MariaDB tablet (10.6, uid 100); the other candidate is MySQL 8.4
+			// (uid 101). identifyPrimaryCandidate is given the raw (unguarded) version
+			// and flavor maps, so its internal scopedVersionMap must detect the mixed
+			// families and disable version comparison. Without that guard, findCandidate
+			// would compute 8.4 < 10.6 and pull the election to the MySQL tablet — the
+			// incompatible choice; with it, the MariaDB intermediate source is kept.
+			name:               "mixed flavor families disable version comparison in final election",
+			intermediateSource: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}},
+			validCandidates: []*topodatapb.Tablet{
+				{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}}, // MariaDB 10.6 (intermediate source)
+				{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101}}, // MySQL 8.4
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}}},
+				"zone1-0000000101": {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101}}},
+			},
+			versionMap: map[string]mysqlctl.ServerVersion{
+				"zone1-0000000100": {Major: 10, Minor: 6},
+				"zone1-0000000101": {Major: 8, Minor: 4, Patch: 0},
+			},
+			flavorMap: map[string]mysqlctl.MySQLFlavor{
+				"zone1-0000000100": mysqlctl.FlavorMariaDB,
+				"zone1-0000000101": mysqlctl.FlavorMySQL,
+			},
+			result: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}},
 		},
 	}
 
@@ -8226,7 +9067,7 @@ func TestEmergencyReparenter_identifyPrimaryCandidate(t *testing.T) {
 			logger := logutil.NewMemoryLogger()
 
 			erp := NewEmergencyReparenter(nil, nil, logger)
-			res, err := erp.identifyPrimaryCandidate(test.intermediateSource, test.validCandidates, test.tabletMap, test.emergencyReparentOps)
+			res, err := erp.identifyPrimaryCandidate(test.intermediateSource, test.validCandidates, test.tabletMap, test.versionMap, test.flavorMap, test.emergencyReparentOps)
 			if test.err != "" {
 				assert.EqualError(t, err, test.err)
 				return
@@ -8305,7 +9146,7 @@ func TestParentContextCancelled(t *testing.T) {
 		time.Sleep(time.Second)
 		cancel()
 	}()
-	_, err = erp.reparentReplicas(ctx, ev, tabletMap[newPrimaryTabletAlias].Tablet, tabletMap, statusMap, emergencyReparentOps, nil /* nonAckers */, true)
+	_, err = erp.reparentReplicas(ctx, ev, tabletMap[newPrimaryTabletAlias].Tablet, tabletMap, statusMap, emergencyReparentOps, nil /* nonAckers */, false /* splitBrainOverrideActive */, true)
 	require.NoError(t, err)
 }
 
@@ -9424,7 +10265,7 @@ func TestEmergencyReparenterFindErrantGTIDs(t *testing.T) {
 			validCandidates, isGtid, err := FindPositionsOfAllCandidates(tt.statusMap, tt.primaryStatusMap)
 			require.NoError(t, err)
 			require.True(t, isGtid)
-			candidates, starved, err := erp.findErrantGTIDs(t.Context(), validCandidates, tt.statusMap, tt.tabletMap, 10*time.Second, nil)
+			candidates, starved, err := erp.findErrantGTIDs(t.Context(), validCandidates, tt.statusMap, tt.tabletMap, 10*time.Second, nil, false)
 			if tt.wantErr != "" {
 				require.ErrorContains(t, err, tt.wantErr)
 				return
@@ -9441,7 +10282,7 @@ func TestEmergencyReparenterFindErrantGTIDs(t *testing.T) {
 			dp, err := policy.GetDurabilityPolicy(policy.DurabilitySemiSync)
 			require.NoError(t, err)
 			ers := EmergencyReparenter{logger: logutil.NewCallbackLogger(func(*logutilpb.Event) {})}
-			winningPrimary, _, err := ers.findMostAdvanced(candidates, tt.tabletMap, EmergencyReparentOptions{durability: dp})
+			winningPrimary, _, err := ers.findMostAdvanced(candidates, tt.tabletMap, nil, nil, EmergencyReparentOptions{durability: dp})
 			require.NoError(t, err)
 			require.True(t, slices.Contains(tt.wantMostAdvancedPossible, winningPrimary.Hostname), winningPrimary.Hostname)
 		})
@@ -9452,8 +10293,8 @@ func TestEmergencyReparenterFindErrantGTIDs(t *testing.T) {
 // for a bug where a nil *RelayLogPositions entry in validCandidates would
 // cause a nil pointer panic. The test includes:
 //   - zone1-0000000102: valid candidate with max reparent journal length
-//   - zone1-0000000103: nil position with max reparent journal length (exercises the maxLenCandidates loop)
-//   - zone1-0000000104: nil position with a lower reparent journal length (exercises the lagged-candidate loop)
+//   - zone1-0000000103: nil position with max reparent journal length
+//   - zone1-0000000104: nil position with a lower reparent journal length
 func TestEmergencyReparenterFindErrantGTIDs_NilPosition(t *testing.T) {
 	u1 := "00000000-0000-0000-0000-000000000001"
 	erp := NewEmergencyReparenter(nil, &testutil.TabletManagerClient{
@@ -9516,10 +10357,8 @@ func TestEmergencyReparenterFindErrantGTIDs_NilPosition(t *testing.T) {
 		},
 	}
 	// Construct validCandidates with nil entries for zone1-0000000103 and
-	// zone1-0000000104. zone1-0000000103 has the same reparent journal length
-	// as zone1-0000000102 (maxLen), so it exercises the nil guard in the
-	// maxLenCandidates loop. zone1-0000000104 has a lower reparent journal
-	// length, so it exercises the nil guard in the lagged-candidate loop.
+	// zone1-0000000104, at max and lower reparent journal lengths respectively;
+	// both must be dropped from candidacy before the evidence tier is computed.
 	validCandidates := map[string]*RelayLogPositions{
 		"zone1-0000000102": {
 			Combined: replication.MustParsePosition(replication.Mysql56FlavorID, u1+":1-100"),
@@ -9528,10 +10367,490 @@ func TestEmergencyReparenterFindErrantGTIDs_NilPosition(t *testing.T) {
 		"zone1-0000000104": nil,
 	}
 
-	candidates, starved, err := erp.findErrantGTIDs(t.Context(), validCandidates, statusMap, tabletMap, 10*time.Second, nil)
+	candidates, starved, err := erp.findErrantGTIDs(t.Context(), validCandidates, statusMap, tabletMap, 10*time.Second, nil, false)
 	require.NoError(t, err)
 	require.Contains(t, candidates, "zone1-0000000102")
 	// the nil peer at maxLen contributed no evidence, so the surviving candidate was
 	// accepted without any comparison
 	assert.ElementsMatch(t, []string{"zone1-0000000102"}, starved)
+}
+
+// TestEmergencyReparenter_findMostAdvanced_versionTiebreakerAfterCatchUp is a
+// regression test for the case where a lower-version candidate has the same
+// combined relay-log position as a higher-version candidate but a lower pre-wait
+// executed position. After the relay-log wait, applyRelayLogsAndReconcile bumps
+// each applied candidate's Executed up to its Combined position, so both compare
+// equal and the MySQL version tiebreaker must select the lower-version tablet
+// rather than the one that merely looked more advanced before catch-up.
+//
+// This is GTID-only: version-aware election is restricted to GTID-based
+// (MySQL/Percona) shards, which is also the only path applyRelayLogsAndReconcile
+// reconciles.
+func TestEmergencyReparenter_findMostAdvanced_versionTiebreakerAfterCatchUp(t *testing.T) {
+	// The relay log holds GTIDs through sequence 10; executedBehind has applied
+	// only through sequence 5, so it is a proper subset of the combined position.
+	combined := mustPosition(t, "3e11fa47-71ca-11e1-9e33-c80aa9429562:1-10")
+	executedFull := combined
+	executedBehind := mustPosition(t, "3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5")
+
+	// olderReplica: lower version, SQL thread behind pre-wait.
+	// newerReplica: higher version, fully applied pre-wait.
+	// Both have the same combined relay-log position.
+	validCandidates := map[string]*RelayLogPositions{
+		"zone1-0000000100": {Combined: combined, Executed: executedBehind},
+		"zone1-0000000101": {Combined: combined, Executed: executedFull},
+	}
+	tabletMap := map[string]*topo.TabletInfo{
+		"zone1-0000000100": {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}, Type: topodatapb.TabletType_REPLICA}},
+		"zone1-0000000101": {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101}, Type: topodatapb.TabletType_REPLICA}},
+	}
+	versionMap := map[string]mysqlctl.ServerVersion{
+		"zone1-0000000100": {Major: 8, Minor: 0, Patch: 35},
+		"zone1-0000000101": {Major: 8, Minor: 4, Patch: 0},
+	}
+
+	durability, err := policy.GetDurabilityPolicy(policy.DurabilityNone)
+	require.NoError(t, err)
+
+	// Before the relay-log wait, the newer tablet looks more advanced on Executed
+	// and would be chosen as the intermediate source.
+	erpBefore := NewEmergencyReparenter(nil, nil, logutil.NewMemoryLogger())
+	intermediateSource, _, err := erpBefore.findMostAdvanced(validCandidates, tabletMap, versionMap, nil, EmergencyReparentOptions{durability: durability})
+	require.NoError(t, err)
+	require.True(t, topoproto.TabletAliasEqual(intermediateSource.Alias, &topodatapb.TabletAlias{Cell: "zone1", Uid: 101}))
+
+	// Both candidates' SQL threads catch up to the combined relay-log position
+	// during the wait, which reconciles their Executed up to Combined. After that,
+	// positions are equal and the version tiebreaker selects the lower-version tablet.
+	combinedStr := replication.EncodePosition(combined)
+	statusMap := map[string]*replicationdatapb.StopReplicationStatus{
+		"zone1-0000000100": {After: &replicationdatapb.Status{RelayLogPosition: combinedStr}},
+		"zone1-0000000101": {After: &replicationdatapb.Status{RelayLogPosition: combinedStr}},
+	}
+	tmc := &testutil.TabletManagerClient{
+		WaitForPositionResults: map[string]map[string]error{
+			"zone1-0000000100": {combinedStr: nil},
+			"zone1-0000000101": {combinedStr: nil},
+		},
+	}
+	erp := NewEmergencyReparenter(nil, tmc, logutil.NewMemoryLogger())
+	reconciled, _, err := erp.applyRelayLogsAndReconcile(t.Context(), validCandidates, validCandidates, tabletMap, statusMap, 30*time.Second, true /* requireAll */, true /* isGTIDBased */)
+	require.NoError(t, err)
+
+	intermediateSource, _, err = erp.findMostAdvanced(reconciled, tabletMap, versionMap, nil, EmergencyReparentOptions{durability: durability})
+	require.NoError(t, err)
+	require.True(t, topoproto.TabletAliasEqual(intermediateSource.Alias, &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}))
+}
+
+// TestEmergencyReparenterFindErrantGTIDs_EmptyPrimaryPosition is a regression test
+// for a bug where a demoted primary with a zero GTID position (its GTID state was
+// wiped while the journal table kept its rows) was accepted as a candidate and its
+// empty position added to the evidence set. Empty evidence corroborates nothing, so
+// every GTID on the surviving replica was flagged errant, leaving the empty primary
+// as the only candidate left to promote.
+func TestEmergencyReparenterFindErrantGTIDs_EmptyPrimaryPosition(t *testing.T) {
+	u1 := "00000000-0000-0000-0000-000000000001"
+	emptyPos, err := replication.DecodePosition("MySQL56/")
+	require.NoError(t, err)
+	require.True(t, emptyPos.IsZero())
+
+	erp := NewEmergencyReparenter(nil, &testutil.TabletManagerClient{
+		ReadReparentJournalInfoResults: map[string]int32{
+			"zone1-0000000100": 2,
+			"zone1-0000000101": 2,
+		},
+	}, nil)
+	tabletMap := map[string]*topo.TabletInfo{
+		"zone1-0000000100": {
+			Tablet: &topodatapb.Tablet{
+				Hostname: "zone1-0000000100",
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+				Type: topodatapb.TabletType_PRIMARY,
+			},
+		},
+		"zone1-0000000101": {
+			Tablet: &topodatapb.Tablet{
+				Hostname: "zone1-0000000101",
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  101,
+				},
+				Type: topodatapb.TabletType_REPLICA,
+			},
+		},
+	}
+	// The demoted primary is not in statusMap: it answered the stop-replication phase
+	// as a primary.
+	statusMap := map[string]*replicationdatapb.StopReplicationStatus{
+		"zone1-0000000101": {
+			After: &replicationdatapb.Status{
+				RelayLogPosition: getRelayLogPosition("1-100"),
+				SourceUuid:       u1,
+			},
+		},
+	}
+	validCandidates := map[string]*RelayLogPositions{
+		"zone1-0000000100": {Combined: emptyPos},
+		"zone1-0000000101": {
+			Combined: replication.MustParsePosition(replication.Mysql56FlavorID, u1+":1-100"),
+		},
+	}
+
+	candidates, starved, err := erp.findErrantGTIDs(t.Context(), validCandidates, statusMap, tabletMap, 10*time.Second, nil, false)
+	require.NoError(t, err)
+	// the empty primary contributed no evidence, so the lagged replica must be accepted
+	// as-is rather than have its entire GTID set flagged errant
+	require.Contains(t, candidates, "zone1-0000000101")
+	// a candidate with no GTIDs corroborates nothing and cannot be promoted over tablets
+	// with real history, so it is dropped from candidacy
+	assert.NotContains(t, candidates, "zone1-0000000100")
+	// with the empty primary dropped, the replica forms the evidence tier on its own and
+	// was accepted with nothing to compare against; report it starved so the caller can
+	// decide whether the blind spot is acceptable
+	assert.ElementsMatch(t, []string{"zone1-0000000101"}, starved)
+}
+
+// TestEmergencyReparenterFindErrantGTIDs_EmptyPrimaryErrantReplica covers the case where
+// a max-reparent-journal candidate has a zero GTID position and the remaining candidates
+// disagree. Dropping the wiped tablet must not leave the real candidates compared
+// against nothing: the surviving replicas form the evidence tier and are compared
+// against each other, catching the errant one.
+func TestEmergencyReparenterFindErrantGTIDs_EmptyPrimaryErrantReplica(t *testing.T) {
+	u1 := "00000000-0000-0000-0000-000000000001"
+	u3 := "00000000-0000-0000-0000-000000000003"
+	emptyPos, err := replication.DecodePosition("MySQL56/")
+	require.NoError(t, err)
+	require.True(t, emptyPos.IsZero())
+
+	erp := NewEmergencyReparenter(nil, &testutil.TabletManagerClient{
+		ReadReparentJournalInfoResults: map[string]int32{
+			"zone1-0000000100": 2,
+			"zone1-0000000101": 2,
+			"zone1-0000000102": 2,
+		},
+	}, nil)
+	tabletMap := map[string]*topo.TabletInfo{
+		"zone1-0000000100": {
+			Tablet: &topodatapb.Tablet{
+				Hostname: "zone1-0000000100",
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+				Type: topodatapb.TabletType_PRIMARY,
+			},
+		},
+		"zone1-0000000101": {
+			Tablet: &topodatapb.Tablet{
+				Hostname: "zone1-0000000101",
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  101,
+				},
+				Type: topodatapb.TabletType_REPLICA,
+			},
+		},
+		"zone1-0000000102": {
+			Tablet: &topodatapb.Tablet{
+				Hostname: "zone1-0000000102",
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  102,
+				},
+				Type: topodatapb.TabletType_REPLICA,
+			},
+		},
+	}
+	// The demoted primary is not in statusMap: it answered the stop-replication phase
+	// as a primary.
+	statusMap := map[string]*replicationdatapb.StopReplicationStatus{
+		"zone1-0000000101": {
+			After: &replicationdatapb.Status{
+				RelayLogPosition: getRelayLogPosition("1-100"),
+				SourceUuid:       u1,
+			},
+		},
+		"zone1-0000000102": {
+			After: &replicationdatapb.Status{
+				RelayLogPosition: getRelayLogPosition("1-100", "", "1"),
+				SourceUuid:       u1,
+			},
+		},
+	}
+	validCandidates := map[string]*RelayLogPositions{
+		"zone1-0000000100": {Combined: emptyPos},
+		"zone1-0000000101": {
+			Combined: replication.MustParsePosition(replication.Mysql56FlavorID, u1+":1-100"),
+		},
+		"zone1-0000000102": {
+			Combined: replication.MustParsePosition(replication.Mysql56FlavorID, u1+":1-100,"+u3+":1"),
+		},
+	}
+
+	candidates, starved, err := erp.findErrantGTIDs(t.Context(), validCandidates, statusMap, tabletMap, 10*time.Second, nil, false)
+	require.NoError(t, err)
+	require.Contains(t, candidates, "zone1-0000000101")
+	// no other tablet corroborates u3:1, so zone1-0000000102 has an errant GTID and
+	// must not survive detection
+	assert.NotContains(t, candidates, "zone1-0000000102")
+	assert.NotContains(t, candidates, "zone1-0000000100")
+	// both replicas had a peer to compare against, so nobody was accepted blindly
+	assert.Empty(t, starved)
+}
+
+// findErrantGTIDsWipedShardFixture returns a two-tablet fixture (a demoted primary and
+// a replica) for the wiped-shard fail-closed tests: positions and journal counts vary
+// per test, the topology does not.
+func findErrantGTIDsWipedShardFixture(t *testing.T) (map[string]*topo.TabletInfo, replication.Position) {
+	t.Helper()
+	emptyPos, err := replication.DecodePosition("MySQL56/")
+	require.NoError(t, err)
+	require.True(t, emptyPos.IsZero())
+
+	tabletMap := map[string]*topo.TabletInfo{
+		"zone1-0000000100": {
+			Tablet: &topodatapb.Tablet{
+				Hostname: "zone1-0000000100",
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+				Type: topodatapb.TabletType_PRIMARY,
+			},
+		},
+		"zone1-0000000101": {
+			Tablet: &topodatapb.Tablet{
+				Hostname: "zone1-0000000101",
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  101,
+				},
+				Type: topodatapb.TabletType_REPLICA,
+			},
+		},
+	}
+	return tabletMap, emptyPos
+}
+
+// TestEmergencyReparenterFindErrantGTIDs_WipedMaxJournalFailsClosed covers the case
+// where the only candidate holding the latest reparent journal history has a zero GTID
+// position: the surviving replica provably missed a promotion and no evidence is left
+// to prove what it contained, so ERS must fail closed instead of promoting from a
+// recomputed lagged tier.
+func TestEmergencyReparenterFindErrantGTIDs_WipedMaxJournalFailsClosed(t *testing.T) {
+	u1 := "00000000-0000-0000-0000-000000000001"
+	tabletMap, emptyPos := findErrantGTIDsWipedShardFixture(t)
+
+	erp := NewEmergencyReparenter(nil, &testutil.TabletManagerClient{
+		ReadReparentJournalInfoResults: map[string]int32{
+			"zone1-0000000100": 2,
+			"zone1-0000000101": 1,
+		},
+	}, nil)
+	statusMap := map[string]*replicationdatapb.StopReplicationStatus{
+		"zone1-0000000101": {
+			After: &replicationdatapb.Status{
+				RelayLogPosition: getRelayLogPosition("1-100"),
+				SourceUuid:       u1,
+			},
+		},
+	}
+	validCandidates := map[string]*RelayLogPositions{
+		"zone1-0000000100": {Combined: emptyPos},
+		"zone1-0000000101": {
+			Combined: replication.MustParsePosition(replication.Mysql56FlavorID, u1+":1-100"),
+		},
+	}
+
+	_, _, err := erp.findErrantGTIDs(t.Context(), validCandidates, statusMap, tabletMap, 10*time.Second, nil, false)
+	require.ErrorContains(t, err, "cannot be proven to have seen the latest promotion")
+	require.ErrorContains(t, err, "zone1-0000000100")
+}
+
+// TestEmergencyReparenterFindErrantGTIDs_AllZeroPositionsWithJournalHistory covers a
+// shard where every candidate reports an empty GTID position but the reparent journal
+// still has entries: the GTID state was wiped on every reachable tablet, which must
+// not be mistaken for an uninitialized shard, so ERS fails closed.
+func TestEmergencyReparenterFindErrantGTIDs_AllZeroPositionsWithJournalHistory(t *testing.T) {
+	tabletMap, emptyPos := findErrantGTIDsWipedShardFixture(t)
+
+	erp := NewEmergencyReparenter(nil, &testutil.TabletManagerClient{
+		ReadReparentJournalInfoResults: map[string]int32{
+			"zone1-0000000100": 2,
+			"zone1-0000000101": 1,
+		},
+	}, nil)
+	validCandidates := map[string]*RelayLogPositions{
+		"zone1-0000000100": {Combined: emptyPos},
+		"zone1-0000000101": {Combined: emptyPos},
+	}
+
+	_, _, err := erp.findErrantGTIDs(t.Context(), validCandidates, map[string]*replicationdatapb.StopReplicationStatus{}, tabletMap, 10*time.Second, nil, false)
+	require.ErrorContains(t, err, "cannot be proven to have seen the latest promotion")
+	require.ErrorContains(t, err, "zone1-0000000100")
+}
+
+// TestEmergencyReparenterFindErrantGTIDs_AllZeroPositionsNewShard pins the shard
+// initialization case: every candidate has an empty GTID position and an empty
+// reparent journal, so there is no history to protect and every candidate remains
+// eligible to become the first primary.
+func TestEmergencyReparenterFindErrantGTIDs_AllZeroPositionsNewShard(t *testing.T) {
+	tabletMap, emptyPos := findErrantGTIDsWipedShardFixture(t)
+
+	erp := NewEmergencyReparenter(nil, &testutil.TabletManagerClient{
+		ReadReparentJournalInfoResults: map[string]int32{
+			"zone1-0000000100": 0,
+			"zone1-0000000101": 0,
+		},
+	}, nil)
+	validCandidates := map[string]*RelayLogPositions{
+		"zone1-0000000100": {Combined: emptyPos},
+		"zone1-0000000101": {Combined: emptyPos},
+	}
+
+	candidates, starved, err := erp.findErrantGTIDs(t.Context(), validCandidates, map[string]*replicationdatapb.StopReplicationStatus{}, tabletMap, 10*time.Second, nil, true)
+	require.NoError(t, err)
+	assert.Contains(t, candidates, "zone1-0000000100")
+	assert.Contains(t, candidates, "zone1-0000000101")
+	assert.Empty(t, starved)
+}
+
+// TestEmergencyReparenterFindErrantGTIDs_MissingJournalTableRealPosition covers the
+// converse of the new-shard tolerance: a tablet with real GTIDs but no reparent journal
+// table is abnormal (a botched restore, not an uninitialized shard) and must keep
+// failing the gather rather than being silently treated as maximally lagged.
+func TestEmergencyReparenterFindErrantGTIDs_MissingJournalTableRealPosition(t *testing.T) {
+	u1 := "00000000-0000-0000-0000-000000000001"
+	tabletMap, _ := findErrantGTIDsWipedShardFixture(t)
+
+	erp := NewEmergencyReparenter(nil, &testutil.TabletManagerClient{
+		ReadReparentJournalInfoErrors: map[string]error{
+			"zone1-0000000100": errors.New("rpc error: code = Unknown desc = Table '_vt.reparent_journal' doesn't exist (errno 1146) (sqlstate 42S02) during query: SELECT COUNT(*) FROM _vt.reparent_journal"),
+		},
+		ReadReparentJournalInfoResults: map[string]int32{
+			"zone1-0000000101": 1,
+		},
+	}, nil)
+	validCandidates := map[string]*RelayLogPositions{
+		"zone1-0000000100": {
+			Combined: replication.MustParsePosition(replication.Mysql56FlavorID, u1+":1-100"),
+		},
+		"zone1-0000000101": {
+			Combined: replication.MustParsePosition(replication.Mysql56FlavorID, u1+":1-100"),
+		},
+	}
+
+	_, _, err := erp.findErrantGTIDs(t.Context(), validCandidates, map[string]*replicationdatapb.StopReplicationStatus{}, tabletMap, 10*time.Second, nil, false)
+	require.ErrorContains(t, err, "could not read reparent journal information")
+}
+
+// TestEmergencyReparenterFindErrantGTIDs_MissingJournalTableNewShard covers a shard so
+// new that the sidecar reparent journal table does not exist yet: the resulting MySQL
+// error must be treated as zero journal entries rather than failing the gather, so ERS
+// can still initialize the shard.
+func TestEmergencyReparenterFindErrantGTIDs_MissingJournalTableNewShard(t *testing.T) {
+	tabletMap, emptyPos := findErrantGTIDsWipedShardFixture(t)
+
+	erp := NewEmergencyReparenter(nil, &testutil.TabletManagerClient{
+		ReadReparentJournalInfoErrors: map[string]error{
+			"zone1-0000000100": errors.New("rpc error: code = Unknown desc = Table '_vt.reparent_journal' doesn't exist (errno 1146) (sqlstate 42S02) during query: SELECT COUNT(*) FROM _vt.reparent_journal"),
+		},
+		ReadReparentJournalInfoResults: map[string]int32{
+			"zone1-0000000101": 0,
+		},
+	}, nil)
+	validCandidates := map[string]*RelayLogPositions{
+		"zone1-0000000100": {Combined: emptyPos},
+		"zone1-0000000101": {Combined: emptyPos},
+	}
+
+	candidates, starved, err := erp.findErrantGTIDs(t.Context(), validCandidates, map[string]*replicationdatapb.StopReplicationStatus{}, tabletMap, 10*time.Second, nil, true)
+	require.NoError(t, err)
+	assert.Contains(t, candidates, "zone1-0000000100")
+	assert.Contains(t, candidates, "zone1-0000000101")
+	assert.Empty(t, starved)
+}
+
+// TestEmergencyReparenterFindErrantGTIDs_AllZeroPositionsInitializedShard covers a shard
+// whose GTID state was wiped on every reachable candidate while the journal tables
+// survived empty: readable zero counts alone cannot distinguish this from a brand-new
+// shard, so the topology must agree the shard was never initialized before anyone is
+// treated as a valid first primary. Here the topology records a previous primary, so
+// ERS fails closed.
+func TestEmergencyReparenterFindErrantGTIDs_AllZeroPositionsInitializedShard(t *testing.T) {
+	tabletMap, emptyPos := findErrantGTIDsWipedShardFixture(t)
+
+	erp := NewEmergencyReparenter(nil, &testutil.TabletManagerClient{
+		ReadReparentJournalInfoResults: map[string]int32{
+			"zone1-0000000100": 0,
+			"zone1-0000000101": 0,
+		},
+	}, nil)
+	validCandidates := map[string]*RelayLogPositions{
+		"zone1-0000000100": {Combined: emptyPos},
+		"zone1-0000000101": {Combined: emptyPos},
+	}
+
+	_, _, err := erp.findErrantGTIDs(t.Context(), validCandidates, map[string]*replicationdatapb.StopReplicationStatus{}, tabletMap, 10*time.Second, nil, false)
+	require.ErrorContains(t, err, "topology records a previous primary")
+}
+
+// TestEmergencyReparenterFindErrantGTIDs_MissingJournalTableInitializedShard covers a
+// wiped tablet on an initialized shard that also lost its sidecar tables: the missing
+// journal table hides an unknown journal depth, which must not be converted to zero
+// entries, or a survivor with a potentially older visible journal would form the
+// evidence tier alone and be promoted. The gather must fail instead.
+func TestEmergencyReparenterFindErrantGTIDs_MissingJournalTableInitializedShard(t *testing.T) {
+	u1 := "00000000-0000-0000-0000-000000000001"
+	tabletMap, emptyPos := findErrantGTIDsWipedShardFixture(t)
+
+	erp := NewEmergencyReparenter(nil, &testutil.TabletManagerClient{
+		ReadReparentJournalInfoErrors: map[string]error{
+			"zone1-0000000100": errors.New("rpc error: code = Unknown desc = Table '_vt.reparent_journal' doesn't exist (errno 1146) (sqlstate 42S02) during query: SELECT COUNT(*) FROM _vt.reparent_journal"),
+		},
+		ReadReparentJournalInfoResults: map[string]int32{
+			"zone1-0000000101": 1,
+		},
+	}, nil)
+	validCandidates := map[string]*RelayLogPositions{
+		"zone1-0000000100": {Combined: emptyPos},
+		"zone1-0000000101": {
+			Combined: replication.MustParsePosition(replication.Mysql56FlavorID, u1+":1-100"),
+		},
+	}
+
+	_, _, err := erp.findErrantGTIDs(t.Context(), validCandidates, map[string]*replicationdatapb.StopReplicationStatus{}, tabletMap, 10*time.Second, nil, false)
+	require.ErrorContains(t, err, "could not read reparent journal information")
+}
+
+// TestEmergencyReparenterFindErrantGTIDs_MissingJournalTableMixedStateShard covers a
+// contradictory state: the topology says the shard was never initialized, but a
+// reachable candidate has a nonzero GTID position and journal history, proving it was.
+// The missing journal table on the wiped tablet still hides an unknown journal depth,
+// so it must not be converted to zero entries on the topology's word alone; the gather
+// must fail instead of letting the visible journal form the evidence tier.
+func TestEmergencyReparenterFindErrantGTIDs_MissingJournalTableMixedStateShard(t *testing.T) {
+	u1 := "00000000-0000-0000-0000-000000000001"
+	tabletMap, emptyPos := findErrantGTIDsWipedShardFixture(t)
+
+	erp := NewEmergencyReparenter(nil, &testutil.TabletManagerClient{
+		ReadReparentJournalInfoErrors: map[string]error{
+			"zone1-0000000100": errors.New("rpc error: code = Unknown desc = Table '_vt.reparent_journal' doesn't exist (errno 1146) (sqlstate 42S02) during query: SELECT COUNT(*) FROM _vt.reparent_journal"),
+		},
+		ReadReparentJournalInfoResults: map[string]int32{
+			"zone1-0000000101": 1,
+		},
+	}, nil)
+	validCandidates := map[string]*RelayLogPositions{
+		"zone1-0000000100": {Combined: emptyPos},
+		"zone1-0000000101": {
+			Combined: replication.MustParsePosition(replication.Mysql56FlavorID, u1+":1-100"),
+		},
+	}
+
+	_, _, err := erp.findErrantGTIDs(t.Context(), validCandidates, map[string]*replicationdatapb.StopReplicationStatus{}, tabletMap, 10*time.Second, nil, true)
+	require.ErrorContains(t, err, "could not read reparent journal information")
 }

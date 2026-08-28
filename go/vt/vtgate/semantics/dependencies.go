@@ -52,11 +52,9 @@ type (
 
 func createCertain(direct TableSet, recursive TableSet, qt evalengine.Type) *certain {
 	c := &certain{
-		dependency: dependency{
-			certain:   true,
-			direct:    direct,
-			recursive: recursive,
-		},
+		certain:   true,
+		direct:    direct,
+		recursive: recursive,
 	}
 	if qt.Valid() && qt.Type() != querypb.Type_NULL_TYPE {
 		c.typ = qt
@@ -66,11 +64,9 @@ func createCertain(direct TableSet, recursive TableSet, qt evalengine.Type) *cer
 
 func createUncertain(direct TableSet, recursive TableSet) *uncertain {
 	return &uncertain{
-		dependency: dependency{
-			certain:   false,
-			direct:    direct,
-			recursive: recursive,
-		},
+		certain:   false,
+		direct:    direct,
+		recursive: recursive,
 	}
 }
 

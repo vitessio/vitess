@@ -1302,7 +1302,7 @@ func TestGetDetectionAnalysisShardEligibleObservers(t *testing.T) {
 
 	// primaryEligibleObservers runs the real analysis query and returns the ks/0 primary row's
 	// ShardEligibleObservers count.
-	primaryEligibleObservers := func(t *testing.T) uint {
+	primaryEligibleObservers := func(t *testing.T) int {
 		t.Helper()
 		got, err := GetDetectionAnalysis("", "", &DetectionAnalysisHints{})
 		require.NoError(t, err)
@@ -1320,14 +1320,14 @@ func TestGetDetectionAnalysisShardEligibleObservers(t *testing.T) {
 	// Even with quorum ERS disabled (the default), the count is computed: the flag is dynamic and
 	// its consumers re-read it later in the analysis cycle, so the denominator must never be a
 	// baked-in 0 just because the flag was off when the query was built.
-	assert.Equal(t, uint(3), primaryEligibleObservers(t),
+	assert.Equal(t, 3, primaryEligibleObservers(t),
 		"shard_eligible_observers must be computed regardless of the quorum-ERS flag")
 
 	// With quorum ERS enabled, only the shard's 2 REPLICA + 1 RDONLY tablets are eligible observers;
 	// the SPARE and PRIMARY must be excluded.
 	config.SetERSOnTabletUnreachable(true)
 	t.Cleanup(func() { config.SetERSOnTabletUnreachable(false) })
-	assert.Equal(t, uint(3), primaryEligibleObservers(t),
+	assert.Equal(t, 3, primaryEligibleObservers(t),
 		"only the shard's 2 REPLICA + 1 RDONLY tablets are eligible observers; the SPARE and PRIMARY must be excluded")
 
 	// ShardEligibleObserverCount — the standalone helper the /api/shard-tablet-health-quorum endpoint uses to source
@@ -1444,7 +1444,7 @@ func TestPostProcessAnalyses(t *testing.T) {
 	// real InvalidPrimary it is joined through the primary's database_instance row, which VTOrc never
 	// created); ShardEligibleObservers carries the shard's REPLICA/RDONLY count from the analysis
 	// query, which is the expected observer population the quorum gate must use.
-	invalidPrimaryAnalysis := func(shardEligibleObservers uint) *DetectionAnalysis {
+	invalidPrimaryAnalysis := func(shardEligibleObservers int) *DetectionAnalysis {
 		return &DetectionAnalysis{
 			Analysis:               InvalidPrimary,
 			Description:            "VTOrc hasn't been able to reach the primary even once since restart/shutdown",
@@ -1457,7 +1457,7 @@ func TestPostProcessAnalyses(t *testing.T) {
 	}
 	// shutdownInvalidPrimaryAnalysis is an InvalidPrimary whose vttablet was gracefully shut down
 	// (TabletShutdownTime stamped), so the quorum path must fail closed and leave it InvalidPrimary.
-	shutdownInvalidPrimaryAnalysis := func(shardEligibleObservers uint) *DetectionAnalysis {
+	shutdownInvalidPrimaryAnalysis := func(shardEligibleObservers int) *DetectionAnalysis {
 		a := invalidPrimaryAnalysis(shardEligibleObservers)
 		a.IsTabletShutdown = true
 		return a
