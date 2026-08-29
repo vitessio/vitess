@@ -367,7 +367,8 @@ func (api *API) Handler() http.Handler {
 	router := mux.NewRouter().PathPrefix("/api").Subrouter()
 
 	router.Use(handlers.CORS(
-		handlers.AllowCredentials(), handlers.AllowedOrigins(api.options.HTTPOpts.CORSOrigins), handlers.AllowedMethods([]string{"GET", "HEAD", "POST", "PUT", "DELETE", "OPTIONS"})))
+		handlers.AllowCredentials(), handlers.AllowedOrigins(api.options.HTTPOpts.CORSOrigins), handlers.AllowedMethods([]string{"GET", "HEAD", "POST", "PUT", "DELETE", "OPTIONS"}),
+	))
 
 	httpAPI := vtadminhttp.NewAPI(api, api.options.HTTPOpts)
 
@@ -581,8 +582,10 @@ func (api *API) ConcludeTransaction(ctx context.Context, req *vtadminpb.Conclude
 	span, ctx := trace.NewSpan(ctx, "API.ConcludeTransaction")
 	defer span.Finish()
 
-	if !api.authz.IsAuthorized(ctx, req.ClusterId, rbac.ClusterResource, rbac.GetAction) {
-		return nil, nil
+	// Concluding a transaction is a destructive, write-like operation, so it
+	// requires PutAction rather than a read-only action.
+	if !api.authz.IsAuthorized(ctx, req.ClusterId, rbac.ClusterResource, rbac.PutAction) {
+		return nil, fmt.Errorf("%w: cannot conclude transaction in %s", errors.ErrUnauthorized, req.ClusterId)
 	}
 
 	c, err := api.getClusterForRequest(req.ClusterId)

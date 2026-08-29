@@ -22,6 +22,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -70,6 +71,18 @@ func TestServerUsesStandardLibraryRouter(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.IsType(t, http.NewServeMux(), s.router)
+}
+
+func TestNewHTTPServerConfiguresBoundedTimeouts(t *testing.T) {
+	h := http.NewServeMux()
+	s := NewHTTPServer("127.0.0.1:0", h)
+
+	assert.Equal(t, "127.0.0.1:0", s.Addr)
+	assert.Same(t, h, s.Handler)
+	assert.Equal(t, 10*time.Second, s.ReadHeaderTimeout)
+	assert.Equal(t, 30*time.Second, s.ReadTimeout)
+	assert.Equal(t, 5*time.Minute, s.WriteTimeout)
+	assert.Equal(t, 120*time.Second, s.IdleTimeout)
 }
 
 func TestNewServerRegistersStaticAssets(t *testing.T) {
@@ -217,4 +230,21 @@ type authnFakeServer struct {
 func (f *authnFakeServer) GetClusters(ctx context.Context, req *vtadminpb.GetClustersRequest) (*vtadminpb.GetClustersResponse, error) {
 	f.actor, _ = rbac.FromContext(ctx)
 	return &vtadminpb.GetClustersResponse{}, nil
+}
+
+func TestSecureHeadersOnEveryResponse(t *testing.T) {
+	s, err := NewServer(&fakeVTAdminServer{}, Options{})
+	require.NoError(t, err)
+
+	for _, path := range []string{"/clusters", "/does-not-exist"} {
+		t.Run(path, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			req := httptest.NewRequest(http.MethodGet, path, nil)
+			s.ServeHTTP(rec, req)
+
+			assert.Equal(t, "DENY", rec.Header().Get("X-Frame-Options"))
+			assert.Equal(t, "frame-ancestors 'none'", rec.Header().Get("Content-Security-Policy"))
+			assert.Equal(t, "nosniff", rec.Header().Get("X-Content-Type-Options"))
+		})
+	}
 }

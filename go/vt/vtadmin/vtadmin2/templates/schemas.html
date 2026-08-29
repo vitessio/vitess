@@ -13,13 +13,13 @@
       <tr><th>Cluster</th><th>Keyspace</th><th>Tables</th></tr>
     </thead>
     <tbody>
-      {{ range .Data }}
+      {{ range .Data }}{{ $s := . }}
       <tr>
-        <td>{{ clusterID .GetCluster }}</td>
-        <td>{{ .GetKeyspace }}</td>
+        <td>{{ clusterID $s.GetCluster }}</td>
+        <td>{{ $s.GetKeyspace }}</td>
         <td>
-          {{ schemaTableCount . }}
-          {{ range .GetTableDefinitions }}<div>{{ .GetName }}</div>{{ end }}
+          {{ schemaTableCount $s }}
+          {{ range $s.GetTableDefinitions }}<div><a href="/schema/{{ pathEscape (clusterID $s.GetCluster) }}/{{ pathEscape $s.GetKeyspace }}/{{ pathEscape .GetName }}">{{ .GetName }}</a></div>{{ end }}
         </td>
       </tr>
       {{ else }}

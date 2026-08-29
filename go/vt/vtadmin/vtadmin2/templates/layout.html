@@ -4,16 +4,18 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  {{ if .RefreshSeconds }}<meta http-equiv="refresh" content="{{ .RefreshSeconds }}">{{ end }}
   <title>{{ .Title }} | {{ .DocumentTitle }}</title>
   <link rel="stylesheet" href="/static/vtadmin2.css">
   <script src="/static/vtadmin2.js" defer></script>
 </head>
-<body>
+<body data-theme="{{ .Theme }}">
   <header class="topbar">
     <a class="brand" href="/clusters">
       <img class="brand-logo" src="/static/vitess-stacked.png" alt="Vitess">
       <span>VTAdmin2</span>
     </a>
+    <a class="settings-link" href="/settings">Settings</a>
     {{ if .ReadOnly }}<span class="badge">Read-only</span>{{ end }}
   </header>
   <div class="shell">

@@ -109,7 +109,7 @@ func TestBuildHTTPServerConfiguresTimeouts(t *testing.T) {
 	assert.NotNil(t, server.Handler)
 	assert.GreaterOrEqual(t, server.ReadHeaderTimeout, 5*time.Second)
 	assert.GreaterOrEqual(t, server.ReadTimeout, 30*time.Second)
-	assert.GreaterOrEqual(t, server.WriteTimeout, 30*time.Second)
+	assert.GreaterOrEqual(t, server.WriteTimeout, 5*time.Minute)
 	assert.GreaterOrEqual(t, server.IdleTimeout, 30*time.Second)
 }
 

@@ -60,7 +60,7 @@ func (s *Server) vtExplain(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	form, err := s.loadFormOptions(r.Context(), clusterID, keyspace)
+	form, err := s.loadFormOptions(r, clusterID, keyspace)
 	if err != nil {
 		s.renderError(w, r, http.StatusInternalServerError, "VTExplain", err)
 		return
@@ -107,7 +107,7 @@ func (s *Server) vExplain(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	form, err := s.loadFormOptions(r.Context(), clusterID, keyspace)
+	form, err := s.loadFormOptions(r, clusterID, keyspace)
 	if err != nil {
 		s.renderError(w, r, http.StatusInternalServerError, "VExplain", err)
 		return

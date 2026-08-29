@@ -17,19 +17,22 @@ limitations under the License.
 package vtadmin2
 
 import (
-	"context"
 	"net/http"
 
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
 )
 
-func (s *Server) loadFormOptions(ctx context.Context, requestedCluster, requestedKeyspace string) (formOptions, error) {
+// loadFormOptions loads clusters and keyspaces for form rendering. The
+// selected cluster honors, in order: an explicit request, the saved default
+// cluster cookie, then the first cluster.
+func (s *Server) loadFormOptions(r *http.Request, requestedCluster, requestedKeyspace string) (formOptions, error) {
+	ctx := r.Context()
 	clustersResp, err := s.api.GetClusters(ctx, &vtadminpb.GetClustersRequest{})
 	if err != nil {
 		return formOptions{}, err
 	}
 	clusters := clustersResp.GetClusters()
-	selectedCluster := selectedClusterID(clusters, requestedCluster)
+	selectedCluster := selectedClusterID(clusters, requestedCluster, cookieValue(r, defaultClusterCookieName))
 
 	keyspaceReq := &vtadminpb.GetKeyspacesRequest{}
 	if selectedCluster != "" {
@@ -94,9 +97,10 @@ func (s *Server) keyspace(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.render(w, r, http.StatusOK, "keyspace.html", PageData{
-		Title:  keyspaceName(ks),
-		Active: "keyspaces",
-		Data:   ks,
+		Title:     keyspaceName(ks),
+		Active:    "keyspaces",
+		NeedsCSRF: !s.opts.ReadOnly,
+		Data:      ks,
 	})
 }
 

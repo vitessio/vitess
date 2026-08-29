@@ -54,9 +54,10 @@ type VtctldClient struct {
 		Response *vtctldatapb.CompleteSchemaMigrationResponse
 		Error    error
 	}
-	CreateKeyspaceShouldErr bool
-	CreateShardShouldErr    bool
-	DeleteKeyspaceShouldErr bool
+	CreateKeyspaceShouldErr      bool
+	ConcludeTransactionShouldErr bool
+	CreateShardShouldErr         bool
+	DeleteKeyspaceShouldErr      bool
 	// Keyed by _sorted_ <ks/shard> list string joined by commas.
 	DeleteShardsResults map[string]error
 	// Keyed by _sorted_ TabletAlias list string joined by commas.
@@ -238,6 +239,15 @@ func (fake *VtctldClient) CompleteSchemaMigration(ctx context.Context, req *vtct
 	}
 
 	return nil, fmt.Errorf("%w: no result set for %s", assert.AnError, key)
+}
+
+// ConcludeTransaction is part of the vtctldclient.VtctldClient interface.
+func (fake *VtctldClient) ConcludeTransaction(ctx context.Context, req *vtctldatapb.ConcludeTransactionRequest, opts ...grpc.CallOption) (*vtctldatapb.ConcludeTransactionResponse, error) {
+	if fake.ConcludeTransactionShouldErr {
+		return nil, fmt.Errorf("%w: ConcludeTransaction error", assert.AnError)
+	}
+
+	return &vtctldatapb.ConcludeTransactionResponse{}, nil
 }
 
 // CreateKeyspace is part of the vtctldclient.VtctldClient interface.

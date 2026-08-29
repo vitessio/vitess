@@ -20,6 +20,74 @@
   </dl>
   <p><a href="/tablet/{{ pathEscape .Data.ClusterID }}/{{ pathEscape .Data.Alias }}/full_status">Full Status</a></p>
 </div>
+{{ if not .ReadOnly }}
+<div class="card">
+  <h2>Tablet actions</h2>
+  <div class="actions-grid">
+    <details>
+      <summary>Replication</summary>
+      <div class="form-grid">
+        <form method="POST" action="/tablet/{{ pathEscape .Data.ClusterID }}/{{ pathEscape .Data.Alias }}/start_replication">
+          <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
+          <button type="submit" class="button">Start replication</button>
+        </form>
+        <form method="POST" action="/tablet/{{ pathEscape .Data.ClusterID }}/{{ pathEscape .Data.Alias }}/stop_replication">
+          <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
+          <button type="submit" class="button">Stop replication</button>
+        </form>
+        <form method="POST" action="/tablet/{{ pathEscape .Data.ClusterID }}/{{ pathEscape .Data.Alias }}/refresh_replication_source">
+          <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
+          <button type="submit" class="button">Refresh replication source</button>
+          <p class="muted">Runs CHANGE REPLICATION SOURCE TO so this tablet replicates from the current shard primary.</p>
+        </form>
+      </div>
+    </details>
+    <details>
+      <summary>Read-only mode</summary>
+      <div class="form-grid">
+        <form method="POST" action="/tablet/{{ pathEscape .Data.ClusterID }}/{{ pathEscape .Data.Alias }}/set_read_only">
+          <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
+          <button type="submit" class="button">Set read-only</button>
+        </form>
+        <form method="POST" action="/tablet/{{ pathEscape .Data.ClusterID }}/{{ pathEscape .Data.Alias }}/set_read_write">
+          <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
+          <button type="submit" class="button">Set read-write</button>
+        </form>
+      </div>
+    </details>
+    <details>
+      <summary>Diagnostics</summary>
+      <div class="form-grid">
+        <form method="POST" action="/tablet/{{ pathEscape .Data.ClusterID }}/{{ pathEscape .Data.Alias }}/ping">
+          <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
+          <button type="submit" class="button">Ping tablet</button>
+        </form>
+        <form method="POST" action="/tablet/{{ pathEscape .Data.ClusterID }}/{{ pathEscape .Data.Alias }}/refresh_state">
+          <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
+          <button type="submit" class="button">Refresh state</button>
+          <p class="muted">Reloads the tablet record from the topology server.</p>
+        </form>
+        <form method="POST" action="/tablet/{{ pathEscape .Data.ClusterID }}/{{ pathEscape .Data.Alias }}/health_check">
+          <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
+          <button type="submit" class="button">Run health check</button>
+        </form>
+      </div>
+    </details>
+    <details>
+      <summary>Delete tablet</summary>
+      <form method="POST" action="/tablet/{{ pathEscape .Data.ClusterID }}/{{ pathEscape .Data.Alias }}/delete" data-confirm="Permanently delete tablet {{ .Data.Alias }}?">
+        <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
+        <label class="checkbox-label">
+          <input type="checkbox" name="allow_primary">
+          Allow deleting a primary tablet
+        </label>
+        <p class="muted">Removes the tablet record from the topology server. The mysqld process itself is not stopped. This cannot be undone.</p>
+        <button type="submit" class="button danger">Delete tablet</button>
+      </form>
+    </details>
+  </div>
+</div>
+{{ end }}
 <div class="card">
   <h2>Tablet Data</h2>
   <pre>{{ protoJSON .Data.Tablet }}</pre>

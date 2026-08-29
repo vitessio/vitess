@@ -97,9 +97,10 @@ func (s *Server) workflow(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.render(w, r, http.StatusOK, "workflow.html", PageData{
-		Title:  r.PathValue("name"),
-		Active: "workflows",
-		Data:   resp,
+		Title:     r.PathValue("name"),
+		Active:    "workflows",
+		NeedsCSRF: !s.opts.ReadOnly,
+		Data:      resp,
 	})
 }
 
@@ -141,7 +142,7 @@ func (s *Server) vdiffShow(w http.ResponseWriter, r *http.Request) {
 		s.renderError(w, r, http.StatusBadRequest, "VDiff", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "workflow query parameter is required"))
 		return
 	}
-	form, err := s.loadFormOptions(r.Context(), r.PathValue("cluster_id"), keyspace)
+	form, err := s.loadFormOptions(r, r.PathValue("cluster_id"), keyspace)
 	if err != nil {
 		s.renderError(w, r, http.StatusInternalServerError, "VDiff", err)
 		return

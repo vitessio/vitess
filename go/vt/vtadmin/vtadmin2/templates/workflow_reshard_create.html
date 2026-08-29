@@ -1,0 +1,126 @@
+{{ define "workflow_reshard_create.html" }}
+{{ template "layout" . }}
+{{ end }}
+
+{{ define "content" }}
+{{ $d := .Data }}
+<div class="toolbar">
+  <h1>Create Reshard workflow</h1>
+  <a href="/workflows">Back to workflows</a>
+</div>
+
+<p class="muted">Reshard splits or merges shards within a keyspace: tablets are launched for the new shard ranges and data is copied from the source shards while staying in sync. <a href="https://vitess.io/docs/user-guides/reshard/" target="_blank" rel="noopener noreferrer">Reshard user guide</a>.</p>
+
+{{ if $d.PickCluster }}
+<div class="card">
+  <h2>Choose a cluster</h2>
+  <p class="muted">Shards are per cluster. Pick the cluster you want to reshard:</p>
+  <div class="toolbar-links">
+    {{ range $d.Form.Clusters }}
+    <a class="button" href="/workflows/reshard/create?cluster_id={{ pathEscape .GetId }}">{{ .GetName }} ({{ .GetId }})</a>
+    {{ end }}
+  </div>
+</div>
+{{ else }}
+<div class="card">
+  <h2>Reshard details</h2>
+  <form method="POST" action="/workflows/reshard/create" class="form-grid">
+    <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
+
+    <label>
+      Cluster
+      <select name="cluster_id" required>
+        {{ range $d.Form.Clusters }}
+        <option value="{{ .GetId }}"{{ if eq .GetId $d.SelectedCluster }} selected{{ end }}>{{ .GetName }} ({{ .GetId }})</option>
+        {{ end }}
+      </select>
+    </label>
+    <label>
+      Workflow name
+      <input type="text" name="workflow" required autocomplete="off">
+    </label>
+    <label>
+      Keyspace
+      <select name="keyspace" required>
+        {{ range $d.Form.Keyspaces }}
+        {{ if eq (clusterID .GetCluster) $d.SelectedCluster }}
+        <option value="{{ keyspaceName . }}">{{ keyspaceName . }}</option>
+        {{ end }}
+        {{ end }}
+      </select>
+    </label>
+    <label>
+      Source shards
+      <input type="text" name="source_shards" required placeholder="0" autocomplete="off">
+      <span class="muted">Comma-separated shard names to split or merge from, e.g. "0" or "-80, 80-".</span>
+    </label>
+    <label>
+      Target shards
+      <input type="text" name="target_shards" required placeholder="-80, 80-" autocomplete="off">
+      <span class="muted">Comma-separated shard names to create, e.g. "-80, 80-".</span>
+    </label>
+
+    <h3>Advanced</h3>
+    <label>
+      Cells
+      <input type="text" name="cells" placeholder="zone1, zone2" autocomplete="off">
+      <span class="muted">Cells and/or cell aliases to source the copy from. Leave empty for all.</span>
+    </label>
+    <fieldset class="form-fieldset">
+      <legend>Source tablet types</legend>
+      <label class="checkbox-label">
+        <input type="checkbox" name="tablet_type" value="REPLICA">
+        REPLICA
+      </label>
+      <label class="checkbox-label">
+        <input type="checkbox" name="tablet_type" value="PRIMARY">
+        PRIMARY
+      </label>
+      <label class="checkbox-label">
+        <input type="checkbox" name="tablet_type" value="RDONLY">
+        RDONLY
+      </label>
+    </fieldset>
+    <label class="checkbox-label">
+      <input type="checkbox" name="tablet_selection_preference" checked>
+      Prefer tablets in order (REPLICA, then RDONLY)
+    </label>
+    <p class="muted">When unchecked, tablets of any type may be picked for the copy.</p>
+    <label>
+      OnDDL strategy
+      <select name="on_ddl">
+        <option value="IGNORE" selected>IGNORE</option>
+        <option value="STOP">STOP</option>
+        <option value="EXEC">EXEC</option>
+        <option value="EXEC_IGNORE">EXEC_IGNORE</option>
+      </select>
+      <span class="muted">What to do when DDL is encountered in the VReplication stream.</span>
+    </label>
+    <label class="checkbox-label">
+      <input type="checkbox" name="skip_schema_copy">
+      Skip schema copy
+    </label>
+    <p class="muted">Use when the target shards already have the schema created.</p>
+    <label class="checkbox-label">
+      <input type="checkbox" name="stop_after_copy">
+      Stop after copy
+    </label>
+    <p class="muted">Stops VReplication once the backfill copy finishes, without catching up.</p>
+    <label class="checkbox-label">
+      <input type="checkbox" name="defer_secondary_keys">
+      Defer secondary keys
+    </label>
+    <p class="muted">Creates secondary indexes in one shot after the table copy finishes instead of during it.</p>
+    <label class="checkbox-label">
+      <input type="checkbox" name="auto_start" checked>
+      Auto start
+    </label>
+    <p class="muted">Starts the workflow automatically after creating it.</p>
+
+    <div>
+      <button type="submit" class="button">Create workflow</button>
+    </div>
+  </form>
+</div>
+{{ end }}
+{{ end }}

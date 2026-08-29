@@ -80,8 +80,9 @@ func (s *Server) tabletDetail(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.render(w, r, http.StatusOK, "tablet.html", PageData{
-		Title:  alias,
-		Active: "tablets",
+		Title:     alias,
+		Active:    "tablets",
+		NeedsCSRF: !s.opts.ReadOnly,
 		Data: tabletDetailData{
 			ClusterID: clusterID,
 			Alias:     alias,

@@ -19,4 +19,159 @@
     </tbody>
   </table>
 </div>
+<div class="card">
+  <h2>Streams</h2>
+  <table>
+    <thead><tr><th>Stream key</th><th>Shard</th><th>State</th></tr></thead>
+    <tbody>
+      {{ range $shardKey, $shardStream := .Data.GetWorkflow.GetShardStreams }}
+      {{ range $shardStream.GetStreams }}
+      <tr>
+        <td><a href="/workflow/{{ pathEscape (clusterID $.Data.GetCluster) }}/{{ pathEscape $.Data.GetKeyspace }}/{{ pathEscape $.Data.GetWorkflow.GetName }}/stream/{{ pathEscape .GetTablet.GetCell }}/{{ .GetTablet.GetUid }}/{{ .GetId }}">{{ .GetTablet.GetCell }}-{{ .GetTablet.GetUid }}:{{ .GetId }}</a></td>
+        <td>{{ .GetShard }}</td>
+        <td>{{ .GetState }}</td>
+      </tr>
+      {{ end }}
+      {{ else }}
+      <tr><td colspan="3">No streams found.</td></tr>
+      {{ end }}
+    </tbody>
+  </table>
+</div>
+{{ if not .ReadOnly }}
+<div class="card danger-zone">
+  <h2>Workflow actions</h2>
+  <div class="actions-grid">
+    <details>
+      <summary>Lifecycle</summary>
+      <div class="form-grid">
+        <form method="POST" action="/workflow/{{ pathEscape (clusterID .Data.GetCluster) }}/{{ pathEscape .Data.GetKeyspace }}/{{ pathEscape .Data.GetWorkflow.GetName }}/start">
+          <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
+          <button type="submit" class="button">Start workflow</button>
+        </form>
+        <form method="POST" action="/workflow/{{ pathEscape (clusterID .Data.GetCluster) }}/{{ pathEscape .Data.GetKeyspace }}/{{ pathEscape .Data.GetWorkflow.GetName }}/stop">
+          <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
+          <button type="submit" class="button">Stop workflow</button>
+        </form>
+      </div>
+    </details>
+    <details>
+      <summary>Switch traffic</summary>
+      <form method="POST" action="/workflow/{{ pathEscape (clusterID .Data.GetCluster) }}/{{ pathEscape .Data.GetKeyspace }}/{{ pathEscape .Data.GetWorkflow.GetName }}/switch_traffic" class="form-grid" data-confirm="Switch traffic for workflow {{ .Data.GetWorkflow.GetName }}?">
+        <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
+        <fieldset class="form-fieldset">
+          <legend>Tablet types</legend>
+          <label class="checkbox-label"><input type="checkbox" name="tablet_type" value="PRIMARY">PRIMARY</label>
+          <label class="checkbox-label"><input type="checkbox" name="tablet_type" value="REPLICA">REPLICA</label>
+          <label class="checkbox-label"><input type="checkbox" name="tablet_type" value="RDONLY">RDONLY</label>
+        </fieldset>
+        <label>
+          Cells
+          <input type="text" name="cells" placeholder="zone1, zone2" autocomplete="off">
+        </label>
+        <label>
+          Timeout (seconds)
+          <input type="number" name="timeout" min="0" step="1">
+        </label>
+        <label>
+          Max replication lag allowed (seconds)
+          <input type="number" name="max_replication_lag_allowed" min="0" step="1">
+        </label>
+        <label class="checkbox-label">
+          <input type="checkbox" name="enable_reverse_replication" checked>
+          Enable reverse replication
+        </label>
+        <label class="checkbox-label">
+          <input type="checkbox" name="initialize_target_sequences" checked>
+          Initialize target sequences
+        </label>
+        <label class="checkbox-label">
+          <input type="checkbox" name="force">
+          Force
+        </label>
+        <label class="checkbox-label">
+          <input type="checkbox" name="dry_run">
+          Dry run
+        </label>
+        <button type="submit" class="button secondary">Switch traffic</button>
+      </form>
+    </details>
+    <details>
+      <summary>Reverse traffic</summary>
+      <form method="POST" action="/workflow/{{ pathEscape (clusterID .Data.GetCluster) }}/{{ pathEscape .Data.GetKeyspace }}/{{ pathEscape .Data.GetWorkflow.GetName }}/reverse_traffic" class="form-grid" data-confirm="Reverse traffic for workflow {{ .Data.GetWorkflow.GetName }}?">
+        <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
+        <fieldset class="form-fieldset">
+          <legend>Tablet types</legend>
+          <label class="checkbox-label"><input type="checkbox" name="tablet_type" value="PRIMARY">PRIMARY</label>
+          <label class="checkbox-label"><input type="checkbox" name="tablet_type" value="REPLICA">REPLICA</label>
+          <label class="checkbox-label"><input type="checkbox" name="tablet_type" value="RDONLY">RDONLY</label>
+        </fieldset>
+        <label class="checkbox-label">
+          <input type="checkbox" name="force">
+          Force
+        </label>
+        <button type="submit" class="button secondary">Reverse traffic</button>
+      </form>
+    </details>
+    <details>
+      <summary>VDiff</summary>
+      <form method="POST" action="/workflow/{{ pathEscape (clusterID .Data.GetCluster) }}/{{ pathEscape .Data.GetKeyspace }}/{{ pathEscape .Data.GetWorkflow.GetName }}/vdiff" class="form-grid">
+        <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
+        <label>
+          VDiff UUID (optional)
+          <input type="text" name="uuid" autocomplete="off">
+        </label>
+        <label>
+          Source cells
+          <input type="text" name="source_cells" placeholder="zone1, zone2" autocomplete="off">
+        </label>
+        <label>
+          Tables
+          <input type="text" name="tables" placeholder="users, orders" autocomplete="off">
+          <span class="muted">Comma-separated. Leave empty to compare all tables in the workflow.</span>
+        </label>
+        <label class="checkbox-label">
+          <input type="checkbox" name="auto_retry" checked>
+          Auto retry on error
+        </label>
+        <label class="checkbox-label">
+          <input type="checkbox" name="wait">
+          Wait for the vdiff to complete before returning
+        </label>
+        <button type="submit" class="button">Create VDiff</button>
+      </form>
+    </details>
+    <details>
+      <summary>Complete workflow (MoveTables)</summary>
+      <form method="POST" action="/workflow/{{ pathEscape (clusterID .Data.GetCluster) }}/{{ pathEscape .Data.GetKeyspace }}/{{ pathEscape .Data.GetWorkflow.GetName }}/complete" class="form-grid" data-confirm="Finalize workflow {{ .Data.GetWorkflow.GetName }}? This moves the workflow to Complete status and cannot be reversed.">
+        <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
+        <label class="checkbox-label">
+          <input type="checkbox" name="keep_data" checked>
+          Keep data (do not drop copied tables on the source)
+        </label>
+        <label class="checkbox-label">
+          <input type="checkbox" name="keep_routing_rules">
+          Keep routing rules
+        </label>
+        <label class="checkbox-label">
+          <input type="checkbox" name="rename_tables">
+          Rename tables instead of dropping them
+        </label>
+        <button type="submit" class="button danger">Complete workflow</button>
+      </form>
+    </details>
+    <details>
+      <summary>Cancel workflow (delete)</summary>
+      <form method="POST" action="/workflow/{{ pathEscape (clusterID .Data.GetCluster) }}/{{ pathEscape .Data.GetKeyspace }}/{{ pathEscape .Data.GetWorkflow.GetName }}/cancel" class="form-grid" data-confirm="Cancel and delete workflow {{ .Data.GetWorkflow.GetName }}? This cannot be undone.">
+        <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
+        <label class="checkbox-label">
+          <input type="checkbox" name="keep_data" checked>
+          Keep data
+        </label>
+        <button type="submit" class="button danger">Cancel workflow</button>
+      </form>
+    </details>
+  </div>
+</div>
+{{ end }}
 {{ end }}

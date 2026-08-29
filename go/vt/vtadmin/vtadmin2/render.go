@@ -17,11 +17,17 @@ limitations under the License.
 package vtadmin2
 
 import (
+	"bytes"
+	"encoding/json"
 	"html/template"
 	"io/fs"
 	"net/http"
 	"path/filepath"
+	"reflect"
+	"strconv"
 	"strings"
+
+	"google.golang.org/protobuf/proto"
 )
 
 type (
@@ -30,14 +36,16 @@ type (
 	}
 
 	PageData struct {
-		Title         string
-		Active        string
-		ReadOnly      bool
-		CSRFToken     string
-		NeedsCSRF     bool
-		Flash         *Flash
-		Data          any
-		DocumentTitle string
+		Title          string
+		Active         string
+		ReadOnly       bool
+		CSRFToken      string
+		NeedsCSRF      bool
+		Flash          *Flash
+		Data           any
+		DocumentTitle  string
+		Theme          string
+		RefreshSeconds int
 	}
 
 	Flash struct {
@@ -60,15 +68,17 @@ func parseTemplates() (*templateSet, error) {
 		}
 
 		tmpl, err := template.New("").Funcs(template.FuncMap{
-			"clusterID":        clusterID,
-			"externalURL":      externalURL,
-			"keyspaceName":     keyspaceName,
-			"pathEscape":       pathEscape,
-			"protoJSON":        protoJSON,
-			"schemaTableCount": schemaTableCount,
-			"sortedShardNames": sortedShardNames,
-			"tabletAlias":      tabletAlias,
-			"urlQueryEscape":   urlQueryEscape,
+			"clusterID":          clusterID,
+			"externalURL":        externalURL,
+			"keyspaceName":       keyspaceName,
+			"pathEscape":         pathEscape,
+			"protoJSON":          protoJSON,
+			"schemaTableCount":   schemaTableCount,
+			"shardActionPath":    shardActionPath,
+			"keyspaceActionPath": keyspaceActionPath,
+			"sortedShardNames":   sortedShardNames,
+			"tabletAlias":        tabletAlias,
+			"urlQueryEscape":     urlQueryEscape,
 		}).ParseFS(assets, "templates/layout.html", page)
 		if err != nil {
 			return nil, err
@@ -87,11 +97,52 @@ func staticFS() fs.FS {
 	return static
 }
 
+// refreshablePagePrefixes are the volatile pages for which auto-refresh via
+// ?refresh=N is honored. Refreshing expensive pages (e.g. topology) or every
+// page by default would hammer the API.
+var refreshablePagePrefixes = []string{
+	"/workflow",
+	"/migrations",
+	"/transactions",
+}
+
+// refreshSecondsFromQuery parses the ?refresh=N query parameter on pages
+// where auto-refresh makes sense, bounded to [10, 60] seconds so aggressive
+// polling cannot hammer the API.
+func refreshSecondsFromQuery(r *http.Request) int {
+	refresh := queryValue(r, "refresh")
+	if refresh == "" {
+		return 0
+	}
+	n, err := strconv.Atoi(refresh)
+	if err != nil || n <= 0 {
+		return 0
+	}
+	if n > 60 {
+		n = 60
+	}
+	if n < 10 {
+		n = 10
+	}
+	for _, prefix := range refreshablePagePrefixes {
+		if strings.HasPrefix(r.URL.Path, prefix) {
+			return n
+		}
+	}
+	return 0
+}
+
 func (s *Server) render(w http.ResponseWriter, r *http.Request, status int, name string, data PageData) {
 	if data.DocumentTitle == "" {
 		data.DocumentTitle = s.opts.DocumentTitle
 	}
 	data.ReadOnly = s.opts.ReadOnly
+	data.RefreshSeconds = refreshSecondsFromQuery(r)
+	// Respect the user's saved theme, defaulting to system preference.
+	data.Theme = "system"
+	if cookie, err := r.Cookie(themeCookieName); err == nil && validThemes[cookie.Value] {
+		data.Theme = cookie.Value
+	}
 	if data.NeedsCSRF && data.CSRFToken == "" {
 		data.CSRFToken = csrfToken(w, r)
 	}
@@ -103,18 +154,64 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, status int, name
 		clearFlash(w, r)
 	}
 
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	tmpl := s.templates.templates[strings.TrimPrefix(name, "templates/")]
 	if tmpl == nil {
 		http.Error(w, "template not found: "+name, http.StatusInternalServerError)
 		return
 	}
-	if status != http.StatusOK {
-		w.WriteHeader(status)
-	}
-	if err := tmpl.ExecuteTemplate(w, name, data); err != nil {
+
+	// Render into a buffer first so template failures produce a clean 500
+	// rather than a partial page followed by an error.
+	var buf bytes.Buffer
+	if err := tmpl.ExecuteTemplate(&buf, name, data); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
+
+	if s.opts.EnableDebugJSON && queryValue(r, "format") == "json" {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.WriteHeader(status)
+		_, _ = w.Write([]byte(protoJSONAny(data.Data)))
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(status)
+	_, _ = w.Write(buf.Bytes())
+}
+
+// protoJSONAny serializes a proto message, or a slice of proto messages, to
+// JSON using protoJSON per element. Non-proto values fall back to
+// encoding/json.
+func protoJSONAny(v any) string {
+	if msg, ok := v.(proto.Message); ok {
+		return protoJSON(msg)
+	}
+
+	rv := reflect.ValueOf(v)
+	if rv.Kind() != reflect.Slice && rv.Kind() != reflect.Array {
+		b, err := json.Marshal(v)
+		if err != nil {
+			return "null"
+		}
+		return string(b)
+	}
+
+	parts := make([]string, 0, rv.Len())
+	for i := range rv.Len() {
+		elem := rv.Index(i)
+		if msg, ok := elem.Interface().(proto.Message); ok {
+			parts = append(parts, protoJSON(msg))
+			continue
+		}
+		b, err := json.Marshal(elem.Interface())
+		if err != nil {
+			parts = append(parts, "null")
+			continue
+		}
+		parts = append(parts, string(b))
+	}
+	return "[" + strings.Join(parts, ",") + "]"
 }
 
 func (s *Server) renderError(w http.ResponseWriter, r *http.Request, status int, title string, err error) {

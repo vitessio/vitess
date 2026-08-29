@@ -1,0 +1,151 @@
+{{ define "workflow_movetables_create.html" }}
+{{ template "layout" . }}
+{{ end }}
+
+{{ define "content" }}
+{{ $d := .Data }}
+<div class="toolbar">
+  <h1>Create MoveTables workflow</h1>
+  <a href="/workflows">Back to workflows</a>
+</div>
+
+<p class="muted">MoveTables copies tables from a source keyspace into a target keyspace and keeps them in sync via VReplication, enabling zero-downtime migration or resharding. <a href="https://vitess.io/docs/user-guides/migration/movetables/" target="_blank" rel="noopener noreferrer">MoveTables user guide</a>.</p>
+
+<div class="card">
+  <h2>1. Choose source</h2>
+  <form method="GET" action="/workflows/movetables/create" class="form-grid">
+    <label>
+      Cluster
+      <select name="cluster_id">
+        {{ range $d.Form.Clusters }}
+        <option value="{{ .GetId }}"{{ if eq .GetId $d.SelectedCluster }} selected{{ end }}>{{ .GetName }} ({{ .GetId }})</option>
+        {{ end }}
+      </select>
+    </label>
+    <label>
+      Source keyspace
+      <select name="source_keyspace">
+        {{ range $d.Form.Keyspaces }}
+        {{ if eq (clusterID .GetCluster) $d.SelectedCluster }}
+        <option value="{{ keyspaceName . }}"{{ if eq (keyspaceName .) $d.SourceKeyspace }} selected{{ end }}>{{ keyspaceName . }}</option>
+        {{ end }}
+        {{ end }}
+      </select>
+    </label>
+    <div>
+      <button type="submit" class="button">Load tables</button>
+      <span class="muted">Reloads this page with the source keyspace's tables so you can pick what to copy.</span>
+    </div>
+  </form>
+</div>
+
+{{ if and $d.SelectedCluster $d.SourceKeyspace }}
+<div class="card">
+  <h2>2. Create the workflow</h2>
+  <form method="POST" action="/workflows/movetables/create" class="form-grid">
+    <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
+    <input type="hidden" name="cluster_id" value="{{ $d.SelectedCluster }}">
+    <input type="hidden" name="source_keyspace" value="{{ $d.SourceKeyspace }}">
+
+    <label>
+      Workflow name
+      <input type="text" name="workflow" required autocomplete="off">
+    </label>
+    <label>
+      Target keyspace
+      <select name="target_keyspace" required>
+        {{ range $d.Form.Keyspaces }}
+        {{ if eq (clusterID .GetCluster) $d.SelectedCluster }}
+        <option value="{{ keyspaceName . }}"{{ if eq (keyspaceName .) $d.SourceKeyspace }} disabled{{ end }}>{{ keyspaceName . }}</option>
+        {{ end }}
+        {{ end }}
+      </select>
+    </label>
+
+    <fieldset class="form-fieldset">
+      <legend>Tables to copy from {{ $d.SourceKeyspace }}</legend>
+      {{ if $d.SourceTables }}
+      {{ range $d.SourceTables }}
+      <label class="checkbox-label">
+        <input type="checkbox" name="table" value="{{ . }}">
+        {{ . }}
+      </label>
+      {{ end }}
+      {{ else }}
+      <p class="muted">Could not list tables for this keyspace; you can still copy all tables.</p>
+      {{ end }}
+      <label class="checkbox-label">
+        <input type="checkbox" name="all_tables">
+        Copy all tables
+      </label>
+      <p class="muted">When enabled, every table in the source keyspace is copied and individual selection is ignored.</p>
+    </fieldset>
+
+    <h3>Advanced</h3>
+    <label>
+      Cells
+      <input type="text" name="cells" placeholder="zone1, zone2" autocomplete="off">
+      <span class="muted">Cells and/or cell aliases to copy table data from. Leave empty for all.</span>
+    </label>
+    <label>
+      OnDDL strategy
+      <select name="on_ddl">
+        <option value="IGNORE" selected>IGNORE</option>
+        <option value="STOP">STOP</option>
+        <option value="EXEC">EXEC</option>
+        <option value="EXEC_IGNORE">EXEC_IGNORE</option>
+      </select>
+      <span class="muted">What to do when DDL is encountered in the VReplication stream.</span>
+    </label>
+    <fieldset class="form-fieldset">
+      <legend>Source tablet types</legend>
+      <label class="checkbox-label">
+        <input type="checkbox" name="tablet_type" value="REPLICA">
+        REPLICA
+      </label>
+      <label class="checkbox-label">
+        <input type="checkbox" name="tablet_type" value="PRIMARY">
+        PRIMARY
+      </label>
+      <label class="checkbox-label">
+        <input type="checkbox" name="tablet_type" value="RDONLY">
+        RDONLY
+      </label>
+    </fieldset>
+    <label>
+      Source time zone
+      <input type="text" name="source_time_zone" placeholder="UTC" autocomplete="off">
+      <span class="muted">DATETIME fields on the source are converted from this time zone into UTC.</span>
+    </label>
+    <label>
+      External source cluster
+      <input type="text" name="external_cluster_name" placeholder="cluster_name" autocomplete="off">
+      <span class="muted">Optional mounted cluster containing the source keyspace.</span>
+    </label>
+    <label class="checkbox-label">
+      <input type="checkbox" name="stop_after_copy">
+      Stop after copy
+    </label>
+    <p class="muted">Stops VReplication after the copy phase finishes, without catching up.</p>
+    <label class="checkbox-label">
+      <input type="checkbox" name="defer_secondary_keys">
+      Defer secondary keys
+    </label>
+    <p class="muted">Creates secondary indexes in one shot after the table copy finishes instead of during it.</p>
+    <label class="checkbox-label">
+      <input type="checkbox" name="auto_start" checked>
+      Auto start
+    </label>
+    <p class="muted">Starts the workflow automatically after creating it.</p>
+
+    <div>
+      <button type="submit" class="button">Create workflow</button>
+    </div>
+  </form>
+</div>
+{{ else }}
+<div class="card">
+  <p class="muted">Pick a cluster and source keyspace above to continue.</p>
+</div>
+{{ end }}
+{{ end }}

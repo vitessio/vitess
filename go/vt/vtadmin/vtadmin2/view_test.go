@@ -34,8 +34,14 @@ func TestExternalURLPrefixesHTTPForHosts(t *testing.T) {
 func TestSelectedClusterDefaultsToFirstCluster(t *testing.T) {
 	clusters := []*vtadminpb.Cluster{{Id: "local", Name: "Local"}, {Id: "prod", Name: "Prod"}}
 
-	assert.Equal(t, "local", selectedClusterID(clusters, ""))
-	assert.Equal(t, "prod", selectedClusterID(clusters, "prod"))
+	assert.Equal(t, "local", selectedClusterID(clusters, "", ""))
+	assert.Equal(t, "prod", selectedClusterID(clusters, "prod", ""))
+	// An explicit request wins over the saved default.
+	assert.Equal(t, "prod", selectedClusterID(clusters, "prod", "local"))
+	// The saved default cluster wins over the first cluster.
+	assert.Equal(t, "prod", selectedClusterID(clusters, "", "prod"))
+	// An unknown default falls back to the first cluster.
+	assert.Equal(t, "local", selectedClusterID(clusters, "", "bogus"))
 }
 
 func TestSelectedKeyspaceDefaultsToFirstForCluster(t *testing.T) {

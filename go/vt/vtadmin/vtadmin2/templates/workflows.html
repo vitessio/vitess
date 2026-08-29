@@ -5,7 +5,14 @@
 {{ define "content" }}
 <div class="toolbar">
   <h1>Workflows</h1>
-  <input class="table-filter" data-table-filter="#workflows-table" placeholder="Filter Workflows" aria-label="Filter Workflows">
+  <div class="toolbar-links">
+    {{ if not .ReadOnly }}
+    <a class="button" href="/workflows/movetables/create">Create MoveTables workflow</a>
+    <a class="button" href="/workflows/reshard/create">Create Reshard workflow</a>
+    <a class="button" href="/workflows/materialize/create">Create Materialize workflow</a>
+    {{ end }}
+    <input class="table-filter" data-table-filter="#workflows-table" placeholder="Filter Workflows" aria-label="Filter Workflows">
+  </div>
 </div>
 <div class="card">
   <table id="workflows-table">

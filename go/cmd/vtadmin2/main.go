@@ -45,6 +45,13 @@ import (
 	"vitess.io/vitess/go/vt/vtenv"
 )
 
+type (
+	runtimeConfig struct {
+		rbac *rbac.Config
+		ui   vtadmin2.Options
+	}
+)
+
 var (
 	clusterConfigs       cluster.ClustersFlag
 	clusterFileConfig    cluster.FileConfig
@@ -65,11 +72,6 @@ var (
 		Version: servenv.AppVersion.String(),
 	}
 )
-
-type runtimeConfig struct {
-	rbac *rbac.Config
-	ui   vtadmin2.Options
-}
 
 func preRun(cmd *cobra.Command, args []string) error {
 	_flag.TrickGlog()
@@ -107,14 +109,7 @@ func run(cmd *cobra.Command, args []string) error {
 }
 
 func buildHTTPServer(addr string, handler http.Handler) *http.Server {
-	return &http.Server{
-		Addr:              addr,
-		Handler:           handler,
-		ReadHeaderTimeout: 10 * time.Second,
-		ReadTimeout:       30 * time.Second,
-		WriteTimeout:      30 * time.Second,
-		IdleTimeout:       time.Minute,
-	}
+	return vtadmin2.NewHTTPServer(addr, handler)
 }
 
 func serveHTTPServer(ctx context.Context, server *http.Server) error {

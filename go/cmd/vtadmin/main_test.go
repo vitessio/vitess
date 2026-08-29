@@ -23,6 +23,13 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestValidateUIOptions(t *testing.T) {
+	assert.NoError(t, validateUIOptions("react", false))
+	assert.NoError(t, validateUIOptions("vtadmin2", false))
+	assert.ErrorContains(t, validateUIOptions("unknown", false), "invalid --ui value")
+	assert.ErrorContains(t, validateUIOptions("vtadmin2", true), "not supported")
+}
+
 func TestMainFlagRegistration(t *testing.T) {
 	registerFlags()
 

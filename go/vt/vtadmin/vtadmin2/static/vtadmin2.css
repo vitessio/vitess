@@ -58,6 +58,11 @@ a { color: var(--vt-color-primary); }
   padding: 0.2rem 0.55rem;
 }
 
+.badge-primary {
+  background: var(--vt-color-accent);
+  font-weight: 600;
+}
+
 .shell {
   display: grid;
   grid-template-columns: 14rem 1fr;
@@ -101,6 +106,27 @@ a { color: var(--vt-color-primary); }
   border-radius: 0.65rem;
   margin-bottom: 1rem;
   padding: 1rem;
+}
+
+dl {
+  display: grid;
+  gap: 0.45rem 1.5rem;
+  grid-template-columns: max-content 1fr;
+  margin: 0;
+}
+
+dt {
+  color: var(--vt-color-muted);
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  padding-top: 0.18rem;
+  text-transform: uppercase;
+}
+
+dd {
+  margin: 0;
+  overflow-wrap: anywhere;
 }
 
 .toolbar {
@@ -178,20 +204,137 @@ th {
   max-width: 42rem;
 }
 
+.form-fieldset {
+  border: 1px solid var(--vt-color-border);
+  border-radius: 0.4rem;
+  display: grid;
+  gap: 0.5rem;
+  padding: 0.75rem;
+}
+
+.form-fieldset legend {
+  color: var(--vt-color-muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 0 0.35rem;
+  text-transform: uppercase;
+}
+
 label {
   display: grid;
   font-weight: 600;
   gap: 0.35rem;
 }
 
-input[type="text"], select {
+input[type="text"], input[type="number"], select {
   border: 1px solid var(--vt-color-border);
   border-radius: 0.4rem;
   font: inherit;
   padding: 0.55rem;
 }
 
+.danger-zone {
+  border-color: #f2c4c4;
+}
+
+.danger-zone h2 {
+  color: var(--vt-color-danger);
+}
+
+.actions-grid {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.actions-grid details {
+  border: 1px solid var(--vt-color-border);
+  border-radius: 0.4rem;
+}
+
+.actions-grid summary {
+  cursor: pointer;
+  font-weight: 600;
+  padding: 0.65rem 0.8rem;
+}
+
+.actions-grid form {
+  padding: 0 0.8rem 0.8rem;
+}
+
+.actions-grid .button:active,
+.button:active {
+  transform: translateY(1px);
+}
+
+.checkbox-label {
+  align-items: center;
+  display: flex;
+  font-weight: 400;
+  gap: 0.5rem;
+  grid-template-columns: none;
+}
+
+.muted {
+  color: var(--vt-color-muted);
+  font-size: 0.85rem;
+  margin: 0.25rem 0 0;
+}
+
+details > summary {
+  list-style: revert;
+}
+
+details pre {
+  max-height: 16rem;
+  overflow: auto;
+}
+
+.toolbar-links {
+  display: flex;
+  gap: 1rem;
+}
+
+.inline-form {
+  display: inline-block;
+  margin: 0;
+}
+
 @media (max-width: 800px) {
   .shell { grid-template-columns: 1fr; }
   .nav { border-right: 0; border-bottom: 1px solid var(--vt-color-border); }
+}
+.settings-link {
+  color: white;
+  font-size: 0.85rem;
+  margin-left: auto;
+  text-decoration: none;
+}
+
+/* Dark theme: token overrides applied via <body data-theme="dark">. */
+@media (prefers-color-scheme: dark) {
+  body[data-theme="system"] {
+    --vt-color-bg: #10151f;
+    --vt-color-surface: #1a2230;
+    --vt-color-text: #e6eaf2;
+    --vt-color-muted: #94a0b8;
+    --vt-color-border: #2c3648;
+    --vt-color-primary-light: #3a2417;
+  }
+}
+
+body[data-theme="dark"] {
+  --vt-color-bg: #10151f;
+  --vt-color-surface: #1a2230;
+  --vt-color-text: #e6eaf2;
+  --vt-color-muted: #94a0b8;
+  --vt-color-border: #2c3648;
+  --vt-color-primary-light: #3a2417;
+}
+
+body[data-theme="dark"] .flash.success {
+  background: #12351f;
+}
+
+body[data-theme="dark"] .flash.error {
+  background: #3b1414;
 }

@@ -25,12 +25,14 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
-type topologyPathData struct {
-	Clusters  []*vtadminpb.Cluster
-	ClusterID string
-	Path      string
-	Response  *vtctldatapb.GetTopologyPathResponse
-}
+type (
+	topologyPathData struct {
+		Clusters  []*vtadminpb.Cluster
+		ClusterID string
+		Path      string
+		Response  *vtctldatapb.GetTopologyPathResponse
+	}
+)
 
 func (s *Server) topologyPath(w http.ResponseWriter, r *http.Request) {
 	clustersResp, err := s.api.GetClusters(r.Context(), &vtadminpb.GetClustersRequest{})
@@ -39,7 +41,7 @@ func (s *Server) topologyPath(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	clusters := clustersResp.GetClusters()
-	clusterID := selectedClusterID(clusters, queryValue(r, "cluster_id"))
+	clusterID := selectedClusterID(clusters, queryValue(r, "cluster_id"), cookieValue(r, defaultClusterCookieName))
 	if clusterID == "" {
 		s.renderError(w, r, http.StatusBadRequest, "Topology", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "cluster_id is required"))
 		return

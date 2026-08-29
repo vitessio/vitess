@@ -40,7 +40,15 @@
       {{ range .Data.Transactions }}
       <tr>
         <td>{{ .GetDtid }}</td>
-        <td><a href="/transaction/{{ pathEscape $.Data.ClusterID }}/{{ pathEscape .GetDtid }}/info">Info</a></td>
+        <td>
+          <a href="/transaction/{{ pathEscape $.Data.ClusterID }}/{{ pathEscape .GetDtid }}/info">Info</a>
+          {{ if not $.ReadOnly }}
+          <form method="POST" action="/transaction/{{ pathEscape $.Data.ClusterID }}/{{ pathEscape .GetDtid }}/conclude" data-confirm="Conclude transaction {{ .GetDtid }}? This is irreversible." class="inline-form">
+            <input type="hidden" name="csrf_token" value="{{ $.CSRFToken }}">
+            <button type="submit" class="button danger">Conclude</button>
+          </form>
+          {{ end }}
+        </td>
       </tr>
       {{ else }}
       <tr><td colspan="2">No unresolved transactions found.</td></tr>

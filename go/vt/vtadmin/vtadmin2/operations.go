@@ -71,7 +71,7 @@ func (s *Server) schemaMigrations(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	form, err := s.loadFormOptions(r.Context(), requestedCluster, keyspace)
+	form, err := s.loadFormOptions(r, requestedCluster, keyspace)
 	if err != nil {
 		s.renderError(w, r, http.StatusInternalServerError, "Migrations", err)
 		return
@@ -125,7 +125,7 @@ func (s *Server) transactions(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	form, err := s.loadFormOptions(r.Context(), clusterID, keyspace)
+	form, err := s.loadFormOptions(r, clusterID, keyspace)
 	if err != nil {
 		s.renderError(w, r, http.StatusInternalServerError, "Transactions", err)
 		return
@@ -161,8 +161,9 @@ func (s *Server) transactions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.render(w, r, http.StatusOK, "transactions.html", PageData{
-		Title:  "Transactions",
-		Active: "transactions",
+		Title:     "Transactions",
+		Active:    "transactions",
+		NeedsCSRF: !s.opts.ReadOnly,
 		Data: transactionsData{
 			ClusterID:    clusterID,
 			Keyspace:     keyspace,

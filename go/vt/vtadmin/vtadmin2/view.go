@@ -17,9 +17,10 @@ limitations under the License.
 package vtadmin2
 
 import (
+	"maps"
 	"net/http"
 	"net/url"
-	"sort"
+	"slices"
 	"strings"
 
 	"google.golang.org/protobuf/encoding/protojson"
@@ -31,12 +32,14 @@ import (
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
 )
 
-type formOptions struct {
-	Clusters         []*vtadminpb.Cluster
-	Keyspaces        []*vtadminpb.Keyspace
-	SelectedCluster  string
-	SelectedKeyspace string
-}
+type (
+	formOptions struct {
+		Clusters         []*vtadminpb.Cluster
+		Keyspaces        []*vtadminpb.Keyspace
+		SelectedCluster  string
+		SelectedKeyspace string
+	}
+)
 
 func queryValues(r *http.Request, name string) []string { return r.URL.Query()[name] }
 
@@ -56,9 +59,16 @@ func externalURL(value string) string {
 	return "http://" + value
 }
 
-func selectedClusterID(clusters []*vtadminpb.Cluster, requested string) string {
+func selectedClusterID(clusters []*vtadminpb.Cluster, requested, defaultCluster string) string {
 	if requested != "" {
 		return requested
+	}
+	if defaultCluster != "" {
+		for _, c := range clusters {
+			if c.GetId() == defaultCluster {
+				return defaultCluster
+			}
+		}
 	}
 	if len(clusters) == 0 {
 		return ""
@@ -109,12 +119,7 @@ func sortedShardNames(ks *vtadminpb.Keyspace) []string {
 	if ks == nil {
 		return nil
 	}
-	names := make([]string, 0, len(ks.GetShards()))
-	for name := range ks.GetShards() {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-	return names
+	return slices.Sorted(maps.Keys(ks.GetShards()))
 }
 
 func tabletAlias(alias *topodatapb.TabletAlias) string {

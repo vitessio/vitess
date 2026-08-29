@@ -17,10 +17,15 @@ limitations under the License.
 package main
 
 import (
+	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
+	"log/slog"
+	"net/http"
 	"os"
+	"syscall"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -38,6 +43,7 @@ import (
 	vtadminhttp "vitess.io/vitess/go/vt/vtadmin/http"
 	"vitess.io/vitess/go/vt/vtadmin/http/debug"
 	"vitess.io/vitess/go/vt/vtadmin/rbac"
+	"vitess.io/vitess/go/vt/vtadmin/vtadmin2"
 	"vitess.io/vitess/go/vt/vtctl/grpcclientcommon"
 	"vitess.io/vitess/go/vt/vtenv"
 )
@@ -56,11 +62,21 @@ var (
 
 	cacheRefreshKey string
 
+	// Server-rendered UI (vtadmin2) options.
+	ui          string
+	uiAddr      string
+	uiReadOnly  bool
+	uiDebugJSON bool
+
 	traceCloser io.Closer = &noopCloser{}
 
 	rootCmd = &cobra.Command{
 		Use: "vtadmin",
 		PreRunE: func(cmd *cobra.Command, args []string) error {
+			if err := validateUIOptions(ui, enableDynamicClusters); err != nil {
+				return err
+			}
+
 			_flag.TrickGlog()
 
 			if err := log.Init(cmd.Flags()); err != nil {
@@ -105,6 +121,16 @@ func startTracing(cmd *cobra.Command) {
 	}
 
 	traceCloser = trace.StartTracing("vtadmin")
+}
+
+func validateUIOptions(ui string, enableDynamicClusters bool) error {
+	if ui != "react" && ui != "vtadmin2" {
+		return fmt.Errorf("invalid --ui value %q: want react or vtadmin2", ui)
+	}
+	if ui == "vtadmin2" && enableDynamicClusters {
+		return errors.New("--enable-dynamic-clusters is not supported with --ui=vtadmin2")
+	}
+	return nil
 }
 
 func run(cmd *cobra.Command, args []string) {
@@ -164,6 +190,53 @@ func run(cmd *cobra.Command, args []string) {
 		RBAC:                  rbacConfig,
 		EnableDynamicClusters: enableDynamicClusters,
 	})
+
+	// The vtadmin2 server reuses the same API implementation (and its RBAC
+	// enforcement) and runs alongside the JSON API on its own address, so both
+	// UIs can be served during the migration.
+	if ui == "vtadmin2" {
+		uiServer, err := vtadmin2.NewServer(s, vtadmin2.Options{
+			Addr:            uiAddr,
+			ReadOnly:        uiReadOnly,
+			DocumentTitle:   "VTAdmin",
+			EnableDebugJSON: uiDebugJSON,
+			Authenticator:   rbacConfig.GetAuthenticator(),
+		})
+		if err != nil {
+			fatal(err)
+		}
+
+		httpServer := vtadmin2.NewHTTPServer(uiAddr, uiServer)
+
+		uiErr := make(chan error, 1)
+		shutdownBase := context.WithoutCancel(cmd.Context())
+		shutdownUI := func() {
+			shutdownCtx, cancel := context.WithTimeout(shutdownBase, 5*time.Second)
+			defer cancel()
+			if err := httpServer.Shutdown(shutdownCtx); err != nil && !errors.Is(err, http.ErrServerClosed) {
+				slog.Error("vtadmin2 UI shutdown failed", slog.Any("error", err))
+			}
+		}
+		servenv.OnTermSync(shutdownUI)
+
+		go func() {
+			slog.Info("vtadmin2 UI listening", slog.String("addr", uiAddr))
+			if err := httpServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+				uiErr <- err
+			}
+		}()
+
+		defer shutdownUI()
+
+		go func() {
+			if err := <-uiErr; err != nil {
+				slog.Error("vtadmin2 UI server failed", slog.Any("error", err))
+				if signalErr := syscall.Kill(syscall.Getpid(), syscall.SIGTERM); signalErr != nil {
+					slog.Error("failed to signal vtadmin shutdown", slog.Any("error", signalErr))
+				}
+			}
+		}()
+	}
 	bootSpan.Finish()
 
 	if err := s.ListenAndServe(); err != nil {
@@ -183,6 +256,12 @@ func registerFlags() {
 	rootCmd.Flags().Var(&defaultClusterConfig, "cluster-defaults", "default options for all clusters")
 	rootCmd.Flags().BoolVar(&enableDynamicClusters, "enable-dynamic-clusters", false, "whether to enable dynamic clusters that are set by request header cookies or gRPC metadata")
 
+	// Server-rendered UI flags
+	rootCmd.Flags().StringVar(&ui, "ui", "react", "admin UI to serve: react (default SPA) or vtadmin2 (server-rendered UI)")
+	rootCmd.Flags().StringVar(&uiAddr, "ui-addr", ":15001", "address for the vtadmin2 UI to listen on (used with --ui=vtadmin2)")
+	rootCmd.Flags().BoolVar(&uiReadOnly, "ui-read-only", false, "run the vtadmin2 UI in read-only mode (used with --ui=vtadmin2)")
+	rootCmd.Flags().BoolVar(&uiDebugJSON, "ui-debug-json", false, "enable ?format=json page data output in the vtadmin2 UI (used with --ui=vtadmin2)")
+
 	// Tracing flags
 	trace.RegisterFlags(rootCmd.Flags()) // defined in go/vt/trace
 	utils.SetFlagBoolVar(rootCmd.Flags(), &opts.EnableTracing, "grpc-tracing", false, "whether to enable tracing on the gRPC server")
@@ -201,7 +280,8 @@ func registerFlags() {
 		"HTTP endpoint to expose prometheus metrics on. Omit to disable scraping metrics. "+
 			"Using a path used by VTAdmin's http API is unsupported and causes undefined behavior.")
 	rootCmd.Flags().StringSliceVar(&httpOpts.CORSOrigins, "http-origin", []string{}, "repeated, comma-separated flag of allowed CORS origins. omit to disable CORS")
-	rootCmd.Flags().StringVar(&httpOpts.ExperimentalOptions.TabletURLTmpl,
+	rootCmd.Flags().StringVar(
+		&httpOpts.ExperimentalOptions.TabletURLTmpl,
 		"http-tablet-url-tmpl",
 		"https://{{ .Tablet.Hostname }}:80",
 		"[EXPERIMENTAL] Go template string to generate a reachable http(s) "+
@@ -211,8 +291,8 @@ func registerFlags() {
 
 	// RBAC flags
 	rootCmd.Flags().StringVar(&rbacConfigPath, "rbac-config", "", "path to an RBAC config file. must be set if passing --rbac")
-	rootCmd.Flags().BoolVar(&enableRBAC, "rbac", false, "whether to enable RBAC. must be set if not passing --rbac")
-	rootCmd.Flags().BoolVar(&disableRBAC, "no-rbac", false, "whether to disable RBAC. must be set if not passing --no-rbac")
+	rootCmd.Flags().BoolVar(&enableRBAC, "rbac", false, "whether to enable RBAC. must be set if not passing --no-rbac")
+	rootCmd.Flags().BoolVar(&disableRBAC, "no-rbac", false, "whether to disable RBAC. must be set if not passing --rbac")
 
 	// Global cache flags (N.B. there are also cluster-specific cache flags)
 	cacheRefreshHelp := "instructs a request to ignore any cached data (if applicable) and refresh the cache;" +

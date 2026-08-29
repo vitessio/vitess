@@ -5,7 +5,10 @@
 {{ define "content" }}
 <div class="toolbar">
   <h1>Migrations</h1>
-  <input class="table-filter" data-table-filter="#migrations-table" placeholder="Filter Migrations" aria-label="Filter Migrations">
+  <div class="toolbar-links">
+    {{ if not .ReadOnly }}<a class="button" href="/migrations/create">Create migration</a>{{ end }}
+    <input class="table-filter" data-table-filter="#migrations-table" placeholder="Filter Migrations" aria-label="Filter Migrations">
+  </div>
 </div>
 <div class="card">
   <form method="get" action="/migrations" class="form-grid">
