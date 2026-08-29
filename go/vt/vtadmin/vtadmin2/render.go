@@ -18,7 +18,7 @@ package vtadmin2
 
 import (
 	"bytes"
-	"encoding/json"
+	jsonv2 "encoding/json/v2"
 	"html/template"
 	"io/fs"
 	"net/http"
@@ -182,7 +182,7 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, status int, name
 
 // protoJSONAny serializes a proto message, or a slice of proto messages, to
 // JSON using protoJSON per element. Non-proto values fall back to
-// encoding/json.
+// encoding/json/v2.
 func protoJSONAny(v any) string {
 	if msg, ok := v.(proto.Message); ok {
 		return protoJSON(msg)
@@ -190,7 +190,7 @@ func protoJSONAny(v any) string {
 
 	rv := reflect.ValueOf(v)
 	if rv.Kind() != reflect.Slice && rv.Kind() != reflect.Array {
-		b, err := json.Marshal(v)
+		b, err := jsonv2.Marshal(v)
 		if err != nil {
 			return "null"
 		}
@@ -204,7 +204,7 @@ func protoJSONAny(v any) string {
 			parts = append(parts, protoJSON(msg))
 			continue
 		}
-		b, err := json.Marshal(elem.Interface())
+		b, err := jsonv2.Marshal(elem.Interface())
 		if err != nil {
 			parts = append(parts, "null")
 			continue
