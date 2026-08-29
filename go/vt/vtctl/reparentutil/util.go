@@ -401,21 +401,6 @@ func ShardReplicationStatuses(ctx context.Context, ts *topo.Server, tmc tmclient
 	return tablets, result, rec.Error()
 }
 
-// getValidCandidatesAndPositionsAsList converts the valid candidates from a map to a list of tablets, making it easier to sort
-func getValidCandidatesAndPositionsAsList(validCandidates map[string]*RelayLogPositions, tabletMap map[string]*topo.TabletInfo) ([]*topodatapb.Tablet, []*RelayLogPositions, error) {
-	var validTablets []*topodatapb.Tablet
-	var tabletPositions []*RelayLogPositions
-	for tabletAlias, position := range validCandidates {
-		tablet, isFound := tabletMap[tabletAlias]
-		if !isFound {
-			return nil, nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "candidate %v not found in the tablet map; this an impossible situation", tabletAlias)
-		}
-		validTablets = append(validTablets, tablet.Tablet)
-		tabletPositions = append(tabletPositions, position)
-	}
-	return validTablets, tabletPositions, nil
-}
-
 // isCancellationError returns true if err is a context cancellation, either as the
 // sentinel error or as a gRPC code (server-side wrapping loses the sentinel). A deadline
 // expiry isn't a cancellation, that's how a genuinely stuck tablet fails a wait.
@@ -437,23 +422,6 @@ func removeTabletsByAlias(tablets []*topodatapb.Tablet, aliases []string) []*top
 	return result
 }
 
-// restrictValidCandidates is used to restrict some candidates from being considered eligible for becoming the intermediate source or the final promotion candidate
-func restrictValidCandidates(validCandidates map[string]*RelayLogPositions, tabletMap map[string]*topo.TabletInfo) (map[string]*RelayLogPositions, error) {
-	restrictedValidCandidates := make(map[string]*RelayLogPositions)
-	for candidate, position := range validCandidates {
-		candidateInfo, ok := tabletMap[candidate]
-		if !ok {
-			return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "candidate %v not found in the tablet map; this an impossible situation", candidate)
-		}
-		// We do not allow BACKUP, DRAINED or RESTORE type of tablets to be considered for being the replication source or the candidate for primary
-		if topoproto.IsTypeInList(candidateInfo.Type, []topodatapb.TabletType{topodatapb.TabletType_BACKUP, topodatapb.TabletType_RESTORE, topodatapb.TabletType_DRAINED}) {
-			continue
-		}
-		restrictedValidCandidates[candidate] = position
-	}
-	return restrictedValidCandidates, nil
-}
-
 // findCandidate returns the best promotion candidate from possibleCandidates.
 // possibleCandidates MUST already be sorted by replication position (most
 // advanced first): when there is no version data, or when the lowest-release
@@ -461,18 +429,18 @@ func restrictValidCandidates(validCandidates map[string]*RelayLogPositions, tabl
 // falls back to the position-sorted ordering (the first element, or the
 // intermediate source) rather than re-checking position.
 func findCandidate(
-	intermediateSource *topodatapb.Tablet,
-	possibleCandidates []*topodatapb.Tablet,
-	versionMap map[string]mysqlctl.ServerVersion,
-) *topodatapb.Tablet {
+	intermediateSource *ersCandidate,
+	possibleCandidates []*ersCandidate,
+) *ersCandidate {
 	if len(possibleCandidates) == 0 {
 		return nil
 	}
 
-	if len(versionMap) == 0 {
-		// No version data — fall back to preferring the intermediate source to avoid catch-up.
+	mysqlVersions, _ := usableERSCandidateMySQLVersions(possibleCandidates)
+	if len(mysqlVersions) == 0 {
+		// Version ordering is unavailable, so prefer the intermediate source to avoid catch-up.
 		for _, candidate := range possibleCandidates {
-			if topoproto.TabletAliasEqual(intermediateSource.Alias, candidate.Alias) {
+			if candidate.isSameTablet(intermediateSource) {
 				return candidate
 			}
 		}
@@ -484,41 +452,36 @@ func findCandidate(
 	// ServerVersion.CompareForReplication). Among candidates that compare equal,
 	// prefer the intermediate source to avoid catch-up.
 	//
-	// Note: versionMap is scoped by the caller to a single flavor family for the
-	// tier's candidates, but the intermediate source is frequently NOT in this
-	// tier, so sourceVersion below can be a cross-family version — which
+	// Note: the flavor-family guard above is scoped to the tier's candidates, but
+	// the intermediate source is frequently NOT in this tier, so sourceVersion
+	// below can be a cross-family version — which
 	// CompareForReplication's precondition otherwise forbids. This is deliberately
 	// harmless: the source-preference at the end only takes effect when the source
 	// is actually found in possibleCandidates (and is therefore in-family), so a
 	// cross-family comparison result is always discarded. Keep that invariant if
 	// editing the source-preference block below.
-	sourceAlias := topoproto.TabletAliasString(intermediateSource.Alias)
-	sourceVersion, ok := versionMap[sourceAlias]
-	if !ok {
-		sourceVersion = unknownVersion
+	sourceVersion := unknownVersion
+	if intermediateSource != nil && intermediateSource.hasMySQLVersion {
+		sourceVersion = intermediateSource.mysqlVersion
 	}
 
-	var best *topodatapb.Tablet
+	var best *ersCandidate
 	bestVersion := unknownVersion
-	for _, candidate := range possibleCandidates {
-		alias := topoproto.TabletAliasString(candidate.Alias)
-		v, ok := versionMap[alias]
-		if !ok {
-			v = unknownVersion
-		}
-
+	for i, candidate := range possibleCandidates {
+		candidateVersion := mysqlVersions[i]
 		if best == nil {
 			best = candidate
-			bestVersion = v
+			bestVersion = candidateVersion
 			continue
 		}
 
-		// Keep the lower version; CompareForReplication returns < 0 when v is lower.
-		if v.CompareForReplication(bestVersion) >= 0 {
+		// Keep the lower version; CompareForReplication returns < 0 when
+		// candidateVersion is lower.
+		if candidateVersion.CompareForReplication(bestVersion) >= 0 {
 			continue
 		}
 		best = candidate
-		bestVersion = v
+		bestVersion = candidateVersion
 	}
 
 	// The first loop finds the lowest-version candidate without bias. Now that we know
@@ -526,7 +489,7 @@ func findCandidate(
 	// if so, prefer it because it already holds the most-advanced position and won't need catch-up.
 	if sourceVersion.CompareForReplication(bestVersion) == 0 {
 		for _, candidate := range possibleCandidates {
-			if topoproto.TabletAliasEqual(intermediateSource.Alias, candidate.Alias) {
+			if candidate.isSameTablet(intermediateSource) {
 				return candidate
 			}
 		}
@@ -536,9 +499,9 @@ func findCandidate(
 }
 
 // getTabletsWithPromotionRules gets the tablets with the given promotion rule from the list of tablets
-func getTabletsWithPromotionRules(durability policy.Durabler, tablets []*topodatapb.Tablet, rule promotionrule.CandidatePromotionRule) (res []*topodatapb.Tablet) {
-	for _, candidate := range tablets {
-		promotionRule := policy.PromotionRule(durability, candidate)
+func getTabletsWithPromotionRules(durability policy.Durabler, candidates []*ersCandidate, rule promotionrule.CandidatePromotionRule) (res []*ersCandidate) {
+	for _, candidate := range candidates {
+		promotionRule := policy.PromotionRule(durability, candidate.tablet())
 		if promotionRule == rule {
 			res = append(res, candidate)
 		}

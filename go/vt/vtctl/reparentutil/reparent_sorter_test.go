@@ -25,6 +25,7 @@ import (
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 )
 
@@ -360,6 +361,74 @@ func TestReparentSorter(t *testing.T) {
 			})
 		})
 	}
+}
+
+func TestSortERSCandidates(t *testing.T) {
+	makeCandidate := func(uid uint32, position string) *ersCandidate {
+		pos := replication.MustParsePosition(replication.Mysql56FlavorID, position)
+		return &ersCandidate{
+			info: &topo.TabletInfo{Tablet: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: uid},
+				Type:  topodatapb.TabletType_REPLICA,
+			}},
+			positions: &RelayLogPositions{Combined: pos, Executed: pos},
+		}
+	}
+
+	durability, err := policy.GetDurabilityPolicy(policy.DurabilityNone)
+	require.NoError(t, err)
+
+	t.Run("position ordering without version data", func(t *testing.T) {
+		dominated := makeCandidate(100, "3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5")
+		incomparable := makeCandidate(101, "AAAAAAAA-71CA-11E1-9E33-C80AA9429562:1-10")
+		dominator := makeCandidate(102, "3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10")
+		candidates := []*ersCandidate{dominated, incomparable, dominator}
+
+		assert.False(t, sortERSCandidates(candidates, durability))
+		assert.Equal(t, []*ersCandidate{incomparable, dominator, dominated}, candidates)
+	})
+
+	t.Run("lower version breaks an equal-position tie", func(t *testing.T) {
+		higherVersion := makeCandidate(100, "3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10")
+		higherVersion.mysqlVersion = mysqlctl.ServerVersion{Major: 8, Minor: 4}
+		higherVersion.mysqlFlavor = mysqlctl.FlavorMySQL
+		higherVersion.hasMySQLVersion = true
+		lowerVersion := makeCandidate(101, "3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10")
+		lowerVersion.mysqlVersion = mysqlctl.ServerVersion{Major: 8, Minor: 0, Patch: 35}
+		lowerVersion.mysqlFlavor = mysqlctl.FlavorPercona
+		lowerVersion.hasMySQLVersion = true
+		candidates := []*ersCandidate{higherVersion, lowerVersion}
+
+		assert.False(t, sortERSCandidates(candidates, durability))
+		assert.Equal(t, []*ersCandidate{lowerVersion, higherVersion}, candidates)
+	})
+
+	t.Run("missing version sorts after a known version", func(t *testing.T) {
+		unknown := makeCandidate(100, "3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10")
+		known := makeCandidate(101, "3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10")
+		known.mysqlVersion = mysqlctl.ServerVersion{Major: 8, Minor: 4}
+		known.mysqlFlavor = mysqlctl.FlavorMySQL
+		known.hasMySQLVersion = true
+		candidates := []*ersCandidate{unknown, known}
+
+		assert.False(t, sortERSCandidates(candidates, durability))
+		assert.Equal(t, []*ersCandidate{known, unknown}, candidates)
+	})
+
+	t.Run("mixed flavor families disable version ordering", func(t *testing.T) {
+		mariaDB := makeCandidate(100, "3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10")
+		mariaDB.mysqlVersion = mysqlctl.ServerVersion{Major: 10, Minor: 6}
+		mariaDB.mysqlFlavor = mysqlctl.FlavorMariaDB
+		mariaDB.hasMySQLVersion = true
+		mysql := makeCandidate(101, "3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10")
+		mysql.mysqlVersion = mysqlctl.ServerVersion{Major: 8, Minor: 0, Patch: 35}
+		mysql.mysqlFlavor = mysqlctl.FlavorMySQL
+		mysql.hasMySQLVersion = true
+		candidates := []*ersCandidate{mysql, mariaDB}
+
+		assert.True(t, sortERSCandidates(candidates, durability))
+		assert.Equal(t, []*ersCandidate{mariaDB, mysql}, candidates)
+	})
 }
 
 func forEachReparentSorterPermutation(values []int, test func([]int)) {

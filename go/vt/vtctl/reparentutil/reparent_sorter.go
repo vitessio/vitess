@@ -358,3 +358,66 @@ func sortTabletsForReparent(tablets []*topodatapb.Tablet, positions []*RelayLogP
 	sort.Sort(newReparentSorter(tablets, positions, innodbBufferPool, mysqlVersions, durability, mode))
 	return nil
 }
+
+type ersCandidateSorter struct {
+	candidates []*ersCandidate
+	sorter     *reparentSorter
+}
+
+func (es *ersCandidateSorter) Len() int {
+	return len(es.candidates)
+}
+
+func (es *ersCandidateSorter) Swap(i, j int) {
+	es.candidates[i], es.candidates[j] = es.candidates[j], es.candidates[i]
+	es.sorter.Swap(i, j)
+}
+
+func (es *ersCandidateSorter) Less(i, j int) bool {
+	return es.sorter.Less(i, j)
+}
+
+func usableERSCandidateMySQLVersions(candidates []*ersCandidate) ([]mysqlctl.ServerVersion, bool) {
+	hasMySQLVersion := false
+	for _, candidate := range candidates {
+		if candidate.hasMySQLVersion {
+			hasMySQLVersion = true
+			break
+		}
+	}
+	if !hasMySQLVersion {
+		return nil, false
+	}
+
+	mysqlVersions := make([]mysqlctl.ServerVersion, len(candidates))
+	mysqlFlavors := make([]mysqlctl.MySQLFlavor, len(candidates))
+	for i, candidate := range candidates {
+		mysqlVersions[i] = unknownVersion
+		if candidate.hasMySQLVersion {
+			mysqlVersions[i] = candidate.mysqlVersion
+		}
+		mysqlFlavors[i] = candidate.mysqlFlavor
+	}
+
+	usableVersions := usableMySQLVersions(mysqlVersions, mysqlFlavors)
+	return usableVersions, usableVersions == nil
+}
+
+// sortERSCandidates orders the ERS promotion candidates in place, most eligible first,
+// by replication position with ties broken by the promotion rules and MySQL version.
+// It returns true when mixed known flavor families disabled version-aware ordering.
+func sortERSCandidates(candidates []*ersCandidate, durability policy.Durabler) bool {
+	tablets := make([]*topodatapb.Tablet, len(candidates))
+	positions := make([]*RelayLogPositions, len(candidates))
+	for i, candidate := range candidates {
+		tablets[i] = candidate.tablet()
+		positions[i] = candidate.positions
+	}
+	mysqlVersions, mixedFlavorFamilies := usableERSCandidateMySQLVersions(candidates)
+
+	sort.Sort(&ersCandidateSorter{
+		candidates: candidates,
+		sorter:     newReparentSorter(tablets, positions, nil, mysqlVersions, durability, SortByPosition),
+	})
+	return mixedFlavorFamilies
+}

@@ -19,7 +19,6 @@ package reparentutil
 import (
 	"context"
 	"errors"
-	"maps"
 	"slices"
 	"strings"
 	"sync"
@@ -55,6 +54,141 @@ import (
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 )
+
+func ersCandidatesFromPositionsForTest(
+	t *testing.T,
+	positions map[string]*RelayLogPositions,
+	tabletMap map[string]*topo.TabletInfo,
+	statusMap map[string]*replicationdatapb.StopReplicationStatus,
+) []*ersCandidate {
+	t.Helper()
+
+	candidates := make([]*ersCandidate, 0, len(positions))
+	for alias, candidatePositions := range positions {
+		info := tabletMap[alias]
+		require.NotNil(t, info)
+		candidates = append(candidates, &ersCandidate{
+			info:       info,
+			positions:  candidatePositions,
+			stopStatus: statusMap[alias],
+		})
+	}
+
+	return candidates
+}
+
+func ersCandidatesFromTabletsForTest(
+	tablets []*topodatapb.Tablet,
+	tabletMap map[string]*topo.TabletInfo,
+	statusMap map[string]*replicationdatapb.StopReplicationStatus,
+	tabletsTakingBackup map[string]bool,
+) []*ersCandidate {
+	candidates := make([]*ersCandidate, 0, len(tablets))
+	for _, tablet := range tablets {
+		alias := topoproto.TabletAliasString(tablet.Alias)
+		info := tabletMap[alias]
+		if info == nil {
+			info = &topo.TabletInfo{Tablet: tablet}
+		}
+		candidates = append(candidates, &ersCandidate{
+			info:         info,
+			stopStatus:   statusMap[alias],
+			takingBackup: tabletsTakingBackup[alias],
+		})
+	}
+
+	return candidates
+}
+
+func setERSCandidateVersionsForTest(
+	candidates []*ersCandidate,
+	versionMap map[string]mysqlctl.ServerVersion,
+	flavorMap map[string]mysqlctl.MySQLFlavor,
+) {
+	for _, candidate := range candidates {
+		alias := candidate.alias()
+		candidate.mysqlVersion, candidate.hasMySQLVersion = versionMap[alias]
+		candidate.mysqlFlavor = flavorMap[alias]
+	}
+}
+
+func ersCandidateForTabletForTest(candidates []*ersCandidate, tablet *topodatapb.Tablet) *ersCandidate {
+	if tablet == nil {
+		return nil
+	}
+	if candidate := findERSCandidateByAlias(candidates, tablet.Alias); candidate != nil {
+		return candidate
+	}
+	return &ersCandidate{info: &topo.TabletInfo{Tablet: tablet}}
+}
+
+func ersCandidateByAliasForTest(t *testing.T, candidates []*ersCandidate, alias string) *ersCandidate {
+	t.Helper()
+
+	for _, candidate := range candidates {
+		if candidate.alias() == alias {
+			return candidate
+		}
+	}
+	require.FailNow(t, "candidate not found", "alias: %s", alias)
+	return nil
+}
+
+func ersCandidatesByAliasForTest(t *testing.T, candidates []*ersCandidate, aliases ...string) []*ersCandidate {
+	t.Helper()
+
+	result := make([]*ersCandidate, 0, len(aliases))
+	for _, alias := range aliases {
+		result = append(result, ersCandidateByAliasForTest(t, candidates, alias))
+	}
+	return result
+}
+
+func ersCandidateTabletsForTest(candidates []*ersCandidate) []*topodatapb.Tablet {
+	tablets := make([]*topodatapb.Tablet, 0, len(candidates))
+	for _, candidate := range candidates {
+		tablets = append(tablets, candidate.tablet())
+	}
+	return tablets
+}
+
+func TestERSCandidateIsSameTablet(t *testing.T) {
+	t.Parallel()
+
+	withAlias := func(cell string, uid uint32) *ersCandidate {
+		return &ersCandidate{info: &topo.TabletInfo{Tablet: &topodatapb.Tablet{
+			Alias: &topodatapb.TabletAlias{Cell: cell, Uid: uid},
+		}}}
+	}
+
+	candidate := withAlias("zone1", 100)
+	var nilCandidate *ersCandidate
+
+	t.Run("same tablet built separately", func(t *testing.T) {
+		assert.True(t, candidate.isSameTablet(withAlias("zone1", 100)))
+	})
+
+	t.Run("different tablets", func(t *testing.T) {
+		assert.False(t, candidate.isSameTablet(withAlias("zone1", 101)))
+		assert.False(t, candidate.isSameTablet(withAlias("zone2", 100)))
+	})
+
+	// a candidate with no alias has no identity to match on, so it matches nothing.
+	// two of them must not compare equal either: isIntermediateSourceIdeal reads a
+	// true here as "no better candidate exists" and skips the intermediate promotion
+	t.Run("candidates without an identity match nothing", func(t *testing.T) {
+		noInfo := &ersCandidate{}
+		noAlias := &ersCandidate{info: &topo.TabletInfo{Tablet: &topodatapb.Tablet{}}}
+
+		for _, other := range []*ersCandidate{nilCandidate, noInfo, noAlias} {
+			assert.False(t, candidate.isSameTablet(other))
+			assert.False(t, other.isSameTablet(candidate))
+		}
+		assert.False(t, nilCandidate.isSameTablet(nilCandidate))
+		assert.False(t, noInfo.isSameTablet(noInfo))
+		assert.False(t, noAlias.isSameTablet(noAlias))
+	})
+}
 
 func TestNewEmergencyReparenter(t *testing.T) {
 	t.Parallel()
@@ -6812,7 +6946,8 @@ func TestEmergencyReparenter_waitForRelayLogsToApply(t *testing.T) {
 			}
 
 			erp := NewEmergencyReparenter(nil, tt.tmc, logger)
-			result, err := erp.waitForRelayLogsToApply(cellCtx, tt.candidates, tt.tabletMap, tt.statusMap, cellTimeout, tt.requireAll)
+			candidates := ersCandidatesFromPositionsForTest(t, tt.candidates, tt.tabletMap, tt.statusMap)
+			result, err := erp.waitForRelayLogsToApply(cellCtx, candidates, cellTimeout, tt.requireAll)
 			if tt.shouldErr {
 				require.Error(t, err)
 				if tt.errContains != "" {
@@ -6824,9 +6959,9 @@ func TestEmergencyReparenter_waitForRelayLogsToApply(t *testing.T) {
 
 			if tt.checkOutcome {
 				require.NotNil(t, result)
-				assert.ElementsMatch(t, tt.wantApplied, result.applied, "applied mismatch")
-				assert.ElementsMatch(t, tt.wantFailed, result.failed, "failed mismatch")
-				assert.ElementsMatch(t, tt.wantCancelled, result.cancelled, "cancelled mismatch")
+				assert.ElementsMatch(t, tt.wantApplied, ersCandidateAliases(result.applied), "applied mismatch")
+				assert.ElementsMatch(t, tt.wantFailed, ersCandidateAliases(result.failed), "failed mismatch")
+				assert.ElementsMatch(t, tt.wantCancelled, ersCandidateAliases(result.cancelled), "cancelled mismatch")
 			}
 		})
 	}
@@ -6876,14 +7011,6 @@ func TestEmergencyReparenter_applyRelayLogsAndReconcile(t *testing.T) {
 			},
 		}
 	}
-	waitCandidatesOf := func(candidates map[string]*RelayLogPositions) map[string]*RelayLogPositions {
-		return map[string]*RelayLogPositions{
-			"zone1-0000000100": candidates["zone1-0000000100"],
-			"zone1-0000000101": candidates["zone1-0000000101"],
-			"zone1-0000000102": candidates["zone1-0000000102"],
-		}
-	}
-
 	t.Run("applied bumped, failed removed, cancelled and unwaited untouched", func(t *testing.T) {
 		t.Parallel()
 
@@ -6898,25 +7025,30 @@ func TestEmergencyReparenter_applyRelayLogsAndReconcile(t *testing.T) {
 			},
 		}
 
-		candidates := newCandidates(t)
+		candidatePositions := newCandidates(t)
+		candidates := ersCandidatesFromPositionsForTest(t, candidatePositions, tabletMap, statusMap)
+		waitCandidates := ersCandidatesByAliasForTest(t, candidates, "zone1-0000000100", "zone1-0000000101", "zone1-0000000102")
 		erp := NewEmergencyReparenter(nil, tmc, logger)
-		reconciled, waitResult, err := erp.applyRelayLogsAndReconcile(t.Context(), waitCandidatesOf(candidates), candidates, tabletMap, statusMap, waitReplicasTimeout, false, true)
+		reconciled, waitResult, err := erp.applyRelayLogsAndReconcile(t.Context(), waitCandidates, candidates, waitReplicasTimeout, false, true)
 		require.NoError(t, err)
 		require.NotNil(t, waitResult)
 
-		assert.ElementsMatch(t, []string{"zone1-0000000100"}, waitResult.applied)
-		assert.ElementsMatch(t, []string{"zone1-0000000101"}, waitResult.failed)
-		assert.ElementsMatch(t, []string{"zone1-0000000102"}, waitResult.cancelled)
+		assert.ElementsMatch(t, []string{"zone1-0000000100"}, ersCandidateAliases(waitResult.applied))
+		assert.ElementsMatch(t, []string{"zone1-0000000101"}, ersCandidateAliases(waitResult.failed))
+		assert.ElementsMatch(t, []string{"zone1-0000000102"}, ersCandidateAliases(waitResult.cancelled))
 
 		// the failed candidate is no longer promotable
-		assert.NotContains(t, reconciled, "zone1-0000000101")
+		assert.NotContains(t, ersCandidateAliases(reconciled), "zone1-0000000101")
 
 		// the applied candidate has fully executed what it received
-		assert.True(t, reconciled["zone1-0000000100"].Executed.Equal(reconciled["zone1-0000000100"].Combined))
+		applied := ersCandidateByAliasForTest(t, reconciled, "zone1-0000000100")
+		assert.True(t, applied.positions.Executed.Equal(applied.positions.Combined))
 
 		// the cancelled and unwaited candidates keep their received positions
-		assert.True(t, reconciled["zone1-0000000102"].Executed.Equal(mustPosition(t, "3e11fa47-71ca-11e1-9e33-c80aa9429562:1-6")))
-		assert.True(t, reconciled["zone1-0000000103"].Executed.Equal(mustPosition(t, "3e11fa47-71ca-11e1-9e33-c80aa9429562:1-3")))
+		cancelled := ersCandidateByAliasForTest(t, reconciled, "zone1-0000000102")
+		assert.True(t, cancelled.positions.Executed.Equal(mustPosition(t, "3e11fa47-71ca-11e1-9e33-c80aa9429562:1-6")))
+		unwaited := ersCandidateByAliasForTest(t, reconciled, "zone1-0000000103")
+		assert.True(t, unwaited.positions.Executed.Equal(mustPosition(t, "3e11fa47-71ca-11e1-9e33-c80aa9429562:1-3")))
 	})
 
 	t.Run("wait error leaves the candidates unmutated", func(t *testing.T) {
@@ -6930,14 +7062,17 @@ func TestEmergencyReparenter_applyRelayLogsAndReconcile(t *testing.T) {
 			},
 		}
 
-		candidates := newCandidates(t)
+		candidatePositions := newCandidates(t)
+		candidates := ersCandidatesFromPositionsForTest(t, candidatePositions, tabletMap, statusMap)
+		waitCandidates := ersCandidatesByAliasForTest(t, candidates, "zone1-0000000100", "zone1-0000000101", "zone1-0000000102")
 		erp := NewEmergencyReparenter(nil, tmc, logger)
-		reconciled, _, err := erp.applyRelayLogsAndReconcile(t.Context(), waitCandidatesOf(candidates), candidates, tabletMap, statusMap, waitReplicasTimeout, true, true)
+		reconciled, _, err := erp.applyRelayLogsAndReconcile(t.Context(), waitCandidates, candidates, waitReplicasTimeout, true, true)
 		require.ErrorContains(t, err, "could not apply all relay logs")
 
 		// on error the caller's candidates come back as-is: nothing removed, nothing bumped
 		assert.Len(t, reconciled, 4)
-		assert.True(t, reconciled["zone1-0000000100"].Executed.Equal(mustPosition(t, "3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5")))
+		candidate := ersCandidateByAliasForTest(t, reconciled, "zone1-0000000100")
+		assert.True(t, candidate.positions.Executed.Equal(mustPosition(t, "3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5")))
 	})
 
 	t.Run("non-GTID candidates never get their Executed position bumped", func(t *testing.T) {
@@ -6956,19 +7091,20 @@ func TestEmergencyReparenter_applyRelayLogsAndReconcile(t *testing.T) {
 		// replica would sort ahead of an equal-position former primary
 		filePos, err := replication.DecodePosition("FilePos/binlog.000001:1000")
 		require.NoError(t, err)
-		candidates := map[string]*RelayLogPositions{
+		candidatePositions := map[string]*RelayLogPositions{
 			"zone1-0000000100": {Combined: filePos},
 			"zone1-0000000101": {Combined: filePos},
 			"zone1-0000000102": {Combined: filePos},
 		}
+		candidates := ersCandidatesFromPositionsForTest(t, candidatePositions, tabletMap, statusMap)
 		erp := NewEmergencyReparenter(nil, tmc, logger)
-		reconciled, waitResult, err := erp.applyRelayLogsAndReconcile(t.Context(), maps.Clone(candidates), candidates, tabletMap, statusMap, waitReplicasTimeout, true, false)
+		reconciled, waitResult, err := erp.applyRelayLogsAndReconcile(t.Context(), slices.Clone(candidates), candidates, waitReplicasTimeout, true, false)
 		require.NoError(t, err)
 		require.NotNil(t, waitResult)
 		assert.Len(t, waitResult.applied, 3)
 
-		for alias, pos := range reconciled {
-			assert.True(t, pos.Executed.IsZero(), "%s Executed should stay zero, got %v", alias, pos.Executed)
+		for _, candidate := range reconciled {
+			assert.True(t, candidate.positions.Executed.IsZero(), "%s Executed should stay zero, got %v", candidate.alias(), candidate.positions.Executed)
 		}
 	})
 }
@@ -7704,13 +7840,15 @@ func TestEmergencyReparenter_findMostAdvanced(t *testing.T) {
 			erp := NewEmergencyReparenter(nil, nil, logutil.NewMemoryLogger())
 
 			test.emergencyReparentOps.durability = durability
-			winningTablet, _, err := erp.findMostAdvanced(test.validCandidates, test.tabletMap, test.versionMap, test.flavorMap, test.emergencyReparentOps)
+			candidates := ersCandidatesFromPositionsForTest(t, test.validCandidates, test.tabletMap, nil)
+			setERSCandidateVersionsForTest(candidates, test.versionMap, test.flavorMap)
+			winningCandidate, _, err := erp.findMostAdvanced(candidates, test.emergencyReparentOps)
 			if test.err != "" {
 				require.Error(t, err)
 				assert.Contains(t, err.Error(), test.err)
 			} else {
 				require.NoError(t, err)
-				assert.True(t, topoproto.TabletAliasEqual(test.result.Alias, winningTablet.Alias))
+				assert.True(t, topoproto.TabletAliasEqual(test.result.Alias, winningCandidate.tablet().Alias))
 			}
 		})
 	}
@@ -8802,12 +8940,13 @@ func TestEmergencyReparenter_promoteIntermediateSource(t *testing.T) {
 					require.NoError(t, lerr, "could not unlock %s/%s after test", tt.keyspace, tt.shard)
 				}()
 			}
-			tabletInfo := tt.tabletMap[tt.newSourceTabletAlias]
 
 			tt.emergencyReparentOps.durability = durability
 
 			erp := NewEmergencyReparenter(ts, tt.tmc, logger)
-			res, err := erp.promoteIntermediateSource(ctx, ev, tabletInfo.Tablet, tt.tabletMap, tt.statusMap, tt.validCandidateTablets, tt.emergencyReparentOps)
+			candidates := ersCandidatesFromTabletsForTest(tt.validCandidateTablets, tt.tabletMap, tt.statusMap, nil)
+			source := ersCandidateByAliasForTest(t, candidates, tt.newSourceTabletAlias)
+			res, err := erp.promoteIntermediateSource(ctx, ev, source, candidates, tt.statusMap, tt.emergencyReparentOps)
 			if tt.shouldErr {
 				require.Error(t, err)
 				assert.Contains(t, err.Error(), tt.errShouldContain)
@@ -8816,8 +8955,8 @@ func TestEmergencyReparenter_promoteIntermediateSource(t *testing.T) {
 
 			require.NoError(t, err)
 			require.Len(t, res, len(tt.result))
-			for idx, tablet := range res {
-				assert.Equal(t, topoproto.TabletAliasString(tt.result[idx].Alias), topoproto.TabletAliasString(tablet.Alias))
+			for idx, candidate := range res {
+				assert.Equal(t, topoproto.TabletAliasString(tt.result[idx].Alias), candidate.alias())
 			}
 		})
 	}
@@ -8896,23 +9035,6 @@ func TestEmergencyReparenter_identifyPrimaryCandidate(t *testing.T) {
 				},
 			},
 			err: "requested candidate zone1-0000000100 is not in valid candidates list",
-		}, {
-			name: "explicit request for a primary tablet not in tablet map",
-			emergencyReparentOps: EmergencyReparentOptions{NewPrimaryAlias: &topodatapb.TabletAlias{
-				Cell: "zone1",
-				Uid:  100,
-			}},
-			intermediateSource: nil,
-			validCandidates: []*topodatapb.Tablet{
-				{
-					Alias: &topodatapb.TabletAlias{
-						Cell: "zone1",
-						Uid:  100,
-					},
-				},
-			},
-			tabletMap: map[string]*topo.TabletInfo{},
-			err:       "candidate zone1-0000000100 not found in the tablet map; this an impossible situation",
 		}, {
 			name:                 "preferred candidate in the valid list with the best promote rule",
 			emergencyReparentOps: EmergencyReparentOptions{},
@@ -9033,11 +9155,10 @@ func TestEmergencyReparenter_identifyPrimaryCandidate(t *testing.T) {
 		}, {
 			// Regression for the mixed-flavor-family case. The intermediate source is
 			// the MariaDB tablet (10.6, uid 100); the other candidate is MySQL 8.4
-			// (uid 101). identifyPrimaryCandidate is given the raw (unguarded) version
-			// and flavor maps, so its internal scopedVersionMap must detect the mixed
-			// families and disable version comparison. Without that guard, findCandidate
-			// would compute 8.4 < 10.6 and pull the election to the MySQL tablet — the
-			// incompatible choice; with it, the MariaDB intermediate source is kept.
+			// (uid 101). Each candidate carries its version and flavor, so findCandidate
+			// must detect the mixed families and disable version comparison. Without
+			// that guard, it would compute 8.4 < 10.6 and pull the election to the MySQL
+			// tablet — the incompatible choice; with it, the MariaDB source is kept.
 			name:               "mixed flavor families disable version comparison in final election",
 			intermediateSource: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}},
 			validCandidates: []*topodatapb.Tablet{
@@ -9067,13 +9188,16 @@ func TestEmergencyReparenter_identifyPrimaryCandidate(t *testing.T) {
 			logger := logutil.NewMemoryLogger()
 
 			erp := NewEmergencyReparenter(nil, nil, logger)
-			res, err := erp.identifyPrimaryCandidate(test.intermediateSource, test.validCandidates, test.tabletMap, test.versionMap, test.flavorMap, test.emergencyReparentOps)
+			candidates := ersCandidatesFromTabletsForTest(test.validCandidates, test.tabletMap, nil, nil)
+			setERSCandidateVersionsForTest(candidates, test.versionMap, test.flavorMap)
+			intermediateSource := ersCandidateForTabletForTest(candidates, test.intermediateSource)
+			res, err := erp.identifyPrimaryCandidate(intermediateSource, candidates, test.emergencyReparentOps)
 			if test.err != "" {
 				assert.EqualError(t, err, test.err)
 				return
 			}
 			require.NoError(t, err)
-			assert.True(t, topoproto.TabletAliasEqual(res.Alias, test.result.Alias))
+			assert.True(t, topoproto.TabletAliasEqual(res.tablet().Alias, test.result.Alias))
 		})
 	}
 }
@@ -9233,6 +9357,31 @@ func TestEmergencyReparenter_filterValidCandidates(t *testing.T) {
 			tabletsTakingBackup: replicaTakingBackup,
 			filteredTablets:     []*topodatapb.Tablet{replicaTablet},
 		}, {
+			// the requested primary loses to a preferred candidate here, so the operator
+			// must be told the backup is why rather than left with a bare "not in valid
+			// candidates list" from identifyPrimaryCandidate later on
+			name:                "requested primary taking a backup is rejected naming the backup",
+			durability:          policy.DurabilityNone,
+			validTablets:        allTablets,
+			tabletsReachable:    []*topodatapb.Tablet{replicaTablet, replicaCrossCellTablet, rdonlyTablet, rdonlyCrossCellTablet},
+			tabletsTakingBackup: replicaTakingBackup,
+			opts: EmergencyReparentOptions{
+				NewPrimaryAlias: replicaTablet.Alias,
+			},
+			errShouldContain: "proposed primary zone-1-0000000002 is taking a backup and other candidates are available",
+		}, {
+			// but a backup is only a preference: with nothing better to promote, the
+			// requested primary still wins and ERS must not refuse it
+			name:                "requested primary taking a backup is kept when there are no other candidates",
+			durability:          policy.DurabilityNone,
+			validTablets:        allTablets,
+			tabletsReachable:    []*topodatapb.Tablet{replicaTablet, rdonlyTablet, rdonlyCrossCellTablet},
+			tabletsTakingBackup: replicaTakingBackup,
+			opts: EmergencyReparentOptions{
+				NewPrimaryAlias: replicaTablet.Alias,
+			},
+			filteredTablets: []*topodatapb.Tablet{replicaTablet},
+		}, {
 			name:                "filter cross cell",
 			durability:          policy.DurabilityNone,
 			validTablets:        allTablets,
@@ -9330,13 +9479,14 @@ func TestEmergencyReparenter_filterValidCandidates(t *testing.T) {
 			tt.opts.durability = durability
 			logger := logutil.NewMemoryLogger()
 			erp := NewEmergencyReparenter(nil, nil, logger)
-			tabletList, err := erp.filterValidCandidates(tt.validTablets, tt.tabletsReachable, tt.nonAckers, tt.tabletsTakingBackup, tt.prevPrimary, tt.opts)
+			candidates := ersCandidatesFromTabletsForTest(tt.validTablets, nil, nil, tt.tabletsTakingBackup)
+			candidateList, err := erp.filterValidCandidates(candidates, tt.tabletsReachable, tt.nonAckers, tt.prevPrimary, tt.opts)
 			if tt.errShouldContain != "" {
 				require.Error(t, err)
 				require.Contains(t, err.Error(), tt.errShouldContain)
 			} else {
 				require.NoError(t, err)
-				require.Equal(t, tt.filteredTablets, tabletList)
+				require.Equal(t, tt.filteredTablets, ersCandidateTabletsForTest(candidateList))
 			}
 		})
 	}
@@ -10262,29 +10412,27 @@ func TestEmergencyReparenterFindErrantGTIDs(t *testing.T) {
 			erp := &EmergencyReparenter{
 				tmc: tt.tmc,
 			}
-			validCandidates, isGtid, err := FindPositionsOfAllCandidates(tt.statusMap, tt.primaryStatusMap)
+			validCandidates, isGtid, err := buildERSCandidates(&replicationSnapshot{
+				statusMap:        tt.statusMap,
+				primaryStatusMap: tt.primaryStatusMap,
+			}, tt.tabletMap)
 			require.NoError(t, err)
 			require.True(t, isGtid)
-			candidates, starved, err := erp.findErrantGTIDs(t.Context(), validCandidates, tt.statusMap, tt.tabletMap, 10*time.Second, nil, false)
+			candidates, starved, err := erp.findErrantGTIDs(t.Context(), validCandidates, 10*time.Second, nil, false)
 			if tt.wantErr != "" {
 				require.ErrorContains(t, err, tt.wantErr)
 				return
 			}
 			require.NoError(t, err)
-			assert.ElementsMatch(t, tt.wantStarved, starved)
-			keys := make([]string, 0, len(candidates))
-			for key := range candidates {
-				keys = append(keys, key)
-			}
-			slices.Sort(keys)
-			require.ElementsMatch(t, tt.wantedCandidates, keys)
+			assert.ElementsMatch(t, tt.wantStarved, ersCandidateAliases(starved))
+			require.ElementsMatch(t, tt.wantedCandidates, ersCandidateAliases(candidates))
 
 			dp, err := policy.GetDurabilityPolicy(policy.DurabilitySemiSync)
 			require.NoError(t, err)
 			ers := EmergencyReparenter{logger: logutil.NewCallbackLogger(func(*logutilpb.Event) {})}
-			winningPrimary, _, err := ers.findMostAdvanced(candidates, tt.tabletMap, nil, nil, EmergencyReparentOptions{durability: dp})
+			winningPrimary, _, err := ers.findMostAdvanced(candidates, EmergencyReparentOptions{durability: dp})
 			require.NoError(t, err)
-			require.True(t, slices.Contains(tt.wantMostAdvancedPossible, winningPrimary.Hostname), winningPrimary.Hostname)
+			require.True(t, slices.Contains(tt.wantMostAdvancedPossible, winningPrimary.tablet().Hostname), winningPrimary.tablet().Hostname)
 		})
 	}
 }
@@ -10367,12 +10515,13 @@ func TestEmergencyReparenterFindErrantGTIDs_NilPosition(t *testing.T) {
 		"zone1-0000000104": nil,
 	}
 
-	candidates, starved, err := erp.findErrantGTIDs(t.Context(), validCandidates, statusMap, tabletMap, 10*time.Second, nil, false)
+	inputCandidates := ersCandidatesFromPositionsForTest(t, validCandidates, tabletMap, statusMap)
+	candidates, starved, err := erp.findErrantGTIDs(t.Context(), inputCandidates, 10*time.Second, nil, false)
 	require.NoError(t, err)
-	require.Contains(t, candidates, "zone1-0000000102")
+	require.Contains(t, ersCandidateAliases(candidates), "zone1-0000000102")
 	// the nil peer at maxLen contributed no evidence, so the surviving candidate was
 	// accepted without any comparison
-	assert.ElementsMatch(t, []string{"zone1-0000000102"}, starved)
+	assert.ElementsMatch(t, []string{"zone1-0000000102"}, ersCandidateAliases(starved))
 }
 
 // TestEmergencyReparenter_findMostAdvanced_versionTiebreakerAfterCatchUp is a
@@ -10396,7 +10545,7 @@ func TestEmergencyReparenter_findMostAdvanced_versionTiebreakerAfterCatchUp(t *t
 	// olderReplica: lower version, SQL thread behind pre-wait.
 	// newerReplica: higher version, fully applied pre-wait.
 	// Both have the same combined relay-log position.
-	validCandidates := map[string]*RelayLogPositions{
+	candidatePositions := map[string]*RelayLogPositions{
 		"zone1-0000000100": {Combined: combined, Executed: executedBehind},
 		"zone1-0000000101": {Combined: combined, Executed: executedFull},
 	}
@@ -10411,13 +10560,15 @@ func TestEmergencyReparenter_findMostAdvanced_versionTiebreakerAfterCatchUp(t *t
 
 	durability, err := policy.GetDurabilityPolicy(policy.DurabilityNone)
 	require.NoError(t, err)
+	candidates := ersCandidatesFromPositionsForTest(t, candidatePositions, tabletMap, nil)
+	setERSCandidateVersionsForTest(candidates, versionMap, nil)
 
 	// Before the relay-log wait, the newer tablet looks more advanced on Executed
 	// and would be chosen as the intermediate source.
 	erpBefore := NewEmergencyReparenter(nil, nil, logutil.NewMemoryLogger())
-	intermediateSource, _, err := erpBefore.findMostAdvanced(validCandidates, tabletMap, versionMap, nil, EmergencyReparentOptions{durability: durability})
+	intermediateSource, _, err := erpBefore.findMostAdvanced(candidates, EmergencyReparentOptions{durability: durability})
 	require.NoError(t, err)
-	require.True(t, topoproto.TabletAliasEqual(intermediateSource.Alias, &topodatapb.TabletAlias{Cell: "zone1", Uid: 101}))
+	require.True(t, topoproto.TabletAliasEqual(intermediateSource.tablet().Alias, &topodatapb.TabletAlias{Cell: "zone1", Uid: 101}))
 
 	// Both candidates' SQL threads catch up to the combined relay-log position
 	// during the wait, which reconciles their Executed up to Combined. After that,
@@ -10433,13 +10584,16 @@ func TestEmergencyReparenter_findMostAdvanced_versionTiebreakerAfterCatchUp(t *t
 			"zone1-0000000101": {combinedStr: nil},
 		},
 	}
+	for _, candidate := range candidates {
+		candidate.stopStatus = statusMap[candidate.alias()]
+	}
 	erp := NewEmergencyReparenter(nil, tmc, logutil.NewMemoryLogger())
-	reconciled, _, err := erp.applyRelayLogsAndReconcile(t.Context(), validCandidates, validCandidates, tabletMap, statusMap, 30*time.Second, true /* requireAll */, true /* isGTIDBased */)
+	reconciled, _, err := erp.applyRelayLogsAndReconcile(t.Context(), candidates, candidates, 30*time.Second, true /* requireAll */, true /* isGTIDBased */)
 	require.NoError(t, err)
 
-	intermediateSource, _, err = erp.findMostAdvanced(reconciled, tabletMap, versionMap, nil, EmergencyReparentOptions{durability: durability})
+	intermediateSource, _, err = erp.findMostAdvanced(reconciled, EmergencyReparentOptions{durability: durability})
 	require.NoError(t, err)
-	require.True(t, topoproto.TabletAliasEqual(intermediateSource.Alias, &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}))
+	require.True(t, topoproto.TabletAliasEqual(intermediateSource.tablet().Alias, &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}))
 }
 
 // TestEmergencyReparenterFindErrantGTIDs_EmptyPrimaryPosition is a regression test
@@ -10499,18 +10653,19 @@ func TestEmergencyReparenterFindErrantGTIDs_EmptyPrimaryPosition(t *testing.T) {
 		},
 	}
 
-	candidates, starved, err := erp.findErrantGTIDs(t.Context(), validCandidates, statusMap, tabletMap, 10*time.Second, nil, false)
+	inputCandidates := ersCandidatesFromPositionsForTest(t, validCandidates, tabletMap, statusMap)
+	candidates, starved, err := erp.findErrantGTIDs(t.Context(), inputCandidates, 10*time.Second, nil, false)
 	require.NoError(t, err)
 	// the empty primary contributed no evidence, so the lagged replica must be accepted
 	// as-is rather than have its entire GTID set flagged errant
-	require.Contains(t, candidates, "zone1-0000000101")
+	require.Contains(t, ersCandidateAliases(candidates), "zone1-0000000101")
 	// a candidate with no GTIDs corroborates nothing and cannot be promoted over tablets
 	// with real history, so it is dropped from candidacy
-	assert.NotContains(t, candidates, "zone1-0000000100")
+	assert.NotContains(t, ersCandidateAliases(candidates), "zone1-0000000100")
 	// with the empty primary dropped, the replica forms the evidence tier on its own and
 	// was accepted with nothing to compare against; report it starved so the caller can
 	// decide whether the blind spot is acceptable
-	assert.ElementsMatch(t, []string{"zone1-0000000101"}, starved)
+	assert.ElementsMatch(t, []string{"zone1-0000000101"}, ersCandidateAliases(starved))
 }
 
 // TestEmergencyReparenterFindErrantGTIDs_EmptyPrimaryErrantReplica covers the case where
@@ -10590,13 +10745,14 @@ func TestEmergencyReparenterFindErrantGTIDs_EmptyPrimaryErrantReplica(t *testing
 		},
 	}
 
-	candidates, starved, err := erp.findErrantGTIDs(t.Context(), validCandidates, statusMap, tabletMap, 10*time.Second, nil, false)
+	inputCandidates := ersCandidatesFromPositionsForTest(t, validCandidates, tabletMap, statusMap)
+	candidates, starved, err := erp.findErrantGTIDs(t.Context(), inputCandidates, 10*time.Second, nil, false)
 	require.NoError(t, err)
-	require.Contains(t, candidates, "zone1-0000000101")
+	require.Contains(t, ersCandidateAliases(candidates), "zone1-0000000101")
 	// no other tablet corroborates u3:1, so zone1-0000000102 has an errant GTID and
 	// must not survive detection
-	assert.NotContains(t, candidates, "zone1-0000000102")
-	assert.NotContains(t, candidates, "zone1-0000000100")
+	assert.NotContains(t, ersCandidateAliases(candidates), "zone1-0000000102")
+	assert.NotContains(t, ersCandidateAliases(candidates), "zone1-0000000100")
 	// both replicas had a peer to compare against, so nobody was accepted blindly
 	assert.Empty(t, starved)
 }
@@ -10665,7 +10821,8 @@ func TestEmergencyReparenterFindErrantGTIDs_WipedMaxJournalFailsClosed(t *testin
 		},
 	}
 
-	_, _, err := erp.findErrantGTIDs(t.Context(), validCandidates, statusMap, tabletMap, 10*time.Second, nil, false)
+	inputCandidates := ersCandidatesFromPositionsForTest(t, validCandidates, tabletMap, statusMap)
+	_, _, err := erp.findErrantGTIDs(t.Context(), inputCandidates, 10*time.Second, nil, false)
 	require.ErrorContains(t, err, "cannot be proven to have seen the latest promotion")
 	require.ErrorContains(t, err, "zone1-0000000100")
 }
@@ -10688,7 +10845,8 @@ func TestEmergencyReparenterFindErrantGTIDs_AllZeroPositionsWithJournalHistory(t
 		"zone1-0000000101": {Combined: emptyPos},
 	}
 
-	_, _, err := erp.findErrantGTIDs(t.Context(), validCandidates, map[string]*replicationdatapb.StopReplicationStatus{}, tabletMap, 10*time.Second, nil, false)
+	inputCandidates := ersCandidatesFromPositionsForTest(t, validCandidates, tabletMap, nil)
+	_, _, err := erp.findErrantGTIDs(t.Context(), inputCandidates, 10*time.Second, nil, false)
 	require.ErrorContains(t, err, "cannot be proven to have seen the latest promotion")
 	require.ErrorContains(t, err, "zone1-0000000100")
 }
@@ -10711,10 +10869,11 @@ func TestEmergencyReparenterFindErrantGTIDs_AllZeroPositionsNewShard(t *testing.
 		"zone1-0000000101": {Combined: emptyPos},
 	}
 
-	candidates, starved, err := erp.findErrantGTIDs(t.Context(), validCandidates, map[string]*replicationdatapb.StopReplicationStatus{}, tabletMap, 10*time.Second, nil, true)
+	inputCandidates := ersCandidatesFromPositionsForTest(t, validCandidates, tabletMap, nil)
+	candidates, starved, err := erp.findErrantGTIDs(t.Context(), inputCandidates, 10*time.Second, nil, true)
 	require.NoError(t, err)
-	assert.Contains(t, candidates, "zone1-0000000100")
-	assert.Contains(t, candidates, "zone1-0000000101")
+	assert.Contains(t, ersCandidateAliases(candidates), "zone1-0000000100")
+	assert.Contains(t, ersCandidateAliases(candidates), "zone1-0000000101")
 	assert.Empty(t, starved)
 }
 
@@ -10743,7 +10902,8 @@ func TestEmergencyReparenterFindErrantGTIDs_MissingJournalTableRealPosition(t *t
 		},
 	}
 
-	_, _, err := erp.findErrantGTIDs(t.Context(), validCandidates, map[string]*replicationdatapb.StopReplicationStatus{}, tabletMap, 10*time.Second, nil, false)
+	inputCandidates := ersCandidatesFromPositionsForTest(t, validCandidates, tabletMap, nil)
+	_, _, err := erp.findErrantGTIDs(t.Context(), inputCandidates, 10*time.Second, nil, false)
 	require.ErrorContains(t, err, "could not read reparent journal information")
 }
 
@@ -10767,10 +10927,11 @@ func TestEmergencyReparenterFindErrantGTIDs_MissingJournalTableNewShard(t *testi
 		"zone1-0000000101": {Combined: emptyPos},
 	}
 
-	candidates, starved, err := erp.findErrantGTIDs(t.Context(), validCandidates, map[string]*replicationdatapb.StopReplicationStatus{}, tabletMap, 10*time.Second, nil, true)
+	inputCandidates := ersCandidatesFromPositionsForTest(t, validCandidates, tabletMap, nil)
+	candidates, starved, err := erp.findErrantGTIDs(t.Context(), inputCandidates, 10*time.Second, nil, true)
 	require.NoError(t, err)
-	assert.Contains(t, candidates, "zone1-0000000100")
-	assert.Contains(t, candidates, "zone1-0000000101")
+	assert.Contains(t, ersCandidateAliases(candidates), "zone1-0000000100")
+	assert.Contains(t, ersCandidateAliases(candidates), "zone1-0000000101")
 	assert.Empty(t, starved)
 }
 
@@ -10794,7 +10955,8 @@ func TestEmergencyReparenterFindErrantGTIDs_AllZeroPositionsInitializedShard(t *
 		"zone1-0000000101": {Combined: emptyPos},
 	}
 
-	_, _, err := erp.findErrantGTIDs(t.Context(), validCandidates, map[string]*replicationdatapb.StopReplicationStatus{}, tabletMap, 10*time.Second, nil, false)
+	inputCandidates := ersCandidatesFromPositionsForTest(t, validCandidates, tabletMap, nil)
+	_, _, err := erp.findErrantGTIDs(t.Context(), inputCandidates, 10*time.Second, nil, false)
 	require.ErrorContains(t, err, "topology records a previous primary")
 }
 
@@ -10822,7 +10984,8 @@ func TestEmergencyReparenterFindErrantGTIDs_MissingJournalTableInitializedShard(
 		},
 	}
 
-	_, _, err := erp.findErrantGTIDs(t.Context(), validCandidates, map[string]*replicationdatapb.StopReplicationStatus{}, tabletMap, 10*time.Second, nil, false)
+	inputCandidates := ersCandidatesFromPositionsForTest(t, validCandidates, tabletMap, nil)
+	_, _, err := erp.findErrantGTIDs(t.Context(), inputCandidates, 10*time.Second, nil, false)
 	require.ErrorContains(t, err, "could not read reparent journal information")
 }
 
@@ -10851,6 +11014,7 @@ func TestEmergencyReparenterFindErrantGTIDs_MissingJournalTableMixedStateShard(t
 		},
 	}
 
-	_, _, err := erp.findErrantGTIDs(t.Context(), validCandidates, map[string]*replicationdatapb.StopReplicationStatus{}, tabletMap, 10*time.Second, nil, true)
+	inputCandidates := ersCandidatesFromPositionsForTest(t, validCandidates, tabletMap, nil)
+	_, _, err := erp.findErrantGTIDs(t.Context(), inputCandidates, 10*time.Second, nil, true)
 	require.ErrorContains(t, err, "could not read reparent journal information")
 }
