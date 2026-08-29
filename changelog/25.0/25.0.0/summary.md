@@ -47,6 +47,8 @@
     - **[Backup/Restore](#minor-changes-backup)**
         - [Chunked backup/restore for the builtinbackupengine](#backup-chunked-builtin)
         - [Slow clean mysqld shutdowns no longer fail backups](#backup-mysqld-shutdown-timeout)
+    - **[VTAdmin](#minor-changes-vtadmin)**
+        - [New experimental server-rendered UI (vtadmin2)](#vtadmin-server-rendered-ui)
     - **[General](#minor-changes-general)**
         - [Build version metadata now sourced from VCS stamping](#build-info-from-vcs)
 
@@ -484,6 +486,16 @@ See [#20167](https://github.com/vitessio/vitess/pull/20167) for details.
 The builtin backup engine's shutdown deadline (`--builtinbackup-mysqld-timeout`) is now raised to the backup request's mysqld shutdown timeout (e.g. vtbackup's `--mysql-shutdown-timeout`) plus a 30 second grace period whenever that is larger, so the two settings can no longer silently conflict. The same grace period now pads the shutdown contexts of `mysqlctl`, `mysqlctld` and `vtbackup`, which moves `mysqlctld`'s derived `--onterm-timeout` default from `5m10s` to `5m30s`.
 
 In addition, when `mysqladmin` gives up waiting for mysqld to stop, the shutdown is no longer failed immediately: the `SHUTDOWN` command has already been delivered at that point, so Vitess keeps waiting on the pid/socket files until the caller's deadline expires (or for a 30 second grace period, when the caller has no deadline). Slow-but-clean shutdowns, such as upgrade-safe backups running with `innodb_fast_shutdown=0` on large databases, previously failed with `Aborted waiting on pid file` even though mysqld was stopping normally.
+
+### <a id="minor-changes-vtadmin"/>VTAdmin</a>
+
+#### <a id="vtadmin-server-rendered-ui"/>New experimental server-rendered UI (vtadmin2)</a>
+
+Vitess now ships `vtadmin2`, an experimental, opt-in web UI for VTAdmin whose pages are rendered on the server in Go and HTML. It reuses the existing VTAdmin backend API and its RBAC, so it exposes the same clusters and enforces the same access rules as the default UI. Because it renders pages server-side, it does not need the Node.js, npm, and React build toolchain that the default UI requires, which reduces the associated dependency and supply-chain surface.
+
+The React/TypeScript single-page application remains the default and is unchanged, so existing VTAdmin deployments are unaffected unless an operator opts in. There are two ways to opt in: run the new standalone `vtadmin2` binary, or enable it on the existing `vtadmin` binary by setting its `--ui` flag to `vtadmin2` (the default, `react`, serves the single-page application).
+
+See [#20946](https://github.com/vitessio/vitess/pull/20946) for details.
 
 ### <a id="minor-changes-general"/>General</a>
 
