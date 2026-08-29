@@ -301,7 +301,7 @@ sequenceDiagram
   G1 ->> MM: Provide Transaction details
   G2 ->> MM: Provide Transaction details
   MM -->> G2: Distributed Transaction ID details
-  Note over G2,MM: This VTGate recieves the transaction to resolve.
+  Note over G2,MM: This VTGate receives the transaction to resolve.
   end
   alt Transaction State: Commit
   G2 ->> RM1: Commit Prepared Transaction
