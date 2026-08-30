@@ -1,5 +1,5 @@
 /*
-Copyright 2025 The Vitess Authors.
+Copyright 2026 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"maps"
+	"math"
 	"os"
 	"slices"
 	"strings"
@@ -243,6 +244,10 @@ func New(ctx context.Context, name string, conn *vtgateconn.VTGateConn, tables [
 	}
 	if v.cfg.flags.HeartbeatInterval == 0 {
 		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: HeartbeatInterval must be positive")
+	}
+	heartbeatDuration := time.Duration(v.cfg.flags.HeartbeatInterval) * time.Second
+	if heartbeatDuration > time.Duration(math.MaxInt64)/time.Duration(v.cfg.heartbeatTimeoutMultiplier) {
+		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: heartbeat liveness window exceeds maximum duration (interval %d seconds, multiplier %d)", v.cfg.flags.HeartbeatInterval, v.cfg.heartbeatTimeoutMultiplier)
 	}
 
 	v.shardsByKeyspace, err = getShardsByKeyspace(ctx, conn.Session("@"+topoproto.TabletTypeLString(v.cfg.tabletType), nil))

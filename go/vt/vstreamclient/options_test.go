@@ -17,6 +17,7 @@ limitations under the License.
 package vstreamclient
 
 import (
+	"math"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -24,6 +25,8 @@ import (
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 func TestWithFlags_ClonesInput(t *testing.T) {
@@ -79,6 +82,47 @@ func TestNew_ValidatesEffectiveHeartbeatInterval(t *testing.T) {
 			require.NoError(t, err)
 			assert.EqualValues(t, 5, v.cfg.flags.HeartbeatInterval)
 			assert.EqualValues(t, 123, v.cfg.flags.TransactionChunkSize)
+		})
+	}
+}
+
+func TestNew_RejectsHeartbeatLivenessOverflow(t *testing.T) {
+	for _, tt := range []struct {
+		name       string
+		interval   uint32
+		multiplier int
+		override   int
+		wantErr    bool
+	}{
+		{name: "multiplier ten boundary", interval: 922337203, multiplier: 10},
+		{name: "above multiplier ten boundary", interval: 922337204, multiplier: 10, wantErr: true},
+		{name: "positive wrapped product", interval: math.MaxUint32, multiplier: 10, wantErr: true},
+		{name: "dedicated heartbeat overflow", interval: 1, multiplier: 10, override: 1000000000, wantErr: true},
+		{name: "valid dedicated override", interval: math.MaxUint32, multiplier: 10, override: 5},
+		{name: "uint32 maximum fits multiplier two", interval: math.MaxUint32, multiplier: 2},
+		{name: "uint32 maximum exceeds multiplier three", interval: math.MaxUint32, multiplier: 3, wantErr: true},
+		{name: "custom multiplier boundary", interval: 9223372, multiplier: 1000},
+		{name: "above custom multiplier boundary", interval: 9223373, multiplier: 1000, wantErr: true},
+		{name: "maximum multiplier", interval: 10, multiplier: math.MaxInt, wantErr: true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			originalMultiplier := DefaultHeartbeatTimeoutMultiplier
+			DefaultHeartbeatTimeoutMultiplier = tt.multiplier
+			t.Cleanup(func() { DefaultHeartbeatTimeoutMultiplier = originalMultiplier })
+			conn, impl := newStateTestConn(t, shardsAndStateTableResponses(nil)...)
+			opts := []Option{WithStateTable("stateks", "state"), WithFlags(&vtgatepb.VStreamFlags{HeartbeatInterval: tt.interval})}
+			if tt.override > 0 {
+				opts = append(opts, WithHeartbeatSeconds(tt.override))
+			}
+
+			_, err := New(t.Context(), "stream", conn, []TableConfig{newStateTestTableConfig()}, opts...)
+			if tt.wantErr {
+				require.ErrorContains(t, err, "heartbeat liveness window exceeds maximum duration")
+				assert.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
+				assert.Empty(t, impl.queries)
+				return
+			}
+			require.NoError(t, err)
 		})
 	}
 }

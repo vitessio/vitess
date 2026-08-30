@@ -695,6 +695,7 @@ The liveness window is `HeartbeatInterval × DefaultHeartbeatTimeoutMultiplier`:
 and a multiplier of ten allow ten seconds of silence. Set the package default before constructing clients if your
 environment needs a different tolerance. `WithHeartbeatSeconds(...)` overrides the heartbeat interval supplied by
 `WithFlags(...)` in either option order; it does not override other flags.
+`New(...)` rejects configurations whose interval times multiplier cannot fit in a positive `time.Duration`.
 
 Recommended pattern:
 
