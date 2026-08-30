@@ -216,9 +216,6 @@ func WithFlags(flags *vtgatepb.VStreamFlags) Option {
 		if flags == nil {
 			return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: flags cannot be nil")
 		}
-		if flags.HeartbeatInterval == 0 {
-			return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: HeartbeatInterval must be positive")
-		}
 		if flags.StreamKeyspaceHeartbeats {
 			return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: StreamKeyspaceHeartbeats is not supported: it streams internal sidecar heartbeat table events that have no TableConfig")
 		}

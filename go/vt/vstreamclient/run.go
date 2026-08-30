@@ -166,24 +166,13 @@ func (v *VStreamClient) Run(ctx context.Context) error {
 		return fmt.Errorf("vstreamclient: failed to create vstream: %w", err)
 	}
 
-	// take ownership of the state row only once the stream is established, so an abandoned
-	// constructor or a failed stream setup never fences the incumbent consumer. The takeover
-	// fails with an error wrapping ErrFenced if another client claimed the stream since New
-	// read its state.
-	err = v.takeStateOwnership(ctx)
-	if err != nil {
-		return err
-	}
-
-	// to prevent an immediate flush, we initialize LastFlushedAt here, even if it wasn't technically flushed
-	v.stats.LastFlushedAt = time.Now()
-
 	// ********************************************************************************************************
 	// Event Processing
 	//
 	// this is the main loop that processes events from the stream. It will continue until the stream ends or an
 	// error occurs. The context is checked before processing each event.
 	// ********************************************************************************************************
+	claimedOwnership := false
 	for {
 		// events come in batches, depending on how busy the keyspace is. This is where the network communication
 		// happens, so it's the most likely place for errors to occur.
@@ -204,6 +193,15 @@ func (v *VStreamClient) Run(ctx context.Context) error {
 				}
 			}
 			return fmt.Errorf("vstreamclient: remote error: %w", err)
+		}
+
+		if !claimedOwnership {
+			err = v.takeStateOwnership(ctx)
+			if err != nil {
+				return err
+			}
+			v.stats.LastFlushedAt = time.Now()
+			claimedOwnership = true
 		}
 
 		err = v.handleEvents(ctx, events)
@@ -337,9 +335,9 @@ func (v *VStreamClient) handleEvents(ctx context.Context, events []*binlogdatapb
 		case binlogdatapb.VEventType_VGTID:
 			v.latestVgtid = ev.Vgtid
 
-		// commit and other events are safe to flush on, since they indicate the end of a transaction.
+		// commit, other, and rollback events are safe to flush on, since they indicate the end of a transaction.
 		// Otherwise, there's not much to do with these events.
-		case binlogdatapb.VEventType_COMMIT, binlogdatapb.VEventType_OTHER:
+		case binlogdatapb.VEventType_COMMIT, binlogdatapb.VEventType_OTHER, binlogdatapb.VEventType_ROLLBACK:
 			// only flush when we have an event that guarantees we're not flushing mid-transaction
 			v.inTransaction = false
 			err = v.flush(ctx, false)
@@ -392,13 +390,6 @@ func (v *VStreamClient) handleEvents(ctx context.Context, events []*binlogdatapb
 		// event for each transaction. The other two are used for checkpoints, but nothing to do here.
 		case binlogdatapb.VEventType_BEGIN:
 			v.inTransaction = true
-
-		// rollback also terminates a transaction. Rows from rolled-back transactions are never
-		// delivered (vstream reads the binlog, which only contains committed transactions), so
-		// there is nothing to discard; only the transaction state must be cleared, or every
-		// later heartbeat flush would stay suppressed on an idle stream.
-		case binlogdatapb.VEventType_ROLLBACK:
-			v.inTransaction = false
 
 		// journal events are sent on resharding. Unless you are manually targeting shards, vstream should
 		// transparently handle resharding for you, so you shouldn't need to do anything with these events.

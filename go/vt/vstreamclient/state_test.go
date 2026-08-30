@@ -19,8 +19,10 @@ package vstreamclient
 import (
 	"context"
 	"errors"
+	"io"
 	"strings"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/stretchr/testify/assert"
@@ -57,6 +59,7 @@ type stateTestVTGateImpl struct {
 	// startup-watchdog path for a hung stream setup.
 	vstreamErr    error
 	vstreamBlocks bool
+	recvBlocks    bool
 }
 
 func (t *stateTestVTGateImpl) VStream(ctx context.Context, _ topodatapb.TabletType, _ *binlogdatapb.VGtid, _ *binlogdatapb.Filter, _ *vtgatepb.VStreamFlags) (vtgateconn.VStreamReader, error) {
@@ -66,6 +69,12 @@ func (t *stateTestVTGateImpl) VStream(ctx context.Context, _ topodatapb.TabletTy
 	}
 	if t.vstreamErr != nil {
 		return nil, t.vstreamErr
+	}
+	if t.recvBlocks {
+		return &testVStreamReader{recvFn: func() ([]*binlogdatapb.VEvent, error) {
+			<-ctx.Done()
+			return nil, ctx.Err()
+		}}, nil
 	}
 	return t.reader, nil
 }
@@ -567,6 +576,75 @@ func TestRun_FailedStreamSetupDoesNotFenceIncumbent(t *testing.T) {
 	}
 }
 
+func TestRun_FailedFirstReceiveDoesNotFenceIncumbent(t *testing.T) {
+	rejected := errors.New("stream rejected")
+	for _, tt := range []struct {
+		name    string
+		recvErr error
+		wantErr error
+	}{
+		{name: "server rejection", recvErr: rejected, wantErr: rejected},
+		{name: "EOF", recvErr: io.EOF, wantErr: io.ErrUnexpectedEOF},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			conn, impl := newStateTestConn(t, shardsAndStateTableResponses(resumableStateRow(t))...)
+			impl.reader = &testVStreamReader{err: tt.recvErr}
+			v, err := New(t.Context(), "stream", conn, []TableConfig{newStateTestTableConfig()}, WithStateTable("stateks", "state"))
+			require.NoError(t, err)
+			queriesBeforeRun := len(impl.queries)
+
+			err = v.Run(t.Context())
+			require.ErrorIs(t, err, tt.wantErr)
+			assert.Len(t, impl.queries, queriesBeforeRun)
+			assert.True(t, v.stats.LastFlushedAt.IsZero())
+		})
+	}
+}
+
+func TestRun_FirstReceiveStartupTimeoutDoesNotFenceIncumbent(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		conn, impl := newStateTestConn(t, shardsAndStateTableResponses(resumableStateRow(t))...)
+		impl.recvBlocks = true
+		v, err := New(t.Context(), "stream", conn, []TableConfig{newStateTestTableConfig()}, WithStateTable("stateks", "state"))
+		require.NoError(t, err)
+		queriesBeforeRun := len(impl.queries)
+		v.cfg.startupTimeout = 30 * time.Second
+
+		err = v.Run(t.Context())
+		require.ErrorIs(t, err, ErrStartupTimeout)
+		assert.Len(t, impl.queries, queriesBeforeRun)
+		assert.True(t, v.stats.LastFlushedAt.IsZero())
+	})
+}
+
+func TestRun_ClaimsAfterFirstBatchAndProcessesIt(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		conn, impl := newStateTestConn(t, shardsAndStateTableResponses(resumableStateRow(t))...)
+		processed := errors.New("first batch processed")
+		var v *VStreamClient
+		var firstReceivedAt time.Time
+		var hookCalls int
+		v, err := New(t.Context(), "stream", conn, []TableConfig{newStateTestTableConfig()}, WithStateTable("stateks", "state"),
+			WithEventFunc(func(context.Context, *binlogdatapb.VEvent) error {
+				hookCalls++
+				assert.Len(t, impl.queries, 4)
+				assert.False(t, v.stats.LastFlushedAt.Before(firstReceivedAt))
+				return processed
+			}, binlogdatapb.VEventType_HEARTBEAT))
+		require.NoError(t, err)
+		impl.reader = &testVStreamReader{recvFn: func() ([]*binlogdatapb.VEvent, error) {
+			require.Len(t, impl.queries, 3)
+			time.Sleep(2 * time.Second)
+			firstReceivedAt = time.Now()
+			return []*binlogdatapb.VEvent{{Type: binlogdatapb.VEventType_HEARTBEAT}}, nil
+		}}
+
+		err = v.Run(t.Context())
+		require.ErrorIs(t, err, processed)
+		assert.Equal(t, 1, hookCalls)
+	})
+}
+
 func TestRun_BlockedStreamSetupSurfacesStartupTimeout(t *testing.T) {
 	conn, impl := newStateTestConn(t, shardsAndStateTableResponses(resumableStateRow(t))...)
 	impl.vstreamBlocks = true
@@ -779,13 +857,43 @@ func TestHandleEvents_RollbackTerminatesTransactionState(t *testing.T) {
 	// BEGIN/ROLLBACK would stay suppressed on an idle stream
 	err := v.handleEvents(t.Context(), []*binlogdatapb.VEvent{
 		{Type: binlogdatapb.VEventType_BEGIN},
-		{Type: binlogdatapb.VEventType_ROLLBACK},
 		{Type: binlogdatapb.VEventType_VGTID, Vgtid: vgtid},
+		{Type: binlogdatapb.VEventType_ROLLBACK},
 		{Type: binlogdatapb.VEventType_HEARTBEAT},
 	})
 	require.NoError(t, err)
 	assert.Equal(t, 1, flushed)
 	require.Len(t, impl.queries, 1)
+}
+
+func TestHandleEvents_RollbackFlushesDuringShutdown(t *testing.T) {
+	session, impl := newStateTestSession(t)
+	flushed := 0
+	table := &TableConfig{
+		Keyspace: "ks", Table: "t", MaxRowsPerFlush: 10,
+		FlushFn: func(_ context.Context, rows []Row, meta FlushMeta) error {
+			assert.Equal(t, FlushReasonGracefulShutdown, meta.FlushReason)
+			flushed += len(rows)
+			return nil
+		},
+		currentBatch: []Row{{Data: "previously committed"}},
+	}
+	v := &VStreamClient{
+		cfg:     clientConfig{name: "stream", vgtidStateKeyspace: "ks", vgtidStateTable: "state", minFlushDuration: time.Hour},
+		session: session, stats: VStreamStats{LastFlushedAt: time.Now()},
+		tables:      map[string]*TableConfig{"ks.t": table},
+		latestVgtid: &binlogdatapb.VGtid{ShardGtids: []*binlogdatapb.ShardGtid{{Keyspace: "ks", Shard: "0", Gtid: testConcretePosition}}},
+	}
+	setLifecycleState(v, true, true, true, nil)
+
+	err := v.handleEvents(t.Context(), []*binlogdatapb.VEvent{{Type: binlogdatapb.VEventType_BEGIN}, {Type: binlogdatapb.VEventType_ROLLBACK}})
+	require.NoError(t, err)
+	assert.Equal(t, 1, flushed)
+	assert.Len(t, impl.queries, 1)
+	assert.Empty(t, table.currentBatch)
+	shouldExit, err := v.shouldExitRun(t.Context())
+	require.NoError(t, err)
+	assert.True(t, shouldExit)
 }
 
 func TestUpdateLatestVGtid_MissingStateRowErrors(t *testing.T) {

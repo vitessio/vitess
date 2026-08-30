@@ -93,7 +93,7 @@ flowchart TD
     S -->|No| U[Create state record<br/>and start copy phase]
     T --> C[vstreamclient Run loop]
     U --> C
-    C --> D[**Process Events**<br/>FIELD: cache schema<br/>ROW: buffer rows<br/>VGTID: checkpoint<br/><br>COMMIT: flush<br>DDL: flush<br>HEARTBEAT: flush if not in a transaction<br/><br>BEGIN: track transaction<br/>ROLLBACK: end transaction<br/>JOURNAL: ignore<br>VERSION: ignore<br>LASTPK: ignore<br>SAVEPOINT: ignore]
+    C --> D[**Process Events**<br/>FIELD: cache schema<br/>ROW: buffer rows<br/>VGTID: checkpoint<br/><br>COMMIT: flush<br>DDL: flush<br>HEARTBEAT: flush if not in a transaction<br/><br>BEGIN: track transaction<br/>ROLLBACK: end transaction and flush<br/>JOURNAL: ignore<br>VERSION: ignore<br>LASTPK: ignore<br>SAVEPOINT: ignore]
 
     subgraph HOOKS[Optional EventFunc hooks]
         H[Run before built-in handling]
@@ -750,9 +750,10 @@ creation is currently mandatory; provisioning the table separately does not supp
 
 Two clients running with the same stream name would interleave checkpoint writes, so the checkpoint could move
 backwards and cause large replays. To prevent that, `Run(...)` claims ownership of the state row with a unique owner
-token after opening its VStream, and every checkpoint write requires the token to still match. `New(...)` prepares
-the takeover without claiming the row, so an abandoned constructor or failed stream setup does not fence a running
-consumer.
+token after receiving the first successful VStream response, and every checkpoint write requires the token to
+still match. `New(...)` prepares the takeover without claiming the row, so an abandoned constructor, failed stream
+setup, or failure/timeout on the first receive does not fence a running consumer. The first batch is processed
+after the ownership claim succeeds.
 
 The newest client wins: when a new client starts (for example during a rolling deploy), the previous client's next
 checkpoint write fails and its `Run(...)` returns an error wrapping `ErrFenced`, which you can match with `errors.Is`.
@@ -818,8 +819,9 @@ For row events coming from MySQL binlog replication, `binlog_row_image` affects 
 | `NOBLOB` | Large blob/text-style fields may be omitted from row images. | Unsupported: omitted delete values cannot be distinguished from SQL `NULL`. |
 | `MINIMAL` | Only the fields needed for the row event may be present. | Unsupported: neither a scanner nor a later query can reconstruct omitted delete values reliably. |
 
-This client requires `FULL`. `New(...)` probes `@@global.binlog_row_image` on every source shard and fails unless it
-reports `FULL`; an unverifiable shard also fails, since it could silently be running `NOBLOB`. The check can be
+This client requires `FULL`. On every source shard, `New(...)` probes `@@global.binlog_row_image` on the primary
+and on the configured stream tablet type, and fails unless both report `FULL`. An unverifiable target also fails,
+since it could silently be running `NOBLOB`. The check can be
 bypassed with `WithSkipRowImageCheck()` when the probe cannot run (e.g. restricted permissions), but only do that if
 you have verified `FULL` out of band.
 
@@ -828,9 +830,11 @@ for before-images: under `NOBLOB` or `MINIMAL`, an omitted delete value is indis
 for both the default decoder and custom `VStreamScanner` implementations, so nullable fields get silently corrupted.
 There is no way to "handle it in `FlushFn`" — the information is simply not on the wire.
 
-Note the probe can only verify the *current* value on each shard. Replaying from an old position (stored state or an
-explicit starting VGtid) can deliver events written while a different row image was active, and writer sessions can
-override the global value. `FULL` must have been in effect for the entire retained replay range you intend to consume.
+The probes sample one tablet per target and only verify its *current* global value. Every tablet that may serve the
+stream must use `FULL`, including its replication applier sessions: replicas can omit delete values when re-logging
+events. Replaying from an old position (stored state or an explicit starting VGtid) can deliver events written while
+a different row image was active, and writer or replication sessions can retain or override the global value.
+`FULL` must have been in effect for the entire retained replay range you intend to consume.
 
 For after-images, the default reflection-based decoder fails fast when Vitess explicitly marks a row as partial:
 

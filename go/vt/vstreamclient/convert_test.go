@@ -33,7 +33,6 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 )
 
 type testRow struct {
@@ -1083,11 +1082,4 @@ func TestHandleRowEvent_PartialJSONFailsForDefaultDecoder(t *testing.T) {
 	require.Error(t, err)
 	require.ErrorContains(t, err, "partial JSON updates are unsupported")
 	assert.Empty(t, table.currentBatch)
-}
-
-func TestWithFlags_RejectsZeroHeartbeatInterval(t *testing.T) {
-	v := &VStreamClient{}
-	err := WithFlags(&vtgatepb.VStreamFlags{HeartbeatInterval: 0})(v)
-	require.Error(t, err)
-	assert.ErrorContains(t, err, "HeartbeatInterval")
 }

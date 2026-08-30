@@ -45,6 +45,44 @@ func TestWithFlags_RejectsStreamKeyspaceHeartbeats(t *testing.T) {
 	require.ErrorContains(t, err, "StreamKeyspaceHeartbeats is not supported")
 }
 
+func TestNew_ValidatesEffectiveHeartbeatInterval(t *testing.T) {
+	for _, tt := range []struct {
+		name    string
+		opts    []Option
+		wantErr bool
+	}{
+		{
+			name: "flags before heartbeat override",
+			opts: []Option{WithFlags(&vtgatepb.VStreamFlags{TransactionChunkSize: 123}), WithHeartbeatSeconds(5)},
+		},
+		{
+			name: "heartbeat override before flags",
+			opts: []Option{WithHeartbeatSeconds(5), WithFlags(&vtgatepb.VStreamFlags{TransactionChunkSize: 123})},
+		},
+		{
+			name:    "zero heartbeat without override",
+			opts:    []Option{WithFlags(&vtgatepb.VStreamFlags{TransactionChunkSize: 123})},
+			wantErr: true,
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			conn := newConstructorTestConn(t)
+			table := newStateTestTableConfig()
+			table.Keyspace = "customer"
+			opts := append([]Option{WithStateTable("commerce", "vstreams")}, tt.opts...)
+			v, err := New(t.Context(), "stream", conn, []TableConfig{table}, opts...)
+			if tt.wantErr {
+				require.ErrorContains(t, err, "HeartbeatInterval must be positive")
+				assert.Nil(t, v)
+				return
+			}
+			require.NoError(t, err)
+			assert.EqualValues(t, 5, v.cfg.flags.HeartbeatInterval)
+			assert.EqualValues(t, 123, v.cfg.flags.TransactionChunkSize)
+		})
+	}
+}
+
 // testConcretePosition is a parseable MySQL56 position for starting-vgtid tests.
 const testConcretePosition = "MySQL56/16b1039f-22b6-11ed-b765-0a43f95f28a3:1-5"
 

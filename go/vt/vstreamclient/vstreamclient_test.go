@@ -89,6 +89,7 @@ type testVStreamReader struct {
 	batches [][]*binlogdatapb.VEvent
 	err     error
 	index   int
+	recvFn  func() ([]*binlogdatapb.VEvent, error)
 }
 
 type newTestVTGateImpl struct {
@@ -96,6 +97,7 @@ type newTestVTGateImpl struct {
 	shardsByTarget   map[string][]string
 	discoveryTargets []string
 	vschemaErr       error
+	rowImageByTarget map[string]string
 }
 
 func (t *newTestVTGateImpl) Execute(_ context.Context, session *vtgatepb.Session, query string, bindVars map[string]*querypb.BindVariable, prepared bool) (*vtgatepb.Session, *sqltypes.Result, error) {
@@ -125,6 +127,9 @@ func (t *newTestVTGateImpl) Execute(_ context.Context, session *vtgatepb.Session
 		return session, &sqltypes.Result{RowsAffected: 1}, nil
 
 	case strings.Contains(query, "binlog_row_image"):
+		if rowImage, ok := t.rowImageByTarget[session.TargetString]; ok {
+			return session, sqltypes.MakeTestResult(sqltypes.MakeTestFields("@@global.binlog_row_image", "varchar"), rowImage), nil
+		}
 		return session, sqltypes.MakeTestResult(sqltypes.MakeTestFields("@@global.binlog_row_image", "varchar"), "FULL"), nil
 
 	case query == "SHOW VSCHEMA KEYSPACES":
@@ -171,6 +176,9 @@ func getLifecycleState(v *VStreamClient) (runUsed, runActive, shutdownRequested 
 }
 
 func (r *testVStreamReader) Recv() ([]*binlogdatapb.VEvent, error) {
+	if r.recvFn != nil {
+		return r.recvFn()
+	}
 	if r.index < len(r.batches) {
 		batch := r.batches[r.index]
 		r.index++
@@ -276,6 +284,27 @@ func TestNew_DiscoversShardsForConfiguredTabletType(t *testing.T) {
 			}
 			assert.ElementsMatch(t, tt.shards, shards)
 		})
+	}
+}
+
+func TestNew_RejectsNonFullRowImageOnConfiguredTabletType(t *testing.T) {
+	for _, tabletType := range []topodatapb.TabletType{topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY} {
+		for _, rowImage := range []string{"NOBLOB", "MINIMAL"} {
+			t.Run(tabletType.String()+"/"+rowImage, func(t *testing.T) {
+				target := "customer:0@" + strings.ToLower(tabletType.String())
+				impl := &newTestVTGateImpl{rowImageByTarget: map[string]string{target: rowImage}}
+				conn, err := vtgateconn.DialCustom(t.Context(), func(context.Context, string) (vtgateconn.Impl, error) {
+					return impl, nil
+				}, "")
+				require.NoError(t, err)
+				t.Cleanup(conn.Close)
+				table := newStateTestTableConfig()
+				table.Keyspace = "customer"
+				_, err = New(t.Context(), "stream", conn, []TableConfig{table}, WithStateTable("commerce", "state"), WithTabletType(tabletType))
+				require.ErrorContains(t, err, "requires FULL")
+				assert.ErrorContains(t, err, target)
+			})
+		}
 	}
 }
 

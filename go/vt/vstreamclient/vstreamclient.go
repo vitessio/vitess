@@ -235,6 +235,16 @@ func New(ctx context.Context, name string, conn *vtgateconn.VTGateConn, tables [
 		}
 	}
 
+	if v.cfg.flags == nil {
+		v.cfg.flags = DefaultFlags()
+	}
+	if v.cfg.heartbeatSeconds > 0 {
+		v.cfg.flags.HeartbeatInterval = uint32(v.cfg.heartbeatSeconds)
+	}
+	if v.cfg.flags.HeartbeatInterval == 0 {
+		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: HeartbeatInterval must be positive")
+	}
+
 	v.shardsByKeyspace, err = getShardsByKeyspace(ctx, conn.Session("@"+topoproto.TabletTypeLString(v.cfg.tabletType), nil))
 	if err != nil {
 		return nil, err
@@ -289,13 +299,6 @@ func New(ctx context.Context, name string, conn *vtgateconn.VTGateConn, tables [
 		Rules: rules,
 	}
 
-	if v.cfg.flags == nil {
-		v.cfg.flags = DefaultFlags()
-	}
-
-	if v.cfg.heartbeatSeconds > 0 {
-		v.cfg.flags.HeartbeatInterval = uint32(v.cfg.heartbeatSeconds)
-	}
 	if err = validateTableNameMode(v.tables, v.cfg.flags); err != nil {
 		return nil, err
 	}
@@ -351,7 +354,7 @@ func New(ctx context.Context, name string, conn *vtgateconn.VTGateConn, tables [
 	}
 
 	// New deliberately performs no state mutation: the ownership takeover (a compare-and-swap
-	// against the owner token observed above) is deferred until Run has established the stream,
+	// against the owner token observed above) is deferred until Run receives the first stream response,
 	// so a constructed-but-abandoned client or a failed stream setup never fences the incumbent
 	// consumer. See takeStateOwnership.
 	v.pendingTakeover = &stateTakeover{
@@ -593,19 +596,25 @@ func (v *VStreamClient) validateBinlogRowImage(ctx context.Context) error {
 		keyspaces[table.Keyspace] = true
 	}
 
+	tabletTypes := []topodatapb.TabletType{topodatapb.TabletType_PRIMARY}
+	if v.cfg.tabletType != topodatapb.TabletType_PRIMARY {
+		tabletTypes = append(tabletTypes, v.cfg.tabletType)
+	}
+
 	for _, keyspace := range slices.Sorted(maps.Keys(keyspaces)) {
 		for _, shard := range v.shardsByKeyspace[keyspace] {
-			// target each shard individually: an untargeted probe would only observe one
-			// arbitrary shard, and another shard's primary could still use NOBLOB
-			session := v.cfg.conn.Session(keyspace+":"+shard, nil)
-			result, err := session.Execute(ctx, "select @@global.binlog_row_image", nil, false)
-			if err != nil || len(result.Rows) == 0 || len(result.Rows[0]) == 0 {
-				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: could not verify binlog_row_image on shard %s/%s (use WithSkipRowImageCheck to bypass at your own risk): %v", keyspace, shard, err)
-			}
+			for _, tabletType := range tabletTypes {
+				target := keyspace + ":" + shard + "@" + topoproto.TabletTypeLString(tabletType)
+				session := v.cfg.conn.Session(target, nil)
+				result, err := session.Execute(ctx, "select @@global.binlog_row_image", nil, false)
+				if err != nil || len(result.Rows) == 0 || len(result.Rows[0]) == 0 {
+					return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: could not verify binlog_row_image on target %s (use WithSkipRowImageCheck to bypass at your own risk): %v", target, err)
+				}
 
-			rowImage := result.Rows[0][0].ToString()
-			if !strings.EqualFold(rowImage, "FULL") {
-				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: shard %s/%s uses binlog_row_image=%s, but this client requires FULL: with partial row images, omitted delete before-image values are indistinguishable from NULL", keyspace, shard, rowImage)
+				rowImage := result.Rows[0][0].ToString()
+				if !strings.EqualFold(rowImage, "FULL") {
+					return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: target %s uses binlog_row_image=%s, but this client requires FULL: with partial row images, omitted delete before-image values are indistinguishable from NULL", target, rowImage)
+				}
 			}
 		}
 	}
