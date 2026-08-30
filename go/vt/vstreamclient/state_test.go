@@ -179,7 +179,7 @@ func TestNewVGtid_MissingKeyspaceErrors(t *testing.T) {
 	}
 
 	_, err := newVGtid(tables, map[string][]string{"ks1": {"0"}})
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.ErrorContains(t, err, "keyspace missing not found")
 }
 
@@ -236,8 +236,8 @@ func TestNew_RestartTableConfigMismatchErrors(t *testing.T) {
 		FlushFn:         func(context.Context, []Row, FlushMeta) error { return nil },
 	}}, WithStateTable("stateks", "state"))
 	require.Error(t, err)
-	assert.ErrorContains(t, err, "provided tables do not match stored tables")
-	assert.ErrorContains(t, err, "query changed")
+	require.ErrorContains(t, err, "provided tables do not match stored tables")
+	require.ErrorContains(t, err, "query changed")
 
 	// a failed constructor must not have fenced the running client: no insert or update may
 	// have touched the owner token

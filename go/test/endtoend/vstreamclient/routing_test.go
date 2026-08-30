@@ -227,6 +227,6 @@ func TestVStreamClientBareTableNamesAmbiguousAcrossKeyspaces(t *testing.T) {
 		vstreamclient.WithFlags(&vtgatepb.VStreamFlags{HeartbeatInterval: 1, ExcludeKeyspaceFromTableName: true}),
 	)
 	require.Error(t, err)
-	assert.ErrorContains(t, err, "ExcludeKeyspaceFromTableName")
+	require.ErrorContains(t, err, "ExcludeKeyspaceFromTableName")
 	assert.ErrorContains(t, err, "customer")
 }

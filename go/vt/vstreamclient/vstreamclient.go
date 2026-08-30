@@ -19,13 +19,11 @@ package vstreamclient
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"maps"
 	"os"
 	"slices"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/google/uuid"
@@ -37,6 +35,7 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	_ "vitess.io/vitess/go/vt/vtctl/grpcvtctlclient"
 	"vitess.io/vitess/go/vt/vterrors"
 	_ "vitess.io/vitess/go/vt/vtgate/grpcvtgateconn"
@@ -54,8 +53,7 @@ type VStreamClient struct {
 	// configured keyspaces and to bootstrap the initial vgtid
 	shardsByKeyspace map[string][]string
 
-	// shardedByKeyspace caches each keyspace's vschema sharded property; nil when the vschema
-	// could not be read, in which case validation falls back to the shard-name heuristic
+	// shardedByKeyspace caches each keyspace's vschema sharded property.
 	shardedByKeyspace map[string]bool
 
 	// keep per table state and config, which is used to generate the vgtid filter.
@@ -65,8 +63,9 @@ type VStreamClient struct {
 	// lastEventProcessedAtUnixNano is the time after the last event batch was processed, including time for the
 	// user provided flush function to complete. A zero value means Run has not successfully processed any events yet,
 	// so heartbeat liveness checks should not trigger startup cancellation.
-	lastEventProcessedAtUnixNano atomic.Int64
-	isProcessingEvents           atomic.Bool
+	eventMu                      sync.Mutex
+	lastEventProcessedAtUnixNano int64
+	isProcessingEvents           bool
 
 	// lastFlushedVgtid is the last vgtid that was flushed, which is compared to the latestVgtid to determine
 	// if we need to flush again.
@@ -100,7 +99,7 @@ type clientConfig struct {
 	vgtidStateKeyspace string
 	vgtidStateTable    string
 
-	// ownerToken uniquely identifies this client instance in the state row. New claims it on startup,
+	// ownerToken uniquely identifies this client instance in the state row. Run claims it on startup,
 	// and checkpoint writes require it to still match, so of two clients running with the same stream
 	// name, the newest one wins and the older one fails fast with ErrFenced.
 	ownerToken string
@@ -229,20 +228,21 @@ func New(ctx context.Context, name string, conn *vtgateconn.VTGateConn, tables [
 
 	var err error
 
-	// load all shards, so we can validate settings before starting. It's not technically necessary to do this here,
-	// but it's more user-friendly to fail early if there is misconfiguration. This needs to be done before running
-	// the options, so that the shards are available for validation.
-	v.shardsByKeyspace, err = getShardsByKeyspace(ctx, v.session)
+	// set options from the variadic list
+	for _, opt := range opts {
+		if err = opt(v); err != nil {
+			return nil, err
+		}
+	}
+
+	v.shardsByKeyspace, err = getShardsByKeyspace(ctx, conn.Session("@"+topoproto.TabletTypeLString(v.cfg.tabletType), nil))
 	if err != nil {
 		return nil, err
 	}
 
 	v.shardedByKeyspace, err = getShardedByKeyspace(ctx, v.session)
 	if err != nil {
-		// older vtgates may not support SHOW VSCHEMA KEYSPACES; validation falls back to the
-		// shard-name heuristic in that case
-		log.Warn("vstreamclient: could not read vschema keyspace sharding", slog.Any("error", err))
-		v.shardedByKeyspace = nil
+		return nil, vterrors.Wrap(err, "vstreamclient: could not read vschema keyspace sharding")
 	}
 
 	err = v.initTables(tables)
@@ -255,11 +255,11 @@ func New(ctx context.Context, name string, conn *vtgateconn.VTGateConn, tables [
 		return nil, err
 	}
 
-	// set options from the variadic list
-	for _, opt := range opts {
-		if err = opt(v); err != nil {
-			return nil, err
-		}
+	if err = v.validateStateTable(); err != nil {
+		return nil, err
+	}
+	if err = v.validateStartingVGtid(); err != nil {
+		return nil, err
 	}
 
 	// after options, so WithSkipRowImageCheck can opt out
@@ -301,10 +301,6 @@ func New(ctx context.Context, name string, conn *vtgateconn.VTGateConn, tables [
 	}
 
 	// handle state lookup
-	if v.cfg.vgtidStateKeyspace == "" || v.cfg.vgtidStateTable == "" {
-		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: state table not configured (use WithStateTable)")
-	}
-
 	explicitStartingVGtid := v.latestVgtid
 
 	err = initStateTable(ctx, v.session, v.cfg.vgtidStateKeyspace, v.cfg.vgtidStateTable)

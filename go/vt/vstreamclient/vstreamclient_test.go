@@ -93,11 +93,18 @@ type testVStreamReader struct {
 
 type newTestVTGateImpl struct {
 	testVTGateImpl
+	shardsByTarget   map[string][]string
+	discoveryTargets []string
+	vschemaErr       error
 }
 
 func (t *newTestVTGateImpl) Execute(_ context.Context, session *vtgatepb.Session, query string, bindVars map[string]*querypb.BindVariable, prepared bool) (*vtgatepb.Session, *sqltypes.Result, error) {
 	switch {
 	case query == "SHOW VITESS_SHARDS":
+		t.discoveryTargets = append(t.discoveryTargets, session.TargetString)
+		if shards, ok := t.shardsByTarget[session.TargetString]; ok {
+			return session, sqltypes.MakeTestResult(sqltypes.MakeTestFields("shard", "varchar"), shards...), nil
+		}
 		return session, sqltypes.MakeTestResult(
 			sqltypes.MakeTestFields("shard", "varchar"),
 			"customer/0",
@@ -121,6 +128,9 @@ func (t *newTestVTGateImpl) Execute(_ context.Context, session *vtgatepb.Session
 		return session, sqltypes.MakeTestResult(sqltypes.MakeTestFields("@@global.binlog_row_image", "varchar"), "FULL"), nil
 
 	case query == "SHOW VSCHEMA KEYSPACES":
+		if t.vschemaErr != nil {
+			return session, nil, t.vschemaErr
+		}
 		return session, sqltypes.MakeTestResult(
 			sqltypes.MakeTestFields("Keyspace|Sharded|Foreign Key|Comment", "varchar|varchar|varchar|varchar"),
 			"customer|false|unmanaged|",
@@ -204,12 +214,181 @@ func TestDefaultFlagsExcludeKeyspaceFromTableName(t *testing.T) {
 
 func TestNew_ValidatesName(t *testing.T) {
 	_, err := New(t.Context(), "", nil, nil)
-	assert.Error(t, err)
-	assert.ErrorContains(t, err, "name is required")
+	require.Error(t, err)
+	require.ErrorContains(t, err, "name is required")
 
 	_, err = New(t.Context(), strings.Repeat("a", 65), nil, nil)
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.ErrorContains(t, err, "name must be 64 characters or less")
+}
+
+func TestNew_DiscoversShardsForConfiguredTabletType(t *testing.T) {
+	for _, tt := range []struct {
+		name       string
+		tabletType topodatapb.TabletType
+		target     string
+		shards     []string
+		explicit   bool
+	}{
+		{name: "default replica", target: "@replica", shards: []string{"-80", "80-"}},
+		{name: "primary", tabletType: topodatapb.TabletType_PRIMARY, target: "@primary", shards: []string{"0"}},
+		{name: "rdonly", tabletType: topodatapb.TabletType_RDONLY, target: "@rdonly", shards: []string{"-40", "40-"}},
+		{name: "explicit replica position before tablet option", tabletType: topodatapb.TabletType_REPLICA, target: "@replica", shards: []string{"-80", "80-"}, explicit: true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			impl := &newTestVTGateImpl{shardsByTarget: map[string][]string{
+				"@primary": {"customer/0", "commerce/0"},
+				"@replica": {"customer/-80", "customer/80-"},
+				"@rdonly":  {"customer/-40", "customer/40-"},
+			}}
+			conn, err := vtgateconn.DialCustom(t.Context(), func(context.Context, string) (vtgateconn.Impl, error) {
+				return impl, nil
+			}, "")
+			require.NoError(t, err)
+			t.Cleanup(conn.Close)
+
+			opts := []Option{WithStateTable("commerce", "state")}
+			if tt.explicit {
+				position := &binlogdatapb.VGtid{}
+				for _, shard := range tt.shards {
+					position.ShardGtids = append(position.ShardGtids, &binlogdatapb.ShardGtid{Keyspace: "customer", Shard: shard, Gtid: testConcretePosition})
+				}
+				opts = append(opts, WithStartingVGtid(position))
+			}
+			if tt.tabletType != topodatapb.TabletType_UNKNOWN {
+				opts = append(opts, WithTabletType(tt.tabletType))
+			}
+			optionCalls := 0
+			opts = append(opts, func(*VStreamClient) error {
+				optionCalls++
+				return nil
+			})
+			table := newStateTestTableConfig()
+			table.Keyspace = "customer"
+			v, err := New(t.Context(), "stream", conn, []TableConfig{table}, opts...)
+			require.NoError(t, err)
+			assert.Equal(t, []string{tt.target}, impl.discoveryTargets)
+			assert.Equal(t, 1, optionCalls)
+			shards := make([]string, 0, len(v.latestVgtid.ShardGtids))
+			for _, position := range v.latestVgtid.ShardGtids {
+				assert.Equal(t, "customer", position.Keyspace)
+				shards = append(shards, position.Shard)
+			}
+			assert.ElementsMatch(t, tt.shards, shards)
+		})
+	}
+}
+
+func TestNew_RequiresStateKeyspaceShardingMetadata(t *testing.T) {
+	impl := &newTestVTGateImpl{vschemaErr: errors.New("vschema unavailable")}
+	conn, err := vtgateconn.DialCustom(t.Context(), func(context.Context, string) (vtgateconn.Impl, error) {
+		return impl, nil
+	}, "")
+	require.NoError(t, err)
+	t.Cleanup(conn.Close)
+	table := newStateTestTableConfig()
+	table.Keyspace = "customer"
+	_, err = New(t.Context(), "stream", conn, []TableConfig{table}, WithStateTable("commerce", "state"))
+	require.ErrorContains(t, err, "vschema unavailable")
+}
+
+func TestMonitorHeartbeat_DoesNotWaitForGracefulShutdown(t *testing.T) {
+	for _, tt := range []struct {
+		name              string
+		startup           bool
+		shutdownRequested bool
+		cause             error
+	}{
+		{name: "heartbeat", cause: ErrHeartbeatTimeout},
+		{name: "startup", startup: true, cause: ErrStartupTimeout},
+		{name: "heartbeat during requested shutdown", shutdownRequested: true, cause: ErrHeartbeatTimeout},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				ctx, cancel := context.WithCancelCause(t.Context())
+				v := &VStreamClient{cfg: clientConfig{
+					flags: DefaultFlags(), startupTimeout: 5 * time.Second,
+					gracefulShutdownWaitDur:    time.Hour,
+					heartbeatTimeoutMultiplier: 2,
+				}}
+				setLifecycleState(v, true, true, tt.shutdownRequested, cancel)
+				t.Cleanup(func() { cancel(nil); v.endRun() })
+				if !tt.startup {
+					v.lastEventProcessedAtUnixNano = time.Now().Add(-3 * time.Second).UnixNano()
+				}
+				done := make(chan struct{})
+				go func() { defer close(done); v.monitorHeartbeat(ctx) }()
+				select {
+				case <-done:
+					require.ErrorIs(t, context.Cause(ctx), tt.cause)
+				case <-time.After(30 * time.Second):
+					assert.Fail(t, "liveness cancellation waited for the graceful shutdown window")
+				}
+			})
+		})
+	}
+}
+
+func TestMonitorHeartbeat_DefaultToleratesShortSilence(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		conn, _ := newStateTestConn(t, shardsAndStateTableResponses(nil)...)
+		v, err := New(t.Context(), "stream", conn, []TableConfig{newStateTestTableConfig()}, WithStateTable("stateks", "state"))
+		require.NoError(t, err)
+		ctx, cancel := context.WithCancelCause(t.Context())
+		t.Cleanup(func() { cancel(nil); v.endRun() })
+		setLifecycleState(v, true, true, false, cancel)
+		v.lastEventProcessedAtUnixNano = time.Now().UnixNano()
+		go v.monitorHeartbeat(ctx)
+
+		time.Sleep(5 * time.Second)
+		synctest.Wait()
+		require.NoError(t, ctx.Err())
+
+		time.Sleep(6 * time.Second)
+		synctest.Wait()
+		require.ErrorIs(t, context.Cause(ctx), ErrHeartbeatTimeout)
+	})
+}
+
+func TestMonitorHeartbeat_TimeoutExcludesNewEventBatch(t *testing.T) {
+	ctx, cancel := context.WithCancelCause(t.Context())
+	t.Cleanup(func() { cancel(nil) })
+	cancelStarted := make(chan struct{})
+	releaseCancel := make(chan struct{})
+	var releaseOnce sync.Once
+	defer releaseOnce.Do(func() { close(releaseCancel) })
+	hookCalled := make(chan struct{}, 1)
+	v := &VStreamClient{cfg: clientConfig{flags: DefaultFlags(), heartbeatTimeoutMultiplier: 2, eventFuncs: map[binlogdatapb.VEventType]EventFunc{
+		binlogdatapb.VEventType_HEARTBEAT: func(context.Context, *binlogdatapb.VEvent) error {
+			hookCalled <- struct{}{}
+			return nil
+		},
+	}}}
+	setLifecycleState(v, true, true, false, func(cause error) {
+		close(cancelStarted)
+		<-releaseCancel
+		cancel(cause)
+	})
+	v.lastEventProcessedAtUnixNano = time.Now().Add(-3 * time.Second).UnixNano()
+	go v.monitorHeartbeat(ctx)
+	select {
+	case <-cancelStarted:
+	case <-time.After(30 * time.Second):
+		require.FailNow(t, "liveness cancellation did not start")
+	}
+	eventsDone := make(chan error, 1)
+	go func() {
+		eventsDone <- v.handleEvents(ctx, []*binlogdatapb.VEvent{{Type: binlogdatapb.VEventType_HEARTBEAT}})
+	}()
+	assert.Never(t, func() bool { return len(hookCalled) != 0 }, 30*time.Second, 10*time.Millisecond)
+	releaseOnce.Do(func() { close(releaseCancel) })
+	select {
+	case err := <-eventsDone:
+		require.ErrorIs(t, err, ErrHeartbeatTimeout)
+	case <-time.After(30 * time.Second):
+		require.FailNow(t, "event processing did not return after cancellation")
+	}
+	assert.Empty(t, hookCalled)
 }
 
 func TestNew_ValidatesMutableDefaults(t *testing.T) {
@@ -226,6 +405,24 @@ func TestNew_ValidatesMutableDefaults(t *testing.T) {
 		original := DefaultHeartbeatTimeoutMultiplier
 		t.Cleanup(func() { DefaultHeartbeatTimeoutMultiplier = original })
 		DefaultHeartbeatTimeoutMultiplier = -1
+
+		_, err := New(t.Context(), "stream", newConstructorTestConn(t), nil)
+		require.ErrorContains(t, err, "DefaultHeartbeatTimeoutMultiplier must be positive")
+	})
+
+	t.Run("negative startup timeout", func(t *testing.T) {
+		original := DefaultStartupTimeout
+		t.Cleanup(func() { DefaultStartupTimeout = original })
+		DefaultStartupTimeout = -time.Second
+
+		_, err := New(t.Context(), "stream", newConstructorTestConn(t), nil)
+		require.ErrorContains(t, err, "DefaultStartupTimeout must be positive")
+	})
+
+	t.Run("zero heartbeat timeout multiplier", func(t *testing.T) {
+		original := DefaultHeartbeatTimeoutMultiplier
+		t.Cleanup(func() { DefaultHeartbeatTimeoutMultiplier = original })
+		DefaultHeartbeatTimeoutMultiplier = 0
 
 		_, err := New(t.Context(), "stream", newConstructorTestConn(t), nil)
 		require.ErrorContains(t, err, "DefaultHeartbeatTimeoutMultiplier must be positive")
@@ -329,22 +526,22 @@ func TestNew_RejectsAmbiguousBareTableNamesAcrossKeyspaces(t *testing.T) {
 		WithStateTable("commerce", "vstreams"),
 		WithFlags(&vtgatepb.VStreamFlags{HeartbeatInterval: 1, ExcludeKeyspaceFromTableName: true}),
 	)
-	assert.Error(t, err)
-	assert.ErrorContains(t, err, "ExcludeKeyspaceFromTableName")
+	require.Error(t, err)
+	require.ErrorContains(t, err, "ExcludeKeyspaceFromTableName")
 	assert.ErrorContains(t, err, "customer")
 }
 
 func TestWithMinFlushDuration_RejectsNonPositive(t *testing.T) {
 	v := &VStreamClient{}
 	err := WithMinFlushDuration(0)(v)
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.ErrorContains(t, err, "minimum flush duration")
 }
 
 func TestWithHeartbeatSeconds_RejectsNonPositive(t *testing.T) {
 	v := &VStreamClient{}
 	err := WithHeartbeatSeconds(0)(v)
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.ErrorContains(t, err, "heartbeat seconds")
 }
 
@@ -356,8 +553,8 @@ func TestWithHeartbeatSeconds_RejectsOverflow(t *testing.T) {
 
 	v := &VStreamClient{}
 	err := WithHeartbeatSeconds(int(overflow))(v)
-	assert.Error(t, err)
-	assert.ErrorContains(t, err, "heartbeat seconds must be")
+	require.Error(t, err)
+	require.ErrorContains(t, err, "heartbeat seconds must be")
 	assert.ErrorContains(t, err, "or less")
 }
 
@@ -365,8 +562,8 @@ func TestWithTimeLocation_Validation(t *testing.T) {
 	v := &VStreamClient{}
 
 	err := WithTimeLocation(nil)(v)
-	assert.Error(t, err)
-	assert.ErrorContains(t, err, "time location")
+	require.Error(t, err)
+	require.ErrorContains(t, err, "time location")
 
 	loc := time.FixedZone("UTC-5", -5*60*60)
 	err = WithTimeLocation(loc)(v)
@@ -378,8 +575,8 @@ func TestWithTabletType_Validation(t *testing.T) {
 	v := &VStreamClient{}
 
 	err := WithTabletType(topodatapb.TabletType_UNKNOWN)(v)
-	assert.Error(t, err)
-	assert.ErrorContains(t, err, "tablet type cannot be UNKNOWN")
+	require.Error(t, err)
+	require.ErrorContains(t, err, "tablet type cannot be UNKNOWN")
 
 	err = WithTabletType(topodatapb.TabletType_RDONLY)(v)
 	require.NoError(t, err)
@@ -389,7 +586,7 @@ func TestWithTabletType_Validation(t *testing.T) {
 func TestWithFlags_RejectsNil(t *testing.T) {
 	v := &VStreamClient{}
 	err := WithFlags(nil)(v)
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.ErrorContains(t, err, "flags cannot be nil")
 }
 
@@ -397,12 +594,12 @@ func TestWithGracefulShutdownChan_Validation(t *testing.T) {
 	v := &VStreamClient{}
 
 	err := WithGracefulShutdownChan(nil, time.Second)(v)
-	assert.Error(t, err)
-	assert.ErrorContains(t, err, "graceful shutdown channel")
+	require.Error(t, err)
+	require.ErrorContains(t, err, "graceful shutdown channel")
 
 	err = WithGracefulShutdownChan(make(chan struct{}), 0)(v)
-	assert.Error(t, err)
-	assert.ErrorContains(t, err, "graceful shutdown wait")
+	require.Error(t, err)
+	require.ErrorContains(t, err, "graceful shutdown wait")
 
 	ch := make(chan struct{})
 	err = WithGracefulShutdownChan(ch, time.Second)(v)
@@ -415,12 +612,12 @@ func TestWithGracefulShutdownSignals_Validation(t *testing.T) {
 	v := &VStreamClient{}
 
 	err := WithGracefulShutdownSignals(time.Second)(v)
-	assert.Error(t, err)
-	assert.ErrorContains(t, err, "graceful shutdown signals")
+	require.Error(t, err)
+	require.ErrorContains(t, err, "graceful shutdown signals")
 
 	err = WithGracefulShutdownSignals(0, os.Interrupt)(v)
-	assert.Error(t, err)
-	assert.ErrorContains(t, err, "graceful shutdown wait")
+	require.Error(t, err)
+	require.ErrorContains(t, err, "graceful shutdown wait")
 
 	err = WithGracefulShutdownSignals(time.Second, os.Interrupt)(v)
 	require.NoError(t, err)
@@ -433,14 +630,14 @@ func TestWithEventFunc_Validation(t *testing.T) {
 	fn := func(_ context.Context, _ *binlogdatapb.VEvent) error { return nil }
 
 	err := WithEventFunc(fn)(v)
-	assert.Error(t, err)
-	assert.ErrorContains(t, err, "no event types provided")
+	require.Error(t, err)
+	require.ErrorContains(t, err, "no event types provided")
 
 	err = WithEventFunc(fn, binlogdatapb.VEventType_FIELD)(v)
 	require.NoError(t, err)
 
 	err = WithEventFunc(fn, binlogdatapb.VEventType_FIELD)(v)
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.ErrorContains(t, err, "already has a function")
 }
 
@@ -474,7 +671,7 @@ func TestLookupTable(t *testing.T) {
 		}}
 
 		_, err := v.lookupTable("t")
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.ErrorContains(t, err, "ambiguous table name")
 	})
 }
@@ -501,7 +698,7 @@ func TestRun_RejectsClosedClient(t *testing.T) {
 	setLifecycleState(v, true, false, false, nil)
 
 	err := v.Run(t.Context())
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.ErrorContains(t, err, "client is closed")
 }
 
@@ -566,8 +763,8 @@ func TestRun_EOFReturnsErrorAndLeavesBufferedRowsUnflushed(t *testing.T) {
 	}
 
 	err = v.Run(t.Context())
-	assert.Error(t, err)
-	assert.ErrorContains(t, err, "unexpected EOF")
+	require.Error(t, err)
+	require.ErrorContains(t, err, "unexpected EOF")
 	assert.Nil(t, v.lastFlushedVgtid)
 	require.Len(t, table.currentBatch, 1)
 	row, ok := table.currentBatch[0].Data.(*testRowSmall)
@@ -933,7 +1130,7 @@ func TestGracefulShutdown_CancelsActiveRunAfterWait(t *testing.T) {
 
 		synctest.Wait()
 		assert.True(t, v.ShutdownRequested())
-		assert.NoError(t, ctx.Err())
+		require.NoError(t, ctx.Err())
 
 		time.Sleep(5 * time.Second)
 		synctest.Wait()
@@ -973,7 +1170,7 @@ func TestMonitorHeartbeat_DoesNotShutdownBeforeFirstEvent(t *testing.T) {
 			return false
 		}
 	}, 2500*time.Millisecond, 100*time.Millisecond)
-	assert.NoError(t, ctx.Err())
+	require.NoError(t, ctx.Err())
 	assert.False(t, v.ShutdownRequested())
 
 	cancel(nil)
@@ -985,7 +1182,7 @@ func TestMonitorHeartbeat_DoesNotShutdownBeforeFirstEvent(t *testing.T) {
 			return false
 		}
 	}, time.Second, 50*time.Millisecond)
-	assert.ErrorIs(t, ctx.Err(), context.Canceled)
+	require.ErrorIs(t, ctx.Err(), context.Canceled)
 	assert.False(t, v.ShutdownRequested())
 }
 
@@ -995,12 +1192,13 @@ func TestMonitorHeartbeat_ShutsDownWhenHeartbeatStopsAfterFirstEvent(t *testing.
 
 	v := &VStreamClient{
 		cfg: clientConfig{
-			flags:                   DefaultFlags(),
-			gracefulShutdownWaitDur: 0,
+			flags:                      DefaultFlags(),
+			gracefulShutdownWaitDur:    0,
+			heartbeatTimeoutMultiplier: 2,
 		},
 	}
 	setLifecycleState(v, true, true, false, cancel)
-	v.lastEventProcessedAtUnixNano.Store(time.Now().Add(-3 * time.Second).UnixNano())
+	v.lastEventProcessedAtUnixNano = time.Now().Add(-3 * time.Second).UnixNano()
 
 	done := make(chan struct{})
 	go func() {
@@ -1016,7 +1214,7 @@ func TestMonitorHeartbeat_ShutsDownWhenHeartbeatStopsAfterFirstEvent(t *testing.
 			return false
 		}
 	}, 2*time.Second, 100*time.Millisecond)
-	assert.ErrorIs(t, ctx.Err(), context.Canceled)
+	require.ErrorIs(t, ctx.Err(), context.Canceled)
 	require.ErrorIs(t, context.Cause(ctx), ErrHeartbeatTimeout)
 	assert.True(t, v.ShutdownRequested())
 }
@@ -1030,7 +1228,7 @@ func TestMonitorHeartbeat_StartupTimeoutShutsDownWithCause(t *testing.T) {
 			flags:                      DefaultFlags(),
 			gracefulShutdownWaitDur:    0,
 			startupTimeout:             100 * time.Millisecond,
-			heartbeatTimeoutMultiplier: DefaultHeartbeatTimeoutMultiplier,
+			heartbeatTimeoutMultiplier: 2,
 		},
 	}
 	setLifecycleState(v, true, true, false, cancel)

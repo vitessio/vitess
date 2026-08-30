@@ -341,7 +341,10 @@
       "Packages": [
         "vitess.io/vitess/go/test/endtoend/vstreamclient"
       ],
-      "Args": [],
+      "Args": [
+        "-timeout",
+        "30m"
+      ],
       "Command": [],
       "Manual": false,
       "Shard": "12",

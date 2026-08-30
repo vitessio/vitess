@@ -448,7 +448,7 @@ func parseTagName(tag string) string {
 }
 
 func (table *TableConfig) validateRowChangeForDefaultDecoding(rc *binlogdatapb.RowChange) error {
-	if table.implementsScanner || rc == nil || rc.After == nil {
+	if table.implementsScanner || rc.After == nil {
 		return nil
 	}
 
@@ -474,6 +474,9 @@ func (table *TableConfig) handleRowEvent(ev *binlogdatapb.RowEvent, vstreamStats
 	table.currentBatch = slices.Grow(table.currentBatch, len(ev.RowChanges))
 
 	for _, rc := range ev.RowChanges {
+		if rc == nil || (rc.Before == nil && rc.After == nil) {
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vstreamclient: row change has neither a before nor an after image for table %s", qualifiedTableName(table.Keyspace, table.Table))
+		}
 		if err := table.validateRowChangeForDefaultDecoding(rc); err != nil {
 			return err
 		}

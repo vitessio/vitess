@@ -272,16 +272,16 @@ func contextErr(ctx context.Context) error {
 }
 
 func (v *VStreamClient) handleEvents(ctx context.Context, events []*binlogdatapb.VEvent) error {
-	// if event processing / flushing takes longer than the heartbeat timeout, the heartbeat monitor might trigger
-	// and cancel the context, since no events are processed during that time. This technically leaves a tiny race
-	// condition between defer running and the next Recv happening in the Run() loop, but trying to make that
-	// perfect would add a lot of complexity, and the window is very small.
-	v.isProcessingEvents.Store(true)
+	v.eventMu.Lock()
+	v.isProcessingEvents = true
+	v.eventMu.Unlock()
 	defer func() {
 		// keep track of the last event time for heartbeat monitoring. We're purposefully not using the event
 		// timestamp, since that would cause cancellation if the stream was copying, delayed, or lagging.
-		v.lastEventProcessedAtUnixNano.Store(time.Now().UnixNano())
-		v.isProcessingEvents.Store(false)
+		v.eventMu.Lock()
+		v.lastEventProcessedAtUnixNano = time.Now().UnixNano()
+		v.isProcessingEvents = false
+		v.eventMu.Unlock()
 	}()
 
 	for _, ev := range events {
@@ -475,7 +475,7 @@ func (v *VStreamClient) monitorHeartbeat(ctx context.Context) {
 	}
 	timeoutMultiplier := v.cfg.heartbeatTimeoutMultiplier
 	if timeoutMultiplier <= 0 {
-		timeoutMultiplier = 2
+		timeoutMultiplier = 10
 	}
 
 	heartbeatDur := time.Duration(v.cfg.flags.HeartbeatInterval) * time.Second
@@ -485,67 +485,30 @@ func (v *VStreamClient) monitorHeartbeat(ctx context.Context) {
 	defer heartbeat.Stop()
 
 	startupTimer := time.NewTimer(startupTimeout)
+	defer startupTimer.Stop()
 	startupTimerChan := startupTimer.C
 
 	for {
 		select {
 		case tm := <-heartbeat.C:
-			// if we haven't processed any events yet, we should skip the heartbeat check, since it's likely that
-			// we're still starting up and haven't had a chance to receive the first event yet. This is especially
-			// important if the startup is slow, since we don't want to accidentally shut down during startup.
-			lastEventProcessedAtUnixNano := v.lastEventProcessedAtUnixNano.Load()
-			if lastEventProcessedAtUnixNano == 0 {
-				continue
-			}
-
-			// once we receive the first event, we can stop the startup timer and disable the select case
-			if startupTimerChan != nil {
-				startupTimer.Stop()
-				startupTimerChan = nil
-			}
-
-			// if we're currently processing events, we should skip the heartbeat check, since it's likely that we're
-			// just busy and haven't had a chance to receive the latest event yet. This is especially important for
-			// long-running flushes since they can take longer than the heartbeat duration, and we don't want to
-			// accidentally cancel the context during a flush.
-			if v.isProcessingEvents.Load() {
-				continue
-			}
-
-			// require a stable snapshot: the timestamp must be unchanged across the idle
-			// observation above. handleEvents stores the timestamp before clearing the
-			// processing flag, so if the value moved, a batch completed while we were sampling
-			// and its fresh timestamp resets the window; skip this tick instead of comparing
-			// against a value that was mid-update.
-			if v.lastEventProcessedAtUnixNano.Load() != lastEventProcessedAtUnixNano {
-				continue
-			}
-
-			// if we haven't received an event within the liveness window, we'll cancel the context, since
-			// we're likely disconnected, and exit the goroutine
-			if tm.Sub(time.Unix(0, lastEventProcessedAtUnixNano)) > livenessWindow {
+			if err := v.cancelIfIdle(tm, livenessWindow, false); err != nil {
 				log.Warn(
 					"vstreamclient: no events received within the liveness window, shutting down the stream",
 					slog.String("name", v.cfg.name),
 					slog.Duration("liveness_window", livenessWindow),
-					slog.Time("last_event_processed_at", time.Unix(0, lastEventProcessedAtUnixNano)),
+					slog.Any("error", err),
 				)
-				v.gracefulShutdownWithCause(v.cfg.gracefulShutdownWaitDur, ErrHeartbeatTimeout)
 				return
 			}
 
 		case <-startupTimerChan:
-			// this is a sanity check to shutdown the client if we never receive a single event.
-			// The processing flag is checked before the timestamp: handleEvents stores the
-			// timestamp before clearing the flag, so once we observe idle, the timestamp read
-			// is guaranteed to see any batch that just finished.
-			if !v.isProcessingEvents.Load() && v.lastEventProcessedAtUnixNano.Load() == 0 {
+			if err := v.cancelIfIdle(time.Now(), livenessWindow, true); err != nil {
 				log.Warn(
 					"vstreamclient: no events received since Run started, shutting down the stream",
 					slog.String("name", v.cfg.name),
 					slog.Duration("startup_timeout", startupTimeout),
+					slog.Any("error", err),
 				)
-				v.gracefulShutdownWithCause(v.cfg.gracefulShutdownWaitDur, ErrStartupTimeout)
 				return
 			}
 			startupTimerChan = nil
@@ -554,6 +517,36 @@ func (v *VStreamClient) monitorHeartbeat(ctx context.Context) {
 			return
 		}
 	}
+}
+
+func (v *VStreamClient) cancelIfIdle(now time.Time, livenessWindow time.Duration, startup bool) error {
+	v.eventMu.Lock()
+	defer v.eventMu.Unlock()
+	if v.isProcessingEvents {
+		return nil
+	}
+
+	cause := ErrHeartbeatTimeout
+	if startup {
+		if v.lastEventProcessedAtUnixNano != 0 {
+			return nil
+		}
+		cause = ErrStartupTimeout
+	} else if v.lastEventProcessedAtUnixNano == 0 || now.Sub(time.Unix(0, v.lastEventProcessedAtUnixNano)) <= livenessWindow {
+		return nil
+	}
+
+	v.lifecycle.mu.Lock()
+	if !v.lifecycle.runActive || v.lifecycle.cancelRunCtxFn == nil {
+		v.lifecycle.mu.Unlock()
+		return nil
+	}
+	v.lifecycle.shutdownRequested = true
+	v.lifecycle.shutdownCause = cause
+	cancelRunCtxFn := v.lifecycle.cancelRunCtxFn
+	v.lifecycle.mu.Unlock()
+	cancelRunCtxFn(cause)
+	return cause
 }
 
 // ********************************************************************************************************

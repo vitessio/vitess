@@ -20,12 +20,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	"vitess.io/vitess/go/vt/vstreamclient"
@@ -85,8 +87,10 @@ func TestVStreamClientGracefulShutdownChanStopsOnThresholdFlush(t *testing.T) {
 	te := newTestEnv(t)
 
 	shutdownCh := make(chan struct{})
-	flushStarted := make(chan vstreamclient.FlushReason, 4)
+	flushStarted := make(chan vstreamclient.FlushMeta, 4)
 	flushGate := make(chan struct{})
+	releaseFlush := sync.OnceFunc(func() { close(flushGate) })
+	t.Cleanup(releaseFlush)
 	var flushCalls atomic.Int32
 	vstreamClient := te.newDefaultClient(
 		t, t.Name(), []vstreamclient.TableConfig{{
@@ -97,7 +101,7 @@ func TestVStreamClientGracefulShutdownChanStopsOnThresholdFlush(t *testing.T) {
 			DataType:        &Customer{},
 			FlushFn: func(_ context.Context, _ []vstreamclient.Row, meta vstreamclient.FlushMeta) error {
 				flushCalls.Add(1)
-				flushStarted <- meta.FlushReason
+				flushStarted <- meta
 				<-flushGate
 				return nil
 			},
@@ -114,13 +118,13 @@ func TestVStreamClientGracefulShutdownChanStopsOnThresholdFlush(t *testing.T) {
 
 	// the buffered row hits MaxRowsPerFlush=1, so the first flush is threshold-triggered;
 	// hold it open on the gate
-	reason := recvOrFail(t, flushStarted, "threshold flush start")
-	require.Equal(t, vstreamclient.FlushReasonMaxRowsPerFlush, reason)
+	meta := recvOrFail(t, flushStarted, "threshold flush start")
+	require.Equal(t, vstreamclient.FlushReasonMaxRowsPerFlush, meta.FlushReason)
 
 	// request the shutdown while that flush is provably still in progress, then release it
 	close(shutdownCh)
 	require.Eventually(t, vstreamClient.ShutdownRequested, 30*time.Second, 10*time.Millisecond)
-	close(flushGate)
+	releaseFlush()
 
 	err := recvOrFail(t, runErrCh, "run exit after shutdown channel closed")
 	require.NoError(t, runCtx.Err(), "run context expired before the shutdown channel stopped the run")
@@ -128,6 +132,7 @@ func TestVStreamClientGracefulShutdownChanStopsOnThresholdFlush(t *testing.T) {
 
 	// the shutdown completed on that very threshold flush: no later flush boundary was needed
 	assert.Equal(t, int32(1), flushCalls.Load())
+	assert.True(t, proto.Equal(meta.LatestVGtid, queryLatestVGtid(t, te.ctx, te.session, t.Name())))
 }
 
 // TestVStreamClientIgnoresNoOpTransactions verifies transactions in the streamed keyspace whose
@@ -253,7 +258,7 @@ func TestVStreamClientGracefulShutdownClosesMultiTableClient(t *testing.T) {
 
 	err = vstreamClient.Run(t.Context())
 	require.Error(t, err)
-	assert.ErrorContains(t, err, "client is closed")
+	require.ErrorContains(t, err, "client is closed")
 	assert.ElementsMatch(t, []string{"customer.customer", "customer.purchases"}, rowTables)
 
 	// restart with a sentinel row: the shutdown checkpoint must cover the priming rows, so a
@@ -362,7 +367,7 @@ func TestVStreamClientGracefulShutdownReplayMatrix(t *testing.T) {
 
 				err := <-runErrCh
 				require.Error(t, err)
-				assert.ErrorIs(t, err, context.Canceled)
+				require.ErrorIs(t, err, context.Canceled)
 				assert.Zero(t, flushCount)
 
 				replayed := replayAfterShutdown(t, te, newClient, sentinel)
@@ -472,7 +477,7 @@ func TestVStreamClientGracefulShutdownReplayMatrix(t *testing.T) {
 
 				err := <-runErrCh
 				require.Error(t, err)
-				assert.ErrorIs(t, err, context.Canceled)
+				require.ErrorIs(t, err, context.Canceled)
 				assert.Zero(t, flushCount)
 
 				replayed := replayAfterShutdown(t, te, newClient, sentinel)

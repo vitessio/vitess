@@ -95,7 +95,7 @@ func TestVStreamClientFlushFnError(t *testing.T) {
 	defer cancelRun()
 	err := vstreamClient.Run(runCtx)
 	require.Error(t, err)
-	assert.ErrorContains(t, err, "error flushing table customer")
+	require.ErrorContains(t, err, "error flushing table customer")
 	assert.ErrorContains(t, err, flushErr.Error())
 }
 
@@ -124,6 +124,6 @@ func TestVStreamClientEventHookError(t *testing.T) {
 	defer cancelRun()
 	err := vstreamClient.Run(runCtx)
 	require.Error(t, err)
-	assert.ErrorContains(t, err, "user error processing FIELD event")
+	require.ErrorContains(t, err, "user error processing FIELD event")
 	assert.ErrorContains(t, err, hookErr.Error())
 }

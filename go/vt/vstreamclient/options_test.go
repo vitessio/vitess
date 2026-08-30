@@ -95,6 +95,14 @@ func TestWithStartingVGtid_Validation(t *testing.T) {
 			wantErr: "not a parseable position",
 		},
 		{
+			name: "copy cursor",
+			vgtid: &binlogdatapb.VGtid{ShardGtids: []*binlogdatapb.ShardGtid{
+				{Keyspace: "ks", Shard: "-80", Gtid: testConcretePosition, TablePKs: []*binlogdatapb.TableLastPK{{TableName: "t"}}},
+				startingShardGtid("80-"),
+			}},
+			wantErr: "copy cursors are not supported",
+		},
+		{
 			name:    "foreign keyspace",
 			vgtid:   &binlogdatapb.VGtid{ShardGtids: []*binlogdatapb.ShardGtid{{Keyspace: "other", Shard: "0", Gtid: testConcretePosition}}},
 			wantErr: "not a configured source keyspace",
@@ -120,7 +128,11 @@ func TestWithStartingVGtid_Validation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := WithStartingVGtid(tt.vgtid)(newStartingVGtidClient())
+			v := newStartingVGtidClient()
+			err := WithStartingVGtid(tt.vgtid)(v)
+			if err == nil {
+				err = v.validateStartingVGtid()
+			}
 			require.ErrorContains(t, err, tt.wantErr)
 		})
 	}
@@ -150,23 +162,26 @@ func TestWithStateTable_RequiresTableName(t *testing.T) {
 func TestWithStateTable_RejectsUnknownKeyspace(t *testing.T) {
 	v := &VStreamClient{shardsByKeyspace: map[string][]string{"ks": {"0"}}}
 
-	err := WithStateTable("missing", "state")(v)
+	require.NoError(t, WithStateTable("missing", "state")(v))
+	err := v.validateStateTable()
 	require.ErrorContains(t, err, "keyspace missing not found")
 }
 
 func TestWithStateTable_RejectsShardedKeyspace(t *testing.T) {
-	v := &VStreamClient{shardsByKeyspace: map[string][]string{"sharded": {"-80", "80-"}}}
+	v := &VStreamClient{shardsByKeyspace: map[string][]string{"sharded": {"-80", "80-"}}, shardedByKeyspace: map[string]bool{"sharded": true}}
 
-	err := WithStateTable("sharded", "state")(v)
+	require.NoError(t, WithStateTable("sharded", "state")(v))
+	err := v.validateStateTable()
 	require.ErrorContains(t, err, "only unsharded keyspaces are supported")
 }
 
 func TestWithStateTable_RejectsSingleShardShardedKeyspace(t *testing.T) {
 	// a sharded keyspace with one shard is named "-", not "0"; the shard count alone
 	// cannot distinguish it from an unsharded keyspace
-	v := &VStreamClient{shardsByKeyspace: map[string][]string{"sharded": {"-"}}}
+	v := &VStreamClient{shardsByKeyspace: map[string][]string{"sharded": {"-"}}, shardedByKeyspace: map[string]bool{"sharded": true}}
 
-	err := WithStateTable("sharded", "state")(v)
+	require.NoError(t, WithStateTable("sharded", "state")(v))
+	err := v.validateStateTable()
 	require.ErrorContains(t, err, "only unsharded keyspaces are supported")
 }
 
@@ -178,19 +193,22 @@ func TestWithStateTable_RejectsVSchemaShardedKeyspace(t *testing.T) {
 		shardedByKeyspace: map[string]bool{"sharded": true},
 	}
 
-	err := WithStateTable("sharded", "state")(v)
+	require.NoError(t, WithStateTable("sharded", "state")(v))
+	err := v.validateStateTable()
 	require.ErrorContains(t, err, "only unsharded keyspaces are supported")
 }
 
 func TestWithStateTable_RejectsStreamedSourceKeyspace(t *testing.T) {
 	v := &VStreamClient{
-		shardsByKeyspace: map[string][]string{"ks": {"0"}},
+		shardsByKeyspace:  map[string][]string{"ks": {"0"}},
+		shardedByKeyspace: map[string]bool{"ks": false},
 		tables: map[string]*TableConfig{
 			"ks.t": {Keyspace: "ks", Table: "t"},
 		},
 	}
 
-	err := WithStateTable("ks", "state")(v)
+	require.NoError(t, WithStateTable("ks", "state")(v))
+	err := v.validateStateTable()
 	require.ErrorContains(t, err, "also a streamed source keyspace")
 }
 

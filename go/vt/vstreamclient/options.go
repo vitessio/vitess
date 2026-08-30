@@ -60,7 +60,7 @@ var (
 	// interval: once the first event has been received, if no event (including heartbeats) is received
 	// for that window, the client shuts itself down with ErrHeartbeatTimeout. This can be safely
 	// modified if needed before calling New.
-	DefaultHeartbeatTimeoutMultiplier = 2
+	DefaultHeartbeatTimeoutMultiplier = 10
 )
 
 // Option is a function that can be used to configure a VStreamClient
@@ -79,6 +79,8 @@ func WithMinFlushDuration(d time.Duration) Option {
 	}
 }
 
+// WithHeartbeatSeconds sets the heartbeat interval in seconds. It overrides the
+// HeartbeatInterval in WithFlags regardless of the order the options are supplied.
 func WithHeartbeatSeconds(seconds int) Option {
 	return func(v *VStreamClient) error {
 		if seconds <= 0 {
@@ -158,36 +160,33 @@ func WithStateTable(keyspace, table string) Option {
 			return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: state table name is required")
 		}
 
-		shards, ok := v.shardsByKeyspace[keyspace]
-		if !ok {
-			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: keyspace %s not found", keyspace)
-		}
-
-		// the vschema sharded property is the authoritative check: a sharded keyspace can have
-		// any single shard today (even one named "0") and gain shards through resharding
-		if sharded, ok := v.shardedByKeyspace[keyspace]; ok && sharded {
-			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: keyspace %s is sharded, only unsharded keyspaces are supported", keyspace)
-		}
-
-		// shard-name heuristic as a backstop for clusters where the vschema cannot be read:
-		// unsharded keyspaces always have exactly one shard named "0"
-		if len(shards) != 1 || shards[0] != "0" {
-			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: keyspace %s is sharded, only unsharded keyspaces are supported", keyspace)
-		}
-
-		// checkpoint writes are themselves transactions: if the state keyspace is also a source
-		// keyspace, every checkpoint advances the stream position and schedules another
-		// checkpoint, creating a self-sustaining write loop on an otherwise idle stream
-		for _, tbl := range v.tables {
-			if tbl.Keyspace == keyspace {
-				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: state keyspace %s is also a streamed source keyspace; store checkpoints in a keyspace that is not being streamed", keyspace)
-			}
-		}
-
 		v.cfg.vgtidStateKeyspace = sqlescape.EscapeID(keyspace)
 		v.cfg.vgtidStateTable = sqlescape.EscapeID(table)
 		return nil
 	}
+}
+
+func (v *VStreamClient) validateStateTable() error {
+	if v.cfg.vgtidStateKeyspace == "" || v.cfg.vgtidStateTable == "" {
+		return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: state table not configured (use WithStateTable)")
+	}
+	keyspace, err := sqlescape.UnescapeID(v.cfg.vgtidStateKeyspace)
+	if err != nil {
+		return vterrors.Wrap(err, "vstreamclient: invalid state keyspace")
+	}
+	sharded, ok := v.shardedByKeyspace[keyspace]
+	if !ok {
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: keyspace %s not found in vschema", keyspace)
+	}
+	if sharded {
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: keyspace %s is sharded, only unsharded keyspaces are supported", keyspace)
+	}
+	for _, table := range v.tables {
+		if table.Keyspace == keyspace {
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: state keyspace %s is also a streamed source keyspace; store checkpoints in a keyspace that is not being streamed", keyspace)
+		}
+	}
+	return nil
 }
 
 // WithSkipRowImageCheck disables the verification that every source shard uses
@@ -210,7 +209,8 @@ func DefaultFlags() *vtgatepb.VStreamFlags {
 	}
 }
 
-// WithFlags lets you manually control all the flag options, instead of using helper functions
+// WithFlags configures the VStream flags. WithHeartbeatSeconds overrides its
+// HeartbeatInterval regardless of option order; other flags are preserved.
 func WithFlags(flags *vtgatepb.VStreamFlags) Option {
 	return func(v *VStreamClient) error {
 		if flags == nil {
@@ -273,15 +273,13 @@ func WithStartingVGtid(vgtid *binlogdatapb.VGtid) Option {
 			return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: starting vgtid must include at least one shard gtid")
 		}
 
-		configuredKeyspaces := make(map[string]bool, len(v.tables))
-		for _, table := range v.tables {
-			configuredKeyspaces[table.Keyspace] = true
-		}
-
 		seen := make(map[string]bool, len(vgtid.ShardGtids))
 		for _, shardGtid := range vgtid.ShardGtids {
 			if shardGtid == nil || shardGtid.Keyspace == "" || shardGtid.Shard == "" {
 				return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: every starting shard gtid must name a keyspace and shard")
+			}
+			if len(shardGtid.TablePKs) != 0 {
+				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: starting gtid for %s/%s contains TablePKs; copy cursors are not supported", shardGtid.Keyspace, shardGtid.Shard)
 			}
 			if shardGtid.Gtid == "" || strings.EqualFold(shardGtid.Gtid, "current") {
 				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: starting gtid for %s/%s must be a concrete position, got %q: symbolic or empty positions cannot be persisted as a restart point", shardGtid.Keyspace, shardGtid.Shard, shardGtid.Gtid)
@@ -289,13 +287,6 @@ func WithStartingVGtid(vgtid *binlogdatapb.VGtid) Option {
 			if _, err := replication.DecodePosition(shardGtid.Gtid); err != nil {
 				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: starting gtid for %s/%s is not a parseable position: %v", shardGtid.Keyspace, shardGtid.Shard, err)
 			}
-			if !configuredKeyspaces[shardGtid.Keyspace] {
-				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: starting vgtid names keyspace %s, which is not a configured source keyspace", shardGtid.Keyspace)
-			}
-			if !slices.Contains(v.shardsByKeyspace[shardGtid.Keyspace], shardGtid.Shard) {
-				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: starting vgtid names shard %s/%s, which does not exist in the cluster", shardGtid.Keyspace, shardGtid.Shard)
-			}
-
 			key := shardGtid.Keyspace + "/" + shardGtid.Shard
 			if seen[key] {
 				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: starting vgtid names shard %s more than once", key)
@@ -303,18 +294,36 @@ func WithStartingVGtid(vgtid *binlogdatapb.VGtid) Option {
 			seen[key] = true
 		}
 
-		// VTGate only opens streams for the listed shards, so a partial position would silently
-		// never consume the omitted shards
-		for keyspace := range configuredKeyspaces {
-			for _, shard := range v.shardsByKeyspace[keyspace] {
-				if !seen[keyspace+"/"+shard] {
-					return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: starting vgtid does not cover shard %s/%s; every shard of every configured source keyspace needs a position", keyspace, shard)
-				}
-			}
-		}
-
 		// clone so later caller mutations can't change or race with client state
 		v.latestVgtid = proto.Clone(vgtid).(*binlogdatapb.VGtid)
 		return nil
 	}
+}
+
+func (v *VStreamClient) validateStartingVGtid() error {
+	if v.latestVgtid == nil {
+		return nil
+	}
+	configuredKeyspaces := make(map[string]bool, len(v.tables))
+	for _, table := range v.tables {
+		configuredKeyspaces[table.Keyspace] = true
+	}
+	seen := make(map[string]bool, len(v.latestVgtid.ShardGtids))
+	for _, shardGtid := range v.latestVgtid.ShardGtids {
+		if !configuredKeyspaces[shardGtid.Keyspace] {
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: starting vgtid names keyspace %s, which is not a configured source keyspace", shardGtid.Keyspace)
+		}
+		if !slices.Contains(v.shardsByKeyspace[shardGtid.Keyspace], shardGtid.Shard) {
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: starting vgtid names shard %s/%s, which does not exist in the cluster", shardGtid.Keyspace, shardGtid.Shard)
+		}
+		seen[shardGtid.Keyspace+"/"+shardGtid.Shard] = true
+	}
+	for keyspace := range configuredKeyspaces {
+		for _, shard := range v.shardsByKeyspace[keyspace] {
+			if !seen[keyspace+"/"+shard] {
+				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: starting vgtid does not cover shard %s/%s; every shard of every configured source keyspace needs a position", keyspace, shard)
+			}
+		}
+	}
+	return nil
 }

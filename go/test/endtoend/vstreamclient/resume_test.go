@@ -157,7 +157,7 @@ func TestVStreamClientRestartsInterruptedCopy(t *testing.T) {
 	err := interruptedClient.Run(runCtx)
 	cancelRun()
 	require.Error(t, err)
-	assert.ErrorContains(t, err, interruptErr.Error())
+	require.ErrorContains(t, err, interruptErr.Error())
 
 	var got []*Customer
 	restartedClient := te.newDefaultClient(t, t.Name(), []vstreamclient.TableConfig{{

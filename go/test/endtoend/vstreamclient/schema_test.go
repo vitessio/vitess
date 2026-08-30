@@ -230,7 +230,7 @@ func TestVStreamClientSchemaDriftFailsWhenProjectedColumnTypeChanges(t *testing.
 
 	err := <-runErrCh
 	require.Error(t, err)
-	assert.ErrorContains(t, err, "projected_payload")
+	require.ErrorContains(t, err, "projected_payload")
 	assert.ErrorContains(t, err, "error unmarshalling JSON")
 }
 

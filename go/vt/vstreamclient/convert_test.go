@@ -222,7 +222,7 @@ func TestCopyRowToStruct_NullIntoNonPointerErrors(t *testing.T) {
 
 	v := reflect.New(table.underlyingType)
 	err = copyRowToStruct(shard, row, v)
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.ErrorContains(t, err, "NULL into non-pointer field")
 }
 
@@ -279,7 +279,7 @@ func TestCopyRowToStruct_JSONFieldInvalidErrors(t *testing.T) {
 
 	v := reflect.New(table.underlyingType)
 	err = copyRowToStruct(shard, row, v)
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.ErrorContains(t, err, "error unmarshalling JSON for field payload")
 }
 
@@ -305,8 +305,8 @@ func TestCopyRowToStruct_JSONFieldNullIntoNonPointerErrors(t *testing.T) {
 
 	v := reflect.New(table.underlyingType)
 	err = copyRowToStruct(shard, row, v)
-	assert.Error(t, err)
-	assert.ErrorContains(t, err, "error unmarshalling JSON for field payload")
+	require.Error(t, err)
+	require.ErrorContains(t, err, "error unmarshalling JSON for field payload")
 	assert.ErrorContains(t, err, "NULL into non-pointer field")
 }
 
@@ -546,8 +546,8 @@ func TestCopyRowToStruct_UnsupportedStructFieldErrors(t *testing.T) {
 
 	v := reflect.New(table.underlyingType)
 	err = copyRowToStruct(shard, row, v)
-	assert.Error(t, err)
-	assert.ErrorContains(t, err, "unsupported struct field type")
+	require.Error(t, err)
+	require.ErrorContains(t, err, "unsupported struct field type")
 	assert.ErrorContains(t, err, "wrapped")
 }
 
@@ -565,8 +565,8 @@ func TestCopyRowToStruct_IntOverflowErrors(t *testing.T) {
 
 	v := reflect.New(table.underlyingType)
 	err = copyRowToStruct(shard, row, v)
-	assert.Error(t, err)
-	assert.ErrorContains(t, err, "overflows destination type")
+	require.Error(t, err)
+	require.ErrorContains(t, err, "overflows destination type")
 	assert.ErrorContains(t, err, "value")
 }
 
@@ -584,8 +584,8 @@ func TestCopyRowToStruct_UintOverflowErrors(t *testing.T) {
 
 	v := reflect.New(table.underlyingType)
 	err = copyRowToStruct(shard, row, v)
-	assert.Error(t, err)
-	assert.ErrorContains(t, err, "overflows destination type")
+	require.Error(t, err)
+	require.ErrorContains(t, err, "overflows destination type")
 	assert.ErrorContains(t, err, "value")
 }
 
@@ -603,8 +603,8 @@ func TestCopyRowToStruct_FloatOverflowErrors(t *testing.T) {
 
 	v := reflect.New(table.underlyingType)
 	err = copyRowToStruct(shard, row, v)
-	assert.Error(t, err)
-	assert.ErrorContains(t, err, "overflows destination type")
+	require.Error(t, err)
+	require.ErrorContains(t, err, "overflows destination type")
 	assert.ErrorContains(t, err, "value")
 }
 
@@ -615,7 +615,7 @@ func TestReflectMapFields_ErrorOnUnknownFields(t *testing.T) {
 	table.underlyingType = reflect.Indirect(reflect.ValueOf(table.DataType)).Type()
 
 	_, err := table.reflectMapFields(fields)
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.ErrorContains(t, err, "field extra")
 }
 
@@ -652,7 +652,7 @@ func TestInitTables_RequiresFlushFn(t *testing.T) {
 		Table:    "t",
 		DataType: &testRowSmall{},
 	}})
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.ErrorContains(t, err, "has no flush function")
 }
 
@@ -674,7 +674,7 @@ func TestInitTables_SetsDefaults(t *testing.T) {
 	require.NotNil(t, table)
 	assert.Equal(t, "select * from `t`", table.Query)
 	assert.Equal(t, DefaultMaxRowsPerFlush, table.MaxRowsPerFlush)
-	assert.Len(t, table.currentBatch, 0)
+	assert.Empty(t, table.currentBatch)
 	assert.Equal(t, DefaultMaxRowsPerFlush, cap(table.currentBatch))
 }
 
@@ -745,7 +745,7 @@ func TestInitTables_RejectsConflictingQueriesForSameTableAcrossKeyspaces(t *test
 		{Keyspace: "ks1", Table: "t", Query: "select * from t where id < 10", DataType: &testRowSmall{}, FlushFn: func(context.Context, []Row, FlushMeta) error { return nil }},
 		{Keyspace: "ks2", Table: "t", Query: "select * from t where id >= 10", DataType: &testRowSmall{}, FlushFn: func(context.Context, []Row, FlushMeta) error { return nil }},
 	})
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.ErrorContains(t, err, "same table name across keyspaces must use identical queries")
 }
 
@@ -761,7 +761,7 @@ func TestInitTables_RejectsUnknownKeyspace(t *testing.T) {
 		DataType: &testRowSmall{},
 		FlushFn:  func(context.Context, []Row, FlushMeta) error { return nil },
 	}})
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.ErrorContains(t, err, "keyspace missing not found")
 }
 
@@ -777,7 +777,7 @@ func TestInitTables_RejectsNonStructDataType(t *testing.T) {
 		DataType: new(int64),
 		FlushFn:  func(context.Context, []Row, FlushMeta) error { return nil },
 	}})
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.ErrorContains(t, err, "must be a struct")
 }
 
@@ -794,7 +794,7 @@ func TestInitTables_RejectsTypedNilDataType(t *testing.T) {
 		DataType: row,
 		FlushFn:  func(context.Context, []Row, FlushMeta) error { return nil },
 	}})
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.ErrorContains(t, err, "has no data type")
 }
 
@@ -811,7 +811,7 @@ func TestInitTables_RejectsNegativeMaxRowsPerFlush(t *testing.T) {
 		DataType:        &testRowSmall{},
 		FlushFn:         func(context.Context, []Row, FlushMeta) error { return nil },
 	}})
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.ErrorContains(t, err, "max rows per flush must be positive")
 }
 
@@ -829,10 +829,9 @@ func TestValidateTableConfig(t *testing.T) {
 			map[string]*TableConfig{"t": {Keyspace: "ks", Table: "t", Query: "select * from t"}},
 			map[string]dbTableConfig{"t": {Keyspace: "ks", Table: "t", Query: "select id from t"}},
 		)
-		assert.Error(t, err)
-		assert.ErrorContains(t, err, "provided tables do not match stored tables")
-		assert.ErrorContains(t, err, "table ks.t query changed")
-		assert.ErrorContains(t, err, "provided \"select * from t\"")
+		require.ErrorContains(t, err, "provided tables do not match stored tables")
+		require.ErrorContains(t, err, "table ks.t query changed")
+		require.ErrorContains(t, err, "provided \"select * from t\"")
 		assert.ErrorContains(t, err, "stored \"select id from t\"")
 	})
 
@@ -846,7 +845,7 @@ func TestValidateTableConfig(t *testing.T) {
 				"t1": {Keyspace: "ks", Table: "t1", Query: "select * from t1"},
 			},
 		)
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.ErrorContains(t, err, "table ks.t2 is new in provided config")
 	})
 
@@ -860,7 +859,7 @@ func TestValidateTableConfig(t *testing.T) {
 				"t2": {Keyspace: "ks", Table: "t2", Query: "select * from t2"},
 			},
 		)
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.ErrorContains(t, err, "table ks.t2 is missing from provided config")
 	})
 }
@@ -1009,8 +1008,8 @@ func TestHandleRowEvent_DecodeFailureDoesNotBufferRow(t *testing.T) {
 
 	stats := &VStreamStats{}
 	err = table.handleRowEvent(ev, stats)
-	assert.Error(t, err)
-	assert.Len(t, table.currentBatch, 0)
+	require.Error(t, err)
+	assert.Empty(t, table.currentBatch)
 }
 
 func TestHandleRowEvent_ScannerFailureDoesNotBufferRow(t *testing.T) {
@@ -1028,9 +1027,9 @@ func TestHandleRowEvent_ScannerFailureDoesNotBufferRow(t *testing.T) {
 
 	stats := &VStreamStats{}
 	err := table.handleRowEvent(ev, stats)
-	assert.Error(t, err)
-	assert.ErrorContains(t, err, "client scan failed")
-	assert.Len(t, table.currentBatch, 0)
+	require.Error(t, err)
+	require.ErrorContains(t, err, "client scan failed")
+	assert.Empty(t, table.currentBatch)
 }
 
 func TestHandleRowEvent_PartialRowImageFailsForDefaultDecoder(t *testing.T) {
@@ -1050,9 +1049,9 @@ func TestHandleRowEvent_PartialRowImageFailsForDefaultDecoder(t *testing.T) {
 
 	stats := &VStreamStats{}
 	err = table.handleRowEvent(ev, stats)
-	assert.Error(t, err)
-	assert.ErrorContains(t, err, "partial row images are unsupported")
-	assert.Len(t, table.currentBatch, 0)
+	require.Error(t, err)
+	require.ErrorContains(t, err, "partial row images are unsupported")
+	assert.Empty(t, table.currentBatch)
 }
 
 func TestHandleRowEvent_PartialJSONFailsForDefaultDecoder(t *testing.T) {
@@ -1081,14 +1080,14 @@ func TestHandleRowEvent_PartialJSONFailsForDefaultDecoder(t *testing.T) {
 
 	stats := &VStreamStats{}
 	err = table.handleRowEvent(ev, stats)
-	assert.Error(t, err)
-	assert.ErrorContains(t, err, "partial JSON updates are unsupported")
-	assert.Len(t, table.currentBatch, 0)
+	require.Error(t, err)
+	require.ErrorContains(t, err, "partial JSON updates are unsupported")
+	assert.Empty(t, table.currentBatch)
 }
 
 func TestWithFlags_RejectsZeroHeartbeatInterval(t *testing.T) {
 	v := &VStreamClient{}
 	err := WithFlags(&vtgatepb.VStreamFlags{HeartbeatInterval: 0})(v)
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.ErrorContains(t, err, "HeartbeatInterval")
 }

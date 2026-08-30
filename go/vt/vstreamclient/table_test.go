@@ -21,7 +21,31 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
+
+func TestHandleRowEvent_RejectsMissingRowImages(t *testing.T) {
+	for _, tt := range []struct {
+		name   string
+		change *binlogdatapb.RowChange
+	}{
+		{name: "nil row change"},
+		{name: "missing images", change: &binlogdatapb.RowChange{}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			table := &TableConfig{Keyspace: "ks", Table: "t", shards: map[string]shardConfig{"0": {}}}
+			stats := &VStreamStats{}
+			var err error
+			require.NotPanics(t, func() {
+				err = table.handleRowEvent(&binlogdatapb.RowEvent{TableName: "ks.t", Shard: "0", RowChanges: []*binlogdatapb.RowChange{tt.change}}, stats)
+			})
+			require.ErrorContains(t, err, "row change has neither a before nor an after image")
+			assert.Empty(t, table.currentBatch)
+			assert.Zero(t, stats.RowDeleteCount)
+		})
+	}
+}
 
 // TestResetBatch_ReuseBatchSlice pins the batch reuse contract deterministically: the test holds a
 // reference into the previous batch's backing array, so with reuse enabled the next batch must

@@ -484,7 +484,7 @@ This approach is useful when:
 - column names need custom mapping logic
 - values need validation or conversion into enums or domain types
 - JSON/blob columns need bespoke decoding
-- partial row images or partial JSON updates need bitmap-aware handling
+- partial after-images or partial JSON updates need bitmap-aware handling
 - delete events need special handling beyond the default struct mapping
 
 ## Common Usage Patterns
@@ -664,6 +664,10 @@ error, the normal flush path for that commit does not run.
 
 Use `WithStartingVGtid(...)` to override any stored checkpoint and begin from a caller-supplied position.
 
+Every configured source shard must have exactly one concrete, parseable GTID, using the serving partition for the
+configured tablet type (REPLICA by default). Empty positions, `current`, foreign shards, and `TablePKs` copy cursors
+are rejected before any state row is changed. To start a fresh copy, omit this option.
+
 This is useful for:
 
 - replay
@@ -683,6 +687,14 @@ stream failure, create a new client before trying again.
 
 `GracefulShutdown(wait)` asks an active `Run()` call to stop after the next safe flush boundary. If no safe boundary
 arrives before `wait` expires, the client stops and buffered rows are replayed on the next startup.
+
+Liveness failures (`ErrHeartbeatTimeout` and `ErrStartupTimeout`) cancel the stream immediately without waiting for
+the graceful shutdown window. Any work after the last successful checkpoint is replayed on restart.
+
+The liveness window is `HeartbeatInterval × DefaultHeartbeatTimeoutMultiplier`: by default, one-second heartbeats
+and a multiplier of ten allow ten seconds of silence. Set the package default before constructing clients if your
+environment needs a different tolerance. `WithHeartbeatSeconds(...)` overrides the heartbeat interval supplied by
+`WithFlags(...)` in either option order; it does not override other flags.
 
 Recommended pattern:
 
@@ -727,16 +739,28 @@ event.
 `WithStateTable(...)` requires an unsharded keyspace. This package intentionally stores its state in a user-owned Vitess
 table rather than in `_vt`.
 
+The keyspace must report `sharded=false` in `SHOW VSCHEMA KEYSPACES`; if that metadata cannot be read, construction
+fails. The state keyspace does not need replicas just because the source stream uses REPLICA tablets.
+
+Every `New(...)` call executes `CREATE TABLE IF NOT EXISTS` for the state table, including when it already exists.
+The consumer's account must be permitted to execute that DDL as well as read and write checkpoints. Automatic
+creation is currently mandatory; provisioning the table separately does not suppress the startup DDL.
+
 ### Run only one client per stream name
 
 Two clients running with the same stream name would interleave checkpoint writes, so the checkpoint could move
-backwards and cause large replays. To prevent that, `New(...)` claims ownership of the state row with a unique owner
-token, and every checkpoint write requires the token to still match.
+backwards and cause large replays. To prevent that, `Run(...)` claims ownership of the state row with a unique owner
+token after opening its VStream, and every checkpoint write requires the token to still match. `New(...)` prepares
+the takeover without claiming the row, so an abandoned constructor or failed stream setup does not fence a running
+consumer.
 
 The newest client wins: when a new client starts (for example during a rolling deploy), the previous client's next
 checkpoint write fails and its `Run(...)` returns an error wrapping `ErrFenced`, which you can match with `errors.Is`.
-Rows the fenced client flushed after the newer client read its starting checkpoint may be replayed by the newer
-client — the usual at-least-once contract applies.
+Ownership is checked when writing the checkpoint, after `FlushFn` returns. Until that check, both processes can
+write to the sink concurrently. `WithMinFlushDuration(...)` is not a hard upper bound on this overlap: a long
+transaction or slow flush can extend it. An older row image can arrive after a newer one, so idempotency alone
+does not guarantee correct ordering. Serialize consumer handoffs externally, or use sink-enforced fencing or
+source-version checks that reject stale writes. State-row fencing protects the checkpoint, not the sink.
 
 If you want multiple concurrent consumers, use a distinct stream name for each.
 
@@ -791,8 +815,8 @@ For row events coming from MySQL binlog replication, `binlog_row_image` affects 
 | `binlog_row_image` | What to expect | Tradeoff |
 | --- | --- | --- |
 | `FULL` | You can generally expect the row image to be fully populated. | Easiest to reason about, but uses more binlog bandwidth and more memory in the stream consumer. |
-| `NOBLOB` | Large blob/text-style fields may be omitted from row images. | Reduces memory and event size, but if your sink assumes those fields are always present, you can accidentally write `NULL` or otherwise clear data you expected to keep. |
-| `MINIMAL` | Only the fields needed for the row event may be present. | Smallest row images, but you should not assume you received a full record. If you need to flesh out missing data, a common pattern is to fetch the extra metadata inside `FlushFn` using the primary key from the event. |
+| `NOBLOB` | Large blob/text-style fields may be omitted from row images. | Unsupported: omitted delete values cannot be distinguished from SQL `NULL`. |
+| `MINIMAL` | Only the fields needed for the row event may be present. | Unsupported: neither a scanner nor a later query can reconstruct omitted delete values reliably. |
 
 This client requires `FULL`. `New(...)` probes `@@global.binlog_row_image` on every source shard and fails unless it
 reports `FULL`; an unverifiable shard also fails, since it could silently be running `NOBLOB`. The check can be
