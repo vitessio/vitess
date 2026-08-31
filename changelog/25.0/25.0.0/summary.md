@@ -29,6 +29,7 @@
         - [Preparing a statement no longer starts an implicit transaction](#vtgate-prepare-no-implicit-tx)
         - [Stricter validation of SQL-level PREPARE statements](#vtgate-prepare-stricter-validation)
         - [Stricter PROXY protocol v1 header validation](#vtgate-proxy-protocol-v1-strictness)
+        - [`VALUES` table constructors as a query](#vtgate-values-table-constructor)
     - **[Reparent](#minor-changes-reparent)**
         - [`EmergencyReparentShard` no longer waits on replicas that cannot win the election](#ers-lagging-relay-log-wait)
         - [`EmergencyReparentShard` can explicitly recover from split brain](#ers-allow-split-brain-promotion)
@@ -281,6 +282,26 @@ Specification-conformant v1 headers, as emitted by HAProxy, AWS load balancers, 
 **Impact**: Deployments whose proxy emits one of the forms above — most notably the nginx stream module proxying between IPv6 clients and IPv4 upstreams — will have those connections rejected before the MySQL handshake. Configure the proxy to emit specification-conformant headers (for nginx, listen on a matching address family or on a v4-mapped socket so addresses are rendered in IPv6 form).
 
 See [#20733](https://github.com/vitessio/vitess/pull/20733) for details.
+
+#### <a id="vtgate-values-table-constructor"/>`VALUES` table constructors as a query</a>
+
+A MySQL 8.0.19 `VALUES ROW(...)` table constructor can now be used wherever VTGate accepts a query: as a derived table, as a branch of a `UNION`, as a subquery, and as a CTE definition. These previously failed with an internal `VT13001` error or, in the subquery positions, panicked.
+
+```sql
+SELECT * FROM (VALUES ROW(1, 1), ROW(2, 2)) AS sub;
+```
+
+When VTGate has to plan the query itself, it does so by rewriting the `VALUES` statement into the `SELECT ... UNION ALL ...` that produces the same rows, so the query it sends to MySQL no longer uses `VALUES` syntax. The generated `column_0`, `column_1`, ... column names, the column types unified across rows, and their collations are unchanged.
+
+Queries that qualify for the single-unsharded-keyspace fast path are not rewritten. They are forwarded to MySQL with their `VALUES` syntax intact, so for those the backend's own support for `VALUES` and its own validation of it applies.
+
+On the rewriting path, three forms are not supported, and now report that plainly rather than as an internal error:
+
+- A standalone `VALUES ROW(...)` statement, because it is not yet classified as a read statement and so would miss routing, `sql_select_limit` and streaming plans.
+- `VALUES ... ORDER BY ...`. MySQL parses and validates the clause but never applies it, so rewriting to a `UNION`, which would sort, returns different rows.
+- `VALUES ::listarg`, whose rows are only known once bind variables are bound.
+
+**Impact**: Queries using `VALUES` table constructors that previously failed now succeed. Two things to be aware of on the rewriting path. A large `VALUES` list becomes a `UNION` with one branch per row, and planning cost grows quadratically with the number of rows, so a constructor with many thousands of rows is slow to plan. And because the rewritten query no longer uses `VALUES` syntax, it is accepted by backends that do not support `VALUES` themselves, such as MySQL 5.7. This does not apply to queries taking the fast path described above, which still require a backend that supports `VALUES`.
 
 ### <a id="minor-changes-reparent"/>Reparent</a>
 
