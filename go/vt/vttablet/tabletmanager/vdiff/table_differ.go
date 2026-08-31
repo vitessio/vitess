@@ -1143,16 +1143,20 @@ func (td *tableDiffer) getSourcePKCols() error {
 	if err != nil {
 		return vterrors.Wrapf(err, "table %s", sourceTableName)
 	}
+	// The source stream is always ordered by the full physical source PK, while the
+	// VDiff merge sorter orders both streams by the comparison key. The merge is
+	// only valid when the comparison key is an order-preserving prefix of the
+	// physical source PK, so reject any plan (projected in full or not) that is not.
+	// This catches reordered keys and non-matching aliases as well as omitted-suffix
+	// filters.
+	if err := comparisonKeyIsSourcePKPrefix(sourceSelect, td.tablePlan.comparePKs, sourceTable.PrimaryKeyColumns); err != nil {
+		return err
+	}
 	if !allProjected {
-		// A subset-projection filter omits part of the physical source PK. Reject it
-		// unless the comparison key is an order-preserving prefix of that PK, since
-		// the source stream is always ordered by the full physical source PK.
-		if err := comparisonKeyIsSourcePKPrefix(sourceSelect, td.tablePlan.comparePKs, sourceTable.PrimaryKeyColumns); err != nil {
-			return err
-		}
-		// The full source PK is not projected, so no resumable source checkpoint is
-		// possible: any resume restarts the whole table for both streams, and the
-		// table cannot honor --max-diff-duration. Clear any stale loaded checkpoint.
+		// The comparison key is a safe prefix, but the full source PK is not
+		// projected so no resumable source checkpoint is possible: any resume
+		// restarts the whole table for both streams, and the table cannot honor
+		// --max-diff-duration. Clear any stale loaded checkpoint.
 		td.tablePlan.sourceCheckpointUnavailable = true
 		td.lastSourcePK = nil
 		td.lastTargetPK = nil
@@ -1219,18 +1223,15 @@ func sourceTableNameFromSelect(sourceSelect *sqlparser.Select) (string, error) {
 // (aliased ColName), or a CONVERT(col USING charset) rename.
 //
 // allProjected is true only when every source PK column resolves to a physical
-// SELECT column. A PK column that is entirely absent from the SELECT list returns
-// allProjected == false with no error and no partial indices (a subset-projection
-// filter the caller must further validate). A PK column that is projected only as
-// the output of a non-matching expression -- a rename of a different column
-// ("other_col as id") or a computed value ("a+b as id") -- returns an error: the
-// row streamer orders the source by the physical PK column while VDiff would
-// compare the aliased value, so the merge input would not be sorted.
+// SELECT column. It is false, with no error, when a source PK column is not
+// projected as a physical column (absent, or shadowed by an alias of another
+// column); the caller then cannot build a resumable source checkpoint. Merge-
+// ordering correctness is enforced separately by comparisonKeyIsSourcePKPrefix,
+// which the caller runs for every plan.
 func sourcePKSelectIndices(sourceSelect *sqlparser.Select, pkColumns []string) (indices []int, allProjected bool, err error) {
 	indices = make([]int, 0, len(pkColumns))
 	for _, pkc := range pkColumns {
 		physicalIdx := -1
-		claimedByAlias := false
 		for i, selExpr := range sourceSelect.SelectExprs.Exprs {
 			// Invariant: buildTablePlan expands "*" into explicit columns before
 			// this runs, so the SELECT list must contain only AliasedExprs. A
@@ -1250,38 +1251,14 @@ func sourcePKSelectIndices(sourceSelect *sqlparser.Select, pkColumns []string) (
 				physicalIdx = i
 				break
 			}
-			// The PK name is produced as the output of a non-matching expression.
-			if strings.EqualFold(selectExprOutputName(aliasedExpr), pkc) {
-				claimedByAlias = true
-			}
 		}
 		if physicalIdx < 0 {
-			if claimedByAlias {
-				return nil, false, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED,
-					"vdiff does not support a filter that projects the %q source primary key column only through a non-matching expression: %s",
-					pkc, sqlparser.String(sourceSelect))
-			}
-			// Entirely absent: a subset-projection filter. The caller runs without a
-			// resume checkpoint after verifying the comparison key is a prefix of the
-			// physical source PK.
+			// Not projected as a physical column: no resumable source checkpoint.
 			return nil, false, nil
 		}
 		indices = append(indices, physicalIdx)
 	}
 	return indices, true, nil
-}
-
-// selectExprOutputName returns the output column name a SELECT expression
-// produces: its explicit alias, or the column name for an unaliased column
-// reference. Other unaliased expressions have no output name.
-func selectExprOutputName(expr *sqlparser.AliasedExpr) string {
-	if !expr.As.IsEmpty() {
-		return expr.As.String()
-	}
-	if col, ok := expr.Expr.(*sqlparser.ColName); ok {
-		return col.Name.String()
-	}
-	return ""
 }
 
 // underlyingSourceColumn returns the name of the physical source column that a

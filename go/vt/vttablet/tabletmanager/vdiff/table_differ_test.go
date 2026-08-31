@@ -619,6 +619,55 @@ func TestGetSourcePKCols_ComputedAliasRejected(t *testing.T) {
 		tablePlan: &tablePlan{
 			table:       sourceTable,
 			sourceQuery: "select c2, a + b as textcol from pktext order by textcol asc",
+			// textcol is the comparison key, projected at SELECT index 1 as the
+			// computed expression "a + b".
+			comparePKs: []compareColInfo{{colIndex: 1, colName: "textcol", isPK: true}},
+		},
+	}
+
+	err := td.getSourcePKCols()
+	require.Error(t, err)
+	require.False(t, td.tablePlan.sourceCheckpointUnavailable)
+	require.Empty(t, td.tablePlan.sourcePkCols)
+}
+
+// TestGetSourcePKCols_ReorderedComparisonKeyRejected verifies that a plan whose
+// source PK is fully projected is still rejected when the comparison key is not
+// an order-preserving prefix of the physical source PK. Here the source PK is
+// (a, b) but the filter projects "select b as target_a, a as target_b", so VDiff
+// compares in (a=physical b, b=physical a) order while the row streamer emits
+// rows ordered by the physical PK (a, b). Without this check the first pass would
+// report false differences.
+func TestGetSourcePKCols_ReorderedComparisonKeyRejected(t *testing.T) {
+	tvde := newTestVDiffEnv(t)
+	defer tvde.close()
+
+	ct := tvde.createController(t, 1)
+
+	sourceTable := &tabletmanagerdatapb.TableDefinition{
+		Name:              "t",
+		Columns:           []string{"a", "b"},
+		PrimaryKeyColumns: []string{"a", "b"},
+		Fields:            sqltypes.MakeTestFields("a|b", "int64|int64"),
+	}
+	tvde.tmc.schema = &tabletmanagerdatapb.SchemaDefinition{
+		TableDefinitions: []*tabletmanagerdatapb.TableDefinition{sourceTable},
+	}
+
+	td := &tableDiffer{
+		wd: &workflowDiffer{
+			ct: ct,
+		},
+		table: sourceTable,
+		tablePlan: &tablePlan{
+			table:       sourceTable,
+			sourceQuery: "select b as target_a, a as target_b from t order by target_a asc, target_b asc",
+			// The comparison key (target_a, target_b) maps to physical (b, a), which
+			// is not a prefix of the physical source PK (a, b).
+			comparePKs: []compareColInfo{
+				{colIndex: 0, colName: "target_a", isPK: true},
+				{colIndex: 1, colName: "target_b", isPK: true},
+			},
 		},
 	}
 

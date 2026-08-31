@@ -241,12 +241,13 @@ func TestSourcePKSelectIndices(t *testing.T) {
 		},
 		{
 			// A computed expression wrapped in CONVERT aliased back to the PK name
-			// is a derived value, not the physical column. The PK name is claimed by
-			// this non-matching alias, so it is rejected rather than run unsorted.
-			name:        "computed convert aliased to PK name is rejected",
-			sourceQuery: "select convert(concat(c1, 'x') using utf8mb4) as c1, c2 from t order by c1 asc",
-			pkColumns:   []string{"c1"},
-			wantErr:     true,
+			// is a derived value, not the physical column, so it is treated as not
+			// projected here. Merge-ordering safety is enforced by the caller's
+			// comparisonKeyIsSourcePKPrefix check.
+			name:             "computed convert aliased to PK name is not projected",
+			sourceQuery:      "select convert(concat(c1, 'x') using utf8mb4) as c1, c2 from t order by c1 asc",
+			pkColumns:        []string{"c1"},
+			wantNotProjected: true,
 		},
 		{
 			name:        "function expression with alias",
@@ -305,21 +306,22 @@ func TestSourcePKSelectIndices(t *testing.T) {
 			wantIndices: []int{0, 1},
 		},
 		{
-			// A computed alias claims the source PK name but is a derived value, not
-			// the physical column the row streamer orders by, so it is rejected.
-			name:        "computed alias claiming source PK name is rejected",
-			sourceQuery: "select a + b as id, c from t order by id asc",
-			pkColumns:   []string{"id"},
-			wantErr:     true,
+			// A computed alias is a derived value, not the physical column, so it is
+			// treated as not projected here (correctness is enforced by the caller's
+			// prefix check when this column is the comparison key).
+			name:             "computed alias claiming source PK name is not projected",
+			sourceQuery:      "select a + b as id, c from t order by id asc",
+			pkColumns:        []string{"id"},
+			wantNotProjected: true,
 		},
 		{
 			// An alias mapping an unrelated physical column to the source PK name
-			// (Copilot's example) does not match the physical PK the row streamer
-			// orders by, so it is rejected rather than compared unsorted.
-			name:        "unrelated column aliased to source PK name is rejected",
-			sourceQuery: "select other_col as id, c from t order by id asc",
-			pkColumns:   []string{"id"},
-			wantErr:     true,
+			// does not match the physical PK, so it is treated as not projected
+			// (the caller's prefix check rejects it when id is the comparison key).
+			name:             "unrelated column aliased to source PK name is not projected",
+			sourceQuery:      "select other_col as id, c from t order by id asc",
+			pkColumns:        []string{"id"},
+			wantNotProjected: true,
 		},
 		{
 			// Invariant guard: buildTablePlan must expand "*" into explicit
