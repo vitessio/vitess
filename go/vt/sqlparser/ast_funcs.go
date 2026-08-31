@@ -3262,9 +3262,13 @@ func (node *ValuesStatement) GetColumns() []SelectExpr {
 	panic("no columns available") // TODO: we need a better solution than a panic
 }
 
-func (node *ValuesStatement) SetComments(comments Comments) {}
+func (node *ValuesStatement) SetComments(comments Comments) {
+	node.Comments = comments.Parsed()
+}
 
-func (node *ValuesStatement) GetParsedComments() *ParsedComments { return nil }
+func (node *ValuesStatement) GetParsedComments() *ParsedComments {
+	return node.Comments
+}
 
 func NewFuncExpr(name string, exprs ...Expr) *FuncExpr {
 	return &FuncExpr{

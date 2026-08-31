@@ -73,6 +73,30 @@ func TestDeniedSystemVariables(t *testing.T) {
 		wantErr:  "VT12001: unsupported: system setting: UNIQUE_CHECKS",
 		wantCode: vtrpcpb.Code_UNIMPLEMENTED,
 	}, {
+		// A VALUES statement carries its own comments, and a UNION reads them from its left
+		// branch, so the denylist has to see them there too.
+		name:     "SET_VAR hint on a VALUES branch of a UNION is denied",
+		denied:   map[string]struct{}{"unique_checks": {}},
+		query:    "values /*+ SET_VAR(unique_checks=0) */ row(1) union all select 2",
+		wantErr:  "VT12001: unsupported: system setting: unique_checks",
+		wantCode: vtrpcpb.Code_UNIMPLEMENTED,
+	}, {
+		name:     "SET_VAR hint on a multi row VALUES branch of a UNION is denied",
+		denied:   map[string]struct{}{"unique_checks": {}},
+		query:    "values /*+ SET_VAR(unique_checks=0) */ row(1), row(2) union all select 3",
+		wantErr:  "VT12001: unsupported: system setting: unique_checks",
+		wantCode: vtrpcpb.Code_UNIMPLEMENTED,
+	}, {
+		name:     "SET_VAR hint above a VALUES derived table is denied",
+		denied:   map[string]struct{}{"unique_checks": {}},
+		query:    "select /*+ SET_VAR(unique_checks=0) */ * from (values row(1)) as sub",
+		wantErr:  "VT12001: unsupported: system setting: unique_checks",
+		wantCode: vtrpcpb.Code_UNIMPLEMENTED,
+	}, {
+		name:   "unrelated SET_VAR hints on a VALUES branch are unaffected",
+		denied: map[string]struct{}{"unique_checks": {}},
+		query:  "values /*+ SET_VAR(sql_mode='ANSI') */ row(1) union all select 2",
+	}, {
 		name:     "denylist applies to VitessAware sysvars",
 		denied:   map[string]struct{}{"autocommit": {}},
 		query:    "set autocommit = 0",
