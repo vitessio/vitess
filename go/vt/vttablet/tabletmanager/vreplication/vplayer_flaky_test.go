@@ -40,11 +40,42 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	vttablet "vitess.io/vitess/go/vt/vttablet/common"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer/testenv"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	qh "vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication/queryhistory"
 )
+
+type (
+	// fakeThrottleChecker is a throttleChecker whose verdict the test
+	// controls: while deny is set every check is refused, as for a tablet
+	// whose lag-gated throttler checks are being denied.
+	fakeThrottleChecker struct {
+		deny atomic.Bool
+	}
+)
+
+func (f *fakeThrottleChecker) ThrottleCheckOKOrWaitAppName(_ context.Context, appName throttlerapp.Name) (*throttle.CheckResult, bool) {
+	if f.deny.Load() {
+		// Mimic the real client's denial pacing so the caller's check
+		// loop does not spin hot, but pace faster than the real client:
+		// the vplayer refreshes its denial timestamp once per check, and
+		// a wide refresh-to-deadline margin keeps a paused CI runner
+		// from letting the stall timer see a stale denial.
+		time.Sleep(50 * time.Millisecond)
+		return &throttle.CheckResult{
+			ResponseCode: tabletmanagerdatapb.CheckThrottlerResponseCode_THRESHOLD_EXCEEDED,
+			AppName:      appName.String(),
+		}, false
+	}
+	return &throttle.CheckResult{
+		ResponseCode: tabletmanagerdatapb.CheckThrottlerResponseCode_OK,
+		AppName:      appName.String(),
+	}, true
+}
 
 var testGTIDCounter atomic.Uint64
 
@@ -4281,4 +4312,125 @@ func drainDBQueries() {
 			return
 		}
 	}
+}
+
+// TestPlayerNoStallWhileThrottled exercises the production handoff for
+// https://github.com/vitessio/vitess/issues/20922 end to end: a
+// throttler-denied vplayer reports its denials (vplayer.lastThrottledNano)
+// to the relay log, which defers the stall verdict, so sustained throttling
+// must not produce the relay log I/O stall error -- and replication must
+// resume normally once the throttler allows it again.
+func TestPlayerNoStallWhileThrottled(t *testing.T) {
+	defer deleteTablet(addTablet(100))
+
+	// Capture the error log so we can assert the stall message is absent.
+	ole := log.Error
+	logger := logutil.NewMemoryLogger()
+	log.Error = func(msg string, _ ...slog.Attr) {
+		logger.Errorf("%s", msg)
+	}
+
+	oldProgressDeadline := vplayerProgressDeadline
+	oldRelayLogMaxItems := vttablet.DefaultVReplicationConfig.RelayLogMaxItems
+	oldThrottlerClient := playerEngine.throttlerClient
+	defer func() {
+		log.Error = ole
+		vplayerProgressDeadline = oldProgressDeadline
+		vttablet.DefaultVReplicationConfig.RelayLogMaxItems = oldRelayLogMaxItems
+		playerEngine.throttlerClient = oldThrottlerClient
+		drainDBQueries()
+	}()
+	// Shorten the stall deadline so that an undeferred stall would fire
+	// well within the test's throttled window, but keep a wide margin
+	// (100x) over the fake checker's denial pacing: a spurious stall
+	// would need a full-process pause longer than the deadline between
+	// two denial-timestamp refreshes, which even a resource-starved CI
+	// runner should not produce.
+	vplayerProgressDeadline = 5 * time.Second
+	// Make each relay log batch a single transaction so the relay log
+	// fills -- and its Send blocks, starting the stall timer -- as soon as
+	// events arrive while the applier is denied.
+	vttablet.DefaultVReplicationConfig.RelayLogMaxItems = 1
+
+	// Start with the throttler allowing, so the stream starts up cleanly;
+	// the fake's verdict is flipped to denied before any row events flow.
+	throttler := &fakeThrottleChecker{}
+	playerEngine.throttlerClient = throttler
+
+	execStatements(t, []string{
+		"create table t1(id bigint, val1 varchar(128), primary key(id))",
+		fmt.Sprintf("create table %s.t1(id bigint, val1 varchar(128), primary key(id))", vrepldb),
+	})
+	defer execStatements(t, []string{
+		"drop table t1",
+		fmt.Sprintf("drop table %s.t1", vrepldb),
+	})
+
+	// Note: TestPlayerStalls uses an empty filter, which in its STATEMENT
+	// binlog_format scenarios passes statements through wholesale. Here we
+	// replicate default ROW events, which an empty filter would drop, so
+	// match the table explicitly.
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match: "/.*",
+		}},
+	}
+	bls := &binlogdatapb.BinlogSource{
+		Keyspace: env.KeyspaceName,
+		Shard:    env.ShardName,
+		Filter:   filter,
+		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
+	}
+	// Create the stream via the engine directly rather than through
+	// startVReplication: this test makes no assertions on the shared
+	// globalDBQueries channel -- the throttled window produces a
+	// nondeterministic mix of time_throttled/heartbeat updates -- so
+	// teardown must not expect a consumed channel either. The final
+	// deferred drain leaves the channel empty for subsequent tests.
+	defer drainDBQueries()
+	query := binlogplayer.CreateVReplication("test", bls, primaryPosition(t), 9223372036854775807, 9223372036854775807, 0, vrepldb, binlogdatapb.VReplicationWorkflowType_MoveTables, 0, false)
+	qr, err := playerEngine.Exec(query)
+	require.NoError(t, err)
+	defer func() {
+		_, err := playerEngine.Exec(fmt.Sprintf("delete from _vt.vreplication where id = %d", qr.InsertID))
+		require.NoError(t, err)
+	}()
+
+	// Deny all throttler checks from here on: the vplayer stops draining
+	// the relay log, so the row events below fill it and block the
+	// vstreamer's Send, which starts the stall timer.
+	throttler.deny.Store(true)
+	execStatements(t, []string{
+		"insert into t1(id, val1) values (1, 'aaa')",
+		"insert into t1(id, val1) values (2, 'bbb')",
+		"insert into t1(id, val1) values (3, 'ccc')",
+	})
+
+	// Wait out several stall deadlines' worth of denied time: without the
+	// denial handoff to the relay log, the stall fires within
+	// vplayerProgressDeadline and errors the stream.
+	time.Sleep(3 * vplayerProgressDeadline)
+	log.Flush()
+	require.NotContains(t, logger.String(), relayLogIOStalledMsg,
+		"the stall detector fired while the vplayer was throttled")
+
+	dbc := playerEngine.dbClientFactoryFiltered()
+	require.NoError(t, dbc.Connect())
+	defer dbc.Close()
+	waitForQueryResult(t, dbc, fmt.Sprintf("select state from _vt.vreplication where id = %d", qr.InsertID), "Running")
+
+	// Once the throttler allows again, the stream must drain the relay log
+	// and apply the queued rows: it was healthy all along. Use a generous
+	// CI-safe window: the backlog drains one single-item batch at a time
+	// with RelayLogMaxItems=1.
+	throttler.deny.Store(false)
+	countQuery := fmt.Sprintf("select count(*) from %s.t1", vrepldb)
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		res, err := dbc.ExecuteFetch(countQuery, 1)
+		require.NoError(c, err)
+		require.Len(c, res.Rows, 1)
+		assert.Equal(c, "3", res.Rows[0][0].ToString())
+	}, 30*time.Second, 100*time.Millisecond, "the queued rows were not applied after the throttler allowed again")
+	log.Flush()
+	require.NotContains(t, logger.String(), relayLogIOStalledMsg)
 }
