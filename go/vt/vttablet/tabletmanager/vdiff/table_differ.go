@@ -909,12 +909,23 @@ func setTableMismatch(dbClient binlogplayer.DBClient, vdiffID int64, table strin
 }
 
 func (td *tableDiffer) lastPKFromRow(row []sqltypes.Value) *tabletmanagerdatapb.VDiffTableLastPK {
+	// The streamed row is laid out in SELECT-expression order, and compareCols is
+	// indexed by that same order and carries each column's name. We resolve the
+	// field by name rather than indexing table.Fields (which is in DDL order), so
+	// a filter that reorders columns still pairs each PK value with the field
+	// describing that column. Proto3ToResult rebuilds each value's type from these
+	// fields and the row streamer uses that type to quote the resume predicate, so
+	// a wrong field type would yield an invalid checkpoint.
+	fieldByName := make(map[string]*querypb.Field, len(td.tablePlan.table.Fields))
+	for _, f := range td.tablePlan.table.Fields {
+		fieldByName[strings.ToLower(f.Name)] = f
+	}
 	buildQR := func(pkCols []int) *querypb.QueryResult {
 		pkColCnt := len(pkCols)
 		pkFields := make([]*querypb.Field, pkColCnt)
 		pkVals := make([]sqltypes.Value, pkColCnt)
 		for i, colIndex := range pkCols {
-			pkFields[i] = td.tablePlan.table.Fields[colIndex]
+			pkFields[i] = fieldByName[strings.ToLower(td.tablePlan.compareCols[colIndex].colName)]
 			pkVals[i] = row[colIndex]
 		}
 		return &querypb.QueryResult{
@@ -1076,40 +1087,69 @@ func (td *tableDiffer) getSourcePKCols() error {
 		return vterrors.Wrapf(err, "table %s", sourceTableName)
 	}
 	if !allProjected {
-		// At least one source PK column is not projected by the filter's SELECT
-		// list at all (e.g. source PK (cid, typ) with a filter of
-		// "select cid, name from customer"). We cannot build a resumable source
-		// checkpoint for such a subset-projection (or cross-table) filter: the
-		// row streamer always resumes on the full source PK and rejects a lastpk
-		// whose length does not match the source table's PK column count (see
-		// buildSelect in rowstreamer.go).
-		//
-		// Persisting only a target checkpoint (leaving the source key nil or
-		// empty) is not safe either: on resume the target would resume mid-table
-		// while the source restarts from the beginning, so the merge loop would
-		// classify every source row before the target's resume point as
-		// ExtraRowsSource, producing a false mismatch on every retry.
-		//
-		// So we record an explicit "source checkpoint unavailable" state. This
-		// makes updateTableProgress clear any persisted lastpk and leave the
-		// in-memory retry PKs unset, so any resume (auto-retry or manual resume)
-		// restarts the whole table from the beginning for both the source and
-		// target streams. That is correct (no false extra-row reports). Because
-		// such a table cannot be checkpointed it also cannot honor
-		// --max-diff-duration: if it exceeds that bound the differ stops with a
-		// non-retryable error rather than overriding the operator's bound (see
-		// differ).
+		// A subset-projection (or cross-table) filter omits part of the physical
+		// source PK from the SELECT list (e.g. source PK (cid, typ) with a filter
+		// of "select cid, name from customer"). The row streamer still emits source
+		// rows ordered by the full physical source PK, while the VDiff merge sorter
+		// orders both streams by the comparison key (comparePKs). That merge is only
+		// valid when the comparison key is an order-preserving prefix of the
+		// physical source PK; otherwise the source stream is not sorted by the
+		// compared columns and the diff produces false results even on the first
+		// pass, so we reject the plan.
+		if err := comparisonKeyIsSourcePKPrefix(sourceSelect, td.tablePlan.comparePKs, sourceTable.PrimaryKeyColumns); err != nil {
+			return err
+		}
+		// The comparison key is a safe prefix, but the full source PK is not
+		// projected so we cannot build a resumable source checkpoint: the row
+		// streamer resumes on the full source PK and rejects a lastpk of a different
+		// length (see buildSelect in rowstreamer.go). Record "source checkpoint
+		// unavailable" so updateTableProgress clears any persisted lastpk and any
+		// resume restarts the whole table from the beginning for both streams. Such
+		// a table also cannot honor --max-diff-duration.
 		td.tablePlan.sourceCheckpointUnavailable = true
-		// Discard any checkpoint that buildPlan already loaded from the database
-		// via getTableLastPK (e.g. a stale, possibly wrong-length lastpk written
-		// before this fix and then resumed after an upgrade). Leaving it set would
-		// resume the streams on that stale key instead of restarting the table.
+		// Discard any checkpoint buildPlan loaded via getTableLastPK (e.g. a stale,
+		// possibly wrong-length lastpk written before this fix); leaving it set would
+		// resume on that stale key instead of restarting the table.
 		td.lastSourcePK = nil
 		td.lastTargetPK = nil
 		return nil
 	}
 	td.tablePlan.sourcePkCols = indices
 
+	return nil
+}
+
+// comparisonKeyIsSourcePKPrefix verifies that the columns the VDiff merge sorter
+// compares on (comparePKs, in comparison order) are an order-preserving prefix of
+// the physical source PK. The row streamer emits source rows ordered by the full
+// physical source PK regardless of the query's ORDER BY, so a comparison key that
+// is not such a prefix leaves the merge input unsorted and produces false results.
+// Each comparePK indexes the SELECT list (positionally shared with the source
+// query); its underlying source column must equal the source PK column at the same
+// rank. It returns an error for unsafe filter shapes.
+func comparisonKeyIsSourcePKPrefix(sourceSelect *sqlparser.Select, comparePKs []compareColInfo, sourcePKColumns []string) error {
+	if len(comparePKs) > len(sourcePKColumns) {
+		return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED,
+			"vdiff does not support this filter: the comparison key has more columns (%d) than the physical source primary key (%d): %s",
+			len(comparePKs), len(sourcePKColumns), sqlparser.String(sourceSelect))
+	}
+	for i, cpk := range comparePKs {
+		if cpk.colIndex < 0 || cpk.colIndex >= len(sourceSelect.SelectExprs.Exprs) {
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL,
+				"comparison key index %d out of range for vdiff source query: %s", cpk.colIndex, sqlparser.String(sourceSelect))
+		}
+		aliasedExpr, ok := sourceSelect.SelectExprs.Exprs[cpk.colIndex].(*sqlparser.AliasedExpr)
+		if !ok {
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL,
+				"unexpected non-aliased expression at position %d in vdiff source query: %s", cpk.colIndex, sqlparser.String(sourceSelect))
+		}
+		colName, ok := underlyingSourceColumn(aliasedExpr.Expr)
+		if !ok || !strings.EqualFold(colName, sourcePKColumns[i]) {
+			return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED,
+				"vdiff does not support this filter: the comparison key is not an order-preserving prefix of the physical source primary key %v, so the source stream is not sorted by the compared columns: %s",
+				sourcePKColumns, sqlparser.String(sourceSelect))
+		}
+	}
 	return nil
 }
 
@@ -1138,22 +1178,23 @@ func sourceTableNameFromSelect(sourceSelect *sqlparser.Select) (string, error) {
 // (aliased ColName), or a CONVERT(col USING charset) rename.
 //
 // allProjected is true only when every source PK column resolves to a physical
-// SELECT column. If any PK column is not projected as a physical column -- absent,
-// or present only via a non-physical expression such as "other_col as id" -- it
-// returns allProjected == false with no error and no partial indices, so the
-// caller treats the source checkpoint as unavailable. The row streamer resumes on
-// the full physical source PK, so a partial or derived source key is not usable.
+// SELECT column. A PK column that is entirely absent from the SELECT list returns
+// allProjected == false with no error and no partial indices (a subset-projection
+// filter the caller must further validate). A PK column that is projected only as
+// the output of a non-matching expression -- a rename of a different column
+// ("other_col as id") or a computed value ("a+b as id") -- returns an error: the
+// row streamer orders the source by the physical PK column while VDiff would
+// compare the aliased value, so the merge input would not be sorted.
 func sourcePKSelectIndices(sourceSelect *sqlparser.Select, pkColumns []string) (indices []int, allProjected bool, err error) {
 	indices = make([]int, 0, len(pkColumns))
 	for _, pkc := range pkColumns {
 		physicalIdx := -1
+		claimedByAlias := false
 		for i, selExpr := range sourceSelect.SelectExprs.Exprs {
 			// Invariant: buildTablePlan expands "*" into explicit columns before
-			// this runs, so the SELECT list must contain only AliasedExprs. If a
-			// StarExpr ever reaches here it means a caller passed an unexpanded
-			// query; fail loud rather than silently treating PK columns as not
-			// projected (which would corrupt resume checkpoints). We do NOT expand
-			// the star here; that logic belongs in buildTablePlan.
+			// this runs, so the SELECT list must contain only AliasedExprs. A
+			// StarExpr here means a caller passed an unexpanded query; fail loud
+			// rather than silently treating PK columns as not projected.
 			if _, isStar := selExpr.(*sqlparser.StarExpr); isStar {
 				return nil, false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected '*' in vdiff source query SELECT list; expected columns to be expanded by buildTablePlan: %s", sqlparser.String(sourceSelect))
 			}
@@ -1168,16 +1209,38 @@ func sourcePKSelectIndices(sourceSelect *sqlparser.Select, pkColumns []string) (
 				physicalIdx = i
 				break
 			}
+			// The PK name is produced as the output of a non-matching expression.
+			if strings.EqualFold(selectExprOutputName(aliasedExpr), pkc) {
+				claimedByAlias = true
+			}
 		}
 		if physicalIdx < 0 {
-			// Not projected as a physical column (absent, or only via a non-physical
-			// expression): report it so the caller runs without a resume checkpoint
-			// rather than returning a partial key or failing.
+			if claimedByAlias {
+				return nil, false, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED,
+					"vdiff does not support a filter that projects the %q source primary key column only through a non-matching expression: %s",
+					pkc, sqlparser.String(sourceSelect))
+			}
+			// Entirely absent: a subset-projection filter. The caller runs without a
+			// resume checkpoint after verifying the comparison key is a prefix of the
+			// physical source PK.
 			return nil, false, nil
 		}
 		indices = append(indices, physicalIdx)
 	}
 	return indices, true, nil
+}
+
+// selectExprOutputName returns the output column name a SELECT expression
+// produces: its explicit alias, or the column name for an unaliased column
+// reference. Other unaliased expressions have no output name.
+func selectExprOutputName(expr *sqlparser.AliasedExpr) string {
+	if !expr.As.IsEmpty() {
+		return expr.As.String()
+	}
+	if col, ok := expr.Expr.(*sqlparser.ColName); ok {
+		return col.Name.String()
+	}
+	return ""
 }
 
 // underlyingSourceColumn returns the name of the physical source column that a

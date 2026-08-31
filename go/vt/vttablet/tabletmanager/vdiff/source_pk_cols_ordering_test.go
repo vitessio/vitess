@@ -26,6 +26,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 )
 
@@ -240,12 +241,12 @@ func TestSourcePKSelectIndices(t *testing.T) {
 		},
 		{
 			// A computed expression wrapped in CONVERT aliased back to the PK name
-			// is a derived value, not the physical column, so it is treated as not
-			// projected (the diff runs without a resume checkpoint).
-			name:             "computed convert aliased to PK name is not projected",
-			sourceQuery:      "select convert(concat(c1, 'x') using utf8mb4) as c1, c2 from t order by c1 asc",
-			pkColumns:        []string{"c1"},
-			wantNotProjected: true,
+			// is a derived value, not the physical column. The PK name is claimed by
+			// this non-matching alias, so it is rejected rather than run unsorted.
+			name:        "computed convert aliased to PK name is rejected",
+			sourceQuery: "select convert(concat(c1, 'x') using utf8mb4) as c1, c2 from t order by c1 asc",
+			pkColumns:   []string{"c1"},
+			wantErr:     true,
 		},
 		{
 			name:        "function expression with alias",
@@ -304,21 +305,21 @@ func TestSourcePKSelectIndices(t *testing.T) {
 			wantIndices: []int{0, 1},
 		},
 		{
-			// A computed alias does not satisfy a source PK lookup: the row
-			// streamer resumes on the physical PK value, so it is treated as not
-			// projected rather than persisting a derived value.
-			name:             "computed alias does not satisfy source PK (not projected)",
-			sourceQuery:      "select a + b as id, c from t order by id asc",
-			pkColumns:        []string{"id"},
-			wantNotProjected: true,
+			// A computed alias claims the source PK name but is a derived value, not
+			// the physical column the row streamer orders by, so it is rejected.
+			name:        "computed alias claiming source PK name is rejected",
+			sourceQuery: "select a + b as id, c from t order by id asc",
+			pkColumns:   []string{"id"},
+			wantErr:     true,
 		},
 		{
 			// An alias mapping an unrelated physical column to the source PK name
-			// does not match the physical PK, so it is treated as not projected.
-			name:             "unrelated column aliased to source PK name is not projected",
-			sourceQuery:      "select other_col as id, c from t order by id asc",
-			pkColumns:        []string{"id"},
-			wantNotProjected: true,
+			// (Copilot's example) does not match the physical PK the row streamer
+			// orders by, so it is rejected rather than compared unsorted.
+			name:        "unrelated column aliased to source PK name is rejected",
+			sourceQuery: "select other_col as id, c from t order by id asc",
+			pkColumns:   []string{"id"},
+			wantErr:     true,
 		},
 		{
 			// Invariant guard: buildTablePlan must expand "*" into explicit
@@ -368,4 +369,140 @@ func TestSourcePKSelectIndices(t *testing.T) {
 			assert.Equal(t, tc.wantIndices, indices)
 		})
 	}
+}
+
+// TestComparisonKeyIsSourcePKPrefix verifies the merge-safety gate used for
+// subset-projection filters: the columns VDiff merge-sorts on (comparePKs) must
+// be an order-preserving prefix of the physical source PK, since the row streamer
+// always emits source rows ordered by that physical PK.
+func TestComparisonKeyIsSourcePKPrefix(t *testing.T) {
+	testCases := []struct {
+		name        string
+		sourceQuery string
+		// comparePKColIndices are the SELECT-list positions of the comparison
+		// columns, in comparison order (as findPKs would populate comparePKs).
+		comparePKColIndices []int
+		sourcePKColumns     []string
+		wantErr             bool
+	}{
+		{
+			// Documented safe case: source PK (cid, typ) compared on cid. cid is a
+			// prefix of (cid, typ), so a source stream ordered by (cid, typ) is also
+			// ordered by cid.
+			name:                "prefix compare on leading pk column",
+			sourceQuery:         "select cid, name from customer order by cid asc",
+			comparePKColIndices: []int{0},
+			sourcePKColumns:     []string{"cid", "typ"},
+		},
+		{
+			// Unsafe: source PK (typ, cid) compared on cid. cid is not a prefix of
+			// (typ, cid), so a stream ordered by (typ, cid) is not ordered by cid.
+			name:                "compare on non-leading pk column is rejected",
+			sourceQuery:         "select cid, name from customer order by cid asc",
+			comparePKColIndices: []int{0},
+			sourcePKColumns:     []string{"typ", "cid"},
+			wantErr:             true,
+		},
+		{
+			// Full-length prefix (equal) is safe.
+			name:                "full pk compare in order",
+			sourceQuery:         "select cid, typ from customer order by cid asc, typ asc",
+			comparePKColIndices: []int{0, 1},
+			sourcePKColumns:     []string{"cid", "typ"},
+		},
+		{
+			// Comparison key has more columns than the physical source PK.
+			name:                "comparison key longer than source pk is rejected",
+			sourceQuery:         "select cid, typ from customer order by cid asc, typ asc",
+			comparePKColIndices: []int{0, 1},
+			sourcePKColumns:     []string{"cid"},
+			wantErr:             true,
+		},
+		{
+			// A comparison column that is a computed value (not a physical column)
+			// cannot match the physical PK ordering.
+			name:                "computed comparison column is rejected",
+			sourceQuery:         "select a + b as id, c from t order by id asc",
+			comparePKColIndices: []int{0},
+			sourcePKColumns:     []string{"id"},
+			wantErr:             true,
+		},
+	}
+
+	parser := sqlparser.NewTestParser()
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			statement, err := parser.Parse(tc.sourceQuery)
+			require.NoError(t, err)
+			sourceSelect, ok := statement.(*sqlparser.Select)
+			require.True(t, ok)
+
+			comparePKs := make([]compareColInfo, len(tc.comparePKColIndices))
+			for i, idx := range tc.comparePKColIndices {
+				comparePKs[i] = compareColInfo{colIndex: idx, isPK: true}
+			}
+
+			err = comparisonKeyIsSourcePKPrefix(sourceSelect, comparePKs, tc.sourcePKColumns)
+			if tc.wantErr {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+		})
+	}
+}
+
+// TestLastPKFromRowMixedTypeReorder verifies that lastPKFromRow attaches the
+// correct field (and therefore type) to each PK value when the filter reorders
+// columns relative to their DDL order. The checkpoint values are round-tripped
+// through the same Proto3ToResult path the row streamer uses to quote the resume
+// predicate, so a numeric PK value must not be reconstructed as a string.
+func TestLastPKFromRowMixedTypeReorder(t *testing.T) {
+	// Table PK is (id int, code varchar); DDL/Fields order is [id, code]. The
+	// filter reorders them: "select code, id from t", so the streamed row layout
+	// (SELECT order) is [code, id].
+	table := &tabletmanagerdatapb.TableDefinition{
+		Name:              "t",
+		Columns:           []string{"id", "code"},
+		PrimaryKeyColumns: []string{"id", "code"},
+		Fields:            sqltypes.MakeTestFields("id|code", "int64|varchar"),
+	}
+
+	td := &tableDiffer{
+		tablePlan: &tablePlan{
+			table: table,
+			// compareCols is indexed by SELECT position: 0 -> code, 1 -> id.
+			compareCols: []compareColInfo{
+				{colIndex: 0, colName: "code", isPK: true},
+				{colIndex: 1, colName: "id", isPK: true},
+			},
+			// PK order is (id, code): id is at SELECT position 1, code at 0.
+			pkCols:       []int{1, 0},
+			sourcePkCols: []int{1, 0},
+		},
+	}
+
+	// Streamed row in SELECT order: [code="abc", id=5].
+	row := []sqltypes.Value{sqltypes.NewVarChar("abc"), sqltypes.NewInt64(5)}
+
+	lastPK := td.lastPKFromRow(row)
+	require.NotNil(t, lastPK.Target)
+
+	// The lastpk is emitted in PK order (id, code): the integer id first with an
+	// integer field, then the varchar code. Indexing table.Fields by SELECT
+	// position would have paired id's value with code's (varchar) field.
+	require.Len(t, lastPK.Target.Fields, 2)
+	assert.EqualValues(t, "id", lastPK.Target.Fields[0].Name)
+	assert.Equal(t, querypb.Type_INT64, lastPK.Target.Fields[0].Type)
+	assert.EqualValues(t, "code", lastPK.Target.Fields[1].Name)
+	assert.Equal(t, querypb.Type_VARCHAR, lastPK.Target.Fields[1].Type)
+
+	// Round-trip through the row streamer's reconstruction path: the id value must
+	// stay integral (so EncodeSQL emits an unquoted number) and code stays quoted.
+	result := sqltypes.Proto3ToResult(lastPK.Target)
+	require.Len(t, result.Rows, 1)
+	assert.True(t, result.Rows[0][0].IsIntegral(), "id checkpoint value should be integral, got %v", result.Rows[0][0])
+	assert.False(t, result.Rows[0][0].IsQuoted(), "id checkpoint value must not be quoted, got %v", result.Rows[0][0])
+	assert.True(t, result.Rows[0][1].IsQuoted(), "code checkpoint value should be quoted, got %v", result.Rows[0][1])
 }
