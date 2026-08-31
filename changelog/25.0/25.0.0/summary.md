@@ -301,6 +301,8 @@ On the rewriting path, three forms are not supported, and now report that plainl
 - `VALUES ... ORDER BY ...`. MySQL parses and validates the clause but never applies it, so rewriting to a `UNION`, which would sort, returns different rows.
 - `VALUES ::listarg`, whose rows are only known once bind variables are bound.
 
+Separately, a few shapes are still affected by pre-existing planner bugs that the rewrite routes `VALUES` into but does not cause - each reproduces the same way with a hand written `UNION` or derived table. A multi row `VALUES` joined on a predicate against its columns ([#20955](https://github.com/vitessio/vitess/issues/20955)), a predicate over a `VALUES` list of three or more rows ([#20960](https://github.com/vitessio/vitess/issues/20960)), and an aggregate subquery inside a `VALUES` row ([#20961](https://github.com/vitessio/vitess/issues/20961)).
+
 **Impact**: Queries using `VALUES` table constructors that previously failed now succeed. Two things to be aware of on the rewriting path. A large `VALUES` list becomes a `UNION` with one branch per row, and planning cost grows quadratically with the number of rows, so a constructor with many thousands of rows is slow to plan. And because the rewritten query no longer uses `VALUES` syntax, it is accepted by backends that do not support `VALUES` themselves, such as MySQL 5.7. This does not apply to queries taking the fast path described above, which still require a backend that supports `VALUES`.
 
 ### <a id="minor-changes-reparent"/>Reparent</a>
