@@ -195,7 +195,10 @@ func hasMysql56GTIDSet(pos replication.Position) bool {
 	return ok
 }
 
-func findPositionsOfAllCandidates(
+// FindPositionsOfAllCandidates will find candidates for an emergency
+// reparent, and, if successful, return a mapping of those tablet aliases (as
+// raw strings) to their replication positions for later comparison.
+func FindPositionsOfAllCandidates(
 	statusMap map[string]*replicationdatapb.StopReplicationStatus,
 	primaryStatusMap map[string]*replicationdatapb.PrimaryStatus,
 ) (map[string]*RelayLogPositions, bool, error) {
@@ -299,18 +302,8 @@ func findPositionsOfAllCandidates(
 	return positionMap, isGTIDBased, nil
 }
 
-// FindPositionsOfAllCandidates will find candidates for an emergency
-// reparent, and, if successful, return a mapping of those tablet aliases (as
-// raw strings) to their replication positions for later comparison.
-func FindPositionsOfAllCandidates(
-	statusMap map[string]*replicationdatapb.StopReplicationStatus,
-	primaryStatusMap map[string]*replicationdatapb.PrimaryStatus,
-) (map[string]*RelayLogPositions, bool, error) {
-	return findPositionsOfAllCandidates(statusMap, primaryStatusMap)
-}
-
 func buildERSCandidates(snapshot *replicationSnapshot, tabletMap map[string]*topo.TabletInfo) ([]*ersCandidate, bool, error) {
-	positionMap, isGTIDBased, err := findPositionsOfAllCandidates(snapshot.statusMap, snapshot.primaryStatusMap)
+	positionMap, isGTIDBased, err := FindPositionsOfAllCandidates(snapshot.statusMap, snapshot.primaryStatusMap)
 	if err != nil {
 		return nil, false, err
 	}

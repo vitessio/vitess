@@ -384,7 +384,9 @@ func TestSortERSCandidates(t *testing.T) {
 		dominator := makeCandidate(102, "3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10")
 		candidates := []*ersCandidate{dominated, incomparable, dominator}
 
-		assert.False(t, sortERSCandidates(candidates, durability))
+		mysqlVersions, mixedFlavorFamilies := usableERSCandidateMySQLVersions(candidates)
+		assert.False(t, mixedFlavorFamilies)
+		require.NoError(t, sortERSCandidates(candidates, mysqlVersions, durability))
 		assert.Equal(t, []*ersCandidate{incomparable, dominator, dominated}, candidates)
 	})
 
@@ -399,7 +401,9 @@ func TestSortERSCandidates(t *testing.T) {
 		lowerVersion.hasMySQLVersion = true
 		candidates := []*ersCandidate{higherVersion, lowerVersion}
 
-		assert.False(t, sortERSCandidates(candidates, durability))
+		mysqlVersions, mixedFlavorFamilies := usableERSCandidateMySQLVersions(candidates)
+		assert.False(t, mixedFlavorFamilies)
+		require.NoError(t, sortERSCandidates(candidates, mysqlVersions, durability))
 		assert.Equal(t, []*ersCandidate{lowerVersion, higherVersion}, candidates)
 	})
 
@@ -411,7 +415,9 @@ func TestSortERSCandidates(t *testing.T) {
 		known.hasMySQLVersion = true
 		candidates := []*ersCandidate{unknown, known}
 
-		assert.False(t, sortERSCandidates(candidates, durability))
+		mysqlVersions, mixedFlavorFamilies := usableERSCandidateMySQLVersions(candidates)
+		assert.False(t, mixedFlavorFamilies)
+		require.NoError(t, sortERSCandidates(candidates, mysqlVersions, durability))
 		assert.Equal(t, []*ersCandidate{known, unknown}, candidates)
 	})
 
@@ -426,7 +432,9 @@ func TestSortERSCandidates(t *testing.T) {
 		mysql.hasMySQLVersion = true
 		candidates := []*ersCandidate{mysql, mariaDB}
 
-		assert.True(t, sortERSCandidates(candidates, durability))
+		mysqlVersions, mixedFlavorFamilies := usableERSCandidateMySQLVersions(candidates)
+		assert.True(t, mixedFlavorFamilies)
+		require.NoError(t, sortERSCandidates(candidates, mysqlVersions, durability))
 		assert.Equal(t, []*ersCandidate{mariaDB, mysql}, candidates)
 	})
 }
@@ -724,84 +732,6 @@ func TestUsableMySQLVersions(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := usableMySQLVersions(tt.versions, tt.flavors)
-			if tt.wantNil {
-				require.Nil(t, got)
-			} else {
-				require.NotNil(t, got)
-			}
-		})
-	}
-}
-
-// TestScopedVersionMap verifies the map-based family guard used on the ERS
-// election path (findMostAdvanced, identifyPrimaryCandidate). Returning nil for a
-// mixed-family candidate set is what disables version-aware comparison in the
-// final candidate selection, not just the intermediate-source sort. Crucially,
-// the guard is scoped to the passed candidates: a non-candidate tablet elsewhere
-// in the shard must not disable version ordering for the real candidates.
-func TestScopedVersionMap(t *testing.T) {
-	v80 := mysqlctl.ServerVersion{Major: 8, Minor: 0, Patch: 35}
-	v106 := mysqlctl.ServerVersion{Major: 10, Minor: 6}
-
-	tabletA := &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}}
-	tabletB := &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101}}
-	tabletC := &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 102}}
-
-	// A full-shard map where C is a MariaDB tablet, A and B are MySQL/Percona.
-	versionMap := map[string]mysqlctl.ServerVersion{
-		"zone1-0000000100": v80,
-		"zone1-0000000101": v80,
-		"zone1-0000000102": v106,
-	}
-	flavorMap := map[string]mysqlctl.MySQLFlavor{
-		"zone1-0000000100": mysqlctl.FlavorMySQL,
-		"zone1-0000000101": mysqlctl.FlavorPercona,
-		"zone1-0000000102": mysqlctl.FlavorMariaDB,
-	}
-
-	tests := []struct {
-		name       string
-		candidates []*topodatapb.Tablet
-		versionMap map[string]mysqlctl.ServerVersion
-		flavorMap  map[string]mysqlctl.MySQLFlavor
-		wantNil    bool
-	}{
-		{
-			name:       "empty version map stays nil",
-			candidates: []*topodatapb.Tablet{tabletA, tabletB},
-			versionMap: nil,
-			flavorMap:  nil,
-			wantNil:    true,
-		},
-		{
-			name:       "same family candidates are usable",
-			candidates: []*topodatapb.Tablet{tabletA, tabletB},
-			versionMap: versionMap,
-			flavorMap:  flavorMap,
-			wantNil:    false,
-		},
-		{
-			name:       "mixed family candidates disable version ordering",
-			candidates: []*topodatapb.Tablet{tabletA, tabletC},
-			versionMap: versionMap,
-			flavorMap:  flavorMap,
-			wantNil:    true,
-		},
-		{
-			// Point-1 regression: C (MariaDB) is in the shard-wide maps but NOT in
-			// the candidate set. The guard must ignore it and keep version ordering
-			// for the MySQL-only candidates A and B.
-			name:       "non-candidate other-family tablet does not disable ordering",
-			candidates: []*topodatapb.Tablet{tabletA, tabletB},
-			versionMap: versionMap,
-			flavorMap:  flavorMap,
-			wantNil:    false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := scopedVersionMap(tt.candidates, tt.versionMap, tt.flavorMap)
 			if tt.wantNil {
 				require.Nil(t, got)
 			} else {

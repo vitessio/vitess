@@ -119,11 +119,7 @@ func (c *ersCandidate) tablet() *topodatapb.Tablet {
 	return c.info.Tablet
 }
 
-// isSameTablet reports whether two candidates are the same tablet. Within a single
-// ERS run pointer equality would do, but comparing aliases keeps the answer correct
-// for a caller that built its candidate elsewhere. A candidate without an alias has
-// no identity to match on, so it is never the same tablet as anything, including
-// another candidate without an alias.
+// isSameTablet compares aliases; a candidate without one never matches.
 func (c *ersCandidate) isSameTablet(other *ersCandidate) bool {
 	if c == nil || other == nil || c.info == nil || other.info == nil {
 		return false
@@ -892,9 +888,15 @@ func (erp *EmergencyReparenter) findMostAdvanced(
 		return nil, nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "no valid candidates for emergency reparent")
 	}
 
-	// Version ordering is disabled when the candidates span flavor families.
-	if mixedFlavorFamilies := sortERSCandidates(validCandidates, opts.durability); mixedFlavorFamilies {
+	// Version ordering is disabled when the candidates span flavor families. The guard is
+	// scoped to the candidates being sorted, so a tablet elsewhere in the shard that is
+	// not a candidate cannot disable version comparison for the ones being elected among.
+	mysqlVersions, mixedFlavorFamilies := usableERSCandidateMySQLVersions(validCandidates)
+	if mixedFlavorFamilies {
 		erp.logger.Warningf("reparent candidates span multiple MySQL flavor families; skipping version-aware election")
+	}
+	if err := sortERSCandidates(validCandidates, mysqlVersions, opts.durability); err != nil {
+		return nil, nil, err
 	}
 	for _, candidate := range validCandidates {
 		erp.logger.Infof("finding intermediate source - sorted replica: %s", candidate.alias())
@@ -1482,7 +1484,9 @@ func (erp *EmergencyReparenter) findErrantGTIDs(
 	// We use all the candidates with the maximum length of the reparent journal to find the errant GTIDs amongst them.
 	var maxLenPositions []replication.Position
 	var starvedCandidates []*ersCandidate
-	updatedValidCandidateSet := sets.New[*ersCandidate]()
+	// Survivor order carries no contract: findMostAdvanced sorts these again, with a
+	// tablet-alias tiebreak, before anything is elected
+	var updatedValidCandidates []*ersCandidate
 	for _, candidate := range maxLenCandidates {
 		candidatePositions := candidate.positions
 		if candidate.stopStatus == nil {
@@ -1497,7 +1501,7 @@ func (erp *EmergencyReparenter) findErrantGTIDs(
 			// Even in this case, the best we can do is not run errant GTID detection on either, and let the split brain detection code
 			// deal with it, if A in fact has errant GTIDs.
 			maxLenPositions = append(maxLenPositions, candidatePositions.Combined)
-			updatedValidCandidateSet.Insert(candidate)
+			updatedValidCandidates = append(updatedValidCandidates, candidate)
 			continue
 		}
 		// Store all the other candidate's positions so that we can run errant GTID detection using them.
@@ -1526,7 +1530,7 @@ func (erp *EmergencyReparenter) findErrantGTIDs(
 			continue
 		}
 		maxLenPositions = append(maxLenPositions, candidatePositions.Combined)
-		updatedValidCandidateSet.Insert(candidate)
+		updatedValidCandidates = append(updatedValidCandidates, candidate)
 	}
 
 	// The extra evidence positions also corroborate the lagged tablets below.
@@ -1563,14 +1567,7 @@ func (erp *EmergencyReparenter) findErrantGTIDs(
 			log.Error(fmt.Sprintf("skipping %s with GTIDSet:%v because we detected errant GTIDs - %v", candidate.alias(), candidatePositions, errantGTIDs))
 			continue
 		}
-		updatedValidCandidateSet.Insert(candidate)
-	}
-
-	updatedValidCandidates := make([]*ersCandidate, 0, len(updatedValidCandidateSet))
-	for _, candidate := range validCandidates {
-		if updatedValidCandidateSet.Has(candidate) {
-			updatedValidCandidates = append(updatedValidCandidates, candidate)
-		}
+		updatedValidCandidates = append(updatedValidCandidates, candidate)
 	}
 
 	return updatedValidCandidates, starvedCandidates, nil
