@@ -116,7 +116,35 @@ func (wd *workflowDiffer) reconcileReferenceTables(dr *DiffReport) error {
 	return nil
 }
 
+// tableProjectionIsAllPKs reports whether every column in the table's
+// comparison projection is part of the primary key, in which case even a
+// PK-only row sample contains the complete row.
+func (wd *workflowDiffer) tableProjectionIsAllPKs(tableName string) bool {
+	td, ok := wd.tableDiffers[tableName]
+	if !ok || td.tablePlan == nil || len(td.tablePlan.compareCols) == 0 {
+		return false
+	}
+	for _, col := range td.tablePlan.compareCols {
+		if !col.isPK {
+			return false
+		}
+	}
+	return true
+}
+
 func (wd *workflowDiffer) doReconcileExtraRows(dr *DiffReport, maxExtraRowsToCompare int64, maxReportSampleRows int64) error {
+	// Trim the extra rows diffs to the maxReportSampleRows value on every exit
+	// path: the diff collects samples up to maxExtraRowsToCompare per side,
+	// which can be greater than maxReportSampleRows. When rows are reconciled,
+	// this must happen after the slices and counts have been updated.
+	defer func() {
+		if int64(len(dr.ExtraRowsSourceDiffs)) > maxReportSampleRows && maxReportSampleRows > 0 {
+			dr.ExtraRowsSourceDiffs = dr.ExtraRowsSourceDiffs[:maxReportSampleRows]
+		}
+		if int64(len(dr.ExtraRowsTargetDiffs)) > maxReportSampleRows && maxReportSampleRows > 0 {
+			dr.ExtraRowsTargetDiffs = dr.ExtraRowsTargetDiffs[:maxReportSampleRows]
+		}
+	}()
 	if dr.ExtraRowsSource == 0 || dr.ExtraRowsTarget == 0 {
 		return nil
 	}
@@ -124,17 +152,56 @@ func (wd *workflowDiffer) doReconcileExtraRows(dr *DiffReport, maxExtraRowsToCom
 	matchedTargetDiffs := make([]bool, len(dr.ExtraRowsTargetDiffs))
 	matchedDiffs := int64(0)
 
-	maxRows := min(int(dr.ExtraRowsSource), int(maxExtraRowsToCompare))
+	// Bound the comparison by the number of saved samples, which can be lower
+	// than the extra-row counts, rather than by the counts themselves.
+	maxRows := min(len(dr.ExtraRowsSourceDiffs), int(maxExtraRowsToCompare))
 	log.Info(fmt.Sprintf("Reconciling extra rows for table %s in vdiff %s, extra source rows %d, extra target rows %d, max rows %d", dr.TableName, wd.ct.uuid, dr.ExtraRowsSource, dr.ExtraRowsTarget, maxRows))
 
-	// Find the matching extra rows
+	// Samples persisted by an older binary and reloaded on resume lack the
+	// LosslessValues marker but may still be provably complete:
+	// - a PK-only sample is complete when the comparison projection consists
+	//   entirely of PK columns (whose values are never truncated);
+	// - with truncation configured, a sample is complete when none of its
+	//   values carries the truncation marker, which truncation always
+	//   appends. A genuine value ending in the marker is indistinguishable
+	//   from a truncated one and stays excluded, which errs on the safe side.
+	allPKs := wd.tableProjectionIsAllPKs(dr.TableName)
+	isLossless := func(rd *RowDiff) bool {
+		if rd.LosslessValues {
+			return true
+		}
+		if wd.opts.GetReportOptions().GetOnlyPks() && !allPKs {
+			return false
+		}
+		if wd.opts.GetReportOptions().GetRowDiffColumnTruncateAt() > 0 {
+			for _, v := range rd.Row {
+				if strings.HasSuffix(v, truncatedNotation) {
+					return false
+				}
+			}
+		}
+		return true
+	}
+
+	// Find the matching extra rows. The extra row counts (dr.ExtraRowsSource/dr.ExtraRowsTarget)
+	// can be higher than the number of saved sample rows -- e.g. when the counts exceed
+	// maxExtraRowsToCompare -- so all indexing must be bounded by the slice lengths, never by
+	// the counts. Only lossless samples take part: samples with truncated values cannot
+	// prove that two rows are identical, and reconciling them could hide a real difference.
 	for i := 0; i < len(dr.ExtraRowsSourceDiffs); i++ {
+		if !isLossless(dr.ExtraRowsSourceDiffs[i]) {
+			continue
+		}
 		for j := 0; j < len(dr.ExtraRowsTargetDiffs); j++ {
-			if matchedTargetDiffs[j] {
-				// previously matched
+			if matchedTargetDiffs[j] || !isLossless(dr.ExtraRowsTargetDiffs[j]) {
+				// Previously matched, or not provably identical.
 				continue
 			}
-			if reflect.DeepEqual(dr.ExtraRowsSourceDiffs[i], dr.ExtraRowsTargetDiffs[j]) {
+			// Compare only the row data: the other RowDiff fields describe the
+			// sample's provenance (the side-specific debug query, the lossless
+			// marker which differs between samples persisted by older binaries
+			// and current ones), not the row itself.
+			if reflect.DeepEqual(dr.ExtraRowsSourceDiffs[i].Row, dr.ExtraRowsTargetDiffs[j].Row) {
 				matchedSourceDiffs[i] = true
 				matchedTargetDiffs[j] = true
 				matchedDiffs++
@@ -180,14 +247,6 @@ func (wd *workflowDiffer) doReconcileExtraRows(dr *DiffReport, maxExtraRowsToCom
 		log.Info(fmt.Sprintf("Reconciled extra rows for table %s in vdiff %s, matching rows %d, extra source rows %d, extra target rows %d. Max compared rows %d", dr.TableName, wd.ct.uuid, matchedDiffs, dr.ExtraRowsSource, dr.ExtraRowsTarget, maxRows))
 	}
 
-	// Trim the extra rows diffs to the maxReportSampleRows value. Note we need to do this after updating
-	// the slices and counts above, since maxExtraRowsToCompare can be greater than maxVDiffReportSampleRows.
-	if int64(len(dr.ExtraRowsSourceDiffs)) > maxReportSampleRows && maxReportSampleRows > 0 {
-		dr.ExtraRowsSourceDiffs = dr.ExtraRowsSourceDiffs[:maxReportSampleRows-1]
-	}
-	if int64(len(dr.ExtraRowsTargetDiffs)) > maxReportSampleRows && maxReportSampleRows > 0 {
-		dr.ExtraRowsTargetDiffs = dr.ExtraRowsTargetDiffs[:maxReportSampleRows-1]
-	}
 	return nil
 }
 
