@@ -109,7 +109,7 @@ var (
 
 	// download part size and concurrency for parallel downloads via transfer manager
 	downloadPartSize    int64 = 8 * 1024 * 1024 // 8MiB - transfer manager default
-	downloadConcurrency int   = 5               // transfer manager default
+	downloadConcurrency int   = 1               // default preserves old single-stream GetObject path
 
 	ErrPartSize = errors.New("minimum S3 part size must be between 5MiB and 5GiB")
 )
@@ -126,7 +126,7 @@ func registerFlags(fs *pflag.FlagSet) {
 	utils.SetFlagStringVar(fs, &sse, "s3-backup-server-side-encryption", "", "server-side encryption algorithm (e.g., AES256, aws:kms, sse_c:/path/to/key/file).")
 	utils.SetFlagInt64Var(fs, &minPartSize, "s3-backup-aws-min-partsize", minPartSize, "Minimum part size to use, defaults to 5MiB but can be increased due to the dataset size.")
 	utils.SetFlagInt64Var(fs, &downloadPartSize, "s3-backup-download-part-size", 8*1024*1024, "Part size in bytes for parallel S3 downloads via transfer manager.")
-	utils.SetFlagIntVar(fs, &downloadConcurrency, "s3-backup-download-concurrency", 5, "Number of parallel goroutines for S3 downloads via transfer manager.")
+	utils.SetFlagIntVar(fs, &downloadConcurrency, "s3-backup-download-concurrency", 1, "Number of parallel goroutines for S3 downloads. Set > 1 to enable parallel byte-range GETs via the transfer manager.")
 }
 
 func init() {
@@ -352,11 +352,25 @@ func (bh *S3BackupHandle) ReadFile(ctx context.Context, filename string) (io.Rea
 	sendStats := bh.bs.params.Stats.Scope(stats.Operation("AWS:Request:Send"))
 	timedClient := &timedS3Client{client: bh.s3Client, sendStats: sendStats}
 
+	// When concurrency <= 1 (the default), use a plain GetObject — no HeadObject,
+	// no ranged GETs, no transfer manager overhead. Users opt into parallel
+	// downloads by setting --s3-backup-download-concurrency > 1.
+	if downloadConcurrency <= 1 {
+		out, err := timedClient.GetObject(ctx, &s3.GetObjectInput{
+			Bucket:               &bucket,
+			Key:                  &object,
+			SSECustomerAlgorithm: bh.bs.s3SSE.customerAlg,
+			SSECustomerKey:       bh.bs.s3SSE.customerKey,
+			SSECustomerKeyMD5:    bh.bs.s3SSE.customerMd5,
+		})
+		if err != nil {
+			return nil, err
+		}
+		return out.Body, nil
+	}
+
 	if downloadPartSize < minDownloadPartSize {
 		return nil, fmt.Errorf("--s3-backup-download-part-size must be >= %d (5 MiB), got %d", minDownloadPartSize, downloadPartSize)
-	}
-	if downloadConcurrency < 1 {
-		return nil, fmt.Errorf("--s3-backup-download-concurrency must be >= 1, got %d", downloadConcurrency)
 	}
 
 	bufferSize, err := downloadBufferSize(downloadPartSize, downloadConcurrency)

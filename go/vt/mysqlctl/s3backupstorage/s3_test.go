@@ -629,7 +629,8 @@ func TestReadFileInvalidDownloadFlags(t *testing.T) {
 		minPartSize = origMinPartSize
 	}()
 
-	// Part size below download minimum (5MiB)
+	// Part size below download minimum (5MiB) — need concurrency > 1 to reach
+	// the transfer manager path where part-size validation runs.
 	downloadPartSize = 1024
 	downloadConcurrency = 5
 	_, err := bh.ReadFile(t.Context(), "testfile")
@@ -641,13 +642,6 @@ func TestReadFileInvalidDownloadFlags(t *testing.T) {
 	_, err = bh.ReadFile(t.Context(), "testfile")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "5 MiB")
-
-	// Zero concurrency
-	downloadPartSize = 8 * 1024 * 1024
-	downloadConcurrency = 0
-	_, err = bh.ReadFile(t.Context(), "testfile")
-	require.Error(t, err)
-	require.Contains(t, err.Error(), ">= 1")
 
 	// Regression: download part size (8MiB) is valid even when upload minPartSize
 	// is set higher (16MiB). The two thresholds must be independent.
