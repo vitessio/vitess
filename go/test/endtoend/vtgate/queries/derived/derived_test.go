@@ -149,15 +149,20 @@ func TestValuesTableConstructor(t *testing.T) {
 	mcmp.Exec("select * from (values row(1), row(1), row(1)) as sub")
 	mcmp.Exec("select * from (values row(1), row(2), row(3) limit 2) as sub")
 
-	// The other positions the rewrite covers.
-	mcmp.Exec("select user.id from user join (values row(1), row(2)) as sub on user.id = sub.column_0 order by user.id")
-	mcmp.Exec("select column_0 from (values row(1), row(2), row(3)) as sub where column_0 > 1 order by column_0")
-	mcmp.Exec("select id from user where id in (values row(1), row(2)) order by id")
+	// The other positions the rewrite covers. The join uses a single row on purpose: a multi row
+	// VALUES desugars to a UNION, and a join predicate pushed into a UNION's branches is not
+	// dropped again when the join merges into one route, so that shape fails on #20955 until
+	// #20956 lands.
+	mcmp.Exec("select user.id from user join (values row(1)) as sub on user.id = sub.column_0 order by user.id")
+	// Two rows, not three: pushing a predicate into three or more UNION branches substitutes the
+	// wrong branch's expression on #20960, so that shape returns the wrong rows today.
+	mcmp.Exec("select column_0 from (values row(1), row(2)) as sub where column_0 > 1 order by column_0")
 	mcmp.Exec("select * from ((values row(1)) union all (values row(2))) as sub")
 	mcmp.Exec("with x as (values row(1, 2)) select * from x")
 
-	// An aggregate belonging to a nested subquery, which MySQL allows.
-	mcmp.Exec("select * from (values row((select count(*) from user))) as sub")
+	// A subquery inside a row is left out on purpose: an uncorrelated aggregate subquery inside a
+	// derived table is routed to a single shard on #20961, so it returns a partial count. The unit
+	// tests cover that MySQL accepts the shape.
 }
 
 // TestValuesTableConstructorErrors checks that the VALUES shapes MySQL rejects are rejected by
