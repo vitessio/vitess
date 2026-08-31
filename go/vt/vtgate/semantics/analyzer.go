@@ -17,6 +17,8 @@ limitations under the License.
 package semantics
 
 import (
+	"slices"
+
 	"vitess.io/vitess/go/mysql/collations"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -385,9 +387,87 @@ func (a *analyzer) analyze(statement sqlparser.Statement) error {
 		return nil
 	}
 
+	if err := rewriteValuesStatements(statement); err != nil {
+		return err
+	}
+
 	a.lateInit()
 
 	return a.lateAnalyze(statement)
+}
+
+// rewriteValuesStatements desugars every VALUES table constructor used as a query - a derived
+// table, a UNION branch, a subquery or a CTE definition - into its SELECT equivalent, since nothing
+// downstream knows how to plan a *sqlparser.ValuesStatement.
+//
+// This cannot be a case in the early rewriter: checkForInvalidConstructs inspects a UNION or a
+// Subquery on the way down, before the walk reaches the VALUES statement hanging off it. It runs
+// after canShortCut so that a query forwarded to MySQL untouched keeps the VALUES syntax as written.
+func rewriteValuesStatements(statement sqlparser.Statement) error {
+	var err error
+	_ = sqlparser.Rewrite(statement, func(cursor *sqlparser.Cursor) bool {
+		if err != nil {
+			return false
+		}
+		values, ok := cursor.Node().(*sqlparser.ValuesStatement)
+		if !ok || !valuesIsUsedAsQuery(cursor.Parent()) {
+			return true
+		}
+
+		if err = checkValuesRows(values); err != nil {
+			return false
+		}
+
+		var rewritten sqlparser.TableStatement
+		rewritten, err = sqlparser.ValuesToTableStatement(values)
+		if err != nil {
+			return false
+		}
+		// Revisit, so the walk continues into the replacement instead of the VALUES statement.
+		cursor.ReplaceAndRevisit(rewritten)
+		return true
+	}, nil)
+	return err
+}
+
+// checkValuesRows rejects an aggregate in a VALUES row, which MySQL reports as
+// ER_INVALID_GROUP_FUNC_USE. The desugared `select count(*) from dual` would happily return a row.
+func checkValuesRows(values *sqlparser.ValuesStatement) error {
+	for _, row := range values.Rows {
+		if slices.ContainsFunc(row, rowContainsAggregation) {
+			return &InvalidUseOfGroupFunction{}
+		}
+	}
+	return nil
+}
+
+// rowContainsAggregation reports whether a VALUES row aggregates in its own right.
+// sqlparser.ContainsAggregation cannot be used because it descends into subqueries, where MySQL
+// does allow an aggregate: `VALUES ROW((SELECT COUNT(*) FROM t))` is legal.
+func rowContainsAggregation(expr sqlparser.Expr) bool {
+	found := false
+	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
+		switch node.(type) {
+		case *sqlparser.Subquery:
+			return false, nil
+		case sqlparser.AggrFunc:
+			found = true
+			return false, nil
+		}
+		return true, nil
+	}, expr)
+	return found
+}
+
+// valuesIsUsedAsQuery reports whether a VALUES statement hanging off this node is a query, rather
+// than INSERT rows or a view definition, which keep their own meaning.
+func valuesIsUsedAsQuery(parent sqlparser.SQLNode) bool {
+	switch parent.(type) {
+	case *sqlparser.DerivedTable, *sqlparser.Union, *sqlparser.Subquery, *sqlparser.CommonTableExpr:
+		return true
+	default:
+		return false
+	}
 }
 
 func (a *analyzer) lateAnalyze(statement sqlparser.SQLNode) error {

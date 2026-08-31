@@ -28,6 +28,135 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
+// TestRewriteValuesStatements checks that a VALUES table constructor used as a query is desugared
+// into the SELECT that produces the same rows, in every position it can be used as one. The
+// expectations were checked against MySQL 8.4.
+func TestRewriteValuesStatements(t *testing.T) {
+	tcases := []struct {
+		query        string
+		rewritten    string
+		errorMessage string
+	}{{
+		query:     "select * from (values row(1, 1)) as sub",
+		rewritten: "select column_0, column_1 from (select 1 as column_0, 1 as column_1 from dual) as sub",
+	}, {
+		query:     "select sub.column_0 from (values row(1, 1)) as sub",
+		rewritten: "select sub.column_0 from (select 1 as column_0, 1 as column_1 from dual) as sub",
+	}, {
+		query:     "select * from (values row(1, 1), row(2, 2)) as sub",
+		rewritten: "select column_0, column_1 from (select 1 as column_0, 1 as column_1 from dual union all select 2, 2 from dual) as sub",
+	}, {
+		// UNION ALL, not UNION: VALUES keeps duplicate rows.
+		query:     "select * from (values row(1), row(1)) as sub",
+		rewritten: "select column_0 from (select 1 as column_0 from dual union all select 1 from dual) as sub",
+	}, {
+		query:     "select * from (values row(1, 1), row(2, 2)) as sub(a, b)",
+		rewritten: "select a, b from (select 1 as column_0, 1 as column_1 from dual union all select 2, 2 from dual) as sub(a, b)",
+	}, {
+		query:     "select * from (values row(2), row(1) limit 1) as sub",
+		rewritten: "select column_0 from (select 2 as column_0 from dual union all select 1 from dual limit 1) as sub",
+	}, {
+		// MySQL never applies these, so a sorting UNION would return different rows.
+		query:        "select * from (values row(2), row(1) order by column_0) as sub",
+		errorMessage: "VT12001: unsupported: VALUES with an ORDER BY",
+	}, {
+		query:        "select * from (values row(2), row(1) order by 1) as sub",
+		errorMessage: "VT12001: unsupported: VALUES with an ORDER BY",
+	}, {
+		query:        "select * from (values row(2), row(1) order by column_0 limit 1) as sub",
+		errorMessage: "VT12001: unsupported: VALUES with an ORDER BY",
+	}, {
+		query:     "select * from ((values row(1)) union all (values row(2))) as sub",
+		rewritten: "select column_0 from (select 1 as column_0 from dual union all select 2 as column_0 from dual) as sub",
+	}, {
+		query:     "select * from (values row(1) union values row(2)) as sub",
+		rewritten: "select column_0 from (select 1 as column_0 from dual union select 2 as column_0 from dual) as sub",
+	}, {
+		query:     "select id from t where id in (values row(1))",
+		rewritten: "select id from t where id in (select 1 as column_0 from dual)",
+	}, {
+		query:     "select exists (values row(1)) from t",
+		rewritten: "select exists (select 1 as column_0 from dual) from t",
+	}, {
+		query:     "with x as (values row(1, 2)) select * from x",
+		rewritten: "select column_0, column_1 from (select 1 as column_0, 2 as column_1 from dual) as x",
+	}, {
+		query:     "select * from (values row((select id from t))) as sub",
+		rewritten: "select column_0 from (select (select id from t) as column_0 from dual) as sub",
+	}, {
+		// The CTE stays available to the rows.
+		query:     "select * from (with x as (select id from t) values row((select count(*) from x))) as sub",
+		rewritten: "select column_0 from (select (select count(*) from (select id from t) as x) as column_0 from dual) as sub",
+	}, {
+		query:     "insert into t(a, b) values row(1, 2)",
+		rewritten: "insert into t(a, b) values row(1, 2)",
+	}, {
+		// MySQL accepts an aggregate that belongs to a nested subquery.
+		query:     "select * from (values row((select count(*) from t))) as sub",
+		rewritten: "select column_0 from (select (select count(*) from t) as column_0 from dual) as sub",
+	}, {
+		query:        "select * from (values ::a) as sub",
+		errorMessage: "VT12001: unsupported: VALUES with a list argument",
+	}, {
+		query:        "select * from (values row()) as sub",
+		errorMessage: "VT03012: invalid syntax: each row of a VALUES clause must have at least one column",
+	}, {
+		query:        "select * from (values row(1), row(2, 2)) as sub",
+		errorMessage: "VT03006: column count does not match value count with the row",
+	}, {
+		query:        "select * from (values row(1, 1), row(2)) as sub",
+		errorMessage: "VT03006: column count does not match value count with the row",
+	}, {
+		query:        "select * from (values row(count(*))) as sub",
+		errorMessage: "Invalid use of group function",
+	}, {
+		query:        "select * from (values row(1), row(max(id))) as sub",
+		errorMessage: "Invalid use of group function",
+	}}
+
+	for _, tcase := range tcases {
+		t.Run(tcase.query, func(t *testing.T) {
+			parse, err := sqlparser.NewTestParser().Parse(tcase.query)
+			require.NoError(t, err)
+
+			_, err = Analyze(parse, "user", &FakeSI{
+				Tables: map[string]*vindexes.BaseTable{
+					"t": {Name: sqlparser.NewIdentifierCS("t"), Keyspace: ks2},
+				},
+			})
+
+			if tcase.errorMessage != "" {
+				require.EqualError(t, err, tcase.errorMessage)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tcase.rewritten, sqlparser.String(parse))
+		})
+	}
+}
+
+// TestRewriteValuesStatementsLeavesOtherPositionsAlone pins the exclusion half of
+// valuesIsUsedAsQuery: rewriting INSERT rows changes how they are planned, and rewriting a view
+// definition would change what gets stored in the schema.
+func TestRewriteValuesStatementsLeavesOtherPositionsAlone(t *testing.T) {
+	queries := []string{
+		"insert into t(a, b) values row(1, 2)",
+		"create view v as values row(1, 2)",
+		"alter view v as values row(1, 2)",
+		"create table t2 as values row(1, 2)",
+	}
+
+	for _, query := range queries {
+		t.Run(query, func(t *testing.T) {
+			parse, err := sqlparser.NewTestParser().Parse(query)
+			require.NoError(t, err)
+
+			require.NoError(t, rewriteValuesStatements(parse))
+			assert.Equal(t, query, sqlparser.String(parse))
+		})
+	}
+}
+
 var NoTables TableSet
 
 var (

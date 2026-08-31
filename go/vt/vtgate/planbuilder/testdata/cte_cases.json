@@ -2510,5 +2510,24 @@
         "Query": "select a from (select 1 from dual union all select 2 from dual) as dt(a) where exists (with recursive qn as (select a * 0 as b from dual union all select b + 1 from qn where b = 0) select 1 from qn where b = a)"
       }
     }
+  },
+  {
+    "comment": "VALUES table constructor as a CTE definition",
+    "query": "with x as (values row(1, 2)) select * from x",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "with x as (values row(1, 2)) select * from x",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Reference",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select column_0, column_1 from (select 1 as column_0, 2 as column_1 from dual where 1 != 1) as x where 1 != 1",
+        "Query": "select column_0, column_1 from (select 1 as column_0, 2 as column_1 from dual) as x"
+      }
+    }
   }
 ]
