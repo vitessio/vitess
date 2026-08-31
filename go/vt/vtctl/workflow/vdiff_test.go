@@ -755,11 +755,6 @@ func TestVDiffDelete(t *testing.T) {
 	}
 }
 
-// TestVDiffShow verifies that VDiffShow forwards the no_samples flag from the
-// vtctld request through to the tabletmanager VDiff request sent to every target
-// primary, for both flag values. This exercises the vtctld->tabletmanager
-// plumbing so a regression there is caught rather than relying on query-string
-// comparisons alone.
 func TestVDiffShow(t *testing.T) {
 	ctx := t.Context()
 	sourceKeyspace := &testKeyspace{
@@ -778,8 +773,6 @@ func TestVDiffShow(t *testing.T) {
 	env.tmc.strict = true
 	action := string(vdiff.ShowAction)
 
-	// expectedShowRequest is the tabletmanager request VDiffShow must forward to
-	// each target primary for a given no_samples value.
 	expectedShowRequest := func(noSamples bool) *tabletmanagerdatapb.VDiffRequest {
 		return &tabletmanagerdatapb.VDiffRequest{
 			Keyspace:  targetKeyspace.KeyspaceName,
@@ -793,7 +786,6 @@ func TestVDiffShow(t *testing.T) {
 			},
 		}
 	}
-	// bothTargets expects the same forwarded request on both target shards.
 	bothTargets := func(noSamples bool) map[*topodatapb.Tablet]*vdiffRequestResponse {
 		return map[*topodatapb.Tablet]*vdiffRequestResponse{
 			env.tablets[targetKeyspace.KeyspaceName][startingTargetTabletUID]:               {req: expectedShowRequest(noSamples)},

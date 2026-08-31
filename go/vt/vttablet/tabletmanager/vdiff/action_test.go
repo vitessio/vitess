@@ -347,7 +347,6 @@ func TestPerformVDiffAction(t *testing.T) {
 			},
 		},
 		{
-			// Show by UUID with no_samples=false reads the full report.
 			name: "show by uuid full report",
 			req: &tabletmanagerdatapb.VDiffRequest{
 				Action:    string(ShowAction),
@@ -364,8 +363,6 @@ func TestPerformVDiffAction(t *testing.T) {
 			},
 		},
 		{
-			// Show by UUID with no_samples must run the JSON_REMOVE variant that
-			// strips the row samples, and nothing else about the path may change.
 			name: "show by uuid no samples",
 			req: &tabletmanagerdatapb.VDiffRequest{
 				Action:    string(ShowAction),

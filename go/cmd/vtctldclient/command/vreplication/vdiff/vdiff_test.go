@@ -815,10 +815,6 @@ func TestGetStructNames(t *testing.T) {
 	require.Equal(t, want, got)
 }
 
-// TestShowNoSamplesFlag guards the `vdiff show --no-samples` flag against
-// accidental removal or renaming. The go/flags/endtoend golden fixtures only
-// cover each binary's root --help, not subcommands, so this is the flag's
-// regression coverage (mirrors the movetables keep-data flag test).
 func TestShowNoSamplesFlag(t *testing.T) {
 	root := &cobra.Command{Use: "test"}
 	registerCommands(root)
