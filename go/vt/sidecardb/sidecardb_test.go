@@ -391,3 +391,25 @@ func TestTableSchemaDiff(t *testing.T) {
 		})
 	}
 }
+
+// TestVDiffTableLastPKIsBlob asserts vdiff_table.lastpk is a blob type (not a
+// fixed-length varbinary) so large serialized VDiff checkpoints are not truncated (see #20900).
+func TestVDiffTableLastPKIsBlob(t *testing.T) {
+	schema, err := schemaLocation.ReadFile("schema/vdiff/vdiff_table.sql")
+	require.NoError(t, err)
+	stmt, err := sqlparser.NewTestParser().ParseStrictDDL(string(schema))
+	require.NoError(t, err)
+	ct, ok := stmt.(*sqlparser.CreateTable)
+	require.True(t, ok)
+
+	var lastpk *sqlparser.ColumnDefinition
+	for _, col := range ct.TableSpec.Columns {
+		if col.Name.EqualString("lastpk") {
+			lastpk = col
+			break
+		}
+	}
+	require.NotNil(t, lastpk, "lastpk column not found in vdiff_table schema")
+	require.Equal(t, "mediumblob", strings.ToLower(lastpk.Type.Type),
+		"vdiff_table.lastpk must be a blob type matching copy_state.lastpk; a fixed-length varbinary truncates large checkpoints")
+}
