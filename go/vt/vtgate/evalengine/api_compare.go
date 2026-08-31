@@ -372,6 +372,15 @@ type Merger struct {
 	count int        // number of active (non-exhausted) streams
 }
 
+// NewMerger creates a merger with room for the expected number of streams.
+// The capacity avoids slice growth while the caller primes the merge tree.
+func NewMerger(compare Comparison, streams int) *Merger {
+	return &Merger{
+		Compare: compare,
+		keys:    make([]mergeRow, 0, streams),
+	}
+}
+
 func (m *Merger) Len() int {
 	return m.count
 }

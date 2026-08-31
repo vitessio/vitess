@@ -175,6 +175,43 @@ func (stc *ScatterConn) ExecuteMultiShard(
 	return qr, allErrors.GetErrors()
 }
 
+// ExecuteMultiShardWithResultRuns is like ExecuteMultiShard, and also returns
+// successful shard results in the same order as rss.
+func (stc *ScatterConn) ExecuteMultiShardWithResultRuns(
+	ctx context.Context,
+	primitive engine.Primitive,
+	rss []*srvtopo.ResolvedShard,
+	queries []*querypb.BoundQuery,
+	session *econtext.SafeSession,
+	autocommit bool,
+	ignoreMaxMemoryRows bool,
+	resultsObserver econtext.ResultsObserver,
+	fetchLastInsertID bool,
+) (qr *sqltypes.Result, resultRuns []*sqltypes.Result, errs []error) {
+	if len(rss) != len(queries) {
+		return nil, nil, []error{vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] got mismatched number of queries and shards")}
+	}
+
+	qr = new(sqltypes.Result)
+	resultRuns = make([]*sqltypes.Result, len(rss))
+	allErrors := stc.executeMultiShard(ctx, primitive, rss, queries, session, autocommit, resultsObserver, fetchLastInsertID,
+		func(i int, innerqr *sqltypes.Result) {
+			// Keep result runs aligned with the rows accepted into qr. If the
+			// memory limit rejects qr, neither result form escapes this method.
+			if ignoreMaxMemoryRows || len(qr.Rows) <= maxMemoryRows {
+				qr.AppendResult(innerqr)
+				resultRuns[i] = innerqr
+			}
+		},
+	)
+
+	if !ignoreMaxMemoryRows && len(qr.Rows) > maxMemoryRows {
+		return nil, nil, []error{vterrors.NewErrorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.NetPacketTooLarge, "in-memory row count exceeded allowed limit of %d", maxMemoryRows)}
+	}
+
+	return qr, resultRuns, allErrors.GetErrors()
+}
+
 // ExecuteMultiShardPerShard is like ExecuteMultiShard but returns each shard's
 // result separately, aligned by index to rss, instead of merging them into one
 // result. It reuses the same concurrent fan-out, retry, transaction and session

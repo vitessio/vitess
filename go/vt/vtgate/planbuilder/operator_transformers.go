@@ -649,6 +649,10 @@ func buildRoutePrimitive(ctx *plancontext.PlanningContext, op *operators.Route, 
 			CollationEnv:    ctx.VSchema.Environment().CollationEnv(),
 		})
 	}
+	// Route.planOffsets omits special expressions such as RAND() because VTGate
+	// cannot merge them. Only preserve runs when every shard ORDER BY expression
+	// has a corresponding route comparator.
+	eroute.ShardResultIsSorted = len(eroute.OrderBy) > 0 && len(eroute.OrderBy) == len(stmt.GetOrderBy())
 
 	prepareTheAST(stmt)
 
