@@ -29,6 +29,10 @@ type (
 	Tracker struct {
 		lastID      ID
 		expressions map[ID]sqlparser.Expr
+
+		// derived maps a predicate to the predicates split out of it, so that skipping the
+		// original also skips the copies. A UNION splits one per source.
+		derived map[ID][]ID
 	}
 
 	// ID is a unique key that references the current expression a join predicate represents.
@@ -38,6 +42,7 @@ type (
 func NewTracker() *Tracker {
 	return &Tracker{
 		expressions: make(map[ID]sqlparser.Expr),
+		derived:     make(map[ID][]ID),
 	}
 }
 
@@ -68,6 +73,17 @@ func (t *Tracker) Get(id ID) (sqlparser.Expr, error) {
 	return expr, nil
 }
 
+// NewDerivedJoinPredicate creates a predicate that is a rewritten copy of the one identified by
+// parent, and that must stop being rendered whenever the parent does.
+func (t *Tracker) NewDerivedJoinPredicate(parent ID, org sqlparser.Expr) *JoinPredicate {
+	jp := t.NewJoinPredicate(org)
+	t.derived[parent] = append(t.derived[parent], jp.ID)
+	return jp
+}
+
 func (t *Tracker) Skip(id ID) {
 	t.expressions[id] = nil
+	for _, derivedID := range t.derived[id] {
+		t.Skip(derivedID)
+	}
 }

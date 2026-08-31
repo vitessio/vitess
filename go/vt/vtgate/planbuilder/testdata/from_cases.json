@@ -4842,5 +4842,115 @@
         "Query": "select information_schema.`table`.col from information_schema.`table` order by information_schema.`table`.`name` asc"
       }
     }
+  },
+  {
+    "comment": "a join predicate pushed into the branches of a UNION is dropped again when the join merges into a single route",
+    "query": "select user.col from user join (select 1 as c from dual union all select 2 from dual) as sub on user.id = sub.c",
+    "plan": {
+      "Type": "Scatter",
+      "QueryType": "SELECT",
+      "Original": "select user.col from user join (select 1 as c from dual union all select 2 from dual) as sub on user.id = sub.c",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select `user`.col from `user`, (select 1 as c from dual where 1 != 1 union all select 2 from dual where 1 != 1) as sub where 1 != 1",
+        "Query": "select `user`.col from `user`, (select 1 as c from dual union all select 2 from dual) as sub where `user`.id = sub.c"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "the same with three branches",
+    "query": "select user.col from user join (select 1 as c from dual union all select 2 from dual union all select 3 from dual) as sub on user.id = sub.c",
+    "plan": {
+      "Type": "Scatter",
+      "QueryType": "SELECT",
+      "Original": "select user.col from user join (select 1 as c from dual union all select 2 from dual union all select 3 from dual) as sub on user.id = sub.c",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select `user`.col from `user`, (select 1 as c from dual where 1 != 1 union all select 2 from dual where 1 != 1 union all select 3 from dual where 1 != 1) as sub where 1 != 1",
+        "Query": "select `user`.col from `user`, (select 1 as c from dual union all select 2 from dual union all select 3 from dual) as sub where `user`.id = sub.c"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "the same for UNION DISTINCT",
+    "query": "select user.col from user join (select 1 as c from dual union select 2 from dual) as sub on user.id = sub.c",
+    "plan": {
+      "Type": "Scatter",
+      "QueryType": "SELECT",
+      "Original": "select user.col from user join (select 1 as c from dual union select 2 from dual) as sub on user.id = sub.c",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select `user`.col from `user`, (select 1 as c from dual where 1 != 1 union select 2 from dual where 1 != 1) as sub where 1 != 1",
+        "Query": "select `user`.col from `user`, (select 1 as c from dual union select 2 from dual) as sub where `user`.id = sub.c"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "the same for a LEFT JOIN",
+    "query": "select user.col from user left join (select 1 as c from dual union all select 2 from dual) as sub on user.id = sub.c",
+    "plan": {
+      "Type": "Scatter",
+      "QueryType": "SELECT",
+      "Original": "select user.col from user left join (select 1 as c from dual union all select 2 from dual) as sub on user.id = sub.c",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select `user`.col from `user` left join (select 1 as c from dual where 1 != 1 union all select 2 from dual where 1 != 1) as sub on `user`.id = sub.c where 1 != 1",
+        "Query": "select `user`.col from `user` left join (select 1 as c from dual union all select 2 from dual) as sub on `user`.id = sub.c"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "a predicate local to the UNION is still pushed into its branches",
+    "query": "select user.col from user join (select 1 as c from dual union all select 2 from dual) as sub on sub.c = 1",
+    "plan": {
+      "Type": "Scatter",
+      "QueryType": "SELECT",
+      "Original": "select user.col from user join (select 1 as c from dual union all select 2 from dual) as sub on sub.c = 1",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select `user`.col from `user`, (select 1 as c from dual where 1 != 1 union all select 2 from dual where 1 != 1) as sub where 1 != 1",
+        "Query": "select `user`.col from `user`, (select 1 as c from dual where 1 = 1 union all select 2 from dual where 2 = 1) as sub"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
   }
 ]
