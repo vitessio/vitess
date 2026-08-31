@@ -56,7 +56,8 @@ func copyRowToStructInLocation(shard shardConfig, row []sqltypes.Value, vPtr ref
 		loc = defaultDecodeLocation
 	}
 
-	for fieldName, m := range shard.fieldMap {
+	for _, m := range shard.fieldMappings {
+		fieldName := m.name
 		structField := reflect.Indirect(vPtr).FieldByIndex(m.structIndex)
 
 		// Handle pointer fields by allocating as needed.
@@ -92,7 +93,7 @@ func copyRowToStructInLocation(shard shardConfig, row []sqltypes.Value, vPtr ref
 			continue
 		}
 
-		handled, err := tryScanSpecialField(structField, row[m.rowIndex], loc)
+		handled, err := tryScanSpecialField(m, structField, row[m.rowIndex], loc)
 		if err != nil {
 			return fmt.Errorf("vstreamclient: error converting row value for field %s: %w", fieldName, err)
 		}
@@ -204,13 +205,16 @@ func copyRowToStructInLocation(shard shardConfig, row []sqltypes.Value, vPtr ref
 	return nil
 }
 
-func tryScanSpecialField(structField reflect.Value, rowValue sqltypes.Value, loc *time.Location) (bool, error) {
-	if structField.Type() == timeType {
+// The interface checks here depend only on the struct field's type, so they are
+// resolved once in reflectMapStructFields rather than per row. structField.Addr
+// is taken only when a cached verdict says the interface is actually satisfied.
+func tryScanSpecialField(m fieldMapping, structField reflect.Value, rowValue sqltypes.Value, loc *time.Location) (bool, error) {
+	if m.isTime {
 		return false, nil
 	}
 
 	if structField.CanAddr() {
-		if structField.Addr().Type().Implements(sqlScannerType) {
+		if m.implementsSQLScanner {
 			scanner := structField.Addr().Interface().(sql.Scanner)
 			driverValue, err := sqlValueToDriverValue(rowValue, loc)
 			if err != nil {
@@ -219,7 +223,7 @@ func tryScanSpecialField(structField reflect.Value, rowValue sqltypes.Value, loc
 			return true, scanner.Scan(driverValue)
 		}
 
-		if structField.Addr().Type().Implements(textUnmarshalerType) {
+		if m.implementsTextUnmarshaler {
 			if rowValue.IsNull() {
 				return false, nil
 			}

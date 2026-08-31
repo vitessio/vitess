@@ -17,6 +17,7 @@ limitations under the License.
 package vstreamclient
 
 import (
+	"cmp"
 	"fmt"
 	"reflect"
 	"slices"
@@ -100,20 +101,29 @@ type TableStats struct {
 
 // shardConfig is the per-shard configuration for a table, which is used to scan the results
 type shardConfig struct {
-	fieldMap map[string]fieldMapping
-	fields   []*querypb.Field
+	fieldMappings []fieldMapping
+	fields        []*querypb.Field
 }
 
 // fieldMapping caches the mapping of table fields to struct fields, to reduce reflection overhead. This is
 // configured once per shard, and used for all rows in that shard, unless a DDL event changes the schema,
 // in which case the mapping is updated.
 type fieldMapping struct {
+	name        string
 	rowIndex    int
 	structIndex []int
 	structType  reflect.Type
 	kind        reflect.Kind
 	isPointer   bool
 	jsonDecode  bool
+
+	// Whether the addressable field implements the interfaces tryScanSpecialField
+	// looks for. These depend only on the struct type, so resolving them per row
+	// costs two reflect.Type.Implements calls and a reflect.Type.ptrTo allocation
+	// for an answer that cannot change.
+	isTime                    bool
+	implementsSQLScanner      bool
+	implementsTextUnmarshaler bool
 }
 
 // TODO: there's a consolidation issue to deal with here. Someone could easily add a new table in
@@ -318,25 +328,25 @@ func (table *TableConfig) resetBatch() {
 }
 
 func (table *TableConfig) handleFieldEvent(ev *binlogdatapb.FieldEvent) error {
-	var fieldMap map[string]fieldMapping
+	var fieldMappings []fieldMapping
 	var err error
 
 	if !table.implementsScanner {
-		fieldMap, err = table.reflectMapFields(ev.Fields)
+		fieldMappings, err = table.reflectMapFields(ev.Fields)
 		if err != nil {
 			return err
 		}
 	}
 
 	table.shards[ev.Shard] = shardConfig{
-		fieldMap: fieldMap,
-		fields:   ev.Fields,
+		fieldMappings: fieldMappings,
+		fields:        ev.Fields,
 	}
 
 	return nil
 }
 
-func (table *TableConfig) reflectMapFields(fields []*querypb.Field) (map[string]fieldMapping, error) {
+func (table *TableConfig) reflectMapFields(fields []*querypb.Field) ([]fieldMapping, error) {
 	fieldMap := make(map[string]fieldMapping, len(fields))
 	table.reflectMapStructFields(table.underlyingType, nil, fields, fieldMap)
 
@@ -353,7 +363,18 @@ func (table *TableConfig) reflectMapFields(fields []*querypb.Field) (map[string]
 		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vstreamclient: no matching fields found for table %s", table.Table)
 	}
 
-	return fieldMap, nil
+	// Every row iterates these mappings, so hand back a slice rather than the
+	// map: it drops the map iterator per row and reads in wire order. Sorting
+	// by rowIndex also makes multi-field errors deterministic.
+	mappings := make([]fieldMapping, 0, len(fieldMap))
+	for _, mapping := range fieldMap {
+		mappings = append(mappings, mapping)
+	}
+	slices.SortFunc(mappings, func(a, b fieldMapping) int {
+		return cmp.Compare(a.rowIndex, b.rowIndex)
+	})
+
+	return mappings, nil
 }
 
 func (table *TableConfig) reflectMapStructFields(structType reflect.Type, indexPrefix []int, fields []*querypb.Field, fieldMap map[string]fieldMapping) {
@@ -395,13 +416,20 @@ func (table *TableConfig) reflectMapStructFields(structType reflect.Type, indexP
 				fieldType = fieldType.Elem()
 			}
 
+			// copyRowToStructInLocation dereferences pointer fields before
+			// scanning, so the addressable value is always *fieldType.
+			addrType := reflect.PointerTo(fieldType)
 			fieldMap[mappedFieldName] = fieldMapping{
-				rowIndex:    j,
-				structIndex: fullIndex,
-				structType:  fieldType,
-				kind:        fieldType.Kind(),
-				isPointer:   isPointer,
-				jsonDecode:  jsonDecode,
+				name:                      mappedFieldName,
+				rowIndex:                  j,
+				structIndex:               fullIndex,
+				structType:                fieldType,
+				kind:                      fieldType.Kind(),
+				isPointer:                 isPointer,
+				jsonDecode:                jsonDecode,
+				isTime:                    fieldType == timeType,
+				implementsSQLScanner:      addrType.Implements(sqlScannerType),
+				implementsTextUnmarshaler: addrType.Implements(textUnmarshalerType),
 			}
 		}
 	}
