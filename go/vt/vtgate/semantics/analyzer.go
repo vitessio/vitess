@@ -17,6 +17,7 @@ limitations under the License.
 package semantics
 
 import (
+	"fmt"
 	"slices"
 
 	"vitess.io/vitess/go/mysql/collations"
@@ -423,6 +424,7 @@ func rewriteValuesStatements(statement sqlparser.Statement) error {
 		if err != nil {
 			return false
 		}
+		rewritten = wrapValuesOnUnionRHS(cursor.Parent(), values, rewritten)
 		// Revisit, so the walk continues into the replacement instead of the VALUES statement.
 		cursor.ReplaceAndRevisit(rewritten)
 		return true
@@ -457,6 +459,32 @@ func rowContainsAggregation(expr sqlparser.Expr) bool {
 		return true, nil
 	}, expr)
 	return found
+}
+
+// wrapValuesOnUnionRHS wraps a desugared VALUES statement in a derived table when it desugared to a
+// UNION sitting on the right hand side of another UNION, which the operator planner rejects. It
+// wraps rather than reassociating because `a UNION (b UNION ALL c)` and `(a UNION b) UNION ALL c`
+// do not return the same rows when the two UNIONs differ in whether they are DISTINCT.
+func wrapValuesOnUnionRHS(parent sqlparser.SQLNode, values *sqlparser.ValuesStatement, rewritten sqlparser.TableStatement) sqlparser.TableStatement {
+	union, isUnion := parent.(*sqlparser.Union)
+	if !isUnion || union.Right != sqlparser.TableStatement(values) {
+		return rewritten
+	}
+	if _, wasSplit := rewritten.(*sqlparser.Union); !wasSplit {
+		return rewritten
+	}
+
+	exprs := make([]sqlparser.SelectExpr, 0, len(values.Rows[0]))
+	for i := range values.Rows[0] {
+		exprs = append(exprs, &sqlparser.AliasedExpr{Expr: sqlparser.NewColName(fmt.Sprintf("column_%d", i))})
+	}
+	return &sqlparser.Select{
+		SelectExprs: &sqlparser.SelectExprs{Exprs: exprs},
+		From: []sqlparser.TableExpr{&sqlparser.AliasedTableExpr{
+			Expr: &sqlparser.DerivedTable{Select: rewritten},
+			As:   sqlparser.NewIdentifierCS("dt"),
+		}},
+	}
 }
 
 // valuesIsUsedAsQuery reports whether a VALUES statement hanging off this node is a query, rather

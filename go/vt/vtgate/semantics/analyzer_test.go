@@ -78,6 +78,21 @@ func TestRewriteValuesStatements(t *testing.T) {
 		query:     "select exists (values row(1)) from t",
 		rewritten: "select exists (select 1 as column_0 from dual) from t",
 	}, {
+		// A multi row VALUES on the right of a UNION is wrapped, since the operator planner rejects
+		// a UNION nested there. A single row desugars to a SELECT and needs no wrapping, and the
+		// left hand side allows nesting.
+		query:     "select 0 union all values row(1), row(2)",
+		rewritten: "select 0 from dual union all select column_0 from (select 1 as column_0 from dual union all select 2 from dual) as dt",
+	}, {
+		query:     "select 0, 0 union values row(1, 2), row(3, 4)",
+		rewritten: "select 0, 0 from dual union select column_0, column_1 from (select 1 as column_0, 2 as column_1 from dual union all select 3, 4 from dual) as dt",
+	}, {
+		query:     "select 0 union all values row(1)",
+		rewritten: "select 0 from dual union all select 1 as column_0 from dual",
+	}, {
+		query:     "values row(1), row(2) union all select 0",
+		rewritten: "select 1 as column_0 from dual union all select 2 from dual union all select 0 from dual",
+	}, {
 		query:     "with x as (values row(1, 2)) select * from x",
 		rewritten: "select column_0, column_1 from (select 1 as column_0, 2 as column_1 from dual) as x",
 	}, {
