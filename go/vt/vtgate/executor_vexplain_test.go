@@ -300,6 +300,37 @@ func TestVExplainMySQLPlanTargetedSend(t *testing.T) {
 	assert.Equal(t, targetShard, plan.MySQLExplainJSON[targetShard].Shard)
 }
 
+// TestVExplainMySQLPlanPreservesTargetTabletAlias verifies that VEXPLAIN MYSQLPLAN
+// honours a tablet-specific target (USE ks:shard@type|alias). The pinned tablet alias
+// is stored on SafeSession, not in the vtgatepb.Session proto, so the standalone
+// autocommit session that ExecuteMultiShardPerShard builds must copy it explicitly, or
+// the EXPLAIN routes through the gateway to some other tablet of that type - reporting a
+// different tablet's optimizer plan than the one the caller pinned. This is proven by
+// pinning a nonexistent alias: when the alias is honoured, routing fails closed with
+// "not found"; had it been dropped, the EXPLAIN would silently succeed against a
+// gateway-selected tablet. The same query without an alias still succeeds, showing the
+// shard itself is reachable and the rejection is due solely to the honoured alias.
+func TestVExplainMySQLPlanPreservesTargetTabletAlias(t *testing.T) {
+	executor, ctx := createExecutorEnvCallback(t, createExecutorConfig(), func(shard, ks string, tabletType topodatapb.TabletType, conn *sandboxconn.SandboxConn) {
+		if ks == KsTestSharded && tabletType == topodatapb.TabletType_PRIMARY {
+			conn.SetResults([]*sqltypes.Result{explainResultForShard(shard)})
+		}
+	})
+
+	const query = "vexplain mysqlplan select id from `user`"
+
+	// Sanity: with only the shard target (no tablet alias), the EXPLAIN reaches the shard.
+	shardSession := &vtgatepb.Session{TargetString: KsTestSharded + ":-20@primary"}
+	_, err := executorExec(ctx, executor, shardSession, query, nil)
+	require.NoError(t, err)
+
+	// With a pinned (nonexistent) tablet alias, routing must honour it and fail closed,
+	// rather than dropping it and silently routing via the gateway.
+	pinnedSession := &vtgatepb.Session{TargetString: KsTestSharded + ":-20@primary|aa-9999999"}
+	_, err = executorExec(ctx, executor, pinnedSession, query, nil)
+	require.ErrorContains(t, err, "not found")
+}
+
 // TestVExplainMySQLPlanMultipleRoutes verifies that a plan with more than one
 // Route node (here a UNION, which plans as Distinct over a Concatenate of two
 // Routes) attaches a distinct per-shard EXPLAIN map to each Route node, keyed by

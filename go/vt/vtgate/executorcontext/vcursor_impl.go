@@ -912,7 +912,13 @@ func (vc *VCursorImpl) ExecuteMultiShard(ctx context.Context, primitive engine.P
 // requested, so - unlike ExecuteMultiShard - it does not write SafeSession.LastInsertId.
 func (vc *VCursorImpl) ExecuteMultiShardPerShard(ctx context.Context, primitive engine.Primitive, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery) ([]*sqltypes.Result, []error) {
 	atomic.AddUint64(&vc.logStats.ShardQueries, uint64(len(rss)))
-	results, errs := vc.executor.ExecuteMultiShardPerShard(ctx, primitive, rss, commentedShardQueries(queries, vc.marginComments), NewAutocommitSession(vc.SafeSession.Session), false /* autocommit */, vc.observer, false /* fetchLastInsertID */)
+	// A tablet-specific target (USE ks:shard@type|alias) is stored on SafeSession, not
+	// in the vtgatepb.Session proto, so NewAutocommitSession would drop it and the
+	// EXPLAINs would route through the gateway to another tablet of that type. Carry the
+	// alias over so each EXPLAIN reaches the same tablet the wrapped query would.
+	standaloneSession := NewAutocommitSession(vc.SafeSession.Session)
+	standaloneSession.SetTargetTabletAlias(vc.SafeSession.GetTargetTabletAlias())
+	results, errs := vc.executor.ExecuteMultiShardPerShard(ctx, primitive, rss, commentedShardQueries(queries, vc.marginComments), standaloneSession, false /* autocommit */, vc.observer, false /* fetchLastInsertID */)
 	vc.logShardsQueried(primitive, len(rss))
 	return results, errs
 }
