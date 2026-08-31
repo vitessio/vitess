@@ -381,6 +381,11 @@ func runMySQLExplainTasks(ctx context.Context, vcursor VCursor, tasks []mysqlExp
 	}
 	executor, ok := vcursor.(MultiShardPerShardExecutor)
 	if !ok {
+		// The per-shard executor is an optional VCursor capability (see
+		// MultiShardPerShardExecutor). The in-tree VCursor implements it, so this
+		// only happens for an out-of-tree VCursor that does not; warn so the
+		// resulting plan-without-EXPLAIN output is not mistaken for a bug.
+		log.Warn("VEXPLAIN MYSQLPLAN: VCursor does not implement MultiShardPerShardExecutor; returning plan without MySQL EXPLAIN output")
 		return explainResults, nil
 	}
 
