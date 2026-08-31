@@ -192,8 +192,9 @@ func TestVExplainMySQLReservedConn(t *testing.T) {
 
 // TestVExplainMySQLEmptyResultWarns verifies that when a shard's EXPLAIN returns an
 // empty result (no rows), that shard is omitted from the output map but a warning is
-// logged rather than dropping it silently. Here two shards are targeted but only one
-// EXPLAIN result is provided, so the second shard yields an empty result.
+// both logged (for the operator) and recorded on the session (surfaced to the client
+// via SHOW WARNINGS) rather than dropping it silently. Here two shards are targeted
+// but only one EXPLAIN result is provided, so the second shard yields an empty result.
 func TestVExplainMySQLEmptyResultWarns(t *testing.T) {
 	var (
 		mu       sync.Mutex
@@ -234,4 +235,10 @@ func TestVExplainMySQLEmptyResultWarns(t *testing.T) {
 	defer mu.Unlock()
 	require.Len(t, warnings, 1)
 	assert.Contains(t, warnings[0], "empty EXPLAIN result")
+
+	// The client must also be able to discover the omitted shard via SHOW WARNINGS,
+	// so a warning naming the empty shard is recorded on the session.
+	require.Len(t, vc.warnings, 1)
+	assert.Contains(t, vc.warnings[0].Message, "empty EXPLAIN result")
+	assert.Contains(t, vc.warnings[0].Message, "20-")
 }

@@ -399,10 +399,15 @@ func runMySQLExplainTasks(ctx context.Context, vcursor VCursor, tasks []mysqlExp
 				// EXPLAIN FORMAT=JSON always returns one row of one column, and a
 				// per-shard failure would already have aborted above, so an empty
 				// result here is anomalous. Warn rather than silently omitting the
-				// shard from the output map.
+				// shard from the output map: log for the operator and record a
+				// session warning so the client can see the omission via SHOW WARNINGS.
 				log.Warn("VEXPLAIN MYSQLPLAN got an empty EXPLAIN result; omitting shard from output",
 					slog.String("keyspace", task.rss[i].Target.Keyspace),
 					slog.String("shard", task.rss[i].Target.Shard))
+				vcursor.Session().RecordWarning(&querypb.QueryWarning{
+					Message: fmt.Sprintf("VEXPLAIN MYSQLPLAN got an empty EXPLAIN result for %s/%s; shard omitted from output",
+						task.rss[i].Target.Keyspace, task.rss[i].Target.Shard),
+				})
 				continue
 			}
 			perShard := explainResults[task.primitive]
