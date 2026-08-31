@@ -36,6 +36,7 @@ import (
 	vttablet "vitess.io/vitess/go/vt/vttablet/common"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 // TestRowStreamerQuery validates that the correct force index hint and order by is added to the rowstreamer query.
@@ -770,4 +771,20 @@ func expectStreamError(t *testing.T, query string, want string) {
 		return nil
 	}, nil)
 	require.EqualError(t, err, want, "Got incorrect error")
+}
+
+func TestTrimRowPool(t *testing.T) {
+	rows := []*querypb.Row{{Values: make([]byte, 0, 1024)}, {Values: make([]byte, 0, 2048)}}
+
+	// Under budget: the pool and poolBytes are unchanged, not dropped.
+	kept, poolBytes, dropped := trimRowPool(rows, 3072, 4096)
+	require.False(t, dropped)
+	require.Equal(t, 3072, poolBytes)
+	require.Len(t, kept, 2)
+
+	// Over budget: the whole pool is dropped and poolBytes resets to 0.
+	kept, poolBytes, dropped = trimRowPool(rows, 5000, 4096)
+	require.True(t, dropped)
+	require.Equal(t, 0, poolBytes)
+	require.Nil(t, kept)
 }
