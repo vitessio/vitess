@@ -123,21 +123,6 @@ type journalEvent struct {
 	shardGTIDs   map[string]*binlogdatapb.ShardGtid
 }
 
-<<<<<<< HEAD
-type PostCopyActionType int
-type PostCopyAction struct {
-	Type PostCopyActionType `json:"type"`
-	Task string             `json:"task"`
-}
-||||||| parent of bc8f88fc18 (VReplication: don't count throttled time in the vplayer stall deadline (#20925))
-type (
-	PostCopyActionType int
-	PostCopyAction     struct {
-		Type PostCopyActionType `json:"type"`
-		Task string             `json:"task"`
-	}
-)
-=======
 type (
 	// throttleChecker is what the engine needs from the tablet throttler:
 	// a single check that either passes or briefly waits and denies. It
@@ -153,7 +138,6 @@ type (
 		Task string             `json:"task"`
 	}
 )
->>>>>>> bc8f88fc18 (VReplication: don't count throttled time in the vplayer stall deadline (#20925))
 
 // NewEngine creates a new Engine.
 // A nil ts means that the Engine is disabled.

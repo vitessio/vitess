@@ -25,10 +25,12 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/nsf/jsondiff"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/replication"
@@ -46,24 +48,6 @@ import (
 	qh "vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication/queryhistory"
 )
 
-<<<<<<< HEAD
-||||||| parent of bc8f88fc18 (VReplication: don't count throttled time in the vplayer stall deadline (#20925))
-var testGTIDCounter atomic.Uint64
-
-func uniqueTestGTID() string {
-	now := uint64(time.Now().UnixNano())
-	seq := testGTIDCounter.Add(1)
-	return fmt.Sprintf("%08x-%04x-%04x-%04x-%012x:%d",
-		uint32(now>>32),
-		uint16(now>>16),
-		uint16(now),
-		uint16(seq>>16),
-		seq&0xffffffffffff,
-		100+seq,
-	)
-}
-
-=======
 type (
 	// fakeThrottleChecker is a throttleChecker whose verdict the test
 	// controls: while deny is set every check is refused, as for a tablet
@@ -92,22 +76,6 @@ func (f *fakeThrottleChecker) ThrottleCheckOKOrWaitAppName(_ context.Context, ap
 	}, true
 }
 
-var testGTIDCounter atomic.Uint64
-
-func uniqueTestGTID() string {
-	now := uint64(time.Now().UnixNano())
-	seq := testGTIDCounter.Add(1)
-	return fmt.Sprintf("%08x-%04x-%04x-%04x-%012x:%d",
-		uint32(now>>32),
-		uint16(now>>16),
-		uint16(now),
-		uint16(seq>>16),
-		seq&0xffffffffffff,
-		100+seq,
-	)
-}
-
->>>>>>> bc8f88fc18 (VReplication: don't count throttled time in the vplayer stall deadline (#20925))
 // TestPlayerGeneratedInvisiblePrimaryKey confirms that the gipk column is replicated by vplayer, both for target
 // tables that have a gipk column and those that make it visible.
 func TestPlayerGeneratedInvisiblePrimaryKey(t *testing.T) {
@@ -4218,20 +4186,6 @@ func startVReplication(t *testing.T, bls *binlogdatapb.BinlogSource, pos string)
 		})
 	}, int(qr.InsertID)
 }
-<<<<<<< HEAD
-||||||| parent of bc8f88fc18 (VReplication: don't count throttled time in the vplayer stall deadline (#20925))
-
-func drainDBQueries() {
-	for {
-		select {
-		case <-globalDBQueries:
-			continue
-		default:
-			return
-		}
-	}
-}
-=======
 
 func drainDBQueries() {
 	for {
@@ -4254,17 +4208,15 @@ func TestPlayerNoStallWhileThrottled(t *testing.T) {
 	defer deleteTablet(addTablet(100))
 
 	// Capture the error log so we can assert the stall message is absent.
-	ole := log.Error
+	ole := log.Errorf
 	logger := logutil.NewMemoryLogger()
-	log.Error = func(msg string, _ ...slog.Attr) {
-		logger.Errorf("%s", msg)
-	}
+	log.Errorf = logger.Errorf
 
 	oldProgressDeadline := vplayerProgressDeadline
 	oldRelayLogMaxItems := vttablet.DefaultVReplicationConfig.RelayLogMaxItems
 	oldThrottlerClient := playerEngine.throttlerClient
 	defer func() {
-		log.Error = ole
+		log.Errorf = ole
 		vplayerProgressDeadline = oldProgressDeadline
 		vttablet.DefaultVReplicationConfig.RelayLogMaxItems = oldRelayLogMaxItems
 		playerEngine.throttlerClient = oldThrottlerClient
@@ -4364,4 +4316,3 @@ func TestPlayerNoStallWhileThrottled(t *testing.T) {
 	log.Flush()
 	require.NotContains(t, logger.String(), relayLogIOStalledMsg)
 }
->>>>>>> bc8f88fc18 (VReplication: don't count throttled time in the vplayer stall deadline (#20925))
