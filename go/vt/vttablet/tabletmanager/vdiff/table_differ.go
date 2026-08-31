@@ -941,11 +941,8 @@ func setTableMismatch(dbClient binlogplayer.DBClient, vdiffID int64, table strin
 }
 
 func (td *tableDiffer) lastPKFromRow(row []sqltypes.Value) *tabletmanagerdatapb.VDiffTableLastPK {
-	// The row is laid out in SELECT-expression order. Proto3ToResult rebuilds each
-	// value's type from the attached fields and the row streamer uses that type to
-	// quote the resume predicate, so each PK value must be paired with its own
-	// column's field (by name, not by DDL ordinal) to survive column reorders and
-	// type-changing renames.
+	// Resolve target PK fields by column name (not by DDL ordinal) so reordered
+	// projections pair each value with its own column's field.
 	targetFieldByName := make(map[string]*querypb.Field, len(td.tablePlan.table.Fields))
 	for _, f := range td.tablePlan.table.Fields {
 		targetFieldByName[strings.ToLower(f.Name)] = f
@@ -965,9 +962,8 @@ func (td *tableDiffer) lastPKFromRow(row []sqltypes.Value) *tabletmanagerdatapb.
 		targetFields[i] = targetFieldByName[strings.ToLower(td.tablePlan.compareCols[colIndex].colName)]
 	}
 
-	// The row is the source stream's row, so each value already carries the source
-	// column type. Use it for the source fields so a rename that changes the column
-	// type still quotes the source key with the source type, not the target type.
+	// The row is the source stream's row, so take source field types from the values
+	// themselves; a type-changing rename then quotes the source key with the source type.
 	sourceFields := make([]*querypb.Field, len(td.tablePlan.sourcePkCols))
 	for i, colIndex := range td.tablePlan.sourcePkCols {
 		sourceFields[i] = &querypb.Field{
@@ -980,8 +976,7 @@ func (td *tableDiffer) lastPKFromRow(row []sqltypes.Value) *tabletmanagerdatapb.
 		Target: buildQR(td.tablePlan.pkCols, targetFields),
 	}
 	// A separate source lastpk is only needed when the source key differs from the
-	// target: different column positions, or the same positions but different field
-	// types (a type-changing rename). Otherwise the target value is reused.
+	// target by column position or by field type; otherwise the target value is reused.
 	if !slices.Equal(td.tablePlan.pkCols, td.tablePlan.sourcePkCols) || !fieldTypesEqual(targetFields, sourceFields) {
 		lastPK.Source = buildQR(td.tablePlan.sourcePkCols, sourceFields)
 	}
@@ -1052,14 +1047,9 @@ func (td *tableDiffer) getSourcePKCols() error {
 	ctx, cancel := context.WithTimeout(td.wd.ct.vde.ctx, topo.RemoteOperationTimeout*3)
 	defer cancel()
 
-	// Parse the source query first. We need it for two reasons:
-	//  1. The physical source table can differ from the target table name
-	//     (td.table.Name) for cross-table MoveTables filters, e.g. a filter of
-	//     "select ... from t2" for target table t1. The schema, PK-equivalent,
-	//     and PK column lookups must all use the real source table.
-	//  2. We map PK columns against the SELECT expression order (the actual row
-	//     layout) rather than td.table.Columns (column ordinal position),
-	//     because filters can reorder columns (e.g. "select c2, c1 from t1").
+	// Parse the source query to resolve the physical source table (which can differ
+	// from td.table.Name for cross-table filters) and to map PK columns by SELECT
+	// order rather than column ordinal.
 	statement, err := td.wd.ct.vde.parser.Parse(td.tablePlan.sourceQuery)
 	if err != nil {
 		return vterrors.Wrapf(err, "failed to parse source query for table %s", td.table.Name)
@@ -1137,26 +1127,18 @@ func (td *tableDiffer) getSourcePKCols() error {
 		}
 	}
 
-	// Map each source PK column to its position in the SELECT expression order,
-	// which is the actual layout of the streamed rows.
 	indices, allProjected, err := sourcePKSelectIndices(sourceSelect, sourceTable.PrimaryKeyColumns)
 	if err != nil {
 		return vterrors.Wrapf(err, "table %s", sourceTableName)
 	}
-	// The source stream is always ordered by the full physical source PK, while the
-	// VDiff merge sorter orders both streams by the comparison key. The merge is
-	// only valid when the comparison key is an order-preserving prefix of the
-	// physical source PK, so reject any plan (projected in full or not) that is not.
-	// This catches reordered keys and non-matching aliases as well as omitted-suffix
-	// filters.
+	// Reject any plan whose comparison key is not an order-preserving prefix of the
+	// physical source PK; the source stream is always ordered by that PK.
 	if err := comparisonKeyIsSourcePKPrefix(sourceSelect, td.tablePlan.comparePKs, sourceTable.PrimaryKeyColumns); err != nil {
 		return err
 	}
 	if !allProjected {
-		// The comparison key is a safe prefix, but the full source PK is not
-		// projected so no resumable source checkpoint is possible: any resume
-		// restarts the whole table for both streams, and the table cannot honor
-		// --max-diff-duration. Clear any stale loaded checkpoint.
+		// The full source PK is not projected, so no resumable source checkpoint is
+		// possible; any resume restarts the whole table. Clear any stale checkpoint.
 		td.tablePlan.sourceCheckpointUnavailable = true
 		td.lastSourcePK = nil
 		td.lastTargetPK = nil
@@ -1217,17 +1199,11 @@ func sourceTableNameFromSelect(sourceSelect *sqlparser.Select) (string, error) {
 	return tableName.String(), nil
 }
 
-// sourcePKSelectIndices maps each source PK column to its position in the SELECT
-// expression list (the physical row layout the row streamer produces), in PK
-// definition order. A PK column resolves through a plain ColName, a rename
-// (aliased ColName), or a CONVERT(col USING charset) rename.
-//
-// allProjected is true only when every source PK column resolves to a physical
-// SELECT column. It is false, with no error, when a source PK column is not
-// projected as a physical column (absent, or shadowed by an alias of another
-// column); the caller then cannot build a resumable source checkpoint. Merge-
-// ordering correctness is enforced separately by comparisonKeyIsSourcePKPrefix,
-// which the caller runs for every plan.
+// sourcePKSelectIndices maps each source PK column to its SELECT-list position, in
+// PK definition order. allProjected is false (no error) when a PK column is not
+// projected as a physical column, in which case a resumable source checkpoint
+// cannot be built; merge-ordering correctness is enforced by the caller via
+// comparisonKeyIsSourcePKPrefix.
 func sourcePKSelectIndices(sourceSelect *sqlparser.Select, pkColumns []string) (indices []int, allProjected bool, err error) {
 	indices = make([]int, 0, len(pkColumns))
 	for _, pkc := range pkColumns {
@@ -1244,9 +1220,8 @@ func sourcePKSelectIndices(sourceSelect *sqlparser.Select, pkColumns []string) (
 			if !ok {
 				continue
 			}
-			// A physical match always wins, even if it appears after an alias
-			// that shadows the PK name. This preserves correct resolution for
-			// queries like "select b as a, a as b" (PK a -> the real a).
+			// A physical match wins over an alias that shadows the PK name
+			// (e.g. "select b as a, a as b" resolves PK a to the real a).
 			if colName, ok := underlyingSourceColumn(aliasedExpr.Expr); ok && strings.EqualFold(pkc, colName) {
 				physicalIdx = i
 				break
@@ -1272,10 +1247,8 @@ func underlyingSourceColumn(expr sqlparser.Expr) (string, bool) {
 	case *sqlparser.ColName:
 		return e.Name.String(), true
 	case *sqlparser.ConvertUsingExpr:
-		// Only a direct column rename like "convert(c1 using utf8mb4) as c2"
-		// is a physical source column. Anything wrapped in a computation
-		// (concat, cast, arithmetic, etc.) is not a physical column, so it
-		// resolves to none and the PK is treated as not projected.
+		// Only a direct column rename like "convert(c1 using utf8mb4) as c2" is a
+		// physical column; a computation wrapped in CONVERT is not.
 		if inner, ok := e.Expr.(*sqlparser.ColName); ok {
 			return inner.Name.String(), true
 		}

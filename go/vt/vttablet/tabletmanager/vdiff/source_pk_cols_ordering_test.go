@@ -495,9 +495,9 @@ func TestLastPKFromRowMixedTypeReorder(t *testing.T) {
 	// integer field, then the varchar code. Indexing table.Fields by SELECT
 	// position would have paired id's value with code's (varchar) field.
 	require.Len(t, lastPK.Target.Fields, 2)
-	assert.EqualValues(t, "id", lastPK.Target.Fields[0].Name)
+	assert.Equal(t, "id", lastPK.Target.Fields[0].Name)
 	assert.Equal(t, querypb.Type_INT64, lastPK.Target.Fields[0].Type)
-	assert.EqualValues(t, "code", lastPK.Target.Fields[1].Name)
+	assert.Equal(t, "code", lastPK.Target.Fields[1].Name)
 	assert.Equal(t, querypb.Type_VARCHAR, lastPK.Target.Fields[1].Type)
 
 	// Round-trip through the row streamer's reconstruction path: the id value must
