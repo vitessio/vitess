@@ -941,23 +941,18 @@ func setTableMismatch(dbClient binlogplayer.DBClient, vdiffID int64, table strin
 }
 
 func (td *tableDiffer) lastPKFromRow(row []sqltypes.Value) *tabletmanagerdatapb.VDiffTableLastPK {
-	// The streamed row is laid out in SELECT-expression order, and compareCols is
-	// indexed by that same order and carries each column's name. We resolve the
-	// field by name rather than indexing table.Fields (which is in DDL order), so
-	// a filter that reorders columns still pairs each PK value with the field
-	// describing that column. Proto3ToResult rebuilds each value's type from these
-	// fields and the row streamer uses that type to quote the resume predicate, so
-	// a wrong field type would yield an invalid checkpoint.
-	fieldByName := make(map[string]*querypb.Field, len(td.tablePlan.table.Fields))
+	// The row is laid out in SELECT-expression order. Proto3ToResult rebuilds each
+	// value's type from the attached fields and the row streamer uses that type to
+	// quote the resume predicate, so each PK value must be paired with its own
+	// column's field (by name, not by DDL ordinal) to survive column reorders and
+	// type-changing renames.
+	targetFieldByName := make(map[string]*querypb.Field, len(td.tablePlan.table.Fields))
 	for _, f := range td.tablePlan.table.Fields {
-		fieldByName[strings.ToLower(f.Name)] = f
+		targetFieldByName[strings.ToLower(f.Name)] = f
 	}
-	buildQR := func(pkCols []int) *querypb.QueryResult {
-		pkColCnt := len(pkCols)
-		pkFields := make([]*querypb.Field, pkColCnt)
-		pkVals := make([]sqltypes.Value, pkColCnt)
+	buildQR := func(pkCols []int, pkFields []*querypb.Field) *querypb.QueryResult {
+		pkVals := make([]sqltypes.Value, len(pkCols))
 		for i, colIndex := range pkCols {
-			pkFields[i] = fieldByName[strings.ToLower(td.tablePlan.compareCols[colIndex].colName)]
 			pkVals[i] = row[colIndex]
 		}
 		return &querypb.QueryResult{
@@ -965,16 +960,46 @@ func (td *tableDiffer) lastPKFromRow(row []sqltypes.Value) *tabletmanagerdatapb.
 			Rows:   []*querypb.Row{sqltypes.RowToProto3(pkVals)},
 		}
 	}
-	lastPK := &tabletmanagerdatapb.VDiffTableLastPK{
-		Target: buildQR(td.tablePlan.pkCols),
+	targetFields := make([]*querypb.Field, len(td.tablePlan.pkCols))
+	for i, colIndex := range td.tablePlan.pkCols {
+		targetFields[i] = targetFieldByName[strings.ToLower(td.tablePlan.compareCols[colIndex].colName)]
 	}
-	// If the source and target PKs are different, we need to save the source PK
-	// as well. Otherwise the source will be nil which means that the target value
-	// should also be used for the source.
-	if !slices.Equal(td.tablePlan.pkCols, td.tablePlan.sourcePkCols) {
-		lastPK.Source = buildQR(td.tablePlan.sourcePkCols)
+
+	// The row is the source stream's row, so each value already carries the source
+	// column type. Use it for the source fields so a rename that changes the column
+	// type still quotes the source key with the source type, not the target type.
+	sourceFields := make([]*querypb.Field, len(td.tablePlan.sourcePkCols))
+	for i, colIndex := range td.tablePlan.sourcePkCols {
+		sourceFields[i] = &querypb.Field{
+			Name: td.tablePlan.compareCols[colIndex].colName,
+			Type: row[colIndex].Type(),
+		}
+	}
+
+	lastPK := &tabletmanagerdatapb.VDiffTableLastPK{
+		Target: buildQR(td.tablePlan.pkCols, targetFields),
+	}
+	// A separate source lastpk is only needed when the source key differs from the
+	// target: different column positions, or the same positions but different field
+	// types (a type-changing rename). Otherwise the target value is reused.
+	if !slices.Equal(td.tablePlan.pkCols, td.tablePlan.sourcePkCols) || !fieldTypesEqual(targetFields, sourceFields) {
+		lastPK.Source = buildQR(td.tablePlan.sourcePkCols, sourceFields)
 	}
 	return lastPK
+}
+
+// fieldTypesEqual reports whether two field slices have the same length and
+// element-wise column types.
+func fieldTypesEqual(a, b []*querypb.Field) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i].GetType() != b[i].GetType() {
+			return false
+		}
+	}
+	return true
 }
 
 // If SourceTimeZone is defined in the BinlogSource (_vt.vreplication.source), the
@@ -1119,29 +1144,16 @@ func (td *tableDiffer) getSourcePKCols() error {
 		return vterrors.Wrapf(err, "table %s", sourceTableName)
 	}
 	if !allProjected {
-		// A subset-projection (or cross-table) filter omits part of the physical
-		// source PK from the SELECT list (e.g. source PK (cid, typ) with a filter
-		// of "select cid, name from customer"). The row streamer still emits source
-		// rows ordered by the full physical source PK, while the VDiff merge sorter
-		// orders both streams by the comparison key (comparePKs). That merge is only
-		// valid when the comparison key is an order-preserving prefix of the
-		// physical source PK; otherwise the source stream is not sorted by the
-		// compared columns and the diff produces false results even on the first
-		// pass, so we reject the plan.
+		// A subset-projection filter omits part of the physical source PK. Reject it
+		// unless the comparison key is an order-preserving prefix of that PK, since
+		// the source stream is always ordered by the full physical source PK.
 		if err := comparisonKeyIsSourcePKPrefix(sourceSelect, td.tablePlan.comparePKs, sourceTable.PrimaryKeyColumns); err != nil {
 			return err
 		}
-		// The comparison key is a safe prefix, but the full source PK is not
-		// projected so we cannot build a resumable source checkpoint: the row
-		// streamer resumes on the full source PK and rejects a lastpk of a different
-		// length (see buildSelect in rowstreamer.go). Record "source checkpoint
-		// unavailable" so updateTableProgress clears any persisted lastpk and any
-		// resume restarts the whole table from the beginning for both streams. Such
-		// a table also cannot honor --max-diff-duration.
+		// The full source PK is not projected, so no resumable source checkpoint is
+		// possible: any resume restarts the whole table for both streams, and the
+		// table cannot honor --max-diff-duration. Clear any stale loaded checkpoint.
 		td.tablePlan.sourceCheckpointUnavailable = true
-		// Discard any checkpoint buildPlan loaded via getTableLastPK (e.g. a stale,
-		// possibly wrong-length lastpk written before this fix); leaving it set would
-		// resume on that stale key instead of restarting the table.
 		td.lastSourcePK = nil
 		td.lastTargetPK = nil
 		return nil
@@ -1151,14 +1163,11 @@ func (td *tableDiffer) getSourcePKCols() error {
 	return nil
 }
 
-// comparisonKeyIsSourcePKPrefix verifies that the columns the VDiff merge sorter
-// compares on (comparePKs, in comparison order) are an order-preserving prefix of
-// the physical source PK. The row streamer emits source rows ordered by the full
-// physical source PK regardless of the query's ORDER BY, so a comparison key that
-// is not such a prefix leaves the merge input unsorted and produces false results.
-// Each comparePK indexes the SELECT list (positionally shared with the source
-// query); its underlying source column must equal the source PK column at the same
-// rank. It returns an error for unsafe filter shapes.
+// comparisonKeyIsSourcePKPrefix returns an error unless the columns the VDiff
+// merge sorter compares on (comparePKs, in comparison order) are an order-
+// preserving prefix of the physical source PK. Each comparePK indexes the SELECT
+// list (shared with the source query), so its underlying source column must equal
+// the source PK column at the same rank.
 func comparisonKeyIsSourcePKPrefix(sourceSelect *sqlparser.Select, comparePKs []compareColInfo, sourcePKColumns []string) error {
 	if len(comparePKs) > len(sourcePKColumns) {
 		return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED,

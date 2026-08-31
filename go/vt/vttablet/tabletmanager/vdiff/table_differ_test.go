@@ -137,12 +137,19 @@ func TestUpdateTableProgress(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			dbc := binlogplayer.NewMockDBClient(t)
 			dbc.ExpectRequest(fmt.Sprintf(queryTemplate, tc.expectedLastPK), &sqltypes.Result{}, nil)
+			// compareCols maps each SELECT position to its column name, as
+			// buildTablePlan populates it in production.
+			compareCols := make([]compareColInfo, len(tc.fields))
+			for i, f := range tc.fields {
+				compareCols[i] = compareColInfo{colIndex: i, colName: f.Name}
+			}
 			td := &tableDiffer{
 				wd:    wd,
 				table: table,
 				tablePlan: &tablePlan{
 					pkCols:       tc.pkCols,
 					sourcePkCols: tc.sourcePkCols,
+					compareCols:  compareCols,
 					table: &tabletmanagerdatapb.TableDefinition{
 						Fields: tc.fields,
 					},
@@ -580,13 +587,13 @@ func TestGetSourcePKCols_TableDroppedOnSource(t *testing.T) {
 	require.Nil(t, td.tablePlan.sourcePkCols)
 }
 
-// TestGetSourcePKCols_ComputedAliasUnavailable verifies that when a source PK
+// TestGetSourcePKCols_ComputedAliasRejected verifies that when a source PK
 // column is projected only via a non-physical expression (a computed value
-// aliased to the PK name) rather than as a physical column, getSourcePKCols does
-// not fail: it flags the source checkpoint as unavailable so no derived value is
-// persisted and the whole table restarts on resume. The row streamer resumes on
-// the physical source PK, so the diff still runs, just without mid-table resume.
-func TestGetSourcePKCols_ComputedAliasUnavailable(t *testing.T) {
+// aliased to the PK name) rather than as a physical column, getSourcePKCols
+// rejects the plan. The row streamer orders the source by the physical PK column
+// while VDiff would compare the aliased value, so the merge input would not be
+// sorted and could produce false diffs even on the first pass.
+func TestGetSourcePKCols_ComputedAliasRejected(t *testing.T) {
 	tvde := newTestVDiffEnv(t)
 	defer tvde.close()
 
@@ -616,8 +623,8 @@ func TestGetSourcePKCols_ComputedAliasUnavailable(t *testing.T) {
 	}
 
 	err := td.getSourcePKCols()
-	require.NoError(t, err)
-	require.True(t, td.tablePlan.sourceCheckpointUnavailable)
+	require.Error(t, err)
+	require.False(t, td.tablePlan.sourceCheckpointUnavailable)
 	require.Empty(t, td.tablePlan.sourcePkCols)
 }
 
@@ -652,8 +659,10 @@ func TestGetSourcePKCols_SubsetProjectionUnavailable(t *testing.T) {
 		tablePlan: &tablePlan{
 			table:       sourceTable,
 			sourceQuery: "select cid, name from customer order by cid asc",
-			// The target has cid as its (single) PK at SELECT index 0.
-			pkCols: []int{0},
+			// The target has cid as its (single) PK at SELECT index 0. cid is a
+			// prefix of the physical source PK (cid, typ), so the merge is valid.
+			pkCols:     []int{0},
+			comparePKs: []compareColInfo{{colIndex: 0, colName: "cid", isPK: true}},
 		},
 	}
 
@@ -700,6 +709,12 @@ func TestGetSourcePKCols_ResumeCheckpointReorderedPK(t *testing.T) {
 		tablePlan: &tablePlan{
 			table:       sourceTable,
 			sourceQuery: "select b, c, a from t order by c asc, a asc",
+			// compareCols maps each SELECT position (b, c, a) to its column name.
+			compareCols: []compareColInfo{
+				{colIndex: 0, colName: "b"},
+				{colIndex: 1, colName: "c"},
+				{colIndex: 2, colName: "a"},
+			},
 			// Target PK differs from source PK order so that lastPKFromRow
 			// persists a distinct Source checkpoint.
 			pkCols: []int{2, 1},
@@ -720,11 +735,6 @@ func TestGetSourcePKCols_ResumeCheckpointReorderedPK(t *testing.T) {
 	require.Len(t, sourceResult.Rows, 1)
 	require.Equal(t, "20", sourceResult.Rows[0][0].ToString(), "first source PK value should be column c")
 	require.Equal(t, "30", sourceResult.Rows[0][1].ToString(), "second source PK value should be column a")
-	// Note: the checkpoint field-type metadata is still looked up via colIndex
-	// against table.Fields (DDL order), which is the pre-existing known
-	// limitation documented in the PR; it affects the target pkCols path
-	// equally and is out of scope here. This test pins the value indices, which
-	// is what this change fixes.
 }
 
 // TestGetSourcePKCols_SubsetProjectionPersistReloadResume is the persist/reload/
@@ -765,8 +775,10 @@ func TestGetSourcePKCols_SubsetProjectionPersistReloadResume(t *testing.T) {
 		tablePlan: &tablePlan{
 			table:       sourceTable,
 			sourceQuery: "select cid, name from customer order by cid asc",
-			// The target has cid as its (single) PK at SELECT index 0.
-			pkCols: []int{0},
+			// The target has cid as its (single) PK at SELECT index 0. cid is a
+			// prefix of the physical source PK (cid, typ), so the merge is valid.
+			pkCols:     []int{0},
+			comparePKs: []compareColInfo{{colIndex: 0, colName: "cid", isPK: true}},
 		},
 	}
 

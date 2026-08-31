@@ -506,3 +506,50 @@ func TestLastPKFromRowMixedTypeReorder(t *testing.T) {
 	assert.False(t, result.Rows[0][0].IsQuoted(), "id checkpoint value must not be quoted, got %v", result.Rows[0][0])
 	assert.True(t, result.Rows[0][1].IsQuoted(), "code checkpoint value should be quoted, got %v", result.Rows[0][1])
 }
+
+// TestLastPKFromRowTypeChangingRename verifies that when a filter renames a
+// physical source PK column to a differently-typed target column, the source
+// checkpoint is quoted with the source type (not the target type). Otherwise the
+// row streamer would build a resume predicate that quotes a numeric source key as
+// a string.
+func TestLastPKFromRowTypeChangingRename(t *testing.T) {
+	// Source PK is "id" (int64); the filter renames it to the target column
+	// "id_str" (varchar): "select id as id_str from t". The source and target PKs
+	// occupy the same SELECT position but have different types.
+	targetTable := &tabletmanagerdatapb.TableDefinition{
+		Name:              "t",
+		Columns:           []string{"id_str"},
+		PrimaryKeyColumns: []string{"id_str"},
+		Fields:            sqltypes.MakeTestFields("id_str", "varchar"),
+	}
+
+	td := &tableDiffer{
+		tablePlan: &tablePlan{
+			table:       targetTable,
+			compareCols: []compareColInfo{{colIndex: 0, colName: "id_str", isPK: true}},
+			pkCols:      []int{0},
+			// The source PK "id" is at the same SELECT position but is an int64.
+			sourcePkCols: []int{0},
+		},
+	}
+
+	// Streamed source row: the physical source value is numeric. lastPKFromRow
+	// takes the source column type from this value, not the target schema.
+	row := []sqltypes.Value{sqltypes.NewInt64(5)}
+
+	lastPK := td.lastPKFromRow(row)
+
+	// The differing types force a distinct source checkpoint rather than reusing
+	// the target value.
+	require.NotNil(t, lastPK.Source, "a type-changing rename must persist a source checkpoint")
+
+	// The source key stays numeric (unquoted); the target key is a varchar (quoted).
+	source := sqltypes.Proto3ToResult(lastPK.Source)
+	require.Len(t, source.Rows, 1)
+	assert.True(t, source.Rows[0][0].IsIntegral(), "source checkpoint value should stay integral, got %v", source.Rows[0][0])
+	assert.False(t, source.Rows[0][0].IsQuoted(), "source checkpoint value must not be quoted, got %v", source.Rows[0][0])
+
+	target := sqltypes.Proto3ToResult(lastPK.Target)
+	require.Len(t, target.Rows, 1)
+	assert.True(t, target.Rows[0][0].IsQuoted(), "target checkpoint value should be quoted, got %v", target.Rows[0][0])
+}
