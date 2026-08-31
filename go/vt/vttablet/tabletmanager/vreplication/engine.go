@@ -107,7 +107,7 @@ type Engine struct {
 	journaler map[string]*journalEvent
 	ec        *externalConnector
 
-	throttlerClient *throttle.Client
+	throttlerClient throttleChecker
 
 	// This should only be set in Test Engines in order to short
 	// circuit functions as needed in unit tests. It's automatically
@@ -125,6 +125,14 @@ type journalEvent struct {
 }
 
 type (
+	// throttleChecker is what the engine needs from the tablet throttler:
+	// a single check that either passes or briefly waits and denies. It
+	// is an interface -- rather than the *throttle.Client that production
+	// always installs -- so that tests can inject throttler behavior.
+	throttleChecker interface {
+		ThrottleCheckOKOrWaitAppName(ctx context.Context, appName throttlerapp.Name) (checkResult *throttle.CheckResult, throttleCheckOK bool)
+	}
+
 	PostCopyActionType int
 	PostCopyAction     struct {
 		Type PostCopyActionType `json:"type"`
@@ -178,6 +186,7 @@ func NewTestEngine(ts *topo.Server, cell string, mysqld mysqlctl.MysqlDaemon, db
 		dbName:                  dbname,
 		journaler:               make(map[string]*journalEvent),
 		ec:                      newExternalConnector(env, externalConfig),
+		throttlerClient:         throttle.NewBackgroundClient(nil, throttlerapp.VReplicationName, base.UndefinedScope),
 	}
 	return vre
 }
@@ -197,6 +206,7 @@ func NewSimpleTestEngine(ts *topo.Server, cell string, mysqld mysqlctl.MysqlDaem
 		dbName:                  dbname,
 		journaler:               make(map[string]*journalEvent),
 		ec:                      newExternalConnector(env, externalConfig),
+		throttlerClient:         throttle.NewBackgroundClient(nil, throttlerapp.VReplicationName, base.UndefinedScope),
 		shortcircuit:            true,
 	}
 	return vre
@@ -232,8 +242,15 @@ func (vre *Engine) Open(ctx context.Context) {
 	log.Info("VReplication engine opened successfully")
 }
 
+// ThrottlerClient returns the engine's throttle client when it is backed
+// by one. The internal field is a throttleChecker so tests can inject
+// throttler behavior; a non-Client checker maps to nil here, which is safe
+// for callers as *throttle.Client methods accept a nil receiver.
 func (vre *Engine) ThrottlerClient() *throttle.Client {
-	return vre.throttlerClient
+	if client, ok := vre.throttlerClient.(*throttle.Client); ok {
+		return client
+	}
+	return nil
 }
 
 func (vre *Engine) openLocked(ctx context.Context) error {
