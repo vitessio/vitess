@@ -404,8 +404,7 @@ func stopInterrupted(err error) bool {
 	if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
 		return true
 	}
-	var sqlErr *sqlerror.SQLError
-	if errors.As(err, &sqlErr) {
+	if sqlErr, ok := errors.AsType[*sqlerror.SQLError](err); ok {
 		switch sqlErr.Number() {
 		case sqlerror.ERStopReplicaIOThreadTimeout, sqlerror.ERStopReplicaSQLThreadTimeout:
 			// rpl_stop_replica_timeout fired: the stop remains in effect.

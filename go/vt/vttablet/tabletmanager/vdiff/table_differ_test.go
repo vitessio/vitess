@@ -17,20 +17,46 @@ limitations under the License.
 package vdiff
 
 import (
+	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
+	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtgate/engine"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 )
+
+type (
+	// erroringPrimitive is an engine.Primitive for testing that streams the
+	// given results and then fails with err, simulating a mid-stream error.
+	erroringPrimitive struct {
+		engine.Primitive
+		results []*sqltypes.Result
+		err     error
+	}
+)
+
+func (p *erroringPrimitive) TryStreamExecute(ctx context.Context, vcursor engine.VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+	for _, r := range p.results {
+		if err := callback(r); err != nil {
+			return err
+		}
+	}
+	return p.err
+}
 
 func TestUpdateTableProgress(t *testing.T) {
 	wd := &workflowDiffer{
@@ -130,6 +156,397 @@ func TestUpdateTableProgress(t *testing.T) {
 			}
 		})
 	}
+}
+
+var drainTestFields = sqltypes.MakeTestFields("c1|c2", "int64|varchar")
+
+func drainTestRow(id int64, val string) []sqltypes.Value {
+	return []sqltypes.Value{sqltypes.NewInt64(id), sqltypes.NewVarChar(val)}
+}
+
+// newDrainTestDiffer builds a minimal tableDiffer, backed by the given mock
+// db client and source/target row streams, that can execute diff().
+func newDrainTestDiffer(dbc binlogplayer.DBClient, source, target engine.Primitive) *tableDiffer {
+	ct := &controller{
+		id:                    1,
+		uuid:                  "62b5b1de-561b-4b3b-a138-2be9d0f46f78",
+		vde:                   &Engine{parser: sqlparser.NewTestParser()},
+		done:                  make(chan struct{}),
+		dbClientFactory:       func() binlogplayer.DBClient { return dbc },
+		TableDiffRowCounts:    stats.NewCountersWithSingleLabel("", "", "Rows"),
+		TableDiffPhaseTimings: stats.NewTimings("", "", ""),
+	}
+	wd := &workflowDiffer{
+		ct:           ct,
+		collationEnv: collations.MySQL8(),
+		opts: &tabletmanagerdatapb.VDiffOptions{
+			CoreOptions:   &tabletmanagerdatapb.VDiffCoreOptions{},
+			ReportOptions: &tabletmanagerdatapb.VDiffReportOptions{},
+		},
+	}
+	table := &tabletmanagerdatapb.TableDefinition{
+		Name:   "t1",
+		Fields: drainTestFields,
+	}
+	return &tableDiffer{
+		wd:    wd,
+		table: table,
+		tablePlan: &tablePlan{
+			table:        table,
+			sourceQuery:  "select c1, c2 from t1",
+			targetQuery:  "select c1, c2 from t1",
+			pkCols:       []int{0},
+			sourcePkCols: []int{0},
+			selectPks:    []int{0},
+			comparePKs: []compareColInfo{
+				{colIndex: 0, isPK: true, colName: "c1"},
+			},
+			compareCols: []compareColInfo{
+				{colIndex: 0, isPK: true, colName: "c1"},
+				{colIndex: 1, isPK: false, colName: "c2"},
+			},
+		},
+		sourcePrimitive: source,
+		targetPrimitive: target,
+	}
+}
+
+// TestDiffDrainedRowSampling tests that when one side's rows are exhausted
+// first, the remaining rows drained from the other side are each saved as an
+// extra-row sample (up to max-extra-rows-to-compare) so that
+// reconcileExtraRows can later match them against the extra rows found on the
+// exhausted side. Previously only the first drained row was given a sample,
+// so any remaining drained rows could never be reconciled and were falsely
+// reported as extra rows even when the data matched.
+func TestDiffDrainedRowSampling(t *testing.T) {
+	fields := drainTestFields
+	makeRow := drainTestRow
+	// Both sides contain the same four rows, but the streams disagree on
+	// the order (e.g. because of differing PK collations between the source
+	// and target): rows 3 and 4 arrive first on one side, so rows 1 and 2
+	// are drained from it after the other side is exhausted.
+	inOrderRows := [][]sqltypes.Value{makeRow(1, "a"), makeRow(2, "b"), makeRow(3, "c"), makeRow(4, "d")}
+	outOfOrderRows := [][]sqltypes.Value{makeRow(3, "c"), makeRow(4, "d"), makeRow(1, "a"), makeRow(2, "b")}
+
+	testCases := []struct {
+		name                  string
+		sourceRows            [][]sqltypes.Value
+		targetRows            [][]sqltypes.Value
+		maxExtraRowsToCompare int64
+		wantExtraRowsSource   int64
+		wantExtraRowsTarget   int64
+		wantSourceSamples     int
+		wantTargetSamples     int
+		// Wanted values after reconciling the extra rows.
+		wantReconciledExtraRowsSource int64
+		wantReconciledExtraRowsTarget int64
+		wantReconciledMatchingRows    int64
+	}{
+		{
+			name:                          "drain target rows",
+			sourceRows:                    inOrderRows,
+			targetRows:                    outOfOrderRows,
+			maxExtraRowsToCompare:         1000,
+			wantExtraRowsSource:           2,
+			wantExtraRowsTarget:           2,
+			wantSourceSamples:             2,
+			wantTargetSamples:             2,
+			wantReconciledExtraRowsSource: 0,
+			wantReconciledExtraRowsTarget: 0,
+			wantReconciledMatchingRows:    4,
+		},
+		{
+			name:                          "drain source rows",
+			sourceRows:                    outOfOrderRows,
+			targetRows:                    inOrderRows,
+			maxExtraRowsToCompare:         1000,
+			wantExtraRowsSource:           2,
+			wantExtraRowsTarget:           2,
+			wantSourceSamples:             2,
+			wantTargetSamples:             2,
+			wantReconciledExtraRowsSource: 0,
+			wantReconciledExtraRowsTarget: 0,
+			wantReconciledMatchingRows:    4,
+		},
+		{
+			name:                  "drained samples capped by max-extra-rows-to-compare",
+			sourceRows:            inOrderRows,
+			targetRows:            outOfOrderRows,
+			maxExtraRowsToCompare: 1,
+			wantExtraRowsSource:   2,
+			wantExtraRowsTarget:   2,
+			wantSourceSamples:     1,
+			wantTargetSamples:     1,
+			// Only the first extra row on each side has a sample, so only
+			// that pair can be reconciled.
+			wantReconciledExtraRowsSource: 1,
+			wantReconciledExtraRowsTarget: 1,
+			wantReconciledMatchingRows:    3,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			dbc := binlogplayer.NewMockDBClient(t)
+			td := newDrainTestDiffer(dbc,
+				engine.NewRowsPrimitive(tc.sourceRows, fields),
+				engine.NewRowsPrimitive(tc.targetRows, fields),
+			)
+			wd := td.wd
+
+			stateQuery, err := sqlparser.ParseAndBind(sqlGetVDiffTable,
+				sqltypes.Int64BindVariable(td.wd.ct.id),
+				sqltypes.StringBindVariable(td.table.Name),
+			)
+			require.NoError(t, err)
+			dbc.ExpectRequest(stateQuery, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+				"lastpk|mismatch|report",
+				"varbinary|int64|varbinary",
+			), "|0|{}"), nil)
+			dbc.ExpectRequestRE("update _vt.vdiff_table set rows_compared = .*", &sqltypes.Result{}, nil)
+
+			coreOpts := &tabletmanagerdatapb.VDiffCoreOptions{
+				MaxRows:               100,
+				MaxExtraRowsToCompare: tc.maxExtraRowsToCompare,
+			}
+			reportOpts := &tabletmanagerdatapb.VDiffReportOptions{
+				MaxSampleRows: 10,
+			}
+			dr, err := td.diff(t.Context(), coreOpts, reportOpts, nil)
+			require.NoError(t, err)
+			require.Equal(t, int64(6), dr.ProcessedRows)
+			require.Equal(t, int64(2), dr.MatchingRows)
+			require.Equal(t, int64(0), dr.MismatchedRows)
+			require.Equal(t, tc.wantExtraRowsSource, dr.ExtraRowsSource)
+			require.Equal(t, tc.wantExtraRowsTarget, dr.ExtraRowsTarget)
+			require.Len(t, dr.ExtraRowsSourceDiffs, tc.wantSourceSamples)
+			require.Len(t, dr.ExtraRowsTargetDiffs, tc.wantTargetSamples)
+
+			require.NoError(t, wd.doReconcileExtraRows(dr, tc.maxExtraRowsToCompare, reportOpts.MaxSampleRows))
+			require.Equal(t, tc.wantReconciledExtraRowsSource, dr.ExtraRowsSource)
+			require.Equal(t, tc.wantReconciledExtraRowsTarget, dr.ExtraRowsTarget)
+			require.Equal(t, tc.wantReconciledMatchingRows, dr.MatchingRows)
+			require.Equal(t, int64(6), dr.ProcessedRows)
+			require.Equal(t, int64(0), dr.MismatchedRows)
+		})
+	}
+}
+
+// TestGenRowDiffMarksLosslessValues tests that a row sample is affirmatively
+// marked lossless only when it contains complete values: a sample whose values
+// were actually truncated (per row-diff-column-truncate-at) is not, since only
+// lossless samples take part in extra-row reconciliation.
+func TestGenRowDiffMarksLosslessValues(t *testing.T) {
+	td := newDrainTestDiffer(binlogplayer.NewMockDBClient(t),
+		engine.NewRowsPrimitive(nil, drainTestFields),
+		engine.NewRowsPrimitive(nil, drainTestFields),
+	)
+	reportOpts := &tabletmanagerdatapb.VDiffReportOptions{
+		MaxSampleRows:           10,
+		RowDiffColumnTruncateAt: 8,
+	}
+
+	longValue := "this value is definitely long enough to get truncated"
+	rd, err := td.genRowDiff(td.tablePlan.sourceQuery, drainTestRow(1, longValue), reportOpts)
+	require.NoError(t, err)
+	require.False(t, rd.LosslessValues)
+	require.Equal(t, longValue[:8]+truncatedNotation, rd.Row["c2"])
+
+	rd, err = td.genRowDiff(td.tablePlan.sourceQuery, drainTestRow(1, "short"), reportOpts)
+	require.NoError(t, err)
+	require.True(t, rd.LosslessValues)
+	require.Equal(t, "short", rd.Row["c2"])
+
+	// A PK-only sample omits the non-PK columns and is not lossless...
+	onlyPksOpts := &tabletmanagerdatapb.VDiffReportOptions{
+		MaxSampleRows: 10,
+		OnlyPks:       true,
+	}
+	rd, err = td.genRowDiff(td.tablePlan.sourceQuery, drainTestRow(1, "short"), onlyPksOpts)
+	require.NoError(t, err)
+	require.False(t, rd.LosslessValues)
+	require.Equal(t, map[string]string{"c1": "1"}, rd.Row)
+
+	// ...unless the PK columns cover the entire projection.
+	td.tablePlan.selectPks = []int{0, 1}
+	rd, err = td.genRowDiff(td.tablePlan.sourceQuery, drainTestRow(1, "short"), onlyPksOpts)
+	require.NoError(t, err)
+	require.True(t, rd.LosslessValues)
+	require.Equal(t, map[string]string{"c1": "1", "c2": "short"}, rd.Row)
+}
+
+// TestDiffDrainStreamError tests that when the stream fails in the middle of
+// draining the remaining rows of one side, none of the partially drained rows
+// are merged into the diff report: the report persisted by the deferred
+// progress update must reflect only the fully compared rows, so that resuming
+// the diff does not count the drained rows a second time.
+func TestDiffDrainStreamError(t *testing.T) {
+	fields := drainTestFields
+	makeRow := drainTestRow
+	streamErr := errors.New("stream terminated unexpectedly")
+	coreOpts := &tabletmanagerdatapb.VDiffCoreOptions{
+		MaxRows:               100,
+		MaxExtraRowsToCompare: 1000,
+	}
+	reportOpts := &tabletmanagerdatapb.VDiffReportOptions{
+		MaxSampleRows: 10,
+	}
+	stateQuery, err := sqlparser.ParseAndBind(sqlGetVDiffTable,
+		sqltypes.Int64BindVariable(1),
+		sqltypes.StringBindVariable("t1"),
+	)
+	require.NoError(t, err)
+	stateFields := sqltypes.MakeTestFields(
+		"lastpk|mismatch|report",
+		"varbinary|int64|varbinary",
+	)
+
+	// First diff attempt: the source has rows 1 and 2; the target stream
+	// returns the matching rows 1 and 2 plus rows 3 and 4, and then fails.
+	// Rows 3 and 4 are drained after the source is exhausted, but since the
+	// drain ends in an error they must not be counted or sampled.
+	dbc := binlogplayer.NewMockDBClient(t)
+	td := newDrainTestDiffer(dbc,
+		engine.NewRowsPrimitive([][]sqltypes.Value{makeRow(1, "a"), makeRow(2, "b")}, fields),
+		&erroringPrimitive{
+			Primitive: engine.NewRowsPrimitive(nil, fields),
+			results: []*sqltypes.Result{{
+				Fields: fields,
+				Rows:   [][]sqltypes.Value{makeRow(1, "a"), makeRow(2, "b"), makeRow(3, "c"), makeRow(4, "d")},
+			}},
+			err: streamErr,
+		},
+	)
+	dbc.ExpectRequest(stateQuery, sqltypes.MakeTestResult(stateFields, "|0|{}"), nil)
+	// The deferred progress update must persist a report that contains only
+	// the two fully compared rows: no drained extra-row counts or samples.
+	wantReport, err := json.Marshal(&DiffReport{
+		TableName:     "t1",
+		ProcessedRows: 2,
+		MatchingRows:  2,
+	})
+	require.NoError(t, err)
+	dbc.ExpectRequestRE(`update _vt\.vdiff_table set rows_compared = 2, lastpk = '.*', report = '`+
+		regexp.QuoteMeta(string(wantReport))+`' where vdiff_id = 1 and table_name = 't1'`,
+		&sqltypes.Result{}, nil)
+
+	_, err = td.diff(t.Context(), coreOpts, reportOpts, nil)
+	require.ErrorIs(t, err, streamErr)
+
+	// Resume the diff from the persisted state. The source has no rows past
+	// the persisted lastpk; the target re-streams the two drained rows. Each
+	// drained row must be counted exactly once across the two attempts.
+	dbc2 := binlogplayer.NewMockDBClient(t)
+	td2 := newDrainTestDiffer(dbc2,
+		engine.NewRowsPrimitive(nil, fields),
+		engine.NewRowsPrimitive([][]sqltypes.Value{makeRow(3, "c"), makeRow(4, "d")}, fields),
+	)
+	dbc2.ExpectRequest(stateQuery, sqltypes.MakeTestResult(stateFields, fmt.Sprintf("|0|%s", wantReport)), nil)
+	dbc2.ExpectRequestRE(`update _vt\.vdiff_table set rows_compared = 4, report = .*`, &sqltypes.Result{}, nil)
+
+	dr, err := td2.diff(t.Context(), coreOpts, reportOpts, nil)
+	require.NoError(t, err)
+	require.Equal(t, int64(4), dr.ProcessedRows)
+	require.Equal(t, int64(2), dr.MatchingRows)
+	require.Equal(t, int64(0), dr.ExtraRowsSource)
+	require.Equal(t, int64(2), dr.ExtraRowsTarget)
+	require.Len(t, dr.ExtraRowsTargetDiffs, 2)
+}
+
+// TestDiffSourceDrainStreamError is the source-side counterpart of
+// TestDiffDrainStreamError: the target stream is exhausted first and the
+// source stream fails while its remaining rows are being drained. It also
+// covers the case where the drain is entered with a held, not-yet-processed
+// source row (after an extra-target-row comparison): that row must not be
+// persisted as lastpk, since its count and sample were discarded with the
+// failed drain, and a resumed diff would otherwise skip it permanently.
+func TestDiffSourceDrainStreamError(t *testing.T) {
+	fields := drainTestFields
+	makeRow := drainTestRow
+	streamErr := errors.New("stream terminated unexpectedly")
+	coreOpts := &tabletmanagerdatapb.VDiffCoreOptions{
+		MaxRows:               100,
+		MaxExtraRowsToCompare: 1000,
+	}
+	reportOpts := &tabletmanagerdatapb.VDiffReportOptions{
+		MaxSampleRows: 10,
+	}
+	stateQuery, err := sqlparser.ParseAndBind(sqlGetVDiffTable,
+		sqltypes.Int64BindVariable(1),
+		sqltypes.StringBindVariable("t1"),
+	)
+	require.NoError(t, err)
+	stateFields := sqltypes.MakeTestFields(
+		"lastpk|mismatch|report",
+		"varbinary|int64|varbinary",
+	)
+
+	t.Run("drain error after matched rows", func(t *testing.T) {
+		// Rows 1 and 2 match; rows 3 and 4 are drained from the source and
+		// the drain fails. The persisted report must contain only the two
+		// fully compared rows, with lastpk pointing at row 2.
+		dbc := binlogplayer.NewMockDBClient(t)
+		td := newDrainTestDiffer(dbc,
+			&erroringPrimitive{
+				Primitive: engine.NewRowsPrimitive(nil, fields),
+				results: []*sqltypes.Result{{
+					Fields: fields,
+					Rows:   [][]sqltypes.Value{makeRow(1, "a"), makeRow(2, "b"), makeRow(3, "c"), makeRow(4, "d")},
+				}},
+				err: streamErr,
+			},
+			engine.NewRowsPrimitive([][]sqltypes.Value{makeRow(1, "a"), makeRow(2, "b")}, fields),
+		)
+		dbc.ExpectRequest(stateQuery, sqltypes.MakeTestResult(stateFields, "|0|{}"), nil)
+		wantReport, err := json.Marshal(&DiffReport{
+			TableName:     "t1",
+			ProcessedRows: 2,
+			MatchingRows:  2,
+		})
+		require.NoError(t, err)
+		dbc.ExpectRequestRE(`update _vt\.vdiff_table set rows_compared = 2, lastpk = '.*', report = '`+
+			regexp.QuoteMeta(string(wantReport))+`' where vdiff_id = 1 and table_name = 't1'`,
+			&sqltypes.Result{}, nil)
+
+		_, err = td.diff(t.Context(), coreOpts, reportOpts, nil)
+		require.ErrorIs(t, err, streamErr)
+	})
+
+	t.Run("drain error with a held unprocessed source row", func(t *testing.T) {
+		// The first comparison finds an extra target row (source row 2 vs
+		// target row 1), holding source row 2 unprocessed. The target is then
+		// exhausted and the source drain fails. Since source row 2's count and
+		// sample are discarded with the failed drain, it must not be recorded
+		// as lastpk: the persisted update must carry no position (the report
+		// contains only the extra target row), so that a resumed diff streams
+		// source row 2 again.
+		dbc := binlogplayer.NewMockDBClient(t)
+		td := newDrainTestDiffer(dbc,
+			&erroringPrimitive{
+				Primitive: engine.NewRowsPrimitive(nil, fields),
+				results: []*sqltypes.Result{{
+					Fields: fields,
+					Rows:   [][]sqltypes.Value{makeRow(2, "b"), makeRow(3, "c")},
+				}},
+				err: streamErr,
+			},
+			engine.NewRowsPrimitive([][]sqltypes.Value{makeRow(1, "a")}, fields),
+		)
+		dbc.ExpectRequest(stateQuery, sqltypes.MakeTestResult(stateFields, "|0|{}"), nil)
+		wantReport, err := json.Marshal(&DiffReport{
+			TableName:            "t1",
+			ProcessedRows:        1,
+			ExtraRowsTarget:      1,
+			ExtraRowsTargetDiffs: []*RowDiff{{Row: map[string]string{"c1": "1", "c2": "a"}, LosslessValues: true}},
+		})
+		require.NoError(t, err)
+		dbc.ExpectRequestRE(`update _vt\.vdiff_table set rows_compared = 1, report = '`+
+			regexp.QuoteMeta(string(wantReport))+`' where vdiff_id = 1 and table_name = 't1'`,
+			&sqltypes.Result{}, nil)
+
+		_, err = td.diff(t.Context(), coreOpts, reportOpts, nil)
+		require.ErrorIs(t, err, streamErr)
+	})
 }
 
 func TestGetSourcePKCols_TableDroppedOnSource(t *testing.T) {

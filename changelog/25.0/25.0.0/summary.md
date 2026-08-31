@@ -19,6 +19,7 @@
 - **[Minor Changes](#minor-changes)**
     - **[VReplication](#minor-changes-vreplication)**
         - [Default data protection for `_reverse` workflow cancel/complete](#vreplication-reverse-workflow-data-protection)
+        - [Preserve Materialize target data on cancel by default](#vreplication-materialize-cancel-data-protection)
     - **[VTGate](#minor-changes-vtgate)**
         - [Ingress bytes in query LogStats](#vtgate-logstats-ingress-bytes)
         - [New controls for cross-keyspace reads](#vtgate-cross-keyspace-reads)
@@ -172,6 +173,16 @@ When calling `cancel` or `complete` on an auto-generated `_reverse` workflow wit
 The `--keep-data` flag help text has been updated to note this default explicitly. This change applies to MoveTables, Reshard, and other VReplication workflow types that use the shared cancel/complete paths.
 
 See [#19906](https://github.com/vitessio/vitess/pull/19906) for details.
+
+#### <a id="vreplication-materialize-cancel-data-protection"/>Preserve Materialize target data on cancel by default</a>
+
+`vtctldclient Materialize cancel` now preserves the materialized target tables and their data. To remove the target tables when canceling the workflow, explicitly pass `--keep-data=false`.
+
+Previously `Materialize cancel` exposed no `--keep-data` flag and always omitted `keep_data` from the `WorkflowDelete` request. The server resolves an omitted `keep_data` to `false`, so canceling a Materialize workflow always dropped the target tables with no way to opt out. `Materialize cancel` now has its own command that always sends `keep_data` explicitly.
+
+This is a client-side fix. The server and the generic `vtctldclient Workflow delete` command are unchanged, so operators must upgrade `vtctldclient` to pick it up; an older client canceling a Materialize workflow against a newer server still drops the target tables.
+
+See [#20711](https://github.com/vitessio/vitess/issues/20711) for details.
 
 ### <a id="minor-changes-vtgate"/>VTGate</a>
 
