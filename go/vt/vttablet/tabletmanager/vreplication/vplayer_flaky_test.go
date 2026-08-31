@@ -31,6 +31,7 @@ import (
 	"time"
 
 	"github.com/nsf/jsondiff"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/replication"
