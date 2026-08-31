@@ -23,7 +23,12 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/vt/key"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtenv"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -32,6 +37,7 @@ import (
 type mockVSchema struct {
 	plancontext.VSchema
 	preventCrossKeyspaceReads map[string]bool
+	tables                    map[string]*vindexes.BaseTable
 }
 
 func (m *mockVSchema) AllowCrossKeyspaceReads(keyspace string) (bool, error) {
@@ -41,12 +47,60 @@ func (m *mockVSchema) AllowCrossKeyspaceReads(keyspace string) (bool, error) {
 	return !m.preventCrossKeyspaceReads[keyspace], nil
 }
 
+func (m *mockVSchema) FindTableOrVindex(tab sqlparser.TableName) (*vindexes.BaseTable, vindexes.Vindex, string, topodatapb.TabletType, key.ShardDestination, error) {
+	tbl, found := m.tables[tab.Name.String()]
+	if !found {
+		return nil, nil, "", topodatapb.TabletType_PRIMARY, nil, vterrors.VT05004(tab.Name.String())
+	}
+	return tbl, nil, tbl.Keyspace.Name, topodatapb.TabletType_PRIMARY, nil, nil
+}
+
+func (m *mockVSchema) Environment() *vtenv.Environment {
+	return vtenv.NewTestEnv()
+}
+
+func (m *mockVSchema) ConnCollation() collations.ID {
+	return collations.CollationUtf8mb4ID
+}
+
 func TestCheckCrossKeyspaceJoin(t *testing.T) {
 	ks1 := &vindexes.Keyspace{Name: "ks1"}
 	ks2 := &vindexes.Keyspace{Name: "ks2"}
 
 	makeRoute := func(ks *vindexes.Keyspace) *Route {
 		return &Route{Routing: &NoneRouting{keyspace: ks}}
+	}
+	plainTable := func(ks *vindexes.Keyspace) *Table {
+		return &Table{
+			QTable: &QueryTable{Table: sqlparser.NewTableName("t")},
+			VTable: &vindexes.BaseTable{Name: sqlparser.NewIdentifierCS("t"), Keyspace: ks},
+		}
+	}
+	refTable := func(ks *vindexes.Keyspace, copyKs string) *Table {
+		return &Table{
+			QTable: &QueryTable{Table: sqlparser.NewTableName("ref")},
+			VTable: &vindexes.BaseTable{
+				Name:         sqlparser.NewIdentifierCS("ref"),
+				Keyspace:     ks,
+				ReferencedBy: map[string]*vindexes.BaseTable{copyKs: {}},
+			},
+		}
+	}
+	sourcedTable := func(ks *vindexes.Keyspace, sourceKs string) *Table {
+		return &Table{
+			QTable: &QueryTable{Table: sqlparser.NewTableName("ref")},
+			VTable: &vindexes.BaseTable{
+				Name:     sqlparser.NewIdentifierCS("ref"),
+				Keyspace: ks,
+				Source: &vindexes.Source{
+					Qualifier: sqlparser.NewIdentifierCS(sourceKs),
+					Name:      sqlparser.NewIdentifierCS("src"),
+				},
+			},
+		}
+	}
+	noneRouteOver := func(ks *vindexes.Keyspace, src Operator) *Route {
+		return &Route{unaryOperator: newUnaryOp(src), Routing: &NoneRouting{keyspace: ks}}
 	}
 
 	tests := []struct {
@@ -209,6 +263,84 @@ func TestCheckCrossKeyspaceJoin(t *testing.T) {
 				preventCrossKeyspaceReads: map[string]bool{"ks1": false, "ks2": false},
 			},
 		},
+		{
+			name: "inferred none keyspace does not create a cross-keyspace pair",
+			lhs:  &Route{Routing: &NoneRouting{keyspace: ks1, inferredKeyspace: true}},
+			rhs:  makeRoute(ks2),
+			vschema: &mockVSchema{
+				preventCrossKeyspaceReads: map[string]bool{"ks1": true, "ks2": true},
+			},
+		},
+		{
+			name: "inferred none keyspace wrapped in a non-route is also skipped",
+			lhs: &Projection{
+				unaryOperator: newUnaryOp(&Route{Routing: &NoneRouting{keyspace: ks1, inferredKeyspace: true}}),
+			},
+			rhs: makeRoute(ks2),
+			vschema: &mockVSchema{
+				preventCrossKeyspaceReads: map[string]bool{"ks1": true, "ks2": true},
+			},
+		},
+		{
+			name: "cross-keyspace denied but the lhs none branch's table has a reference copy on the rhs",
+			lhs:  noneRouteOver(ks1, refTable(ks1, "ks2")),
+			rhs:  makeRoute(ks2),
+			vschema: &mockVSchema{
+				preventCrossKeyspaceReads: map[string]bool{"ks1": true, "ks2": true},
+			},
+		},
+		{
+			name: "cross-keyspace denied but the rhs none branch's table is sourced from the lhs keyspace",
+			lhs:  makeRoute(ks1),
+			rhs:  noneRouteOver(ks2, sourcedTable(ks2, "ks1")),
+			vschema: &mockVSchema{
+				preventCrossKeyspaceReads: map[string]bool{"ks1": true, "ks2": true},
+			},
+		},
+		{
+			name: "cross-keyspace denied but the rhs none branch's table has an unqualified source resolving to the lhs keyspace",
+			lhs:  makeRoute(ks1),
+			rhs: noneRouteOver(ks2, &Table{
+				QTable: &QueryTable{Table: sqlparser.NewTableName("ref")},
+				VTable: &vindexes.BaseTable{
+					Name:     sqlparser.NewIdentifierCS("ref"),
+					Keyspace: ks2,
+					Source: &vindexes.Source{
+						Name: sqlparser.NewIdentifierCS("src"),
+					},
+				},
+			}),
+			vschema: &mockVSchema{
+				preventCrossKeyspaceReads: map[string]bool{"ks1": true, "ks2": true},
+				tables: map[string]*vindexes.BaseTable{
+					"src": {Name: sqlparser.NewIdentifierCS("src"), Keyspace: ks1},
+				},
+			},
+		},
+		{
+			name: "a none branch that absorbed a table without a copy on the rhs stays denied",
+			lhs: noneRouteOver(ks1, &Join{
+				LHS: refTable(ks1, "ks2"),
+				RHS: plainTable(ks1),
+			}),
+			rhs: makeRoute(ks2),
+			vschema: &mockVSchema{
+				preventCrossKeyspaceReads: map[string]bool{"ks1": true, "ks2": true},
+			},
+			expectPanic: true,
+		},
+		{
+			name: "an inferred none keyspace over a real table stays accountable",
+			lhs: &Route{
+				unaryOperator: newUnaryOp(plainTable(ks1)),
+				Routing:       &NoneRouting{keyspace: ks1, inferredKeyspace: true},
+			},
+			rhs: makeRoute(ks2),
+			vschema: &mockVSchema{
+				preventCrossKeyspaceReads: map[string]bool{"ks1": true, "ks2": true},
+			},
+			expectPanic: true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -289,6 +421,150 @@ func TestOperatorKeyspaces(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			assert.Equal(t, tt.expected, operatorKeyspaces(tt.op))
+		})
+	}
+}
+
+func TestRealTableKeyspaces(t *testing.T) {
+	ks1 := &vindexes.Keyspace{Name: "ks1"}
+	ks2 := &vindexes.Keyspace{Name: "ks2"}
+
+	makeTable := func(ks *vindexes.Keyspace) *Table {
+		return &Table{
+			QTable: &QueryTable{Table: sqlparser.NewTableName("t")},
+			VTable: &vindexes.BaseTable{Name: sqlparser.NewIdentifierCS("t"), Keyspace: ks},
+		}
+	}
+	makeInfSchemaTable := func(ks *vindexes.Keyspace) *Table {
+		return &Table{
+			QTable: &QueryTable{Table: sqlparser.NewTableName("tables"), IsInfSchema: true},
+			VTable: &vindexes.BaseTable{Name: sqlparser.NewIdentifierCS("tables"), Keyspace: ks},
+		}
+	}
+
+	tests := []struct {
+		name     string
+		op       Operator
+		expected []*vindexes.Keyspace
+	}{
+		{
+			name:     "real table",
+			op:       makeTable(ks1),
+			expected: []*vindexes.Keyspace{ks1},
+		},
+		{
+			name:     "virtual dual table has no keyspace",
+			op:       &Table{},
+			expected: nil,
+		},
+		{
+			name:     "table nested under a projection",
+			op:       &Projection{unaryOperator: newUnaryOp(makeTable(ks1))},
+			expected: []*vindexes.Keyspace{ks1},
+		},
+		{
+			name:     "same keyspace tables are deduplicated",
+			op:       &Join{LHS: makeTable(ks1), RHS: makeTable(ks1)},
+			expected: []*vindexes.Keyspace{ks1},
+		},
+		{
+			name:     "tables from different keyspaces",
+			op:       &Join{LHS: makeTable(ks1), RHS: makeTable(ks2)},
+			expected: []*vindexes.Keyspace{ks1, ks2},
+		},
+		{
+			name:     "real table joined with a virtual dual",
+			op:       &Join{LHS: makeTable(ks1), RHS: &Table{}},
+			expected: []*vindexes.Keyspace{ks1},
+		},
+		{
+			name:     "information_schema table with a synthetic vtable contributes nothing",
+			op:       makeInfSchemaTable(ks1),
+			expected: nil,
+		},
+		{
+			name:     "information_schema table joined with a real table",
+			op:       &Join{LHS: makeInfSchemaTable(ks1), RHS: makeTable(ks2)},
+			expected: []*vindexes.Keyspace{ks2},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, realTableKeyspaces(tt.op))
+		})
+	}
+}
+
+func TestUpdateRoutingLogicKeepsNoneRouting(t *testing.T) {
+	ks := &vindexes.Keyspace{Name: "ks1"}
+	ctx := &plancontext.PlanningContext{
+		SemTable: &semantics.SemTable{},
+		VSchema:  &mockVSchema{},
+	}
+	orig := &NoneRouting{keyspace: ks, inferredKeyspace: true}
+	falseCmp := &sqlparser.ComparisonExpr{
+		Operator: sqlparser.EqualOp,
+		Left:     sqlparser.NewIntLiteral("1"),
+		Right:    sqlparser.NewIntLiteral("2"),
+	}
+
+	got := UpdateRoutingLogic(ctx, falseCmp, orig)
+
+	assert.Same(t, orig, got)
+}
+
+func TestHasInfoSchemaTables(t *testing.T) {
+	ks1 := &vindexes.Keyspace{Name: "ks1"}
+
+	makeTable := func() *Table {
+		return &Table{
+			QTable: &QueryTable{Table: sqlparser.NewTableName("t")},
+			VTable: &vindexes.BaseTable{Name: sqlparser.NewIdentifierCS("t"), Keyspace: ks1},
+		}
+	}
+	makeInfSchemaTable := func() *Table {
+		return &Table{
+			QTable: &QueryTable{Table: sqlparser.NewTableName("tables"), IsInfSchema: true},
+			VTable: &vindexes.BaseTable{Name: sqlparser.NewIdentifierCS("tables"), Keyspace: ks1},
+		}
+	}
+
+	tests := []struct {
+		name     string
+		op       Operator
+		expected bool
+	}{
+		{
+			name:     "real table",
+			op:       makeTable(),
+			expected: false,
+		},
+		{
+			name:     "information_schema table",
+			op:       makeInfSchemaTable(),
+			expected: true,
+		},
+		{
+			name:     "virtual dual table",
+			op:       &Table{},
+			expected: false,
+		},
+		{
+			name:     "information_schema table nested under a projection",
+			op:       &Projection{unaryOperator: newUnaryOp(makeInfSchemaTable())},
+			expected: true,
+		},
+		{
+			name:     "information_schema table joined with a real table",
+			op:       &Join{LHS: makeTable(), RHS: makeInfSchemaTable()},
+			expected: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, hasInfoSchemaTables(tt.op))
 		})
 	}
 }
