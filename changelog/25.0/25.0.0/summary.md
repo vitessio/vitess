@@ -25,6 +25,7 @@
     - **[VTGate](#minor-changes-vtgate)**
         - [Ingress bytes in query LogStats](#vtgate-logstats-ingress-bytes)
         - [New controls for cross-keyspace reads](#vtgate-cross-keyspace-reads)
+        - [information_schema queries with IN predicates route correctly](#information-schema-in-routing)
         - [Streaming errors no longer surface as connection loss](#vtgate-streamexecute-real-errors)
         - [SHA256-hashed passwords in the static gRPC auth plugin](#vtgate-grpc-static-auth-sha256)
         - [PREPARE statements no longer report the prepared statement's tables](#vtgate-prepare-tables-used)
@@ -242,6 +243,16 @@ When enabled, the planner will reject queries that require joining or combining 
 ```
 
 The VTGate flag prevents cross-keyspace reads globally, regardless of per-keyspace VSchema settings.
+
+#### <a id="information-schema-in-routing"/>`information_schema` queries with IN predicates route correctly</a>
+
+An `IN` predicate on `table_schema` or `table_name` in an `information_schema`
+query previously bypassed schema-name routing entirely and silently returned
+an empty or incomplete result (issue #20878) — the form ORMs such as Rails
+now generate. A single-valued `IN` (literal list of one, or a bound list with
+one value) now routes exactly like the equivalent `=` predicate. An `IN` list
+naming more than one schema cannot be routed to a single keyspace and now
+fails with an explicit `VT12001` error instead of returning wrong rows.
 
 #### <a id="vtgate-streamexecute-real-errors"/>Streaming errors no longer surface as connection loss</a>
 
