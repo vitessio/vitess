@@ -148,6 +148,12 @@ func extractInfoSchemaRoutingPredicate(ctx *plancontext.PlanningContext, in sqlp
 		if !ok || len(tuple) != 1 || !shouldRewrite(tuple[0]) {
 			return false, "", nil
 		}
+		// Only routable columns get the equality rewrite: a single-element IN
+		// on any other column must stay exactly as written.
+		col, isSchema, isTable := IsTableSchemaOrName(cmp.Left, ctx.VSchema.Environment().MySQLVersion())
+		if col == nil || (!isSchema && !isTable) {
+			return false, "", nil
+		}
 		cmp.Operator = sqlparser.EqualOp
 		cmp.Right = tuple[0]
 	default:
