@@ -868,7 +868,7 @@ func (td *tableDiffer) updateTableProgress(dbClient binlogplayer.DBClient, dr *D
 		}
 	}
 	if _, err := dbClient.ExecuteFetch(query, 1); err != nil {
-		return err
+		return vterrors.Wrapf(errWithoutQueryEcho(err), "failed to save diff report for table %s", td.table.Name)
 	}
 
 	td.wd.ct.TableDiffRowCounts.Add(td.table.Name, dr.ProcessedRows)
@@ -914,7 +914,7 @@ func (td *tableDiffer) updateTableStateAndReport(ctx context.Context, dbClient b
 		return err
 	}
 	if _, err = dbClient.ExecuteFetch(query, 1); err != nil {
-		return err
+		return vterrors.Wrapf(errWithoutQueryEcho(err), "failed to save diff report for table %s", td.table.Name)
 	}
 	insertVDiffLog(ctx, dbClient, td.wd.ct.id, fmt.Sprintf("%s: table %s", state, encodeString(td.table.Name)))
 
