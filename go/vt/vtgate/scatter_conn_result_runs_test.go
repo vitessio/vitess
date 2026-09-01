@@ -18,6 +18,7 @@ package vtgate
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -45,6 +46,7 @@ func TestExecuteMultiShardWithResultRuns(t *testing.T) {
 	sc := newTestScatterConn(ctx, hc, newSandboxForCells(ctx, []string{cell}), cell)
 	sbc0 := hc.AddTestTablet(cell, "-80", 1, ks, "-80", topodatapb.TabletType_PRIMARY, true, 1, nil)
 	sbc1 := hc.AddTestTablet(cell, "80-", 1, ks, "80-", topodatapb.TabletType_PRIMARY, true, 1, nil)
+	sbc0.ExecDelayResponse = 10 * time.Millisecond
 	run0 := sqltypes.MakeTestResult(sqltypes.MakeTestFields("id", "int64"), "1", "3")
 	run1 := sqltypes.MakeTestResult(sqltypes.MakeTestFields("id", "int64"), "2", "4")
 	sbc0.SetResults([]*sqltypes.Result{run0})
@@ -58,7 +60,7 @@ func TestExecuteMultiShardWithResultRuns(t *testing.T) {
 
 	result, runs, errs := sc.ExecuteMultiShardWithResultRuns(ctx, nil, rss, queries, econtext.NewSafeSession(nil), false, false, nullResultsObserver{}, false)
 	require.Empty(t, errs)
-	require.Len(t, result.Rows, 4)
+	require.Equal(t, []sqltypes.Row{run1.Rows[0], run1.Rows[1], run0.Rows[0], run0.Rows[1]}, result.Rows)
 	require.Len(t, runs, len(rss))
 	require.Same(t, run0, runs[0])
 	require.Same(t, run1, runs[1])
