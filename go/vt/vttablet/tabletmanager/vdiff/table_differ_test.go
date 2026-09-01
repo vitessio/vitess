@@ -725,23 +725,19 @@ func TestGetSourcePKCols_SubsetProjectionUnavailable(t *testing.T) {
 	require.Empty(t, td.tablePlan.sourcePkCols)
 }
 
-// TestGetSourcePKCols_ResumeCheckpointReorderedPK is a resume regression test.
-// For a composite-PK table whose source query reorders the PK columns
-// (SELECT layout differs from PK definition order), it confirms that the
-// sourcePkCols indices point at the correct SELECT positions so that the
-// persisted source lastpk pairs each PK value with the right column. Before
-// the fix, the indices were in column-ordinal order and lastPKFromRow built a
-// corrupted source checkpoint, causing false ExtraRowsSource on every resume.
-func TestGetSourcePKCols_ResumeCheckpointReorderedPK(t *testing.T) {
+// TestGetSourcePKCols_ReorderedLayoutIsUncheckpointable verifies that a table
+// whose source-PK layout the pre-fix code would have mapped differently (here a
+// composite PK (c, a) with a SELECT order of b, c, a, so the corrected mapping
+// [1, 2] differs from the old column-ordinal mapping [0, 2]) is treated as
+// un-checkpointable. Because a checkpoint persisted before an upgrade cannot be
+// told apart from a current one by content, no source lastpk is persisted and any
+// resume restarts both streams, avoiding the false ExtraRowsSource in #20601.
+func TestGetSourcePKCols_ReorderedLayoutIsUncheckpointable(t *testing.T) {
 	tvde := newTestVDiffEnv(t)
 	defer tvde.close()
 
 	ct := tvde.createController(t, 1)
 
-	// Physical source table "t" has columns a,b,c with composite PK (c, a).
-	// The source query projects them in a different order: b, c, a.
-	// So source PK "c" is at SELECT index 1 and "a" is at SELECT index 2.
-	// Fields are in DDL order (a,b,c), matching what GetSchema returns.
 	sourceTable := &tabletmanagerdatapb.TableDefinition{
 		Name:              "t",
 		Columns:           []string{"a", "b", "c"},
@@ -760,91 +756,95 @@ func TestGetSourcePKCols_ResumeCheckpointReorderedPK(t *testing.T) {
 		tablePlan: &tablePlan{
 			table:       sourceTable,
 			sourceQuery: "select b, c, a from t order by c asc, a asc",
-			// compareCols maps each SELECT position (b, c, a) to its column name.
 			compareCols: []compareColInfo{
 				{colIndex: 0, colName: "b"},
 				{colIndex: 1, colName: "c"},
 				{colIndex: 2, colName: "a"},
 			},
-			// Target PK differs from source PK order so that lastPKFromRow
-			// persists a distinct Source checkpoint.
 			pkCols: []int{2, 1},
 		},
 	}
 
-	err := td.getSourcePKCols()
-	require.NoError(t, err)
-	require.Equal(t, []int{1, 2}, td.tablePlan.sourcePkCols)
-
-	// A streamed row [b=10, c=20, a=30] must serialize the source checkpoint
-	// as PK (c, a) = (20, 30), i.e. taking SELECT indices [1, 2], not the
-	// ordinal-order indices [2, 0] that the buggy code would have produced.
-	row := []sqltypes.Value{sqltypes.NewInt64(10), sqltypes.NewInt64(20), sqltypes.NewInt64(30)}
-	lastPK := td.lastPKFromRow(row)
-	require.NotNil(t, lastPK.Source)
-	sourceResult := sqltypes.Proto3ToResult(lastPK.Source)
-	require.Len(t, sourceResult.Rows, 1)
-	require.Equal(t, "20", sourceResult.Rows[0][0].ToString(), "first source PK value should be column c")
-	require.Equal(t, "30", sourceResult.Rows[0][1].ToString(), "second source PK value should be column a")
+	require.NoError(t, td.getSourcePKCols())
+	require.True(t, td.tablePlan.sourceCheckpointUnavailable, "a reordered source-PK layout must not be checkpointed")
+	require.Empty(t, td.tablePlan.sourcePkCols, "no partial source key must be built")
 }
 
-// TestGetSourcePKCols_DiscardsLegacyOrderedCheckpoint verifies that a source
-// checkpoint persisted before the ordering fix (its columns stored in target-
-// column order) is discarded on resume so both streams restart, rather than
-// resuming the row streamer from a wrongly ordered key (the false ExtraRowsSource
-// in #20601). A checkpoint already written in the corrected order is kept.
+// TestGetSourcePKCols_DiscardsLegacyOrderedCheckpoint verifies the upgrade guard.
+// A pre-fix checkpoint cannot be told apart from a current one by field names (a
+// single reordered PK keeps its name; only the value differs), so any layout whose
+// corrected mapping differs from the old column-ordinal mapping is treated as
+// un-checkpointable: a loaded checkpoint is discarded and both streams restart. A
+// layout whose mapping is unchanged keeps its checkpoint.
 func TestGetSourcePKCols_DiscardsLegacyOrderedCheckpoint(t *testing.T) {
 	tvde := newTestVDiffEnv(t)
 	defer tvde.close()
 
 	ct := tvde.createController(t, 1)
 
-	// Source PK (c, a); the filter projects b, c, a so the corrected source lastpk
-	// order is (c, a). The pre-fix code stored it in column order (a, c).
-	sourceTable := &tabletmanagerdatapb.TableDefinition{
-		Name:              "t",
-		Columns:           []string{"a", "b", "c"},
-		PrimaryKeyColumns: []string{"c", "a"},
-		Fields:            sqltypes.MakeTestFields("a|b|c", "int64|int64|int64"),
-	}
-	tvde.tmc.schema = &tabletmanagerdatapb.SchemaDefinition{
-		TableDefinitions: []*tabletmanagerdatapb.TableDefinition{sourceTable},
-	}
-
-	newTD := func() *tableDiffer {
-		return &tableDiffer{
+	t.Run("reordered single-PK layout discards a name-matching legacy checkpoint", func(t *testing.T) {
+		// Columns (id, payload), PK id, filter "select payload, id": the corrected
+		// index is 1 but the pre-fix code used the DDL index 0. The old checkpoint's
+		// field is still named "id" (matching the corrected name) while its value
+		// came from SELECT position 0 (payload) -- so a name check would wrongly
+		// accept it. The mapping guard discards it.
+		sourceTable := &tabletmanagerdatapb.TableDefinition{
+			Name:              "t",
+			Columns:           []string{"id", "payload"},
+			PrimaryKeyColumns: []string{"id"},
+			Fields:            sqltypes.MakeTestFields("id|payload", "int64|varchar"),
+		}
+		tvde.tmc.schema = &tabletmanagerdatapb.SchemaDefinition{
+			TableDefinitions: []*tabletmanagerdatapb.TableDefinition{sourceTable},
+		}
+		td := &tableDiffer{
 			wd:    &workflowDiffer{ct: ct},
 			table: sourceTable,
 			tablePlan: &tablePlan{
 				table:       sourceTable,
-				sourceQuery: "select b, c, a from t order by c asc, a asc",
-				compareCols: []compareColInfo{
-					{colIndex: 0, colName: "b"},
-					{colIndex: 1, colName: "c"},
-					{colIndex: 2, colName: "a"},
-				},
-				pkCols: []int{2, 1},
+				sourceQuery: "select payload, id from t order by id asc",
+				compareCols: []compareColInfo{{colIndex: 0, colName: "payload"}, {colIndex: 1, colName: "id"}},
+				pkCols:      []int{1},
 			},
 		}
-	}
-
-	t.Run("legacy-ordered checkpoint is discarded", func(t *testing.T) {
-		td := newTD()
-		// Pre-fix (main) format: source fields in target-column order (a, c).
-		td.lastSourcePK = &querypb.QueryResult{Fields: sqltypes.MakeTestFields("a|c", "int64|int64")}
+		td.lastSourcePK = &querypb.QueryResult{Fields: sqltypes.MakeTestFields("id", "int64")}
 		td.lastTargetPK = td.lastSourcePK
+
 		require.NoError(t, td.getSourcePKCols())
-		require.Nil(t, td.lastSourcePK, "a legacy-ordered source checkpoint must be discarded")
+		require.True(t, td.tablePlan.sourceCheckpointUnavailable)
+		require.Nil(t, td.lastSourcePK, "a name-matching legacy checkpoint on a reordered layout must be discarded")
 		require.Nil(t, td.lastTargetPK, "both streams must restart")
 	})
 
-	t.Run("corrected-order checkpoint is kept", func(t *testing.T) {
-		td := newTD()
-		// Corrected format: source fields in source-PK order (c, a).
-		td.lastSourcePK = &querypb.QueryResult{Fields: sqltypes.MakeTestFields("c|a", "int64|int64")}
+	t.Run("unchanged layout keeps its checkpoint", func(t *testing.T) {
+		// Columns (id, payload), PK id, filter "select id, payload": the corrected
+		// mapping matches the old one, so the checkpoint is safe to reuse.
+		sourceTable := &tabletmanagerdatapb.TableDefinition{
+			Name:              "t2",
+			Columns:           []string{"id", "payload"},
+			PrimaryKeyColumns: []string{"id"},
+			Fields:            sqltypes.MakeTestFields("id|payload", "int64|varchar"),
+		}
+		tvde.tmc.schema = &tabletmanagerdatapb.SchemaDefinition{
+			TableDefinitions: []*tabletmanagerdatapb.TableDefinition{sourceTable},
+		}
+		td := &tableDiffer{
+			wd:    &workflowDiffer{ct: ct},
+			table: sourceTable,
+			tablePlan: &tablePlan{
+				table:       sourceTable,
+				sourceQuery: "select id, payload from t2 order by id asc",
+				compareCols: []compareColInfo{{colIndex: 0, colName: "id"}, {colIndex: 1, colName: "payload"}},
+				pkCols:      []int{0},
+			},
+		}
+		td.lastSourcePK = &querypb.QueryResult{Fields: sqltypes.MakeTestFields("id", "int64")}
 		td.lastTargetPK = td.lastSourcePK
+
 		require.NoError(t, td.getSourcePKCols())
-		require.NotNil(t, td.lastSourcePK, "a checkpoint already in the corrected order must be kept")
+		require.False(t, td.tablePlan.sourceCheckpointUnavailable)
+		require.Equal(t, []int{0}, td.tablePlan.sourcePkCols)
+		require.NotNil(t, td.lastSourcePK, "an unchanged-layout checkpoint must be kept")
 	})
 }
 

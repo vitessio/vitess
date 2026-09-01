@@ -1144,50 +1144,72 @@ func (td *tableDiffer) getSourcePKCols() error {
 		td.lastTargetPK = nil
 		return nil
 	}
-	td.tablePlan.sourcePkCols = indices
-
-	// A source checkpoint persisted before the source-PK ordering fix stored its
-	// columns in a different order. Reusing it across an upgrade would feed the row
-	// streamer a wrongly ordered key and reproduce the false ExtraRowsSource in
-	// #20601. If the loaded checkpoint is not in the corrected order, restart both
-	// streams instead of resuming from it.
-	if td.lastSourcePK != nil && !td.tablePlan.sourceLastPKInCorrectedOrder(td.lastSourcePK) {
+	// The pre-fix code stored the source lastpk using target-column-ordinal indices.
+	// When that mapping differs from the corrected one, a checkpoint persisted before
+	// an upgrade would resume the source from a wrongly ordered value (the false
+	// ExtraRowsSource in #20601), and it cannot be told apart from a current one by
+	// content (a single reordered PK keeps the same field name, only the value
+	// differs). Treat such layouts as un-checkpointable: persist no lastpk and restart
+	// both streams on resume, exactly like the subset-projection case above.
+	if !slices.Equal(indices, legacySourcePkColOrder(td.table.Columns, sourceTable.PrimaryKeyColumns)) {
+		td.tablePlan.sourceCheckpointUnavailable = true
 		td.lastSourcePK = nil
 		td.lastTargetPK = nil
+		return nil
 	}
+
+	td.tablePlan.sourcePkCols = indices
 
 	return nil
 }
 
-// sourceLastPKInCorrectedOrder reports whether a loaded source lastpk was written
-// with the corrected source-PK column order, i.e. its fields match the columns at
-// sourcePkCols in order. A checkpoint written before the ordering fix stored its
-// columns differently and must not be reused.
-func (tp *tablePlan) sourceLastPKInCorrectedOrder(lastPK *querypb.QueryResult) bool {
-	if lastPK == nil || len(lastPK.Fields) != len(tp.sourcePkCols) {
-		return false
+// legacySourcePkColOrder reproduces the pre-fix source-PK index mapping: the
+// positions of the source PK columns within the target table's columns, in column
+// order. Used only to detect whether a persisted checkpoint predates the ordering
+// fix and so cannot be safely reused.
+func legacySourcePkColOrder(targetColumns, sourcePKColumns []string) []int {
+	pkSet := make(map[string]struct{}, len(sourcePKColumns))
+	for _, pk := range sourcePKColumns {
+		pkSet[strings.ToLower(pk)] = struct{}{}
 	}
-	for i, colIndex := range tp.sourcePkCols {
-		if !strings.EqualFold(lastPK.Fields[i].GetName(), tp.compareCols[colIndex].colName) {
-			return false
+	order := make([]int, 0, len(sourcePKColumns))
+	for i, col := range targetColumns {
+		if _, ok := pkSet[strings.ToLower(col)]; ok {
+			order = append(order, i)
 		}
 	}
-	return true
+	return order
 }
 
 // comparisonKeyIsSourcePKPrefix returns an error unless the columns the VDiff
 // merge sorter compares on (comparePKs, in comparison order) are an order-
 // preserving prefix of the physical source PK. Each comparePK indexes the SELECT
 // list (shared with the source query), so its underlying source column must equal
-// the source PK column at the same rank.
+// the source PK column at the same rank. Physical PK columns that the filter's
+// WHERE pins to a single value are constant across the stream and so do not affect
+// its order; they are dropped before the prefix comparison (e.g. a multi-tenant
+// "where tenant_id = 1" filter makes comparing on id valid even though the source
+// PK is (tenant_id, id)).
 func comparisonKeyIsSourcePKPrefix(sourceSelect *sqlparser.Select, comparePKs []compareColInfo, sourcePKColumns []string) error {
-	if len(comparePKs) > len(sourcePKColumns) {
-		// Wrapped as MySQL ERNotSupportedYet so the "(errno 1235)" suffix survives
-		// being persisted as a string and rebuilt by retryVDiffs, making
-		// IsEphemeralError classify it as non-ephemeral (no infinite auto-retry).
-		return sqlerror.NewSQLError(sqlerror.ERNotSupportedYet, sqlerror.SSClientError,
-			fmt.Sprintf("vdiff does not support this filter: the comparison key has more columns (%d) than the physical source primary key (%d): %s",
-				len(comparePKs), len(sourcePKColumns), sqlparser.String(sourceSelect)))
+	pinned := equalityPinnedColumns(sourceSelect.Where)
+	effectivePK := make([]string, 0, len(sourcePKColumns))
+	for _, col := range sourcePKColumns {
+		if _, ok := pinned[strings.ToLower(col)]; !ok {
+			effectivePK = append(effectivePK, col)
+		}
+	}
+
+	// unsupportedFilter wraps the rejection as MySQL ERNotSupportedYet so the
+	// "(errno 1235)" suffix survives being persisted as a string and rebuilt by
+	// retryVDiffs, making IsEphemeralError classify it as non-ephemeral (no infinite
+	// auto-retry).
+	unsupportedFilter := func(format string, args ...any) error {
+		return sqlerror.NewSQLError(sqlerror.ERNotSupportedYet, sqlerror.SSClientError, fmt.Sprintf(format, args...))
+	}
+
+	if len(comparePKs) > len(effectivePK) {
+		return unsupportedFilter("vdiff does not support this filter: the comparison key has more columns (%d) than the unconstrained physical source primary key (%d): %s",
+			len(comparePKs), len(effectivePK), sqlparser.String(sourceSelect))
 	}
 	for i, cpk := range comparePKs {
 		if cpk.colIndex < 0 || cpk.colIndex >= len(sourceSelect.SelectExprs.Exprs) {
@@ -1200,14 +1222,40 @@ func comparisonKeyIsSourcePKPrefix(sourceSelect *sqlparser.Select, comparePKs []
 				"unexpected non-aliased expression at position %d in vdiff source query: %s", cpk.colIndex, sqlparser.String(sourceSelect))
 		}
 		colName, ok := underlyingSourceColumn(aliasedExpr.Expr)
-		if !ok || !strings.EqualFold(colName, sourcePKColumns[i]) {
-			// ERNotSupportedYet so it persists as non-ephemeral (see above).
-			return sqlerror.NewSQLError(sqlerror.ERNotSupportedYet, sqlerror.SSClientError,
-				fmt.Sprintf("vdiff does not support this filter: the comparison key is not an order-preserving prefix of the physical source primary key %v, so the source stream is not sorted by the compared columns: %s",
-					sourcePKColumns, sqlparser.String(sourceSelect)))
+		if !ok || !strings.EqualFold(colName, effectivePK[i]) {
+			return unsupportedFilter("vdiff does not support this filter: the comparison key is not an order-preserving prefix of the physical source primary key %v, so the source stream is not sorted by the compared columns: %s",
+				sourcePKColumns, sqlparser.String(sourceSelect))
 		}
 	}
 	return nil
+}
+
+// equalityPinnedColumns returns the set of columns the WHERE clause constrains to
+// a single literal value via a top-level "col = literal" conjunct (lowercased). It
+// is intentionally conservative: only plain equality against a literal is treated
+// as pinned; ranges, IN, OR, in_keyrange, and non-literal comparisons are ignored.
+func equalityPinnedColumns(where *sqlparser.Where) map[string]struct{} {
+	pinned := make(map[string]struct{})
+	if where == nil {
+		return pinned
+	}
+	for _, expr := range sqlparser.SplitAndExpression(nil, where.Expr) {
+		cmp, ok := expr.(*sqlparser.ComparisonExpr)
+		if !ok || cmp.Operator != sqlparser.EqualOp {
+			continue
+		}
+		if col, ok := cmp.Left.(*sqlparser.ColName); ok {
+			if _, isLiteral := cmp.Right.(*sqlparser.Literal); isLiteral {
+				pinned[col.Name.Lowered()] = struct{}{}
+			}
+		}
+		if col, ok := cmp.Right.(*sqlparser.ColName); ok {
+			if _, isLiteral := cmp.Left.(*sqlparser.Literal); isLiteral {
+				pinned[col.Name.Lowered()] = struct{}{}
+			}
+		}
+	}
+	return pinned
 }
 
 // sourceTableNameFromSelect returns the physical source table referenced by the

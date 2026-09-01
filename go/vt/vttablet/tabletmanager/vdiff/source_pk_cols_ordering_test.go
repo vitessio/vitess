@@ -432,6 +432,24 @@ func TestComparisonKeyIsSourcePKPrefix(t *testing.T) {
 			sourcePKColumns:     []string{"id"},
 			wantErr:             true,
 		},
+		{
+			// Multi-tenant filter: source PK (tenant_id, id) with the leading column
+			// pinned to a constant, so the stream is effectively ordered by id and
+			// comparing on id is valid even though id alone is not a PK prefix.
+			name:                "leading pk pinned to a constant allows compare on suffix",
+			sourceQuery:         "select tenant_id, id, data from src where tenant_id = 1 order by id asc",
+			comparePKColIndices: []int{1},
+			sourcePKColumns:     []string{"tenant_id", "id"},
+		},
+		{
+			// Same shape but without the pinning WHERE: id is not a prefix of
+			// (tenant_id, id), so it is rejected.
+			name:                "leading pk not pinned rejects compare on suffix",
+			sourceQuery:         "select tenant_id, id, data from src order by id asc",
+			comparePKColIndices: []int{1},
+			sourcePKColumns:     []string{"tenant_id", "id"},
+			wantErr:             true,
+		},
 	}
 
 	parser := sqlparser.NewTestParser()
