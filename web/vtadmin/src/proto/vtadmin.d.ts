@@ -42161,6 +42161,9 @@ export namespace tabletmanagerdata {
         /** VDiffReportOptions row_diff_column_truncate_at. */
         row_diff_column_truncate_at: (number|Long);
 
+        /** VDiffReportOptions no_samples. */
+        no_samples: boolean;
+
         /**
          * Creates a new VDiffReportOptions instance using the specified properties.
          * @param [properties] Properties to set
@@ -42259,6 +42262,9 @@ export namespace tabletmanagerdata {
 
             /** VDiffReportOptions row_diff_column_truncate_at */
             row_diff_column_truncate_at?: (number|Long|null);
+
+            /** VDiffReportOptions no_samples */
+            no_samples?: (boolean|null);
 
             /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
@@ -96807,6 +96813,9 @@ export namespace vtctldata {
         /** VDiffShowRequest arg. */
         arg: string;
 
+        /** VDiffShowRequest no_samples. */
+        no_samples: boolean;
+
         /**
          * Creates a new VDiffShowRequest instance using the specified properties.
          * @param [properties] Properties to set
@@ -96899,6 +96908,9 @@ export namespace vtctldata {
 
             /** VDiffShowRequest arg */
             arg?: (string|null);
+
+            /** VDiffShowRequest no_samples */
+            no_samples?: (boolean|null);
 
             /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];

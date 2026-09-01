@@ -20,6 +20,7 @@
 - **[Minor Changes](#minor-changes)**
     - **[VReplication](#minor-changes-vreplication)**
         - [Default data protection for `_reverse` workflow cancel/complete](#vreplication-reverse-workflow-data-protection)
+        - [`vdiff show --no-samples` strips the per-table row-sample report](#vreplication-vdiff-no-samples)
         - [Preserve Materialize target data on cancel by default](#vreplication-materialize-cancel-data-protection)
     - **[VTGate](#minor-changes-vtgate)**
         - [Ingress bytes in query LogStats](#vtgate-logstats-ingress-bytes)
@@ -186,6 +187,14 @@ When calling `cancel` or `complete` on an auto-generated `_reverse` workflow wit
 The `--keep-data` flag help text has been updated to note this default explicitly. This change applies to MoveTables, Reshard, and other VReplication workflow types that use the shared cancel/complete paths.
 
 See [#19906](https://github.com/vitessio/vitess/pull/19906) for details.
+
+#### <a id="vreplication-vdiff-no-samples"/>`vdiff show --no-samples` strips the per-table row-sample report</a>
+
+`vtctldclient vdiff ... show` now accepts a `--no-samples` flag. When set, the per-table diff report has its row-sample arrays (`MismatchedRowsSample`, `ExtraRowsSourceSample`, `ExtraRowsTargetSample`) stripped on the tablet, while the scalar counters and all other summary fields are preserved. This avoids exceeding gRPC message limits when `vdiff show` aggregates large blob/JSON row samples across every target shard. It is exposed as `no_samples` on the `VDiffShowRequest` (vtctld) and `VDiffReportOptions` (tablet) protobuf messages, and is opt-in and backward compatible.
+
+`vdiff create --wait` also uses `no_samples` for its internal progress polls. Text output is unchanged; with `--format json`, the per-interval progress output no longer includes the row samples (they remain available via `vdiff show --verbose` once the diff completes).
+
+See [#20870](https://github.com/vitessio/vitess/pull/20870) for details.
 
 #### <a id="vreplication-materialize-cancel-data-protection"/>Preserve Materialize target data on cancel by default</a>
 
