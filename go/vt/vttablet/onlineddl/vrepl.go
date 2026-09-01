@@ -82,15 +82,24 @@ func (v *VReplStream) isRunning() bool {
 	return false
 }
 
-// hasError() returns true when the workflow has failed and will not retry
-func (v *VReplStream) hasError() (isTerminal bool, vreplError error) {
+// hasError returns the stream's error state:
+//   - isTerminal: the stream is in the Error state for an unrecoverable
+//     reason (or with a legacy, unclassified terminal error) and the
+//     migration cannot proceed;
+//   - isResumable: the stream is in the Error state only because its
+//     retry window (--vreplication-max-time-to-retry-on-error) expired on
+//     a recoverable-class error, and can be resumed;
+//   - vreplError: the error, terminal or not, if any.
+func (v *VReplStream) hasError() (isTerminal bool, isResumable bool, vreplError error) {
 	switch {
+	case v.state == binlogdatapb.VReplicationWorkflowState_Error && strings.Contains(v.message, vreplication.RetriesExhaustedIndicator):
+		return false, true, errors.New(v.message)
 	case v.state == binlogdatapb.VReplicationWorkflowState_Error:
-		return true, errors.New(v.message)
+		return true, false, errors.New(v.message)
 	case strings.Contains(strings.ToLower(v.message), "error"):
-		return false, errors.New(v.message)
+		return false, false, errors.New(v.message)
 	}
-	return false, nil
+	return false, false, nil
 }
 
 // Lag returns the vreplication lag, as determined by the higher of the transaction timestamp and the time updated.

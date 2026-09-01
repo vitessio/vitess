@@ -38,10 +38,12 @@ import (
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/vtenv"
+	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 	"vitess.io/vitess/go/vt/vttablet/tmclienttest"
 
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
@@ -712,6 +714,109 @@ func TestMigrationStatusTransitionsUpdateMetrics(t *testing.T) {
 			assert.Equal(t, startedBefore+tcase.expectStarted, startedMigrations.Get(), "startedMigrations")
 			assert.Equal(t, successBefore+tcase.expectSuccess, successfulMigrations.Get(), "successfulMigrations")
 			assert.Equal(t, failedBefore+tcase.expectFailed, failedMigrations.Get(), "failedMigrations")
+		})
+	}
+}
+
+// TestResumeBackoffElapsed tests the pacing of automatic vreplication
+// stream resume attempts: the first attempt is immediate, subsequent
+// delays double from the initial backoff, and the delay caps at the
+// maximum backoff regardless of attempt count.
+func TestResumeBackoffElapsed(t *testing.T) {
+	now := time.Now()
+	state := &vreplResumeState{}
+	assert.True(t, resumeBackoffElapsed(state, now), "first attempt must be immediate")
+
+	state = &vreplResumeState{attempts: 1, lastAttempt: now.Add(-30 * time.Second)}
+	assert.False(t, resumeBackoffElapsed(state, now), "1st retry before initial backoff")
+	state.lastAttempt = now.Add(-vreplResumeInitialBackoff)
+	assert.True(t, resumeBackoffElapsed(state, now), "1st retry at initial backoff")
+
+	// A resume attempt that failed before ever succeeding (e.g. GetTablet kept
+	// erroring) still records lastAttempt but does not increment attempts (see
+	// maybeResumeVReplication). attempts==0 must not bypass pacing in that case,
+	// or a persistently failing attempt would hot-loop on every tick.
+	state = &vreplResumeState{attempts: 0, lastAttempt: now.Add(-30 * time.Second)}
+	assert.False(t, resumeBackoffElapsed(state, now), "failed 1st attempt before initial backoff")
+	state.lastAttempt = now.Add(-vreplResumeInitialBackoff)
+	assert.True(t, resumeBackoffElapsed(state, now), "failed 1st attempt at initial backoff")
+
+	state = &vreplResumeState{attempts: 3, lastAttempt: now.Add(-2 * vreplResumeInitialBackoff)}
+	assert.False(t, resumeBackoffElapsed(state, now), "3rd retry doubles twice")
+	state.lastAttempt = now.Add(-4 * vreplResumeInitialBackoff)
+	assert.True(t, resumeBackoffElapsed(state, now))
+
+	// Far beyond the doubling range the delay must cap, not overflow.
+	state = &vreplResumeState{attempts: 500, lastAttempt: now.Add(-vreplResumeMaxBackoff)}
+	assert.True(t, resumeBackoffElapsed(state, now), "delay caps at max backoff")
+	state.lastAttempt = now.Add(-vreplResumeMaxBackoff + time.Second)
+	assert.False(t, resumeBackoffElapsed(state, now))
+}
+
+// TestOverrideStateFromHistory tests readVReplStream's _vt.vreplication_log
+// history-scan decision: a class-B (retries-exhausted) historical row must
+// not force the live state back to Error once the stream is actually
+// running again (Init/Copying/Running) — class B is resumable by
+// definition, so a live running stream supersedes a stale class-B history
+// row. Class A / legacy terminal-error rows keep their original stickiness
+// and always override, regardless of the live state.
+func TestOverrideStateFromHistory(t *testing.T) {
+	classBMessage := vreplication.RetriesExhaustedIndicator + ": the same error was encountered continuously for longer than --vreplication-max-time-to-retry-on-error (15m0s): connection refused"
+	classAMessage := vreplication.UnrecoverableErrorIndicator + ": bad data"
+	legacyMessage := vreplication.TerminalErrorIndicator + ": some error"
+
+	testCases := []struct {
+		name              string
+		liveState         binlogdatapb.VReplicationWorkflowState
+		historicalMessage string
+		wantOverride      bool
+	}{
+		{
+			name:              "class B, live Running -> no override",
+			liveState:         binlogdatapb.VReplicationWorkflowState_Running,
+			historicalMessage: classBMessage,
+			wantOverride:      false,
+		},
+		{
+			name:              "class B, live Copying -> no override",
+			liveState:         binlogdatapb.VReplicationWorkflowState_Copying,
+			historicalMessage: classBMessage,
+			wantOverride:      false,
+		},
+		{
+			name:              "class B, live Init -> no override",
+			liveState:         binlogdatapb.VReplicationWorkflowState_Init,
+			historicalMessage: classBMessage,
+			wantOverride:      false,
+		},
+		{
+			name:              "class B, live Error -> override",
+			liveState:         binlogdatapb.VReplicationWorkflowState_Error,
+			historicalMessage: classBMessage,
+			wantOverride:      true,
+		},
+		{
+			name:              "class A, live Running -> override (stickiness preserved)",
+			liveState:         binlogdatapb.VReplicationWorkflowState_Running,
+			historicalMessage: classAMessage,
+			wantOverride:      true,
+		},
+		{
+			name:              "class A, live Error -> override",
+			liveState:         binlogdatapb.VReplicationWorkflowState_Error,
+			historicalMessage: classAMessage,
+			wantOverride:      true,
+		},
+		{
+			name:              "legacy, live Running -> override (stickiness preserved)",
+			liveState:         binlogdatapb.VReplicationWorkflowState_Running,
+			historicalMessage: legacyMessage,
+			wantOverride:      true,
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.wantOverride, overrideStateFromHistory(tc.liveState, tc.historicalMessage))
 		})
 	}
 }

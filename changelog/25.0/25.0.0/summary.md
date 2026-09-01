@@ -20,6 +20,7 @@
     - **[VReplication](#minor-changes-vreplication)**
         - [Default data protection for `_reverse` workflow cancel/complete](#vreplication-reverse-workflow-data-protection)
         - [Preserve Materialize target data on cancel by default](#vreplication-materialize-cancel-data-protection)
+        - [Online DDL migrations resume automatically after transient vreplication errors](#onlineddl-vrepl-auto-resume)
     - **[VTGate](#minor-changes-vtgate)**
         - [Ingress bytes in query LogStats](#vtgate-logstats-ingress-bytes)
         - [New controls for cross-keyspace reads](#vtgate-cross-keyspace-reads)
@@ -183,6 +184,14 @@ Previously `Materialize cancel` exposed no `--keep-data` flag and always omitted
 This is a client-side fix. The server and the generic `vtctldclient Workflow delete` command are unchanged, so operators must upgrade `vtctldclient` to pick it up; an older client canceling a Materialize workflow against a newer server still drops the target tables.
 
 See [#20711](https://github.com/vitessio/vitess/issues/20711) for details.
+
+#### <a id="onlineddl-vrepl-auto-resume"/>Online DDL migrations resume automatically after transient vreplication errors</a>
+
+An Online DDL migration whose backing vreplication stream exhausts `--vreplication-max-time-to-retry-on-error` on a recoverable-class error is no longer failed immediately. The Online DDL executor now resumes the stream automatically, backing off between attempts, for up to 180 minutes of persistent failure — the same budget the executor already uses to detect stale migrations. Only migrations whose stream error is genuinely unrecoverable, or that exceed the 180-minute budget, are still failed.
+
+As part of this change, vreplication terminal errors are now classified in their error message as either unrecoverable (retrying cannot fix them) or retries-exhausted (the retry window expired on an otherwise recoverable error), letting operators and the executor tell resumable streams apart from ones that need intervention.
+
+See [#20926](https://github.com/vitessio/vitess/issues/20926) for details.
 
 ### <a id="minor-changes-vtgate"/>VTGate</a>
 

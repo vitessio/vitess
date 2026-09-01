@@ -24,6 +24,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"slices"
 	"strconv"
@@ -156,6 +157,7 @@ type Executor struct {
 	// The Executor auto-reviews the map and cleans up migrations thought to be running which are not running.
 	ownedRunningMigrations        sync.Map
 	vreplicationLastError         map[string]*vterrors.LastError
+	vreplicationResumeState       map[string]*vreplResumeState
 	tickReentranceFlag            atomic.Int64
 	reviewedRunningMigrationsFlag bool
 
@@ -172,6 +174,38 @@ type Executor struct {
 type cancellableMigration struct {
 	uuid    string
 	message string
+}
+
+// vreplResumeState paces automatic resume attempts for a migration whose
+// vreplication stream parked on a resumable terminal error.
+type vreplResumeState struct {
+	attempts    int
+	lastAttempt time.Time
+}
+
+const (
+	vreplResumeInitialBackoff = 1 * time.Minute
+	vreplResumeMaxBackoff     = 15 * time.Minute
+)
+
+// resumeBackoffElapsed reports whether the next automatic resume attempt
+// is due: the delay doubles per successful attempt from
+// vreplResumeInitialBackoff and caps at vreplResumeMaxBackoff. Before any
+// attempt has ever been made (lastAttempt is the zero value), the first
+// attempt is always due. maybeResumeVReplication records lastAttempt on
+// both successful and failed attempts (but only increments attempts on
+// success), so a persistently failing attempt still paces at
+// vreplResumeInitialBackoff instead of retrying on every tick.
+func resumeBackoffElapsed(state *vreplResumeState, now time.Time) bool {
+	if state.lastAttempt.IsZero() {
+		return true
+	}
+	delay := vreplResumeInitialBackoff
+	for i := 1; i < state.attempts && delay < vreplResumeMaxBackoff; i++ {
+		delay *= 2
+	}
+	delay = min(delay, vreplResumeMaxBackoff)
+	return now.Sub(state.lastAttempt) >= delay
 }
 
 // pendingMigration carries both the UUID and migration context of a pending migration.
@@ -297,6 +331,7 @@ func (e *Executor) Open() error {
 		return true
 	})
 	e.vreplicationLastError = make(map[string]*vterrors.LastError)
+	e.vreplicationResumeState = make(map[string]*vreplResumeState)
 
 	if sidecar.GetName() != sidecar.DefaultName {
 		e.execQuery = e.executeQueryWithSidecarDBReplacement
@@ -3145,6 +3180,27 @@ func (e *Executor) runNextMigration(ctx context.Context) error {
 	return nil
 }
 
+// overrideStateFromHistory decides whether readVReplStream's _vt.vreplication_log
+// history scan should override the live stream's state with a historical
+// terminal-error row. Class B (vreplication.RetriesExhaustedIndicator) is
+// resumable by definition: once the stream is actually running again
+// (liveState is Init/Copying/Running), a stale class-B history row must not
+// force the migration back into a permanent Error state. Class A / legacy
+// terminal-error rows keep the scan's original stickiness and always
+// override, regardless of the live state, since they indicate the stream
+// can never make forward progress again from that point.
+func overrideStateFromHistory(liveState binlogdatapb.VReplicationWorkflowState, historicalMessage string) bool {
+	if strings.Contains(historicalMessage, vreplication.RetriesExhaustedIndicator) {
+		switch liveState {
+		case binlogdatapb.VReplicationWorkflowState_Init,
+			binlogdatapb.VReplicationWorkflowState_Copying,
+			binlogdatapb.VReplicationWorkflowState_Running:
+			return false
+		}
+	}
+	return true
+}
+
 // readVReplStream reads _vt.vreplication entries for given workflow
 func (e *Executor) readVReplStream(ctx context.Context, uuid string, okIfMissing bool) (*VReplStream, error) {
 	query, err := sqlparser.ParseAndBind(sqlReadVReplStream,
@@ -3199,9 +3255,12 @@ func (e *Executor) readVReplStream(ctx context.Context, uuid string, okIfMissing
 		}
 		// The query has LIMIT 1, ie returns at most one row
 		if row := r.Named().Row(); row != nil {
-			s.state = binlogdatapb.VReplicationWorkflowState_Error
-			if message := row.AsString("message", ""); message != "" {
-				s.message = "vreplication: " + message
+			historicalMessage := row.AsString("message", "")
+			if overrideStateFromHistory(s.state, historicalMessage) {
+				s.state = binlogdatapb.VReplicationWorkflowState_Error
+				if historicalMessage != "" {
+					s.message = "vreplication: " + historicalMessage
+				}
 			}
 		}
 	}
@@ -3328,6 +3387,51 @@ func getInOrderCompletionPendingCount(onlineDDL *schema.OnlineDDL, pendingMigrat
 	return pendingCount
 }
 
+// maybeResumeVReplication restarts the vreplication stream backing a
+// migration that parked on a resumable terminal error (see
+// vreplication.RetriesExhaustedIndicator), pacing attempts with
+// resumeBackoffElapsed. The executor's LastError window
+// (staleMigrationFailMinutes) remains the overall budget: if the stream
+// keeps re-parking, reviewRunningMigrations cancels the migration once
+// that window expires.
+//
+// The resume is attempted before any bookkeeping is updated: state.attempts
+// (which both paces the backoff via resumeBackoffElapsed and numbers the
+// "resuming automatically, attempt N" message) and the migration message
+// are only touched once the resume has actually been issued. On failure
+// (GetTablet or the vreplicationExec itself erroring), state.lastAttempt is
+// still updated — so a persistently failing resume paces at
+// vreplResumeInitialBackoff rather than hot-looping on every check — but
+// attempts is left untouched and the migration message is not rewritten,
+// since no resume was actually issued to report.
+func (e *Executor) maybeResumeVReplication(ctx context.Context, uuid string, s *VReplStream) {
+	state, ok := e.vreplicationResumeState[uuid]
+	if !ok {
+		state = &vreplResumeState{}
+		e.vreplicationResumeState[uuid] = state
+	}
+	if !resumeBackoffElapsed(state, time.Now()) {
+		return
+	}
+	tablet, err := e.ts.GetTablet(ctx, e.tabletAlias)
+	if err != nil {
+		state.lastAttempt = time.Now()
+		log.Error("Online DDL: failed to get tablet for vreplication resume",
+			slog.String("uuid", uuid), slog.Any("error", err))
+		return
+	}
+	if _, err := e.vreplicationExec(ctx, tablet.Tablet, binlogplayer.StartVReplication(s.id)); err != nil {
+		state.lastAttempt = time.Now()
+		log.Error("Online DDL: failed to resume vreplication stream",
+			slog.String("uuid", uuid), slog.Int64("stream_id", int64(s.id)), slog.Any("error", err))
+		return
+	}
+	state.attempts++
+	state.lastAttempt = time.Now()
+	_ = e.updateMigrationMessage(ctx, uuid,
+		fmt.Sprintf("vreplication stream errored but is resumable; resuming automatically, attempt %d: %s", state.attempts, s.message))
+}
+
 // reviewRunningMigrations iterates migrations in 'running' state. Normally there's only one running, which was
 // spawned by this tablet; but vreplication migrations could also resume from failure.
 func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning int, cancellable []*cancellableMigration, err error) {
@@ -3416,10 +3520,19 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 					)
 				}
 				lastError := e.vreplicationLastError[uuid]
-				isTerminal, vreplError := s.hasError()
+				isTerminal, isResumable, vreplError := s.hasError()
 				lastError.Record(vreplError)
-				if isTerminal || !lastError.ShouldRetry() {
+				if vreplError == nil {
+					// The stream recovered: clear the per-migration resume
+					// backoff state so a future error episode starts a
+					// fresh "first attempt immediate" backoff sequence.
+					delete(e.vreplicationResumeState, uuid)
+				}
+				switch {
+				case isTerminal || !lastError.ShouldRetry():
 					cancellable = append(cancellable, newCancellableMigration(uuid, s.message))
+				case isResumable:
+					e.maybeResumeVReplication(ctx, uuid, s)
 				}
 				if !s.isRunning() {
 					log.Info(fmt.Sprintf("migration %s in 'running' state but vreplication state is '%s'", uuid, s.state.String()))

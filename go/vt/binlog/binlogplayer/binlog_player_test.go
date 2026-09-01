@@ -433,6 +433,13 @@ func TestUpdateVReplicationTimestamp(t *testing.T) {
 	assert.Equalf(t, want, got, "updateVReplicationPos() = %#v, want %#v", got, want)
 }
 
+func TestStartVReplication(t *testing.T) {
+	want := "update _vt.vreplication set state='Running', message='' where id=78522"
+
+	got := StartVReplication(78522)
+	assert.Equalf(t, want, got, "StartVReplication(78522) = %#v, want %#v", got, want)
+}
+
 func TestReadVReplicationPos(t *testing.T) {
 	want := "select pos from _vt.vreplication where id=482821"
 	got := ReadVReplicationPos(482821)

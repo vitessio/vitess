@@ -26,6 +26,9 @@ import (
 
 	"vitess.io/vitess/go/vt/schemadiff"
 	"vitess.io/vitess/go/vt/vtenv"
+	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
+
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
 
 func TestRevertible(t *testing.T) {
@@ -230,6 +233,84 @@ func TestRevertible(t *testing.T) {
 			assert.Equal(t, toStringSlice(tcase.removedUniqueKeyNames), v.analysis.RemovedUniqueKeys.Names())
 			assert.Equal(t, toStringSlice(tcase.droppedNoDefaultColumnNames), v.analysis.DroppedNoDefaultColumns.Names())
 			assert.Equal(t, toStringSlice(tcase.expandedColumnNames), v.analysis.ExpandedColumns.Names())
+		})
+	}
+}
+
+// TestVReplStreamHasError tests the classification of vreplication stream
+// errors: unrecoverable (and legacy, unclassified) terminal errors are
+// terminal for the migration, while retries-exhausted terminal errors are
+// resumable; non-Error states never classify as terminal.
+func TestVReplStreamHasError(t *testing.T) {
+	testCases := []struct {
+		name          string
+		state         binlogdatapb.VReplicationWorkflowState
+		message       string
+		wantTerminal  bool
+		wantResumable bool
+		wantErr       bool
+	}{
+		{
+			name:          "unrecoverable",
+			state:         binlogdatapb.VReplicationWorkflowState_Error,
+			message:       vreplication.UnrecoverableErrorIndicator + ": bad data",
+			wantTerminal:  true,
+			wantResumable: false,
+			wantErr:       true,
+		},
+		{
+			name:          "retries exhausted",
+			state:         binlogdatapb.VReplicationWorkflowState_Error,
+			message:       vreplication.RetriesExhaustedIndicator + ": the same error was encountered continuously for longer than --vreplication-max-time-to-retry-on-error (15m0s): connection refused",
+			wantTerminal:  false,
+			wantResumable: true,
+			wantErr:       true,
+		},
+		{
+			// The readVReplStream history scan (executor.go) prepends "vreplication: "
+			// to messages it pulls from _vt.vreplication_log, so the class-B marker is
+			// no longer at the start of the message. hasError must still classify this
+			// as resumable: it uses strings.Contains, not a prefix match, against
+			// v.message. Pins that Contains-not-prefix behavior.
+			name:          "log-scan-derived vreplication prefix, retries exhausted",
+			state:         binlogdatapb.VReplicationWorkflowState_Error,
+			message:       "vreplication: " + vreplication.RetriesExhaustedIndicator + ": the same error was encountered continuously for longer than --vreplication-max-time-to-retry-on-error (15m0s): connection refused",
+			wantTerminal:  false,
+			wantResumable: true,
+			wantErr:       true,
+		},
+		{
+			name:          "legacy unclassified terminal marker",
+			state:         binlogdatapb.VReplicationWorkflowState_Error,
+			message:       vreplication.TerminalErrorIndicator + ": some error",
+			wantTerminal:  true,
+			wantResumable: false,
+			wantErr:       true,
+		},
+		{
+			name:          "non-terminal error message",
+			state:         binlogdatapb.VReplicationWorkflowState_Running,
+			message:       "error applying event: connection refused",
+			wantTerminal:  false,
+			wantResumable: false,
+			wantErr:       true,
+		},
+		{
+			name:          "no error",
+			state:         binlogdatapb.VReplicationWorkflowState_Running,
+			message:       "",
+			wantTerminal:  false,
+			wantResumable: false,
+			wantErr:       false,
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			s := &VReplStream{state: tc.state, message: tc.message}
+			isTerminal, isResumable, err := s.hasError()
+			assert.Equal(t, tc.wantTerminal, isTerminal)
+			assert.Equal(t, tc.wantResumable, isResumable)
+			assert.Equal(t, tc.wantErr, err != nil)
 		})
 	}
 }

@@ -835,3 +835,23 @@ func TestControllerErrorLogMessages(t *testing.T) {
 	require.Contains(t, errorLogs, expectedRetryPrefix,
 		"log message should have format 'workflow X, stream Y: error, will retry after ...', got: %s", errorLogs)
 }
+
+// TestTerminalVReplicationError tests the construction of terminal error
+// messages: both classes carry the load-bearing "terminal error:" prefix
+// that the Online DDL executor's _vt.vreplication_log scan matches, and
+// the retries-exhausted class names the flag that bounds the retry window
+// along with its effective value so that the message is actionable.
+func TestTerminalVReplicationError(t *testing.T) {
+	baseErr := errors.New("connection refused")
+
+	err := terminalVReplicationError(baseErr, true, 15*time.Minute)
+	require.ErrorContains(t, err, UnrecoverableErrorIndicator)
+	require.ErrorContains(t, err, "connection refused")
+	require.True(t, strings.HasPrefix(err.Error(), TerminalErrorIndicator+":"))
+
+	err = terminalVReplicationError(baseErr, false, 15*time.Minute)
+	require.ErrorContains(t, err, RetriesExhaustedIndicator)
+	require.ErrorContains(t, err, "--vreplication-max-time-to-retry-on-error (15m0s)")
+	require.ErrorContains(t, err, "connection refused")
+	require.True(t, strings.HasPrefix(err.Error(), TerminalErrorIndicator+":"))
+}
