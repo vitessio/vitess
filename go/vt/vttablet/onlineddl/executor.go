@@ -181,6 +181,22 @@ type cancellableMigration struct {
 type vreplResumeState struct {
 	attempts    int
 	lastAttempt time.Time
+	// firstParked is when the current error episode began: the first time
+	// the stream was observed parked on a resumable terminal error since
+	// the last full recovery. It bounds the episode's resume budget.
+	firstParked time.Time
+}
+
+// resumeBudgetExhausted reports whether the current error episode has
+// outlived the resume budget (staleMigrationFailMinutes since the
+// episode's first park), after which the migration is cancelled instead
+// of resumed. The budget is tracked from the first park deliberately
+// rather than through LastError: the park/resume cycle alternates the
+// stream's message between the retries-exhausted wrapper and raw retry
+// errors, which resets LastError's message-equality window every cycle
+// and would otherwise leave a persistently flapping stream unbounded.
+func resumeBudgetExhausted(state *vreplResumeState, now time.Time) bool {
+	return !state.firstParked.IsZero() && now.Sub(state.firstParked) >= staleMigrationFailMinutes*time.Minute
 }
 
 const (
@@ -3190,15 +3206,19 @@ func (e *Executor) runNextMigration(ctx context.Context) error {
 // override, regardless of the live state, since they indicate the stream
 // can never make forward progress again from that point.
 func overrideStateFromHistory(liveState binlogdatapb.VReplicationWorkflowState, historicalMessage string) bool {
-	if strings.Contains(historicalMessage, vreplication.RetriesExhaustedIndicator) {
-		switch liveState {
-		case binlogdatapb.VReplicationWorkflowState_Init,
-			binlogdatapb.VReplicationWorkflowState_Copying,
-			binlogdatapb.VReplicationWorkflowState_Running:
-			return false
-		}
+	// The live row is authoritative whenever it already carries an error:
+	// setState writes _vt.vreplication before the best-effort history
+	// insert, so the newest matching history row can lag behind a fresher
+	// live error and must not replace it.
+	if liveState == binlogdatapb.VReplicationWorkflowState_Error {
+		return false
 	}
-	return true
+	// A retries-exhausted (resumable) history row never forces the stream
+	// back into the Error state: the stream was, by definition, resumable,
+	// and its live state supersedes that history. Unrecoverable and
+	// legacy, unclassified terminal errors remain sticky, which is the
+	// scan's original purpose.
+	return !isRetriesExhaustedMessage(historicalMessage)
 }
 
 // readVReplStream reads _vt.vreplication entries for given workflow
@@ -3259,7 +3279,7 @@ func (e *Executor) readVReplStream(ctx context.Context, uuid string, okIfMissing
 			if overrideStateFromHistory(s.state, historicalMessage) {
 				s.state = binlogdatapb.VReplicationWorkflowState_Error
 				if historicalMessage != "" {
-					s.message = "vreplication: " + historicalMessage
+					s.message = vreplMessageWrapperPrefix + historicalMessage
 				}
 			}
 		}
@@ -3390,10 +3410,10 @@ func getInOrderCompletionPendingCount(onlineDDL *schema.OnlineDDL, pendingMigrat
 // maybeResumeVReplication restarts the vreplication stream backing a
 // migration that parked on a resumable terminal error (see
 // vreplication.RetriesExhaustedIndicator), pacing attempts with
-// resumeBackoffElapsed. The executor's LastError window
-// (staleMigrationFailMinutes) remains the overall budget: if the stream
-// keeps re-parking, reviewRunningMigrations cancels the migration once
-// that window expires.
+// resumeBackoffElapsed. The overall budget for a continuous error episode
+// is resumeBudgetExhausted, checked by the caller: once the episode
+// outlives staleMigrationFailMinutes, the migration is cancelled instead
+// of resumed.
 //
 // The resume is attempted before any bookkeeping is updated: state.attempts
 // (which both paces the backoff via resumeBackoffElapsed and numbers the
@@ -3404,12 +3424,7 @@ func getInOrderCompletionPendingCount(onlineDDL *schema.OnlineDDL, pendingMigrat
 // vreplResumeInitialBackoff rather than hot-looping on every check — but
 // attempts is left untouched and the migration message is not rewritten,
 // since no resume was actually issued to report.
-func (e *Executor) maybeResumeVReplication(ctx context.Context, uuid string, s *VReplStream) {
-	state, ok := e.vreplicationResumeState[uuid]
-	if !ok {
-		state = &vreplResumeState{}
-		e.vreplicationResumeState[uuid] = state
-	}
+func (e *Executor) maybeResumeVReplication(ctx context.Context, uuid string, s *VReplStream, state *vreplResumeState) {
 	if !resumeBackoffElapsed(state, time.Now()) {
 		return
 	}
@@ -3532,7 +3547,19 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 				case isTerminal || !lastError.ShouldRetry():
 					cancellable = append(cancellable, newCancellableMigration(uuid, s.message))
 				case isResumable:
-					e.maybeResumeVReplication(ctx, uuid, s)
+					state, ok := e.vreplicationResumeState[uuid]
+					if !ok {
+						state = &vreplResumeState{}
+						e.vreplicationResumeState[uuid] = state
+					}
+					if state.firstParked.IsZero() {
+						state.firstParked = time.Now()
+					}
+					if resumeBudgetExhausted(state, time.Now()) {
+						cancellable = append(cancellable, newCancellableMigration(uuid, s.message))
+					} else {
+						e.maybeResumeVReplication(ctx, uuid, s, state)
+					}
 				}
 				if !s.isRunning() {
 					log.Info(fmt.Sprintf("migration %s in 'running' state but vreplication state is '%s'", uuid, s.state.String()))

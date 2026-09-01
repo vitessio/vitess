@@ -790,10 +790,13 @@ func TestOverrideStateFromHistory(t *testing.T) {
 			wantOverride:      false,
 		},
 		{
-			name:              "class B, live Error -> override",
+			// The live row is written before the best-effort history insert,
+			// so a live Error is always at least as fresh as any history row
+			// and must stay authoritative.
+			name:              "class B, live Error -> no override, live row is authoritative",
 			liveState:         binlogdatapb.VReplicationWorkflowState_Error,
 			historicalMessage: classBMessage,
-			wantOverride:      true,
+			wantOverride:      false,
 		},
 		{
 			name:              "class A, live Running -> override (stickiness preserved)",
@@ -802,10 +805,27 @@ func TestOverrideStateFromHistory(t *testing.T) {
 			wantOverride:      true,
 		},
 		{
-			name:              "class A, live Error -> override",
+			name:              "class A, live Error -> no override, live row is authoritative",
 			liveState:         binlogdatapb.VReplicationWorkflowState_Error,
 			historicalMessage: classAMessage,
+			wantOverride:      false,
+		},
+		{
+			// Classification is anchored to the message boundary: a class A
+			// error whose cause text embeds the class B marker (e.g. user
+			// data quoted in a MySQL error) must not classify as class B.
+			name:              "class A embedding class B marker in cause, live Running -> override",
+			liveState:         binlogdatapb.VReplicationWorkflowState_Running,
+			historicalMessage: vreplication.UnrecoverableErrorIndicator + ": Duplicate entry '" + vreplication.RetriesExhaustedIndicator + "' for key 'val'",
 			wantOverride:      true,
+		},
+		{
+			// A resumable-class history row never forces the Error state,
+			// regardless of the live state.
+			name:              "class B, live Stopped -> no override",
+			liveState:         binlogdatapb.VReplicationWorkflowState_Stopped,
+			historicalMessage: classBMessage,
+			wantOverride:      false,
 		},
 		{
 			name:              "legacy, live Running -> override (stickiness preserved)",
@@ -819,4 +839,29 @@ func TestOverrideStateFromHistory(t *testing.T) {
 			assert.Equal(t, tc.wantOverride, overrideStateFromHistory(tc.liveState, tc.historicalMessage))
 		})
 	}
+}
+
+// TestResumeBudgetExhausted tests the explicit per-episode resume budget:
+// a migration whose stream keeps parking on resumable errors is only
+// resumed for staleMigrationFailMinutes after the episode's first park,
+// after which it is cancelled. The budget is tracked from the first park
+// timestamp, deliberately independent of LastError's message-equality
+// window: the park/resume cycle alternates the stream's message between
+// the retries-exhausted wrapper and raw retry errors, which resets that
+// window every cycle and would otherwise leave a flapping stream
+// unbounded.
+func TestResumeBudgetExhausted(t *testing.T) {
+	now := time.Now()
+
+	state := &vreplResumeState{}
+	assert.False(t, resumeBudgetExhausted(state, now), "no park recorded yet")
+
+	state = &vreplResumeState{firstParked: now.Add(-time.Minute)}
+	assert.False(t, resumeBudgetExhausted(state, now), "just parked")
+
+	state = &vreplResumeState{firstParked: now.Add(-staleMigrationFailMinutes*time.Minute + time.Minute)}
+	assert.False(t, resumeBudgetExhausted(state, now), "under the budget")
+
+	state = &vreplResumeState{firstParked: now.Add(-staleMigrationFailMinutes * time.Minute)}
+	assert.True(t, resumeBudgetExhausted(state, now), "budget exhausted")
 }

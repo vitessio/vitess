@@ -270,13 +270,24 @@ func TestVReplStreamHasError(t *testing.T) {
 			// The readVReplStream history scan (executor.go) prepends "vreplication: "
 			// to messages it pulls from _vt.vreplication_log, so the class-B marker is
 			// no longer at the start of the message. hasError must still classify this
-			// as resumable: it uses strings.Contains, not a prefix match, against
-			// v.message. Pins that Contains-not-prefix behavior.
+			// as resumable: classification strips the known "vreplication: "
+			// wrapper before anchoring the marker at the message boundary.
 			name:          "log-scan-derived vreplication prefix, retries exhausted",
 			state:         binlogdatapb.VReplicationWorkflowState_Error,
 			message:       "vreplication: " + vreplication.RetriesExhaustedIndicator + ": the same error was encountered continuously for longer than --vreplication-max-time-to-retry-on-error (15m0s): connection refused",
 			wantTerminal:  false,
 			wantResumable: true,
+			wantErr:       true,
+		},
+		{
+			// Classification is anchored at the message boundary: a class A
+			// error whose cause embeds the class B marker (e.g. user data in
+			// a MySQL duplicate-entry error) must stay terminal.
+			name:          "unrecoverable with class B marker embedded in cause",
+			state:         binlogdatapb.VReplicationWorkflowState_Error,
+			message:       vreplication.UnrecoverableErrorIndicator + ": error applying event: Duplicate entry '" + vreplication.RetriesExhaustedIndicator + "' for key 'val'",
+			wantTerminal:  true,
+			wantResumable: false,
 			wantErr:       true,
 		},
 		{

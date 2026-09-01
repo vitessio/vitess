@@ -90,9 +90,25 @@ func (v *VReplStream) isRunning() bool {
 //     retry window (--vreplication-max-time-to-retry-on-error) expired on
 //     a recoverable-class error, and can be resumed;
 //   - vreplError: the error, terminal or not, if any.
+//
+// vreplMessageWrapperPrefix is prepended by readVReplStream to messages
+// derived from the _vt.vreplication_log history scan.
+const vreplMessageWrapperPrefix = "vreplication: "
+
+// isRetriesExhaustedMessage reports whether a vreplication error message
+// carries the retries-exhausted (resumable) classification. The marker is
+// matched at the message boundary -- after stripping the known
+// "vreplication: " wrapper -- so that marker text embedded in the
+// underlying error (e.g. user data quoted in a MySQL duplicate-entry
+// error) cannot influence the classification.
+func isRetriesExhaustedMessage(message string) bool {
+	message = strings.TrimPrefix(message, vreplMessageWrapperPrefix)
+	return strings.HasPrefix(message, vreplication.RetriesExhaustedIndicator)
+}
+
 func (v *VReplStream) hasError() (isTerminal bool, isResumable bool, vreplError error) {
 	switch {
-	case v.state == binlogdatapb.VReplicationWorkflowState_Error && strings.Contains(v.message, vreplication.RetriesExhaustedIndicator):
+	case v.state == binlogdatapb.VReplicationWorkflowState_Error && isRetriesExhaustedMessage(v.message):
 		return false, true, errors.New(v.message)
 	case v.state == binlogdatapb.VReplicationWorkflowState_Error:
 		return true, false, errors.New(v.message)
