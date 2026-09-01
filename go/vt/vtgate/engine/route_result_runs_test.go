@@ -18,7 +18,9 @@ package engine
 
 import (
 	"context"
+	"slices"
 	"testing"
+	"testing/quick"
 
 	"github.com/stretchr/testify/require"
 
@@ -374,6 +376,50 @@ func TestRouteMergeResultRunsComparison(t *testing.T) {
 			expectResult(t, got, want)
 		})
 	}
+}
+
+// TestRouteMergeResultRunsMatchesFullSort proves the merge and full-sort paths
+// produce the same ordered rows for random shard-sorted inputs.
+func TestRouteMergeResultRunsMatchesFullSort(t *testing.T) {
+	property := func(values []int64, shardByte uint8) bool {
+		shards := int(shardByte%7) + 2
+		if len(values) > 256 {
+			values = values[:256]
+		}
+		values = slices.Clone(values)
+		for len(values) < shards*(mergeMinRowsPerRun+1) {
+			values = append(values, int64(len(values)))
+		}
+
+		fields := sqltypes.MakeTestFields("id", "int64")
+		valuesByShard := make([][]int64, shards)
+		for i, value := range values {
+			valuesByShard[i%shards] = append(valuesByShard[i%shards], value)
+		}
+		runs := make([]*sqltypes.Result, shards)
+		for shard, shardValues := range valuesByShard {
+			slices.Sort(shardValues)
+			run := &sqltypes.Result{Fields: fields, Rows: make([]sqltypes.Row, len(shardValues))}
+			for row, value := range shardValues {
+				run.Rows[row] = sqltypes.Row{sqltypes.NewInt64(value)}
+			}
+			runs[shard] = run
+		}
+
+		flat := new(sqltypes.Result)
+		for shard := len(runs) - 1; shard >= 0; shard-- {
+			flat.AppendResult(runs[shard])
+		}
+		route := newResultRunsRoute()
+		want, err := route.sort(flat.Copy())
+		if err != nil {
+			return false
+		}
+		got, merged, err := route.mergeResultRuns(flat, runs)
+		return err == nil && merged && got.Equal(want)
+	}
+
+	require.NoError(t, quick.Check(property, nil))
 }
 
 func requireResultRowsOrdered(t *testing.T, orderBy evalengine.Comparison, rows []sqltypes.Row) {
