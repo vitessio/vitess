@@ -18,6 +18,7 @@ package executorcontext
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -30,13 +31,35 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/logstats"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
+	"vitess.io/vitess/go/vt/vtgate/vtgateservice"
 )
 
-type resultRunsExecutor struct {
-	fakeExecutor
+type (
+	resultRunsExecutor struct {
+		fakeExecutor
 
-	result *sqltypes.Result
-	runs   []*sqltypes.Result
+		result     *sqltypes.Result
+		runs       []*sqltypes.Result
+		executeErr error
+	}
+
+	flatResultExecutor struct {
+		fakeExecutor
+
+		result *sqltypes.Result
+	}
+)
+
+func (executor resultRunsExecutor) Execute(
+	context.Context,
+	vtgateservice.MySQLConnection,
+	string,
+	*SafeSession,
+	string,
+	map[string]*querypb.BindVariable,
+	bool,
+) (*sqltypes.Result, error) {
+	return nil, executor.executeErr
 }
 
 func (executor resultRunsExecutor) ExecuteMultiShardWithResultRuns(
@@ -53,16 +76,69 @@ func (executor resultRunsExecutor) ExecuteMultiShardWithResultRuns(
 	return executor.result, executor.runs, nil
 }
 
+func (executor flatResultExecutor) ExecuteMultiShard(
+	context.Context,
+	engine.Primitive,
+	[]*srvtopo.ResolvedShard,
+	[]*querypb.BoundQuery,
+	*SafeSession,
+	bool,
+	bool,
+	ResultsObserver,
+	bool,
+) (*sqltypes.Result, []error) {
+	return executor.result, nil
+}
+
 // TestVCursorExecuteMultiShardWithResultRuns proves the VCursor preserves the
 // executor's flat result and aligned shard runs.
 func TestVCursorExecuteMultiShardWithResultRuns(t *testing.T) {
 	result := sqltypes.MakeTestResult(sqltypes.MakeTestFields("id", "int64"), "1", "2")
 	runs := []*sqltypes.Result{result}
+	vc := newResultRunsTestVCursor(t, resultRunsExecutor{result: result, runs: runs}, NewSafeSession(nil))
+
+	got, gotRuns, errs := vc.ExecuteMultiShardWithResultRuns(t.Context(), nil, nil, nil, false, false, false)
+	require.Empty(t, errs)
+	require.Same(t, result, got)
+	require.Len(t, gotRuns, 1)
+	require.Same(t, runs[0], gotRuns[0])
+}
+
+// TestVCursorExecuteMultiShardWithResultRunsFallbacks proves the optional path
+// keeps the flat-result fallback and savepoint error contract.
+func TestVCursorExecuteMultiShardWithResultRunsFallbacks(t *testing.T) {
+	t.Run("executor without result runs", func(t *testing.T) {
+		result := sqltypes.MakeTestResult(sqltypes.MakeTestFields("id", "int64"), "1", "2")
+		vc := newResultRunsTestVCursor(t, flatResultExecutor{result: result}, NewSafeSession(nil))
+
+		got, runs, errs := vc.ExecuteMultiShardWithResultRuns(t.Context(), nil, nil, nil, false, false, false)
+		require.Empty(t, errs)
+		require.Same(t, result, got)
+		require.Nil(t, runs)
+	})
+
+	t.Run("savepoint failure", func(t *testing.T) {
+		wantErr := errors.New("savepoint failed")
+		session := NewSafeSession(nil)
+		session.SetSavepointState(true)
+		vc := newResultRunsTestVCursor(t, resultRunsExecutor{executeErr: wantErr}, session)
+		rss := []*srvtopo.ResolvedShard{{}, {}}
+
+		got, runs, errs := vc.ExecuteMultiShardWithResultRuns(t.Context(), nil, rss, nil, true, false, false)
+		require.Nil(t, got)
+		require.Nil(t, runs)
+		require.Len(t, errs, 1)
+		require.ErrorIs(t, errs[0], wantErr)
+	})
+}
+
+func newResultRunsTestVCursor(t *testing.T, executor iExecute, session *SafeSession) *VCursorImpl {
+	t.Helper()
 	logStats := logstats.NewLogStats(t.Context(), t.Name(), "select id from user", "", nil, streamlog.NewQueryLogConfigForTest())
 	vc, err := NewVCursorImpl(
-		NewSafeSession(nil),
+		session,
 		sqlparser.MarginComments{},
-		resultRunsExecutor{result: result, runs: runs},
+		executor,
 		logStats,
 		nil,
 		&vindexes.VSchema{},
@@ -73,10 +149,5 @@ func TestVCursorExecuteMultiShardWithResultRuns(t *testing.T) {
 		nil,
 	)
 	require.NoError(t, err)
-
-	got, gotRuns, errs := vc.ExecuteMultiShardWithResultRuns(t.Context(), nil, nil, nil, false, false, false)
-	require.Empty(t, errs)
-	require.Same(t, result, got)
-	require.Len(t, gotRuns, 1)
-	require.Same(t, runs[0], gotRuns[0])
+	return vc
 }

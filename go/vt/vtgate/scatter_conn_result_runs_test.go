@@ -72,3 +72,17 @@ func TestExecuteMultiShardWithResultRuns(t *testing.T) {
 	require.Same(t, run0, runs[0])
 	require.Nil(t, runs[1])
 }
+
+// TestExecuteMultiShardWithResultRunsRejectsMismatchedInput proves shard and
+// query lists must stay positionally aligned.
+func TestExecuteMultiShardWithResultRunsRejectsMismatchedInput(t *testing.T) {
+	rss := []*srvtopo.ResolvedShard{{}}
+
+	result, runs, errs := new(ScatterConn).ExecuteMultiShardWithResultRuns(
+		t.Context(), nil, rss, nil, nil, false, false, nil, false,
+	)
+	require.Nil(t, result)
+	require.Nil(t, runs)
+	require.Len(t, errs, 1)
+	require.EqualError(t, errs[0], "[BUG] got mismatched number of queries and shards")
+}

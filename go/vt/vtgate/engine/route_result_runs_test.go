@@ -32,15 +32,17 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
-type resultRunsVCursor struct {
-	*loggingVCursor
+type (
+	resultRunsVCursor struct {
+		*loggingVCursor
 
-	result          *sqltypes.Result
-	runs            []*sqltypes.Result
-	errs            []error
-	multiShardCalls int
-	resultRunsCalls int
-}
+		result          *sqltypes.Result
+		runs            []*sqltypes.Result
+		errs            []error
+		multiShardCalls int
+		resultRunsCalls int
+	}
+)
 
 func (vc *resultRunsVCursor) ExecuteMultiShard(
 	context.Context,
@@ -156,11 +158,46 @@ func TestRouteMergeResultRunsBoundaries(t *testing.T) {
 		require.True(t, merged)
 		expectResult(t, got, combineResultRuns(runs...))
 	})
+
+	t.Run("empty and exhausted runs", func(t *testing.T) {
+		runs := []*sqltypes.Result{
+			sqltypes.MakeTestResult(sqltypes.MakeTestFields("id", "int64")),
+			sqltypes.MakeTestResult(sqltypes.MakeTestFields("id", "int64"), "0"),
+			sqltypes.MakeTestResult(sqltypes.MakeTestFields("id", "int64"), "1", "3", "5", "7", "9", "11", "13", "15"),
+			sqltypes.MakeTestResult(sqltypes.MakeTestFields("id", "int64"), "2", "4", "6", "8", "10", "12", "14", "16"),
+		}
+		route := newResultRunsRoute()
+		flat := combineResultRuns(runs[3], runs[2], runs[1])
+		want, err := route.sort(flat.Copy())
+		require.NoError(t, err)
+
+		got, merged, err := route.mergeResultRuns(flat, runs)
+		require.NoError(t, err)
+		require.True(t, merged)
+		expectResult(t, got, want)
+	})
 }
 
 // TestRouteMergeResultRunsPartialAndFallback proves partial results and missing
 // run data keep the existing warning and full-sort behavior.
 func TestRouteMergeResultRunsPartialAndFallback(t *testing.T) {
+	t.Run("falls back for missing or mismatched run data", func(t *testing.T) {
+		route := newResultRunsRoute()
+
+		got, merged, err := route.mergeResultRuns(nil, nil)
+		require.NoError(t, err)
+		require.False(t, merged)
+		require.Nil(t, got)
+
+		flat := sqltypes.MakeTestResult(sqltypes.MakeTestFields("id", "int64"), "3", "1", "2")
+		got, merged, err = route.mergeResultRuns(flat, []*sqltypes.Result{
+			sqltypes.MakeTestResult(sqltypes.MakeTestFields("id", "int64"), "1", "2"),
+		})
+		require.NoError(t, err)
+		require.False(t, merged)
+		require.Same(t, flat, got)
+	})
+
 	t.Run("partial success truncates merged rows and records warnings", func(t *testing.T) {
 		runs := []*sqltypes.Result{
 			sqltypes.MakeTestResult(sqltypes.MakeTestFields("id|sort_key", "int64|int64"), "1|10", "3|30"),
@@ -201,6 +238,43 @@ func TestRouteMergeResultRunsPartialAndFallback(t *testing.T) {
 		require.Equal(t, 1, vc.resultRunsCalls)
 		require.Equal(t, 0, vc.multiShardCalls)
 		expectResult(t, got, sqltypes.MakeTestResult(sqltypes.MakeTestFields("id", "int64"), "1", "2", "3"))
+	})
+
+	t.Run("marked route falls back when the VCursor cannot return runs", func(t *testing.T) {
+		route := newResultRunsRoute()
+		vc := &loggingVCursor{
+			shards: []string{"-80", "80-"},
+			results: []*sqltypes.Result{
+				sqltypes.MakeTestResult(sqltypes.MakeTestFields("id", "int64"), "3", "1", "2"),
+			},
+		}
+
+		got, err := route.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
+		require.NoError(t, err)
+		expectResult(t, got, sqltypes.MakeTestResult(sqltypes.MakeTestFields("id", "int64"), "1", "2", "3"))
+	})
+
+	t.Run("returns merge comparison errors", func(t *testing.T) {
+		runs := []*sqltypes.Result{
+			sqltypes.MakeTestResult(sqltypes.MakeTestFields("name", "varchar"), "a", "c", "e", "g", "i"),
+			sqltypes.MakeTestResult(sqltypes.MakeTestFields("name", "varchar"), "b", "d", "f", "h", "j"),
+		}
+		route := newResultRunsRoute()
+		route.OrderBy = evalengine.Comparison{{
+			Col:             0,
+			WeightStringCol: -1,
+			Type:            evalengine.NewType(sqltypes.VarChar, collations.Unknown),
+			CollationEnv:    collations.MySQL8(),
+		}}
+		vc := &resultRunsVCursor{
+			loggingVCursor: &loggingVCursor{shards: []string{"-80", "80-"}},
+			result:         combineResultRuns(runs[1], runs[0]),
+			runs:           runs,
+		}
+
+		got, err := route.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
+		require.EqualError(t, err, "cannot compare strings, collation is unknown or unsupported (collation ID: 0)")
+		require.Nil(t, got)
 	})
 
 	t.Run("unmarked routes use the original flat-result path", func(t *testing.T) {
