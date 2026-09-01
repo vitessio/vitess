@@ -786,6 +786,66 @@ func TestGetSourcePKCols_ResumeCheckpointReorderedPK(t *testing.T) {
 	require.Equal(t, "30", sourceResult.Rows[0][1].ToString(), "second source PK value should be column a")
 }
 
+// TestGetSourcePKCols_DiscardsLegacyOrderedCheckpoint verifies that a source
+// checkpoint persisted before the ordering fix (its columns stored in target-
+// column order) is discarded on resume so both streams restart, rather than
+// resuming the row streamer from a wrongly ordered key (the false ExtraRowsSource
+// in #20601). A checkpoint already written in the corrected order is kept.
+func TestGetSourcePKCols_DiscardsLegacyOrderedCheckpoint(t *testing.T) {
+	tvde := newTestVDiffEnv(t)
+	defer tvde.close()
+
+	ct := tvde.createController(t, 1)
+
+	// Source PK (c, a); the filter projects b, c, a so the corrected source lastpk
+	// order is (c, a). The pre-fix code stored it in column order (a, c).
+	sourceTable := &tabletmanagerdatapb.TableDefinition{
+		Name:              "t",
+		Columns:           []string{"a", "b", "c"},
+		PrimaryKeyColumns: []string{"c", "a"},
+		Fields:            sqltypes.MakeTestFields("a|b|c", "int64|int64|int64"),
+	}
+	tvde.tmc.schema = &tabletmanagerdatapb.SchemaDefinition{
+		TableDefinitions: []*tabletmanagerdatapb.TableDefinition{sourceTable},
+	}
+
+	newTD := func() *tableDiffer {
+		return &tableDiffer{
+			wd:    &workflowDiffer{ct: ct},
+			table: sourceTable,
+			tablePlan: &tablePlan{
+				table:       sourceTable,
+				sourceQuery: "select b, c, a from t order by c asc, a asc",
+				compareCols: []compareColInfo{
+					{colIndex: 0, colName: "b"},
+					{colIndex: 1, colName: "c"},
+					{colIndex: 2, colName: "a"},
+				},
+				pkCols: []int{2, 1},
+			},
+		}
+	}
+
+	t.Run("legacy-ordered checkpoint is discarded", func(t *testing.T) {
+		td := newTD()
+		// Pre-fix (main) format: source fields in target-column order (a, c).
+		td.lastSourcePK = &querypb.QueryResult{Fields: sqltypes.MakeTestFields("a|c", "int64|int64")}
+		td.lastTargetPK = td.lastSourcePK
+		require.NoError(t, td.getSourcePKCols())
+		require.Nil(t, td.lastSourcePK, "a legacy-ordered source checkpoint must be discarded")
+		require.Nil(t, td.lastTargetPK, "both streams must restart")
+	})
+
+	t.Run("corrected-order checkpoint is kept", func(t *testing.T) {
+		td := newTD()
+		// Corrected format: source fields in source-PK order (c, a).
+		td.lastSourcePK = &querypb.QueryResult{Fields: sqltypes.MakeTestFields("c|a", "int64|int64")}
+		td.lastTargetPK = td.lastSourcePK
+		require.NoError(t, td.getSourcePKCols())
+		require.NotNil(t, td.lastSourcePK, "a checkpoint already in the corrected order must be kept")
+	})
+}
+
 // TestGetSourcePKCols_SubsetProjectionPersistReloadResume is the persist/reload/
 // resume regression test for the subset-projection case (source PK (cid, typ),
 // target PK cid, filter "select cid, name from customer"). It exercises the full

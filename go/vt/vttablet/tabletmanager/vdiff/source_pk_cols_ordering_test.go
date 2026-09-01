@@ -17,14 +17,17 @@ limitations under the License.
 package vdiff
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
@@ -554,4 +557,34 @@ func TestLastPKFromRowTypeChangingRename(t *testing.T) {
 	target := sqltypes.Proto3ToResult(lastPK.Target)
 	require.Len(t, target.Rows, 1)
 	assert.True(t, target.Rows[0][0].IsQuoted(), "target checkpoint value should be quoted, got %v", target.Rows[0][0])
+}
+
+// TestComparisonKeyPrefixRejectionIsNonEphemeral verifies that the error returned
+// when a filter is rejected as unsupported persists as non-ephemeral. saveErrorState
+// stores only the error text and retryVDiffs rebuilds it, so the "(errno 1235)"
+// suffix must survive both directly and when wrapped, otherwise auto-retry would
+// retry the deterministic rejection forever.
+func TestComparisonKeyPrefixRejectionIsNonEphemeral(t *testing.T) {
+	parser := sqlparser.NewTestParser()
+	stmt, err := parser.Parse("select cid, name from customer order by cid asc")
+	require.NoError(t, err)
+	sel, ok := stmt.(*sqlparser.Select)
+	require.True(t, ok)
+
+	// Compare on cid, but the physical source PK is (typ, cid): cid is not a
+	// prefix, so the plan is rejected.
+	rejectErr := comparisonKeyIsSourcePKPrefix(sel,
+		[]compareColInfo{{colIndex: 0, colName: "cid", isPK: true}},
+		[]string{"typ", "cid"})
+	require.Error(t, rejectErr)
+	require.False(t, sqlerror.IsEphemeralError(rejectErr), "the rejection error must be non-ephemeral")
+
+	for _, persisted := range []string{
+		rejectErr.Error(),
+		vterrors.Wrapf(rejectErr, "table %s", "customer").Error(),
+	} {
+		reconstructed := sqlerror.NewSQLErrorFromError(errors.New(persisted))
+		require.False(t, sqlerror.IsEphemeralError(reconstructed),
+			"reconstructed rejection error must stay non-ephemeral so it is not auto-retried forever: %q", persisted)
+	}
 }

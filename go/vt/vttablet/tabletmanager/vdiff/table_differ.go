@@ -1146,7 +1146,33 @@ func (td *tableDiffer) getSourcePKCols() error {
 	}
 	td.tablePlan.sourcePkCols = indices
 
+	// A source checkpoint persisted before the source-PK ordering fix stored its
+	// columns in a different order. Reusing it across an upgrade would feed the row
+	// streamer a wrongly ordered key and reproduce the false ExtraRowsSource in
+	// #20601. If the loaded checkpoint is not in the corrected order, restart both
+	// streams instead of resuming from it.
+	if td.lastSourcePK != nil && !td.tablePlan.sourceLastPKInCorrectedOrder(td.lastSourcePK) {
+		td.lastSourcePK = nil
+		td.lastTargetPK = nil
+	}
+
 	return nil
+}
+
+// sourceLastPKInCorrectedOrder reports whether a loaded source lastpk was written
+// with the corrected source-PK column order, i.e. its fields match the columns at
+// sourcePkCols in order. A checkpoint written before the ordering fix stored its
+// columns differently and must not be reused.
+func (tp *tablePlan) sourceLastPKInCorrectedOrder(lastPK *querypb.QueryResult) bool {
+	if lastPK == nil || len(lastPK.Fields) != len(tp.sourcePkCols) {
+		return false
+	}
+	for i, colIndex := range tp.sourcePkCols {
+		if !strings.EqualFold(lastPK.Fields[i].GetName(), tp.compareCols[colIndex].colName) {
+			return false
+		}
+	}
+	return true
 }
 
 // comparisonKeyIsSourcePKPrefix returns an error unless the columns the VDiff
@@ -1156,9 +1182,12 @@ func (td *tableDiffer) getSourcePKCols() error {
 // the source PK column at the same rank.
 func comparisonKeyIsSourcePKPrefix(sourceSelect *sqlparser.Select, comparePKs []compareColInfo, sourcePKColumns []string) error {
 	if len(comparePKs) > len(sourcePKColumns) {
-		return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED,
-			"vdiff does not support this filter: the comparison key has more columns (%d) than the physical source primary key (%d): %s",
-			len(comparePKs), len(sourcePKColumns), sqlparser.String(sourceSelect))
+		// Wrapped as MySQL ERNotSupportedYet so the "(errno 1235)" suffix survives
+		// being persisted as a string and rebuilt by retryVDiffs, making
+		// IsEphemeralError classify it as non-ephemeral (no infinite auto-retry).
+		return sqlerror.NewSQLError(sqlerror.ERNotSupportedYet, sqlerror.SSClientError,
+			fmt.Sprintf("vdiff does not support this filter: the comparison key has more columns (%d) than the physical source primary key (%d): %s",
+				len(comparePKs), len(sourcePKColumns), sqlparser.String(sourceSelect)))
 	}
 	for i, cpk := range comparePKs {
 		if cpk.colIndex < 0 || cpk.colIndex >= len(sourceSelect.SelectExprs.Exprs) {
@@ -1172,9 +1201,10 @@ func comparisonKeyIsSourcePKPrefix(sourceSelect *sqlparser.Select, comparePKs []
 		}
 		colName, ok := underlyingSourceColumn(aliasedExpr.Expr)
 		if !ok || !strings.EqualFold(colName, sourcePKColumns[i]) {
-			return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED,
-				"vdiff does not support this filter: the comparison key is not an order-preserving prefix of the physical source primary key %v, so the source stream is not sorted by the compared columns: %s",
-				sourcePKColumns, sqlparser.String(sourceSelect))
+			// ERNotSupportedYet so it persists as non-ephemeral (see above).
+			return sqlerror.NewSQLError(sqlerror.ERNotSupportedYet, sqlerror.SSClientError,
+				fmt.Sprintf("vdiff does not support this filter: the comparison key is not an order-preserving prefix of the physical source primary key %v, so the source stream is not sorted by the compared columns: %s",
+					sourcePKColumns, sqlparser.String(sourceSelect)))
 		}
 	}
 	return nil
