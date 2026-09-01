@@ -17,6 +17,7 @@ limitations under the License.
 package vtgate
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -30,7 +31,41 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/srvtopo"
 	econtext "vitess.io/vitess/go/vt/vtgate/executorcontext"
+	"vitess.io/vitess/go/vt/vttablet/queryservice"
 )
+
+type (
+	blockingGateway struct {
+		srvtopo.Gateway
+		started chan<- struct{}
+		release <-chan struct{}
+	}
+
+	resultObserver chan *sqltypes.Result
+)
+
+func (g *blockingGateway) Execute(
+	ctx context.Context,
+	session queryservice.Session,
+	target *querypb.Target,
+	query string,
+	bindVariables map[string]*querypb.BindVariable,
+	transactionID int64,
+	reservedID int64,
+	options *querypb.ExecuteOptions,
+) (*sqltypes.Result, error) {
+	close(g.started)
+	select {
+	case <-g.release:
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+	return g.Gateway.Execute(ctx, session, target, query, bindVariables, transactionID, reservedID, options)
+}
+
+func (o resultObserver) Observe(result *sqltypes.Result) {
+	o <- result
+}
 
 // TestExecuteMultiShardWithResultRuns proves successful shard results stay
 // aligned with shard order while the flat result keeps completion order.
@@ -46,7 +81,6 @@ func TestExecuteMultiShardWithResultRuns(t *testing.T) {
 	sc := newTestScatterConn(ctx, hc, newSandboxForCells(ctx, []string{cell}), cell)
 	sbc0 := hc.AddTestTablet(cell, "-80", 1, ks, "-80", topodatapb.TabletType_PRIMARY, true, 1, nil)
 	sbc1 := hc.AddTestTablet(cell, "80-", 1, ks, "80-", topodatapb.TabletType_PRIMARY, true, 1, nil)
-	sbc0.ExecDelayResponse = 10 * time.Millisecond
 	run0 := sqltypes.MakeTestResult(sqltypes.MakeTestFields("id", "int64"), "1", "3")
 	run1 := sqltypes.MakeTestResult(sqltypes.MakeTestFields("id", "int64"), "2", "4")
 	sbc0.SetResults([]*sqltypes.Result{run0})
@@ -58,13 +92,58 @@ func TestExecuteMultiShardWithResultRuns(t *testing.T) {
 	}
 	queries := []*querypb.BoundQuery{{Sql: "select id from user"}, {Sql: "select id from user"}}
 
-	result, runs, errs := sc.ExecuteMultiShardWithResultRuns(ctx, nil, rss, queries, econtext.NewSafeSession(nil), false, false, nullResultsObserver{}, false)
+	firstStarted := make(chan struct{})
+	releaseFirst := make(chan struct{})
+	t.Cleanup(func() {
+		select {
+		case <-releaseFirst:
+		default:
+			close(releaseFirst)
+		}
+	})
+	rss[0].Gateway = &blockingGateway{
+		Gateway: sbc0,
+		started: firstStarted,
+		release: releaseFirst,
+	}
+
+	observer := make(resultObserver, len(rss))
+	var (
+		result *sqltypes.Result
+		runs   []*sqltypes.Result
+		errs   []error
+	)
+	done := make(chan struct{})
+	go func() {
+		result, runs, errs = sc.ExecuteMultiShardWithResultRuns(ctx, nil, rss, queries, econtext.NewSafeSession(nil), false, false, observer, false)
+		close(done)
+	}()
+
+	select {
+	case <-firstStarted:
+	case <-time.After(30 * time.Second):
+		t.Fatal("first shard did not start")
+	}
+	select {
+	case observed := <-observer:
+		require.Same(t, run1, observed)
+	case <-time.After(30 * time.Second):
+		t.Fatal("second shard did not finish")
+	}
+	close(releaseFirst)
+	select {
+	case <-done:
+	case <-time.After(30 * time.Second):
+		t.Fatal("scatter execution did not finish")
+	}
+
 	require.Empty(t, errs)
 	require.Equal(t, []sqltypes.Row{run1.Rows[0], run1.Rows[1], run0.Rows[0], run0.Rows[1]}, result.Rows)
 	require.Len(t, runs, len(rss))
 	require.Same(t, run0, runs[0])
 	require.Same(t, run1, runs[1])
 
+	rss[0].Gateway = sbc0
 	sbc0.SetResults([]*sqltypes.Result{run0})
 	sbc1.MustFailCodes[vtrpcpb.Code_INTERNAL] = 1
 	result, runs, errs = sc.ExecuteMultiShardWithResultRuns(ctx, nil, rss, queries, econtext.NewSafeSession(nil), false, false, nullResultsObserver{}, false)
