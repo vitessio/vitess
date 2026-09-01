@@ -126,9 +126,10 @@ type vplayer struct {
 	// FKs reference non-PK unique keys.
 	parentFKRefs map[string][]parentFKRef
 	// cascadeUnsafeTables holds tables whose changes can implicitly modify
-	// rows more than one FK edge away via cascading referential actions.
-	// Transactions touching them must go through the global path — their
-	// writeset cannot cover the grandchild rows the cascade locks. See
+	// rows their own row events never mention, via cascading referential
+	// actions. Transactions touching them must go through the global path —
+	// their writeset cannot cover the child rows the cascade deletes or
+	// rewrites (nor any grandchild rows those changes lock). See
 	// buildCascadeUnsafeTableSet.
 	cascadeUnsafeTables map[string]struct{}
 	// postDDLDroppedTables records dropped table names from executed DDLs so the

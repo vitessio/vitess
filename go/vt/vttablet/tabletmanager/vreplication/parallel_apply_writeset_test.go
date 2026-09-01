@@ -713,24 +713,30 @@ func TestBuildCascadeUnsafeTableSet(t *testing.T) {
 			fkRefs: nil,
 		},
 		{
-			// b references a with CASCADE, but b has no children of its own:
-			// the cascade cannot reach past the direct edge, which the
-			// child/parent FK writeset keys already cover.
-			name: "single-level cascade stays parallel",
+			// b references a with CASCADE: the child/parent FK writeset keys
+			// only cover child rows under the SAME parent value. The cascade
+			// implicitly deletes (or rewrites, for SET NULL) b rows whose PK
+			// and unique-secondary values never appear in a's row events, so
+			// a later child txn under a different parent can claim a freed
+			// value with no shared writeset key — an order-dependent
+			// duplicate-key failure. The parent must force-serialize.
+			name: "single-level cascade marks the parent",
 			fkRefs: map[string][]fkConstraintRef{
 				"b": {edge("a", "CASCADE", "NO ACTION")},
 			},
+			want: []string{"a"},
 		},
 		{
-			// c -> b -> a, both edges CASCADE: deleting a rows implicitly
-			// deletes b rows, which implicitly touches c — invisible to a's
-			// writeset. b-direct changes still see c via the direct edge.
-			name: "two-level cascade marks the top parent only",
+			// c -> b -> a, both edges CASCADE: both cascading parents are
+			// unsafe — a's cascade also reaches c transitively, and each
+			// parent's direct cascade frees child PK/unique values invisible
+			// to its writeset.
+			name: "two-level cascade marks both parents",
 			fkRefs: map[string][]fkConstraintRef{
 				"b": {edge("a", "CASCADE", "NO ACTION")},
 				"c": {edge("b", "CASCADE", "NO ACTION")},
 			},
-			want: []string{"a"},
+			want: []string{"a", "b"},
 		},
 		{
 			// The grandchild edge's rule doesn't matter: even RESTRICT makes
@@ -767,13 +773,13 @@ func TestBuildCascadeUnsafeTableSet(t *testing.T) {
 			want: []string{"a"},
 		},
 		{
-			name: "three-level cascade marks every parent with reach past its child",
+			name: "three-level cascade marks every cascading parent",
 			fkRefs: map[string][]fkConstraintRef{
 				"b": {edge("a", "CASCADE", "NO ACTION")},
 				"c": {edge("b", "CASCADE", "NO ACTION")},
 				"d": {edge("c", "CASCADE", "NO ACTION")},
 			},
-			want: []string{"a", "b"},
+			want: []string{"a", "b", "c"},
 		},
 	}
 	for _, tcase := range tcases {

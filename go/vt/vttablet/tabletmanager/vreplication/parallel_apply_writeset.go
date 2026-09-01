@@ -1292,37 +1292,31 @@ func fkRuleMayModifyChildRows(rule string) bool {
 }
 
 // buildCascadeUnsafeTableSet returns the tables whose changes can implicitly
-// modify rows more than one FK edge away. A parent table of a cascading
-// constraint (child → parent with CASCADE / SET NULL / SET DEFAULT rules) is
-// unsafe when that child is itself the parent of any FK constraint: a change
-// to the table cascades into child rows below the server layer — never
-// row-logged — and those implicit child changes then lock or modify the
-// child's own children, tables the writeset built from the original row
-// events knows nothing about. The scheduler must force such transactions
-// through the global path.
+// modify rows the table's own row events never mention. A parent table of a
+// cascading constraint (child → parent with CASCADE / SET NULL / SET DEFAULT
+// rules) is unsafe: a change to it cascades into child rows below the server
+// layer — never row-logged — so the writeset built from the parent's row
+// events cannot see what those implicit child changes touch. The scheduler
+// must force such transactions through the global path.
 //
-// Single-edge cascades stay parallel: the child rows InnoDB implicitly
-// touches are exactly the ones whose FK values reference the changed parent
-// row, and the child/parent FK writeset keys already make those conflict.
-// SET NULL and ON UPDATE CASCADE only rewrite the child's FK columns, but we
-// treat them like ON DELETE CASCADE rather than proving the rewritten columns
-// cannot themselves be referenced by a grandchild — the precision would cost
+// That holds even for a single-edge cascade. The child/parent FK writeset
+// keys only serialize child transactions under the SAME parent value; the
+// cascade's implicit deletes (or FK-column rewrites, for SET NULL) also free
+// the affected child rows' PK and unique-secondary values, which a later
+// child transaction under a DIFFERENT parent can claim with no shared
+// writeset key — reordered, that is a duplicate-key failure. And when the
+// child is itself a parent, the implicit changes additionally lock or modify
+// the child's own children, transitively. SET NULL and ON UPDATE CASCADE
+// only rewrite the child's FK columns, but we treat them like ON DELETE
+// CASCADE rather than proving the rewritten columns cannot participate in a
+// unique key or a grandchild reference — the precision would cost
 // column-level analysis for schemas that are rare in practice.
 func buildCascadeUnsafeTableSet(fkRefs map[string][]fkConstraintRef) map[string]struct{} {
 	if len(fkRefs) == 0 {
 		return nil
 	}
-	parents := make(map[string]struct{})
-	for _, refs := range fkRefs {
-		for _, ref := range refs {
-			parents[ref.ParentTable] = struct{}{}
-		}
-	}
 	var unsafeTables map[string]struct{}
-	for childTable, refs := range fkRefs {
-		if _, childIsParent := parents[childTable]; !childIsParent {
-			continue
-		}
+	for _, refs := range fkRefs {
 		for _, ref := range refs {
 			if !fkRuleMayModifyChildRows(ref.DeleteRule) && !fkRuleMayModifyChildRows(ref.UpdateRule) {
 				continue
