@@ -377,8 +377,15 @@ type Merger struct {
 func NewMerger(compare Comparison, streams int) *Merger {
 	return &Merger{
 		Compare: compare,
-		keys:    make([]mergeRow, 0, streams),
+		keys:    make([]mergeRow, 0, mergeTreeCapacity(streams)),
 	}
+}
+
+func mergeTreeCapacity(streams int) int {
+	if streams <= 0 {
+		return 0
+	}
+	return 1 << bits.Len(uint(streams-1))
 }
 
 func (m *Merger) Len() int {
@@ -399,7 +406,7 @@ func (m *Merger) Init() {
 	}
 
 	// Round up to next power of 2
-	m.cap = 1 << bits.Len(uint(n-1))
+	m.cap = mergeTreeCapacity(n)
 
 	// Pad keys to capacity; padding entries are sentinel (source < 0)
 	m.keys = slices.Grow(m.keys, m.cap-n)
