@@ -1208,11 +1208,11 @@ func comparisonKeyIsSourcePKPrefix(sourceSelect *sqlparser.Select, comparePKs []
 		return sqlerror.NewSQLError(sqlerror.ERNotSupportedYet, sqlerror.SSClientError, fmt.Sprintf(format, args...))
 	}
 
-	if len(comparePKs) > len(effectivePK) {
-		return unsupportedFilter("vdiff does not support this filter: the comparison key has more columns (%d) than the unconstrained physical source primary key (%d): %s",
-			len(comparePKs), len(effectivePK), sqlparser.String(sourceSelect))
-	}
-	for i, cpk := range comparePKs {
+	// Build the comparison key's source columns in comparison order, dropping the
+	// pinned ones: a constant comparison component does not affect the merge order,
+	// so it must be dropped from both sides before the prefix check.
+	effectiveCompare := make([]string, 0, len(comparePKs))
+	for _, cpk := range comparePKs {
 		if cpk.colIndex < 0 || cpk.colIndex >= len(sourceSelect.SelectExprs.Exprs) {
 			return vterrors.Errorf(vtrpcpb.Code_INTERNAL,
 				"comparison key index %d out of range for vdiff source query: %s", cpk.colIndex, sqlparser.String(sourceSelect))
@@ -1223,7 +1223,22 @@ func comparisonKeyIsSourcePKPrefix(sourceSelect *sqlparser.Select, comparePKs []
 				"unexpected non-aliased expression at position %d in vdiff source query: %s", cpk.colIndex, sqlparser.String(sourceSelect))
 		}
 		colName, ok := underlyingSourceColumn(aliasedExpr.Expr)
-		if !ok || !strings.EqualFold(colName, effectivePK[i]) {
+		if !ok {
+			return unsupportedFilter("vdiff does not support this filter: the comparison key includes a non-physical column, so the source stream is not sorted by the compared columns: %s",
+				sqlparser.String(sourceSelect))
+		}
+		if _, isPinned := pinned[strings.ToLower(colName)]; isPinned {
+			continue
+		}
+		effectiveCompare = append(effectiveCompare, colName)
+	}
+
+	if len(effectiveCompare) > len(effectivePK) {
+		return unsupportedFilter("vdiff does not support this filter: the comparison key has more columns (%d) than the unconstrained physical source primary key (%d): %s",
+			len(effectiveCompare), len(effectivePK), sqlparser.String(sourceSelect))
+	}
+	for i, col := range effectiveCompare {
+		if !strings.EqualFold(col, effectivePK[i]) {
 			return unsupportedFilter("vdiff does not support this filter: the comparison key is not an order-preserving prefix of the physical source primary key %v, so the source stream is not sorted by the compared columns: %s",
 				sourcePKColumns, sqlparser.String(sourceSelect))
 		}

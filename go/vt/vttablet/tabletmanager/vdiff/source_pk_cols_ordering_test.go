@@ -450,6 +450,15 @@ func TestComparisonKeyIsSourcePKPrefix(t *testing.T) {
 			sourcePKColumns:     []string{"tenant_id", "id"},
 			wantErr:             true,
 		},
+		{
+			// Comparison key also contains the pinned column (target PK is the full
+			// (tenant_id, id)). The pinned column is constant, so it is dropped from
+			// both the comparison key and the source PK, leaving (id) vs (id).
+			name:                "pinned column present in comparison key is allowed",
+			sourceQuery:         "select tenant_id, id, data from src where tenant_id = 1 order by tenant_id asc, id asc",
+			comparePKColIndices: []int{0, 1},
+			sourcePKColumns:     []string{"tenant_id", "id"},
+		},
 	}
 
 	parser := sqlparser.NewTestParser()
