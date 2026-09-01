@@ -14,6 +14,7 @@
         - [Snapshot Topology feature removed](#vtorc-snapshot-topology-removed)
         - [VTOrc `--cell` flag is now required](#vtorc-cell-required)
         - [`BackupHandle` interface gains `Wait()` method](#backup-handle-wait-method)
+        - [VTOrc: `--cells-to-watch` removed in favor of `--cells-no-recovery`](#vtorc-cells-no-recovery)
     - **[Deprecations](#deprecations)**
         - [CLI Flags](#deprecated-cli-flags)
         - [Legacy streaming-path plan types in query rules](#deprecated-selectstream-rule-plan)
@@ -22,6 +23,7 @@
         - [Default data protection for `_reverse` workflow cancel/complete](#vreplication-reverse-workflow-data-protection)
         - [Unknown VStream event types are now hard errors in the applier](#vreplication-unknown-event-error)
         - [Workflow config overrides sent to source tablets are now allowlisted](#vreplication-source-overrides-allowlist)
+        - [`vdiff show --no-samples` strips the per-table row-sample report](#vreplication-vdiff-no-samples)
         - [Preserve Materialize target data on cancel by default](#vreplication-materialize-cancel-data-protection)
     - **[VTGate](#minor-changes-vtgate)**
         - [Ingress bytes in query LogStats](#vtgate-logstats-ingress-bytes)
@@ -141,6 +143,18 @@ func (bh *MyBackupHandle) Wait() {}
 
 See [#20167](https://github.com/vitessio/vitess/pull/20167) for details.
 
+#### <a id="vtorc-cells-no-recovery"/>VTOrc: `--cells-to-watch` removed in favor of `--cells-no-recovery`</a>
+
+The `--cells-to-watch` flag has been removed. It restricted vtorc's tablet discovery to a fixed set of cells, which created a serious failure mode for any keyspace that spanned cells: if the primary lived in a cell *not* in `--cells-to-watch`, vtorc filtered the primary out of discovery, concluded the keyspace had no primary, and triggered an `EmergencyReparentShard` against a replica in a watched cell. The other cell's vtorc then saw its primary demoted and ran its own ERS — the two vtorcs ping-ponged ERS operations until the keyspace was destroyed. The flag only "worked" under true cell isolation (each cell hosting an independent primary), a configuration with no practical purpose.
+
+The replacement, `--cells-no-recovery`, is a deny-list for *recovery actions only*; vtorc's discovery still spans all cells, so it always sees the real topology. When a problem is detected, vtorc skips the actionable recovery if the *analyzed* (failed) tablet is in a listed cell, recording a `CellNoRecovery` reason under the existing `SkippedRecoveries` stat. For `ClusterHasNoPrimary` (no primary exists in the shard), recovery is suppressed only when every cell that has tablets in the shard appears in the deny-list; a partial deny-list lets the initial PlannedReparentShard (PRS) proceed. Detection still happens for tablets in listed cells (so operators retain visibility), and non-actionable recoveries (pure detection paths) are unaffected. The cells passed to `--cells-no-recovery` are validated against the topology's known cells at startup; an unknown cell name causes vtorc to exit. For per-tablet recoveries, the filter gates on the analyzed tablet's cell: it does not, on its own, prevent a replica in a no-recovery cell from being chosen as a promotion candidate during an `EmergencyReparentShard` triggered by a failure in another cell (use `--prevent-cross-cell-failover` for that).
+
+**Schema change:** this PR changes `recovery_detection.detection_id` from a plain `INTEGER PRIMARY KEY` to `INTEGER PRIMARY KEY AUTOINCREMENT`, adds a `UNIQUE (alias, analysis)` index, and changes the detection write to an upsert (`INSERT … ON CONFLICT(alias, analysis) DO UPDATE SET detection_timestamp = now()`). VTOrc drops and recreates its SQLite database on startup, so no migration is needed. The behavioral effect is that repeated detections of the same ongoing failure on the same tablet upsert a single row, refreshing `detection_timestamp` on each poll, rather than accumulating one row per poll cycle; the `detection_id` is stable for the duration of that incident. When a recovery successfully promotes a new primary (ERS/PRS), the triggering `recovery_detection` row is deleted, creating a clean incident boundary: the next recurrence of the same failure inserts a fresh row with a new `detection_id`. Failed recovery attempts and non-primary-promotion recoveries (`fixReplica`, `fixPrimary`, etc.) leave the row intact so retries within the same incident share the same `detection_id`; those rows are cleaned up by expiry-based history pruning. Suppressed recoveries (e.g. cell gate, quorum gate) follow the same expiry path. This change applies to all vtorc deployments, not only those using `--cells-no-recovery`.
+
+**Migration:** drop `--cells-to-watch` from your vtorc invocation. If you previously used it for true cell-isolated deployments, the new flag is not a like-for-like replacement (vtorc will now discover and watch all cells); discuss your scenario in the linked issue if the new flag does not cover your needs. If you are upgrading from v24.0.0 specifically and have `--cells-to-watch` in your vtorc flags, note that this flag was already removed in v24.0.1; replace it with `--cells-no-recovery` before upgrading.
+
+See [#20021](https://github.com/vitessio/vitess/issues/20021) for details.
+
 ### <a id="deprecations"/>Deprecations</a>
 
 #### <a id="deprecated-cli-flags"/>CLI Flags</a>
@@ -193,6 +207,14 @@ The VReplication applier previously ignored VStream event types it did not recog
 When a workflow has per-workflow config overrides, the target now sends only the source-relevant subset (packet size, timeouts, experimental flags, and similar) to the source tablet's VStreamer instead of the full override map. This keeps newer target-only override keys from failing workflows whose source tablets run an older version that rejects unknown keys.
 
 See [#19906](https://github.com/vitessio/vitess/pull/19906) for details.
+
+#### <a id="vreplication-vdiff-no-samples"/>`vdiff show --no-samples` strips the per-table row-sample report</a>
+
+`vtctldclient vdiff ... show` now accepts a `--no-samples` flag. When set, the per-table diff report has its row-sample arrays (`MismatchedRowsSample`, `ExtraRowsSourceSample`, `ExtraRowsTargetSample`) stripped on the tablet, while the scalar counters and all other summary fields are preserved. This avoids exceeding gRPC message limits when `vdiff show` aggregates large blob/JSON row samples across every target shard. It is exposed as `no_samples` on the `VDiffShowRequest` (vtctld) and `VDiffReportOptions` (tablet) protobuf messages, and is opt-in and backward compatible.
+
+`vdiff create --wait` also uses `no_samples` for its internal progress polls. Text output is unchanged; with `--format json`, the per-interval progress output no longer includes the row samples (they remain available via `vdiff show --verbose` once the diff completes).
+
+See [#20870](https://github.com/vitessio/vitess/pull/20870) for details.
 
 #### <a id="vreplication-materialize-cancel-data-protection"/>Preserve Materialize target data on cancel by default</a>
 
