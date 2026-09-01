@@ -122,19 +122,19 @@ func TestExecuteMultiShardWithResultRuns(t *testing.T) {
 	select {
 	case <-firstStarted:
 	case <-time.After(30 * time.Second):
-		t.Fatal("first shard did not start")
+		require.FailNow(t, "first shard did not start")
 	}
 	select {
 	case observed := <-observer:
 		require.Same(t, run1, observed)
 	case <-time.After(30 * time.Second):
-		t.Fatal("second shard did not finish")
+		require.FailNow(t, "second shard did not finish")
 	}
 	close(releaseFirst)
 	select {
 	case <-done:
 	case <-time.After(30 * time.Second):
-		t.Fatal("scatter execution did not finish")
+		require.FailNow(t, "scatter execution did not finish")
 	}
 
 	require.Empty(t, errs)
