@@ -1289,6 +1289,15 @@ func (vp *vplayer) scheduleItems(ctx context.Context, scheduler *applyScheduler,
 		if event.Journal.MigrationType != binlogdatapb.MigrationType_TABLES {
 			return true
 		}
+		// Mirror the serial applier's TABLES-journal gate (see applyEvent's
+		// VEventType_JOURNAL handling): a lookup vindex backfill stream never
+		// follows a TABLES journal -- the commit path ignores it -- so it
+		// must not terminate scheduling either. Terminating would shut the
+		// applier down at a journal the commit path then refuses to act on,
+		// restarting the workflow at the same position forever.
+		if binlogdatapb.VReplicationWorkflowType(vp.vr.WorkflowType) == binlogdatapb.VReplicationWorkflowType_CreateLookupIndex {
+			return false
+		}
 		jtables := make(map[string]struct{}, len(event.Journal.Tables))
 		for _, table := range event.Journal.Tables {
 			jtables[table] = struct{}{}

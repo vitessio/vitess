@@ -7208,6 +7208,56 @@ func TestScheduleItems_RelevantJournalStopsSchedulingLaterEventsInSameFetch(t *t
 	assert.True(t, got.payload.commitOnly)
 }
 
+// TestScheduleItems_TablesJournalLookupVindexDoesNotTerminate mirrors the
+// serial applier's gate from https://github.com/vitessio/vitess/pull/20917
+// for the parallel scheduler: a lookup vindex backfill stream never follows
+// a TABLES journal — the commit path ignores it — so the journal must not
+// terminate scheduling either. Terminating would shut the applier down at a
+// journal the commit path then refuses to act on, restarting the workflow at
+// the same position forever. Scheduling must continue with the events that
+// follow the journal in the same fetch.
+func TestScheduleItems_TablesJournalLookupVindexDoesNotTerminate(t *testing.T) {
+	vp, _ := testVPlayer(t)
+	ctx := testCtx(t)
+	scheduler := newApplyScheduler(ctx)
+	state := &parallelScheduleState{lastFlushTime: time.Now(), lastHeartbeatRefresh: time.Now()}
+	vp.replicatorPlan = &ReplicatorPlan{TablePlans: map[string]*TablePlan{
+		"t1": {TargetName: "t1"},
+	}}
+	vp.vr.WorkflowType = int32(binlogdatapb.VReplicationWorkflowType_CreateLookupIndex)
+
+	items := [][]*binlogdatapb.VEvent{{
+		{Type: binlogdatapb.VEventType_GTID, Gtid: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5"},
+		{
+			Type:      binlogdatapb.VEventType_JOURNAL,
+			Timestamp: 200,
+			Journal: &binlogdatapb.Journal{
+				MigrationType: binlogdatapb.MigrationType_TABLES,
+				Tables:        []string{"t1"},
+			},
+		},
+		{Type: binlogdatapb.VEventType_GTID, Gtid: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-6"},
+		{Type: binlogdatapb.VEventType_OTHER, Timestamp: 201},
+	}}
+
+	err := vp.scheduleItems(ctx, scheduler, state, items)
+	require.NoError(t, err,
+		"a TABLES journal must not terminate a lookup vindex workflow's scheduling")
+
+	// Both the (ignored-at-commit) journal and the post-journal txn must have
+	// been scheduled: scheduling continued past the journal.
+	scheduler.mu.Lock()
+	assert.Equal(t, 2, scheduler.pendingCount,
+		"the events after the journal must still be scheduled")
+	scheduler.mu.Unlock()
+
+	got, gerr := scheduler.nextReady(ctx)
+	require.NoError(t, gerr)
+	require.NotNil(t, got)
+	assert.Equal(t, binlogdatapb.VEventType_JOURNAL, got.payload.events[0].Type)
+	assert.True(t, got.payload.commitOnly)
+}
+
 func TestScheduleItems_StopDDLStopsSchedulingLaterEventsInSameFetch(t *testing.T) {
 	vp, _ := testVPlayer(t)
 	ctx := testCtx(t)
