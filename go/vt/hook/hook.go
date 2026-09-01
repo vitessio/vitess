@@ -137,11 +137,6 @@ func (hook *Hook) ExecuteContext(ctx context.Context) (result *HookResult) {
 
 	// Find the hook.
 	cmd, status, err := hook.findHook(ctx)
-	if ctx.Err() != nil {
-		result.ExitStatus = HOOK_TIMEOUT_ERROR
-		result.Stderr = ctx.Err().Error() + "\n"
-		return result
-	}
 	if err != nil {
 		result.ExitStatus = status
 		result.Stderr = err.Error() + "\n"
@@ -209,6 +204,9 @@ func (hook *Hook) ExecuteOptional() error {
 // ExecuteOptionalContext executes an optional hook until ctx is cancelled.
 func (hook *Hook) ExecuteOptionalContext(ctx context.Context) error {
 	hr := hook.ExecuteContext(ctx)
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	switch hr.ExitStatus {
 	case HOOK_DOES_NOT_EXIST:
 		log.Info(fmt.Sprintf("%v hook doesn't exist", hook.Name))

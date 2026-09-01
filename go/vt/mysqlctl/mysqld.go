@@ -386,7 +386,11 @@ func (mysqld *Mysqld) startNoWait(ctx context.Context, cnf *Mycnf, mysqldArgs ..
 	ts := fmt.Sprintf("Mysqld.Start(%v)", time.Now().Unix())
 
 	// try the mysqld start hook, if any
-	switch hr := hook.NewHook("mysqld_start", mysqldArgs).ExecuteContext(ctx); hr.ExitStatus {
+	hr := hook.NewHook("mysqld_start", mysqldArgs).ExecuteContext(ctx)
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	switch hr.ExitStatus {
 	case hook.HOOK_SUCCESS:
 		// hook exists and worked, we can keep going
 		name = "mysqld_start hook" //nolint:ineffassign
@@ -484,7 +488,11 @@ func (mysqld *Mysqld) startNoWait(ctx context.Context, cnf *Mycnf, mysqldArgs ..
 	}
 
 	// try the postflight mysqld start hook, if any
-	switch hr := hook.NewHook("postflight_mysqld_start", mysqldArgs).ExecuteContext(ctx); hr.ExitStatus {
+	hr = hook.NewHook("postflight_mysqld_start", mysqldArgs).ExecuteContext(ctx)
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	switch hr.ExitStatus {
 	case hook.HOOK_SUCCESS, hook.HOOK_DOES_NOT_EXIST:
 		// hook exists and worked, or does not exist, we can keep going
 	default:
@@ -1008,7 +1016,11 @@ func (mysqld *Mysqld) initConfig(ctx context.Context, cnf *Mycnf, outFile string
 		env[v] = os.Getenv(v)
 	}
 
-	switch hr := hook.NewHookWithEnv("make_mycnf", nil, env).ExecuteContext(ctx); hr.ExitStatus {
+	hr := hook.NewHookWithEnv("make_mycnf", nil, env).ExecuteContext(ctx)
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return ctxErr
+	}
+	switch hr.ExitStatus {
 	case hook.HOOK_DOES_NOT_EXIST:
 		log.Info("make_mycnf hook doesn't exist, reading template files")
 		configData, err = cnf.makeMycnf(mysqld.getMycnfTemplate())

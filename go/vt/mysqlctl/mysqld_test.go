@@ -43,6 +43,15 @@ type testcase struct {
 	flavor        MySQLFlavor
 }
 
+func TestStartNoWaitCanceledWithMissingHook(t *testing.T) {
+	t.Setenv("VTROOT", t.TempDir())
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	err := (&Mysqld{}).startNoWait(ctx, &Mycnf{})
+	require.ErrorIs(t, err, context.Canceled)
+}
+
 func TestParseVersionString(t *testing.T) {
 	testcases := []testcase{
 		{
