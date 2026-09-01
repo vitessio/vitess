@@ -211,7 +211,18 @@ func (rp *RoutingParameters) routeInfoSchemaQuery(ctx context.Context, vcursor V
 		if err != nil {
 			return nil, err
 		}
-		ks := result.Value(vcursor.ConnCollation()).ToString()
+		var ks string
+		if tuple := result.TupleValues(); tuple != nil {
+			// A list bindvar from an IN predicate: a single element is an
+			// equality and routes; anything else cannot name one keyspace, and
+			// falling through would silently query the wrong one.
+			if len(tuple) != 1 {
+				return nil, vterrors.VT12001("IN list with multiple schema names in an information_schema query")
+			}
+			ks = tuple[0].ToString()
+		} else {
+			ks = result.Value(vcursor.ConnCollation()).ToString()
+		}
 		switch {
 		case idx == 0:
 			specifiedKS = ks

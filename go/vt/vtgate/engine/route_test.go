@@ -198,6 +198,72 @@ func TestInformationSchemaWithTableAndSchemaWithRoutedTables(t *testing.T) {
 	}
 }
 
+func TestSystemTableSchemaInSingleValueRoutes(t *testing.T) {
+	// SysTableTableSchema holding a list bindvar with ONE value must route
+	// exactly like the scalar equality form: same keyspace resolution, same
+	// :__vtschemaname bindvar.
+	sel := &Route{
+		RoutingParameters: &RoutingParameters{
+			Opcode: DBA,
+			Keyspace: &vindexes.Keyspace{
+				Name:    "ks",
+				Sharded: false,
+			},
+			SysTableTableSchema: []evalengine.Expr{
+				evalengine.NewBindVarTuple("schemas", collations.SystemCollation.Collation),
+			},
+		},
+		Query:      "dummy_select",
+		FieldQuery: "dummy_select_field",
+	}
+	vc := &loggingVCursor{
+		shards:  []string{"1"},
+		results: []*sqltypes.Result{defaultSelectResult},
+	}
+	bindVars := map[string]*querypb.BindVariable{
+		"schemas": sqltypes.TestBindVariable([]any{"myKeyspace"}),
+	}
+
+	_, err := sel.TryExecute(t.Context(), vc, bindVars, false)
+	require.NoError(t, err)
+	vc.ExpectLog(t, []string{
+		"ResolveDestinations myKeyspace [] Destinations:DestinationAnyShard()",
+		fmt.Sprintf("ExecuteMultiShard myKeyspace.1: dummy_select {__replacevtschemaname: %v schemas: %v} false false",
+			sqltypes.Int64BindVariable(1), sqltypes.TestBindVariable([]any{"myKeyspace"})),
+	})
+}
+
+func TestSystemTableSchemaInMultiValueErrors(t *testing.T) {
+	// A multi-value schema list cannot be resolved to one keyspace: the
+	// query must fail loudly (VT12001), never fall through to the default
+	// keyspace and return silently wrong rows.
+	sel := &Route{
+		RoutingParameters: &RoutingParameters{
+			Opcode: DBA,
+			Keyspace: &vindexes.Keyspace{
+				Name:    "ks",
+				Sharded: false,
+			},
+			SysTableTableSchema: []evalengine.Expr{
+				evalengine.NewBindVarTuple("schemas", collations.SystemCollation.Collation),
+			},
+		},
+		Query:      "dummy_select",
+		FieldQuery: "dummy_select_field",
+	}
+	vc := &loggingVCursor{
+		shards:  []string{"1"},
+		results: []*sqltypes.Result{defaultSelectResult},
+	}
+	bindVars := map[string]*querypb.BindVariable{
+		"schemas": sqltypes.TestBindVariable([]any{"ks1", "ks2"}),
+	}
+
+	_, err := sel.TryExecute(t.Context(), vc, bindVars, false)
+	require.ErrorContains(t, err, "VT12001")
+	assert.Equal(t, vtrpcpb.Code_UNIMPLEMENTED, vterrors.Code(err))
+}
+
 func TestSelectScatter(t *testing.T) {
 	sel := NewRoute(
 		Scatter,
