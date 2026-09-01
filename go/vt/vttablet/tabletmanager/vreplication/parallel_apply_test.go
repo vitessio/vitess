@@ -695,7 +695,7 @@ func TestApplyEventsParallelCanceledContext(t *testing.T) {
 
 	vp.vr.workflowConfig.ParallelReplicationWorkers = 1
 
-	relay := newRelayLog(ctx, 10, 100)
+	relay := newRelayLog(ctx, 10, 100, nil)
 
 	err := vp.applyEventsParallel(ctx, relay)
 	require.ErrorIs(t, err, context.Canceled)
@@ -739,7 +739,7 @@ func TestApplyEventsParallelReturnsScheduleError(t *testing.T) {
 		vp.vr.vre.dbClientFactoryFiltered = func() binlogplayer.DBClient { return mockDB }
 	}
 
-	relay := newRelayLog(ctx, 10, 100)
+	relay := newRelayLog(ctx, 10, 100, nil)
 	invalidGTID := &binlogdatapb.VEvent{Type: binlogdatapb.VEventType_GTID, Gtid: "invalid"}
 	require.NoError(t, relay.Send([]*binlogdatapb.VEvent{invalidGTID}))
 
@@ -788,7 +788,7 @@ func TestApplyEventsParallelCommitsScheduledPrefixBeforeScheduleError(t *testing
 		vp.vr.vre.dbClientFactoryFiltered = func() binlogplayer.DBClient { return mockDB }
 	}
 
-	relay := newRelayLog(ctx, 10, 100)
+	relay := newRelayLog(ctx, 10, 100, nil)
 	validGTID := &binlogdatapb.VEvent{Type: binlogdatapb.VEventType_GTID, Gtid: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5"}
 	otherEvent := &binlogdatapb.VEvent{Type: binlogdatapb.VEventType_OTHER, Timestamp: 100}
 	invalidGTID := &binlogdatapb.VEvent{Type: binlogdatapb.VEventType_GTID, Gtid: "invalid"}
@@ -847,7 +847,7 @@ func TestApplyEventsParallelReturnsNilAfterScheduledStopPosEvenIfLaterScheduleFa
 	require.NoError(t, err)
 	vp.stopPos = stopPos
 
-	relay := newRelayLog(ctx, 10, 100)
+	relay := newRelayLog(ctx, 10, 100, nil)
 	validGTID := &binlogdatapb.VEvent{Type: binlogdatapb.VEventType_GTID, Gtid: replication.EncodePosition(stopPos)}
 	otherEvent := &binlogdatapb.VEvent{Type: binlogdatapb.VEventType_OTHER, Timestamp: 100}
 	invalidGTID := &binlogdatapb.VEvent{Type: binlogdatapb.VEventType_GTID, Gtid: "invalid"}
@@ -906,7 +906,7 @@ func TestApplyEventsParallelReturnsNilAfterEmptyTxnStopPosEvenIfLaterScheduleFai
 	require.NoError(t, err)
 	vp.stopPos = stopPos
 
-	relay := newRelayLog(ctx, 10, 100)
+	relay := newRelayLog(ctx, 10, 100, nil)
 	validGTID := &binlogdatapb.VEvent{Type: binlogdatapb.VEventType_GTID, Gtid: replication.EncodePosition(stopPos)}
 	commitEvent := &binlogdatapb.VEvent{Type: binlogdatapb.VEventType_COMMIT, Timestamp: 100}
 	invalidGTID := &binlogdatapb.VEvent{Type: binlogdatapb.VEventType_GTID, Gtid: "invalid"}
@@ -965,7 +965,7 @@ func TestApplyEventsParallelReturnsNilAfterScheduledStopDDLEvenIfLaterScheduleFa
 		vp.vr.vre.dbClientFactoryFiltered = func() binlogplayer.DBClient { return mockDB }
 	}
 
-	relay := newRelayLog(ctx, 10, 100)
+	relay := newRelayLog(ctx, 10, 100, nil)
 	validGTID := &binlogdatapb.VEvent{Type: binlogdatapb.VEventType_GTID, Gtid: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5"}
 	ddlEvent := &binlogdatapb.VEvent{Type: binlogdatapb.VEventType_DDL, Statement: "alter table t1 add column c1 int", Timestamp: 100}
 	invalidGTID := &binlogdatapb.VEvent{Type: binlogdatapb.VEventType_GTID, Gtid: "invalid"}
@@ -1039,7 +1039,7 @@ func TestApplyEventsParallelReturnsNilAfterScheduledRelevantJournalEvenIfLaterSc
 		},
 	}
 
-	relay := newRelayLog(ctx, 10, 100)
+	relay := newRelayLog(ctx, 10, 100, nil)
 	validGTID := &binlogdatapb.VEvent{Type: binlogdatapb.VEventType_GTID, Gtid: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5"}
 	journalEvent := &binlogdatapb.VEvent{Type: binlogdatapb.VEventType_JOURNAL, Timestamp: 100, Journal: &binlogdatapb.Journal{
 		Id:            1,
@@ -1088,7 +1088,7 @@ func TestApplyEventsParallelReturnsWorkerErrorEvenIfCancellationLooksLikeEOF(t *
 		}}
 	}
 
-	relay := newRelayLog(ctx, 10, 100)
+	relay := newRelayLog(ctx, 10, 100, nil)
 	require.NoError(t, relay.Send([]*binlogdatapb.VEvent{
 		{Type: binlogdatapb.VEventType_GTID, Gtid: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5"},
 		{Type: binlogdatapb.VEventType_INSERT, Dml: "insert into t1(id) values (1)", Timestamp: 100},
@@ -1213,7 +1213,7 @@ func TestApplyEventsParallelCancelledContext(t *testing.T) {
 
 	vp.vr.workflowConfig.ParallelReplicationWorkers = 1
 
-	relay := newRelayLog(ctx, 10, 100)
+	relay := newRelayLog(ctx, 10, 100, nil)
 
 	err := vp.applyEventsParallel(ctx, relay)
 	require.ErrorIs(t, err, context.Canceled)
@@ -1230,7 +1230,7 @@ func TestApplyEventsParallelParallelWorkersFailFastOnCanceledContext(t *testing.
 		panic("worker factory should not be called for canceled context")
 	}
 
-	relay := newRelayLog(ctx, 10, 100)
+	relay := newRelayLog(ctx, 10, 100, nil)
 
 	var err error
 	require.NotPanics(t, func() {
@@ -1354,7 +1354,7 @@ func TestScheduleLoopCanceledContext(t *testing.T) {
 	cancel()
 
 	scheduler := newApplyScheduler(ctx)
-	relay := newRelayLog(ctx, 10, 100)
+	relay := newRelayLog(ctx, 10, 100, nil)
 
 	err := vp.scheduleLoop(ctx, relay, scheduler)
 	require.ErrorIs(t, err, context.Canceled)
@@ -1376,7 +1376,7 @@ func TestScheduleLoopProcessesItems(t *testing.T) {
 	}
 
 	scheduler := newApplyScheduler(ctx)
-	relay := newRelayLog(ctx, 10, 100)
+	relay := newRelayLog(ctx, 10, 100, nil)
 
 	vp.tablePlans["t1"] = &TablePlan{
 		TargetName: "t1",
@@ -1443,7 +1443,7 @@ func TestScheduleLoopThrottledUpdates(t *testing.T) {
 	}
 
 	scheduler := newApplyScheduler(ctx)
-	relay := newRelayLog(ctx, 10, 100)
+	relay := newRelayLog(ctx, 10, 100, nil)
 
 	errCh := make(chan error, 1)
 	go func() {
@@ -1468,7 +1468,7 @@ func TestScheduleLoopCancelledContext(t *testing.T) {
 	cancel()
 
 	scheduler := newApplyScheduler(ctx)
-	relay := newRelayLog(ctx, 10, 100)
+	relay := newRelayLog(ctx, 10, 100, nil)
 
 	err := vp.scheduleLoop(ctx, relay, scheduler)
 	require.ErrorIs(t, err, context.Canceled)
@@ -3956,12 +3956,14 @@ func TestWorkerLoop_FIELDRefreshClearsPublishedDroppedTablesAfterCommit(t *testi
 	require.NoError(t, vp.applyEvent(ctx, fieldEvent, false))
 	require.NoError(t, vp.dbClient.Rollback())
 
-	vp.postDDLDroppedTables = map[string]struct{}{tableName: {}}
-	vp2 := *vp
-	vp2.postDDLDroppedTables = cloneDroppedTables(vp.postDDLDroppedTables)
+	// Swap in a cloned dropped-tables map rather than copying the vplayer
+	// struct: vplayer contains an atomic.Int64 and must not be copied.
+	originalDroppedTables := map[string]struct{}{tableName: {}}
+	vp.postDDLDroppedTables = cloneDroppedTables(originalDroppedTables)
 
-	require.NoError(t, vp2.applyEvent(ctx, fieldEvent, false))
+	require.NoError(t, vp.applyEvent(ctx, fieldEvent, false))
 	require.NoError(t, vp.dbClient.Rollback())
+	vp.postDDLDroppedTables = originalDroppedTables
 	require.Contains(t, vp.postDDLDroppedTables, tableName)
 
 	scheduler := newApplyScheduler(ctx)

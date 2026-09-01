@@ -1840,13 +1840,21 @@ func TestPlannedReparenter_performInitialPromotion(t *testing.T) {
 		keyspace     string
 		shard        string
 		primaryElect *topodatapb.Tablet
+		tabletMap    map[string]*topo.TabletInfo
 
 		expectedPos string
 		shouldErr   bool
+		expectedErr string
 	}{
 		{
 			name: "successful promotion",
 			tmc: &testutil.TabletManagerClient{
+				ReplicationStatusResults: map[string]struct {
+					Position *replicationdatapb.Status
+					Error    error
+				}{
+					"zone1-0000000200": {Position: &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10", RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10"}},
+				},
 				InitPrimaryResults: map[string]struct {
 					Result string
 					Error  error
@@ -1866,12 +1874,253 @@ func TestPlannedReparenter_performInitialPromotion(t *testing.T) {
 					Uid:  200,
 				},
 			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000200": {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 200}}},
+			},
 			expectedPos: "successful reparent journal position",
 			shouldErr:   false,
 		},
 		{
+			// A peer holds transactions the version-preferred primary-elect does not,
+			// so the dominance guard must reject the promotion rather than let
+			// InitPrimary discard them.
+			name: "primary-elect behind a peer is rejected",
+			tmc: &testutil.TabletManagerClient{
+				ReplicationStatusResults: map[string]struct {
+					Position *replicationdatapb.Status
+					Error    error
+				}{
+					"zone1-0000000200": {Position: &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10", RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10"}},
+					"zone1-0000000201": {Position: &replicationdatapb.Status{RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-100"}},
+				},
+				InitPrimaryResults: map[string]struct {
+					Result string
+					Error  error
+				}{
+					"zone1-0000000200": {Result: "should not be reached", Error: nil},
+				},
+			},
+			ev:       &events.Reparent{},
+			keyspace: "testkeyspace",
+			shard:    "-",
+			primaryElect: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  200,
+				},
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000200": {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 200}}},
+				"zone1-0000000201": {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 201}}},
+			},
+			shouldErr:   true,
+			expectedErr: "contains transactions not found in primary-elect",
+		},
+		{
+			// The elect's received position (Combined 1-10) is ahead of the peer's
+			// (1-8), but its executed position (1-3) is behind. InitPrimary does not
+			// apply the relay log, so the elect's received-but-unapplied 1-4..1-10 are
+			// discarded at promotion and only 1-3 survives — losing the peer's 1-4..1-8.
+			// The guard must compare the elect's executed position against the peer's
+			// received position and reject, rather than credit the elect with
+			// transactions InitPrimary is about to drop.
+			name: "primary-elect received-ahead but executed-behind is rejected",
+			tmc: &testutil.TabletManagerClient{
+				ReplicationStatusResults: map[string]struct {
+					Position *replicationdatapb.Status
+					Error    error
+				}{
+					"zone1-0000000200": {Position: &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-3", RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10"}},
+					"zone1-0000000201": {Position: &replicationdatapb.Status{RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-8"}},
+				},
+				InitPrimaryResults: map[string]struct {
+					Result string
+					Error  error
+				}{
+					"zone1-0000000200": {Result: "should not be reached", Error: nil},
+				},
+			},
+			ev:       &events.Reparent{},
+			keyspace: "testkeyspace",
+			shard:    "-",
+			primaryElect: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  200,
+				},
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000200": {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 200}}},
+				"zone1-0000000201": {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 201}}},
+			},
+			shouldErr:   true,
+			expectedErr: "contains transactions not found in primary-elect",
+		},
+		{
+			// A uniform MariaDB shard. MariaDB reports its executed position in
+			// Position but leaves RelayLogPosition empty (ParseMariadbReplicationStatus),
+			// so keying the peer on RelayLogPosition alone would decode to a zero
+			// position that any elect trivially dominates. The peer's executed position
+			// (seq 100) is ahead of the elect's (seq 50), so the guard must fall back to
+			// the peer's executed position and reject rather than let InitPrimary discard
+			// the peer's transactions.
+			name: "mariadb peer ahead on executed is rejected",
+			tmc: &testutil.TabletManagerClient{
+				ReplicationStatusResults: map[string]struct {
+					Position *replicationdatapb.Status
+					Error    error
+				}{
+					"zone1-0000000200": {Position: &replicationdatapb.Status{Position: "MariaDB/1-1-50", RelayLogPosition: "MariaDB/1-1-50"}},
+					"zone1-0000000201": {Position: &replicationdatapb.Status{Position: "MariaDB/1-1-100"}},
+				},
+				InitPrimaryResults: map[string]struct {
+					Result string
+					Error  error
+				}{
+					"zone1-0000000200": {Result: "should not be reached"},
+				},
+			},
+			ev:       &events.Reparent{},
+			keyspace: "testkeyspace",
+			shard:    "-",
+			primaryElect: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  200,
+				},
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000200": {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 200}}},
+				"zone1-0000000201": {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 201}}},
+			},
+			shouldErr:   true,
+			expectedErr: "contains transactions not found in primary-elect",
+		},
+		{
+			// A peer's position fetch fails during the concurrent scan. The error
+			// must be aggregated across the goroutines and abort the promotion — we
+			// can't prove the elect dominates a tablet we couldn't reach. Uses three
+			// tablets so the fan-out and error aggregation are exercised, not just a
+			// single pair.
+			name: "peer position fetch failure aborts promotion",
+			tmc: &testutil.TabletManagerClient{
+				ReplicationStatusResults: map[string]struct {
+					Position *replicationdatapb.Status
+					Error    error
+				}{
+					"zone1-0000000200": {Position: &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10", RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10"}},
+					"zone1-0000000201": {Position: &replicationdatapb.Status{RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10"}},
+					"zone1-0000000202": {Error: assert.AnError},
+				},
+				InitPrimaryResults: map[string]struct {
+					Result string
+					Error  error
+				}{
+					"zone1-0000000200": {Result: "should not be reached"},
+				},
+			},
+			ev:       &events.Reparent{},
+			keyspace: "testkeyspace",
+			shard:    "-",
+			primaryElect: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  200,
+				},
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000200": {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 200}}},
+				"zone1-0000000201": {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 201}}},
+				"zone1-0000000202": {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 202}}},
+			},
+			shouldErr:   true,
+			expectedErr: "cannot get replication status of tablet",
+		},
+		{
+			// The peer's position is incomparable with the elect's (disjoint GTID
+			// histories — different source UUIDs, neither a superset of the other).
+			// AtLeast is false in both directions, so the dominance guard must reject
+			// the promotion rather than silently pick a side of the divergence.
+			name: "incomparable peer position is rejected",
+			tmc: &testutil.TabletManagerClient{
+				ReplicationStatusResults: map[string]struct {
+					Position *replicationdatapb.Status
+					Error    error
+				}{
+					"zone1-0000000200": {Position: &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10", RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10"}},
+					"zone1-0000000201": {Position: &replicationdatapb.Status{RelayLogPosition: "MySQL56/A1B2C3D4-71CA-11E1-9E33-C80AA9429562:1-10"}},
+				},
+				InitPrimaryResults: map[string]struct {
+					Result string
+					Error  error
+				}{
+					"zone1-0000000200": {Result: "should not be reached"},
+				},
+			},
+			ev:       &events.Reparent{},
+			keyspace: "testkeyspace",
+			shard:    "-",
+			primaryElect: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  200,
+				},
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000200": {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 200}}},
+				"zone1-0000000201": {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 201}}},
+			},
+			shouldErr:   true,
+			expectedErr: "contains transactions not found in primary-elect",
+		},
+		{
+			// PrimaryPosition on a file-position tablet returns that tablet's own
+			// binlog coordinates, which are not comparable across tablets. Here the
+			// elect's coordinates (higher file/offset by string+numeric compare) would
+			// make AtLeast wrongly report it as containing the peer, waving through a
+			// lossy promotion — so the guard must fail closed on file-position rather
+			// than trust that comparison.
+			name: "file-position candidate fails closed",
+			tmc: &testutil.TabletManagerClient{
+				ReplicationStatusResults: map[string]struct {
+					Position *replicationdatapb.Status
+					Error    error
+				}{
+					"zone1-0000000200": {Position: &replicationdatapb.Status{Position: "FilePos/vt-bin.000009:5000", RelayLogPosition: "FilePos/vt-bin.000009:5000"}},
+					"zone1-0000000201": {Position: &replicationdatapb.Status{RelayLogPosition: "FilePos/vt-bin.000002:100"}},
+				},
+				InitPrimaryResults: map[string]struct {
+					Result string
+					Error  error
+				}{
+					"zone1-0000000200": {Result: "should not be reached"},
+				},
+			},
+			ev:       &events.Reparent{},
+			keyspace: "testkeyspace",
+			shard:    "-",
+			primaryElect: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  200,
+				},
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000200": {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 200}}},
+				"zone1-0000000201": {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 201}}},
+			},
+			shouldErr:   true,
+			expectedErr: "file-position replication position",
+		},
+		{
 			name: "primary-elect fails to promote",
 			tmc: &testutil.TabletManagerClient{
+				ReplicationStatusResults: map[string]struct {
+					Position *replicationdatapb.Status
+					Error    error
+				}{
+					"zone1-0000000200": {Position: &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10", RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10"}},
+				},
 				InitPrimaryResults: map[string]struct {
 					Result string
 					Error  error
@@ -1890,11 +2139,21 @@ func TestPlannedReparenter_performInitialPromotion(t *testing.T) {
 					Uid:  200,
 				},
 			},
-			shouldErr: true,
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000200": {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 200}}},
+			},
+			shouldErr:   true,
+			expectedErr: "failed to be promoted to primary",
 		},
 		{
 			name: "promotion succeeds but parent context times out",
 			tmc: &testutil.TabletManagerClient{
+				ReplicationStatusResults: map[string]struct {
+					Position *replicationdatapb.Status
+					Error    error
+				}{
+					"zone1-0000000200": {Position: &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10", RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10"}},
+				},
 				InitPrimaryPostDelays: map[string]time.Duration{
 					"zone1-0000000200": time.Millisecond * 100, // 10x the parent context timeout
 				},
@@ -1917,7 +2176,11 @@ func TestPlannedReparenter_performInitialPromotion(t *testing.T) {
 					Uid:  200,
 				},
 			},
-			shouldErr: true,
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000200": {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 200}}},
+			},
+			shouldErr:   true,
+			expectedErr: "timed out",
 		},
 	}
 
@@ -1938,6 +2201,13 @@ func TestPlannedReparenter_performInitialPromotion(t *testing.T) {
 
 			pr := NewPlannedReparenter(ts, tt.tmc, logger)
 
+			// performInitialPromotion re-checks the shard lock before promoting, so
+			// hold it for the duration of the call.
+			lockCtx, unlock, lockErr := ts.LockShard(ctx, tt.keyspace, tt.shard, "test lock for performInitialPromotion")
+			require.NoError(t, lockErr)
+			defer unlock(&lockErr)
+			ctx = lockCtx
+
 			if tt.ctxTimeout > 0 {
 				_ctx, cancel := context.WithTimeout(ctx, tt.ctxTimeout)
 				defer cancel()
@@ -1949,12 +2219,19 @@ func TestPlannedReparenter_performInitialPromotion(t *testing.T) {
 			require.NoError(t, err)
 			pos, err := pr.performInitialPromotion(
 				ctx,
+				tt.keyspace,
+				tt.shard,
 				tt.primaryElect,
+				tt.tabletMap,
+				false, /* primaryElectExplicit */
 				PlannedReparentOptions{durability: durability},
 			)
 
 			if tt.shouldErr {
-				assert.Error(t, err)
+				require.Error(t, err)
+				if tt.expectedErr != "" {
+					require.ErrorContains(t, err, tt.expectedErr)
+				}
 				return
 			}
 
@@ -1962,6 +2239,240 @@ func TestPlannedReparenter_performInitialPromotion(t *testing.T) {
 			assert.Equal(t, tt.expectedPos, pos)
 		})
 	}
+}
+
+// TestPlannedReparenter_performInitialPromotion_lostLock verifies that if the
+// shard lock is not held when performInitialPromotion runs, it aborts before
+// calling InitPrimary rather than promoting after the lock was lost during the
+// position scan.
+func TestPlannedReparenter_performInitialPromotion_lostLock(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	ts := memorytopo.NewServer(ctx, "zone1")
+	defer ts.Close()
+
+	testutil.AddShards(ctx, t, ts, &vtctldatapb.Shard{Keyspace: "testkeyspace", Name: "-"})
+
+	// InitPrimary would return an error if it were reached; the lock check must
+	// fire first, so the promotion is never attempted.
+	tmc := &testutil.TabletManagerClient{
+		ReplicationStatusResults: map[string]struct {
+			Position *replicationdatapb.Status
+			Error    error
+		}{
+			"zone1-0000000200": {Position: &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10", RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10"}},
+		},
+		InitPrimaryResults: map[string]struct {
+			Result string
+			Error  error
+		}{
+			"zone1-0000000200": {Result: "should not be reached"},
+		},
+	}
+
+	pr := NewPlannedReparenter(ts, tmc, logutil.NewMemoryLogger())
+	durability, err := policy.GetDurabilityPolicy(policy.DurabilityNone)
+	require.NoError(t, err)
+
+	primaryElect := &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 200}}
+	tabletMap := map[string]*topo.TabletInfo{
+		"zone1-0000000200": {Tablet: primaryElect},
+	}
+
+	// Note: ctx does not hold the shard lock.
+	_, err = pr.performInitialPromotion(ctx, "testkeyspace", "-", primaryElect, tabletMap, false /* primaryElectExplicit */, PlannedReparentOptions{durability: durability})
+	require.Error(t, err)
+	assert.ErrorContains(t, err, lostTopologyLockMsg)
+}
+
+// TestCheckPrimaryElectContainsAllPositions_FilePosExplicitPrimary verifies the
+// escape hatch: on a file-position shard, where cross-tablet positions can't be
+// compared, an operator who explicitly requested the primary (--new-primary) is
+// allowed to proceed. Without an explicit request the same input fails closed.
+//
+// Crucially, the elect's binlog filename sorts *below* the peer's
+// (000002 < 000009). File positions are not comparable across tablets, so this
+// ordering is arbitrary — the escape hatch must exclude file positions from the
+// dominance comparison entirely, not merely skip the dedicated rejection. If the
+// AtLeast comparison still ran on these positions, the explicit case would
+// wrongly fail on "contains transactions not found in primary-elect".
+func TestCheckPrimaryElectContainsAllPositions_FilePosExplicitPrimary(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	tmc := &testutil.TabletManagerClient{
+		ReplicationStatusResults: map[string]struct {
+			Position *replicationdatapb.Status
+			Error    error
+		}{
+			// Elect sorts below the peer by binlog filename, the unfavorable ordering.
+			"zone1-0000000200": {Position: &replicationdatapb.Status{Position: "FilePos/vt-bin.000002:100", RelayLogPosition: "FilePos/vt-bin.000002:100"}},
+			"zone1-0000000201": {Position: &replicationdatapb.Status{RelayLogPosition: "FilePos/vt-bin.000009:5000"}},
+		},
+	}
+	pr := NewPlannedReparenter(nil, tmc, logutil.NewMemoryLogger())
+
+	primaryElect := &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 200}}
+	tabletMap := map[string]*topo.TabletInfo{
+		"zone1-0000000200": {Tablet: primaryElect},
+		"zone1-0000000201": {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 201}}},
+	}
+
+	// Auto-election: file-position positions can't be compared across tablets, so
+	// fail closed.
+	err := pr.checkPrimaryElectContainsAllPositions(ctx, primaryElect, tabletMap, false /* primaryElectExplicit */)
+	require.ErrorContains(t, err, "file-position replication position")
+
+	// Explicit --new-primary: honor the operator's choice. This must pass despite
+	// the elect's file position sorting below the peer's, because file positions are
+	// excluded from the comparison, not compared with an arbitrary verdict.
+	err = pr.checkPrimaryElectContainsAllPositions(ctx, primaryElect, tabletMap, true /* primaryElectExplicit */)
+	require.NoError(t, err)
+}
+
+// TestCheckPrimaryElectContainsAllPositions_SingleFilePosCandidate verifies that a
+// lone file-position candidate can auto-initialize: with no peers, there are no
+// cross-tablet coordinates to compare, so the elect's own file position must not
+// trip the file-position rejection even without an explicit primary. This is the
+// initial-bootstrap / no-clear-primary single-tablet case.
+func TestCheckPrimaryElectContainsAllPositions_SingleFilePosCandidate(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	tmc := &testutil.TabletManagerClient{
+		ReplicationStatusResults: map[string]struct {
+			Position *replicationdatapb.Status
+			Error    error
+		}{
+			"zone1-0000000200": {Position: &replicationdatapb.Status{Position: "FilePos/vt-bin.000002:100", RelayLogPosition: "FilePos/vt-bin.000002:100"}},
+		},
+	}
+	pr := NewPlannedReparenter(nil, tmc, logutil.NewMemoryLogger())
+
+	primaryElect := &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 200}}
+	tabletMap := map[string]*topo.TabletInfo{
+		"zone1-0000000200": {Tablet: primaryElect},
+	}
+
+	// Auto-election, single candidate: no peers to compare against, so the sole
+	// file-position elect is safe to initialize and must not be rejected.
+	err := pr.checkPrimaryElectContainsAllPositions(ctx, primaryElect, tabletMap, false /* primaryElectExplicit */)
+	require.NoError(t, err)
+}
+
+// TestCheckPrimaryElectContainsAllPositions_MixedPositionFlavors verifies that a
+// shard mixing GTID-based and file-position tablets is rejected, even when the
+// operator explicitly named the primary. The file-position escape hatch is only
+// valid on a uniformly file-position shard: a GTID elect's transactions cannot be
+// compared against a file-position peer's, so skipping that peer would let the
+// promotion silently discard the peer's history. Both directions (GTID elect with a
+// file-position peer, and a file-position elect with a GTID peer) must fail closed.
+func TestCheckPrimaryElectContainsAllPositions_MixedPositionFlavors(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+
+	// GTID elect (200), file-position peer (201).
+	tmc := &testutil.TabletManagerClient{
+		ReplicationStatusResults: map[string]struct {
+			Position *replicationdatapb.Status
+			Error    error
+		}{
+			"zone1-0000000200": {Position: &replicationdatapb.Status{Position: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5", RelayLogPosition: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5"}},
+			"zone1-0000000201": {Position: &replicationdatapb.Status{RelayLogPosition: "FilePos/vt-bin.000009:5000"}},
+		},
+	}
+	pr := NewPlannedReparenter(nil, tmc, logutil.NewMemoryLogger())
+
+	primaryElect := &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 200}}
+	tabletMap := map[string]*topo.TabletInfo{
+		"zone1-0000000200": {Tablet: primaryElect},
+		"zone1-0000000201": {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 201}}},
+	}
+
+	// Auto-election fails closed on the mixed shard.
+	err := pr.checkPrimaryElectContainsAllPositions(ctx, primaryElect, tabletMap, false /* primaryElectExplicit */)
+	require.ErrorContains(t, err, "mixes GTID-based and file-position replication")
+
+	// Explicit --new-primary must NOT bypass the mixed-shard rejection: the escape
+	// hatch only applies to a uniformly file-position shard.
+	err = pr.checkPrimaryElectContainsAllPositions(ctx, primaryElect, tabletMap, true /* primaryElectExplicit */)
+	require.ErrorContains(t, err, "mixes GTID-based and file-position replication")
+
+	// The mirror case (file-position elect, GTID peer) is likewise rejected.
+	tmcMirror := &testutil.TabletManagerClient{
+		ReplicationStatusResults: map[string]struct {
+			Position *replicationdatapb.Status
+			Error    error
+		}{
+			"zone1-0000000200": {Position: &replicationdatapb.Status{Position: "FilePos/vt-bin.000002:100", RelayLogPosition: "FilePos/vt-bin.000002:100"}},
+			"zone1-0000000201": {Position: &replicationdatapb.Status{RelayLogPosition: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5"}},
+		},
+	}
+	prMirror := NewPlannedReparenter(nil, tmcMirror, logutil.NewMemoryLogger())
+
+	err = prMirror.checkPrimaryElectContainsAllPositions(ctx, primaryElect, tabletMap, true /* primaryElectExplicit */)
+	require.ErrorContains(t, err, "mixes GTID-based and file-position replication")
+}
+
+// TestCheckPrimaryElectContainsAllPositions_EmptyVsTypedEmpty pins the distinction
+// the mixed-flavor check turns on: only a position with no GTIDSet at all is
+// flavor-less, and a typed-but-empty GTID position is still GTID-based.
+//
+//   - A genuinely empty peer position ("", nil GTIDSet) is a fresh, never-initialized
+//     tablet: it counts as neither GTID nor file-position, so it must not trip the
+//     mixed-flavor rejection against a GTID elect. The fresh-init path stays unaffected.
+//   - A typed-but-empty GTID elect ("MySQL56/", empty gtid_executed on a provisioned
+//     tablet) has a non-nil GTIDSet and IS GTID-based, so a shard pairing it with a
+//     file-position peer must be rejected as mixed — even with an explicit primary.
+//     Skipping it (as testing pos.IsZero() would) lets the empty elect wave through and
+//     silently discard the file-position peer's history.
+func TestCheckPrimaryElectContainsAllPositions_EmptyVsTypedEmpty(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+
+	// A fresh peer with no transactions yet ("") does not make the shard mixed.
+	tmcFresh := &testutil.TabletManagerClient{
+		ReplicationStatusResults: map[string]struct {
+			Position *replicationdatapb.Status
+			Error    error
+		}{
+			// GTID elect that contains the (empty) peer.
+			"zone1-0000000200": {Position: &replicationdatapb.Status{Position: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5", RelayLogPosition: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5"}},
+			// Fresh peer with no transactions yet: empty position, no GTIDSet.
+			"zone1-0000000201": {Position: &replicationdatapb.Status{RelayLogPosition: ""}},
+		},
+	}
+	prFresh := NewPlannedReparenter(nil, tmcFresh, logutil.NewMemoryLogger())
+
+	primaryElect := &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 200}}
+	tabletMap := map[string]*topo.TabletInfo{
+		"zone1-0000000200": {Tablet: primaryElect},
+		"zone1-0000000201": {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 201}}},
+	}
+
+	// An empty peer is neither GTID nor file-position, so no mixed-flavor rejection,
+	// and the GTID elect contains the empty peer, so the check passes.
+	err := prFresh.checkPrimaryElectContainsAllPositions(ctx, primaryElect, tabletMap, false /* primaryElectExplicit */)
+	require.NoError(t, err)
+
+	// A typed-but-empty GTID elect ("MySQL56/") is still GTID-based, so a file-position
+	// peer makes the shard mixed and must be rejected even with an explicit primary.
+	tmcTypedEmpty := &testutil.TabletManagerClient{
+		ReplicationStatusResults: map[string]struct {
+			Position *replicationdatapb.Status
+			Error    error
+		}{
+			"zone1-0000000200": {Position: &replicationdatapb.Status{Position: "MySQL56/", RelayLogPosition: "MySQL56/"}},
+			"zone1-0000000201": {Position: &replicationdatapb.Status{RelayLogPosition: "FilePos/vt-bin.000009:5000"}},
+		},
+	}
+	prTypedEmpty := NewPlannedReparenter(nil, tmcTypedEmpty, logutil.NewMemoryLogger())
+
+	err = prTypedEmpty.checkPrimaryElectContainsAllPositions(ctx, primaryElect, tabletMap, true /* primaryElectExplicit */)
+	require.ErrorContains(t, err, "mixes GTID-based and file-position replication")
 }
 
 func TestPlannedReparenter_performPartialPromotionRecovery(t *testing.T) {
@@ -2127,10 +2638,11 @@ func TestPlannedReparenter_performPotentialPromotion(t *testing.T) {
 		timeout    time.Duration
 		unlockTopo bool
 
-		keyspace     string
-		shard        string
-		primaryElect *topodatapb.Tablet
-		tabletMap    map[string]*topo.TabletInfo
+		keyspace             string
+		shard                string
+		primaryElect         *topodatapb.Tablet
+		tabletMap            map[string]*topo.TabletInfo
+		primaryElectExplicit bool
 
 		shouldErr bool
 	}{
@@ -2388,6 +2900,61 @@ func TestPlannedReparenter_performPotentialPromotion(t *testing.T) {
 			shouldErr: true,
 		},
 		{
+			// DemotePrimary on a file-position tablet returns that tablet's own binlog
+			// coordinates, which are not comparable across tablets. The elect's
+			// coordinates (higher file/offset) would make AtLeast falsely report it as
+			// dominant, so the dominance check must fail closed rather than promote and
+			// risk discarding a peer's transactions.
+			name: "file-position candidate fails closed",
+			tmc: &testutil.TabletManagerClient{
+				DemotePrimaryResults: map[string]struct {
+					Status *replicationdatapb.PrimaryStatus
+					Error  error
+				}{
+					"zone1-0000000100": {
+						Status: &replicationdatapb.PrimaryStatus{
+							Position: "FilePos/vt-bin.000009:5000",
+						},
+						Error: nil,
+					},
+					"zone1-0000000101": {
+						Status: &replicationdatapb.PrimaryStatus{
+							Position: "FilePos/vt-bin.000002:100",
+						},
+						Error: nil,
+					},
+				},
+			},
+			unlockTopo: false,
+			keyspace:   "testkeyspace",
+			shard:      "-",
+			primaryElect: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+					},
+				},
+				"zone1-0000000101": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  101,
+						},
+					},
+				},
+			},
+			shouldErr: true,
+		},
+		{
 			name: "lost topology lock",
 			tmc: &testutil.TabletManagerClient{
 				DemotePrimaryResults: map[string]struct {
@@ -2514,6 +3081,56 @@ func TestPlannedReparenter_performPotentialPromotion(t *testing.T) {
 			},
 			shouldErr: false,
 		},
+		{
+			// File-position shard, no explicit primary: cross-tablet coordinates
+			// aren't comparable, so fail closed.
+			name: "file-position auto-election fails closed",
+			tmc: &testutil.TabletManagerClient{
+				DemotePrimaryResults: map[string]struct {
+					Status *replicationdatapb.PrimaryStatus
+					Error  error
+				}{
+					"zone1-0000000100": {Status: &replicationdatapb.PrimaryStatus{Position: "FilePos/vt-bin.000002:100"}},
+					"zone1-0000000101": {Status: &replicationdatapb.PrimaryStatus{Position: "FilePos/vt-bin.000009:5000"}},
+				},
+			},
+			keyspace: "testkeyspace",
+			shard:    "-",
+			primaryElect: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}}},
+				"zone1-0000000101": {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101}}},
+			},
+			shouldErr: true,
+		},
+		{
+			// Same file-position shard, but the operator explicitly chose the primary.
+			// The elect sorts below the peer by binlog filename; file positions must be
+			// excluded from the comparison entirely, so the explicit choice is honored.
+			name: "file-position explicit primary is honored",
+			tmc: &testutil.TabletManagerClient{
+				DemotePrimaryResults: map[string]struct {
+					Status *replicationdatapb.PrimaryStatus
+					Error  error
+				}{
+					"zone1-0000000100": {Status: &replicationdatapb.PrimaryStatus{Position: "FilePos/vt-bin.000002:100"}},
+					"zone1-0000000101": {Status: &replicationdatapb.PrimaryStatus{Position: "FilePos/vt-bin.000009:5000"}},
+				},
+			},
+			keyspace:             "testkeyspace",
+			shard:                "-",
+			primaryElectExplicit: true,
+			primaryElect: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}}},
+				"zone1-0000000101": {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101}}},
+			},
+			shouldErr: false,
+		},
 	}
 
 	logger := logutil.NewMemoryLogger()
@@ -2552,7 +3169,7 @@ func TestPlannedReparenter_performPotentialPromotion(t *testing.T) {
 				ctx = _ctx
 			}
 
-			err := pr.performPotentialPromotion(ctx, tt.keyspace, tt.shard, tt.primaryElect, tt.tabletMap)
+			err := pr.performPotentialPromotion(ctx, tt.keyspace, tt.shard, tt.primaryElect, tt.tabletMap, tt.primaryElectExplicit)
 			if tt.shouldErr {
 				assert.Error(t, err)
 
@@ -2881,6 +3498,15 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 		{
 			name: "shard initialization",
 			tmc: &testutil.TabletManagerClient{
+				ReplicationStatusResults: map[string]struct {
+					Position *replicationdatapb.Status
+					Error    error
+				}{
+					// Elect (200) is at least as advanced as the peer (100), so the
+					// initial-promotion dominance guard passes.
+					"zone1-0000000200": {Position: &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10", RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10"}},
+					"zone1-0000000100": {Position: &replicationdatapb.Status{RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10"}},
+				},
 				PopulateReparentJournalResults: map[string]error{
 					"zone1-0000000200": nil,
 				},
@@ -2980,13 +3606,26 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 					Position *replicationdatapb.Status
 					Error    error
 				}{
+					// Elect (200, at 1-2) dominates the not-replicating peer (100),
+					// so the initial-promotion dominance guard passes.
 					"zone1-0000000200": {
 						Position: &replicationdatapb.Status{
-							Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-2",
+							Position:         "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-2",
+							RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-2",
 						},
 					},
+					// Peer (100) is not replicating; the check falls back to its
+					// PrimaryStatus, which reports an empty position.
 					"zone1-0000000100": {
 						Error: mysql.ErrNotReplica,
+					},
+				},
+				PrimaryStatusResults: map[string]struct {
+					Status *replicationdatapb.PrimaryStatus
+					Error  error
+				}{
+					"zone1-0000000100": {
+						Status: &replicationdatapb.PrimaryStatus{Position: ""},
 					},
 				},
 				SetReplicationSourceResults: map[string]error{

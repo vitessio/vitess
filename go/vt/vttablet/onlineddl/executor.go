@@ -3803,7 +3803,7 @@ func (e *Executor) gcArtifacts(ctx context.Context) error {
 	defer e.migrationMutex.Unlock()
 
 	query, err := sqlparser.ParseAndBind(sqlSelectUncollectedArtifacts,
-		sqltypes.Int64BindVariable(int64((retainOnlineDDLTables).Seconds())),
+		sqltypes.Int64BindVariable(int64(retainOnlineDDLTables.Seconds())),
 	)
 	if err != nil {
 		return err
@@ -4938,10 +4938,10 @@ func (e *Executor) SubmitMigration(
 	log.Info(fmt.Sprintf("SubmitMigration: request to submit migration %s; action=%s, table=%s", onlineDDL.UUID, actionStr, onlineDDL.Table))
 
 	revertedUUID, _ := onlineDDL.GetRevertUUID(e.env.Environment().Parser()) // Empty value if the migration is not actually a REVERT. Safe to ignore error.
-	retainArtifactsSeconds := int64((retainOnlineDDLTables).Seconds())
+	retainArtifactsSeconds := int64(retainOnlineDDLTables.Seconds())
 	if retainArtifacts, _ := onlineDDL.StrategySetting().RetainArtifactsDuration(); retainArtifacts != 0 {
 		// Explicit retention indicated by `--retain-artifact` DDL strategy flag for this migration. Override!
-		retainArtifactsSeconds = int64((retainArtifacts).Seconds())
+		retainArtifactsSeconds = int64(retainArtifacts.Seconds())
 	}
 	cutoverThreshold, err := onlineDDL.StrategySetting().CutOverThreshold()
 	if err != nil {

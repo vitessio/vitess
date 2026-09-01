@@ -79,6 +79,13 @@ func (vc *vcopier) copyAll(ctx context.Context, settings binlogplayer.VRSettings
 		return err
 	}
 
+	// Save the controller-level context before applying the copy phase
+	// duration timeout to it. Its cancellation means that the controller
+	// is stopping -- because the workflow is being stopped or deleted, or
+	// the engine is closing -- and any in-flight post copy action must
+	// then be interrupted, whereas an elapsed copy phase duration must
+	// not interrupt it.
+	stopCtx := ctx
 	ctx, cancel := context.WithTimeout(ctx, vc.vr.workflowConfig.CopyPhaseDuration)
 	defer cancel()
 
@@ -142,7 +149,7 @@ func (vc *vcopier) copyAll(ctx context.Context, settings binlogplayer.VRSettings
 			copyWorkQueue = vc.newCopyWorkQueue(parallelism, copyWorkerFactory)
 			if state.currentTableName != "" {
 				log.Info(fmt.Sprintf("copy of table %s is done at lastpk %+v", state.currentTableName, lastpkbv))
-				if err := vc.runPostCopyActionsAndDeleteCopyState(ctx, state.currentTableName); err != nil {
+				if err := vc.runPostCopyActionsAndDeleteCopyState(ctx, stopCtx, state.currentTableName); err != nil {
 					return err
 				}
 			} else {
@@ -309,7 +316,7 @@ func (vc *vcopier) copyAll(ctx context.Context, settings binlogplayer.VRSettings
 		log.Info(fmt.Sprintf("Copy of %v stopped", state.currentTableName))
 		return errors.New("CopyAll was interrupted due to context expiration")
 	default:
-		if err := vc.runPostCopyActionsAndDeleteCopyState(ctx, state.currentTableName); err != nil {
+		if err := vc.runPostCopyActionsAndDeleteCopyState(ctx, stopCtx, state.currentTableName); err != nil {
 			return err
 		}
 		if err := vc.updatePos(ctx, gtid); err != nil {
@@ -323,8 +330,8 @@ func (vc *vcopier) copyAll(ctx context.Context, settings binlogplayer.VRSettings
 // runPostCopyActionsAndDeleteCopyState runs post copy actions and deletes the
 // copy state entry for a table, signifying that the copy phase is complete for
 // that table.
-func (vc *vcopier) runPostCopyActionsAndDeleteCopyState(ctx context.Context, tableName string) error {
-	if err := vc.vr.execPostCopyActions(ctx, tableName); err != nil {
+func (vc *vcopier) runPostCopyActionsAndDeleteCopyState(ctx, stopCtx context.Context, tableName string) error {
+	if err := vc.vr.execPostCopyActions(ctx, stopCtx, tableName); err != nil {
 		return vterrors.Wrapf(err, "failed to execute post copy actions for table %q", tableName)
 	}
 	log.Info("Deleting copy state and post copy actions for table " + tableName)

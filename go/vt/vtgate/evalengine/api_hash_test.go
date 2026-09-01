@@ -216,7 +216,7 @@ func coerceTo(v1, v2 sqltypes.Type) (sqltypes.Type, error) {
 	if sqltypes.IsNull(v1) || sqltypes.IsNull(v2) {
 		return sqltypes.Null, nil
 	}
-	if (sqltypes.IsTextOrBinary(v1)) && (sqltypes.IsTextOrBinary(v2)) {
+	if sqltypes.IsTextOrBinary(v1) && sqltypes.IsTextOrBinary(v2) {
 		return sqltypes.VarChar, nil
 	}
 	if sqltypes.IsDateOrTime(v1) {

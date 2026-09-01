@@ -79,7 +79,7 @@ For example:
 // Flags
 var (
 	flavor           = flag.String("flavor", "mysql80", "comma-separated bootstrap flavor(s) to run against (when using Docker mode). Available flavors: all,"+flavors)
-	bootstrapVersion = flag.String("bootstrap-version", "58", "the version identifier to use for the docker images")
+	bootstrapVersion = flag.String("bootstrap-version", "60", "the version identifier to use for the docker images")
 	runCount         = flag.Int("runs", 1, "run each test this many times")
 	logPass          = flag.Bool("log-pass", false, "log test output even if it passes")
 	timeout          = flag.Duration("timeout", 30*time.Minute, "timeout for each test")
@@ -401,7 +401,7 @@ func main() {
 	}
 
 	// Duplicate tests for flavors.
-	var dup []*Test
+	dup := make([]*Test, 0, len(tests)*len(flavors))
 	for _, flavor := range flavors {
 		for _, t := range tests {
 			test := *t
@@ -723,7 +723,7 @@ func (a ByPassTime) Less(i, j int) bool { return a[i].PassTime > a[j].PassTime }
 
 func getTestsSorted(names []string, testMap map[string]*Test) []*Test {
 	sort.Strings(names)
-	var tests []*Test
+	tests := make([]*Test, 0, len(names))
 	for _, name := range names {
 		t := testMap[name]
 		t.name = name

@@ -52,6 +52,11 @@ var (
 
 	// The error to return when we have detected a stall in the vplayer.
 	errVPlayerStalled = errors.New("progress stalled; vplayer was unable to replicate the transaction in a timely manner; examine the target mysqld instance health and the replicated queries' EXPLAIN output to see why queries are taking unusually long")
+
+	// vplayerThrottleEpoch is the reference instant for throttle-denial
+	// offsets: it carries a monotonic clock reading, so durations measured
+	// against it are immune to wall clock steps in either direction.
+	vplayerThrottleEpoch = time.Now()
 )
 
 // vplayer replays binlog events by pulling them from a vstreamer.
@@ -101,6 +106,12 @@ type vplayer struct {
 	phase string
 
 	throttlerAppName string
+	// lastThrottledNano is when applyEvents was last denied by the
+	// throttler, as monotonic nanoseconds since vplayerThrottleEpoch.
+	// The relay log uses it to defer the stall verdict: a
+	// throttle-denied applier does not drain the relay log, so that
+	// time must not count toward vplayerProgressDeadline.
+	lastThrottledNano atomic.Int64
 
 	serialMu      *sync.Mutex
 	parallelOrder *atomic.Int64
@@ -357,7 +368,7 @@ func (vp *vplayer) fetchAndApply(ctx context.Context) (err error) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	relay := newRelayLog(ctx, vp.vr.workflowConfig.RelayLogMaxItems, vp.vr.workflowConfig.RelayLogMaxSize)
+	relay := newRelayLog(ctx, vp.vr.workflowConfig.RelayLogMaxItems, vp.vr.workflowConfig.RelayLogMaxSize, &vp.lastThrottledNano)
 
 	streamErr := make(chan error, 1)
 	go func() {
@@ -704,6 +715,10 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 		}
 		// Check throttler.
 		if checkResult, ok := vp.vr.vre.throttlerClient.ThrottleCheckOKOrWaitAppName(ctx, throttlerapp.Name(vp.throttlerAppName)); !ok {
+			// While denied we are deliberately not draining the relay log,
+			// so this time must not count toward the relay log's stall
+			// deadline.
+			vp.lastThrottledNano.Store(int64(time.Since(vplayerThrottleEpoch)))
 			_ = vp.vr.updateTimeThrottled(throttlerapp.VPlayerName, checkResult.Summary())
 			estimateLag()
 			continue
@@ -996,6 +1011,29 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 		case binlogdatapb.MigrationType_SHARDS:
 			// All tables of the source were migrated. So, no validation needed.
 		case binlogdatapb.MigrationType_TABLES:
+			// Lookup vindex backfill streams must never follow a TABLES
+			// journal (written by MoveTables SwitchTraffic/ReverseTraffic):
+			// their filter selects keyspace_id(), which the vstreamer
+			// resolves against the serving keyspace's vschema, so a
+			// relocated stream either fails to plan or computes wrong
+			// keyspace_id values and corrupts the lookup table. The
+			// stream's current source keeps receiving the owner table's
+			// writes via the paired workflow after the switch -- when
+			// reverse replication is running, which is the default -- so
+			// we ignore the journal and keep replicating from it. With
+			// --enable-reverse-replication=false nothing feeds the
+			// current source and the backfill goes stale until reverse
+			// replication is started or the switch is reversed. SHARDS
+			// (Reshard) journals are still followed: the keyspace -- and
+			// with it the filter's validity -- does not change.
+			if binlogdatapb.VReplicationWorkflowType(vp.vr.WorkflowType) == binlogdatapb.VReplicationWorkflowType_CreateLookupIndex {
+				log.Info("Ignoring TABLES journal for lookup vindex workflow",
+					slog.String("workflow", vp.vr.WorkflowName),
+					slog.Int64("journal_id", event.Journal.Id),
+					slog.Any("journal_tables", event.Journal.Tables),
+				)
+				return nil
+			}
 			// Validate that all or none of the tables are in the journal.
 			jtables := make(map[string]bool)
 			for _, table := range event.Journal.Tables {

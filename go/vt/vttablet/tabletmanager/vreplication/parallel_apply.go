@@ -1113,6 +1113,10 @@ func (vp *vplayer) scheduleLoop(ctx context.Context, relay *relayLog, scheduler 
 			vp.serialMu.Unlock()
 		}
 		if checkResult, ok := vp.vr.vre.throttlerClient.ThrottleCheckOKOrWaitAppName(ctx, throttlerapp.Name(vp.throttlerAppName)); !ok {
+			// While denied we are deliberately not draining the relay log,
+			// so this time must not count toward the relay log's stall
+			// deadline.
+			vp.lastThrottledNano.Store(int64(time.Since(vplayerThrottleEpoch)))
 			// Must hold serialMu when calling updateTimeThrottled because
 			// it uses vr.dbClient, which may also be in use by the
 			// commitLoop for commitOnly transactions on the main connection.

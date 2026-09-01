@@ -231,23 +231,21 @@ func (be *MySQLShellBackupEngine) ExecuteBackup(ctx context.Context, params Back
 	// JSON-encode and write the MANIFEST
 	bm := &MySQLShellBackupManifest{
 		// Common base fields
-		BackupManifest: BackupManifest{
-			BackupMethod: mysqlShellBackupEngineName,
-			// the position is empty here because we have no way of capturing it from mysqlsh
-			// we will capture it when doing the restore as mysqlsh can replace the GTIDs with
-			// what it has stored in the backup.
-			Position:       posBeforeBackup,
-			PurgedPosition: posBeforeBackup,
-			BackupTime:     FormatRFC3339(params.BackupTime.UTC()),
-			FinishedTime:   FormatRFC3339(time.Now().UTC()),
-			ServerUUID:     serverUUID,
-			TabletAlias:    params.TabletAlias,
-			Hostname:       hostname,
-			Keyspace:       params.Keyspace,
-			Shard:          params.Shard,
-			MySQLVersion:   mysqlVersion,
-			UpgradeSafe:    true,
-		},
+		BackupMethod: mysqlShellBackupEngineName,
+		// the position is empty here because we have no way of capturing it from mysqlsh
+		// we will capture it when doing the restore as mysqlsh can replace the GTIDs with
+		// what it has stored in the backup.
+		Position:       posBeforeBackup,
+		PurgedPosition: posBeforeBackup,
+		BackupTime:     FormatRFC3339(params.BackupTime.UTC()),
+		FinishedTime:   FormatRFC3339(time.Now().UTC()),
+		ServerUUID:     serverUUID,
+		TabletAlias:    params.TabletAlias,
+		Hostname:       hostname,
+		Keyspace:       params.Keyspace,
+		Shard:          params.Shard,
+		MySQLVersion:   mysqlVersion,
+		UpgradeSafe:    true,
 
 		// mysql shell backup specific fields
 		BackupLocation: location,

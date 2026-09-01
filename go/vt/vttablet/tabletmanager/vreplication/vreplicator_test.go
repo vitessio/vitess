@@ -23,7 +23,6 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -38,6 +37,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/dbconfigs"
+	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/schemadiff"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -651,7 +651,7 @@ func TestDeferSecondaryKeys(t *testing.T) {
 				if err != nil {
 					return err
 				}
-				err = myvr.execPostCopyActions(ctx, "t1")
+				err = myvr.execPostCopyActions(ctx, ctx, "t1")
 				if err != nil {
 					return err
 				}
@@ -793,7 +793,7 @@ func TestDeferSecondaryKeys(t *testing.T) {
 				require.NoError(t, err)
 			}
 
-			err = vr.execPostCopyActions(ctx, tcase.tableName)
+			err = vr.execPostCopyActions(ctx, ctx, tcase.tableName)
 			expectedPostCopyActionRecs := 0
 			if tcase.wantExecErr != "" {
 				require.Contains(t, err.Error(), tcase.wantExecErr)
@@ -828,6 +828,23 @@ func TestDeferSecondaryKeys(t *testing.T) {
 // copying all rows, is properly killed when the context
 // is cancelled -- e.g. due to the VReplication engine
 // closing for a tablet transition during a PRS.
+type (
+	// stalledDbaDaemon simulates a stalled DBA connection setup:
+	// GetDbaConnection blocks until the given context is done -- so an
+	// unbounded context would block it forever -- and attemptDone is
+	// closed when the attempt ends.
+	stalledDbaDaemon struct {
+		mysqlctl.MysqlDaemon
+		attemptDone chan struct{}
+	}
+)
+
+func (d *stalledDbaDaemon) GetDbaConnection(ctx context.Context) (*dbconnpool.DBConnection, error) {
+	defer close(d.attemptDone)
+	<-ctx.Done()
+	return nil, ctx.Err()
+}
+
 func TestCancelledDeferSecondaryKeys(t *testing.T) {
 	// Skip the test for MariaDB as it does not have
 	// performance_schema enabled by default.
@@ -892,57 +909,215 @@ func TestCancelledDeferSecondaryKeys(t *testing.T) {
 	withoutPKs := "create table t1 (id int not null, c1 int default null, c2 int default null, primary key(id))"
 	alter := fmt.Sprintf("alter table %s.t1 add key c1 (c1), add key c2 (c2)", dbName)
 
-	// Create the table.
-	_, err = dbClient.ExecuteFetch(ddl, 1)
-	require.NoError(t, err)
+	testCases := []struct {
+		name string
+		// setup returns the stopCtx to pass to execPostCopyActions and
+		// the function which triggers the interruption of the in-flight
+		// post copy action.
+		setup func(t *testing.T) (stopCtx context.Context, interrupt func())
+		// interruptBeforeStart interrupts before execPostCopyActions is
+		// even called rather than while the ALTER is known to be running.
+		// The interruption must not be lost when it arrives while no
+		// action is executing.
+		interruptBeforeStart bool
+		// stalledKill simulates a stalled DBA connection setup during
+		// the kill attempt. The attempt must fail once its timeout
+		// expires -- rather than blocking forever -- after which the
+		// in-flight action is simply left to complete.
+		stalledKill bool
+	}{
+		{
+			// The stop context is cancelled when the controller is
+			// stopped, e.g. when stopping or deleting the workflow.
+			name: "workflow stopped",
+			setup: func(t *testing.T) (context.Context, func()) {
+				stopCtx, stopCancel := context.WithCancel(t.Context())
+				t.Cleanup(stopCancel)
+				return stopCtx, stopCancel
+			},
+		},
+		{
+			// A cancellation that arrives when no action is currently
+			// executing must still interrupt the actions promptly. If it
+			// were lost, a subsequently started action would block the
+			// controller with nothing left to interrupt it.
+			name: "workflow stopped before actions started",
+			setup: func(t *testing.T) (context.Context, func()) {
+				stopCtx, stopCancel := context.WithCancel(t.Context())
+				t.Cleanup(stopCancel)
+				return stopCtx, stopCancel
+			},
+			interruptBeforeStart: true,
+		},
+		{
+			// A stalled DBA connection setup must not leave the kill
+			// attempt blocked forever.
+			name: "workflow stopped with stalled kill connection",
+			setup: func(t *testing.T) (context.Context, func()) {
+				stopCtx, stopCancel := context.WithCancel(t.Context())
+				t.Cleanup(stopCancel)
+				return stopCtx, stopCancel
+			},
+			stalledKill: true,
+		},
+		{
+			// The engine's context is cancelled on tablet shutdown or
+			// transition. This case must run last as the shared test
+			// engine cannot be re-opened within this test.
+			name: "engine closed",
+			setup: func(t *testing.T) (context.Context, func()) {
+				return t.Context(), func() { playerEngine.cancel() }
+			},
+		},
+	}
 
-	// Setup the ALTER work.
-	err = vr.stashSecondaryKeys(ctx, tableName)
-	require.NoError(t, err)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Create the table.
+			_, err = dbClient.ExecuteFetch(ddl, 1)
+			require.NoError(t, err)
+			t.Cleanup(func() {
+				_, err := dbClient.ExecuteFetch(fmt.Sprintf("drop table %s.%s", dbName, tableName), 1)
+				require.NoError(t, err)
+				_, err = dbClient.ExecuteFetch(fmt.Sprintf("delete from _vt.post_copy_action where vrepl_id=%d", id), 1)
+				require.NoError(t, err)
+			})
 
-	// Lock the table to block execution of the ALTER so
-	// that we can be sure that it runs and we can KILL it.
-	_, err = dbaconn.ExecuteFetch(fmt.Sprintf("lock table %s.%s write", dbName, tableName), 1)
-	require.NoError(t, err)
+			// Setup the ALTER work.
+			err = vr.stashSecondaryKeys(ctx, tableName)
+			require.NoError(t, err)
 
-	// The ALTER should block on the table lock.
-	wg := sync.WaitGroup{}
-	wg.Go(func() {
-		err := vr.execPostCopyActions(ctx, tableName)
-		assert.True(t, strings.EqualFold(err.Error(), "EOF (errno 2013) (sqlstate HY000) during query: "+alter))
-	})
+			stopCtx, interrupt := tc.setup(t)
 
-	// Confirm that the expected ALTER query is being attempted.
-	query := fmt.Sprintf("select count(*) from performance_schema.events_statements_current where sql_text = '%s'", alter)
-	waitForQueryResult(t, dbaconn, query, "1")
+			var killAttemptDone chan struct{}
+			if tc.stalledKill {
+				killAttemptDone = make(chan struct{})
+				vr.mysqld = &stalledDbaDaemon{MysqlDaemon: env.Mysqld, attemptDone: killAttemptDone}
+				t.Cleanup(func() { vr.mysqld = env.Mysqld })
+			}
 
-	// Cancel the context while the ALTER is running/blocked
-	// and wait for it to be KILLed off.
-	playerEngine.cancel()
-	wg.Wait()
+			done := make(chan struct{})
+			errCh := make(chan error, 1)
+			t.Cleanup(func() {
+				// If the test failed before execPostCopyActions returned,
+				// wait for it here -- after the cleanup below has unlocked
+				// the tables -- as it uses the shared dbClient connection
+				// on its way out and would otherwise corrupt it for the
+				// cleanups and test cases that follow.
+				select {
+				case <-done:
+				case <-time.After(30 * time.Second):
+				}
+			})
 
-	_, err = dbaconn.ExecuteFetch("unlock tables", 1)
-	require.NoError(t, err)
+			// Lock the table to block execution of the ALTER so
+			// that we can be sure that it runs and we can KILL it.
+			_, err = dbaconn.ExecuteFetch(fmt.Sprintf("lock table %s.%s write", dbName, tableName), 1)
+			require.NoError(t, err)
+			t.Cleanup(func() {
+				// A no-op if the test already unlocked them.
+				_, err := dbaconn.ExecuteFetch("unlock tables", 1)
+				require.NoError(t, err)
+			})
 
-	// Confirm that the ALTER to re-add the secondary keys
-	// did not succeed.
-	currentDDL := getCurrentDDL(tableName)
-	assert.True(t, strings.EqualFold(stripCruft(withoutPKs), stripCruft(currentDDL)),
-		"Expected: %s\n     Got: %s", forError(withoutPKs), forError(currentDDL))
+			if tc.interruptBeforeStart {
+				interrupt()
+			}
 
-	// Confirm that we successfully attempted to kill it.
-	query = "select count(*) from performance_schema.events_statements_history where digest_text = 'KILL ?' and errors = 0"
-	res, err := dbaconn.ExecuteFetch(query, 1)
-	require.NoError(t, err)
-	assert.Len(t, res.Rows, 1)
-	// TODO: figure out why the KILL never shows up...
-	// require.Equal(t, "1", res.Rows[0][0].ToString())
+			// The ALTER should block on the table lock.
+			go func() {
+				defer close(done)
+				errCh <- vr.execPostCopyActions(ctx, stopCtx, tableName)
+			}()
 
-	// Confirm that the post copy action record still exists
-	// so it will later be retried.
-	res, err = dbClient.ExecuteFetch(fmt.Sprintf(getActionsSQLf, id, tableName), 1)
-	require.NoError(t, err)
-	require.Len(t, res.Rows, 1)
+			if !tc.interruptBeforeStart {
+				// Confirm that the expected ALTER query is being attempted.
+				query := fmt.Sprintf("select count(*) from performance_schema.events_statements_current where sql_text = '%s'", alter)
+				waitForQueryResult(t, dbaconn, query, "1")
+
+				// Interrupt the post copy action while the ALTER is
+				// running/blocked.
+				interrupt()
+			}
+
+			if tc.stalledKill {
+				// The kill attempt is bounded, so the stalled connection
+				// setup must fail on its own once the attempt's timeout
+				// expires.
+				require.Eventually(t, func() bool {
+					select {
+					case <-killAttemptDone:
+						return true
+					default:
+						return false
+					}
+				}, 30*time.Second, 10*time.Millisecond)
+				// The kill failed and there are no retries, so the ALTER
+				// remains; unlock the table to let it -- and with it the
+				// post copy actions -- complete.
+				_, err = dbaconn.ExecuteFetch("unlock tables", 1)
+				require.NoError(t, err)
+			}
+
+			// Wait for execPostCopyActions to return. Use a generous
+			// CI-safe timeout as resource-starved runners can pause
+			// things for multiple seconds.
+			require.Eventually(t, func() bool {
+				select {
+				case <-done:
+					return true
+				default:
+					return false
+				}
+			}, 30*time.Second, 10*time.Millisecond)
+			actionErr := <-errCh
+			if tc.stalledKill {
+				// The actions completed normally after the failed kill.
+				require.NoError(t, actionErr)
+			} else {
+				require.Error(t, actionErr)
+				if !tc.interruptBeforeStart {
+					assert.True(t, strings.EqualFold(actionErr.Error(), "EOF (errno 2013) (sqlstate HY000) during query: "+alter),
+						"unexpected error: %v", actionErr)
+				}
+			}
+
+			_, err = dbaconn.ExecuteFetch("unlock tables", 1)
+			require.NoError(t, err)
+
+			currentDDL := getCurrentDDL(tableName)
+			if tc.stalledKill {
+				// Confirm that the ALTER to re-add the secondary keys
+				// succeeded as it was never killed.
+				assert.False(t, strings.EqualFold(stripCruft(withoutPKs), stripCruft(currentDDL)),
+					"Expected the secondary keys to have been re-added, got: %s", forError(currentDDL))
+			} else {
+				// Confirm that the ALTER to re-add the secondary keys
+				// did not succeed.
+				assert.True(t, strings.EqualFold(stripCruft(withoutPKs), stripCruft(currentDDL)),
+					"Expected: %s\n     Got: %s", forError(withoutPKs), forError(currentDDL))
+			}
+
+			// Confirm that we successfully attempted to kill it.
+			query := "select count(*) from performance_schema.events_statements_history where digest_text = 'KILL ?' and errors = 0"
+			res, err := dbaconn.ExecuteFetch(query, 1)
+			require.NoError(t, err)
+			assert.Len(t, res.Rows, 1)
+			// TODO: figure out why the KILL never shows up...
+			// require.Equal(t, "1", res.Rows[0][0].ToString())
+
+			res, err = dbClient.ExecuteFetch(fmt.Sprintf(getActionsSQLf, id, tableName), 1)
+			require.NoError(t, err)
+			if tc.stalledKill {
+				// The completed actions deleted their record.
+				require.Empty(t, res.Rows)
+			} else {
+				// Confirm that the post copy action record still exists
+				// so it will later be retried.
+				require.Len(t, res.Rows, 1)
+			}
+		})
+	}
 }
 
 // TestResumingFromPreviousWorkflowKeepingRowsCopied tests that when you
