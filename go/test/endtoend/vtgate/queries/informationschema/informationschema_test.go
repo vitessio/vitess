@@ -305,6 +305,34 @@ WHERE TABLE_SCHEMA = 'ks' AND TABLE_NAME = 't2';
 	)
 }
 
+// TestInformationSchemaWithInPredicate reproduces
+// https://github.com/vitessio/vitess/issues/20878: IN predicates on
+// table_schema/table_name must route like their equality forms instead of
+// silently returning an empty set, and a multi-value schema IN must fail
+// loudly rather than return wrong rows.
+func TestInformationSchemaWithInPredicate(t *testing.T) {
+	if clusterInstance.HasPartialKeyspaces {
+		t.Skip("test can randomly select one of the shards, and the shards are in different keyspaces")
+	}
+	mcmp, closer := start(t)
+	defer closer()
+
+	// equality and single-element IN must agree (both non-empty)
+	eq := utils.Exec(t, mcmp.VtConn, "select table_name from information_schema.tables where table_schema = database() and table_name = 't1'")
+	in := utils.Exec(t, mcmp.VtConn, "select table_name from information_schema.tables where table_schema in (database()) and table_name in ('t1')")
+	require.NotEmpty(t, eq.Rows)
+	require.Equal(t, eq.Rows, in.Rows)
+
+	// the issue's literal repro: schema named by literal IN
+	inLit := utils.Exec(t, mcmp.VtConn, "select table_name from information_schema.tables where table_schema in ('ks') and table_name = 't1'")
+	require.Equal(t, eq.Rows, inLit.Rows)
+
+	// multi-value schema IN fails loudly instead of returning empty/wrong rows
+	_, err := mcmp.VtConn.ExecuteFetch("select table_name from information_schema.tables where table_schema in ('ks', 'other')", 100, false)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "VT12001")
+}
+
 func TestJoinWithSingleShardQueryOnRHS(t *testing.T) {
 	// This test checks that we can run queries like this, where the RHS is a single shard query
 	mcmp, closer := start(t)
