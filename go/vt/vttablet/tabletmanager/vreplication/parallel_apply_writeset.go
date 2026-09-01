@@ -546,6 +546,11 @@ func validateFKStreamedFieldCompatibility(childPlan *TablePlan, childFieldIdx ma
 					"FK child column %q referencing %s hashes under a streamed collation that differs from the target's: forcing serialization",
 					childCol, ref.ParentTable)
 			}
+			if _, ok := childPlan.WritesetTypeMismatchColumns[strings.ToLower(childCol)]; ok {
+				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
+					"FK child column %q referencing %s is enforced under a target column type that differs from the streamed type: forcing serialization",
+					childCol, ref.ParentTable)
+			}
 		}
 		parentPlan := planByTarget[ref.ParentTable]
 		if parentPlan == nil || len(parentPlan.Fields) == 0 {
@@ -555,6 +560,11 @@ func validateFKStreamedFieldCompatibility(childPlan *TablePlan, childFieldIdx ma
 			if _, ok := parentPlan.WritesetCollationMismatchColumns[strings.ToLower(refCol)]; ok {
 				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
 					"FK referenced column %q on parent table %s hashes under a streamed collation that differs from the target's: forcing serialization",
+					refCol, ref.ParentTable)
+			}
+			if _, ok := parentPlan.WritesetTypeMismatchColumns[strings.ToLower(refCol)]; ok {
+				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
+					"FK referenced column %q on parent table %s is enforced under a target column type that differs from the streamed type: forcing serialization",
 					refCol, ref.ParentTable)
 			}
 		}

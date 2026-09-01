@@ -1170,6 +1170,14 @@ func writesetUniqueKeysFromSpec(plan *TablePlan, tableSpec *sqlparser.TableSpec)
 				// no faithful writeset key exists for this index.
 				return nil, true
 			}
+			if _, ok := plan.WritesetTypeMismatchColumns[colName]; ok {
+				// The index's uniqueness is enforced over the target's
+				// normalized values but the streamed bytes hash under the
+				// source's type: target-equal values could hash apart and
+				// miss conflicts, so no faithful writeset key exists for
+				// this index.
+				return nil, true
+			}
 		}
 		uniqueKeys = append(uniqueKeys, indexColNames)
 	}

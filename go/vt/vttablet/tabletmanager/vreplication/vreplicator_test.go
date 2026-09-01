@@ -71,6 +71,7 @@ func TestWritesetUniqueKeysFromSpec(t *testing.T) {
 		ddl               string
 		identityCols      []string
 		mismatchCols      []string
+		typeMismatchCols  []string
 		wantUniqueKeys    [][]string
 		wantMustSerialize bool
 	}{
@@ -82,6 +83,17 @@ func TestWritesetUniqueKeysFromSpec(t *testing.T) {
 			ddl:               "create table t1 (id int not null, email varchar(64) not null, primary key(id), unique key uk_email(email))",
 			identityCols:      []string{"id"},
 			mismatchCols:      []string{"email"},
+			wantMustSerialize: true,
+		},
+		{
+			// A unique-key column whose streamed and target column types
+			// differ: the target can normalize streamed-distinct values to
+			// the same stored value, so the hash equality no longer matches
+			// the uniqueness the target enforces, force serialization.
+			name:              "type-mismatched unique secondary serializes",
+			ddl:               "create table t1 (id int not null, amount decimal(10,2) not null, primary key(id), unique key uk_amount(amount))",
+			identityCols:      []string{"id"},
+			typeMismatchCols:  []string{"amount"},
 			wantMustSerialize: true,
 		},
 		{
@@ -167,6 +179,12 @@ func TestWritesetUniqueKeysFromSpec(t *testing.T) {
 				plan.WritesetCollationMismatchColumns = make(map[string]struct{}, len(tc.mismatchCols))
 				for _, col := range tc.mismatchCols {
 					plan.WritesetCollationMismatchColumns[col] = struct{}{}
+				}
+			}
+			if len(tc.typeMismatchCols) > 0 {
+				plan.WritesetTypeMismatchColumns = make(map[string]struct{}, len(tc.typeMismatchCols))
+				for _, col := range tc.typeMismatchCols {
+					plan.WritesetTypeMismatchColumns[col] = struct{}{}
 				}
 			}
 			uniqueKeys, mustSerialize := writesetUniqueKeysFromSpec(plan, tableSpec)

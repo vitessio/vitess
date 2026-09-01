@@ -1677,6 +1677,139 @@ func TestBuildTxnWritesetIdentityCollationMismatch(t *testing.T) {
 	})
 }
 
+// TestBuildTxnWritesetIdentityTypeMismatch covers an identity column whose
+// streamed column type (whose raw value bytes the writeset hasher digests)
+// differs from the type the target enforces: the target can normalize
+// streamed-distinct values to the same stored value (e.g. a DECIMAL scale
+// reduction rounding 1.234 and 1.231 both to 1.23), so target-conflicting
+// transactions could hash apart and the plan must be marked unsupported.
+// Matching types stay supported, a non-identity mismatch is recorded for the
+// unique-key and FK checks without flipping the flag, and a side with no
+// recorded type cannot be judged and is left alone.
+func TestBuildTxnWritesetIdentityTypeMismatch(t *testing.T) {
+	vttablet.InitVReplicationConfigDefaults()
+	buildPlan := func(t *testing.T, colInfos []*ColumnInfo, fields []*querypb.Field) *TablePlan {
+		vr := &vreplicator{workflowConfig: vttablet.DefaultVReplicationConfig}
+		plan, err := vr.buildReplicatorPlan(
+			getSource(&binlogdatapb.Filter{Rules: []*binlogdatapb.Rule{{
+				Match: "t1",
+			}}}),
+			map[string][]*ColumnInfo{"t1": colInfos},
+			nil,
+			binlogplayer.NewStats(),
+			collations.MySQL8(),
+			sqlparser.NewTestParser(),
+		)
+		require.NoError(t, err)
+		tplan, err := plan.buildExecutionPlan(&binlogdatapb.FieldEvent{TableName: "t1", Fields: fields})
+		require.NoError(t, err)
+		return tplan
+	}
+	t.Run("identity type mismatch is unsupported", func(t *testing.T) {
+		tplan := buildPlan(t,
+			[]*ColumnInfo{{Name: "id", IsPK: true, ColumnType: "decimal(10,2)"}},
+			[]*querypb.Field{{Name: "id", Type: querypb.Type_DECIMAL, ColumnType: "decimal(10,3)"}},
+		)
+		assert.True(t, tplan.HasUnsupportedWritesetMapping)
+		assert.Contains(t, tplan.WritesetTypeMismatchColumns, "id")
+	})
+	t.Run("matching type stays supported", func(t *testing.T) {
+		tplan := buildPlan(t,
+			[]*ColumnInfo{{Name: "id", IsPK: true, ColumnType: "decimal(10,2)"}},
+			[]*querypb.Field{{Name: "id", Type: querypb.Type_DECIMAL, ColumnType: "decimal(10,2)"}},
+		)
+		assert.False(t, tplan.HasUnsupportedWritesetMapping)
+		assert.NotContains(t, tplan.WritesetTypeMismatchColumns, "id")
+	})
+	t.Run("non-identity type mismatch is recorded but stays supported", func(t *testing.T) {
+		tplan := buildPlan(t,
+			[]*ColumnInfo{
+				{Name: "id", IsPK: true, ColumnType: "bigint"},
+				{Name: "val", ColumnType: "decimal(10,2)"},
+			},
+			[]*querypb.Field{
+				{Name: "id", Type: querypb.Type_INT64, ColumnType: "bigint"},
+				{Name: "val", Type: querypb.Type_DECIMAL, ColumnType: "decimal(10,3)"},
+			},
+		)
+		assert.False(t, tplan.HasUnsupportedWritesetMapping)
+		assert.Contains(t, tplan.WritesetTypeMismatchColumns, "val")
+	})
+	t.Run("missing type info is not judged", func(t *testing.T) {
+		tplan := buildPlan(t,
+			[]*ColumnInfo{{Name: "id", IsPK: true, ColumnType: "decimal(10,2)"}},
+			[]*querypb.Field{{Name: "id", Type: querypb.Type_DECIMAL}},
+		)
+		assert.False(t, tplan.HasUnsupportedWritesetMapping)
+		assert.NotContains(t, tplan.WritesetTypeMismatchColumns, "id")
+	})
+}
+
+// TestBuildTxnWritesetFKTypeMismatchForcesSerialization covers FK-joined
+// columns whose streamed and target column types differ: the target enforces
+// the FK match over normalized target values while the hasher digests the
+// streamed bytes, so the child/parent conflict edge cannot be trusted and
+// the transaction must be forced onto the serial path.
+func TestBuildTxnWritesetFKTypeMismatchForcesSerialization(t *testing.T) {
+	newPlans := func(childMismatch, parentMismatch map[string]struct{}) map[string]*TablePlan {
+		return map[string]*TablePlan{
+			"parent": {
+				TargetName: "parent",
+				Fields:     []*querypb.Field{{Name: "id", Type: querypb.Type_VARCHAR}},
+				PKIndices:  []bool{true},
+
+				WritesetTypeMismatchColumns: parentMismatch,
+			},
+			"child": {
+				TargetName: "child",
+				Fields: []*querypb.Field{
+					{Name: "id", Type: querypb.Type_INT64},
+					{Name: "parent_id", Type: querypb.Type_VARCHAR},
+				},
+				PKIndices: []bool{true, false},
+
+				WritesetTypeMismatchColumns: childMismatch,
+			},
+		}
+	}
+	fkRefs := map[string][]fkConstraintRef{
+		"child": {{ParentTable: "parent", ChildColumnNames: []string{"parent_id"}, ReferencedColumnNames: []string{"id"}}},
+	}
+	childEvent := &binlogdatapb.VEvent{
+		Type: binlogdatapb.VEventType_ROW,
+		RowEvent: &binlogdatapb.RowEvent{TableName: "child", RowChanges: []*binlogdatapb.RowChange{{
+			After: &querypb.Row{Values: []byte("542"), Lengths: []int64{1, 2}},
+		}}},
+	}
+
+	t.Run("child column type mismatch forces serialization", func(t *testing.T) {
+		keys, err := buildTxnWriteset(
+			newPlans(map[string]struct{}{"parent_id": {}}, nil),
+			fkRefs,
+			buildParentFKRefs(fkRefs),
+			[]*binlogdatapb.VEvent{childEvent},
+		)
+		require.Error(t, err)
+		require.ErrorContains(t, err, "streamed type")
+		require.Nil(t, keys)
+		require.True(t, writesetErrorForcesSerialization(err),
+			"an FK column type mismatch must serialize the txn, not fail the workflow")
+	})
+	t.Run("parent referenced column type mismatch forces serialization", func(t *testing.T) {
+		keys, err := buildTxnWriteset(
+			newPlans(nil, map[string]struct{}{"id": {}}),
+			fkRefs,
+			buildParentFKRefs(fkRefs),
+			[]*binlogdatapb.VEvent{childEvent},
+		)
+		require.Error(t, err)
+		require.ErrorContains(t, err, "streamed type")
+		require.Nil(t, keys)
+		require.True(t, writesetErrorForcesSerialization(err),
+			"an FK column type mismatch must serialize the txn, not fail the workflow")
+	})
+}
+
 // TestBuildTxnWritesetFKCollationMismatchForcesSerialization covers FK-joined
 // columns whose streamed and target collations differ: the child/parent hash
 // equality the scheduler relies on no longer matches the equality the target
@@ -1723,6 +1856,8 @@ func TestBuildTxnWritesetFKCollationMismatchForcesSerialization(t *testing.T) {
 		require.Error(t, err)
 		require.ErrorContains(t, err, "collation")
 		require.Nil(t, keys)
+		require.True(t, writesetErrorForcesSerialization(err),
+			"an FK collation mismatch must serialize the txn, not fail the workflow")
 	})
 	t.Run("parent referenced column mismatch forces serialization", func(t *testing.T) {
 		keys, err := buildTxnWriteset(
@@ -1734,6 +1869,8 @@ func TestBuildTxnWritesetFKCollationMismatchForcesSerialization(t *testing.T) {
 		require.Error(t, err)
 		require.ErrorContains(t, err, "collation")
 		require.Nil(t, keys)
+		require.True(t, writesetErrorForcesSerialization(err),
+			"an FK collation mismatch must serialize the txn, not fail the workflow")
 	})
 	t.Run("no mismatch stays parallel", func(t *testing.T) {
 		keys, err := buildTxnWriteset(

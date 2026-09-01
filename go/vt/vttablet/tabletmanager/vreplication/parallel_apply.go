@@ -815,7 +815,9 @@ func writesetErrorForcesSerialization(err error) bool {
 		strings.Contains(err.Error(), "not in streamed fields") ||
 		strings.Contains(err.Error(), "no usable writeset identity") ||
 		strings.Contains(err.Error(), "streamed field metadata mismatch") ||
-		strings.Contains(err.Error(), "unknown collation ")
+		strings.Contains(err.Error(), "unknown collation ") ||
+		strings.Contains(err.Error(), "hashes under a streamed collation") ||
+		strings.Contains(err.Error(), "differs from the streamed type")
 }
 
 // computeLastEventTimestamp scans events in reverse to find the last event

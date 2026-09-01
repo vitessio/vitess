@@ -90,6 +90,7 @@ func (rp *ReplicatorPlan) buildExecutionPlan(fieldEvent *binlogdatapb.FieldEvent
 			tplanv.Fields = append(tplanv.Fields, trimmed)
 		}
 		tplanv.WritesetCollationMismatchColumns = writesetCollationMismatchColumns(tplanv.Fields, rp.ColInfoMap[prelim.TargetName], rp.collationEnv)
+		tplanv.WritesetTypeMismatchColumns = writesetTypeMismatchColumns(tplanv.Fields, rp.ColInfoMap[prelim.TargetName])
 		tplanv.HasUnsupportedWritesetMapping = hasUnsupportedWritesetMapping(&tplanv, tplanv.Fields)
 		return &tplanv, nil
 	}
@@ -100,6 +101,7 @@ func (rp *ReplicatorPlan) buildExecutionPlan(fieldEvent *binlogdatapb.FieldEvent
 	}
 	tplan.Fields = fieldEvent.Fields
 	tplan.WritesetCollationMismatchColumns = writesetCollationMismatchColumns(tplan.Fields, rp.ColInfoMap[prelim.TargetName], rp.collationEnv)
+	tplan.WritesetTypeMismatchColumns = writesetTypeMismatchColumns(tplan.Fields, rp.ColInfoMap[prelim.TargetName])
 	tplan.HasUnsupportedWritesetMapping = hasUnsupportedWritesetMapping(tplan, tplan.Fields)
 	return tplan, nil
 }
@@ -142,10 +144,13 @@ func hasUnsupportedWritesetMapping(plan *TablePlan, streamedFields []*querypb.Fi
 			continue
 		}
 		// The identity hash must agree with the target's PK equality: a
-		// collation-mismatched identity column could hash target-equal
-		// values apart, so the table serializes.
+		// collation- or type-mismatched identity column could hash
+		// target-equal values apart, so the table serializes.
 		name := strings.ToLower(strings.Trim(streamedFields[i].Name, "`"))
 		if _, ok := plan.WritesetCollationMismatchColumns[name]; ok {
+			return true
+		}
+		if _, ok := plan.WritesetTypeMismatchColumns[name]; ok {
 			return true
 		}
 	}
@@ -199,6 +204,47 @@ func writesetCollationMismatchColumns(streamedFields []*querypb.Field, colInfos 
 			mismatch = colInfo.Collation != ""
 		}
 		if mismatch {
+			if mismatched == nil {
+				mismatched = make(map[string]struct{})
+			}
+			mismatched[name] = struct{}{}
+		}
+	}
+	return mismatched
+}
+
+// writesetTypeMismatchColumns returns the lowered names of streamed columns
+// whose column type differs from the type the target enforces. The writeset
+// hasher digests the STREAMED value bytes, while the identity, unique-key,
+// and FK constraints it protects are enforced over the TARGET's stored --
+// normalized -- values: when the types differ (e.g. a DECIMAL(10,3) source
+// feeding a DECIMAL(10,2) target), streamed-distinct values can normalize to
+// the same target value and hash apart, so target-conflicting transactions
+// could receive disjoint writesets and execute out of order. Columns
+// recorded here force serialization wherever they participate in a writeset
+// key, at the same sites as WritesetCollationMismatchColumns. A column with
+// no type recorded on either side cannot be judged and is left alone.
+func writesetTypeMismatchColumns(streamedFields []*querypb.Field, colInfos []*ColumnInfo) map[string]struct{} {
+	if len(streamedFields) == 0 || len(colInfos) == 0 {
+		return nil
+	}
+	targetByName := make(map[string]*ColumnInfo, len(colInfos))
+	for _, colInfo := range colInfos {
+		if colInfo != nil {
+			targetByName[strings.ToLower(colInfo.Name)] = colInfo
+		}
+	}
+	var mismatched map[string]struct{}
+	for _, field := range streamedFields {
+		if field == nil || field.ColumnType == "" {
+			continue
+		}
+		name := strings.ToLower(strings.Trim(field.Name, "`"))
+		colInfo, ok := targetByName[name]
+		if !ok || colInfo.ColumnType == "" {
+			continue
+		}
+		if !strings.EqualFold(field.ColumnType, colInfo.ColumnType) {
 			if mismatched == nil {
 				mismatched = make(map[string]struct{})
 			}
@@ -342,10 +388,15 @@ type TablePlan struct {
 	// enforces (see writesetCollationMismatchColumns). Any writeset key that
 	// would touch one of them must force serialization instead.
 	WritesetCollationMismatchColumns map[string]struct{}
-	Stats                            *binlogplayer.Stats
-	FieldsToSkip                     map[string]bool
-	ConvertCharset                   map[string](*binlogdatapb.CharsetConversion)
-	HasExtraSourcePkColumns          bool
+	// WritesetTypeMismatchColumns holds the lowered names of streamed columns
+	// whose column type diverges from the type the target enforces (see
+	// writesetTypeMismatchColumns). Any writeset key that would touch one of
+	// them must force serialization instead.
+	WritesetTypeMismatchColumns map[string]struct{}
+	Stats                       *binlogplayer.Stats
+	FieldsToSkip                map[string]bool
+	ConvertCharset              map[string](*binlogdatapb.CharsetConversion)
+	HasExtraSourcePkColumns     bool
 
 	TablePlanBuilder *tablePlanBuilder
 	// PartialInserts is a dynamically generated cache of insert ParsedQueries, which update only some columns.
