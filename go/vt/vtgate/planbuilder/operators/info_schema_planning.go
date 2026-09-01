@@ -155,6 +155,19 @@ func extractInfoSchemaRoutingPredicate(ctx *plancontext.PlanningContext, in sqlp
 			if col == nil || (!isSchema && !isTable) {
 				return false, "", nil
 			}
+			// Guard BEFORE mutating: if the element can't be translated to an
+			// evalengine expression, we won't be able to route on it, so the IN
+			// must be left exactly as written instead of being cosmetically
+			// rewritten to `=` (same Config as the shared translatability check
+			// below).
+			_, err := evalengine.Translate(rhs[0], &evalengine.Config{
+				Collation:     collations.SystemCollation.Collation,
+				ResolveColumn: NotImplementedSchemaInfoResolver,
+				Environment:   ctx.VSchema.Environment(),
+			})
+			if err != nil {
+				return false, "", nil
+			}
 			cmp.Operator = sqlparser.EqualOp
 			cmp.Right = rhs[0]
 		case sqlparser.ListArg:

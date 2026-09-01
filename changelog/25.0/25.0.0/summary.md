@@ -250,9 +250,10 @@ An `IN` predicate on `table_schema` or `table_name` in an `information_schema`
 query previously bypassed schema-name routing entirely and silently returned
 an empty or incomplete result (issue #20878) — the form ORMs such as Rails
 now generate. A single-valued `IN` (literal list of one, or a bound list with
-one value) now routes exactly like the equivalent `=` predicate. An `IN` list
-naming more than one schema cannot be routed to a single keyspace and now
-fails with an explicit `VT12001` error instead of returning wrong rows.
+one value) now routes exactly like the equivalent `=` predicate. A bound
+`IN` list (the form produced by vtgate's query normalization) naming more
+than one schema cannot be routed to a single keyspace and now fails with an
+explicit `VT12001` error instead of returning wrong rows.
 
 #### <a id="vtgate-streamexecute-real-errors"/>Streaming errors no longer surface as connection loss</a>
 
