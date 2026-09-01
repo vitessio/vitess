@@ -70,9 +70,6 @@ type (
 		// merge-sorted.
 		OrderBy evalengine.Comparison
 
-		// ShardResultIsSorted is set by the planner when Query orders every shard result by OrderBy.
-		ShardResultIsSorted bool
-
 		// TruncateColumnCount specifies the number of columns to return
 		// in the final result. Rest of the columns are truncated
 		// from the result received. If 0, no truncation happens.
@@ -83,6 +80,9 @@ type (
 
 		// ScatterErrorsAsWarnings is true if results should be returned even if some shards have an error
 		ScatterErrorsAsWarnings bool
+
+		// ShardResultIsSorted is set by the planner when Query orders every shard result by OrderBy.
+		ShardResultIsSorted bool
 
 		// RoutingParameters parameters required for query routing.
 		*RoutingParameters
