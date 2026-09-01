@@ -30,6 +30,8 @@ import (
 func gen4Planner(query string, plannerVersion querypb.ExecuteOptions_PlannerVersion) stmtPlanner {
 	return func(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema) (*planResult, error) {
 		switch stmt := stmt.(type) {
+		case *sqlparser.Do:
+			return gen4DoStmtPlanner(query, plannerVersion, stmt, reservedVars, vschema)
 		case sqlparser.SelectStatement:
 			return gen4SelectStmtPlanner(query, plannerVersion, stmt, reservedVars, vschema)
 		case *sqlparser.Update:

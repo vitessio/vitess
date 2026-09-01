@@ -1791,6 +1791,26 @@ func TestGetPlanCacheNormalized(t *testing.T) {
 	})
 }
 
+// DO goes through the normal planner, so its plan belongs in the plan cache
+// instead of being rebuilt (semantic analysis included) on every execution.
+func TestGetPlanCacheDo(t *testing.T) {
+	r, _, _, _, ctx := createExecutorEnv(t)
+
+	vc, _ := r.newVCursor(econtext.NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "@unknown"}), makeComments(""), nil)
+	query := "do 1"
+
+	plan1, _ := getPlanCached(t, ctx, r, vc.SafeSession, query, makeComments(""), map[string]*querypb.BindVariable{}, false)
+	assertCacheSize(t, r.plans, 1)
+
+	plan2, _ := getPlanCached(t, ctx, r, vc.SafeSession, query, makeComments(""), map[string]*querypb.BindVariable{}, false)
+	assert.Same(t, plan1, plan2)
+	assertCacheSize(t, r.plans, 1)
+
+	// The skip directive still keeps a DO out of the cache.
+	getPlanCached(t, ctx, r, vc.SafeSession, "do /*vt+ SKIP_QUERY_PLAN_CACHE=1 */ 1", makeComments(""), map[string]*querypb.BindVariable{}, false)
+	assertCacheSize(t, r.plans, 1)
+}
+
 func TestGetPlanNormalized(t *testing.T) {
 	r, _, _, _, ctx := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
 
@@ -2200,7 +2220,6 @@ func TestExecutorOther(t *testing.T) {
 	stmts := []string{
 		"repair table t1",
 		"optimize table t1",
-		"do 1",
 	}
 
 	for _, stmt := range stmts {
@@ -2227,6 +2246,21 @@ func TestExecutorOther(t *testing.T) {
 			})
 		}
 	}
+}
+
+func TestExecutorDo(t *testing.T) {
+	executor, sbc1, sbc2, sbclookup, ctx := createExecutorEnv(t)
+
+	// DO with a constant expression is evaluated entirely at vtgate: it
+	// never reaches any shard, and MySQL's DO returns a plain OK with no
+	// result set.
+	result, err := executorExec(ctx, executor, &vtgatepb.Session{TargetString: "TestExecutor"}, "do 1 + 1, 2", nil)
+	require.NoError(t, err)
+	assert.Empty(t, result.Rows)
+	assert.Empty(t, result.Fields)
+	assert.EqualValues(t, 0, sbc1.ExecCount.Load())
+	assert.EqualValues(t, 0, sbc2.ExecCount.Load())
+	assert.EqualValues(t, 0, sbclookup.ExecCount.Load())
 }
 
 func TestExecutorAnalyze(t *testing.T) {

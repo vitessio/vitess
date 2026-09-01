@@ -977,6 +977,10 @@ func TestRowCount(t *testing.T) {
 	_, err = executorExec(ctx, executor, session, "delete from user where id in (42, 24)", map[string]*querypb.BindVariable{})
 	require.NoError(t, err)
 	testRowCount(t, ctx, executor, session, 2)
+
+	_, err = executorExec(ctx, executor, session, "do 1", map[string]*querypb.BindVariable{})
+	require.NoError(t, err)
+	testRowCount(t, ctx, executor, session, 0)
 }
 
 func testRowCount(t *testing.T, ctx context.Context, executor *Executor, session *vtgatepb.Session, wantRowCount int64) {
@@ -3694,6 +3698,22 @@ func TestSelectScatterFails(t *testing.T) {
 	require.NoError(t, err)
 
 	_, err = executorExec(ctx, executor, sess, "savepoint a", nil)
+	require.NoError(t, err)
+}
+
+func TestExecutorDoScatterOverride(t *testing.T) {
+	executor, _, _, _, ctx := createExecutorEnv(t)
+	executor.config.AllowScatter = false
+
+	sess := &vtgatepb.Session{TargetString: "TestExecutor"}
+
+	// A DO whose subquery scatters is rejected when scatter is disallowed.
+	_, err := executorExec(ctx, executor, sess, "do (select count(*) from `user`)", nil)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "scatter")
+
+	// The ALLOW_SCATTER directive carried on the DO overrides the restriction.
+	_, err = executorExec(ctx, executor, sess, "do /*vt+ ALLOW_SCATTER */ (select count(*) from `user`)", nil)
 	require.NoError(t, err)
 }
 

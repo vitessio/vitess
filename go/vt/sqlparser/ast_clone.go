@@ -155,6 +155,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfDelete(in)
 	case *DerivedTable:
 		return CloneRefOfDerivedTable(in)
+	case *Do:
+		return CloneRefOfDo(in)
 	case *DropColumn:
 		return CloneRefOfDropColumn(in)
 	case *DropDatabase:
@@ -1330,6 +1332,17 @@ func CloneRefOfDerivedTable(n *DerivedTable) *DerivedTable {
 	}
 	out := *n
 	out.Select = CloneTableStatement(n.Select)
+	return &out
+}
+
+// CloneRefOfDo creates a deep clone of the input.
+func CloneRefOfDo(n *Do) *Do {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Comments = CloneRefOfParsedComments(n.Comments)
+	out.Exprs = CloneSliceOfExpr(n.Exprs)
 	return &out
 }
 
@@ -4642,6 +4655,8 @@ func CloneStatement(in Statement) Statement {
 		return CloneRefOfDeallocateStmt(in)
 	case *Delete:
 		return CloneRefOfDelete(in)
+	case *Do:
+		return CloneRefOfDo(in)
 	case *DropDatabase:
 		return CloneRefOfDropDatabase(in)
 	case *DropProcedure:
