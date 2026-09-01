@@ -31,6 +31,7 @@
         - [Preparing a statement no longer starts an implicit transaction](#vtgate-prepare-no-implicit-tx)
         - [Stricter validation of SQL-level PREPARE statements](#vtgate-prepare-stricter-validation)
         - [Stricter PROXY protocol v1 header validation](#vtgate-proxy-protocol-v1-strictness)
+        - [Qualified stars are no longer coalesced by `JOIN ... USING`](#vtgate-qualified-star-join-using)
     - **[Reparent](#minor-changes-reparent)**
         - [`EmergencyReparentShard` no longer waits on replicas that cannot win the election](#ers-lagging-relay-log-wait)
         - [`EmergencyReparentShard` can explicitly recover from split brain](#ers-allow-split-brain-promotion)
@@ -303,6 +304,14 @@ Specification-conformant v1 headers, as emitted by HAProxy, AWS load balancers, 
 **Impact**: Deployments whose proxy emits one of the forms above — most notably the nginx stream module proxying between IPv6 clients and IPv4 upstreams — will have those connections rejected before the MySQL handshake. Configure the proxy to emit specification-conformant headers (for nginx, listen on a matching address family or on a v4-mapped socket so addresses are rendered in IPv6 form).
 
 See [#20733](https://github.com/vitessio/vitess/pull/20733) for details.
+
+#### <a id="vtgate-qualified-star-join-using"/>Qualified stars are no longer coalesced by `JOIN ... USING`</a>
+
+MySQL coalesces the join columns of a `JOIN ... USING` for an unqualified `*` only: a qualified `tbl.*` returns every column of the named table, join columns included. VTGate previously applied the coalescing to qualified stars too, silently omitting the join columns from the right-hand table's `tbl.*` expansion, so affected queries returned fewer columns through VTGate than on MySQL. Qualified stars now expand to every column of the named table, matching MySQL. Unqualified `*` expansion is unchanged.
+
+**Impact**: The result schema of queries that select a qualified star from the right-hand side of a `JOIN ... USING` gains the previously omitted join columns, matching what MySQL returns. A qualified star over the left-hand table also changes: the coalescing previously hoisted the join columns to the front of its expansion, and the columns now appear in table order, again matching MySQL. Clients reading those results positionally will see additional or reordered columns after upgrading.
+
+See [#20759](https://github.com/vitessio/vitess/pull/20759) for details.
 
 ### <a id="minor-changes-reparent"/>Reparent</a>
 
