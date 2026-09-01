@@ -188,6 +188,11 @@ func createInstructionFor(ctx context.Context, query string, stmt sqlparser.Stat
 			return nil, err
 		}
 		return buildRoutePlan(stmt, reservedVars, vschema, configuredPlanner)
+	case *sqlparser.ValuesStatement:
+		// A VALUES statement used as a query is rewritten during semantic analysis. A standalone one
+		// is not: sqlparser.Preview does not classify it as a read, so it would be misrouted and
+		// would miss sql_select_limit and streaming plans.
+		return nil, vterrors.VT12001("VALUES as a standalone statement")
 	case sqlparser.DDLStatement:
 		return buildGeneralDDLPlan(ctx, query, stmt, reservedVars, vschema, cfg)
 	case *sqlparser.AlterMigration:

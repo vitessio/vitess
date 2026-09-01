@@ -4842,5 +4842,122 @@
         "Query": "select information_schema.`table`.col from information_schema.`table` order by information_schema.`table`.`name` asc"
       }
     }
+  },
+  {
+    "comment": "VALUES table constructor as a derived table - columns are named column_0, column_1, ... like MySQL does",
+    "query": "select * from (values row(1, 1)) as sub",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select * from (values row(1, 1)) as sub",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Reference",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select column_0, column_1 from (select 1 as column_0, 1 as column_1 from dual where 1 != 1) as sub where 1 != 1",
+        "Query": "select column_0, column_1 from (select 1 as column_0, 1 as column_1 from dual) as sub"
+      }
+    }
+  },
+  {
+    "comment": "multi row VALUES table constructor as a derived table",
+    "query": "select * from (values row(1, 1), row(2, 2)) as sub",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select * from (values row(1, 1), row(2, 2)) as sub",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Reference",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select column_0, column_1 from (select 1 as column_0, 1 as column_1 from dual where 1 != 1 union all select 2, 2 from dual where 1 != 1) as sub where 1 != 1",
+        "Query": "select column_0, column_1 from (select 1 as column_0, 1 as column_1 from dual union all select 2, 2 from dual) as sub"
+      }
+    }
+  },
+  {
+    "comment": "VALUES table constructor as a derived table with explicit column aliases",
+    "query": "select b, a from (values row(1, 1), row(2, 2)) as sub(a, b)",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select b, a from (values row(1, 1), row(2, 2)) as sub(a, b)",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Reference",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select b, a from (select 1 as column_0, 1 as column_1 from dual where 1 != 1 union all select 2, 2 from dual where 1 != 1) as sub(a, b) where 1 != 1",
+        "Query": "select b, a from (select 1 as column_0, 1 as column_1 from dual union all select 2, 2 from dual) as sub(a, b)"
+      }
+    }
+  },
+  {
+    "comment": "predicates are pushed into the rows of a VALUES table constructor",
+    "query": "select column_0 from (values row(1), row(2)) as sub where sub.column_0 = 1",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select column_0 from (values row(1), row(2)) as sub where sub.column_0 = 1",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Reference",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select column_0 from (select 1 as column_0 from dual where 1 != 1 union all select 2 from dual where 1 != 1) as sub where 1 != 1",
+        "Query": "select column_0 from (select 1 as column_0 from dual where 1 = 1 union all select 2 from dual where 2 = 1) as sub"
+      }
+    }
+  },
+  {
+    "comment": "VALUES table constructor inside a subquery against a sharded table",
+    "query": "select id from user where id in (select column_0 from (values row(1), row(2)) as sub)",
+    "plan": {
+      "Type": "Scatter",
+      "QueryType": "SELECT",
+      "Original": "select id from user where id in (select column_0 from (values row(1), row(2)) as sub)",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id from `user` where 1 != 1",
+        "Query": "select id from `user` where id in (select column_0 from (select 1 as column_0 from dual union all select 2 from dual) as sub)"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "VALUES branches of a UNION used as a derived table",
+    "query": "select * from ((values row(1)) union all (values row(2))) as sub",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select * from ((values row(1)) union all (values row(2))) as sub",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Reference",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select column_0 from (select 1 as column_0 from dual where 1 != 1 union all select 2 as column_0 from dual where 1 != 1) as sub where 1 != 1",
+        "Query": "select column_0 from (select 1 as column_0 from dual union all select 2 as column_0 from dual) as sub"
+      }
+    }
   }
 ]

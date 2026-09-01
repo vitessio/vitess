@@ -121,3 +121,62 @@ func TestDerivedTableColumnAliasWithJoin(t *testing.T) {
 	mcmp.Exec(`SELECT user.id FROM user join (SELECT id FROM user) t(uid) on t.uid = user.id`)
 	mcmp.Exec(`SELECT user.id FROM user left join (SELECT id FROM user) t(uid) on t.uid = user.id`)
 }
+
+// TestValuesTableConstructor checks a VALUES table constructor against MySQL. VTGate plans these by
+// rewriting them into an equivalent SELECT ... UNION ALL ..., so MySQL is the oracle for the
+// generated column names, the column types unified across rows, and duplicate rows surviving.
+//
+// ORDER BY is absent because VTGate rejects it; the unit tests cover that.
+func TestValuesTableConstructor(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+
+	// The VALUES table constructor was added in MySQL 8.0.19.
+	mcmp.SkipIfBinaryIsBelowVersion(8, "mysqld")
+
+	// The generated column names are what the rewrite depends on, so compare them explicitly.
+	mcmp.ExecWithColumnCompare("select * from (values row(1, 1)) as sub")
+	mcmp.ExecWithColumnCompare("select * from (values row(1, 1), row(2, 2)) as sub")
+	mcmp.ExecWithColumnCompare("select sub.column_1, sub.column_0 from (values row(1, 2)) as sub")
+	mcmp.ExecWithColumnCompare("select * from (values row(1, 1), row(2, 2)) as sub(a, b)")
+
+	// Heterogeneous rows, where MySQL unifies the column type across the rows.
+	mcmp.ExecWithColumnCompare("select * from (values row(1), row('a')) as sub")
+	mcmp.ExecWithColumnCompare("select * from (values row(null), row(1)) as sub")
+	mcmp.ExecWithColumnCompare("select * from (values row(1, 'a'), row(2, 'bb')) as sub")
+
+	// VALUES keeps duplicate rows, so the rewrite has to use UNION ALL rather than UNION.
+	mcmp.Exec("select * from (values row(1), row(1), row(1)) as sub")
+	mcmp.Exec("select * from (values row(1), row(2), row(3) limit 2) as sub")
+
+	// The other positions the rewrite covers. The join uses a single row on purpose: a multi row
+	// VALUES desugars to a UNION, and a join predicate pushed into a UNION's branches is not
+	// dropped again when the join merges into one route, so that shape fails on #20955 until
+	// #20956 lands.
+	mcmp.Exec("select user.id from user join (values row(1)) as sub on user.id = sub.column_0 order by user.id")
+	// Two rows, not three: pushing a predicate into three or more UNION branches substitutes the
+	// wrong branch's expression on #20960, so that shape returns the wrong rows today.
+	mcmp.Exec("select column_0 from (values row(1), row(2)) as sub where column_0 > 1 order by column_0")
+	mcmp.Exec("select * from ((values row(1)) union all (values row(2))) as sub")
+	mcmp.Exec("with x as (values row(1, 2)) select * from x")
+
+	// A subquery inside a row is left out on purpose: an uncorrelated aggregate subquery inside a
+	// derived table is routed to a single shard on #20961, so it returns a partial count. The unit
+	// tests cover that MySQL accepts the shape.
+}
+
+// TestValuesTableConstructorErrors checks that the VALUES shapes MySQL rejects are rejected by
+// VTGate too, rather than being desugared into a SELECT that MySQL would accept.
+func TestValuesTableConstructorErrors(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+
+	mcmp.SkipIfBinaryIsBelowVersion(8, "mysqld")
+
+	_, err := mcmp.ExecAllowAndCompareError("select * from (values row(1, 1), row(2)) as sub", utils.CompareOptions{})
+	require.Error(t, err)
+
+	// The rewritten `select count(*) from dual` would otherwise happily return a row.
+	_, err = mcmp.ExecAllowAndCompareError("select * from (values row(count(*))) as sub", utils.CompareOptions{})
+	require.Error(t, err)
+}

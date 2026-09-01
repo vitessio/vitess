@@ -482,3 +482,65 @@ func TestVersionedCommentParsing(t *testing.T) {
 		})
 	}
 }
+
+// TestValuesToTableStatement checks the desugaring of a VALUES table constructor into the SELECT
+// statement that produces the same rows. The expectations were checked against MySQL 8.4.
+func TestValuesToTableStatement(t *testing.T) {
+	tcases := []struct {
+		in           string
+		out          string
+		errorMessage string
+	}{{
+		in:  "values row(1, 2)",
+		out: "select 1 as column_0, 2 as column_1 from dual",
+	}, {
+		in:  "values row(1, 2), row(3, 4), row(3, 4)",
+		out: "select 1 as column_0, 2 as column_1 from dual union all select 3, 4 from dual union all select 3, 4 from dual",
+	}, {
+		in:  "values /* a comment */ row(1)",
+		out: "select /* a comment */ 1 as column_0 from dual",
+	}, {
+		in:  "with x as (select 1 from t) values row(2) limit 3",
+		out: "with x as (select 1 from t) select 2 as column_0 from dual limit 3",
+	}, {
+		in:  "with x as (select 1 from t) values row(2), row(3) limit 3",
+		out: "with x as (select 1 from t) select 2 as column_0 from dual union all select 3 from dual limit 3",
+	}, {
+		// MySQL never applies these, so a sorting UNION would return different rows.
+		in:           "values row(2), row(1) order by column_0",
+		errorMessage: "VT12001: unsupported: VALUES with an ORDER BY",
+	}, {
+		in:           "values row(2), row(1) order by 1 limit 1",
+		errorMessage: "VT12001: unsupported: VALUES with an ORDER BY",
+	}, {
+		// VT03006 carries the SQL state MySQL uses for a ragged VALUES statement.
+		in:           "values row(1), row(2, 3)",
+		errorMessage: "VT03006: column count does not match value count with the row",
+	}, {
+		in:           "values row(1, 2), row(3)",
+		errorMessage: "VT03006: column count does not match value count with the row",
+	}, {
+		in:           "values ::a",
+		errorMessage: "VT12001: unsupported: VALUES with a list argument",
+	}, {
+		in:           "values row()",
+		errorMessage: "VT03012: invalid syntax: each row of a VALUES clause must have at least one column",
+	}}
+
+	for _, tcase := range tcases {
+		t.Run(tcase.in, func(t *testing.T) {
+			stmt, err := NewTestParser().Parse(tcase.in)
+			require.NoError(t, err)
+			values, ok := stmt.(*ValuesStatement)
+			require.True(t, ok, "expected a VALUES statement, got %T", stmt)
+
+			out, err := ValuesToTableStatement(values)
+			if tcase.errorMessage != "" {
+				require.EqualError(t, err, tcase.errorMessage)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tcase.out, String(out))
+		})
+	}
+}

@@ -266,7 +266,7 @@
     }
   },
   {
-    "comment": "union operations in derived table, without star expression (FROM)¡",
+    "comment": "union operations in derived table, without star expression (FROM)\u00a1",
     "query": "select col1,col2 from (select col1, col2 from user union all select col1, col2 from user_extra) as t",
     "plan": {
       "Type": "Scatter",
@@ -2909,5 +2909,103 @@
       ]
     },
     "skip_e2e": true
+  },
+  {
+    "comment": "a multi row VALUES table constructor on the right of a UNION is wrapped in a derived table, since a nested UNION is not supported there",
+    "query": "select 0 union all values row(1), row(2)",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select 0 union all values row(1), row(2)",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Reference",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select 0 from dual where 1 != 1 union all select column_0 from (select 1 as column_0 from dual where 1 != 1 union all select 2 from dual where 1 != 1) as dt where 1 != 1",
+        "Query": "select 0 from dual union all select column_0 from (select 1 as column_0 from dual union all select 2 from dual) as dt"
+      }
+    }
+  },
+  {
+    "comment": "the same for UNION DISTINCT, where reassociating instead of wrapping would change the result",
+    "query": "select 0 union values row(1), row(2)",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select 0 union values row(1), row(2)",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Reference",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select 0 from dual where 1 != 1 union select column_0 from (select 1 as column_0 from dual where 1 != 1 union all select 2 from dual where 1 != 1) as dt where 1 != 1",
+        "Query": "select 0 from dual union select column_0 from (select 1 as column_0 from dual union all select 2 from dual) as dt"
+      }
+    }
+  },
+  {
+    "comment": "a single row VALUES table constructor needs no wrapping",
+    "query": "select 0 union all values row(1)",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select 0 union all values row(1)",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Reference",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select 0 from dual where 1 != 1 union all select 1 as column_0 from dual where 1 != 1",
+        "Query": "select 0 from dual union all select 1 as column_0 from dual"
+      }
+    }
+  },
+  {
+    "comment": "a VALUES table constructor on the left of a UNION needs no wrapping",
+    "query": "values row(1), row(2) union all select 0",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "values row(1), row(2) union all select 0",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Reference",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select 1 as column_0 from dual where 1 != 1 union all select 2 from dual where 1 != 1 union all select 0 from dual where 1 != 1",
+        "Query": "select 1 as column_0 from dual union all select 2 from dual union all select 0 from dual"
+      }
+    }
+  },
+  {
+    "comment": "VALUES table constructor unioned with a sharded table",
+    "query": "select id from user union all values row(1), row(2)",
+    "plan": {
+      "Type": "Scatter",
+      "QueryType": "SELECT",
+      "Original": "select id from user union all values row(1), row(2)",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id from `user` where 1 != 1 union all select column_0 from (select 1 as column_0 from dual where 1 != 1 union all select 2 from dual where 1 != 1) as dt where 1 != 1",
+        "Query": "select id from `user` union all select column_0 from (select 1 as column_0 from dual union all select 2 from dual) as dt"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
   }
 ]

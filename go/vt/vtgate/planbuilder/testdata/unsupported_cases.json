@@ -443,5 +443,25 @@
     "comment": "window function in derived table on scatter route",
     "query": "select * from (select rank() over (partition by col) as r from user) as t",
     "plan": "VT12001: unsupported: window functions are only supported for single-shard queries"
+  },
+  {
+    "comment": "the rows of a VALUES list argument are only known at execution time, so it cannot be planned as a derived table",
+    "query": "select * from (values ::a) as sub",
+    "plan": "VT12001: unsupported: VALUES with a list argument"
+  },
+  {
+    "comment": "a VALUES row with no columns has no valid SELECT equivalent",
+    "query": "select * from (values row()) as sub",
+    "plan": "VT03012: invalid syntax: each row of a VALUES clause must have at least one column"
+  },
+  {
+    "comment": "a standalone VALUES statement is not classified as a read by sqlparser.Preview, so it is not planned yet",
+    "query": "values row(1, 2)",
+    "plan": "VT12001: unsupported: VALUES as a standalone statement"
+  },
+  {
+    "comment": "all rows of a VALUES table constructor must have the same number of columns",
+    "query": "select * from (values row(1, 1), row(2)) as sub",
+    "plan": "VT03006: column count does not match value count with the row"
   }
 ]

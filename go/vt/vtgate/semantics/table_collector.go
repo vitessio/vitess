@@ -441,7 +441,7 @@ func (tc *tableCollector) handleDerivedTable(node *sqlparser.AliasedTableExpr, t
 	case *sqlparser.Union:
 		return tc.addUnionDerivedTable(sel, node, node.Columns, node.As)
 	default:
-		return vterrors.VT13001("[BUG] %T in a derived table", sel)
+		return vterrors.VT13001(fmt.Sprintf("%T in a derived table", sel))
 	}
 }
 

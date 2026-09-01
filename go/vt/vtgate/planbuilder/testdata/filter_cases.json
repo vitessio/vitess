@@ -5120,5 +5120,27 @@
         "user.user_extra"
       ]
     }
+  },
+  {
+    "comment": "VALUES table constructor as an IN subquery",
+    "query": "select id from user where id in (values row(1), row(2))",
+    "plan": {
+      "Type": "Scatter",
+      "QueryType": "SELECT",
+      "Original": "select id from user where id in (values row(1), row(2))",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id from `user` where 1 != 1",
+        "Query": "select id from `user` where id in (select 1 as column_0 from dual union all select 2 from dual)"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
   }
 ]

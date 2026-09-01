@@ -2500,6 +2500,65 @@ func GetAllSelects(selStmt TableStatement) []TableStatement {
 	panic("[BUG]: unknown type for SelectStatement")
 }
 
+// ValuesToTableStatement desugars a VALUES table constructor into the SELECT statement that
+// produces the same rows. UNION ALL, because VALUES keeps duplicate rows:
+//
+//	VALUES ROW(1, 2), ROW(3, 4)  ->  SELECT 1 AS column_0, 2 AS column_1 UNION ALL SELECT 3, 4
+func ValuesToTableStatement(values *ValuesStatement) (TableStatement, error) {
+	if values.ListArg != "" {
+		// The rows are only known once the bind variables are bound.
+		return nil, vterrors.VT12001("VALUES with a list argument")
+	}
+	if len(values.Order) > 0 {
+		// MySQL parses and validates the ORDER BY of a VALUES statement but never applies it, so a
+		// UNION, which would sort, is not an equivalent rewrite.
+		return nil, vterrors.VT12001("VALUES with an ORDER BY")
+	}
+	if len(values.Rows) == 0 {
+		return nil, vterrors.VT13001("VALUES statement with neither rows nor a list argument")
+	}
+
+	width := len(values.Rows[0])
+	if width == 0 {
+		// Our grammar accepts ROW(), MySQL does not.
+		return nil, vterrors.VT03012("each row of a VALUES clause must have at least one column")
+	}
+
+	var result TableStatement
+	for i, row := range values.Rows {
+		if len(row) != width {
+			// The error MySQL reports for a ragged VALUES, rather than the one the desugared UNION
+			// would report for a ragged UNION.
+			return nil, vterrors.VT03006()
+		}
+		sel := &Select{SelectExprs: valuesRowToSelectExprs(row, i == 0)}
+		if i == 0 {
+			sel.Comments = values.Comments
+			result = sel
+			continue
+		}
+		result = &Union{Left: result, Right: sel}
+	}
+
+	result.SetWith(values.With)
+	result.SetLimit(values.Limit)
+	return result, nil
+}
+
+// valuesRowToSelectExprs turns a VALUES row into a projection. Only the first row is aliased, since
+// a UNION takes its column names from its first branch, and MySQL names them column_0, column_1, ...
+func valuesRowToSelectExprs(row ValTuple, withColumnAliases bool) *SelectExprs {
+	exprs := make([]SelectExpr, 0, len(row))
+	for i, expr := range row {
+		ae := &AliasedExpr{Expr: expr}
+		if withColumnAliases {
+			ae.As = NewIdentifierCI(fmt.Sprintf("column_%d", i))
+		}
+		exprs = append(exprs, ae)
+	}
+	return &SelectExprs{Exprs: exprs}
+}
+
 // ColumnName returns the alias if one was provided, otherwise prints the AST
 func (ae *AliasedExpr) ColumnName() string {
 	if ae.As.NotEmpty() {
@@ -3203,9 +3262,13 @@ func (node *ValuesStatement) GetColumns() []SelectExpr {
 	panic("no columns available") // TODO: we need a better solution than a panic
 }
 
-func (node *ValuesStatement) SetComments(comments Comments) {}
+func (node *ValuesStatement) SetComments(comments Comments) {
+	node.Comments = comments.Parsed()
+}
 
-func (node *ValuesStatement) GetParsedComments() *ParsedComments { return nil }
+func (node *ValuesStatement) GetParsedComments() *ParsedComments {
+	return node.Comments
+}
 
 func NewFuncExpr(name string, exprs ...Expr) *FuncExpr {
 	return &FuncExpr{
