@@ -131,7 +131,7 @@ type (
 		AddWarningCount(name string, value int64)
 	}
 
-	iExecuteResultRuns interface {
+	resultRunExecutor interface {
 		ExecuteMultiShardWithResultRuns(ctx context.Context, primitive engine.Primitive, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, session *SafeSession, autocommit bool, ignoreMaxMemoryRows bool, resultsObserver ResultsObserver, fetchLastInsertID bool) (qr *sqltypes.Result, resultRuns []*sqltypes.Result, errs []error)
 	}
 
@@ -911,7 +911,7 @@ func (vc *VCursorImpl) executeMultiShard(ctx context.Context, primitive engine.P
 
 	commentedQueries := commentedShardQueries(queries, vc.marginComments)
 	if withResultRuns {
-		if executor, ok := vc.executor.(iExecuteResultRuns); ok {
+		if executor, ok := vc.executor.(resultRunExecutor); ok {
 			qr, resultRuns, errs = executor.ExecuteMultiShardWithResultRuns(ctx, primitive, rss, commentedQueries, vc.SafeSession, canAutocommit, vc.ignoreMaxMemoryRows, vc.observer, fetchLastInsertID)
 		} else {
 			qr, errs = vc.executor.ExecuteMultiShard(ctx, primitive, rss, commentedQueries, vc.SafeSession, canAutocommit, vc.ignoreMaxMemoryRows, vc.observer, fetchLastInsertID)

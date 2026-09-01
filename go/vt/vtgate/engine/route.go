@@ -43,7 +43,7 @@ import (
 var _ Primitive = (*Route)(nil)
 
 type (
-	resultRunVCursor interface {
+	resultRunExecutor interface {
 		ExecuteMultiShardWithResultRuns(ctx context.Context, primitive Primitive, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, rollbackOnError, canAutocommit, fetchLastInsertID bool) (*sqltypes.Result, []*sqltypes.Result, []error)
 	}
 
@@ -201,8 +201,8 @@ func (route *Route) executeShards(
 		errs       []error
 	)
 	if route.ShardResultIsSorted && len(route.OrderBy) > 0 && len(rss) > 1 {
-		if resultRunsVCursor, ok := vcursor.(resultRunVCursor); ok {
-			result, resultRuns, errs = resultRunsVCursor.ExecuteMultiShardWithResultRuns(ctx, route, rss, queries, false /*rollbackOnError*/, false /*canAutocommit*/, route.FetchLastInsertID)
+		if executor, ok := vcursor.(resultRunExecutor); ok {
+			result, resultRuns, errs = executor.ExecuteMultiShardWithResultRuns(ctx, route, rss, queries, false /*rollbackOnError*/, false /*canAutocommit*/, route.FetchLastInsertID)
 		} else {
 			result, errs = vcursor.ExecuteMultiShard(ctx, route, rss, queries, false /*rollbackOnError*/, false /*canAutocommit*/, route.FetchLastInsertID)
 		}
