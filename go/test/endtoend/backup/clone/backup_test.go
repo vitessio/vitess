@@ -19,6 +19,7 @@ package clone
 import (
 	"fmt"
 	"os"
+	"path"
 	"strings"
 	"testing"
 	"time"
@@ -125,6 +126,21 @@ func vtbackupWithClone(t *testing.T) error {
 	mysqlSocket, err := os.CreateTemp("", "vtbackup_clone_test_mysql.sock")
 	require.NoError(t, err)
 	defer os.Remove(mysqlSocket.Name())
+
+	// Boot the recipient mysqld with super-read-only enabled, mirroring the
+	// stock mycnf templates used in production. The init_db file restores the
+	// boot value at the end of initialization, so the recipient is read-only
+	// when the clone starts. CLONE INSTANCE is a write statement that
+	// super_read_only blocks for every user, so this exercises ExecuteClone
+	// disabling super_read_only before cloning.
+	sroCnf := path.Join(t.TempDir(), "super_read_only.cnf")
+	require.NoError(t, os.WriteFile(sroCnf, []byte("super-read-only = 1\n"), 0o666))
+	extraMyCnf := sroCnf
+	if existing := os.Getenv("EXTRA_MY_CNF"); existing != "" {
+		// Append last so super-read-only wins over any earlier settings.
+		extraMyCnf = existing + ":" + sroCnf
+	}
+	t.Setenv("EXTRA_MY_CNF", extraMyCnf)
 
 	extraArgs := []string{
 		"--allow-first-backup",

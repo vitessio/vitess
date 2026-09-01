@@ -705,6 +705,38 @@ func TestCloneFromDonor(t *testing.T) {
 			wantErr:         false,
 		},
 		{
+			name:            "disables super_read_only before clone",
+			cloneFromTablet: "cell1-100",
+			setup: func(t *testing.T, env *cloneFromDonorTestEnv) {
+				// The recipient booted read-only (e.g. super-read-only in my.cnf,
+				// restored at the end of init_db.sql). CLONE INSTANCE is a write
+				// statement that super_read_only blocks for every user, so
+				// ExecuteClone must disable it before cloning.
+				env.mysqld.SuperReadOnly.Store(true)
+				env.mysqld.ReadOnly = true
+				env.mysqld.ExecuteSuperQueryListCallback = func() {
+					// Fires for SET GLOBAL clone_valid_donor_list and for the
+					// CLONE command: super_read_only must already be off.
+					assert.False(t, env.mysqld.SuperReadOnly.Load(), "super_read_only must be disabled before CLONE runs")
+				}
+			},
+			wantErr: false,
+			assertResult: func(t *testing.T, env *cloneFromDonorTestEnv) {
+				assert.False(t, env.mysqld.SuperReadOnly.Load())
+			},
+		},
+		{
+			name:            "fails when super_read_only cannot be disabled",
+			cloneFromTablet: "cell1-100",
+			setup: func(t *testing.T, env *cloneFromDonorTestEnv) {
+				env.mysqld.SetSuperReadOnlyError = assert.AnError
+				// Neither the donor-list SET nor the CLONE command may execute.
+				env.mysqld.ExpectedExecuteSuperQueryList = []string{}
+			},
+			wantErr:         true,
+			wantErrContains: "failed to disable super_read_only before clone",
+		},
+		{
 			name:            "ERRestartServerFailed triggers manual restart and succeeds",
 			cloneFromTablet: "cell1-100",
 			setup: func(t *testing.T, env *cloneFromDonorTestEnv) {

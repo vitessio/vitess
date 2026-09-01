@@ -300,6 +300,18 @@ func (c *CloneExecutor) ExecuteClone(ctx context.Context, mysqld MysqlDaemon, my
 
 	log.Info(fmt.Sprintf("Starting CLONE REMOTE from %s:%d", c.DonorHost, c.DonorPort))
 
+	// CLONE INSTANCE is a write statement on the recipient, and super_read_only
+	// blocks it for every user — no privilege (SUPER, CONNECTION_ADMIN, ...)
+	// bypasses it. The recipient commonly boots read-only: the stock mycnf
+	// templates enable super-read-only, and init_db scripts restore that value
+	// at the end of initialization. Disable it explicitly before cloning rather
+	// than relying on the init flow to leave the instance writable. There is no
+	// need to restore it afterwards: mysqld restarts when CLONE completes, which
+	// re-applies the configured value.
+	if _, err := mysqld.SetSuperReadOnly(ctx, false); err != nil {
+		return vterrors.Wrap(err, "failed to disable super_read_only before clone")
+	}
+
 	// Set the valid donor list
 	donorAddr := fmt.Sprintf("%s:%d", c.DonorHost, c.DonorPort)
 	setDonorListQuery := fmt.Sprintf("SET GLOBAL clone_valid_donor_list = '%s'", donorAddr)
