@@ -1144,21 +1144,22 @@ func (td *tableDiffer) getSourcePKCols() error {
 		td.lastTargetPK = nil
 		return nil
 	}
-	// The pre-fix code stored the source lastpk using target-column-ordinal indices.
-	// When that mapping differs from the corrected one, a checkpoint persisted before
-	// an upgrade would resume the source from a wrongly ordered value (the false
-	// ExtraRowsSource in #20601), and it cannot be told apart from a current one by
-	// content (a single reordered PK keeps the same field name, only the value
-	// differs). Treat such layouts as un-checkpointable: persist no lastpk and restart
-	// both streams on resume, exactly like the subset-projection case above.
-	if !slices.Equal(indices, legacySourcePkColOrder(td.table.Columns, sourceTable.PrimaryKeyColumns)) {
+	td.tablePlan.sourcePkCols = indices
+
+	// A loaded checkpoint on a layout the pre-fix code mapped differently
+	// (column-ordinal order) than the corrected SELECT-position order cannot be
+	// proven current: a single reordered PK keeps the same field name, only the
+	// value differs, so a stale pre-upgrade checkpoint is indistinguishable from a
+	// new one. Discard it and restart both streams; this run persists no lastpk, so
+	// a subsequent run loads none and resumes normally with the corrected mapping.
+	// A fresh run (no loaded checkpoint) is unaffected and checkpoints normally.
+	if td.lastSourcePK != nil &&
+		!slices.Equal(indices, legacySourcePkColOrder(td.table.Columns, sourceTable.PrimaryKeyColumns)) {
 		td.tablePlan.sourceCheckpointUnavailable = true
+		td.tablePlan.sourcePkCols = nil
 		td.lastSourcePK = nil
 		td.lastTargetPK = nil
-		return nil
 	}
-
-	td.tablePlan.sourcePkCols = indices
 
 	return nil
 }

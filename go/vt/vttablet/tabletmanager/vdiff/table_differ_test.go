@@ -725,14 +725,13 @@ func TestGetSourcePKCols_SubsetProjectionUnavailable(t *testing.T) {
 	require.Empty(t, td.tablePlan.sourcePkCols)
 }
 
-// TestGetSourcePKCols_ReorderedLayoutIsUncheckpointable verifies that a table
-// whose source-PK layout the pre-fix code would have mapped differently (here a
-// composite PK (c, a) with a SELECT order of b, c, a, so the corrected mapping
-// [1, 2] differs from the old column-ordinal mapping [0, 2]) is treated as
-// un-checkpointable. Because a checkpoint persisted before an upgrade cannot be
-// told apart from a current one by content, no source lastpk is persisted and any
-// resume restarts both streams, avoiding the false ExtraRowsSource in #20601.
-func TestGetSourcePKCols_ReorderedLayoutIsUncheckpointable(t *testing.T) {
+// TestGetSourcePKCols_FreshReorderedLayoutCheckpoints verifies that a fresh VDiff
+// (no persisted checkpoint) on a table whose source query reorders the PK columns
+// still checkpoints correctly with the SELECT-position mapping. Here the composite
+// PK (c, a) is projected as b, c, a, so the corrected sourcePkCols are [1, 2] and
+// lastPKFromRow pairs each PK value with the right column. The upgrade guard only
+// affects a loaded checkpoint, so a fresh run is unaffected.
+func TestGetSourcePKCols_FreshReorderedLayoutCheckpoints(t *testing.T) {
 	tvde := newTestVDiffEnv(t)
 	defer tvde.close()
 
@@ -766,8 +765,18 @@ func TestGetSourcePKCols_ReorderedLayoutIsUncheckpointable(t *testing.T) {
 	}
 
 	require.NoError(t, td.getSourcePKCols())
-	require.True(t, td.tablePlan.sourceCheckpointUnavailable, "a reordered source-PK layout must not be checkpointed")
-	require.Empty(t, td.tablePlan.sourcePkCols, "no partial source key must be built")
+	require.False(t, td.tablePlan.sourceCheckpointUnavailable, "a fresh reordered layout must still be checkpointed")
+	require.Equal(t, []int{1, 2}, td.tablePlan.sourcePkCols)
+
+	// A streamed row [b=10, c=20, a=30] serializes the source checkpoint as
+	// PK (c, a) = (20, 30) using SELECT indices [1, 2].
+	row := []sqltypes.Value{sqltypes.NewInt64(10), sqltypes.NewInt64(20), sqltypes.NewInt64(30)}
+	lastPK := td.lastPKFromRow(row)
+	require.NotNil(t, lastPK.Source)
+	sourceResult := sqltypes.Proto3ToResult(lastPK.Source)
+	require.Len(t, sourceResult.Rows, 1)
+	require.Equal(t, "20", sourceResult.Rows[0][0].ToString(), "first source PK value should be column c")
+	require.Equal(t, "30", sourceResult.Rows[0][1].ToString(), "second source PK value should be column a")
 }
 
 // TestGetSourcePKCols_DiscardsLegacyOrderedCheckpoint verifies the upgrade guard.
