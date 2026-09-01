@@ -27,6 +27,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -1359,4 +1360,36 @@ func TestBuildPlanFailure(t *testing.T) {
 		err = wd.buildPlan(dbc, filter, testSchema)
 		assert.EqualError(t, err, tcase.err, tcase.input)
 	}
+}
+
+// TestMarkTableErroredPreservesOriginalError verifies that when marking a table
+// errored fails -- e.g. the report write failed with errno 1153, closing the
+// MySQL connection, so the follow-up state update fails with errno 2006 -- the
+// original errno-1153 error is returned rather than the shadowing 2006.
+func TestMarkTableErroredPreservesOriginalError(t *testing.T) {
+	wd := &workflowDiffer{ct: &controller{id: 1}}
+	table := &tabletmanagerdatapb.TableDefinition{Name: "test"}
+	td := &tableDiffer{wd: wd, table: table}
+
+	diffErr := &sqlerror.SQLError{
+		Num:     sqlerror.ERNetPacketTooLarge,
+		State:   "08S01",
+		Message: "Got a packet bigger than 'max_allowed_packet' bytes",
+	}
+	connErr := &sqlerror.SQLError{
+		Num:     sqlerror.CRServerGone,
+		State:   "HY000",
+		Message: "MySQL server has gone away",
+	}
+
+	dbc := binlogplayer.NewMockDBClient(t)
+	// updateTableState(ErrorState) fails because the connection is gone.
+	dbc.ExpectRequestRE("update _vt.vdiff_table set state = 'error'", &sqltypes.Result{}, connErr)
+	// insertVDiffLog then runs (its own failure is swallowed).
+	dbc.ExpectRequestRE("insert into _vt.vdiff_log", &sqltypes.Result{}, nil)
+
+	err := wd.markTableErrored(t.Context(), dbc, td, diffErr)
+	require.ErrorContains(t, err, "(errno 1153)")
+	require.NotContains(t, err.Error(), "errno 2006")
+	dbc.Wait()
 }
