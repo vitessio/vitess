@@ -1846,7 +1846,7 @@ func (e *Executor) ExecuteMultiShardPerShard(ctx context.Context, primitive engi
 
 // ExecuteMultiShardWithResultRuns executes a scatter query and preserves successful shard result runs.
 func (e *Executor) ExecuteMultiShardWithResultRuns(ctx context.Context, primitive engine.Primitive, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, session *econtext.SafeSession, autocommit bool, ignoreMaxMemoryRows bool, resultsObserver econtext.ResultsObserver, fetchLastInsertID bool) (qr *sqltypes.Result, resultRuns []*sqltypes.Result, errs []error) {
-	return e.scatterConn.ExecuteMultiShardWithResultRuns(ctx, primitive, rss, queries, session, autocommit, ignoreMaxMemoryRows, resultsObserver, fetchLastInsertID)
+	return e.scatterConn.executeMultiShardWithResultRuns(ctx, primitive, rss, queries, session, autocommit, ignoreMaxMemoryRows, resultsObserver, fetchLastInsertID)
 }
 
 // StreamExecuteMulti implements the IExecutor interface

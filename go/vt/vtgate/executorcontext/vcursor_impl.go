@@ -108,6 +108,7 @@ type (
 		Execute(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, method string, session *SafeSession, s string, vars map[string]*querypb.BindVariable, prepared bool) (*sqltypes.Result, error)
 		ExecuteMultiShard(ctx context.Context, primitive engine.Primitive, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, session *SafeSession, autocommit bool, ignoreMaxMemoryRows bool, resultsObserver ResultsObserver, fetchLastInsertID bool) (qr *sqltypes.Result, errs []error)
 		ExecuteMultiShardPerShard(ctx context.Context, primitive engine.Primitive, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, session *SafeSession, autocommit bool, resultsObserver ResultsObserver, fetchLastInsertID bool) (results []*sqltypes.Result, errs []error)
+		ExecuteMultiShardWithResultRuns(ctx context.Context, primitive engine.Primitive, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, session *SafeSession, autocommit bool, ignoreMaxMemoryRows bool, resultsObserver ResultsObserver, fetchLastInsertID bool) (qr *sqltypes.Result, resultRuns []*sqltypes.Result, errs []error)
 		StreamExecuteMulti(ctx context.Context, primitive engine.Primitive, query string, rss []*srvtopo.ResolvedShard, vars []map[string]*querypb.BindVariable, session *SafeSession, autocommit bool, callback func(reply *sqltypes.Result) error, observer ResultsObserver, fetchLastInsertID bool) []error
 		ExecuteLock(ctx context.Context, rs *srvtopo.ResolvedShard, query *querypb.BoundQuery, session *SafeSession, lockFuncType sqlparser.LockingFuncType) (*sqltypes.Result, error)
 		Commit(ctx context.Context, safeSession *SafeSession) error
@@ -129,10 +130,6 @@ type (
 		ReadTransaction(ctx context.Context, transactionID string) (*querypb.TransactionMetadata, error)
 		UnresolvedTransactions(ctx context.Context, targets []*querypb.Target) ([]*querypb.TransactionMetadata, error)
 		AddWarningCount(name string, value int64)
-	}
-
-	resultRunExecutor interface {
-		ExecuteMultiShardWithResultRuns(ctx context.Context, primitive engine.Primitive, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, session *SafeSession, autocommit bool, ignoreMaxMemoryRows bool, resultsObserver ResultsObserver, fetchLastInsertID bool) (qr *sqltypes.Result, resultRuns []*sqltypes.Result, errs []error)
 	}
 
 	// VSchemaOperator is an interface to Vschema Operations
@@ -911,11 +908,7 @@ func (vc *VCursorImpl) executeMultiShard(ctx context.Context, primitive engine.P
 
 	commentedQueries := commentedShardQueries(queries, vc.marginComments)
 	if withResultRuns {
-		if executor, ok := vc.executor.(resultRunExecutor); ok {
-			qr, resultRuns, errs = executor.ExecuteMultiShardWithResultRuns(ctx, primitive, rss, commentedQueries, vc.SafeSession, canAutocommit, vc.ignoreMaxMemoryRows, vc.observer, fetchLastInsertID)
-		} else {
-			qr, errs = vc.executor.ExecuteMultiShard(ctx, primitive, rss, commentedQueries, vc.SafeSession, canAutocommit, vc.ignoreMaxMemoryRows, vc.observer, fetchLastInsertID)
-		}
+		qr, resultRuns, errs = vc.executor.ExecuteMultiShardWithResultRuns(ctx, primitive, rss, commentedQueries, vc.SafeSession, canAutocommit, vc.ignoreMaxMemoryRows, vc.observer, fetchLastInsertID)
 	} else {
 		qr, errs = vc.executor.ExecuteMultiShard(ctx, primitive, rss, commentedQueries, vc.SafeSession, canAutocommit, vc.ignoreMaxMemoryRows, vc.observer, fetchLastInsertID)
 	}

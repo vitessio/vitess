@@ -37,11 +37,10 @@ import (
 type (
 	blockingGateway struct {
 		srvtopo.Gateway
-		started chan<- struct{}
 		release <-chan struct{}
 	}
 
-	resultObserver chan *sqltypes.Result
+	releaseObserver chan struct{}
 )
 
 func (g *blockingGateway) Execute(
@@ -54,7 +53,6 @@ func (g *blockingGateway) Execute(
 	reservedID int64,
 	options *querypb.ExecuteOptions,
 ) (*sqltypes.Result, error) {
-	close(g.started)
 	select {
 	case <-g.release:
 	case <-ctx.Done():
@@ -63,14 +61,18 @@ func (g *blockingGateway) Execute(
 	return g.Gateway.Execute(ctx, session, target, query, bindVariables, transactionID, reservedID, options)
 }
 
-func (o resultObserver) Observe(result *sqltypes.Result) {
-	o <- result
+func (o releaseObserver) Observe(*sqltypes.Result) {
+	select {
+	case <-o:
+	default:
+		close(o)
+	}
 }
 
 // TestExecuteMultiShardWithResultRuns proves successful shard results stay
 // aligned with shard order while the flat result keeps completion order.
 func TestExecuteMultiShardWithResultRuns(t *testing.T) {
-	ctx := utils.LeakCheckContext(t)
+	ctx := utils.LeakCheckContextTimeout(t, 30*time.Second)
 	const (
 		cell = "aa"
 		ks   = "TestExecuteMultiShardWithResultRuns"
@@ -92,50 +94,13 @@ func TestExecuteMultiShardWithResultRuns(t *testing.T) {
 	}
 	queries := []*querypb.BoundQuery{{Sql: "select id from user"}, {Sql: "select id from user"}}
 
-	firstStarted := make(chan struct{})
-	releaseFirst := make(chan struct{})
-	t.Cleanup(func() {
-		select {
-		case <-releaseFirst:
-		default:
-			close(releaseFirst)
-		}
-	})
+	releaseFirst := make(releaseObserver)
 	rss[0].Gateway = &blockingGateway{
 		Gateway: sbc0,
-		started: firstStarted,
 		release: releaseFirst,
 	}
 
-	observer := make(resultObserver, len(rss))
-	var (
-		result *sqltypes.Result
-		runs   []*sqltypes.Result
-		errs   []error
-	)
-	done := make(chan struct{})
-	go func() {
-		result, runs, errs = sc.ExecuteMultiShardWithResultRuns(ctx, nil, rss, queries, econtext.NewSafeSession(nil), false, false, observer, false)
-		close(done)
-	}()
-
-	select {
-	case <-firstStarted:
-	case <-time.After(30 * time.Second):
-		require.FailNow(t, "first shard did not start")
-	}
-	select {
-	case observed := <-observer:
-		require.Same(t, run1, observed)
-	case <-time.After(30 * time.Second):
-		require.FailNow(t, "second shard did not finish")
-	}
-	close(releaseFirst)
-	select {
-	case <-done:
-	case <-time.After(30 * time.Second):
-		require.FailNow(t, "scatter execution did not finish")
-	}
+	result, runs, errs := sc.executeMultiShardWithResultRuns(ctx, nil, rss, queries, econtext.NewSafeSession(nil), false, false, releaseFirst, false)
 
 	require.Empty(t, errs)
 	require.Equal(t, []sqltypes.Row{run1.Rows[0], run1.Rows[1], run0.Rows[0], run0.Rows[1]}, result.Rows)
@@ -146,7 +111,7 @@ func TestExecuteMultiShardWithResultRuns(t *testing.T) {
 	rss[0].Gateway = sbc0
 	sbc0.SetResults([]*sqltypes.Result{run0})
 	sbc1.MustFailCodes[vtrpcpb.Code_INTERNAL] = 1
-	result, runs, errs = sc.ExecuteMultiShardWithResultRuns(ctx, nil, rss, queries, econtext.NewSafeSession(nil), false, false, nullResultsObserver{}, false)
+	result, runs, errs = sc.executeMultiShardWithResultRuns(ctx, nil, rss, queries, econtext.NewSafeSession(nil), false, false, nullResultsObserver{}, false)
 	require.Len(t, errs, 1)
 	require.Len(t, result.Rows, 2)
 	require.Len(t, runs, len(rss))
@@ -159,7 +124,7 @@ func TestExecuteMultiShardWithResultRuns(t *testing.T) {
 func TestExecuteMultiShardWithResultRunsRejectsMismatchedInput(t *testing.T) {
 	rss := []*srvtopo.ResolvedShard{{}}
 
-	result, runs, errs := new(ScatterConn).ExecuteMultiShardWithResultRuns(
+	result, runs, errs := new(ScatterConn).executeMultiShardWithResultRuns(
 		t.Context(), nil, rss, nil, nil, false, false, nil, false,
 	)
 	require.Nil(t, result)

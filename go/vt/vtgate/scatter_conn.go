@@ -175,9 +175,7 @@ func (stc *ScatterConn) ExecuteMultiShard(
 	return qr, allErrors.GetErrors()
 }
 
-// ExecuteMultiShardWithResultRuns is like ExecuteMultiShard, and also returns
-// successful shard results in the same order as rss.
-func (stc *ScatterConn) ExecuteMultiShardWithResultRuns(
+func (stc *ScatterConn) executeMultiShardWithResultRuns(
 	ctx context.Context,
 	primitive engine.Primitive,
 	rss []*srvtopo.ResolvedShard,

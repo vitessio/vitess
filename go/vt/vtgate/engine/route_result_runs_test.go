@@ -359,7 +359,7 @@ func TestRouteMergeResultRunsComparison(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			route := newResultRunsRoute()
 			route.OrderBy = tt.orderBy
-			runs := copyResultRuns(tt.runs)
+			runs := tt.runs
 			flat := combineResultRuns(runs...)
 			want, err := route.sort(flat.Copy())
 			require.NoError(t, err)
@@ -444,14 +444,4 @@ func combineResultRuns(runs ...*sqltypes.Result) *sqltypes.Result {
 		}
 	}
 	return result
-}
-
-func copyResultRuns(runs []*sqltypes.Result) []*sqltypes.Result {
-	copies := make([]*sqltypes.Result, len(runs))
-	for i, run := range runs {
-		if run != nil {
-			copies[i] = run.Copy()
-		}
-	}
-	return copies
 }

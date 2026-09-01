@@ -42,63 +42,6 @@ import (
 
 var _ Primitive = (*Route)(nil)
 
-type (
-	resultRunExecutor interface {
-		ExecuteMultiShardWithResultRuns(ctx context.Context, primitive Primitive, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, rollbackOnError, canAutocommit, fetchLastInsertID bool) (*sqltypes.Result, []*sqltypes.Result, []error)
-	}
-
-	// Route represents the instructions to route a read query to
-	// one or many vttablets.
-	Route struct {
-		// Route does not take inputs
-		noInputs
-
-		// Route does not need transaction handling
-		noTxNeeded
-
-		// Query specifies the query to be executed.
-		Query string
-
-		// QueryStatement is the parsed AST of Query
-		QueryStatement sqlparser.Statement
-
-		// FieldQuery specifies the query to be executed for a GetFieldInfo request.
-		FieldQuery string
-
-		// OrderBy specifies the key order for merge sorting. This will be
-		// set only for scatter queries that need the results to be
-		// merge-sorted.
-		OrderBy evalengine.Comparison
-
-		// TruncateColumnCount specifies the number of columns to return
-		// in the final result. Rest of the columns are truncated
-		// from the result received. If 0, no truncation happens.
-		TruncateColumnCount int
-
-		// QueryTimeout contains the optional timeout (in milliseconds) to apply to this query
-		QueryTimeout int
-
-		// ScatterErrorsAsWarnings is true if results should be returned even if some shards have an error
-		ScatterErrorsAsWarnings bool
-
-		// ShardResultIsSorted is set by the planner when Query orders every shard result by OrderBy.
-		ShardResultIsSorted bool
-
-		// RoutingParameters parameters required for query routing.
-		*RoutingParameters
-
-		// NoRoutesSpecialHandling will make the route send a query to arbitrary shard if the routing logic can't find
-		// the correct shard. This is important for queries where no matches does not mean empty result - examples would be:
-		// select count(*) from tbl where lookupColumn = 'not there'
-		// select exists(<subq>)
-		NoRoutesSpecialHandling bool
-
-		FetchLastInsertID bool
-	}
-
-	cxtKey int
-)
-
 // mergeMinRowsPerRun is the largest average run size with no consistent merge
 // latency win. A full sort handles these small results without a merge tree.
 const mergeMinRowsPerRun = 4
@@ -130,6 +73,55 @@ var replicaWarmingReadsErrors = stats.NewCountersWithMultiLabels(
 	[]string{"Keyspace", "Code"},
 )
 
+// Route represents the instructions to route a read query to
+// one or many vttablets.
+type Route struct {
+	// Route does not take inputs
+	noInputs
+
+	// Route does not need transaction handling
+	noTxNeeded
+
+	// Query specifies the query to be executed.
+	Query string
+
+	// QueryStatement is the parsed AST of Query
+	QueryStatement sqlparser.Statement
+
+	// FieldQuery specifies the query to be executed for a GetFieldInfo request.
+	FieldQuery string
+
+	// OrderBy specifies the key order for merge sorting. This will be
+	// set only for scatter queries that need the results to be
+	// merge-sorted.
+	OrderBy evalengine.Comparison
+
+	// TruncateColumnCount specifies the number of columns to return
+	// in the final result. Rest of the columns are truncated
+	// from the result received. If 0, no truncation happens.
+	TruncateColumnCount int
+
+	// QueryTimeout contains the optional timeout (in milliseconds) to apply to this query
+	QueryTimeout int
+
+	// ScatterErrorsAsWarnings is true if results should be returned even if some shards have an error
+	ScatterErrorsAsWarnings bool
+
+	// ShardResultIsSorted is set by the planner when Query orders every shard result by OrderBy.
+	ShardResultIsSorted bool
+
+	// RoutingParameters parameters required for query routing.
+	*RoutingParameters
+
+	// NoRoutesSpecialHandling will make the route send a query to arbitrary shard if the routing logic can't find
+	// the correct shard. This is important for queries where no matches does not mean empty result - examples would be:
+	// select count(*) from tbl where lookupColumn = 'not there'
+	// select exists(<subq>)
+	NoRoutesSpecialHandling bool
+
+	FetchLastInsertID bool
+}
+
 // NewRoute creates a Route.
 func NewRoute(opcode Opcode, keyspace *vindexes.Keyspace, query, fieldQuery string) *Route {
 	return &Route{
@@ -153,6 +145,8 @@ func (route *Route) TryExecute(ctx context.Context, vcursor VCursor, bindVars ma
 
 	return route.executeShards(ctx, vcursor, bindVars, wantfields, rss, bvs)
 }
+
+type cxtKey int
 
 const (
 	IgnoreReserveTxn cxtKey = iota
