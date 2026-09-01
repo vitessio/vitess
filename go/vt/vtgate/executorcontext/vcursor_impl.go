@@ -131,6 +131,10 @@ type (
 		AddWarningCount(name string, value int64)
 	}
 
+	iExecuteResultRuns interface {
+		ExecuteMultiShardWithResultRuns(ctx context.Context, primitive engine.Primitive, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, session *SafeSession, autocommit bool, ignoreMaxMemoryRows bool, resultsObserver ResultsObserver, fetchLastInsertID bool) (qr *sqltypes.Result, resultRuns []*sqltypes.Result, errs []error)
+	}
+
 	// VSchemaOperator is an interface to Vschema Operations
 	VSchemaOperator interface {
 		GetCurrentSrvVschema() *vschemapb.SrvVSchema
@@ -206,10 +210,6 @@ type (
 		executedPrimitive engine.Primitive
 	}
 )
-
-type iExecuteResultRuns interface {
-	ExecuteMultiShardWithResultRuns(ctx context.Context, primitive engine.Primitive, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, session *SafeSession, autocommit bool, ignoreMaxMemoryRows bool, resultsObserver ResultsObserver, fetchLastInsertID bool) (qr *sqltypes.Result, resultRuns []*sqltypes.Result, errs []error)
-}
 
 // NewVCursorImpl creates a VCursorImpl. Before creating this object, you have to separate out any marginComments that came with
 // the query and supply it here. Trailing comments are typically sent by the application for various reasons,
