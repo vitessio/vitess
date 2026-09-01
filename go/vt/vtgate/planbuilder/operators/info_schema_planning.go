@@ -133,7 +133,24 @@ func (isr *InfoSchemaRouting) Keyspace() *vindexes.Keyspace {
 
 func extractInfoSchemaRoutingPredicate(ctx *plancontext.PlanningContext, in sqlparser.Expr) (bool, string, sqlparser.Expr) {
 	cmp, ok := in.(*sqlparser.ComparisonExpr)
-	if !ok || cmp.Operator != sqlparser.EqualOp {
+	if !ok {
+		return false, "", nil
+	}
+	switch cmp.Operator {
+	case sqlparser.EqualOp:
+	case sqlparser.InOp:
+		// A single-element IN list is an equality: only one destination is
+		// named, so the predicate routes exactly like `=` (mirrors
+		// ShardedRouting.planInOp). Guard BEFORE mutating: an element the
+		// equality path would refuse (e.g. database(), which must stay in the
+		// query untouched) must leave the IN exactly as written.
+		tuple, ok := cmp.Right.(sqlparser.ValTuple)
+		if !ok || len(tuple) != 1 || !shouldRewrite(tuple[0]) {
+			return false, "", nil
+		}
+		cmp.Operator = sqlparser.EqualOp
+		cmp.Right = tuple[0]
+	default:
 		return false, "", nil
 	}
 

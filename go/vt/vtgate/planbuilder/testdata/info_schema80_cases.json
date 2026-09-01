@@ -1289,5 +1289,65 @@
         "SysTableTableSchema": "['ks']"
       }
     }
+  },
+  {
+    "comment": "single-element IN on table_schema routes like equality",
+    "query": "select table_name from information_schema.tables where table_schema in ('user')",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select table_name from information_schema.tables where table_schema in ('user')",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "DBA",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select `table_name` from information_schema.`tables` where 1 != 1",
+        "Query": "select `table_name` from information_schema.`tables` where table_schema = :__vtschemaname /* VARCHAR */",
+        "SysTableTableSchema": "['user']"
+      }
+    }
+  },
+  {
+    "comment": "single-element IN on table_name routes like equality",
+    "query": "select column_name from information_schema.statistics where table_schema = 'user' and table_name in ('user_extra')",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select column_name from information_schema.statistics where table_schema = 'user' and table_name in ('user_extra')",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "DBA",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select `column_name` from information_schema.statistics where 1 != 1",
+        "Query": "select `column_name` from information_schema.statistics where table_schema = :__vtschemaname /* VARCHAR */ and `table_name` = :table_name /* VARCHAR */",
+        "SysTableTableName": "[table_name:'user_extra']",
+        "SysTableTableSchema": "['user']"
+      }
+    }
+  },
+  {
+    "comment": "single-element IN containing database() is left alone, like = database()",
+    "query": "select table_name from information_schema.tables where table_schema in (database())",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select table_name from information_schema.tables where table_schema in (database())",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "DBA",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select `table_name` from information_schema.`tables` where 1 != 1",
+        "Query": "select `table_name` from information_schema.`tables` where table_schema in (database())"
+      }
+    }
   }
 ]
