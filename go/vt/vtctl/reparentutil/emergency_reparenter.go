@@ -87,13 +87,9 @@ type EmergencyReparentOptions struct {
 	durability policy.Durabler
 }
 
-// ersCandidate is one ERS promotion candidate and its per-tablet pipeline state.
-//
-// buildERSCandidates is the only place that builds these, and it builds exactly one
-// per tablet for the whole run. Every later stage filters that pool into new slices
-// without ever rebuilding a candidate, so a *ersCandidate is a stable identity for
-// its tablet and set membership can be tested by pointer. Anything that builds a
-// second candidate for a tablet already in the pool breaks that, so don't.
+// ersCandidate holds the state ERS tracks for one promotion candidate. It is
+// built once, then reused as the candidate pool is filtered, so its pointer is a
+// stable identity for the whole run.
 type ersCandidate struct {
 	info      *topo.TabletInfo
 	positions *RelayLogPositions
