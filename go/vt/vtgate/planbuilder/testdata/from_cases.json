@@ -4932,6 +4932,76 @@
     }
   },
   {
+    "comment": "a nested UNION splits the predicate twice, and both levels of copies are dropped on merge",
+    "query": "select user.col from user join ((select 1 as c from dual union all select 2 from dual) union all select 3 from dual) as sub on user.id = sub.c",
+    "plan": {
+      "Type": "Scatter",
+      "QueryType": "SELECT",
+      "Original": "select user.col from user join ((select 1 as c from dual union all select 2 from dual) union all select 3 from dual) as sub on user.id = sub.c",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select `user`.col from `user`, (select 1 as c from dual where 1 != 1 union all select 2 from dual where 1 != 1 union all select 3 from dual where 1 != 1) as sub where 1 != 1",
+        "Query": "select `user`.col from `user`, (select 1 as c from dual union all select 2 from dual union all select 3 from dual) as sub where `user`.id = sub.c"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "the copies pushed into the UNION branches are kept when the join does not merge, since they are the only place the predicate is applied",
+    "query": "select unsharded.col from unsharded join (select id as c from user union all select user_id from user_extra) as sub on unsharded.id = sub.c",
+    "plan": {
+      "Type": "Join",
+      "QueryType": "SELECT",
+      "Original": "select unsharded.col from unsharded join (select id as c from user union all select user_id from user_extra) as sub on unsharded.id = sub.c",
+      "Instructions": {
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "L:0",
+        "JoinVars": {
+          "unsharded_id": 1
+        },
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "FieldQuery": "select unsharded.col, unsharded.id from unsharded where 1 != 1",
+            "Query": "select unsharded.col, unsharded.id from unsharded"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from (select id as c from `user` where 1 != 1 union all select user_id from user_extra where 1 != 1) as sub where 1 != 1",
+            "Query": "select 1 from (select id as c from `user` where id = :unsharded_id union all select user_id from user_extra where user_id = :unsharded_id) as sub",
+            "Values": [
+              ":unsharded_id"
+            ],
+            "Vindex": "user_index"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.unsharded",
+        "user.user",
+        "user.user_extra"
+      ]
+    }
+  },
+  {
     "comment": "a predicate local to the UNION is still pushed into its branches",
     "query": "select user.col from user join (select 1 as c from dual union all select 2 from dual) as sub on sub.c = 1",
     "plan": {
