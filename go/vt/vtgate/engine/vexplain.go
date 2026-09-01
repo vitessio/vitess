@@ -20,9 +20,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/key"
+	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -51,7 +54,25 @@ type (
 		InterOpStats map[Primitive]RowsReceived
 		ShardsStats  map[Primitive]ShardsQueried
 	}
+
+	// mysqlExplainTask is the set of EXPLAIN FORMAT=JSON queries to run against the
+	// resolved shards of a single primitive (a Route or read Send). rss and queries
+	// are aligned by index, one entry per targeted shard.
+	mysqlExplainTask struct {
+		primitive Primitive
+		rss       []*srvtopo.ResolvedShard
+		queries   []*querypb.BoundQuery
+	}
 )
+
+// vexplainMySQLReservedConnError is returned when VEXPLAIN MYSQLPLAN runs in a
+// session that holds a reserved connection (for example, one that has created a
+// temporary table). Each EXPLAIN is issued on a fresh standalone connection that
+// cannot see that session-local state, so the captured plan would not match the
+// one the real query would use. VEXPLAIN ALL shares the same standalone-EXPLAIN
+// path, so we do not point the user at it.
+const vexplainMySQLReservedConnError = "VEXPLAIN MYSQLPLAN is not supported in a session that holds a reserved connection " +
+	"(for example, one that has created a temporary table), because EXPLAIN runs on a separate connection that cannot see the session's temporary tables"
 
 var _ Primitive = (*VExplain)(nil)
 
@@ -61,7 +82,7 @@ func (v *VExplain) GetFields(context.Context, VCursor, map[string]*querypb.BindV
 	switch v.Type {
 	case sqlparser.QueriesVExplainType:
 		fields = getVExplainQueriesFields()
-	case sqlparser.AllVExplainType:
+	case sqlparser.AllVExplainType, sqlparser.MySQLVExplainType:
 		fields = getVExplainAllFields()
 	case sqlparser.TraceVExplainType:
 		fields = getVExplainTraceFields()
@@ -102,6 +123,11 @@ func (v *VExplain) NeedsTransaction() bool {
 
 // TryExecute implements the Primitive interface
 func (v *VExplain) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+	// MySQLPLAN resolves target shards and runs EXPLAIN against them without
+	// executing the wrapped query, so we neither trace nor log nor run the input.
+	if v.Type == sqlparser.MySQLVExplainType {
+		return v.convertToVExplainMySQLResult(ctx, vcursor, bindVars)
+	}
 	var stats func() Stats
 	if v.Type == sqlparser.TraceVExplainType {
 		stats = vcursor.StartPrimitiveTrace()
@@ -121,6 +147,15 @@ func noOpCallback(*sqltypes.Result) error {
 
 // TryStreamExecute implements the Primitive interface
 func (v *VExplain) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+	// MySQLPLAN resolves target shards and runs EXPLAIN against them without
+	// executing the wrapped query, so we neither trace nor log nor run the input.
+	if v.Type == sqlparser.MySQLVExplainType {
+		result, err := v.convertToVExplainMySQLResult(ctx, vcursor, bindVars)
+		if err != nil {
+			return err
+		}
+		return callback(result)
+	}
 	var stats func() Stats
 	if v.Type == sqlparser.TraceVExplainType {
 		stats = vcursor.StartPrimitiveTrace()
@@ -219,18 +254,206 @@ func (v *VExplain) convertToVExplainAllResult(ctx context.Context, vcursor VCurs
 	return qr, nil
 }
 
-// primitiveToPlanDescriptionWithSQLResults transforms a primitive tree into a corresponding PlanDescription tree
-// and adds the given res ...
+// convertToVExplainMySQLResult resolves the target shards of each Route in the
+// plan and runs EXPLAIN FORMAT=JSON against every resolved shard, without
+// executing the wrapped query. The MySQL EXPLAIN output is attached to each Route
+// node keyed by shard, so per-shard plan and cost differences are visible.
+func (v *VExplain) convertToVExplainMySQLResult(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+	if vcursor.Session().InReservedConn() {
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, vexplainMySQLReservedConnError)
+	}
+
+	var tasks []mysqlExplainTask
+	if err := v.collectMySQLExplainTasks(ctx, vcursor, v.Input, bindVars, &tasks); err != nil {
+		return nil, err
+	}
+
+	explainResults, err := runMySQLExplainTasks(ctx, vcursor, tasks)
+	if err != nil {
+		return nil, err
+	}
+
+	planDescription := primitiveToPlanDescriptionWithShardedSQLResults(v.Input, explainResults)
+	resultBytes, err := json.MarshalIndent(planDescription, "", "\t")
+	if err != nil {
+		return nil, err
+	}
+
+	rows := []sqltypes.Row{{sqltypes.NewVarChar(string(resultBytes))}}
+	return &sqltypes.Result{
+		Fields: getVExplainAllFields(),
+		Rows:   rows,
+	}, nil
+}
+
+// collectMySQLExplainTasks walks the primitive tree and, for each Route or read
+// Send, resolves its target shards and appends one EXPLAIN task covering all of
+// that primitive's shards. Shard resolution runs serially here (it is cheap and,
+// for a pushed-down Limit, must happen before its child Route is visited); the
+// EXPLAIN queries themselves are run concurrently by runMySQLExplainTasks.
+func (v *VExplain) collectMySQLExplainTasks(ctx context.Context, vcursor VCursor, primitive Primitive, bindVars map[string]*querypb.BindVariable, tasks *[]mysqlExplainTask) error {
+	switch prim := primitive.(type) {
+	case *Route:
+		rss, bvs, err := prim.findRoute(ctx, vcursor, bindVars)
+		if err != nil {
+			return err
+		}
+		// Mirror executeShards: when routing resolves no shard but the Route is
+		// marked for no-routes special handling (e.g. an aggregate SELECT whose
+		// predicate maps to no shard), the real query would still be sent to an
+		// arbitrary shard. Fall back to anyShard so EXPLAIN reflects that.
+		if len(rss) == 0 && prim.NoRoutesSpecialHandling {
+			rss, bvs, err = prim.anyShard(ctx, vcursor, bindVars)
+			if err != nil {
+				return err
+			}
+		}
+		appendMySQLExplainTasks(tasks, prim, rss, getQueries(prim.Query, bvs))
+	case *Send:
+		// A read Send targets an explicit shard/keyrange destination, so its shards
+		// resolve without executing the query. DML/DDL sends are rejected at plan
+		// time, so anything reaching here is a read.
+		rss, _, err := vcursor.ResolveDestinations(ctx, prim.Keyspace.Name, nil, []key.ShardDestination{prim.TargetDestination})
+		if err != nil {
+			return err
+		}
+		queries := make([]*querypb.BoundQuery, len(rss))
+		for i := range rss {
+			queries[i] = &querypb.BoundQuery{Sql: prim.Query, BindVariables: bindVars}
+		}
+		appendMySQLExplainTasks(tasks, prim, rss, queries)
+	case *Limit:
+		// A pushed-down scatter limit rewrites its child Route's query to use
+		// :__upper_limit, which Limit.TryExecute computes before executing its
+		// input. Compute it here too so the child Route's EXPLAIN can bind it.
+		count, offset, err := prim.getCountAndOffset(ctx, vcursor, bindVars)
+		if err != nil {
+			return err
+		}
+		bindVars = copyBindVars(bindVars)
+		bindVars[UpperLimitStr] = sqltypes.Int64BindVariable(int64(count + offset))
+	}
+
+	inputs, _ := primitive.Inputs()
+	for _, input := range inputs {
+		// Each input gets its own copy: a Route's findRoute mutates the map in
+		// place (e.g. DBA/information_schema routes populate schema/table
+		// replacement bind vars), and the resulting task keeps that map pointer.
+		// Sharing one map across sibling inputs (e.g. the arms of a Concatenate)
+		// would let a later sibling overwrite an earlier task's bindings before
+		// the EXPLAINs run. This mirrors Concatenate's per-source copyBindVars.
+		if err := v.collectMySQLExplainTasks(ctx, vcursor, input, copyBindVars(bindVars), tasks); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// appendMySQLExplainTasks records one EXPLAIN task for the given primitive,
+// wrapping each shard's query in EXPLAIN FORMAT=JSON. rss and queries are
+// aligned by index.
+func appendMySQLExplainTasks(tasks *[]mysqlExplainTask, primitive Primitive, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery) {
+	if len(rss) == 0 {
+		return
+	}
+	explainQueries := make([]*querypb.BoundQuery, len(queries))
+	for i, q := range queries {
+		explainQueries[i] = &querypb.BoundQuery{
+			Sql:           "explain format = json " + q.Sql,
+			BindVariables: q.BindVariables,
+		}
+	}
+	*tasks = append(*tasks, mysqlExplainTask{primitive: primitive, rss: rss, queries: explainQueries})
+}
+
+// runMySQLExplainTasks runs each task's EXPLAIN FORMAT=JSON queries against its
+// shards and returns the per-shard results keyed by shard against the primitive
+// that owns each. Each task fans out through the VCursor's per-shard executor,
+// which reuses the normal scatter machinery: the shard queries run concurrently,
+// every targeted shard is counted in ShardQueries regardless of per-shard
+// outcome, and a failure against any shard fails the whole command. The per-shard
+// executor is an optional VCursor capability; a VCursor that does not implement it
+// yields no MySQL EXPLAIN output.
+func runMySQLExplainTasks(ctx context.Context, vcursor VCursor, tasks []mysqlExplainTask) (map[Primitive]map[string]json.RawMessage, error) {
+	explainResults := make(map[Primitive]map[string]json.RawMessage)
+	if len(tasks) == 0 {
+		return explainResults, nil
+	}
+	executor, ok := vcursor.(MultiShardPerShardExecutor)
+	if !ok {
+		// The per-shard executor is an optional VCursor capability (see
+		// MultiShardPerShardExecutor). The in-tree VCursor implements it, so this
+		// only happens for an out-of-tree VCursor that does not; warn so the
+		// resulting plan-without-EXPLAIN output is not mistaken for a bug.
+		log.Warn("VEXPLAIN MYSQLPLAN: VCursor does not implement MultiShardPerShardExecutor; returning plan without MySQL EXPLAIN output")
+		return explainResults, nil
+	}
+
+	for _, task := range tasks {
+		results, errs := executor.ExecuteMultiShardPerShard(ctx, task.primitive, task.rss, task.queries)
+		if err := vterrors.Aggregate(errs); err != nil {
+			return nil, err
+		}
+		for i, res := range results {
+			if res == nil || len(res.Rows) == 0 || len(res.Rows[0]) == 0 {
+				// EXPLAIN FORMAT=JSON always returns one row of one column, and a
+				// per-shard failure would already have aborted above, so an empty
+				// result here is anomalous. Warn rather than silently omitting the
+				// shard from the output map: log for the operator and record a
+				// session warning so the client can see the omission via SHOW WARNINGS.
+				log.Warn("VEXPLAIN MYSQLPLAN got an empty EXPLAIN result; omitting shard from output",
+					slog.String("keyspace", task.rss[i].Target.Keyspace),
+					slog.String("shard", task.rss[i].Target.Shard))
+				vcursor.Session().RecordWarning(&querypb.QueryWarning{
+					Message: fmt.Sprintf("VEXPLAIN MYSQLPLAN got an empty EXPLAIN result for %s/%s; shard omitted from output",
+						task.rss[i].Target.Keyspace, task.rss[i].Target.Shard),
+				})
+				continue
+			}
+			perShard := explainResults[task.primitive]
+			if perShard == nil {
+				perShard = make(map[string]json.RawMessage)
+				explainResults[task.primitive] = perShard
+			}
+			perShard[task.rss[i].Target.Shard] = json.RawMessage(res.Rows[0][0].ToString())
+		}
+	}
+	return explainResults, nil
+}
+
+// primitiveToPlanDescriptionWithShardedSQLResults transforms a primitive tree
+// into a corresponding PlanDescription tree, attaching the per-shard MySQL
+// EXPLAIN output (keyed by shard) to the matching Route nodes.
+func primitiveToPlanDescriptionWithShardedSQLResults(in Primitive, res map[Primitive]map[string]json.RawMessage) PrimitiveDescription {
+	return primitiveToPlanDescriptionWith(in, func(prim Primitive, pd *PrimitiveDescription) {
+		if perShard, found := res[prim]; found {
+			pd.Other["mysql_explain_json_by_shard"] = perShard
+		}
+	})
+}
+
+// primitiveToPlanDescriptionWithSQLResults transforms a primitive tree into a
+// corresponding PlanDescription tree, attaching the given per-primitive MySQL
+// EXPLAIN output to the matching nodes.
 func primitiveToPlanDescriptionWithSQLResults(in Primitive, res map[Primitive]string) PrimitiveDescription {
+	return primitiveToPlanDescriptionWith(in, func(prim Primitive, pd *PrimitiveDescription) {
+		if v, found := res[prim]; found {
+			pd.Other["mysql_explain_json"] = json.RawMessage(v)
+		}
+	})
+}
+
+// primitiveToPlanDescriptionWith walks the primitive tree into a PlanDescription
+// tree, calling attach on each node so the caller can decorate it with its own
+// EXPLAIN output (which differs in shape between VEXPLAIN ALL and MYSQLPLAN).
+func primitiveToPlanDescriptionWith(in Primitive, attach func(Primitive, *PrimitiveDescription)) PrimitiveDescription {
 	this := in.description()
 
-	if v, found := res[in]; found {
-		this.Other["mysql_explain_json"] = json.RawMessage(v)
-	}
+	attach(in, &this)
 
 	inputs, infos := in.Inputs()
 	for idx, input := range inputs {
-		pd := primitiveToPlanDescriptionWithSQLResults(input, res)
+		pd := primitiveToPlanDescriptionWith(input, attach)
 		if infos != nil {
 			for k, v := range infos[idx] {
 				if k == inputName {
