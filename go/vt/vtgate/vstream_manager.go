@@ -917,7 +917,7 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 						var endTimer *time.Timer
 						if vs.stopOnReshard {
 							// We're going to be ending the tablet stream, along with the VStream, so
-							// we ensure a reasonable minimum amount of time is alloted for clients
+							// we ensure a reasonable minimum amount of time is allotted for clients
 							// to Recv the journal event before the VStream's context is cancelled
 							// (which would cause the grpc SendMsg or RecvMsg to fail). If the client
 							// doesn't Recv the journal event before the VStream ends then they'll
@@ -1022,7 +1022,7 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 // maybeUpdateTableNames updates table names when the ExcludeKeyspaceFromTableName flag is disabled.
 // If we're streaming from multiple keyspaces, updating the table names by inserting the keyspace will disambiguate
 // duplicate table names. If we enable the ExcludeKeyspaceFromTableName flag to not update the table names, there is no need to
-// clone the entire event, whcih improves performance. This is typically safely used by clients only streaming one keyspace.
+// clone the entire event, which improves performance. This is typically safely used by clients only streaming one keyspace.
 func maybeUpdateTableName(event *binlogdatapb.VEvent, keyspace string, excludeKeyspaceFromTableName bool,
 	tableNameExtractor func(ev *binlogdatapb.VEvent) *string,
 ) *binlogdatapb.VEvent {

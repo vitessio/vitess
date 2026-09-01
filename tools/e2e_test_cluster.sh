@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# These test uses excutables and launch them as process
+# These test uses executables and launch them as process
 # After that all tests run, here we are testing those
 
 # All Go packages with test files.

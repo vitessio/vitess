@@ -330,7 +330,7 @@ func Init(
 	}
 
 	// We need to get the keyspaces and rebuild the keyspace graphs
-	// before we make the topo-server read-only incase we are filtering by
+	// before we make the topo-server read-only in case we are filtering by
 	// keyspaces.
 	var keyspaces []string
 	if discovery.FilteringKeyspaces() {

@@ -95,7 +95,7 @@ func (e *Executor) newExecute(
 			// -- IF we don't see a newer vschema come in -- affects how long we retry in total and how quickly
 			// we retry the query and (should) succeed when the traffic switch fails or we otherwise hit the
 			// max buffer failover time without resolving the keyspace event and marking it as consistent.
-			// This calculation attemps to ensure that we retry at a sensible interval and number of times
+			// This calculation attempts to ensure that we retry at a sensible interval and number of times
 			// based on the buffering configuration. This way we should be able to perform the max retries
 			// within the given window of time for most queries and we should not end up waiting too long
 			// after the traffic switch fails or the buffer window has ended, retrying old queries.
@@ -118,7 +118,7 @@ func (e *Executor) newExecute(
 		// result of MoveTables SwitchTraffic which does a RebuildSrvVSchema which in turn causes
 		// the vtgate to clear the cached plans when processing the new serving vschema.
 		// When buffering ends, many queries might be getting planned at the same time and we then
-		// take full advatange of the cached plan.
+		// take full advantage of the cached plan.
 		plan, vcursor, stmt, err = e.fetchOrCreatePlan(ctx, safeSession, sql, bindVars, parameterize, prepared, logStats, true)
 		execStart := e.logPlanningFinished(logStats, plan)
 
