@@ -724,7 +724,8 @@ func testRestOfWorkflow(t *testing.T) {
 	// verify that SwitchWrites correctly filters terminal OnlineDDL streams rather
 	// than failing with "cannot migrate until all streams are running".
 	if currentWorkflowType == binlogdatapb.VReplicationWorkflowType_Reshard {
-		injectTerminalOnlineDDLStream(t, sourceTab)
+		cleanupOnlineDDL := injectTerminalOnlineDDLStream(t, sourceTab)
+		defer cleanupOnlineDDL()
 	}
 
 	tstWorkflowSwitchWrites(t)
@@ -1012,8 +1013,9 @@ func tstApplySchemaOnlineDDL(t *testing.T, sql string, keyspace string) {
 // injectTerminalOnlineDDLStream inserts a fake stopped OnlineDDL VReplication
 // stream and a corresponding terminal schema_migrations row on the given tablet.
 // This simulates a completed OnlineDDL migration whose VReplication stream has
-// not yet been garbage collected.
-func injectTerminalOnlineDDLStream(t *testing.T, tablet *cluster.VttabletProcess) {
+// not yet been garbage collected. Returns a cleanup function that removes the
+// injected rows.
+func injectTerminalOnlineDDLStream(t *testing.T, tablet *cluster.VttabletProcess) func() {
 	fakeUUID := "00000000_0000_0000_0000_000000000099"
 	dbName := "vt_" + defaultTargetKs
 
@@ -1031,10 +1033,12 @@ func injectTerminalOnlineDDLStream(t *testing.T, tablet *cluster.VttabletProcess
 	_, err = tablet.QueryTablet(insertMigration, "", false)
 	require.NoError(t, err, "failed to insert fake schema_migrations row: %v", err)
 
-	t.Cleanup(func() {
-		tablet.QueryTablet(fmt.Sprintf("delete from %s.vreplication where workflow = '%s'", sidecarDBIdentifier, fakeUUID), "", false)
-		tablet.QueryTablet(fmt.Sprintf("delete from %s.schema_migrations where migration_uuid = '%s'", sidecarDBIdentifier, fakeUUID), "", false)
-	})
+	return func() {
+		_, err := tablet.QueryTablet(fmt.Sprintf("delete from %s.vreplication where workflow = '%s'", sidecarDBIdentifier, fakeUUID), "", false)
+		require.NoError(t, err, "failed to clean up fake VReplication stream: %v", err)
+		_, err = tablet.QueryTablet(fmt.Sprintf("delete from %s.schema_migrations where migration_uuid = '%s'", sidecarDBIdentifier, fakeUUID), "", false)
+		require.NoError(t, err, "failed to clean up fake schema_migrations row: %v", err)
+	}
 }
 
 func validateTableRoutingRule(t *testing.T, table, tabletType, fromKeyspace, toKeyspace string) {
