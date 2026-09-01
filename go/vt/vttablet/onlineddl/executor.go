@@ -204,6 +204,24 @@ const (
 	vreplResumeMaxBackoff     = 15 * time.Minute
 )
 
+// vreplStreamAction is reviewVReplStreamError's decision on what
+// reviewRunningMigrations should do about a running migration's
+// vreplication stream.
+type vreplStreamAction int
+
+const (
+	// vreplStreamNoAction: the stream reports no error, or a transient
+	// error still within the LastError retry window; leave it alone.
+	vreplStreamNoAction vreplStreamAction = iota
+	// vreplStreamCancel: the stream's error is terminal for the migration;
+	// cancel (fail) the migration.
+	vreplStreamCancel
+	// vreplStreamResume: the stream parked on a resumable terminal error
+	// and the episode's resume budget is not exhausted; attempt an
+	// automatic resume.
+	vreplStreamResume
+)
+
 // resumeBackoffElapsed reports whether the next automatic resume attempt
 // is due: the delay doubles per successful attempt from
 // vreplResumeInitialBackoff and caps at vreplResumeMaxBackoff. Before any
@@ -3447,6 +3465,54 @@ func (e *Executor) maybeResumeVReplication(ctx context.Context, uuid string, s *
 		fmt.Sprintf("vreplication stream errored but is resumable; resuming automatically, attempt %d: %s", state.attempts, s.message))
 }
 
+// reviewVReplStreamError decides what reviewRunningMigrations should do
+// about the error state (if any) of a running migration's vreplication
+// stream. Many errors are recoverable, and we do not wish to fail on first
+// sight: transient errors are recorded into the migration's LastError and
+// only cancel the migration once the same error has persisted past the
+// LastError retry window. A stream parked on a resumable terminal error
+// (class B, vreplication.RetriesExhaustedIndicator) is resumed rather than
+// cancelled, until the error episode outlives the resume budget
+// (resumeBudgetExhausted); an unrecoverable terminal error (class A, or the
+// legacy undifferentiated marker) cancels immediately. When the stream
+// reports no error, any tracked resume episode ends so a future one starts
+// fresh.
+func (e *Executor) reviewVReplStreamError(uuid string, s *VReplStream, now time.Time) vreplStreamAction {
+	if _, ok := e.vreplicationLastError[uuid]; !ok {
+		e.vreplicationLastError[uuid] = vterrors.NewLastError(
+			fmt.Sprintf("Online DDL migration %v", uuid),
+			staleMigrationFailMinutes*time.Minute,
+		)
+	}
+	lastError := e.vreplicationLastError[uuid]
+	isTerminal, isResumable, vreplError := s.hasError()
+	lastError.Record(vreplError)
+	if vreplError == nil {
+		// The stream recovered: clear the per-migration resume
+		// backoff state so a future error episode starts a
+		// fresh "first attempt immediate" backoff sequence.
+		delete(e.vreplicationResumeState, uuid)
+	}
+	switch {
+	case isTerminal || !lastError.ShouldRetry():
+		return vreplStreamCancel
+	case isResumable:
+		state, ok := e.vreplicationResumeState[uuid]
+		if !ok {
+			state = &vreplResumeState{}
+			e.vreplicationResumeState[uuid] = state
+		}
+		if state.firstParked.IsZero() {
+			state.firstParked = now
+		}
+		if resumeBudgetExhausted(state, now) {
+			return vreplStreamCancel
+		}
+		return vreplStreamResume
+	}
+	return vreplStreamNoAction
+}
+
 // reviewRunningMigrations iterates migrations in 'running' state. Normally there's only one running, which was
 // spawned by this tablet; but vreplication migrations could also resume from failure.
 func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning int, cancellable []*cancellableMigration, err error) {
@@ -3525,41 +3591,11 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 				if s == nil {
 					return nil
 				}
-				// Let's see if vreplication indicates an error. Many errors are recoverable, and
-				// we do not wish to fail on first sight. We will use LastError to repeatedly
-				// check if this error persists, until finally, after some timeout, we give up.
-				if _, ok := e.vreplicationLastError[uuid]; !ok {
-					e.vreplicationLastError[uuid] = vterrors.NewLastError(
-						fmt.Sprintf("Online DDL migration %v", uuid),
-						staleMigrationFailMinutes*time.Minute,
-					)
-				}
-				lastError := e.vreplicationLastError[uuid]
-				isTerminal, isResumable, vreplError := s.hasError()
-				lastError.Record(vreplError)
-				if vreplError == nil {
-					// The stream recovered: clear the per-migration resume
-					// backoff state so a future error episode starts a
-					// fresh "first attempt immediate" backoff sequence.
-					delete(e.vreplicationResumeState, uuid)
-				}
-				switch {
-				case isTerminal || !lastError.ShouldRetry():
+				switch e.reviewVReplStreamError(uuid, s, time.Now()) {
+				case vreplStreamCancel:
 					cancellable = append(cancellable, newCancellableMigration(uuid, s.message))
-				case isResumable:
-					state, ok := e.vreplicationResumeState[uuid]
-					if !ok {
-						state = &vreplResumeState{}
-						e.vreplicationResumeState[uuid] = state
-					}
-					if state.firstParked.IsZero() {
-						state.firstParked = time.Now()
-					}
-					if resumeBudgetExhausted(state, time.Now()) {
-						cancellable = append(cancellable, newCancellableMigration(uuid, s.message))
-					} else {
-						e.maybeResumeVReplication(ctx, uuid, s, state)
-					}
+				case vreplStreamResume:
+					e.maybeResumeVReplication(ctx, uuid, s, e.vreplicationResumeState[uuid])
 				}
 				if !s.isRunning() {
 					log.Info(fmt.Sprintf("migration %s in 'running' state but vreplication state is '%s'", uuid, s.state.String()))

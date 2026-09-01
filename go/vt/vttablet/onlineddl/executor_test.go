@@ -38,6 +38,7 @@ import (
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/vtenv"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
@@ -864,4 +865,82 @@ func TestResumeBudgetExhausted(t *testing.T) {
 
 	state = &vreplResumeState{firstParked: now.Add(-staleMigrationFailMinutes * time.Minute)}
 	assert.True(t, resumeBudgetExhausted(state, now), "budget exhausted")
+}
+
+// TestReviewVReplStreamError tests the executor's per-stream decision in
+// reviewRunningMigrations: a retries-exhausted (class B) stream is resumed
+// rather than cancelled, an unrecoverable (class A) stream is cancelled, and
+// a resumable stream whose error episode has outlived the resume budget is
+// cancelled. The lifecycle subtest walks a single migration through
+// park -> resume -> budget exhaustion -> recovery -> fresh episode.
+func TestReviewVReplStreamError(t *testing.T) {
+	newExecutor := func() *Executor {
+		return &Executor{
+			vreplicationLastError:   make(map[string]*vterrors.LastError),
+			vreplicationResumeState: make(map[string]*vreplResumeState),
+		}
+	}
+	uuid := "1cbcd662_8ed6_11ee_bc8f_0a43f95f28a3"
+	now := time.Now()
+
+	unrecoverableStream := &VReplStream{
+		state:   binlogdatapb.VReplicationWorkflowState_Error,
+		message: vreplication.UnrecoverableErrorIndicator + ": bad data",
+	}
+	resumableStream := &VReplStream{
+		state:   binlogdatapb.VReplicationWorkflowState_Error,
+		message: vreplication.RetriesExhaustedIndicator + ": the same error was encountered continuously for longer than --vreplication-max-time-to-retry-on-error (15m0s): connection refused",
+	}
+	healthyStream := &VReplStream{
+		state: binlogdatapb.VReplicationWorkflowState_Running,
+	}
+	transientErrorStream := &VReplStream{
+		state:   binlogdatapb.VReplicationWorkflowState_Running,
+		message: "error connecting to source tablet",
+	}
+
+	t.Run("unrecoverable stream is cancelled", func(t *testing.T) {
+		e := newExecutor()
+		assert.Equal(t, vreplStreamCancel, e.reviewVReplStreamError(uuid, unrecoverableStream, now))
+		assert.NotContains(t, e.vreplicationResumeState, uuid)
+	})
+	t.Run("transient error within the retry window is tolerated", func(t *testing.T) {
+		e := newExecutor()
+		assert.Equal(t, vreplStreamNoAction, e.reviewVReplStreamError(uuid, transientErrorStream, now))
+	})
+	t.Run("transient error past the retry window is cancelled", func(t *testing.T) {
+		e := newExecutor()
+		// Seed a LastError whose window is already expired (negative max
+		// time in error) so that ShouldRetry is deterministically false
+		// once the error has been recorded, without sleeping.
+		lastError := vterrors.NewLastError("test", -time.Nanosecond)
+		lastError.Record(errors.New(transientErrorStream.message))
+		e.vreplicationLastError[uuid] = lastError
+		assert.Equal(t, vreplStreamCancel, e.reviewVReplStreamError(uuid, transientErrorStream, now))
+	})
+	t.Run("retries-exhausted lifecycle", func(t *testing.T) {
+		e := newExecutor()
+		// First tick parked on a resumable terminal error: resume, not cancel.
+		assert.Equal(t, vreplStreamResume, e.reviewVReplStreamError(uuid, resumableStream, now))
+		require.Contains(t, e.vreplicationResumeState, uuid)
+		assert.Equal(t, now, e.vreplicationResumeState[uuid].firstParked)
+
+		// Later ticks within the budget keep resuming, and the episode
+		// start is not restamped.
+		assert.Equal(t, vreplStreamResume, e.reviewVReplStreamError(uuid, resumableStream, now.Add(30*time.Minute)))
+		assert.Equal(t, now, e.vreplicationResumeState[uuid].firstParked)
+
+		// Once the episode outlives the resume budget, the migration is
+		// cancelled even though the stream error is still class B.
+		assert.Equal(t, vreplStreamCancel, e.reviewVReplStreamError(uuid, resumableStream, now.Add(staleMigrationFailMinutes*time.Minute)))
+
+		// The stream recovering ends the episode and clears the state.
+		assert.Equal(t, vreplStreamNoAction, e.reviewVReplStreamError(uuid, healthyStream, now.Add(staleMigrationFailMinutes*time.Minute)))
+		assert.NotContains(t, e.vreplicationResumeState, uuid)
+
+		// A later park starts a fresh episode with a fresh budget.
+		later := now.Add(24 * time.Hour)
+		assert.Equal(t, vreplStreamResume, e.reviewVReplStreamError(uuid, resumableStream, later))
+		assert.Equal(t, later, e.vreplicationResumeState[uuid].firstParked)
+	})
 }
