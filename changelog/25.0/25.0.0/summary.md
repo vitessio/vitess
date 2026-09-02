@@ -258,6 +258,13 @@ be routed to a single keyspace and now fails with an explicit `VT12001` error
 instead of returning wrong rows. Multi-value `table_name` lists are unaffected
 and keep working as plain filters.
 
+One narrow shape that previously worked is currently rejected as well: a
+multi-value `IN` list naming only system schemas (e.g. `table_schema IN
+('information_schema', 'performance_schema')`) now returns the same `VT12001`,
+because the routing rewrite cannot carry a multi-schema filter. Split the
+query per schema or use equality predicates as a workaround; issue #20974
+tracks restoring support for that shape.
+
 #### <a id="vtgate-streamexecute-real-errors"/>Streaming errors no longer surface as connection loss</a>
 
 Streaming queries (under `SET workload = 'OLAP'`, multi-statement batches, and prepared-statement execution) previously returned `ERROR 2013 (HY000): Lost connection to MySQL server during query` and tore down the underlying TCP connection whenever the streaming handler returned an error *after* the first row or field packet had been emitted. VTGate now writes a proper ERR packet in place of the result-set terminator, so the real error code and message reach the client and the connection remains usable for subsequent queries.

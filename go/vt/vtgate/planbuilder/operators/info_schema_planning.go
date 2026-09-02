@@ -205,6 +205,21 @@ func extractInfoSchemaRoutingPredicate(ctx *plancontext.PlanningContext, in sqlp
 			// dedicated, vtgate-owned list variable; the stored expression
 			// still reads the client's list, and the engine populates the
 			// dedicated one (with the routed table name when applicable).
+			//
+			// The rewrite must be idempotent: resetRoutingLogic replays
+			// seenPredicates, which hold this same, already-mutated node.
+			// A replay that reserved yet another name would store an
+			// expression reading a variable nothing populates (the issue
+			// #20972 hazard class), so recognize our own dedicated variable
+			// and recover the client's original list from the reservations.
+			for original, name := range ctx.ReservedArguments {
+				if name != string(rhs) {
+					continue
+				}
+				if clientList, ok := original.(sqlparser.ListArg); ok {
+					return false, name, clientList
+				}
+			}
 			bvName := ctx.GetReservedArgumentFor(rhs)
 			cmp.Right = sqlparser.ListArg(bvName)
 			return false, bvName, rhs
