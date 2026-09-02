@@ -19,6 +19,7 @@
 - **[Minor Changes](#minor-changes)**
     - **[VReplication](#minor-changes-vreplication)**
         - [Default data protection for `_reverse` workflow cancel/complete](#vreplication-reverse-workflow-data-protection)
+        - [`SwitchTraffic` refuses to switch writes before reads](#vreplication-switch-writes-requires-reads)
     - **[VTGate](#minor-changes-vtgate)**
         - [Ingress bytes in query LogStats](#vtgate-logstats-ingress-bytes)
         - [New controls for cross-keyspace reads](#vtgate-cross-keyspace-reads)
@@ -172,6 +173,14 @@ When calling `cancel` or `complete` on an auto-generated `_reverse` workflow wit
 The `--keep-data` flag help text has been updated to note this default explicitly. This change applies to MoveTables, Reshard, and other VReplication workflow types that use the shared cancel/complete paths.
 
 See [#19906](https://github.com/vitessio/vitess/pull/19906) for details.
+
+#### <a id="vreplication-switch-writes-requires-reads"/>`SwitchTraffic` refuses to switch writes before reads</a>
+
+A forward `SwitchTraffic` request that switches only writes (`PRIMARY`) while read traffic (`REPLICA`/`RDONLY`) is still on the source is now rejected with a `FAILED_PRECONDITION` error. Switching writes first strands the unswitched reads on a source that no longer receives writes, and for a Reshard it leaves the workflow impossible to `Complete` (which requires all read and write traffic to be switched).
+
+To switch writes, either switch reads first, or include the read types in the same request (e.g. `--tablet-types=rdonly,replica,primary`). The check can be overridden with `--force`.
+
+See [#20924](https://github.com/vitessio/vitess/pull/20924) for details.
 
 ### <a id="minor-changes-vtgate"/>VTGate</a>
 
