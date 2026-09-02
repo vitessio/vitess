@@ -40,6 +40,11 @@ type keyspaceActionsFakeServer struct {
 	removeKeyspaceCellReq      *vtadminpb.RemoveKeyspaceCellRequest
 	createShardReq             *vtadminpb.CreateShardRequest
 	reloadSchemasReq           *vtadminpb.ReloadSchemasRequest
+	validateKeyspaceNil        bool
+	validateSchemaNil          bool
+	validateVersionNil         bool
+	rebuildGraphNil            bool
+	removeCellNil              bool
 }
 
 func (f *keyspaceActionsFakeServer) GetKeyspace(ctx context.Context, req *vtadminpb.GetKeyspaceRequest) (*vtadminpb.Keyspace, error) {
@@ -52,26 +57,41 @@ func (f *keyspaceActionsFakeServer) GetKeyspace(ctx context.Context, req *vtadmi
 
 func (f *keyspaceActionsFakeServer) ValidateKeyspace(ctx context.Context, req *vtadminpb.ValidateKeyspaceRequest) (*vtctldatapb.ValidateKeyspaceResponse, error) {
 	f.validateKeyspaceReq = req
+	if f.validateKeyspaceNil {
+		return nil, nil
+	}
 	return &vtctldatapb.ValidateKeyspaceResponse{}, nil
 }
 
 func (f *keyspaceActionsFakeServer) ValidateSchemaKeyspace(ctx context.Context, req *vtadminpb.ValidateSchemaKeyspaceRequest) (*vtctldatapb.ValidateSchemaKeyspaceResponse, error) {
 	f.validateSchemaKeyspaceReq = req
+	if f.validateSchemaNil {
+		return nil, nil
+	}
 	return &vtctldatapb.ValidateSchemaKeyspaceResponse{}, nil
 }
 
 func (f *keyspaceActionsFakeServer) ValidateVersionKeyspace(ctx context.Context, req *vtadminpb.ValidateVersionKeyspaceRequest) (*vtctldatapb.ValidateVersionKeyspaceResponse, error) {
 	f.validateVersionKeyspaceReq = req
+	if f.validateVersionNil {
+		return nil, nil
+	}
 	return &vtctldatapb.ValidateVersionKeyspaceResponse{}, nil
 }
 
 func (f *keyspaceActionsFakeServer) RebuildKeyspaceGraph(ctx context.Context, req *vtadminpb.RebuildKeyspaceGraphRequest) (*vtadminpb.RebuildKeyspaceGraphResponse, error) {
 	f.rebuildKeyspaceGraphReq = req
+	if f.rebuildGraphNil {
+		return nil, nil
+	}
 	return &vtadminpb.RebuildKeyspaceGraphResponse{}, nil
 }
 
 func (f *keyspaceActionsFakeServer) RemoveKeyspaceCell(ctx context.Context, req *vtadminpb.RemoveKeyspaceCellRequest) (*vtadminpb.RemoveKeyspaceCellResponse, error) {
 	f.removeKeyspaceCellReq = req
+	if f.removeCellNil {
+		return nil, nil
+	}
 	return &vtadminpb.RemoveKeyspaceCellResponse{}, nil
 }
 
@@ -180,6 +200,60 @@ func TestKeyspaceActionsCallAPI(t *testing.T) {
 			}
 			assert.Equal(t, expectedRedirect, rec.Header().Get("Location"))
 			tt.verify(t, fake)
+		})
+	}
+}
+
+func TestKeyspaceActionsUnauthorizedNilResponse(t *testing.T) {
+	tests := []struct {
+		action string
+		form   url.Values
+		setup  func(*keyspaceActionsFakeServer)
+		called func(*keyspaceActionsFakeServer) any
+	}{
+		{
+			action: "/validate",
+			setup:  func(f *keyspaceActionsFakeServer) { f.validateKeyspaceNil = true },
+			called: func(f *keyspaceActionsFakeServer) any { return f.validateKeyspaceReq },
+		},
+		{
+			action: "/validate_schema",
+			setup:  func(f *keyspaceActionsFakeServer) { f.validateSchemaNil = true },
+			called: func(f *keyspaceActionsFakeServer) any { return f.validateSchemaKeyspaceReq },
+		},
+		{
+			action: "/validate_version",
+			setup:  func(f *keyspaceActionsFakeServer) { f.validateVersionNil = true },
+			called: func(f *keyspaceActionsFakeServer) any { return f.validateVersionKeyspaceReq },
+		},
+		{
+			action: "/rebuild_graph",
+			setup:  func(f *keyspaceActionsFakeServer) { f.rebuildGraphNil = true },
+			called: func(f *keyspaceActionsFakeServer) any { return f.rebuildKeyspaceGraphReq },
+		},
+		{
+			action: "/remove_cell",
+			form:   url.Values{"cell": {"zone1"}},
+			setup:  func(f *keyspaceActionsFakeServer) { f.removeCellNil = true },
+			called: func(f *keyspaceActionsFakeServer) any { return f.removeKeyspaceCellReq },
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.action, func(t *testing.T) {
+			fake := &keyspaceActionsFakeServer{}
+			tt.setup(fake)
+			s := newKeyspaceActionsTestServer(t, fake, false)
+
+			form := url.Values{}
+			if tt.form != nil {
+				form = tt.form
+			}
+			rec := postShardForm(t, s, keyspaceActionBase+tt.action, form)
+
+			assert.Equal(t, http.StatusBadRequest, rec.Code)
+			assert.NotNil(t, tt.called(fake))
+			assert.Contains(t, rec.Body.String(), "not authorized")
 		})
 	}
 }

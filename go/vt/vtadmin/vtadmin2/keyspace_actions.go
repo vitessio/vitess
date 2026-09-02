@@ -50,6 +50,10 @@ func (s *Server) keyspaceValidate(w http.ResponseWriter, r *http.Request) {
 		s.renderFormErrorErr(w, r, title, err)
 		return
 	}
+	if resp == nil {
+		s.renderFormError(w, r, title, "not authorized to validate keyspace")
+		return
+	}
 
 	s.redirectWithFlash(w, r, keyspaceDetailPath(clusterID, keyspace), Flash{
 		Kind:    "success",
@@ -64,12 +68,16 @@ func (s *Server) keyspaceValidateSchema(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	_, err := s.api.ValidateSchemaKeyspace(r.Context(), &vtadminpb.ValidateSchemaKeyspaceRequest{
+	resp, err := s.api.ValidateSchemaKeyspace(r.Context(), &vtadminpb.ValidateSchemaKeyspaceRequest{
 		ClusterId: clusterID,
 		Keyspace:  keyspace,
 	})
 	if err != nil {
 		s.renderFormErrorErr(w, r, title, err)
+		return
+	}
+	if resp == nil {
+		s.renderFormError(w, r, title, "not authorized to validate schema")
 		return
 	}
 
@@ -86,12 +94,16 @@ func (s *Server) keyspaceValidateVersion(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	_, err := s.api.ValidateVersionKeyspace(r.Context(), &vtadminpb.ValidateVersionKeyspaceRequest{
+	resp, err := s.api.ValidateVersionKeyspace(r.Context(), &vtadminpb.ValidateVersionKeyspaceRequest{
 		ClusterId: clusterID,
 		Keyspace:  keyspace,
 	})
 	if err != nil {
 		s.renderFormErrorErr(w, r, title, err)
+		return
+	}
+	if resp == nil {
+		s.renderFormError(w, r, title, "not authorized to validate version")
 		return
 	}
 
@@ -108,13 +120,17 @@ func (s *Server) keyspaceRebuildGraph(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err := s.api.RebuildKeyspaceGraph(r.Context(), &vtadminpb.RebuildKeyspaceGraphRequest{
+	resp, err := s.api.RebuildKeyspaceGraph(r.Context(), &vtadminpb.RebuildKeyspaceGraphRequest{
 		ClusterId: clusterID,
 		Keyspace:  keyspace,
 		Cells:     splitFormList(r.Form.Get("cells")),
 	})
 	if err != nil {
 		s.renderFormErrorErr(w, r, title, err)
+		return
+	}
+	if resp == nil {
+		s.renderFormError(w, r, title, "not authorized to rebuild keyspace graph")
 		return
 	}
 
@@ -137,7 +153,7 @@ func (s *Server) keyspaceRemoveCell(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err := s.api.RemoveKeyspaceCell(r.Context(), &vtadminpb.RemoveKeyspaceCellRequest{
+	resp, err := s.api.RemoveKeyspaceCell(r.Context(), &vtadminpb.RemoveKeyspaceCellRequest{
 		ClusterId: clusterID,
 		Keyspace:  keyspace,
 		Cell:      cell,
@@ -145,6 +161,10 @@ func (s *Server) keyspaceRemoveCell(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		s.renderFormErrorErr(w, r, title, err)
+		return
+	}
+	if resp == nil {
+		s.renderFormError(w, r, title, "not authorized to remove keyspace cell")
 		return
 	}
 

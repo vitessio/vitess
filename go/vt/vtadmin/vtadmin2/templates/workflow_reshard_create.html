@@ -17,7 +17,7 @@
   <p class="muted">Shards are per cluster. Pick the cluster you want to reshard:</p>
   <div class="toolbar-links">
     {{ range $d.Form.Clusters }}
-    <a class="button" href="/workflows/reshard/create?cluster_id={{ pathEscape .GetId }}">{{ .GetName }} ({{ .GetId }})</a>
+    <a class="button" href="/workflows/reshard/create?cluster_id={{ urlQueryEscape .GetId }}">{{ .GetName }} ({{ .GetId }})</a>
     {{ end }}
   </div>
 </div>

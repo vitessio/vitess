@@ -143,12 +143,13 @@
         <button type="submit" class="button">Create VDiff</button>
       </form>
     </details>
+    {{ if .Data.CanComplete }}
     <details>
-      <summary>Complete workflow (MoveTables)</summary>
+      <summary>Complete workflow</summary>
       <form method="POST" action="/workflow/{{ pathEscape (clusterID .Data.GetCluster) }}/{{ pathEscape .Data.GetKeyspace }}/{{ pathEscape .Data.GetWorkflow.GetName }}/complete" class="form-grid" data-confirm="Finalize workflow {{ .Data.GetWorkflow.GetName }}? This moves the workflow to Complete status and cannot be reversed.">
         <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
         <label class="checkbox-label">
-          <input type="checkbox" name="keep_data" checked>
+          <input type="checkbox" name="keep_data">
           Keep data (do not drop copied tables on the source)
         </label>
         <label class="checkbox-label">
@@ -162,6 +163,7 @@
         <button type="submit" class="button danger">Complete workflow</button>
       </form>
     </details>
+    {{ end }}
     <details>
       <summary>Cancel workflow (delete)</summary>
       <form method="POST" action="/workflow/{{ pathEscape (clusterID .Data.GetCluster) }}/{{ pathEscape .Data.GetKeyspace }}/{{ pathEscape .Data.GetWorkflow.GetName }}/cancel" class="form-grid" data-confirm="Cancel and delete workflow {{ .Data.GetWorkflow.GetName }}? This cannot be undone.">

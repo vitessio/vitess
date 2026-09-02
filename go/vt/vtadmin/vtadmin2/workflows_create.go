@@ -150,7 +150,7 @@ func (s *Server) createReshardForm(w http.ResponseWriter, r *http.Request) {
 
 	// With more than one cluster, a shard list only makes sense per cluster;
 	// ask the user to pick one explicitly rather than guessing.
-	pickCluster := len(form.Clusters) > 1 && requestedCluster == ""
+	pickCluster := len(form.Clusters) > 1 && requestedCluster != form.SelectedCluster
 
 	s.render(w, r, http.StatusOK, "workflow_reshard_create.html", PageData{
 		Title:     "Create Reshard workflow",
@@ -384,7 +384,7 @@ func (s *Server) createMigrationForm(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	pickCluster := len(form.Clusters) > 1 && requestedCluster == ""
+	pickCluster := len(form.Clusters) > 1 && requestedCluster != form.SelectedCluster
 
 	s.render(w, r, http.StatusOK, "migration_create.html", PageData{
 		Title:     "Create schema migration",

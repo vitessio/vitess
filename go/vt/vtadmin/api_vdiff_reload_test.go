@@ -18,15 +18,18 @@ package vtadmin
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/protoutil"
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	"vitess.io/vitess/go/vt/vtadmin/rbac"
 	vtadmintestutil "vitess.io/vitess/go/vt/vtadmin/testutil"
 	"vitess.io/vitess/go/vt/vtadmin/vtctldclient/fakevtctldclient"
+	"vitess.io/vitess/go/vt/vtctl/workflow"
 	"vitess.io/vitess/go/vt/vtenv"
 )
 
@@ -119,6 +122,64 @@ func TestVDiffCreatePreservesExplicitOptions(t *testing.T) {
 	require.NotNil(t, got)
 	assert.Equal(t, "kept-uuid", got.Uuid)
 	assert.True(t, got.AutoRetry)
+}
+
+func TestVDiffCreateAppliesDefaultWaitTimeWhenZero(t *testing.T) {
+	t.Parallel()
+
+	fake := &fakevtctldclient.VtctldClient{}
+	api := NewAPI(vtenv.NewTestEnv(), vtadmintestutil.BuildClusters(t, vtadmintestutil.TestClusterConfig{
+		Cluster:      &vtadminpb.Cluster{Id: "c1", Name: "cluster1"},
+		VtctldClient: fake,
+	}), Options{})
+	t.Cleanup(func() {
+		assert.NoError(t, api.Close())
+	})
+
+	_, err := api.VDiffCreate(t.Context(), &vtadminpb.VDiffCreateRequest{
+		ClusterId: "c1",
+		Request: &vtctldatapb.VDiffCreateRequest{
+			Workflow:                    "wf",
+			TargetKeyspace:              "ks",
+			Uuid:                        "wait-uuid",
+			FilteredReplicationWaitTime: protoutil.DurationToProto(0),
+		},
+	})
+	require.NoError(t, err)
+
+	got := fake.LastVDiffCreateRequest
+	require.NotNil(t, got)
+	require.NotNil(t, got.FilteredReplicationWaitTime)
+	assert.Equal(t, int64(workflow.DefaultTimeout.Seconds()), got.FilteredReplicationWaitTime.Seconds)
+}
+
+func TestVDiffCreatePreservesPositiveWaitTime(t *testing.T) {
+	t.Parallel()
+
+	fake := &fakevtctldclient.VtctldClient{}
+	api := NewAPI(vtenv.NewTestEnv(), vtadmintestutil.BuildClusters(t, vtadmintestutil.TestClusterConfig{
+		Cluster:      &vtadminpb.Cluster{Id: "c1", Name: "cluster1"},
+		VtctldClient: fake,
+	}), Options{})
+	t.Cleanup(func() {
+		assert.NoError(t, api.Close())
+	})
+
+	_, err := api.VDiffCreate(t.Context(), &vtadminpb.VDiffCreateRequest{
+		ClusterId: "c1",
+		Request: &vtctldatapb.VDiffCreateRequest{
+			Workflow:                    "wf",
+			TargetKeyspace:              "ks",
+			Uuid:                        "wait-kept",
+			FilteredReplicationWaitTime: protoutil.DurationToProto(45 * time.Second),
+		},
+	})
+	require.NoError(t, err)
+
+	got := fake.LastVDiffCreateRequest
+	require.NotNil(t, got)
+	require.NotNil(t, got.FilteredReplicationWaitTime)
+	assert.Equal(t, int64(45), got.FilteredReplicationWaitTime.Seconds)
 }
 
 func TestReloadSchemaShardForwardsKeyspaceAndShard(t *testing.T) {

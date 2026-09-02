@@ -37,7 +37,7 @@ Flags:
       --tracing-enable-logging                  whether to enable logging in the tracing service
       --tracing-sampling-rate float             sampling rate for traces as a probability between 0.0 and 1.0 (default 0.1)
       --ui string                               admin UI to serve: react (default SPA) or vtadmin2 (server-rendered UI) (default "react")
-      --ui-addr string                          address for the vtadmin2 UI to listen on (used with --ui=vtadmin2) (default ":15001")
+      --ui-addr string                          address for the vtadmin2 UI to listen on (used with --ui=vtadmin2) (default ":14202")
       --ui-debug-json                           enable ?format=json page data output in the vtadmin2 UI (used with --ui=vtadmin2)
       --ui-read-only                            run the vtadmin2 UI in read-only mode (used with --ui=vtadmin2)
       --ui-trust-proxy-https                    mark UI cookies Secure when X-Forwarded-Proto: https is present from a trusted HTTPS-terminating proxy (used with --ui=vtadmin2)

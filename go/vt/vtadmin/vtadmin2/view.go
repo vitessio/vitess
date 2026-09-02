@@ -17,6 +17,7 @@ limitations under the License.
 package vtadmin2
 
 import (
+	"html/template"
 	"maps"
 	"net/http"
 	"net/url"
@@ -45,9 +46,20 @@ func queryValues(r *http.Request, name string) []string { return r.URL.Query()[n
 
 func queryValue(r *http.Request, name string) string { return r.URL.Query().Get(name) }
 
+func hasNonRefreshQuery(r *http.Request) bool {
+	for key := range r.URL.Query() {
+		if key != "refresh" {
+			return true
+		}
+	}
+	return false
+}
+
 func pathEscape(value string) string { return url.PathEscape(value) }
 
-func urlQueryEscape(value string) string { return url.QueryEscape(value) }
+func urlQueryEscape(value string) template.URL {
+	return template.URL(url.QueryEscape(value))
+}
 
 func externalURL(value string) string {
 	if value == "" {
@@ -59,16 +71,18 @@ func externalURL(value string) string {
 	return "http://" + value
 }
 
+func clusterIDExists(clusters []*vtadminpb.Cluster, id string) bool {
+	return slices.ContainsFunc(clusters, func(c *vtadminpb.Cluster) bool {
+		return c.GetId() == id
+	})
+}
+
 func selectedClusterID(clusters []*vtadminpb.Cluster, requested, defaultCluster string) string {
-	if requested != "" {
+	if requested != "" && clusterIDExists(clusters, requested) {
 		return requested
 	}
-	if defaultCluster != "" {
-		for _, c := range clusters {
-			if c.GetId() == defaultCluster {
-				return defaultCluster
-			}
-		}
+	if defaultCluster != "" && clusterIDExists(clusters, defaultCluster) {
+		return defaultCluster
 	}
 	if len(clusters) == 0 {
 		return ""

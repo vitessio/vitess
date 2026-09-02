@@ -39,6 +39,7 @@ type workflowActionsFakeServer struct {
 	fakeVTAdminServer
 
 	workflowType             string
+	trafficState             string
 	startWorkflowNil         bool
 	stopWorkflowNil          bool
 	startWorkflowReq         *vtadminpb.StartWorkflowRequest
@@ -59,6 +60,14 @@ func (f *workflowActionsFakeServer) GetWorkflow(ctx context.Context, req *vtadmi
 		Keyspace: req.Keyspace,
 		Workflow: &vtctldatapb.Workflow{Name: req.Name, WorkflowType: workflowType},
 	}, nil
+}
+
+func (f *workflowActionsFakeServer) GetWorkflowStatus(ctx context.Context, req *vtadminpb.GetWorkflowStatusRequest) (*vtctldatapb.WorkflowStatusResponse, error) {
+	state := f.trafficState
+	if state == "" {
+		state = "All Reads Switched. Writes Switched"
+	}
+	return &vtctldatapb.WorkflowStatusResponse{TrafficState: state}, nil
 }
 
 func (f *workflowActionsFakeServer) StartWorkflow(ctx context.Context, req *vtadminpb.StartWorkflowRequest) (*vtctldatapb.WorkflowUpdateResponse, error) {
@@ -216,6 +225,59 @@ func TestWorkflowCompleteCallsMoveTablesComplete(t *testing.T) {
 	assert.True(t, inner.GetKeepData())
 }
 
+func TestWorkflowCompleteKeepDataDefaultsFalse(t *testing.T) {
+	fake := &workflowActionsFakeServer{}
+	s := newWorkflowActionsTestServer(t, fake, false)
+
+	rec := postShardForm(t, s, workflowActionBase+"/complete", url.Values{})
+
+	assert.Equal(t, http.StatusSeeOther, rec.Code)
+	require.NotNil(t, fake.moveTablesCompleteReq)
+	assert.False(t, fake.moveTablesCompleteReq.GetRequest().GetKeepData())
+}
+
+func TestWorkflowCompleteRejectsUnsupportedTypes(t *testing.T) {
+	fake := &workflowActionsFakeServer{workflowType: "Materialize"}
+	s := newWorkflowActionsTestServer(t, fake, false)
+
+	rec := postShardForm(t, s, workflowActionBase+"/complete", url.Values{})
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Nil(t, fake.moveTablesCompleteReq)
+	assert.Contains(t, rec.Body.String(), "MoveTables")
+}
+
+func TestWorkflowCompleteRejectsUnswitchedTraffic(t *testing.T) {
+	fake := &workflowActionsFakeServer{trafficState: "Reads Not Switched. Writes Not Switched"}
+	s := newWorkflowActionsTestServer(t, fake, false)
+
+	rec := postShardForm(t, s, workflowActionBase+"/complete", url.Values{})
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Nil(t, fake.moveTablesCompleteReq)
+	assert.Contains(t, rec.Body.String(), "fully switched")
+}
+
+func TestWorkflowTrafficFullySwitched(t *testing.T) {
+	tests := []struct {
+		state string
+		want  bool
+	}{
+		{state: "All Reads Switched. Writes Switched", want: true},
+		{state: "All Reads Switched. All Writes Switched", want: true},
+		{state: "Reads Not Switched. Writes Not Switched", want: false},
+		{state: "All Reads Switched. Writes Not Switched", want: false},
+		{state: "Reads Not Switched. Writes Switched", want: false},
+		{state: "Reads partially switched. Replica not switched. All Rdonly Reads Switched. Writes Switched", want: false},
+		{state: "", want: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.state, func(t *testing.T) {
+			assert.Equal(t, tt.want, workflowTrafficFullySwitched(tt.state))
+		})
+	}
+}
+
 func TestWorkflowSwitchTraffic(t *testing.T) {
 	fake := &workflowActionsFakeServer{}
 	s := newWorkflowActionsTestServer(t, fake, false)
@@ -366,6 +428,8 @@ func TestWorkflowDetailRendersActions(t *testing.T) {
 	assert.Contains(t, body, workflowActionBase+"/switch_traffic")
 	assert.Contains(t, body, workflowActionBase+"/complete")
 	assert.Contains(t, body, workflowActionBase+"/vdiff")
+	assert.Contains(t, body, `name="keep_data">`)
+	assert.Contains(t, body, "Keep data (do not drop copied tables on the source)")
 
 	// A POST using the exact rendered token/cookie pairing must get past
 	// CSRF validation.
@@ -401,6 +465,35 @@ func TestWorkflowDetailTrafficSwitchVisibility(t *testing.T) {
 				assert.NotContains(t, body, workflowActionBase+"/switch_traffic")
 				assert.NotContains(t, body, workflowActionBase+"/reverse_traffic")
 			}
+		})
+	}
+}
+
+func TestWorkflowDetailCompleteVisibility(t *testing.T) {
+	tests := []struct {
+		name         string
+		workflowType string
+		trafficState string
+		wantComplete bool
+	}{
+		{name: "movetables switched", workflowType: "MoveTables", trafficState: "All Reads Switched. Writes Switched", wantComplete: true},
+		{name: "reshard switched", workflowType: "Reshard", trafficState: "All Reads Switched. Writes Switched", wantComplete: true},
+		{name: "movetables not switched", workflowType: "MoveTables", trafficState: "Reads Not Switched. Writes Not Switched", wantComplete: false},
+		{name: "materialize switched", workflowType: "Materialize", trafficState: "All Reads Switched. Writes Switched", wantComplete: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fake := &workflowActionsFakeServer{workflowType: tt.workflowType, trafficState: tt.trafficState}
+			s := newWorkflowActionsTestServer(t, fake, false)
+
+			_, rec := renderWithCSRF(t, s, workflowActionBase)
+			body := rec.Body.String()
+			if tt.wantComplete {
+				assert.Contains(t, body, workflowActionBase+"/complete")
+				return
+			}
+			assert.NotContains(t, body, workflowActionBase+"/complete")
 		})
 	}
 }

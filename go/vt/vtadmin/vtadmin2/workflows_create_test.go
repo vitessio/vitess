@@ -620,6 +620,52 @@ func TestCreateMigrationFormLocksSelectedCluster(t *testing.T) {
 	assert.Contains(t, body, `href="/migrations/create">`)
 }
 
+func TestCreateMigrationFormUnknownClusterFallsBackWhenSingleCluster(t *testing.T) {
+	fake := &workflowCreateFakeServer{}
+	s := newWorkflowCreateTestServer(t, fake, false)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, createMigrationPath+"?cluster_id=missing", nil)
+	s.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	body := rec.Body.String()
+	assert.Contains(t, body, `name="sql"`)
+	assert.Contains(t, body, `type="hidden" name="cluster_id" value="local"`)
+	assert.NotContains(t, body, "Choose a cluster")
+}
+
+func TestCreateMigrationFormUnknownClusterRepicksWhenMultiCluster(t *testing.T) {
+	fake := &multiClusterFakeServer{}
+	s, err := NewServer(fake, Options{})
+	require.NoError(t, err)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, createMigrationPath+"?cluster_id=missing", nil)
+	s.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	body := rec.Body.String()
+	assert.NotContains(t, body, `name="sql"`)
+	assert.Contains(t, body, "/migrations/create?cluster_id=local")
+	assert.Contains(t, body, "/migrations/create?cluster_id=prod")
+}
+
+func TestCreateMigrationFormQueryEscapesClusterID(t *testing.T) {
+	fake := &reservedCharClusterFakeServer{}
+	s, err := NewServer(fake, Options{})
+	require.NoError(t, err)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, createMigrationPath, nil)
+	s.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	body := rec.Body.String()
+	assert.Contains(t, body, "/migrations/create?cluster_id="+url.QueryEscape(reservedCharClusterID))
+	assert.NotContains(t, body, "/migrations/create?cluster_id="+reservedCharClusterID+"\"")
+}
+
 func TestCreateMigrationPostRedirectsToMigrations(t *testing.T) {
 	fake := &workflowCreateFakeServer{}
 	s := newWorkflowCreateTestServer(t, fake, false)
@@ -747,6 +793,52 @@ func TestCreateReshardFormLocksSelectedCluster(t *testing.T) {
 	assert.Contains(t, body, `href="/workflows/reshard/create">`)
 }
 
+func TestCreateReshardFormUnknownClusterFallsBackWhenSingleCluster(t *testing.T) {
+	fake := &workflowCreateFakeServer{}
+	s := newWorkflowCreateTestServer(t, fake, false)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, createReshardPath+"?cluster_id=missing", nil)
+	s.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	body := rec.Body.String()
+	assert.Contains(t, body, `name="workflow"`)
+	assert.Contains(t, body, `type="hidden" name="cluster_id" value="local"`)
+	assert.NotContains(t, body, "Choose a cluster")
+}
+
+func TestCreateReshardFormUnknownClusterRepicksWhenMultiCluster(t *testing.T) {
+	fake := &multiClusterFakeServer{}
+	s, err := NewServer(fake, Options{})
+	require.NoError(t, err)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, createReshardPath+"?cluster_id=missing", nil)
+	s.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	body := rec.Body.String()
+	assert.NotContains(t, body, `name="workflow"`)
+	assert.Contains(t, body, "/workflows/reshard/create?cluster_id=local")
+	assert.Contains(t, body, "/workflows/reshard/create?cluster_id=prod")
+}
+
+func TestCreateReshardFormQueryEscapesClusterID(t *testing.T) {
+	fake := &reservedCharClusterFakeServer{}
+	s, err := NewServer(fake, Options{})
+	require.NoError(t, err)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, createReshardPath, nil)
+	s.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	body := rec.Body.String()
+	assert.Contains(t, body, "/workflows/reshard/create?cluster_id="+url.QueryEscape(reservedCharClusterID))
+	assert.NotContains(t, body, "/workflows/reshard/create?cluster_id="+reservedCharClusterID+"\"")
+}
+
 type multiClusterFakeServer struct {
 	workflowCreateFakeServer
 }
@@ -760,6 +852,19 @@ func (f *multiClusterFakeServer) GetClusters(ctx context.Context, req *vtadminpb
 
 func (f *multiClusterFakeServer) GetKeyspaces(ctx context.Context, req *vtadminpb.GetKeyspacesRequest) (*vtadminpb.GetKeyspacesResponse, error) {
 	return &vtadminpb.GetKeyspacesResponse{Keyspaces: []*vtadminpb.Keyspace{}}, nil
+}
+
+const reservedCharClusterID = "team&env=prod"
+
+type reservedCharClusterFakeServer struct {
+	workflowCreateFakeServer
+}
+
+func (f *reservedCharClusterFakeServer) GetClusters(ctx context.Context, req *vtadminpb.GetClustersRequest) (*vtadminpb.GetClustersResponse, error) {
+	return &vtadminpb.GetClustersResponse{Clusters: []*vtadminpb.Cluster{
+		{Id: "local", Name: "Local"},
+		{Id: reservedCharClusterID, Name: "Team"},
+	}}, nil
 }
 
 const createReshardPath = "/workflows/reshard/create"

@@ -1735,7 +1735,7 @@ func (api *API) VDiffCreate(ctx context.Context, req *vtadminpb.VDiffCreateReque
 	if req.Request.TabletSelectionPreference == tabletmanagerdatapb.TabletSelectionPreference_ANY {
 		req.Request.TabletSelectionPreference = tabletmanagerdatapb.TabletSelectionPreference_INORDER
 	}
-	if req.Request.FilteredReplicationWaitTime == nil {
+	if d, ok, err := protoutil.DurationFromProto(req.Request.FilteredReplicationWaitTime); err != nil || !ok || d <= 0 {
 		req.Request.FilteredReplicationWaitTime = protoutil.DurationToProto(workflow.DefaultTimeout)
 	}
 	if req.Request.Limit == 0 {

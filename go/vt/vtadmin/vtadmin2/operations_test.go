@@ -152,6 +152,20 @@ func TestMigrationsPageDefaultsClusterAndKeyspaceSelects(t *testing.T) {
 	assert.Nil(t, fake.getSchemaMigrationsRequest)
 }
 
+func TestMigrationsPageRefreshOnlyDoesNotRequireFilters(t *testing.T) {
+	fake := &operationsFakeServer{}
+	s, err := NewServer(fake, Options{})
+	require.NoError(t, err)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/migrations?refresh=10", nil)
+	s.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Contains(t, rec.Body.String(), `<select name="cluster_id" required>`)
+	assert.Nil(t, fake.getSchemaMigrationsRequest)
+}
+
 func TestMigrationsPageRejectsEmptyClusterID(t *testing.T) {
 	fake := &operationsFakeServer{}
 	s, err := NewServer(fake, Options{})
@@ -256,6 +270,20 @@ func TestTransactionsPageDefaultsClusterAndKeyspaceSelects(t *testing.T) {
 	assert.Contains(t, rec.Body.String(), `<option value="local" selected>Local (local)</option>`)
 	assert.Contains(t, rec.Body.String(), `<select name="keyspace" required>`)
 	assert.Contains(t, rec.Body.String(), `<option value="commerce" selected>commerce</option>`)
+	assert.Nil(t, fake.getUnresolvedTransactionsRequest)
+}
+
+func TestTransactionsPageRefreshOnlyDoesNotRequireFilters(t *testing.T) {
+	fake := &operationsFakeServer{}
+	s, err := NewServer(fake, Options{})
+	require.NoError(t, err)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/transactions?refresh=10", nil)
+	s.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Contains(t, rec.Body.String(), `<select name="cluster_id" required>`)
 	assert.Nil(t, fake.getUnresolvedTransactionsRequest)
 }
 

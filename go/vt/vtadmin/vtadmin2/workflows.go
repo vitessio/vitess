@@ -28,6 +28,11 @@ import (
 )
 
 type (
+	workflowDetailData struct {
+		*vtadminpb.Workflow
+		CanComplete bool
+	}
+
 	workflowStatusData struct {
 		ClusterID string
 		Keyspace  string
@@ -96,11 +101,26 @@ func (s *Server) workflow(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	canComplete := false
+	if workflowSupportsTrafficSwitch(resp.GetWorkflow().GetWorkflowType()) {
+		status, statusErr := s.api.GetWorkflowStatus(r.Context(), &vtadminpb.GetWorkflowStatusRequest{
+			ClusterId: r.PathValue("cluster_id"),
+			Keyspace:  r.PathValue("keyspace"),
+			Name:      r.PathValue("name"),
+		})
+		if statusErr == nil {
+			canComplete = workflowTrafficFullySwitched(status.GetTrafficState())
+		}
+	}
+
 	s.render(w, r, http.StatusOK, "workflow.html", PageData{
 		Title:     r.PathValue("name"),
 		Active:    "workflows",
 		NeedsCSRF: !s.opts.ReadOnly,
-		Data:      resp,
+		Data: workflowDetailData{
+			Workflow:    resp,
+			CanComplete: canComplete,
+		},
 	})
 }
 

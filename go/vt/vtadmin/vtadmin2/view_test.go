@@ -42,6 +42,9 @@ func TestSelectedClusterDefaultsToFirstCluster(t *testing.T) {
 	assert.Equal(t, "prod", selectedClusterID(clusters, "", "prod"))
 	// An unknown default falls back to the first cluster.
 	assert.Equal(t, "local", selectedClusterID(clusters, "", "bogus"))
+	// An unknown requested ID is ignored rather than locking an empty form.
+	assert.Equal(t, "local", selectedClusterID(clusters, "bogus", ""))
+	assert.Equal(t, "prod", selectedClusterID(clusters, "bogus", "prod"))
 }
 
 func TestSelectedKeyspaceDefaultsToFirstForCluster(t *testing.T) {

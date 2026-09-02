@@ -135,7 +135,39 @@ func (s *Server) workflowComplete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err := s.api.MoveTablesComplete(r.Context(), &vtadminpb.MoveTablesCompleteRequest{
+	wf, err := s.api.GetWorkflow(r.Context(), &vtadminpb.GetWorkflowRequest{
+		ClusterId: clusterID,
+		Keyspace:  keyspace,
+		Name:      workflow,
+	})
+	if err != nil {
+		s.renderFormErrorErr(w, r, title, err)
+		return
+	}
+	if wf == nil || wf.GetWorkflow() == nil {
+		s.renderFormError(w, r, title, "not authorized to complete workflow")
+		return
+	}
+	if !workflowSupportsTrafficSwitch(wf.GetWorkflow().GetWorkflowType()) {
+		s.renderFormError(w, r, title, "complete is only supported for MoveTables and Reshard workflows")
+		return
+	}
+
+	status, err := s.api.GetWorkflowStatus(r.Context(), &vtadminpb.GetWorkflowStatusRequest{
+		ClusterId: clusterID,
+		Keyspace:  keyspace,
+		Name:      workflow,
+	})
+	if err != nil {
+		s.renderFormErrorErr(w, r, title, err)
+		return
+	}
+	if !workflowTrafficFullySwitched(status.GetTrafficState()) {
+		s.renderFormError(w, r, title, "cannot complete workflow until traffic is fully switched")
+		return
+	}
+
+	_, err = s.api.MoveTablesComplete(r.Context(), &vtadminpb.MoveTablesCompleteRequest{
 		ClusterId: clusterID,
 		Request: &vtctldatapb.MoveTablesCompleteRequest{
 			Workflow:         workflow,
@@ -158,6 +190,13 @@ func (s *Server) workflowComplete(w http.ResponseWriter, r *http.Request) {
 
 func workflowSupportsTrafficSwitch(workflowType string) bool {
 	return workflowType == "MoveTables" || workflowType == "Reshard"
+}
+
+func workflowTrafficFullySwitched(trafficState string) bool {
+	if strings.Contains(trafficState, "Not Switched") || strings.Contains(trafficState, "partially") {
+		return false
+	}
+	return strings.Contains(trafficState, "Writes Switched")
 }
 
 func (s *Server) workflowSwitchTraffic(w http.ResponseWriter, r *http.Request, direction int32) {

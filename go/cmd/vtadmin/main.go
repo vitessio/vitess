@@ -260,7 +260,7 @@ func registerFlags() {
 
 	// Server-rendered UI flags
 	rootCmd.Flags().StringVar(&ui, "ui", "react", "admin UI to serve: react (default SPA) or vtadmin2 (server-rendered UI)")
-	rootCmd.Flags().StringVar(&uiAddr, "ui-addr", ":15001", "address for the vtadmin2 UI to listen on (used with --ui=vtadmin2)")
+	rootCmd.Flags().StringVar(&uiAddr, "ui-addr", ":14202", "address for the vtadmin2 UI to listen on (used with --ui=vtadmin2)")
 	rootCmd.Flags().BoolVar(&uiReadOnly, "ui-read-only", false, "run the vtadmin2 UI in read-only mode (used with --ui=vtadmin2)")
 	rootCmd.Flags().BoolVar(&uiDebugJSON, "ui-debug-json", false, "enable ?format=json page data output in the vtadmin2 UI (used with --ui=vtadmin2)")
 	rootCmd.Flags().BoolVar(&uiTrustProxy, "ui-trust-proxy-https", false, "mark UI cookies Secure when X-Forwarded-Proto: https is present from a trusted HTTPS-terminating proxy (used with --ui=vtadmin2)")

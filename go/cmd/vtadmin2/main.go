@@ -108,7 +108,7 @@ func run(cmd *cobra.Command, args []string) (err error) {
 
 	addr := uiOpts.Addr
 	if addr == "" {
-		addr = ":15001"
+		addr = ":14202"
 	}
 	log.Info("starting vtadmin2", slog.String("addr", addr))
 	ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
@@ -240,7 +240,7 @@ func buildVTAdmin2Options(rbacConfig *rbac.Config) vtadmin2.Options {
 }
 
 func registerFlags() {
-	rootCmd.Flags().StringVar(&uiOpts.Addr, "addr", ":15001", "address to serve the vtadmin2 web UI on")
+	rootCmd.Flags().StringVar(&uiOpts.Addr, "addr", ":14202", "address to serve the vtadmin2 web UI on")
 	rootCmd.Flags().BoolVar(&uiOpts.ReadOnly, "read-only", false, "hide vtadmin2 mutating actions in the UI")
 	rootCmd.Flags().StringVar(&uiOpts.DocumentTitle, "document-title", "VTAdmin2", "document title for vtadmin2 pages")
 	rootCmd.Flags().BoolVar(&uiOpts.EnableDebugJSON, "debug-json", false, "enable debug JSON views in vtadmin2 pages")
