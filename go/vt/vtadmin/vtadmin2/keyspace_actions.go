@@ -222,7 +222,7 @@ func (s *Server) keyspaceReloadSchema(w http.ResponseWriter, r *http.Request) {
 		s.renderFormErrorErr(w, r, title, err)
 		return
 	}
-	if resp == nil {
+	if resp == nil || !reloadSchemasCoveredKeyspace(resp, keyspace) {
 		s.renderFormError(w, r, title, "not authorized to reload schema")
 		return
 	}
@@ -243,4 +243,13 @@ func (s *Server) keyspaceReloadSchema(w http.ResponseWriter, r *http.Request) {
 		Kind:    "success",
 		Message: "reloaded schema on keyspace " + keyspace,
 	})
+}
+
+func reloadSchemasCoveredKeyspace(resp *vtadminpb.ReloadSchemasResponse, keyspace string) bool {
+	for _, result := range resp.GetKeyspaceResults() {
+		if result.GetKeyspace().GetKeyspace().GetName() == keyspace {
+			return true
+		}
+	}
+	return false
 }

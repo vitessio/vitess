@@ -111,7 +111,14 @@ func (f *keyspaceActionsFakeServer) ReloadSchemas(ctx context.Context, req *vtad
 	if f.reloadSchemasResp != nil {
 		return f.reloadSchemasResp, nil
 	}
-	return &vtadminpb.ReloadSchemasResponse{}, nil
+	return &vtadminpb.ReloadSchemasResponse{
+		KeyspaceResults: []*vtadminpb.ReloadSchemasResponse_KeyspaceResult{{
+			Keyspace: &vtadminpb.Keyspace{
+				Cluster:  &vtadminpb.Cluster{Id: testClusterID},
+				Keyspace: &vtctldatapb.Keyspace{Name: testKeyspace},
+			},
+		}},
+	}, nil
 }
 
 func newKeyspaceActionsTestServer(t *testing.T, fake *keyspaceActionsFakeServer, readOnly bool) *Server {
@@ -273,10 +280,26 @@ func TestKeyspaceActionsUnauthorizedNilResponse(t *testing.T) {
 	}
 }
 
+func TestKeyspaceReloadSchemaEmptyResponseUnauthorized(t *testing.T) {
+	fake := &keyspaceActionsFakeServer{
+		reloadSchemasResp: &vtadminpb.ReloadSchemasResponse{},
+	}
+	s := newKeyspaceActionsTestServer(t, fake, false)
+
+	rec := postShardForm(t, s, keyspaceActionBase+"/reload_schema", url.Values{})
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.NotEqual(t, keyspaceActionBase, rec.Header().Get("Location"))
+	assert.Contains(t, rec.Body.String(), "not authorized")
+}
+
 func TestKeyspaceReloadSchemaFailureEventsDoNotFlashSuccess(t *testing.T) {
 	fake := &keyspaceActionsFakeServer{
 		reloadSchemasResp: &vtadminpb.ReloadSchemasResponse{
 			KeyspaceResults: []*vtadminpb.ReloadSchemasResponse_KeyspaceResult{{
+				Keyspace: &vtadminpb.Keyspace{
+					Keyspace: &vtctldatapb.Keyspace{Name: testKeyspace},
+				},
 				Events: []*logutilpb.Event{{
 					Level: logutilpb.Level_ERROR,
 					Value: "ReloadSchema(commerce) failed",
