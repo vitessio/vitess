@@ -964,7 +964,9 @@ func moveCustomerTableSwitchFlows(t *testing.T, cells []*Cell, sourceCellOrAlias
 		printRoutingRules(t, vc, "After reversing read traffic")
 
 		validateWritesRouteToSource(t)
-		switchWrites(t, workflowType, ksWorkflow, false)
+		// Reads were reversed back to the source above, so switching writes here is
+		// again a write-before-read switch and requires --force.
+		switchWrites(t, workflowType, ksWorkflow, false, "--force")
 		validateWritesRouteToTarget(t)
 
 		printRoutingRules(t, vc, "After switching writes and reversing reads")
