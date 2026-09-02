@@ -1822,7 +1822,7 @@ func (e *Executor) CancelMigration(ctx context.Context, uuid string, message str
 	// resume a stream that was just cancelled.
 	timestampMarked := issuedByUser
 	defer func() {
-		ferr := e.failMigration(ctx, onlineDDL, errors.New(message))
+		ferr := e.terminallyFailMigration(ctx, onlineDDL, errors.New(message))
 		if ferr != nil {
 			log.Error("CancelMigration: failed to transition migration to a terminal state",
 				slog.String("uuid", uuid), slog.String("tablet", e.TabletAliasString()), slog.Any("error", ferr))
@@ -2545,15 +2545,25 @@ func (e *Executor) readFailedCancelledMigrationsInContextBeforeMigration(ctx con
 	return uuids, err
 }
 
-// failMigration marks a migration as failed
-func (e *Executor) failMigration(ctx context.Context, onlineDDL *schema.OnlineDDL, withError error) error {
+// terminallyFailMigration transitions a migration to failed/cancelled and
+// reports whether that durable status transition itself succeeded — callers
+// that must know the migration really reached a terminal state (e.g.
+// CancelMigration's stream-tracking cleanup) use this directly.
+func (e *Executor) terminallyFailMigration(ctx context.Context, onlineDDL *schema.OnlineDDL, withError error) error {
 	defer e.triggerNextCheckInterval()
-	_ = e.updateMigrationStatusFailedOrCancelled(ctx, onlineDDL.UUID)
+	transitionErr := e.updateMigrationStatusFailedOrCancelled(ctx, onlineDDL.UUID)
 	failedMigrations.Add(1)
 	if withError != nil {
 		_ = e.updateMigrationMessage(ctx, onlineDDL.UUID, withError.Error())
 	}
 	e.ownedRunningMigrations.Delete(onlineDDL.UUID)
+	return transitionErr
+}
+
+// failMigration marks a migration as failed and returns the causing error,
+// so callers can fail-and-propagate in one statement.
+func (e *Executor) failMigration(ctx context.Context, onlineDDL *schema.OnlineDDL, withError error) error {
+	_ = e.terminallyFailMigration(ctx, onlineDDL, withError)
 	return withError
 }
 

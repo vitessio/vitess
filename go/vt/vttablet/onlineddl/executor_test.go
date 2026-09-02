@@ -930,6 +930,26 @@ func TestForgetVReplStreamOrdering(t *testing.T) {
 			"tracking must survive a cancellation whose terminal transition failed")
 		assert.Contains(t, e.vreplicationLastError, uuid)
 	})
+	t.Run("successful internal cancellation clears tracking", func(t *testing.T) {
+		// The terminal-transition verdict must come from the actual status
+		// update, not from failMigration's propagate-the-cause return value
+		// (which is always non-nil for a cancellation): a successful
+		// internal cancellation must clear the tracking, not log a false
+		// transition failure and leak it.
+		e := newTrackedExecutor(func(ctx context.Context, query string) (*sqltypes.Result, error) {
+			if strings.HasPrefix(strings.TrimSpace(strings.ToUpper(query)), "UPDATE") {
+				return &sqltypes.Result{RowsAffected: 1}, nil
+			}
+			return sqltypes.MakeTestResult(
+				sqltypes.MakeTestFields("migration_uuid|migration_status", "varchar|varchar"),
+				uuid+"|running"), nil
+		})
+		_, err := e.CancelMigration(t.Context(), uuid, "internal cancel", false)
+		require.NoError(t, err)
+		assert.NotContains(t, e.vreplicationResumeState, uuid,
+			"a successfully cancelled migration must not retain stream tracking")
+		assert.NotContains(t, e.vreplicationLastError, uuid)
+	})
 	t.Run("user cancellation with durable timestamp clears tracking despite failed transition", func(t *testing.T) {
 		// A user-issued cancel writes cancelled_timestamp first; once that
 		// is durable the migration is terminally cancelled even if the
