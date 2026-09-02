@@ -1130,6 +1130,35 @@ func TestReviewVReplStreamError(t *testing.T) {
 		}
 		assert.Equal(t, vreplStreamResume, e2.reviewVReplStreamError(uuid, freshlyParked, now))
 	})
+	t.Run("progress between errors starts a fresh episode", func(t *testing.T) {
+		// A resumed stream can advance its checkpoints and hit a NEW error
+		// before any error-free observation lands — every tick then carries
+		// an error. Forward progress must end the previous episode anyway:
+		// the new error deserves a fresh budget, not the old episode's
+		// nearly-spent one.
+		e := newExecutor()
+		parkedAtX := &VReplStream{
+			state:   binlogdatapb.VReplicationWorkflowState_Error,
+			message: vreplication.RetriesExhaustedIndicator + ": connection refused",
+			pos:     "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-42",
+		}
+		parkedAtY := &VReplStream{
+			state:   binlogdatapb.VReplicationWorkflowState_Error,
+			message: vreplication.RetriesExhaustedIndicator + ": disk full",
+			pos:     "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-100",
+		}
+
+		assert.Equal(t, vreplStreamResume, e.reviewVReplStreamError(uuid, parkedAtX, now))
+		e.vreplicationResumeState[uuid].lastAttempt = now
+
+		// The re-park arrives with an advanced position, past the old
+		// episode's budget: it must be treated as a fresh episode and
+		// resumed, not cancelled against the previous clock.
+		later := now.Add(staleMigrationFailMinutes * time.Minute)
+		assert.Equal(t, vreplStreamResume, e.reviewVReplStreamError(uuid, parkedAtY, later),
+			"a re-park after forward progress must start a fresh episode")
+		assert.Equal(t, later, e.vreplicationResumeState[uuid].firstParked)
+	})
 	t.Run("clean stream past the recovery grace ends the episode", func(t *testing.T) {
 		// A caught-up stream on an idle source advances neither pos nor
 		// rows_copied, yet it is healthy. A clean observation well past the

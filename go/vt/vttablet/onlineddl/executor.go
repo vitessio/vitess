@@ -3567,22 +3567,30 @@ func (e *Executor) reviewVReplStreamError(uuid string, s *VReplStream, now time.
 	lastError := e.vreplicationLastError[uuid]
 	isTerminal, isResumable, vreplError := s.hasError()
 	lastError.Record(vreplError)
+	// Forward progress past the parked position or row-copy checkpoint (the
+	// copy phase advances rows_copied while pos stays fixed) ends the
+	// episode no matter what the row currently reports: a resumed stream
+	// can advance and then hit a NEW error before any error-free
+	// observation lands, and that new error deserves a fresh episode —
+	// re-parking below re-creates one from the current row — rather than
+	// inheriting the previous episode's nearly-spent budget.
+	if state, ok := e.vreplicationResumeState[uuid]; ok &&
+		(s.pos != state.parkedPos || s.rowsCopied > state.parkedRowsCopied) {
+		delete(e.vreplicationResumeState, uuid)
+	}
 	if vreplError == nil {
 		// The stream reports no error — but a just-issued resume looks
 		// exactly like this (StartVReplication clears the state and the
 		// message) before the stream has done any work, so an error-free
 		// observation alone must not end the episode: every
 		// park/resume/park cycle would renew the resume budget
-		// indefinitely. Recovery is: forward progress past the parked
-		// position or row-copy checkpoint (the copy phase advances
-		// rows_copied while pos stays fixed), or a clean observation past
-		// the recovery grace of the last resume attempt — well beyond the
-		// seconds-wide synthetic window — which covers a healthy caught-up
-		// stream on an idle source, where neither marker moves.
+		// indefinitely. With progress handled above, the remaining recovery
+		// signal is a clean observation past the recovery grace of the last
+		// resume attempt — well beyond the seconds-wide synthetic window —
+		// which covers a healthy caught-up stream on an idle source, where
+		// neither checkpoint moves.
 		state, ok := e.vreplicationResumeState[uuid]
 		recovered := !ok ||
-			s.pos != state.parkedPos ||
-			s.rowsCopied > state.parkedRowsCopied ||
 			state.lastAttempt.IsZero() ||
 			now.Sub(state.lastAttempt) >= vreplResumeRecoveryGrace()
 		if recovered {
