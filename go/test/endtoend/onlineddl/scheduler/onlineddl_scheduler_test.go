@@ -681,7 +681,7 @@ func testScheduler(t *testing.T) {
 			waitForReadyToComplete(t, t1uuid, true)
 		})
 		t.Run("park the stream with a retries-exhausted error", func(t *testing.T) {
-			parkVReplStream(t, t1uuid, "terminal error: retries exhausted: the same error was encountered continuously for longer than --vreplication-max-time-to-retry-on-error (1m0s): io.EOF")
+			parkVReplStream(t, t1uuid, "retries exhausted: the same error was encountered continuously for longer than --vreplication-max-time-to-retry-on-error (1m0s): io.EOF")
 		})
 		t.Run("expect automatic resume", func(t *testing.T) {
 			status := onlineddl.WaitForVReplicationStatus(t, &vtParams, primaryTablet, t1uuid, normalWaitTime, "Running")

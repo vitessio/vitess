@@ -77,7 +77,7 @@ func TestJournalOneToOne(t *testing.T) {
 		fmt.Sprintf("delete from _vt.vreplication where id=%d", firstID),
 		"commit",
 		"/update _vt.vreplication set message='Picked source tablet.*",
-		"/update _vt.vreplication set state='Running', message=left\\('', 1000\\), time_updated=\\d+ where id.*",
+		"/update _vt.vreplication set state='Running', message=left\\('', 1000\\) where id.*",
 	))
 
 	// Delete all vreplication streams. There should be only one, but we don't know its id.
@@ -142,8 +142,8 @@ func TestJournalOneToMany(t *testing.T) {
 		"commit",
 		"/update _vt.vreplication set message='Picked source tablet.*",
 		"/update _vt.vreplication set message='Picked source tablet.*",
-		"/update _vt.vreplication set state='Running', message=left\\('', 1000\\), time_updated=\\d+ where id.*",
-		"/update _vt.vreplication set state='Running', message=left\\('', 1000\\), time_updated=\\d+ where id.*",
+		"/update _vt.vreplication set state='Running', message=left\\('', 1000\\) where id.*",
+		"/update _vt.vreplication set state='Running', message=left\\('', 1000\\) where id.*",
 	))
 
 	// Delete all vreplication streams. There should be only one, but we don't know its id.
@@ -201,7 +201,7 @@ func TestJournalTablePresent(t *testing.T) {
 		fmt.Sprintf("delete from _vt.vreplication where id=%d", firstID),
 		"commit",
 		"/update _vt.vreplication set message='Picked source tablet.*",
-		"/update _vt.vreplication set state='Running', message=left\\('', 1000\\), time_updated=\\d+ where id.*",
+		"/update _vt.vreplication set state='Running', message=left\\('', 1000\\) where id.*",
 	))
 
 	// Delete all vreplication streams. There should be only one, but we don't know its id.
@@ -310,7 +310,7 @@ func TestJournalTableMixed(t *testing.T) {
 	defer execStatements(t, []string{"delete from _vt.resharding_journal"})
 
 	expectDBClientQueries(t, qh.Expect(
-		"/update _vt.vreplication set state='Stopped', message=left\\('unable to handle journal event: tables were partially matched', 1000\\), time_updated=\\d+ where id",
+		"/update _vt.vreplication set state='Stopped', message=left\\('unable to handle journal event: tables were partially matched', 1000\\) where id",
 	))
 
 	// Delete all vreplication streams. There should be only one, but we don't know its id.

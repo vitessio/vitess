@@ -104,6 +104,22 @@ func TestSetStateStampsTimeUpdated(t *testing.T) {
 		workflowConfig: vttablet.DefaultVReplicationConfig,
 	}
 	require.NoError(t, vr.setState(binlogdatapb.VReplicationWorkflowState_Error, "boom"))
+
+	// Non-Error transitions must NOT stamp time_updated: with the default
+	// infinite retry config every retry attempt re-enters
+	// setState(Running, ""), and stamping there would report artificial
+	// liveness that keeps the stale-migration fallback from ever firing on
+	// a stuck retry loop.
+	dbClient2 := binlogplayer.NewMockDBClient(t)
+	dbClient2.ExpectRequest("update _vt.vreplication set state='Running', message=left('', 1000) where id=1", &sqltypes.Result{}, nil)
+	dbClient2.ExpectRequestRE(`insert into _vt\.vreplication_log.*`, &sqltypes.Result{}, nil)
+	vr2 := &vreplicator{
+		id:             1,
+		stats:          stats,
+		dbClient:       newVDBClient(dbClient2, stats, 0),
+		workflowConfig: vttablet.DefaultVReplicationConfig,
+	}
+	require.NoError(t, vr2.setState(binlogdatapb.VReplicationWorkflowState_Running, ""))
 }
 
 // fakeFetchSuperQueryMysqld is a minimal MysqlDaemon test double that delegates

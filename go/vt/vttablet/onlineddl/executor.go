@@ -202,10 +202,15 @@ type vreplResumeState struct {
 // stream-level verdict: a migration whose cancelled_timestamp is set but
 // whose terminal status transition has not yet landed (the running-migrations
 // review filters on migration_status only) must never be auto-resumed —
-// converting the verdict to a cancellation re-drives the terminal transition
-// instead. All other verdicts pass through untouched.
+// every verdict converts to a cancellation, re-driving the terminal
+// transition. Without cancellation intent the verdict passes through
+// untouched.
 func resolveVReplStreamAction(action vreplStreamAction, cancellationRequested bool) vreplStreamAction {
-	if action == vreplStreamResume && cancellationRequested {
+	if cancellationRequested {
+		// Any verdict yields to a pending cancellation: a surviving clean
+		// stream produces no action of its own and can keep refreshing
+		// liveness indefinitely, so only re-driving the cancellation here
+		// gets the migration out of 'running'.
 		return vreplStreamCancel
 	}
 	return action

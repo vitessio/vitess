@@ -1033,10 +1033,11 @@ func TestForgetVReplStreamOrdering(t *testing.T) {
 func TestResolveVReplStreamAction(t *testing.T) {
 	assert.Equal(t, vreplStreamCancel, resolveVReplStreamAction(vreplStreamResume, true),
 		"an unfulfilled cancellation intent must convert resume into cancel")
-	assert.Equal(t, vreplStreamResume, resolveVReplStreamAction(vreplStreamResume, false))
+	assert.Equal(t, vreplStreamCancel, resolveVReplStreamAction(vreplStreamNoAction, true),
+		"a surviving clean stream yields no action, but the pending cancellation must still be re-driven")
 	assert.Equal(t, vreplStreamCancel, resolveVReplStreamAction(vreplStreamCancel, true))
+	assert.Equal(t, vreplStreamResume, resolveVReplStreamAction(vreplStreamResume, false))
 	assert.Equal(t, vreplStreamCancel, resolveVReplStreamAction(vreplStreamCancel, false))
-	assert.Equal(t, vreplStreamNoAction, resolveVReplStreamAction(vreplStreamNoAction, true))
 	assert.Equal(t, vreplStreamNoAction, resolveVReplStreamAction(vreplStreamNoAction, false))
 }
 

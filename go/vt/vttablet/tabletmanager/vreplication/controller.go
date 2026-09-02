@@ -64,8 +64,16 @@ const (
 	// RetriesExhaustedIndicator marks a terminal error on a
 	// recoverable-class error whose retry window
 	// (--vreplication-max-time-to-retry-on-error) expired: the stream is
-	// resumable by setting it back to the Running state.
-	RetriesExhaustedIndicator = TerminalErrorIndicator + ": retries exhausted"
+	// resumable by setting it back to the Running state. It deliberately
+	// does NOT extend TerminalErrorIndicator: the marker is written durably
+	// into _vt.vreplication_log, and a previous-version executor converts
+	// any TerminalErrorIndicator-matching history record back into an Error
+	// even when the live row is Running — extending the legacy marker would
+	// make a downgrade fail migrations this version had legitimately
+	// resumed. To a previous-version executor this message classifies as an
+	// ordinary transient error instead, restoring its pre-classification
+	// behavior.
+	RetriesExhaustedIndicator = "retries exhausted"
 )
 
 // controller is created by Engine. Members are initialized upfront.

@@ -91,6 +91,22 @@ func setTabletTypesStr(tabletTypesStr string) func() {
 	}
 }
 
+// TestRetriesExhaustedIndicatorIsNotLegacyTerminal pins a downgrade-safety
+// invariant: the resumable class B marker must NOT extend the legacy
+// TerminalErrorIndicator. The marker is written durably into
+// _vt.vreplication_log, and a previous-version executor's readVReplStream
+// unconditionally converts any TerminalErrorIndicator-matching history
+// record back into an Error — even when the live row is Running — which
+// would fail a migration the newer executor had legitimately resumed the
+// moment a downgrade or mixed-version failover occurs.
+func TestRetriesExhaustedIndicatorIsNotLegacyTerminal(t *testing.T) {
+	assert.False(t, strings.HasPrefix(RetriesExhaustedIndicator, TerminalErrorIndicator),
+		"the resumable marker must not be classified terminal by previous-version executors")
+	// The unrecoverable class stays legacy-terminal on purpose: it must be
+	// treated as terminal by every version.
+	assert.True(t, strings.HasPrefix(UnrecoverableErrorIndicator, TerminalErrorIndicator))
+}
+
 func TestControllerKeyRange(t *testing.T) {
 	resetBinlogClient()
 	wantTablet := addTablet(100)
@@ -837,10 +853,13 @@ func TestControllerErrorLogMessages(t *testing.T) {
 }
 
 // TestTerminalVReplicationError tests the construction of terminal error
-// messages: both classes carry the load-bearing "terminal error:" prefix
-// that the Online DDL executor's _vt.vreplication_log scan matches, and
-// the retries-exhausted class names the flag that bounds the retry window
-// along with its effective value so that the message is actionable.
+// messages: the unrecoverable class carries the load-bearing
+// "terminal error:" prefix that the Online DDL executor's
+// _vt.vreplication_log scan matches, while the resumable retries-exhausted
+// class starts with its own marker (see RetriesExhaustedIndicator's doc for
+// why it must not carry the terminal prefix) and names the flag that bounds
+// the retry window along with its effective value so that the message is
+// actionable.
 func TestTerminalVReplicationError(t *testing.T) {
 	baseErr := errors.New("connection refused")
 
@@ -850,8 +869,8 @@ func TestTerminalVReplicationError(t *testing.T) {
 	require.True(t, strings.HasPrefix(err.Error(), TerminalErrorIndicator+":"))
 
 	err = terminalVReplicationError(baseErr, false, 15*time.Minute)
-	require.ErrorContains(t, err, RetriesExhaustedIndicator)
 	require.ErrorContains(t, err, "--vreplication-max-time-to-retry-on-error (15m0s)")
 	require.ErrorContains(t, err, "connection refused")
-	require.True(t, strings.HasPrefix(err.Error(), TerminalErrorIndicator+":"))
+	require.True(t, strings.HasPrefix(err.Error(), RetriesExhaustedIndicator+":"))
+	require.False(t, strings.HasPrefix(err.Error(), TerminalErrorIndicator))
 }
