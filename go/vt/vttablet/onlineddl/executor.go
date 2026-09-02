@@ -258,7 +258,8 @@ const (
 // error-free observation is still treated as inconclusive rather than as
 // recovery. It must outwait every path that can delay a resumed stream's
 // error report: the synthetic clean row a resume itself writes
-// (StartVReplication clears the state and message) is re-stamped by the
+// (resumeVReplicationQuery rewrites the row to a clean Running state) is
+// re-stamped by the
 // stream's own retries within a minute, but a re-STALLED applier keeps a
 // clean Running row with frozen checkpoints until the vplayer stall
 // deadline fires — so the grace is derived from that deadline, with
@@ -3230,6 +3231,26 @@ func (e *Executor) getNonConflictingMigration(ctx context.Context) (*schema.Onli
 		}
 		isImmediateOperation := migrationRow.AsBool("is_immediate_operation", false)
 
+		// A candidate carrying an unfulfilled cancellation intent must not
+		// be scheduled: queued/ready selection ignores cancellation, so a
+		// cancellation whose terminal transition failed would otherwise
+		// start executing (and only the running-migrations review consumes
+		// the intent, which non-vreplication strategies never reach).
+		// Re-drive the terminal transition here instead.
+		pendingCancelMessage, hasPendingCancel := e.vreplicationPendingCancel[uuid]
+		if hasPendingCancel || !migrationRow["cancelled_timestamp"].IsNull() {
+			if pendingCancelMessage == "" {
+				pendingCancelMessage = "cancellation requested before migration start"
+			}
+			if ferr := e.terminallyFailMigration(ctx, onlineDDL, errors.New(pendingCancelMessage)); ferr != nil {
+				log.Error("getNonConflictingMigration: failed to transition cancelled migration to a terminal state",
+					slog.String("uuid", uuid), slog.String("tablet", e.TabletAliasString()), slog.Any("error", ferr))
+			} else {
+				e.forgetVReplStream(uuid)
+			}
+			continue
+		}
+
 		if conflictFound, _ := e.isAnyConflictingMigrationRunning(onlineDDL); conflictFound {
 			continue // this migration conflicts with a running one
 		}
@@ -3619,7 +3640,7 @@ func (e *Executor) maybeResumeVReplication(ctx context.Context, uuid string, s *
 // resumeVReplicationQuery returns the statement resuming a stream parked on a
 // resumable terminal error, conditional on the row still holding the exact
 // state and message the resume decision was based on. An unconditional update
-// (binlogplayer.StartVReplication) would silently flip a stream an operator
+// would silently flip a stream an operator
 // stopped in the meantime back to Running and erase the operator's message;
 // with the condition, such a race yields zero affected rows and the caller
 // treats the decision as stale.
@@ -3677,8 +3698,8 @@ func (e *Executor) reviewVReplStreamError(uuid string, s *VReplStream, now time.
 	}
 	if vreplError == nil {
 		// The stream reports no error — but a just-issued resume looks
-		// exactly like this (StartVReplication clears the state and the
-		// message) before the stream has done any work, and so does EVERY
+		// exactly like this (the resume rewrites the row to a clean
+		// Running state) before the stream has done any work, and so does EVERY
 		// internal retry attempt (each one re-enters setState(Running, "")
 		// until the error lands again), so an error-free observation alone
 		// must not end the episode: sampling any such window would renew
@@ -3699,10 +3720,16 @@ func (e *Executor) reviewVReplStreamError(uuid string, s *VReplStream, now time.
 		// copy-phase duration, so there recovery is demonstrated only by
 		// advancing checkpoints.
 		state, ok := e.vreplicationResumeState[uuid]
+		// Throttle updates stamp time_updated and time_throttled together
+		// without any replication having succeeded, so equal stamps mean
+		// the latest liveness is throttle-driven — deliberate pausing, not
+		// demonstrated health; a heartbeat after the throttle advances
+		// time_updated past time_throttled.
 		recovered := !ok ||
 			(s.message == "" &&
 				s.state == binlogdatapb.VReplicationWorkflowState_Running &&
 				now.Sub(time.Unix(s.timeUpdated, 0)) < vreplResumeRecoveryGrace() &&
+				s.timeUpdated > s.timeThrottled &&
 				(state.lastAttempt.IsZero() ||
 					now.Sub(state.lastAttempt) >= vreplResumeRecoveryGrace()))
 		if recovered {
@@ -3852,6 +3879,13 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 						cancelMessage = pendingCancelMessage
 					}
 					cancellable = append(cancellable, newCancellableMigration(uuid, cancelMessage))
+					// The migration's fate this tick is cancellation, and a
+					// cancel verdict can ride on a healthy Running stream
+					// (an unfulfilled cancellation intent): proceeding into
+					// the ownership/liveness/cutover flow below could cut
+					// the migration over and complete it before
+					// cancelMigrations processes the queue.
+					return nil
 				case vreplStreamResume:
 					e.maybeResumeVReplication(ctx, uuid, s, e.vreplicationResumeState[uuid])
 				}

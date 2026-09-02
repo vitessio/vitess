@@ -699,15 +699,6 @@ func StartVReplicationUntil(uid int32, pos string) string {
 		encodeString(binlogdatapb.VReplicationWorkflowState_Running.String()), encodeString(pos), uid)
 }
 
-// StartVReplication returns a statement to start the replication. It also
-// clears any stale message left over from a prior terminal state, mirroring
-// how StopVReplication sets a message.
-func StartVReplication(uid int32) string {
-	return fmt.Sprintf(
-		"update _vt.vreplication set state=%v, message=%v where id=%v",
-		encodeString(binlogdatapb.VReplicationWorkflowState_Running.String()), encodeString(""), uid)
-}
-
 // StopVReplication returns a statement to stop the replication.
 func StopVReplication(uid int32, message string) string {
 	return fmt.Sprintf(

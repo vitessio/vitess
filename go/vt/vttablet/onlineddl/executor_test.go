@@ -1251,6 +1251,28 @@ func TestReviewRunningMigrationsNilStreamCancellation(t *testing.T) {
 		assert.Equal(t, uuid, cancellable[0].uuid)
 		assert.Equal(t, "internal cancel", cancellable[0].message)
 	})
+	t.Run("a cancel verdict stops the review before cutover", func(t *testing.T) {
+		// A healthy Running stream can carry a pending cancellation intent
+		// (a prior cancellation's terminal transition failed). The cancel
+		// verdict must end this migration's review: proceeding into the
+		// ownership/liveness/cutover flow could cut the migration over and
+		// complete it this very tick, before cancelMigrations processes
+		// the queued cancellation.
+		runningStream := sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields("id|workflow|source|pos|state|message", "int32|varchar|varchar|varchar|varchar|varchar"),
+			"1|"+uuid+"|||Running|")
+		e := newReviewExecutor(
+			"migration_uuid|migration_status|strategy",
+			"varchar|varchar|varchar",
+			uuid+"|running|vitess", runningStream)
+		e.vreplicationPendingCancel[uuid] = "internal cancel"
+		_, cancellable, err := e.reviewRunningMigrations(t.Context())
+		require.NoError(t, err)
+		require.Len(t, cancellable, 1)
+		_, owned := e.ownedRunningMigrations.Load(uuid)
+		assert.False(t, owned,
+			"a migration under cancellation must not proceed through the review's ownership and cutover flow")
+	})
 	t.Run("a stopped stream without pending intent is untouched", func(t *testing.T) {
 		stoppedStream := sqltypes.MakeTestResult(
 			sqltypes.MakeTestFields("id|workflow|source|pos|state|message", "int32|varchar|varchar|varchar|varchar|varchar"),
@@ -1301,7 +1323,7 @@ func TestForgetVReplStream(t *testing.T) {
 // TestResumeVReplicationQuery pins the resume statement's conditional shape:
 // it must only transition the stream back to Running when the row is still in
 // the exact Error state (and message) that the resume decision was based on.
-// An unconditional update — like binlogplayer.StartVReplication's — would
+// An unconditional update would
 // silently override an operator's concurrent Stop and erase its message.
 func TestResumeVReplicationQuery(t *testing.T) {
 	message := vreplication.RetriesExhaustedIndicator + ": it's 'complicated'"
@@ -1385,7 +1407,7 @@ func TestReviewVReplStreamError(t *testing.T) {
 	})
 	t.Run("synthetic clean row after a resume does not renew the budget", func(t *testing.T) {
 		// Issuing a resume rewrites the stream to a clean Running row
-		// (StartVReplication clears the state and message) before the
+		// (the resume clears the state and message) before the
 		// stream has done any work. That synthetic observation must not
 		// end the error episode: otherwise every park/resume/park cycle
 		// would restamp firstParked and the resume budget could be renewed
@@ -1657,5 +1679,127 @@ func TestReviewVReplStreamError(t *testing.T) {
 		}
 		assert.Equal(t, vreplStreamNoAction, e.reviewVReplStreamError(uuid, recoveredStream, now.Add(vreplResumeRecoveryGrace())))
 		assert.NotContains(t, e.vreplicationResumeState, uuid)
+	})
+	t.Run("throttle-refreshed clean stream does not end the episode", func(t *testing.T) {
+		// Throttle updates stamp time_updated and time_throttled together
+		// without any replication having succeeded: a resumed stream held
+		// throttled through the grace looks alive and clean, yet the
+		// failure it parked on was never re-exercised. Equal stamps mean
+		// the latest liveness is throttle-driven and must not end the
+		// episode; a heartbeat after the throttle advances time_updated
+		// past time_throttled and proves a functioning applier.
+		e := newExecutor()
+		pos := "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-42"
+		parkedStream := &VReplStream{
+			state:   binlogdatapb.VReplicationWorkflowState_Error,
+			message: vreplication.RetriesExhaustedIndicator + ": connection refused",
+			pos:     pos,
+		}
+		throttledStream := &VReplStream{
+			state:         binlogdatapb.VReplicationWorkflowState_Running,
+			pos:           pos,
+			timeUpdated:   now.Add(vreplResumeRecoveryGrace()).Unix(),
+			timeThrottled: now.Add(vreplResumeRecoveryGrace()).Unix(),
+		}
+
+		assert.Equal(t, vreplStreamResume, e.reviewVReplStreamError(uuid, parkedStream, now))
+		e.vreplicationResumeState[uuid].lastAttempt = now
+
+		assert.Equal(t, vreplStreamNoAction, e.reviewVReplStreamError(uuid, throttledStream, now.Add(vreplResumeRecoveryGrace())))
+		require.Contains(t, e.vreplicationResumeState, uuid,
+			"throttle-driven liveness is deliberate pausing, not demonstrated recovery")
+
+		// A heartbeat landing after the last throttle stamp is genuine
+		// applier liveness: the episode ends.
+		heartbeatingStream := &VReplStream{
+			state:         binlogdatapb.VReplicationWorkflowState_Running,
+			pos:           pos,
+			timeUpdated:   now.Add(vreplResumeRecoveryGrace()).Unix(),
+			timeThrottled: now.Unix(),
+		}
+		assert.Equal(t, vreplStreamNoAction, e.reviewVReplStreamError(uuid, heartbeatingStream, now.Add(vreplResumeRecoveryGrace())))
+		assert.NotContains(t, e.vreplicationResumeState, uuid)
+	})
+}
+
+// TestGetNonConflictingMigrationCancellationIntent pins the scheduling gate:
+// queued/ready selection ignores cancellation, so a migration carrying an
+// unfulfilled cancellation intent (durable cancelled_timestamp, or the
+// in-memory pending record) must not be picked for execution — the
+// scheduler re-drives its terminal transition instead. Without the gate a
+// user-cancelled migration whose terminal transition failed would be
+// scheduled and start executing.
+func TestGetNonConflictingMigrationCancellationIntent(t *testing.T) {
+	uuid := "1cbcd662_8ed6_11ee_bc8f_0a43f95f28a3"
+	type harness struct {
+		e                   *Executor
+		transitionAttempted *bool
+	}
+	newSchedulerExecutor := func(migrationFields, migrationTypes, migrationRow string) harness {
+		var transitionAttempted bool
+		e := &Executor{
+			tabletAlias:               &topodatapb.TabletAlias{Cell: "cell", Uid: 1},
+			vreplicationLastError:     map[string]*vterrors.LastError{},
+			vreplicationResumeState:   map[string]*vreplResumeState{},
+			vreplicationPendingCancel: map[string]string{},
+			ticks:                     timer.NewTimer(time.Hour),
+			execQuery: func(ctx context.Context, query string) (*sqltypes.Result, error) {
+				q := strings.ToLower(query)
+				switch {
+				case strings.HasPrefix(strings.TrimSpace(q), "update"):
+					if strings.Contains(q, "migration_status") {
+						transitionAttempted = true
+					}
+					return &sqltypes.Result{RowsAffected: 1}, nil
+				case strings.Contains(q, "migration_status='ready'"):
+					return sqltypes.MakeTestResult(
+						sqltypes.MakeTestFields("migration_uuid", "varchar"), uuid), nil
+				case strings.Contains(q, "in ('queued', 'ready', 'running')"):
+					return &sqltypes.Result{}, nil
+				case strings.HasPrefix(strings.TrimSpace(q), "select") && strings.Contains(q, "migration_uuid="):
+					return sqltypes.MakeTestResult(
+						sqltypes.MakeTestFields(migrationFields, migrationTypes), migrationRow), nil
+				default:
+					return &sqltypes.Result{}, nil
+				}
+			},
+		}
+		e.isOpen.Store(1)
+		return harness{e: e, transitionAttempted: &transitionAttempted}
+	}
+
+	t.Run("durable cancellation intent is re-driven, not scheduled", func(t *testing.T) {
+		h := newSchedulerExecutor(
+			"migration_uuid|migration_status|strategy|cancelled_timestamp",
+			"varchar|varchar|varchar|varchar",
+			uuid+"|ready|vitess|2026-09-02 18:00:00")
+		onlineDDL, err := h.e.getNonConflictingMigration(t.Context())
+		require.NoError(t, err)
+		assert.Nil(t, onlineDDL, "a cancelled migration must not be picked for execution")
+		assert.True(t, *h.transitionAttempted, "the terminal transition must be re-driven instead")
+	})
+	t.Run("pending in-memory intent is re-driven, not scheduled", func(t *testing.T) {
+		h := newSchedulerExecutor(
+			"migration_uuid|migration_status|strategy",
+			"varchar|varchar|varchar",
+			uuid+"|ready|vitess")
+		h.e.vreplicationPendingCancel[uuid] = "internal cancel"
+		onlineDDL, err := h.e.getNonConflictingMigration(t.Context())
+		require.NoError(t, err)
+		assert.Nil(t, onlineDDL)
+		assert.True(t, *h.transitionAttempted)
+		assert.NotContains(t, h.e.vreplicationPendingCancel, uuid,
+			"a successfully re-driven cancellation must clear its pending intent")
+	})
+	t.Run("a candidate without intent is scheduled", func(t *testing.T) {
+		h := newSchedulerExecutor(
+			"migration_uuid|migration_status|strategy",
+			"varchar|varchar|varchar",
+			uuid+"|ready|vitess")
+		onlineDDL, err := h.e.getNonConflictingMigration(t.Context())
+		require.NoError(t, err)
+		require.NotNil(t, onlineDDL)
+		assert.Equal(t, uuid, onlineDDL.UUID)
+		assert.False(t, *h.transitionAttempted)
 	})
 }
