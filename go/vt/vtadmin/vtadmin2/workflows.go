@@ -19,6 +19,7 @@ package vtadmin2
 import (
 	"errors"
 	"net/http"
+	"strings"
 
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
@@ -30,7 +31,8 @@ import (
 type (
 	workflowDetailData struct {
 		*vtadminpb.Workflow
-		CanComplete bool
+		CanComplete     bool
+		KeepDataChecked bool
 	}
 
 	workflowStatusData struct {
@@ -118,8 +120,9 @@ func (s *Server) workflow(w http.ResponseWriter, r *http.Request) {
 		Active:    "workflows",
 		NeedsCSRF: !s.opts.ReadOnly,
 		Data: workflowDetailData{
-			Workflow:    resp,
-			CanComplete: canComplete,
+			Workflow:        resp,
+			CanComplete:     canComplete,
+			KeepDataChecked: strings.HasSuffix(resp.GetWorkflow().GetName(), "_reverse"),
 		},
 	})
 }

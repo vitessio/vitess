@@ -149,7 +149,8 @@
       <form method="POST" action="/workflow/{{ pathEscape (clusterID .Data.GetCluster) }}/{{ pathEscape .Data.GetKeyspace }}/{{ pathEscape .Data.GetWorkflow.GetName }}/complete" class="form-grid" data-confirm="Finalize workflow {{ .Data.GetWorkflow.GetName }}? This moves the workflow to Complete status and cannot be reversed.">
         <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
         <label class="checkbox-label">
-          <input type="checkbox" name="keep_data">
+          <input type="hidden" name="keep_data" value="off">
+          <input type="checkbox" name="keep_data" value="on"{{ if .Data.KeepDataChecked }} checked{{ end }}>
           Keep data (do not drop copied tables on the source)
         </label>
         <label class="checkbox-label">

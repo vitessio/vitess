@@ -20,6 +20,7 @@ import (
 	"cmp"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
@@ -172,17 +173,12 @@ func (s *Server) workflowComplete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var keepData *bool
-	if r.Form.Get("keep_data") == "on" {
-		keepData = new(true)
-	}
-
 	_, err = s.api.MoveTablesComplete(r.Context(), &vtadminpb.MoveTablesCompleteRequest{
 		ClusterId: clusterID,
 		Request: &vtctldatapb.MoveTablesCompleteRequest{
 			Workflow:         workflow,
 			TargetKeyspace:   keyspace,
-			KeepData:         keepData,
+			KeepData:         formOptionalKeepData(r.Form),
 			KeepRoutingRules: r.Form.Get("keep_routing_rules") == "on",
 			RenameTables:     r.Form.Get("rename_tables") == "on",
 		},
@@ -207,6 +203,17 @@ func workflowTrafficFullySwitched(trafficState string) bool {
 		return false
 	}
 	return strings.Contains(trafficState, "Writes Switched")
+}
+
+func formOptionalKeepData(form url.Values) *bool {
+	values := form["keep_data"]
+	if len(values) == 0 {
+		return nil
+	}
+	if slices.Contains(values, "on") {
+		return new(true)
+	}
+	return new(false)
 }
 
 func (s *Server) workflowSwitchTraffic(w http.ResponseWriter, r *http.Request, direction int32) {

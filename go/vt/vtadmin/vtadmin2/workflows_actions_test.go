@@ -247,16 +247,48 @@ func TestWorkflowCompleteKeepDataDefaultsNil(t *testing.T) {
 	assert.Nil(t, fake.moveTablesCompleteReq.GetRequest().KeepData)
 }
 
-func TestWorkflowCompleteReverseKeepDataDefaultsNil(t *testing.T) {
+func TestWorkflowCompleteDefaultFormDropsData(t *testing.T) {
 	fake := &workflowActionsFakeServer{}
 	s := newWorkflowActionsTestServer(t, fake, false)
 
-	rec := postShardForm(t, s, "/workflow/local/sales/users_to_sales_reverse/complete", url.Values{})
+	rec := postShardForm(t, s, workflowActionBase+"/complete", url.Values{"keep_data": {"off"}})
+
+	assert.Equal(t, http.StatusSeeOther, rec.Code)
+	require.NotNil(t, fake.moveTablesCompleteReq)
+	keepData := fake.moveTablesCompleteReq.GetRequest().KeepData
+	require.NotNil(t, keepData)
+	assert.False(t, *keepData)
+}
+
+func TestWorkflowCompleteReverseDefaultFormKeepsData(t *testing.T) {
+	fake := &workflowActionsFakeServer{}
+	s := newWorkflowActionsTestServer(t, fake, false)
+
+	rec := postShardForm(t, s, "/workflow/local/sales/users_to_sales_reverse/complete", url.Values{
+		"keep_data": {"off", "on"},
+	})
 
 	assert.Equal(t, http.StatusSeeOther, rec.Code)
 	require.NotNil(t, fake.moveTablesCompleteReq)
 	assert.Equal(t, "users_to_sales_reverse", fake.moveTablesCompleteReq.GetRequest().GetWorkflow())
-	assert.Nil(t, fake.moveTablesCompleteReq.GetRequest().KeepData)
+	keepData := fake.moveTablesCompleteReq.GetRequest().KeepData
+	require.NotNil(t, keepData)
+	assert.True(t, *keepData)
+}
+
+func TestWorkflowCompleteReverseUncheckedDropsData(t *testing.T) {
+	fake := &workflowActionsFakeServer{}
+	s := newWorkflowActionsTestServer(t, fake, false)
+
+	rec := postShardForm(t, s, "/workflow/local/sales/users_to_sales_reverse/complete", url.Values{
+		"keep_data": {"off"},
+	})
+
+	assert.Equal(t, http.StatusSeeOther, rec.Code)
+	require.NotNil(t, fake.moveTablesCompleteReq)
+	keepData := fake.moveTablesCompleteReq.GetRequest().KeepData
+	require.NotNil(t, keepData)
+	assert.False(t, *keepData)
 }
 
 func TestWorkflowCompleteRejectsUnsupportedTypes(t *testing.T) {
@@ -451,8 +483,9 @@ func TestWorkflowDetailRendersActions(t *testing.T) {
 	assert.Contains(t, body, workflowActionBase+"/switch_traffic")
 	assert.Contains(t, body, workflowActionBase+"/complete")
 	assert.Contains(t, body, workflowActionBase+"/vdiff")
-	assert.Contains(t, body, `name="keep_data">`)
+	assert.Contains(t, body, `name="keep_data"`)
 	assert.Contains(t, body, "Keep data (do not drop copied tables on the source)")
+	assert.NotContains(t, body, `name="keep_data" value="on" checked`)
 
 	// A POST using the exact rendered token/cookie pairing must get past
 	// CSRF validation.
@@ -461,6 +494,15 @@ func TestWorkflowDetailRendersActions(t *testing.T) {
 	})
 	assert.Equal(t, http.StatusSeeOther, rec.Code)
 	require.NotNil(t, fake.startWorkflowReq)
+}
+
+func TestWorkflowDetailReverseCompleteKeepDataChecked(t *testing.T) {
+	fake := &workflowActionsFakeServer{}
+	s := newWorkflowActionsTestServer(t, fake, false)
+
+	_, rec := renderWithCSRF(t, s, "/workflow/local/sales/users_to_sales_reverse")
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Contains(t, rec.Body.String(), `name="keep_data" value="on" checked`)
 }
 
 func TestWorkflowDetailTrafficSwitchVisibility(t *testing.T) {
