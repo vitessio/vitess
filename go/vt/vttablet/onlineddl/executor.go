@@ -3842,8 +3842,13 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 				)
 				switch action {
 				case vreplStreamCancel:
+					// A recorded pending intent carries the original
+					// cancellation reason; the stream stop rewrites only the
+					// state, so s.message can still be a stale pre-stop error
+					// that must not overwrite that reason in the migration's
+					// message.
 					cancelMessage := s.message
-					if cancelMessage == "" {
+					if hasPendingCancel && pendingCancelMessage != "" {
 						cancelMessage = pendingCancelMessage
 					}
 					cancellable = append(cancellable, newCancellableMigration(uuid, cancelMessage))

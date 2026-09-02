@@ -1230,13 +1230,15 @@ func TestReviewRunningMigrationsNilStreamCancellation(t *testing.T) {
 	t.Run("pending internal intent re-drives a stopped stream", func(t *testing.T) {
 		// An internal cancellation has no durable cancelled_timestamp, and
 		// its successful stream stop erased the Error verdict that
-		// triggered it: the live row is now Stopped and clean. Only the
-		// recorded pending intent can convert this into a cancellation —
-		// without it the migration idles in 'running' until the
-		// stale-migration fallback.
+		// triggered it: the live row is now Stopped. Only the recorded
+		// pending intent can convert this into a cancellation — without it
+		// the migration idles in 'running' until the stale-migration
+		// fallback. The stop rewrites only the state, so the row still
+		// carries its pre-stop message: the cancellation must report the
+		// recorded reason, not that stale leftover.
 		stoppedStream := sqltypes.MakeTestResult(
 			sqltypes.MakeTestFields("id|workflow|source|pos|state|message", "int32|varchar|varchar|varchar|varchar|varchar"),
-			"1|"+uuid+"|||Stopped|")
+			"1|"+uuid+"|||Stopped|connection refused: will retry")
 		e := newReviewExecutor(
 			"migration_uuid|migration_status|strategy",
 			"varchar|varchar|varchar",
