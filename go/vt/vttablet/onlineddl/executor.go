@@ -155,9 +155,19 @@ type Executor struct {
 	// - be adopted by this executor (possible for vreplication migrations), or
 	// - be terminated
 	// The Executor auto-reviews the map and cleans up migrations thought to be running which are not running.
-	ownedRunningMigrations        sync.Map
-	vreplicationLastError         map[string]*vterrors.LastError
-	vreplicationResumeState       map[string]*vreplResumeState
+	ownedRunningMigrations  sync.Map
+	vreplicationLastError   map[string]*vterrors.LastError
+	vreplicationResumeState map[string]*vreplResumeState
+	// vreplicationPendingCancel records a cancellation (uuid -> message)
+	// whose durable terminal transition has not landed yet. A user-issued
+	// cancellation leaves a durable cancelled_timestamp behind, but an
+	// internal one does not — and a successful stream stop erases the very
+	// stream verdict that triggered it, so without this record the review
+	// loop would have nothing to re-drive until the stale-migration
+	// fallback. In-memory like the rest of the tracking: after an executor
+	// restart the slower message- and staleness-based fallbacks still
+	// converge.
+	vreplicationPendingCancel     map[string]string
 	tickReentranceFlag            atomic.Int64
 	reviewedRunningMigrationsFlag bool
 
@@ -224,6 +234,7 @@ func resolveVReplStreamAction(action vreplStreamAction, cancellationRequested bo
 func (e *Executor) forgetVReplStream(uuid string) {
 	delete(e.vreplicationResumeState, uuid)
 	delete(e.vreplicationLastError, uuid)
+	delete(e.vreplicationPendingCancel, uuid)
 }
 
 // resumeBudgetExhausted reports whether the current error episode has
@@ -421,6 +432,7 @@ func (e *Executor) Open() error {
 	})
 	e.vreplicationLastError = make(map[string]*vterrors.LastError)
 	e.vreplicationResumeState = make(map[string]*vreplResumeState)
+	e.vreplicationPendingCancel = make(map[string]string)
 
 	if sidecar.GetName() != sidecar.DefaultName {
 		e.execQuery = e.executeQueryWithSidecarDBReplacement
@@ -1855,10 +1867,10 @@ func (e *Executor) CancelMigration(ctx context.Context, uuid string, message str
 			// and durably failing the migration now would orphan it — once
 			// the migration leaves 'running' the review loop no longer sees
 			// it, and nothing else stops the stream before artifact GC.
-			// Leave the migration and its tracking in place: the next review
-			// tick re-drives the cancellation, via the recorded intent for
-			// user-issued cancellations (resolveVReplStreamAction) or the
-			// re-detected triggering condition for internal ones.
+			// Leave the migration and its tracking in place, and record the
+			// pending intent so the next review tick re-drives the
+			// cancellation regardless of what the stream reports by then.
+			e.vreplicationPendingCancel[uuid] = message
 			log.Error("CancelMigration: not transitioning migration to a terminal state as termination did not complete; the cancellation will be re-driven",
 				slog.String("uuid", uuid), slog.String("tablet", e.TabletAliasString()), slog.Any("error", err))
 			return
@@ -1866,6 +1878,13 @@ func (e *Executor) CancelMigration(ctx context.Context, uuid string, message str
 		tctx, tcancel := context.WithTimeout(context.WithoutCancel(ctx), grpcTimeout)
 		defer tcancel()
 		if ferr := e.terminallyFailMigration(tctx, onlineDDL, errors.New(message)); ferr != nil {
+			// The successful stop has already erased the stream verdict
+			// that triggered an internal cancellation (the live row is
+			// Stopped, not Error), and internal cancellations leave no
+			// durable cancelled_timestamp: without the recorded intent the
+			// review loop would have nothing to re-drive until the
+			// stale-migration fallback.
+			e.vreplicationPendingCancel[uuid] = message
 			log.Error("CancelMigration: failed to transition migration to a terminal state",
 				slog.String("uuid", uuid), slog.String("tablet", e.TabletAliasString()), slog.Any("error", ferr))
 			return
@@ -3654,16 +3673,21 @@ func (e *Executor) reviewVReplStreamError(uuid string, s *VReplStream, now time.
 	if vreplError == nil {
 		// The stream reports no error — but a just-issued resume looks
 		// exactly like this (StartVReplication clears the state and the
-		// message) before the stream has done any work, so an error-free
-		// observation alone must not end the episode: every
-		// park/resume/park cycle would renew the resume budget
-		// indefinitely. With progress handled above, the remaining recovery
-		// signal is a TRULY CLEAN observation — hasError treats an
-		// unrecognized non-empty message as no error, but such a message
-		// means the stream is mid-retry, not recovered — in the Running
-		// state, past the recovery grace of the last resume attempt, well
-		// beyond the seconds-wide synthetic window. That covers a healthy
-		// caught-up stream on an idle source, where neither checkpoint
+		// message) before the stream has done any work, and so does EVERY
+		// internal retry attempt (each one re-enters setState(Running, "")
+		// until the error lands again), so an error-free observation alone
+		// must not end the episode: sampling any such window would renew
+		// the resume budget indefinitely. With progress handled above, the
+		// remaining recovery signal is a TRULY CLEAN observation — hasError
+		// treats an unrecognized non-empty message as no error, but such a
+		// message means the stream is mid-retry, not recovered — in the
+		// Running state, past the recovery grace of the last resume
+		// attempt, AND showing recent liveness: only a functioning applier
+		// advances time_updated (heartbeats, position updates — non-Error
+		// setState does not stamp it), so a clean row still carrying the
+		// old park's time_updated is a retry window, not recovery. That
+		// leaves a healthy caught-up stream on an idle source, whose
+		// heartbeats keep time_updated fresh while neither checkpoint
 		// moves. The grace is derived from the vplayer stall deadline and
 		// only bounds the Running (replication) phase: a Copying stream can
 		// hold a clean row through a copy attempt blocked for up to the
@@ -3673,6 +3697,7 @@ func (e *Executor) reviewVReplStreamError(uuid string, s *VReplStream, now time.
 		recovered := !ok ||
 			(s.message == "" &&
 				s.state == binlogdatapb.VReplicationWorkflowState_Running &&
+				now.Sub(time.Unix(s.timeUpdated, 0)) < vreplResumeRecoveryGrace() &&
 				(state.lastAttempt.IsZero() ||
 					now.Sub(state.lastAttempt) >= vreplResumeRecoveryGrace()))
 		if recovered {
@@ -3784,27 +3809,39 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 				if isVreplicationTestSuite {
 					e.triggerNextCheckInterval()
 				}
+				// An unfulfilled cancellation is signalled durably by
+				// cancelled_timestamp (user-issued) or by the in-memory
+				// pending record (internal, or any cancellation whose
+				// terminal transition failed).
+				pendingCancelMessage, hasPendingCancel := e.vreplicationPendingCancel[uuid]
+				cancellationRequested := hasPendingCancel || !migrationRow["cancelled_timestamp"].IsNull()
 				if s == nil {
 					// No stream to observe is benign — a starting
 					// migration's stream may not exist yet. But an
-					// unfulfilled cancellation intent (cancelled_timestamp
-					// written, terminal transition never landed, e.g. a
-					// CancelMigration that failed between the intent write
-					// and the transition) has no stream-side review to
-					// convert it, so this is the only path that can
-					// re-drive it to its terminal state.
-					if !migrationRow["cancelled_timestamp"].IsNull() {
-						cancellable = append(cancellable, newCancellableMigration(uuid, "cancellation requested; vreplication stream not found"))
+					// unfulfilled cancellation intent (terminal transition
+					// never landed, e.g. a CancelMigration that failed
+					// between the intent write and the transition) has no
+					// stream-side review to convert it, so this is the only
+					// path that can re-drive it to its terminal state.
+					if cancellationRequested {
+						if pendingCancelMessage == "" {
+							pendingCancelMessage = "cancellation requested; vreplication stream not found"
+						}
+						cancellable = append(cancellable, newCancellableMigration(uuid, pendingCancelMessage))
 					}
 					return nil
 				}
 				action := resolveVReplStreamAction(
 					e.reviewVReplStreamError(uuid, s, time.Now()),
-					!migrationRow["cancelled_timestamp"].IsNull(),
+					cancellationRequested,
 				)
 				switch action {
 				case vreplStreamCancel:
-					cancellable = append(cancellable, newCancellableMigration(uuid, s.message))
+					cancelMessage := s.message
+					if cancelMessage == "" {
+						cancelMessage = pendingCancelMessage
+					}
+					cancellable = append(cancellable, newCancellableMigration(uuid, cancelMessage))
 				case vreplStreamResume:
 					e.maybeResumeVReplication(ctx, uuid, s, e.vreplicationResumeState[uuid])
 				}

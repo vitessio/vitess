@@ -896,11 +896,12 @@ func TestForgetVReplStreamOrdering(t *testing.T) {
 	uuid := "1cbcd662_8ed6_11ee_bc8f_0a43f95f28a3"
 	newTrackedExecutor := func(execQuery func(ctx context.Context, query string) (*sqltypes.Result, error)) *Executor {
 		e := &Executor{
-			vreplicationLastError:   map[string]*vterrors.LastError{uuid: vterrors.NewLastError("test", time.Minute)},
-			vreplicationResumeState: map[string]*vreplResumeState{uuid: {firstParked: time.Now()}},
-			tabletAlias:             &topodatapb.TabletAlias{Cell: "cell", Uid: 1},
-			ticks:                   timer.NewTimer(time.Hour),
-			execQuery:               execQuery,
+			vreplicationLastError:     map[string]*vterrors.LastError{uuid: vterrors.NewLastError("test", time.Minute)},
+			vreplicationResumeState:   map[string]*vreplResumeState{uuid: {firstParked: time.Now()}},
+			vreplicationPendingCancel: map[string]string{},
+			tabletAlias:               &topodatapb.TabletAlias{Cell: "cell", Uid: 1},
+			ticks:                     timer.NewTimer(time.Hour),
+			execQuery:                 execQuery,
 		}
 		e.isOpen.Store(1)
 		return e
@@ -943,6 +944,8 @@ func TestForgetVReplStreamOrdering(t *testing.T) {
 		assert.Contains(t, e.vreplicationResumeState, uuid,
 			"tracking must survive a cancellation whose terminal transition failed")
 		assert.Contains(t, e.vreplicationLastError, uuid)
+		assert.Equal(t, "internal cancel", e.vreplicationPendingCancel[uuid],
+			"an internal cancellation whose transition failed must record a pending intent: a successful stop leaves no stream verdict to re-trigger it")
 	})
 	t.Run("successful internal cancellation clears tracking", func(t *testing.T) {
 		// The terminal-transition verdict must come from the actual status
@@ -963,6 +966,7 @@ func TestForgetVReplStreamOrdering(t *testing.T) {
 		assert.NotContains(t, e.vreplicationResumeState, uuid,
 			"a successfully cancelled migration must not retain stream tracking")
 		assert.NotContains(t, e.vreplicationLastError, uuid)
+		assert.NotContains(t, e.vreplicationPendingCancel, uuid)
 	})
 	t.Run("user cancellation with failed transition retains tracking", func(t *testing.T) {
 		// cancelled_timestamp alone is not a terminal transition: the
@@ -1124,13 +1128,18 @@ func TestReviewRunningMigrationsNilStreamCancellation(t *testing.T) {
 	uuid := "1cbcd662_8ed6_11ee_bc8f_0a43f95f28a3"
 	env := tabletenv.NewEnv(vtenv.NewTestEnv(), tabletenv.NewDefaultConfig(), "ExecutorTest")
 	alias := &topodatapb.TabletAlias{Cell: "cell", Uid: 1}
-	newReviewExecutor := func(migrationFields, migrationTypes, migrationRow string) *Executor {
+	newReviewExecutor := func(migrationFields, migrationTypes, migrationRow string, streamResult *sqltypes.Result) *Executor {
+		if streamResult == nil {
+			// The stream is absent.
+			streamResult = &sqltypes.Result{}
+		}
 		e := &Executor{
-			env:                     env,
-			tabletAlias:             alias,
-			vreplicationLastError:   map[string]*vterrors.LastError{},
-			vreplicationResumeState: map[string]*vreplResumeState{},
-			ticks:                   timer.NewTimer(time.Hour),
+			env:                       env,
+			tabletAlias:               alias,
+			vreplicationLastError:     map[string]*vterrors.LastError{},
+			vreplicationResumeState:   map[string]*vreplResumeState{},
+			vreplicationPendingCancel: map[string]string{},
+			ticks:                     timer.NewTimer(time.Hour),
 			lagThrottler: throttle.NewThrottler(env, nil, nil, alias, nil,
 				func() topodatapb.TabletType { return topodatapb.TabletType_PRIMARY }, "TestPool"),
 			execQuery: func(ctx context.Context, query string) (*sqltypes.Result, error) {
@@ -1141,9 +1150,10 @@ func TestReviewRunningMigrationsNilStreamCancellation(t *testing.T) {
 						sqltypes.MakeTestFields("migration_uuid", "varchar"), uuid), nil
 				case strings.Contains(q, "in ('queued', 'ready', 'running')"):
 					return &sqltypes.Result{}, nil
-				case strings.Contains(q, "from _vt.vreplication"):
-					// The stream is absent.
+				case strings.Contains(q, "from _vt.vreplication_log"):
 					return &sqltypes.Result{}, nil
+				case strings.Contains(q, "from _vt.vreplication"):
+					return streamResult, nil
 				case strings.HasPrefix(strings.TrimSpace(q), "select") && strings.Contains(q, "migration_uuid="):
 					return sqltypes.MakeTestResult(
 						sqltypes.MakeTestFields(migrationFields, migrationTypes), migrationRow), nil
@@ -1160,7 +1170,7 @@ func TestReviewRunningMigrationsNilStreamCancellation(t *testing.T) {
 		e := newReviewExecutor(
 			"migration_uuid|migration_status|strategy|cancelled_timestamp",
 			"varchar|varchar|varchar|varchar",
-			uuid+"|running|vitess|2026-09-02 17:00:00")
+			uuid+"|running|vitess|2026-09-02 17:00:00", nil)
 		_, cancellable, err := e.reviewRunningMigrations(t.Context())
 		require.NoError(t, err)
 		require.Len(t, cancellable, 1,
@@ -1171,11 +1181,46 @@ func TestReviewRunningMigrationsNilStreamCancellation(t *testing.T) {
 		e := newReviewExecutor(
 			"migration_uuid|migration_status|strategy",
 			"varchar|varchar|varchar",
-			uuid+"|running|vitess")
+			uuid+"|running|vitess", nil)
 		_, cancellable, err := e.reviewRunningMigrations(t.Context())
 		require.NoError(t, err)
 		assert.Empty(t, cancellable,
 			"a nil-stream migration without cancellation intent must not be cancelled")
+	})
+	t.Run("pending internal intent re-drives a stopped stream", func(t *testing.T) {
+		// An internal cancellation has no durable cancelled_timestamp, and
+		// its successful stream stop erased the Error verdict that
+		// triggered it: the live row is now Stopped and clean. Only the
+		// recorded pending intent can convert this into a cancellation —
+		// without it the migration idles in 'running' until the
+		// stale-migration fallback.
+		stoppedStream := sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields("id|workflow|source|pos|state|message", "int32|varchar|varchar|varchar|varchar|varchar"),
+			"1|"+uuid+"|||Stopped|")
+		e := newReviewExecutor(
+			"migration_uuid|migration_status|strategy",
+			"varchar|varchar|varchar",
+			uuid+"|running|vitess", stoppedStream)
+		e.vreplicationPendingCancel[uuid] = "internal cancel"
+		_, cancellable, err := e.reviewRunningMigrations(t.Context())
+		require.NoError(t, err)
+		require.Len(t, cancellable, 1,
+			"a stopped stream with pending internal cancellation intent must be re-driven to its terminal state")
+		assert.Equal(t, uuid, cancellable[0].uuid)
+		assert.Equal(t, "internal cancel", cancellable[0].message)
+	})
+	t.Run("a stopped stream without pending intent is untouched", func(t *testing.T) {
+		stoppedStream := sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields("id|workflow|source|pos|state|message", "int32|varchar|varchar|varchar|varchar|varchar"),
+			"1|"+uuid+"|||Stopped|")
+		e := newReviewExecutor(
+			"migration_uuid|migration_status|strategy",
+			"varchar|varchar|varchar",
+			uuid+"|running|vitess", stoppedStream)
+		_, cancellable, err := e.reviewRunningMigrations(t.Context())
+		require.NoError(t, err)
+		assert.Empty(t, cancellable,
+			"a stopped stream without cancellation intent must not be cancelled")
 	})
 }
 
@@ -1450,9 +1495,12 @@ func TestReviewVReplStreamError(t *testing.T) {
 			message: vreplication.RetriesExhaustedIndicator + ": connection refused",
 			pos:     pos,
 		}
+		// A genuinely healthy caught-up stream heartbeats time_updated
+		// fresh; the recovery condition requires that liveness.
 		idleCleanStream := &VReplStream{
-			state: binlogdatapb.VReplicationWorkflowState_Running,
-			pos:   pos,
+			state:       binlogdatapb.VReplicationWorkflowState_Running,
+			pos:         pos,
+			timeUpdated: now.Add(vreplResumeRecoveryGrace()).Unix(),
 		}
 
 		assert.Equal(t, vreplStreamResume, e.reviewVReplStreamError(uuid, parkedStream, now))
@@ -1522,5 +1570,50 @@ func TestReviewVReplStreamError(t *testing.T) {
 
 		// Budget exhaustion still lands against the original park.
 		assert.Equal(t, vreplStreamCancel, e.reviewVReplStreamError(uuid, parkedStream, now.Add(staleMigrationFailMinutes*time.Minute)))
+	})
+	t.Run("recurrent clean retry window does not end the episode", func(t *testing.T) {
+		// With --vreplication-max-time-to-retry-on-error above the grace,
+		// a persistently failing replication-phase stream produces a clean
+		// Running row on EVERY internal retry (each attempt re-enters
+		// setState(Running, "")), not just after the executor's resume. A
+		// review sampling such a window past the grace must not read it as
+		// recovery: only a live applier advances time_updated (heartbeats,
+		// pos updates — non-Error setState no longer stamps it), so a
+		// clean row carrying the old park's stale time_updated is a retry
+		// cycle, and ending the episode there would grant the eventual
+		// retries-exhausted park a fresh budget every time.
+		e := newExecutor()
+		pos := "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-42"
+		parkedStream := &VReplStream{
+			state:       binlogdatapb.VReplicationWorkflowState_Error,
+			message:     vreplication.RetriesExhaustedIndicator + ": connection refused",
+			pos:         pos,
+			timeUpdated: now.Unix(),
+		}
+		retryWindowStream := &VReplStream{
+			state:       binlogdatapb.VReplicationWorkflowState_Running,
+			pos:         pos,
+			timeUpdated: now.Unix(), // stale: no heartbeat has landed since the park
+		}
+
+		assert.Equal(t, vreplStreamResume, e.reviewVReplStreamError(uuid, parkedStream, now))
+		e.vreplicationResumeState[uuid].lastAttempt = now
+
+		assert.Equal(t, vreplStreamNoAction, e.reviewVReplStreamError(uuid, retryWindowStream, now.Add(vreplResumeRecoveryGrace())))
+		require.Contains(t, e.vreplicationResumeState, uuid,
+			"a clean row with stale liveness is a retry window, not recovery")
+		// The episode start was seeded from the park row's whole-second
+		// durable time_updated stamp.
+		assert.Equal(t, time.Unix(now.Unix(), 0), e.vreplicationResumeState[uuid].firstParked)
+
+		// The same clean row with fresh liveness is a heartbeating,
+		// recovered stream: the episode ends.
+		recoveredStream := &VReplStream{
+			state:       binlogdatapb.VReplicationWorkflowState_Running,
+			pos:         pos,
+			timeUpdated: now.Add(vreplResumeRecoveryGrace()).Unix(),
+		}
+		assert.Equal(t, vreplStreamNoAction, e.reviewVReplStreamError(uuid, recoveredStream, now.Add(vreplResumeRecoveryGrace())))
+		assert.NotContains(t, e.vreplicationResumeState, uuid)
 	})
 }
