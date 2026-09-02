@@ -1774,6 +1774,75 @@ func TestMaybeResumeVReplicationRefreshesLiveness(t *testing.T) {
 	})
 }
 
+// TestReviewRunningMigrationsAdoptsResumedStream pins that the tick which
+// successfully resumes a parked stream also adopts the migration into
+// ownedRunningMigrations. The review's snapshot still shows the parked
+// (Error) row after a resume, so the normal adoption path is skipped — and
+// runNextMigration runs BEFORE the next review in each tick, so without
+// immediate adoption the resumed migration is invisible to the scheduler's
+// conflict and concurrency checks for a full tick, letting a conflicting
+// (even non-concurrent) migration start into that gap.
+func TestReviewRunningMigrationsAdoptsResumedStream(t *testing.T) {
+	uuid := "1cbcd662_8ed6_11ee_bc8f_0a43f95f28a3"
+	protocolName := t.Name()
+	resetProtocol := tmclienttest.SetProtocol(t.Name(), protocolName)
+	defer resetProtocol()
+	tmclient.RegisterTabletManagerClientFactory(protocolName, func() tmclient.TabletManagerClient {
+		return &resumingTabletManagerClient{}
+	})
+	alias := &topodatapb.TabletAlias{Cell: "cell", Uid: 1}
+	ts := memorytopo.NewServer(t.Context(), "cell")
+	require.NoError(t, ts.CreateTablet(t.Context(), &topodatapb.Tablet{
+		Alias:    alias,
+		Keyspace: "ks",
+		Shard:    "0",
+		Type:     topodatapb.TabletType_PRIMARY,
+	}))
+	env := tabletenv.NewEnv(vtenv.NewTestEnv(), tabletenv.NewDefaultConfig(), "ExecutorTest")
+	parkedStream := sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("id|workflow|source|pos|state|message", "int32|varchar|varchar|varchar|varchar|varchar"),
+		"1|"+uuid+"|||Error|"+vreplication.RetriesExhaustedIndicator+": connection refused")
+	e := &Executor{
+		env:                       env,
+		ts:                        ts,
+		tabletAlias:               alias,
+		vreplicationLastError:     map[string]*vterrors.LastError{},
+		vreplicationResumeState:   map[string]*vreplResumeState{},
+		vreplicationPendingCancel: map[string]string{},
+		ticks:                     timer.NewTimer(time.Hour),
+		lagThrottler: throttle.NewThrottler(env, nil, nil, alias, nil,
+			func() topodatapb.TabletType { return topodatapb.TabletType_PRIMARY }, "TestPool"),
+		execQuery: func(ctx context.Context, query string) (*sqltypes.Result, error) {
+			q := strings.ToLower(query)
+			switch {
+			case strings.Contains(q, "migration_status='running'"):
+				return sqltypes.MakeTestResult(
+					sqltypes.MakeTestFields("migration_uuid", "varchar"), uuid), nil
+			case strings.Contains(q, "in ('queued', 'ready', 'running')"):
+				return &sqltypes.Result{}, nil
+			case strings.Contains(q, "from _vt.vreplication_log"):
+				return &sqltypes.Result{}, nil
+			case strings.Contains(q, "from _vt.vreplication"):
+				return parkedStream, nil
+			case strings.HasPrefix(strings.TrimSpace(q), "select") && strings.Contains(q, "migration_uuid="):
+				return sqltypes.MakeTestResult(
+					sqltypes.MakeTestFields("migration_uuid|migration_status|strategy", "varchar|varchar|varchar"),
+					uuid+"|running|vitess"), nil
+			default:
+				return &sqltypes.Result{}, nil
+			}
+		},
+	}
+	e.isOpen.Store(1)
+
+	_, cancellable, err := e.reviewRunningMigrations(t.Context())
+	require.NoError(t, err)
+	assert.Empty(t, cancellable)
+	_, owned := e.ownedRunningMigrations.Load(uuid)
+	assert.True(t, owned,
+		"the tick that resumes a parked stream must adopt the migration, or the scheduler's conflict checks miss it until the next review")
+}
+
 // TestGetNonConflictingMigrationCancellationIntent pins the scheduling gate:
 // queued/ready selection ignores cancellation, so a migration carrying an
 // unfulfilled cancellation intent (durable cancelled_timestamp, or the
