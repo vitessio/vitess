@@ -1142,9 +1142,13 @@ func TestReviewVReplStreamError(t *testing.T) {
 			message: vreplication.RetriesExhaustedIndicator + ": connection refused",
 			pos:     "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-42",
 		}
+		// Same error text as the first park, deliberately: LastError resets
+		// its window on a DIFFERENT error by itself, so only an identical
+		// recurring error exercises the hazard — inheriting the old
+		// window's firstSeen across the progress reset.
 		parkedAtY := &VReplStream{
 			state:   binlogdatapb.VReplicationWorkflowState_Error,
-			message: vreplication.RetriesExhaustedIndicator + ": disk full",
+			message: vreplication.RetriesExhaustedIndicator + ": connection refused",
 			pos:     "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-100",
 		}
 
