@@ -1005,6 +1005,38 @@ func TestForgetVReplStreamOrdering(t *testing.T) {
 			"the transition must succeed on its own bounded context and clear the tracking")
 		assert.NotContains(t, e.vreplicationLastError, uuid)
 	})
+	t.Run("unconfirmed termination defers the terminal transition", func(t *testing.T) {
+		// terminateMigration can fail before the stream is stopped (its
+		// topology lookup, an expired caller context). Durably failing the
+		// migration then would orphan a live stream: once the migration
+		// leaves 'running', the review loop no longer sees it and nothing
+		// stops the stream until artifact GC. The terminal transition must
+		// wait for a termination attempt that did not error — the migration
+		// stays in 'running' and the next review tick re-drives the
+		// cancellation.
+		var terminalTransitionAttempted bool
+		e := newTrackedExecutor(func(ctx context.Context, query string) (*sqltypes.Result, error) {
+			if strings.HasPrefix(strings.TrimSpace(strings.ToUpper(query)), "UPDATE") {
+				if strings.Contains(query, "migration_status") {
+					terminalTransitionAttempted = true
+				}
+				return &sqltypes.Result{RowsAffected: 1}, nil
+			}
+			// A 'vitess' strategy routes terminateMigration through the
+			// vreplication stop path, whose topology lookup fails below.
+			return sqltypes.MakeTestResult(
+				sqltypes.MakeTestFields("migration_uuid|migration_status|strategy", "varchar|varchar|varchar"),
+				uuid+"|running|vitess"), nil
+		})
+		// No tablet record exists: terminateMigration's topology lookup fails.
+		e.ts = memorytopo.NewServer(t.Context(), "cell")
+		_, err := e.CancelMigration(t.Context(), uuid, "internal cancel", false)
+		require.Error(t, err)
+		assert.False(t, terminalTransitionAttempted,
+			"the durable terminal transition must not run when termination was not confirmed")
+		assert.Contains(t, e.vreplicationResumeState, uuid)
+		assert.Contains(t, e.vreplicationLastError, uuid)
+	})
 	t.Run("failed cancellation retains tracking", func(t *testing.T) {
 		e := newTrackedExecutor(func(ctx context.Context, query string) (*sqltypes.Result, error) {
 			// The cancelled_timestamp UPDATE fails; the SELECT that
@@ -1335,5 +1367,38 @@ func TestReviewVReplStreamError(t *testing.T) {
 		later := now.Add(staleMigrationFailMinutes * time.Minute)
 		assert.Equal(t, vreplStreamResume, e.reviewVReplStreamError(uuid, parkedStream, later))
 		assert.Equal(t, later, e.vreplicationResumeState[uuid].firstParked)
+	})
+	t.Run("clean copying stream past the grace keeps the episode", func(t *testing.T) {
+		// The recovery grace is derived from the vplayer stall deadline,
+		// which governs only the replication (Running) phase. In the copy
+		// phase a blocked copy attempt can hold a clean row — no error, no
+		// checkpoint movement — for up to the copy-phase duration, far past
+		// the grace, so a clean Copying observation is not evidence of
+		// recovery: the copy phase demonstrates recovery through advancing
+		// checkpoints (the progress signal). Ending the episode here would
+		// let a copy blocked on the parked error renew the resume budget on
+		// every subsequent park.
+		e := newExecutor()
+		pos := "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-42"
+		parkedStream := &VReplStream{
+			state:   binlogdatapb.VReplicationWorkflowState_Error,
+			message: vreplication.RetriesExhaustedIndicator + ": connection refused",
+			pos:     pos,
+		}
+		blockedCopyStream := &VReplStream{
+			state: binlogdatapb.VReplicationWorkflowState_Copying,
+			pos:   pos,
+		}
+
+		assert.Equal(t, vreplStreamResume, e.reviewVReplStreamError(uuid, parkedStream, now))
+		e.vreplicationResumeState[uuid].lastAttempt = now
+
+		assert.Equal(t, vreplStreamNoAction, e.reviewVReplStreamError(uuid, blockedCopyStream, now.Add(vreplResumeRecoveryGrace())))
+		require.Contains(t, e.vreplicationResumeState, uuid,
+			"a clean Copying row without checkpoint movement is a blocked copy, not recovery")
+		assert.Equal(t, now, e.vreplicationResumeState[uuid].firstParked)
+
+		// Budget exhaustion still lands against the original park.
+		assert.Equal(t, vreplStreamCancel, e.reviewVReplStreamError(uuid, parkedStream, now.Add(staleMigrationFailMinutes*time.Minute)))
 	})
 }

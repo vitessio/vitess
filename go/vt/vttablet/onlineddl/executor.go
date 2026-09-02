@@ -1842,6 +1842,19 @@ func (e *Executor) CancelMigration(ctx context.Context, uuid string, message str
 	// by terminateMigration, and reusing it could strand a cancelled-intent
 	// migration in 'running'.
 	defer func() {
+		if err != nil {
+			// Termination was not confirmed: the stream may still be live,
+			// and durably failing the migration now would orphan it — once
+			// the migration leaves 'running' the review loop no longer sees
+			// it, and nothing else stops the stream before artifact GC.
+			// Leave the migration and its tracking in place: the next review
+			// tick re-drives the cancellation, via the recorded intent for
+			// user-issued cancellations (resolveVReplStreamAction) or the
+			// re-detected triggering condition for internal ones.
+			log.Error("CancelMigration: not transitioning migration to a terminal state as termination did not complete; the cancellation will be re-driven",
+				slog.String("uuid", uuid), slog.String("tablet", e.TabletAliasString()), slog.Any("error", err))
+			return
+		}
 		tctx, tcancel := context.WithTimeout(context.WithoutCancel(ctx), grpcTimeout)
 		defer tcancel()
 		if ferr := e.terminallyFailMigration(tctx, onlineDDL, errors.New(message)); ferr != nil {
@@ -3639,13 +3652,19 @@ func (e *Executor) reviewVReplStreamError(uuid string, s *VReplStream, now time.
 		// indefinitely. With progress handled above, the remaining recovery
 		// signal is a TRULY CLEAN observation — hasError treats an
 		// unrecognized non-empty message as no error, but such a message
-		// means the stream is mid-retry, not recovered — past the recovery
-		// grace of the last resume attempt, well beyond the seconds-wide
-		// synthetic window. That covers a healthy caught-up stream on an
-		// idle source, where neither checkpoint moves.
+		// means the stream is mid-retry, not recovered — in the Running
+		// state, past the recovery grace of the last resume attempt, well
+		// beyond the seconds-wide synthetic window. That covers a healthy
+		// caught-up stream on an idle source, where neither checkpoint
+		// moves. The grace is derived from the vplayer stall deadline and
+		// only bounds the Running (replication) phase: a Copying stream can
+		// hold a clean row through a copy attempt blocked for up to the
+		// copy-phase duration, so there recovery is demonstrated only by
+		// advancing checkpoints.
 		state, ok := e.vreplicationResumeState[uuid]
 		recovered := !ok ||
 			(s.message == "" &&
+				s.state == binlogdatapb.VReplicationWorkflowState_Running &&
 				(state.lastAttempt.IsZero() ||
 					now.Sub(state.lastAttempt) >= vreplResumeRecoveryGrace()))
 		if recovered {
