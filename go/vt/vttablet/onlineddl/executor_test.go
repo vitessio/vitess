@@ -965,6 +965,9 @@ func TestForgetVReplStreamOrdering(t *testing.T) {
 		assert.Contains(t, e.vreplicationLastError, uuid)
 		assert.Equal(t, "internal cancel", e.vreplicationPendingCancel[uuid],
 			"an internal cancellation whose transition failed must record a pending intent: a successful stop leaves no stream verdict to re-trigger it")
+		_, owned := e.ownedRunningMigrations.Load(uuid)
+		assert.True(t, owned,
+			"a still-running migration under pending cancellation must stay owned, or the scheduler's conflict checks miss it")
 	})
 	t.Run("successful internal cancellation clears tracking", func(t *testing.T) {
 		// The terminal-transition verdict must come from the actual status
@@ -1008,6 +1011,9 @@ func TestForgetVReplStreamOrdering(t *testing.T) {
 		assert.Contains(t, e.vreplicationResumeState, uuid,
 			"tracking must survive until the terminal status transition actually lands")
 		assert.Contains(t, e.vreplicationLastError, uuid)
+		_, owned := e.ownedRunningMigrations.Load(uuid)
+		assert.True(t, owned,
+			"a still-running migration under pending cancellation must stay owned")
 	})
 	t.Run("cancellation with expired caller context still completes the transition", func(t *testing.T) {
 		// The deferred terminal transition must not reuse a context that
@@ -1073,6 +1079,9 @@ func TestForgetVReplStreamOrdering(t *testing.T) {
 			"the durable terminal transition must not run when termination was not confirmed")
 		assert.Contains(t, e.vreplicationResumeState, uuid)
 		assert.Contains(t, e.vreplicationLastError, uuid)
+		_, owned := e.ownedRunningMigrations.Load(uuid)
+		assert.True(t, owned,
+			"terminateMigration disowned the migration, but with an unconfirmed stop it remains live: ownership must be restored")
 	})
 	t.Run("failed stream stop defers the terminal transition", func(t *testing.T) {
 		// When no delete follows, the graceful stop IS the termination: a
@@ -1113,6 +1122,9 @@ func TestForgetVReplStreamOrdering(t *testing.T) {
 			"the durable terminal transition must not run when the stream stop failed")
 		assert.Contains(t, e.vreplicationResumeState, uuid)
 		assert.Contains(t, e.vreplicationLastError, uuid)
+		_, owned := e.ownedRunningMigrations.Load(uuid)
+		assert.True(t, owned,
+			"the stream may still be applying changes: ownership must be restored until the cancellation lands")
 	})
 	t.Run("failed cancellation retains tracking", func(t *testing.T) {
 		e := newTrackedExecutor(func(ctx context.Context, query string) (*sqltypes.Result, error) {

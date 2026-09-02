@@ -1871,7 +1871,14 @@ func (e *Executor) CancelMigration(ctx context.Context, uuid string, message str
 			// Leave the migration and its tracking in place, and record the
 			// pending intent so the next review tick re-drives the
 			// cancellation regardless of what the stream reports by then.
+			// terminateMigration disowned the migration, but it remains in
+			// 'running' with a possibly live stream, and the review never
+			// re-adopts a migration under pending cancellation (its verdict
+			// is always cancel): restore ownership so the scheduler's
+			// conflict and concurrency checks keep seeing it until the
+			// cancellation lands.
 			e.vreplicationPendingCancel[uuid] = message
+			e.ownedRunningMigrations.Store(uuid, onlineDDL)
 			log.Error("CancelMigration: not transitioning migration to a terminal state as termination did not complete; the cancellation will be re-driven",
 				slog.String("uuid", uuid), slog.String("tablet", e.TabletAliasString()), slog.Any("error", err))
 			return
@@ -1886,6 +1893,13 @@ func (e *Executor) CancelMigration(ctx context.Context, uuid string, message str
 			// review loop would have nothing to re-drive until the
 			// stale-migration fallback.
 			e.vreplicationPendingCancel[uuid] = message
+			// The migration is still in 'running' status until the
+			// transition lands: keep it owned for the scheduler's checks —
+			// but only if it was running to begin with (a queued/ready
+			// migration was never this executor's running work).
+			if onlineDDL.Status == schema.OnlineDDLStatusRunning {
+				e.ownedRunningMigrations.Store(uuid, onlineDDL)
+			}
 			log.Error("CancelMigration: failed to transition migration to a terminal state",
 				slog.String("uuid", uuid), slog.String("tablet", e.TabletAliasString()), slog.Any("error", ferr))
 			return
