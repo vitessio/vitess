@@ -1633,7 +1633,17 @@ func (vp *vplayer) scheduleItems(ctx context.Context, scheduler *applyScheduler,
 						// time_updated directly via SQL to keep
 						// max_v_replication_lag fresh until the next ordered
 						// position save is queued.
-						needRefresh := time.Since(state.lastHeartbeatRefresh) >= idleTimeout
+						//
+						// Only refresh while the scheduler is idle: the write
+						// sets time_updated==time_heartbeat, which
+						// getVReplicationTrxLag reads as "fully caught up".
+						// With ordered transactions still uncommitted that
+						// would hide the pending work from
+						// max_v_replication_lag — a stalled pipeline would
+						// keep reporting zero lag. While busy, lag stays
+						// honest via the committed transactions' own position
+						// updates (or their absence).
+						needRefresh := time.Since(state.lastHeartbeatRefresh) >= idleTimeout && scheduler.idle()
 						if needRefresh {
 							state.lastHeartbeatRefresh = now
 							vp.serialMu.Lock()
@@ -1879,9 +1889,23 @@ func (vp *vplayer) scheduleItems(ctx context.Context, scheduler *applyScheduler,
 						return err
 					}
 				}
+				// Only write the heartbeat (time_updated==time_heartbeat) when
+				// nothing is uncommitted — neither scheduled work in the
+				// pipeline nor row events accumulated locally awaiting their
+				// COMMIT. getVReplicationTrxLag reads that write as "fully
+				// caught up", so writing it with work outstanding would hide
+				// the pending transactions from max_v_replication_lag. The
+				// serial applier gets this guarantee implicitly (it only
+				// processes heartbeats between fully committed transactions);
+				// here it must be checked. The accumulated-heartbeats counter
+				// still advances so the write happens promptly once idle.
+				pipelineIdle := len(state.curEvents) == 0 && scheduler.idle()
 				vp.serialMu.Lock()
 				vp.numAccumulatedHeartbeats++
-				err := vp.recordHeartbeat()
+				var err error
+				if pipelineIdle {
+					err = vp.recordHeartbeat()
+				}
 				vp.serialMu.Unlock()
 				if err != nil {
 					return err

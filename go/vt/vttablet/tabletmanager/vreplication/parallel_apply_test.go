@@ -1347,6 +1347,158 @@ func TestScheduleItemsBackpressuresOutstandingOrderedTransactions(t *testing.T) 
 	require.ErrorIs(t, <-errCh, context.Canceled)
 }
 
+// dispatchUncommittedRowTxn puts the scheduler into a busy state: one ordered
+// row transaction dispatched to a worker but not yet committed. The caller
+// gets it back so it can markCommitted it to return the scheduler to idle.
+func dispatchUncommittedRowTxn(t *testing.T, ctx context.Context, scheduler *applyScheduler) *applyTxn {
+	t.Helper()
+	txn := acquireApplyTxn()
+	txn.order = 1
+	txn.writeset = []uint64{42}
+	txn.payload = acquireApplyTxnPayload()
+	require.NoError(t, scheduler.enqueue(txn))
+	got, err := scheduler.nextReady(ctx)
+	require.NoError(t, err)
+	require.Same(t, txn, got)
+	return txn
+}
+
+// countHeartbeatWrites counts _vt.vreplication heartbeat updates
+// (time_updated=time_heartbeat=now) recorded by the fake DB client. Such a
+// write tells getVReplicationTrxLag that the stream is fully caught up, so it
+// must only ever happen when no scheduled work remains uncommitted.
+func countHeartbeatWrites(recording *recordingDBClient) int {
+	count := 0
+	for _, q := range recording.queries {
+		if strings.Contains(q, "time_heartbeat") {
+			count++
+		}
+	}
+	return count
+}
+
+// TestScheduleItemsHeartbeatRefreshWaitsForPendingWork tests the empty
+// transaction path's periodic time_updated refresh: while an ordered data
+// transaction is dispatched but not yet committed, the refresh must not run —
+// it would set time_updated==time_heartbeat, which the workflow lag metric
+// (getVReplicationTrxLag) reads as "fully caught up", hiding the pending
+// work from max_v_replication_lag. Once the pipeline is idle again the
+// refresh must resume.
+func TestScheduleItemsHeartbeatRefreshWaitsForPendingWork(t *testing.T) {
+	vp, _ := testVPlayer(t)
+	ctx := testCtx(t)
+	recording := &recordingDBClient{}
+	vp.vr.dbClient = newVDBClient(recording, vp.vr.stats, vp.vr.workflowConfig.RelayLogMaxItems)
+
+	scheduler := newApplyScheduler(ctx)
+	state := &parallelScheduleState{
+		lastFlushTime:        time.Now(),
+		lastHeartbeatRefresh: time.Now().Add(-2 * idleTimeout),
+	}
+	emptyTxn := func(gtid string) []*binlogdatapb.VEvent {
+		return []*binlogdatapb.VEvent{
+			{Type: binlogdatapb.VEventType_GTID, Gtid: gtid},
+			{Type: binlogdatapb.VEventType_COMMIT, Timestamp: 100},
+		}
+	}
+
+	// While an ordered row transaction is dispatched but uncommitted, an
+	// empty (filtered) transaction's heartbeat refresh must not fire.
+	inflight := dispatchUncommittedRowTxn(t, ctx, scheduler)
+	err := vp.scheduleItems(ctx, scheduler, state, [][]*binlogdatapb.VEvent{emptyTxn("MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5")})
+	require.NoError(t, err)
+	assert.Zero(t, countHeartbeatWrites(recording),
+		"heartbeat refresh must not report caught-up while an ordered transaction is uncommitted")
+
+	// Once the pipeline is idle, the refresh must resume.
+	require.NoError(t, scheduler.markCommitted(inflight))
+	state.lastHeartbeatRefresh = time.Now().Add(-2 * idleTimeout)
+	err = vp.scheduleItems(ctx, scheduler, state, [][]*binlogdatapb.VEvent{emptyTxn("MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-6")})
+	require.NoError(t, err)
+	assert.Equal(t, 1, countHeartbeatWrites(recording),
+		"heartbeat refresh must resume once all scheduled work has committed")
+}
+
+// TestScheduleItemsHeartbeatEventWaitsForPendingWork tests HEARTBEAT event
+// handling: the time_updated=time_heartbeat write must not happen while an
+// ordered transaction is uncommitted, nor while row events are accumulated
+// locally awaiting their COMMIT — in both cases the stream is not caught up,
+// and the write would hide that from max_v_replication_lag. The serial
+// applier gets this for free (it only sees heartbeats between fully
+// committed transactions); the parallel scheduler must check explicitly.
+func TestScheduleItemsHeartbeatEventWaitsForPendingWork(t *testing.T) {
+	vp, _ := testVPlayer(t)
+	ctx := testCtx(t)
+	recording := &recordingDBClient{}
+	vp.vr.dbClient = newVDBClient(recording, vp.vr.stats, vp.vr.workflowConfig.RelayLogMaxItems)
+
+	scheduler := newApplyScheduler(ctx)
+	state := &parallelScheduleState{
+		lastFlushTime:        time.Now(),
+		lastHeartbeatRefresh: time.Now(),
+	}
+	vp.tablePlans["t1"] = &TablePlan{
+		TargetName: "t1",
+		Fields:     []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}},
+		PKIndices:  []bool{true},
+	}
+	vp.tablePlansVersion.Store(1)
+	// Ensure the accumulated-heartbeats threshold never gates the write in
+	// this test; only the pending-work checks should.
+	vp.numAccumulatedHeartbeats = 1000
+
+	heartbeat := func() []*binlogdatapb.VEvent {
+		now := time.Now()
+		return []*binlogdatapb.VEvent{{
+			Type:        binlogdatapb.VEventType_HEARTBEAT,
+			Timestamp:   now.Unix(),
+			CurrentTime: now.UnixNano(),
+		}}
+	}
+
+	// While an ordered row transaction is dispatched but uncommitted, a
+	// heartbeat must not write time_updated/time_heartbeat.
+	inflight := dispatchUncommittedRowTxn(t, ctx, scheduler)
+	err := vp.scheduleItems(ctx, scheduler, state, [][]*binlogdatapb.VEvent{heartbeat()})
+	require.NoError(t, err)
+	assert.Zero(t, countHeartbeatWrites(recording),
+		"heartbeat must not report caught-up while an ordered transaction is uncommitted")
+	require.NoError(t, scheduler.markCommitted(inflight))
+
+	// A heartbeat arriving mid-transaction (row events accumulated, COMMIT
+	// not yet seen) must not write either, even with an idle scheduler.
+	midTxn := []*binlogdatapb.VEvent{
+		{Type: binlogdatapb.VEventType_GTID, Gtid: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-7"},
+		{Type: binlogdatapb.VEventType_ROW, RowEvent: &binlogdatapb.RowEvent{
+			TableName: "t1",
+			RowChanges: []*binlogdatapb.RowChange{{
+				After: &querypb.Row{Values: []byte("1"), Lengths: []int64{1}},
+			}},
+		}, Timestamp: 100},
+	}
+	midTxn = append(midTxn, heartbeat()...)
+	err = vp.scheduleItems(ctx, scheduler, state, [][]*binlogdatapb.VEvent{midTxn})
+	require.NoError(t, err)
+	assert.Zero(t, countHeartbeatWrites(recording),
+		"heartbeat must not report caught-up while row events are accumulated awaiting COMMIT")
+
+	// Complete the accumulated transaction and drain it so the pipeline is
+	// fully idle again.
+	err = vp.scheduleItems(ctx, scheduler, state, [][]*binlogdatapb.VEvent{{
+		{Type: binlogdatapb.VEventType_COMMIT, Timestamp: 100},
+	}})
+	require.NoError(t, err)
+	rowTxn, err := scheduler.nextReady(ctx)
+	require.NoError(t, err)
+	require.NoError(t, scheduler.markCommitted(rowTxn))
+
+	// Idle pipeline, no accumulated events: the heartbeat write must happen.
+	err = vp.scheduleItems(ctx, scheduler, state, [][]*binlogdatapb.VEvent{heartbeat()})
+	require.NoError(t, err)
+	assert.Equal(t, 1, countHeartbeatWrites(recording),
+		"heartbeat write must resume once the pipeline is idle")
+}
+
 func TestScheduleLoopCanceledContext(t *testing.T) {
 	vp, _ := testVPlayer(t)
 

@@ -548,6 +548,19 @@ func (s *applyScheduler) advanceCommittedSequence(seq int64) {
 	}
 }
 
+// idle reports whether the scheduler has no pending or inflight transactions
+// of any class: everything enqueued so far has been durably committed. It is
+// the non-blocking form of waitForIdle's predicate. scheduleItems uses it to
+// gate out-of-band heartbeat writes: setting time_updated==time_heartbeat
+// tells getVReplicationTrxLag that the stream is fully caught up, which is
+// only true when no scheduled work remains uncommitted.
+func (s *applyScheduler) idle() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.pendingCount == 0 && s.inflightGlobal == 0 && s.inflightMissingMeta == 0 &&
+		s.inflightCommitMeta == 0 && len(s.inflightWriteset) == 0 && s.inflightNoConflict == 0
+}
+
 // waitForIdle blocks until there are no pending or inflight transactions of
 // any class. scheduleLoop calls it as a barrier after a DDL fetch so that the
 // DDL, its FK-metadata refresh, and any FIELD events for DDL-affected tables
