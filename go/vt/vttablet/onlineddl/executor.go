@@ -3577,6 +3577,17 @@ func (e *Executor) reviewVReplStreamError(uuid string, s *VReplStream, now time.
 	if state, ok := e.vreplicationResumeState[uuid]; ok &&
 		(s.pos != state.parkedPos || s.rowsCopied > state.parkedRowsCopied) {
 		delete(e.vreplicationResumeState, uuid)
+		// The LastError retry window must restart with the episode: the
+		// same error text recurring after real progress is a new problem,
+		// not a continuation, and the inherited window's firstSeen would
+		// cancel the migration (!ShouldRetry) before the fresh resume
+		// budget could matter.
+		lastError = vterrors.NewLastError(
+			fmt.Sprintf("Online DDL migration %v", uuid),
+			staleMigrationFailMinutes*time.Minute,
+		)
+		e.vreplicationLastError[uuid] = lastError
+		lastError.Record(vreplError)
 	}
 	if vreplError == nil {
 		// The stream reports no error — but a just-issued resume looks

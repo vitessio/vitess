@@ -1155,9 +1155,18 @@ func TestReviewVReplStreamError(t *testing.T) {
 		// episode's budget: it must be treated as a fresh episode and
 		// resumed, not cancelled against the previous clock.
 		later := now.Add(staleMigrationFailMinutes * time.Minute)
+		originalLastError := e.vreplicationLastError[uuid]
+		require.NotNil(t, originalLastError)
 		assert.Equal(t, vreplStreamResume, e.reviewVReplStreamError(uuid, parkedAtY, later),
 			"a re-park after forward progress must start a fresh episode")
 		assert.Equal(t, later, e.vreplicationResumeState[uuid].firstParked)
+		// The LastError retry window tracks the same episode: the same
+		// error text recurring after real progress must not inherit the
+		// old window's firstSeen, or !ShouldRetry() would cancel the
+		// migration before the fresh resume budget could matter. A fresh
+		// window means a fresh LastError.
+		assert.NotSame(t, originalLastError, e.vreplicationLastError[uuid],
+			"the retry window must restart with the fresh episode")
 	})
 	t.Run("clean stream past the recovery grace ends the episode", func(t *testing.T) {
 		// A caught-up stream on an idle source advances neither pos nor
