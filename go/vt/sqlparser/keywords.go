@@ -474,6 +474,7 @@ var keywords = []keyword{
 	{"multipoint", MULTIPOINT},
 	{"multipolygon", MULTIPOLYGON},
 	{"month", MONTH},
+	{"mysqlplan", MYSQLPLAN},
 	{"mysql_errno", MYSQL_ERRNO},
 	{"name", NAME},
 	{"names", NAMES},

@@ -13,6 +13,7 @@
         - [Snapshot Topology feature removed](#vtorc-snapshot-topology-removed)
         - [VTOrc `--cell` flag is now required](#vtorc-cell-required)
         - [`BackupHandle` interface gains `Wait()` method](#backup-handle-wait-method)
+        - [VTOrc: `--cells-to-watch` removed in favor of `--cells-no-recovery`](#vtorc-cells-no-recovery)
     - **[Deprecations](#deprecations)**
         - [CLI Flags](#deprecated-cli-flags)
         - [Legacy streaming-path plan types in query rules](#deprecated-selectstream-rule-plan)
@@ -20,6 +21,8 @@
     - **[VReplication](#minor-changes-vreplication)**
         - [Default data protection for `_reverse` workflow cancel/complete](#vreplication-reverse-workflow-data-protection)
         - [`SwitchTraffic` refuses to switch writes before reads](#vreplication-switch-writes-requires-reads)
+        - [`vdiff show --no-samples` strips the per-table row-sample report](#vreplication-vdiff-no-samples)
+        - [Preserve Materialize target data on cancel by default](#vreplication-materialize-cancel-data-protection)
     - **[VTGate](#minor-changes-vtgate)**
         - [Ingress bytes in query LogStats](#vtgate-logstats-ingress-bytes)
         - [New controls for cross-keyspace reads](#vtgate-cross-keyspace-reads)
@@ -29,6 +32,7 @@
         - [Preparing a statement no longer starts an implicit transaction](#vtgate-prepare-no-implicit-tx)
         - [Stricter validation of SQL-level PREPARE statements](#vtgate-prepare-stricter-validation)
         - [Stricter PROXY protocol v1 header validation](#vtgate-proxy-protocol-v1-strictness)
+        - [New `VEXPLAIN MYSQLPLAN` statement](#vtgate-vexplain-mysqlplan)
     - **[Reparent](#minor-changes-reparent)**
         - [`EmergencyReparentShard` no longer waits on replicas that cannot win the election](#ers-lagging-relay-log-wait)
         - [`EmergencyReparentShard` can explicitly recover from split brain](#ers-allow-split-brain-promotion)
@@ -129,6 +133,18 @@ func (bh *MyBackupHandle) Wait() {}
 
 See [#20167](https://github.com/vitessio/vitess/pull/20167) for details.
 
+#### <a id="vtorc-cells-no-recovery"/>VTOrc: `--cells-to-watch` removed in favor of `--cells-no-recovery`</a>
+
+The `--cells-to-watch` flag has been removed. It restricted vtorc's tablet discovery to a fixed set of cells, which created a serious failure mode for any keyspace that spanned cells: if the primary lived in a cell *not* in `--cells-to-watch`, vtorc filtered the primary out of discovery, concluded the keyspace had no primary, and triggered an `EmergencyReparentShard` against a replica in a watched cell. The other cell's vtorc then saw its primary demoted and ran its own ERS — the two vtorcs ping-ponged ERS operations until the keyspace was destroyed. The flag only "worked" under true cell isolation (each cell hosting an independent primary), a configuration with no practical purpose.
+
+The replacement, `--cells-no-recovery`, is a deny-list for *recovery actions only*; vtorc's discovery still spans all cells, so it always sees the real topology. When a problem is detected, vtorc skips the actionable recovery if the *analyzed* (failed) tablet is in a listed cell, recording a `CellNoRecovery` reason under the existing `SkippedRecoveries` stat. For `ClusterHasNoPrimary` (no primary exists in the shard), recovery is suppressed only when every cell that has tablets in the shard appears in the deny-list; a partial deny-list lets the initial PlannedReparentShard (PRS) proceed. Detection still happens for tablets in listed cells (so operators retain visibility), and non-actionable recoveries (pure detection paths) are unaffected. The cells passed to `--cells-no-recovery` are validated against the topology's known cells at startup; an unknown cell name causes vtorc to exit. For per-tablet recoveries, the filter gates on the analyzed tablet's cell: it does not, on its own, prevent a replica in a no-recovery cell from being chosen as a promotion candidate during an `EmergencyReparentShard` triggered by a failure in another cell (use `--prevent-cross-cell-failover` for that).
+
+**Schema change:** this PR changes `recovery_detection.detection_id` from a plain `INTEGER PRIMARY KEY` to `INTEGER PRIMARY KEY AUTOINCREMENT`, adds a `UNIQUE (alias, analysis)` index, and changes the detection write to an upsert (`INSERT … ON CONFLICT(alias, analysis) DO UPDATE SET detection_timestamp = now()`). VTOrc drops and recreates its SQLite database on startup, so no migration is needed. The behavioral effect is that repeated detections of the same ongoing failure on the same tablet upsert a single row, refreshing `detection_timestamp` on each poll, rather than accumulating one row per poll cycle; the `detection_id` is stable for the duration of that incident. When a recovery successfully promotes a new primary (ERS/PRS), the triggering `recovery_detection` row is deleted, creating a clean incident boundary: the next recurrence of the same failure inserts a fresh row with a new `detection_id`. Failed recovery attempts and non-primary-promotion recoveries (`fixReplica`, `fixPrimary`, etc.) leave the row intact so retries within the same incident share the same `detection_id`; those rows are cleaned up by expiry-based history pruning. Suppressed recoveries (e.g. cell gate, quorum gate) follow the same expiry path. This change applies to all vtorc deployments, not only those using `--cells-no-recovery`.
+
+**Migration:** drop `--cells-to-watch` from your vtorc invocation. If you previously used it for true cell-isolated deployments, the new flag is not a like-for-like replacement (vtorc will now discover and watch all cells); discuss your scenario in the linked issue if the new flag does not cover your needs. If you are upgrading from v24.0.0 specifically and have `--cells-to-watch` in your vtorc flags, note that this flag was already removed in v24.0.1; replace it with `--cells-no-recovery` before upgrading.
+
+See [#20021](https://github.com/vitessio/vitess/issues/20021) for details.
+
 ### <a id="deprecations"/>Deprecations</a>
 
 #### <a id="deprecated-cli-flags"/>CLI Flags</a>
@@ -181,6 +197,24 @@ A forward `SwitchTraffic` request that switches only writes (`PRIMARY`) while re
 To switch writes, either switch reads first, or include the read types in the same request (e.g. `--tablet-types=rdonly,replica,primary`). The check can be overridden with `--force`.
 
 See [#20924](https://github.com/vitessio/vitess/pull/20924) for details.
+
+#### <a id="vreplication-vdiff-no-samples"/>`vdiff show --no-samples` strips the per-table row-sample report</a>
+
+`vtctldclient vdiff ... show` now accepts a `--no-samples` flag. When set, the per-table diff report has its row-sample arrays (`MismatchedRowsSample`, `ExtraRowsSourceSample`, `ExtraRowsTargetSample`) stripped on the tablet, while the scalar counters and all other summary fields are preserved. This avoids exceeding gRPC message limits when `vdiff show` aggregates large blob/JSON row samples across every target shard. It is exposed as `no_samples` on the `VDiffShowRequest` (vtctld) and `VDiffReportOptions` (tablet) protobuf messages, and is opt-in and backward compatible.
+
+`vdiff create --wait` also uses `no_samples` for its internal progress polls. Text output is unchanged; with `--format json`, the per-interval progress output no longer includes the row samples (they remain available via `vdiff show --verbose` once the diff completes).
+
+See [#20870](https://github.com/vitessio/vitess/pull/20870) for details.
+
+#### <a id="vreplication-materialize-cancel-data-protection"/>Preserve Materialize target data on cancel by default</a>
+
+`vtctldclient Materialize cancel` now preserves the materialized target tables and their data. To remove the target tables when canceling the workflow, explicitly pass `--keep-data=false`.
+
+Previously `Materialize cancel` exposed no `--keep-data` flag and always omitted `keep_data` from the `WorkflowDelete` request. The server resolves an omitted `keep_data` to `false`, so canceling a Materialize workflow always dropped the target tables with no way to opt out. `Materialize cancel` now has its own command that always sends `keep_data` explicitly.
+
+This is a client-side fix. The server and the generic `vtctldclient Workflow delete` command are unchanged, so operators must upgrade `vtctldclient` to pick it up; an older client canceling a Materialize workflow against a newer server still drops the target tables.
+
+See [#20711](https://github.com/vitessio/vitess/issues/20711) for details.
 
 ### <a id="minor-changes-vtgate"/>VTGate</a>
 
@@ -279,6 +313,24 @@ Specification-conformant v1 headers, as emitted by HAProxy, AWS load balancers, 
 **Impact**: Deployments whose proxy emits one of the forms above — most notably the nginx stream module proxying between IPv6 clients and IPv4 upstreams — will have those connections rejected before the MySQL handshake. Configure the proxy to emit specification-conformant headers (for nginx, listen on a matching address family or on a v4-mapped socket so addresses are rendered in IPv6 form).
 
 See [#20733](https://github.com/vitessio/vitess/pull/20733) for details.
+
+#### <a id="vtgate-vexplain-mysqlplan"/>New `VEXPLAIN MYSQLPLAN` statement</a>
+
+A new `VEXPLAIN MYSQLPLAN <query>` statement runs MySQL's `EXPLAIN FORMAT=JSON` against the shards a `SELECT` would target, **without executing the query itself**. It resolves each `Route`'s target shards from its vindex at resolution time and issues `EXPLAIN` against every resolved shard, attaching the per-shard MySQL plan to the VTGate plan tree keyed by shard, so per-shard plan and cost differences are visible.
+
+Unlike `VEXPLAIN ALL`, which executes the query to discover the shard-level queries before explaining them, `VEXPLAIN MYSQLPLAN` never runs the wrapped query.
+
+This no-execution guarantee is specifically about the wrapped query. The `EXPLAIN FORMAT=JSON` statement itself is still executed by MySQL on each shard, and — exactly like a plain `EXPLAIN` — MySQL may evaluate parts of it as a side effect: [`EXPLAIN` can execute a stored function](https://dev.mysql.com/doc/refman/8.4/en/derived-tables.html) reached through a view or derived table that MySQL [materializes during optimization](https://dev.mysql.com/doc/refman/8.4/en/derived-table-optimization.html), and such a function can modify data. `VEXPLAIN MYSQLPLAN` rejects the query shapes it can detect that carry this risk (derived tables, subqueries, CTEs, sequence and advisory-lock functions, and views known to the schema tracker), but with view tracking disabled (`--enable-views=false`) it cannot tell an untracked view from a base table, so `EXPLAIN` against such a view can still trigger these side effects. This matches what issuing `EXPLAIN` directly does — except that a plain `EXPLAIN` lands on a single arbitrary shard whereas `VEXPLAIN MYSQLPLAN` runs it against every resolved shard, and `VEXPLAIN ALL` is more exposed still, since it executes the wrapped query before explaining it.
+
+Only `SELECT` statements whose target shards can be resolved from a vindex without reading cluster data are supported. DML (`INSERT`/`UPDATE`/`DELETE`), and any query whose shard set depends on data — cross-shard joins, subqueries, recursive CTEs, and lookup vindexes — are rejected with an error suggesting `VEXPLAIN ALL` instead. Derived tables, views, and common table expressions are likewise unsupported: `EXPLAIN FORMAT=JSON` can materialize a derived table during optimization (running any stored function inside it once per shard), which would break the promise never to run the wrapped query.
+
+For queries eligible for deferred plan optimization (where equal bind variable values let the plan collapse to a single shard at execution time), `VEXPLAIN MYSQLPLAN` explains the general (baseline) plan rather than the value-specific optimized one, so it reports the full shard footprint the query can target regardless of the bind variable values supplied.
+
+For each `Route` in the plan, the per-shard `EXPLAIN` queries are run concurrently across that `Route`'s shards, reusing the same scatter fan-out a real query would use; plans with multiple `Route` nodes (for example, a `UNION`) explain each `Route` in turn. If the `EXPLAIN` against any targeted shard fails (for example, an unreachable shard), the whole `VEXPLAIN MYSQLPLAN` command fails with that error rather than returning a partial result — matching the default all-or-nothing behavior of a scatter query.
+
+Because each per-shard `EXPLAIN` runs on a separate connection, a `VEXPLAIN MYSQLPLAN` issued inside an open transaction reflects the pre-transaction state of each shard rather than any uncommitted changes made in that transaction — the same limitation as `VEXPLAIN ALL`.
+
+Like a plain `EXPLAIN`, the per-shard `EXPLAIN FORMAT=JSON` queries `VEXPLAIN MYSQLPLAN` issues are not subject to table ACL checks on the explained tables, so `VEXPLAIN MYSQLPLAN` can return per-shard plan metadata (index names, row estimates, filtered percentages) for tables the caller could not otherwise read. For the same reason — the tablet plans an `EXPLAIN` without the explained table's identity — query denylist rules that are conditioned on a table name are not enforced against these per-shard `EXPLAIN` queries either; denylist rules conditioned on the query pattern still apply if their pattern matches the `explain format = json ...` query text. Unlike a plain `EXPLAIN`, which reaches a single arbitrary shard, `VEXPLAIN MYSQLPLAN` extends this to every resolved shard of every keyspace in the plan. Deployments that rely on table ACLs or table-scoped query denylist rules to restrict read access should restrict access to `VEXPLAIN MYSQLPLAN` accordingly.
 
 ### <a id="minor-changes-reparent"/>Reparent</a>
 
