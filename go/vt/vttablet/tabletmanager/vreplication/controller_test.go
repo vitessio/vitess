@@ -91,14 +91,13 @@ func setTabletTypesStr(tabletTypesStr string) func() {
 	}
 }
 
-// TestRetriesExhaustedIndicatorIsNotLegacyTerminal pins a downgrade-safety
-// invariant: the resumable class B marker must NOT extend the legacy
-// TerminalErrorIndicator. The marker is written durably into
-// _vt.vreplication_log, and a previous-version executor's readVReplStream
-// unconditionally converts any TerminalErrorIndicator-matching history
-// record back into an Error — even when the live row is Running — which
-// would fail a migration the newer executor had legitimately resumed the
-// moment a downgrade or mixed-version failover occurs.
+// TestRetriesExhaustedIndicatorIsNotLegacyTerminal pins the marker
+// taxonomy: the resumable class B marker must NOT extend the legacy
+// TerminalErrorIndicator, because the message is operator visible and a
+// condition that is resumable by design must not be labeled a terminal
+// error. This is a labeling invariant, not downgrade protection: a
+// previous-version executor's history scan selects any state='Error'
+// record regardless of message (see RetriesExhaustedIndicator's doc).
 func TestRetriesExhaustedIndicatorIsNotLegacyTerminal(t *testing.T) {
 	assert.False(t, strings.HasPrefix(RetriesExhaustedIndicator, TerminalErrorIndicator),
 		"the resumable marker must not be classified terminal by previous-version executors")
