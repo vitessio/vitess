@@ -252,11 +252,8 @@ func (tp *TransactionPayload) decode() error {
 	}
 
 	header := make([]byte, headerLen)
-	// How many bytes of the decompressed payload are still unread. Every event body
-	// must come out of this, so it is the one length bound not taken from the same
-	// untrusted metadata as the event header. In streaming mode uncompressedSize is
-	// not verified against the decoded stream, so treat 0 as "unknown" and skip the
-	// check rather than trusting it: the read below still fails on a short payload.
+	// Bytes of the declared payload not yet read. uncompressedSize is not verified
+	// against the decoded stream, so 0 means "unknown" and the check is skipped.
 	remaining := int64(-1)
 	if tp.uncompressedSize > 0 && tp.uncompressedSize <= math.MaxInt64 {
 		remaining = int64(tp.uncompressedSize)
@@ -279,37 +276,21 @@ func (tp *TransactionPayload) decode() error {
 				"binlog event length of %d is smaller than the event header", eventLen)
 		}
 		// eventLen is a four byte field from the payload, so it must not size an
-		// allocation unbounded. Two facts settle how to bound it, both measured:
-		//
-		//   - uncompressedSize is ACCURATE for real payloads. The recorded fixture
-		//     large_compressed_trx_payload.bin declares 173,120,239 and its events sum
-		//     to exactly that (78 + 68 + 173,120,066 + 27), so a 173MB row event
-		//     decompressing from 16KB is legitimate traffic. An absolute ceiling is
-		//     therefore wrong: a 64MiB cap rejects that payload.
-		//   - uncompressedSize is NOT VERIFIED against the decoded stream in streaming
-		//     mode, so on its own it is not a bound either: a 26 byte frame can declare
-		//     uncompressedSize 2GiB and eventLen 1GiB and have both accepted, which
-		//     allocated 1,073,746,688 bytes.
-		//
-		// So bound by the bytes of the declared payload not yet consumed -- which keeps
-		// the legitimate case exact -- and additionally refuse to reserve more than
-		// eventChunkSize until that much has actually been read, which is what makes a
-		// lying declaration cheap. Deriving the reservation from arrived data alone was
-		// measured worse on valid input every way it was tried (28.5MiB, 47.2MiB and
-		// 52.5MiB for an 8MiB event against 16.2MiB before), so read the first chunk
-		// into a small buffer and only then commit to the full length.
+		// allocation unbounded. An absolute ceiling is wrong -- the recorded fixture
+		// large_compressed_trx_payload.bin legitimately declares 173,120,239 bytes --
+		// and uncompressedSize is not verified against the stream, so it is not a
+		// bound on its own either. Bound by the declared bytes not yet consumed, and
+		// reserve no more than eventChunkSize until that much has actually arrived.
 		if remaining >= 0 && eventLen-headerLen > remaining {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
 				"binlog event length of %d exceeds the %d bytes left in the transaction payload",
 				eventLen, remaining+headerLen)
 		}
 		if eventLen-headerLen > eventChunkSize {
-			// Grow geometrically and never past what has arrived. Reading one fixed
-			// chunk and then committing to eventLen merely postpones the allocation:
-			// a 142 byte frame delivering 1.1MiB while claiming 4GiB still allocated
-			// 4,305,625,816 bytes. Doubling keeps the reservation within a factor of
-			// two of the bytes actually decoded, so peak memory tracks real data at
-			// every step, and a valid event still reaches its size in log2(n) steps.
+			// Grow geometrically and never past what has arrived, so the reservation
+			// stays within a factor of two of the bytes actually decoded. Reading one
+			// fixed chunk and then committing to eventLen only postpones the
+			// allocation.
 			buf := make([]byte, headerLen, headerLen+eventChunkSize)
 			copy(buf, header)
 			for int64(len(buf)) < eventLen {
