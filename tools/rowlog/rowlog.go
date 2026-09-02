@@ -395,7 +395,7 @@ func getFlavor(ctx context.Context, server, keyspace string) string {
 	if curPos == "" {
 		return ""
 	}
-	flavor := strings.Split(curPos, "/")[0]
+	flavor, _, _ := strings.Cut(curPos, "/")
 	return flavor
 }
 

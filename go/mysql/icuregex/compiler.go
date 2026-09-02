@@ -2093,7 +2093,7 @@ func (c *compiler) matchStartType() {
 			jmpDest := op.value()
 			if jmpDest > loc {
 				if currentLen < forwardedLength[jmpDest] {
-					forwardedLength[jmpDest] = (currentLen)
+					forwardedLength[jmpDest] = currentLen
 				}
 			}
 			atStart = false
@@ -2204,7 +2204,7 @@ func (c *compiler) matchStartType() {
 					jmpDest := op.value()
 					if jmpDest > loc {
 						if currentLen < forwardedLength[jmpDest] {
-							forwardedLength[jmpDest] = (currentLen)
+							forwardedLength[jmpDest] = currentLen
 						}
 					}
 				}
@@ -2756,7 +2756,7 @@ var invariantChars = [...]uint32{
 }
 
 func ucharIsInvariant(c rune) bool {
-	return c <= 0x7f && (invariantChars[(c)>>5]&(uint32(1)<<(c&0x1f))) != 0
+	return c <= 0x7f && (invariantChars[c>>5]&(uint32(1)<<(c&0x1f))) != 0
 }
 
 func (c *compiler) setPushOp(op setOperation) {

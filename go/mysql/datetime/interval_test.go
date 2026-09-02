@@ -87,10 +87,8 @@ func TestParseInterval(t *testing.T) {
 			in: "123",
 			tt: IntervalSecond,
 			want: &Interval{
-				timeparts: timeparts{
-					sec:  123,
-					prec: 6,
-				},
+				sec:  123,
+				prec: 6,
 				unit: IntervalSecond,
 			},
 		},
@@ -98,10 +96,8 @@ func TestParseInterval(t *testing.T) {
 			in: "1",
 			tt: IntervalDay,
 			want: &Interval{
-				timeparts: timeparts{
-					day:  1,
-					prec: 0,
-				},
+				day:  1,
+				prec: 0,
 				unit: IntervalDay,
 			},
 		},
@@ -109,10 +105,8 @@ func TestParseInterval(t *testing.T) {
 			in: "1234",
 			tt: IntervalMinute,
 			want: &Interval{
-				timeparts: timeparts{
-					min:  1234,
-					prec: 0,
-				},
+				min:  1234,
+				prec: 0,
 				unit: IntervalMinute,
 			},
 		},
@@ -120,11 +114,9 @@ func TestParseInterval(t *testing.T) {
 			in: "123.98",
 			tt: IntervalSecond,
 			want: &Interval{
-				timeparts: timeparts{
-					sec:  123,
-					nsec: 980000000,
-					prec: 6,
-				},
+				sec:  123,
+				nsec: 980000000,
+				prec: 6,
 				unit: IntervalSecond,
 			},
 		},
@@ -138,10 +130,8 @@ func TestParseInterval(t *testing.T) {
 	// Neg interval case
 	res := ParseInterval("123", IntervalSecond, true)
 	want := &Interval{
-		timeparts: timeparts{
-			sec:  -123,
-			prec: 6,
-		},
+		sec:  -123,
+		prec: 6,
 		unit: IntervalSecond,
 	}
 	assert.Equal(t, want, res)
@@ -157,10 +147,8 @@ func TestParseIntervalInt64(t *testing.T) {
 			in: 123,
 			tt: IntervalSecond,
 			want: &Interval{
-				timeparts: timeparts{
-					sec:  123,
-					prec: 0,
-				},
+				sec:  123,
+				prec: 0,
 				unit: IntervalSecond,
 			},
 		},
@@ -168,10 +156,8 @@ func TestParseIntervalInt64(t *testing.T) {
 			in: 1234,
 			tt: IntervalMicrosecond,
 			want: &Interval{
-				timeparts: timeparts{
-					nsec: 1234000,
-					prec: 6,
-				},
+				nsec: 1234000,
+				prec: 6,
 				unit: IntervalMicrosecond,
 			},
 		},
@@ -179,10 +165,8 @@ func TestParseIntervalInt64(t *testing.T) {
 			in: 35454,
 			tt: IntervalMinute,
 			want: &Interval{
-				timeparts: timeparts{
-					min:  35454,
-					prec: 0,
-				},
+				min:  35454,
+				prec: 0,
 				unit: IntervalMinute,
 			},
 		},
@@ -196,10 +180,8 @@ func TestParseIntervalInt64(t *testing.T) {
 	// Neg interval case
 	res := ParseIntervalInt64(123, IntervalSecond, true)
 	want := &Interval{
-		timeparts: timeparts{
-			sec:  -123,
-			prec: 0,
-		},
+		sec:  -123,
+		prec: 0,
 		unit: IntervalSecond,
 	}
 	assert.Equal(t, want, res)
@@ -215,11 +197,9 @@ func TestParseIntervalFloat(t *testing.T) {
 			in: 123.45,
 			tt: IntervalSecond,
 			want: &Interval{
-				timeparts: timeparts{
-					sec:  123,
-					nsec: 450000000,
-					prec: 6,
-				},
+				sec:  123,
+				nsec: 450000000,
+				prec: 6,
 				unit: IntervalSecond,
 			},
 		},
@@ -227,10 +207,8 @@ func TestParseIntervalFloat(t *testing.T) {
 			in: 12.34,
 			tt: IntervalMinute,
 			want: &Interval{
-				timeparts: timeparts{
-					min:  12,
-					prec: 0,
-				},
+				min:  12,
+				prec: 0,
 				unit: IntervalMinute,
 			},
 		},
@@ -238,10 +216,8 @@ func TestParseIntervalFloat(t *testing.T) {
 			in: 12.67,
 			tt: IntervalHour,
 			want: &Interval{
-				timeparts: timeparts{
-					hour: 13,
-					prec: 0,
-				},
+				hour: 13,
+				prec: 0,
 				unit: IntervalHour,
 			},
 		},
@@ -249,10 +225,8 @@ func TestParseIntervalFloat(t *testing.T) {
 			in: 12.67,
 			tt: IntervalMicrosecond,
 			want: &Interval{
-				timeparts: timeparts{
-					nsec: 13000,
-					prec: 6,
-				},
+				nsec: 13000,
+				prec: 6,
 				unit: IntervalMicrosecond,
 			},
 		},
@@ -260,10 +234,8 @@ func TestParseIntervalFloat(t *testing.T) {
 			in: 123,
 			tt: IntervalDay,
 			want: &Interval{
-				timeparts: timeparts{
-					day:  123,
-					prec: 0,
-				},
+				day:  123,
+				prec: 0,
 				unit: IntervalDay,
 			},
 		},
@@ -280,11 +252,9 @@ func TestParseIntervalFloat(t *testing.T) {
 	// Neg interval case
 	res := ParseIntervalFloat(123.4, IntervalSecond, true)
 	want := &Interval{
-		timeparts: timeparts{
-			sec:  -123,
-			nsec: -400000000,
-			prec: 6,
-		},
+		sec:  -123,
+		nsec: -400000000,
+		prec: 6,
 		unit: IntervalSecond,
 	}
 	assert.Equal(t, want, res)

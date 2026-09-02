@@ -20,6 +20,8 @@ import (
 	"context"
 	"net"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
@@ -50,6 +52,31 @@ func TestStartNoWaitCanceledWithMissingHook(t *testing.T) {
 
 	err := (&Mysqld{}).startNoWait(ctx, &Mycnf{})
 	require.ErrorIs(t, err, context.Canceled)
+}
+
+func TestNewMysqldContextCancellation(t *testing.T) {
+	mysqlRoot := t.TempDir()
+	require.NoError(t, os.Mkdir(filepath.Join(mysqlRoot, "bin"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(mysqlRoot, "bin", "mysqld"), []byte("#!/bin/sh\nsleep 60\n"), 0o755))
+	t.Setenv("VT_MYSQL_ROOT", mysqlRoot)
+
+	globalDBConfigs := dbconfigs.GlobalDBConfigs
+	dbconfigs.GlobalDBConfigs = dbconfigs.DBConfigs{}
+	t.Cleanup(func() {
+		dbconfigs.GlobalDBConfigs = globalDBConfigs
+	})
+	networkSocketFile := socketFile
+	socketFile = ""
+	t.Cleanup(func() {
+		socketFile = networkSocketFile
+	})
+
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	mysqld, err := newMysqld(ctx, &dbconfigs.DBConfigs{})
+	require.ErrorIs(t, err, context.Canceled)
+	require.Nil(t, mysqld)
 }
 
 func TestParseVersionString(t *testing.T) {
@@ -361,30 +388,37 @@ func TestGetVersionString(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-func TestGetVersionComment(t *testing.T) {
-	db := fakesqldb.New(t)
-	defer db.Close()
+// TestExecCmdWithContext verifies that execCmdWithContext is actually bound to its
+// context, so the mysqld --version fallback of GetVersionString can no longer
+// outlive a caller's deadline (e.g. holding the TabletManager action lock).
+func TestExecCmdWithContext(t *testing.T) {
+	if _, err := exec.LookPath("sleep"); err != nil {
+		t.Skip("sleep binary not available")
+	}
 
-	params := db.ConnParams()
-	cp := *params
-	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb")
+	t.Run("cancelled context returns promptly", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(t.Context())
+		cancel() // already cancelled
 
-	db.AddQuery("SELECT 1", &sqltypes.Result{})
-	db.AddQuery("select @@global.version_comment", sqltypes.MakeTestResult(sqltypes.MakeTestFields("@@global.version_comment", "varchar"), "test_version1", "test_version2"))
+		start := time.Now()
+		_, _, err := execCmdWithContext(ctx, "sleep", []string{"60"}, nil, "", nil)
+		elapsed := time.Since(start)
 
-	testMysqld := NewMysqld(dbc)
-	defer testMysqld.Close()
+		require.Error(t, err, "a cancelled context must not run the command to completion")
+		require.Less(t, elapsed, 30*time.Second, "the command must be killed rather than sleep for 60s")
+	})
 
-	ctx := t.Context()
-	_, err := testMysqld.GetVersionComment(ctx)
-	require.ErrorContains(t, err, "unexpected result length")
+	t.Run("expired deadline kills a long-running command", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(t.Context(), 100*time.Millisecond)
+		defer cancel()
 
-	ver := "test_version"
-	db.AddQuery("select @@global.version_comment", sqltypes.MakeTestResult(sqltypes.MakeTestFields("@@global.version_comment", "varchar"), ver))
+		start := time.Now()
+		_, _, err := execCmdWithContext(ctx, "sleep", []string{"60"}, nil, "", nil)
+		elapsed := time.Since(start)
 
-	str, err := testMysqld.GetVersionComment(ctx)
-	require.NoError(t, err)
-	assert.Equal(t, ver, str)
+		require.Error(t, err)
+		require.Less(t, elapsed, 30*time.Second, "the command must be killed at the deadline, not run for 60s")
+	})
 }
 
 func TestHostMetrics(t *testing.T) {

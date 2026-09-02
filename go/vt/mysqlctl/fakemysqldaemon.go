@@ -35,10 +35,10 @@ import (
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
-	"vitess.io/vitess/go/vt/proto/replicationdata"
 
 	mysqlctlpb "vitess.io/vitess/go/vt/proto/mysqlctl"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 )
 
@@ -358,11 +358,6 @@ func (fmd *FakeMysqlDaemon) GetMysqlPort(ctx context.Context) (int32, error) {
 	return fmd.MysqlPort.Load(), nil
 }
 
-// GetServerID is part of the MysqlDaemon interface.
-func (fmd *FakeMysqlDaemon) GetServerID(ctx context.Context) (uint32, error) {
-	return 1, nil
-}
-
 // GetServerUUID is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) GetServerUUID(ctx context.Context) (string, error) {
 	if fmd.ServerUUID != "" {
@@ -408,7 +403,8 @@ func (fmd *FakeMysqlDaemon) PrimaryStatus(ctx context.Context) (replication.Prim
 	}, nil
 }
 
-func (fmd *FakeMysqlDaemon) ReplicationConfiguration(ctx context.Context) (*replicationdata.Configuration, error) {
+// CollectFullStatusData is part of the MysqlDaemon interface.
+func (fmd *FakeMysqlDaemon) CollectFullStatusData(context.Context) (*replicationdatapb.FullStatus, error) {
 	return nil, nil
 }
 
@@ -428,13 +424,6 @@ func (fmd *FakeMysqlDaemon) ResetReplication(ctx context.Context) error {
 func (fmd *FakeMysqlDaemon) ResetReplicationParameters(ctx context.Context) error {
 	return fmd.ExecuteSuperQueryList(ctx, []string{
 		"FAKE RESET REPLICA ALL",
-	})
-}
-
-// GetBinlogInformation is part of the MysqlDaemon interface.
-func (fmd *FakeMysqlDaemon) GetBinlogInformation(ctx context.Context) (binlogFormat string, logEnabled bool, logReplicaUpdate bool, binlogRowImage string, err error) {
-	return "ROW", true, true, "FULL", fmd.ExecuteSuperQueryList(ctx, []string{
-		"FAKE select @@global",
 	})
 }
 
@@ -850,19 +839,9 @@ func (fmd *FakeMysqlDaemon) SemiSyncStatus(ctx context.Context) (bool, bool) {
 	return false, fmd.SemiSyncReplicaEnabled
 }
 
-// SemiSyncClients is part of the MysqlDaemon interface.
-func (fmd *FakeMysqlDaemon) SemiSyncClients(ctx context.Context) uint32 {
-	return 0
-}
-
 // SemiSyncExtensionLoaded is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) SemiSyncExtensionLoaded(ctx context.Context) (mysql.SemiSyncType, error) {
 	return mysql.SemiSyncTypeSource, nil
-}
-
-// SemiSyncSettings is part of the MysqlDaemon interface.
-func (fmd *FakeMysqlDaemon) SemiSyncSettings(ctx context.Context) (timeout uint64, numReplicas uint32) {
-	return 10000000, 1
 }
 
 // SemiSyncReplicationStatus is part of the MysqlDaemon interface.
@@ -879,11 +858,6 @@ func (fmd *FakeMysqlDaemon) IsSemiSyncBlocked(ctx context.Context) (bool, error)
 // GetVersionString is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) GetVersionString(ctx context.Context) (string, error) {
 	return fmd.Version, nil
-}
-
-// GetVersionComment is part of the MysqlDaemon interface.
-func (fmd *FakeMysqlDaemon) GetVersionComment(ctx context.Context) (string, error) {
-	return "", nil
 }
 
 func (fmd *FakeMysqlDaemon) HostMetrics(ctx context.Context, cnf *Mycnf) (*mysqlctlpb.HostMetricsResponse, error) {
