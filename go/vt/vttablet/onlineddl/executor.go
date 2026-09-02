@@ -3592,14 +3592,9 @@ func getInOrderCompletionPendingCount(onlineDDL *schema.OnlineDDL, pendingMigrat
 // vreplResumeInitialBackoff rather than hot-looping on every check — but
 // attempts is left untouched and the migration message is not rewritten,
 // since no resume was actually issued to report.
-//
-// Returns whether the resume was actually issued, so the caller can adopt
-// the now-running stream in the same tick: its snapshot still shows the
-// parked row, and the scheduler's conflict checks run before the next
-// review.
-func (e *Executor) maybeResumeVReplication(ctx context.Context, uuid string, s *VReplStream, state *vreplResumeState) bool {
+func (e *Executor) maybeResumeVReplication(ctx context.Context, uuid string, s *VReplStream, state *vreplResumeState) {
 	if !resumeBackoffElapsed(state, time.Now()) {
-		return false
+		return
 	}
 	// The caller holds migrationMutex, and the migration-check tick hands us
 	// an unbounded context: bound the topology lookup and the resume
@@ -3630,14 +3625,14 @@ func (e *Executor) maybeResumeVReplication(ctx context.Context, uuid string, s *
 		state.lastAttempt = time.Now()
 		log.Error("Online DDL: failed to get tablet for vreplication resume",
 			slog.String("uuid", uuid), slog.String("tablet", e.TabletAliasString()), slog.Any("error", err))
-		return false
+		return
 	}
 	res, err := e.vreplicationExec(ctx, tablet.Tablet, resumeVReplicationQuery(s.id, s.message))
 	if err != nil {
 		state.lastAttempt = time.Now()
 		log.Error("Online DDL: failed to resume vreplication stream",
 			slog.String("uuid", uuid), slog.String("tablet", e.TabletAliasString()), slog.Int64("stream_id", int64(s.id)), slog.Any("error", err))
-		return false
+		return
 	}
 	if res.RowsAffected == 0 {
 		// The stream is no longer in the state the resume decision was
@@ -3647,7 +3642,7 @@ func (e *Executor) maybeResumeVReplication(ctx context.Context, uuid string, s *
 		state.lastAttempt = time.Now()
 		log.Warn("Online DDL: vreplication stream no longer parked on the observed resumable error; skipping resume",
 			slog.String("uuid", uuid), slog.String("tablet", e.TabletAliasString()), slog.Int64("stream_id", int64(s.id)))
-		return false
+		return
 	}
 	state.attempts++
 	state.lastAttempt = time.Now()
@@ -3659,7 +3654,6 @@ func (e *Executor) maybeResumeVReplication(ctx context.Context, uuid string, s *
 		log.Error("Online DDL: failed to record automatic vreplication resume in the migration message",
 			slog.String("uuid", uuid), slog.String("tablet", e.TabletAliasString()), slog.Int64("stream_id", int64(s.id)), slog.Any("error", err))
 	}
-	return true
 }
 
 // resumeVReplicationQuery returns the statement resuming a stream parked on a
@@ -3912,16 +3906,16 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 					// cancelMigrations processes the queue.
 					return nil
 				case vreplStreamResume:
-					if e.maybeResumeVReplication(ctx, uuid, s, e.vreplicationResumeState[uuid]) {
-						// The stream was just flipped to Running, but this
-						// tick's snapshot still shows the parked row, so
-						// the adoption below is skipped — and
-						// runNextMigration runs before the next review, so
-						// without adopting here the resumed migration is
-						// invisible to the scheduler's conflict and
-						// concurrency checks for a full tick.
-						e.ownedRunningMigrations.Store(uuid, onlineDDL)
-					}
+					// A parked-resumable migration is live work for its
+					// whole recovery episode — it can stay in 'running'
+					// for the full resume budget — but its Error snapshot
+					// skips the normal adoption below, and
+					// runNextMigration runs before the next review: adopt
+					// it here, regardless of whether this tick's paced
+					// attempt is issued or succeeds, so the scheduler's
+					// conflict and concurrency checks see it.
+					e.ownedRunningMigrations.Store(uuid, onlineDDL)
+					e.maybeResumeVReplication(ctx, uuid, s, e.vreplicationResumeState[uuid])
 				}
 				if !s.isRunning() {
 					log.Info(fmt.Sprintf("migration %s in 'running' state but vreplication state is '%s'", uuid, s.state.String()))
