@@ -41,10 +41,12 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 	"vitess.io/vitess/go/vt/vttablet/tmclienttest"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
@@ -609,6 +611,18 @@ type fakeTabletManagerClient struct {
 
 func (fakeTabletManagerClient) Close() {}
 
+// stopFailingTabletManagerClient fails every VReplicationExec call,
+// simulating a stream stop RPC failure during migration termination.
+type stopFailingTabletManagerClient struct {
+	tmclient.TabletManagerClient
+}
+
+func (stopFailingTabletManagerClient) Close() {}
+
+func (stopFailingTabletManagerClient) VReplicationExec(ctx context.Context, tablet *topodatapb.Tablet, query string) (*querypb.QueryResult, error) {
+	return nil, errors.New("stop failed")
+}
+
 func (fakeTabletManagerClient) ReloadSchema(ctx context.Context, tablet *topodatapb.Tablet, waitPosition string) error {
 	return nil
 }
@@ -1037,6 +1051,46 @@ func TestForgetVReplStreamOrdering(t *testing.T) {
 		assert.Contains(t, e.vreplicationResumeState, uuid)
 		assert.Contains(t, e.vreplicationLastError, uuid)
 	})
+	t.Run("failed stream stop defers the terminal transition", func(t *testing.T) {
+		// When no delete follows, the graceful stop IS the termination: a
+		// swallowed stop failure would let the deferred transition durably
+		// fail the migration while its stream keeps applying changes,
+		// invisible to the running-migrations review until artifact GC.
+		// The stop failure must propagate so the transition is deferred
+		// and the next review tick re-drives the cancellation.
+		var terminalTransitionAttempted bool
+		e := newTrackedExecutor(func(ctx context.Context, query string) (*sqltypes.Result, error) {
+			if strings.HasPrefix(strings.TrimSpace(strings.ToUpper(query)), "UPDATE") {
+				if strings.Contains(query, "migration_status") {
+					terminalTransitionAttempted = true
+				}
+				return &sqltypes.Result{RowsAffected: 1}, nil
+			}
+			return sqltypes.MakeTestResult(
+				sqltypes.MakeTestFields("migration_uuid|migration_status|strategy", "varchar|varchar|varchar"),
+				uuid+"|running|vitess"), nil
+		})
+		protocolName := t.Name()
+		resetProtocol := tmclienttest.SetProtocol(t.Name(), protocolName)
+		defer resetProtocol()
+		tmclient.RegisterTabletManagerClientFactory(protocolName, func() tmclient.TabletManagerClient {
+			return &stopFailingTabletManagerClient{}
+		})
+		ts := memorytopo.NewServer(t.Context(), "cell")
+		require.NoError(t, ts.CreateTablet(t.Context(), &topodatapb.Tablet{
+			Alias:    &topodatapb.TabletAlias{Cell: "cell", Uid: 1},
+			Keyspace: "ks",
+			Shard:    "0",
+			Type:     topodatapb.TabletType_PRIMARY,
+		}))
+		e.ts = ts
+		_, err := e.CancelMigration(t.Context(), uuid, "internal cancel", false)
+		require.ErrorContains(t, err, "stop failed")
+		assert.False(t, terminalTransitionAttempted,
+			"the durable terminal transition must not run when the stream stop failed")
+		assert.Contains(t, e.vreplicationResumeState, uuid)
+		assert.Contains(t, e.vreplicationLastError, uuid)
+	})
 	t.Run("failed cancellation retains tracking", func(t *testing.T) {
 		e := newTrackedExecutor(func(ctx context.Context, query string) (*sqltypes.Result, error) {
 			// The cancelled_timestamp UPDATE fails; the SELECT that
@@ -1054,6 +1108,74 @@ func TestForgetVReplStreamOrdering(t *testing.T) {
 		assert.Contains(t, e.vreplicationResumeState, uuid,
 			"a cancellation that failed before any durable transition must not clear the episode")
 		assert.Contains(t, e.vreplicationLastError, uuid)
+	})
+}
+
+// TestReviewRunningMigrationsNilStreamCancellation pins the re-drive path
+// for a migration whose vreplication stream is absent: an unfulfilled
+// cancellation intent (cancelled_timestamp written, terminal transition
+// never landed — e.g. a CancelMigration interrupted between the intent
+// write and the transition) has no stream-side review to convert it, so
+// the running-migrations review must emit the cancellation itself; without
+// this the migration would stay in 'running' until the stale-migration
+// fallback. A nil-stream migration without recorded intent stays untouched
+// — a starting migration's stream may simply not exist yet.
+func TestReviewRunningMigrationsNilStreamCancellation(t *testing.T) {
+	uuid := "1cbcd662_8ed6_11ee_bc8f_0a43f95f28a3"
+	env := tabletenv.NewEnv(vtenv.NewTestEnv(), tabletenv.NewDefaultConfig(), "ExecutorTest")
+	alias := &topodatapb.TabletAlias{Cell: "cell", Uid: 1}
+	newReviewExecutor := func(migrationFields, migrationTypes, migrationRow string) *Executor {
+		e := &Executor{
+			env:                     env,
+			tabletAlias:             alias,
+			vreplicationLastError:   map[string]*vterrors.LastError{},
+			vreplicationResumeState: map[string]*vreplResumeState{},
+			ticks:                   timer.NewTimer(time.Hour),
+			lagThrottler: throttle.NewThrottler(env, nil, nil, alias, nil,
+				func() topodatapb.TabletType { return topodatapb.TabletType_PRIMARY }, "TestPool"),
+			execQuery: func(ctx context.Context, query string) (*sqltypes.Result, error) {
+				q := strings.ToLower(query)
+				switch {
+				case strings.Contains(q, "migration_status='running'"):
+					return sqltypes.MakeTestResult(
+						sqltypes.MakeTestFields("migration_uuid", "varchar"), uuid), nil
+				case strings.Contains(q, "in ('queued', 'ready', 'running')"):
+					return &sqltypes.Result{}, nil
+				case strings.Contains(q, "from _vt.vreplication"):
+					// The stream is absent.
+					return &sqltypes.Result{}, nil
+				case strings.HasPrefix(strings.TrimSpace(q), "select") && strings.Contains(q, "migration_uuid="):
+					return sqltypes.MakeTestResult(
+						sqltypes.MakeTestFields(migrationFields, migrationTypes), migrationRow), nil
+				default:
+					return &sqltypes.Result{}, nil
+				}
+			},
+		}
+		e.isOpen.Store(1)
+		return e
+	}
+
+	t.Run("pending cancellation intent is re-driven", func(t *testing.T) {
+		e := newReviewExecutor(
+			"migration_uuid|migration_status|strategy|cancelled_timestamp",
+			"varchar|varchar|varchar|varchar",
+			uuid+"|running|vitess|2026-09-02 17:00:00")
+		_, cancellable, err := e.reviewRunningMigrations(t.Context())
+		require.NoError(t, err)
+		require.Len(t, cancellable, 1,
+			"a nil-stream migration with recorded cancellation intent must be re-driven to its terminal state")
+		assert.Equal(t, uuid, cancellable[0].uuid)
+	})
+	t.Run("no recorded intent leaves the migration untouched", func(t *testing.T) {
+		e := newReviewExecutor(
+			"migration_uuid|migration_status|strategy",
+			"varchar|varchar|varchar",
+			uuid+"|running|vitess")
+		_, cancellable, err := e.reviewRunningMigrations(t.Context())
+		require.NoError(t, err)
+		assert.Empty(t, cancellable,
+			"a nil-stream migration without cancellation intent must not be cancelled")
 	})
 }
 

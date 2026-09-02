@@ -745,9 +745,17 @@ func (e *Executor) terminateVReplMigration(ctx context.Context, uuid string, del
 	if err != nil {
 		return err
 	}
-	// silently skip error; stopping the stream is just a graceful act; later deleting it is more important
+	// When a delete follows below, the stop is just a graceful act and its
+	// failure is only logged: the delete is what terminates the stream.
+	// Without a delete the stop IS the termination, so its failure must
+	// propagate: terminateMigration's callers gate the durable terminal
+	// transition on this result (see CancelMigration), and swallowing it
+	// would fail the migration while its stream keeps applying changes.
 	if _, err := e.vreplicationExec(ctx, tablet.Tablet, query); err != nil {
 		log.Error(fmt.Sprintf("FAIL vreplicationExec: uuid=%s, query=%v, error=%v", uuid, query, err))
+		if !deleteEntry {
+			return err
+		}
 	}
 	if deleteEntry {
 		if err := e.deleteVReplicationEntry(ctx, uuid); err != nil {
@@ -3777,6 +3785,17 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 					e.triggerNextCheckInterval()
 				}
 				if s == nil {
+					// No stream to observe is benign — a starting
+					// migration's stream may not exist yet. But an
+					// unfulfilled cancellation intent (cancelled_timestamp
+					// written, terminal transition never landed, e.g. a
+					// CancelMigration that failed between the intent write
+					// and the transition) has no stream-side review to
+					// convert it, so this is the only path that can
+					// re-drive it to its terminal state.
+					if !migrationRow["cancelled_timestamp"].IsNull() {
+						cancellable = append(cancellable, newCancellableMigration(uuid, "cancellation requested; vreplication stream not found"))
+					}
 					return nil
 				}
 				action := resolveVReplStreamAction(
