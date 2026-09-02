@@ -236,7 +236,7 @@ func TestWorkflowCompleteCallsMoveTablesComplete(t *testing.T) {
 	assert.True(t, inner.GetKeepData())
 }
 
-func TestWorkflowCompleteKeepDataDefaultsFalse(t *testing.T) {
+func TestWorkflowCompleteKeepDataDefaultsNil(t *testing.T) {
 	fake := &workflowActionsFakeServer{}
 	s := newWorkflowActionsTestServer(t, fake, false)
 
@@ -244,7 +244,19 @@ func TestWorkflowCompleteKeepDataDefaultsFalse(t *testing.T) {
 
 	assert.Equal(t, http.StatusSeeOther, rec.Code)
 	require.NotNil(t, fake.moveTablesCompleteReq)
-	assert.False(t, fake.moveTablesCompleteReq.GetRequest().GetKeepData())
+	assert.Nil(t, fake.moveTablesCompleteReq.GetRequest().KeepData)
+}
+
+func TestWorkflowCompleteReverseKeepDataDefaultsNil(t *testing.T) {
+	fake := &workflowActionsFakeServer{}
+	s := newWorkflowActionsTestServer(t, fake, false)
+
+	rec := postShardForm(t, s, "/workflow/local/sales/users_to_sales_reverse/complete", url.Values{})
+
+	assert.Equal(t, http.StatusSeeOther, rec.Code)
+	require.NotNil(t, fake.moveTablesCompleteReq)
+	assert.Equal(t, "users_to_sales_reverse", fake.moveTablesCompleteReq.GetRequest().GetWorkflow())
+	assert.Nil(t, fake.moveTablesCompleteReq.GetRequest().KeepData)
 }
 
 func TestWorkflowCompleteRejectsUnsupportedTypes(t *testing.T) {
