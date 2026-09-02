@@ -756,7 +756,10 @@ func testRestOfWorkflow(t *testing.T) {
 	waitForLowLag(t, defaultTargetKs, "wf1")
 	// Switching writes forward while reads are still on the source is now
 	// refused (it would strand reads on a source that no longer takes writes).
-	require.Error(t, tstWorkflowAction(t, workflowActionSwitchTraffic, "primary", ""))
+	// Assert the specific ordering error so a transient failure can't masquerade
+	// as the guard firing.
+	err = tstWorkflowAction(t, workflowActionSwitchTraffic, "primary", "")
+	require.ErrorContains(t, err, "before reads are switched")
 	// --force overrides the guard to reach the writes-switched state exercised below.
 	tstWorkflowSwitchWritesForced(t)
 	checkStates(t, wrangler.WorkflowStateNotSwitched, wrangler.WorkflowStateWritesSwitched)
@@ -938,7 +941,8 @@ func moveCustomerTableSwitchFlows(t *testing.T, cells []*Cell, sourceCellOrAlias
 		moveTablesAndWait()
 
 		validateWritesRouteToSource(t)
-		switchWrites(t, workflowType, ksWorkflow, false)
+		// Reads are still on the source here, so switching writes first requires --force.
+		switchWrites(t, workflowType, ksWorkflow, false, "--force")
 		validateWritesRouteToTarget(t)
 
 		validateReadsRouteToSource(t, "replica")
@@ -975,7 +979,8 @@ func moveCustomerTableSwitchFlows(t *testing.T, cells []*Cell, sourceCellOrAlias
 		moveTablesAndWait()
 
 		validateWritesRouteToSource(t)
-		switchWrites(t, workflowType, ksWorkflow, false)
+		// Reads are still on the source here, so switching writes first requires --force.
+		switchWrites(t, workflowType, ksWorkflow, false, "--force")
 		validateWritesRouteToTarget(t)
 
 		switchWrites(t, workflowType, ksWorkflow, true)

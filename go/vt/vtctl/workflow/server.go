@@ -2880,24 +2880,59 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 
 	// Don't switch writes forward while leaving reads on the source. Moving writes
 	// while any read type stays on the source strands those reads and, for a Reshard,
-	// makes the workflow uncompletable. Flag each read type this request does not itself
-	// switch and that is still on the source; read types included in the request are
-	// left to switchReads, which normalizes tablet types (e.g. adding RDONLY when no
-	// rdonly tablets exist) and cells. --force overrides. Evaluated on freshly reloaded
-	// state under the workflow lock, so it is serialized against concurrent switches
-	// rather than relying on the pre-lock state.
+	// makes the workflow uncompletable. For each read type, work out the cells that
+	// would still be on the source after this request's read switches (including the
+	// cells this request does not target) and flag any that remain. --force overrides.
+	// Evaluated on freshly reloaded state under the workflow lock, so it is serialized
+	// against concurrent switches rather than relying on the pre-lock state.
 	if TrafficSwitchDirection(req.Direction) == DirectionForward && switchPrimary {
 		_, lockedState, stateErr := s.getWorkflowState(ctx, req.Keyspace, req.Workflow)
 		if stateErr != nil {
 			return nil, stateErr
 		}
+		// cellsStrandedOnSource returns the cells still on the source after this
+		// request. If the request does not switch the type, every not-switched cell
+		// remains; if it does, only cells outside req.Cells remain (empty req.Cells
+		// means all cells, so nothing remains).
+		cellsStrandedOnSource := func(switchedByReq bool, notSwitched []string) []string {
+			if len(notSwitched) == 0 {
+				return nil
+			}
+			if !switchedByReq {
+				return notSwitched
+			}
+			if len(req.Cells) == 0 {
+				return nil
+			}
+			reqCells := make(map[string]bool, len(req.Cells))
+			for _, c := range req.Cells {
+				reqCells[c] = true
+			}
+			var stranded []string
+			for _, c := range notSwitched {
+				if !reqCells[c] {
+					stranded = append(stranded, c)
+				}
+			}
+			return stranded
+		}
 		var readsNotSwitched []string
 		if !lockedState.WritesSwitched {
-			if !switchReplica && len(lockedState.ReplicaCellsNotSwitched) > 0 {
-				readsNotSwitched = append(readsNotSwitched, fmt.Sprintf("REPLICA (cells: %s)", strings.Join(lockedState.ReplicaCellsNotSwitched, ",")))
+			if stranded := cellsStrandedOnSource(switchReplica, lockedState.ReplicaCellsNotSwitched); len(stranded) > 0 {
+				readsNotSwitched = append(readsNotSwitched, fmt.Sprintf("REPLICA (cells: %s)", strings.Join(stranded, ",")))
 			}
-			if !switchRdonly && len(lockedState.RdonlyCellsNotSwitched) > 0 {
-				readsNotSwitched = append(readsNotSwitched, fmt.Sprintf("RDONLY (cells: %s)", strings.Join(lockedState.RdonlyCellsNotSwitched, ",")))
+			// switchReads auto-adds RDONLY when replica reads are being switched and
+			// the targeted cells have no rdonly tablets, so RDONLY is not stranded then.
+			rdonlySwitchedByReq := switchRdonly
+			if switchReplica && !switchRdonly {
+				rdonlyTabletsExist, err := topotools.DoCellsHaveRdonlyTablets(ctx, s.ts, req.Cells)
+				if err != nil {
+					return nil, err
+				}
+				rdonlySwitchedByReq = !rdonlyTabletsExist
+			}
+			if stranded := cellsStrandedOnSource(rdonlySwitchedByReq, lockedState.RdonlyCellsNotSwitched); len(stranded) > 0 {
+				readsNotSwitched = append(readsNotSwitched, fmt.Sprintf("RDONLY (cells: %s)", strings.Join(stranded, ",")))
 			}
 		}
 		if len(readsNotSwitched) > 0 {

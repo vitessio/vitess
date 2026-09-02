@@ -1750,7 +1750,11 @@ func switchReads(t *testing.T, workflowType, cells, ksWorkflow string, reverse b
 	require.NoError(t, err, "%s Error: %s: %s", command, err, output)
 }
 
-func switchWrites(t *testing.T, workflowType, ksWorkflow string, reverse bool) {
+// switchWrites switches (or reverses) write traffic. extraArgs are appended to
+// the command; callers that switch writes before reads pass "--force" to bypass
+// the read-ordering guard. Callers that switch reads first pass nothing so they
+// still exercise the normal guarded path.
+func switchWrites(t *testing.T, workflowType, ksWorkflow string, reverse bool, extraArgs ...string) {
 	if workflowType != binlogdatapb.VReplicationWorkflowType_MoveTables.String() &&
 		workflowType != binlogdatapb.VReplicationWorkflowType_Reshard.String() {
 		require.FailNowf(t, "Invalid workflow type for SwitchTraffic, must be MoveTables or Reshard",
@@ -1764,18 +1768,12 @@ func switchWrites(t *testing.T, workflowType, ksWorkflow string, reverse bool) {
 	ensureCanSwitch(t, workflowType, "", ksWorkflow)
 	defaultTargetKs, workflow, found := strings.Cut(ksWorkflow, ".")
 	require.True(t, found)
-	// Forward writes-only switches are refused when reads are still on the source,
-	// so pass --force here. Callers that switch reads first are unaffected by it.
-	var forceArgs []string
-	if !reverse {
-		forceArgs = append(forceArgs, "--force")
-	}
 	if workflowType == binlogdatapb.VReplicationWorkflowType_MoveTables.String() {
-		moveTablesAction(t, command, defaultCellName, workflow, defaultSourceKs, defaultTargetKs, "", append([]string{"--timeout=" + SwitchWritesTimeout, "--tablet-types=primary"}, forceArgs...)...)
+		moveTablesAction(t, command, defaultCellName, workflow, defaultSourceKs, defaultTargetKs, "", append([]string{"--timeout=" + SwitchWritesTimeout, "--tablet-types=primary"}, extraArgs...)...)
 		return
 	}
 	output, err := vc.VtctldClient.ExecuteCommandWithOutput(append([]string{workflowType, "--tablet-types=primary", "--workflow", workflow,
-		"--target-keyspace", defaultTargetKs, command, "--timeout=" + SwitchWritesTimeout, "--initialize-target-sequences"}, forceArgs...)...)
+		"--target-keyspace", defaultTargetKs, command, "--timeout=" + SwitchWritesTimeout, "--initialize-target-sequences"}, extraArgs...)...)
 	if output != "" {
 		fmt.Printf("Output of switching writes with vtctldclient for %s:\n++++++\n%s\n--------\n", ksWorkflow, output)
 	}
