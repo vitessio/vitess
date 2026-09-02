@@ -968,6 +968,9 @@ func TestReviewVReplStreamError(t *testing.T) {
 		assert.Equal(t, vreplStreamResume, e.reviewVReplStreamError(uuid, parkedStream, now))
 		require.Contains(t, e.vreplicationResumeState, uuid)
 		assert.Equal(t, now, e.vreplicationResumeState[uuid].firstParked)
+		// reviewRunningMigrations issues the resume in the same tick,
+		// stamping lastAttempt; model that here.
+		e.vreplicationResumeState[uuid].lastAttempt = now
 
 		// The post-resume clean row at the same position keeps the episode.
 		assert.Equal(t, vreplStreamNoAction, e.reviewVReplStreamError(uuid, syntheticCleanStream, now.Add(time.Minute)))
@@ -978,9 +981,77 @@ func TestReviewVReplStreamError(t *testing.T) {
 		// Re-parking within the budget keeps resuming on the original clock.
 		assert.Equal(t, vreplStreamResume, e.reviewVReplStreamError(uuid, parkedStream, now.Add(30*time.Minute)))
 		assert.Equal(t, now, e.vreplicationResumeState[uuid].firstParked)
+		e.vreplicationResumeState[uuid].lastAttempt = now.Add(30 * time.Minute)
 		assert.Equal(t, vreplStreamNoAction, e.reviewVReplStreamError(uuid, syntheticCleanStream, now.Add(31*time.Minute)))
 
 		// Exhaustion is measured from the original park, not the last one.
 		assert.Equal(t, vreplStreamCancel, e.reviewVReplStreamError(uuid, parkedStream, now.Add(staleMigrationFailMinutes*time.Minute)))
+	})
+	t.Run("copy-phase progress ends the episode without a position change", func(t *testing.T) {
+		// During the copy phase rows_copied advances while pos can stay
+		// fixed: advancing row-copy checkpoints are real forward progress
+		// and must end the episode, so a much later error starts a fresh
+		// budget instead of cancelling a productive migration.
+		e := newExecutor()
+		pos := "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-42"
+		parkedStream := &VReplStream{
+			state:      binlogdatapb.VReplicationWorkflowState_Error,
+			message:    vreplication.RetriesExhaustedIndicator + ": connection refused",
+			pos:        pos,
+			rowsCopied: 100,
+		}
+		copyingStream := &VReplStream{
+			state:      binlogdatapb.VReplicationWorkflowState_Copying,
+			pos:        pos,
+			rowsCopied: 5000,
+		}
+
+		assert.Equal(t, vreplStreamResume, e.reviewVReplStreamError(uuid, parkedStream, now))
+		e.vreplicationResumeState[uuid].lastAttempt = now
+
+		assert.Equal(t, vreplStreamNoAction, e.reviewVReplStreamError(uuid, copyingStream, now.Add(time.Minute)))
+		assert.NotContains(t, e.vreplicationResumeState, uuid,
+			"advancing rows_copied is forward progress and must end the episode")
+
+		// A later park starts a fresh episode with a fresh budget.
+		later := now.Add(staleMigrationFailMinutes * time.Minute)
+		assert.Equal(t, vreplStreamResume, e.reviewVReplStreamError(uuid, parkedStream, later))
+		assert.Equal(t, later, e.vreplicationResumeState[uuid].firstParked)
+	})
+	t.Run("clean stream past the recovery grace ends the episode", func(t *testing.T) {
+		// A caught-up stream on an idle source advances neither pos nor
+		// rows_copied, yet it is healthy. A clean observation well past the
+		// last resume attempt cannot be the synthetic post-resume row
+		// (that window is seconds wide), so it ends the episode: a later
+		// error must start a fresh budget rather than cancel against an
+		// hours-old firstParked.
+		e := newExecutor()
+		pos := "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-42"
+		parkedStream := &VReplStream{
+			state:   binlogdatapb.VReplicationWorkflowState_Error,
+			message: vreplication.RetriesExhaustedIndicator + ": connection refused",
+			pos:     pos,
+		}
+		idleCleanStream := &VReplStream{
+			state: binlogdatapb.VReplicationWorkflowState_Running,
+			pos:   pos,
+		}
+
+		assert.Equal(t, vreplStreamResume, e.reviewVReplStreamError(uuid, parkedStream, now))
+		e.vreplicationResumeState[uuid].lastAttempt = now
+
+		// Within the grace of the resume attempt: retained (could be the
+		// synthetic row).
+		assert.Equal(t, vreplStreamNoAction, e.reviewVReplStreamError(uuid, idleCleanStream, now.Add(vreplResumeRecoveryGrace-time.Second)))
+		require.Contains(t, e.vreplicationResumeState, uuid)
+
+		// Past the grace: genuinely recovered, episode over.
+		assert.Equal(t, vreplStreamNoAction, e.reviewVReplStreamError(uuid, idleCleanStream, now.Add(vreplResumeRecoveryGrace)))
+		assert.NotContains(t, e.vreplicationResumeState, uuid)
+
+		// A later park starts a fresh episode with a fresh budget.
+		later := now.Add(staleMigrationFailMinutes * time.Minute)
+		assert.Equal(t, vreplStreamResume, e.reviewVReplStreamError(uuid, parkedStream, later))
+		assert.Equal(t, later, e.vreplicationResumeState[uuid].firstParked)
 	})
 }

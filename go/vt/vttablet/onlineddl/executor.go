@@ -185,13 +185,17 @@ type vreplResumeState struct {
 	// the stream was observed parked on a resumable terminal error since
 	// the last full recovery. It bounds the episode's resume budget.
 	firstParked time.Time
-	// parkedPos is the stream's position when the episode began. A
-	// just-issued resume rewrites the stream to a clean Running row before
-	// any work happens, so an error-free observation alone does not mean
-	// recovery: only an advanced position does. Without this marker every
-	// park/resume/park cycle would restamp firstParked and renew the
-	// resume budget indefinitely.
-	parkedPos string
+	// parkedPos and parkedRowsCopied are the stream's position and row-copy
+	// count when the episode began. A just-issued resume rewrites the
+	// stream to a clean Running row before any work happens, so an
+	// error-free observation alone does not mean recovery: forward progress
+	// past either marker does (the copy phase advances rows_copied while
+	// pos can stay fixed), as does a clean observation past
+	// vreplResumeRecoveryGrace since the last resume attempt. Without
+	// these markers every park/resume/park cycle would restamp firstParked
+	// and renew the resume budget indefinitely.
+	parkedPos        string
+	parkedRowsCopied int64
 }
 
 // resumeBudgetExhausted reports whether the current error episode has
@@ -209,6 +213,17 @@ func resumeBudgetExhausted(state *vreplResumeState, now time.Time) bool {
 const (
 	vreplResumeInitialBackoff = 1 * time.Minute
 	vreplResumeMaxBackoff     = 15 * time.Minute
+	// vreplResumeRecoveryGrace is how long after the last resume attempt an
+	// error-free observation is still treated as the synthetic clean row a
+	// resume itself writes (StartVReplication clears the state and message
+	// before the stream does any work). Past the grace, a clean stream is
+	// genuinely recovered even when neither its position nor its row-copy
+	// count moved — a caught-up stream on an idle source advances neither.
+	// The synthetic window is only seconds wide (the stream's own retries
+	// re-stamp an error message well within a minute), so the grace just
+	// needs to comfortably exceed it while staying far below the resume
+	// budget.
+	vreplResumeRecoveryGrace = 5 * time.Minute
 )
 
 // vreplStreamAction is reviewVReplStreamError's decision on what
@@ -3502,11 +3517,22 @@ func (e *Executor) reviewVReplStreamError(uuid string, s *VReplStream, now time.
 	if vreplError == nil {
 		// The stream reports no error — but a just-issued resume looks
 		// exactly like this (StartVReplication clears the state and the
-		// message) before the stream has done any work, so only forward
-		// progress past the episode's parked position counts as recovery.
-		// Clearing on the synthetic clean row would let every
-		// park/resume/park cycle renew the resume budget indefinitely.
-		if state, ok := e.vreplicationResumeState[uuid]; !ok || s.pos != state.parkedPos {
+		// message) before the stream has done any work, so an error-free
+		// observation alone must not end the episode: every
+		// park/resume/park cycle would renew the resume budget
+		// indefinitely. Recovery is: forward progress past the parked
+		// position or row-copy checkpoint (the copy phase advances
+		// rows_copied while pos stays fixed), or a clean observation past
+		// the recovery grace of the last resume attempt — well beyond the
+		// seconds-wide synthetic window — which covers a healthy caught-up
+		// stream on an idle source, where neither marker moves.
+		state, ok := e.vreplicationResumeState[uuid]
+		recovered := !ok ||
+			s.pos != state.parkedPos ||
+			s.rowsCopied > state.parkedRowsCopied ||
+			state.lastAttempt.IsZero() ||
+			now.Sub(state.lastAttempt) >= vreplResumeRecoveryGrace
+		if recovered {
 			delete(e.vreplicationResumeState, uuid)
 		}
 	}
@@ -3516,7 +3542,7 @@ func (e *Executor) reviewVReplStreamError(uuid string, s *VReplStream, now time.
 	case isResumable:
 		state, ok := e.vreplicationResumeState[uuid]
 		if !ok {
-			state = &vreplResumeState{parkedPos: s.pos}
+			state = &vreplResumeState{parkedPos: s.pos, parkedRowsCopied: s.rowsCopied}
 			e.vreplicationResumeState[uuid] = state
 		}
 		if state.firstParked.IsZero() {
