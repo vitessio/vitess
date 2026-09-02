@@ -91,23 +91,9 @@ func ParseMysql56GTIDSet(s string) (Mysql56GTIDSet, error) {
 			return nil, vterrors.Wrapf(err, "invalid MySQL 5.6 GTID set (%q)", s)
 		}
 
-		// The capacity is only a hint to append, so bounding it cannot change the
-		// parsed result. It is bounded because the hint is derived from untrusted
-		// input: a valid SID followed by a long run of colons would otherwise
-		// reserve one interval per colon before any interval is parsed, and
-		// parseInterval below rejects the very first one.
-		//
-		// The bound is a fraction of the remaining input rather than a constant, so
-		// a genuinely long interval list still gets an exact hint. parseInterval
-		// accepts a singleton "N" as well as a range "N-M", so the shortest interval
-		// that contributes an element is two bytes including its separator ("1:"),
-		// and duplicates are retained rather than merged. Dividing by more than two
-		// would under-reserve a valid singleton list such as "1:1:1:..." and force
-		// append to grow and copy: measured at 100k singletons, a len(tail)/4 bound
-		// allocated 6,685,104 bytes against 1,606,032 for the unbounded hint, a
-		// 4.16x regression on valid input. Two is therefore the tightest correct
-		// divisor, and it still cuts a 1MiB colon run from 19,963,872 bytes to
-		// 11,036,616.
+		// The hint is derived from untrusted input, so bound it: the densest valid
+		// interval list is one singleton per two bytes ("1:"), and a smaller divisor
+		// would under-reserve that.
 		nIntervals := strings.Count(tail, ":") + 1
 		if max := len(tail)/2 + 1; nIntervals > max {
 			nIntervals = max
