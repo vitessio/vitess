@@ -23,9 +23,31 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/fakesqldb"
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
 )
+
+// A connection error during ExecuteFetchMulti must mark the connection closed,
+// like ExecuteFetch does, so a pool never recycles a dead connection whose
+// IsClosed still reports false.
+func TestDBConnectionExecuteFetchMultiConnError(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+
+	params := dbconfigs.New(db.ConnParams())
+	conn, err := NewDBConnection(t.Context(), params)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	sql := "select intval from test_table"
+	db.AddRejectedQuery(sql, sqlerror.NewSQLError(sqlerror.CRServerLost, sqlerror.SSUnknownSQLState, "Lost connection to MySQL server during query"))
+
+	_, _, err = conn.ExecuteFetchMulti(sql, 10, false)
+	require.Error(t, err)
+	require.ErrorContains(t, err, "Lost connection to MySQL server during query")
+	require.True(t, conn.IsClosed(), "a connection error must mark the connection closed so it is not reused")
+}
 
 // TestExecuteStreamFetchCarriesOKPacket verifies that ExecuteStreamFetch forwards
 // the OK-packet RowsAffected and InsertID to the callback for a query that
