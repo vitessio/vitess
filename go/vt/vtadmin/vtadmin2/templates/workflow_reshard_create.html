@@ -26,15 +26,19 @@
   <h2>Reshard details</h2>
   <form method="POST" action="/workflows/reshard/create" class="form-grid">
     <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
+    <input type="hidden" name="cluster_id" value="{{ $d.SelectedCluster }}">
 
     <label>
       Cluster
-      <select name="cluster_id" required>
-        {{ range $d.Form.Clusters }}
-        <option value="{{ .GetId }}"{{ if eq .GetId $d.SelectedCluster }} selected{{ end }}>{{ .GetName }} ({{ .GetId }})</option>
-        {{ end }}
-      </select>
+      {{ range $d.Form.Clusters }}
+      {{ if eq .GetId $d.SelectedCluster }}
+      <span>{{ .GetName }} ({{ .GetId }})</span>
+      {{ end }}
+      {{ end }}
     </label>
+    {{ if gt (len $d.Form.Clusters) 1 }}
+    <p class="muted"><a href="/workflows/reshard/create">Choose a different cluster</a></p>
+    {{ end }}
     <label>
       Workflow name
       <input type="text" name="workflow" required autocomplete="off">

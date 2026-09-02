@@ -562,6 +562,8 @@ func TestCreateMigrationFormRendersOptions(t *testing.T) {
 	require.Equal(t, http.StatusOK, rec.Code)
 	body := rec.Body.String()
 
+	assert.Contains(t, body, `type="hidden" name="cluster_id" value="local"`)
+	assert.NotContains(t, body, `<select name="cluster_id"`)
 	assert.Contains(t, body, `name="keyspace"`)
 	assert.Contains(t, body, `name="sql"`)
 	assert.Contains(t, body, `name="ddl_strategy"`)
@@ -584,6 +586,38 @@ func TestCreateMigrationFormReadOnly(t *testing.T) {
 
 	assert.Equal(t, http.StatusForbidden, rec.Code)
 	assert.Nil(t, fake.applySchemaReq)
+}
+
+func TestCreateMigrationFormMultiClusterPicksClusterFirst(t *testing.T) {
+	fake := &multiClusterFakeServer{}
+	s, err := NewServer(fake, Options{})
+	require.NoError(t, err)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, createMigrationPath, nil)
+	s.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	assert.NotContains(t, rec.Body.String(), `name="sql"`)
+	assert.Contains(t, rec.Body.String(), "/migrations/create?cluster_id=local")
+	assert.Contains(t, rec.Body.String(), "/migrations/create?cluster_id=prod")
+}
+
+func TestCreateMigrationFormLocksSelectedCluster(t *testing.T) {
+	fake := &multiClusterFakeServer{}
+	s, err := NewServer(fake, Options{})
+	require.NoError(t, err)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, createMigrationPath+"?cluster_id=prod", nil)
+	s.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	body := rec.Body.String()
+	assert.Contains(t, body, `type="hidden" name="cluster_id" value="prod"`)
+	assert.NotContains(t, body, `<select name="cluster_id"`)
+	assert.Contains(t, body, `name="sql"`)
+	assert.Contains(t, body, `href="/migrations/create">`)
 }
 
 func TestCreateMigrationPostRedirectsToMigrations(t *testing.T) {
@@ -696,6 +730,23 @@ func TestCreateReshardFormMultiClusterPicksClusterFirst(t *testing.T) {
 	assert.Contains(t, rec.Body.String(), "/workflows/reshard/create?cluster_id=prod")
 }
 
+func TestCreateReshardFormLocksSelectedCluster(t *testing.T) {
+	fake := &multiClusterFakeServer{}
+	s, err := NewServer(fake, Options{})
+	require.NoError(t, err)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, createReshardPath+"?cluster_id=prod", nil)
+	s.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	body := rec.Body.String()
+	assert.Contains(t, body, `name="workflow"`)
+	assert.Contains(t, body, `type="hidden" name="cluster_id" value="prod"`)
+	assert.NotContains(t, body, `<select name="cluster_id"`)
+	assert.Contains(t, body, `href="/workflows/reshard/create">`)
+}
+
 type multiClusterFakeServer struct {
 	workflowCreateFakeServer
 }
@@ -727,6 +778,8 @@ func TestCreateReshardFormRendersOptions(t *testing.T) {
 	// In a single-cluster setup the default cluster must be resolved so the
 	// keyspace select is populated without ?cluster_id in the URL.
 	assert.Contains(t, body, `<option value="commerce"`)
+	assert.Contains(t, body, `type="hidden" name="cluster_id" value="local"`)
+	assert.NotContains(t, body, `<select name="cluster_id"`)
 	assert.Contains(t, body, `name="workflow"`)
 	assert.Contains(t, body, `name="keyspace"`)
 	assert.Contains(t, body, `name="source_shards"`)

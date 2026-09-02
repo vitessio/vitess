@@ -11,22 +11,37 @@
 
 <p class="muted">Applies DDL to a keyspace through Vitess's online schema migration (or directly, depending on the DDL strategy). <a href="https://vitess.io/docs/user-guides/schema-changes/" target="_blank" rel="noopener noreferrer">Schema changes user guide</a>.</p>
 
+{{ if $d.PickCluster }}
+<div class="card">
+  <h2>Choose a cluster</h2>
+  <p class="muted">Keyspaces are per cluster. Pick the cluster you want to migrate:</p>
+  <div class="toolbar-links">
+    {{ range $d.Form.Clusters }}
+    <a class="button" href="/migrations/create?cluster_id={{ pathEscape .GetId }}">{{ .GetName }} ({{ .GetId }})</a>
+    {{ end }}
+  </div>
+</div>
+{{ else }}
 <div class="card">
   <form method="POST" action="/migrations/create" class="form-grid">
     <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
+    <input type="hidden" name="cluster_id" value="{{ $d.SelectedCluster }}">
 
     <label>
       Cluster
-      <select name="cluster_id" required>
-        {{ range $d.Clusters }}
-        <option value="{{ .GetId }}"{{ if eq .GetId $d.SelectedCluster }} selected{{ end }}>{{ .GetName }} ({{ .GetId }})</option>
-        {{ end }}
-      </select>
+      {{ range $d.Form.Clusters }}
+      {{ if eq .GetId $d.SelectedCluster }}
+      <span>{{ .GetName }} ({{ .GetId }})</span>
+      {{ end }}
+      {{ end }}
     </label>
+    {{ if gt (len $d.Form.Clusters) 1 }}
+    <p class="muted"><a href="/migrations/create">Choose a different cluster</a></p>
+    {{ end }}
     <label>
       Keyspace
       <select name="keyspace" required>
-        {{ range $d.Keyspaces }}
+        {{ range $d.Form.Keyspaces }}
         {{ if eq (clusterID .GetCluster) $d.SelectedCluster }}
         <option value="{{ keyspaceName . }}">{{ keyspaceName . }}</option>
         {{ end }}
@@ -76,4 +91,5 @@
     </div>
   </form>
 </div>
+{{ end }}
 {{ end }}

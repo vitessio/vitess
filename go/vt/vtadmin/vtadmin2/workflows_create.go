@@ -50,6 +50,12 @@ type (
 		ReferenceTables []string
 		SelectedCluster string
 	}
+
+	createMigrationData struct {
+		Form            formOptions
+		PickCluster     bool
+		SelectedCluster string
+	}
 )
 
 // beginFormAction performs the shared preflight for mutating form handlers:
@@ -371,17 +377,24 @@ func (s *Server) createMigrationForm(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	form, err := s.loadFormOptions(r, queryValue(r, "cluster_id"), "")
+	requestedCluster := queryValue(r, "cluster_id")
+	form, err := s.loadFormOptions(r, requestedCluster, "")
 	if err != nil {
 		s.renderError(w, r, http.StatusInternalServerError, "Create schema migration", err)
 		return
 	}
 
+	pickCluster := len(form.Clusters) > 1 && requestedCluster == ""
+
 	s.render(w, r, http.StatusOK, "migration_create.html", PageData{
 		Title:     "Create schema migration",
 		Active:    "migrations",
 		NeedsCSRF: true,
-		Data:      form,
+		Data: createMigrationData{
+			Form:            form,
+			PickCluster:     pickCluster,
+			SelectedCluster: form.SelectedCluster,
+		},
 	})
 }
 
