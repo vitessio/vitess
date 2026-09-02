@@ -1429,15 +1429,10 @@ func TestClientInitializationEmptyBucket(t *testing.T) {
 		params: backupstorage.NoParams(),
 	}
 
-	client, err := bs.client(t.Context())
+	_, err := bs.client(t.Context())
 	require.Error(t, err, "client() should error with empty bucket")
-	require.Nil(t, client)
 	require.Contains(t, err.Error(), "--s3-backup-storage-bucket required")
-	require.NotNil(t, bs._client)
-
-	client, err = bs.client(t.Context())
-	require.NoError(t, err)
-	require.Same(t, bs._client, client)
+	require.Nil(t, bs._client)
 }
 
 func TestClientInitializationHonoursContextCancellation(t *testing.T) {
@@ -1512,12 +1507,13 @@ func TestClientInitializationHonoursContextCancellation(t *testing.T) {
 		}
 	}, 30*time.Second, 10*time.Millisecond)
 	require.ErrorIs(t, err, context.Canceled)
-	require.NotNil(t, bs._client)
+	require.Nil(t, bs._client)
 
 	client, err := bs.client(t.Context())
 	require.NoError(t, err)
+	require.NotNil(t, client)
 	require.Same(t, client, bs._client)
-	require.Equal(t, 1, mockServer.RequestCount())
+	require.Equal(t, 2, mockServer.RequestCount())
 }
 
 func TestClientInitializationWaiterHonoursContextCancellation(t *testing.T) {

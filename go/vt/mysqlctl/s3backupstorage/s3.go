@@ -597,16 +597,13 @@ func (bs *S3BackupStorage) client(ctx context.Context) (*s3.Client, error) {
 	client, err := bs.initializeClient(ctx)
 
 	bs.mu.Lock()
-	if client != nil {
+	if err == nil {
 		bs._client = client
 	}
 	close(bs.clientInitDone)
 	bs.clientInitDone = nil
 	bs.mu.Unlock()
-	if err != nil {
-		return nil, err
-	}
-	return client, nil
+	return client, err
 }
 
 func (bs *S3BackupStorage) initializeClient(ctx context.Context) (*s3.Client, error) {
@@ -644,15 +641,15 @@ func (bs *S3BackupStorage) initializeClient(ctx context.Context) (*s3.Client, er
 	client := s3.NewFromConfig(cfg, options...)
 
 	if len(bucket) == 0 {
-		return client, errors.New("--s3-backup-storage-bucket required")
+		return nil, errors.New("--s3-backup-storage-bucket required")
 	}
 
 	if _, err := client.HeadBucket(ctx, &s3.HeadBucketInput{Bucket: &bucket}); err != nil {
-		return client, err
+		return nil, err
 	}
 
 	if err := bs.s3SSE.init(); err != nil {
-		return client, err
+		return nil, err
 	}
 
 	return client, nil
