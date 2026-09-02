@@ -267,9 +267,11 @@ func TestSystemTableSchemaInMultiValueErrors(t *testing.T) {
 }
 
 // sysTableNameInRoute builds a DBA route whose SysTableTableName entry came
-// from a `table_name IN ::tables` predicate: keyed by the list bind
-// variable's own name, evaluating to a tuple, with the predicate left in the
-// query unrewritten.
+// from a `table_name IN ::tables` predicate: keyed by a dedicated,
+// vtgate-owned list variable (the rewritten query references ::vttables),
+// while the stored expression still reads the client's ::tables list — which
+// the normalizer may share between predicates, so it must never be rewritten
+// in place.
 func sysTableNameInRoute() *Route {
 	return &Route{
 		RoutingParameters: &RoutingParameters{
@@ -279,7 +281,7 @@ func sysTableNameInRoute() *Route {
 				Sharded: false,
 			},
 			SysTableTableName: map[string]evalengine.Expr{
-				"tables": evalengine.NewBindVarTuple("tables", collations.SystemCollation.Collation),
+				"vttables": evalengine.NewBindVarTuple("tables", collations.SystemCollation.Collation),
 			},
 		},
 		Query:      "dummy_select",
@@ -302,19 +304,22 @@ func TestSystemTableTableNameInSingleValueRoutedRewrite(t *testing.T) {
 			},
 		},
 	}
+	original := sqltypes.TestBindVariable([]any{"tableName"})
 	bindVars := map[string]*querypb.BindVariable{
-		"tables": sqltypes.TestBindVariable([]any{"tableName"}),
+		"tables": original,
 	}
 
 	_, err := sel.TryExecute(t.Context(), vc, bindVars, false)
 	require.NoError(t, err)
-	require.NotNil(t, bindVars["tables"])
-	assert.Equal(t, querypb.Type_TUPLE, bindVars["tables"].Type,
-		"the query still says `in ::tables`, so the rewritten bind variable must remain a tuple")
+	require.NotNil(t, bindVars["vttables"])
+	assert.Equal(t, querypb.Type_TUPLE, bindVars["vttables"].Type,
+		"the rewritten query says `in ::vttables`, so the dedicated bind variable must be a tuple")
+	assert.True(t, proto.Equal(original, bindVars["tables"]),
+		"the client's list bind variable may be shared with other predicates and must never be rewritten")
 	vc.ExpectLog(t, []string{
 		"FindTable(tableName)",
 		"ResolveDestinations routedKeyspace [] Destinations:DestinationAnyShard()",
-		fmt.Sprintf("ExecuteMultiShard routedKeyspace.1: dummy_select {__vtschemaname: type:VARCHAR tables: %v} false false", sqltypes.TestBindVariable([]any{"routedTable"})),
+		fmt.Sprintf("ExecuteMultiShard routedKeyspace.1: dummy_select {__vtschemaname: type:VARCHAR tables: %v vttables: %v} false false", original, sqltypes.TestBindVariable([]any{"routedTable"})),
 	})
 }
 
@@ -336,9 +341,13 @@ func TestSystemTableTableNameInMultiValueStaysUnrouted(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, proto.Equal(original, bindVars["tables"]),
 		"a multi-element table-name list must keep its original bind variable untouched")
+	require.NotNil(t, bindVars["vttables"],
+		"the rewritten query references the dedicated variable, so it must be populated even when the list contributes nothing to routing")
+	assert.Equal(t, original.Values, bindVars["vttables"].Values,
+		"a multi-element list is copied into the dedicated variable unchanged")
 	vc.ExpectLog(t, []string{
 		"ResolveDestinations ks [] Destinations:DestinationAnyShard()",
-		fmt.Sprintf("ExecuteMultiShard ks.1: dummy_select {__vtschemaname: type:VARCHAR tables: %v} false false", original),
+		fmt.Sprintf("ExecuteMultiShard ks.1: dummy_select {__vtschemaname: type:VARCHAR tables: %v vttables: %v} false false", original, bindVars["vttables"]),
 	})
 }
 

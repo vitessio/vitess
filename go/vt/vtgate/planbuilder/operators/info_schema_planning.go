@@ -199,7 +199,15 @@ func extractInfoSchemaRoutingPredicate(ctx *plancontext.PlanningContext, in sqlp
 				cmp.Right = sqlparser.NewTypedArgument(sqltypes.BvSchemaName, sqltypes.VarChar)
 				return true, sqltypes.BvSchemaName, rhs
 			}
-			return false, string(rhs), rhs
+			// The client's list may be shared: the normalizer reuses one list
+			// bind variable for identical IN tuples across predicates, so the
+			// engine must never write it. Re-point this predicate at a
+			// dedicated, vtgate-owned list variable; the stored expression
+			// still reads the client's list, and the engine populates the
+			// dedicated one (with the routed table name when applicable).
+			bvName := ctx.GetReservedArgumentFor(rhs)
+			cmp.Right = sqlparser.ListArg(bvName)
+			return false, bvName, rhs
 		default:
 			return false, "", nil
 		}

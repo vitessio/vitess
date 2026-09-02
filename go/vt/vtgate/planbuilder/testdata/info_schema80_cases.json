@@ -1405,9 +1405,30 @@
           "Sharded": false
         },
         "FieldQuery": "select `column_name` from information_schema.statistics where 1 != 1",
-        "Query": "select `column_name` from information_schema.statistics where table_schema = :__vtschemaname /* VARCHAR */ and `table_name` in ::tables",
+        "Query": "select `column_name` from information_schema.statistics where table_schema = :__vtschemaname /* VARCHAR */ and `table_name` in ::__tables",
         "SysTableTableSchema": "['user']",
-        "SysTableTableName": "[tables:::tables]"
+        "SysTableTableName": "[__tables:::tables]"
+      }
+    }
+  },
+  {
+    "comment": "a list bindvar shared between predicates (the normalizer dedupes identical IN tuples): only the table_name predicate is re-pointed at the dedicated variable; the shared client variable stays untouched in the other predicate",
+    "query": "select column_name from information_schema.statistics where table_schema = 'user' and table_name in ::names and index_name in ::names",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select column_name from information_schema.statistics where table_schema = 'user' and table_name in ::names and index_name in ::names",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "DBA",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select `column_name` from information_schema.statistics where 1 != 1",
+        "Query": "select `column_name` from information_schema.statistics where table_schema = :__vtschemaname /* VARCHAR */ and `table_name` in ::__names and index_name in ::names",
+        "SysTableTableName": "[__names:::names]",
+        "SysTableTableSchema": "['user']"
       }
     }
   },

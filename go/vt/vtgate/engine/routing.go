@@ -241,20 +241,29 @@ func (rp *RoutingParameters) routeInfoSchemaQuery(ctx context.Context, vcursor V
 		}
 		var tabName string
 		if tuple := val.TupleValues(); tuple != nil {
-			// A table-name list bindvar from an IN predicate: one name routes
-			// like the equality form (including routed-table handling below);
-			// any other length contributes nothing to routing and the
-			// predicate keeps working as the pushed-down filter it already
-			// is, so its bind variable stays untouched.
+			// A table-name list from an IN predicate. The expression reads
+			// the CLIENT's list bind variable — which the normalizer may
+			// share between identical IN tuples on other columns — while
+			// tblBvName is the dedicated, vtgate-owned list variable the
+			// rewritten query references, so the client's variable is never
+			// written. One name routes like the equality form (including
+			// routed-table handling below); any other length contributes
+			// nothing to routing and the predicate keeps working as the
+			// pushed-down filter it already is.
 			if len(tuple) != 1 {
+				// The rewritten query still references the dedicated
+				// variable, so it must be populated: copy the client's
+				// values unchanged.
+				bindVars[tblBvName] = tupleBindVariable(tuple)
 				continue
 			}
 			tabName = tuple[0].ToString()
+			bindVars[tblBvName] = tupleOfOneBindVariable(tabName)
 		} else {
 			tabName = val.Value(vcursor.ConnCollation()).ToString()
+			bindVars[tblBvName] = sqltypes.StringBindVariable(tabName)
 		}
 		tableNames[tblBvName] = tabName
-		setSysTableNameBindVar(bindVars, tblBvName, tabName)
 	}
 
 	// if the table_schema is system schema, route to default keyspace.
@@ -331,18 +340,33 @@ func (rp *RoutingParameters) routedTable(ctx context.Context, vcursor VCursor, b
 }
 
 // setSysTableNameBindVar sets a system-table name bind variable, preserving
-// its shape: a name that arrived as a one-element IN list bindvar must stay a
-// TUPLE value, because the query still references it as a list bind variable
-// (`in ::name`); everything else is the scalar the query's `= :name` expects.
+// its shape: a name that came from a one-element IN list is a vtgate-owned
+// TUPLE variable (the rewritten query says `in ::name`), while everything
+// else is the scalar the query's `= :name` expects.
 func setSysTableNameBindVar(bindVars map[string]*querypb.BindVariable, name, value string) {
 	if bv, ok := bindVars[name]; ok && bv.Type == querypb.Type_TUPLE {
-		bindVars[name] = &querypb.BindVariable{
-			Type:   querypb.Type_TUPLE,
-			Values: []*querypb.Value{{Type: querypb.Type_VARCHAR, Value: []byte(value)}},
-		}
+		bindVars[name] = tupleOfOneBindVariable(value)
 		return
 	}
 	bindVars[name] = sqltypes.StringBindVariable(value)
+}
+
+// tupleOfOneBindVariable builds the one-element TUPLE bind variable a
+// rewritten `in ::name` list predicate expects.
+func tupleOfOneBindVariable(value string) *querypb.BindVariable {
+	return &querypb.BindVariable{
+		Type:   querypb.Type_TUPLE,
+		Values: []*querypb.Value{{Type: querypb.Type_VARCHAR, Value: []byte(value)}},
+	}
+}
+
+// tupleBindVariable builds a TUPLE bind variable holding the given values.
+func tupleBindVariable(values []sqltypes.Value) *querypb.BindVariable {
+	bv := &querypb.BindVariable{Type: querypb.Type_TUPLE}
+	for _, value := range values {
+		bv.Values = append(bv.Values, sqltypes.ValueToProto(value))
+	}
+	return bv
 }
 
 func (rp *RoutingParameters) anyShard(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
