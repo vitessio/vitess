@@ -611,6 +611,18 @@ type fakeTabletManagerClient struct {
 
 func (fakeTabletManagerClient) Close() {}
 
+// resumingTabletManagerClient reports every VReplicationExec call as having
+// affected one row, simulating a successfully issued stream resume.
+type resumingTabletManagerClient struct {
+	tmclient.TabletManagerClient
+}
+
+func (resumingTabletManagerClient) Close() {}
+
+func (resumingTabletManagerClient) VReplicationExec(ctx context.Context, tablet *topodatapb.Tablet, query string) (*querypb.QueryResult, error) {
+	return &querypb.QueryResult{RowsAffected: 1}, nil
+}
+
 // stopFailingTabletManagerClient fails every VReplicationExec call,
 // simulating a stream stop RPC failure during migration termination.
 type stopFailingTabletManagerClient struct {
@@ -1726,6 +1738,55 @@ func TestReviewVReplStreamError(t *testing.T) {
 		assert.Equal(t, vreplStreamNoAction, e.reviewVReplStreamError(uuid, heartbeatingStream, now.Add(vreplResumeRecoveryGrace())))
 		assert.NotContains(t, e.vreplicationResumeState, uuid)
 	})
+}
+
+// TestMaybeResumeVReplicationRefreshesLiveness pins that an accepted resume
+// refreshes the migration's liveness_timestamp. The stale reaper runs right
+// after the running-migrations review in the same tick, and a class-B park
+// arrives after --vreplication-max-time-to-retry-on-error of continuous
+// failure with no heartbeats: with a retry window at or above the stale
+// threshold, the liveness clock is already expired at the very first park,
+// and without this stamp the reaper would fail the migration in the same
+// tick that resumed it. The stamp is budget-gated — resumes stop when the
+// episode's budget expires — so it cannot hold off the reaper indefinitely.
+func TestMaybeResumeVReplicationRefreshesLiveness(t *testing.T) {
+	uuid := "1cbcd662_8ed6_11ee_bc8f_0a43f95f28a3"
+	protocolName := t.Name()
+	resetProtocol := tmclienttest.SetProtocol(t.Name(), protocolName)
+	defer resetProtocol()
+	tmclient.RegisterTabletManagerClientFactory(protocolName, func() tmclient.TabletManagerClient {
+		return &resumingTabletManagerClient{}
+	})
+	alias := &topodatapb.TabletAlias{Cell: "cell", Uid: 1}
+	ts := memorytopo.NewServer(t.Context(), "cell")
+	require.NoError(t, ts.CreateTablet(t.Context(), &topodatapb.Tablet{
+		Alias:    alias,
+		Keyspace: "ks",
+		Shard:    "0",
+		Type:     topodatapb.TabletType_PRIMARY,
+	}))
+	var livenessRefreshed bool
+	e := &Executor{
+		ts:          ts,
+		tabletAlias: alias,
+		ticks:       timer.NewTimer(time.Hour),
+		execQuery: func(ctx context.Context, query string) (*sqltypes.Result, error) {
+			if strings.Contains(query, "liveness_timestamp=NOW(6)") {
+				livenessRefreshed = true
+			}
+			return &sqltypes.Result{RowsAffected: 1}, nil
+		},
+	}
+	e.isOpen.Store(1)
+
+	parkedStream := &VReplStream{
+		id:      1,
+		state:   binlogdatapb.VReplicationWorkflowState_Error,
+		message: vreplication.RetriesExhaustedIndicator + ": connection refused",
+	}
+	e.maybeResumeVReplication(t.Context(), uuid, parkedStream, &vreplResumeState{firstParked: time.Now()})
+	assert.True(t, livenessRefreshed,
+		"an accepted resume must refresh liveness so the same tick's stale reaper cannot fail the just-resumed migration")
 }
 
 // TestGetNonConflictingMigrationCancellationIntent pins the scheduling gate:

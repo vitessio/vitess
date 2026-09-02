@@ -3627,6 +3627,18 @@ func (e *Executor) maybeResumeVReplication(ctx context.Context, uuid string, s *
 	}
 	state.attempts++
 	state.lastAttempt = time.Now()
+	// An accepted resume is active management of the migration: refresh its
+	// liveness so the stale reaper — which runs right after this review in
+	// the same tick — cannot fail a just-resumed migration whose liveness
+	// clock still points at its last pre-error heartbeat (with a retry
+	// window at or above the stale threshold, that clock is already expired
+	// at the very first park). The stamp is budget-gated: resumes stop when
+	// the episode's budget expires, so the reaper's authority returns as
+	// soon as the executor stops managing the stream.
+	if err := e.updateMigrationTimestamp(ctx, "liveness_timestamp", uuid); err != nil {
+		log.Error("Online DDL: failed to refresh migration liveness after vreplication resume",
+			slog.String("uuid", uuid), slog.String("tablet", e.TabletAliasString()), slog.Any("error", err))
+	}
 	if err := e.updateMigrationMessage(ctx, uuid,
 		fmt.Sprintf("vreplication stream errored but is resumable; resuming automatically, attempt %d: %s", state.attempts, s.message)); err != nil {
 		// The resume itself succeeded; only the operator-facing record of
