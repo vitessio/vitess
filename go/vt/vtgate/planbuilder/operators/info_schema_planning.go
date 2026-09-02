@@ -191,9 +191,9 @@ func extractInfoSchemaRoutingPredicate(ctx *plancontext.PlanningContext, in sqlp
 			// length errors, so the predicate is rewritten to the equality
 			// form up front. For the table_name column one value contributes
 			// routed-table handling while other lengths keep working as the
-			// pushed-down filter, so the predicate must stay exactly as
-			// written: it is keyed by the list's own bind variable name and
-			// the engine rewrites that variable's value in place.
+			// pushed-down filter, so the predicate keeps its IN shape but is
+			// re-pointed at a dedicated, vtgate-owned list variable that the
+			// engine populates at execution — see below.
 			if isSchema {
 				cmp.Operator = sqlparser.EqualOp
 				cmp.Right = sqlparser.NewTypedArgument(sqltypes.BvSchemaName, sqltypes.VarChar)
