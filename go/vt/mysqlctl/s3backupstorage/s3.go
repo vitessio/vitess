@@ -319,7 +319,7 @@ func (bh *S3BackupHandle) ReadFile(ctx context.Context, filename string) (io.Rea
 		if err != nil {
 			return nil, err
 		}
-		if downloadBenchmarkDiscard {
+		if downloadBenchmarkDiscard && !strings.HasSuffix(object, "/MANIFEST") {
 			return newDiscardDrainer(object, out.Body, out.ContentLength), nil
 		}
 		return out.Body, nil
@@ -370,7 +370,7 @@ func (bh *S3BackupHandle) ReadFile(ctx context.Context, filename string) (io.Rea
 		return nil, err
 	}
 
-	if downloadBenchmarkDiscard {
+	if downloadBenchmarkDiscard && !strings.HasSuffix(object, "/MANIFEST") {
 		return newDiscardDrainerWithCancel(object, out.Body, out.ContentLength, cancel), nil
 	}
 
