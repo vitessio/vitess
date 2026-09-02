@@ -2612,7 +2612,12 @@ func (e *Executor) readFailedCancelledMigrationsInContextBeforeMigration(ctx con
 func (e *Executor) terminallyFailMigration(ctx context.Context, onlineDDL *schema.OnlineDDL, withError error) error {
 	defer e.triggerNextCheckInterval()
 	transitionErr := e.updateMigrationStatusFailedOrCancelled(ctx, onlineDDL.UUID)
-	failedMigrations.Add(1)
+	// Count only migrations that actually reached a terminal state: the
+	// review loop re-drives a failed transition on every tick, and counting
+	// each attempt would inflate the metric while the migration still runs.
+	if transitionErr == nil {
+		failedMigrations.Add(1)
+	}
 	if withError != nil {
 		_ = e.updateMigrationMessage(ctx, onlineDDL.UUID, withError.Error())
 	}

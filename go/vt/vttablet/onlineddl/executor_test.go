@@ -1115,6 +1115,46 @@ func TestForgetVReplStreamOrdering(t *testing.T) {
 	})
 }
 
+// TestTerminallyFailMigrationMetric pins that FailedMigrations counts only
+// migrations that actually reached a terminal state: the review loop
+// re-drives a failed terminal transition on every tick, and an
+// unconditional increment would inflate the counter once per tick while
+// the migration is still running.
+func TestTerminallyFailMigrationMetric(t *testing.T) {
+	onlineDDL := &schema.OnlineDDL{UUID: "1cbcd662_8ed6_11ee_bc8f_0a43f95f28a3"}
+	newMetricExecutor := func(execQuery func(ctx context.Context, query string) (*sqltypes.Result, error)) *Executor {
+		e := &Executor{
+			vreplicationLastError:     map[string]*vterrors.LastError{},
+			vreplicationResumeState:   map[string]*vreplResumeState{},
+			vreplicationPendingCancel: map[string]string{},
+			tabletAlias:               &topodatapb.TabletAlias{Cell: "cell", Uid: 1},
+			ticks:                     timer.NewTimer(time.Hour),
+			execQuery:                 execQuery,
+		}
+		e.isOpen.Store(1)
+		return e
+	}
+
+	t.Run("failed transition does not count", func(t *testing.T) {
+		e := newMetricExecutor(func(ctx context.Context, query string) (*sqltypes.Result, error) {
+			return nil, errors.New("backend unavailable")
+		})
+		before := failedMigrations.Get()
+		err := e.terminallyFailMigration(t.Context(), onlineDDL, nil)
+		require.Error(t, err)
+		assert.Equal(t, before, failedMigrations.Get(),
+			"a migration still in 'running' must not count as failed")
+	})
+	t.Run("successful transition counts once", func(t *testing.T) {
+		e := newMetricExecutor(func(ctx context.Context, query string) (*sqltypes.Result, error) {
+			return &sqltypes.Result{RowsAffected: 1}, nil
+		})
+		before := failedMigrations.Get()
+		require.NoError(t, e.terminallyFailMigration(t.Context(), onlineDDL, nil))
+		assert.Equal(t, before+1, failedMigrations.Get())
+	})
+}
+
 // TestReviewRunningMigrationsNilStreamCancellation pins the re-drive path
 // for a migration whose vreplication stream is absent: an unfulfilled
 // cancellation intent (cancelled_timestamp written, terminal transition
