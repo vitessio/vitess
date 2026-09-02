@@ -1205,6 +1205,70 @@ func TestWorkerLoopCancelDoesNotUnblockBlockedBatchFlush(t *testing.T) {
 	}
 }
 
+// TestCommitLoopCancelUnblocksBlockedCommit tests cancellation while the
+// commitLoop is blocked inside a commit's wire call (CommitTrxQueryBatch on
+// a stalled MySQL connection). The worker's apply-phase cancellation hook
+// does not cover this: the worker clears activeApplyClient before handing
+// the connection to the commitLoop, and worker.close() only runs after the
+// commitLoop returns. Without a commit-phase hook that closes the committing
+// connection on ctx.Done(), applyEventsParallel's `<-commitDone` wait — and
+// with it the controller's shutdown — hangs indefinitely.
+func TestCommitLoopCancelUnblocksBlockedCommit(t *testing.T) {
+	ctx, cancel := context.WithCancel(testCtx(t))
+	defer cancel()
+
+	vp, _ := testVPlayer(t)
+	scheduler := newApplyScheduler(ctx)
+
+	blockingClient := &blockingBatchDBClient{
+		blockMulti: make(chan struct{}),
+		entered:    make(chan struct{}, 1),
+		closed:     make(chan struct{}),
+	}
+	t.Cleanup(func() {
+		select {
+		case <-blockingClient.blockMulti:
+		default:
+			close(blockingClient.blockMulti)
+		}
+	})
+	workerClient := newVDBClient(blockingClient, vp.vr.stats, vp.vr.workflowConfig.RelayLogMaxItems)
+	workerClient.maxBatchSize = 1024
+	// Open the deferred-begin batch transaction, as a batch-mode worker
+	// does before applying row events.
+	require.NoError(t, workerClient.Begin())
+
+	// A worker row transaction handed to the commitLoop in batch mode:
+	// client set, query/commit nil, so the commitLoop takes the batch fast
+	// path and blocks inside CommitTrxQueryBatch's ExecuteFetchMulti.
+	txn := acquireApplyTxn()
+	txn.order = 1
+	txn.payload = &applyTxnPayload{client: workerClient}
+
+	commitCh := make(chan *applyTxn, 1)
+	commitCh <- txn
+
+	done := make(chan error, 1)
+	go func() {
+		done <- vp.commitLoop(ctx, scheduler, commitCh)
+	}()
+
+	select {
+	case <-blockingClient.entered:
+	case <-time.After(30 * time.Second):
+		require.FailNow(t, "timed out waiting for the commitLoop to block in the commit")
+	}
+
+	cancel()
+
+	select {
+	case err := <-done:
+		require.Error(t, err)
+	case <-time.After(30 * time.Second):
+		require.FailNow(t, "commitLoop remained stuck after cancellation while the commit's wire call was blocked")
+	}
+}
+
 func TestApplyEventsParallelCancelledContext(t *testing.T) {
 	vp, _ := testVPlayer(t)
 

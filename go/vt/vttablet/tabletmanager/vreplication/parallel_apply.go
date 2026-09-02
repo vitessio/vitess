@@ -2197,6 +2197,26 @@ func (vp *vplayer) workerLoop(ctx context.Context, scheduler *applyScheduler, co
 // For commitOnly transactions, it applies events on the main connection
 // under serialMu.
 func (vp *vplayer) commitLoop(ctx context.Context, scheduler *applyScheduler, commitCh <-chan *applyTxn) error {
+	// A commit's wire calls (CommitTrxQueryBatch / Commit / ExecuteFetch)
+	// block without a context, and the worker's apply-phase cancellation
+	// hook does not cover them: activeApplyClient is cleared before the txn
+	// is handed to the commitLoop, and worker.close() only runs after the
+	// commitLoop returns. A commit stalled on a dead MySQL connection would
+	// therefore hang applyEventsParallel's commitDone wait — and with it
+	// the controller's shutdown — indefinitely. Publish the connection each
+	// commit uses so ctx cancellation closes it, erroring the blocked call.
+	// Closing a connection mid-commit is safe: the position update commits
+	// in the same transaction as the row data, so either the commit landed
+	// (and the position advanced with it) or it rolled back (and the
+	// restart resumes from the previous durable position).
+	var activeCommitClient atomic.Pointer[vdbClient]
+	stopInterrupt := context.AfterFunc(ctx, func() {
+		if c := activeCommitClient.Load(); c != nil {
+			c.Close()
+		}
+	})
+	defer stopInterrupt()
+
 	updateLag := func(payload *applyTxnPayload) {
 		if payload.lastEventTimestamp != 0 {
 			tsNs := payload.lastEventTimestamp * 1e9
@@ -2231,6 +2251,8 @@ func (vp *vplayer) commitLoop(ctx context.Context, scheduler *applyScheduler, co
 		if dbClient == nil {
 			dbClient = vp.activeDBClient()
 		}
+		activeCommitClient.Store(dbClient)
+		defer activeCommitClient.Store(nil)
 
 		// Worker batch-mode fast path: the worker set payload.client but left
 		// payload.query/commit nil so we wouldn't allocate a closure per
@@ -2332,6 +2354,8 @@ func (vp *vplayer) commitLoop(ctx context.Context, scheduler *applyScheduler, co
 		if dbClient == nil {
 			dbClient = vp.activeDBClient()
 		}
+		activeCommitClient.Store(dbClient)
+		defer activeCommitClient.Store(nil)
 		vp.serialMu.Lock()
 		defer vp.serialMu.Unlock()
 
