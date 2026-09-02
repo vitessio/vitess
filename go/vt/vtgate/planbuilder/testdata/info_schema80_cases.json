@@ -1157,7 +1157,7 @@
     }
   },
   {
-    "comment": "table_schema OR predicate\n# It is unsupported because we do not route queries to multiple keyspaces right now",
+    "comment": "table_schema OR predicate # rewritten to IN and carried: more than one schema name errors loudly at execution instead of silently querying the default keyspace",
     "query": "SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = 'ks' OR TABLE_SCHEMA = 'main'",
     "plan": {
       "Type": "Passthrough",
@@ -1171,7 +1171,8 @@
           "Sharded": false
         },
         "FieldQuery": "select TABLE_CATALOG, TABLE_SCHEMA, `TABLE_NAME`, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from INFORMATION_SCHEMA.`TABLES` where 1 != 1",
-        "Query": "select TABLE_CATALOG, TABLE_SCHEMA, `TABLE_NAME`, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from INFORMATION_SCHEMA.`TABLES` where TABLE_SCHEMA = 'ks' or TABLE_SCHEMA = 'main'"
+        "Query": "select TABLE_CATALOG, TABLE_SCHEMA, `TABLE_NAME`, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from INFORMATION_SCHEMA.`TABLES` where TABLE_SCHEMA = :__vtschemaname /* VARCHAR */",
+        "SysTableTableSchema": "[('ks', 'main')]"
       }
     }
   },
@@ -1390,7 +1391,7 @@
     }
   },
   {
-    "comment": "IN with a list bindvar on table_name stays a plain filter (multi-name INs work as filters once the schema routes)",
+    "comment": "IN with a list bindvar on table_name is extracted without rewriting the predicate; one value routes (incl. routed tables), more stay a working filter",
     "query": "select column_name from information_schema.statistics where table_schema = 'user' and table_name in ::tables",
     "plan": {
       "Type": "Passthrough",
@@ -1405,7 +1406,48 @@
         },
         "FieldQuery": "select `column_name` from information_schema.statistics where 1 != 1",
         "Query": "select `column_name` from information_schema.statistics where table_schema = :__vtschemaname /* VARCHAR */ and `table_name` in ::tables",
-        "SysTableTableSchema": "['user']"
+        "SysTableTableSchema": "['user']",
+        "SysTableTableName": "[tables:::tables]"
+      }
+    }
+  },
+  {
+    "comment": "multi-element literal IN on table_schema is carried for the execution-time guard (errors there; never silently unrouted)",
+    "query": "select table_name from information_schema.tables where table_schema in ('a', 'b')",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select table_name from information_schema.tables where table_schema in ('a', 'b')",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "DBA",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select `table_name` from information_schema.`tables` where 1 != 1",
+        "Query": "select `table_name` from information_schema.`tables` where table_schema = :__vtschemaname /* VARCHAR */",
+        "SysTableTableSchema": "[('a', 'b')]"
+      }
+    }
+  },
+  {
+    "comment": "prepared-statement IN on table_schema (tuple of arguments) is carried for the execution-time guard",
+    "query": "select table_name from information_schema.tables where table_schema in (:v1, :v2)",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select table_name from information_schema.tables where table_schema in (:v1, :v2)",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "DBA",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select `table_name` from information_schema.`tables` where 1 != 1",
+        "Query": "select `table_name` from information_schema.`tables` where table_schema = :__vtschemaname /* VARCHAR */",
+        "SysTableTableSchema": "[(:v1, :v2)]"
       }
     }
   },

@@ -331,6 +331,11 @@ func TestInformationSchemaWithInPredicate(t *testing.T) {
 	_, err := mcmp.VtConn.ExecuteFetch("select table_name from information_schema.tables where table_schema in ('ks', 'other')", 100, false)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "VT12001")
+
+	// a multi-value table_name IN keeps working as a plain filter: the schema
+	// routes, the list filters, no error
+	multiName := utils.Exec(t, mcmp.VtConn, "select table_name from information_schema.tables where table_schema = database() and table_name in ('t1', 't7_xxhash')")
+	require.Len(t, multiName.Rows, 2)
 }
 
 func TestJoinWithSingleShardQueryOnRHS(t *testing.T) {

@@ -22,6 +22,8 @@ import (
 	"strconv"
 	"testing"
 
+	"google.golang.org/protobuf/proto"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -262,6 +264,82 @@ func TestSystemTableSchemaInMultiValueErrors(t *testing.T) {
 	_, err := sel.TryExecute(t.Context(), vc, bindVars, false)
 	require.ErrorContains(t, err, "VT12001")
 	assert.Equal(t, vtrpcpb.Code_UNIMPLEMENTED, vterrors.Code(err))
+}
+
+// sysTableNameInRoute builds a DBA route whose SysTableTableName entry came
+// from a `table_name IN ::tables` predicate: keyed by the list bind
+// variable's own name, evaluating to a tuple, with the predicate left in the
+// query unrewritten.
+func sysTableNameInRoute() *Route {
+	return &Route{
+		RoutingParameters: &RoutingParameters{
+			Opcode: DBA,
+			Keyspace: &vindexes.Keyspace{
+				Name:    "ks",
+				Sharded: false,
+			},
+			SysTableTableName: map[string]evalengine.Expr{
+				"tables": evalengine.NewBindVarTuple("tables", collations.SystemCollation.Collation),
+			},
+		},
+		Query:      "dummy_select",
+		FieldQuery: "dummy_select_field",
+	}
+}
+
+func TestSystemTableTableNameInSingleValueRoutedRewrite(t *testing.T) {
+	// A one-element table-name list routes like the equality form, including
+	// routed-table handling — and because the query still references the
+	// list bind variable, the rewritten value must stay a TUPLE.
+	sel := sysTableNameInRoute()
+	vc := &loggingVCursor{
+		shards:  []string{"1"},
+		results: []*sqltypes.Result{defaultSelectResult},
+		tableRoutes: tableRoutes{
+			tbl: &vindexes.BaseTable{
+				Name:     sqlparser.NewIdentifierCS("routedTable"),
+				Keyspace: &vindexes.Keyspace{Name: "routedKeyspace"},
+			},
+		},
+	}
+	bindVars := map[string]*querypb.BindVariable{
+		"tables": sqltypes.TestBindVariable([]any{"tableName"}),
+	}
+
+	_, err := sel.TryExecute(t.Context(), vc, bindVars, false)
+	require.NoError(t, err)
+	require.NotNil(t, bindVars["tables"])
+	assert.Equal(t, querypb.Type_TUPLE, bindVars["tables"].Type,
+		"the query still says `in ::tables`, so the rewritten bind variable must remain a tuple")
+	vc.ExpectLog(t, []string{
+		"FindTable(tableName)",
+		"ResolveDestinations routedKeyspace [] Destinations:DestinationAnyShard()",
+		fmt.Sprintf("ExecuteMultiShard routedKeyspace.1: dummy_select {__vtschemaname: type:VARCHAR tables: %v} false false", sqltypes.TestBindVariable([]any{"routedTable"})),
+	})
+}
+
+func TestSystemTableTableNameInMultiValueStaysUnrouted(t *testing.T) {
+	// A multi-element table-name list cannot pick a route, but it works as
+	// the pushed-down filter it already is: no error, no bind variable
+	// rewrite, default routing.
+	sel := sysTableNameInRoute()
+	vc := &loggingVCursor{
+		shards:  []string{"1"},
+		results: []*sqltypes.Result{defaultSelectResult},
+	}
+	original := sqltypes.TestBindVariable([]any{"t1", "t2"})
+	bindVars := map[string]*querypb.BindVariable{
+		"tables": original,
+	}
+
+	_, err := sel.TryExecute(t.Context(), vc, bindVars, false)
+	require.NoError(t, err)
+	assert.True(t, proto.Equal(original, bindVars["tables"]),
+		"a multi-element table-name list must keep its original bind variable untouched")
+	vc.ExpectLog(t, []string{
+		"ResolveDestinations ks [] Destinations:DestinationAnyShard()",
+		fmt.Sprintf("ExecuteMultiShard ks.1: dummy_select {__vtschemaname: type:VARCHAR tables: %v} false false", original),
+	})
 }
 
 func TestSelectScatter(t *testing.T) {

@@ -239,9 +239,22 @@ func (rp *RoutingParameters) routeInfoSchemaQuery(ctx context.Context, vcursor V
 		if err != nil {
 			return nil, err
 		}
-		tabName := val.Value(vcursor.ConnCollation()).ToString()
+		var tabName string
+		if tuple := val.TupleValues(); tuple != nil {
+			// A table-name list bindvar from an IN predicate: one name routes
+			// like the equality form (including routed-table handling below);
+			// any other length contributes nothing to routing and the
+			// predicate keeps working as the pushed-down filter it already
+			// is, so its bind variable stays untouched.
+			if len(tuple) != 1 {
+				continue
+			}
+			tabName = tuple[0].ToString()
+		} else {
+			tabName = val.Value(vcursor.ConnCollation()).ToString()
+		}
 		tableNames[tblBvName] = tabName
-		bindVars[tblBvName] = sqltypes.StringBindVariable(tabName)
+		setSysTableNameBindVar(bindVars, tblBvName, tabName)
 	}
 
 	// if the table_schema is system schema, route to default keyspace.
@@ -305,16 +318,31 @@ func (rp *RoutingParameters) routedTable(ctx context.Context, vcursor VCursor, b
 			}
 
 			shards, _, err := vcursor.ResolveDestinations(ctx, routedTable.Keyspace.Name, nil, []key.ShardDestination{key.DestinationAnyShard{}})
-			bindVars[tblBvName] = sqltypes.StringBindVariable(routedTable.Name.String())
+			setSysTableNameBindVar(bindVars, tblBvName, routedTable.Name.String())
 			if tableSchema != "" {
 				setReplaceSchemaName(bindVars)
 			}
 			return shards, err
 		}
 		// no routed table info found. we'll return nil and check on the outside if we can find the table_schema
-		bindVars[tblBvName] = sqltypes.StringBindVariable(tableName)
+		setSysTableNameBindVar(bindVars, tblBvName, tableName)
 	}
 	return nil, nil
+}
+
+// setSysTableNameBindVar sets a system-table name bind variable, preserving
+// its shape: a name that arrived as a one-element IN list bindvar must stay a
+// TUPLE value, because the query still references it as a list bind variable
+// (`in ::name`); everything else is the scalar the query's `= :name` expects.
+func setSysTableNameBindVar(bindVars map[string]*querypb.BindVariable, name, value string) {
+	if bv, ok := bindVars[name]; ok && bv.Type == querypb.Type_TUPLE {
+		bindVars[name] = &querypb.BindVariable{
+			Type:   querypb.Type_TUPLE,
+			Values: []*querypb.Value{{Type: querypb.Type_VARCHAR, Value: []byte(value)}},
+		}
+		return
+	}
+	bindVars[name] = sqltypes.StringBindVariable(value)
 }
 
 func (rp *RoutingParameters) anyShard(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {

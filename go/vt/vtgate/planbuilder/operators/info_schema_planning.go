@@ -139,52 +139,67 @@ func extractInfoSchemaRoutingPredicate(ctx *plancontext.PlanningContext, in sqlp
 	switch cmp.Operator {
 	case sqlparser.EqualOp:
 	case sqlparser.InOp:
-		switch rhs := cmp.Right.(type) {
-		case sqlparser.ValTuple:
-			// A single-element IN list is an equality: only one destination is
-			// named, so the predicate routes exactly like `=` (mirrors
-			// ShardedRouting.planInOp). Guard BEFORE mutating: an element the
-			// equality path would refuse (e.g. database(), which must stay in the
-			// query untouched) must leave the IN exactly as written.
-			if len(rhs) != 1 || !shouldRewrite(rhs[0]) {
-				return false, "", nil
-			}
-			// Only routable columns get the equality rewrite: a single-element IN
-			// on any other column must stay exactly as written.
-			col, isSchema, isTable := IsTableSchemaOrName(cmp.Left, ctx.VSchema.Environment().MySQLVersion())
-			if col == nil || (!isSchema && !isTable) {
-				return false, "", nil
-			}
-			// Guard BEFORE mutating: if the element can't be translated to an
-			// evalengine expression, we won't be able to route on it, so the IN
-			// must be left exactly as written instead of being cosmetically
-			// rewritten to `=` (same Config as the shared translatability check
-			// below).
-			_, err := evalengine.Translate(rhs[0], &evalengine.Config{
+		// Only routable columns are ever touched: an IN on any other column
+		// must stay exactly as written. All guards run BEFORE any mutation.
+		col, isSchema, isTable := IsTableSchemaOrName(cmp.Left, ctx.VSchema.Environment().MySQLVersion())
+		if col == nil || (!isSchema && !isTable) {
+			return false, "", nil
+		}
+		translates := func(e sqlparser.Expr) bool {
+			// same Config as the shared translatability check below
+			_, err := evalengine.Translate(e, &evalengine.Config{
 				Collation:     collations.SystemCollation.Collation,
 				ResolveColumn: NotImplementedSchemaInfoResolver,
 				Environment:   ctx.VSchema.Environment(),
 			})
-			if err != nil {
-				return false, "", nil
+			return err == nil
+		}
+		switch rhs := cmp.Right.(type) {
+		case sqlparser.ValTuple:
+			if len(rhs) == 1 {
+				// A single-element IN list is an equality: only one destination
+				// is named, so the predicate routes exactly like `=` (mirrors
+				// ShardedRouting.planInOp). An element the equality path would
+				// refuse (e.g. database(), which must stay in the query
+				// untouched) leaves the IN exactly as written.
+				if !shouldRewrite(rhs[0]) || !translates(rhs[0]) {
+					return false, "", nil
+				}
+				cmp.Operator = sqlparser.EqualOp
+				cmp.Right = rhs[0]
+				break // continue into the shared equality tail below
 			}
-			cmp.Operator = sqlparser.EqualOp
-			cmp.Right = rhs[0]
-		case sqlparser.ListArg:
-			// The normalizer turns `in ('x')` into a list bindvar whose length
-			// is unknown until execution. Extract it for the schema column and
-			// let routeInfoSchemaQuery unwrap a 1-element list or error on a
-			// longer one; rewriting to equality here is correct for the only
-			// length that routes. table_name lists are deliberately NOT
-			// extracted: they already work as pushed-down filters once the
-			// schema routes, for any length.
-			col, isSchema, _ := IsTableSchemaOrName(cmp.Left, ctx.VSchema.Environment().MySQLVersion())
-			if col == nil || !isSchema {
+			// A multi-element schema list — a literal list with normalization
+			// disabled, or a prepared statement's `IN (?, ?)` — cannot name
+			// one keyspace. Carry the whole tuple so routeInfoSchemaQuery's
+			// cardinality guard rejects it loudly at execution instead of the
+			// query silently running against the default keyspace. The
+			// equality rewrite below is safe: execution always errors on the
+			// tuple before the rewritten query can be sent anywhere.
+			// Multi-element table_name lists are left alone: they already
+			// work as pushed-down filters once the schema routes.
+			if !isSchema || !translates(rhs) {
 				return false, "", nil
 			}
 			cmp.Operator = sqlparser.EqualOp
 			cmp.Right = sqlparser.NewTypedArgument(sqltypes.BvSchemaName, sqltypes.VarChar)
 			return true, sqltypes.BvSchemaName, rhs
+		case sqlparser.ListArg:
+			// The normalizer turns `in ('x')` into a list bindvar whose length
+			// is unknown until execution, so routeInfoSchemaQuery decides
+			// there: for the schema column one value routes and any other
+			// length errors, so the predicate is rewritten to the equality
+			// form up front. For the table_name column one value contributes
+			// routed-table handling while other lengths keep working as the
+			// pushed-down filter, so the predicate must stay exactly as
+			// written: it is keyed by the list's own bind variable name and
+			// the engine rewrites that variable's value in place.
+			if isSchema {
+				cmp.Operator = sqlparser.EqualOp
+				cmp.Right = sqlparser.NewTypedArgument(sqltypes.BvSchemaName, sqltypes.VarChar)
+				return true, sqltypes.BvSchemaName, rhs
+			}
+			return false, string(rhs), rhs
 		default:
 			return false, "", nil
 		}
