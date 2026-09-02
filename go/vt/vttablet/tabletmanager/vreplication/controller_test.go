@@ -91,21 +91,6 @@ func setTabletTypesStr(tabletTypesStr string) func() {
 	}
 }
 
-// TestRetriesExhaustedIndicatorIsNotLegacyTerminal pins the marker
-// taxonomy: the resumable class B marker must NOT extend the legacy
-// TerminalErrorIndicator, because the message is operator visible and a
-// condition that is resumable by design must not be labeled a terminal
-// error. This is a labeling invariant, not downgrade protection: a
-// previous-version executor's history scan selects any state='Error'
-// record regardless of message (see RetriesExhaustedIndicator's doc).
-func TestRetriesExhaustedIndicatorIsNotLegacyTerminal(t *testing.T) {
-	assert.False(t, strings.HasPrefix(RetriesExhaustedIndicator, TerminalErrorIndicator),
-		"the resumable marker must not be classified terminal by previous-version executors")
-	// The unrecoverable class stays legacy-terminal on purpose: it must be
-	// treated as terminal by every version.
-	assert.True(t, strings.HasPrefix(UnrecoverableErrorIndicator, TerminalErrorIndicator))
-}
-
 func TestControllerKeyRange(t *testing.T) {
 	resetBinlogClient()
 	wantTablet := addTablet(100)
@@ -851,15 +836,25 @@ func TestControllerErrorLogMessages(t *testing.T) {
 		"log message should have format 'workflow X, stream Y: error, will retry after ...', got: %s", errorLogs)
 }
 
-// TestTerminalVReplicationError tests the construction of terminal error
-// messages: the unrecoverable class carries the load-bearing
-// "terminal error:" prefix that the Online DDL executor's
+// TestTerminalVReplicationError tests the marker taxonomy and the
+// construction of terminal error messages: the unrecoverable class carries
+// the load-bearing "terminal error:" prefix that the Online DDL executor's
 // _vt.vreplication_log scan matches, while the resumable retries-exhausted
-// class starts with its own marker (see RetriesExhaustedIndicator's doc for
-// why it must not carry the terminal prefix) and names the flag that bounds
-// the retry window along with its effective value so that the message is
-// actionable.
+// class starts with its own marker and names the flag that bounds the
+// retry window along with its effective value so that the message is
+// actionable. The class B marker must NOT extend TerminalErrorIndicator:
+// the message is operator visible, and a condition that is resumable by
+// design must not be labeled a terminal error. That is a labeling
+// invariant, not downgrade protection — a previous-version executor's
+// history scan selects any state='Error' record regardless of message (see
+// RetriesExhaustedIndicator's doc).
 func TestTerminalVReplicationError(t *testing.T) {
+	assert.False(t, strings.HasPrefix(RetriesExhaustedIndicator, TerminalErrorIndicator),
+		"the resumable marker must not be labeled with the legacy terminal prefix")
+	// The unrecoverable class stays legacy-terminal on purpose: it must be
+	// treated as terminal by every version.
+	assert.True(t, strings.HasPrefix(UnrecoverableErrorIndicator, TerminalErrorIndicator))
+
 	baseErr := errors.New("connection refused")
 
 	err := terminalVReplicationError(baseErr, true, 15*time.Minute)
