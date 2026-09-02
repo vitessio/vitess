@@ -905,11 +905,10 @@ func TestSIDs(t *testing.T) {
 	assert.Equal(t, "8bc65cca-3fe4-11ed-bbfb-091034d48b3e", sids[0].String())
 }
 
-// TestParseMysql56GTIDSetIntervalsCapHint checks that the preallocation hint for
-// the intervals slice does not follow a count taken from the input beyond what that
-// input could hold, while a genuinely long interval list still parses unchanged.
-// The hostile case asserts on allocation volume, because a colon run parses without
-// error either way once the intervals are all discarded.
+// TestParseMysql56GTIDSetIntervalsCapHint pins the bound on the intervals
+// preallocation. Measured on the parent commit, the hostile case allocates
+// 16,785,456 bytes and fails the 12MiB assertion below; with the bound it is
+// 8,400,152. The valid dense case is 1,605,640 either way.
 func TestParseMysql56GTIDSetIntervalsCapHint(t *testing.T) {
 	const sid = "00010203-0405-0607-0809-0a0b0c0d0e0f"
 
@@ -918,7 +917,6 @@ func TestParseMysql56GTIDSetIntervalsCapHint(t *testing.T) {
 		var sb strings.Builder
 		sb.WriteString(sid)
 		for i := range n {
-			// non-overlapping ascending intervals, so none are merged or discarded
 			fmt.Fprintf(&sb, ":%d-%d", 2*i+1, 2*i+1)
 		}
 		got, err := ParseMysql56GTIDSet(sb.String())
@@ -928,16 +926,7 @@ func TestParseMysql56GTIDSetIntervalsCapHint(t *testing.T) {
 		assert.Len(t, got[sidVal], n, "n=%d", n)
 	}
 
-	// A long run of colons carries no intervals at all, so reserving one per colon
-	// is pure waste. 1MiB of colons is 16MiB of interval structs unbounded.
-	//
-	// The bound cannot be tightened past len(tail)/2 to shrink this further: the
-	// densest valid list is one singleton per two bytes ("1:"), so a smaller
-	// divisor under-reserves legitimate input. That trade-off is why the threshold
-	// here is 12MiB rather than the 8MiB a len(tail)/4 bound would reach --
-	// measured, /4 cut this case to 5.0MiB but inflated a valid 100k-singleton
-	// list from 1,606,032 to 6,685,104 bytes. Bounding a hostile input is not
-	// worth a 4.16x regression on a valid one.
+	// A colon run carries no intervals, so reserving one per colon is pure waste.
 	hostile := sid + ":" + strings.Repeat(":", 1<<20)
 	var before, after runtime.MemStats
 	runtime.GC()
@@ -949,10 +938,8 @@ func TestParseMysql56GTIDSetIntervalsCapHint(t *testing.T) {
 		"parsing %d colons allocated %d bytes for intervals that are all discarded",
 		1<<20, allocated)
 
-	// The bound must not under-reserve a valid list. parseInterval accepts a
-	// singleton "N", so "1:1:1:..." needs one interval per two input bytes -- the
-	// densest valid form. Note that duplicate singletons are each retained rather
-	// than merged, so this really does need `singletons` intervals.
+	// The bound must not under-reserve the densest valid list: duplicate singletons
+	// are retained rather than merged, so "1:1:1:..." needs one interval per two bytes.
 	const singletons = 100000
 	var sb strings.Builder
 	sb.WriteString(sid)
@@ -967,11 +954,8 @@ func TestParseMysql56GTIDSetIntervalsCapHint(t *testing.T) {
 	denseAlloc := after.TotalAlloc - before.TotalAlloc
 	sidVal, err := ParseSID(sid)
 	require.NoError(t, err)
-	assert.Len(t, dense[sidVal], singletons,
-		"duplicate singletons are retained, not merged")
-	// 100k intervals at 16 bytes is 1.6MiB; allow headroom for the strings but not
-	// for a doubling-and-copying append.
+	assert.Len(t, dense[sidVal], singletons)
 	assert.Less(t, denseAlloc, uint64(3<<20),
-		"a dense valid singleton list allocated %d bytes, which means the capacity "+
-			"hint under-reserved and append had to grow", denseAlloc)
+		"a dense valid singleton list allocated %d bytes, so the hint under-reserved",
+		denseAlloc)
 }
