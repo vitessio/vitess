@@ -2880,20 +2880,34 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 
 	// Don't switch writes forward while leaving reads on the source. Moving writes
 	// while any read type stays on the source strands those reads and, for a Reshard,
-	// makes the workflow uncompletable. For each read type, work out the cells that
-	// would still be on the source after this request's read switches (including the
-	// cells this request does not target) and flag any that remain. --force overrides.
-	// Evaluated on freshly reloaded state under the workflow lock, so it is serialized
-	// against concurrent switches rather than relying on the pre-lock state.
+	// makes the workflow uncompletable. For each read type, work out whether reads
+	// would still be on the source after this request's read switches and flag any
+	// that remain. --force overrides. Evaluated on freshly reloaded state under the
+	// workflow lock, so it is serialized against concurrent switches rather than
+	// relying on the pre-lock state.
 	if TrafficSwitchDirection(req.Direction) == DirectionForward && switchPrimary {
 		_, lockedState, stateErr := s.getWorkflowState(ctx, req.Keyspace, req.Workflow)
 		if stateErr != nil {
 			return nil, stateErr
 		}
+		// Reshard switches reads per cell, so a request naming only some cells can
+		// leave others on the source. MoveTables read routing rules are global, so a
+		// requested read type is fully switched regardless of --cells; only apply the
+		// per-cell subtraction for Reshard.
+		perCellStranding := lockedState.WorkflowType == TypeReshard
+		var reqCells sets.Set[string]
+		if perCellStranding {
+			// ExpandCells resolves aliases to concrete cell names (empty means all
+			// cells) so they compare against the concrete cells in the state.
+			expanded, err := s.ts.ExpandCells(ctx, strings.Join(req.Cells, ","))
+			if err != nil {
+				return nil, err
+			}
+			reqCells = sets.New(expanded...)
+		}
 		// cellsStrandedOnSource returns the cells still on the source after this
 		// request. If the request does not switch the type, every not-switched cell
-		// remains; if it does, only cells outside req.Cells remain (empty req.Cells
-		// means all cells, so nothing remains).
+		// remains; if it does, only cells this request does not target remain.
 		cellsStrandedOnSource := func(switchedByReq bool, notSwitched []string) []string {
 			if len(notSwitched) == 0 {
 				return nil
@@ -2901,16 +2915,12 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 			if !switchedByReq {
 				return notSwitched
 			}
-			if len(req.Cells) == 0 {
+			if !perCellStranding {
 				return nil
-			}
-			reqCells := make(map[string]bool, len(req.Cells))
-			for _, c := range req.Cells {
-				reqCells[c] = true
 			}
 			var stranded []string
 			for _, c := range notSwitched {
-				if !reqCells[c] {
+				if !reqCells.Has(c) {
 					stranded = append(stranded, c)
 				}
 			}
