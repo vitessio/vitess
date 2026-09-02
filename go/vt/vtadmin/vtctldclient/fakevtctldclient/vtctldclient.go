@@ -168,8 +168,9 @@ type VtctldClient struct {
 		Response *vtctldatapb.ValidateVersionKeyspaceResponse
 		Error    error
 	}
-	LastVDiffCreateRequest *vtctldatapb.VDiffCreateRequest
-	WorkflowUpdateResults  map[string]struct {
+	LastVDiffCreateRequest       *vtctldatapb.VDiffCreateRequest
+	LastMaterializeCreateRequest *vtctldatapb.MaterializeCreateRequest
+	WorkflowUpdateResults        map[string]struct {
 		Response *vtctldatapb.WorkflowUpdateResponse
 		Error    error
 	}
@@ -816,6 +817,12 @@ func (fake *VtctldClient) ValidateVersionKeyspace(ctx context.Context, req *vtct
 	}
 
 	return nil, fmt.Errorf("%w: no result set for %s", assert.AnError, key)
+}
+
+// MaterializeCreate is part of the vtctldclient.VtctldClient interface.
+func (fake *VtctldClient) MaterializeCreate(ctx context.Context, req *vtctldatapb.MaterializeCreateRequest, opts ...grpc.CallOption) (*vtctldatapb.MaterializeCreateResponse, error) {
+	fake.LastMaterializeCreateRequest = req
+	return &vtctldatapb.MaterializeCreateResponse{}, nil
 }
 
 // VDiffCreate is part of the vtctldclient.VtctldClient interface.

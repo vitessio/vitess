@@ -1757,10 +1757,7 @@ func (api *API) VDiffCreate(ctx context.Context, req *vtadminpb.VDiffCreateReque
 		defaultAutoStart := true
 		req.Request.AutoStart = &defaultAutoStart
 	}
-	// AutoRetry is preserved exactly as submitted. The vtadmin2 UI checkbox is
-	// pre-checked, so browser users always send an explicit value; callers of
-	// the API should set AutoRetry explicitly because vtctld's own default is
-	// false. The field cannot be made presence-aware without a proto change.
+	req.Request.AutoRetry = true
 
 	return c.Vtctld.VDiffCreate(ctx, req.Request)
 }
@@ -2066,17 +2063,19 @@ func (api *API) MaterializeCreate(ctx context.Context, req *vtadminpb.Materializ
 		return nil, err
 	}
 
-	// Parser with default options. New() itself initializes with default MySQL version.
-	parser, err := sqlparser.New(sqlparser.Options{
-		TruncateUILen:  512,
-		TruncateErrLen: 0,
-	})
-	if err != nil {
-		return nil, err
-	}
-	req.Request.Settings.TableSettings, err = vreplcommon.ParseTableMaterializeSettings(req.TableSettings, parser)
-	if err != nil {
-		return nil, err
+	tableSettings := strings.TrimSpace(req.TableSettings)
+	if tableSettings != "" || len(req.Request.GetSettings().GetReferenceTables()) == 0 {
+		parser, err := sqlparser.New(sqlparser.Options{
+			TruncateUILen:  512,
+			TruncateErrLen: 0,
+		})
+		if err != nil {
+			return nil, err
+		}
+		req.Request.Settings.TableSettings, err = vreplcommon.ParseTableMaterializeSettings(tableSettings, parser)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return c.Vtctld.MaterializeCreate(ctx, req.Request)

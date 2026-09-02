@@ -125,8 +125,9 @@ func TestCreateMoveTablesFormRendersOptions(t *testing.T) {
 	assert.Contains(t, body, `name="table" value="orders"`)
 	assert.Contains(t, body, `name="all_tables"`)
 	assert.Contains(t, body, `name="on_ddl"`)
-	assert.Contains(t, body, `name="tablet_type" value="REPLICA"`)
-	assert.Contains(t, body, `name="tablet_type" value="PRIMARY"`)
+	assert.Contains(t, body, `name="tablet_type" value="REPLICA" checked`)
+	assert.Contains(t, body, `name="tablet_type" value="PRIMARY" checked`)
+	assert.Contains(t, body, `name="defer_secondary_keys" checked`)
 	assert.Contains(t, body, `name="auto_start"`)
 	assert.Contains(t, body, `name="csrf_token"`)
 	assert.Contains(t, body, "IGNORE") // on_ddl default option
@@ -247,7 +248,7 @@ func TestCreateMoveTablesPostDefaults(t *testing.T) {
 	// SPA default when nothing else is selected.
 	assert.Equal(t, "IGNORE", inner.OnDdl)
 	assert.Empty(t, inner.Cells)
-	assert.Empty(t, inner.TabletTypes)
+	assert.Equal(t, []topodatapb.TabletType{topodatapb.TabletType_REPLICA, topodatapb.TabletType_PRIMARY}, inner.TabletTypes)
 	assert.False(t, inner.AutoStart) // not submitted: zero value, not assumed
 }
 
@@ -370,8 +371,10 @@ func TestCreateMaterializeFormRendersOptions(t *testing.T) {
 	assert.Contains(t, body, `name="source_keyspace"`)
 	assert.Contains(t, body, `name="target_keyspace"`)
 	assert.Contains(t, body, `name="table_settings"`)
+	assert.Contains(t, body, `placeholder='[{"target_table":"target_table","source_expression":"select * from source_table"}]'`)
 	assert.Contains(t, body, `name="cell"`)
-	assert.Contains(t, body, `name="tablet_type"`)
+	assert.Contains(t, body, `name="tablet_type" value="REPLICA" checked`)
+	assert.Contains(t, body, `name="tablet_type" value="PRIMARY" checked`)
 	assert.Contains(t, body, `name="reference_table" value="users"`)
 	assert.Contains(t, body, `name="reference_table" value="orders"`)
 	assert.Contains(t, body, `name="csrf_token"`)
@@ -499,7 +502,7 @@ func TestCreateMaterializePostDefaults(t *testing.T) {
 	assert.Equal(t, http.StatusSeeOther, rec.Code)
 	settings := fake.materializeCreateReq.GetRequest().GetSettings()
 	assert.Empty(t, settings.Cell)
-	assert.Empty(t, settings.TabletTypes)
+	assert.Equal(t, "REPLICA,PRIMARY", settings.TabletTypes)
 	assert.Equal(t, tabletmanagerdatapb.TabletSelectionPreference_ANY, settings.TabletSelectionPreference)
 	assert.False(t, settings.StopAfterCopy)
 }
@@ -729,12 +732,13 @@ func TestCreateReshardFormRendersOptions(t *testing.T) {
 	assert.Contains(t, body, `name="source_shards"`)
 	assert.Contains(t, body, `name="target_shards"`)
 	assert.Contains(t, body, `name="cells"`)
-	assert.Contains(t, body, `name="tablet_type" value="REPLICA"`)
+	assert.Contains(t, body, `name="tablet_type" value="REPLICA" checked`)
+	assert.Contains(t, body, `name="tablet_type" value="PRIMARY" checked`)
 	assert.Contains(t, body, `name="on_ddl"`)
 	assert.Contains(t, body, `name="tablet_selection_preference"`)
 	assert.Contains(t, body, `name="skip_schema_copy"`)
 	assert.Contains(t, body, `name="stop_after_copy"`)
-	assert.Contains(t, body, `name="defer_secondary_keys"`)
+	assert.Contains(t, body, `name="defer_secondary_keys" checked`)
 	assert.Contains(t, body, `name="auto_start"`)
 	assert.Contains(t, body, `name="csrf_token"`)
 	assert.NotNil(t, findCookie(rec, csrfCookieName))
@@ -812,6 +816,7 @@ func TestCreateReshardPostDefaults(t *testing.T) {
 	inner := fake.reshardCreateReq.GetRequest()
 	require.NotNil(t, inner)
 	assert.Equal(t, "IGNORE", inner.OnDdl)
+	assert.Equal(t, []topodatapb.TabletType{topodatapb.TabletType_REPLICA, topodatapb.TabletType_PRIMARY}, inner.TabletTypes)
 	// Absent checkbox: zero value (ANY), not assumed to be INORDER.
 	assert.Equal(t, tabletmanagerdatapb.TabletSelectionPreference_ANY, inner.TabletSelectionPreference)
 	assert.False(t, inner.AutoStart)

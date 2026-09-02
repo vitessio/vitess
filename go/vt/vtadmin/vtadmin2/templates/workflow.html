@@ -55,6 +55,8 @@
         </form>
       </div>
     </details>
+    {{ $wfType := .Data.GetWorkflow.GetWorkflowType }}
+    {{ if or (eq $wfType "MoveTables") (eq $wfType "Reshard") }}
     <details>
       <summary>Switch traffic</summary>
       <form method="POST" action="/workflow/{{ pathEscape (clusterID .Data.GetCluster) }}/{{ pathEscape .Data.GetKeyspace }}/{{ pathEscape .Data.GetWorkflow.GetName }}/switch_traffic" class="form-grid" data-confirm="Switch traffic for workflow {{ .Data.GetWorkflow.GetName }}?">
@@ -83,7 +85,7 @@
           Enable reverse replication
         </label>
         <label class="checkbox-label">
-          <input type="checkbox" name="initialize_target_sequences" checked>
+          <input type="checkbox" name="initialize_target_sequences">
           Initialize target sequences
         </label>
         <label class="checkbox-label">
@@ -115,6 +117,7 @@
         <button type="submit" class="button secondary">Reverse traffic</button>
       </form>
     </details>
+    {{ end }}
     <details>
       <summary>VDiff</summary>
       <form method="POST" action="/workflow/{{ pathEscape (clusterID .Data.GetCluster) }}/{{ pathEscape .Data.GetKeyspace }}/{{ pathEscape .Data.GetWorkflow.GetName }}/vdiff" class="form-grid">

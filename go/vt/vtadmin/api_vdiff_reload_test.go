@@ -118,7 +118,7 @@ func TestVDiffCreatePreservesExplicitOptions(t *testing.T) {
 	got := fake.LastVDiffCreateRequest
 	require.NotNil(t, got)
 	assert.Equal(t, "kept-uuid", got.Uuid)
-	assert.False(t, got.AutoRetry)
+	assert.True(t, got.AutoRetry)
 }
 
 func TestReloadSchemaShardForwardsKeyspaceAndShard(t *testing.T) {

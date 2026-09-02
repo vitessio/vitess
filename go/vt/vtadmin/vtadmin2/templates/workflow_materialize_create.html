@@ -64,7 +64,7 @@
     </label>
     <label>
       Table settings (JSON)
-      <textarea name="table_settings" rows="8" placeholder='{"target_table": {"source_expression": "..."}}'></textarea>
+      <textarea name="table_settings" rows="8" placeholder='[{"target_table":"target_table","source_expression":"select * from source_table"}]'></textarea>
       <span class="muted">JSON defining which tables to materialize and the select expressions to build them from. Provide either table settings or reference tables — not both.</span>
     </label>
 
@@ -89,11 +89,11 @@
     <fieldset class="form-fieldset">
       <legend>Source tablet types</legend>
       <label class="checkbox-label">
-        <input type="checkbox" name="tablet_type" value="REPLICA">
+        <input type="checkbox" name="tablet_type" value="REPLICA" checked>
         REPLICA
       </label>
       <label class="checkbox-label">
-        <input type="checkbox" name="tablet_type" value="PRIMARY">
+        <input type="checkbox" name="tablet_type" value="PRIMARY" checked>
         PRIMARY
       </label>
       <label class="checkbox-label">

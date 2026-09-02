@@ -38,6 +38,9 @@ const (
 type workflowActionsFakeServer struct {
 	fakeVTAdminServer
 
+	workflowType             string
+	startWorkflowNil         bool
+	stopWorkflowNil          bool
 	startWorkflowReq         *vtadminpb.StartWorkflowRequest
 	stopWorkflowReq          *vtadminpb.StopWorkflowRequest
 	workflowDeleteReq        *vtadminpb.WorkflowDeleteRequest
@@ -47,20 +50,30 @@ type workflowActionsFakeServer struct {
 }
 
 func (f *workflowActionsFakeServer) GetWorkflow(ctx context.Context, req *vtadminpb.GetWorkflowRequest) (*vtadminpb.Workflow, error) {
+	workflowType := f.workflowType
+	if workflowType == "" {
+		workflowType = "MoveTables"
+	}
 	return &vtadminpb.Workflow{
 		Cluster:  &vtadminpb.Cluster{Id: req.ClusterId},
 		Keyspace: req.Keyspace,
-		Workflow: &vtctldatapb.Workflow{Name: req.Name, WorkflowType: "MoveTables"},
+		Workflow: &vtctldatapb.Workflow{Name: req.Name, WorkflowType: workflowType},
 	}, nil
 }
 
 func (f *workflowActionsFakeServer) StartWorkflow(ctx context.Context, req *vtadminpb.StartWorkflowRequest) (*vtctldatapb.WorkflowUpdateResponse, error) {
 	f.startWorkflowReq = req
+	if f.startWorkflowNil {
+		return nil, nil
+	}
 	return &vtctldatapb.WorkflowUpdateResponse{}, nil
 }
 
 func (f *workflowActionsFakeServer) StopWorkflow(ctx context.Context, req *vtadminpb.StopWorkflowRequest) (*vtctldatapb.WorkflowUpdateResponse, error) {
 	f.stopWorkflowReq = req
+	if f.stopWorkflowNil {
+		return nil, nil
+	}
 	return &vtctldatapb.WorkflowUpdateResponse{}, nil
 }
 
@@ -128,6 +141,39 @@ func TestWorkflowStartStopCallAPI(t *testing.T) {
 			assert.Equal(t, http.StatusSeeOther, rec.Code)
 			assert.Equal(t, workflowActionBase, rec.Header().Get("Location"))
 			tt.verify(t, fake)
+		})
+	}
+}
+
+func TestWorkflowStartStopUnauthorizedNilResponse(t *testing.T) {
+	tests := []struct {
+		action string
+		setup  func(*workflowActionsFakeServer)
+		called func(*workflowActionsFakeServer) any
+	}{
+		{
+			action: "/start",
+			setup:  func(f *workflowActionsFakeServer) { f.startWorkflowNil = true },
+			called: func(f *workflowActionsFakeServer) any { return f.startWorkflowReq },
+		},
+		{
+			action: "/stop",
+			setup:  func(f *workflowActionsFakeServer) { f.stopWorkflowNil = true },
+			called: func(f *workflowActionsFakeServer) any { return f.stopWorkflowReq },
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.action, func(t *testing.T) {
+			fake := &workflowActionsFakeServer{}
+			tt.setup(fake)
+			s := newWorkflowActionsTestServer(t, fake, false)
+
+			rec := postShardForm(t, s, workflowActionBase+tt.action, url.Values{})
+
+			assert.Equal(t, http.StatusBadRequest, rec.Code)
+			assert.NotNil(t, tt.called(fake))
+			assert.Contains(t, rec.Body.String(), "not authorized")
 		})
 	}
 }
@@ -274,6 +320,7 @@ func TestWorkflowSwitchTrafficDefaultsTabletTypes(t *testing.T) {
 		topodatapb.TabletType_REPLICA,
 		topodatapb.TabletType_RDONLY,
 	}, inner.TabletTypes)
+	assert.False(t, inner.InitializeTargetSequences)
 }
 
 func TestWorkflowReverseTrafficDefaultsTabletTypes(t *testing.T) {
@@ -327,4 +374,63 @@ func TestWorkflowDetailRendersActions(t *testing.T) {
 	})
 	assert.Equal(t, http.StatusSeeOther, rec.Code)
 	require.NotNil(t, fake.startWorkflowReq)
+}
+
+func TestWorkflowDetailTrafficSwitchVisibility(t *testing.T) {
+	tests := []struct {
+		workflowType string
+		wantSwitch   bool
+	}{
+		{workflowType: "MoveTables", wantSwitch: true},
+		{workflowType: "Reshard", wantSwitch: true},
+		{workflowType: "Materialize", wantSwitch: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.workflowType, func(t *testing.T) {
+			fake := &workflowActionsFakeServer{workflowType: tt.workflowType}
+			s := newWorkflowActionsTestServer(t, fake, false)
+
+			_, rec := renderWithCSRF(t, s, workflowActionBase)
+			body := rec.Body.String()
+			assert.Contains(t, body, workflowActionBase+"/start")
+			if tt.wantSwitch {
+				assert.Contains(t, body, workflowActionBase+"/switch_traffic")
+				assert.Contains(t, body, workflowActionBase+"/reverse_traffic")
+			} else {
+				assert.NotContains(t, body, workflowActionBase+"/switch_traffic")
+				assert.NotContains(t, body, workflowActionBase+"/reverse_traffic")
+			}
+		})
+	}
+}
+
+func TestWorkflowSwitchTrafficRejectsUnsupportedTypes(t *testing.T) {
+	tests := []struct {
+		workflowType string
+		wantOK       bool
+	}{
+		{workflowType: "MoveTables", wantOK: true},
+		{workflowType: "Reshard", wantOK: true},
+		{workflowType: "Materialize", wantOK: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.workflowType, func(t *testing.T) {
+			fake := &workflowActionsFakeServer{workflowType: tt.workflowType}
+			s := newWorkflowActionsTestServer(t, fake, false)
+
+			rec := postShardForm(t, s, workflowActionBase+"/switch_traffic", url.Values{})
+
+			if tt.wantOK {
+				assert.Equal(t, http.StatusSeeOther, rec.Code)
+				require.NotNil(t, fake.workflowSwitchTrafficReq)
+				return
+			}
+
+			assert.Equal(t, http.StatusBadRequest, rec.Code)
+			assert.Nil(t, fake.workflowSwitchTrafficReq)
+			assert.Contains(t, rec.Body.String(), "MoveTables")
+		})
+	}
 }

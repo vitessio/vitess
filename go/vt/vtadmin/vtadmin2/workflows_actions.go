@@ -54,13 +54,17 @@ func (s *Server) workflowStart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err := s.api.StartWorkflow(r.Context(), &vtadminpb.StartWorkflowRequest{
+	resp, err := s.api.StartWorkflow(r.Context(), &vtadminpb.StartWorkflowRequest{
 		ClusterId: clusterID,
 		Keyspace:  keyspace,
 		Workflow:  workflow,
 	})
 	if err != nil {
 		s.renderFormErrorErr(w, r, title, err)
+		return
+	}
+	if resp == nil {
+		s.renderFormError(w, r, title, "not authorized to start workflow")
 		return
 	}
 
@@ -77,13 +81,17 @@ func (s *Server) workflowStop(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err := s.api.StopWorkflow(r.Context(), &vtadminpb.StopWorkflowRequest{
+	resp, err := s.api.StopWorkflow(r.Context(), &vtadminpb.StopWorkflowRequest{
 		ClusterId: clusterID,
 		Keyspace:  keyspace,
 		Workflow:  workflow,
 	})
 	if err != nil {
 		s.renderFormErrorErr(w, r, title, err)
+		return
+	}
+	if resp == nil {
+		s.renderFormError(w, r, title, "not authorized to stop workflow")
 		return
 	}
 
@@ -148,6 +156,10 @@ func (s *Server) workflowComplete(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func workflowSupportsTrafficSwitch(workflowType string) bool {
+	return workflowType == "MoveTables" || workflowType == "Reshard"
+}
+
 func (s *Server) workflowSwitchTraffic(w http.ResponseWriter, r *http.Request, direction int32) {
 	title := "Switch traffic"
 	if direction == switchDirectionBackward {
@@ -156,6 +168,24 @@ func (s *Server) workflowSwitchTraffic(w http.ResponseWriter, r *http.Request, d
 
 	clusterID, keyspace, workflow, ok := s.beginWorkflowAction(w, r, title)
 	if !ok {
+		return
+	}
+
+	wf, err := s.api.GetWorkflow(r.Context(), &vtadminpb.GetWorkflowRequest{
+		ClusterId: clusterID,
+		Keyspace:  keyspace,
+		Name:      workflow,
+	})
+	if err != nil {
+		s.renderFormErrorErr(w, r, title, err)
+		return
+	}
+	if wf == nil || wf.GetWorkflow() == nil {
+		s.renderFormError(w, r, title, "not authorized to "+strings.ToLower(title))
+		return
+	}
+	if !workflowSupportsTrafficSwitch(wf.GetWorkflow().GetWorkflowType()) {
+		s.renderFormError(w, r, title, "traffic switching is only supported for MoveTables and Reshard workflows")
 		return
 	}
 

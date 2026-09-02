@@ -191,7 +191,7 @@ func (s *Server) createReshard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tabletTypes, err := parseTabletTypes(r.Form["tablet_type"])
+	tabletTypes, err := parseCreateSourceTabletTypes(r.Form["tablet_type"])
 	if err != nil {
 		s.renderFormError(w, r, title, err.Error())
 		return
@@ -324,7 +324,7 @@ func (s *Server) createMaterialize(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tabletTypes, err := parseTabletTypes(r.Form["tablet_type"])
+	tabletTypes, err := parseCreateSourceTabletTypes(r.Form["tablet_type"])
 	if err != nil {
 		s.renderFormError(w, r, title, err.Error())
 		return
@@ -499,7 +499,7 @@ func (s *Server) createMoveTables(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tabletTypes, err := parseTabletTypes(r.Form["tablet_type"])
+	tabletTypes, err := parseCreateSourceTabletTypes(r.Form["tablet_type"])
 	if err != nil {
 		s.renderFormError(w, r, title, err.Error())
 		return
@@ -560,6 +560,16 @@ func parseTabletTypes(names []string) ([]topodatapb.TabletType, error) {
 		types = append(types, topodatapb.TabletType(value))
 	}
 	return types, nil
+}
+
+func parseCreateSourceTabletTypes(names []string) ([]topodatapb.TabletType, error) {
+	if len(names) == 0 {
+		return []topodatapb.TabletType{
+			topodatapb.TabletType_REPLICA,
+			topodatapb.TabletType_PRIMARY,
+		}, nil
+	}
+	return parseTabletTypes(names)
 }
 
 // renderFormErrorErr is renderFormError for error values.

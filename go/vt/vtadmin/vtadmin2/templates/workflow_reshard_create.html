@@ -69,11 +69,11 @@
     <fieldset class="form-fieldset">
       <legend>Source tablet types</legend>
       <label class="checkbox-label">
-        <input type="checkbox" name="tablet_type" value="REPLICA">
+        <input type="checkbox" name="tablet_type" value="REPLICA" checked>
         REPLICA
       </label>
       <label class="checkbox-label">
-        <input type="checkbox" name="tablet_type" value="PRIMARY">
+        <input type="checkbox" name="tablet_type" value="PRIMARY" checked>
         PRIMARY
       </label>
       <label class="checkbox-label">
@@ -107,7 +107,7 @@
     </label>
     <p class="muted">Stops VReplication once the backfill copy finishes, without catching up.</p>
     <label class="checkbox-label">
-      <input type="checkbox" name="defer_secondary_keys">
+      <input type="checkbox" name="defer_secondary_keys" checked>
       Defer secondary keys
     </label>
     <p class="muted">Creates secondary indexes in one shot after the table copy finishes instead of during it.</p>
