@@ -18,7 +18,6 @@ package vtadmin2
 
 import (
 	"net/http"
-	"net/url"
 
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
 )
@@ -41,7 +40,10 @@ func (s *Server) transactionConclude(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	redirectWithFlash(w, r, "/transactions?cluster_id="+url.QueryEscape(clusterID), Flash{
+	// Redirect to the unfiltered transactions page: the transactions handler
+	// requires both cluster_id and keyspace when any query parameters are
+	// present, and this action is not keyed to a single keyspace.
+	s.redirectWithFlash(w, r, "/transactions", Flash{
 		Kind:    "success",
 		Message: "concluded transaction " + dtid,
 	})

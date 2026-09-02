@@ -144,14 +144,14 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, status int, name
 		data.Theme = cookie.Value
 	}
 	if data.NeedsCSRF && data.CSRFToken == "" {
-		data.CSRFToken = csrfToken(w, r)
+		data.CSRFToken = s.csrfToken(w, r)
 	}
 	if data.Flash == nil {
-		if flash := flashFromRequest(w, r); flash != nil {
+		if flash := s.flashFromRequest(w, r); flash != nil {
 			data.Flash = flash
 		}
 	} else {
-		clearFlash(w, r)
+		s.clearFlash(w, r)
 	}
 
 	tmpl := s.templates.templates[strings.TrimPrefix(name, "templates/")]

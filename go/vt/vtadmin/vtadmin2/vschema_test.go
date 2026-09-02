@@ -45,6 +45,13 @@ type vschemaFakeServer struct {
 	getVSchemaNilResponse  bool
 }
 
+func (f *vschemaFakeServer) GetClusters(ctx context.Context, req *vtadminpb.GetClustersRequest) (*vtadminpb.GetClustersResponse, error) {
+	return &vtadminpb.GetClustersResponse{Clusters: []*vtadminpb.Cluster{
+		{Id: "local", Name: "Local"},
+		{Id: "prod", Name: "Prod"},
+	}}, nil
+}
+
 func (f *vschemaFakeServer) GetVSchemas(ctx context.Context, req *vtadminpb.GetVSchemasRequest) (*vtadminpb.GetVSchemasResponse, error) {
 	f.getVSchemasRequest = req
 	if f.getVSchemasError != nil {
@@ -168,6 +175,22 @@ func TestSrvKeyspacesPageCallsServerAndRendersRows(t *testing.T) {
 	assert.Contains(t, rec.Body.String(), "SrvKeyspaces")
 	assert.Contains(t, rec.Body.String(), "commerce")
 	assert.Contains(t, rec.Body.String(), "zone1")
+}
+
+func TestSrvKeyspacesPageRequiresClusterSelection(t *testing.T) {
+	fake := &vschemaFakeServer{}
+	s, err := NewServer(fake, Options{})
+	require.NoError(t, err)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/srvkeyspaces", nil)
+	s.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Nil(t, fake.getSrvKeyspacesRequest)
+	assert.Contains(t, rec.Body.String(), `name="cluster_id"`)
+	assert.Contains(t, rec.Body.String(), "local")
+	assert.Contains(t, rec.Body.String(), "prod")
 }
 
 func TestSrvKeyspacesPageBackendErrorReturnsInternalServerError(t *testing.T) {

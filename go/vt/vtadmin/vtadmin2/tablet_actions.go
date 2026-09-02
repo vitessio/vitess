@@ -60,7 +60,7 @@ func (s *Server) tabletStartReplication(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	redirectWithFlash(w, r, tabletDetailRedirect(clusterID, r.PathValue("alias")), Flash{
+	s.redirectWithFlash(w, r, tabletDetailRedirect(clusterID, r.PathValue("alias")), Flash{
 		Kind:    "success",
 		Message: "replication started on tablet " + r.PathValue("alias"),
 	})
@@ -82,7 +82,7 @@ func (s *Server) tabletStopReplication(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	redirectWithFlash(w, r, tabletDetailRedirect(clusterID, r.PathValue("alias")), Flash{
+	s.redirectWithFlash(w, r, tabletDetailRedirect(clusterID, r.PathValue("alias")), Flash{
 		Kind:    "success",
 		Message: "replication stopped on tablet " + r.PathValue("alias"),
 	})
@@ -109,7 +109,7 @@ func (s *Server) tabletRefreshReplicationSource(w http.ResponseWriter, r *http.R
 		message += " (now replicating from " + keyspace + "/" + resp.GetShard() + ")"
 	}
 
-	redirectWithFlash(w, r, tabletDetailRedirect(clusterID, r.PathValue("alias")), Flash{
+	s.redirectWithFlash(w, r, tabletDetailRedirect(clusterID, r.PathValue("alias")), Flash{
 		Kind:    "success",
 		Message: message,
 	})
@@ -131,7 +131,7 @@ func (s *Server) tabletSetReadOnly(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	redirectWithFlash(w, r, tabletDetailRedirect(clusterID, r.PathValue("alias")), Flash{
+	s.redirectWithFlash(w, r, tabletDetailRedirect(clusterID, r.PathValue("alias")), Flash{
 		Kind:    "success",
 		Message: "tablet " + r.PathValue("alias") + " set to read-only",
 	})
@@ -153,7 +153,7 @@ func (s *Server) tabletSetReadWrite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	redirectWithFlash(w, r, tabletDetailRedirect(clusterID, r.PathValue("alias")), Flash{
+	s.redirectWithFlash(w, r, tabletDetailRedirect(clusterID, r.PathValue("alias")), Flash{
 		Kind:    "success",
 		Message: "tablet " + r.PathValue("alias") + " set to read-write",
 	})
@@ -177,7 +177,7 @@ func (s *Server) tabletDelete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// The tablet no longer exists after deletion, so redirect to the list.
-	redirectWithFlash(w, r, "/tablets", Flash{
+	s.redirectWithFlash(w, r, "/tablets", Flash{
 		Kind:    "success",
 		Message: "deleted tablet " + r.PathValue("alias"),
 	})
@@ -199,7 +199,7 @@ func (s *Server) tabletPing(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	redirectWithFlash(w, r, tabletDetailRedirect(clusterID, r.PathValue("alias")), Flash{
+	s.redirectWithFlash(w, r, tabletDetailRedirect(clusterID, r.PathValue("alias")), Flash{
 		Kind:    "success",
 		Message: "tablet " + r.PathValue("alias") + " responded to ping",
 	})
@@ -226,7 +226,7 @@ func (s *Server) tabletRefreshState(w http.ResponseWriter, r *http.Request) {
 		message += ": " + status
 	}
 
-	redirectWithFlash(w, r, tabletDetailRedirect(clusterID, r.PathValue("alias")), Flash{
+	s.redirectWithFlash(w, r, tabletDetailRedirect(clusterID, r.PathValue("alias")), Flash{
 		Kind:    "success",
 		Message: message,
 	})
@@ -253,7 +253,7 @@ func (s *Server) tabletRunHealthCheck(w http.ResponseWriter, r *http.Request) {
 		message += ": " + status
 	}
 
-	redirectWithFlash(w, r, tabletDetailRedirect(clusterID, r.PathValue("alias")), Flash{
+	s.redirectWithFlash(w, r, tabletDetailRedirect(clusterID, r.PathValue("alias")), Flash{
 		Kind:    "success",
 		Message: message,
 	})

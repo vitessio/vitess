@@ -63,10 +63,11 @@ var (
 	cacheRefreshKey string
 
 	// Server-rendered UI (vtadmin2) options.
-	ui          string
-	uiAddr      string
-	uiReadOnly  bool
-	uiDebugJSON bool
+	ui           string
+	uiAddr       string
+	uiReadOnly   bool
+	uiDebugJSON  bool
+	uiTrustProxy bool
 
 	traceCloser io.Closer = &noopCloser{}
 
@@ -200,6 +201,7 @@ func run(cmd *cobra.Command, args []string) {
 			ReadOnly:        uiReadOnly,
 			DocumentTitle:   "VTAdmin",
 			EnableDebugJSON: uiDebugJSON,
+			TrustProxyProto: uiTrustProxy,
 			Authenticator:   rbacConfig.GetAuthenticator(),
 		})
 		if err != nil {
@@ -261,6 +263,7 @@ func registerFlags() {
 	rootCmd.Flags().StringVar(&uiAddr, "ui-addr", ":15001", "address for the vtadmin2 UI to listen on (used with --ui=vtadmin2)")
 	rootCmd.Flags().BoolVar(&uiReadOnly, "ui-read-only", false, "run the vtadmin2 UI in read-only mode (used with --ui=vtadmin2)")
 	rootCmd.Flags().BoolVar(&uiDebugJSON, "ui-debug-json", false, "enable ?format=json page data output in the vtadmin2 UI (used with --ui=vtadmin2)")
+	rootCmd.Flags().BoolVar(&uiTrustProxy, "ui-trust-proxy-https", false, "mark UI cookies Secure when X-Forwarded-Proto: https is present from a trusted HTTPS-terminating proxy (used with --ui=vtadmin2)")
 
 	// Tracing flags
 	trace.RegisterFlags(rootCmd.Flags()) // defined in go/vt/trace

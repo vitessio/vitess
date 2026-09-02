@@ -30,7 +30,10 @@ import (
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
-const workflowActionBase = "/workflow/local/sales/users_to_sales"
+const (
+	workflowActionBase = "/workflow/local/sales/users_to_sales"
+	generatedVDiffUUID = "550e8400-e29b-41d4-a716-446655440000"
+)
 
 type workflowActionsFakeServer struct {
 	fakeVTAdminServer
@@ -78,7 +81,11 @@ func (f *workflowActionsFakeServer) MoveTablesComplete(ctx context.Context, req 
 
 func (f *workflowActionsFakeServer) VDiffCreate(ctx context.Context, req *vtadminpb.VDiffCreateRequest) (*vtctldatapb.VDiffCreateResponse, error) {
 	f.vdiffCreateReq = req
-	return &vtctldatapb.VDiffCreateResponse{}, nil
+	uuid := req.GetRequest().GetUuid()
+	if uuid == "" {
+		uuid = generatedVDiffUUID
+	}
+	return &vtctldatapb.VDiffCreateResponse{UUID: uuid}, nil
 }
 
 func newWorkflowActionsTestServer(t *testing.T, fake *workflowActionsFakeServer, readOnly bool) *Server {
@@ -229,7 +236,7 @@ func TestWorkflowVDiffCreateRedirectsToShow(t *testing.T) {
 	assert.Contains(t, rec.Header().Get("Location"), "/vdiff/local/show?")
 	assert.Contains(t, rec.Header().Get("Location"), "workflow=users_to_sales")
 	assert.Contains(t, rec.Header().Get("Location"), "keyspace=sales")
-	assert.Contains(t, rec.Header().Get("Location"), "uuid=my-vdiff-uuid")
+	assert.Contains(t, rec.Header().Get("Location"), "arg=my-vdiff-uuid")
 
 	req := fake.vdiffCreateReq
 	require.NotNil(t, req)
@@ -241,6 +248,48 @@ func TestWorkflowVDiffCreateRedirectsToShow(t *testing.T) {
 	assert.Equal(t, "my-vdiff-uuid", inner.Uuid)
 	assert.Equal(t, []string{"zone1", "zone2"}, inner.SourceCells)
 	assert.Equal(t, []string{"users", "orders"}, inner.Tables)
+}
+
+func TestWorkflowVDiffCreateRedirectsUsingReturnedUUID(t *testing.T) {
+	fake := &workflowActionsFakeServer{}
+	s := newWorkflowActionsTestServer(t, fake, false)
+
+	rec := postShardForm(t, s, workflowActionBase+"/vdiff", url.Values{})
+
+	assert.Equal(t, http.StatusSeeOther, rec.Code)
+	assert.Contains(t, rec.Header().Get("Location"), "arg="+generatedVDiffUUID)
+}
+
+func TestWorkflowSwitchTrafficDefaultsTabletTypes(t *testing.T) {
+	fake := &workflowActionsFakeServer{}
+	s := newWorkflowActionsTestServer(t, fake, false)
+
+	rec := postShardForm(t, s, workflowActionBase+"/switch_traffic", url.Values{})
+
+	assert.Equal(t, http.StatusSeeOther, rec.Code)
+	inner := fake.workflowSwitchTrafficReq.GetRequest()
+	require.NotNil(t, inner)
+	assert.Equal(t, []topodatapb.TabletType{
+		topodatapb.TabletType_PRIMARY,
+		topodatapb.TabletType_REPLICA,
+		topodatapb.TabletType_RDONLY,
+	}, inner.TabletTypes)
+}
+
+func TestWorkflowReverseTrafficDefaultsTabletTypes(t *testing.T) {
+	fake := &workflowActionsFakeServer{}
+	s := newWorkflowActionsTestServer(t, fake, false)
+
+	rec := postShardForm(t, s, workflowActionBase+"/reverse_traffic", url.Values{})
+
+	assert.Equal(t, http.StatusSeeOther, rec.Code)
+	inner := fake.workflowSwitchTrafficReq.GetRequest()
+	require.NotNil(t, inner)
+	assert.Equal(t, []topodatapb.TabletType{
+		topodatapb.TabletType_PRIMARY,
+		topodatapb.TabletType_REPLICA,
+		topodatapb.TabletType_RDONLY,
+	}, inner.TabletTypes)
 }
 
 func TestWorkflowActionsReadOnly(t *testing.T) {

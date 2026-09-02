@@ -64,6 +64,7 @@
           <label class="checkbox-label"><input type="checkbox" name="tablet_type" value="PRIMARY">PRIMARY</label>
           <label class="checkbox-label"><input type="checkbox" name="tablet_type" value="REPLICA">REPLICA</label>
           <label class="checkbox-label"><input type="checkbox" name="tablet_type" value="RDONLY">RDONLY</label>
+          <span class="muted">If none are selected, PRIMARY, REPLICA, and RDONLY are switched.</span>
         </fieldset>
         <label>
           Cells
@@ -105,6 +106,7 @@
           <label class="checkbox-label"><input type="checkbox" name="tablet_type" value="PRIMARY">PRIMARY</label>
           <label class="checkbox-label"><input type="checkbox" name="tablet_type" value="REPLICA">REPLICA</label>
           <label class="checkbox-label"><input type="checkbox" name="tablet_type" value="RDONLY">RDONLY</label>
+          <span class="muted">If none are selected, PRIMARY, REPLICA, and RDONLY are switched.</span>
         </fieldset>
         <label class="checkbox-label">
           <input type="checkbox" name="force">
@@ -134,10 +136,7 @@
           <input type="checkbox" name="auto_retry" checked>
           Auto retry on error
         </label>
-        <label class="checkbox-label">
-          <input type="checkbox" name="wait">
-          Wait for the vdiff to complete before returning
-        </label>
+        <p class="muted">The VDiff is created asynchronously; open the VDiff report to follow its progress.</p>
         <button type="submit" class="button">Create VDiff</button>
       </form>
     </details>

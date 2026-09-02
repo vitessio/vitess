@@ -89,7 +89,7 @@ func (s *Server) settingsSave(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	secure := r.TLS != nil
+	secure := s.secureCookie(r)
 	http.SetCookie(w, &http.Cookie{
 		Name:     themeCookieName,
 		Value:    theme,
@@ -119,7 +119,7 @@ func (s *Server) settingsSave(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	redirectWithFlash(w, r, "/settings", Flash{
+	s.redirectWithFlash(w, r, "/settings", Flash{
 		Kind:    "success",
 		Message: "settings saved",
 	})

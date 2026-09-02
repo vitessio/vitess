@@ -1711,8 +1711,10 @@ func (api *API) VDiffCreate(ctx context.Context, req *vtadminpb.VDiffCreateReque
 	span, ctx := trace.NewSpan(ctx, "API.VDiffCreate")
 	defer span.Finish()
 
-	if !api.authz.IsAuthorized(ctx, req.ClusterId, rbac.ClusterResource, rbac.GetAction) {
-		return nil, nil
+	// Creating a VDiff launches a job and changes cluster state, so it
+	// requires a write action rather than read permission.
+	if !api.authz.IsAuthorized(ctx, req.ClusterId, rbac.ClusterResource, rbac.PutAction) {
+		return nil, fmt.Errorf("%w: cannot create VDiff in %s", errors.ErrUnauthorized, req.ClusterId)
 	}
 
 	c, err := api.getClusterForRequest(req.ClusterId)
@@ -1722,20 +1724,43 @@ func (api *API) VDiffCreate(ctx context.Context, req *vtadminpb.VDiffCreateReque
 
 	cluster.AnnotateSpan(c, span)
 
-	// Set the default options
-	req.Request.Uuid = uuid.New().String()
-	req.Request.TabletTypes = vdiffcmd.TabletTypesDefault
-	req.Request.TabletSelectionPreference = tabletmanagerdatapb.TabletSelectionPreference_INORDER
-	req.Request.FilteredReplicationWaitTime = protoutil.DurationToProto(workflow.DefaultTimeout)
-	req.Request.Limit = math.MaxInt64
-	req.Request.MaxReportSampleRows = 10
-	req.Request.MaxExtraRowsToCompare = 1000
-	req.Request.WaitUpdateInterval = protoutil.DurationToProto(time.Duration(1 * time.Minute))
-	req.Request.AutoRetry = true
-	req.Request.RowDiffColumnTruncateAt = 128
-
-	defaultAutoStart := true
-	req.Request.AutoStart = &defaultAutoStart
+	// Set defaults. Explicitly submitted values are preserved; defaults are
+	// applied only for omitted options.
+	if req.Request.Uuid == "" {
+		req.Request.Uuid = uuid.New().String()
+	}
+	if len(req.Request.TabletTypes) == 0 {
+		req.Request.TabletTypes = vdiffcmd.TabletTypesDefault
+	}
+	if req.Request.TabletSelectionPreference == tabletmanagerdatapb.TabletSelectionPreference_ANY {
+		req.Request.TabletSelectionPreference = tabletmanagerdatapb.TabletSelectionPreference_INORDER
+	}
+	if req.Request.FilteredReplicationWaitTime == nil {
+		req.Request.FilteredReplicationWaitTime = protoutil.DurationToProto(workflow.DefaultTimeout)
+	}
+	if req.Request.Limit == 0 {
+		req.Request.Limit = math.MaxInt64
+	}
+	if req.Request.MaxReportSampleRows == 0 {
+		req.Request.MaxReportSampleRows = 10
+	}
+	if req.Request.MaxExtraRowsToCompare == 0 {
+		req.Request.MaxExtraRowsToCompare = 1000
+	}
+	if req.Request.WaitUpdateInterval == nil {
+		req.Request.WaitUpdateInterval = protoutil.DurationToProto(time.Duration(1 * time.Minute))
+	}
+	if req.Request.RowDiffColumnTruncateAt == 0 {
+		req.Request.RowDiffColumnTruncateAt = 128
+	}
+	if req.Request.AutoStart == nil {
+		defaultAutoStart := true
+		req.Request.AutoStart = &defaultAutoStart
+	}
+	// AutoRetry is preserved exactly as submitted. The vtadmin2 UI checkbox is
+	// pre-checked, so browser users always send an explicit value; callers of
+	// the API should set AutoRetry explicitly because vtctld's own default is
+	// false. The field cannot be made presence-aware without a proto change.
 
 	return c.Vtctld.VDiffCreate(ctx, req.Request)
 }
@@ -2297,12 +2322,20 @@ func (api *API) ReloadSchemaShard(ctx context.Context, req *vtadminpb.ReloadSche
 	span, ctx := trace.NewSpan(ctx, "API.ReloadSchemas")
 	defer span.Finish()
 
+	if !api.authz.IsAuthorized(ctx, req.ClusterId, rbac.SchemaResource, rbac.ReloadAction) {
+		return nil, fmt.Errorf("%w: cannot reload schema in %s", errors.ErrUnauthorized, req.ClusterId)
+	}
+
 	c, err := api.getClusterForRequest(req.ClusterId)
 	if err != nil {
 		return nil, err
 	}
 
+	// Keyspace and shard identity are required by vtctld; forward them
+	// explicitly so the reload targets the requested shard.
 	res, err := c.Vtctld.ReloadSchemaShard(ctx, &vtctldatapb.ReloadSchemaShardRequest{
+		Keyspace:       req.Keyspace,
+		Shard:          req.Shard,
 		WaitPosition:   req.WaitPosition,
 		IncludePrimary: req.IncludePrimary,
 		Concurrency:    req.Concurrency,

@@ -168,7 +168,8 @@ type VtctldClient struct {
 		Response *vtctldatapb.ValidateVersionKeyspaceResponse
 		Error    error
 	}
-	WorkflowUpdateResults map[string]struct {
+	LastVDiffCreateRequest *vtctldatapb.VDiffCreateRequest
+	WorkflowUpdateResults  map[string]struct {
 		Response *vtctldatapb.WorkflowUpdateResponse
 		Error    error
 	}
@@ -815,6 +816,15 @@ func (fake *VtctldClient) ValidateVersionKeyspace(ctx context.Context, req *vtct
 	}
 
 	return nil, fmt.Errorf("%w: no result set for %s", assert.AnError, key)
+}
+
+// VDiffCreate is part of the vtctldclient.VtctldClient interface.
+func (fake *VtctldClient) VDiffCreate(ctx context.Context, req *vtctldatapb.VDiffCreateRequest, opts ...grpc.CallOption) (*vtctldatapb.VDiffCreateResponse, error) {
+	fake.LastVDiffCreateRequest = req
+	if req == nil {
+		return &vtctldatapb.VDiffCreateResponse{}, nil
+	}
+	return &vtctldatapb.VDiffCreateResponse{UUID: req.Uuid}, nil
 }
 
 // WorkflowUpdate is part of the vtctldclient.VtctldClient interface.

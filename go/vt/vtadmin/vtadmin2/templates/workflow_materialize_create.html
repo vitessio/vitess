@@ -64,8 +64,8 @@
     </label>
     <label>
       Table settings (JSON)
-      <textarea name="table_settings" rows="8" required placeholder='{"target_table": {"source_expression": "..."}}'></textarea>
-      <span class="muted">JSON defining which tables to materialize and the select expressions to build them from. Passed through to vtctld as-is.</span>
+      <textarea name="table_settings" rows="8" placeholder='{"target_table": {"source_expression": "..."}}'></textarea>
+      <span class="muted">JSON defining which tables to materialize and the select expressions to build them from. Provide either table settings or reference tables — not both.</span>
     </label>
 
     {{ if $d.ReferenceTables }}
@@ -77,6 +77,7 @@
         {{ . }}
       </label>
       {{ end }}
+      <span class="muted">Selecting reference tables creates a reference-table materialization; leave all unchecked when using table settings.</span>
     </fieldset>
     {{ end }}
 

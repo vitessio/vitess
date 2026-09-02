@@ -29,17 +29,29 @@ const (
 	flashCookieName = "vtadmin2_flash"
 )
 
-func csrfToken(w http.ResponseWriter, r *http.Request) string {
+// secureCookie reports whether cookies for this request should carry the
+// Secure attribute. Direct TLS is detected from the request; when the UI is
+// deployed behind an HTTPS-terminating proxy, TrustProxyProto additionally
+// honors an X-Forwarded-Proto: https header from the configured proxy.
+func (s *Server) secureCookie(r *http.Request) bool {
+	if r.TLS != nil {
+		return true
+	}
+	return s.opts.TrustProxyProto && r.Header.Get("X-Forwarded-Proto") == "https"
+}
+
+func (s *Server) csrfToken(w http.ResponseWriter, r *http.Request) string {
 	if cookie, err := r.Cookie(csrfCookieName); err == nil && cookie.Value != "" {
 		return cookie.Value
 	}
 
+	secure := s.secureCookie(r)
 	token := randomToken()
 	http.SetCookie(w, &http.Cookie{
 		Name:     csrfCookieName,
 		Value:    token,
 		Path:     "/",
-		Secure:   r.TLS != nil,
+		Secure:   secure,
 		HttpOnly: true,
 		SameSite: http.SameSiteStrictMode,
 	})
@@ -58,24 +70,24 @@ func validCSRFToken(r *http.Request) bool {
 	return subtle.ConstantTimeCompare([]byte(cookie.Value), []byte(formToken)) == 1
 }
 
-func setFlash(w http.ResponseWriter, r *http.Request, flash Flash) {
+func (s *Server) setFlash(w http.ResponseWriter, r *http.Request, flash Flash) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     flashCookieName,
 		Value:    encodeFlash(flash),
 		Path:     "/",
-		Secure:   r.TLS != nil,
+		Secure:   s.secureCookie(r),
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
 	})
 }
 
-func flashFromRequest(w http.ResponseWriter, r *http.Request) *Flash {
+func (s *Server) flashFromRequest(w http.ResponseWriter, r *http.Request) *Flash {
 	cookie, err := r.Cookie(flashCookieName)
 	if err != nil || cookie.Value == "" {
 		return nil
 	}
 
-	clearFlash(w, r)
+	s.clearFlash(w, r)
 	flash := decodeFlash(cookie.Value)
 	if flash == nil || !validFlashKind(flash.Kind) || flash.Message == "" {
 		return nil
@@ -83,13 +95,13 @@ func flashFromRequest(w http.ResponseWriter, r *http.Request) *Flash {
 	return flash
 }
 
-func clearFlash(w http.ResponseWriter, r *http.Request) {
+func (s *Server) clearFlash(w http.ResponseWriter, r *http.Request) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     flashCookieName,
 		Value:    "",
 		Path:     "/",
 		MaxAge:   -1,
-		Secure:   r.TLS != nil,
+		Secure:   s.secureCookie(r),
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
 	})

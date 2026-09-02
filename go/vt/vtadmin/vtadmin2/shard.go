@@ -24,13 +24,14 @@ import (
 	"strings"
 
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vterrors"
 
+	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	vttimepb "vitess.io/vitess/go/vt/proto/vttime"
-	"vitess.io/vitess/go/vt/vterrors"
 )
 
 type (
@@ -163,7 +164,7 @@ func (s *Server) shardDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	redirectWithFlash(w, r, "/keyspaces", Flash{
+	s.redirectWithFlash(w, r, "/keyspaces", Flash{
 		Kind:    "success",
 		Message: "deleted shard " + keyspace + "/" + shard,
 	})
@@ -176,7 +177,7 @@ func (s *Server) shardReloadSchema(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err := s.api.ReloadSchemaShard(r.Context(), &vtadminpb.ReloadSchemaShardRequest{
+	resp, err := s.api.ReloadSchemaShard(r.Context(), &vtadminpb.ReloadSchemaShardRequest{
 		ClusterId:      clusterID,
 		Keyspace:       keyspace,
 		Shard:          shard,
@@ -186,8 +187,16 @@ func (s *Server) shardReloadSchema(w http.ResponseWriter, r *http.Request) {
 		s.renderFormError(w, r, title, err.Error())
 		return
 	}
+	if resp == nil {
+		s.renderFormError(w, r, title, "not authorized to reload schema")
+		return
+	}
+	if err := reloadSchemaEventsError(resp.GetEvents()); err != nil {
+		s.renderFormError(w, r, title, err.Error())
+		return
+	}
 
-	redirectWithFlash(w, r, shardDetailPath(clusterID, keyspace, shard), Flash{
+	s.redirectWithFlash(w, r, shardDetailPath(clusterID, keyspace, shard), Flash{
 		Kind:    "success",
 		Message: "reloaded schema on shard " + keyspace + "/" + shard,
 	})
@@ -210,6 +219,30 @@ func (s *Server) shardExternallyPromote(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	// The page is scoped to one shard, but the API operates on whatever alias
+	// it is given. Verify the submitted tablet actually belongs to this shard
+	// before mutating it, otherwise an operator could affect another shard
+	// while believing they are acting on this one.
+	tablet, err := s.api.GetTablet(r.Context(), &vtadminpb.GetTabletRequest{
+		Alias:      alias,
+		ClusterIds: []string{clusterID},
+	})
+	if err != nil {
+		s.renderError(w, r, tabletErrorStatus(err), title, err)
+		return
+	}
+	if tablet == nil || tablet.GetTablet() == nil {
+		s.renderFormError(w, r, title, "tablet not found")
+		return
+	}
+	if tablet.GetTablet().GetKeyspace() != keyspace || tablet.GetTablet().GetShard() != shard {
+		s.renderFormErrorErr(w, r, title, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+			"tablet %s belongs to %s/%s, not %s/%s",
+			topoproto.TabletAliasString(alias),
+			tablet.GetTablet().GetKeyspace(), tablet.GetTablet().GetShard(), keyspace, shard))
+		return
+	}
+
 	_, err = s.api.TabletExternallyPromoted(r.Context(), &vtadminpb.TabletExternallyPromotedRequest{
 		Alias:      alias,
 		ClusterIds: []string{clusterID},
@@ -219,7 +252,7 @@ func (s *Server) shardExternallyPromote(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	redirectWithFlash(w, r, shardDetailPath(clusterID, keyspace, shard), Flash{
+	s.redirectWithFlash(w, r, shardDetailPath(clusterID, keyspace, shard), Flash{
 		Kind:    "success",
 		Message: "acknowledged external promotion of " + topoproto.TabletAliasString(alias),
 	})
@@ -238,7 +271,7 @@ func (s *Server) shardPlannedFailover(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err = s.api.PlannedFailoverShard(r.Context(), &vtadminpb.PlannedFailoverShardRequest{
+	resp, err := s.api.PlannedFailoverShard(r.Context(), &vtadminpb.PlannedFailoverShardRequest{
 		ClusterId: clusterID,
 		Options:   options.Planned,
 	})
@@ -246,8 +279,12 @@ func (s *Server) shardPlannedFailover(w http.ResponseWriter, r *http.Request) {
 		s.renderFormError(w, r, title, err.Error())
 		return
 	}
+	if resp == nil {
+		s.renderFormError(w, r, title, "not authorized to run planned failover")
+		return
+	}
 
-	redirectWithFlash(w, r, shardDetailPath(clusterID, keyspace, shard), Flash{
+	s.redirectWithFlash(w, r, shardDetailPath(clusterID, keyspace, shard), Flash{
 		Kind:    "success",
 		Message: "planned failover completed for shard " + keyspace + "/" + shard,
 	})
@@ -266,7 +303,7 @@ func (s *Server) shardEmergencyFailover(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	_, err = s.api.EmergencyFailoverShard(r.Context(), &vtadminpb.EmergencyFailoverShardRequest{
+	resp, err := s.api.EmergencyFailoverShard(r.Context(), &vtadminpb.EmergencyFailoverShardRequest{
 		ClusterId: clusterID,
 		Options: &vtctldatapb.EmergencyReparentShardRequest{
 			Keyspace:                  keyspace,
@@ -280,8 +317,12 @@ func (s *Server) shardEmergencyFailover(w http.ResponseWriter, r *http.Request) 
 		s.renderFormError(w, r, title, err.Error())
 		return
 	}
+	if resp == nil {
+		s.renderFormError(w, r, title, "not authorized to run emergency failover")
+		return
+	}
 
-	redirectWithFlash(w, r, shardDetailPath(clusterID, keyspace, shard), Flash{
+	s.redirectWithFlash(w, r, shardDetailPath(clusterID, keyspace, shard), Flash{
 		Kind:    "success",
 		Message: "emergency failover completed for shard " + keyspace + "/" + shard,
 	})
@@ -356,7 +397,7 @@ func (s *Server) shardValidate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	redirectWithFlash(w, r, shardDetailPath(clusterID, keyspace, shard), Flash{
+	s.redirectWithFlash(w, r, shardDetailPath(clusterID, keyspace, shard), Flash{
 		Kind:    "success",
 		Message: "validated shard " + keyspace + "/" + shard + ": " + strings.Join(resp.GetResults(), "; "),
 	})
@@ -379,8 +420,25 @@ func (s *Server) shardValidateVersion(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	redirectWithFlash(w, r, shardDetailPath(clusterID, keyspace, shard), Flash{
+	s.redirectWithFlash(w, r, shardDetailPath(clusterID, keyspace, shard), Flash{
 		Kind:    "success",
 		Message: "validated versions on shard " + keyspace + "/" + shard,
 	})
+}
+
+func reloadSchemaEventsError(events []*logutilpb.Event) error {
+	for _, ev := range events {
+		if ev == nil {
+			continue
+		}
+		switch ev.Level {
+		case logutilpb.Level_ERROR:
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "reload schema failed: %s", ev.GetValue())
+		case logutilpb.Level_WARNING:
+			if strings.Contains(strings.ToLower(ev.GetValue()), "failed") {
+				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "reload schema failed: %s", ev.GetValue())
+			}
+		}
+	}
+	return nil
 }

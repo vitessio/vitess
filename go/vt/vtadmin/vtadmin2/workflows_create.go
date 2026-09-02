@@ -153,7 +153,7 @@ func (s *Server) createReshardForm(w http.ResponseWriter, r *http.Request) {
 		Data: createReshardData{
 			Form:            form,
 			PickCluster:     pickCluster,
-			SelectedCluster: requestedCluster,
+			SelectedCluster: form.SelectedCluster,
 		},
 	})
 }
@@ -229,7 +229,7 @@ func (s *Server) createReshard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	redirectWithFlash(w, r, "/workflow/"+pathEscape(clusterID)+"/"+pathEscape(keyspace)+"/"+pathEscape(workflow), Flash{
+	s.redirectWithFlash(w, r, "/workflow/"+pathEscape(clusterID)+"/"+pathEscape(keyspace)+"/"+pathEscape(workflow), Flash{
 		Kind:    "success",
 		Message: "created Reshard workflow " + workflow + " on keyspace " + keyspace,
 	})
@@ -286,7 +286,6 @@ func (s *Server) createMaterialize(w http.ResponseWriter, r *http.Request) {
 	workflow := strings.TrimSpace(r.Form.Get("workflow"))
 	sourceKeyspace := strings.TrimSpace(r.Form.Get("source_keyspace"))
 	targetKeyspace := strings.TrimSpace(r.Form.Get("target_keyspace"))
-	tableSettings := strings.TrimSpace(r.Form.Get("table_settings"))
 
 	if clusterID == "" {
 		s.renderFormError(w, r, title, "cluster is required")
@@ -308,8 +307,20 @@ func (s *Server) createMaterialize(w http.ResponseWriter, r *http.Request) {
 		s.renderFormError(w, r, title, "source and target keyspace must differ")
 		return
 	}
-	if tableSettings == "" {
-		s.renderFormError(w, r, title, "table settings are required")
+
+	// The vtctld Materialize contract requires exactly one of TableSettings
+	// (JSON) or ReferenceTables. Enforce the exclusive choice here so invalid
+	// combinations are rejected before reaching the backend.
+	tableSettings := strings.TrimSpace(r.Form.Get("table_settings"))
+	referenceTables := r.Form["reference_table"]
+	hasTableSettings := tableSettings != ""
+	hasReferenceTables := len(referenceTables) > 0
+	if hasTableSettings && hasReferenceTables {
+		s.renderFormError(w, r, title, "provide either table settings or reference tables, not both")
+		return
+	}
+	if !hasTableSettings && !hasReferenceTables {
+		s.renderFormError(w, r, title, "provide table settings or select reference tables")
 		return
 	}
 
@@ -334,7 +345,7 @@ func (s *Server) createMaterialize(w http.ResponseWriter, r *http.Request) {
 				Workflow:                  workflow,
 				SourceKeyspace:            sourceKeyspace,
 				TargetKeyspace:            targetKeyspace,
-				ReferenceTables:           r.Form["reference_table"],
+				ReferenceTables:           referenceTables,
 				Cell:                      strings.Join(splitFormList(r.Form.Get("cell")), ","),
 				TabletTypes:               strings.Join(tabletTypeNames, ","),
 				StopAfterCopy:             r.Form.Get("stop_after_copy") == "on",
@@ -348,7 +359,7 @@ func (s *Server) createMaterialize(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	redirectWithFlash(w, r, "/workflow/"+pathEscape(clusterID)+"/"+pathEscape(targetKeyspace)+"/"+pathEscape(workflow), Flash{
+	s.redirectWithFlash(w, r, "/workflow/"+pathEscape(clusterID)+"/"+pathEscape(targetKeyspace)+"/"+pathEscape(workflow), Flash{
 		Kind:    "success",
 		Message: "created Materialize workflow " + workflow + " (" + sourceKeyspace + " -> " + targetKeyspace + ")",
 	})
@@ -431,7 +442,7 @@ func (s *Server) createMigration(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	redirectWithFlash(w, r, "/migrations?keyspace="+url.QueryEscape(keyspace)+"&cluster_id="+url.QueryEscape(clusterID), Flash{
+	s.redirectWithFlash(w, r, "/migrations?keyspace="+url.QueryEscape(keyspace)+"&cluster_id="+url.QueryEscape(clusterID), Flash{
 		Kind:    "success",
 		Message: "schema migration request created for keyspace " + keyspace,
 	})
@@ -478,6 +489,11 @@ func (s *Server) createMoveTables(w http.ResponseWriter, r *http.Request) {
 
 	allTables := r.Form.Get("all_tables") == "on"
 	includeTables := r.Form["table"]
+	if allTables {
+		// MoveTables rejects a request with both AllTables and IncludeTables,
+		// so drop individual selections when copying all tables.
+		includeTables = nil
+	}
 	if !allTables && len(includeTables) == 0 {
 		s.renderFormError(w, r, title, "select at least one table or enable copy of all tables")
 		return
@@ -517,7 +533,7 @@ func (s *Server) createMoveTables(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	redirectWithFlash(w, r, "/workflow/"+pathEscape(clusterID)+"/"+pathEscape(targetKeyspace)+"/"+pathEscape(workflow), Flash{
+	s.redirectWithFlash(w, r, "/workflow/"+pathEscape(clusterID)+"/"+pathEscape(targetKeyspace)+"/"+pathEscape(workflow), Flash{
 		Kind:    "success",
 		Message: "created MoveTables workflow " + workflow + " (" + sourceKeyspace + " -> " + targetKeyspace + ")",
 	})

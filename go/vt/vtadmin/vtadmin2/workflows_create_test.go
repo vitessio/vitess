@@ -207,6 +207,27 @@ func TestCreateMoveTablesPostAllTables(t *testing.T) {
 	assert.Empty(t, inner.IncludeTables)
 }
 
+func TestCreateMoveTablesPostAllTablesClearsSelections(t *testing.T) {
+	fake := &workflowCreateFakeServer{}
+	s := newWorkflowCreateTestServer(t, fake, false)
+
+	form := url.Values{
+		"cluster_id":      {testClusterID},
+		"workflow":        {"full_copy"},
+		"source_keyspace": {testKeyspace},
+		"target_keyspace": {"sales"},
+		"all_tables":      {"on"},
+		"table":           {"users", "orders"},
+	}
+	rec := postShardForm(t, s, createMoveTablesPath, form)
+
+	assert.Equal(t, http.StatusSeeOther, rec.Code)
+	inner := fake.moveTablesCreateReq.GetRequest()
+	require.NotNil(t, inner)
+	assert.True(t, inner.AllTables)
+	assert.Empty(t, inner.IncludeTables)
+}
+
 func TestCreateMoveTablesPostDefaults(t *testing.T) {
 	fake := &workflowCreateFakeServer{}
 	s := newWorkflowCreateTestServer(t, fake, false)
@@ -379,7 +400,6 @@ func TestCreateMaterializePostRedirectsToWorkflowDetail(t *testing.T) {
 		"source_keyspace":             {testKeyspace},
 		"target_keyspace":             {"sales"},
 		"table_settings":              {`{"target_table":"sales_summary"}`},
-		"reference_table":             {"users"},
 		"cell":                        {"zone1, zone2"},
 		"tablet_type":                 {"REPLICA", "PRIMARY"},
 		"tablet_selection_preference": {"on"},
@@ -399,12 +419,68 @@ func TestCreateMaterializePostRedirectsToWorkflowDetail(t *testing.T) {
 	assert.Equal(t, "sales_summary", settings.Workflow)
 	assert.Equal(t, testKeyspace, settings.SourceKeyspace)
 	assert.Equal(t, "sales", settings.TargetKeyspace)
-	assert.Equal(t, []string{"users"}, settings.ReferenceTables)
+	assert.Empty(t, settings.ReferenceTables)
 	assert.Equal(t, "zone1,zone2", settings.Cell)
 	assert.Equal(t, "REPLICA,PRIMARY", settings.TabletTypes)
 	assert.True(t, settings.StopAfterCopy)
 	assert.Equal(t, tabletmanagerdatapb.TabletSelectionPreference_INORDER, settings.TabletSelectionPreference)
 	assert.Equal(t, vtctldatapb.MaterializationIntent_CUSTOM, settings.MaterializationIntent)
+}
+
+func TestCreateMaterializePostReferenceTablesOnly(t *testing.T) {
+	fake := &workflowCreateFakeServer{}
+	s := newWorkflowCreateTestServer(t, fake, false)
+
+	form := url.Values{
+		"cluster_id":      {testClusterID},
+		"workflow":        {"ref_copy"},
+		"source_keyspace": {testKeyspace},
+		"target_keyspace": {"sales"},
+		"reference_table": {"users", "orders"},
+	}
+	rec := postShardForm(t, s, createMaterializePath, form)
+
+	assert.Equal(t, http.StatusSeeOther, rec.Code)
+	assert.Equal(t, "/workflow/local/sales/ref_copy", rec.Header().Get("Location"))
+
+	req := fake.materializeCreateReq
+	require.NotNil(t, req)
+	assert.Empty(t, req.TableSettings)
+	assert.Equal(t, []string{"users", "orders"}, req.GetRequest().GetSettings().ReferenceTables)
+}
+
+func TestCreateMaterializePostRejectsBothModes(t *testing.T) {
+	fake := &workflowCreateFakeServer{}
+	s := newWorkflowCreateTestServer(t, fake, false)
+
+	form := url.Values{
+		"cluster_id":      {testClusterID},
+		"workflow":        {"both"},
+		"source_keyspace": {testKeyspace},
+		"target_keyspace": {"sales"},
+		"table_settings":  {`{"target_table":"x"}`},
+		"reference_table": {"users"},
+	}
+	rec := postShardForm(t, s, createMaterializePath, form)
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Nil(t, fake.materializeCreateReq)
+}
+
+func TestCreateMaterializePostRejectsNeitherMode(t *testing.T) {
+	fake := &workflowCreateFakeServer{}
+	s := newWorkflowCreateTestServer(t, fake, false)
+
+	form := url.Values{
+		"cluster_id":      {testClusterID},
+		"workflow":        {"neither"},
+		"source_keyspace": {testKeyspace},
+		"target_keyspace": {"sales"},
+	}
+	rec := postShardForm(t, s, createMaterializePath, form)
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Nil(t, fake.materializeCreateReq)
 }
 
 func TestCreateMaterializePostDefaults(t *testing.T) {
@@ -645,6 +721,9 @@ func TestCreateReshardFormRendersOptions(t *testing.T) {
 	require.Equal(t, http.StatusOK, rec.Code)
 	body := rec.Body.String()
 
+	// In a single-cluster setup the default cluster must be resolved so the
+	// keyspace select is populated without ?cluster_id in the URL.
+	assert.Contains(t, body, `<option value="commerce"`)
 	assert.Contains(t, body, `name="workflow"`)
 	assert.Contains(t, body, `name="keyspace"`)
 	assert.Contains(t, body, `name="source_shards"`)

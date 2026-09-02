@@ -17,6 +17,7 @@ limitations under the License.
 package vtadmin2
 
 import (
+	"cmp"
 	"net/http"
 	"net/url"
 	"strings"
@@ -63,7 +64,7 @@ func (s *Server) workflowStart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	redirectWithFlash(w, r, workflowDetailPath(clusterID, keyspace, workflow), Flash{
+	s.redirectWithFlash(w, r, workflowDetailPath(clusterID, keyspace, workflow), Flash{
 		Kind:    "success",
 		Message: "started workflow " + workflow,
 	})
@@ -86,7 +87,7 @@ func (s *Server) workflowStop(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	redirectWithFlash(w, r, workflowDetailPath(clusterID, keyspace, workflow), Flash{
+	s.redirectWithFlash(w, r, workflowDetailPath(clusterID, keyspace, workflow), Flash{
 		Kind:    "success",
 		Message: "stopped workflow " + workflow,
 	})
@@ -113,7 +114,7 @@ func (s *Server) workflowCancel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	redirectWithFlash(w, r, "/workflows", Flash{
+	s.redirectWithFlash(w, r, "/workflows", Flash{
 		Kind:    "success",
 		Message: "cancelled workflow " + workflow,
 	})
@@ -141,7 +142,7 @@ func (s *Server) workflowComplete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	redirectWithFlash(w, r, "/workflows", Flash{
+	s.redirectWithFlash(w, r, "/workflows", Flash{
 		Kind:    "success",
 		Message: "completed workflow " + workflow,
 	})
@@ -158,7 +159,14 @@ func (s *Server) workflowSwitchTraffic(w http.ResponseWriter, r *http.Request, d
 		return
 	}
 
-	tabletTypes, err := parseTabletTypes(r.Form["tablet_type"])
+	// Match the vtctldclient CLI: an omitted tablet-types selection defaults
+	// to PRIMARY, REPLICA, and RDONLY. An empty list can return success while
+	// switching no traffic at all.
+	submittedTypes := r.Form["tablet_type"]
+	if len(submittedTypes) == 0 {
+		submittedTypes = []string{"PRIMARY", "REPLICA", "RDONLY"}
+	}
+	tabletTypes, err := parseTabletTypes(submittedTypes)
 	if err != nil {
 		s.renderFormErrorErr(w, r, title, err)
 		return
@@ -208,7 +216,7 @@ func (s *Server) workflowSwitchTraffic(w http.ResponseWriter, r *http.Request, d
 		message += " (dry run)"
 	}
 
-	redirectWithFlash(w, r, workflowDetailPath(clusterID, keyspace, workflow), Flash{
+	s.redirectWithFlash(w, r, workflowDetailPath(clusterID, keyspace, workflow), Flash{
 		Kind:    "success",
 		Message: message,
 	})
@@ -229,7 +237,7 @@ func (s *Server) workflowVDiffCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err := s.api.VDiffCreate(r.Context(), &vtadminpb.VDiffCreateRequest{
+	resp, err := s.api.VDiffCreate(r.Context(), &vtadminpb.VDiffCreateRequest{
 		ClusterId: clusterID,
 		Request: &vtctldatapb.VDiffCreateRequest{
 			Workflow:       workflow,
@@ -239,11 +247,16 @@ func (s *Server) workflowVDiffCreate(w http.ResponseWriter, r *http.Request) {
 			TargetCells:    splitFormList(r.Form.Get("target_cells")),
 			Tables:         splitFormList(r.Form.Get("tables")),
 			AutoRetry:      r.Form.Get("auto_retry") == "on",
-			Wait:           r.Form.Get("wait") == "on",
+			// Wait is intentionally not offered: a synchronous VDiff can outlive
+			// the HTTP request. Create the VDiff and poll the show page instead.
 		},
 	})
 	if err != nil {
 		s.renderFormErrorErr(w, r, title, err)
+		return
+	}
+	if resp == nil {
+		s.renderFormError(w, r, title, "not authorized to create VDiff")
 		return
 	}
 
@@ -252,11 +265,11 @@ func (s *Server) workflowVDiffCreate(w http.ResponseWriter, r *http.Request) {
 		"&keyspace=" + url.QueryEscape(keyspace) +
 		"&workflow=" + url.QueryEscape(workflow)
 
-	if u := strings.TrimSpace(r.Form.Get("uuid")); u != "" {
-		redirect += "&uuid=" + url.QueryEscape(u)
+	if u := cmp.Or(resp.GetUUID(), strings.TrimSpace(r.Form.Get("uuid"))); u != "" {
+		redirect += "&arg=" + url.QueryEscape(u)
 	}
 
-	redirectWithFlash(w, r, redirect, Flash{
+	s.redirectWithFlash(w, r, redirect, Flash{
 		Kind:    "success",
 		Message: "created VDiff for workflow " + workflow,
 	})

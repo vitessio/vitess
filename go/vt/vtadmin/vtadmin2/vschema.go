@@ -20,6 +20,7 @@ import (
 	"net/http"
 
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
+	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
 func (s *Server) vschemas(w http.ResponseWriter, r *http.Request) {
@@ -60,20 +61,51 @@ func (s *Server) vschema(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+type (
+	srvKeyspacesData struct {
+		Clusters        []*vtadminpb.Cluster
+		SelectedCluster string
+		SrvKeyspaces    map[string]*vtctldatapb.GetSrvKeyspacesResponse
+	}
+)
+
+// srvKeyspaces requires an explicit cluster: the backing API merges results
+// into a map keyed only by keyspace name, so same-named keyspaces from
+// different clusters would overwrite one another without cluster attribution.
 func (s *Server) srvKeyspaces(w http.ResponseWriter, r *http.Request) {
+	clustersResp, err := s.api.GetClusters(r.Context(), &vtadminpb.GetClustersRequest{})
+	if err != nil {
+		s.renderError(w, r, http.StatusInternalServerError, "SrvKeyspaces", err)
+		return
+	}
+
+	data := srvKeyspacesData{
+		Clusters:        clustersResp.GetClusters(),
+		SelectedCluster: queryValue(r, "cluster_id"),
+	}
+	if data.SelectedCluster == "" {
+		s.render(w, r, http.StatusOK, "srvkeyspaces.html", PageData{
+			Title:  "SrvKeyspaces",
+			Active: "srvkeyspaces",
+			Data:   data,
+		})
+		return
+	}
+
 	resp, err := s.api.GetSrvKeyspaces(r.Context(), &vtadminpb.GetSrvKeyspacesRequest{
-		ClusterIds: queryValues(r, "cluster_id"),
+		ClusterIds: []string{data.SelectedCluster},
 		Cells:      queryValues(r, "cell"),
 	})
 	if err != nil {
 		s.renderError(w, r, http.StatusInternalServerError, "SrvKeyspaces", err)
 		return
 	}
+	data.SrvKeyspaces = resp.GetSrvKeyspaces()
 
 	s.render(w, r, http.StatusOK, "srvkeyspaces.html", PageData{
 		Title:  "SrvKeyspaces",
 		Active: "srvkeyspaces",
-		Data:   resp,
+		Data:   data,
 	})
 }
 

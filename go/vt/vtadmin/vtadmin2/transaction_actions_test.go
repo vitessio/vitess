@@ -73,7 +73,9 @@ func TestTransactionConclude(t *testing.T) {
 	rec := postShardForm(t, s, "/transaction/local/transaction-id-1/conclude", form)
 
 	assert.Equal(t, http.StatusSeeOther, rec.Code)
-	assert.Equal(t, "/transactions?cluster_id=local", rec.Header().Get("Location"))
+	// Redirect to the unfiltered list: the filtered view requires both
+	// cluster_id and keyspace, which this action does not key to.
+	assert.Equal(t, "/transactions", rec.Header().Get("Location"))
 
 	req := fake.concludeTransactionReq
 	require.NotNil(t, req)

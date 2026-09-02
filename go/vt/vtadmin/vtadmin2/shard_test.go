@@ -27,6 +27,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
@@ -56,11 +57,16 @@ type shardFakeServer struct {
 
 	deleteShardsReq        *vtadminpb.DeleteShardsRequest
 	reloadSchemaShardReq   *vtadminpb.ReloadSchemaShardRequest
+	reloadSchemaShardResp  *vtadminpb.ReloadSchemaShardResponse
 	externallyPromotedReq  *vtadminpb.TabletExternallyPromotedRequest
 	plannedFailoverReq     *vtadminpb.PlannedFailoverShardRequest
+	plannedFailoverNil     bool
 	emergencyFailoverReq   *vtadminpb.EmergencyFailoverShardRequest
+	emergencyFailoverNil   bool
 	validateShardReq       *vtadminpb.ValidateShardRequest
 	validateVersionShardRe *vtadminpb.ValidateVersionShardRequest
+	getTabletReq           *vtadminpb.GetTabletRequest
+	getTabletError         error
 }
 
 func (f *shardFakeServer) GetKeyspace(ctx context.Context, req *vtadminpb.GetKeyspaceRequest) (*vtadminpb.Keyspace, error) {
@@ -92,6 +98,21 @@ func (f *shardFakeServer) GetShardReplicationPositions(ctx context.Context, req 
 	return &vtadminpb.GetShardReplicationPositionsResponse{ReplicationPositions: f.positions}, nil
 }
 
+func (f *shardFakeServer) GetTablet(ctx context.Context, req *vtadminpb.GetTabletRequest) (*vtadminpb.Tablet, error) {
+	f.getTabletReq = req
+	if f.getTabletError != nil {
+		return nil, f.getTabletError
+	}
+	return &vtadminpb.Tablet{
+		Cluster: &vtadminpb.Cluster{Id: req.GetClusterIds()[0]},
+		Tablet: &topodatapb.Tablet{
+			Alias:    req.Alias,
+			Keyspace: testKeyspace,
+			Shard:    testShard,
+		},
+	}, nil
+}
+
 func (f *shardFakeServer) DeleteShards(ctx context.Context, req *vtadminpb.DeleteShardsRequest) (*vtctldatapb.DeleteShardsResponse, error) {
 	f.deleteShardsReq = req
 	return &vtctldatapb.DeleteShardsResponse{}, nil
@@ -99,6 +120,9 @@ func (f *shardFakeServer) DeleteShards(ctx context.Context, req *vtadminpb.Delet
 
 func (f *shardFakeServer) ReloadSchemaShard(ctx context.Context, req *vtadminpb.ReloadSchemaShardRequest) (*vtadminpb.ReloadSchemaShardResponse, error) {
 	f.reloadSchemaShardReq = req
+	if f.reloadSchemaShardResp != nil {
+		return f.reloadSchemaShardResp, nil
+	}
 	return &vtadminpb.ReloadSchemaShardResponse{}, nil
 }
 
@@ -109,11 +133,17 @@ func (f *shardFakeServer) TabletExternallyPromoted(ctx context.Context, req *vta
 
 func (f *shardFakeServer) PlannedFailoverShard(ctx context.Context, req *vtadminpb.PlannedFailoverShardRequest) (*vtadminpb.PlannedFailoverShardResponse, error) {
 	f.plannedFailoverReq = req
+	if f.plannedFailoverNil {
+		return nil, nil
+	}
 	return &vtadminpb.PlannedFailoverShardResponse{}, nil
 }
 
 func (f *shardFakeServer) EmergencyFailoverShard(ctx context.Context, req *vtadminpb.EmergencyFailoverShardRequest) (*vtadminpb.EmergencyFailoverShardResponse, error) {
 	f.emergencyFailoverReq = req
+	if f.emergencyFailoverNil {
+		return nil, nil
+	}
 	return &vtadminpb.EmergencyFailoverShardResponse{}, nil
 }
 
@@ -362,6 +392,22 @@ func TestShardReloadSchemaDefaultsExcludePrimary(t *testing.T) {
 	assert.False(t, fake.reloadSchemaShardReq.IncludePrimary)
 }
 
+func TestShardReloadSchemaFailureEventsDoNotFlashSuccess(t *testing.T) {
+	fake := newShardFake()
+	fake.reloadSchemaShardResp = &vtadminpb.ReloadSchemaShardResponse{
+		Events: []*logutilpb.Event{{
+			Level: logutilpb.Level_WARNING,
+			Value: "ReloadSchemaShard(commerce/0) failed to load tablet list",
+		}},
+	}
+	s := newShardTestServer(t, fake, false)
+
+	rec := postShardForm(t, s, shardActionPaths()[1], url.Values{})
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.NotEqual(t, shardDetailPath(testClusterID, testKeyspace, testShard), rec.Header().Get("Location"))
+}
+
 func TestShardExternallyPromote(t *testing.T) {
 	fake := newShardFake()
 	s := newShardTestServer(t, fake, false)
@@ -375,6 +421,32 @@ func TestShardExternallyPromote(t *testing.T) {
 	assert.Equal(t, "zone1", fake.externallyPromotedReq.Alias.Cell)
 	assert.Equal(t, uint32(100), fake.externallyPromotedReq.Alias.Uid)
 	assert.Equal(t, []string{testClusterID}, fake.externallyPromotedReq.ClusterIds)
+}
+
+func TestShardExternallyPromoteRejectsTabletFromOtherShard(t *testing.T) {
+	fake := newShardFake()
+	// The fake's GetTablet reports the tablet lives in commerce/0, so a
+	// request scoped to a different shard must be rejected.
+	s := newShardTestServer(t, fake, false)
+
+	form := url.Values{"alias": {"zone1-0000000100"}}
+	rec := postShardForm(t, s, shardDetailPath(testClusterID, testKeyspace, "other-shard")+"/externally-promote", form)
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Nil(t, fake.externallyPromotedReq)
+	require.NotNil(t, fake.getTabletReq)
+}
+
+func TestShardExternallyPromoteTabletLookupFails(t *testing.T) {
+	fake := newShardFake()
+	fake.getTabletError = vterrors.New(vtrpcpb.Code_NOT_FOUND, "no such tablet")
+	s := newShardTestServer(t, fake, false)
+
+	form := url.Values{"alias": {"zone1-0000000100"}}
+	rec := postShardForm(t, s, shardActionPaths()[2], form)
+
+	assert.Equal(t, http.StatusNotFound, rec.Code)
+	assert.Nil(t, fake.externallyPromotedReq)
 }
 
 func TestShardExternallyPromoteInvalidAlias(t *testing.T) {
@@ -455,6 +527,18 @@ func TestShardPlannedFailoverInvalidTimeout(t *testing.T) {
 	assert.Nil(t, fake.plannedFailoverReq)
 }
 
+func TestShardPlannedFailoverUnauthorizedNilResponse(t *testing.T) {
+	fake := newShardFake()
+	fake.plannedFailoverNil = true
+	s := newShardTestServer(t, fake, false)
+
+	rec := postShardForm(t, s, shardActionPaths()[3], url.Values{})
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	require.NotNil(t, fake.plannedFailoverReq)
+	assert.Contains(t, rec.Body.String(), "not authorized")
+}
+
 func TestShardEmergencyFailover(t *testing.T) {
 	fake := newShardFake()
 	s := newShardTestServer(t, fake, false)
@@ -476,6 +560,18 @@ func TestShardEmergencyFailover(t *testing.T) {
 	assert.Equal(t, uint32(101), fake.emergencyFailoverReq.Options.NewPrimary.Uid)
 	assert.True(t, fake.emergencyFailoverReq.Options.PreventCrossCellPromotion)
 	assert.Equal(t, int64(30), fake.emergencyFailoverReq.Options.WaitReplicasTimeout.Seconds)
+}
+
+func TestShardEmergencyFailoverUnauthorizedNilResponse(t *testing.T) {
+	fake := newShardFake()
+	fake.emergencyFailoverNil = true
+	s := newShardTestServer(t, fake, false)
+
+	rec := postShardForm(t, s, shardActionPaths()[4], url.Values{})
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	require.NotNil(t, fake.emergencyFailoverReq)
+	assert.Contains(t, rec.Body.String(), "not authorized")
 }
 
 func TestShardValidate(t *testing.T) {

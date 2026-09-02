@@ -32,6 +32,11 @@ type (
 		DocumentTitle   string
 		EnableDebugJSON bool
 		Authenticator   rbac.Authenticator
+		// TrustProxyProto marks cookies Secure when the request arrives without
+		// direct TLS but carries X-Forwarded-Proto: https from a trusted
+		// HTTPS-terminating proxy. Only enable this when the UI is behind such
+		// a proxy; the header is spoofable otherwise.
+		TrustProxyProto bool
 	}
 
 	Server struct {

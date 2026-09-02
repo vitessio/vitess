@@ -67,7 +67,7 @@ func (s *Server) createKeyspace(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	redirectWithFlash(w, r, "/keyspace/"+url.PathEscape(clusterID)+"/"+url.PathEscape(name), Flash{
+	s.redirectWithFlash(w, r, "/keyspace/"+url.PathEscape(clusterID)+"/"+url.PathEscape(name), Flash{
 		Kind:    "success",
 		Message: "created keyspace " + name,
 	})
@@ -83,7 +83,7 @@ func (s *Server) renderFormError(w http.ResponseWriter, r *http.Request, title s
 	})
 }
 
-func redirectWithFlash(w http.ResponseWriter, r *http.Request, target string, flash Flash) {
-	setFlash(w, r, flash)
+func (s *Server) redirectWithFlash(w http.ResponseWriter, r *http.Request, target string, flash Flash) {
+	s.setFlash(w, r, flash)
 	http.Redirect(w, r, target, http.StatusSeeOther)
 }

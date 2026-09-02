@@ -40,6 +40,7 @@ Flags:
       --ui-addr string                          address for the vtadmin2 UI to listen on (used with --ui=vtadmin2) (default ":15001")
       --ui-debug-json                           enable ?format=json page data output in the vtadmin2 UI (used with --ui=vtadmin2)
       --ui-read-only                            run the vtadmin2 UI in read-only mode (used with --ui=vtadmin2)
+      --ui-trust-proxy-https                    mark UI cookies Secure when X-Forwarded-Proto: https is present from a trusted HTTPS-terminating proxy (used with --ui=vtadmin2)
       --version                                 version for vtadmin
       --vtctld-grpc-ca string                   the server ca to use to validate servers when connecting
       --vtctld-grpc-cert string                 the cert to use to connect

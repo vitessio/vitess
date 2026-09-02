@@ -82,7 +82,7 @@ func preRun(cmd *cobra.Command, args []string) error {
 	return validateFlags()
 }
 
-func run(cmd *cobra.Command, args []string) error {
+func run(cmd *cobra.Command, args []string) (err error) {
 	cfg, err := buildRuntimeConfig()
 	if err != nil {
 		return err
@@ -92,6 +92,14 @@ func run(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
+	defer func() {
+		if closeErr := api.Close(); closeErr != nil {
+			slog.Error("failed to close vtadmin API", slog.Any("error", closeErr))
+			if err == nil {
+				err = closeErr
+			}
+		}
+	}()
 
 	server, err := vtadmin2.NewServer(api, cfg.ui)
 	if err != nil {
@@ -105,6 +113,7 @@ func run(cmd *cobra.Command, args []string) error {
 	log.Info("starting vtadmin2", slog.String("addr", addr))
 	ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+
 	return serveHTTPServer(ctx, buildHTTPServer(addr, server))
 }
 
@@ -235,6 +244,7 @@ func registerFlags() {
 	rootCmd.Flags().BoolVar(&uiOpts.ReadOnly, "read-only", false, "hide vtadmin2 mutating actions in the UI")
 	rootCmd.Flags().StringVar(&uiOpts.DocumentTitle, "document-title", "VTAdmin2", "document title for vtadmin2 pages")
 	rootCmd.Flags().BoolVar(&uiOpts.EnableDebugJSON, "debug-json", false, "enable debug JSON views in vtadmin2 pages")
+	rootCmd.Flags().BoolVar(&uiOpts.TrustProxyProto, "cookie-secure-behind-proxy", false, "mark vtadmin2 cookies Secure when X-Forwarded-Proto: https is present from a trusted HTTPS-terminating proxy")
 
 	rootCmd.Flags().Var(&clusterConfigs, "cluster", "per-cluster configuration. any values here take precedence over those in -cluster-defaults or -cluster-config")
 	rootCmd.Flags().Var(&clusterFileConfig, "cluster-config", "path to a yaml cluster configuration. see clusters.example.yaml")

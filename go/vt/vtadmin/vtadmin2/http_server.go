@@ -22,8 +22,9 @@ import (
 )
 
 // NewHTTPServer creates the bounded HTTP server configuration shared by the
-// standalone and integrated vtadmin2 entrypoints. The write timeout is long
-// enough for failovers, traffic switches, schema changes, and waiting VDiffs.
+// standalone and integrated vtadmin2 entrypoints. The write timeout covers
+// failovers, traffic switches, and schema changes. VDiff creation is
+// asynchronous; operators poll the show page instead of waiting in-request.
 func NewHTTPServer(addr string, handler http.Handler) *http.Server {
 	return &http.Server{
 		Addr:              addr,

@@ -51,7 +51,7 @@ func (s *Server) keyspaceValidate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	redirectWithFlash(w, r, keyspaceDetailPath(clusterID, keyspace), Flash{
+	s.redirectWithFlash(w, r, keyspaceDetailPath(clusterID, keyspace), Flash{
 		Kind:    "success",
 		Message: "validated keyspace " + keyspace + ": " + strings.Join(resp.GetResults(), "; "),
 	})
@@ -73,7 +73,7 @@ func (s *Server) keyspaceValidateSchema(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	redirectWithFlash(w, r, keyspaceDetailPath(clusterID, keyspace), Flash{
+	s.redirectWithFlash(w, r, keyspaceDetailPath(clusterID, keyspace), Flash{
 		Kind:    "success",
 		Message: "validated schema on keyspace " + keyspace,
 	})
@@ -95,7 +95,7 @@ func (s *Server) keyspaceValidateVersion(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	redirectWithFlash(w, r, keyspaceDetailPath(clusterID, keyspace), Flash{
+	s.redirectWithFlash(w, r, keyspaceDetailPath(clusterID, keyspace), Flash{
 		Kind:    "success",
 		Message: "validated versions on keyspace " + keyspace,
 	})
@@ -118,7 +118,7 @@ func (s *Server) keyspaceRebuildGraph(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	redirectWithFlash(w, r, keyspaceDetailPath(clusterID, keyspace), Flash{
+	s.redirectWithFlash(w, r, keyspaceDetailPath(clusterID, keyspace), Flash{
 		Kind:    "success",
 		Message: "rebuilt keyspace graph for " + keyspace,
 	})
@@ -148,7 +148,7 @@ func (s *Server) keyspaceRemoveCell(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	redirectWithFlash(w, r, keyspaceDetailPath(clusterID, keyspace), Flash{
+	s.redirectWithFlash(w, r, keyspaceDetailPath(clusterID, keyspace), Flash{
 		Kind:    "success",
 		Message: "removed cell " + cell + " from keyspace " + keyspace,
 	})
@@ -180,7 +180,7 @@ func (s *Server) keyspaceCreateShard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	redirectWithFlash(w, r, shardDetailPath(clusterID, keyspace, shard), Flash{
+	s.redirectWithFlash(w, r, shardDetailPath(clusterID, keyspace, shard), Flash{
 		Kind:    "success",
 		Message: "created shard " + keyspace + "/" + shard,
 	})
@@ -202,7 +202,7 @@ func (s *Server) keyspaceReloadSchema(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	redirectWithFlash(w, r, keyspaceDetailPath(clusterID, keyspace), Flash{
+	s.redirectWithFlash(w, r, keyspaceDetailPath(clusterID, keyspace), Flash{
 		Kind:    "success",
 		Message: "reloaded schema on keyspace " + keyspace,
 	})
