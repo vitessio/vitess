@@ -2103,6 +2103,14 @@ func (vp *vplayer) workerLoop(ctx context.Context, scheduler *applyScheduler, co
 		// Publish the current worker client so the worker-scoped
 		// context.AfterFunc can close it if ctx is cancelled.
 		activeApplyClient.Store(worker.client)
+		// Recheck after publishing: this hook has the same missed-cancellation
+		// window as the commitLoop's (see commitWorkerTxn) — the one-shot
+		// AfterFunc may have fired between nextReady's ctx check and the
+		// Store above with a nil client, leaving the apply's blocking calls
+		// with no closer.
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		// DDL bookkeeping (postDDLStalePlans, postDDLDroppedTables) is only
 		// populated when OnDdl is EXEC or EXEC_IGNORE. In the default IGNORE
 		// mode, these maps stay empty for the workflow's lifetime, so we can
@@ -2253,6 +2261,16 @@ func (vp *vplayer) commitLoop(ctx context.Context, scheduler *applyScheduler, co
 		}
 		activeCommitClient.Store(dbClient)
 		defer activeCommitClient.Store(nil)
+		// Recheck after publishing: the one-shot AfterFunc may have fired
+		// between the entry ctx check and the Store above, found a nil
+		// pointer, and exited permanently — leaving a blocking call below
+		// with no closer. Err() and cancellation are serialized by the
+		// context's internal lock, so either this read observes the
+		// cancellation or the callback observes the Store; the window
+		// cannot fall between.
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 
 		// Worker batch-mode fast path: the worker set payload.client but left
 		// payload.query/commit nil so we wouldn't allocate a closure per
@@ -2356,6 +2374,11 @@ func (vp *vplayer) commitLoop(ctx context.Context, scheduler *applyScheduler, co
 		}
 		activeCommitClient.Store(dbClient)
 		defer activeCommitClient.Store(nil)
+		// Recheck after publishing; see the matching comment in
+		// commitWorkerTxn for the missed-cancellation window this closes.
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		vp.serialMu.Lock()
 		defer vp.serialMu.Unlock()
 

@@ -1269,6 +1269,60 @@ func TestCommitLoopCancelUnblocksBlockedCommit(t *testing.T) {
 	}
 }
 
+// TestCommitLoopSpentCancellationNeverTouchesConnection pins the terminal
+// state a missed-cancellation race would leave behind: the commitLoop's
+// one-shot cancellation callback already spent (fired with no published
+// connection). From that state, a queued commit must never enter a blocking
+// wire call — nothing could unblock it — so the loop must return without
+// touching the connection. Together with the recheck-after-publish in
+// commitWorkerTxn/commitOnlyTxn (which closes the window between the ctx
+// check and the connection's publication), this keeps every blocking call
+// reachable only while a closer is armed.
+func TestCommitLoopSpentCancellationNeverTouchesConnection(t *testing.T) {
+	vp, _ := testVPlayer(t)
+	ctx, cancel := context.WithCancel(testCtx(t))
+	scheduler := newApplyScheduler(ctx)
+
+	blockingClient := &blockingBatchDBClient{
+		blockMulti: make(chan struct{}),
+		entered:    make(chan struct{}, 1),
+		closed:     make(chan struct{}),
+	}
+	t.Cleanup(func() {
+		select {
+		case <-blockingClient.blockMulti:
+		default:
+			close(blockingClient.blockMulti)
+		}
+	})
+	workerClient := newVDBClient(blockingClient, vp.vr.stats, vp.vr.workflowConfig.RelayLogMaxItems)
+	workerClient.maxBatchSize = 1024
+	require.NoError(t, workerClient.Begin())
+
+	txn := acquireApplyTxn()
+	txn.order = 1
+	txn.payload = &applyTxnPayload{client: workerClient}
+	commitCh := make(chan *applyTxn, 1)
+	commitCh <- txn
+
+	// Cancel before the loop runs: its cancellation callback is spent
+	// immediately, with no connection published.
+	cancel()
+
+	done := make(chan error, 1)
+	go func() {
+		done <- vp.commitLoop(ctx, scheduler, commitCh)
+	}()
+
+	select {
+	case err := <-done:
+		require.Error(t, err)
+	case <-time.After(30 * time.Second):
+		require.FailNow(t, "commitLoop did not return with cancellation already spent")
+	}
+	assert.Empty(t, blockingClient.queries, "a commit entered a wire call with the cancellation callback already spent")
+}
+
 func TestApplyEventsParallelCancelledContext(t *testing.T) {
 	vp, _ := testVPlayer(t)
 
