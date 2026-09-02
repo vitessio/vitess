@@ -3480,16 +3480,48 @@ func (e *Executor) maybeResumeVReplication(ctx context.Context, uuid string, s *
 			slog.String("uuid", uuid), slog.String("tablet", e.TabletAliasString()), slog.Any("error", err))
 		return
 	}
-	if _, err := e.vreplicationExec(ctx, tablet.Tablet, binlogplayer.StartVReplication(s.id)); err != nil {
+	res, err := e.vreplicationExec(ctx, tablet.Tablet, resumeVReplicationQuery(s.id, s.message))
+	if err != nil {
 		state.lastAttempt = time.Now()
 		log.Error("Online DDL: failed to resume vreplication stream",
 			slog.String("uuid", uuid), slog.String("tablet", e.TabletAliasString()), slog.Int64("stream_id", int64(s.id)), slog.Any("error", err))
 		return
 	}
+	if res.RowsAffected == 0 {
+		// The stream is no longer in the state the resume decision was
+		// based on: an operator stopped it, or it transitioned on its own,
+		// between our observation and this statement. The decision is
+		// stale; do not count it as an attempt or rewrite the message.
+		state.lastAttempt = time.Now()
+		log.Warn("Online DDL: vreplication stream no longer parked on the observed resumable error; skipping resume",
+			slog.String("uuid", uuid), slog.String("tablet", e.TabletAliasString()), slog.Int64("stream_id", int64(s.id)))
+		return
+	}
 	state.attempts++
 	state.lastAttempt = time.Now()
-	_ = e.updateMigrationMessage(ctx, uuid,
-		fmt.Sprintf("vreplication stream errored but is resumable; resuming automatically, attempt %d: %s", state.attempts, s.message))
+	if err := e.updateMigrationMessage(ctx, uuid,
+		fmt.Sprintf("vreplication stream errored but is resumable; resuming automatically, attempt %d: %s", state.attempts, s.message)); err != nil {
+		// The resume itself succeeded; only the operator-facing record of
+		// it failed. Log rather than fail, so the attempt is at least
+		// traceable in the tablet log.
+		log.Error("Online DDL: failed to record automatic vreplication resume in the migration message",
+			slog.String("uuid", uuid), slog.String("tablet", e.TabletAliasString()), slog.Int64("stream_id", int64(s.id)), slog.Any("error", err))
+	}
+}
+
+// resumeVReplicationQuery returns the statement resuming a stream parked on a
+// resumable terminal error, conditional on the row still holding the exact
+// state and message the resume decision was based on. An unconditional update
+// (binlogplayer.StartVReplication) would silently flip a stream an operator
+// stopped in the meantime back to Running and erase the operator's message;
+// with the condition, such a race yields zero affected rows and the caller
+// treats the decision as stale.
+func resumeVReplicationQuery(id int32, observedMessage string) string {
+	return fmt.Sprintf("update _vt.vreplication set state=%s, message='' where id=%d and state=%s and message=%s",
+		sqltypes.EncodeStringSQL(binlogdatapb.VReplicationWorkflowState_Running.String()),
+		id,
+		sqltypes.EncodeStringSQL(binlogdatapb.VReplicationWorkflowState_Error.String()),
+		sqltypes.EncodeStringSQL(observedMessage))
 }
 
 // reviewVReplStreamError decides what reviewRunningMigrations should do

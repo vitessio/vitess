@@ -873,6 +873,19 @@ func TestResumeBudgetExhausted(t *testing.T) {
 // a resumable stream whose error episode has outlived the resume budget is
 // cancelled. The lifecycle subtest walks a single migration through
 // park -> resume -> budget exhaustion -> recovery -> fresh episode.
+// TestResumeVReplicationQuery pins the resume statement's conditional shape:
+// it must only transition the stream back to Running when the row is still in
+// the exact Error state (and message) that the resume decision was based on.
+// An unconditional update — like binlogplayer.StartVReplication's — would
+// silently override an operator's concurrent Stop and erase its message.
+func TestResumeVReplicationQuery(t *testing.T) {
+	message := vreplication.RetriesExhaustedIndicator + ": it's 'complicated'"
+	query := resumeVReplicationQuery(42, message)
+	assert.Equal(t,
+		"update _vt.vreplication set state='Running', message='' where id=42 and state='Error' and message="+sqltypes.EncodeStringSQL(message),
+		query)
+}
+
 func TestReviewVReplStreamError(t *testing.T) {
 	newExecutor := func() *Executor {
 		return &Executor{
