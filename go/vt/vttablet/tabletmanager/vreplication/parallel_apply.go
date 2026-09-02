@@ -1643,14 +1643,21 @@ func (vp *vplayer) scheduleItems(ctx context.Context, scheduler *applyScheduler,
 						// keep reporting zero lag. While busy, lag stays
 						// honest via the committed transactions' own position
 						// updates (or their absence).
-						needRefresh := time.Since(state.lastHeartbeatRefresh) >= idleTimeout && scheduler.idle()
-						if needRefresh {
+						if time.Since(state.lastHeartbeatRefresh) >= idleTimeout {
+							// Advance the refresh timer even when the busy
+							// check below skips the write: this rate-limits
+							// the scheduler.idle() probe (which takes the
+							// scheduler mutex the worker dispatch path is
+							// hot on) to once per idleTimeout instead of
+							// once per empty transaction while busy.
 							state.lastHeartbeatRefresh = now
-							vp.serialMu.Lock()
-							err := vp.vr.updateHeartbeatTime(now.Unix())
-							vp.serialMu.Unlock()
-							if err != nil {
-								return err
+							if scheduler.idle() {
+								vp.serialMu.Lock()
+								err := vp.vr.updateHeartbeatTime(now.Unix())
+								vp.serialMu.Unlock()
+								if err != nil {
+									return err
+								}
 							}
 						}
 						vp.serialMu.Lock()
@@ -1899,11 +1906,18 @@ func (vp *vplayer) scheduleItems(ctx context.Context, scheduler *applyScheduler,
 				// processes heartbeats between fully committed transactions);
 				// here it must be checked. The accumulated-heartbeats counter
 				// still advances so the write happens promptly once idle.
-				pipelineIdle := len(state.curEvents) == 0 && scheduler.idle()
+				//
+				// Probe scheduler.idle() (which takes the scheduler mutex the
+				// worker dispatch path is hot on) only when a write is due
+				// anyway per mustUpdateHeartbeat, keeping this branch's cost
+				// off the hot path: throttled heartbeats can arrive hundreds
+				// of times per second. Taking the scheduler mutex while
+				// holding serialMu follows the lock order the commitLoop's
+				// commitOnlyTxn already established.
 				vp.serialMu.Lock()
 				vp.numAccumulatedHeartbeats++
 				var err error
-				if pipelineIdle {
+				if len(state.curEvents) == 0 && vp.mustUpdateHeartbeat() && scheduler.idle() {
 					err = vp.recordHeartbeat()
 				}
 				vp.serialMu.Unlock()

@@ -244,6 +244,40 @@ func TestNewApplyWorker(t *testing.T) {
 	worker.close()
 }
 
+// TestNewApplyWorkerSmallMaxBatchSizeFallback tests the batch size fallback
+// when the max_allowed_packet lookup fails: the user-configurable
+// relay-log-max-size may validly be tiny (relay log tests use 10), and the
+// headroom subtraction must not drive maxBatchSize non-positive — that would
+// leave batchMode enabled with a batch that force-flushes on every add and
+// commits empty batches. Must match vreplicator.maxQuerySize's semantics:
+// only subtract the headroom when the value exceeds it.
+func TestNewApplyWorkerSmallMaxBatchSizeFallback(t *testing.T) {
+	stats := binlogplayer.NewStats()
+	stats.VReplicationLagGauges.Stop()
+	t.Cleanup(stats.Stop)
+
+	cfg := vttablet.GetDefaultVReplicationConfig()
+	cfg.RelayLogMaxSize = 10
+
+	client := &failingDBClient{failOnQuery: map[string]error{"max_allowed_packet": errors.New("lookup failed")}}
+	vr := &vreplicator{
+		id:             1,
+		stats:          stats,
+		dbClient:       newVDBClient(client, stats, cfg.RelayLogMaxItems),
+		workflowConfig: cfg,
+		vre:            &Engine{dbClientFactoryFiltered: func() binlogplayer.DBClient { return client }},
+	}
+
+	worker, err := newApplyWorker(t.Context(), vr)
+	require.NoError(t, err)
+	t.Cleanup(worker.close)
+
+	require.True(t, worker.batchMode)
+	for _, c := range worker.conns {
+		assert.Equal(t, int64(10), c.maxBatchSize)
+	}
+}
+
 func TestCreateWorkerConn_UsesSerialSQLModeContract(t *testing.T) {
 	testCases := []struct {
 		name         string
