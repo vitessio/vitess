@@ -2890,10 +2890,14 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 		if stateErr != nil {
 			return nil, stateErr
 		}
-		// Reshard switches reads per cell, so a request naming only some cells can
-		// leave others on the source. MoveTables read routing rules are global, so a
-		// requested read type is fully switched regardless of --cells; only apply the
-		// per-cell subtraction for Reshard.
+		// Reshard and MoveTables strand reads differently. MoveTables reads are
+		// governed by global routing rules: switching a read type in any cell adds
+		// the redirect globally, and switching writes rebuilds SrvVSchema in every
+		// cell (traffic_switcher.go changeWriteRoute), so the write switch propagates
+		// that redirect everywhere. A MoveTables read type is therefore stranded only
+		// if it has not been switched in any cell. Reshard reads are per-cell served
+		// types that the write switch does not touch, so a request naming only some
+		// cells can leave the rest on the source.
 		perCellStranding := lockedState.WorkflowType == TypeReshard
 		var reqCells sets.Set[string]
 		if perCellStranding {
@@ -2906,20 +2910,27 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 			reqCells = sets.New(expanded...)
 		}
 		// cellsStrandedOnSource returns the cells still on the source after this
-		// request. If the request does not switch the type, every not-switched cell
-		// remains; if it does, only cells this request does not target remain.
-		cellsStrandedOnSource := func(switchedByReq bool, notSwitched []string) []string {
-			if len(notSwitched) == 0 {
+		// request switches (or does not switch) a read type.
+		cellsStrandedOnSource := func(switchedByReq bool, cellsSwitched, cellsNotSwitched []string) []string {
+			if len(cellsNotSwitched) == 0 {
 				return nil
-			}
-			if !switchedByReq {
-				return notSwitched
 			}
 			if !perCellStranding {
-				return nil
+				// MoveTables: not stranded if this request switches the type, or it is
+				// already switched in some cell (the global redirect then exists and
+				// the write switch pushes it to every cell).
+				if switchedByReq || len(cellsSwitched) > 0 {
+					return nil
+				}
+				return cellsNotSwitched
+			}
+			// Reshard: an unswitched type leaves every not-switched cell behind; a
+			// switched type only leaves cells this request does not target.
+			if !switchedByReq {
+				return cellsNotSwitched
 			}
 			var stranded []string
-			for _, c := range notSwitched {
+			for _, c := range cellsNotSwitched {
 				if !reqCells.Has(c) {
 					stranded = append(stranded, c)
 				}
@@ -2928,7 +2939,7 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 		}
 		var readsNotSwitched []string
 		if !lockedState.WritesSwitched {
-			if stranded := cellsStrandedOnSource(switchReplica, lockedState.ReplicaCellsNotSwitched); len(stranded) > 0 {
+			if stranded := cellsStrandedOnSource(switchReplica, lockedState.ReplicaCellsSwitched, lockedState.ReplicaCellsNotSwitched); len(stranded) > 0 {
 				readsNotSwitched = append(readsNotSwitched, fmt.Sprintf("REPLICA (cells: %s)", strings.Join(stranded, ",")))
 			}
 			// switchReads auto-adds RDONLY when replica reads are being switched and
@@ -2941,7 +2952,7 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 				}
 				rdonlySwitchedByReq = !rdonlyTabletsExist
 			}
-			if stranded := cellsStrandedOnSource(rdonlySwitchedByReq, lockedState.RdonlyCellsNotSwitched); len(stranded) > 0 {
+			if stranded := cellsStrandedOnSource(rdonlySwitchedByReq, lockedState.RdonlyCellsSwitched, lockedState.RdonlyCellsNotSwitched); len(stranded) > 0 {
 				readsNotSwitched = append(readsNotSwitched, fmt.Sprintf("RDONLY (cells: %s)", strings.Join(stranded, ",")))
 			}
 		}
