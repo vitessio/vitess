@@ -1764,12 +1764,18 @@ func switchWrites(t *testing.T, workflowType, ksWorkflow string, reverse bool) {
 	ensureCanSwitch(t, workflowType, "", ksWorkflow)
 	defaultTargetKs, workflow, found := strings.Cut(ksWorkflow, ".")
 	require.True(t, found)
+	// Forward writes-only switches are refused when reads are still on the source,
+	// so pass --force here. Callers that switch reads first are unaffected by it.
+	var forceArgs []string
+	if !reverse {
+		forceArgs = append(forceArgs, "--force")
+	}
 	if workflowType == binlogdatapb.VReplicationWorkflowType_MoveTables.String() {
-		moveTablesAction(t, command, defaultCellName, workflow, defaultSourceKs, defaultTargetKs, "", "--timeout="+SwitchWritesTimeout, "--tablet-types=primary")
+		moveTablesAction(t, command, defaultCellName, workflow, defaultSourceKs, defaultTargetKs, "", append([]string{"--timeout=" + SwitchWritesTimeout, "--tablet-types=primary"}, forceArgs...)...)
 		return
 	}
-	output, err := vc.VtctldClient.ExecuteCommandWithOutput(workflowType, "--tablet-types=primary", "--workflow", workflow,
-		"--target-keyspace", defaultTargetKs, command, "--timeout="+SwitchWritesTimeout, "--initialize-target-sequences")
+	output, err := vc.VtctldClient.ExecuteCommandWithOutput(append([]string{workflowType, "--tablet-types=primary", "--workflow", workflow,
+		"--target-keyspace", defaultTargetKs, command, "--timeout=" + SwitchWritesTimeout, "--initialize-target-sequences"}, forceArgs...)...)
 	if output != "" {
 		fmt.Printf("Output of switching writes with vtctldclient for %s:\n++++++\n%s\n--------\n", ksWorkflow, output)
 	}

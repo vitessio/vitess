@@ -2878,25 +2878,25 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 
 	ts.force = req.GetForce()
 
-	// Don't switch writes forward while leaving reads on the source. If this request
-	// switches only PRIMARY (no read types) and reads are still on the source, moving
-	// writes strands those reads and, for a Reshard, makes the workflow uncompletable.
-	// Requests that also switch reads are left to switchReads, which normalizes tablet
-	// types (e.g. adding RDONLY when no rdonly tablets exist) and cells. --force overrides.
-	// Evaluated on freshly reloaded state under the workflow lock, so it is serialized
-	// against concurrent switches rather than relying on the pre-lock state.
-	if TrafficSwitchDirection(req.Direction) == DirectionForward && switchPrimary &&
-		!switchReplica && !switchRdonly {
+	// Don't switch writes forward while leaving reads on the source. Moving writes
+	// while any read type stays on the source strands those reads and, for a Reshard,
+	// makes the workflow uncompletable. Flag each read type this request does not itself
+	// switch and that is still on the source; read types included in the request are
+	// left to switchReads, which normalizes tablet types (e.g. adding RDONLY when no
+	// rdonly tablets exist) and cells. --force overrides. Evaluated on freshly reloaded
+	// state under the workflow lock, so it is serialized against concurrent switches
+	// rather than relying on the pre-lock state.
+	if TrafficSwitchDirection(req.Direction) == DirectionForward && switchPrimary {
 		_, lockedState, stateErr := s.getWorkflowState(ctx, req.Keyspace, req.Workflow)
 		if stateErr != nil {
 			return nil, stateErr
 		}
 		var readsNotSwitched []string
 		if !lockedState.WritesSwitched {
-			if len(lockedState.ReplicaCellsNotSwitched) > 0 {
+			if !switchReplica && len(lockedState.ReplicaCellsNotSwitched) > 0 {
 				readsNotSwitched = append(readsNotSwitched, fmt.Sprintf("REPLICA (cells: %s)", strings.Join(lockedState.ReplicaCellsNotSwitched, ",")))
 			}
-			if len(lockedState.RdonlyCellsNotSwitched) > 0 {
+			if !switchRdonly && len(lockedState.RdonlyCellsNotSwitched) > 0 {
 				readsNotSwitched = append(readsNotSwitched, fmt.Sprintf("RDONLY (cells: %s)", strings.Join(lockedState.RdonlyCellsNotSwitched, ",")))
 			}
 		}

@@ -2154,6 +2154,17 @@ func TestWorkflowSwitchTrafficFailsToSwitchWritesBeforeReads(t *testing.T) {
 	})
 	require.ErrorContains(t, err, "cannot switch writes")
 	require.ErrorContains(t, err, "before reads are switched")
+
+	// A mixed request that switches PRIMARY and REPLICA but leaves RDONLY on the
+	// source must also fail: the RDONLY reads would be stranded just the same.
+	_, err = env.ws.WorkflowSwitchTraffic(ctx, &vtctldatapb.WorkflowSwitchTrafficRequest{
+		Keyspace:    targetKeyspaceName,
+		Workflow:    workflowName,
+		TabletTypes: []topodatapb.TabletType{topodatapb.TabletType_PRIMARY, topodatapb.TabletType_REPLICA},
+		Direction:   int32(DirectionForward),
+	})
+	require.ErrorContains(t, err, "cannot switch writes")
+	require.ErrorContains(t, err, "RDONLY")
 }
 
 func TestMoveTablesTrafficSwitchingDryRun(t *testing.T) {
