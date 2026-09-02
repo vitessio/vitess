@@ -873,9 +873,66 @@ func TestResumeBudgetExhausted(t *testing.T) {
 // a resumable stream whose error episode has outlived the resume budget is
 // cancelled. The lifecycle subtest walks a single migration through
 // park -> resume -> budget exhaustion -> recovery -> fresh episode.
-// TestForgetVReplStream pins the cleanup that keeps a cancelled migration's
-// error episode and retry window from leaking into a later RETRY of the same
-// UUID, which would instantly exhaust the retried migration's fresh budget.
+// TestForgetVReplStreamOrdering pins WHEN the cleanup runs, not just what it
+// deletes: a no-op RETRY (against a migration that is not failed/cancelled)
+// and a cancellation that fails before its durable transition must both
+// leave an active migration's recovery tracking intact — clearing it would
+// grant the still-running stream a fresh error episode and resume budget.
+func TestForgetVReplStreamOrdering(t *testing.T) {
+	uuid := "1cbcd662_8ed6_11ee_bc8f_0a43f95f28a3"
+	newTrackedExecutor := func(execQuery func(ctx context.Context, query string) (*sqltypes.Result, error)) *Executor {
+		e := &Executor{
+			vreplicationLastError:   map[string]*vterrors.LastError{uuid: vterrors.NewLastError("test", time.Minute)},
+			vreplicationResumeState: map[string]*vreplResumeState{uuid: {firstParked: time.Now()}},
+			tabletAlias:             &topodatapb.TabletAlias{Cell: "cell", Uid: 1},
+			ticks:                   timer.NewTimer(time.Hour),
+			execQuery:               execQuery,
+		}
+		e.isOpen.Store(1)
+		return e
+	}
+
+	t.Run("no-op retry retains tracking", func(t *testing.T) {
+		e := newTrackedExecutor(func(ctx context.Context, query string) (*sqltypes.Result, error) {
+			return &sqltypes.Result{RowsAffected: 0}, nil
+		})
+		_, err := e.RetryMigration(t.Context(), uuid)
+		require.NoError(t, err)
+		assert.Contains(t, e.vreplicationResumeState, uuid,
+			"a RETRY that requeued nothing must not clear an active migration's episode")
+		assert.Contains(t, e.vreplicationLastError, uuid)
+	})
+	t.Run("actual retry clears tracking", func(t *testing.T) {
+		e := newTrackedExecutor(func(ctx context.Context, query string) (*sqltypes.Result, error) {
+			return &sqltypes.Result{RowsAffected: 1}, nil
+		})
+		_, err := e.RetryMigration(t.Context(), uuid)
+		require.NoError(t, err)
+		assert.NotContains(t, e.vreplicationResumeState, uuid)
+		assert.NotContains(t, e.vreplicationLastError, uuid)
+	})
+	t.Run("failed cancellation retains tracking", func(t *testing.T) {
+		e := newTrackedExecutor(func(ctx context.Context, query string) (*sqltypes.Result, error) {
+			// The cancelled_timestamp UPDATE fails; the SELECT that
+			// readMigration issues (which also names that column) succeeds
+			// with a running (cancellable) migration.
+			if strings.Contains(query, "SET cancelled_timestamp=NOW(6)") {
+				return nil, errors.New("backend unavailable")
+			}
+			return sqltypes.MakeTestResult(
+				sqltypes.MakeTestFields("migration_uuid|migration_status", "varchar|varchar"),
+				uuid+"|running"), nil
+		})
+		_, err := e.CancelMigration(t.Context(), uuid, "test cancel", true)
+		require.Error(t, err)
+		assert.Contains(t, e.vreplicationResumeState, uuid,
+			"a cancellation that failed before any durable transition must not clear the episode")
+		assert.Contains(t, e.vreplicationLastError, uuid)
+	})
+}
+
+// TestForgetVReplStream pins the helper's deletion semantics; the lifecycle
+// points at which it may run are pinned by TestForgetVReplStreamOrdering.
 func TestForgetVReplStream(t *testing.T) {
 	e := &Executor{
 		vreplicationLastError:   make(map[string]*vterrors.LastError),

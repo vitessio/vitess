@@ -1803,7 +1803,6 @@ func (e *Executor) CancelMigration(ctx context.Context, uuid string, message str
 		return emptyResult, nil
 	}
 	// From this point on, we're actually cancelling a migration
-	e.forgetVReplStream(uuid)
 	if issuedByUser {
 		// if this was issued by the user, then we mark the `cancelled_timestamp`, and based on that,
 		// the migration state will be 'cancelled'.
@@ -1814,6 +1813,12 @@ func (e *Executor) CancelMigration(ctx context.Context, uuid string, message str
 			return nil, err
 		}
 	}
+	// Every path below terminally transitions the migration (the deferred
+	// failMigration guarantees it), so the stream tracking can be dropped
+	// now — but not any earlier: a cancellation that fails before this
+	// point leaves the migration active, and erasing its episode would
+	// grant the still-running stream a fresh resume budget.
+	e.forgetVReplStream(uuid)
 	defer e.failMigration(ctx, onlineDDL, errors.New(message))
 	defer e.triggerNextCheckInterval()
 
@@ -4624,10 +4629,19 @@ func (e *Executor) RetryMigration(ctx context.Context, uuid string) (result *sql
 	if err != nil {
 		return nil, err
 	}
-	// The retried migration gets a fresh error episode and retry window.
-	e.forgetVReplStream(uuid)
 	defer e.triggerNextCheckInterval()
-	return e.execQuery(ctx, query)
+	result, err = e.execQuery(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	if result.RowsAffected > 0 {
+		// Only an actual requeue gets a fresh error episode and retry
+		// window: the update is status-restricted, so a no-op RETRY against
+		// a migration that is not failed/cancelled must not clear an active
+		// stream's tracking.
+		e.forgetVReplStream(uuid)
+	}
+	return result, nil
 }
 
 // CleanupMigration sets migration is ready for artifact cleanup. Artifacts are not immediately deleted:
