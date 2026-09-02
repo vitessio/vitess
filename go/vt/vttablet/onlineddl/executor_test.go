@@ -612,16 +612,22 @@ type fakeTabletManagerClient struct {
 func (fakeTabletManagerClient) Close() {}
 
 // resumingTabletManagerClient reports every VReplicationExec call as having
-// affected one row, simulating a successfully issued stream resume.
+// affected one row, simulating a successfully issued stream resume. When
+// cancel is set it is invoked before returning, simulating a resume that
+// succeeds just as the shared bounded context expires.
 type resumingTabletManagerClient struct {
 	tmclient.TabletManagerClient
+	cancel context.CancelFunc
+}
+
+func (c *resumingTabletManagerClient) VReplicationExec(ctx context.Context, tablet *topodatapb.Tablet, query string) (*querypb.QueryResult, error) {
+	if c.cancel != nil {
+		c.cancel()
+	}
+	return &querypb.QueryResult{RowsAffected: 1}, nil
 }
 
 func (resumingTabletManagerClient) Close() {}
-
-func (resumingTabletManagerClient) VReplicationExec(ctx context.Context, tablet *topodatapb.Tablet, query string) (*querypb.QueryResult, error) {
-	return &querypb.QueryResult{RowsAffected: 1}, nil
-}
 
 // stopFailingTabletManagerClient fails every VReplicationExec call,
 // simulating a stream stop RPC failure during migration termination.
@@ -1787,6 +1793,57 @@ func TestMaybeResumeVReplicationRefreshesLiveness(t *testing.T) {
 	e.maybeResumeVReplication(t.Context(), uuid, parkedStream, &vreplResumeState{firstParked: time.Now()})
 	assert.True(t, livenessRefreshed,
 		"an accepted resume must refresh liveness so the same tick's stale reaper cannot fail the just-resumed migration")
+}
+
+// TestMaybeResumeVReplicationLivenessContext pins that the post-resume
+// liveness refresh does not ride the shared bounded context: a resume that
+// succeeds just as that context expires must still land the refresh on its
+// own context, or the same tick's stale reaper could fail the migration the
+// resume just saved.
+func TestMaybeResumeVReplicationLivenessContext(t *testing.T) {
+	uuid := "1cbcd662_8ed6_11ee_bc8f_0a43f95f28a3"
+	parentCtx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	protocolName := t.Name()
+	resetProtocol := tmclienttest.SetProtocol(t.Name(), protocolName)
+	defer resetProtocol()
+	tmclient.RegisterTabletManagerClientFactory(protocolName, func() tmclient.TabletManagerClient {
+		// The resume RPC succeeds, but the shared context dies with it.
+		return &resumingTabletManagerClient{cancel: cancel}
+	})
+	alias := &topodatapb.TabletAlias{Cell: "cell", Uid: 1}
+	ts := memorytopo.NewServer(t.Context(), "cell")
+	require.NoError(t, ts.CreateTablet(t.Context(), &topodatapb.Tablet{
+		Alias:    alias,
+		Keyspace: "ks",
+		Shard:    "0",
+		Type:     topodatapb.TabletType_PRIMARY,
+	}))
+	var livenessRefreshed bool
+	e := &Executor{
+		ts:          ts,
+		tabletAlias: alias,
+		ticks:       timer.NewTimer(time.Hour),
+		execQuery: func(ctx context.Context, query string) (*sqltypes.Result, error) {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+			if strings.Contains(query, "liveness_timestamp=NOW(6)") {
+				livenessRefreshed = true
+			}
+			return &sqltypes.Result{RowsAffected: 1}, nil
+		},
+	}
+	e.isOpen.Store(1)
+
+	parkedStream := &VReplStream{
+		id:      1,
+		state:   binlogdatapb.VReplicationWorkflowState_Error,
+		message: vreplication.RetriesExhaustedIndicator + ": connection refused",
+	}
+	e.maybeResumeVReplication(parentCtx, uuid, parkedStream, &vreplResumeState{firstParked: time.Now()})
+	assert.True(t, livenessRefreshed,
+		"the liveness refresh must land on its own bounded context even when the resume exhausted the shared one")
 }
 
 // TestGetNonConflictingMigrationCancellationIntent pins the scheduling gate:

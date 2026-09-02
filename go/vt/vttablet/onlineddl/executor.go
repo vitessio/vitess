@@ -3634,8 +3634,14 @@ func (e *Executor) maybeResumeVReplication(ctx context.Context, uuid string, s *
 	// window at or above the stale threshold, that clock is already expired
 	// at the very first park). The stamp is budget-gated: resumes stop when
 	// the episode's budget expires, so the reaper's authority returns as
-	// soon as the executor stops managing the stream.
-	if err := e.updateMigrationTimestamp(ctx, "liveness_timestamp", uuid); err != nil {
+	// soon as the executor stops managing the stream. The write gets its
+	// own bounded, non-cancellable context: the resume RPC shares this
+	// function's context and may have exhausted it, and a stream already
+	// flipped to Running must not be left reaper-eligible because the
+	// bookkeeping ran out of deadline.
+	tctx, tcancel := context.WithTimeout(context.WithoutCancel(ctx), topo.RemoteOperationTimeout)
+	defer tcancel()
+	if err := e.updateMigrationTimestamp(tctx, "liveness_timestamp", uuid); err != nil {
 		log.Error("Online DDL: failed to refresh migration liveness after vreplication resume",
 			slog.String("uuid", uuid), slog.String("tablet", e.TabletAliasString()), slog.Any("error", err))
 	}
