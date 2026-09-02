@@ -1112,6 +1112,12 @@ func TestForgetVReplStreamOrdering(t *testing.T) {
 		assert.Contains(t, e.vreplicationResumeState, uuid,
 			"a cancellation that failed before any durable transition must not clear the episode")
 		assert.Contains(t, e.vreplicationLastError, uuid)
+		// The intent write failed before the deferred cleanup was even
+		// registered: no cancellation was accepted, so no pending intent
+		// may exist — a record here would make the scheduler fail a
+		// migration whose cancellation the caller was told did not happen.
+		assert.NotContains(t, e.vreplicationPendingCancel, uuid,
+			"a rejected cancellation must not leave a pending intent behind")
 	})
 }
 
