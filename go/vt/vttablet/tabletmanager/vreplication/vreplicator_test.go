@@ -84,6 +84,28 @@ func TestMaxQuerySize(t *testing.T) {
 	})
 }
 
+// TestSetStateStampsTimeUpdated pins that a state transition stamps
+// time_updated in the same write: a parked (Error) row's time_updated IS its
+// park time. Online DDL's resume-budget seeding relies on that — without the
+// stamp, a copy-phase park inherits a liveness timestamp up to a full copy
+// cycle old (GenerateUpdateRowsCopied deliberately leaves time_updated
+// unchanged) and the advertised recovery budget is silently shortened.
+func TestSetStateStampsTimeUpdated(t *testing.T) {
+	dbClient := binlogplayer.NewMockDBClient(t)
+	dbClient.ExpectRequestRE(`update _vt\.vreplication set state='Error', message=left\('boom', 1000\), time_updated=\d+ where id=1`, &sqltypes.Result{}, nil)
+	dbClient.ExpectRequestRE(`insert into _vt\.vreplication_log.*`, &sqltypes.Result{}, nil)
+	stats := binlogplayer.NewStats()
+	stats.VReplicationLagGauges.Stop()
+	t.Cleanup(stats.Stop)
+	vr := &vreplicator{
+		id:             1,
+		stats:          stats,
+		dbClient:       newVDBClient(dbClient, stats, 0),
+		workflowConfig: vttablet.DefaultVReplicationConfig,
+	}
+	require.NoError(t, vr.setState(binlogdatapb.VReplicationWorkflowState_Error, "boom"))
+}
+
 // fakeFetchSuperQueryMysqld is a minimal MysqlDaemon test double that delegates
 // FetchSuperQuery to a callback. Only the methods exercised by tests are valid;
 // any other call will panic on the embedded nil interface.

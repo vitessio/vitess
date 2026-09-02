@@ -578,7 +578,13 @@ func (vr *vreplicator) setState(state binlogdatapb.VReplicationWorkflowState, me
 		})
 	}
 	vr.stats.State.Store(state.String())
-	query := fmt.Sprintf("update _vt.vreplication set state=%v, message=left(%v, 1000) where id=%v", encodeString(state.String()), encodeString(binlogplayer.MessageTruncate(message)), vr.id)
+	// The state write stamps time_updated so a terminal (Error) row's
+	// time_updated is exactly its park time: consumers seed recovery
+	// budgets from it (Online DDL), and without the stamp a copy-phase
+	// park would carry a liveness timestamp up to a full copy cycle old
+	// (GenerateUpdateRowsCopied deliberately leaves time_updated alone).
+	query := fmt.Sprintf("update _vt.vreplication set state=%v, message=left(%v, 1000), time_updated=%v where id=%v",
+		encodeString(state.String()), encodeString(binlogplayer.MessageTruncate(message)), time.Now().Unix(), vr.id)
 	// If we're batching a transaction, then include the state update
 	// in the current transaction batch.
 	if vr.dbClient.InTransaction && vr.dbClient.maxBatchSize > 0 {
