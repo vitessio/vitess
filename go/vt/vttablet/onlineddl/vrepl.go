@@ -103,7 +103,12 @@ const vreplMessageWrapperPrefix = "vreplication: "
 // error) cannot influence the classification.
 func isRetriesExhaustedMessage(message string) bool {
 	message = strings.TrimPrefix(message, vreplMessageWrapperPrefix)
-	return strings.HasPrefix(message, vreplication.RetriesExhaustedIndicator)
+	// The generated class B message always continues with ":" right after
+	// the marker; requiring it keeps a legacy or externally written message
+	// that merely extends the marker's words (e.g. "... retries exhausted
+	// resources: ...") in the terminal class instead of resuming a stream
+	// whose error was never classified resumable.
+	return strings.HasPrefix(message, vreplication.RetriesExhaustedIndicator+":")
 }
 
 func (v *VReplStream) hasError() (isTerminal bool, isResumable bool, vreplError error) {

@@ -911,6 +911,44 @@ func TestForgetVReplStreamOrdering(t *testing.T) {
 		assert.NotContains(t, e.vreplicationResumeState, uuid)
 		assert.NotContains(t, e.vreplicationLastError, uuid)
 	})
+	t.Run("cancellation whose terminal transition fails retains tracking", func(t *testing.T) {
+		// An internal (non-user) cancellation has no durable
+		// cancelled_timestamp: the deferred failMigration IS the terminal
+		// transition. If it fails, the migration and its parked stream stay
+		// active, and erased tracking would let the next review resume a
+		// stream that was just cancelled.
+		e := newTrackedExecutor(func(ctx context.Context, query string) (*sqltypes.Result, error) {
+			if strings.HasPrefix(strings.TrimSpace(strings.ToUpper(query)), "UPDATE") {
+				return nil, errors.New("backend unavailable")
+			}
+			return sqltypes.MakeTestResult(
+				sqltypes.MakeTestFields("migration_uuid|migration_status", "varchar|varchar"),
+				uuid+"|running"), nil
+		})
+		_, _ = e.CancelMigration(t.Context(), uuid, "internal cancel", false)
+		assert.Contains(t, e.vreplicationResumeState, uuid,
+			"tracking must survive a cancellation whose terminal transition failed")
+		assert.Contains(t, e.vreplicationLastError, uuid)
+	})
+	t.Run("user cancellation with durable timestamp clears tracking despite failed transition", func(t *testing.T) {
+		// A user-issued cancel writes cancelled_timestamp first; once that
+		// is durable the migration is terminally cancelled even if the
+		// deferred failMigration errors, so the tracking may be dropped.
+		e := newTrackedExecutor(func(ctx context.Context, query string) (*sqltypes.Result, error) {
+			if strings.Contains(query, "SET cancelled_timestamp=NOW(6)") {
+				return &sqltypes.Result{RowsAffected: 1}, nil
+			}
+			if strings.HasPrefix(strings.TrimSpace(strings.ToUpper(query)), "UPDATE") {
+				return nil, errors.New("backend unavailable")
+			}
+			return sqltypes.MakeTestResult(
+				sqltypes.MakeTestFields("migration_uuid|migration_status", "varchar|varchar"),
+				uuid+"|running"), nil
+		})
+		_, _ = e.CancelMigration(t.Context(), uuid, "user cancel", true)
+		assert.NotContains(t, e.vreplicationResumeState, uuid)
+		assert.NotContains(t, e.vreplicationLastError, uuid)
+	})
 	t.Run("failed cancellation retains tracking", func(t *testing.T) {
 		e := newTrackedExecutor(func(ctx context.Context, query string) (*sqltypes.Result, error) {
 			// The cancelled_timestamp UPDATE fails; the SELECT that
@@ -1204,7 +1242,20 @@ func TestReviewVReplStreamError(t *testing.T) {
 		assert.Equal(t, vreplStreamNoAction, e.reviewVReplStreamError(uuid, idleCleanStream, now.Add(vreplResumeRecoveryGrace()-time.Second)))
 		require.Contains(t, e.vreplicationResumeState, uuid)
 
-		// Past the grace: genuinely recovered, episode over.
+		// A row carrying an unrecognized retry message (no literal "error",
+		// so hasError reports nil) is NOT clean: the stream is visibly
+		// mid-retry, and ending the episode here would grant every park a
+		// fresh budget whenever the retry window outlasts the grace.
+		retryingStream := &VReplStream{
+			state:   binlogdatapb.VReplicationWorkflowState_Running,
+			message: "connection refused",
+			pos:     pos,
+		}
+		assert.Equal(t, vreplStreamNoAction, e.reviewVReplStreamError(uuid, retryingStream, now.Add(vreplResumeRecoveryGrace())))
+		require.Contains(t, e.vreplicationResumeState, uuid,
+			"an unrecognized non-empty message is mid-retry, not recovery; the grace must not end the episode")
+
+		// Past the grace with a truly clean row: genuinely recovered.
 		assert.Equal(t, vreplStreamNoAction, e.reviewVReplStreamError(uuid, idleCleanStream, now.Add(vreplResumeRecoveryGrace())))
 		assert.NotContains(t, e.vreplicationResumeState, uuid)
 

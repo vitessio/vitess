@@ -1813,13 +1813,24 @@ func (e *Executor) CancelMigration(ctx context.Context, uuid string, message str
 			return nil, err
 		}
 	}
-	// Every path below terminally transitions the migration (the deferred
-	// failMigration guarantees it), so the stream tracking can be dropped
-	// now — but not any earlier: a cancellation that fails before this
-	// point leaves the migration active, and erasing its episode would
-	// grant the still-running stream a fresh resume budget.
-	e.forgetVReplStream(uuid)
-	defer e.failMigration(ctx, onlineDDL, errors.New(message))
+	// The stream tracking may only be dropped once the migration has
+	// durably reached a terminal transition: a user-issued cancel is
+	// durable once cancelled_timestamp is written (above); an internal
+	// cancellation's transition IS the deferred failMigration. If neither
+	// holds — the transition itself failed — the migration and its parked
+	// stream remain active, and erased tracking would let the next review
+	// resume a stream that was just cancelled.
+	timestampMarked := issuedByUser
+	defer func() {
+		ferr := e.failMigration(ctx, onlineDDL, errors.New(message))
+		if ferr != nil {
+			log.Error("CancelMigration: failed to transition migration to a terminal state",
+				slog.String("uuid", uuid), slog.String("tablet", e.TabletAliasString()), slog.Any("error", ferr))
+		}
+		if ferr == nil || timestampMarked {
+			e.forgetVReplStream(uuid)
+		}
+	}()
 	defer e.triggerNextCheckInterval()
 
 	switch onlineDDL.Status {
@@ -3596,14 +3607,17 @@ func (e *Executor) reviewVReplStreamError(uuid string, s *VReplStream, now time.
 		// observation alone must not end the episode: every
 		// park/resume/park cycle would renew the resume budget
 		// indefinitely. With progress handled above, the remaining recovery
-		// signal is a clean observation past the recovery grace of the last
-		// resume attempt — well beyond the seconds-wide synthetic window —
-		// which covers a healthy caught-up stream on an idle source, where
-		// neither checkpoint moves.
+		// signal is a TRULY CLEAN observation — hasError treats an
+		// unrecognized non-empty message as no error, but such a message
+		// means the stream is mid-retry, not recovered — past the recovery
+		// grace of the last resume attempt, well beyond the seconds-wide
+		// synthetic window. That covers a healthy caught-up stream on an
+		// idle source, where neither checkpoint moves.
 		state, ok := e.vreplicationResumeState[uuid]
 		recovered := !ok ||
-			state.lastAttempt.IsZero() ||
-			now.Sub(state.lastAttempt) >= vreplResumeRecoveryGrace()
+			(s.message == "" &&
+				(state.lastAttempt.IsZero() ||
+					now.Sub(state.lastAttempt) >= vreplResumeRecoveryGrace()))
 		if recovered {
 			delete(e.vreplicationResumeState, uuid)
 		}

@@ -299,6 +299,20 @@ func TestVReplStreamHasError(t *testing.T) {
 			wantErr:       true,
 		},
 		{
+			// The generated class B message always continues with ":" right
+			// after the marker. A message that merely extends the marker's
+			// words (e.g. a legacy or externally written terminal message)
+			// is not the generated format and must stay terminal — resuming
+			// a stream whose error was never classified resumable is worse
+			// than failing it.
+			name:          "marker extended by other words is not resumable",
+			state:         binlogdatapb.VReplicationWorkflowState_Error,
+			message:       vreplication.RetriesExhaustedIndicator + " resources: something",
+			wantTerminal:  true,
+			wantResumable: false,
+			wantErr:       true,
+		},
+		{
 			name:          "non-terminal error message",
 			state:         binlogdatapb.VReplicationWorkflowState_Running,
 			message:       "error applying event: connection refused",
