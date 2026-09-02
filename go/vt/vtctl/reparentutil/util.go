@@ -57,6 +57,27 @@ const (
 	lostTopologyLockMsg = "lost topology lock, aborting"
 )
 
+func warnIfMariaDB(logger logutil.Logger, flavor mysqlctl.MySQLFlavor, alias string) {
+	if flavor == mysqlctl.FlavorMariaDB {
+		logger.Warningf("MariaDB support for serving shards is deprecated and will become unsupported in v26.0.0; tablet %v uses MariaDB", alias)
+	}
+}
+
+func warnIfMariaDBVersion(logger logutil.Logger, version, alias string, encodedPositions ...string) {
+	flavor, _, err := mysqlctl.ParseVersionString(version)
+	if err == nil {
+		warnIfMariaDB(logger, flavor, alias)
+		return
+	}
+	for _, encodedPosition := range encodedPositions {
+		position, err := replication.DecodePosition(encodedPosition)
+		if err == nil && position.GTIDSet != nil && position.GTIDSet.Flavor() == replication.MariadbFlavorID {
+			warnIfMariaDB(logger, mysqlctl.FlavorMariaDB, alias)
+			return
+		}
+	}
+}
+
 // ElectNewPrimary finds a tablet that should become a primary after reparent.
 // The criteria for the new primary-elect are (preferably) to be in the same
 // cell as the current primary, and to be different from avoidPrimaryAlias.
@@ -133,6 +154,9 @@ func ElectNewPrimary(
 			pos, replLag, takingBackup, replUnknown, serverVersion, err := findTabletPositionLagBackupStatus(groupCtx, tb, logger, tmc, opts.WaitReplicasTimeout)
 			mu.Lock()
 			defer mu.Unlock()
+			if err == nil {
+				warnIfMariaDBVersion(logger, serverVersion, topoproto.TabletAliasString(tb.Alias), replication.EncodePosition(pos.Executed), replication.EncodePosition(pos.Combined))
+			}
 			if err == nil && (opts.TolerableReplLag == 0 || opts.TolerableReplLag >= replLag) {
 				if takingBackup {
 					fmt.Fprintf(&reasonsToInvalidate, "\n%v is taking a backup", topoproto.TabletAliasString(tablet.Alias))
