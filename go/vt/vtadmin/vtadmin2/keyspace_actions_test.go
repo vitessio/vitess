@@ -26,6 +26,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
@@ -40,6 +41,8 @@ type keyspaceActionsFakeServer struct {
 	removeKeyspaceCellReq      *vtadminpb.RemoveKeyspaceCellRequest
 	createShardReq             *vtadminpb.CreateShardRequest
 	reloadSchemasReq           *vtadminpb.ReloadSchemasRequest
+	reloadSchemasResp          *vtadminpb.ReloadSchemasResponse
+	reloadSchemasNil           bool
 	validateKeyspaceNil        bool
 	validateSchemaNil          bool
 	validateVersionNil         bool
@@ -102,6 +105,12 @@ func (f *keyspaceActionsFakeServer) CreateShard(ctx context.Context, req *vtadmi
 
 func (f *keyspaceActionsFakeServer) ReloadSchemas(ctx context.Context, req *vtadminpb.ReloadSchemasRequest) (*vtadminpb.ReloadSchemasResponse, error) {
 	f.reloadSchemasReq = req
+	if f.reloadSchemasNil {
+		return nil, nil
+	}
+	if f.reloadSchemasResp != nil {
+		return f.reloadSchemasResp, nil
+	}
 	return &vtadminpb.ReloadSchemasResponse{}, nil
 }
 
@@ -177,6 +186,7 @@ func TestKeyspaceActionsCallAPI(t *testing.T) {
 				require.NotNil(t, fake.reloadSchemasReq)
 				assert.Equal(t, []string{testClusterID}, fake.reloadSchemasReq.ClusterIds)
 				assert.Equal(t, []string{testKeyspace}, fake.reloadSchemasReq.Keyspaces)
+				assert.True(t, fake.reloadSchemasReq.IncludePrimary)
 			},
 		},
 	}
@@ -237,6 +247,11 @@ func TestKeyspaceActionsUnauthorizedNilResponse(t *testing.T) {
 			setup:  func(f *keyspaceActionsFakeServer) { f.removeCellNil = true },
 			called: func(f *keyspaceActionsFakeServer) any { return f.removeKeyspaceCellReq },
 		},
+		{
+			action: "/reload_schema",
+			setup:  func(f *keyspaceActionsFakeServer) { f.reloadSchemasNil = true },
+			called: func(f *keyspaceActionsFakeServer) any { return f.reloadSchemasReq },
+		},
 	}
 
 	for _, tt := range tests {
@@ -256,6 +271,26 @@ func TestKeyspaceActionsUnauthorizedNilResponse(t *testing.T) {
 			assert.Contains(t, rec.Body.String(), "not authorized")
 		})
 	}
+}
+
+func TestKeyspaceReloadSchemaFailureEventsDoNotFlashSuccess(t *testing.T) {
+	fake := &keyspaceActionsFakeServer{
+		reloadSchemasResp: &vtadminpb.ReloadSchemasResponse{
+			KeyspaceResults: []*vtadminpb.ReloadSchemasResponse_KeyspaceResult{{
+				Events: []*logutilpb.Event{{
+					Level: logutilpb.Level_ERROR,
+					Value: "ReloadSchema(commerce) failed",
+				}},
+			}},
+		},
+	}
+	s := newKeyspaceActionsTestServer(t, fake, false)
+
+	rec := postShardForm(t, s, keyspaceActionBase+"/reload_schema", url.Values{})
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.NotEqual(t, keyspaceActionBase, rec.Header().Get("Location"))
+	assert.Contains(t, rec.Body.String(), "reload schema failed")
 }
 
 func TestKeyspaceRemoveCellValidation(t *testing.T) {

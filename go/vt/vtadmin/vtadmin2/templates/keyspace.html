@@ -75,7 +75,7 @@
       <summary>Reload schema</summary>
       <form method="POST" action="{{ keyspaceActionPath (clusterID $ks.GetCluster) (keyspaceName $ks) "reload_schema" }}" class="form-grid">
         <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
-        <p class="muted">Reloads the schema on all tablets in this keyspace. Best-effort.</p>
+        <p class="muted">Reloads the schema on all tablets in this keyspace, including the primary. Best-effort.</p>
         <button type="submit" class="button">Reload schema</button>
       </form>
     </details>

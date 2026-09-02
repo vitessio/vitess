@@ -205,6 +205,17 @@ func TestWorkflowCancelCallsDelete(t *testing.T) {
 	assert.True(t, req.GetRequest().GetKeepData())
 }
 
+func TestWorkflowCancelKeepDataDefaultsNil(t *testing.T) {
+	fake := &workflowActionsFakeServer{}
+	s := newWorkflowActionsTestServer(t, fake, false)
+
+	rec := postShardForm(t, s, workflowActionBase+"/cancel", url.Values{})
+
+	assert.Equal(t, http.StatusSeeOther, rec.Code)
+	require.NotNil(t, fake.workflowDeleteReq)
+	assert.Nil(t, fake.workflowDeleteReq.GetRequest().KeepData)
+}
+
 func TestWorkflowCompleteCallsMoveTablesComplete(t *testing.T) {
 	fake := &workflowActionsFakeServer{}
 	s := newWorkflowActionsTestServer(t, fake, false)

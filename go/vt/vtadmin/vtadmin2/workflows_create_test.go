@@ -111,7 +111,7 @@ func TestCreateMoveTablesFormRendersOptions(t *testing.T) {
 	s := newWorkflowCreateTestServer(t, fake, false)
 
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, createMoveTablesPath+"?cluster_id=local&source_keyspace=commerce", nil)
+	req := httptest.NewRequest(http.MethodGet, createMoveTablesPath+"?source_keyspace=commerce", nil)
 	s.ServeHTTP(rec, req)
 
 	require.Equal(t, http.StatusOK, rec.Code)
@@ -186,6 +186,23 @@ func TestCreateMoveTablesPostRedirectsToWorkflowDetail(t *testing.T) {
 	assert.Equal(t, "UTC", inner.SourceTimeZone)
 	assert.True(t, inner.AutoStart)
 	assert.True(t, inner.DeferSecondaryKeys)
+	assert.Equal(t, tabletmanagerdatapb.TabletSelectionPreference_INORDER, inner.TabletSelectionPreference)
+}
+
+func TestCreateMoveTablesFormDefaultsClusterWithoutQuery(t *testing.T) {
+	fake := &workflowCreateFakeServer{}
+	s := newWorkflowCreateTestServer(t, fake, false)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, createMoveTablesPath, nil)
+	s.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	body := rec.Body.String()
+	assert.Contains(t, body, `name="source_keyspace"`)
+	assert.Contains(t, body, `value="commerce"`)
+	assert.Contains(t, body, `value="sales"`)
+	assert.NotContains(t, body, `name="workflow"`)
 }
 
 func TestCreateMoveTablesPostAllTables(t *testing.T) {
@@ -361,7 +378,7 @@ func TestCreateMaterializeFormRendersOptions(t *testing.T) {
 	s := newWorkflowCreateTestServer(t, fake, false)
 
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, createMaterializePath+"?cluster_id=local&target_keyspace=sales", nil)
+	req := httptest.NewRequest(http.MethodGet, createMaterializePath+"?source_keyspace=commerce", nil)
 	s.ServeHTTP(rec, req)
 
 	require.Equal(t, http.StatusOK, rec.Code)
@@ -377,8 +394,25 @@ func TestCreateMaterializeFormRendersOptions(t *testing.T) {
 	assert.Contains(t, body, `name="tablet_type" value="PRIMARY" checked`)
 	assert.Contains(t, body, `name="reference_table" value="users"`)
 	assert.Contains(t, body, `name="reference_table" value="orders"`)
+	assert.Contains(t, body, "Reference tables (in commerce)")
 	assert.Contains(t, body, `name="csrf_token"`)
 	assert.NotNil(t, findCookie(rec, csrfCookieName))
+}
+
+func TestCreateMaterializeFormDefaultsClusterWithoutQuery(t *testing.T) {
+	fake := &workflowCreateFakeServer{}
+	s := newWorkflowCreateTestServer(t, fake, false)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, createMaterializePath, nil)
+	s.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	body := rec.Body.String()
+	assert.Contains(t, body, `name="source_keyspace"`)
+	assert.Contains(t, body, `value="commerce"`)
+	assert.Contains(t, body, `value="sales"`)
+	assert.NotContains(t, body, `name="workflow"`)
 }
 
 func TestCreateMaterializeFormReadOnly(t *testing.T) {

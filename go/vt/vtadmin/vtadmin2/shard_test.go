@@ -64,7 +64,9 @@ type shardFakeServer struct {
 	emergencyFailoverReq   *vtadminpb.EmergencyFailoverShardRequest
 	emergencyFailoverNil   bool
 	validateShardReq       *vtadminpb.ValidateShardRequest
+	validateShardNil       bool
 	validateVersionShardRe *vtadminpb.ValidateVersionShardRequest
+	validateVersionNil     bool
 	getTabletReq           *vtadminpb.GetTabletRequest
 	getTabletError         error
 }
@@ -149,11 +151,17 @@ func (f *shardFakeServer) EmergencyFailoverShard(ctx context.Context, req *vtadm
 
 func (f *shardFakeServer) ValidateShard(ctx context.Context, req *vtadminpb.ValidateShardRequest) (*vtctldatapb.ValidateShardResponse, error) {
 	f.validateShardReq = req
+	if f.validateShardNil {
+		return nil, nil
+	}
 	return &vtctldatapb.ValidateShardResponse{}, nil
 }
 
 func (f *shardFakeServer) ValidateVersionShard(ctx context.Context, req *vtadminpb.ValidateVersionShardRequest) (*vtctldatapb.ValidateVersionShardResponse, error) {
 	f.validateVersionShardRe = req
+	if f.validateVersionNil {
+		return nil, nil
+	}
 	return &vtctldatapb.ValidateVersionShardResponse{}, nil
 }
 
@@ -600,6 +608,30 @@ func TestShardValidateVersion(t *testing.T) {
 	assert.Equal(t, testClusterID, fake.validateVersionShardRe.ClusterId)
 	assert.Equal(t, testKeyspace, fake.validateVersionShardRe.Keyspace)
 	assert.Equal(t, testShard, fake.validateVersionShardRe.Shard)
+}
+
+func TestShardValidateUnauthorizedNilResponse(t *testing.T) {
+	fake := newShardFake()
+	fake.validateShardNil = true
+	s := newShardTestServer(t, fake, false)
+
+	rec := postShardForm(t, s, shardActionPaths()[5], url.Values{})
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	require.NotNil(t, fake.validateShardReq)
+	assert.Contains(t, rec.Body.String(), "not authorized")
+}
+
+func TestShardValidateVersionUnauthorizedNilResponse(t *testing.T) {
+	fake := newShardFake()
+	fake.validateVersionNil = true
+	s := newShardTestServer(t, fake, false)
+
+	rec := postShardForm(t, s, shardActionPaths()[6], url.Values{})
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	require.NotNil(t, fake.validateVersionShardRe)
+	assert.Contains(t, rec.Body.String(), "not authorized")
 }
 
 func TestKeyspaceDetailLinksToShardDetail(t *testing.T) {

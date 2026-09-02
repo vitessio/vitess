@@ -46,7 +46,7 @@ type (
 
 	createMaterializeData struct {
 		Form            formOptions
-		TargetKeyspace  string
+		SourceKeyspace  string
 		ReferenceTables []string
 		SelectedCluster string
 	}
@@ -96,11 +96,11 @@ func (s *Server) createMoveTablesForm(w http.ResponseWriter, r *http.Request) {
 	data := createMoveTablesData{
 		Form:            form,
 		SourceKeyspace:  sourceKeyspace,
-		SelectedCluster: selectedCluster,
+		SelectedCluster: form.SelectedCluster,
 	}
 
-	if selectedCluster != "" && sourceKeyspace != "" {
-		tables, err := s.fetchSourceTables(r, selectedCluster, sourceKeyspace)
+	if form.SelectedCluster != "" && sourceKeyspace != "" {
+		tables, err := s.fetchSourceTables(r, form.SelectedCluster, sourceKeyspace)
 		if err != nil {
 			s.renderError(w, r, http.StatusInternalServerError, "Create MoveTables workflow", err)
 			return
@@ -248,7 +248,7 @@ func (s *Server) createMaterializeForm(w http.ResponseWriter, r *http.Request) {
 	}
 
 	selectedCluster := queryValue(r, "cluster_id")
-	targetKeyspace := queryValue(r, "target_keyspace")
+	sourceKeyspace := queryValue(r, "source_keyspace")
 
 	form, err := s.loadFormOptions(r, selectedCluster, "")
 	if err != nil {
@@ -257,12 +257,8 @@ func (s *Server) createMaterializeForm(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var referenceTables []string
-	if selectedCluster != "" && targetKeyspace != "" {
-		// Reference tables live in the target keyspace, where the materialized
-		// copies will be queried from. A brand-new target keyspace may not have
-		// a schema yet; that only means there is nothing to reference, so it is
-		// not fatal.
-		referenceTables, err = s.fetchSourceTables(r, selectedCluster, targetKeyspace)
+	if form.SelectedCluster != "" && sourceKeyspace != "" {
+		referenceTables, err = s.fetchSourceTables(r, form.SelectedCluster, sourceKeyspace)
 		if err != nil && vterrors.Code(err) != vtrpcpb.Code_NOT_FOUND {
 			s.renderError(w, r, http.StatusInternalServerError, "Create Materialize workflow", err)
 			return
@@ -275,9 +271,9 @@ func (s *Server) createMaterializeForm(w http.ResponseWriter, r *http.Request) {
 		NeedsCSRF: true,
 		Data: createMaterializeData{
 			Form:            form,
-			TargetKeyspace:  targetKeyspace,
+			SourceKeyspace:  sourceKeyspace,
 			ReferenceTables: referenceTables,
-			SelectedCluster: selectedCluster,
+			SelectedCluster: form.SelectedCluster,
 		},
 	})
 }
@@ -526,19 +522,20 @@ func (s *Server) createMoveTables(w http.ResponseWriter, r *http.Request) {
 	_, err = s.api.MoveTablesCreate(r.Context(), &vtadminpb.MoveTablesCreateRequest{
 		ClusterId: clusterID,
 		Request: &vtctldatapb.MoveTablesCreateRequest{
-			Workflow:            workflow,
-			SourceKeyspace:      sourceKeyspace,
-			TargetKeyspace:      targetKeyspace,
-			AllTables:           allTables,
-			IncludeTables:       includeTables,
-			Cells:               splitFormList(r.Form.Get("cells")),
-			TabletTypes:         tabletTypes,
-			OnDdl:               onDdl,
-			SourceTimeZone:      strings.TrimSpace(r.Form.Get("source_time_zone")),
-			ExternalClusterName: strings.TrimSpace(r.Form.Get("external_cluster_name")),
-			AutoStart:           r.Form.Get("auto_start") == "on",
-			StopAfterCopy:       r.Form.Get("stop_after_copy") == "on",
-			DeferSecondaryKeys:  r.Form.Get("defer_secondary_keys") == "on",
+			Workflow:                  workflow,
+			SourceKeyspace:            sourceKeyspace,
+			TargetKeyspace:            targetKeyspace,
+			AllTables:                 allTables,
+			IncludeTables:             includeTables,
+			Cells:                     splitFormList(r.Form.Get("cells")),
+			TabletTypes:               tabletTypes,
+			TabletSelectionPreference: tabletmanagerdatapb.TabletSelectionPreference_INORDER,
+			OnDdl:                     onDdl,
+			SourceTimeZone:            strings.TrimSpace(r.Form.Get("source_time_zone")),
+			ExternalClusterName:       strings.TrimSpace(r.Form.Get("external_cluster_name")),
+			AutoStart:                 r.Form.Get("auto_start") == "on",
+			StopAfterCopy:             r.Form.Get("stop_after_copy") == "on",
+			DeferSecondaryKeys:        r.Form.Get("defer_secondary_keys") == "on",
 		},
 	})
 	if err != nil {

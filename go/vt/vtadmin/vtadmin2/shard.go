@@ -396,6 +396,10 @@ func (s *Server) shardValidate(w http.ResponseWriter, r *http.Request) {
 		s.renderFormError(w, r, title, err.Error())
 		return
 	}
+	if resp == nil {
+		s.renderFormError(w, r, title, "not authorized to validate shard")
+		return
+	}
 
 	s.redirectWithFlash(w, r, shardDetailPath(clusterID, keyspace, shard), Flash{
 		Kind:    "success",
@@ -410,13 +414,17 @@ func (s *Server) shardValidateVersion(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err := s.api.ValidateVersionShard(r.Context(), &vtadminpb.ValidateVersionShardRequest{
+	resp, err := s.api.ValidateVersionShard(r.Context(), &vtadminpb.ValidateVersionShardRequest{
 		ClusterId: clusterID,
 		Keyspace:  keyspace,
 		Shard:     shard,
 	})
 	if err != nil {
 		s.renderFormError(w, r, title, err.Error())
+		return
+	}
+	if resp == nil {
+		s.renderFormError(w, r, title, "not authorized to validate version")
 		return
 	}
 

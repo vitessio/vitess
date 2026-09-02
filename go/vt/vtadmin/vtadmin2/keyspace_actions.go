@@ -213,13 +213,30 @@ func (s *Server) keyspaceReloadSchema(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err := s.api.ReloadSchemas(r.Context(), &vtadminpb.ReloadSchemasRequest{
-		ClusterIds: []string{clusterID},
-		Keyspaces:  []string{keyspace},
+	resp, err := s.api.ReloadSchemas(r.Context(), &vtadminpb.ReloadSchemasRequest{
+		ClusterIds:     []string{clusterID},
+		Keyspaces:      []string{keyspace},
+		IncludePrimary: true,
 	})
 	if err != nil {
 		s.renderFormErrorErr(w, r, title, err)
 		return
+	}
+	if resp == nil {
+		s.renderFormError(w, r, title, "not authorized to reload schema")
+		return
+	}
+	for _, result := range resp.GetKeyspaceResults() {
+		if err := reloadSchemaEventsError(result.GetEvents()); err != nil {
+			s.renderFormErrorErr(w, r, title, err)
+			return
+		}
+	}
+	for _, result := range resp.GetShardResults() {
+		if err := reloadSchemaEventsError(result.GetEvents()); err != nil {
+			s.renderFormErrorErr(w, r, title, err)
+			return
+		}
 	}
 
 	s.redirectWithFlash(w, r, keyspaceDetailPath(clusterID, keyspace), Flash{

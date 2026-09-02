@@ -1,0 +1,36 @@
+Go and HTML VTAdmin web UI
+
+Usage:
+  vtadmin2 [flags]
+
+Flags:
+      --addr string                         address to serve the vtadmin2 web UI on (default ":14202")
+      --alsologtostderr                     log to standard error as well as files
+      --cache-refresh-key string            cache refresh key used by the backing VTAdmin API (default "vt-cache-refresh")
+      --cluster cluster.ClustersFlag        per-cluster configuration. any values here take precedence over those in -cluster-defaults or -cluster-config (default [])
+      --cluster-config cluster.FileConfig   path to a yaml cluster configuration. see clusters.example.yaml (default {defaults: *cluster.Config:{ID: Name: DiscoveryImpl: DiscoveryFlagsByImpl:map[] TabletFQDNTmplStr: VtSQLFlags:map[] VtctldFlags:map[] BackupReadPoolConfig:<nil> SchemaReadPoolConfig:<nil> TopoRWPoolConfig:<nil> TopoReadPoolConfig:<nil> WorkflowReadPoolConfig:<nil> EmergencyFailoverPoolConfig:<nil> FailoverPoolConfig:<nil> SchemaCacheConfig:<nil> vtctldConfigOpts:[] vtsqlConfigOpts:[]}, clusters: []})
+      --cluster-defaults cluster.Config     default options for all clusters (default *cluster.Config:{ID: Name: DiscoveryImpl: DiscoveryFlagsByImpl:map[] TabletFQDNTmplStr: VtSQLFlags:map[] VtctldFlags:map[] BackupReadPoolConfig:<nil> SchemaReadPoolConfig:<nil> TopoRWPoolConfig:<nil> TopoReadPoolConfig:<nil> WorkflowReadPoolConfig:<nil> EmergencyFailoverPoolConfig:<nil> FailoverPoolConfig:<nil> SchemaCacheConfig:<nil> vtctldConfigOpts:[] vtsqlConfigOpts:[]})
+      --cookie-secure-behind-proxy          mark vtadmin2 cookies Secure when X-Forwarded-Proto: https is present from a trusted HTTPS-terminating proxy
+      --debug-json                          enable debug JSON views in vtadmin2 pages
+      --document-title string               document title for vtadmin2 pages (default "VTAdmin2")
+      --enable-dynamic-clusters             whether to enable dynamic clusters that are set by request header cookies or gRPC metadata
+  -h, --help                                help for vtadmin2
+      --log-format string                   log output format: json for machine-readable JSON, text for human-readable colored output (default "json")
+      --log-level string                    minimum log level when structured logging is enabled (debug, info, warn, error) (default "info")
+      --log-rotate-max-size uint            size in bytes at which logs are rotated (glog.MaxSize) (default 1887436800)
+      --log-structured                      enable structured JSON logging (default true)
+      --log_dir string                      If non-empty, write log files in this directory
+      --logtostderr                         log to standard error instead of files
+      --mysql-server-version string         MySQL server version to advertise. (default "8.4.6-Vitess")
+      --no-rbac                             whether to disable RBAC. must be set if not passing --rbac
+      --rbac                                whether to enable RBAC. must be set if not passing --no-rbac
+      --rbac-config string                  path to an RBAC config file. must be set if passing --rbac
+      --read-only                           hide vtadmin2 mutating actions in the UI
+      --stderrthreshold severityFlag        logs at or above this threshold go to stderr (default 1)
+  -v, --v Level                             log level for V logs
+      --version                             version for vtadmin2
+      --vtctld-grpc-ca string               the server ca to use to validate servers when connecting
+      --vtctld-grpc-cert string             the cert to use to connect
+      --vtctld-grpc-crl string              the server crl to use to validate server certificates when connecting
+      --vtctld-grpc-key string              the key to use to connect
+      --vtctld-grpc-server-name string      the server name to use to validate server certificate

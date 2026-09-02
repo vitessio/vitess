@@ -163,11 +163,12 @@ func buildAPI(ctx context.Context, rbacConfig *rbac.Config) (*vtadmin.API, error
 
 	clusters := make([]*cluster.Cluster, 0, len(configs))
 	for _, cfg := range configs {
-		cluster, err := cfg.Cluster(ctx)
+		cl, err := cfg.Cluster(ctx)
 		if err != nil {
+			closeClusters(clusters)
 			return nil, err
 		}
-		clusters = append(clusters, cluster)
+		clusters = append(clusters, cl)
 	}
 
 	if cacheRefreshKey == "" {
@@ -181,12 +182,24 @@ func buildAPI(ctx context.Context, rbacConfig *rbac.Config) (*vtadmin.API, error
 		TruncateErrLen:     servenv.TruncateErrLen,
 	})
 	if err != nil {
+		closeClusters(clusters)
 		return nil, err
 	}
 
 	return vtadmin.NewAPI(env, clusters, vtadmin.Options{
 		RBAC: rbacConfig,
 	}), nil
+}
+
+func closeClusters(clusters []*cluster.Cluster) {
+	for _, cl := range clusters {
+		if cl == nil {
+			continue
+		}
+		if err := cl.Close(); err != nil {
+			slog.Error("failed to close cluster after setup error", slog.String("cluster_id", cl.ID), slog.Any("error", err))
+		}
+	}
 }
 
 func validateFlags() error {
