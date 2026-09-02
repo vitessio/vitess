@@ -198,6 +198,19 @@ type vreplResumeState struct {
 	parkedRowsCopied int64
 }
 
+// resolveVReplStreamAction applies migration-level cancellation intent to the
+// stream-level verdict: a migration whose cancelled_timestamp is set but
+// whose terminal status transition has not yet landed (the running-migrations
+// review filters on migration_status only) must never be auto-resumed —
+// converting the verdict to a cancellation re-drives the terminal transition
+// instead. All other verdicts pass through untouched.
+func resolveVReplStreamAction(action vreplStreamAction, cancellationRequested bool) vreplStreamAction {
+	if action == vreplStreamResume && cancellationRequested {
+		return vreplStreamCancel
+	}
+	return action
+}
+
 // forgetVReplStream drops the executor's in-memory error/resume tracking for
 // a migration's vreplication stream. Called when the migration is cancelled
 // or retried, so a finished migration's error episode and retry window
@@ -1814,22 +1827,24 @@ func (e *Executor) CancelMigration(ctx context.Context, uuid string, message str
 		}
 	}
 	// The stream tracking may only be dropped once the migration has
-	// durably reached a terminal transition: a user-issued cancel is
-	// durable once cancelled_timestamp is written (above); an internal
-	// cancellation's transition IS the deferred failMigration. If neither
-	// holds — the transition itself failed — the migration and its parked
-	// stream remain active, and erased tracking would let the next review
-	// resume a stream that was just cancelled.
-	timestampMarked := issuedByUser
+	// durably reached a terminal transition — cancelled_timestamp alone is
+	// not one: the running-migrations review filters on migration_status
+	// only, so until the deferred transition below lands, the migration
+	// stays under review and must keep its tracking (with its unfulfilled
+	// cancellation intent blocking auto-resume, see
+	// resolveVReplStreamAction). The transition runs on a bounded,
+	// non-cancellable context: the caller's context may have been exhausted
+	// by terminateMigration, and reusing it could strand a cancelled-intent
+	// migration in 'running'.
 	defer func() {
-		ferr := e.terminallyFailMigration(ctx, onlineDDL, errors.New(message))
-		if ferr != nil {
+		tctx, tcancel := context.WithTimeout(context.WithoutCancel(ctx), grpcTimeout)
+		defer tcancel()
+		if ferr := e.terminallyFailMigration(tctx, onlineDDL, errors.New(message)); ferr != nil {
 			log.Error("CancelMigration: failed to transition migration to a terminal state",
 				slog.String("uuid", uuid), slog.String("tablet", e.TabletAliasString()), slog.Any("error", ferr))
+			return
 		}
-		if ferr == nil || timestampMarked {
-			e.forgetVReplStream(uuid)
-		}
+		e.forgetVReplStream(uuid)
 	}()
 	defer e.triggerNextCheckInterval()
 
@@ -3740,7 +3755,11 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 				if s == nil {
 					return nil
 				}
-				switch e.reviewVReplStreamError(uuid, s, time.Now()) {
+				action := resolveVReplStreamAction(
+					e.reviewVReplStreamError(uuid, s, time.Now()),
+					!migrationRow["cancelled_timestamp"].IsNull(),
+				)
+				switch action {
 				case vreplStreamCancel:
 					cancellable = append(cancellable, newCancellableMigration(uuid, s.message))
 				case vreplStreamResume:

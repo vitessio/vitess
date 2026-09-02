@@ -950,10 +950,12 @@ func TestForgetVReplStreamOrdering(t *testing.T) {
 			"a successfully cancelled migration must not retain stream tracking")
 		assert.NotContains(t, e.vreplicationLastError, uuid)
 	})
-	t.Run("user cancellation with durable timestamp clears tracking despite failed transition", func(t *testing.T) {
-		// A user-issued cancel writes cancelled_timestamp first; once that
-		// is durable the migration is terminally cancelled even if the
-		// deferred failMigration errors, so the tracking may be dropped.
+	t.Run("user cancellation with failed transition retains tracking", func(t *testing.T) {
+		// cancelled_timestamp alone is not a terminal transition: the
+		// running-migrations review only filters on migration_status, so
+		// until the status update lands the migration remains eligible for
+		// review and its tracking must survive — the cancellation intent
+		// (not the cleanup) is what blocks auto-resume in the meantime.
 		e := newTrackedExecutor(func(ctx context.Context, query string) (*sqltypes.Result, error) {
 			if strings.Contains(query, "SET cancelled_timestamp=NOW(6)") {
 				return &sqltypes.Result{RowsAffected: 1}, nil
@@ -966,7 +968,41 @@ func TestForgetVReplStreamOrdering(t *testing.T) {
 				uuid+"|running"), nil
 		})
 		_, _ = e.CancelMigration(t.Context(), uuid, "user cancel", true)
-		assert.NotContains(t, e.vreplicationResumeState, uuid)
+		assert.Contains(t, e.vreplicationResumeState, uuid,
+			"tracking must survive until the terminal status transition actually lands")
+		assert.Contains(t, e.vreplicationLastError, uuid)
+	})
+	t.Run("cancellation with expired caller context still completes the transition", func(t *testing.T) {
+		// The deferred terminal transition must not reuse a context that
+		// terminateMigration may have exhausted: it runs on a bounded,
+		// non-cancellable context, so an expired caller context cannot
+		// leave a cancelled-intent migration stuck in 'running'.
+		e := newTrackedExecutor(func(ctx context.Context, query string) (*sqltypes.Result, error) {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+			if strings.HasPrefix(strings.TrimSpace(strings.ToUpper(query)), "UPDATE") {
+				return &sqltypes.Result{RowsAffected: 1}, nil
+			}
+			return sqltypes.MakeTestResult(
+				sqltypes.MakeTestFields("migration_uuid|migration_status", "varchar|varchar"),
+				uuid+"|running"), nil
+		})
+		expiredCtx, cancel := context.WithCancel(t.Context())
+		readDone := false
+		// let the initial read succeed, then expire the context mid-flight
+		inner := e.execQuery
+		e.execQuery = func(ctx context.Context, query string) (*sqltypes.Result, error) {
+			res, err := inner(ctx, query)
+			if !readDone {
+				readDone = true
+				cancel()
+			}
+			return res, err
+		}
+		_, _ = e.CancelMigration(expiredCtx, uuid, "internal cancel", false)
+		assert.NotContains(t, e.vreplicationResumeState, uuid,
+			"the transition must succeed on its own bounded context and clear the tracking")
 		assert.NotContains(t, e.vreplicationLastError, uuid)
 	})
 	t.Run("failed cancellation retains tracking", func(t *testing.T) {
@@ -987,6 +1023,21 @@ func TestForgetVReplStreamOrdering(t *testing.T) {
 			"a cancellation that failed before any durable transition must not clear the episode")
 		assert.Contains(t, e.vreplicationLastError, uuid)
 	})
+}
+
+// TestResolveVReplStreamAction pins that a migration carrying an unfulfilled
+// cancellation intent (cancelled_timestamp written, terminal transition not
+// yet landed) is never auto-resumed: the resume verdict is converted into a
+// cancellation, which re-drives the terminal transition. All other verdicts
+// pass through untouched.
+func TestResolveVReplStreamAction(t *testing.T) {
+	assert.Equal(t, vreplStreamCancel, resolveVReplStreamAction(vreplStreamResume, true),
+		"an unfulfilled cancellation intent must convert resume into cancel")
+	assert.Equal(t, vreplStreamResume, resolveVReplStreamAction(vreplStreamResume, false))
+	assert.Equal(t, vreplStreamCancel, resolveVReplStreamAction(vreplStreamCancel, true))
+	assert.Equal(t, vreplStreamCancel, resolveVReplStreamAction(vreplStreamCancel, false))
+	assert.Equal(t, vreplStreamNoAction, resolveVReplStreamAction(vreplStreamNoAction, true))
+	assert.Equal(t, vreplStreamNoAction, resolveVReplStreamAction(vreplStreamNoAction, false))
 }
 
 // TestForgetVReplStream pins the helper's deletion semantics; the lifecycle
