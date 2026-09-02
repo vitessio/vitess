@@ -198,6 +198,16 @@ type vreplResumeState struct {
 	parkedRowsCopied int64
 }
 
+// forgetVReplStream drops the executor's in-memory error/resume tracking for
+// a migration's vreplication stream. Called when the migration is cancelled
+// or retried, so a finished migration's error episode and retry window
+// cannot leak into a later RETRY of the same UUID and instantly exhaust the
+// retried migration's fresh budget. Callers must hold migrationMutex.
+func (e *Executor) forgetVReplStream(uuid string) {
+	delete(e.vreplicationResumeState, uuid)
+	delete(e.vreplicationLastError, uuid)
+}
+
 // resumeBudgetExhausted reports whether the current error episode has
 // outlived the resume budget (staleMigrationFailMinutes since the
 // episode's first park), after which the migration is cancelled instead
@@ -213,18 +223,23 @@ func resumeBudgetExhausted(state *vreplResumeState, now time.Time) bool {
 const (
 	vreplResumeInitialBackoff = 1 * time.Minute
 	vreplResumeMaxBackoff     = 15 * time.Minute
-	// vreplResumeRecoveryGrace is how long after the last resume attempt an
-	// error-free observation is still treated as the synthetic clean row a
-	// resume itself writes (StartVReplication clears the state and message
-	// before the stream does any work). Past the grace, a clean stream is
-	// genuinely recovered even when neither its position nor its row-copy
-	// count moved — a caught-up stream on an idle source advances neither.
-	// The synthetic window is only seconds wide (the stream's own retries
-	// re-stamp an error message well within a minute), so the grace just
-	// needs to comfortably exceed it while staying far below the resume
-	// budget.
-	vreplResumeRecoveryGrace = 5 * time.Minute
 )
+
+// vreplResumeRecoveryGrace is how long after the last resume attempt an
+// error-free observation is still treated as inconclusive rather than as
+// recovery. It must outwait every path that can delay a resumed stream's
+// error report: the synthetic clean row a resume itself writes
+// (StartVReplication clears the state and message) is re-stamped by the
+// stream's own retries within a minute, but a re-STALLED applier keeps a
+// clean Running row with frozen checkpoints until the vplayer stall
+// deadline fires — so the grace is derived from that deadline, with
+// headroom for the review tick and the error write. Past the grace, a
+// clean stream is genuinely recovered even when neither its position nor
+// its row-copy count moved (a caught-up stream on an idle source advances
+// neither), while staying far below the resume budget.
+func vreplResumeRecoveryGrace() time.Duration {
+	return 2 * vreplication.VPlayerProgressDeadline()
+}
 
 // vreplStreamAction is reviewVReplStreamError's decision on what
 // reviewRunningMigrations should do about a running migration's
@@ -1788,6 +1803,7 @@ func (e *Executor) CancelMigration(ctx context.Context, uuid string, message str
 		return emptyResult, nil
 	}
 	// From this point on, we're actually cancelling a migration
+	e.forgetVReplStream(uuid)
 	if issuedByUser {
 		// if this was issued by the user, then we mark the `cancelled_timestamp`, and based on that,
 		// the migration state will be 'cancelled'.
@@ -3563,7 +3579,7 @@ func (e *Executor) reviewVReplStreamError(uuid string, s *VReplStream, now time.
 			s.pos != state.parkedPos ||
 			s.rowsCopied > state.parkedRowsCopied ||
 			state.lastAttempt.IsZero() ||
-			now.Sub(state.lastAttempt) >= vreplResumeRecoveryGrace
+			now.Sub(state.lastAttempt) >= vreplResumeRecoveryGrace()
 		if recovered {
 			delete(e.vreplicationResumeState, uuid)
 		}
@@ -3579,6 +3595,16 @@ func (e *Executor) reviewVReplStreamError(uuid string, s *VReplStream, now time.
 		}
 		if state.firstParked.IsZero() {
 			state.firstParked = now
+			// The row's time_updated stops advancing when the stream parks
+			// and, unlike this in-memory state, survives executor restarts:
+			// seed the episode from it, so a tablet restart or failover
+			// during a failing migration does not grant the parked stream a
+			// fresh resume budget on every reopen.
+			if s.timeUpdated > 0 {
+				if parked := time.Unix(s.timeUpdated, 0); parked.Before(state.firstParked) {
+					state.firstParked = parked
+				}
+			}
 		}
 		if resumeBudgetExhausted(state, now) {
 			return vreplStreamCancel
@@ -4598,6 +4624,8 @@ func (e *Executor) RetryMigration(ctx context.Context, uuid string) (result *sql
 	if err != nil {
 		return nil, err
 	}
+	// The retried migration gets a fresh error episode and retry window.
+	e.forgetVReplStream(uuid)
 	defer e.triggerNextCheckInterval()
 	return e.execQuery(ctx, query)
 }

@@ -873,6 +873,23 @@ func TestResumeBudgetExhausted(t *testing.T) {
 // a resumable stream whose error episode has outlived the resume budget is
 // cancelled. The lifecycle subtest walks a single migration through
 // park -> resume -> budget exhaustion -> recovery -> fresh episode.
+// TestForgetVReplStream pins the cleanup that keeps a cancelled migration's
+// error episode and retry window from leaking into a later RETRY of the same
+// UUID, which would instantly exhaust the retried migration's fresh budget.
+func TestForgetVReplStream(t *testing.T) {
+	e := &Executor{
+		vreplicationLastError:   make(map[string]*vterrors.LastError),
+		vreplicationResumeState: make(map[string]*vreplResumeState),
+	}
+	uuid := "1cbcd662_8ed6_11ee_bc8f_0a43f95f28a3"
+	e.vreplicationLastError[uuid] = vterrors.NewLastError("test", time.Minute)
+	e.vreplicationResumeState[uuid] = &vreplResumeState{firstParked: time.Now()}
+
+	e.forgetVReplStream(uuid)
+	assert.NotContains(t, e.vreplicationLastError, uuid)
+	assert.NotContains(t, e.vreplicationResumeState, uuid)
+}
+
 // TestResumeVReplicationQuery pins the resume statement's conditional shape:
 // it must only transition the stream back to Running when the row is still in
 // the exact Error state (and message) that the resume decision was based on.
@@ -1031,6 +1048,31 @@ func TestReviewVReplStreamError(t *testing.T) {
 		assert.Equal(t, vreplStreamResume, e.reviewVReplStreamError(uuid, parkedStream, later))
 		assert.Equal(t, later, e.vreplicationResumeState[uuid].firstParked)
 	})
+	t.Run("adopted parked stream seeds the episode from the stream's own park time", func(t *testing.T) {
+		// The executor's in-memory episode state dies with it (tablet
+		// restart, failover, reopen), but the parked row's time_updated is
+		// durable and stops advancing when the stream parks. Seeding the
+		// episode from it means a stream that parked hours before the
+		// executor (re)opened does not get a fresh 180-minute budget on
+		// every restart.
+		e := newExecutor()
+		parkedLongAgo := &VReplStream{
+			state:       binlogdatapb.VReplicationWorkflowState_Error,
+			message:     vreplication.RetriesExhaustedIndicator + ": connection refused",
+			timeUpdated: now.Add(-staleMigrationFailMinutes * time.Minute).Unix(),
+		}
+		assert.Equal(t, vreplStreamCancel, e.reviewVReplStreamError(uuid, parkedLongAgo, now),
+			"a stream that parked a full budget ago must not get a fresh budget from an executor restart")
+
+		// A freshly parked stream (time_updated ~ now) is unaffected.
+		e2 := newExecutor()
+		freshlyParked := &VReplStream{
+			state:       binlogdatapb.VReplicationWorkflowState_Error,
+			message:     vreplication.RetriesExhaustedIndicator + ": connection refused",
+			timeUpdated: now.Unix(),
+		}
+		assert.Equal(t, vreplStreamResume, e2.reviewVReplStreamError(uuid, freshlyParked, now))
+	})
 	t.Run("clean stream past the recovery grace ends the episode", func(t *testing.T) {
 		// A caught-up stream on an idle source advances neither pos nor
 		// rows_copied, yet it is healthy. A clean observation well past the
@@ -1053,13 +1095,18 @@ func TestReviewVReplStreamError(t *testing.T) {
 		assert.Equal(t, vreplStreamResume, e.reviewVReplStreamError(uuid, parkedStream, now))
 		e.vreplicationResumeState[uuid].lastAttempt = now
 
-		// Within the grace of the resume attempt: retained (could be the
-		// synthetic row).
-		assert.Equal(t, vreplStreamNoAction, e.reviewVReplStreamError(uuid, idleCleanStream, now.Add(vreplResumeRecoveryGrace-time.Second)))
+		// Within the grace of the resume attempt: retained. The grace must
+		// outwait every path that can delay the stream's error report — the
+		// longest is the vplayer stall deadline, during which a re-stalled
+		// applier keeps a clean row — so it is derived from that deadline
+		// and a clean row anywhere below it must not end the episode.
+		require.Greater(t, vreplResumeRecoveryGrace(), vreplication.VPlayerProgressDeadline(),
+			"the recovery grace must exceed the vplayer stall deadline")
+		assert.Equal(t, vreplStreamNoAction, e.reviewVReplStreamError(uuid, idleCleanStream, now.Add(vreplResumeRecoveryGrace()-time.Second)))
 		require.Contains(t, e.vreplicationResumeState, uuid)
 
 		// Past the grace: genuinely recovered, episode over.
-		assert.Equal(t, vreplStreamNoAction, e.reviewVReplStreamError(uuid, idleCleanStream, now.Add(vreplResumeRecoveryGrace)))
+		assert.Equal(t, vreplStreamNoAction, e.reviewVReplStreamError(uuid, idleCleanStream, now.Add(vreplResumeRecoveryGrace())))
 		assert.NotContains(t, e.vreplicationResumeState, uuid)
 
 		// A later park starts a fresh episode with a fresh budget.

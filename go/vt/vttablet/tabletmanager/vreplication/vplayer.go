@@ -58,6 +58,14 @@ var (
 	vplayerThrottleEpoch = time.Now()
 )
 
+// VPlayerProgressDeadline returns the current vplayer stall deadline. It is
+// exported for consumers that must outwait every path that can delay a
+// stream's error report — a stalled applier keeps a clean Running row until
+// this deadline fires (e.g. Online DDL's resume-recovery grace).
+func VPlayerProgressDeadline() time.Duration {
+	return vplayerProgressDeadline
+}
+
 // vplayer replays binlog events by pulling them from a vstreamer.
 type vplayer struct {
 	vr        *vreplicator
