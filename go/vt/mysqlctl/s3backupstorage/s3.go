@@ -108,8 +108,9 @@ var (
 	minDownloadPartSize int64 = 5 * 1024 * 1024 // 5MiB - S3 minimum for byte-range requests
 
 	// download part size and concurrency for parallel downloads via transfer manager
-	downloadPartSize    int64 = 8 * 1024 * 1024 // 8MiB - transfer manager default
-	downloadConcurrency int   = 1               // default preserves old single-stream GetObject path
+	downloadPartSize         int64 = 8 * 1024 * 1024 // 8MiB - transfer manager default
+	downloadConcurrency      int   = 1               // default preserves old single-stream GetObject path
+	downloadBenchmarkDiscard bool  = false            // when true, ReadFile drains S3 to /dev/null for throughput benchmarking
 
 	ErrPartSize = errors.New("minimum S3 part size must be between 5MiB and 5GiB")
 )
@@ -127,6 +128,7 @@ func registerFlags(fs *pflag.FlagSet) {
 	fs.Int64Var(&minPartSize, "s3_backup_aws_min_partsize", manager.MinUploadPartSize, "Minimum part size to use, defaults to 5MiB but can be increased due to the dataset size.")
 	fs.Int64Var(&downloadPartSize, "s3-backup-download-part-size", 8*1024*1024, "Part size in bytes for parallel S3 downloads via transfer manager.")
 	fs.IntVar(&downloadConcurrency, "s3-backup-download-concurrency", 1, "Number of parallel goroutines for S3 downloads. Set > 1 to enable parallel byte-range GETs via the transfer manager (recommended: 2-10).")
+	fs.BoolVar(&downloadBenchmarkDiscard, "s3-backup-download-benchmark-discard", false, "Benchmark mode: drain S3 downloads to /dev/null, bypassing decompression and disk I/O. Only use for throughput testing.")
 }
 
 func init() {
@@ -317,6 +319,9 @@ func (bh *S3BackupHandle) ReadFile(ctx context.Context, filename string) (io.Rea
 		if err != nil {
 			return nil, err
 		}
+		if downloadBenchmarkDiscard {
+			return newDiscardDrainer(object, out.Body, out.ContentLength), nil
+		}
 		return out.Body, nil
 	}
 
@@ -363,6 +368,10 @@ func (bh *S3BackupHandle) ReadFile(ctx context.Context, filename string) (io.Rea
 	if err != nil {
 		cancel()
 		return nil, err
+	}
+
+	if downloadBenchmarkDiscard {
+		return newDiscardDrainerWithCancel(object, out.Body, out.ContentLength, cancel), nil
 	}
 
 	// The transfer manager's concurrentReader spawns Concurrency goroutines per
@@ -423,6 +432,54 @@ func (r *cancelingReader) Close() error {
 	if c, ok := r.body.(io.Closer); ok {
 		return c.Close()
 	}
+	return nil
+}
+
+// discardDrainer drains an S3 body to /dev/null in the background, logging
+// throughput stats. The caller sees an immediate EOF on Read, so the restore
+// pipeline doesn't gate the download.
+type discardDrainer struct {
+	done   chan struct{}
+	cancel context.CancelFunc
+}
+
+func newDiscardDrainer(object string, body io.Reader, contentLength *int64) *discardDrainer {
+	return newDiscardDrainerWithCancel(object, body, contentLength, nil)
+}
+
+func newDiscardDrainerWithCancel(object string, body io.Reader, contentLength *int64, cancel context.CancelFunc) *discardDrainer {
+	d := &discardDrainer{done: make(chan struct{}), cancel: cancel}
+	go func() {
+		defer close(d.done)
+		start := time.Now()
+		n, err := io.Copy(io.Discard, body)
+		elapsed := time.Since(start)
+		throughput := float64(n) / elapsed.Seconds() / (1024 * 1024)
+		sizeStr := humanize.IBytes(uint64(n))
+		if contentLength != nil {
+			sizeStr = fmt.Sprintf("%s (ContentLength: %s)", sizeStr, humanize.IBytes(uint64(*contentLength)))
+		}
+		if err != nil {
+			log.Errorf("BENCHMARK discard %s: drained %s in %v (%.1f MiB/s), error: %v", object, sizeStr, elapsed, throughput, err)
+		} else {
+			log.Infof("BENCHMARK discard %s: drained %s in %v (%.1f MiB/s)", object, sizeStr, elapsed, throughput)
+		}
+		if c, ok := body.(io.Closer); ok {
+			c.Close()
+		}
+	}()
+	return d
+}
+
+func (d *discardDrainer) Read([]byte) (int, error) {
+	return 0, io.EOF
+}
+
+func (d *discardDrainer) Close() error {
+	if d.cancel != nil {
+		d.cancel()
+	}
+	<-d.done
 	return nil
 }
 
