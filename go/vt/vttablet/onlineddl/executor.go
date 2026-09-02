@@ -185,6 +185,13 @@ type vreplResumeState struct {
 	// the stream was observed parked on a resumable terminal error since
 	// the last full recovery. It bounds the episode's resume budget.
 	firstParked time.Time
+	// parkedPos is the stream's position when the episode began. A
+	// just-issued resume rewrites the stream to a clean Running row before
+	// any work happens, so an error-free observation alone does not mean
+	// recovery: only an advanced position does. Without this marker every
+	// park/resume/park cycle would restamp firstParked and renew the
+	// resume budget indefinitely.
+	parkedPos string
 }
 
 // resumeBudgetExhausted reports whether the current error episode has
@@ -3446,17 +3453,22 @@ func (e *Executor) maybeResumeVReplication(ctx context.Context, uuid string, s *
 	if !resumeBackoffElapsed(state, time.Now()) {
 		return
 	}
+	// The caller holds migrationMutex, and the migration-check tick hands us
+	// an unbounded context: bound the topology lookup and the resume
+	// statement so a stalled backend cannot retain the mutex indefinitely.
+	ctx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
+	defer cancel()
 	tablet, err := e.ts.GetTablet(ctx, e.tabletAlias)
 	if err != nil {
 		state.lastAttempt = time.Now()
 		log.Error("Online DDL: failed to get tablet for vreplication resume",
-			slog.String("uuid", uuid), slog.Any("error", err))
+			slog.String("uuid", uuid), slog.String("tablet", e.TabletAliasString()), slog.Any("error", err))
 		return
 	}
 	if _, err := e.vreplicationExec(ctx, tablet.Tablet, binlogplayer.StartVReplication(s.id)); err != nil {
 		state.lastAttempt = time.Now()
 		log.Error("Online DDL: failed to resume vreplication stream",
-			slog.String("uuid", uuid), slog.Int64("stream_id", int64(s.id)), slog.Any("error", err))
+			slog.String("uuid", uuid), slog.String("tablet", e.TabletAliasString()), slog.Int64("stream_id", int64(s.id)), slog.Any("error", err))
 		return
 	}
 	state.attempts++
@@ -3488,10 +3500,15 @@ func (e *Executor) reviewVReplStreamError(uuid string, s *VReplStream, now time.
 	isTerminal, isResumable, vreplError := s.hasError()
 	lastError.Record(vreplError)
 	if vreplError == nil {
-		// The stream recovered: clear the per-migration resume
-		// backoff state so a future error episode starts a
-		// fresh "first attempt immediate" backoff sequence.
-		delete(e.vreplicationResumeState, uuid)
+		// The stream reports no error — but a just-issued resume looks
+		// exactly like this (StartVReplication clears the state and the
+		// message) before the stream has done any work, so only forward
+		// progress past the episode's parked position counts as recovery.
+		// Clearing on the synthetic clean row would let every
+		// park/resume/park cycle renew the resume budget indefinitely.
+		if state, ok := e.vreplicationResumeState[uuid]; !ok || s.pos != state.parkedPos {
+			delete(e.vreplicationResumeState, uuid)
+		}
 	}
 	switch {
 	case isTerminal || !lastError.ShouldRetry():
@@ -3499,7 +3516,7 @@ func (e *Executor) reviewVReplStreamError(uuid string, s *VReplStream, now time.
 	case isResumable:
 		state, ok := e.vreplicationResumeState[uuid]
 		if !ok {
-			state = &vreplResumeState{}
+			state = &vreplResumeState{parkedPos: s.pos}
 			e.vreplicationResumeState[uuid] = state
 		}
 		if state.firstParked.IsZero() {

@@ -891,9 +891,6 @@ func TestReviewVReplStreamError(t *testing.T) {
 		state:   binlogdatapb.VReplicationWorkflowState_Error,
 		message: vreplication.RetriesExhaustedIndicator + ": the same error was encountered continuously for longer than --vreplication-max-time-to-retry-on-error (15m0s): connection refused",
 	}
-	healthyStream := &VReplStream{
-		state: binlogdatapb.VReplicationWorkflowState_Running,
-	}
 	transientErrorStream := &VReplStream{
 		state:   binlogdatapb.VReplicationWorkflowState_Running,
 		message: "error connecting to source tablet",
@@ -934,13 +931,56 @@ func TestReviewVReplStreamError(t *testing.T) {
 		// cancelled even though the stream error is still class B.
 		assert.Equal(t, vreplStreamCancel, e.reviewVReplStreamError(uuid, resumableStream, now.Add(staleMigrationFailMinutes*time.Minute)))
 
-		// The stream recovering ends the episode and clears the state.
-		assert.Equal(t, vreplStreamNoAction, e.reviewVReplStreamError(uuid, healthyStream, now.Add(staleMigrationFailMinutes*time.Minute)))
+		// The stream recovering — reporting no error AND having advanced past
+		// the position it parked on — ends the episode and clears the state.
+		recoveredStream := &VReplStream{
+			state: binlogdatapb.VReplicationWorkflowState_Running,
+			pos:   "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-100",
+		}
+		assert.Equal(t, vreplStreamNoAction, e.reviewVReplStreamError(uuid, recoveredStream, now.Add(staleMigrationFailMinutes*time.Minute)))
 		assert.NotContains(t, e.vreplicationResumeState, uuid)
 
 		// A later park starts a fresh episode with a fresh budget.
 		later := now.Add(24 * time.Hour)
 		assert.Equal(t, vreplStreamResume, e.reviewVReplStreamError(uuid, resumableStream, later))
 		assert.Equal(t, later, e.vreplicationResumeState[uuid].firstParked)
+	})
+	t.Run("synthetic clean row after a resume does not renew the budget", func(t *testing.T) {
+		// Issuing a resume rewrites the stream to a clean Running row
+		// (StartVReplication clears the state and message) before the
+		// stream has done any work. That synthetic observation must not
+		// end the error episode: otherwise every park/resume/park cycle
+		// would restamp firstParked and the resume budget could be renewed
+		// indefinitely. Only forward progress — an advanced position —
+		// ends the episode.
+		e := newExecutor()
+		pos := "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-42"
+		parkedStream := &VReplStream{
+			state:   binlogdatapb.VReplicationWorkflowState_Error,
+			message: vreplication.RetriesExhaustedIndicator + ": connection refused",
+			pos:     pos,
+		}
+		syntheticCleanStream := &VReplStream{
+			state: binlogdatapb.VReplicationWorkflowState_Running,
+			pos:   pos,
+		}
+
+		assert.Equal(t, vreplStreamResume, e.reviewVReplStreamError(uuid, parkedStream, now))
+		require.Contains(t, e.vreplicationResumeState, uuid)
+		assert.Equal(t, now, e.vreplicationResumeState[uuid].firstParked)
+
+		// The post-resume clean row at the same position keeps the episode.
+		assert.Equal(t, vreplStreamNoAction, e.reviewVReplStreamError(uuid, syntheticCleanStream, now.Add(time.Minute)))
+		require.Contains(t, e.vreplicationResumeState, uuid)
+		assert.Equal(t, now, e.vreplicationResumeState[uuid].firstParked,
+			"the episode start must survive the synthetic clean observation")
+
+		// Re-parking within the budget keeps resuming on the original clock.
+		assert.Equal(t, vreplStreamResume, e.reviewVReplStreamError(uuid, parkedStream, now.Add(30*time.Minute)))
+		assert.Equal(t, now, e.vreplicationResumeState[uuid].firstParked)
+		assert.Equal(t, vreplStreamNoAction, e.reviewVReplStreamError(uuid, syntheticCleanStream, now.Add(31*time.Minute)))
+
+		// Exhaustion is measured from the original park, not the last one.
+		assert.Equal(t, vreplStreamCancel, e.reviewVReplStreamError(uuid, parkedStream, now.Add(staleMigrationFailMinutes*time.Minute)))
 	})
 }
