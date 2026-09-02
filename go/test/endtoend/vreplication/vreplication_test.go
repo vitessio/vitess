@@ -1772,8 +1772,10 @@ func switchWrites(t *testing.T, workflowType, ksWorkflow string, reverse bool, e
 		moveTablesAction(t, command, defaultCellName, workflow, defaultSourceKs, defaultTargetKs, "", append([]string{"--timeout=" + SwitchWritesTimeout, "--tablet-types=primary"}, extraArgs...)...)
 		return
 	}
-	output, err := vc.VtctldClient.ExecuteCommandWithOutput(append([]string{workflowType, "--tablet-types=primary", "--workflow", workflow,
-		"--target-keyspace", defaultTargetKs, command, "--timeout=" + SwitchWritesTimeout, "--initialize-target-sequences"}, extraArgs...)...)
+	output, err := vc.VtctldClient.ExecuteCommandWithOutput(append([]string{
+		workflowType, "--tablet-types=primary", "--workflow", workflow,
+		"--target-keyspace", defaultTargetKs, command, "--timeout=" + SwitchWritesTimeout, "--initialize-target-sequences",
+	}, extraArgs...)...)
 	if output != "" {
 		fmt.Printf("Output of switching writes with vtctldclient for %s:\n++++++\n%s\n--------\n", ksWorkflow, output)
 	}
