@@ -2816,6 +2816,12 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 		maxReplicationLagAllowed = DefaultTimeout
 	}
 	direction := TrafficSwitchDirection(req.Direction)
+	// Reject directions outside the defined values so a malformed request cannot slip
+	// past the direction-specific handling below (including the read-before-write
+	// guard, which only applies to forward switches).
+	if direction != DirectionForward && direction != DirectionBackward {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid traffic switch direction: %d", req.Direction)
+	}
 	switchReplica, switchRdonly, switchPrimary, err = parseTabletTypes(req.TabletTypes)
 	if err != nil {
 		return nil, err
