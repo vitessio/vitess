@@ -30,8 +30,13 @@ import (
 // connection settings or SET statements from an older vtgate in a mixed-version cluster,
 // or from clients that talk to the query service directly. The checks below mirror the
 // vtgate's validation at each of those entry points, returning the same errors. Only
-// constant values can be judged here — non-constant expressions pass through, and MySQL
-// still applies its own validation to them.
+// constant values can be judged upfront. A non-constant value is handled by entry point:
+// connection settings reject it, since they are applied with no verification afterwards;
+// a SET statement that assigns other variables alongside it is rejected too, since MySQL
+// applies none of a failing SET's assignments and the others would already be applied by
+// the time the value could be judged; a SET statement whose sole assignment it is runs,
+// has its applied value read back and validated, and is restored on failure (see
+// Plan.VerifySQLMode).
 //
 // SET_VAR optimizer hints are not judged: a hint applies to the hinted statement's
 // execution only and cannot change how that statement's own text is lexed, which is the
