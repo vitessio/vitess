@@ -798,6 +798,8 @@ func (ast *astCompiler) translateCallable(call sqlparser.Callable) (IR, error) {
 		cexpr := CallExpr{Arguments: nil, Method: call.Name.String()}
 		var utc, onlyTime bool
 		switch call.Name.Lowered() {
+		case "curdate":
+			return &builtinCurdate{CallExpr: cexpr}, nil
 		case "current_time", "curtime":
 			onlyTime = true
 		case "utc_time":

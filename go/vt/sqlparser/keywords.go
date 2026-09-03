@@ -859,6 +859,15 @@ func isFuncCallKeyword(id int) bool {
 	}
 }
 
+// isFuncCallKeywordName reports whether name lexes as one of the function-call
+// keywords when directly followed by '('. Written with whitespace before the
+// parenthesis, the same name is an identifier and the call is a generic one —
+// MySQL's stored-function path — which must serialize quoted to stay one.
+func isFuncCallKeywordName(name string) bool {
+	id, ok := keywordLookupTable.LookupString(name)
+	return ok && isFuncCallKeyword(id)
+}
+
 type caseInsensitiveTable struct {
 	h map[uint64]keyword
 }
