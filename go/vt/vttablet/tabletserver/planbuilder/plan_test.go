@@ -267,11 +267,9 @@ func TestBuildStatementType_CTERegression(t *testing.T) {
 	require.Equal(t, sqlparser.StmtSelect, streamPlan.StatementType)
 }
 
-// TestBuildStatementType_ReplaceRegression pins down that REPLACE keeps its own
-// statement type. REPLACE parses to an *Insert carrying ReplaceAct, so classifying
-// on the Go type alone reports StmtInsert — which makes a configured REPLACE rule in
-// the query throttler unmatchable while an INSERT rule wrongly applies instead.
-// Both Build and BuildStreaming must classify it as REPLACE.
+// TestBuildStatementType_ReplaceRegression pins REPLACE to its own statement type.
+// Reporting it as INSERT makes a query throttler REPLACE rule unmatchable, and wrongly
+// applies an INSERT rule instead.
 func TestBuildStatementType_ReplaceRegression(t *testing.T) {
 	testSchema := loadSchema("schema_test.json")
 	parser := sqlparser.NewTestParser()
@@ -281,7 +279,7 @@ func TestBuildStatementType_ReplaceRegression(t *testing.T) {
 	statement, err := parser.Parse(replaceStmt)
 	require.NoError(t, err)
 
-	// Premise guard: REPLACE really is represented as an *Insert with ReplaceAct.
+	// Premise: REPLACE is represented as an *Insert with ReplaceAct.
 	ins, ok := statement.(*sqlparser.Insert)
 	require.True(t, ok, "REPLACE should parse to *sqlparser.Insert")
 	require.Equal(t, sqlparser.ReplaceAct, ins.Action)
@@ -294,7 +292,7 @@ func TestBuildStatementType_ReplaceRegression(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, sqlparser.StmtReplace, streamPlan.StatementType)
 
-	// An INSERT must stay an INSERT — the branch must not swallow both.
+	// An INSERT must stay an INSERT.
 	insertStatement, err := parser.Parse("insert into a(eid, id) values (1, 2)")
 	require.NoError(t, err)
 	insertPlan, err := Build(vtenv.NewTestEnv(), insertStatement, testSchema, "dbName", false)

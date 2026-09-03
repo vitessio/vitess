@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -34,6 +35,7 @@ import (
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/srvtopo/srvtopotest"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/memorytopo"
 
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/querythrottler/registry"
 
@@ -1038,6 +1040,158 @@ func TestQueryThrottler_startSrvKeyspaceWatch_ShutdownStopsWatch(t *testing.T) {
 
 	// Verify the watch flag remains false
 	require.False(t, qt.watchStarted.Load(), "Watch should remain not started after multiple shutdowns")
+}
+
+// TestQueryThrottler_srvKeyspaceListener_DeregistersAfterWatchCancel pins the
+// deregistration contract: the listener must return false once the watch is cancelled.
+//
+// Not redundant with the shutdown latch in HandleConfigUpdate — that stops post-Shutdown
+// config from being applied, but leaves the listener registered and retaining the
+// throttler. Only the boolean return releases it.
+func TestQueryThrottler_srvKeyspaceListener_DeregistersAfterWatchCancel(t *testing.T) {
+	env := tabletenv.NewEnv(vtenv.NewTestEnv(), &tabletenv.TabletConfig{}, "TestThrottler")
+	srvTopoServer := srvtopotest.NewPassthroughSrvTopoServer()
+	srvTopoServer.SrvKeyspace = createTestSrvKeyspace(true, querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER, false)
+
+	qt := NewQueryThrottler(t.Context(), &throttle.Throttler{}, env, &topodatapb.TabletAlias{Cell: "test-cell", Uid: 123}, srvTopoServer)
+	qt.keyspace = "test_keyspace"
+
+	watchCtx, cancel := context.WithCancel(t.Context())
+	listener := qt.srvKeyspaceListener(watchCtx)
+
+	srvks := createTestSrvKeyspace(true, querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER, true)
+
+	require.True(t, listener(srvks, nil),
+		"listener must stay registered while the watch context is live")
+
+	cancel()
+	require.False(t, listener(srvks, nil),
+		"listener must return false once cancelled, so srvtopo drops it")
+
+	// The error path must not re-register it either.
+	require.False(t, listener(nil, errors.New("watch error")),
+		"listener must return false after cancellation even on an error notification")
+}
+
+// TestSrvKeyspaceWatcher_DropsListenerReturningFalse is a premise guard against the real
+// resilient watcher: a listener returning false is dropped, while cancelling the context
+// it registered with is not enough. If srvtopo's protocol ever changes, srvKeyspaceListener
+// would silently stop unregistering.
+func TestSrvKeyspaceWatcher_DropsListenerReturningFalse(t *testing.T) {
+	ctx := t.Context()
+	const (
+		cell     = "test-cell"
+		keyspace = "test_keyspace"
+	)
+
+	ts := memorytopo.NewServer(ctx, cell)
+	t.Cleanup(func() { ts.Close() })
+
+	counts := stats.NewCountersWithSingleLabel("", "Resilient srvtopo listener protocol", "type")
+	srvTopoServer := srvtopo.NewResilientServer(ctx, ts, counts)
+
+	publishDryRun := func(dryRun bool) {
+		require.NoError(t, ts.UpdateSrvKeyspace(ctx, cell, keyspace,
+			createTestSrvKeyspace(true, querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER, dryRun)))
+	}
+	publishDryRun(false)
+
+	// A listener registered with its own context, which we cancel part-way through.
+	listenerCtx, cancelListener := context.WithCancel(ctx)
+	t.Cleanup(cancelListener)
+
+	var (
+		mu             sync.Mutex
+		calls          int
+		keepRegistered = true
+		// Recorded inside the callback, not sampled from the test goroutine: sampling
+		// could snapshot the baseline before the false-returning call was processed and
+		// then misread it as a post-drop invocation.
+		callsAtDrop = -1
+	)
+	srvTopoServer.WatchSrvKeyspace(listenerCtx, cell, keyspace, func(_ *topodatapb.SrvKeyspace, _ error) bool {
+		mu.Lock()
+		defer mu.Unlock()
+		calls++
+		if !keepRegistered {
+			callsAtDrop = calls
+			return false
+		}
+		return true
+	})
+
+	callCount := func() int {
+		mu.Lock()
+		defer mu.Unlock()
+		return calls
+	}
+	dropPoint := func() int {
+		mu.Lock()
+		defer mu.Unlock()
+		return callsAtDrop
+	}
+
+	// Baseline: the listener is live and receives updates.
+	before := callCount()
+	publishDryRun(true)
+	require.Eventually(t, func() bool { return callCount() > before }, 30*time.Second, 10*time.Millisecond,
+		"a registered listener must receive SrvKeyspace updates")
+
+	// Cancelling the registration context alone must NOT unregister it — which is why
+	// srvKeyspaceListener cannot rely on cancellation by itself.
+	cancelListener()
+	before = callCount()
+	publishDryRun(false)
+	require.Eventually(t, func() bool { return callCount() > before }, 30*time.Second, 10*time.Millisecond,
+		"cancelling the context must not unregister the listener — only a false return does")
+
+	// Now return false on the next invocation: the watcher must drop the listener and
+	// never call it again.
+	mu.Lock()
+	keepRegistered = false
+	mu.Unlock()
+
+	publishDryRun(true)
+	require.Eventually(t, func() bool { return dropPoint() != -1 }, 30*time.Second, 10*time.Millisecond,
+		"listener should be invoked once more, returning false")
+
+	// No invocation may occur after the one that returned false, however many updates land.
+	publishDryRun(false)
+	publishDryRun(true)
+	require.Never(t, func() bool { return callCount() > dropPoint() }, 5*time.Second, 50*time.Millisecond,
+		"a listener that returned false must never be invoked again")
+}
+
+// watchRecordingSrvTopoServer counts WatchSrvKeyspace registrations, so a test can assert
+// no listener was registered at all rather than that a registered one stayed inert.
+type watchRecordingSrvTopoServer struct {
+	*srvtopotest.PassthroughSrvTopoServer
+	watches atomic.Int64
+}
+
+func (s *watchRecordingSrvTopoServer) WatchSrvKeyspace(ctx context.Context, cell, keyspace string, callback func(*topodatapb.SrvKeyspace, error) bool) {
+	s.watches.Add(1)
+	s.PassthroughSrvTopoServer.WatchSrvKeyspace(ctx, cell, keyspace, callback)
+}
+
+// TestQueryThrottler_startSrvKeyspaceWatch_SkippedAfterShutdown verifies no watch is
+// registered once Shutdown has run. Registering then would leak the listener outright,
+// since dropping it requires a later notification that may never arrive.
+func TestQueryThrottler_startSrvKeyspaceWatch_SkippedAfterShutdown(t *testing.T) {
+	env := tabletenv.NewEnv(vtenv.NewTestEnv(), &tabletenv.TabletConfig{}, "TestThrottler")
+	passthrough := srvtopotest.NewPassthroughSrvTopoServer()
+	passthrough.SrvKeyspace = createTestSrvKeyspace(true, querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER, false)
+	srvTopoServer := &watchRecordingSrvTopoServer{PassthroughSrvTopoServer: passthrough}
+
+	qt := NewQueryThrottler(t.Context(), &throttle.Throttler{}, env, &topodatapb.TabletAlias{Cell: "test-cell", Uid: 123}, srvTopoServer)
+
+	qt.Shutdown()
+	require.True(t, qt.IsShutdown())
+
+	// Registration happens on a goroutine, so allow time for it to occur if unguarded.
+	qt.InitDBConfig("test_keyspace")
+	require.Never(t, func() bool { return srvTopoServer.watches.Load() > 0 }, time.Second, 20*time.Millisecond,
+		"no SrvKeyspace watch may be registered once the throttler is shut down")
 }
 
 // TestQueryThrottler_ConcurrentThrottleAndConfigUpdate exercises concurrent

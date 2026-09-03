@@ -94,11 +94,8 @@ func TestPreview(t *testing.T) {
 	}
 }
 
-// TestASTToStatementType checks the AST-based classifier against the statement types
-// callers key rules off. REPLACE is the case that matters: it parses to an *Insert
-// carrying ReplaceAct, so classifying purely on the Go type reports it as StmtInsert
-// and makes a REPLACE rule unmatchable. Preview() has always reported StmtReplace for
-// these (see TestPreview), so the two classifiers must agree.
+// TestASTToStatementType covers the AST-based classifier. REPLACE is the interesting
+// case: it parses to an *Insert, so classifying on the Go type alone reports INSERT.
 func TestASTToStatementType(t *testing.T) {
 	parser := NewTestParser()
 	testcases := []struct {
@@ -124,9 +121,8 @@ func TestASTToStatementType(t *testing.T) {
 	}
 }
 
-// TestASTToStatementTypeMatchesPreview guards against the AST classifier and the
-// textual classifier drifting apart for INSERT/REPLACE, which is how the REPLACE
-// misclassification went unnoticed.
+// TestASTToStatementTypeMatchesPreview guards the two classifiers against drifting
+// apart for INSERT/REPLACE, which is how the REPLACE misclassification went unnoticed.
 func TestASTToStatementTypeMatchesPreview(t *testing.T) {
 	parser := NewTestParser()
 	for _, sql := range []string{

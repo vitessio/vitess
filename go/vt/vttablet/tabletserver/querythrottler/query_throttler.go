@@ -345,21 +345,42 @@ func (qt *QueryThrottler) startSrvKeyspaceWatch() {
 		return
 	}
 	watchCtx, cancel := context.WithCancel(qt.ctx)
-	// Publish the cancel func under qt.mu so this write is synchronized with Shutdown's
-	// read of qt.cancelWatchContext (Shutdown holds qt.mu when it reads and calls it).
+	// Publish the cancel func under qt.mu to synchronize with Shutdown's read of it, and
+	// read the shutdown latch in the same critical section: a listener registered after
+	// Shutdown would be leaked, since only a later notification can drop it.
 	qt.mu.Lock()
+	alreadyShutdown := qt.shutdown
 	qt.cancelWatchContext = cancel
 	qt.mu.Unlock()
+
+	if alreadyShutdown {
+		cancel() // nothing registered; release the derived context
+		log.Info("QueryThrottler: not starting SrvKeyspace watch, already shut down for keyspace=" + qt.keyspace)
+		return
+	}
 
 	go func() {
 		// WatchSrvKeyspace will:
 		// 1. Provide the current value immediately (may duplicate our GetSrvKeyspace result, but deduped)
 		// 2. Stream future configuration updates via the callback
 		// 3. Automatically retry on transient errors (handled by resilient watcher)
-		qt.srvTopoServer.WatchSrvKeyspace(watchCtx, qt.cell, qt.keyspace, qt.HandleConfigUpdate)
+		qt.srvTopoServer.WatchSrvKeyspace(watchCtx, qt.cell, qt.keyspace, qt.srvKeyspaceListener(watchCtx))
 	}()
 
 	log.Info(fmt.Sprintf("QueryThrottler: started event-driven watch for SrvKeyspace keyspace=%s cell=%s", qt.keyspace, qt.cell))
+}
+
+// srvKeyspaceListener returns the callback for the resilient SrvKeyspace watcher.
+// Returning false is the only way to deregister: srvtopo re-appends a listener whose
+// callback returned true, so cancelling watchCtx alone leaves it invoked after Shutdown.
+// The drop is lazy, taking effect on the next notification.
+func (qt *QueryThrottler) srvKeyspaceListener(watchCtx context.Context) func(*topodatapb.SrvKeyspace, error) bool {
+	return func(srvks *topodatapb.SrvKeyspace, err error) bool {
+		if watchCtx.Err() != nil {
+			return false
+		}
+		return qt.HandleConfigUpdate(srvks, err)
+	}
 }
 
 // buildLabels returns the throttler stat label set: the base {Strategy, Workload, Priority}

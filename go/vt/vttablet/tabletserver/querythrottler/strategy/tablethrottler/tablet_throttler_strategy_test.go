@@ -766,17 +766,11 @@ func TestTabletThrottlerStrategy_Evaluate_NilCachedResultFailsOpen(t *testing.T)
 	}, "Evaluate must not panic when cached result is nil")
 }
 
-// TestTabletThrottlerStrategy_Evaluate_ReplaceRuleMatches verifies that a configured
-// REPLACE rule actually throttles a REPLACE statement, and that an INSERT rule does not
-// silently stand in for one.
+// TestTabletThrottlerStrategy_Evaluate_ReplaceRuleMatches verifies a configured REPLACE
+// rule throttles a REPLACE statement, and that an INSERT rule does not stand in for one.
 //
-// REPLACE parses to an *sqlparser.Insert carrying ReplaceAct. Classifying on the Go type
-// alone reported it as INSERT, so a REPLACE rule — which config validation happily accepts —
-// could never match, while an INSERT rule wrongly applied to REPLACE traffic instead.
-//
-// The statement type is deliberately derived through sqlparser.ASTToStatementType rather than
-// hardcoded, because that call is the fix under test: hardcoding sqlparser.StmtReplace here
-// would make this test pass with or without it.
+// The statement type is derived via sqlparser.ASTToStatementType rather than hardcoded:
+// that call is the fix under test, so hardcoding StmtReplace would pass either way.
 func TestTabletThrottlerStrategy_Evaluate_ReplaceRuleMatches(t *testing.T) {
 	parser := sqlparser.NewTestParser()
 	const replaceSQL = "replace into t(a) values (1)"
@@ -785,7 +779,7 @@ func TestTabletThrottlerStrategy_Evaluate_ReplaceRuleMatches(t *testing.T) {
 	require.NoError(t, err)
 	stmtType := sqlparser.ASTToStatementType(stmt)
 	require.Equal(t, sqlparser.StmtReplace, stmtType,
-		"REPLACE must classify as StmtReplace, otherwise a REPLACE rule can never match")
+		"REPLACE must classify as StmtReplace, else a REPLACE rule can never match")
 
 	overloaded := &throttle.CheckResult{
 		Metrics: map[string]*throttle.MetricResult{
