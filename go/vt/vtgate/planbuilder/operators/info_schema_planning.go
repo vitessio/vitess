@@ -170,12 +170,16 @@ func extractInfoSchemaRoutingPredicate(ctx *plancontext.PlanningContext, in sqlp
 				break // continue into the shared equality tail below
 			}
 			// A multi-element schema list — a literal list with normalization
-			// disabled, or a prepared statement's `IN (?, ?)` — cannot name
-			// one keyspace. Carry the whole tuple so routeInfoSchemaQuery's
-			// cardinality guard rejects it loudly at execution instead of the
-			// query silently running against the default keyspace. The
-			// equality rewrite below is safe: execution always errors on the
-			// tuple before the rewritten query can be sent anywhere.
+			// disabled, or a prepared statement's `IN (?, ?)` — routes only
+			// if every element resolves to the same schema (duplicates do
+			// not change IN semantics). Carry the whole tuple so
+			// routeInfoSchemaQuery decides at execution: elements that all
+			// name one schema route like equality, distinct names are
+			// rejected loudly instead of the query silently running against
+			// the default keyspace. The equality rewrite below is safe
+			// either way: the engine substitutes the resolved value, or
+			// errors on the tuple before the rewritten query can be sent
+			// anywhere.
 			// Multi-element table_name lists are left alone: they already
 			// work as pushed-down filters once the schema routes.
 			if !isSchema || !translates(rhs) {

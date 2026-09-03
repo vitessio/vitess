@@ -213,13 +213,20 @@ func (rp *RoutingParameters) routeInfoSchemaQuery(ctx context.Context, vcursor V
 		}
 		var ks string
 		if tuple := result.TupleValues(); tuple != nil {
-			// A list bindvar from an IN predicate: a single element is an
-			// equality and routes; anything else cannot name one keyspace, and
-			// falling through would silently query the wrong one.
-			if len(tuple) != 1 {
-				return nil, vterrors.VT12001("IN list with other than one schema name in an information_schema query")
+			// A list bindvar from an IN predicate: elements that all name
+			// the same schema route exactly like the equality form —
+			// duplicates do not change IN semantics — while distinct names
+			// cannot name one keyspace, and falling through would silently
+			// query the wrong one.
+			if len(tuple) == 0 {
+				return nil, vterrors.VT12001("empty IN list for the schema name in an information_schema query")
 			}
 			ks = tuple[0].ToString()
+			for _, val := range tuple[1:] {
+				if val.ToString() != ks {
+					return nil, vterrors.VT12001("IN list with more than one distinct schema name in an information_schema query")
+				}
+			}
 		} else {
 			ks = result.Value(vcursor.ConnCollation()).ToString()
 		}
