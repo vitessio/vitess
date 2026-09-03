@@ -384,6 +384,14 @@ func TestForEachStatement(t *testing.T) {
 		err:   "Query was empty",
 		state: vterrors.EmptyQuery,
 	}, {
+		input: ";",
+		err:   "Query was empty",
+		state: vterrors.EmptyQuery,
+	}, {
+		input: " ; ",
+		err:   "Query was empty",
+		state: vterrors.EmptyQuery,
+	}, {
 		// A statement the grammar rejects is handed over as well, cut at the
 		// next top-level ';': the callback's own parse reports it.
 		input: "select 1; bogus; select 3",

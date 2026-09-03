@@ -485,6 +485,7 @@ func (vh *vtgateHandler) streamExecuteMultiQuery(ctx context.Context, c *mysql.C
 			fillInTxStatusFlags(c, session)
 			applyMultiQueryStatusFlagsWithPrevious(c, mysqlCtx.slowQueryStates, idx, previousStatusFlags)
 			if err := callback(sqltypes.QueryResponse{QueryResult: deferredResult}, more, true); err != nil {
+				midStream = true
 				return err
 			}
 		}

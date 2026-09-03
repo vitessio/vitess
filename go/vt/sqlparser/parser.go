@@ -296,6 +296,9 @@ func (p *Parser) ForEachStatement(sql string, fn func(text, rest string) error) 
 		return fn(sql, "")
 	}
 	if strings.TrimSpace(sql[i+1:]) == "" {
+		if strings.TrimSpace(sql[:i]) == "" {
+			return ErrEmpty
+		}
 		return fn(sql[:i], "")
 	}
 

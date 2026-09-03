@@ -990,6 +990,37 @@ func TestComQueryMulti(t *testing.T) {
 	}
 }
 
+// TestStreamExecuteMultiQueryDeferredResultCallbackError verifies that a
+// callback failure on a deferred OK-only result is a transport failure: it is
+// returned as is, and the callback is not invoked again with a QueryError.
+func TestStreamExecuteMultiQueryDeferredResultCallbackError(t *testing.T) {
+	executor, _, _, _, _ := createExecutorEnv(t)
+	vh := newVtgateHandler(newVTGate(executor, nil, nil, nil, nil))
+	listener, err := mysql.NewListener("tcp", "127.0.0.1:", mysql.NewAuthServerNone(), &testHandler{}, 0, 0, false, false, 0, 0, false)
+	require.NoError(t, err)
+	defer listener.Close()
+
+	mysqlConn := mysql.GetTestServerConn(listener)
+	mysqlConn.ConnectionID = 1
+	mysqlConn.UserData = &mysql.StaticUserData{}
+	mysqlCtx := &vtgateMySQLConnection{handler: vh, conn: mysqlConn}
+	session := &vtgatepb.Session{
+		Autocommit:   true,
+		TargetString: "TestExecutor",
+		Options:      &querypb.ExecuteOptions{Workload: querypb.ExecuteOptions_OLAP},
+	}
+	writeFailed := errors.New("write failed")
+	calls := 0
+
+	_, err = vh.streamExecuteMultiQuery(t.Context(), mysqlConn, mysqlCtx, session, "set autocommit = 1; select 1", func(qr sqltypes.QueryResponse, more bool, firstPacket bool) error {
+		calls++
+		return writeFailed
+	})
+
+	require.ErrorIs(t, err, writeFailed)
+	assert.Equal(t, 1, calls)
+}
+
 // selectOneResult is what "select 1" returns through vtgate.
 func selectOneResult() *sqltypes.Result {
 	return &sqltypes.Result{
