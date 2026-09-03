@@ -338,6 +338,11 @@ func (f fakeExecutor) ExecuteMultiShard(ctx context.Context, primitive engine.Pr
 	panic("implement me")
 }
 
+func (f fakeExecutor) ExecuteMultiShardPerShard(ctx context.Context, primitive engine.Primitive, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, session *SafeSession, autocommit bool, resultsObserver ResultsObserver, fetchLastInsertID bool) (results []*sqltypes.Result, errs []error) {
+	// TODO implement me
+	panic("implement me")
+}
+
 func (f fakeExecutor) StreamExecuteMulti(ctx context.Context, primitive engine.Primitive, query string, rss []*srvtopo.ResolvedShard, vars []map[string]*querypb.BindVariable, session *SafeSession, autocommit bool, callback func(reply *sqltypes.Result) error, observer ResultsObserver, fetchLastInsertID bool) []error {
 	// TODO implement me
 	panic("implement me")
