@@ -2170,8 +2170,6 @@ func TestWorkflowSwitchTrafficFailsToSwitchWritesBeforeReads(t *testing.T) {
 		require.NotContains(t, err.Error(), "before reads are switched")
 	}
 
-	// --force overrides the guard: the PRIMARY-only request must not be rejected with
-	// the ordering error (it may still fail later in this minimal env).
 	_, err = env.ws.WorkflowSwitchTraffic(ctx, &vtctldatapb.WorkflowSwitchTrafficRequest{
 		Keyspace:    targetKeyspaceName,
 		Workflow:    workflowName,
@@ -2183,8 +2181,6 @@ func TestWorkflowSwitchTrafficFailsToSwitchWritesBeforeReads(t *testing.T) {
 		require.NotContains(t, err.Error(), "before reads are switched")
 	}
 
-	// A direction outside the defined values is rejected up front so it cannot slip
-	// past the forward-only guard.
 	_, err = env.ws.WorkflowSwitchTraffic(ctx, &vtctldatapb.WorkflowSwitchTrafficRequest{
 		Keyspace:    targetKeyspaceName,
 		Workflow:    workflowName,
