@@ -630,7 +630,7 @@ func (te *TxEngine) ReserveBegin(ctx context.Context, options *querypb.ExecuteOp
 	// The pre-queries are executed directly on the reserved connection, without the
 	// settings pool's BuildSettingQuery pass, so the sql_mode validation must run
 	// here — before any connection is acquired or state is changed.
-	parseMode, err := planbuilder.ValidateReservedSettings(preQueries, te.env.Environment().Parser())
+	parseMode, setsSQLMode, err := planbuilder.ValidateReservedSettings(preQueries, te.env.Environment().Parser())
 	if err != nil {
 		return 0, "", err
 	}
@@ -640,7 +640,7 @@ func (te *TxEngine) ReserveBegin(ctx context.Context, options *querypb.ExecuteOp
 	}
 	defer te.beginRequests.Done()
 
-	conn, err := te.reserve(ctx, options, preQueries, parseMode)
+	conn, err := te.reserve(ctx, options, preQueries, parseMode, setsSQLMode)
 	if err != nil {
 		return 0, "", err
 	}
@@ -661,7 +661,7 @@ func (te *TxEngine) Reserve(ctx context.Context, options *querypb.ExecuteOptions
 	span, ctx := trace.NewSpan(ctx, "TxEngine.Reserve")
 	defer span.Finish()
 	// see ReserveBegin: validate before any connection is acquired or tainted
-	parseMode, err := planbuilder.ValidateReservedSettings(preQueries, te.env.Environment().Parser())
+	parseMode, setsSQLMode, err := planbuilder.ValidateReservedSettings(preQueries, te.env.Environment().Parser())
 	if err != nil {
 		return 0, err
 	}
@@ -670,7 +670,7 @@ func (te *TxEngine) Reserve(ctx context.Context, options *querypb.ExecuteOptions
 		if err != nil {
 			return 0, err
 		}
-		conn, err := te.reserve(ctx, options, preQueries, parseMode)
+		conn, err := te.reserve(ctx, options, preQueries, parseMode, setsSQLMode)
 		if err != nil {
 			return 0, err
 		}
@@ -684,7 +684,7 @@ func (te *TxEngine) Reserve(ctx context.Context, options *querypb.ExecuteOptions
 	}
 	defer conn.Unlock()
 
-	err = te.taintConn(ctx, conn, preQueries, parseMode)
+	err = te.taintConn(ctx, conn, preQueries, parseMode, setsSQLMode)
 	if err != nil {
 		return 0, err
 	}
@@ -692,13 +692,13 @@ func (te *TxEngine) Reserve(ctx context.Context, options *querypb.ExecuteOptions
 }
 
 // Reserve creates a reserved connection and returns the id to it
-func (te *TxEngine) reserve(ctx context.Context, options *querypb.ExecuteOptions, preQueries []string, parseMode sqlparser.SQLMode) (*StatefulConnection, error) {
+func (te *TxEngine) reserve(ctx context.Context, options *querypb.ExecuteOptions, preQueries []string, parseMode sqlparser.SQLMode, setsSQLMode bool) (*StatefulConnection, error) {
 	conn, err := te.txPool.scp.NewConn(ctx, options, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	err = te.taintConn(ctx, conn, preQueries, parseMode)
+	err = te.taintConn(ctx, conn, preQueries, parseMode, setsSQLMode)
 	if err != nil {
 		return nil, err
 	}
@@ -706,7 +706,11 @@ func (te *TxEngine) reserve(ctx context.Context, options *querypb.ExecuteOptions
 	return conn, err
 }
 
-func (te *TxEngine) taintConn(ctx context.Context, conn *StatefulConnection, preQueries []string, parseMode sqlparser.SQLMode) error {
+// taintConn taints the connection and runs the pre-queries on it. The parse mode is
+// recorded only when the pre-queries assign sql_mode: an existing transaction's
+// connection may already be in a mode a SET inside the transaction put it in, which
+// pre-queries that leave sql_mode alone must not reset.
+func (te *TxEngine) taintConn(ctx context.Context, conn *StatefulConnection, preQueries []string, parseMode sqlparser.SQLMode, setsSQLMode bool) error {
 	err := conn.Taint(ctx, te.reservedConnStats)
 	if err != nil {
 		return err
@@ -718,7 +722,9 @@ func (te *TxEngine) taintConn(ctx context.Context, conn *StatefulConnection, pre
 			return err
 		}
 	}
-	conn.SetParseSQLMode(parseMode)
+	if setsSQLMode {
+		conn.SetParseSQLMode(parseMode)
+	}
 	return nil
 }
 

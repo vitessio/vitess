@@ -2435,6 +2435,46 @@ func TestReserveExecute_ParseSQLMode(t *testing.T) {
 	require.NoError(t, err)
 }
 
+// Reserving an existing transaction with settings that do not assign sql_mode leaves
+// the parse mode the transaction's connection is already in untouched: the mode its
+// connection settings put it in keeps governing how later queries on it are parsed.
+func TestReserveExistingTx_KeepsParseSQLMode(t *testing.T) {
+	ctx := t.Context()
+	db, tsv := setupTabletServerTest(t, ctx, "")
+	defer tsv.StopService()
+	defer db.Close()
+
+	db.AddQueryPattern(`set .*sql_mode.*`, &sqltypes.Result{})
+	db.AddQueryPattern(`set .*sql_safe_updates.*`, &sqltypes.Result{})
+	db.AddQueryPattern(`select 1 from dual.*`, &sqltypes.Result{})
+	db.AddQueryPattern(`select get_lock\(.*`, &sqltypes.Result{})
+	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
+
+	// the transaction's connection comes from the settings pool, in PIPES_AS_CONCAT
+	beginState, _, err := tsv.ReserveBeginExecute(ctx, nil, &target, []string{"set sql_mode = 'PIPES_AS_CONCAT'"}, nil,
+		"select 1 from dual", nil, &querypb.ExecuteOptions{})
+	require.NoError(t, err)
+	require.NotEqual(t, int64(0), beginState.TransactionID)
+	require.Equal(t, int64(0), beginState.ReservedID, "a settings-pool transaction is not a true reservation")
+
+	// get_lock forces a true reservation of the transaction's connection, whose
+	// settings do not touch sql_mode
+	reserveState, _, err := tsv.ReserveExecute(ctx, nil, &target, []string{"set sql_safe_updates = 1"},
+		"select get_lock('l', 10) from dual", nil, beginState.TransactionID, &querypb.ExecuteOptions{})
+	require.NoError(t, err)
+	require.Equal(t, beginState.TransactionID, reserveState.ReservedID)
+
+	// under PIPES_AS_CONCAT this query only matches its concat() serialization
+	concatQuery := "select concat('a', 'b') from dual limit 10001"
+	db.AddQuery(concatQuery, &sqltypes.Result{})
+	_, err = tsv.Execute(ctx, nil, &target, "select 'a' || 'b' from dual", nil, beginState.TransactionID, reserveState.ReservedID, &querypb.ExecuteOptions{})
+	require.NoError(t, err)
+	require.Equal(t, 1, db.GetQueryCalledNum(concatQuery))
+
+	err = tsv.Release(ctx, &target, beginState.TransactionID, reserveState.ReservedID)
+	require.NoError(t, err)
+}
+
 func TestReserveExecute_WithTx(t *testing.T) {
 	ctx := t.Context()
 	db, tsv := setupTabletServerTest(t, ctx, "")

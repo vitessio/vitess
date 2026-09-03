@@ -118,48 +118,61 @@ func TestValidateReservedSettings(t *testing.T) {
 	parser := vtenv.NewTestEnv().Parser()
 
 	t.Run("parse-relevant bits are returned", func(t *testing.T) {
-		parseMode, err := ValidateReservedSettings([]string{
+		parseMode, setsSQLMode, err := ValidateReservedSettings([]string{
 			"set sql_safe_updates = 1",
 			"set sql_mode = 'PIPES_AS_CONCAT,STRICT_TRANS_TABLES'",
 		}, parser)
 		require.NoError(t, err)
 		assert.Equal(t, sqlparser.SQLModePipesAsConcat, parseMode)
+		assert.True(t, setsSQLMode)
 	})
 
 	t.Run("the mode the session must not run under is rejected", func(t *testing.T) {
-		_, err := ValidateReservedSettings([]string{
+		_, _, err := ValidateReservedSettings([]string{
 			"set sql_mode = 'NO_BACKSLASH_ESCAPES,STRICT_TRANS_TABLES'",
 		}, parser)
 		require.EqualError(t, err, "setting the NO_BACKSLASH_ESCAPES sql_mode is unsupported")
 	})
 
 	t.Run("HIGH_NOT_PRECEDENCE is accepted and carries its parse bit", func(t *testing.T) {
-		parseMode, err := ValidateReservedSettings([]string{
+		parseMode, setsSQLMode, err := ValidateReservedSettings([]string{
 			"set sql_mode = 'HIGH_NOT_PRECEDENCE'",
 		}, parser)
 		require.NoError(t, err)
 		assert.Equal(t, sqlparser.SQLModeHighNotPrecedence, parseMode)
+		assert.True(t, setsSQLMode)
 	})
 
 	t.Run("mode-free settings carry no parse bits", func(t *testing.T) {
-		parseMode, err := ValidateReservedSettings([]string{"SET sql_mode = 'STRICT_TRANS_TABLES'", "set sql_safe_updates=1"}, parser)
+		parseMode, setsSQLMode, err := ValidateReservedSettings([]string{"SET sql_mode = 'STRICT_TRANS_TABLES'", "set sql_safe_updates=1"}, parser)
 		require.NoError(t, err)
 		assert.Equal(t, sqlparser.SQLMode(0), parseMode)
+		assert.True(t, setsSQLMode, "a sql_mode assignment without parse bits still puts the session in a mode")
+	})
+
+	t.Run("settings without a sql_mode assignment leave the session's mode alone", func(t *testing.T) {
+		parseMode, setsSQLMode, err := ValidateReservedSettings([]string{"set sql_safe_updates=1", "set @@global.sql_mode = 'ANSI_QUOTES'"}, parser)
+		require.NoError(t, err)
+		assert.Equal(t, sqlparser.SQLMode(0), parseMode)
+		assert.False(t, setsSQLMode)
+		_, setsSQLMode, err = ValidateReservedSettings(nil, parser)
+		require.NoError(t, err)
+		assert.False(t, setsSQLMode)
 	})
 
 	t.Run("values that cannot be judged upfront are rejected", func(t *testing.T) {
 		// the settings are applied with no read-back afterwards, so anything that
 		// cannot be judged upfront must not reach the connection
-		_, err := ValidateReservedSettings([]string{"this is not SQL"}, parser)
+		_, _, err := ValidateReservedSettings([]string{"this is not SQL"}, parser)
 		require.ErrorContains(t, err, "failed to parse connection setting: this is not SQL")
-		_, err = ValidateReservedSettings([]string{"select 1 from dual"}, parser)
+		_, _, err = ValidateReservedSettings([]string{"select 1 from dual"}, parser)
 		require.EqualError(t, err, "connection setting is not a SET statement: select 1 from dual")
-		_, err = ValidateReservedSettings([]string{"set sql_mode = concat('AN', 'SI')"}, parser)
+		_, _, err = ValidateReservedSettings([]string{"set sql_mode = concat('AN', 'SI')"}, parser)
 		require.EqualError(t, err, "non-constant sql_mode value in connection settings: set sql_mode = concat('AN', 'SI')")
 	})
 
 	t.Run("invalid sql_mode values are rejected", func(t *testing.T) {
-		_, err := ValidateReservedSettings([]string{"set sql_mode = 'BOGUS'"}, parser)
+		_, _, err := ValidateReservedSettings([]string{"set sql_mode = 'BOGUS'"}, parser)
 		require.EqualError(t, err, "Variable 'sql_mode' can't be set to the value of 'BOGUS'")
 	})
 }

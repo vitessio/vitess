@@ -50,30 +50,32 @@ import (
 // ValidateReservedSettings judges the settings a true reservation executes directly on
 // its tainted connection — the path that does not go through BuildSettingQuery — and
 // returns the parse-relevant sql_mode bits they put the session in, so the reserved
-// connection can parse later queries under them. It mirrors BuildSettingQuery's
-// sql_mode validation: every setting must parse as a SET statement carrying constant
-// sql_mode values, because the settings are applied with no verification afterwards
-// and a value that cannot be judged upfront could put the MySQL session in a mode it
-// must not run under.
-func ValidateReservedSettings(settings []string, parser *sqlparser.Parser) (sqlparser.SQLMode, error) {
-	var parseMode sqlparser.SQLMode
+// connection can parse later queries under them. setsSQLMode reports whether the
+// settings assign sql_mode at all: settings that do not leave the connection's session
+// in whatever mode it already is, which the caller must keep rather than reset. It
+// mirrors BuildSettingQuery's sql_mode validation: every setting must parse as a SET
+// statement carrying constant sql_mode values, because the settings are applied with no
+// verification afterwards and a value that cannot be judged upfront could put the MySQL
+// session in a mode it must not run under.
+func ValidateReservedSettings(settings []string, parser *sqlparser.Parser) (parseMode sqlparser.SQLMode, setsSQLMode bool, err error) {
 	for _, setting := range settings {
 		stmt, err := parser.Parse(setting)
 		if err != nil {
-			return 0, vterrors.Wrapf(err, "failed to parse connection setting: %s", setting)
+			return 0, false, vterrors.Wrapf(err, "failed to parse connection setting: %s", setting)
 		}
 		set, ok := stmt.(*sqlparser.Set)
 		if !ok {
-			return 0, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "connection setting is not a SET statement: %s", setting)
+			return 0, false, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "connection setting is not a SET statement: %s", setting)
 		}
 		if err := validateConstantSetExprsSQLMode(set.Exprs); err != nil {
-			return 0, err
+			return 0, false, err
 		}
 		if mode, sawConstant := constantSetExprsSQLModeBits(set.Exprs); sawConstant {
 			parseMode = mode
+			setsSQLMode = true
 		}
 	}
-	return parseMode, nil
+	return parseMode, setsSQLMode, nil
 }
 
 // validateConstantSetExprsSQLMode is validateSetExprsSQLMode for the settings paths,
