@@ -1447,9 +1447,11 @@ func (e *Executor) getCachedOrBuildPlan(
 // judgment a SET gives it, evaluated on the session's target shard, and the session
 // keeps the judged value, or nothing when it does not change the shard's default —
 // the same value the SET would have left behind. The expression is removed first, so
-// that it is not applied as a connection setting to the very connection judging it;
-// when the judgment fails the request fails and the session is left without a
-// sql_mode, rather than keeping a value that could never be applied.
+// that it is not applied as a connection setting to the very connection judging it.
+// When the judgment fails the request fails; the expression stays in the session for
+// the next request to evaluate, unless the failure says the value can never be applied
+// (it is invalid, or unsupported), in which case keeping it would only fail every later
+// request the same way, including the SET that could replace it.
 func (e *Executor) materializeSessionSQLMode(ctx context.Context, safeSession *econtext.SafeSession, logStats *logstats.LogStats) error {
 	value, ok := safeSession.SQLMode()
 	if !ok || sqlparser.IsSQLModeList(value) {
@@ -1463,6 +1465,7 @@ func (e *Executor) materializeSessionSQLMode(ctx context.Context, safeSession *e
 	if err != nil {
 		return vterrors.Wrapf(err, "cannot evaluate the session's sql_mode expression %s", value)
 	}
+	stored := safeSession.SystemVariables[sysvars.SQLMode.Name]
 	vcursor.SafeSession.RemoveSystemVariable(sysvars.SQLMode.Name)
 	set := &engine.SysVarReservedConn{
 		Name:              sysvars.SQLMode.Name,
@@ -1471,7 +1474,16 @@ func (e *Executor) materializeSessionSQLMode(ctx context.Context, safeSession *e
 		Expr:              value,
 		SupportSetVar:     sysvars.SQLMode.SupportSetVar,
 	}
-	return set.Execute(ctx, vcursor, evalengine.NewExpressionEnv(ctx, nil, vcursor))
+	err = set.Execute(ctx, vcursor, evalengine.NewExpressionEnv(ctx, nil, vcursor))
+	if err == nil {
+		return nil
+	}
+	switch vterrors.Code(err) {
+	case vtrpcpb.Code_INVALID_ARGUMENT, vtrpcpb.Code_UNIMPLEMENTED:
+		return err
+	}
+	safeSession.SetSystemVariable(sysvars.SQLMode.Name, stored)
+	return err
 }
 
 func buildPlanKey(ctx context.Context, vcursor *econtext.VCursorImpl, query string, setVarComment string) engine.PlanKey {

@@ -537,6 +537,26 @@ func TestSessionSQLModeExpressionSessionValue(t *testing.T) {
 		}, sqls)
 	})
 
+	t.Run("a transient failure keeps the expression for the next request", func(t *testing.T) {
+		executor, _, _, lookup, _ := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
+		session := newSession(KsTestUnsharded, "CONCAT(@@sql_mode, ',ANSI_QUOTES')")
+		lookup.MustFailCodes[vtrpcpb.Code_UNAVAILABLE] = 1
+
+		_, err := executorExecSession(t.Context(), executor, session, `select "id" from information_schema.table`, map[string]*querypb.BindVariable{})
+		require.Error(t, err)
+		assert.Equal(t, vtrpcpb.Code_UNAVAILABLE, vterrors.Code(err))
+		// the value could not be judged, but nothing says it never can be: it stays
+		assert.Equal(t, "CONCAT(@@sql_mode, ',ANSI_QUOTES')", session.SystemVariables["sql_mode"])
+
+		lookup.Queries = nil
+		lookup.SetResults([]*sqltypes.Result{judgment("STRICT_TRANS_TABLES", "STRICT_TRANS_TABLES,ANSI_QUOTES")})
+		_, err = executorExecSession(t.Context(), executor, session, `select "id" from information_schema.table`, map[string]*querypb.BindVariable{})
+		require.NoError(t, err)
+		require.Len(t, lookup.Queries, 2)
+		assert.Equal(t, "select /*+ SET_VAR(sql_mode = 'ANSI_QUOTES,STRICT_TRANS_TABLES') */ id from information_schema.`table`", lookup.Queries[1].Sql)
+		assert.Equal(t, "'ANSI_QUOTES,STRICT_TRANS_TABLES'", session.SystemVariables["sql_mode"])
+	})
+
 	t.Run("an expression evaluating to an invalid value fails the request", func(t *testing.T) {
 		executor, _, _, lookup, _ := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
 		session := newSession(KsTestUnsharded, "CONCAT('BO', 'GUS')")
