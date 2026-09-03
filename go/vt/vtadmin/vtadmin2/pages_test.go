@@ -18,8 +18,10 @@ package vtadmin2
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -34,6 +36,7 @@ import (
 type pageFakeServer struct {
 	fakeVTAdminServer
 	getClustersCalled bool
+	getKeyspacesErr   map[string]error
 }
 
 func (f *pageFakeServer) GetClusters(ctx context.Context, req *vtadminpb.GetClustersRequest) (*vtadminpb.GetClustersResponse, error) {
@@ -62,6 +65,9 @@ func TestClustersPageCallsServerAndRendersRows(t *testing.T) {
 }
 
 func (f *pageFakeServer) GetKeyspaces(ctx context.Context, req *vtadminpb.GetKeyspacesRequest) (*vtadminpb.GetKeyspacesResponse, error) {
+	if err := f.getKeyspacesErr[strings.Join(req.GetClusterIds(), ",")]; err != nil {
+		return nil, err
+	}
 	return &vtadminpb.GetKeyspacesResponse{Keyspaces: []*vtadminpb.Keyspace{
 		{
 			Cluster:  &vtadminpb.Cluster{Id: "local cluster", Name: "Local"},
@@ -71,6 +77,33 @@ func (f *pageFakeServer) GetKeyspaces(ctx context.Context, req *vtadminpb.GetKey
 			},
 		},
 	}}, nil
+}
+
+func TestLoadFormOptionsIgnoresUnrelatedClusterErrors(t *testing.T) {
+	fake := &pageFakeServer{
+		getKeyspacesErr: map[string]error{"prod": errors.New("production unavailable")},
+	}
+	s, err := NewServer(fake, Options{})
+	require.NoError(t, err)
+
+	form, err := s.loadFormOptions(httptest.NewRequest(http.MethodGet, "/", nil), "local", "")
+
+	require.NoError(t, err)
+	assert.Equal(t, "local", form.SelectedCluster)
+	assert.Len(t, form.Keyspaces, 1)
+}
+
+func TestLoadFormOptionsReturnsSelectedClusterError(t *testing.T) {
+	fake := &pageFakeServer{
+		getKeyspacesErr: map[string]error{"local": errors.New("local unavailable")},
+	}
+	s, err := NewServer(fake, Options{})
+	require.NoError(t, err)
+
+	_, err = s.loadFormOptions(httptest.NewRequest(http.MethodGet, "/", nil), "local", "")
+
+	require.Error(t, err)
+	assert.ErrorContains(t, err, "local unavailable")
 }
 
 func (f *pageFakeServer) GetKeyspace(ctx context.Context, req *vtadminpb.GetKeyspaceRequest) (*vtadminpb.Keyspace, error) {

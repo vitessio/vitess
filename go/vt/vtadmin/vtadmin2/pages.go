@@ -18,6 +18,7 @@ package vtadmin2
 
 import (
 	"net/http"
+	"sync"
 
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
 )
@@ -34,11 +35,38 @@ func (s *Server) loadFormOptions(r *http.Request, requestedCluster, requestedKey
 	clusters := clustersResp.GetClusters()
 	selectedCluster := selectedClusterID(clusters, requestedCluster, cookieValue(r, defaultClusterCookieName))
 
-	keyspacesResp, err := s.api.GetKeyspaces(ctx, &vtadminpb.GetKeyspacesRequest{})
-	if err != nil {
-		return formOptions{}, err
+	var (
+		keyspaces     []*vtadminpb.Keyspace
+		selectedError error
+		wg            sync.WaitGroup
+		mu            sync.Mutex
+	)
+	for _, cluster := range clusters {
+		wg.Add(1)
+		go func(cluster *vtadminpb.Cluster) {
+			defer wg.Done()
+
+			keyspacesResp, err := s.api.GetKeyspaces(ctx, &vtadminpb.GetKeyspacesRequest{
+				ClusterIds: []string{cluster.GetId()},
+			})
+			if err != nil {
+				if cluster.GetId() == selectedCluster {
+					mu.Lock()
+					selectedError = err
+					mu.Unlock()
+				}
+				return
+			}
+
+			mu.Lock()
+			keyspaces = append(keyspaces, keyspacesResp.GetKeyspaces()...)
+			mu.Unlock()
+		}(cluster)
 	}
-	keyspaces := keyspacesResp.GetKeyspaces()
+	wg.Wait()
+	if selectedError != nil {
+		return formOptions{}, selectedError
+	}
 
 	return formOptions{
 		Clusters:         clusters,
