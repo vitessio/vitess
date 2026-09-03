@@ -216,6 +216,19 @@ func TestWorkflowCancelKeepDataDefaultsNil(t *testing.T) {
 	assert.Nil(t, fake.workflowDeleteReq.GetRequest().KeepData)
 }
 
+func TestWorkflowCancelExplicitlyDropsData(t *testing.T) {
+	fake := &workflowActionsFakeServer{}
+	s := newWorkflowActionsTestServer(t, fake, false)
+
+	rec := postShardForm(t, s, workflowActionBase+"/cancel", url.Values{"keep_data": {"off"}})
+
+	assert.Equal(t, http.StatusSeeOther, rec.Code)
+	require.NotNil(t, fake.workflowDeleteReq)
+	keepData := fake.workflowDeleteReq.GetRequest().KeepData
+	require.NotNil(t, keepData)
+	assert.False(t, *keepData)
+}
+
 func TestWorkflowCompleteCallsMoveTablesComplete(t *testing.T) {
 	fake := &workflowActionsFakeServer{}
 	s := newWorkflowActionsTestServer(t, fake, false)
@@ -510,6 +523,15 @@ func TestWorkflowDetailRendersActions(t *testing.T) {
 }
 
 func TestWorkflowDetailReverseCompleteKeepDataChecked(t *testing.T) {
+	fake := &workflowActionsFakeServer{}
+	s := newWorkflowActionsTestServer(t, fake, false)
+
+	_, rec := renderWithCSRF(t, s, "/workflow/local/sales/users_to_sales_reverse")
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Contains(t, rec.Body.String(), `name="keep_data" value="on" checked`)
+}
+
+func TestWorkflowDetailReverseCancelKeepDataChecked(t *testing.T) {
 	fake := &workflowActionsFakeServer{}
 	s := newWorkflowActionsTestServer(t, fake, false)
 

@@ -109,17 +109,12 @@ func (s *Server) workflowCancel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var keepData *bool
-	if r.Form.Get("keep_data") == "on" {
-		keepData = new(true)
-	}
-
 	_, err := s.api.WorkflowDelete(r.Context(), &vtadminpb.WorkflowDeleteRequest{
 		ClusterId: clusterID,
 		Request: &vtctldatapb.WorkflowDeleteRequest{
 			Keyspace: keyspace,
 			Workflow: workflow,
-			KeepData: keepData,
+			KeepData: formOptionalKeepData(r.Form),
 			Shards:   r.Form["shard"],
 		},
 	})

@@ -44,7 +44,9 @@ type keyspaceActionsFakeServer struct {
 	reloadSchemasReq           *vtadminpb.ReloadSchemasRequest
 	reloadSchemasResp          *vtadminpb.ReloadSchemasResponse
 	reloadSchemasNil           bool
+	validateKeyspaceResp       *vtctldatapb.ValidateKeyspaceResponse
 	validateSchemaResp         *vtctldatapb.ValidateSchemaKeyspaceResponse
+	validateVersionResp        *vtctldatapb.ValidateVersionKeyspaceResponse
 	validateKeyspaceNil        bool
 	validateSchemaNil          bool
 	validateVersionNil         bool
@@ -65,6 +67,9 @@ func (f *keyspaceActionsFakeServer) ValidateKeyspace(ctx context.Context, req *v
 	if f.validateKeyspaceNil {
 		return nil, nil
 	}
+	if f.validateKeyspaceResp != nil {
+		return f.validateKeyspaceResp, nil
+	}
 	return &vtctldatapb.ValidateKeyspaceResponse{}, nil
 }
 
@@ -83,6 +88,9 @@ func (f *keyspaceActionsFakeServer) ValidateVersionKeyspace(ctx context.Context,
 	f.validateVersionKeyspaceReq = req
 	if f.validateVersionNil {
 		return nil, nil
+	}
+	if f.validateVersionResp != nil {
+		return f.validateVersionResp, nil
 	}
 	return &vtctldatapb.ValidateVersionKeyspaceResponse{}, nil
 }
@@ -316,6 +324,38 @@ func TestKeyspaceValidateSchemaFailureResultsDoNotFlashSuccess(t *testing.T) {
 	assert.Contains(t, rec.Body.String(), "schemas differ")
 	assert.Contains(t, rec.Body.String(), "missing table")
 	assert.Less(t, strings.Index(rec.Body.String(), "missing table"), strings.Index(rec.Body.String(), "schemas differ"))
+}
+
+func TestKeyspaceValidateFailureResultsDoNotFlashSuccess(t *testing.T) {
+	fake := &keyspaceActionsFakeServer{
+		validateKeyspaceResp: &vtctldatapb.ValidateKeyspaceResponse{
+			ResultsByShard: map[string]*vtctldatapb.ValidateShardResponse{
+				"0": {Results: []string{"tablet unavailable"}},
+			},
+		},
+	}
+	s := newKeyspaceActionsTestServer(t, fake, false)
+
+	rec := postShardForm(t, s, keyspaceActionBase+"/validate", url.Values{})
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Contains(t, rec.Body.String(), "tablet unavailable")
+}
+
+func TestKeyspaceValidateVersionFailureResultsDoNotFlashSuccess(t *testing.T) {
+	fake := &keyspaceActionsFakeServer{
+		validateVersionResp: &vtctldatapb.ValidateVersionKeyspaceResponse{
+			ResultsByShard: map[string]*vtctldatapb.ValidateShardResponse{
+				"0": {Results: []string{"version mismatch"}},
+			},
+		},
+	}
+	s := newKeyspaceActionsTestServer(t, fake, false)
+
+	rec := postShardForm(t, s, keyspaceActionBase+"/validate_version", url.Values{})
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Contains(t, rec.Body.String(), "version mismatch")
 }
 
 func TestKeyspaceReloadSchemaFailureEventsDoNotFlashSuccess(t *testing.T) {

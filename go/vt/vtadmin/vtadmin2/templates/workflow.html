@@ -170,7 +170,8 @@
       <form method="POST" action="/workflow/{{ pathEscape (clusterID .Data.GetCluster) }}/{{ pathEscape .Data.GetKeyspace }}/{{ pathEscape .Data.GetWorkflow.GetName }}/cancel" class="form-grid" data-confirm="Cancel and delete workflow {{ .Data.GetWorkflow.GetName }}? This cannot be undone.">
         <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
         <label class="checkbox-label">
-          <input type="checkbox" name="keep_data">
+          <input type="hidden" name="keep_data" value="off">
+          <input type="checkbox" name="keep_data" value="on"{{ if .Data.KeepDataChecked }} checked{{ end }}>
           Keep data
         </label>
         <button type="submit" class="button danger">Cancel workflow</button>

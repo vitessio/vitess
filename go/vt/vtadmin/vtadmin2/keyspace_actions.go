@@ -55,6 +55,10 @@ func (s *Server) keyspaceValidate(w http.ResponseWriter, r *http.Request) {
 		s.renderFormError(w, r, title, "not authorized to validate keyspace")
 		return
 	}
+	if result := validationResultsError(resp.GetResults(), resp.GetResultsByShard()); result != "" {
+		s.renderFormError(w, r, title, result)
+		return
+	}
 
 	s.redirectWithFlash(w, r, keyspaceDetailPath(clusterID, keyspace), Flash{
 		Kind:    "success",
@@ -81,7 +85,7 @@ func (s *Server) keyspaceValidateSchema(w http.ResponseWriter, r *http.Request) 
 		s.renderFormError(w, r, title, "not authorized to validate schema")
 		return
 	}
-	if result := schemaValidationError(resp); result != "" {
+	if result := validationResultsError(resp.GetResults(), resp.GetResultsByShard()); result != "" {
 		s.renderFormError(w, r, title, result)
 		return
 	}
@@ -92,12 +96,12 @@ func (s *Server) keyspaceValidateSchema(w http.ResponseWriter, r *http.Request) 
 	})
 }
 
-func schemaValidationError(resp *vtctldatapb.ValidateSchemaKeyspaceResponse) string {
-	if len(resp.GetResults()) > 0 {
-		return strings.Join(resp.GetResults(), "; ")
+func validationResultsError(results []string, resultsByShard map[string]*vtctldatapb.ValidateShardResponse) string {
+	if len(results) > 0 {
+		return strings.Join(results, "; ")
 	}
-	shards := make([]string, 0, len(resp.GetResultsByShard()))
-	for shard, result := range resp.GetResultsByShard() {
+	shards := make([]string, 0, len(resultsByShard))
+	for shard, result := range resultsByShard {
 		if result == nil || len(result.GetResults()) == 0 {
 			continue
 		}
@@ -106,7 +110,7 @@ func schemaValidationError(resp *vtctldatapb.ValidateSchemaKeyspaceResponse) str
 	sort.Strings(shards)
 	failures := make([]string, 0, len(shards))
 	for _, shard := range shards {
-		failures = append(failures, shard+": "+strings.Join(resp.GetResultsByShard()[shard].GetResults(), "; "))
+		failures = append(failures, shard+": "+strings.Join(resultsByShard[shard].GetResults(), "; "))
 	}
 	return strings.Join(failures, "; ")
 }
@@ -128,6 +132,10 @@ func (s *Server) keyspaceValidateVersion(w http.ResponseWriter, r *http.Request)
 	}
 	if resp == nil {
 		s.renderFormError(w, r, title, "not authorized to validate version")
+		return
+	}
+	if result := validationResultsError(resp.GetResults(), resp.GetResultsByShard()); result != "" {
+		s.renderFormError(w, r, title, result)
 		return
 	}
 
