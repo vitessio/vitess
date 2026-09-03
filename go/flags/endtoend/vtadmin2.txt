@@ -27,6 +27,7 @@ Flags:
       --rbac-config string                  path to an RBAC config file. must be set if passing --rbac
       --read-only                           hide vtadmin2 mutating actions in the UI
       --stderrthreshold severityFlag        logs at or above this threshold go to stderr (default 1)
+      --trusted-host strings                trusted HTTP Host header for vtadmin2 requests; may be repeated
   -v, --v Level                             log level for V logs
       --version                             version for vtadmin2
       --vtctld-grpc-ca string               the server ca to use to validate servers when connecting

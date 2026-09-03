@@ -266,6 +266,12 @@ func (api *API) ListenAndServe() error {
 	return api.serv.ListenAndServe()
 }
 
+// ListenAndServeContext is like ListenAndServe, but also begins graceful
+// shutdown when ctx is canceled.
+func (api *API) ListenAndServeContext(ctx context.Context) error {
+	return api.serv.ListenAndServeContext(ctx)
+}
+
 // ServeHTTP serves all routes matching path "/api" (see above)
 // It first processes cookies, and acts accordingly
 // Primarily, it sets up a dynamic API if HttpOpts.EnableDynamicClusters is set

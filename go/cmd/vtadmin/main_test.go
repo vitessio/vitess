@@ -17,6 +17,9 @@ limitations under the License.
 package main
 
 import (
+	"context"
+	"errors"
+	"sync/atomic"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -24,10 +27,39 @@ import (
 )
 
 func TestValidateUIOptions(t *testing.T) {
-	assert.NoError(t, validateUIOptions("react", false))
-	assert.NoError(t, validateUIOptions("vtadmin2", false))
-	assert.ErrorContains(t, validateUIOptions("unknown", false), "invalid --ui value")
-	assert.ErrorContains(t, validateUIOptions("vtadmin2", true), "not supported")
+	assert.NoError(t, validateUIOptions("react", false, nil))
+	assert.NoError(t, validateUIOptions("vtadmin2", false, []string{"localhost:14202"}))
+	require.ErrorContains(t, validateUIOptions("vtadmin2", false, nil), "--ui-trusted-host")
+	require.ErrorContains(t, validateUIOptions("unknown", false, nil), "invalid --ui value")
+	require.ErrorContains(t, validateUIOptions("vtadmin2", true, nil), "not supported")
+}
+
+func TestServeIntegratedServersGracefullyStopsAPIOnUIFailure(t *testing.T) {
+	uiErr := errors.New("UI listener failed")
+	apiStarted := make(chan struct{})
+	var apiStopped atomic.Bool
+	var uiShutdown atomic.Bool
+
+	err := serveIntegratedServers(
+		t.Context(),
+		func(ctx context.Context) error {
+			close(apiStarted)
+			<-ctx.Done()
+			apiStopped.Store(true)
+			return nil
+		},
+		func() error {
+			<-apiStarted
+			return uiErr
+		},
+		func() {
+			uiShutdown.Store(true)
+		},
+	)
+
+	require.ErrorIs(t, err, uiErr)
+	assert.True(t, apiStopped.Load())
+	assert.True(t, uiShutdown.Load())
 }
 
 func TestMainFlagRegistration(t *testing.T) {

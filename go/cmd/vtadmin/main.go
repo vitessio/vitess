@@ -25,6 +25,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -62,18 +63,19 @@ var (
 	cacheRefreshKey string
 
 	// Server-rendered UI (vtadmin2) options.
-	ui           string
-	uiAddr       string
-	uiReadOnly   bool
-	uiDebugJSON  bool
-	uiTrustProxy bool
+	ui             string
+	uiAddr         string
+	uiReadOnly     bool
+	uiDebugJSON    bool
+	uiTrustProxy   bool
+	uiTrustedHosts []string
 
 	traceCloser io.Closer = &noopCloser{}
 
 	rootCmd = &cobra.Command{
 		Use: "vtadmin",
 		PreRunE: func(cmd *cobra.Command, args []string) error {
-			if err := validateUIOptions(ui, enableDynamicClusters); err != nil {
+			if err := validateUIOptions(ui, enableDynamicClusters, uiTrustedHosts); err != nil {
 				return err
 			}
 
@@ -123,12 +125,15 @@ func startTracing(cmd *cobra.Command) {
 	traceCloser = trace.StartTracing("vtadmin")
 }
 
-func validateUIOptions(ui string, enableDynamicClusters bool) error {
+func validateUIOptions(ui string, enableDynamicClusters bool, trustedHosts []string) error {
 	if ui != "react" && ui != "vtadmin2" {
 		return fmt.Errorf("invalid --ui value %q: want react or vtadmin2", ui)
 	}
 	if ui == "vtadmin2" && enableDynamicClusters {
 		return errors.New("--enable-dynamic-clusters is not supported with --ui=vtadmin2")
+	}
+	if ui == "vtadmin2" && len(trustedHosts) == 0 {
+		return errors.New("--ui-trusted-host is required with --ui=vtadmin2")
 	}
 	return nil
 }
@@ -201,6 +206,7 @@ func run(cmd *cobra.Command, args []string) {
 			DocumentTitle:   "VTAdmin",
 			EnableDebugJSON: uiDebugJSON,
 			TrustProxyProto: uiTrustProxy,
+			TrustedHosts:    uiTrustedHosts,
 			Authenticator:   rbacConfig.GetAuthenticator(),
 		})
 		if err != nil {
@@ -209,36 +215,62 @@ func run(cmd *cobra.Command, args []string) {
 
 		httpServer := vtadmin2.NewHTTPServer(uiAddr, uiServer)
 
-		uiErr := make(chan error, 1)
 		shutdownBase := context.WithoutCancel(cmd.Context())
-		shutdownUI := func() {
+		shutdownUI := sync.OnceFunc(func() {
 			shutdownCtx, cancel := context.WithTimeout(shutdownBase, 5*time.Minute)
 			defer cancel()
 			if err := httpServer.Shutdown(shutdownCtx); err != nil && !errors.Is(err, http.ErrServerClosed) {
 				slog.Error("vtadmin2 UI shutdown failed", slog.Any("error", err))
 			}
-		}
+		})
 		servenv.OnTermSync(shutdownUI)
 
-		go func() {
+		serveUI := func() error {
 			slog.Info("vtadmin2 UI listening", slog.String("addr", uiAddr))
 			if err := httpServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-				uiErr <- err
+				return fmt.Errorf("vtadmin2 UI server failed: %w", err)
 			}
-		}()
+			return nil
+		}
 
-		defer shutdownUI()
-
-		go func() {
-			if err := <-uiErr; err != nil {
-				fatal("vtadmin2 UI server failed: ", err)
-			}
-		}()
+		bootSpan.Finish()
+		if err := serveIntegratedServers(cmd.Context(), s.ListenAndServeContext, serveUI, shutdownUI); err != nil {
+			fatal(err)
+		}
+		return
 	}
 	bootSpan.Finish()
 
 	if err := s.ListenAndServe(); err != nil {
 		fatal(err)
+	}
+}
+
+func serveIntegratedServers(
+	ctx context.Context,
+	serveAPI func(context.Context) error,
+	serveUI func() error,
+	shutdownUI func(),
+) error {
+	ctx, cancel := context.WithCancelCause(ctx)
+	defer cancel(nil)
+	defer shutdownUI()
+
+	uiErr := make(chan error, 1)
+	go func() {
+		err := serveUI()
+		if err != nil {
+			uiErr <- err
+			cancel(err)
+		}
+	}()
+
+	apiErr := serveAPI(ctx)
+	select {
+	case err := <-uiErr:
+		return err
+	default:
+		return apiErr
 	}
 }
 
@@ -260,6 +292,7 @@ func registerFlags() {
 	rootCmd.Flags().BoolVar(&uiReadOnly, "ui-read-only", false, "run the vtadmin2 UI in read-only mode (used with --ui=vtadmin2)")
 	rootCmd.Flags().BoolVar(&uiDebugJSON, "ui-debug-json", false, "enable ?format=json page data output in the vtadmin2 UI (used with --ui=vtadmin2)")
 	rootCmd.Flags().BoolVar(&uiTrustProxy, "ui-trust-proxy-https", false, "mark UI cookies Secure when X-Forwarded-Proto: https is present from a trusted HTTPS-terminating proxy (used with --ui=vtadmin2)")
+	rootCmd.Flags().StringSliceVar(&uiTrustedHosts, "ui-trusted-host", nil, "trusted HTTP Host header for vtadmin2 requests; may be repeated (used with --ui=vtadmin2)")
 
 	// Tracing flags
 	trace.RegisterFlags(rootCmd.Flags()) // defined in go/vt/trace

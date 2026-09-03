@@ -71,7 +71,7 @@ func (s *Server) beginFormAction(w http.ResponseWriter, r *http.Request, title s
 		s.renderFormError(w, r, title, err.Error())
 		return false
 	}
-	if !validCSRFToken(r) {
+	if !s.validCSRFToken(r) {
 		s.renderError(w, r, http.StatusForbidden, title, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "invalid CSRF token"))
 		return false
 	}

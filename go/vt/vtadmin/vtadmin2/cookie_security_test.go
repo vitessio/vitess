@@ -119,5 +119,19 @@ func TestCSRFRejectsCrossOriginRequest(t *testing.T) {
 	req.AddCookie(cookie)
 	req.Form = map[string][]string{"csrf_token": {cookie.Value}}
 
-	assert.False(t, validCSRFToken(req))
+	assert.False(t, s.validCSRFToken(req))
+}
+
+func TestRejectsUntrustedHostBeforeIssuingCSRFToken(t *testing.T) {
+	fake := &settingsFakeServer{}
+	s, err := NewServer(fake, Options{TrustedHosts: []string{"vtadmin.example"}})
+	require.NoError(t, err)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/settings", nil)
+	req.Host = "attacker.example"
+	s.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusMisdirectedRequest, rec.Code)
+	assert.Nil(t, findCookie(rec, csrfCookieName))
 }

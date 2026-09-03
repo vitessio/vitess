@@ -53,11 +53,28 @@ func TestValidateFlagsRejectsDynamicClusters(t *testing.T) {
 	enableRBAC = false
 	disableRBAC = true
 	enableDynamicClusters = true
-	t.Cleanup(func() { enableDynamicClusters = false })
+	uiOpts.TrustedHosts = []string{"localhost:14202"}
+	t.Cleanup(func() {
+		enableDynamicClusters = false
+		uiOpts.TrustedHosts = nil
+	})
 
 	err := validateFlags()
 
 	require.ErrorContains(t, err, "vtadmin2 does not support dynamic clusters")
+}
+
+func TestValidateFlagsRequiresTrustedHost(t *testing.T) {
+	enableRBAC = false
+	disableRBAC = true
+	uiOpts.TrustedHosts = nil
+	t.Cleanup(func() {
+		disableRBAC = false
+	})
+
+	err := validateFlags()
+
+	require.ErrorContains(t, err, "--trusted-host")
 }
 
 func TestBuildRuntimeConfigLoadsRBACOnceForAPIAndUI(t *testing.T) {

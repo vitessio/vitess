@@ -36,7 +36,7 @@ func (s *Server) createKeyspace(w http.ResponseWriter, r *http.Request) {
 		s.renderFormError(w, r, "Create keyspace", err.Error())
 		return
 	}
-	if !validCSRFToken(r) {
+	if !s.validCSRFToken(r) {
 		s.renderError(w, r, http.StatusForbidden, "Create keyspace", errors.New("invalid CSRF token"))
 		return
 	}

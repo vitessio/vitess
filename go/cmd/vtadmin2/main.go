@@ -209,6 +209,9 @@ func validateFlags() error {
 	if enableDynamicClusters {
 		return errors.New("vtadmin2 does not support dynamic clusters")
 	}
+	if len(uiOpts.TrustedHosts) == 0 {
+		return errors.New("--trusted-host is required")
+	}
 	return nil
 }
 
@@ -258,6 +261,7 @@ func registerFlags() {
 	rootCmd.Flags().StringVar(&uiOpts.DocumentTitle, "document-title", "VTAdmin2", "document title for vtadmin2 pages")
 	rootCmd.Flags().BoolVar(&uiOpts.EnableDebugJSON, "debug-json", false, "enable debug JSON views in vtadmin2 pages")
 	rootCmd.Flags().BoolVar(&uiOpts.TrustProxyProto, "cookie-secure-behind-proxy", false, "mark vtadmin2 cookies Secure when X-Forwarded-Proto: https is present from a trusted HTTPS-terminating proxy")
+	rootCmd.Flags().StringSliceVar(&uiOpts.TrustedHosts, "trusted-host", nil, "trusted HTTP Host header for vtadmin2 requests; may be repeated")
 
 	rootCmd.Flags().Var(&clusterConfigs, "cluster", "per-cluster configuration. any values here take precedence over those in -cluster-defaults or -cluster-config")
 	rootCmd.Flags().Var(&clusterFileConfig, "cluster-config", "path to a yaml cluster configuration. see clusters.example.yaml")

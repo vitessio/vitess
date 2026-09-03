@@ -59,11 +59,14 @@ func (s *Server) csrfToken(w http.ResponseWriter, r *http.Request) string {
 	return token
 }
 
-func validCSRFToken(r *http.Request) bool {
+func (s *Server) validCSRFToken(r *http.Request) bool {
+	if !s.isTrustedHost(r.Host) {
+		return false
+	}
 	origin := r.Header.Get("Origin")
 	if origin != "" {
 		originURL, err := url.Parse(origin)
-		if err != nil || originURL.Scheme == "" || originURL.Host != r.Host {
+		if err != nil || originURL.Scheme == "" || !s.isTrustedHost(originURL.Host) || !strings.EqualFold(originURL.Host, r.Host) {
 			return false
 		}
 	}

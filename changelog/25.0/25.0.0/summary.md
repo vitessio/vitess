@@ -474,8 +474,8 @@ VTAdmin now ships an experimental server-rendered UI alongside the existing Reac
 
 There are two opt-in ways to run it:
 
-- Integrated: `vtadmin --ui=vtadmin2` serves the HTML UI (default listen address `:14202`, overridable with `--ui-addr`). `--ui-read-only` hides mutating actions. `--ui-debug-json` enables `?format=json` page dumps. `--ui-trust-proxy-https` marks cookies `Secure` when `X-Forwarded-Proto: https` is present; only enable this behind a trusted HTTPS-terminating proxy, because that header is otherwise spoofable.
-- Standalone: the `vtadmin2` binary is now included in install and release packages. Example local clusters start it by default unless `SKIP_VTADMIN2` is set.
+- Integrated: `vtadmin --ui=vtadmin2` serves the HTML UI (default listen address `:14202`, overridable with `--ui-addr`) and requires at least one `--ui-trusted-host` value. `--ui-read-only` hides mutating actions. `--ui-debug-json` enables `?format=json` page dumps. `--ui-trust-proxy-https` marks cookies `Secure` when `X-Forwarded-Proto: https` is present; only enable this behind a trusted HTTPS-terminating proxy, because that header is otherwise spoofable.
+- Standalone: the `vtadmin2` binary is now included in install and release packages and requires at least one `--trusted-host` value. Example local clusters start it by default unless `SKIP_VTADMIN2` is set.
 
 The UI is experimental: it covers the operator pages and actions needed to manage a cluster without the React frontend toolchain, but it is not a complete replacement yet. RBAC still applies through the backing VTAdmin API. Creating a VDiff now requires a cluster `put` action (it previously accepted cluster `get`). Concluding an unresolved transaction also requires cluster `put` rather than a read. Reloading schema on a shard requires the schema `reload` action.
 

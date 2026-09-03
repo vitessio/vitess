@@ -78,7 +78,7 @@ func (s *Server) settingsSave(w http.ResponseWriter, r *http.Request) {
 		s.renderFormError(w, r, title, err.Error())
 		return
 	}
-	if !validCSRFToken(r) {
+	if !s.validCSRFToken(r) {
 		s.renderError(w, r, http.StatusForbidden, title, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "invalid CSRF token"))
 		return
 	}

@@ -18,6 +18,7 @@ package vtadmin2
 
 import (
 	"net/http"
+	"strings"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	vthandlers "vitess.io/vitess/go/vt/vtadmin/http/handlers"
@@ -37,14 +38,16 @@ type (
 		// HTTPS-terminating proxy. Only enable this when the UI is behind such
 		// a proxy; the header is spoofable otherwise.
 		TrustProxyProto bool
+		TrustedHosts    []string
 	}
 
 	Server struct {
-		api       vtAdminAPI
-		opts      Options
-		templates *templateSet
-		router    *http.ServeMux
-		handler   http.Handler
+		api          vtAdminAPI
+		opts         Options
+		trustedHosts map[string]struct{}
+		templates    *templateSet
+		router       *http.ServeMux
+		handler      http.Handler
 	}
 )
 
@@ -56,6 +59,14 @@ func NewServer(api vtAdminAPI, opts Options) (*Server, error) {
 	if opts.DocumentTitle == "" {
 		opts.DocumentTitle = "VTAdmin2"
 	}
+	trustedHosts := make(map[string]struct{}, len(opts.TrustedHosts))
+	for _, host := range opts.TrustedHosts {
+		host = strings.ToLower(strings.TrimSpace(host))
+		if host == "" {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "vtadmin2 trusted hosts cannot be empty")
+		}
+		trustedHosts[host] = struct{}{}
+	}
 
 	tmpl, err := parseTemplates()
 	if err != nil {
@@ -63,10 +74,11 @@ func NewServer(api vtAdminAPI, opts Options) (*Server, error) {
 	}
 
 	s := &Server{
-		api:       api,
-		opts:      opts,
-		templates: tmpl,
-		router:    http.NewServeMux(),
+		api:          api,
+		opts:         opts,
+		trustedHosts: trustedHosts,
+		templates:    tmpl,
+		router:       http.NewServeMux(),
 	}
 	s.routes()
 	s.handler = s.secureHeaders(s.router)
@@ -81,8 +93,20 @@ func (s *Server) secureHeaders(next http.Handler) http.Handler {
 		w.Header().Set("X-Frame-Options", "DENY")
 		w.Header().Set("Content-Security-Policy", "frame-ancestors 'none'")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
+		if !s.isTrustedHost(r.Host) {
+			http.Error(w, "untrusted request host", http.StatusMisdirectedRequest)
+			return
+		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+func (s *Server) isTrustedHost(host string) bool {
+	if len(s.trustedHosts) == 0 {
+		return true
+	}
+	_, ok := s.trustedHosts[strings.ToLower(host)]
+	return ok
 }
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
