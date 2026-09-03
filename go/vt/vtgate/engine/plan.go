@@ -29,6 +29,7 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vthash"
 )
 
@@ -70,6 +71,7 @@ type (
 		SetVarComment   string                // SetVarComment holds any embedded SET_VAR hints within the query.
 		Collation       collations.ID         // Collation is the character collation ID that governs string comparison.
 		SQLMode         sqlparser.SQLMode     // SQLMode holds the parse-relevant sql_mode flags the query was parsed with.
+		EvalSQLMode     evalengine.SQLMode    // EvalSQLMode holds the evaluation-relevant sql_mode flags the plan's expressions were compiled with.
 	}
 )
 
@@ -257,7 +259,7 @@ func getPlanTypeForUpsert(prim *Upsert) PlanType {
 }
 
 func (pk PlanKey) DebugString() string {
-	return fmt.Sprintf("CurrentKeyspace: %s, TabletType: %s, Destination: %s, Query: %s, SetVarComment: %s, Collation: %d, SQLMode: %d", pk.CurrentKeyspace, pk.TabletType.String(), pk.Destination, pk.Query, pk.SetVarComment, pk.Collation, pk.SQLMode)
+	return fmt.Sprintf("CurrentKeyspace: %s, TabletType: %s, Destination: %s, Query: %s, SetVarComment: %s, Collation: %d, SQLMode: %d, EvalSQLMode: %d", pk.CurrentKeyspace, pk.TabletType.String(), pk.Destination, pk.Query, pk.SetVarComment, pk.Collation, pk.SQLMode, pk.EvalSQLMode)
 }
 
 func (pk PlanKey) Hash() theine.HashKey256 {
@@ -266,6 +268,8 @@ func (pk PlanKey) Hash() theine.HashKey256 {
 	_, _ = hasher.WriteUint16(uint16(pk.TabletType))
 	_, _ = hasher.WriteUint16(uint16(pk.SQLMode))
 	_, _ = hasher.WriteUint16(uint16(pk.SQLMode >> 16))
+	_, _ = hasher.WriteUint16(uint16(pk.EvalSQLMode))
+	_, _ = hasher.WriteUint16(uint16(pk.EvalSQLMode >> 16))
 	_, _ = hasher.WriteString(pk.CurrentKeyspace)
 	_, _ = hasher.WriteString(pk.Destination)
 	_, _ = hasher.WriteString(pk.SetVarComment)

@@ -104,23 +104,23 @@ func TestPlanKey(t *testing.T) {
 
 	tests := []testCase{{
 		targetString:          "",
-		expectedPlanPrefixKey: "CurrentKeyspace: ks1, TabletType: PRIMARY, Destination: , Query: SELECT 1, SetVarComment: , Collation: 255, SQLMode: 0",
+		expectedPlanPrefixKey: "CurrentKeyspace: ks1, TabletType: PRIMARY, Destination: , Query: SELECT 1, SetVarComment: , Collation: 255, SQLMode: 0, EvalSQLMode: 3",
 	}, {
 		setVarComment:         "sEtVaRcOmMeNt",
-		expectedPlanPrefixKey: "CurrentKeyspace: ks1, TabletType: PRIMARY, Destination: , Query: SELECT 1, SetVarComment: sEtVaRcOmMeNt, Collation: 255, SQLMode: 0",
+		expectedPlanPrefixKey: "CurrentKeyspace: ks1, TabletType: PRIMARY, Destination: , Query: SELECT 1, SetVarComment: sEtVaRcOmMeNt, Collation: 255, SQLMode: 0, EvalSQLMode: 3",
 	}, {
 		targetString:          "ks1@replica",
-		expectedPlanPrefixKey: "CurrentKeyspace: ks1, TabletType: REPLICA, Destination: , Query: SELECT 1, SetVarComment: , Collation: 255, SQLMode: 0",
+		expectedPlanPrefixKey: "CurrentKeyspace: ks1, TabletType: REPLICA, Destination: , Query: SELECT 1, SetVarComment: , Collation: 255, SQLMode: 0, EvalSQLMode: 3",
 	}, {
 		targetString:          "ks1:-80",
-		expectedPlanPrefixKey: "CurrentKeyspace: ks1, TabletType: PRIMARY, Destination: DestinationShard(-80), Query: SELECT 1, SetVarComment: , Collation: 255, SQLMode: 0",
+		expectedPlanPrefixKey: "CurrentKeyspace: ks1, TabletType: PRIMARY, Destination: DestinationShard(-80), Query: SELECT 1, SetVarComment: , Collation: 255, SQLMode: 0, EvalSQLMode: 3",
 	}, {
 		targetString: "ks1[deadbeef]",
 		resolvedShard: []*srvtopo.ResolvedShard{
 			{Target: &querypb.Target{Keyspace: "ks1", Shard: "-66"}},
 			{Target: &querypb.Target{Keyspace: "ks1", Shard: "66-"}},
 		},
-		expectedPlanPrefixKey: "CurrentKeyspace: ks1, TabletType: PRIMARY, Destination: -66,66-, Query: SELECT 1, SetVarComment: , Collation: 255, SQLMode: 0",
+		expectedPlanPrefixKey: "CurrentKeyspace: ks1, TabletType: PRIMARY, Destination: -66,66-, Query: SELECT 1, SetVarComment: , Collation: 255, SQLMode: 0, EvalSQLMode: 3",
 	}}
 	cfg := econtext.VCursorConfig{
 		Collation:         collations.CollationUtf8mb4ID,
@@ -1789,6 +1789,32 @@ func TestGetPlanCacheNormalized(t *testing.T) {
 		getPlanCached(t, ctx, r, ksIDVc2.SafeSession, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false)
 		assertCacheSize(t, r.plans, 2)
 	})
+}
+
+// TestGetPlanCacheEvalSQLMode ensures sessions that differ only in an
+// evaluation-relevant sql_mode get separate plan cache entries when no SET_VAR
+// comment carries the mode into the key: the compiled plan's zero-date handling
+// depends on NO_ZERO_DATE.
+func TestGetPlanCacheEvalSQLMode(t *testing.T) {
+	r, _, _, _, ctx := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
+	r.vConfig.SetVarEnabled = false
+
+	query := "select cast(col as date) from music_user_map where id = 1"
+	zeroDateSession := econtext.NewSafeSession(&vtgatepb.Session{
+		TargetString:    KsTestUnsharded + "@unknown",
+		SystemVariables: map[string]string{"sql_mode": "'STRICT_TRANS_TABLES'"},
+	})
+	noZeroDateSession := econtext.NewSafeSession(&vtgatepb.Session{
+		TargetString:    KsTestUnsharded + "@unknown",
+		SystemVariables: map[string]string{"sql_mode": "'NO_ZERO_DATE,STRICT_TRANS_TABLES'"},
+	})
+
+	getPlanCached(t, ctx, r, zeroDateSession, query, makeComments(""), map[string]*querypb.BindVariable{}, false)
+	assertCacheSize(t, r.plans, 1)
+	getPlanCached(t, ctx, r, zeroDateSession, query, makeComments(""), map[string]*querypb.BindVariable{}, false)
+	assertCacheSize(t, r.plans, 1)
+	getPlanCached(t, ctx, r, noZeroDateSession, query, makeComments(""), map[string]*querypb.BindVariable{}, false)
+	assertCacheSize(t, r.plans, 2)
 }
 
 func TestGetPlanNormalized(t *testing.T) {

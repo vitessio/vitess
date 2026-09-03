@@ -24,6 +24,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
@@ -108,4 +109,14 @@ func TestPlanKeyHashIncludesSQLMode(t *testing.T) {
 	withRealAsFloat.SQLMode = sqlparser.SQLModeRealAsFloat
 	assert.NotEqual(t, base.Hash(), withRealAsFloat.Hash())
 	assert.NotEqual(t, withMode.Hash(), withRealAsFloat.Hash())
+
+	// NO_ZERO_DATE does not change parsing either, but the plan's compiled
+	// expressions depend on it (zero dates are rejected or allowed), so sessions
+	// that differ only in it must not share an entry.
+	withZeroDate := base
+	withZeroDate.EvalSQLMode = evalengine.ParseSQLMode("STRICT_TRANS_TABLES")
+	withNoZeroDate := base
+	withNoZeroDate.EvalSQLMode = evalengine.ParseSQLMode("NO_ZERO_DATE,STRICT_TRANS_TABLES")
+	assert.NotEqual(t, withZeroDate.Hash(), withNoZeroDate.Hash())
+	assert.NotEqual(t, base.Hash(), withNoZeroDate.Hash())
 }

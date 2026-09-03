@@ -1446,6 +1446,7 @@ func buildPlanKey(ctx context.Context, vcursor *econtext.VCursorImpl, query stri
 		SetVarComment:   setVarComment,
 		Collation:       vcursor.ConnCollation(),
 		SQLMode:         vcursor.ParseSQLMode(),
+		EvalSQLMode:     evalengine.ParseSQLMode(vcursor.SQLMode()),
 	}
 }
 
