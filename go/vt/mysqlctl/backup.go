@@ -525,3 +525,126 @@ func scanLinesToLogger(prefix string, reader io.Reader, logger logutil.Logger, d
 		logger.Warningf("error scanning lines from %s: %v", prefix, err)
 	}
 }
+<<<<<<< HEAD
+||||||| parent of 5130e1be3e (sql_mode: reject unsupported modes at every layer, neutralize them on every connection (#20883))
+
+func ExecuteBackupInitSQL(ctx context.Context, params *BackupParams) error {
+	if params == nil || params.InitSQL == nil || len(params.InitSQL.Queries) == 0 { // Nothing to do
+		return nil
+	}
+	if len(params.InitSQL.TabletTypes) == 0 {
+		return errors.New("backup init SQL queries provided but no tablet types on which to run them")
+	}
+	if !topoproto.IsTypeInList(params.TabletType, params.InitSQL.TabletTypes) {
+		params.Logger.Infof("Skipping backup init SQL queries %q as the backup tablet type %s is not in the provided list %s", strings.Join(params.InitSQL.Queries, ", "), params.TabletType, topoproto.MakeStringTypeCSV(params.InitSQL.TabletTypes))
+		return nil
+	}
+	initTimeout, ok, err := protoutil.DurationFromProto(params.InitSQL.Timeout)
+	if err != nil {
+		return vterrors.Wrapf(err, "invalid init SQL timeout value provided: %v", params.InitSQL.Timeout)
+	}
+	if !ok || initTimeout == 0 {
+		return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "backup init SQL queries provided but no timeout provided -- this is dangerous and not allowed")
+	}
+	queriesCSV := strings.Join(params.InitSQL.Queries, ", ")
+	params.Logger.Infof("Executing init SQL queries %q, with a timeout of %v and fail backup on error set to %t", queriesCSV, initTimeout, params.InitSQL.FailOnError)
+	initCtx, cancel := context.WithTimeout(ctx, initTimeout)
+	defer cancel()
+	// Disable super_read_only before executing init SQL queries, because MySQL
+	// may have been started with super-read-only enabled via my.cnf.
+	resetFunc, err := params.Mysqld.SetSuperReadOnly(initCtx, false)
+	if err != nil {
+		if sqlErr, ok := errors.AsType[*sqlerror.SQLError](err); ok && sqlErr.Number() == sqlerror.ERUnknownSystemVariable {
+			params.Logger.Infof("Server does not support super_read_only, continuing with init SQL queries: %v", err)
+		} else if params.InitSQL.FailOnError {
+			return vterrors.Wrap(err, "failed to disable super_read_only for init SQL queries")
+		} else {
+			params.Logger.Infof("Failed to disable super_read_only for init SQL queries: %v. Will still attempt init SQL queries as fail-on-error is false", err)
+		}
+	}
+	if resetFunc != nil {
+		defer func() {
+			if err := resetFunc(); err != nil {
+				params.Logger.Errorf("Failed to reset super_read_only after init SQL queries: %v", err)
+			}
+		}()
+	}
+	if err := params.Mysqld.ExecuteSuperQueryList(initCtx, params.InitSQL.Queries); err != nil {
+		if params.InitSQL.FailOnError {
+			return vterrors.Wrapf(err, "failed to execute init SQL queries %q and instructed to fail backup in this case", queriesCSV)
+		}
+		select {
+		case <-initCtx.Done():
+			params.Logger.Infof("Canceling init SQL work due to hitting the configured timeout of %v or the the backup itself having been canceled", initTimeout)
+		default:
+			params.Logger.Infof("Failed to execute init SQL queries %q: %v", queriesCSV, err)
+		}
+		params.Logger.Infof("Continuing with backup after failed init SQL work as fail-on-error is false")
+		return nil
+	}
+	params.Logger.Infof("Successfully completed init SQL queries: %q", queriesCSV)
+	return nil
+}
+=======
+
+func ExecuteBackupInitSQL(ctx context.Context, params *BackupParams) error {
+	if params == nil || params.InitSQL == nil || len(params.InitSQL.Queries) == 0 { // Nothing to do
+		return nil
+	}
+	if len(params.InitSQL.TabletTypes) == 0 {
+		return errors.New("backup init SQL queries provided but no tablet types on which to run them")
+	}
+	if !topoproto.IsTypeInList(params.TabletType, params.InitSQL.TabletTypes) {
+		params.Logger.Infof("Skipping backup init SQL queries %q as the backup tablet type %s is not in the provided list %s", strings.Join(params.InitSQL.Queries, ", "), params.TabletType, topoproto.MakeStringTypeCSV(params.InitSQL.TabletTypes))
+		return nil
+	}
+	initTimeout, ok, err := protoutil.DurationFromProto(params.InitSQL.Timeout)
+	if err != nil {
+		return vterrors.Wrapf(err, "invalid init SQL timeout value provided: %v", params.InitSQL.Timeout)
+	}
+	if !ok || initTimeout == 0 {
+		return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "backup init SQL queries provided but no timeout provided -- this is dangerous and not allowed")
+	}
+	queriesCSV := strings.Join(params.InitSQL.Queries, ", ")
+	params.Logger.Infof("Executing init SQL queries %q, with a timeout of %v and fail backup on error set to %t", queriesCSV, initTimeout, params.InitSQL.FailOnError)
+	initCtx, cancel := context.WithTimeout(ctx, initTimeout)
+	defer cancel()
+	// Disable super_read_only before executing init SQL queries, because MySQL
+	// may have been started with super-read-only enabled via my.cnf.
+	resetFunc, err := params.Mysqld.SetSuperReadOnly(initCtx, false)
+	if err != nil {
+		if sqlErr, ok := errors.AsType[*sqlerror.SQLError](err); ok && sqlErr.Number() == sqlerror.ERUnknownSystemVariable {
+			params.Logger.Infof("Server does not support super_read_only, continuing with init SQL queries: %v", err)
+		} else if params.InitSQL.FailOnError {
+			return vterrors.Wrap(err, "failed to disable super_read_only for init SQL queries")
+		} else {
+			params.Logger.Infof("Failed to disable super_read_only for init SQL queries: %v. Will still attempt init SQL queries as fail-on-error is false", err)
+		}
+	}
+	if resetFunc != nil {
+		defer func() {
+			if err := resetFunc(); err != nil {
+				params.Logger.Errorf("Failed to reset super_read_only after init SQL queries: %v", err)
+			}
+		}()
+	}
+	// The tainted variant discards the connection afterwards: operator-supplied
+	// queries may change session state (e.g. sql_mode) that must not leak into
+	// the pooled connections Vitess uses for its own SQL.
+	if err := params.Mysqld.ExecuteSuperQueryListTainted(initCtx, params.InitSQL.Queries); err != nil {
+		if params.InitSQL.FailOnError {
+			return vterrors.Wrapf(err, "failed to execute init SQL queries %q and instructed to fail backup in this case", queriesCSV)
+		}
+		select {
+		case <-initCtx.Done():
+			params.Logger.Infof("Canceling init SQL work due to hitting the configured timeout of %v or the the backup itself having been canceled", initTimeout)
+		default:
+			params.Logger.Infof("Failed to execute init SQL queries %q: %v", queriesCSV, err)
+		}
+		params.Logger.Infof("Continuing with backup after failed init SQL work as fail-on-error is false")
+		return nil
+	}
+	params.Logger.Infof("Successfully completed init SQL queries: %q", queriesCSV)
+	return nil
+}
+>>>>>>> 5130e1be3e (sql_mode: reject unsupported modes at every layer, neutralize them on every connection (#20883))

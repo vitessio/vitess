@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"strings"
 
+	"vitess.io/vitess/go/mysql/sqlmode"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/sysvars"
 	"vitess.io/vitess/go/vt/tableacl"
@@ -186,6 +187,12 @@ type Plan struct {
 
 	// NeedsReservedConn indicates at a reserved connection is needed to execute this plan
 	NeedsReservedConn bool
+
+	// VerifySQLMode is set on a PlanSet that assigns sql_mode a value that could not be
+	// judged at plan time (a non-constant expression): the executor must read back the
+	// applied value and validate it with sqlmode.Validate. Such a plan has sql_mode as
+	// its only assignment (see validateSetStatementSQLMode).
+	VerifySQLMode bool
 }
 
 // TableName returns the table name for the plan.
@@ -223,7 +230,7 @@ func Build(env *vtenv.Environment, statement sqlparser.Statement, tables map[str
 	case *sqlparser.Delete:
 		plan, err = analyzeDelete(stmt, tables)
 	case *sqlparser.Set:
-		plan = analyzeSet(stmt)
+		plan, err = analyzeSet(stmt)
 	case sqlparser.DDLStatement:
 		plan, err = analyzeDDL(stmt)
 	case *sqlparser.AlterMigration:
@@ -353,12 +360,20 @@ func BuildSettingQuery(settings []string, parser *sqlparser.Parser, rejectSubque
 		if !ok {
 			return "", "", vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG]: invalid set statement: %s", setting)
 		}
+<<<<<<< HEAD
 		// settings are applied with no table ACL check, so a subquery is refused
 		// where the ACL is enforced
 		if rejectSubqueries {
 			if err := rejectSettingSubqueries(set, setting); err != nil {
 				return "", "", err
 			}
+||||||| parent of 5130e1be3e (sql_mode: reject unsupported modes at every layer, neutralize them on every connection (#20883))
+=======
+		// settings are applied with no verification afterwards, so sql_mode values
+		// must be constants that can be judged here; vtgates only render constants
+		if err := validateConstantSetExprsSQLMode(set.Exprs); err != nil {
+			return "", "", err
+>>>>>>> 5130e1be3e (sql_mode: reject unsupported modes at every layer, neutralize them on every connection (#20883))
 		}
 		setExprs = append(setExprs, set.Exprs...)
 		for _, sExpr := range set.Exprs {
@@ -366,6 +381,7 @@ func BuildSettingQuery(settings []string, parser *sqlparser.Parser, rejectSubque
 			if sysVar.Scope != sqlparser.SessionScope && sysVar.Scope != sqlparser.NoScope {
 				return "", "", vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG]: session scope expected, got: %s", sysVar.Scope.ToString())
 			}
+<<<<<<< HEAD
 			resetExpr := sqlparser.Expr(defaultValue)
 			switch sysVar.Name.Lowered() {
 			case sysvars.ForeignKeyChecks, sysvars.UniqueChecks:
@@ -375,6 +391,20 @@ func BuildSettingQuery(settings []string, parser *sqlparser.Parser, rejectSubque
 				// checks off. Restore the global value explicitly, which is what DEFAULT
 				// means for a session variable.
 				resetExpr = &sqlparser.Variable{Scope: sqlparser.GlobalScope, Name: sysVar.Name}
+||||||| parent of 5130e1be3e (sql_mode: reject unsupported modes at every layer, neutralize them on every connection (#20883))
+			resetSetExprs = append(resetSetExprs, &sqlparser.SetExpr{Var: sysVar, Expr: lDefault})
+=======
+			resetExpr := sqlparser.Expr(lDefault)
+			if sysVar.Name.Lowered() == sysvars.SQLMode.Name {
+				// `default` would re-inherit the server's global sql_mode including its
+				// lexer modes, undoing the neutralization every Vitess-created
+				// connection starts with (see sqlmode.NeutralizeSessionQuery); restore
+				// the neutralized global instead
+				resetExpr, err = parser.ParseExpr(sqlmode.NeutralizedGlobalExpr)
+				if err != nil {
+					return "", "", vterrors.Wrapf(err, "[BUG]: failed to parse the sql_mode reset expression")
+				}
+>>>>>>> 5130e1be3e (sql_mode: reject unsupported modes at every layer, neutralize them on every connection (#20883))
 			}
 			resetSetExprs = append(resetSetExprs, &sqlparser.SetExpr{Var: sysVar, Expr: resetExpr})
 		}

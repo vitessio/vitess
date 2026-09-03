@@ -69,6 +69,7 @@ func (mysqld *Mysqld) ExecuteSuperQueryList(ctx context.Context, queryList []str
 	return mysqld.executeSuperQueryListConn(ctx, conn, queryList)
 }
 
+<<<<<<< HEAD
 // comSetOption describes the capability exchange in the log line that says
 // what a timeout killed.
 const comSetOption = "COM_SET_OPTION"
@@ -125,6 +126,23 @@ func executeQueryList(queryList []string, name string, exec func(query string) e
 		}
 	}
 	return nil
+||||||| parent of 5130e1be3e (sql_mode: reject unsupported modes at every layer, neutralize them on every connection (#20883))
+=======
+// ExecuteSuperQueryListTainted executes queries as a super user like
+// ExecuteSuperQueryList, but discards the connection afterwards instead of
+// returning it to the pool. Use it for operator-supplied SQL, whose session
+// state changes (e.g. sql_mode) must not leak into pooled connections.
+func (mysqld *Mysqld) ExecuteSuperQueryListTainted(ctx context.Context, queryList []string) error {
+	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
+	if err != nil {
+		return err
+	}
+	// A closed connection is discarded upon Recycle rather than reused.
+	defer conn.Recycle()
+	defer conn.Close()
+
+	return mysqld.executeSuperQueryListConn(ctx, conn, queryList)
+>>>>>>> 5130e1be3e (sql_mode: reject unsupported modes at every layer, neutralize them on every connection (#20883))
 }
 
 func limitString(s string, limit int) string {
