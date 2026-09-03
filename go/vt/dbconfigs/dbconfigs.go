@@ -25,6 +25,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/spf13/pflag"
 
@@ -186,6 +187,12 @@ func (c *Connector) Connect(ctx context.Context) (*mysql.Conn, error) {
 	if err != nil {
 		return nil, err
 	}
+	if params.ConnectTimeoutMs != 0 {
+		// the connect timeout covers the session setup below as well as the dial
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, time.Duration(params.ConnectTimeoutMs)*time.Millisecond)
+		defer cancel()
+	}
 	conn, err := mysql.Connect(ctx, params)
 	if err != nil {
 		return nil, err
@@ -196,7 +203,18 @@ func (c *Connector) Connect(ctx context.Context) (*mysql.Conn, error) {
 	// rules it was serialized with. Strip the lexer modes from the session's
 	// current value, preserving its runtime modes — including any the server's own
 	// connection initialization applied (see sqlmode.NeutralizeSessionQuery).
-	if _, err := conn.ExecuteFetch(sqlmode.NeutralizeSessionQuery, 0, false); err != nil {
+	//
+	// The setup stays bounded by the context like the dial and handshake are: a
+	// backend that stalls after the handshake must not hang the caller. Closing the
+	// connection when the context ends fails the pending exchange right away.
+	stop := context.AfterFunc(ctx, conn.Close)
+	_, err = conn.ExecuteFetch(sqlmode.NeutralizeSessionQuery, 0, false)
+	if !stop() {
+		// the context ended and the connection is closed, whatever the query
+		// returned; report the context error like mysql.Connect does for the dial
+		return nil, ctx.Err()
+	}
+	if err != nil {
 		conn.Close()
 		return nil, vterrors.Wrapf(err, "failed to neutralize the connection's sql_mode")
 	}
