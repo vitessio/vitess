@@ -21,6 +21,7 @@ package onlineddl
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/url"
@@ -42,6 +43,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
@@ -82,45 +84,42 @@ func (v *VReplStream) isRunning() bool {
 	return false
 }
 
-// hasError returns the stream's error state:
-//   - isTerminal: the stream is in the Error state for an unrecoverable
-//     reason (or with a legacy, unclassified terminal error) and the
-//     migration cannot proceed;
-//   - isResumable: the stream is in the Error state only because its
-//     retry window (--vreplication-max-time-to-retry-on-error) expired on
-//     a recoverable-class error, and can be resumed;
-//   - vreplError: the error, terminal or not, if any.
-//
 // vreplMessageWrapperPrefix is prepended by readVReplStream to messages
 // derived from the _vt.vreplication_log history scan.
 const vreplMessageWrapperPrefix = "vreplication: "
 
 // isRetriesExhaustedMessage reports whether a vreplication error message
-// carries the retries-exhausted (resumable) classification. The marker is
+// carries the retries-exhausted classification. The marker is
 // matched at the message boundary -- after stripping the known
 // "vreplication: " wrapper -- so that marker text embedded in the
 // underlying error (e.g. user data quoted in a MySQL duplicate-entry
 // error) cannot influence the classification.
 func isRetriesExhaustedMessage(message string) bool {
 	message = strings.TrimPrefix(message, vreplMessageWrapperPrefix)
-	// The generated class B message always continues with ":" right after
-	// the marker; requiring it keeps a legacy or externally written message
-	// that merely extends the marker's words (e.g. "... retries exhausted
-	// resources: ...") in the terminal class instead of resuming a stream
-	// whose error was never classified resumable.
+	// The generated retries-exhausted message always continues with ":"
+	// right after the marker; requiring it keeps a legacy or externally
+	// written message that merely extends the marker's words (e.g. "...
+	// retries exhausted resources: ...") in the sticky terminal class of
+	// the overrideStateFromHistory scan.
 	return strings.HasPrefix(message, vreplication.RetriesExhaustedIndicator+":")
 }
 
-func (v *VReplStream) hasError() (isTerminal bool, isResumable bool, vreplError error) {
+// hasError returns the stream's error state:
+//   - isTerminal: the stream is in the Error state and the migration cannot
+//     proceed. Any Error state is terminal: streams created by this executor
+//     pin retry-forever via a per-workflow config override (see
+//     generateInsertStatement), so a retries-exhausted park can only come
+//     from a stream created before the override existed — failing it keeps
+//     the actionable message naming the flag that parked it;
+//   - vreplError: the error, terminal or not, if any.
+func (v *VReplStream) hasError() (isTerminal bool, vreplError error) {
 	switch {
-	case v.state == binlogdatapb.VReplicationWorkflowState_Error && isRetriesExhaustedMessage(v.message):
-		return false, true, errors.New(v.message)
 	case v.state == binlogdatapb.VReplicationWorkflowState_Error:
-		return true, false, errors.New(v.message)
+		return true, errors.New(v.message)
 	case strings.Contains(strings.ToLower(v.message), "error"):
-		return false, false, errors.New(v.message)
+		return false, errors.New(v.message)
 	}
-	return false, false, nil
+	return false, nil
 }
 
 // Lag returns the vreplication lag, as determined by the higher of the transaction timestamp and the time updated.
@@ -414,9 +413,22 @@ func (v *VRepl) analyze(ctx context.Context, conn *dbconnpool.DBConnection) erro
 
 // generateInsertStatement generates the INSERT INTO _vt.replication statement that creates the vreplication workflow
 func (v *VRepl) generateInsertStatement() (string, error) {
+	// Pin the stream's retry window to 0 (retry forever) regardless of any
+	// tablet-wide --vreplication-max-time-to-retry-on-error value: a
+	// recoverable error must keep the stream retrying rather than park it in
+	// the Error state, which would fail the migration and lose all copy
+	// progress. The migration's own stale policy (staleMigrationFailMinutes,
+	// driven by time_updated liveness that pure retry loops do not advance)
+	// remains the overall no-progress bound.
+	options, err := json.Marshal(&vtctldatapb.WorkflowOptions{
+		Config: map[string]string{"vreplication-max-time-to-retry-on-error": "0s"},
+	})
+	if err != nil {
+		return "", err
+	}
 	ig := vreplication.NewInsertGenerator(binlogdatapb.VReplicationWorkflowState_Stopped, v.dbName)
 	ig.AddRow(v.workflow, v.bls, v.pos, "", "in_order:REPLICA,PRIMARY",
-		binlogdatapb.VReplicationWorkflowType_OnlineDDL, binlogdatapb.VReplicationWorkflowSubType_None, false, "")
+		binlogdatapb.VReplicationWorkflowType_OnlineDDL, binlogdatapb.VReplicationWorkflowSubType_None, false, string(options))
 
 	return ig.String(), nil
 }

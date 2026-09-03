@@ -155,9 +155,8 @@ type Executor struct {
 	// - be adopted by this executor (possible for vreplication migrations), or
 	// - be terminated
 	// The Executor auto-reviews the map and cleans up migrations thought to be running which are not running.
-	ownedRunningMigrations  sync.Map
-	vreplicationLastError   map[string]*vterrors.LastError
-	vreplicationResumeState map[string]*vreplResumeState
+	ownedRunningMigrations sync.Map
+	vreplicationLastError  map[string]*vterrors.LastError
 	// vreplicationPendingCancel records a cancellation (uuid -> message)
 	// whose durable terminal transition has not landed yet. A user-issued
 	// cancellation leaves a durable cancelled_timestamp behind, but an
@@ -186,35 +185,12 @@ type cancellableMigration struct {
 	message string
 }
 
-// vreplResumeState paces automatic resume attempts for a migration whose
-// vreplication stream parked on a resumable terminal error.
-type vreplResumeState struct {
-	attempts    int
-	lastAttempt time.Time
-	// firstParked is when the current error episode began: the first time
-	// the stream was observed parked on a resumable terminal error since
-	// the last full recovery. It bounds the episode's resume budget.
-	firstParked time.Time
-	// parkedPos and parkedRowsCopied are the stream's position and row-copy
-	// count when the episode began. A just-issued resume rewrites the
-	// stream to a clean Running row before any work happens, so an
-	// error-free observation alone does not mean recovery: forward progress
-	// past either marker does (the copy phase advances rows_copied while
-	// pos can stay fixed), as does a clean observation past
-	// vreplResumeRecoveryGrace since the last resume attempt. Without
-	// these markers every park/resume/park cycle would restamp firstParked
-	// and renew the resume budget indefinitely.
-	parkedPos        string
-	parkedRowsCopied int64
-}
-
 // resolveVReplStreamAction applies migration-level cancellation intent to the
-// stream-level verdict: a migration whose cancelled_timestamp is set but
+// stream-level verdict: for a migration whose cancelled_timestamp is set but
 // whose terminal status transition has not yet landed (the running-migrations
-// review filters on migration_status only) must never be auto-resumed —
-// every verdict converts to a cancellation, re-driving the terminal
-// transition. Without cancellation intent the verdict passes through
-// untouched.
+// review filters on migration_status only), every verdict converts to a
+// cancellation, re-driving the terminal transition. Without cancellation
+// intent the verdict passes through untouched.
 func resolveVReplStreamAction(action vreplStreamAction, cancellationRequested bool) vreplStreamAction {
 	if cancellationRequested {
 		// Any verdict yields to a pending cancellation: a surviving clean
@@ -226,49 +202,14 @@ func resolveVReplStreamAction(action vreplStreamAction, cancellationRequested bo
 	return action
 }
 
-// forgetVReplStream drops the executor's in-memory error/resume tracking for
+// forgetVReplStream drops the executor's in-memory error tracking for
 // a migration's vreplication stream. Called when the migration is cancelled
-// or retried, so a finished migration's error episode and retry window
-// cannot leak into a later RETRY of the same UUID and instantly exhaust the
-// retried migration's fresh budget. Callers must hold migrationMutex.
+// or retried, so a finished migration's retry window cannot leak into a
+// later RETRY of the same UUID and instantly exhaust the retried
+// migration's fresh window. Callers must hold migrationMutex.
 func (e *Executor) forgetVReplStream(uuid string) {
-	delete(e.vreplicationResumeState, uuid)
 	delete(e.vreplicationLastError, uuid)
 	delete(e.vreplicationPendingCancel, uuid)
-}
-
-// resumeBudgetExhausted reports whether the current error episode has
-// outlived the resume budget (staleMigrationFailMinutes since the
-// episode's first park), after which the migration is cancelled instead
-// of resumed. The budget is tracked from the first park deliberately
-// rather than through LastError: the park/resume cycle alternates the
-// stream's message between the retries-exhausted wrapper and raw retry
-// errors, which resets LastError's message-equality window every cycle
-// and would otherwise leave a persistently flapping stream unbounded.
-func resumeBudgetExhausted(state *vreplResumeState, now time.Time) bool {
-	return !state.firstParked.IsZero() && now.Sub(state.firstParked) >= staleMigrationFailMinutes*time.Minute
-}
-
-const (
-	vreplResumeInitialBackoff = 1 * time.Minute
-	vreplResumeMaxBackoff     = 15 * time.Minute
-)
-
-// vreplResumeRecoveryGrace is how long after the last resume attempt an
-// error-free observation is still treated as inconclusive rather than as
-// recovery. It must outwait every path that can delay a resumed stream's
-// error report: the synthetic clean row a resume itself writes
-// (resumeVReplicationQuery rewrites the row to a clean Running state) is
-// re-stamped by the
-// stream's own retries within a minute, but a re-STALLED applier keeps a
-// clean Running row with frozen checkpoints until the vplayer stall
-// deadline fires — so the grace is derived from that deadline, with
-// headroom for the review tick and the error write. Past the grace, a
-// clean stream is genuinely recovered even when neither its position nor
-// its row-copy count moved (a caught-up stream on an idle source advances
-// neither), while staying far below the resume budget.
-func vreplResumeRecoveryGrace() time.Duration {
-	return 2 * vreplication.VPlayerProgressDeadline()
 }
 
 // vreplStreamAction is reviewVReplStreamError's decision on what
@@ -283,31 +224,7 @@ const (
 	// vreplStreamCancel: the stream's error is terminal for the migration;
 	// cancel (fail) the migration.
 	vreplStreamCancel
-	// vreplStreamResume: the stream parked on a resumable terminal error
-	// and the episode's resume budget is not exhausted; attempt an
-	// automatic resume.
-	vreplStreamResume
 )
-
-// resumeBackoffElapsed reports whether the next automatic resume attempt
-// is due: the delay doubles per successful attempt from
-// vreplResumeInitialBackoff and caps at vreplResumeMaxBackoff. Before any
-// attempt has ever been made (lastAttempt is the zero value), the first
-// attempt is always due. maybeResumeVReplication records lastAttempt on
-// both successful and failed attempts (but only increments attempts on
-// success), so a persistently failing attempt still paces at
-// vreplResumeInitialBackoff instead of retrying on every tick.
-func resumeBackoffElapsed(state *vreplResumeState, now time.Time) bool {
-	if state.lastAttempt.IsZero() {
-		return true
-	}
-	delay := vreplResumeInitialBackoff
-	for i := 1; i < state.attempts && delay < vreplResumeMaxBackoff; i++ {
-		delay *= 2
-	}
-	delay = min(delay, vreplResumeMaxBackoff)
-	return now.Sub(state.lastAttempt) >= delay
-}
 
 // pendingMigration carries both the UUID and migration context of a pending migration.
 // The context is required so that in-order completion logic can be scoped per-context:
@@ -432,7 +349,6 @@ func (e *Executor) Open() error {
 		return true
 	})
 	e.vreplicationLastError = make(map[string]*vterrors.LastError)
-	e.vreplicationResumeState = make(map[string]*vreplResumeState)
 	e.vreplicationPendingCancel = make(map[string]string)
 
 	if sidecar.GetName() != sidecar.DefaultName {
@@ -1857,9 +1773,9 @@ func (e *Executor) CancelMigration(ctx context.Context, uuid string, message str
 	// not one: the running-migrations review filters on migration_status
 	// only, so until the deferred transition below lands, the migration
 	// stays under review and must keep its tracking (with its unfulfilled
-	// cancellation intent blocking auto-resume, see
-	// resolveVReplStreamAction). The transition runs on a bounded,
-	// non-cancellable context: the caller's context may have been exhausted
+	// cancellation intent converting every stream verdict into a
+	// cancellation, see resolveVReplStreamAction). The transition runs on a
+	// bounded, non-cancellable context: the caller's context may have been exhausted
 	// by terminateMigration, and reusing it could strand a cancelled-intent
 	// migration in 'running'.
 	defer func() {
@@ -3589,115 +3505,20 @@ func getInOrderCompletionPendingCount(onlineDDL *schema.OnlineDDL, pendingMigrat
 	return pendingCount
 }
 
-// maybeResumeVReplication restarts the vreplication stream backing a
-// migration that parked on a resumable terminal error (see
-// vreplication.RetriesExhaustedIndicator), pacing attempts with
-// resumeBackoffElapsed. The overall budget for a continuous error episode
-// is resumeBudgetExhausted, checked by the caller: once the episode
-// outlives staleMigrationFailMinutes, the migration is cancelled instead
-// of resumed.
-//
-// The resume is attempted before any bookkeeping is updated: state.attempts
-// (which both paces the backoff via resumeBackoffElapsed and numbers the
-// "resuming automatically, attempt N" message) and the migration message
-// are only touched once the resume has actually been issued. On failure
-// (GetTablet or the vreplicationExec itself erroring), state.lastAttempt is
-// still updated — so a persistently failing resume paces at
-// vreplResumeInitialBackoff rather than hot-looping on every check — but
-// attempts is left untouched and the migration message is not rewritten,
-// since no resume was actually issued to report.
-func (e *Executor) maybeResumeVReplication(ctx context.Context, uuid string, s *VReplStream, state *vreplResumeState) {
-	if !resumeBackoffElapsed(state, time.Now()) {
-		return
-	}
-	// The caller holds migrationMutex, and the migration-check tick hands us
-	// an unbounded context: bound the topology lookup and the resume
-	// statement so a stalled backend cannot retain the mutex indefinitely.
-	ctx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
-	defer cancel()
-	// Every paced attempt — issued or failed — is active management of the
-	// migration: refresh its liveness so the stale reaper, which runs right
-	// after this review in the same tick, cannot fail a migration whose
-	// episode is still within its budget (with a retry window at or above
-	// the stale threshold, the liveness clock is already expired at the
-	// very first park; a failed attempt is recorded for a paced retry that
-	// the reaper must not preempt). The stamp is budget-gated: attempts
-	// stop when the episode's budget expires, so the reaper's authority
-	// returns as soon as the executor stops managing the stream. The write
-	// gets its own bounded, non-cancellable context: the resume RPC shares
-	// this function's context and may exhaust it, and a stream already
-	// flipped to Running must not be left reaper-eligible because the
-	// bookkeeping ran out of deadline.
-	tctx, tcancel := context.WithTimeout(context.WithoutCancel(ctx), topo.RemoteOperationTimeout)
-	defer tcancel()
-	if err := e.updateMigrationTimestamp(tctx, "liveness_timestamp", uuid); err != nil {
-		log.Error("Online DDL: failed to refresh migration liveness for vreplication resume attempt",
-			slog.String("uuid", uuid), slog.String("tablet", e.TabletAliasString()), slog.Any("error", err))
-	}
-	tablet, err := e.ts.GetTablet(ctx, e.tabletAlias)
-	if err != nil {
-		state.lastAttempt = time.Now()
-		log.Error("Online DDL: failed to get tablet for vreplication resume",
-			slog.String("uuid", uuid), slog.String("tablet", e.TabletAliasString()), slog.Any("error", err))
-		return
-	}
-	res, err := e.vreplicationExec(ctx, tablet.Tablet, resumeVReplicationQuery(s.id, s.message))
-	if err != nil {
-		state.lastAttempt = time.Now()
-		log.Error("Online DDL: failed to resume vreplication stream",
-			slog.String("uuid", uuid), slog.String("tablet", e.TabletAliasString()), slog.Int64("stream_id", int64(s.id)), slog.Any("error", err))
-		return
-	}
-	if res.RowsAffected == 0 {
-		// The stream is no longer in the state the resume decision was
-		// based on: an operator stopped it, or it transitioned on its own,
-		// between our observation and this statement. The decision is
-		// stale; do not count it as an attempt or rewrite the message.
-		state.lastAttempt = time.Now()
-		log.Warn("Online DDL: vreplication stream no longer parked on the observed resumable error; skipping resume",
-			slog.String("uuid", uuid), slog.String("tablet", e.TabletAliasString()), slog.Int64("stream_id", int64(s.id)))
-		return
-	}
-	state.attempts++
-	state.lastAttempt = time.Now()
-	if err := e.updateMigrationMessage(ctx, uuid,
-		fmt.Sprintf("vreplication stream errored but is resumable; resuming automatically, attempt %d: %s", state.attempts, s.message)); err != nil {
-		// The resume itself succeeded; only the operator-facing record of
-		// it failed. Log rather than fail, so the attempt is at least
-		// traceable in the tablet log.
-		log.Error("Online DDL: failed to record automatic vreplication resume in the migration message",
-			slog.String("uuid", uuid), slog.String("tablet", e.TabletAliasString()), slog.Int64("stream_id", int64(s.id)), slog.Any("error", err))
-	}
-}
-
-// resumeVReplicationQuery returns the statement resuming a stream parked on a
-// resumable terminal error, conditional on the row still holding the exact
-// state and message the resume decision was based on. An unconditional update
-// would silently flip a stream an operator
-// stopped in the meantime back to Running and erase the operator's message;
-// with the condition, such a race yields zero affected rows and the caller
-// treats the decision as stale.
-func resumeVReplicationQuery(id int32, observedMessage string) string {
-	return fmt.Sprintf("update _vt.vreplication set state=%s, message='' where id=%d and state=%s and message=%s",
-		sqltypes.EncodeStringSQL(binlogdatapb.VReplicationWorkflowState_Running.String()),
-		id,
-		sqltypes.EncodeStringSQL(binlogdatapb.VReplicationWorkflowState_Error.String()),
-		sqltypes.EncodeStringSQL(observedMessage))
-}
-
 // reviewVReplStreamError decides what reviewRunningMigrations should do
 // about the error state (if any) of a running migration's vreplication
 // stream. Many errors are recoverable, and we do not wish to fail on first
 // sight: transient errors are recorded into the migration's LastError and
 // only cancel the migration once the same error has persisted past the
-// LastError retry window. A stream parked on a resumable terminal error
-// (class B, vreplication.RetriesExhaustedIndicator) is resumed rather than
-// cancelled, until the error episode outlives the resume budget
-// (resumeBudgetExhausted); an unrecoverable terminal error (class A, or the
-// legacy undifferentiated marker) cancels immediately. When the stream
-// reports no error, any tracked resume episode ends so a future one starts
-// fresh.
-func (e *Executor) reviewVReplStreamError(uuid string, s *VReplStream, now time.Time) vreplStreamAction {
+// LastError retry window. A stream in the Error state is terminal for the
+// migration and cancels it immediately: streams created by this executor
+// pin retry-forever via a per-workflow config override (see
+// generateInsertStatement), so recoverable errors keep the stream retrying
+// at the controller instead of parking it in the Error state. The
+// executor's stale-migration policy remains the overall no-progress bound —
+// liveness is driven by time_updated, which pure retry loops do not
+// advance.
+func (e *Executor) reviewVReplStreamError(uuid string, s *VReplStream) vreplStreamAction {
 	if _, ok := e.vreplicationLastError[uuid]; !ok {
 		e.vreplicationLastError[uuid] = vterrors.NewLastError(
 			fmt.Sprintf("Online DDL migration %v", uuid),
@@ -3705,96 +3526,10 @@ func (e *Executor) reviewVReplStreamError(uuid string, s *VReplStream, now time.
 		)
 	}
 	lastError := e.vreplicationLastError[uuid]
-	isTerminal, isResumable, vreplError := s.hasError()
+	isTerminal, vreplError := s.hasError()
 	lastError.Record(vreplError)
-	// Forward progress past the parked position or row-copy checkpoint (the
-	// copy phase advances rows_copied while pos stays fixed) ends the
-	// episode no matter what the row currently reports: a resumed stream
-	// can advance and then hit a NEW error before any error-free
-	// observation lands, and that new error deserves a fresh episode —
-	// re-parking below re-creates one from the current row — rather than
-	// inheriting the previous episode's nearly-spent budget.
-	if state, ok := e.vreplicationResumeState[uuid]; ok &&
-		(s.pos != state.parkedPos || s.rowsCopied > state.parkedRowsCopied) {
-		delete(e.vreplicationResumeState, uuid)
-		// The LastError retry window must restart with the episode: the
-		// same error text recurring after real progress is a new problem,
-		// not a continuation, and the inherited window's firstSeen would
-		// cancel the migration (!ShouldRetry) before the fresh resume
-		// budget could matter.
-		lastError = vterrors.NewLastError(
-			fmt.Sprintf("Online DDL migration %v", uuid),
-			staleMigrationFailMinutes*time.Minute,
-		)
-		e.vreplicationLastError[uuid] = lastError
-		lastError.Record(vreplError)
-	}
-	if vreplError == nil {
-		// The stream reports no error — but a just-issued resume looks
-		// exactly like this (the resume rewrites the row to a clean
-		// Running state) before the stream has done any work, and so does EVERY
-		// internal retry attempt (each one re-enters setState(Running, "")
-		// until the error lands again), so an error-free observation alone
-		// must not end the episode: sampling any such window would renew
-		// the resume budget indefinitely. With progress handled above, the
-		// remaining recovery signal is a TRULY CLEAN observation — hasError
-		// treats an unrecognized non-empty message as no error, but such a
-		// message means the stream is mid-retry, not recovered — in the
-		// Running state, past the recovery grace of the last resume
-		// attempt, AND showing recent liveness: only a functioning applier
-		// advances time_updated (heartbeats, position updates — non-Error
-		// setState does not stamp it), so a clean row still carrying the
-		// old park's time_updated is a retry window, not recovery. That
-		// leaves a healthy caught-up stream on an idle source, whose
-		// heartbeats keep time_updated fresh while neither checkpoint
-		// moves. The grace is derived from the vplayer stall deadline and
-		// only bounds the Running (replication) phase: a Copying stream can
-		// hold a clean row through a copy attempt blocked for up to the
-		// copy-phase duration, so there recovery is demonstrated only by
-		// advancing checkpoints.
-		state, ok := e.vreplicationResumeState[uuid]
-		// Throttle updates stamp time_updated and time_throttled together
-		// without any replication having succeeded, so equal stamps mean
-		// the latest liveness is throttle-driven — deliberate pausing, not
-		// demonstrated health; a heartbeat after the throttle advances
-		// time_updated past time_throttled.
-		recovered := !ok ||
-			(s.message == "" &&
-				s.state == binlogdatapb.VReplicationWorkflowState_Running &&
-				now.Sub(time.Unix(s.timeUpdated, 0)) < vreplResumeRecoveryGrace() &&
-				s.timeUpdated > s.timeThrottled &&
-				(state.lastAttempt.IsZero() ||
-					now.Sub(state.lastAttempt) >= vreplResumeRecoveryGrace()))
-		if recovered {
-			delete(e.vreplicationResumeState, uuid)
-		}
-	}
-	switch {
-	case isTerminal || !lastError.ShouldRetry():
+	if isTerminal || !lastError.ShouldRetry() {
 		return vreplStreamCancel
-	case isResumable:
-		state, ok := e.vreplicationResumeState[uuid]
-		if !ok {
-			state = &vreplResumeState{parkedPos: s.pos, parkedRowsCopied: s.rowsCopied}
-			e.vreplicationResumeState[uuid] = state
-		}
-		if state.firstParked.IsZero() {
-			state.firstParked = now
-			// The row's time_updated stops advancing when the stream parks
-			// and, unlike this in-memory state, survives executor restarts:
-			// seed the episode from it, so a tablet restart or failover
-			// during a failing migration does not grant the parked stream a
-			// fresh resume budget on every reopen.
-			if s.timeUpdated > 0 {
-				if parked := time.Unix(s.timeUpdated, 0); parked.Before(state.firstParked) {
-					state.firstParked = parked
-				}
-			}
-		}
-		if resumeBudgetExhausted(state, now) {
-			return vreplStreamCancel
-		}
-		return vreplStreamResume
 	}
 	return vreplStreamNoAction
 }
@@ -3897,11 +3632,10 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 					return nil
 				}
 				action := resolveVReplStreamAction(
-					e.reviewVReplStreamError(uuid, s, time.Now()),
+					e.reviewVReplStreamError(uuid, s),
 					cancellationRequested,
 				)
-				switch action {
-				case vreplStreamCancel:
+				if action == vreplStreamCancel {
 					// A recorded pending intent carries the original
 					// cancellation reason; the stream stop rewrites only the
 					// state, so s.message can still be a stale pre-stop error
@@ -3919,17 +3653,6 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 					// the migration over and complete it before
 					// cancelMigrations processes the queue.
 					return nil
-				case vreplStreamResume:
-					// A parked-resumable migration is live work for its
-					// whole recovery episode — it can stay in 'running'
-					// for the full resume budget — but its Error snapshot
-					// skips the normal adoption below, and
-					// runNextMigration runs before the next review: adopt
-					// it here, regardless of whether this tick's paced
-					// attempt is issued or succeeds, so the scheduler's
-					// conflict and concurrency checks see it.
-					e.ownedRunningMigrations.Store(uuid, onlineDDL)
-					e.maybeResumeVReplication(ctx, uuid, s, e.vreplicationResumeState[uuid])
 				}
 				if !s.isRunning() {
 					log.Info(fmt.Sprintf("migration %s in 'running' state but vreplication state is '%s'", uuid, s.state.String()))

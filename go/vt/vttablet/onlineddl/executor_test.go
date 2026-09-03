@@ -36,7 +36,6 @@ import (
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/schema"
-	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -612,24 +611,6 @@ type fakeTabletManagerClient struct {
 
 func (fakeTabletManagerClient) Close() {}
 
-// resumingTabletManagerClient reports every VReplicationExec call as having
-// affected one row, simulating a successfully issued stream resume. When
-// cancel is set it is invoked before returning, simulating a resume that
-// succeeds just as the shared bounded context expires.
-type resumingTabletManagerClient struct {
-	tmclient.TabletManagerClient
-	cancel context.CancelFunc
-}
-
-func (c *resumingTabletManagerClient) VReplicationExec(ctx context.Context, tablet *topodatapb.Tablet, query string) (*querypb.QueryResult, error) {
-	if c.cancel != nil {
-		c.cancel()
-	}
-	return &querypb.QueryResult{RowsAffected: 1}, nil
-}
-
-func (resumingTabletManagerClient) Close() {}
-
 // stopFailingTabletManagerClient fails every VReplicationExec call,
 // simulating a stream stop RPC failure during migration termination.
 type stopFailingTabletManagerClient struct {
@@ -752,41 +733,6 @@ func TestMigrationStatusTransitionsUpdateMetrics(t *testing.T) {
 	}
 }
 
-// TestResumeBackoffElapsed tests the pacing of automatic vreplication
-// stream resume attempts: the first attempt is immediate, subsequent
-// delays double from the initial backoff, and the delay caps at the
-// maximum backoff regardless of attempt count.
-func TestResumeBackoffElapsed(t *testing.T) {
-	now := time.Now()
-	state := &vreplResumeState{}
-	assert.True(t, resumeBackoffElapsed(state, now), "first attempt must be immediate")
-
-	state = &vreplResumeState{attempts: 1, lastAttempt: now.Add(-30 * time.Second)}
-	assert.False(t, resumeBackoffElapsed(state, now), "1st retry before initial backoff")
-	state.lastAttempt = now.Add(-vreplResumeInitialBackoff)
-	assert.True(t, resumeBackoffElapsed(state, now), "1st retry at initial backoff")
-
-	// A resume attempt that failed before ever succeeding (e.g. GetTablet kept
-	// erroring) still records lastAttempt but does not increment attempts (see
-	// maybeResumeVReplication). attempts==0 must not bypass pacing in that case,
-	// or a persistently failing attempt would hot-loop on every tick.
-	state = &vreplResumeState{attempts: 0, lastAttempt: now.Add(-30 * time.Second)}
-	assert.False(t, resumeBackoffElapsed(state, now), "failed 1st attempt before initial backoff")
-	state.lastAttempt = now.Add(-vreplResumeInitialBackoff)
-	assert.True(t, resumeBackoffElapsed(state, now), "failed 1st attempt at initial backoff")
-
-	state = &vreplResumeState{attempts: 3, lastAttempt: now.Add(-2 * vreplResumeInitialBackoff)}
-	assert.False(t, resumeBackoffElapsed(state, now), "3rd retry doubles twice")
-	state.lastAttempt = now.Add(-4 * vreplResumeInitialBackoff)
-	assert.True(t, resumeBackoffElapsed(state, now))
-
-	// Far beyond the doubling range the delay must cap, not overflow.
-	state = &vreplResumeState{attempts: 500, lastAttempt: now.Add(-vreplResumeMaxBackoff)}
-	assert.True(t, resumeBackoffElapsed(state, now), "delay caps at max backoff")
-	state.lastAttempt = now.Add(-vreplResumeMaxBackoff + time.Second)
-	assert.False(t, resumeBackoffElapsed(state, now))
-}
-
 // TestOverrideStateFromHistory tests readVReplStream's _vt.vreplication_log
 // history-scan decision: a class-B (retries-exhausted) historical row must
 // not force the live state back to Error once the stream is actually
@@ -875,48 +821,16 @@ func TestOverrideStateFromHistory(t *testing.T) {
 	}
 }
 
-// TestResumeBudgetExhausted tests the explicit per-episode resume budget:
-// a migration whose stream keeps parking on resumable errors is only
-// resumed for staleMigrationFailMinutes after the episode's first park,
-// after which it is cancelled. The budget is tracked from the first park
-// timestamp, deliberately independent of LastError's message-equality
-// window: the park/resume cycle alternates the stream's message between
-// the retries-exhausted wrapper and raw retry errors, which resets that
-// window every cycle and would otherwise leave a flapping stream
-// unbounded.
-func TestResumeBudgetExhausted(t *testing.T) {
-	now := time.Now()
-
-	state := &vreplResumeState{}
-	assert.False(t, resumeBudgetExhausted(state, now), "no park recorded yet")
-
-	state = &vreplResumeState{firstParked: now.Add(-time.Minute)}
-	assert.False(t, resumeBudgetExhausted(state, now), "just parked")
-
-	state = &vreplResumeState{firstParked: now.Add(-staleMigrationFailMinutes*time.Minute + time.Minute)}
-	assert.False(t, resumeBudgetExhausted(state, now), "under the budget")
-
-	state = &vreplResumeState{firstParked: now.Add(-staleMigrationFailMinutes * time.Minute)}
-	assert.True(t, resumeBudgetExhausted(state, now), "budget exhausted")
-}
-
-// TestReviewVReplStreamError tests the executor's per-stream decision in
-// reviewRunningMigrations: a retries-exhausted (class B) stream is resumed
-// rather than cancelled, an unrecoverable (class A) stream is cancelled, and
-// a resumable stream whose error episode has outlived the resume budget is
-// cancelled. The lifecycle subtest walks a single migration through
-// park -> resume -> budget exhaustion -> recovery -> fresh episode.
 // TestForgetVReplStreamOrdering pins WHEN the cleanup runs, not just what it
 // deletes: a no-op RETRY (against a migration that is not failed/cancelled)
 // and a cancellation that fails before its durable transition must both
-// leave an active migration's recovery tracking intact — clearing it would
-// grant the still-running stream a fresh error episode and resume budget.
+// leave an active migration's error tracking intact — clearing it would
+// grant the still-running stream a fresh retry window.
 func TestForgetVReplStreamOrdering(t *testing.T) {
 	uuid := "1cbcd662_8ed6_11ee_bc8f_0a43f95f28a3"
 	newTrackedExecutor := func(execQuery func(ctx context.Context, query string) (*sqltypes.Result, error)) *Executor {
 		e := &Executor{
 			vreplicationLastError:     map[string]*vterrors.LastError{uuid: vterrors.NewLastError("test", time.Minute)},
-			vreplicationResumeState:   map[string]*vreplResumeState{uuid: {firstParked: time.Now()}},
 			vreplicationPendingCancel: map[string]string{},
 			tabletAlias:               &topodatapb.TabletAlias{Cell: "cell", Uid: 1},
 			ticks:                     timer.NewTimer(time.Hour),
@@ -932,9 +846,8 @@ func TestForgetVReplStreamOrdering(t *testing.T) {
 		})
 		_, err := e.RetryMigration(t.Context(), uuid)
 		require.NoError(t, err)
-		assert.Contains(t, e.vreplicationResumeState, uuid,
-			"a RETRY that requeued nothing must not clear an active migration's episode")
-		assert.Contains(t, e.vreplicationLastError, uuid)
+		assert.Contains(t, e.vreplicationLastError, uuid,
+			"a RETRY that requeued nothing must not clear an active migration's retry window")
 	})
 	t.Run("actual retry clears tracking", func(t *testing.T) {
 		e := newTrackedExecutor(func(ctx context.Context, query string) (*sqltypes.Result, error) {
@@ -942,15 +855,14 @@ func TestForgetVReplStreamOrdering(t *testing.T) {
 		})
 		_, err := e.RetryMigration(t.Context(), uuid)
 		require.NoError(t, err)
-		assert.NotContains(t, e.vreplicationResumeState, uuid)
 		assert.NotContains(t, e.vreplicationLastError, uuid)
 	})
 	t.Run("cancellation whose terminal transition fails retains tracking", func(t *testing.T) {
 		// An internal (non-user) cancellation has no durable
 		// cancelled_timestamp: the deferred failMigration IS the terminal
-		// transition. If it fails, the migration and its parked stream stay
-		// active, and erased tracking would let the next review resume a
-		// stream that was just cancelled.
+		// transition. If it fails, the migration and its stream stay
+		// active, and erased tracking would grant the still-active stream
+		// a fresh retry window.
 		e := newTrackedExecutor(func(ctx context.Context, query string) (*sqltypes.Result, error) {
 			if strings.HasPrefix(strings.TrimSpace(strings.ToUpper(query)), "UPDATE") {
 				return nil, errors.New("backend unavailable")
@@ -960,9 +872,8 @@ func TestForgetVReplStreamOrdering(t *testing.T) {
 				uuid+"|running"), nil
 		})
 		_, _ = e.CancelMigration(t.Context(), uuid, "internal cancel", false)
-		assert.Contains(t, e.vreplicationResumeState, uuid,
+		assert.Contains(t, e.vreplicationLastError, uuid,
 			"tracking must survive a cancellation whose terminal transition failed")
-		assert.Contains(t, e.vreplicationLastError, uuid)
 		assert.Equal(t, "internal cancel", e.vreplicationPendingCancel[uuid],
 			"an internal cancellation whose transition failed must record a pending intent: a successful stop leaves no stream verdict to re-trigger it")
 		_, owned := e.ownedRunningMigrations.Load(uuid)
@@ -985,9 +896,8 @@ func TestForgetVReplStreamOrdering(t *testing.T) {
 		})
 		_, err := e.CancelMigration(t.Context(), uuid, "internal cancel", false)
 		require.NoError(t, err)
-		assert.NotContains(t, e.vreplicationResumeState, uuid,
+		assert.NotContains(t, e.vreplicationLastError, uuid,
 			"a successfully cancelled migration must not retain stream tracking")
-		assert.NotContains(t, e.vreplicationLastError, uuid)
 		assert.NotContains(t, e.vreplicationPendingCancel, uuid)
 	})
 	t.Run("user cancellation with failed transition retains tracking", func(t *testing.T) {
@@ -995,7 +905,7 @@ func TestForgetVReplStreamOrdering(t *testing.T) {
 		// running-migrations review only filters on migration_status, so
 		// until the status update lands the migration remains eligible for
 		// review and its tracking must survive — the cancellation intent
-		// (not the cleanup) is what blocks auto-resume in the meantime.
+		// is what keeps re-driving the terminal transition in the meantime.
 		e := newTrackedExecutor(func(ctx context.Context, query string) (*sqltypes.Result, error) {
 			if strings.Contains(query, "SET cancelled_timestamp=NOW(6)") {
 				return &sqltypes.Result{RowsAffected: 1}, nil
@@ -1008,9 +918,8 @@ func TestForgetVReplStreamOrdering(t *testing.T) {
 				uuid+"|running"), nil
 		})
 		_, _ = e.CancelMigration(t.Context(), uuid, "user cancel", true)
-		assert.Contains(t, e.vreplicationResumeState, uuid,
+		assert.Contains(t, e.vreplicationLastError, uuid,
 			"tracking must survive until the terminal status transition actually lands")
-		assert.Contains(t, e.vreplicationLastError, uuid)
 		_, owned := e.ownedRunningMigrations.Load(uuid)
 		assert.True(t, owned,
 			"a still-running migration under pending cancellation must stay owned")
@@ -1044,9 +953,8 @@ func TestForgetVReplStreamOrdering(t *testing.T) {
 			return res, err
 		}
 		_, _ = e.CancelMigration(expiredCtx, uuid, "internal cancel", false)
-		assert.NotContains(t, e.vreplicationResumeState, uuid,
+		assert.NotContains(t, e.vreplicationLastError, uuid,
 			"the transition must succeed on its own bounded context and clear the tracking")
-		assert.NotContains(t, e.vreplicationLastError, uuid)
 	})
 	t.Run("unconfirmed termination defers the terminal transition", func(t *testing.T) {
 		// terminateMigration can fail before the stream is stopped (its
@@ -1077,7 +985,6 @@ func TestForgetVReplStreamOrdering(t *testing.T) {
 		require.Error(t, err)
 		assert.False(t, terminalTransitionAttempted,
 			"the durable terminal transition must not run when termination was not confirmed")
-		assert.Contains(t, e.vreplicationResumeState, uuid)
 		assert.Contains(t, e.vreplicationLastError, uuid)
 		_, owned := e.ownedRunningMigrations.Load(uuid)
 		assert.True(t, owned,
@@ -1120,7 +1027,6 @@ func TestForgetVReplStreamOrdering(t *testing.T) {
 		require.ErrorContains(t, err, "stop failed")
 		assert.False(t, terminalTransitionAttempted,
 			"the durable terminal transition must not run when the stream stop failed")
-		assert.Contains(t, e.vreplicationResumeState, uuid)
 		assert.Contains(t, e.vreplicationLastError, uuid)
 		_, owned := e.ownedRunningMigrations.Load(uuid)
 		assert.True(t, owned,
@@ -1140,9 +1046,8 @@ func TestForgetVReplStreamOrdering(t *testing.T) {
 		})
 		_, err := e.CancelMigration(t.Context(), uuid, "test cancel", true)
 		require.Error(t, err)
-		assert.Contains(t, e.vreplicationResumeState, uuid,
-			"a cancellation that failed before any durable transition must not clear the episode")
-		assert.Contains(t, e.vreplicationLastError, uuid)
+		assert.Contains(t, e.vreplicationLastError, uuid,
+			"a cancellation that failed before any durable transition must not clear the retry window")
 		// The intent write failed before the deferred cleanup was even
 		// registered: no cancellation was accepted, so no pending intent
 		// may exist — a record here would make the scheduler fail a
@@ -1162,7 +1067,6 @@ func TestTerminallyFailMigrationMetric(t *testing.T) {
 	newMetricExecutor := func(execQuery func(ctx context.Context, query string) (*sqltypes.Result, error)) *Executor {
 		e := &Executor{
 			vreplicationLastError:     map[string]*vterrors.LastError{},
-			vreplicationResumeState:   map[string]*vreplResumeState{},
 			vreplicationPendingCancel: map[string]string{},
 			tabletAlias:               &topodatapb.TabletAlias{Cell: "cell", Uid: 1},
 			ticks:                     timer.NewTimer(time.Hour),
@@ -1214,7 +1118,6 @@ func TestReviewRunningMigrationsNilStreamCancellation(t *testing.T) {
 			env:                       env,
 			tabletAlias:               alias,
 			vreplicationLastError:     map[string]*vterrors.LastError{},
-			vreplicationResumeState:   map[string]*vreplResumeState{},
 			vreplicationPendingCancel: map[string]string{},
 			ticks:                     timer.NewTimer(time.Hour),
 			lagThrottler: throttle.NewThrottler(env, nil, nil, alias, nil,
@@ -1327,16 +1230,13 @@ func TestReviewRunningMigrationsNilStreamCancellation(t *testing.T) {
 
 // TestResolveVReplStreamAction pins that a migration carrying an unfulfilled
 // cancellation intent (cancelled_timestamp written, terminal transition not
-// yet landed) is never auto-resumed: the resume verdict is converted into a
-// cancellation, which re-drives the terminal transition. All other verdicts
-// pass through untouched.
+// yet landed) always converts its verdict into a cancellation, which
+// re-drives the terminal transition. Without intent, verdicts pass through
+// untouched.
 func TestResolveVReplStreamAction(t *testing.T) {
-	assert.Equal(t, vreplStreamCancel, resolveVReplStreamAction(vreplStreamResume, true),
-		"an unfulfilled cancellation intent must convert resume into cancel")
 	assert.Equal(t, vreplStreamCancel, resolveVReplStreamAction(vreplStreamNoAction, true),
 		"a surviving clean stream yields no action, but the pending cancellation must still be re-driven")
 	assert.Equal(t, vreplStreamCancel, resolveVReplStreamAction(vreplStreamCancel, true))
-	assert.Equal(t, vreplStreamResume, resolveVReplStreamAction(vreplStreamResume, false))
 	assert.Equal(t, vreplStreamCancel, resolveVReplStreamAction(vreplStreamCancel, false))
 	assert.Equal(t, vreplStreamNoAction, resolveVReplStreamAction(vreplStreamNoAction, false))
 }
@@ -1346,48 +1246,37 @@ func TestResolveVReplStreamAction(t *testing.T) {
 func TestForgetVReplStream(t *testing.T) {
 	e := &Executor{
 		vreplicationLastError:     make(map[string]*vterrors.LastError),
-		vreplicationResumeState:   make(map[string]*vreplResumeState),
 		vreplicationPendingCancel: make(map[string]string),
 	}
 	uuid := "1cbcd662_8ed6_11ee_bc8f_0a43f95f28a3"
 	e.vreplicationLastError[uuid] = vterrors.NewLastError("test", time.Minute)
-	e.vreplicationResumeState[uuid] = &vreplResumeState{firstParked: time.Now()}
 	e.vreplicationPendingCancel[uuid] = "internal cancel"
 
 	e.forgetVReplStream(uuid)
 	assert.NotContains(t, e.vreplicationLastError, uuid)
-	assert.NotContains(t, e.vreplicationResumeState, uuid)
 	assert.NotContains(t, e.vreplicationPendingCancel, uuid)
 }
 
-// TestResumeVReplicationQuery pins the resume statement's conditional shape:
-// it must only transition the stream back to Running when the row is still in
-// the exact Error state (and message) that the resume decision was based on.
-// An unconditional update would
-// silently override an operator's concurrent Stop and erase its message.
-func TestResumeVReplicationQuery(t *testing.T) {
-	message := vreplication.RetriesExhaustedIndicator + ": it's 'complicated'"
-	query := resumeVReplicationQuery(42, message)
-	assert.Equal(t,
-		"update _vt.vreplication set state='Running', message='' where id=42 and state='Error' and message="+sqltypes.EncodeStringSQL(message),
-		query)
-}
-
+// TestReviewVReplStreamError tests the executor's per-stream decision in
+// reviewRunningMigrations: any Error-state stream — unrecoverable,
+// retries-exhausted, or legacy — is terminal and cancels the migration
+// immediately (streams created by this executor pin retry-forever via the
+// per-workflow config override, so a retries-exhausted park can only come
+// from a pre-override stream); a transient error is tolerated until it
+// persists past the LastError retry window; a clean stream is left alone.
 func TestReviewVReplStreamError(t *testing.T) {
 	newExecutor := func() *Executor {
 		return &Executor{
-			vreplicationLastError:   make(map[string]*vterrors.LastError),
-			vreplicationResumeState: make(map[string]*vreplResumeState),
+			vreplicationLastError: make(map[string]*vterrors.LastError),
 		}
 	}
 	uuid := "1cbcd662_8ed6_11ee_bc8f_0a43f95f28a3"
-	now := time.Now()
 
 	unrecoverableStream := &VReplStream{
 		state:   binlogdatapb.VReplicationWorkflowState_Error,
 		message: vreplication.UnrecoverableErrorIndicator + ": bad data",
 	}
-	resumableStream := &VReplStream{
+	retriesExhaustedStream := &VReplStream{
 		state:   binlogdatapb.VReplicationWorkflowState_Error,
 		message: vreplication.RetriesExhaustedIndicator + ": the same error was encountered continuously for longer than --vreplication-max-time-to-retry-on-error (15m0s): connection refused",
 	}
@@ -1398,12 +1287,15 @@ func TestReviewVReplStreamError(t *testing.T) {
 
 	t.Run("unrecoverable stream is cancelled", func(t *testing.T) {
 		e := newExecutor()
-		assert.Equal(t, vreplStreamCancel, e.reviewVReplStreamError(uuid, unrecoverableStream, now))
-		assert.NotContains(t, e.vreplicationResumeState, uuid)
+		assert.Equal(t, vreplStreamCancel, e.reviewVReplStreamError(uuid, unrecoverableStream))
+	})
+	t.Run("retries-exhausted stream is cancelled", func(t *testing.T) {
+		e := newExecutor()
+		assert.Equal(t, vreplStreamCancel, e.reviewVReplStreamError(uuid, retriesExhaustedStream))
 	})
 	t.Run("transient error within the retry window is tolerated", func(t *testing.T) {
 		e := newExecutor()
-		assert.Equal(t, vreplStreamNoAction, e.reviewVReplStreamError(uuid, transientErrorStream, now))
+		assert.Equal(t, vreplStreamNoAction, e.reviewVReplStreamError(uuid, transientErrorStream))
 	})
 	t.Run("transient error past the retry window is cancelled", func(t *testing.T) {
 		e := newExecutor()
@@ -1413,467 +1305,15 @@ func TestReviewVReplStreamError(t *testing.T) {
 		lastError := vterrors.NewLastError("test", -time.Nanosecond)
 		lastError.Record(errors.New(transientErrorStream.message))
 		e.vreplicationLastError[uuid] = lastError
-		assert.Equal(t, vreplStreamCancel, e.reviewVReplStreamError(uuid, transientErrorStream, now))
+		assert.Equal(t, vreplStreamCancel, e.reviewVReplStreamError(uuid, transientErrorStream))
 	})
-	t.Run("retries-exhausted lifecycle", func(t *testing.T) {
+	t.Run("clean stream is left alone", func(t *testing.T) {
 		e := newExecutor()
-		// First tick parked on a resumable terminal error: resume, not cancel.
-		assert.Equal(t, vreplStreamResume, e.reviewVReplStreamError(uuid, resumableStream, now))
-		require.Contains(t, e.vreplicationResumeState, uuid)
-		assert.Equal(t, now, e.vreplicationResumeState[uuid].firstParked)
-
-		// Later ticks within the budget keep resuming, and the episode
-		// start is not restamped.
-		assert.Equal(t, vreplStreamResume, e.reviewVReplStreamError(uuid, resumableStream, now.Add(30*time.Minute)))
-		assert.Equal(t, now, e.vreplicationResumeState[uuid].firstParked)
-
-		// Once the episode outlives the resume budget, the migration is
-		// cancelled even though the stream error is still class B.
-		assert.Equal(t, vreplStreamCancel, e.reviewVReplStreamError(uuid, resumableStream, now.Add(staleMigrationFailMinutes*time.Minute)))
-
-		// The stream recovering — reporting no error AND having advanced past
-		// the position it parked on — ends the episode and clears the state.
-		recoveredStream := &VReplStream{
+		cleanStream := &VReplStream{
 			state: binlogdatapb.VReplicationWorkflowState_Running,
 			pos:   "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-100",
 		}
-		assert.Equal(t, vreplStreamNoAction, e.reviewVReplStreamError(uuid, recoveredStream, now.Add(staleMigrationFailMinutes*time.Minute)))
-		assert.NotContains(t, e.vreplicationResumeState, uuid)
-
-		// A later park starts a fresh episode with a fresh budget.
-		later := now.Add(24 * time.Hour)
-		assert.Equal(t, vreplStreamResume, e.reviewVReplStreamError(uuid, resumableStream, later))
-		assert.Equal(t, later, e.vreplicationResumeState[uuid].firstParked)
-	})
-	t.Run("synthetic clean row after a resume does not renew the budget", func(t *testing.T) {
-		// Issuing a resume rewrites the stream to a clean Running row
-		// (the resume clears the state and message) before the
-		// stream has done any work. That synthetic observation must not
-		// end the error episode: otherwise every park/resume/park cycle
-		// would restamp firstParked and the resume budget could be renewed
-		// indefinitely. Only forward progress — an advanced position —
-		// ends the episode.
-		e := newExecutor()
-		pos := "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-42"
-		parkedStream := &VReplStream{
-			state:   binlogdatapb.VReplicationWorkflowState_Error,
-			message: vreplication.RetriesExhaustedIndicator + ": connection refused",
-			pos:     pos,
-		}
-		syntheticCleanStream := &VReplStream{
-			state: binlogdatapb.VReplicationWorkflowState_Running,
-			pos:   pos,
-		}
-
-		assert.Equal(t, vreplStreamResume, e.reviewVReplStreamError(uuid, parkedStream, now))
-		require.Contains(t, e.vreplicationResumeState, uuid)
-		assert.Equal(t, now, e.vreplicationResumeState[uuid].firstParked)
-		// reviewRunningMigrations issues the resume in the same tick,
-		// stamping lastAttempt; model that here.
-		e.vreplicationResumeState[uuid].lastAttempt = now
-
-		// The post-resume clean row at the same position keeps the episode.
-		assert.Equal(t, vreplStreamNoAction, e.reviewVReplStreamError(uuid, syntheticCleanStream, now.Add(time.Minute)))
-		require.Contains(t, e.vreplicationResumeState, uuid)
-		assert.Equal(t, now, e.vreplicationResumeState[uuid].firstParked,
-			"the episode start must survive the synthetic clean observation")
-
-		// Re-parking within the budget keeps resuming on the original clock.
-		assert.Equal(t, vreplStreamResume, e.reviewVReplStreamError(uuid, parkedStream, now.Add(30*time.Minute)))
-		assert.Equal(t, now, e.vreplicationResumeState[uuid].firstParked)
-		e.vreplicationResumeState[uuid].lastAttempt = now.Add(30 * time.Minute)
-		assert.Equal(t, vreplStreamNoAction, e.reviewVReplStreamError(uuid, syntheticCleanStream, now.Add(31*time.Minute)))
-
-		// Exhaustion is measured from the original park, not the last one.
-		assert.Equal(t, vreplStreamCancel, e.reviewVReplStreamError(uuid, parkedStream, now.Add(staleMigrationFailMinutes*time.Minute)))
-	})
-	t.Run("copy-phase progress ends the episode without a position change", func(t *testing.T) {
-		// During the copy phase rows_copied advances while pos can stay
-		// fixed: advancing row-copy checkpoints are real forward progress
-		// and must end the episode, so a much later error starts a fresh
-		// budget instead of cancelling a productive migration.
-		e := newExecutor()
-		pos := "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-42"
-		parkedStream := &VReplStream{
-			state:      binlogdatapb.VReplicationWorkflowState_Error,
-			message:    vreplication.RetriesExhaustedIndicator + ": connection refused",
-			pos:        pos,
-			rowsCopied: 100,
-		}
-		copyingStream := &VReplStream{
-			state:      binlogdatapb.VReplicationWorkflowState_Copying,
-			pos:        pos,
-			rowsCopied: 5000,
-		}
-
-		assert.Equal(t, vreplStreamResume, e.reviewVReplStreamError(uuid, parkedStream, now))
-		e.vreplicationResumeState[uuid].lastAttempt = now
-
-		assert.Equal(t, vreplStreamNoAction, e.reviewVReplStreamError(uuid, copyingStream, now.Add(time.Minute)))
-		assert.NotContains(t, e.vreplicationResumeState, uuid,
-			"advancing rows_copied is forward progress and must end the episode")
-
-		// A later park starts a fresh episode with a fresh budget.
-		later := now.Add(staleMigrationFailMinutes * time.Minute)
-		assert.Equal(t, vreplStreamResume, e.reviewVReplStreamError(uuid, parkedStream, later))
-		assert.Equal(t, later, e.vreplicationResumeState[uuid].firstParked)
-	})
-	t.Run("adopted parked stream seeds the episode from the stream's own park time", func(t *testing.T) {
-		// The executor's in-memory episode state dies with it (tablet
-		// restart, failover, reopen), but the parked row's time_updated is
-		// durable and stops advancing when the stream parks. Seeding the
-		// episode from it means a stream that parked hours before the
-		// executor (re)opened does not get a fresh 180-minute budget on
-		// every restart.
-		e := newExecutor()
-		parkedLongAgo := &VReplStream{
-			state:       binlogdatapb.VReplicationWorkflowState_Error,
-			message:     vreplication.RetriesExhaustedIndicator + ": connection refused",
-			timeUpdated: now.Add(-staleMigrationFailMinutes * time.Minute).Unix(),
-		}
-		assert.Equal(t, vreplStreamCancel, e.reviewVReplStreamError(uuid, parkedLongAgo, now),
-			"a stream that parked a full budget ago must not get a fresh budget from an executor restart")
-
-		// A freshly parked stream (time_updated ~ now) is unaffected.
-		e2 := newExecutor()
-		freshlyParked := &VReplStream{
-			state:       binlogdatapb.VReplicationWorkflowState_Error,
-			message:     vreplication.RetriesExhaustedIndicator + ": connection refused",
-			timeUpdated: now.Unix(),
-		}
-		assert.Equal(t, vreplStreamResume, e2.reviewVReplStreamError(uuid, freshlyParked, now))
-	})
-	t.Run("progress between errors starts a fresh episode", func(t *testing.T) {
-		// A resumed stream can advance its checkpoints and hit a NEW error
-		// before any error-free observation lands — every tick then carries
-		// an error. Forward progress must end the previous episode anyway:
-		// the new error deserves a fresh budget, not the old episode's
-		// nearly-spent one.
-		e := newExecutor()
-		parkedAtX := &VReplStream{
-			state:   binlogdatapb.VReplicationWorkflowState_Error,
-			message: vreplication.RetriesExhaustedIndicator + ": connection refused",
-			pos:     "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-42",
-		}
-		// Same error text as the first park, deliberately: LastError resets
-		// its window on a DIFFERENT error by itself, so only an identical
-		// recurring error exercises the hazard — inheriting the old
-		// window's firstSeen across the progress reset.
-		parkedAtY := &VReplStream{
-			state:   binlogdatapb.VReplicationWorkflowState_Error,
-			message: vreplication.RetriesExhaustedIndicator + ": connection refused",
-			pos:     "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-100",
-		}
-
-		assert.Equal(t, vreplStreamResume, e.reviewVReplStreamError(uuid, parkedAtX, now))
-		e.vreplicationResumeState[uuid].lastAttempt = now
-
-		// The re-park arrives with an advanced position, past the old
-		// episode's budget: it must be treated as a fresh episode and
-		// resumed, not cancelled against the previous clock.
-		later := now.Add(staleMigrationFailMinutes * time.Minute)
-		originalLastError := e.vreplicationLastError[uuid]
-		require.NotNil(t, originalLastError)
-		assert.Equal(t, vreplStreamResume, e.reviewVReplStreamError(uuid, parkedAtY, later),
-			"a re-park after forward progress must start a fresh episode")
-		assert.Equal(t, later, e.vreplicationResumeState[uuid].firstParked)
-		// The LastError retry window tracks the same episode: the same
-		// error text recurring after real progress must not inherit the
-		// old window's firstSeen, or !ShouldRetry() would cancel the
-		// migration before the fresh resume budget could matter. A fresh
-		// window means a fresh LastError.
-		assert.NotSame(t, originalLastError, e.vreplicationLastError[uuid],
-			"the retry window must restart with the fresh episode")
-	})
-	t.Run("clean observation recovery conditions", func(t *testing.T) {
-		// A resumed stream's episode may end on a TRULY CLEAN observation:
-		// no message, Running state, past the recovery grace of the last
-		// resume attempt, and fresh non-throttle liveness. Each condition
-		// closes a distinct false-recovery path:
-		//   - the grace outwaits every path that can delay a resumed
-		//     stream's error report (the longest is the vplayer stall
-		//     deadline it is derived from);
-		//   - an unrecognized non-empty message is a stream mid-retry, not
-		//     recovery (hasError reports nil for it, but it is not clean);
-		//   - the Copying state can hold a clean row through a copy attempt
-		//     blocked for up to the copy-phase duration, far past the
-		//     grace — the copy phase demonstrates recovery only through
-		//     advancing checkpoints (the progress signal);
-		//   - only a functioning applier advances time_updated (non-Error
-		//     setState does not stamp it), so a clean row still carrying
-		//     the old park's stale stamp is an internal retry window;
-		//   - throttle updates stamp time_updated and time_throttled
-		//     together without replicating anything, so equal stamps are
-		//     deliberate pausing, not health; a heartbeat after the
-		//     throttle advances time_updated past time_throttled.
-		// Ending the episode on any of the false paths would grant the
-		// eventual re-park a fresh resume budget every time.
-		require.Greater(t, vreplResumeRecoveryGrace(), vreplication.VPlayerProgressDeadline(),
-			"the recovery grace must outwait the vplayer stall deadline")
-
-		pos := "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-42"
-		grace := vreplResumeRecoveryGrace()
-		testCases := []struct {
-			name          string
-			state         binlogdatapb.VReplicationWorkflowState
-			message       string
-			timeUpdated   int64
-			timeThrottled int64
-			observedAt    time.Time
-			wantRecovered bool
-		}{
-			{
-				name:          "idle caught-up stream with fresh liveness past the grace recovers",
-				state:         binlogdatapb.VReplicationWorkflowState_Running,
-				timeUpdated:   now.Add(grace).Unix(),
-				observedAt:    now.Add(grace),
-				wantRecovered: true,
-			},
-			{
-				name:        "within the grace of the resume attempt: retained",
-				state:       binlogdatapb.VReplicationWorkflowState_Running,
-				timeUpdated: now.Add(grace - time.Second).Unix(),
-				observedAt:  now.Add(grace - time.Second),
-			},
-			{
-				name:        "unrecognized retry message is mid-retry: retained",
-				state:       binlogdatapb.VReplicationWorkflowState_Running,
-				message:     "connection refused",
-				timeUpdated: now.Add(grace).Unix(),
-				observedAt:  now.Add(grace),
-			},
-			{
-				name:        "blocked copy, clean Copying row without checkpoint movement: retained",
-				state:       binlogdatapb.VReplicationWorkflowState_Copying,
-				timeUpdated: now.Add(grace).Unix(),
-				observedAt:  now.Add(grace),
-			},
-			{
-				name:        "internal retry window, clean row with the park's stale liveness: retained",
-				state:       binlogdatapb.VReplicationWorkflowState_Running,
-				timeUpdated: now.Unix(),
-				observedAt:  now.Add(grace),
-			},
-			{
-				name:          "throttle-driven liveness is pausing, not recovery: retained",
-				state:         binlogdatapb.VReplicationWorkflowState_Running,
-				timeUpdated:   now.Add(grace).Unix(),
-				timeThrottled: now.Add(grace).Unix(),
-				observedAt:    now.Add(grace),
-			},
-			{
-				name:          "heartbeat after the last throttle stamp recovers",
-				state:         binlogdatapb.VReplicationWorkflowState_Running,
-				timeUpdated:   now.Add(grace).Unix(),
-				timeThrottled: now.Unix(),
-				observedAt:    now.Add(grace),
-				wantRecovered: true,
-			},
-		}
-		parkedStream := &VReplStream{
-			state:   binlogdatapb.VReplicationWorkflowState_Error,
-			message: vreplication.RetriesExhaustedIndicator + ": connection refused",
-			pos:     pos,
-		}
-		for _, tc := range testCases {
-			t.Run(tc.name, func(t *testing.T) {
-				e := newExecutor()
-				require.Equal(t, vreplStreamResume, e.reviewVReplStreamError(uuid, parkedStream, now))
-				// reviewRunningMigrations issues the resume in the same
-				// tick, stamping lastAttempt; model that here.
-				e.vreplicationResumeState[uuid].lastAttempt = now
-
-				// The position never moves: checkpoint progress is a
-				// separate recovery signal, exercised elsewhere.
-				observed := &VReplStream{
-					state:         tc.state,
-					message:       tc.message,
-					pos:           pos,
-					timeUpdated:   tc.timeUpdated,
-					timeThrottled: tc.timeThrottled,
-				}
-				assert.Equal(t, vreplStreamNoAction, e.reviewVReplStreamError(uuid, observed, tc.observedAt))
-				if tc.wantRecovered {
-					assert.NotContains(t, e.vreplicationResumeState, uuid)
-				} else {
-					assert.Contains(t, e.vreplicationResumeState, uuid)
-				}
-			})
-		}
-	})
-}
-
-// TestMaybeResumeVReplicationRefreshesLiveness pins that every paced resume
-// attempt — issued or failed — refreshes the migration's
-// liveness_timestamp, and that the refresh does not ride the shared bounded
-// context. The stale reaper runs right after the running-migrations review
-// in the same tick, and a class-B park arrives after
-// --vreplication-max-time-to-retry-on-error of continuous failure with no
-// heartbeats: with a retry window at or above the stale threshold, the
-// liveness clock is already expired at the very first park, and without
-// this stamp the reaper would fail the migration in the same tick that is
-// managing it — bypassing both the attempt pacing and the resume budget.
-// The stamp is budget-gated — attempts stop when the episode's budget
-// expires — so it cannot hold off the reaper indefinitely.
-func TestMaybeResumeVReplicationRefreshesLiveness(t *testing.T) {
-	uuid := "1cbcd662_8ed6_11ee_bc8f_0a43f95f28a3"
-	parkedStream := &VReplStream{
-		id:      1,
-		state:   binlogdatapb.VReplicationWorkflowState_Error,
-		message: vreplication.RetriesExhaustedIndicator + ": connection refused",
-	}
-	newLivenessExecutor := func(ts *topo.Server, requireLiveCtx bool) (*Executor, *bool) {
-		var livenessRefreshed bool
-		e := &Executor{
-			ts:          ts,
-			tabletAlias: &topodatapb.TabletAlias{Cell: "cell", Uid: 1},
-			ticks:       timer.NewTimer(time.Hour),
-			execQuery: func(ctx context.Context, query string) (*sqltypes.Result, error) {
-				if requireLiveCtx {
-					if err := ctx.Err(); err != nil {
-						return nil, err
-					}
-				}
-				if strings.Contains(query, "liveness_timestamp=NOW(6)") {
-					livenessRefreshed = true
-				}
-				return &sqltypes.Result{RowsAffected: 1}, nil
-			},
-		}
-		e.isOpen.Store(1)
-		return e, &livenessRefreshed
-	}
-
-	t.Run("issued resume stamps on its own context", func(t *testing.T) {
-		// The resume RPC succeeds just as the shared context dies (which a
-		// slow resume can cause): the refresh must be issued and must land
-		// on its own bounded context.
-		parentCtx, cancel := context.WithCancel(t.Context())
-		defer cancel()
-		protocolName := t.Name()
-		resetProtocol := tmclienttest.SetProtocol(t.Name(), protocolName)
-		defer resetProtocol()
-		tmclient.RegisterTabletManagerClientFactory(protocolName, func() tmclient.TabletManagerClient {
-			// The resume RPC succeeds, but the shared context dies with it.
-			return &resumingTabletManagerClient{cancel: cancel}
-		})
-		alias := &topodatapb.TabletAlias{Cell: "cell", Uid: 1}
-		ts := memorytopo.NewServer(t.Context(), "cell")
-		require.NoError(t, ts.CreateTablet(t.Context(), &topodatapb.Tablet{
-			Alias:    alias,
-			Keyspace: "ks",
-			Shard:    "0",
-			Type:     topodatapb.TabletType_PRIMARY,
-		}))
-		e, livenessRefreshed := newLivenessExecutor(ts, true)
-		e.maybeResumeVReplication(parentCtx, uuid, parkedStream, &vreplResumeState{firstParked: time.Now()})
-		assert.True(t, *livenessRefreshed,
-			"the liveness refresh must land on its own bounded context even when the resume exhausted the shared one")
-	})
-	t.Run("failed attempt still stamps", func(t *testing.T) {
-		// The attempt fails at the tablet lookup (no tablet record) and is
-		// recorded for a paced retry: the migration is still under active
-		// management within its budget, so the stamp must land — otherwise
-		// the same tick's stale reaper would fail the migration instead of
-		// allowing the paced retry.
-		ts := memorytopo.NewServer(t.Context(), "cell")
-		e, livenessRefreshed := newLivenessExecutor(ts, false)
-		state := &vreplResumeState{firstParked: time.Now()}
-		e.maybeResumeVReplication(t.Context(), uuid, parkedStream, state)
-		assert.True(t, *livenessRefreshed,
-			"a failed attempt is still active management: the stamp must hold off the reaper for the paced retry")
-		assert.False(t, state.lastAttempt.IsZero(), "the failed attempt must still be paced")
-	})
-}
-
-// TestReviewRunningMigrationsAdoptsParkedResumableStream pins that a
-// migration whose stream is classified resumable is adopted into
-// ownedRunningMigrations for the whole recovery episode. The review's
-// snapshot shows the parked (Error) row, so the normal adoption path is
-// skipped — and runNextMigration runs BEFORE the next review in each tick,
-// so without adoption here the parked-but-resumable migration (which can
-// stay in 'running' for the whole 180-minute budget) is invisible to the
-// scheduler's conflict and concurrency checks, letting a conflicting (even
-// non-concurrent) migration start alongside it. Adoption must not depend on
-// the paced attempt being issued or succeeding: a failed or backed-off
-// attempt leaves the migration just as alive.
-func TestReviewRunningMigrationsAdoptsParkedResumableStream(t *testing.T) {
-	uuid := "1cbcd662_8ed6_11ee_bc8f_0a43f95f28a3"
-	env := tabletenv.NewEnv(vtenv.NewTestEnv(), tabletenv.NewDefaultConfig(), "ExecutorTest")
-	alias := &topodatapb.TabletAlias{Cell: "cell", Uid: 1}
-	parkedStream := sqltypes.MakeTestResult(
-		sqltypes.MakeTestFields("id|workflow|source|pos|state|message", "int32|varchar|varchar|varchar|varchar|varchar"),
-		"1|"+uuid+"|||Error|"+vreplication.RetriesExhaustedIndicator+": connection refused")
-	newAdoptionExecutor := func(ts *topo.Server) *Executor {
-		e := &Executor{
-			env:                       env,
-			ts:                        ts,
-			tabletAlias:               alias,
-			vreplicationLastError:     map[string]*vterrors.LastError{},
-			vreplicationResumeState:   map[string]*vreplResumeState{},
-			vreplicationPendingCancel: map[string]string{},
-			ticks:                     timer.NewTimer(time.Hour),
-			lagThrottler: throttle.NewThrottler(env, nil, nil, alias, nil,
-				func() topodatapb.TabletType { return topodatapb.TabletType_PRIMARY }, "TestPool"),
-			execQuery: func(ctx context.Context, query string) (*sqltypes.Result, error) {
-				q := strings.ToLower(query)
-				switch {
-				case strings.Contains(q, "migration_status='running'"):
-					return sqltypes.MakeTestResult(
-						sqltypes.MakeTestFields("migration_uuid", "varchar"), uuid), nil
-				case strings.Contains(q, "in ('queued', 'ready', 'running')"):
-					return &sqltypes.Result{}, nil
-				case strings.Contains(q, "from _vt.vreplication_log"):
-					return &sqltypes.Result{}, nil
-				case strings.Contains(q, "from _vt.vreplication"):
-					return parkedStream, nil
-				case strings.HasPrefix(strings.TrimSpace(q), "select") && strings.Contains(q, "migration_uuid="):
-					return sqltypes.MakeTestResult(
-						sqltypes.MakeTestFields("migration_uuid|migration_status|strategy", "varchar|varchar|varchar"),
-						uuid+"|running|vitess"), nil
-				default:
-					return &sqltypes.Result{}, nil
-				}
-			},
-		}
-		e.isOpen.Store(1)
-		return e
-	}
-
-	t.Run("successful resume adopts", func(t *testing.T) {
-		protocolName := t.Name()
-		resetProtocol := tmclienttest.SetProtocol(t.Name(), protocolName)
-		defer resetProtocol()
-		tmclient.RegisterTabletManagerClientFactory(protocolName, func() tmclient.TabletManagerClient {
-			return &resumingTabletManagerClient{}
-		})
-		ts := memorytopo.NewServer(t.Context(), "cell")
-		require.NoError(t, ts.CreateTablet(t.Context(), &topodatapb.Tablet{
-			Alias:    alias,
-			Keyspace: "ks",
-			Shard:    "0",
-			Type:     topodatapb.TabletType_PRIMARY,
-		}))
-		e := newAdoptionExecutor(ts)
-		_, cancellable, err := e.reviewRunningMigrations(t.Context())
-		require.NoError(t, err)
-		assert.Empty(t, cancellable)
-		_, owned := e.ownedRunningMigrations.Load(uuid)
-		assert.True(t, owned,
-			"the tick that resumes a parked stream must adopt the migration")
-	})
-	t.Run("failed resume attempt still adopts", func(t *testing.T) {
-		// No tablet record: the paced attempt fails at the tablet lookup,
-		// but the parked migration is still live, resumable work and must be
-		// visible to the scheduler's conflict checks.
-		ts := memorytopo.NewServer(t.Context(), "cell")
-		e := newAdoptionExecutor(ts)
-		_, cancellable, err := e.reviewRunningMigrations(t.Context())
-		require.NoError(t, err)
-		assert.Empty(t, cancellable)
-		_, owned := e.ownedRunningMigrations.Load(uuid)
-		assert.True(t, owned,
-			"a parked-resumable migration must be adopted even when the paced attempt fails")
+		assert.Equal(t, vreplStreamNoAction, e.reviewVReplStreamError(uuid, cleanStream))
 	})
 }
 
@@ -1895,7 +1335,6 @@ func TestGetNonConflictingMigrationCancellationIntent(t *testing.T) {
 		e := &Executor{
 			tabletAlias:               &topodatapb.TabletAlias{Cell: "cell", Uid: 1},
 			vreplicationLastError:     map[string]*vterrors.LastError{},
-			vreplicationResumeState:   map[string]*vreplResumeState{},
 			vreplicationPendingCancel: map[string]string{},
 			ticks:                     timer.NewTimer(time.Hour),
 			execQuery: func(ctx context.Context, query string) (*sqltypes.Result, error) {

@@ -18,6 +18,7 @@ package scheduler
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"math/rand/v2"
@@ -670,32 +671,46 @@ func testScheduler(t *testing.T) {
 	// RetriesExhaustedIndicator: the markers are a message-string contract
 	// between the vreplication controller and the Online DDL executor, and
 	// these tests pin it.
-	t.Run("Auto-resume vreplication stream after retries-exhausted error", func(t *testing.T) {
+	t.Run("Fail migration on retries-exhausted vreplication error", func(t *testing.T) {
 		t1uuid = testOnlineDDLStatement(t, createParams(trivialAlterT1Statement, ddlStrategy+" --postpone-completion", "vtgate", "", "", true)) // skip wait
 
 		t.Run("wait for t1 running", func(t *testing.T) {
 			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusRunning)
 			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
 		})
-		t.Run("wait for ready_to_complete", func(t *testing.T) {
-			waitForReadyToComplete(t, t1uuid, true)
+		t.Run("verify the retry-forever config override", func(t *testing.T) {
+			// The stream must carry the per-workflow config override pinning
+			// vreplication-max-time-to-retry-on-error to 0 (retry forever), so
+			// that a recoverable error keeps the stream retrying at the
+			// controller rather than parking it in the Error state.
+			query, err := sqlparser.ParseAndBind("select options from _vt.vreplication where workflow=%a",
+				sqltypes.StringBindVariable(t1uuid),
+			)
+			require.NoError(t, err)
+			rs, err := primaryTablet.VttabletProcess.QueryTablet(query, "", true)
+			require.NoError(t, err)
+			row := rs.Named().Row()
+			require.NotNil(t, row)
+			// The stored options JSON may be reformatted (whitespace) by the
+			// components that handle it, so parse it rather than matching a
+			// literal substring.
+			var options struct {
+				Config map[string]string `json:"config"`
+			}
+			require.NoError(t, json.Unmarshal([]byte(row.AsString("options", "")), &options))
+			assert.Equal(t, "0s", options.Config["vreplication-max-time-to-retry-on-error"])
 		})
 		t.Run("park the stream with a retries-exhausted error", func(t *testing.T) {
-			parkVReplStream(t, t1uuid, "retries exhausted: the same error was encountered continuously for longer than --vreplication-max-time-to-retry-on-error (1m0s): io.EOF")
+			// A retries-exhausted park can only come from a stream created
+			// before the retry-forever override existed; the executor treats
+			// it as terminal like any other Error state.
+			parkVReplStream(t, t1uuid, "terminal error: retries exhausted: the same error was encountered continuously for longer than --vreplication-max-time-to-retry-on-error (1m0s): io.EOF")
 		})
-		t.Run("expect automatic resume", func(t *testing.T) {
-			status := onlineddl.WaitForVReplicationStatus(t, &vtParams, primaryTablet, t1uuid, normalWaitTime, "Running")
-			require.Equal(t, "Running", status)
-			// The executor resumed the stream rather than failing the migration.
-			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusRunning)
-			// The migration's message reports the automatic resume.
-			waitForMessage(t, t1uuid, "resuming automatically, attempt 1")
-		})
-		t.Run("complete", func(t *testing.T) {
-			onlineddl.CheckCompleteMigration(t, &vtParams, shards, t1uuid, true)
-			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+		t.Run("expect migration failure", func(t *testing.T) {
+			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusFailed)
 			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
-			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusComplete)
+			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusFailed)
+			waitForMessage(t, t1uuid, "retries exhausted")
 		})
 	})
 

@@ -17,6 +17,7 @@ limitations under the License.
 package onlineddl
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"testing"
@@ -26,10 +27,42 @@ import (
 
 	"vitess.io/vitess/go/vt/schemadiff"
 	"vitess.io/vitess/go/vt/vtenv"
+	vttablet "vitess.io/vitess/go/vt/vttablet/common"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
+
+// TestGenerateInsertStatementRetryForever tests that the vreplication stream
+// an Online DDL migration creates carries a per-workflow config override
+// pinning vreplication-max-time-to-retry-on-error to 0 (retry forever):
+// recoverable errors must keep the stream retrying rather than parking it in
+// the Error state, regardless of any tablet-wide flag value. The executor's
+// stale-migration policy remains the overall no-progress bound — liveness is
+// driven by time_updated, which pure retry loops do not advance.
+func TestGenerateInsertStatementRetryForever(t *testing.T) {
+	v := &VRepl{
+		workflow: "wf",
+		dbName:   "vt_test",
+		bls:      &binlogdatapb.BinlogSource{Keyspace: "ks", Shard: "0"},
+	}
+	insert, err := v.generateInsertStatement()
+	require.NoError(t, err)
+
+	// The options JSON is a wire contract read by the vreplication
+	// controller; pin its literal form.
+	const wantOptions = `{"config":{"vreplication-max-time-to-retry-on-error":"0s"}}`
+	require.Contains(t, insert, wantOptions)
+
+	// Round-trip through the same parsing path the controller uses
+	// (processWorkflowOptions): the override must yield retry-forever.
+	var workflowOptions vtctldatapb.WorkflowOptions
+	require.NoError(t, json.Unmarshal([]byte(wantOptions), &workflowOptions))
+	config, err := vttablet.NewVReplicationConfig(workflowOptions.Config)
+	require.NoError(t, err)
+	assert.Zero(t, config.MaxTimeToRetryError)
+}
 
 func TestRevertible(t *testing.T) {
 	type revertibleTestCase struct {
@@ -238,103 +271,60 @@ func TestRevertible(t *testing.T) {
 }
 
 // TestVReplStreamHasError tests the classification of vreplication stream
-// errors: unrecoverable (and legacy, unclassified) terminal errors are
-// terminal for the migration, while retries-exhausted terminal errors are
-// resumable; non-Error states never classify as terminal.
+// errors: any Error-state stream is terminal for the migration — including
+// retries-exhausted (class B) parks, which can only come from a stream
+// created before the executor pinned retry-forever via the per-workflow
+// config override; the actionable message still names the flag that parked
+// it. Non-Error states never classify as terminal.
 func TestVReplStreamHasError(t *testing.T) {
 	testCases := []struct {
-		name          string
-		state         binlogdatapb.VReplicationWorkflowState
-		message       string
-		wantTerminal  bool
-		wantResumable bool
-		wantErr       bool
+		name         string
+		state        binlogdatapb.VReplicationWorkflowState
+		message      string
+		wantTerminal bool
+		wantErr      bool
 	}{
 		{
-			name:          "unrecoverable",
-			state:         binlogdatapb.VReplicationWorkflowState_Error,
-			message:       vreplication.UnrecoverableErrorIndicator + ": bad data",
-			wantTerminal:  true,
-			wantResumable: false,
-			wantErr:       true,
+			name:         "unrecoverable",
+			state:        binlogdatapb.VReplicationWorkflowState_Error,
+			message:      vreplication.UnrecoverableErrorIndicator + ": bad data",
+			wantTerminal: true,
+			wantErr:      true,
 		},
 		{
-			name:          "retries exhausted",
-			state:         binlogdatapb.VReplicationWorkflowState_Error,
-			message:       vreplication.RetriesExhaustedIndicator + ": the same error was encountered continuously for longer than --vreplication-max-time-to-retry-on-error (15m0s): connection refused",
-			wantTerminal:  false,
-			wantResumable: true,
-			wantErr:       true,
+			name:         "retries exhausted",
+			state:        binlogdatapb.VReplicationWorkflowState_Error,
+			message:      vreplication.RetriesExhaustedIndicator + ": the same error was encountered continuously for longer than --vreplication-max-time-to-retry-on-error (15m0s): connection refused",
+			wantTerminal: true,
+			wantErr:      true,
 		},
 		{
-			// The readVReplStream history scan (executor.go) prepends "vreplication: "
-			// to messages it pulls from _vt.vreplication_log, so the class-B marker is
-			// no longer at the start of the message. hasError must still classify this
-			// as resumable: classification strips the known "vreplication: "
-			// wrapper before anchoring the marker at the message boundary.
-			name:          "log-scan-derived vreplication prefix, retries exhausted",
-			state:         binlogdatapb.VReplicationWorkflowState_Error,
-			message:       "vreplication: " + vreplication.RetriesExhaustedIndicator + ": the same error was encountered continuously for longer than --vreplication-max-time-to-retry-on-error (15m0s): connection refused",
-			wantTerminal:  false,
-			wantResumable: true,
-			wantErr:       true,
+			name:         "legacy unclassified terminal marker",
+			state:        binlogdatapb.VReplicationWorkflowState_Error,
+			message:      vreplication.TerminalErrorIndicator + ": some error",
+			wantTerminal: true,
+			wantErr:      true,
 		},
 		{
-			// Classification is anchored at the message boundary: a class A
-			// error whose cause embeds the class B marker (e.g. user data in
-			// a MySQL duplicate-entry error) must stay terminal.
-			name:          "unrecoverable with class B marker embedded in cause",
-			state:         binlogdatapb.VReplicationWorkflowState_Error,
-			message:       vreplication.UnrecoverableErrorIndicator + ": error applying event: Duplicate entry '" + vreplication.RetriesExhaustedIndicator + "' for key 'val'",
-			wantTerminal:  true,
-			wantResumable: false,
-			wantErr:       true,
+			name:         "non-terminal error message",
+			state:        binlogdatapb.VReplicationWorkflowState_Running,
+			message:      "error applying event: connection refused",
+			wantTerminal: false,
+			wantErr:      true,
 		},
 		{
-			name:          "legacy unclassified terminal marker",
-			state:         binlogdatapb.VReplicationWorkflowState_Error,
-			message:       vreplication.TerminalErrorIndicator + ": some error",
-			wantTerminal:  true,
-			wantResumable: false,
-			wantErr:       true,
-		},
-		{
-			// The generated class B message always continues with ":" right
-			// after the marker. A message that merely extends the marker's
-			// words (e.g. a legacy or externally written terminal message)
-			// is not the generated format and must stay terminal — resuming
-			// a stream whose error was never classified resumable is worse
-			// than failing it.
-			name:          "marker extended by other words is not resumable",
-			state:         binlogdatapb.VReplicationWorkflowState_Error,
-			message:       vreplication.RetriesExhaustedIndicator + " resources: something",
-			wantTerminal:  true,
-			wantResumable: false,
-			wantErr:       true,
-		},
-		{
-			name:          "non-terminal error message",
-			state:         binlogdatapb.VReplicationWorkflowState_Running,
-			message:       "error applying event: connection refused",
-			wantTerminal:  false,
-			wantResumable: false,
-			wantErr:       true,
-		},
-		{
-			name:          "no error",
-			state:         binlogdatapb.VReplicationWorkflowState_Running,
-			message:       "",
-			wantTerminal:  false,
-			wantResumable: false,
-			wantErr:       false,
+			name:         "no error",
+			state:        binlogdatapb.VReplicationWorkflowState_Running,
+			message:      "",
+			wantTerminal: false,
+			wantErr:      false,
 		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			s := &VReplStream{state: tc.state, message: tc.message}
-			isTerminal, isResumable, err := s.hasError()
+			isTerminal, err := s.hasError()
 			assert.Equal(t, tc.wantTerminal, isTerminal)
-			assert.Equal(t, tc.wantResumable, isResumable)
 			assert.Equal(t, tc.wantErr, err != nil)
 		})
 	}
