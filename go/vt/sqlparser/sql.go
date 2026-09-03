@@ -23357,7 +23357,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6785
 		{
-			yyLOCAL = &FuncExpr{Name: NewIdentifierCI("curdate")}
+			yyLOCAL = &CurTimeFuncExpr{Name: NewIdentifierCI("curdate")} // a dedicated node like now/curtime/sysdate, so the keyword form is never a generic call (see FuncExpr.Format)
 		}
 		yyVAL.setexpr(yyLOCAL)
 	case 1300:

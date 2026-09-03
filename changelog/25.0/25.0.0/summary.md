@@ -352,7 +352,7 @@ Each of the following matches MySQL, but removes a Vitess-only leniency:
 - `default now` / `on update now` without parentheses no longer parse; write `now()` instead.
 - A bare `now` in an expression is now a column reference, not `now()`.
 - `cast (1 as char)` with whitespace before `(` is now a syntax error.
-- `now ()` / `substr (...)` with whitespace still parse, but as generic function calls rather than the dedicated AST nodes.
+- `now ()` / `substr (...)` with whitespace still parse, but as generic function calls rather than the dedicated AST nodes. That is MySQL's stored-function path, and the call serializes with the name quoted (`` `now`() ``) so that MySQL takes the same path instead of re-lexing the bare name as the built-in.
 
 #### <a id="vtgate-sql-mode-rejection"/>MySQL-faithful validation and rejection of unsupported `sql_mode` values</a>
 

@@ -4213,12 +4213,20 @@ var validSQL = []struct {
 	output: "select cast(1 as char), now(), now(6), sysdate(), curdate(), curtime(), substr('a', 1), extract(year from d) from t",
 }, {
 	// with whitespace before '(' the name is an identifier, and the call is
-	// a generic function call — same as MySQL's stored-function call path
+	// a generic function call — MySQL's stored-function call path. It
+	// serializes quoted so that MySQL takes that path too, rather than
+	// re-lexing the bare name as the built-in
 	input:  "select now () from t",
-	output: "select now() from t",
+	output: "select `now`() from t",
+}, {
+	input:  "select `now`() from t",
+	output: "select `now`() from t",
+}, {
+	input:  "select sysdate (), curdate (), curtime () from t",
+	output: "select `sysdate`(), `curdate`(), `curtime`() from t",
 }, {
 	input:  "select substr ('abc', 1, 2) from t",
-	output: "select substr('abc', 1, 2) from t",
+	output: "select `substr`('abc', 1, 2) from t",
 }, {
 	input:  "select t.now from t",
 	output: "select t.`now` from t",
