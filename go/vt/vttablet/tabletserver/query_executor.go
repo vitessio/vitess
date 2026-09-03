@@ -1236,8 +1236,8 @@ func (qre *QueryExecutor) getStreamConn() (*connpool.PooledConn, error) {
 // When the statement assigns sql_mode a value that could not be judged at plan time (a
 // non-constant expression), the applied value is read back and validated, so that such an
 // expression cannot put the connection into a mode the Vitess parser cannot honor (see
-// sqlmode.Validate). On violation the previous sql_mode is restored, making the failed SET
-// a no-op like it would have been at the vtgate; only if the restore itself fails is the
+// sqlmode.Validate). On violation the previous sql_mode is restored, so the assignment is
+// not applied, as it would not be in MySQL; only if the restore itself fails is the
 // connection closed rather than left running under an unsupported mode.
 func (qre *QueryExecutor) execSet(conn *StatefulConnection) (*sqltypes.Result, error) {
 	if !qre.plan.VerifySQLMode {
@@ -1270,19 +1270,13 @@ func (qre *QueryExecutor) execSet(conn *StatefulConnection) (*sqltypes.Result, e
 	return nil, vErr
 }
 
-// undoSQLModeSet makes a failed SET behave as if it had not executed, as far as the
-// connection allows. MySQL applies none of a SET's assignments when the statement
-// fails, so a statement that only assigned sql_mode is undone by restoring the previous
-// value; a multi-assignment statement also changed variables the executor has no
-// snapshot of, and the connection is closed instead of being returned with some
-// assignments applied. The connection is also closed when the restore itself fails.
+// undoSQLModeSet restores the previous sql_mode after a failed SET, leaving the
+// connection as MySQL leaves it after a SET that fails validation: the assignment is not
+// applied, while any side effects of evaluating the assigned expression stand. sql_mode is
+// the statement's only assignment (see planbuilder.Plan.VerifySQLMode), so restoring it
+// undoes everything the statement applied. The connection is closed when the restore
+// itself fails, rather than being left running under an unsupported mode.
 func (qre *QueryExecutor) undoSQLModeSet(conn *StatefulConnection, prev sqltypes.Value, cause error) {
-	if qre.plan.MultiAssignmentSet {
-		log.Warn("closing connection: a multi-assignment SET failed sql_mode verification and its other assignments cannot be restored",
-			slog.Any("cause", cause), slog.Int64("connID", conn.ID()))
-		conn.Close()
-		return
-	}
 	restore := "set sql_mode = " + sqltypes.EncodeStringSQL(prev.ToString())
 	if _, err := qre.execStatefulConn(conn, restore, false); err != nil {
 		log.Warn("closing connection: a failed SET could not be undone by restoring the previous sql_mode",

@@ -182,16 +182,15 @@ func showTableRewrite(show *sqlparser.ShowBasic, dbName string) {
 }
 
 func analyzeSet(set *sqlparser.Set) (*Plan, error) {
-	verify, err := validateSetExprsSQLMode(set.Exprs)
+	verify, err := validateSetStatementSQLMode(set)
 	if err != nil {
 		return nil, err
 	}
 	return &Plan{
-		PlanID:             PlanSet,
-		FullQuery:          GenerateFullQuery(set),
-		NeedsReservedConn:  true,
-		VerifySQLMode:      verify,
-		MultiAssignmentSet: len(set.Exprs) > 1,
+		PlanID:            PlanSet,
+		FullQuery:         GenerateFullQuery(set),
+		NeedsReservedConn: true,
+		VerifySQLMode:     verify,
 	}, nil
 }
 

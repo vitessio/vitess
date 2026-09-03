@@ -117,6 +117,16 @@ func TestSetPlanRejectsUnsupportedSQLModes(t *testing.T) {
 	}, {
 		// a non-constant global-scope assignment is the operator's domain as well
 		sql: "set @@global.sql_mode = concat('AN', 'SI')",
+	}, {
+		// a multi-assignment SET is applied atomically by MySQL: none of its assignments
+		// take effect when one fails. A non-constant sql_mode can only be judged after
+		// the statement ran, when its other assignments are already applied, so it is
+		// rejected upfront
+		sql:         "set @@sql_safe_updates = 1, @@sql_mode = concat('AN', 'SI')",
+		expectedErr: "non-constant sql_mode value in a multi-assignment SET: set @@sql_safe_updates = 1, @@sql_mode = concat('AN', 'SI')",
+	}, {
+		// a constant sql_mode in a multi-assignment SET is judged at plan time as usual
+		sql: "set @@sql_safe_updates = if(1 = 1, 0, 1), @@sql_mode = 'STRICT_TRANS_TABLES'",
 	}}
 	for _, tc := range tests {
 		t.Run(tc.sql, func(t *testing.T) {

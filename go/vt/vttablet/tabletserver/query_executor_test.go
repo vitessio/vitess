@@ -2193,32 +2193,18 @@ func TestQueryExecutorSetSQLModeVerify(t *testing.T) {
 	_, err = qre.Execute()
 	require.NoError(t, err)
 
-	// a failed multi-assignment SET closes the connection instead of restoring:
-	// the statement changed other variables no snapshot exists for, and MySQL
-	// applies none of a SET's assignments when the statement fails
-	db.DeleteRejectedQuery(restoreQuery)
-	restoreCalls := db.GetQueryCalledNum(restoreQuery)
+	// a multi-assignment SET with a non-constant sql_mode is rejected at plan time: its
+	// other assignments would already be applied by the time the mode can be judged,
+	// while MySQL applies none of a SET's assignments when the statement fails
 	multiSetQuery := "set @@sql_safe_updates = 1, @@sql_mode = concat('AN', 'SI')"
-	db.AddQuery(multiSetQuery, &sqltypes.Result{})
-	db.AddQueryPatternWithCallback("select @@sql_mode", modeResult(prevMode), func(string) {
-		db.AddQuery(readQuery, modeResult(appliedMode))
-	})
-	txID = newTransaction(tsv, nil)
-	qre = newTestQueryExecutor(ctx, tsv, multiSetQuery, txID)
-	require.True(t, qre.plan.VerifySQLMode)
-	require.True(t, qre.plan.MultiAssignmentSet)
-	_, err = qre.Execute()
-	require.EqualError(t, err, "setting the ANSI sql_mode is unsupported")
-	require.Equal(t, restoreCalls, db.GetQueryCalledNum(restoreQuery), "no restore must be attempted")
-	// the connection is gone: the transaction cannot be used again
-	qre = newTestQueryExecutor(ctx, tsv, constQuery, txID)
-	_, err = qre.Execute()
-	require.Error(t, err)
+	_, err = tsv.qe.GetPlan(ctx, tabletenv.NewLogStats(ctx, "TestQueryExecutor", streamlog.NewQueryLogConfigForTest()), multiSetQuery, false, false)
+	require.EqualError(t, err, "non-constant sql_mode value in a multi-assignment SET: "+multiSetQuery)
 
 	// a failed read-back of the applied value undoes the statement as well: without
 	// the read-back there is no telling what mode the connection is in
 	db.ClearQueryPattern()
 	db.DeleteQuery(readQuery)
+	db.DeleteRejectedQuery(restoreQuery)
 	db.AddQuery(restoreQuery, &sqltypes.Result{})
 	db.AddQueryPatternWithCallback("select @@sql_mode", modeResult(prevMode), func(string) {
 		db.AddRejectedQuery(readQuery, errRejected)

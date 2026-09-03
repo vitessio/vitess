@@ -77,6 +77,23 @@ func validateConstantSetExprsSQLMode(exprs sqlparser.SetExprs) error {
 	return nil
 }
 
+// validateSetStatementSQLMode is validateSetExprsSQLMode for SET statements executed on
+// a dedicated connection, where a non-constant sql_mode value can be verified after the
+// statement ran — but only when sql_mode is the statement's sole assignment. MySQL
+// applies none of a SET's assignments when one of them fails; a multi-assignment
+// statement whose sql_mode can only be judged afterwards would already have applied its
+// other assignments by then, so it is rejected upfront instead.
+func validateSetStatementSQLMode(set *sqlparser.Set) (verify bool, err error) {
+	verify, err = validateSetExprsSQLMode(set.Exprs)
+	if err != nil {
+		return false, err
+	}
+	if verify && len(set.Exprs) > 1 {
+		return false, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "non-constant sql_mode value in a multi-assignment SET: %s", sqlparser.String(set))
+	}
+	return verify, nil
+}
+
 // validateSetExprsSQLMode rejects session-scope sql_mode assignments whose constant value
 // fails sqlmode.Validate. Assignments whose value is not a constant cannot be judged here;
 // for those it returns verify=true, asking the executor to read back and validate the

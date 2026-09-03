@@ -205,15 +205,9 @@ type Plan struct {
 
 	// VerifySQLMode is set on a PlanSet that assigns sql_mode a value that could not be
 	// judged at plan time (a non-constant expression): the executor must read back the
-	// applied value and validate it with sqlmode.Validate.
+	// applied value and validate it with sqlmode.Validate. Such a plan has sql_mode as
+	// its only assignment (see validateSetStatementSQLMode).
 	VerifySQLMode bool
-
-	// MultiAssignmentSet is set on a PlanSet whose statement contains more than one
-	// assignment. A failed verification then cannot be undone by restoring sql_mode
-	// alone — the statement changed other variables too — so the executor closes the
-	// connection instead, since MySQL applies none of a SET's assignments when the
-	// statement fails.
-	MultiAssignmentSet bool
 }
 
 // TableName returns the table name for the plan.
