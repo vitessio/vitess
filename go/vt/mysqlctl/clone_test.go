@@ -722,7 +722,28 @@ func TestCloneFromDonor(t *testing.T) {
 			},
 			wantErr: false,
 			assertResult: func(t *testing.T, env *cloneFromDonorTestEnv) {
-				assert.False(t, env.mysqld.SuperReadOnly.Load())
+				// super_read_only is restored to its original (boot) value once the
+				// clone finishes and mysqld restarts, re-applying the configured
+				// value from my.cnf.
+				assert.True(t, env.mysqld.SuperReadOnly.Load())
+			},
+		},
+		{
+			name:            "restores super_read_only when donor list set fails",
+			cloneFromTablet: "cell1-100",
+			setup: func(t *testing.T, env *cloneFromDonorTestEnv) {
+				env.mysqld.SuperReadOnly.Store(true)
+				env.mysqld.ReadOnly = true
+				donorListQuery := fmt.Sprintf("SET GLOBAL clone_valid_donor_list = '%s:%d'", env.donorHost, env.donorPort)
+				env.mysqld.ExpectedExecuteSuperQueryList = []string{}
+				env.mysqld.ExecuteSuperQueryErrorMap = map[string]error{
+					donorListQuery: assert.AnError,
+				}
+			},
+			wantErr:         true,
+			wantErrContains: "failed to set clone_valid_donor_list",
+			assertResult: func(t *testing.T, env *cloneFromDonorTestEnv) {
+				assert.True(t, env.mysqld.SuperReadOnly.Load(), "super_read_only must be restored when the clone aborts before mysqld restarts")
 			},
 		},
 		{
