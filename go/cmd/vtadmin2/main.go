@@ -139,7 +139,7 @@ func serveHTTPServerWithListener(ctx context.Context, server *http.Server, liste
 	case err := <-errCh:
 		return err
 	case <-ctx.Done():
-		shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
+		shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Minute)
 		defer cancel()
 		if err := server.Shutdown(shutdownCtx); err != nil {
 			return err

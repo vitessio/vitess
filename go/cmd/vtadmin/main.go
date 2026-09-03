@@ -213,7 +213,7 @@ func run(cmd *cobra.Command, args []string) {
 		uiErr := make(chan error, 1)
 		shutdownBase := context.WithoutCancel(cmd.Context())
 		shutdownUI := func() {
-			shutdownCtx, cancel := context.WithTimeout(shutdownBase, 5*time.Second)
+			shutdownCtx, cancel := context.WithTimeout(shutdownBase, 5*time.Minute)
 			defer cancel()
 			if err := httpServer.Shutdown(shutdownCtx); err != nil && !errors.Is(err, http.ErrServerClosed) {
 				slog.Error("vtadmin2 UI shutdown failed", slog.Any("error", err))

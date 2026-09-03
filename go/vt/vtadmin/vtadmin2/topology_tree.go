@@ -94,15 +94,23 @@ func buildTopologyTree(clusterID string, keyspaces []*vtadminpb.Keyspace, tablet
 	}
 	slices.SortFunc(data.Cells, func(a, b *topologyCell) int { return strings.Compare(a.Name, b.Name) })
 
+	tabletsByKeyspaceShard := make(map[string]map[string][]*vtadminpb.Tablet)
+	for _, t := range tablets {
+		tablet := t.GetTablet()
+		if _, ok := tabletsByKeyspaceShard[tablet.GetKeyspace()]; !ok {
+			tabletsByKeyspaceShard[tablet.GetKeyspace()] = make(map[string][]*vtadminpb.Tablet)
+		}
+		tabletsByKeyspaceShard[tablet.GetKeyspace()][tablet.GetShard()] = append(
+			tabletsByKeyspaceShard[tablet.GetKeyspace()][tablet.GetShard()], t,
+		)
+	}
+
 	// Keyspaces with per-shard tablet alias lists.
 	for _, ks := range keyspaces {
 		tk := &topologyKeyspace{Name: ks.GetKeyspace().GetName()}
 		for _, shardName := range sortedShardNames(ks) {
 			shard := &topologyShard{Name: shardName}
-			for _, t := range tablets {
-				if t.GetTablet().GetKeyspace() != ks.GetKeyspace().GetName() || t.GetTablet().GetShard() != shardName {
-					continue
-				}
+			for _, t := range tabletsByKeyspaceShard[ks.GetKeyspace().GetName()][shardName] {
 				alias := tabletAlias(t.GetTablet().GetAlias())
 				shard.Tablets = append(shard.Tablets, alias)
 				if t.GetTablet().GetType() == topodatapb.TabletType_PRIMARY {

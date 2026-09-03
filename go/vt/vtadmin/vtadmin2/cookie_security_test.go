@@ -106,3 +106,18 @@ func TestCSRFCookieBehindTrustedProxy(t *testing.T) {
 		assert.False(t, cookie.Secure, "X-Forwarded-Proto must be ignored unless TrustProxyProto is enabled")
 	})
 }
+
+func TestCSRFRejectsCrossOriginRequest(t *testing.T) {
+	fake := &settingsFakeServer{}
+	s, err := NewServer(fake, Options{})
+	require.NoError(t, err)
+
+	cookie := getSettingsWithCSRF(t, s, nil)
+	req := httptest.NewRequest(http.MethodPost, "/settings", nil)
+	req.Host = "vtadmin.example"
+	req.Header.Set("Origin", "https://attacker.example")
+	req.AddCookie(cookie)
+	req.Form = map[string][]string{"csrf_token": {cookie.Value}}
+
+	assert.False(t, validCSRFToken(req))
+}
