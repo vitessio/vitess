@@ -21,6 +21,7 @@ import (
 	"crypto/subtle"
 	"encoding/base64"
 	"net/http"
+	"net/url"
 	"strings"
 )
 
@@ -59,6 +60,13 @@ func (s *Server) csrfToken(w http.ResponseWriter, r *http.Request) string {
 }
 
 func validCSRFToken(r *http.Request) bool {
+	origin := r.Header.Get("Origin")
+	if origin != "" {
+		originURL, err := url.Parse(origin)
+		if err != nil || originURL.Scheme == "" || originURL.Host != r.Host {
+			return false
+		}
+	}
 	cookie, err := r.Cookie(csrfCookieName)
 	if err != nil || cookie.Value == "" {
 		return false
