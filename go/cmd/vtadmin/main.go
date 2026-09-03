@@ -231,8 +231,7 @@ func run(cmd *cobra.Command, args []string) {
 
 		go func() {
 			if err := <-uiErr; err != nil {
-				slog.Error("vtadmin2 UI server failed", slog.Any("error", err))
-				servenv.ExitChan <- os.Interrupt
+				fatal("vtadmin2 UI server failed: ", err)
 			}
 		}()
 	}
