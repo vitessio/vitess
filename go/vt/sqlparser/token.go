@@ -49,13 +49,12 @@ type Tokenizer struct {
 	// after which only the ';' that ends it is delivered before end of input.
 	stopAfterFirstStatement bool
 	firstStatementDone      bool
+	// resyncLexError is set when Error's re-sync to the next statement ran
+	// into a lexical error rather than a ';' or the end of the input.
+	resyncLexError bool
 	// stmtEnd is the offset of the top-level ';' that ended the first
-	// statement, and restStart the offset just after it. Both are -1 while
-	// no such ';' has been seen.
-	stmtEnd   int
-	restStart int
-	// resyncToken is the token at which Error stopped re-syncing: ';', 0 or LEX_ERROR.
-	resyncToken int
+	// statement, -1 while no such ';' has been seen.
+	stmtEnd int
 
 	Pos       int
 	buf       string
@@ -88,11 +87,10 @@ func yyLocDefault(cur *location, rhs []yySymType, n int) {
 // sql string.
 func (p *Parser) NewStringTokenizer(sql string) *Tokenizer {
 	return &Tokenizer{
-		buf:       sql,
-		BindVars:  make(map[string]struct{}),
-		parser:    p,
-		stmtEnd:   -1,
-		restStart: -1,
+		buf:      sql,
+		BindVars: make(map[string]struct{}),
+		parser:   p,
+		stmtEnd:  -1,
 	}
 }
 
@@ -158,7 +156,6 @@ func (tkn *Tokenizer) markStatementEnd() {
 		return
 	}
 	tkn.stmtEnd = tkn.currStart
-	tkn.restStart = tkn.Pos
 }
 
 // resync scans forward to the next top-level ';' or to the end of the input,
@@ -211,9 +208,11 @@ func (tkn *Tokenizer) Error(err string) {
 		tkn.markStatementEnd()
 	}
 	// Try and re-sync to the next statement
-	tkn.resyncToken = tkn.skipStatement()
-	if tkn.resyncToken == ';' {
+	switch tkn.skipStatement() {
+	case ';':
 		tkn.markStatementEnd()
+	case LEX_ERROR:
+		tkn.resyncLexError = true
 	}
 }
 

@@ -235,20 +235,22 @@ var ErrMultipleStatements = vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vt
 func (p *Parser) ParseNext(sql string) (stmt Statement, text string, rest string, err error) {
 	stmt, text, rest, err = p.parseNext(sql)
 	if err != nil {
-		return nil, "", "", err
+		return nil, "", "", vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, err.Error())
 	}
 	return stmt, text, rest, nil
 }
 
 // parseNext is ParseNext, except that on a syntax error text and rest are
 // still returned, cut at the next top-level ';' the tokenizer can find (or
-// the end of the input). SplitStatementToPieces relies on that to pass
-// statements the grammar does not know on to MySQL unchanged.
+// the end of the input), and err is the tokenizer's own error, without the
+// stack trace and formatting of a vterrors error most callers discard.
+// SplitStatementToPieces relies on the cut to pass statements the grammar
+// does not know on to MySQL unchanged.
 func (p *Parser) parseNext(sql string) (stmt Statement, text string, rest string, err error) {
 	tokenizer := p.NewStringTokenizer(sql)
 	tokenizer.stopAfterFirstStatement = true
 	if yyParsePooled(tokenizer) != 0 || tokenizer.LastError != nil {
-		if tokenizer.partialDDL != nil && tokenizer.resyncToken != LEX_ERROR {
+		if tokenizer.partialDDL != nil && !tokenizer.resyncLexError {
 			switch x := tokenizer.partialDDL.(type) {
 			case DBDDLStatement:
 				x.SetFullyParsed(false)
@@ -257,7 +259,7 @@ func (p *Parser) parseNext(sql string) (stmt Statement, text string, rest string
 			}
 			stmt = tokenizer.partialDDL
 		} else {
-			err = vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, tokenizer.LastError.Error())
+			err = tokenizer.LastError
 			tokenizer.resync()
 		}
 	} else {
@@ -266,7 +268,7 @@ func (p *Parser) parseNext(sql string) (stmt Statement, text string, rest string
 	if tokenizer.stmtEnd < 0 {
 		return stmt, sql, "", err
 	}
-	return stmt, sql[:tokenizer.stmtEnd], sql[tokenizer.restStart:], err
+	return stmt, sql[:tokenizer.stmtEnd], sql[tokenizer.stmtEnd+1:], err
 }
 
 // ForEachStatement hands the statements of sql to fn one at a time, the way
@@ -341,7 +343,7 @@ func (p *Parser) singleStatement(sql string) (end int, ok bool) {
 	if strings.IndexByte(sql, ';') == -1 {
 		return len(sql), true
 	}
-	tokenizer := Tokenizer{buf: sql, parser: p, stmtEnd: -1, restStart: -1}
+	tokenizer := Tokenizer{buf: sql, parser: p, stmtEnd: -1}
 	for {
 		switch typ, _ := tokenizer.Scan(); typ {
 		case ';':
