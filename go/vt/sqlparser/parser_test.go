@@ -436,6 +436,39 @@ func TestForEachStatement(t *testing.T) {
 	}
 }
 
+// TestSingleStatementIsNotParsed pins the fast paths: a single statement is
+// handed over without a grammar parse, even when a ';' sits inside a string
+// literal or a comment, and so is a prepare of it. A parse costs dozens of
+// allocations; the lexical check costs at most the tokenizer.
+func TestSingleStatementIsNotParsed(t *testing.T) {
+	parser := NewTestParser()
+	inputs := []string{
+		"select id, name from users where id = 1",
+		"select id, name from users where id = 1;",
+		"select id, name from users where id = 1;\n",
+		"select ';' from users where name = 'a;b'",
+		"select 1 /* ; */ from users",
+		"insert into t(v) values ('{\"k\": \"v;w\"}')",
+	}
+	for _, input := range inputs {
+		t.Run(input, func(t *testing.T) {
+			allocs := testing.AllocsPerRun(20, func() {
+				err := parser.ForEachStatement(input, func(text, rest string) error {
+					return nil
+				})
+				require.NoError(t, err)
+			})
+			assert.LessOrEqual(t, allocs, 1.0, "ForEachStatement parsed a single statement")
+
+			allocs = testing.AllocsPerRun(20, func() {
+				_, _, err := parser.SplitStatement(input)
+				require.NoError(t, err)
+			})
+			assert.LessOrEqual(t, allocs, 1.0, "SplitStatement parsed a single statement")
+		})
+	}
+}
+
 func TestForEachStatementStopsOnCallbackError(t *testing.T) {
 	failed := errors.New("execution failed")
 	var texts []string

@@ -291,15 +291,11 @@ func (p *Parser) ForEachStatement(sql string, fn func(text, rest string) error) 
 		return ErrEmpty
 	}
 	// fast path: a single statement needs no split.
-	i := strings.IndexByte(sql, ';')
-	if i == -1 {
-		return fn(sql, "")
-	}
-	if strings.TrimSpace(sql[i+1:]) == "" {
-		if strings.TrimSpace(sql[:i]) == "" {
+	if end, ok := p.singleStatement(sql); ok {
+		if strings.TrimSpace(sql[:end]) == "" {
 			return ErrEmpty
 		}
-		return fn(sql[:i], "")
+		return fn(sql[:end], "")
 	}
 
 	sql = strings.TrimRight(sql, blankChars+";")
@@ -334,10 +330,42 @@ func NewParseErrorNear(sql string, offset int) error {
 	return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.ParseError, "You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near '%s' at line %d", near, line)
 }
 
+// singleStatement reports, without the grammar, whether sql is a single
+// statement: no ';' token at all, or one that only blanks follow. end is
+// where the statement's text ends (len(sql), or the offset of that ';').
+// A ';' inside a string, a quoted identifier or a comment is not a token,
+// for MySQL's lexer no more than for ours, so such a statement is handed
+// over as is instead of being parsed just to find its end. A lexical error
+// leaves the question to the grammar.
+func (p *Parser) singleStatement(sql string) (end int, ok bool) {
+	if strings.IndexByte(sql, ';') == -1 {
+		return len(sql), true
+	}
+	tokenizer := Tokenizer{buf: sql, parser: p, stmtEnd: -1, restStart: -1}
+	for {
+		switch typ, _ := tokenizer.Scan(); typ {
+		case ';':
+			end = tokenizer.Pos - 1
+			return end, strings.TrimSpace(sql[tokenizer.Pos:]) == ""
+		case 0:
+			return len(sql), true
+		case LEX_ERROR:
+			return 0, false
+		}
+	}
+}
+
 // SplitStatement returns the first sql statement up to either a ';' or EOF
 // and the remainder from the given buffer. The boundary is the one ParseNext
 // finds; a statement the grammar rejects is cut at the next top-level ';'.
+// A single statement is not parsed.
 func (p *Parser) SplitStatement(blob string) (string, string, error) {
+	if end, ok := p.singleStatement(blob); ok {
+		if end == len(blob) {
+			return blob, "", nil
+		}
+		return blob[:end], blob[end+1:], nil
+	}
 	_, sql, rem, _ := p.parseNext(blob)
 	return sql, rem, nil
 }
