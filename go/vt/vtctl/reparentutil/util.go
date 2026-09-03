@@ -579,3 +579,24 @@ func GetBackupCandidates(tablets []*topo.TabletInfo, stats []*replicationdatapb.
 	}
 	return res
 }
+
+// ValidateAllTabletsManaged errors unless every tablet in the shard reports MANAGED. We can't stop
+// replication on a tablet we don't manage or revoke its writes, so a reparent here would report a
+// guarantee it never established. Anything other than MANAGED fails closed, and records predating
+// the field read as MANAGED, so an upgrade is unaffected.
+func ValidateAllTabletsManaged(tabletMap map[string]*topo.TabletInfo) error {
+	var unmanaged []string
+	for alias, tabletInfo := range tabletMap {
+		if tabletInfo.GetMysqlMode() != topodatapb.TabletMySQLMode_MANAGED {
+			unmanaged = append(unmanaged, alias)
+		}
+	}
+	if len(unmanaged) == 0 {
+		return nil
+	}
+	// Map iteration order is random, so sort to keep the error stable.
+	slices.Sort(unmanaged)
+	return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION,
+		"shard has unmanaged tablets %v that Vitess cannot revoke writes from, so it cannot be reparented safely; "+
+			"unmanaged tablets belong in a keyspace of their own", unmanaged)
+}
