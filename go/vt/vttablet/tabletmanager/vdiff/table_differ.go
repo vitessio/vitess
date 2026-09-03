@@ -559,7 +559,11 @@ func (td *tableDiffer) diff(ctx context.Context, coreOpts *tabletmanagerdatapb.V
 		// persisted mismatch bit so a mismatch recorded by a discarded partial
 		// attempt does not stick after a clean full-table pass.
 		mismatch = false
-		if err = setTableMismatch(dbClient, td.wd.ct.id, td.table.Name, false); err != nil {
+		// Reset the persisted report and mismatch bit together so VDiff show never
+		// observes a half-reset state (mismatch=false alongside a stale mismatching
+		// report from the discarded attempt) during the re-scan.
+		dr.TableName = td.table.Name
+		if err = resetTableForRestart(dbClient, td.wd.ct.id, dr); err != nil {
 			return nil, err
 		}
 	} else if rpt := curState.AsBytes("report", []byte("{}")); json.Valid(rpt) {
@@ -926,6 +930,29 @@ func (td *tableDiffer) updateTableStateAndReport(ctx context.Context, dbClient b
 // mismatch bit for a table. It is cleared when a table with no resumable
 // checkpoint restarts from the beginning, so a mismatch recorded by a discarded
 // partial attempt does not stick after a clean full-table pass.
+// resetTableForRestart clears a table's persisted progress, report, and mismatch
+// bit in a single update, so VDiff show never observes a half-reset state while an
+// uncheckpointable table re-scans from the beginning. dr.TableName must be set.
+func resetTableForRestart(dbClient binlogplayer.DBClient, vdiffID int64, dr *DiffReport) error {
+	reportJSON, err := json.Marshal(dr)
+	if err != nil {
+		return err
+	}
+	query, err := sqlparser.ParseAndBind(sqlResetTableForRestart,
+		sqltypes.StringBindVariable(string(reportJSON)),
+		sqltypes.BoolBindVariable(false),
+		sqltypes.Int64BindVariable(vdiffID),
+		sqltypes.StringBindVariable(dr.TableName),
+	)
+	if err != nil {
+		return err
+	}
+	if _, err = dbClient.ExecuteFetch(query, 1); err != nil {
+		return err
+	}
+	return nil
+}
+
 func setTableMismatch(dbClient binlogplayer.DBClient, vdiffID int64, table string, mismatch bool) error {
 	query, err := sqlparser.ParseAndBind(sqlUpdateTableMismatch,
 		sqltypes.BoolBindVariable(mismatch),
@@ -1283,30 +1310,41 @@ func comparisonKeyIsSourcePKPrefix(sourceSelect *sqlparser.Select, comparePKs []
 	return nil
 }
 
-// equalityPinnedColumns returns the set of integer columns the WHERE clause
-// constrains to a single value via a top-level "col = exact-numeric-literal"
-// conjunct (lowercased). It is intentionally conservative: only equality of an
-// integer column against an integer or exact-decimal literal is treated as pinned;
-// ranges, IN, OR, in_keyrange, non-literal or float-literal comparisons, and
-// coercible (non-integer) columns are ignored.
+// equalityPinnedColumns returns the set of columns the WHERE clause constrains to
+// a value that is constant under the source stream's ordering via a top-level
+// "col = literal" conjunct (lowercased). It is intentionally conservative: only a
+// same-domain equality (integer column vs integer/exact-decimal literal, or text
+// column vs string literal) is treated as pinned; ranges, IN, OR, in_keyrange,
+// non-literal comparisons, and coercions (which can match order-distinct rows) are
+// ignored.
 func equalityPinnedColumns(where *sqlparser.Where, colTypes map[string]querypb.Type) map[string]struct{} {
 	pinned := make(map[string]struct{})
 	if where == nil {
 		return pinned
 	}
-	// Pin only an integer column against an exact numeric literal (integer or
-	// decimal): both match at most one stored value. A coercible column (e.g.
-	// VARCHAR vs a numeric literal, or a case/pad-insensitive collation) or a float
-	// literal (approximate comparison, so adjacent values near 2^53 both match) can
-	// match several stored keys, so the column is not constant across the stream
-	// and must not be dropped from the merge key.
-	isPinnable := func(name string) bool {
+	// Pin "col = literal" only when the equality is evaluated in the column's own
+	// ordering domain, so every matched row is equal under the order the source
+	// stream uses and the column is therefore constant across it:
+	//   - an integer column against an integer or exact-decimal literal (matches at
+	//     most one value); float literals use approximate semantics (adjacent values
+	//     near 2^53 both match) and are excluded.
+	//   - a text column against a string literal (matched values are collation-equal,
+	//     so they sort together).
+	// Coercions (text vs numeric, integer vs float) can match order-distinct rows,
+	// so the column would not be constant and must not be dropped from the merge key.
+	pinnable := func(name string, lit *sqlparser.Literal) bool {
 		t, ok := colTypes[strings.ToLower(name)]
-		return ok && sqltypes.IsIntegral(t)
-	}
-	isExactLiteral := func(e sqlparser.Expr) bool {
-		lit, ok := e.(*sqlparser.Literal)
-		return ok && (lit.Type == sqlparser.IntVal || lit.Type == sqlparser.DecimalVal)
+		if !ok {
+			return false
+		}
+		switch {
+		case sqltypes.IsIntegral(t):
+			return lit.Type == sqlparser.IntVal || lit.Type == sqlparser.DecimalVal
+		case sqltypes.IsText(t):
+			return lit.Type == sqlparser.StrVal
+		default:
+			return false
+		}
 	}
 	for _, expr := range sqlparser.SplitAndExpression(nil, where.Expr) {
 		cmp, ok := expr.(*sqlparser.ComparisonExpr)
@@ -1314,12 +1352,12 @@ func equalityPinnedColumns(where *sqlparser.Where, colTypes map[string]querypb.T
 			continue
 		}
 		if col, ok := cmp.Left.(*sqlparser.ColName); ok {
-			if isExactLiteral(cmp.Right) && isPinnable(col.Name.String()) {
+			if lit, ok := cmp.Right.(*sqlparser.Literal); ok && pinnable(col.Name.String(), lit) {
 				pinned[col.Name.Lowered()] = struct{}{}
 			}
 		}
 		if col, ok := cmp.Right.(*sqlparser.ColName); ok {
-			if isExactLiteral(cmp.Left) && isPinnable(col.Name.String()) {
+			if lit, ok := cmp.Left.(*sqlparser.Literal); ok && pinnable(col.Name.String(), lit) {
 				pinned[col.Name.Lowered()] = struct{}{}
 			}
 		}

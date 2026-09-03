@@ -465,9 +465,20 @@ func TestComparisonKeyIsSourcePKPrefix(t *testing.T) {
 			colTypes:            map[string]querypb.Type{"tenant_id": querypb.Type_INT64, "id": querypb.Type_INT64},
 		},
 		{
-			// A non-integer pinned column is not single-valued (e.g. VARCHAR
-			// tenant vs numeric literal coerces and matches '1', '01', ...), so it
-			// must not be dropped; comparing on the suffix id alone is rejected.
+			// Same-domain string equality: a text column pinned to a string
+			// literal matches only collation-equal values, which sort together, so
+			// the stream stays ordered by id and comparing on id is valid.
+			name:                "same-domain string equality allows compare on suffix",
+			sourceQuery:         "select tenant, id, data from src where tenant = 'acme' order by id asc",
+			comparePKColIndices: []int{1},
+			sourcePKColumns:     []string{"tenant", "id"},
+			colTypes:            map[string]querypb.Type{"tenant": querypb.Type_VARCHAR, "id": querypb.Type_INT64},
+		},
+		{
+			// Coercion: a text column vs a numeric literal compares numerically and
+			// matches order-distinct rows ('1', '01', ...), so it is not constant
+			// across the stream and must not be dropped; the suffix compare is
+			// rejected.
 			name:                "coercible pinned column is not dropped",
 			sourceQuery:         "select tenant, id, data from src where tenant = 1 order by id asc",
 			comparePKColIndices: []int{1},
