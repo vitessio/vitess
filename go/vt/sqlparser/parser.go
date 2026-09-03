@@ -17,6 +17,7 @@ limitations under the License.
 package sqlparser
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -409,6 +410,19 @@ func isEmptyStatement(stmt Statement) bool {
 	}
 	_, isCommentOnly := stmt.(*CommentOnly)
 	return isCommentOnly
+}
+
+// IsStatementIncomplete returns true if the statement is incomplete: it does
+// not parse, and the syntax error is at its very end.
+//
+// Deprecated: statement boundaries come from ParseNext now, and nothing in
+// Vitess calls this anymore. It is kept for downstream users of this package
+// and will be removed in a later release.
+func (p *Parser) IsStatementIncomplete(stmt string) bool {
+	tokenizer := p.NewStringTokenizer(stmt)
+	yyParsePooled(tokenizer)
+	var pe PositionedErr
+	return errors.As(tokenizer.LastError, &pe) && pe.Pos == len(stmt)+1
 }
 
 func (p *Parser) IsMySQL80AndAbove() bool {

@@ -469,6 +469,14 @@ func TestSingleStatementIsNotParsed(t *testing.T) {
 	}
 }
 
+func TestIsStatementIncomplete(t *testing.T) {
+	parser := NewTestParser()
+	assert.True(t, parser.IsStatementIncomplete("create procedure p() begin select 1"))
+	assert.True(t, parser.IsStatementIncomplete("select 1 from"))
+	assert.False(t, parser.IsStatementIncomplete("select 1"))
+	assert.False(t, parser.IsStatementIncomplete("select 1 select 2"))
+}
+
 func TestForEachStatementStopsOnCallbackError(t *testing.T) {
 	failed := errors.New("execution failed")
 	var texts []string
