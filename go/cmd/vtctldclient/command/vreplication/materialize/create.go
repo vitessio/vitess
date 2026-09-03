@@ -77,7 +77,9 @@ should be copied as-is from the source keyspace. Here's an example value for tab
 			if err := common.ParseAndValidateCreateOptions(cmd); err != nil {
 				return err
 			}
-			return nil
+			// every flag has been applied by now, so the parser the settings
+			// are validated with sees the final --mysql-server-version
+			return createOptions.TableSettings.parse()
 		},
 		RunE: commandCreate,
 	}
@@ -141,34 +143,49 @@ func commandCreate(cmd *cobra.Command, args []string) error {
 }
 
 // tableSettings is a wrapper around a slice of TableMaterializeSettings
-// proto messages that implements the pflag.Value interface.
+// proto messages that implements the pflag.Value interface. Set only keeps
+// the flag's text: flags are applied in the order given on the command line,
+// so the parser the settings are validated with — configured by
+// --mysql-server-version and the truncation flags — can only be built once
+// every flag has been applied, in the command's PreRunE (see parse).
 type tableSettings struct {
+	raw    string
+	set    bool
 	val    []*vtctldatapb.TableMaterializeSettings
 	parser *sqlparser.Parser
 }
 
 func (ts *tableSettings) String() string {
+	if ts.val == nil {
+		return ts.raw
+	}
 	tsj, _ := json.Marshal(ts.val)
 	return string(tsj)
 }
 
 func (ts *tableSettings) Set(v string) error {
-	// Set runs while the command line is being parsed, before the command's
-	// RunE — the parser must be built here, not there, or the table settings
-	// are validated with a nil parser.
-	if ts.parser == nil {
-		var err error
-		ts.parser, err = sqlparser.New(sqlparser.Options{
-			MySQLServerVersion: common.CreateOptions.MySQLServerVersion,
-			TruncateUILen:      common.CreateOptions.TruncateUILen,
-			TruncateErrLen:     common.CreateOptions.TruncateErrLen,
-		})
-		if err != nil {
-			return err
-		}
+	ts.raw = v
+	ts.set = true
+	return nil
+}
+
+// parse validates the settings given on the command line with a parser
+// configured from the fully applied flags. An absent flag leaves the
+// settings empty.
+func (ts *tableSettings) parse() error {
+	if !ts.set {
+		return nil
 	}
 	var err error
-	ts.val, err = common.ParseTableMaterializeSettings(v, ts.parser)
+	ts.parser, err = sqlparser.New(sqlparser.Options{
+		MySQLServerVersion: common.CreateOptions.MySQLServerVersion,
+		TruncateUILen:      common.CreateOptions.TruncateUILen,
+		TruncateErrLen:     common.CreateOptions.TruncateErrLen,
+	})
+	if err != nil {
+		return err
+	}
+	ts.val, err = common.ParseTableMaterializeSettings(ts.raw, ts.parser)
 	return err
 }
 

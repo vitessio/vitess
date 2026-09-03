@@ -19,20 +19,48 @@ package materialize
 import (
 	"testing"
 
+	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/cmd/vtctldclient/command/vreplication/common"
 )
 
-// Set runs during command-line parsing, before the command's RunE has had any
-// chance to initialize state — it must work on a zero tableSettings, string
-// literals in the source expressions included.
-func TestTableSettingsSet(t *testing.T) {
-	var ts tableSettings
-	err := ts.Set(`[{"target_table": "rollup", "source_expression": "select 'total' as rollupname, count(*) as kount from customer group by rollupname"}]`)
-	require.NoError(t, err)
-	require.Len(t, ts.val, 1)
-	assert.Equal(t, "rollup", ts.val[0].TargetTable)
+// The table settings are validated with a parser configured from the command
+// line, so they can only be parsed once every flag has been applied: flags are
+// applied in the order given, and --mysql-server-version may follow
+// --table-settings.
+func TestTableSettingsParsedAfterAllFlags(t *testing.T) {
+	// the two flags as registerCommands registers them on the create command
+	newFlags := func(ts *tableSettings) *pflag.FlagSet {
+		fs := pflag.NewFlagSet("create", pflag.ContinueOnError)
+		fs.Var(ts, "table-settings", "")
+		fs.StringVar(&common.CreateOptions.MySQLServerVersion, "mysql-server-version", "8.0.40-Vitess", "")
+		return fs
+	}
+	settings := `[{"target_table": "rollup", "source_expression": "select 'total' as rollupname, count(*) as kount from customer group by rollupname"}]`
+	for _, args := range [][]string{
+		{"--table-settings", settings, "--mysql-server-version", "5.7.31"},
+		{"--mysql-server-version", "5.7.31", "--table-settings", settings},
+	} {
+		var ts tableSettings
+		require.NoError(t, newFlags(&ts).Parse(args))
+		require.NoError(t, ts.parse(), "%v", args)
+		require.Len(t, ts.val, 1, "%v", args)
+		assert.Equal(t, "rollup", ts.val[0].TargetTable)
+		assert.False(t, ts.parser.IsMySQL80AndAbove(), "the parser must use the version given, whichever flag came first: %v", args)
+	}
 
-	err = ts.Set(`[{"target_table": "t", "source_expression": "not valid sql"}]`)
-	require.ErrorContains(t, err, "invalid source_expression")
+	var invalid tableSettings
+	require.NoError(t, newFlags(&invalid).Parse([]string{"--table-settings", `[{"target_table": "t", "source_expression": "not valid sql"}]`}))
+	require.ErrorContains(t, invalid.parse(), "invalid source_expression")
+
+	// an absent flag leaves the settings empty; an explicitly empty one is an error
+	var absent tableSettings
+	require.NoError(t, newFlags(&absent).Parse(nil))
+	require.NoError(t, absent.parse())
+	assert.Nil(t, absent.val)
+	var empty tableSettings
+	require.NoError(t, newFlags(&empty).Parse([]string{"--table-settings", ""}))
+	require.Error(t, empty.parse())
 }
