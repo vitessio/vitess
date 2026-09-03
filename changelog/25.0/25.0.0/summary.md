@@ -33,6 +33,7 @@
         - [Stricter PROXY protocol v1 header validation](#vtgate-proxy-protocol-v1-strictness)
         - [MySQL-faithful validation and rejection of unsupported `sql_mode` values](#vtgate-sql-mode-rejection)
         - [New `VEXPLAIN MYSQLPLAN` statement](#vtgate-vexplain-mysqlplan)
+        - [Multi-statement queries are split the way MySQL splits them](#vtgate-multi-statement-splitting)
     - **[Reparent](#minor-changes-reparent)**
         - [`EmergencyReparentShard` no longer waits on replicas that cannot win the election](#ers-lagging-relay-log-wait)
         - [`EmergencyReparentShard` can explicitly recover from split brain](#ers-allow-split-brain-promotion)
@@ -336,6 +337,19 @@ For each `Route` in the plan, the per-shard `EXPLAIN` queries are run concurrent
 Because each per-shard `EXPLAIN` runs on a separate connection, a `VEXPLAIN MYSQLPLAN` issued inside an open transaction reflects the pre-transaction state of each shard rather than any uncommitted changes made in that transaction — the same limitation as `VEXPLAIN ALL`.
 
 Like a plain `EXPLAIN`, the per-shard `EXPLAIN FORMAT=JSON` queries `VEXPLAIN MYSQLPLAN` issues are not subject to table ACL checks on the explained tables, so `VEXPLAIN MYSQLPLAN` can return per-shard plan metadata (index names, row estimates, filtered percentages) for tables the caller could not otherwise read. For the same reason — the tablet plans an `EXPLAIN` without the explained table's identity — query denylist rules that are conditioned on a table name are not enforced against these per-shard `EXPLAIN` queries either; denylist rules conditioned on the query pattern still apply if their pattern matches the `explain format = json ...` query text. Unlike a plain `EXPLAIN`, which reaches a single arbitrary shard, `VEXPLAIN MYSQLPLAN` extends this to every resolved shard of every keyspace in the plan. Deployments that rely on table ACLs or table-scoped query denylist rules to restrict read access should restrict access to `VEXPLAIN MYSQLPLAN` accordingly.
+
+
+#### <a id="vtgate-multi-statement-splitting"/>Multi-statement queries are split the way MySQL splits them</a>
+
+A `COM_QUERY` carrying several statements (a client that negotiated `CLIENT_MULTI_STATEMENTS`, or the `ExecuteMulti` / `StreamExecuteMulti` gRPC calls) used to be cut into statements up front by a token scanner that split at every top-level `;`. VTGate now runs a batch the way MySQL does: one statement is parsed and executed at a time, the grammar decides where it ends, and the first error ends the batch before anything after it is looked at. Visible differences:
+
+- An empty statement followed by more input, such as `select 1;; select 2`, is now a syntax error (`ER_PARSE_ERROR`, 1064) after the statements before it ran, exactly as on MySQL. A trailing `;` (`select 1;;`) is still fine.
+- A batch that ends in a comment, such as `select 1; -- done`, now returns an empty result for the comment, as MySQL does, instead of dropping it.
+- The `;` inside the body of a `CREATE PROCEDURE` is never a statement boundary anymore. Bodies of statements the Vitess grammar does not parse (`CREATE FUNCTION`, `CREATE TRIGGER`, `CREATE EVENT`) still fail, but now with the grammar's error for that statement, after the statements before it ran, instead of a misleading error from a cut inside the body.
+- An unterminated string in a batch (`select 'a\'; select 2` under the default `sql_mode`) is now a syntax error; it used to crash the connection.
+- Preparing a statement followed by another one is rejected with `ER_PARSE_ERROR`, as MySQL does; a trailing `;` is accepted.
+
+`sqlparser.SplitStatementToPieces` and `sqlparser.SplitStatement` are kept for tooling (`ApplySchema`, `ExecuteMultiFetchAsDBA`, ...). They now find statement boundaries with the grammar and no longer special-case `CREATE PROCEDURE`; a statement the grammar does not know is still cut at the next top-level `;`, so batches with statements Vitess does not parse keep working there.
 
 ### <a id="minor-changes-reparent"/>Reparent</a>
 
