@@ -485,6 +485,15 @@ func TestComparisonKeyIsSourcePKPrefix(t *testing.T) {
 			colTypes:            map[string]querypb.Type{"tenant": querypb.Type_VARCHAR, "id": querypb.Type_INT64},
 		},
 		{
+			// Binary domain: a VARBINARY column pinned to a string literal matches
+			// one exact byte value, so the stream stays ordered by id.
+			name:                "binary column pinned by string literal allows compare on suffix",
+			sourceQuery:         "select tenant, id, data from src where tenant = 'acme' order by id asc",
+			comparePKColIndices: []int{1},
+			sourcePKColumns:     []string{"tenant", "id"},
+			colTypes:            map[string]querypb.Type{"tenant": querypb.Type_VARBINARY, "id": querypb.Type_INT64},
+		},
+		{
 			// Coercion: a text column vs a numeric literal compares numerically and
 			// matches order-distinct rows ('1', '01', ...), so it is not constant
 			// across the stream and must not be dropped; the suffix compare is

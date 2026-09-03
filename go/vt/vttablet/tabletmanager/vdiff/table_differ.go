@@ -551,23 +551,27 @@ func (td *tableDiffer) diff(ctx context.Context, coreOpts *tabletmanagerdatapb.V
 	curState := cs.Named().Row()
 	mismatch := curState.AsBool("mismatch", false)
 	dr := &DiffReport{}
-	if td.tablePlan.sourceCheckpointUnavailable {
-		// This table has no resumable checkpoint and restarts from the beginning
-		// on every run (see getSourcePKCols). Carrying over the persisted partial
-		// report or mismatch flag would double-count rows and duplicate mismatch
-		// samples across restarts, so we start fresh instead. Also clear the
-		// persisted mismatch bit so a mismatch recorded by a discarded partial
-		// attempt does not stick after a clean full-table pass.
-		mismatch = false
-		// Reset the persisted report and mismatch bit together so VDiff show never
-		// observes a half-reset state (mismatch=false alongside a stale mismatching
-		// report from the discarded attempt) during the re-scan.
-		dr.TableName = td.table.Name
-		if err = resetTableForRestart(dbClient, td.wd.ct.id, dr); err != nil {
-			return nil, err
+	persistedReport := curState.AsBytes("report", []byte("{}"))
+	// A resumable checkpoint exists only when lastpk is set; an uncheckpointable
+	// table clears it to NULL (see updateTableProgress).
+	hasCheckpoint := len(curState.AsBytes("lastpk", nil)) > 0
+	if td.tablePlan.sourceCheckpointUnavailable || !hasCheckpoint {
+		// The scan starts from the beginning: the table has no resumable checkpoint,
+		// or a prior attempt persisted a partial report without one (e.g. an
+		// interrupted uncheckpointable restart, which clears lastpk to NULL).
+		// Carrying over the persisted report or mismatch flag would double-count
+		// rows and duplicate mismatch samples, so start fresh. Reset the persisted
+		// report and mismatch bit together (only when either is set) so VDiff show
+		// never observes a half-reset state during the re-scan.
+		if mismatch || strings.TrimSpace(string(persistedReport)) != "{}" {
+			dr.TableName = td.table.Name
+			if err = resetTableForRestart(dbClient, td.wd.ct.id, dr); err != nil {
+				return nil, err
+			}
 		}
-	} else if rpt := curState.AsBytes("report", []byte("{}")); json.Valid(rpt) {
-		if err = json.Unmarshal(rpt, dr); err != nil {
+		mismatch = false
+	} else if json.Valid(persistedReport) {
+		if err = json.Unmarshal(persistedReport, dr); err != nil {
 			return nil, err
 		}
 	}
@@ -1314,8 +1318,8 @@ func comparisonKeyIsSourcePKPrefix(sourceSelect *sqlparser.Select, comparePKs []
 // a value that is constant under the source stream's ordering via a top-level
 // "col = literal" conjunct (lowercased). It is intentionally conservative: only a
 // same-domain equality (integer/exact-decimal column vs integer/exact-decimal
-// literal, or text column vs string literal) is treated as pinned; ranges, IN, OR,
-// in_keyrange, non-literal comparisons, and coercions (which can match
+// literal, or text/binary column vs string literal) is treated as pinned; ranges,
+// IN, OR, in_keyrange, non-literal comparisons, and coercions (which can match
 // order-distinct rows) are ignored.
 func equalityPinnedColumns(where *sqlparser.Where, colTypes map[string]querypb.Type) map[string]struct{} {
 	pinned := make(map[string]struct{})
@@ -1328,8 +1332,8 @@ func equalityPinnedColumns(where *sqlparser.Where, colTypes map[string]querypb.T
 	//   - an integer or exact-decimal column against an integer or exact-decimal
 	//     literal (matches at most one value); float literals use approximate
 	//     semantics (adjacent values near 2^53 both match) and are excluded.
-	//   - a text column against a string literal (matched values are collation-equal,
-	//     so they sort together).
+	//   - a text or binary column against a string literal (text: matched values are
+	//     collation-equal, so they sort together; binary: exact bytewise, one value).
 	// Coercions (text vs numeric, exact-numeric vs float) can match order-distinct
 	// rows, so the column would not be constant and must not be dropped.
 	pinnable := func(name string, lit *sqlparser.Literal) bool {
@@ -1343,7 +1347,9 @@ func equalityPinnedColumns(where *sqlparser.Where, colTypes map[string]querypb.T
 			// most one value. Approximate float literals (and FLOAT/DOUBLE columns,
 			// which are not IsIntegral/IsDecimal) are excluded.
 			return lit.Type == sqlparser.IntVal || lit.Type == sqlparser.DecimalVal
-		case sqltypes.IsText(t):
+		case sqltypes.IsTextOrBinary(t):
+			// Text: matched values are collation-equal, so they sort together.
+			// Binary: the equality is exact bytewise, matching one value.
 			return lit.Type == sqlparser.StrVal
 		default:
 			return false
