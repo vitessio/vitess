@@ -154,3 +154,31 @@ func TestUnion(t *testing.T) {
 	mcmp.AssertMatches(`(SELECT 1,'a' order by 1) union (SELECT 1,'a' ORDER BY 1)`, `[[INT64(1) VARCHAR("a")]]`)
 	mcmp.AssertMatches(`(SELECT id2,'a' from t1 where id1 = 1) union (SELECT 'a',id2 from t1 where id1 = 2)`, `[[VARCHAR("1") VARCHAR("a")] [VARCHAR("a") VARCHAR("2")]]`)
 }
+
+// TestUnionVolatilePredicate checks that a predicate is not pushed into the branches of a UNION
+// when that would duplicate a volatile expression. MySQL materializes a UNION rather than merging
+// it, so uuid() is evaluated once per row and `c <> c` is false; pushing sent `uuid() != uuid()`
+// to each branch, which is true for every row.
+//
+// The uuid values are never compared against MySQL, only the rows the predicate lets through.
+func TestUnionVolatilePredicate(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+
+	mcmp.Exec("insert into t1(id1, id2) values (1, 1), (2, 2)")
+
+	for _, workload := range []string{"oltp", "olap"} {
+		mcmp.Run(workload, func(mcmp *utils.MySQLCompare) {
+			utils.Exec(t, mcmp.VtConn, "set workload = "+workload)
+
+			// No row can differ from itself, and every row equals itself.
+			mcmp.AssertIsEmpty("select * from (select uuid() as c from t1 union all select uuid() from t1) sub where c <> c")
+			mcmp.AssertMatches("select count(*) from (select uuid() as c from t1 union all select uuid() from t1) sub where c = c", `[[INT64(4)]]`)
+
+			// A predicate on a deterministic column still pushes, and still routes.
+			mcmp.AssertMatches("select count(*) from (select uuid() as c, id1 as d from t1 union all select uuid(), id1 from t1) sub where d = 1", `[[INT64(2)]]`)
+			// A conjunction splits: the routable half pushes, the duplicating half stays above.
+			mcmp.AssertIsEmpty("select d from (select uuid() as c, id1 as d from t1 union all select uuid(), id1 from t1) sub where c <> c and d = 1")
+		})
+	}
+}
