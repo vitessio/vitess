@@ -3801,19 +3801,25 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 					// repairs.
 					e.ownedRunningMigrations.Store(uuid, onlineDDL)
 					query := repairVReplicationQuery(s.id)
-					tablet, err := e.ts.GetTablet(ctx, e.tabletAlias)
+					// We hold migrationMutex and the tick's context has no
+					// deadline: bound the topology lookup and the repair RPC
+					// so a stalled topo backend cannot block scheduling,
+					// cancellation, and every subsequent review.
+					repairCtx, cancel := context.WithTimeout(ctx, grpcTimeout)
+					defer cancel()
+					tablet, err := e.ts.GetTablet(repairCtx, e.tabletAlias)
 					if err != nil {
 						log.Error("Online DDL: failed to get tablet for vreplication repair",
-							slog.String("uuid", uuid), slog.Any("error", err))
+							slog.String("uuid", uuid), slog.String("tablet", e.TabletAliasString()), slog.Any("error", err))
 						return nil
 					}
-					if _, err := e.vreplicationExec(ctx, tablet.Tablet, query); err != nil {
+					if _, err := e.vreplicationExec(repairCtx, tablet.Tablet, query); err != nil {
 						log.Error("Online DDL: failed to repair vreplication stream parked on a retries-exhausted error",
-							slog.String("uuid", uuid), slog.Int64("stream_id", int64(s.id)), slog.Any("error", err))
+							slog.String("uuid", uuid), slog.String("tablet", e.TabletAliasString()), slog.Int64("stream_id", int64(s.id)), slog.Any("error", err))
 						return nil
 					}
 					log.Info("Online DDL: repaired vreplication stream parked on a retries-exhausted error; restarted with the retry-forever override",
-						slog.String("uuid", uuid), slog.Int64("stream_id", int64(s.id)))
+						slog.String("uuid", uuid), slog.String("tablet", e.TabletAliasString()), slog.Int64("stream_id", int64(s.id)))
 					return nil
 				}
 				if !s.isRunning() {

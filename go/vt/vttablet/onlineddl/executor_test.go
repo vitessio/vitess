@@ -1350,7 +1350,7 @@ func TestVReplStreamShowsLiveness(t *testing.T) {
 			},
 		}
 	}
-	ctx := context.Background()
+	ctx := t.Context()
 	stream := func(pos string, timeThrottled int64) *VReplStream {
 		return &VReplStream{
 			id:            1,
