@@ -639,15 +639,16 @@ func NewArgument(in string) *Argument {
 
 // realTypeName resolves the REAL type keyword the way MySQL's parser does:
 // under sql_mode REAL_AS_FLOAT it is a synonym for FLOAT, otherwise for
-// DOUBLE (spelled as written). The resolution happens at parse time — on
-// MySQL too, a SET_VAR hint cannot change it for its own statement — so the
-// AST and the serialized SQL carry the resolved type and mean the same thing
-// under any consumer's sql_mode.
-func realTypeName(yylex yyLexer, asWritten string) string {
+// DOUBLE. The resolution happens at parse time — on MySQL too, a SET_VAR hint
+// cannot change it for its own statement — so the AST and the serialized SQL
+// carry the resolved type and mean the same thing under any consumer's
+// sql_mode: text parsed under the default mode keeps meaning DOUBLE even when
+// it is later executed on a connection running with REAL_AS_FLOAT.
+func realTypeName(yylex yyLexer) string {
 	if yylex.(*Tokenizer).sqlMode&SQLModeRealAsFloat != 0 {
 		return "float"
 	}
-	return asWritten
+	return "double"
 }
 
 func parseBindVariable(yylex yyLexer, bvar string) *Argument {
