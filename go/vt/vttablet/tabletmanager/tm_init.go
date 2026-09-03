@@ -44,6 +44,7 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/spf13/pflag"
@@ -234,9 +235,9 @@ type TabletManager struct {
 	// mysqlVersion caches the MySQL server version string. It has its own lock
 	// (not tm.mutex) so reads never contend with unrelated TabletManager
 	// operations. See getMySQLVersionString for why this is cached.
-	mysqlVersion              mysqlVersionCache
-	mariaDBDeprecationWarning sync.Once
-	unmanaged                 bool
+	mysqlVersion             mysqlVersionCache
+	mariaDBDeprecationWarned atomic.Bool
+	unmanaged                bool
 }
 
 // BuildTabletFromInput builds a tablet record from input parameters.

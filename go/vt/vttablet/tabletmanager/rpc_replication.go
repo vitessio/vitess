@@ -114,12 +114,12 @@ func (tm *TabletManager) warnMariaDBDeprecation(version string) {
 	if err != nil || flavor != mysqlctl.FlavorMariaDB {
 		return
 	}
-	tm.mariaDBDeprecationWarning.Do(func() {
+	if tm.mariaDBDeprecationWarned.CompareAndSwap(false, true) {
 		log.Warn("MariaDB support for managed tablets is deprecated and will become unsupported in v26.0.0; use --unmanaged in an external keyspace when importing from MariaDB",
 			slog.String("tablet_alias", topoproto.TabletAliasString(tm.tabletAlias)),
 			slog.String("mysql_version", version),
 		)
-	})
+	}
 }
 
 // maxVersionLookupBudget caps how long a bounded version lookup may run
