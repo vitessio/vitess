@@ -1828,12 +1828,11 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 		},
 	}
 
-	logger := logutil.NewMemoryLogger()
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
+			logger := logutil.NewMemoryLogger()
 			ctx := t.Context()
 			ts := memorytopo.NewServer(ctx, "zone1")
 			defer ts.Close()

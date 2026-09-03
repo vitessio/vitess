@@ -59,7 +59,7 @@ const (
 
 func warnIfMariaDB(logger logutil.Logger, flavor mysqlctl.MySQLFlavor, alias string) {
 	if flavor == mysqlctl.FlavorMariaDB {
-		logger.Warningf("MariaDB support for serving shards is deprecated and will become unsupported in v26.0.0; tablet %v uses MariaDB", alias)
+		logger.Warningf("MariaDB support for serving shards is deprecated and will become unsupported in v26.0.0; tablet %s uses MariaDB", alias)
 	}
 }
 
