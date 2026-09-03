@@ -587,7 +587,7 @@ func (dt DateTime) Round(p int) (r DateTime) {
 	r = dt
 	if n == 1e9 {
 		r.Time.nanosecond = 0
-		r.addInterval(&Interval{timeparts: timeparts{sec: 1}, unit: IntervalSecond})
+		r.addInterval(&Interval{sec: 1, unit: IntervalSecond})
 	} else {
 		r.Time.nanosecond = uint32(n)
 	}

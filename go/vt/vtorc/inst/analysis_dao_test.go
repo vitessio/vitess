@@ -1203,6 +1203,7 @@ func TestGetDetectionAnalysis(t *testing.T) {
 		codeWanted     AnalysisCode
 		shardWanted    string
 		keyspaceWanted string
+		cellWanted     string
 	}{
 		{
 			name:       "No additions",
@@ -1217,6 +1218,30 @@ func TestGetDetectionAnalysis(t *testing.T) {
 			codeWanted:     PrimaryTabletDeleted,
 			keyspaceWanted: "ks",
 			shardWanted:    "0",
+			cellWanted:     "zone1",
+		}, {
+			name: "PrimaryTabletDeleted cell comes from shard record, not surviving replica",
+			sql: []string{
+				// Simulate a cross-cell scenario: the shard's recorded primary is zone2-0000000200,
+				// but all surviving vitess_tablet rows are in zone1. Without the fix, AnalyzedCell
+				// would be zone1 (from the first replica row); with the fix it must be zone2.
+				`update vitess_shard set primary_alias = 'zone2-0000000200' where keyspace = 'ks' and shard = '0'`,
+				`delete from vitess_tablet where port = 6714`,
+			},
+			codeWanted:     PrimaryTabletDeleted,
+			keyspaceWanted: "ks",
+			shardWanted:    "0",
+			cellWanted:     "zone2",
+		}, {
+			name: "PrimaryTabletDeleted clears AnalyzedCell when shard primary alias is empty",
+			sql: []string{
+				`delete from vitess_tablet where port = 6714`,
+				`update vitess_shard set primary_alias = '' where keyspace = 'ks' and shard = '0'`,
+			},
+			codeWanted:     PrimaryTabletDeleted,
+			keyspaceWanted: "ks",
+			shardWanted:    "0",
+			cellWanted:     "",
 		}, {
 			name: "Removing Primary Tablet's MySQL record",
 			sql: []string{
@@ -1229,6 +1254,7 @@ func TestGetDetectionAnalysis(t *testing.T) {
 			codeWanted:     InvalidPrimary,
 			keyspaceWanted: "ks",
 			shardWanted:    "0",
+			cellWanted:     "zone1",
 		}, {
 			name: "Removing Replica Tablet's MySQL record",
 			sql: []string{
@@ -1242,6 +1268,7 @@ func TestGetDetectionAnalysis(t *testing.T) {
 			codeWanted:     InvalidReplica,
 			keyspaceWanted: "ks",
 			shardWanted:    "0",
+			cellWanted:     "zone1",
 		},
 	}
 
@@ -1267,6 +1294,7 @@ func TestGetDetectionAnalysis(t *testing.T) {
 			require.Equal(t, tt.codeWanted, got[0].Analysis)
 			require.Equal(t, tt.keyspaceWanted, got[0].AnalyzedKeyspace)
 			require.Equal(t, tt.shardWanted, got[0].AnalyzedShard)
+			require.Equal(t, tt.cellWanted, got[0].AnalyzedCell)
 		})
 	}
 }
@@ -1302,7 +1330,7 @@ func TestGetDetectionAnalysisShardEligibleObservers(t *testing.T) {
 
 	// primaryEligibleObservers runs the real analysis query and returns the ks/0 primary row's
 	// ShardEligibleObservers count.
-	primaryEligibleObservers := func(t *testing.T) uint {
+	primaryEligibleObservers := func(t *testing.T) int {
 		t.Helper()
 		got, err := GetDetectionAnalysis("", "", &DetectionAnalysisHints{})
 		require.NoError(t, err)
@@ -1320,14 +1348,14 @@ func TestGetDetectionAnalysisShardEligibleObservers(t *testing.T) {
 	// Even with quorum ERS disabled (the default), the count is computed: the flag is dynamic and
 	// its consumers re-read it later in the analysis cycle, so the denominator must never be a
 	// baked-in 0 just because the flag was off when the query was built.
-	assert.Equal(t, uint(3), primaryEligibleObservers(t),
+	assert.Equal(t, 3, primaryEligibleObservers(t),
 		"shard_eligible_observers must be computed regardless of the quorum-ERS flag")
 
 	// With quorum ERS enabled, only the shard's 2 REPLICA + 1 RDONLY tablets are eligible observers;
 	// the SPARE and PRIMARY must be excluded.
 	config.SetERSOnTabletUnreachable(true)
 	t.Cleanup(func() { config.SetERSOnTabletUnreachable(false) })
-	assert.Equal(t, uint(3), primaryEligibleObservers(t),
+	assert.Equal(t, 3, primaryEligibleObservers(t),
 		"only the shard's 2 REPLICA + 1 RDONLY tablets are eligible observers; the SPARE and PRIMARY must be excluded")
 
 	// ShardEligibleObserverCount — the standalone helper the /api/shard-tablet-health-quorum endpoint uses to source
@@ -1444,7 +1472,7 @@ func TestPostProcessAnalyses(t *testing.T) {
 	// real InvalidPrimary it is joined through the primary's database_instance row, which VTOrc never
 	// created); ShardEligibleObservers carries the shard's REPLICA/RDONLY count from the analysis
 	// query, which is the expected observer population the quorum gate must use.
-	invalidPrimaryAnalysis := func(shardEligibleObservers uint) *DetectionAnalysis {
+	invalidPrimaryAnalysis := func(shardEligibleObservers int) *DetectionAnalysis {
 		return &DetectionAnalysis{
 			Analysis:               InvalidPrimary,
 			Description:            "VTOrc hasn't been able to reach the primary even once since restart/shutdown",
@@ -1457,7 +1485,7 @@ func TestPostProcessAnalyses(t *testing.T) {
 	}
 	// shutdownInvalidPrimaryAnalysis is an InvalidPrimary whose vttablet was gracefully shut down
 	// (TabletShutdownTime stamped), so the quorum path must fail closed and leave it InvalidPrimary.
-	shutdownInvalidPrimaryAnalysis := func(shardEligibleObservers uint) *DetectionAnalysis {
+	shutdownInvalidPrimaryAnalysis := func(shardEligibleObservers int) *DetectionAnalysis {
 		a := invalidPrimaryAnalysis(shardEligibleObservers)
 		a.IsTabletShutdown = true
 		return a

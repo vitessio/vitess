@@ -54,7 +54,8 @@ func (sqc *SubQueryContainer) GetOrdering(ctx *plancontext.PlanningContext) []Or
 
 // Inputs implements the Operator interface
 func (sqc *SubQueryContainer) Inputs() []Operator {
-	operators := []Operator{sqc.Outer}
+	operators := make([]Operator, 0, 1+len(sqc.Inner))
+	operators = append(operators, sqc.Outer)
 	for _, inner := range sqc.Inner {
 		operators = append(operators, inner)
 	}

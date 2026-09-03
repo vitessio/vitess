@@ -395,6 +395,13 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 		return fmt.Errorf("plan not found for table: %s, current plans are: %#v", tableName, plan.TargetTables)
 	}
 
+	// Save the controller-level context before applying the copy phase
+	// duration timeout to it. Its cancellation means that the controller
+	// is stopping -- because the workflow is being stopped or deleted, or
+	// the engine is closing -- and any in-flight post copy action must
+	// then be interrupted, whereas an elapsed copy phase duration must
+	// not interrupt it.
+	stopCtx := ctx
 	ctx, cancel := context.WithTimeout(ctx, vc.vr.workflowConfig.CopyPhaseDuration)
 	defer cancel()
 
@@ -679,7 +686,7 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 	}
 
 	// Perform any post copy actions
-	if err := vc.vr.execPostCopyActions(ctx, tableName); err != nil {
+	if err := vc.vr.execPostCopyActions(ctx, stopCtx, tableName); err != nil {
 		return vterrors.Wrapf(err, "failed to execute post copy actions for table %q", tableName)
 	}
 
@@ -902,8 +909,7 @@ func partitionTaskErrors(errs []error) (root, dependent []error) {
 		if e == nil {
 			continue
 		}
-		var dbf *dependentBatchFailure
-		if errors.As(e, &dbf) {
+		if _, ok := errors.AsType[*dependentBatchFailure](e); ok {
 			dependent = append(dependent, e)
 		} else {
 			root = append(root, e)

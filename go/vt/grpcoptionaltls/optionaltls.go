@@ -41,7 +41,7 @@ func (c *optionalTLSCreds) ServerHandshake(conn net.Conn) (net.Conn, credentials
 	}
 
 	authInfo := info{
-		CommonAuthInfo: credentials.CommonAuthInfo{SecurityLevel: credentials.NoSecurity},
+		SecurityLevel: credentials.NoSecurity,
 	}
 
 	return wc, authInfo, nil

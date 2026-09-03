@@ -759,6 +759,10 @@ message EmergencyReparentShardRequest {
   // ExpectedPrimary is the optional alias we expect to be the current primary in order for
   // the reparent operation to succeed.
   topodata.TabletAlias expected_primary = 8;
+  // AllowSplitBrainPromotion permits promoting NewPrimary when divergent GTID histories
+  // are detected. NewPrimary is required and must be an upfront undominated candidate.
+  // Transactions only present on losing histories will not be preserved.
+  bool allow_split_brain_promotion = 9;
 }
 
 message EmergencyReparentShardResponse {
@@ -2143,6 +2147,10 @@ message VDiffShowRequest {
   string target_keyspace = 2;
   // This will be 'all', 'last', or a UUID.
   string arg = 3;
+  // no_samples strips the per-table report's row-sample arrays from the
+  // response (keeping the scalar counters), avoiding gRPC message-size limits
+  // on diffs with large blob/JSON rows.
+  bool no_samples = 4;
 }
 
 message VDiffShowResponse {

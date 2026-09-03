@@ -2136,6 +2136,8 @@ func (ty VExplainType) ToString() string {
 		return TraceStr
 	case KeysVExplainType:
 		return KeysStr
+	case MySQLVExplainType:
+		return MySQLStr
 	default:
 		return "Unknown VExplainType"
 	}
@@ -2640,7 +2642,7 @@ func AndExpressions(exprs ...Expr) Expr {
 	case 1:
 		return exprs[0]
 	default:
-		result := (Expr)(nil)
+		result := Expr(nil)
 	outer:
 		// we'll loop and remove any duplicates
 		for i, expr := range exprs {
@@ -2914,6 +2916,9 @@ func (cols Columns) Indexes(subSetCols Columns) (bool, []int) {
 // This function is meant to be used in testing code.
 func MakeColumns(colNames ...string) Columns {
 	var cols Columns
+	if len(colNames) > 0 {
+		cols = make(Columns, 0, len(colNames))
+	}
 	for _, name := range colNames {
 		cols = append(cols, NewIdentifierCI(name))
 	}
@@ -3191,8 +3196,8 @@ func (node *ValuesStatement) GetColumnCount() int {
 }
 
 func (node *ValuesStatement) GetColumns() []SelectExpr {
-	var sel []SelectExpr
 	columnCount := node.GetColumnCount()
+	sel := make([]SelectExpr, 0, columnCount)
 	for i := range columnCount {
 		sel = append(sel, &AliasedExpr{Expr: NewColName(fmt.Sprintf("column_%d", i))})
 	}

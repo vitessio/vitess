@@ -2252,12 +2252,12 @@ func TestExternalizeLookupVindex(t *testing.T) {
 			expectedWorkflowStopCalls := preWorkflowStopCalls
 			if tcase.expectStopped {
 				// We expect the RPC to be called on each target shard.
-				expectedWorkflowStopCalls = preWorkflowStopCalls + (len(targetShards))
+				expectedWorkflowStopCalls = preWorkflowStopCalls + len(targetShards)
 			}
 			expectedWorkflowDeleteCalls := preWorkflowDeleteCalls
 			if tcase.expectDeleted {
 				// We expect the RPC to be called on each target shard.
-				expectedWorkflowDeleteCalls = preWorkflowDeleteCalls + (len(targetShards))
+				expectedWorkflowDeleteCalls = preWorkflowDeleteCalls + len(targetShards)
 			}
 			require.Equal(t, expectedWorkflowStopCalls, tenv.tmc.workflowStopCalls)
 			require.Equal(t, expectedWorkflowDeleteCalls, tenv.tmc.workflowDeleteCalls)
@@ -2905,7 +2905,7 @@ func TestCompleteLookupVindex(t *testing.T) {
 			expectedWorkflowDeleteCalls := preWorkflowDeleteCalls
 			if tcase.expectDelete {
 				// We expect the RPC to be called on each target shard.
-				expectedWorkflowDeleteCalls = preWorkflowDeleteCalls + (len(targetShards))
+				expectedWorkflowDeleteCalls = preWorkflowDeleteCalls + len(targetShards)
 			}
 			require.Equal(t, expectedWorkflowDeleteCalls, tenv.tmc.workflowDeleteCalls)
 

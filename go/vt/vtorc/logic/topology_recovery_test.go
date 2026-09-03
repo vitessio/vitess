@@ -24,6 +24,7 @@ import (
 	"io"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"testing/synctest"
@@ -31,9 +32,12 @@ import (
 
 	"golang.org/x/sys/unix"
 
+	cache "github.com/patrickmn/go-cache"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/vt/external/golib/sqlutils"
@@ -1411,7 +1415,117 @@ func TestReconcileStaleTopoPrimaryTopoTimeout(t *testing.T) {
 	})
 }
 
-// TestRestartDirectReplicasTimeout verifies that restartDirectReplicas does not block forever if an RPC hangs.
+func TestRestartReplicationFallback(t *testing.T) {
+	oldTMC := tmc
+	t.Cleanup(func() {
+		tmc = oldTMC
+	})
+
+	oldRemoteOpTimeout := topo.RemoteOperationTimeout
+	topo.RemoteOperationTimeout = 100 * time.Millisecond
+	t.Cleanup(func() {
+		topo.RemoteOperationTimeout = oldRemoteOpTimeout
+	})
+
+	tablet := &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101}}
+	logger := log.NewPrefixedLogger("test-restart-replication-fallback")
+
+	setup := func(t *testing.T) *tmcmock.MockTabletManagerClient {
+		mockController := gomock.NewController(t)
+		mockTMC := tmcmock.NewMockTabletManagerClient(mockController)
+		tmc = mockTMC
+		return mockTMC
+	}
+
+	// The server may have run STOP REPLICA before timing out, so the fallback
+	// must run while the recovery context is still alive.
+	t.Run("fallback starts replication after RPC timeout", func(t *testing.T) {
+		mockTMC := setup(t)
+		ctx, cancel := context.WithCancel(t.Context())
+		t.Cleanup(cancel)
+
+		gomock.InOrder(
+			mockTMC.EXPECT().
+				RestartReplication(gomock.Any(), tablet, true).
+				DoAndReturn(func(restartCtx context.Context, _ *topodatapb.Tablet, _ bool) error {
+					<-restartCtx.Done()
+					return restartCtx.Err()
+				}),
+			mockTMC.EXPECT().
+				StartReplication(gomock.Any(), tablet, true).
+				DoAndReturn(func(ctx context.Context, _ *topodatapb.Tablet, _ bool) error {
+					require.NoError(t, ctx.Err())
+					_, ok := ctx.Deadline()
+					require.True(t, ok, "cleanup context must have a deadline")
+					return nil
+				}),
+		)
+
+		err := restartReplication(ctx, tablet, true, logger)
+		require.ErrorIs(t, err, context.DeadlineExceeded)
+	})
+
+	// When the fallback also fails, the returned error must still unwrap to
+	// the original RestartReplication error so callers can match on it.
+	t.Run("fallback failure preserves original error", func(t *testing.T) {
+		mockTMC := setup(t)
+
+		gomock.InOrder(
+			mockTMC.EXPECT().
+				RestartReplication(gomock.Any(), tablet, true).
+				DoAndReturn(func(restartCtx context.Context, _ *topodatapb.Tablet, _ bool) error {
+					<-restartCtx.Done()
+					return restartCtx.Err()
+				}),
+			mockTMC.EXPECT().
+				StartReplication(gomock.Any(), tablet, true).
+				Return(errors.New("start failed")),
+		)
+
+		err := restartReplication(t.Context(), tablet, true, logger)
+		require.ErrorIs(t, err, context.DeadlineExceeded)
+		require.ErrorContains(t, err, "failed to ensure replication was started")
+	})
+
+	// A canceled recovery context means the recovery is being torn down; the
+	// detached fallback would only delay eg.Wait() and the next recovery.
+	t.Run("fallback skipped when recovery context is canceled", func(t *testing.T) {
+		mockTMC := setup(t)
+		ctx, cancel := context.WithCancel(t.Context())
+		t.Cleanup(cancel)
+
+		mockTMC.EXPECT().
+			RestartReplication(gomock.Any(), tablet, true).
+			DoAndReturn(func(context.Context, *topodatapb.Tablet, bool) error {
+				cancel()
+				return context.Canceled
+			})
+		mockTMC.EXPECT().
+			StartReplication(gomock.Any(), gomock.Any(), gomock.Any()).
+			Times(0)
+
+		err := restartReplication(ctx, tablet, true, logger)
+		require.ErrorIs(t, err, context.Canceled)
+	})
+
+	// On transport errors the RPC never reached the tablet, so STOP cannot
+	// have run and the fallback would waste a full RemoteOperationTimeout.
+	t.Run("fallback skipped when tablet is unreachable", func(t *testing.T) {
+		mockTMC := setup(t)
+
+		mockTMC.EXPECT().
+			RestartReplication(gomock.Any(), tablet, true).
+			Return(status.Error(codes.Unavailable, "connection refused"))
+		mockTMC.EXPECT().
+			StartReplication(gomock.Any(), gomock.Any(), gomock.Any()).
+			Times(0)
+
+		err := restartReplication(t.Context(), tablet, true, logger)
+		require.Equal(t, codes.Unavailable, status.Code(err))
+	})
+}
+
+// TestRestartDirectReplicasTimeout verifies that restartDirectReplicas does not block forever if replication RPCs hang.
 func TestRestartDirectReplicasTimeout(t *testing.T) {
 	orcDB, fromCache, err := db.OpenVTOrcWithCache()
 	require.NoError(t, err)
@@ -1499,8 +1613,15 @@ func TestRestartDirectReplicasTimeout(t *testing.T) {
 		// when the passed context is canceled.
 		mockTMC := tmcmock.NewMockTabletManagerClient(mockController)
 		mockTMC.EXPECT().
-			StopReplication(gomock.Any(), gomock.Any()).
-			DoAndReturn(func(ctx context.Context, _ *topodatapb.Tablet) error {
+			RestartReplication(gomock.Any(), gomock.Any(), gomock.Any()).
+			DoAndReturn(func(ctx context.Context, _ *topodatapb.Tablet, _ bool) error {
+				<-ctx.Done()
+				return ctx.Err()
+			}).
+			Times(1)
+		mockTMC.EXPECT().
+			StartReplication(gomock.Any(), gomock.Any(), gomock.Any()).
+			DoAndReturn(func(ctx context.Context, _ *topodatapb.Tablet, _ bool) error {
 				<-ctx.Done()
 				return ctx.Err()
 			}).
@@ -1541,10 +1662,13 @@ func TestRestartDirectReplicasTimeout(t *testing.T) {
 		}()
 
 		// Let the recovery goroutine reach a blocked state before advancing fake time (in this case,
-		// hanging on the StopReplication RPC).
+		// hanging on the RestartReplication RPC).
 		synctest.Wait()
 
-		// Move fake time just beyond the expected RPC timeout boundary.
+		// Move fake time beyond both RPC timeout boundaries.
+		time.Sleep(topo.RemoteOperationTimeout + time.Nanosecond)
+		synctest.Wait()
+
 		time.Sleep(topo.RemoteOperationTimeout + time.Nanosecond)
 		synctest.Wait()
 
@@ -1555,11 +1679,809 @@ func TestRestartDirectReplicasTimeout(t *testing.T) {
 			require.NotNil(t, result.topologyRecovery, "topology recovery record must be returned")
 			require.ErrorIs(t, result.err, context.DeadlineExceeded, "restartDirectReplicas must timeout and return when a replication RPC hangs indefinitely")
 		default:
-			require.FailNowf(t, "restartDirectReplicas did not return", "expected timeout after %s when a replication RPC hangs indefinitely", topo.RemoteOperationTimeout)
+			require.FailNowf(t, "restartDirectReplicas did not return", "expected timeout after %s when replication RPCs hang indefinitely", 2*topo.RemoteOperationTimeout)
 		}
 
 		activeRecoveries, err := ReadActiveClusterRecoveries(keyspace, shard)
 		require.NoError(t, err)
 		require.Empty(t, activeRecoveries, "recovery row must be resolved after restartDirectReplicas returns")
 	})
+}
+
+func TestAllCellsDenied(t *testing.T) {
+	tests := []struct {
+		name          string
+		shardCells    []string
+		deniedCells   []string
+		wantAllDenied bool
+	}{
+		{"all cells denied", []string{"z1", "z2"}, []string{"z1", "z2"}, true},
+		{"superset denied", []string{"z1", "z2"}, []string{"z1", "z2", "z3"}, true},
+		{"partial denied", []string{"z1", "z2"}, []string{"z1"}, false},
+		{"none denied", []string{"z1", "z2"}, []string{"z3"}, false},
+		{"empty denied list", []string{"z1"}, []string{}, false},
+		{"empty shard cells", []string{}, []string{"z1"}, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			require.Equal(t, tt.wantAllDenied, allCellsDenied(tt.shardCells, tt.deniedCells))
+		})
+	}
+}
+
+// TestCellsNoRecoveryGateSkip verifies that executeCheckAndRecoverFunction returns
+// nil without attempting recovery when the cell gate fires. The skip cases are
+// distinguishable at the unit level because: (a) without a gate skip the function
+// proceeds to LockShard + actual recovery, (b) the skip path returns nil without
+// touching the topology_recovery table. The proceed path is covered by the e2e
+// test TestDownPrimary_CellsNoRecovery.
+func TestCellsNoRecoveryGateSkip(t *testing.T) {
+	tests := []struct {
+		name         string
+		analysis     inst.DetectionAnalysis
+		cellsToSet   []string
+		shardTablets []struct {
+			cell string
+			uid  uint32
+		}
+		wantSkip bool
+	}{
+		{
+			name: "tablet-level skip when analyzed cell is in deny list",
+			analysis: inst.DetectionAnalysis{
+				Analysis:              inst.ConnectedToWrongPrimary,
+				AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+				AnalyzedCell:          "zone1",
+				AnalyzedKeyspace:      "ks",
+				AnalyzedShard:         "0",
+			},
+			cellsToSet: []string{"zone1"},
+			wantSkip:   true,
+		},
+		{
+			name: "shard-level NOT skipped when only some shard cells are denied",
+			analysis: inst.DetectionAnalysis{
+				Analysis:              inst.ClusterHasNoPrimary,
+				AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+				AnalyzedCell:          "zone1",
+				AnalyzedKeyspace:      "ks",
+				AnalyzedShard:         "0",
+			},
+			cellsToSet: []string{"zone1"},
+			shardTablets: []struct {
+				cell string
+				uid  uint32
+			}{
+				{"zone1", 100},
+				{"zone2", 200},
+			},
+			wantSkip: false,
+		},
+		{
+			name: "shard-level skip when all shard cells are in deny list",
+			analysis: inst.DetectionAnalysis{
+				Analysis:              inst.ClusterHasNoPrimary,
+				AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+				AnalyzedCell:          "zone1",
+				AnalyzedKeyspace:      "ks",
+				AnalyzedShard:         "0",
+			},
+			cellsToSet: []string{"zone1", "zone2"},
+			shardTablets: []struct {
+				cell string
+				uid  uint32
+			}{
+				{"zone1", 100},
+				{"zone2", 200},
+			},
+			wantSkip: true,
+		},
+	}
+
+	db.ClearVTOrcDatabase()
+	defer db.ClearVTOrcDatabase()
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			orcDb, _, err := db.OpenVTOrcWithCache()
+			require.NoError(t, err)
+			for _, tbl := range []string{"topology_recovery_steps", "topology_recovery", "recovery_detection", "vitess_tablet", "global_recovery_disable"} {
+				_, err = orcDb.Exec("DELETE FROM " + tbl)
+				require.NoError(t, err)
+			}
+
+			for _, tab := range tt.shardTablets {
+				require.NoError(t, inst.SaveTablet(&topodatapb.Tablet{
+					Alias:    &topodatapb.TabletAlias{Cell: tab.cell, Uid: tab.uid},
+					Keyspace: tt.analysis.AnalyzedKeyspace,
+					Shard:    tt.analysis.AnalyzedShard,
+				}))
+			}
+
+			ctx := t.Context()
+			oldTs := ts
+			ts = memorytopo.NewServer(ctx, "zone1", "zone2")
+			require.NoError(t, ts.CreateKeyspace(ctx, tt.analysis.AnalyzedKeyspace, &topodatapb.Keyspace{DurabilityPolicy: policy.DurabilityNone}))
+			require.NoError(t, ts.CreateShard(ctx, tt.analysis.AnalyzedKeyspace, tt.analysis.AnalyzedShard))
+			// Also register tablets in the in-process topology so getShardTabletsByCell
+			// (used by the post-lock gate) can read them. inst.SaveTablet only writes to
+			// SQLite, which the gate no longer consults.
+			for _, tab := range tt.shardTablets {
+				require.NoError(t, ts.CreateTablet(ctx, &topodatapb.Tablet{
+					Alias:    &topodatapb.TabletAlias{Cell: tab.cell, Uid: tab.uid},
+					Keyspace: tt.analysis.AnalyzedKeyspace,
+					Shard:    tt.analysis.AnalyzedShard,
+					Type:     topodatapb.TabletType_REPLICA,
+				}))
+			}
+			defer func() { ts = oldTs }()
+
+			// forceRefreshAllTabletsInShard calls DiscoverInstance for each topo tablet,
+			// which requires recentDiscoveryOperationKeys to be non-nil. The var is
+			// normally set by OpenTabletDiscovery; initialize it here for sub-tests that
+			// register tablets in topo so DiscoverInstance exits cleanly (no MySQL in
+			// tests means it logs a discovery failure and returns, not crashes).
+			if len(tt.shardTablets) > 0 {
+				prevKeys := recentDiscoveryOperationKeys
+				recentDiscoveryOperationKeys = cache.New(config.GetInstancePollTime(), time.Second)
+				defer func() { recentDiscoveryOperationKeys = prevKeys }()
+			}
+
+			prev := cellsNoRecovery
+			cellsNoRecovery = tt.cellsToSet
+			defer func() { cellsNoRecovery = prev }()
+
+			prevValidated := cellsNoRecoveryValidated.Swap(true)
+			defer func() { cellsNoRecoveryValidated.Store(prevValidated) }()
+
+			analysis := tt.analysis
+
+			checkAndRecoverFunctionCode, _ := getCheckAndRecoverFunctionCode(&analysis)
+			recoveryName := getRecoverFunctionName(checkAndRecoverFunctionCode)
+			counterKey := strings.Join([]string{recoveryName, analysis.AnalyzedKeyspace, analysis.AnalyzedShard, RecoverySkipCellNoRecovery.String()}, ".")
+			skipsBefore := recoveriesSkippedCounter.Counts()[counterKey]
+
+			require.NoError(t, executeCheckAndRecoverFunction(&analysis))
+
+			skipsAfter := recoveriesSkippedCounter.Counts()[counterKey]
+			if tt.wantSkip {
+				require.Equal(t, skipsBefore+1, skipsAfter, "CellNoRecovery skip counter must be incremented exactly once")
+
+				var recoveryRows int
+				require.NoError(t, orcDb.QueryRow("SELECT COUNT(*) FROM topology_recovery").Scan(&recoveryRows))
+				require.Zero(t, recoveryRows, "no topology_recovery row should exist when recovery is skipped by the cell gate")
+
+				var detectionRows int
+				require.NoError(t, orcDb.QueryRow("SELECT COUNT(*) FROM recovery_detection").Scan(&detectionRows))
+				require.Equal(t, 1, detectionRows, "detection must be recorded even when recovery is skipped")
+			} else {
+				require.Equal(t, skipsBefore, skipsAfter, "CellNoRecovery skip counter must NOT increment when recovery is allowed")
+			}
+		})
+	}
+}
+
+func TestInsertRecoveryDetectionNewIncident(t *testing.T) {
+	orcDb, fromCache, err := db.OpenVTOrcWithCache()
+	require.NoError(t, err)
+	defer func() {
+		if !fromCache {
+			require.NoError(t, orcDb.Close())
+		}
+	}()
+	defer func() {
+		_, err = orcDb.Exec("DELETE FROM recovery_detection")
+		require.NoError(t, err)
+	}()
+
+	alias := &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}
+	analysis := inst.ReplicationStopped
+
+	entry1 := &inst.DetectionAnalysis{
+		AnalyzedInstanceAlias: alias,
+		Analysis:              analysis,
+		AnalyzedKeyspace:      "ks",
+		AnalyzedShard:         "0",
+	}
+	require.NoError(t, InsertRecoveryDetection(entry1))
+	require.NotZero(t, entry1.RecoveryId)
+
+	// Same ongoing incident: should reuse detection_id and refresh timestamp.
+	entry2 := &inst.DetectionAnalysis{
+		AnalyzedInstanceAlias: alias,
+		Analysis:              analysis,
+		AnalyzedKeyspace:      "ks",
+		AnalyzedShard:         "0",
+	}
+	require.NoError(t, InsertRecoveryDetection(entry2))
+	require.Equal(t, entry1.RecoveryId, entry2.RecoveryId, "same ongoing incident should reuse detection_id")
+
+	// Pin the detection_timestamp to a known past value so the UPSERT's
+	// DATETIME('now') is distinguishable even when the test runs sub-second.
+	_, err = orcDb.Exec(
+		`UPDATE recovery_detection SET detection_timestamp = '2026-01-01 00:00:00'
+		 WHERE detection_id = ?`, entry1.RecoveryId)
+	require.NoError(t, err)
+	var pinnedTimestamp string
+	require.NoError(t, orcDb.QueryRow(
+		`SELECT detection_timestamp FROM recovery_detection WHERE detection_id = ?`,
+		entry1.RecoveryId).Scan(&pinnedTimestamp))
+
+	// Recurring failure: UPSERT refreshes detection_timestamp on every poll.
+	entry3 := &inst.DetectionAnalysis{
+		AnalyzedInstanceAlias: alias,
+		Analysis:              analysis,
+		AnalyzedKeyspace:      "ks",
+		AnalyzedShard:         "0",
+	}
+	require.NoError(t, InsertRecoveryDetection(entry3))
+	require.Equal(t, entry1.RecoveryId, entry3.RecoveryId, "UPSERT reuses the same detection_id")
+
+	var refreshedTimestamp string
+	require.NoError(t, orcDb.QueryRow(
+		`SELECT detection_timestamp FROM recovery_detection WHERE detection_id = ?`,
+		entry3.RecoveryId).Scan(&refreshedTimestamp))
+	require.NotEqual(t, pinnedTimestamp, refreshedTimestamp,
+		"each poll should refresh detection_timestamp")
+}
+
+// returningOnlyDB is a test double for db.DB that returns a detection_id only when
+// the query contains RETURNING (i.e. the UPSERT itself). Any other query (e.g. a
+// separate SELECT) gets an empty result, leaving RecoveryId == 0.
+//
+// This is used by TestInsertRecoveryDetectionReturningClosesDeleteRace to verify
+// that InsertRecoveryDetection captures its ID from the UPSERT's RETURNING clause,
+// not a subsequent SELECT. If the function is reverted to two separate statements,
+// the SELECT hits this mock with an empty result, the RecoveryId == 0 guard fires,
+// and the test fails.
+type returningOnlyDB struct{}
+
+func (r *returningOnlyDB) QueryVTOrc(query string, _ []any, onRow func(sqlutils.RowMap) error) error {
+	if strings.Contains(query, "RETURNING") {
+		return onRow(sqlutils.RowMap{"detection_id": sqlutils.CellData{String: "42", Valid: true}})
+	}
+	return nil
+}
+
+// TestInsertRecoveryDetectionReturningClosesDeleteRace verifies that InsertRecoveryDetection
+// captures detection_id from the UPSERT's RETURNING clause rather than a separate SELECT.
+//
+// The race this closes: the old two-statement implementation ran INSERT … ON CONFLICT DO UPDATE
+// then a separate SELECT. A concurrent successful ERS/PRS could call deleteResolvedDetection
+// between those two statements; QueryVTOrc treats zero rows as success, leaving RecoveryId == 0.
+//
+// The test uses a fake DB (returningOnlyDB) that returns a detection_id only for queries
+// containing RETURNING. A separate SELECT query gets an empty result. If the function is
+// reverted to two statements, the SELECT returns nothing, the RecoveryId == 0 guard fires,
+// and the test fails.
+func TestInsertRecoveryDetectionReturningClosesDeleteRace(t *testing.T) {
+	oldDB := db.Db
+	defer func() { db.Db = oldDB }()
+	db.Db = &returningOnlyDB{}
+
+	entry := &inst.DetectionAnalysis{
+		AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 200},
+		Analysis:              inst.ReplicationStopped,
+		AnalyzedKeyspace:      "ks",
+		AnalyzedShard:         "0",
+	}
+	require.NoError(t, InsertRecoveryDetection(entry))
+	require.EqualValues(t, 42, entry.RecoveryId,
+		"RecoveryId must come from the RETURNING clause of the UPSERT, not a subsequent SELECT")
+}
+
+func TestExpireRecoveryDetectionActiveIncidentSurvives(t *testing.T) {
+	orcDb, fromCache, err := db.OpenVTOrcWithCache()
+	require.NoError(t, err)
+	defer func() {
+		if !fromCache {
+			require.NoError(t, orcDb.Close())
+		}
+	}()
+	defer func() {
+		_, err = orcDb.Exec("DELETE FROM recovery_detection")
+		require.NoError(t, err)
+	}()
+
+	oldVal := config.GetAuditPurgeDays()
+	config.SetAuditPurgeDays(10)
+	defer config.SetAuditPurgeDays(oldVal)
+
+	alias := &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}
+	entry := &inst.DetectionAnalysis{
+		AnalyzedInstanceAlias: alias,
+		Analysis:              inst.ReplicationStopped,
+		AnalyzedKeyspace:      "ks",
+		AnalyzedShard:         "0",
+	}
+
+	// Insert the initial detection.
+	require.NoError(t, InsertRecoveryDetection(entry))
+	firstID := entry.RecoveryId
+	require.NotZero(t, firstID)
+
+	// Simulate the UPSERT refreshing detection_timestamp on every poll,
+	// which keeps the row recent even across the retention window.
+	require.NoError(t, InsertRecoveryDetection(entry))
+	require.Equal(t, firstID, entry.RecoveryId, "detection_id must be stable across polls")
+
+	// Run expiry — the row's detection_timestamp is fresh (just updated),
+	// so it must survive even with a short retention period.
+	require.NoError(t, ExpireRecoveryDetectionHistory())
+
+	var remaining int
+	require.NoError(t, orcDb.QueryRow("SELECT COUNT(*) FROM recovery_detection").Scan(&remaining))
+	require.Equal(t, 1, remaining, "actively-polled detection must survive expiry")
+
+	// Verify the detection_id is unchanged.
+	var survivingID int64
+	require.NoError(t, orcDb.QueryRow(
+		"SELECT detection_id FROM recovery_detection").Scan(&survivingID))
+	require.Equal(t, firstID, survivingID, "stable detection_id must be preserved")
+}
+
+// TestCheckIfAlreadyFixedReturnsCellFromRefreshedEntry is a regression test for the
+// PrimaryTabletDeleted cache-generation skew. refreshAllInformation runs
+// RefreshAllKeyspacesAndShards and refreshAllTablets concurrently, so vitess_shard and
+// vitess_tablet may not form a single consistent snapshot. For PrimaryTabletDeleted,
+// AnalyzedCell comes from vitess_shard.primary_alias.Cell, not from the surviving replica's
+// cell. A pre-lock analysis may therefore see AnalyzedCell="zone1" (allowed) while the
+// shard record already records the deleted primary as being in "zone2" (denied). This test
+// verifies that checkIfAlreadyFixed returns the refreshed analysis entry (with the updated
+// AnalyzedCell from the current vitess_shard record) so the caller can re-evaluate the
+// cells-no-recovery policy before proceeding with ERS.
+func TestCheckIfAlreadyFixedReturnsCellFromRefreshedEntry(t *testing.T) {
+	db.ClearVTOrcDatabase()
+	defer db.ClearVTOrcDatabase()
+
+	orcDb, _, err := db.OpenVTOrcWithCache()
+	require.NoError(t, err)
+
+	// Populate vitess_keyspace (durability_policy required by GetDetectionAnalysis).
+	_, err = orcDb.Exec(
+		`INSERT OR REPLACE INTO vitess_keyspace (keyspace, keyspace_type, durability_policy, disable_emergency_reparent) VALUES ('ks', 0, 'semi_sync', 0)`,
+	)
+	require.NoError(t, err)
+
+	// Populate vitess_shard: primary_alias points to zone2 (the deleted primary's cell),
+	// with a non-zero primary_timestamp so PrimaryTabletDeleted can fire.
+	_, err = orcDb.Exec(
+		`INSERT OR REPLACE INTO vitess_shard (keyspace, shard, primary_alias, primary_timestamp, disable_emergency_reparent) VALUES ('ks', '0', 'zone2-0000000200', '2022-12-28 07:23:25 +0000 UTC', 0)`,
+	)
+	require.NoError(t, err)
+
+	// Save the surviving replica (zone1-0000000100) to vitess_tablet. No primary tablet is
+	// saved, simulating the deleted-primary scenario.
+	require.NoError(t, inst.SaveTablet(&topodatapb.Tablet{
+		Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+		Keyspace:      "ks",
+		Shard:         "0",
+		Type:          topodatapb.TabletType_REPLICA,
+		MysqlHostname: "localhost",
+		MysqlPort:     6711,
+	}))
+
+	// Insert a minimal database_instance row so the surviving replica is not flagged
+	// is_invalid (NULL alias in the LEFT JOIN → is_invalid=1 → PrimaryTabletDeleted skipped).
+	_, err = orcDb.Exec(`INSERT OR REPLACE INTO database_instance
+		(alias, hostname, port, tablet_type, cell,
+		 server_id, version, binlog_format, log_bin, log_replica_updates,
+		 binary_log_file, binary_log_pos,
+		 source_host, source_port, replica_net_timeout, heartbeat_interval,
+		 replica_sql_running, replica_io_running,
+		 source_log_file, read_source_log_pos, relay_source_log_file, exec_source_log_pos,
+		 last_checked, last_seen)
+		VALUES ('zone1-0000000100', 'localhost', 6711, 2, 'zone1',
+		        100, '8.0.31', 'ROW', 1, 1,
+		        'bin.000001', 0,
+		        '', 0, 8, 4.0,
+		        1, 1,
+		        '', 0, '', 0,
+		        DATETIME('now'), DATETIME('now'))`)
+	require.NoError(t, err)
+
+	// Initial analysis: AnalyzedCell is "zone1" — the stale pre-refresh snapshot. This
+	// reflects the race window where vitess_tablet recorded the primary deletion while
+	// vitess_shard.primary_alias.Cell still pointed to zone1 instead of zone2.
+	initial := &inst.DetectionAnalysis{
+		Analysis:              inst.PrimaryTabletDeleted,
+		AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+		AnalyzedCell:          "zone1",
+		AnalyzedKeyspace:      "ks",
+		AnalyzedShard:         "0",
+	}
+
+	alreadyFixed, refreshedEntry, err := checkIfAlreadyFixed(initial)
+	require.NoError(t, err)
+	require.False(t, alreadyFixed, "PrimaryTabletDeleted is still active; must not be marked already fixed")
+	require.NotNil(t, refreshedEntry, "a matched entry must be returned when the problem is still present")
+	// The refreshed entry's AnalyzedCell must come from vitess_shard.primary_alias.Cell
+	// (zone2), not from the surviving replica's cell (zone1). This is the cell that
+	// --cells-no-recovery must evaluate against.
+	require.Equal(t, "zone2", refreshedEntry.AnalyzedCell,
+		"refreshed AnalyzedCell must reflect vitess_shard.primary_alias.Cell (zone2), not the stale pre-refresh value (zone1)")
+	require.True(t, topoproto.TabletAliasEqual(initial.AnalyzedInstanceAlias, refreshedEntry.AnalyzedInstanceAlias),
+		"AnalyzedInstanceAlias must remain stable across refresh (surviving replica {zone1, 100} in both snapshots)")
+}
+
+// TestCellsNoRecoveryGateFiresAfterPostLockCellShift is a full integration test of the
+// post-lock cell gate added for PR #20022. It exercises the TOCTOU scenario where:
+//
+//   - refreshAllInformation runs RefreshAllKeyspacesAndShards and refreshAllTablets
+//     concurrently, so vitess_shard and vitess_tablet may not form a consistent snapshot.
+//   - The pre-lock analysis sees AnalyzedCell="zone1" (allowed), because vitess_shard
+//     recorded the deleted primary in zone1 at the time the analysis was built.
+//   - After the shard lock, RefreshKeyspaceAndShard updates vitess_shard so that
+//     primary_alias.Cell is "zone2" (denied).
+//   - checkIfAlreadyFixed matches on (AnalyzedInstanceAlias, recovery function) and
+//     returns the refreshed analysis entry with AnalyzedCell="zone2".
+//   - The post-checkIfAlreadyFixed gate detects the cell shift and suppresses ERS.
+//
+// This test complements TestCheckIfAlreadyFixedReturnsCellFromRefreshedEntry, which only
+// verifies the checkIfAlreadyFixed API. Here we verify the full
+// executeCheckAndRecoverFunction path to ensure the returned refreshed entry is actually
+// used to suppress recovery.
+func TestCellsNoRecoveryGateFiresAfterPostLockCellShift(t *testing.T) {
+	db.ClearVTOrcDatabase()
+	defer db.ClearVTOrcDatabase()
+
+	orcDb, _, err := db.OpenVTOrcWithCache()
+	require.NoError(t, err)
+
+	ctx := t.Context()
+	oldTs := ts
+	ts = memorytopo.NewServer(ctx, "zone1", "zone2")
+	defer func() { ts = oldTs }()
+
+	// Create keyspace and shard in memorytopo. PrimaryAlias points to zone2 (the deleted
+	// primary's cell — the cell that will be in the deny list).
+	require.NoError(t, ts.CreateKeyspace(ctx, "ks", &topodatapb.Keyspace{DurabilityPolicy: policy.DurabilityNone}))
+	require.NoError(t, ts.CreateShard(ctx, "ks", "0"))
+	_, err = ts.UpdateShardFields(ctx, "ks", "0", func(si *topo.ShardInfo) error {
+		si.PrimaryAlias = &topodatapb.TabletAlias{Cell: "zone2", Uid: 200}
+		si.PrimaryTermStartTime = &vttimepb.Time{Seconds: 1672212205}
+		return nil
+	})
+	require.NoError(t, err)
+
+	// Register the surviving replica in memorytopo with MySQL hostname/port matching
+	// the pre-inserted database_instance row, so the JOIN in GetDetectionAnalysis succeeds
+	// after forceRefreshAllTabletsInShard overwrites vitess_tablet with topo data.
+	require.NoError(t, ts.CreateTablet(ctx, &topodatapb.Tablet{
+		Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+		Keyspace:      "ks",
+		Shard:         "0",
+		Type:          topodatapb.TabletType_REPLICA,
+		MysqlHostname: "localhost",
+		MysqlPort:     6711,
+	}))
+
+	// Pre-insert database_instance for the surviving replica. forceRefreshAllTabletsInShard
+	// calls DiscoverInstance which fails without real MySQL and does not touch
+	// database_instance, so this row survives and keeps is_invalid=false for
+	// GetDetectionAnalysis.
+	_, err = orcDb.Exec(`INSERT OR REPLACE INTO database_instance
+		(alias, hostname, port, tablet_type, cell,
+		 server_id, version, binlog_format, log_bin, log_replica_updates,
+		 binary_log_file, binary_log_pos,
+		 source_host, source_port, replica_net_timeout, heartbeat_interval,
+		 replica_sql_running, replica_io_running,
+		 source_log_file, read_source_log_pos, relay_source_log_file, exec_source_log_pos,
+		 last_checked, last_seen)
+		VALUES ('zone1-0000000100', 'localhost', 6711, 2, 'zone1',
+		        100, '8.0.31', 'ROW', 1, 1,
+		        'bin.000001', 0,
+		        '', 0, 8, 4.0,
+		        1, 1,
+		        '', 0, '', 0,
+		        DATETIME('now'), DATETIME('now'))`)
+	require.NoError(t, err)
+
+	// Initialize recentDiscoveryOperationKeys so DiscoverInstance invocations within
+	// forceRefreshAllTabletsInShard do not panic on a nil cache.
+	prevKeys := recentDiscoveryOperationKeys
+	recentDiscoveryOperationKeys = cache.New(config.GetInstancePollTime(), time.Second)
+	defer func() { recentDiscoveryOperationKeys = prevKeys }()
+
+	prev := cellsNoRecovery
+	cellsNoRecovery = []string{"zone2"} // zone2 is denied
+	defer func() { cellsNoRecovery = prev }()
+
+	prevValidated := cellsNoRecoveryValidated.Swap(true)
+	defer func() { cellsNoRecoveryValidated.Store(prevValidated) }()
+
+	// Construct the initial (stale) analysis: AnalyzedCell="zone1" reflects the
+	// pre-refresh snapshot where vitess_shard.primary_alias.Cell was still zone1.
+	analysis := &inst.DetectionAnalysis{
+		Analysis:              inst.PrimaryTabletDeleted,
+		AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+		AnalyzedCell:          "zone1", // stale; zone2 is the actual cell after topo refresh
+		AnalyzedKeyspace:      "ks",
+		AnalyzedShard:         "0",
+	}
+
+	checkAndRecoverFunctionCode, _ := getCheckAndRecoverFunctionCode(analysis)
+	recoveryName := getRecoverFunctionName(checkAndRecoverFunctionCode)
+	counterKey := strings.Join([]string{recoveryName, analysis.AnalyzedKeyspace, analysis.AnalyzedShard, RecoverySkipCellNoRecovery.String()}, ".")
+	skipsBefore := recoveriesSkippedCounter.Counts()[counterKey]
+
+	require.NoError(t, executeCheckAndRecoverFunction(analysis))
+
+	skipsAfter := recoveriesSkippedCounter.Counts()[counterKey]
+	require.Equal(t, skipsBefore+1, skipsAfter,
+		"CellNoRecovery skip counter must increment: post-lock refresh showed AnalyzedCell shifted from zone1 (allowed) to zone2 (denied)")
+
+	var recoveryRows int
+	require.NoError(t, orcDb.QueryRow("SELECT COUNT(*) FROM topology_recovery").Scan(&recoveryRows))
+	require.Zero(t, recoveryRows, "no topology_recovery row must exist when recovery is suppressed by the post-lock cell gate")
+
+	var detectionRows int
+	require.NoError(t, orcDb.QueryRow("SELECT COUNT(*) FROM recovery_detection").Scan(&detectionRows))
+	require.Equal(t, 1, detectionRows, "detection must be recorded even when recovery is suppressed by the post-lock cell gate")
+}
+
+// TestResolveRecoveryIncidentBoundary covers the two-act incident boundary scenario:
+//
+// Act 1 — failed recovery: the detection row must be preserved so retry attempts share the
+// same detection_id (the incident is still active).
+//
+// Act 2 — successful recovery: resolveRecovery establishes the incident boundary by deleting
+// the detection row. A subsequent recurrence of the same failure must receive a strictly
+// greater detection_id (AUTOINCREMENT).
+func TestResolveRecoveryIncidentBoundary(t *testing.T) {
+	orcDb, _, err := db.OpenVTOrcWithCache()
+	require.NoError(t, err)
+	defer func() {
+		_, _ = orcDb.Exec("DELETE FROM recovery_detection")
+		_, _ = orcDb.Exec("DELETE FROM topology_recovery")
+	}()
+
+	alias := &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}
+	entry := &inst.DetectionAnalysis{
+		AnalyzedInstanceAlias: alias,
+		Analysis:              inst.DeadPrimary,
+		AnalyzedKeyspace:      "ks",
+		AnalyzedShard:         "0",
+	}
+	require.NoError(t, InsertRecoveryDetection(entry))
+	firstID := entry.RecoveryId
+	require.NotZero(t, firstID, "detection row must have been inserted")
+
+	// Act 1: failed recovery attempt — detection row must survive.
+	failedRecovery, err := AttemptRecoveryRegistration(entry)
+	require.NoError(t, err)
+	require.NotNil(t, failedRecovery)
+
+	require.NoError(t, resolveRecovery(failedRecovery, nil)) // nil successor → IsSuccessful=false
+
+	var remaining int
+	require.NoError(t, orcDb.QueryRow("SELECT COUNT(*) FROM recovery_detection").Scan(&remaining))
+	require.Equal(t, 1, remaining, "failed recovery must NOT delete the detection row — incident is still active")
+
+	// A retry attempt re-inserts (UPSERT) and must return the same detection_id.
+	retryEntry := &inst.DetectionAnalysis{
+		AnalyzedInstanceAlias: alias,
+		Analysis:              inst.DeadPrimary,
+		AnalyzedKeyspace:      "ks",
+		AnalyzedShard:         "0",
+	}
+	require.NoError(t, InsertRecoveryDetection(retryEntry))
+	require.Equal(t, firstID, retryEntry.RecoveryId,
+		"retry attempt must share the same detection_id — incident is ongoing")
+
+	// Act 2: successful recovery — detection row must be deleted, establishing the incident boundary.
+	successEntry := &inst.DetectionAnalysis{
+		AnalyzedInstanceAlias: alias,
+		Analysis:              inst.DeadPrimary,
+		AnalyzedKeyspace:      "ks",
+		AnalyzedShard:         "0",
+		RecoveryId:            firstID,
+	}
+	successRecovery, err := AttemptRecoveryRegistration(successEntry)
+	require.NoError(t, err)
+	require.NotNil(t, successRecovery)
+
+	promotedReplica := &inst.Instance{InstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101}}
+	require.NoError(t, resolveRecovery(successRecovery, promotedReplica)) // non-nil → IsSuccessful=true
+
+	require.NoError(t, orcDb.QueryRow("SELECT COUNT(*) FROM recovery_detection").Scan(&remaining))
+	require.Zero(t, remaining, "successful recovery must delete the detection row — incident boundary established")
+
+	// Recurrence after the boundary must produce a strictly greater detection_id.
+	// detection_id is INTEGER PRIMARY KEY AUTOINCREMENT: even after deletion, the next
+	// insert gets max_ever + 1, never a reused value.
+	recurrenceEntry := &inst.DetectionAnalysis{
+		AnalyzedInstanceAlias: alias,
+		Analysis:              inst.DeadPrimary,
+		AnalyzedKeyspace:      "ks",
+		AnalyzedShard:         "0",
+	}
+	require.NoError(t, InsertRecoveryDetection(recurrenceEntry))
+	require.Greater(t, recurrenceEntry.RecoveryId, firstID,
+		"recurrence after incident boundary must receive a fresh detection_id strictly greater than the prior incident's")
+}
+
+// TestDeleteResolvedDetectionEstablishesIncidentBoundary verifies the deleteResolvedDetection
+// helper directly: it removes the row and a re-insertion gets a strictly greater AUTOINCREMENT id.
+func TestDeleteResolvedDetectionEstablishesIncidentBoundary(t *testing.T) {
+	orcDb, _, err := db.OpenVTOrcWithCache()
+	require.NoError(t, err)
+	defer func() {
+		_, _ = orcDb.Exec("DELETE FROM recovery_detection")
+	}()
+
+	entry := &inst.DetectionAnalysis{
+		AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+		Analysis:              inst.ReplicationStopped,
+		AnalyzedKeyspace:      "ks",
+		AnalyzedShard:         "0",
+	}
+	require.NoError(t, InsertRecoveryDetection(entry))
+	firstID := entry.RecoveryId
+	require.NotZero(t, firstID)
+
+	deleteResolvedDetection(firstID)
+
+	var remaining int
+	require.NoError(t, orcDb.QueryRow("SELECT COUNT(*) FROM recovery_detection").Scan(&remaining))
+	require.Zero(t, remaining, "deleteResolvedDetection must remove the detection row")
+
+	reEntry := &inst.DetectionAnalysis{
+		AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+		Analysis:              inst.ReplicationStopped,
+		AnalyzedKeyspace:      "ks",
+		AnalyzedShard:         "0",
+	}
+	require.NoError(t, InsertRecoveryDetection(reEntry))
+	require.Greater(t, reEntry.RecoveryId, firstID,
+		"AUTOINCREMENT must assign a fresh detection_id strictly greater than the deleted one")
+}
+
+// TestAlreadyFixedDeletesOrphanDetectionRow verifies that the alreadyFixed path in
+// executeCheckAndRecoverFunction deletes the detection row it inserted.
+//
+// The row is an orphan: a concurrent successful recovery deleted the prior detection row
+// (incident boundary), and this poll re-inserted a new row before blocking on the shard
+// lock. If the orphan is not cleaned up, a real recurrence hits the UPSERT ON CONFLICT
+// path and reuses its ID instead of getting a fresh one, breaking incident boundary
+// semantics.
+//
+// We exercise the cleanup call (deleteResolvedDetection) directly here rather than
+// through executeCheckAndRecoverFunction to avoid the complexity of setting up the full
+// refresh path, while still covering the invariant.
+func TestAlreadyFixedDeletesOrphanDetectionRow(t *testing.T) {
+	orcDb, _, err := db.OpenVTOrcWithCache()
+	require.NoError(t, err)
+	defer func() {
+		_, _ = orcDb.Exec("DELETE FROM recovery_detection")
+	}()
+
+	entry := &inst.DetectionAnalysis{
+		AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+		Analysis:              inst.ReplicationStopped,
+		AnalyzedKeyspace:      "ks",
+		AnalyzedShard:         "0",
+	}
+	require.NoError(t, InsertRecoveryDetection(entry))
+	orphanID := entry.RecoveryId
+	require.NotZero(t, orphanID)
+
+	// Simulate the alreadyFixed path: deleteResolvedDetection is now called to clean up the
+	// orphan row inserted by this poll before it blocked on the shard lock.
+	deleteResolvedDetection(entry.RecoveryId)
+
+	var remaining int
+	require.NoError(t, orcDb.QueryRow(
+		"SELECT COUNT(*) FROM recovery_detection WHERE detection_id = ?", orphanID).Scan(&remaining))
+	require.Equal(t, 0, remaining, "alreadyFixed path must delete the orphan detection row")
+
+	// A real recurrence must get a fresh detection_id (not orphanID), because AUTOINCREMENT
+	// never reuses a retired ID.
+	reEntry := &inst.DetectionAnalysis{
+		AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+		Analysis:              inst.ReplicationStopped,
+		AnalyzedKeyspace:      "ks",
+		AnalyzedShard:         "0",
+	}
+	require.NoError(t, InsertRecoveryDetection(reEntry))
+	require.Greater(t, reEntry.RecoveryId, orphanID,
+		"real recurrence after orphan cleanup must get a fresh detection_id")
+}
+
+// TestOverlappingPollOrphanClearedByAlreadyFixed is a deterministic regression test for the
+// overlapping-poll race described in the alreadyFixed code comment.
+//
+// Sequence:
+//  1. Poll N: InsertRecoveryDetection → id=A; ERS succeeds → deleteResolvedDetection(A) (incident boundary)
+//  2. Poll N+1: InsertRecoveryDetection before acquiring shard lock → id=B (orphan)
+//  3. Poll N+1: acquires lock, checkIfAlreadyFixed=true → deleteResolvedDetection(B) (fix)
+//  4. Future poll: InsertRecoveryDetection → id=C > B (fresh incident)
+func TestOverlappingPollOrphanClearedByAlreadyFixed(t *testing.T) {
+	orcDb, _, err := db.OpenVTOrcWithCache()
+	require.NoError(t, err)
+	defer func() {
+		_, _ = orcDb.Exec("DELETE FROM recovery_detection")
+	}()
+
+	alias := &topodatapb.TabletAlias{Cell: "zone1", Uid: 200}
+
+	// Phase 1: Poll N inserts and ERS succeeds (incident boundary).
+	pollN := &inst.DetectionAnalysis{
+		AnalyzedInstanceAlias: alias,
+		Analysis:              inst.DeadPrimary,
+		AnalyzedKeyspace:      "ks",
+		AnalyzedShard:         "0",
+	}
+	require.NoError(t, InsertRecoveryDetection(pollN))
+	idA := pollN.RecoveryId
+	require.NotZero(t, idA)
+	deleteResolvedDetection(idA)
+
+	// Phase 2: Poll N+1 inserts before acquiring lock (the orphan).
+	pollN1 := &inst.DetectionAnalysis{
+		AnalyzedInstanceAlias: alias,
+		Analysis:              inst.DeadPrimary,
+		AnalyzedKeyspace:      "ks",
+		AnalyzedShard:         "0",
+	}
+	require.NoError(t, InsertRecoveryDetection(pollN1))
+	idB := pollN1.RecoveryId
+	require.Greater(t, idB, idA, "AUTOINCREMENT must assign id > A after A was deleted")
+
+	// Phase 3: alreadyFixed=true; deleteResolvedDetection cleans up the orphan.
+	deleteResolvedDetection(idB)
+
+	var remaining int
+	require.NoError(t, orcDb.QueryRow(
+		"SELECT COUNT(*) FROM recovery_detection WHERE detection_id = ?", idB).Scan(&remaining))
+	require.Equal(t, 0, remaining, "orphan row B must be deleted by the alreadyFixed path")
+
+	// Phase 4: A real recurrence gets a fresh id > B.
+	future := &inst.DetectionAnalysis{
+		AnalyzedInstanceAlias: alias,
+		Analysis:              inst.DeadPrimary,
+		AnalyzedKeyspace:      "ks",
+		AnalyzedShard:         "0",
+	}
+	require.NoError(t, InsertRecoveryDetection(future))
+	require.Greater(t, future.RecoveryId, idB,
+		"future incident must receive a fresh detection_id, never reusing the orphan's ID")
+}
+
+// TestAttemptRecoveryRegistrationStoresDetectionID verifies that writeTopologyRecovery correctly
+// stores analysisEntry.RecoveryId (the detection FK) in topology_recovery.detection_id. There are
+// 6 SQL placeholders and 6 Go args; a regression would silently store the alias string in the
+// detection_id column (SQLite drops extra args without error) and ReadRecentRecoveries would
+// return DetectionID=0 for every row.
+func TestAttemptRecoveryRegistrationStoresDetectionID(t *testing.T) {
+	orcDb, fromCache, err := db.OpenVTOrcWithCache()
+	require.NoError(t, err)
+	defer func() {
+		if !fromCache {
+			require.NoError(t, orcDb.Close())
+		}
+	}()
+	defer func() {
+		_, _ = orcDb.Exec("DELETE FROM topology_recovery")
+		_, _ = orcDb.Exec("DELETE FROM recovery_detection")
+	}()
+
+	entry := &inst.DetectionAnalysis{
+		AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+		Analysis:              inst.ReplicationStopped,
+		AnalyzedKeyspace:      "ks",
+		AnalyzedShard:         "0",
+	}
+	require.NoError(t, InsertRecoveryDetection(entry))
+	require.NotZero(t, entry.RecoveryId, "detection row must have been inserted")
+
+	recovery, err := AttemptRecoveryRegistration(entry)
+	require.NoError(t, err)
+	require.NotNil(t, recovery)
+
+	recoveries, err := ReadRecentRecoveries(0)
+	require.NoError(t, err)
+	require.Len(t, recoveries, 1)
+	require.Equal(t, entry.RecoveryId, recoveries[0].DetectionID,
+		"topology_recovery.detection_id must store the integer RecoveryId, not the alias string")
 }
