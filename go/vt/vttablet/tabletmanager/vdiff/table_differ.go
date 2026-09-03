@@ -551,27 +551,19 @@ func (td *tableDiffer) diff(ctx context.Context, coreOpts *tabletmanagerdatapb.V
 	curState := cs.Named().Row()
 	mismatch := curState.AsBool("mismatch", false)
 	dr := &DiffReport{}
-	persistedReport := curState.AsBytes("report", []byte("{}"))
-	// A resumable checkpoint exists only when lastpk is set; an uncheckpointable
-	// table clears it to NULL (see updateTableProgress).
-	hasCheckpoint := len(curState.AsBytes("lastpk", nil)) > 0
-	if td.tablePlan.sourceCheckpointUnavailable || !hasCheckpoint {
-		// The scan starts from the beginning: the table has no resumable checkpoint,
-		// or a prior attempt persisted a partial report without one (e.g. an
-		// interrupted uncheckpointable restart, which clears lastpk to NULL).
-		// Carrying over the persisted report or mismatch flag would double-count
-		// rows and duplicate mismatch samples, so start fresh. Reset the persisted
-		// report and mismatch bit together (only when either is set) so VDiff show
-		// never observes a half-reset state during the re-scan.
-		if mismatch || strings.TrimSpace(string(persistedReport)) != "{}" {
-			dr.TableName = td.table.Name
-			if err = resetTableForRestart(dbClient, td.wd.ct.id, dr); err != nil {
-				return nil, err
-			}
-		}
+	if td.tablePlan.sourceCheckpointUnavailable {
+		// This table has no resumable checkpoint and restarts from the beginning
+		// on every run (see getSourcePKCols). Carrying over the persisted partial
+		// report or mismatch flag would double-count rows and duplicate mismatch
+		// samples across restarts, so we start fresh instead. Also clear the
+		// persisted mismatch bit so a mismatch recorded by a discarded partial
+		// attempt does not stick after a clean full-table pass.
 		mismatch = false
-	} else if json.Valid(persistedReport) {
-		if err = json.Unmarshal(persistedReport, dr); err != nil {
+		if err = setTableMismatch(dbClient, td.wd.ct.id, td.table.Name, false); err != nil {
+			return nil, err
+		}
+	} else if rpt := curState.AsBytes("report", []byte("{}")); json.Valid(rpt) {
+		if err = json.Unmarshal(rpt, dr); err != nil {
 			return nil, err
 		}
 	}
@@ -934,29 +926,6 @@ func (td *tableDiffer) updateTableStateAndReport(ctx context.Context, dbClient b
 // mismatch bit for a table. It is cleared when a table with no resumable
 // checkpoint restarts from the beginning, so a mismatch recorded by a discarded
 // partial attempt does not stick after a clean full-table pass.
-// resetTableForRestart clears a table's persisted progress, report, and mismatch
-// bit in a single update, so VDiff show never observes a half-reset state while an
-// uncheckpointable table re-scans from the beginning. dr.TableName must be set.
-func resetTableForRestart(dbClient binlogplayer.DBClient, vdiffID int64, dr *DiffReport) error {
-	reportJSON, err := json.Marshal(dr)
-	if err != nil {
-		return err
-	}
-	query, err := sqlparser.ParseAndBind(sqlResetTableForRestart,
-		sqltypes.StringBindVariable(string(reportJSON)),
-		sqltypes.BoolBindVariable(false),
-		sqltypes.Int64BindVariable(vdiffID),
-		sqltypes.StringBindVariable(dr.TableName),
-	)
-	if err != nil {
-		return err
-	}
-	if _, err = dbClient.ExecuteFetch(query, 1); err != nil {
-		return err
-	}
-	return nil
-}
-
 func setTableMismatch(dbClient binlogplayer.DBClient, vdiffID int64, table string, mismatch bool) error {
 	query, err := sqlparser.ParseAndBind(sqlUpdateTableMismatch,
 		sqltypes.BoolBindVariable(mismatch),
