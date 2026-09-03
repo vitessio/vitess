@@ -6814,7 +6814,7 @@ UTC_DATE func_paren_opt
   }
 | CURDATE func_paren_opt
   {
-    $$ = &FuncExpr{Name:NewIdentifierCI("curdate")}
+    $$ = &CurTimeFuncExpr{Name:NewIdentifierCI("curdate")} // a dedicated node like now/curtime/sysdate, so the keyword form is never a generic call (see FuncExpr.Format)
   }
 | UTC_TIME func_datetime_precision
   {
