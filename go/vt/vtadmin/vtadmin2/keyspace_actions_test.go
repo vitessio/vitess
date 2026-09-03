@@ -206,6 +206,7 @@ func TestKeyspaceActionsCallAPI(t *testing.T) {
 				require.NotNil(t, fake.reloadSchemasReq)
 				assert.Equal(t, []string{testClusterID}, fake.reloadSchemasReq.ClusterIds)
 				assert.Equal(t, []string{testKeyspace}, fake.reloadSchemasReq.Keyspaces)
+				assert.Equal(t, int32(10), fake.reloadSchemasReq.Concurrency)
 				assert.True(t, fake.reloadSchemasReq.IncludePrimary)
 			},
 		},

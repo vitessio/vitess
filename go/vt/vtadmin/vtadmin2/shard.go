@@ -181,6 +181,7 @@ func (s *Server) shardReloadSchema(w http.ResponseWriter, r *http.Request) {
 		ClusterId:      clusterID,
 		Keyspace:       keyspace,
 		Shard:          shard,
+		Concurrency:    10,
 		IncludePrimary: r.Form.Get("include_primary") == "on",
 	})
 	if err != nil {
@@ -400,6 +401,10 @@ func (s *Server) shardValidate(w http.ResponseWriter, r *http.Request) {
 		s.renderFormError(w, r, title, "not authorized to validate shard")
 		return
 	}
+	if len(resp.GetResults()) > 0 {
+		s.renderFormError(w, r, title, strings.Join(resp.GetResults(), "; "))
+		return
+	}
 
 	s.redirectWithFlash(w, r, shardDetailPath(clusterID, keyspace, shard), Flash{
 		Kind:    "success",
@@ -425,6 +430,10 @@ func (s *Server) shardValidateVersion(w http.ResponseWriter, r *http.Request) {
 	}
 	if resp == nil {
 		s.renderFormError(w, r, title, "not authorized to validate version")
+		return
+	}
+	if len(resp.GetResults()) > 0 {
+		s.renderFormError(w, r, title, strings.Join(resp.GetResults(), "; "))
 		return
 	}
 

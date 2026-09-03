@@ -248,6 +248,7 @@ func (s *Server) keyspaceReloadSchema(w http.ResponseWriter, r *http.Request) {
 	resp, err := s.api.ReloadSchemas(r.Context(), &vtadminpb.ReloadSchemasRequest{
 		ClusterIds:     []string{clusterID},
 		Keyspaces:      []string{keyspace},
+		Concurrency:    10,
 		IncludePrimary: true,
 	})
 	if err != nil {

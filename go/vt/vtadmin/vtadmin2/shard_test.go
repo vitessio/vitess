@@ -65,8 +65,10 @@ type shardFakeServer struct {
 	emergencyFailoverNil   bool
 	validateShardReq       *vtadminpb.ValidateShardRequest
 	validateShardNil       bool
+	validateShardResp      *vtctldatapb.ValidateShardResponse
 	validateVersionShardRe *vtadminpb.ValidateVersionShardRequest
 	validateVersionNil     bool
+	validateVersionResp    *vtctldatapb.ValidateVersionShardResponse
 	getTabletReq           *vtadminpb.GetTabletRequest
 	getTabletError         error
 }
@@ -154,6 +156,9 @@ func (f *shardFakeServer) ValidateShard(ctx context.Context, req *vtadminpb.Vali
 	if f.validateShardNil {
 		return nil, nil
 	}
+	if f.validateShardResp != nil {
+		return f.validateShardResp, nil
+	}
 	return &vtctldatapb.ValidateShardResponse{}, nil
 }
 
@@ -161,6 +166,9 @@ func (f *shardFakeServer) ValidateVersionShard(ctx context.Context, req *vtadmin
 	f.validateVersionShardRe = req
 	if f.validateVersionNil {
 		return nil, nil
+	}
+	if f.validateVersionResp != nil {
+		return f.validateVersionResp, nil
 	}
 	return &vtctldatapb.ValidateVersionShardResponse{}, nil
 }
@@ -386,6 +394,7 @@ func TestShardReloadSchema(t *testing.T) {
 	assert.Equal(t, testClusterID, fake.reloadSchemaShardReq.ClusterId)
 	assert.Equal(t, testKeyspace, fake.reloadSchemaShardReq.Keyspace)
 	assert.Equal(t, testShard, fake.reloadSchemaShardReq.Shard)
+	assert.Equal(t, int32(10), fake.reloadSchemaShardReq.Concurrency)
 	assert.True(t, fake.reloadSchemaShardReq.IncludePrimary)
 }
 
@@ -608,6 +617,28 @@ func TestShardValidateVersion(t *testing.T) {
 	assert.Equal(t, testClusterID, fake.validateVersionShardRe.ClusterId)
 	assert.Equal(t, testKeyspace, fake.validateVersionShardRe.Keyspace)
 	assert.Equal(t, testShard, fake.validateVersionShardRe.Shard)
+}
+
+func TestShardValidateFailureResultsDoNotFlashSuccess(t *testing.T) {
+	fake := newShardFake()
+	fake.validateShardResp = &vtctldatapb.ValidateShardResponse{Results: []string{"tablet unavailable"}}
+	s := newShardTestServer(t, fake, false)
+
+	rec := postShardForm(t, s, shardActionPaths()[5], url.Values{})
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Contains(t, rec.Body.String(), "tablet unavailable")
+}
+
+func TestShardValidateVersionFailureResultsDoNotFlashSuccess(t *testing.T) {
+	fake := newShardFake()
+	fake.validateVersionResp = &vtctldatapb.ValidateVersionShardResponse{Results: []string{"version mismatch"}}
+	s := newShardTestServer(t, fake, false)
+
+	rec := postShardForm(t, s, shardActionPaths()[6], url.Values{})
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Contains(t, rec.Body.String(), "version mismatch")
 }
 
 func TestShardValidateUnauthorizedNilResponse(t *testing.T) {

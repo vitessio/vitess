@@ -34,11 +34,7 @@ func (s *Server) loadFormOptions(r *http.Request, requestedCluster, requestedKey
 	clusters := clustersResp.GetClusters()
 	selectedCluster := selectedClusterID(clusters, requestedCluster, cookieValue(r, defaultClusterCookieName))
 
-	keyspaceReq := &vtadminpb.GetKeyspacesRequest{}
-	if selectedCluster != "" {
-		keyspaceReq.ClusterIds = []string{selectedCluster}
-	}
-	keyspacesResp, err := s.api.GetKeyspaces(ctx, keyspaceReq)
+	keyspacesResp, err := s.api.GetKeyspaces(ctx, &vtadminpb.GetKeyspacesRequest{})
 	if err != nil {
 		return formOptions{}, err
 	}
