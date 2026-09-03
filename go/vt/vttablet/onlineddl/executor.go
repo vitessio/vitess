@@ -224,6 +224,13 @@ const (
 	// vreplStreamCancel: the stream's error is terminal for the migration;
 	// cancel (fail) the migration.
 	vreplStreamCancel
+	// vreplStreamRepair: the stream parked on a retries-exhausted error,
+	// which can only happen to a stream created before this executor's
+	// retry-forever options override existed (e.g. an in-flight migration
+	// across a rolling upgrade, under a finite tablet-wide
+	// --vreplication-max-time-to-retry-on-error). Restart it with the
+	// override installed instead of failing the migration.
+	vreplStreamRepair
 )
 
 // pendingMigration carries both the UUID and migration context of a pending migration.
@@ -3296,10 +3303,12 @@ func (e *Executor) runNextMigration(ctx context.Context) error {
 
 // overrideStateFromHistory decides whether readVReplStream's _vt.vreplication_log
 // history scan should override the live stream's state with a historical
-// terminal-error row. Class B (vreplication.RetriesExhaustedIndicator) is
-// resumable by definition: once the stream is actually running again
-// (liveState is Init/Copying/Running), a stale class-B history row must not
-// force the migration back into a permanent Error state. Class A / legacy
+// terminal-error row. A class-B (vreplication.RetriesExhaustedIndicator)
+// row records a recoverable-class error whose retry window expired — a past
+// condition, not a permanent verdict: once the stream is actually running
+// again (liveState is Init/Copying/Running), a stale class-B history row
+// must not force the migration back into the Error state, where it would
+// now trigger repair attempts against a healthy stream. Class A / legacy
 // terminal-error rows keep the scan's original stickiness and always
 // override, regardless of the live state, since they indicate the stream
 // can never make forward progress again from that point.
@@ -3311,11 +3320,11 @@ func overrideStateFromHistory(liveState binlogdatapb.VReplicationWorkflowState, 
 	if liveState == binlogdatapb.VReplicationWorkflowState_Error {
 		return false
 	}
-	// A retries-exhausted (resumable) history row never forces the stream
-	// back into the Error state: the stream was, by definition, resumable,
-	// and its live state supersedes that history. Unrecoverable and
-	// legacy, unclassified terminal errors remain sticky, which is the
-	// scan's original purpose.
+	// A retries-exhausted history row never forces the stream back into
+	// the Error state: it records a recoverable-class error, and the live
+	// state supersedes that history. Unrecoverable and legacy,
+	// unclassified terminal errors remain sticky, which is the scan's
+	// original purpose.
 	return !isRetriesExhaustedMessage(historicalMessage)
 }
 
@@ -3514,10 +3523,14 @@ func getInOrderCompletionPendingCount(onlineDDL *schema.OnlineDDL, pendingMigrat
 // migration and cancels it immediately: streams created by this executor
 // pin retry-forever via a per-workflow config override (see
 // generateInsertStatement), so recoverable errors keep the stream retrying
-// at the controller instead of parking it in the Error state. The
-// executor's stale-migration policy remains the overall no-progress bound —
-// liveness is driven by time_updated, which pure retry loops do not
-// advance.
+// at the controller instead of parking it in the Error state. The one
+// exception is a retries-exhausted park, which can only come from a stream
+// created before the override existed: it is repaired (restarted with the
+// override installed) rather than cancelled — unless the park itself has
+// persisted past the LastError retry window, in which case the cancel takes
+// precedence. The executor's stale-migration policy remains the overall
+// no-progress bound — liveness is driven by time_updated, which pure retry
+// loops do not advance.
 func (e *Executor) reviewVReplStreamError(uuid string, s *VReplStream) vreplStreamAction {
 	if _, ok := e.vreplicationLastError[uuid]; !ok {
 		e.vreplicationLastError[uuid] = vterrors.NewLastError(
@@ -3528,10 +3541,32 @@ func (e *Executor) reviewVReplStreamError(uuid string, s *VReplStream) vreplStre
 	lastError := e.vreplicationLastError[uuid]
 	isTerminal, vreplError := s.hasError()
 	lastError.Record(vreplError)
-	if isTerminal || !lastError.ShouldRetry() {
+	if !lastError.ShouldRetry() {
+		return vreplStreamCancel
+	}
+	if isTerminal {
+		if isRetriesExhaustedMessage(s.message) {
+			return vreplStreamRepair
+		}
 		return vreplStreamCancel
 	}
 	return vreplStreamNoAction
+}
+
+// repairVReplicationQuery returns the statement repairing a stream parked on
+// a retries-exhausted error: restart it, clear the parked message, and
+// install the retry-forever options override so it cannot park on a
+// recoverable error again. Overwriting options wholesale is safe because
+// Online DDL streams are only ever created with either empty options (older
+// executors) or exactly this override. The Error-state guard avoids
+// clobbering a stream that recovered concurrently.
+func repairVReplicationQuery(id int32) (string, error) {
+	options, err := onlineDDLVReplicationOptions()
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("update _vt.vreplication set state='Running', message='', options=%s where id=%d and state='Error'",
+		sqltypes.EncodeStringSQL(options), id), nil
 }
 
 // reviewRunningMigrations iterates migrations in 'running' state. Normally there's only one running, which was
@@ -3652,6 +3687,37 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 					// the ownership/liveness/cutover flow below could cut
 					// the migration over and complete it before
 					// cancelMigrations processes the queue.
+					return nil
+				}
+				if action == vreplStreamRepair {
+					// The park pre-dates the retry-forever options override
+					// (e.g. an in-flight migration across a rolling
+					// upgrade): restart the stream with the override
+					// installed, preserving the migration's copy progress.
+					// Own the migration first so the scheduler's conflict
+					// and concurrency checks see it while it recovers. On
+					// failure, log and leave the park in place: the next
+					// tick retries, and the LastError retry window and the
+					// stale-migration policy bound a park that never
+					// repairs.
+					e.ownedRunningMigrations.Store(uuid, onlineDDL)
+					query, err := repairVReplicationQuery(s.id)
+					if err != nil {
+						return err
+					}
+					tablet, err := e.ts.GetTablet(ctx, e.tabletAlias)
+					if err != nil {
+						log.Error("Online DDL: failed to get tablet for vreplication repair",
+							slog.String("uuid", uuid), slog.Any("error", err))
+						return nil
+					}
+					if _, err := e.vreplicationExec(ctx, tablet.Tablet, query); err != nil {
+						log.Error("Online DDL: failed to repair vreplication stream parked on a retries-exhausted error",
+							slog.String("uuid", uuid), slog.Int64("stream_id", int64(s.id)), slog.Any("error", err))
+						return nil
+					}
+					log.Info("Online DDL: repaired vreplication stream parked on a retries-exhausted error; restarted with the retry-forever override",
+						slog.String("uuid", uuid), slog.Int64("stream_id", int64(s.id)))
 					return nil
 				}
 				if !s.isRunning() {

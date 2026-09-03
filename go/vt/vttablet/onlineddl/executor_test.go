@@ -736,10 +736,11 @@ func TestMigrationStatusTransitionsUpdateMetrics(t *testing.T) {
 // TestOverrideStateFromHistory tests readVReplStream's _vt.vreplication_log
 // history-scan decision: a class-B (retries-exhausted) historical row must
 // not force the live state back to Error once the stream is actually
-// running again (Init/Copying/Running) — class B is resumable by
-// definition, so a live running stream supersedes a stale class-B history
-// row. Class A / legacy terminal-error rows keep their original stickiness
-// and always override, regardless of the live state.
+// running again (Init/Copying/Running) — it records a recoverable-class
+// error that has since cleared, and forcing Error would now trigger repair
+// attempts against a healthy stream. Class A / legacy terminal-error rows
+// keep their original stickiness and always override, regardless of the
+// live state.
 func TestOverrideStateFromHistory(t *testing.T) {
 	classBMessage := vreplication.RetriesExhaustedIndicator + ": the same error was encountered continuously for longer than --vreplication-max-time-to-retry-on-error (15m0s): connection refused"
 	classAMessage := vreplication.UnrecoverableErrorIndicator + ": bad data"
@@ -800,7 +801,7 @@ func TestOverrideStateFromHistory(t *testing.T) {
 			wantOverride:      true,
 		},
 		{
-			// A resumable-class history row never forces the Error state,
+			// A retries-exhausted history row never forces the Error state,
 			// regardless of the live state.
 			name:              "class B, live Stopped -> no override",
 			liveState:         binlogdatapb.VReplicationWorkflowState_Stopped,
@@ -1237,8 +1238,11 @@ func TestResolveVReplStreamAction(t *testing.T) {
 	assert.Equal(t, vreplStreamCancel, resolveVReplStreamAction(vreplStreamNoAction, true),
 		"a surviving clean stream yields no action, but the pending cancellation must still be re-driven")
 	assert.Equal(t, vreplStreamCancel, resolveVReplStreamAction(vreplStreamCancel, true))
+	assert.Equal(t, vreplStreamCancel, resolveVReplStreamAction(vreplStreamRepair, true),
+		"a pending cancellation must beat the repair verdict: repairing a cancelled migration's stream would revive it")
 	assert.Equal(t, vreplStreamCancel, resolveVReplStreamAction(vreplStreamCancel, false))
 	assert.Equal(t, vreplStreamNoAction, resolveVReplStreamAction(vreplStreamNoAction, false))
+	assert.Equal(t, vreplStreamRepair, resolveVReplStreamAction(vreplStreamRepair, false))
 }
 
 // TestForgetVReplStream pins the helper's deletion semantics; the lifecycle
@@ -1289,8 +1293,24 @@ func TestReviewVReplStreamError(t *testing.T) {
 		e := newExecutor()
 		assert.Equal(t, vreplStreamCancel, e.reviewVReplStreamError(uuid, unrecoverableStream))
 	})
-	t.Run("retries-exhausted stream is cancelled", func(t *testing.T) {
+	t.Run("retries-exhausted stream is repaired", func(t *testing.T) {
+		// A retries-exhausted park can only come from a stream created
+		// before this executor's retry-forever options override existed
+		// (e.g. an in-flight migration across a rolling upgrade, with a
+		// finite tablet-wide --vreplication-max-time-to-retry-on-error).
+		// It is repaired — restarted with the override installed — rather
+		// than cancelled, preserving the migration's copy progress.
 		e := newExecutor()
+		assert.Equal(t, vreplStreamRepair, e.reviewVReplStreamError(uuid, retriesExhaustedStream))
+	})
+	t.Run("retries-exhausted stream past the retry window is cancelled", func(t *testing.T) {
+		// If the park persists past the executor's own retry window (e.g.
+		// the repair itself keeps failing), the window-expiry cancel takes
+		// precedence over further repair attempts.
+		e := newExecutor()
+		lastError := vterrors.NewLastError("test", -time.Nanosecond)
+		lastError.Record(errors.New(retriesExhaustedStream.message))
+		e.vreplicationLastError[uuid] = lastError
 		assert.Equal(t, vreplStreamCancel, e.reviewVReplStreamError(uuid, retriesExhaustedStream))
 	})
 	t.Run("transient error within the retry window is tolerated", func(t *testing.T) {
@@ -1315,6 +1335,19 @@ func TestReviewVReplStreamError(t *testing.T) {
 		}
 		assert.Equal(t, vreplStreamNoAction, e.reviewVReplStreamError(uuid, cleanStream))
 	})
+}
+
+// TestRepairVReplicationQuery tests the statement that repairs a stream
+// parked on a retries-exhausted error: it must restart the stream, clear the
+// parked message, install the retry-forever options override so the stream
+// cannot park on a recoverable error again, and guard on the Error state so
+// a concurrently recovered stream is not clobbered.
+func TestRepairVReplicationQuery(t *testing.T) {
+	query, err := repairVReplicationQuery(42)
+	require.NoError(t, err)
+	assert.Equal(t,
+		`update _vt.vreplication set state='Running', message='', options='{"config":{"vreplication-max-time-to-retry-on-error":"0s"}}' where id=42 and state='Error'`,
+		query)
 }
 
 // TestGetNonConflictingMigrationCancellationIntent pins the scheduling gate:

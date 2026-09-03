@@ -411,24 +411,36 @@ func (v *VRepl) analyze(ctx context.Context, conn *dbconnpool.DBConnection) erro
 	return nil
 }
 
-// generateInsertStatement generates the INSERT INTO _vt.replication statement that creates the vreplication workflow
-func (v *VRepl) generateInsertStatement() (string, error) {
-	// Pin the stream's retry window to 0 (retry forever) regardless of any
-	// tablet-wide --vreplication-max-time-to-retry-on-error value: a
-	// recoverable error must keep the stream retrying rather than park it in
-	// the Error state, which would fail the migration and lose all copy
-	// progress. The migration's own stale policy (staleMigrationFailMinutes,
-	// driven by time_updated liveness that pure retry loops do not advance)
-	// remains the overall no-progress bound.
+// onlineDDLVReplicationOptions returns the options JSON every Online DDL
+// vreplication stream carries: a per-workflow config override pinning the
+// stream's retry window to 0 (retry forever) regardless of any tablet-wide
+// --vreplication-max-time-to-retry-on-error value. A recoverable error must
+// keep the stream retrying rather than park it in the Error state, which
+// would fail the migration and lose all copy progress. The migration's own
+// stale policy (staleMigrationFailMinutes, driven by time_updated liveness
+// that pure retry loops do not advance) remains the overall no-progress
+// bound. Used both when creating a stream (generateInsertStatement) and when
+// repairing a pre-override stream parked on a retries-exhausted error
+// (repairVReplicationQuery).
+func onlineDDLVReplicationOptions() (string, error) {
 	options, err := json.Marshal(&vtctldatapb.WorkflowOptions{
 		Config: map[string]string{"vreplication-max-time-to-retry-on-error": "0s"},
 	})
 	if err != nil {
 		return "", err
 	}
+	return string(options), nil
+}
+
+// generateInsertStatement generates the INSERT INTO _vt.replication statement that creates the vreplication workflow
+func (v *VRepl) generateInsertStatement() (string, error) {
+	options, err := onlineDDLVReplicationOptions()
+	if err != nil {
+		return "", err
+	}
 	ig := vreplication.NewInsertGenerator(binlogdatapb.VReplicationWorkflowState_Stopped, v.dbName)
 	ig.AddRow(v.workflow, v.bls, v.pos, "", "in_order:REPLICA,PRIMARY",
-		binlogdatapb.VReplicationWorkflowType_OnlineDDL, binlogdatapb.VReplicationWorkflowSubType_None, false, string(options))
+		binlogdatapb.VReplicationWorkflowType_OnlineDDL, binlogdatapb.VReplicationWorkflowSubType_None, false, options)
 
 	return ig.String(), nil
 }
