@@ -1277,6 +1277,49 @@ func TestComStmtCloseClearsPendingLongDataIngressBytes(t *testing.T) {
 	assert.False(t, ok)
 }
 
+// parseModeHandler prepares under a session sql_mode and reports the mode
+// through the optional PrepareParseModeHandler extension.
+type parseModeHandler struct {
+	testRun
+}
+
+func (parseModeHandler) ComPrepare(*Conn, string) ([]*querypb.Field, uint16, error) {
+	panic("ComPrepare must not be called on a handler that implements PrepareParseModeHandler")
+}
+
+func (parseModeHandler) ComPrepareWithParseMode(*Conn, string) ([]*querypb.Field, uint16, uint32, error) {
+	return nil, 1, 5, nil
+}
+
+// A handler that implements PrepareParseModeHandler has its parse mode stored on
+// the prepared statement; a handler with only ComPrepare — the interface as it
+// was before the extension existed — prepares under the default mode.
+func TestComPrepareParseMode(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		handler Handler
+		mode    uint32
+	}{
+		{name: "handler with the extension", handler: parseModeHandler{}, mode: 5},
+		{name: "handler without the extension", handler: testRun{paramCounts: 1}, mode: 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			listener, sConn, cConn := createSocketPair(t)
+			defer listener.Close()
+			defer sConn.Close()
+			defer cConn.Close()
+			sConn.PrepareData = map[uint32]*PrepareData{}
+
+			require.NoError(t, cConn.writePacket(preparePacket(t, "select ?")))
+			require.True(t, sConn.handleNextCommand(tc.handler))
+
+			require.Len(t, sConn.PrepareData, 1)
+			assert.Equal(t, tc.mode, sConn.PrepareData[1].ParseSQLMode)
+			assert.Equal(t, uint16(1), sConn.PrepareData[1].ParamsCount)
+		})
+	}
+}
+
 func TestComPrepareBytesNotAttributedToExecute(t *testing.T) {
 	listener, sConn, cConn := createSocketPair(t)
 	defer listener.Close()
@@ -2361,8 +2404,8 @@ func comQueryMulti(parser *sqlparser.Parser, comQuery func(c *Conn, query string
 	return callback(sqltypes.QueryResponse{QueryError: sqlerror.NewSQLErrorFromError(err)}, false, true)
 }
 
-func (t testRun) ComPrepare(c *Conn, query string) ([]*querypb.Field, uint16, uint32, error) {
-	return nil, t.paramCounts, 0, nil
+func (t testRun) ComPrepare(c *Conn, query string) ([]*querypb.Field, uint16, error) {
+	return nil, t.paramCounts, nil
 }
 
 func (t testRun) WarningCount(c *Conn) uint16 {

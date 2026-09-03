@@ -549,8 +549,17 @@ func slowQueryStatusFlags(statusFlags uint16, slow bool) uint16 {
 	return statusFlags &^ mysql.ServerQueryWasSlow
 }
 
-// ComPrepare is the handler for command prepare.
-func (vh *vtgateHandler) ComPrepare(c *mysql.Conn, query string) ([]*querypb.Field, uint16, uint32, error) {
+var _ mysql.PrepareParseModeHandler = (*vtgateHandler)(nil)
+
+// ComPrepare implements mysql.Handler; vtgate reports the prepare-time parse
+// mode through ComPrepareWithParseMode, which the server calls instead.
+func (vh *vtgateHandler) ComPrepare(c *mysql.Conn, query string) ([]*querypb.Field, uint16, error) {
+	fld, paramsCount, _, err := vh.ComPrepareWithParseMode(c, query)
+	return fld, paramsCount, err
+}
+
+// ComPrepareWithParseMode implements mysql.PrepareParseModeHandler.
+func (vh *vtgateHandler) ComPrepareWithParseMode(c *mysql.Conn, query string) ([]*querypb.Field, uint16, uint32, error) {
 	var ctx context.Context
 	var cancel context.CancelFunc
 	if mysqlQueryTimeout != 0 {

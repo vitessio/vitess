@@ -1471,7 +1471,15 @@ func (c *Conn) handleComPrepare(handler Handler, data []byte) (kontinue bool) {
 		query = statement
 	}
 
-	fld, paramsCount, parseSQLMode, err := handler.ComPrepare(c, query)
+	var fld []*querypb.Field
+	var paramsCount uint16
+	var parseSQLMode uint32
+	var err error
+	if h, ok := handler.(PrepareParseModeHandler); ok {
+		fld, paramsCount, parseSQLMode, err = h.ComPrepareWithParseMode(c, query)
+	} else {
+		fld, paramsCount, err = handler.ComPrepare(c, query)
+	}
 	if err != nil {
 		return c.writeErrorPacketFromErrorAndLog(err)
 	}
