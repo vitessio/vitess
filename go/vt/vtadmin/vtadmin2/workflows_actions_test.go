@@ -367,6 +367,19 @@ func TestWorkflowSwitchTraffic(t *testing.T) {
 	assert.Equal(t, int32(0), inner.Direction)
 }
 
+func TestWorkflowSwitchTrafficRejectsZeroTimeout(t *testing.T) {
+	fake := &workflowActionsFakeServer{}
+	s := newWorkflowActionsTestServer(t, fake, false)
+
+	rec := postShardForm(t, s, workflowActionBase+"/switch_traffic", url.Values{
+		"timeout": {"0"},
+	})
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Nil(t, fake.workflowSwitchTrafficReq)
+	assert.Contains(t, rec.Body.String(), "timeout value must be at least 1 second")
+}
+
 func TestWorkflowReverseTraffic(t *testing.T) {
 	fake := &workflowActionsFakeServer{}
 	s := newWorkflowActionsTestServer(t, fake, false)

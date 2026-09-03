@@ -43,6 +43,7 @@ type keyspaceActionsFakeServer struct {
 	reloadSchemasReq           *vtadminpb.ReloadSchemasRequest
 	reloadSchemasResp          *vtadminpb.ReloadSchemasResponse
 	reloadSchemasNil           bool
+	validateSchemaResp         *vtctldatapb.ValidateSchemaKeyspaceResponse
 	validateKeyspaceNil        bool
 	validateSchemaNil          bool
 	validateVersionNil         bool
@@ -70,6 +71,9 @@ func (f *keyspaceActionsFakeServer) ValidateSchemaKeyspace(ctx context.Context, 
 	f.validateSchemaKeyspaceReq = req
 	if f.validateSchemaNil {
 		return nil, nil
+	}
+	if f.validateSchemaResp != nil {
+		return f.validateSchemaResp, nil
 	}
 	return &vtctldatapb.ValidateSchemaKeyspaceResponse{}, nil
 }
@@ -291,6 +295,23 @@ func TestKeyspaceReloadSchemaEmptyResponseUnauthorized(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
 	assert.NotEqual(t, keyspaceActionBase, rec.Header().Get("Location"))
 	assert.Contains(t, rec.Body.String(), "not authorized")
+}
+
+func TestKeyspaceValidateSchemaFailureResultsDoNotFlashSuccess(t *testing.T) {
+	fake := &keyspaceActionsFakeServer{
+		validateSchemaResp: &vtctldatapb.ValidateSchemaKeyspaceResponse{
+			ResultsByShard: map[string]*vtctldatapb.ValidateShardResponse{
+				"0": {Results: []string{"schemas differ"}},
+			},
+		},
+	}
+	s := newKeyspaceActionsTestServer(t, fake, false)
+
+	rec := postShardForm(t, s, keyspaceActionBase+"/validate_schema", url.Values{})
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.NotEqual(t, keyspaceActionBase, rec.Header().Get("Location"))
+	assert.Contains(t, rec.Body.String(), "schemas differ")
 }
 
 func TestKeyspaceReloadSchemaFailureEventsDoNotFlashSuccess(t *testing.T) {

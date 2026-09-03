@@ -80,11 +80,28 @@ func (s *Server) keyspaceValidateSchema(w http.ResponseWriter, r *http.Request) 
 		s.renderFormError(w, r, title, "not authorized to validate schema")
 		return
 	}
+	if result := schemaValidationError(resp); result != "" {
+		s.renderFormError(w, r, title, result)
+		return
+	}
 
 	s.redirectWithFlash(w, r, keyspaceDetailPath(clusterID, keyspace), Flash{
 		Kind:    "success",
 		Message: "validated schema on keyspace " + keyspace,
 	})
+}
+
+func schemaValidationError(resp *vtctldatapb.ValidateSchemaKeyspaceResponse) string {
+	if len(resp.GetResults()) > 0 {
+		return strings.Join(resp.GetResults(), "; ")
+	}
+	for shard, result := range resp.GetResultsByShard() {
+		if result == nil || len(result.GetResults()) == 0 {
+			continue
+		}
+		return shard + ": " + strings.Join(result.GetResults(), "; ")
+	}
+	return ""
 }
 
 func (s *Server) keyspaceValidateVersion(w http.ResponseWriter, r *http.Request) {

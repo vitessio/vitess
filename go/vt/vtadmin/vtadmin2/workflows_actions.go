@@ -263,6 +263,10 @@ func (s *Server) workflowSwitchTraffic(w http.ResponseWriter, r *http.Request, d
 		s.renderFormErrorErr(w, r, title, err)
 		return
 	}
+	if timeout != nil && timeout.GetSeconds() < 1 {
+		s.renderFormError(w, r, title, "timeout value must be at least 1 second")
+		return
+	}
 
 	maxLag, err := parseShardFormDuration(r, "max_replication_lag_allowed")
 	if err != nil {

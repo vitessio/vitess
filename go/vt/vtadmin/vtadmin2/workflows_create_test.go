@@ -32,6 +32,8 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 const createMoveTablesPath = "/workflows/movetables/create"
@@ -46,6 +48,7 @@ type workflowCreateFakeServer struct {
 	materializeErr       error
 	applySchemaReq       *vtadminpb.ApplySchemaRequest
 	applySchemaErr       error
+	getSchemasErr        error
 }
 
 func (f *workflowCreateFakeServer) GetClusters(ctx context.Context, req *vtadminpb.GetClustersRequest) (*vtadminpb.GetClustersResponse, error) {
@@ -67,6 +70,9 @@ func (f *workflowCreateFakeServer) GetKeyspaces(ctx context.Context, req *vtadmi
 }
 
 func (f *workflowCreateFakeServer) GetSchemas(ctx context.Context, req *vtadminpb.GetSchemasRequest) (*vtadminpb.GetSchemasResponse, error) {
+	if f.getSchemasErr != nil {
+		return nil, f.getSchemasErr
+	}
 	return &vtadminpb.GetSchemasResponse{Schemas: []*vtadminpb.Schema{
 		{
 			Cluster:  &vtadminpb.Cluster{Id: testClusterID},
@@ -203,6 +209,21 @@ func TestCreateMoveTablesFormDefaultsClusterWithoutQuery(t *testing.T) {
 	assert.Contains(t, body, `value="commerce"`)
 	assert.Contains(t, body, `value="sales"`)
 	assert.NotContains(t, body, `name="workflow"`)
+}
+
+func TestCreateMoveTablesFormRendersWithoutSchemaAccess(t *testing.T) {
+	fake := &workflowCreateFakeServer{
+		getSchemasErr: vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "schema access denied"),
+	}
+	s := newWorkflowCreateTestServer(t, fake, false)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, createMoveTablesPath+"?source_keyspace=commerce", nil)
+	s.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	assert.Contains(t, rec.Body.String(), `name="all_tables"`)
+	assert.Contains(t, rec.Body.String(), `name="workflow"`)
 }
 
 func TestCreateMoveTablesPostAllTables(t *testing.T) {

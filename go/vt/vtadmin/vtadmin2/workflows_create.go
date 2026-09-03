@@ -101,7 +101,7 @@ func (s *Server) createMoveTablesForm(w http.ResponseWriter, r *http.Request) {
 
 	if form.SelectedCluster != "" && sourceKeyspace != "" {
 		tables, err := s.fetchSourceTables(r, form.SelectedCluster, sourceKeyspace)
-		if err != nil {
+		if err != nil && vterrors.Code(err) != vtrpcpb.Code_NOT_FOUND {
 			s.renderError(w, r, http.StatusInternalServerError, "Create MoveTables workflow", err)
 			return
 		}
