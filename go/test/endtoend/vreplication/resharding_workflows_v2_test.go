@@ -671,6 +671,17 @@ func testPartialSwitches(t *testing.T) {
 	tstWorkflowSwitchReads(t, "", "")
 	checkStates(t, wrangler.WorkflowStateNotSwitched, wrangler.WorkflowStateReadsSwitched)
 
+	// Inject a fake stopped OnlineDDL VReplication stream on the source shard to
+	// verify that SwitchWrites correctly filters terminal OnlineDDL streams rather
+	// than failing with "cannot migrate until all streams are running".
+	// This must be done before the first SwitchWrites, which creates a resharding
+	// journal; subsequent SwitchWrites calls find the journal and skip
+	// BuildStreamMigrator entirely, so the filter would never be exercised.
+	if currentWorkflowType == binlogdatapb.VReplicationWorkflowType_Reshard {
+		cleanupOnlineDDL := injectTerminalOnlineDDLStream(t, sourceTab)
+		defer cleanupOnlineDDL()
+	}
+
 	tstWorkflowSwitchWrites(t)
 	currentState = nextState
 	nextState = wrangler.WorkflowStateAllSwitched
@@ -719,14 +730,6 @@ func testRestOfWorkflow(t *testing.T) {
 	checkStates(t, wrangler.WorkflowStateNotSwitched, wrangler.WorkflowStateReadsSwitched)
 	validateReadsRouteToTarget(t, "replica,rdonly")
 	validateWritesRouteToSource(t)
-
-	// Inject a fake stopped OnlineDDL VReplication stream on the source shard to
-	// verify that SwitchWrites correctly filters terminal OnlineDDL streams rather
-	// than failing with "cannot migrate until all streams are running".
-	if currentWorkflowType == binlogdatapb.VReplicationWorkflowType_Reshard {
-		cleanupOnlineDDL := injectTerminalOnlineDDLStream(t, sourceTab)
-		defer cleanupOnlineDDL()
-	}
 
 	tstWorkflowSwitchWrites(t)
 	checkStates(t, wrangler.WorkflowStateReadsSwitched, wrangler.WorkflowStateAllSwitched)
