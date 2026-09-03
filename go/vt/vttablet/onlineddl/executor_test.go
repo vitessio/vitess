@@ -1257,12 +1257,56 @@ func TestForgetVReplStream(t *testing.T) {
 	uuid := "1cbcd662_8ed6_11ee_bc8f_0a43f95f28a3"
 	e.vreplicationLastError[uuid] = vterrors.NewLastError("test", time.Minute)
 	e.vreplicationPendingCancel[uuid] = "internal cancel"
-	e.vreplicationProgress[uuid] = vreplStreamProgress{pos: "pos", rowsCopied: 1}
+	e.vreplicationProgress[uuid] = vreplStreamProgress{copyStateID: 1}
 
 	e.forgetVReplStream(uuid)
 	assert.NotContains(t, e.vreplicationLastError, uuid)
 	assert.NotContains(t, e.vreplicationPendingCancel, uuid)
 	assert.NotContains(t, e.vreplicationProgress, uuid)
+}
+
+// TestForgetFinishedVReplStreams tests the per-tick sweep of the in-memory
+// stream tracking: entries for migrations that are neither running nor
+// pending — i.e. that reached a terminal status by any path, including a
+// successful cut-over, which has no single transition point at which to drop
+// them — are removed, while running and pending (queued/ready) migrations
+// keep theirs. A ready migration in particular may carry a pending
+// cancellation intent that the scheduler still has to fulfil.
+func TestForgetFinishedVReplStreams(t *testing.T) {
+	const (
+		runningUUID  = "1cbcd662_8ed6_11ee_bc8f_0a43f95f28a3"
+		readyUUID    = "2cbcd662_8ed6_11ee_bc8f_0a43f95f28a3"
+		finishedUUID = "3cbcd662_8ed6_11ee_bc8f_0a43f95f28a3"
+	)
+	e := &Executor{
+		vreplicationLastError:     make(map[string]*vterrors.LastError),
+		vreplicationPendingCancel: make(map[string]string),
+		vreplicationProgress:      make(map[string]vreplStreamProgress),
+	}
+	for _, uuid := range []string{runningUUID, readyUUID, finishedUUID} {
+		e.vreplicationLastError[uuid] = vterrors.NewLastError("test", time.Minute)
+		e.vreplicationPendingCancel[uuid] = "cancel " + uuid
+		e.vreplicationProgress[uuid] = vreplStreamProgress{copyStateID: 1}
+	}
+	// A finished migration may have left tracking in only some of the maps.
+	const lastErrorOnlyUUID = "4cbcd662_8ed6_11ee_bc8f_0a43f95f28a3"
+	e.vreplicationLastError[lastErrorOnlyUUID] = vterrors.NewLastError("test", time.Minute)
+
+	e.forgetFinishedVReplStreams(
+		map[string]bool{runningUUID: true},
+		map[string]bool{runningUUID: true, readyUUID: true},
+	)
+
+	for _, uuid := range []string{runningUUID, readyUUID} {
+		assert.Contains(t, e.vreplicationLastError, uuid)
+		assert.Contains(t, e.vreplicationPendingCancel, uuid)
+		assert.Contains(t, e.vreplicationProgress, uuid)
+	}
+	for _, uuid := range []string{finishedUUID, lastErrorOnlyUUID} {
+		assert.NotContains(t, e.vreplicationLastError, uuid)
+		assert.NotContains(t, e.vreplicationPendingCancel, uuid)
+		assert.NotContains(t, e.vreplicationProgress, uuid)
+	}
 }
 
 // TestVReplStreamShowsLiveness tests the gate applied before an advanced
@@ -1271,70 +1315,91 @@ func TestForgetVReplStream(t *testing.T) {
 // applier when the stream is caught up, which is genuine health. During the
 // copy phase, heartbeats can also flow between failing copy attempts — the
 // catchup is current while the copy keeps erroring — so liveness
-// additionally requires actual progress (an advanced position or
-// rows-copied checkpoint) or active throttling (a deliberately paused copy
-// is alive, and throttle updates stamp time_updated without progress).
-// Without this gate, a copy phase stuck in a heartbeat-refreshing retry
-// loop would never trip the stale-migration policy and could retry
-// unbounded now that streams pin retry-forever.
+// additionally requires actual copy progress (a newer _vt.copy_state
+// checkpoint row, inserted by every committed copy batch) or active
+// throttling (a deliberately paused copy is alive, and throttle updates
+// stamp time_updated without progress). The stream's replication position
+// is deliberately NOT a progress signal: catchup runs before every copy
+// attempt and advances it on a busy source even when the copy itself keeps
+// failing. Nor is the first observation: it only establishes the baseline,
+// so that a stuck copy cannot earn a fresh budget from every executor
+// restart (the tracking is in-memory). Without this gate, a copy phase stuck
+// in a heartbeat-refreshing retry loop would never trip the stale-migration
+// policy and could retry unbounded now that streams pin retry-forever.
 func TestVReplStreamShowsLiveness(t *testing.T) {
 	uuid := "1cbcd662_8ed6_11ee_bc8f_0a43f95f28a3"
-	newExecutor := func(copyStateCount int64) *Executor {
+	// newExecutor's fake copy_state lookup reports the given row count and
+	// max checkpoint id; tests mutate the pointed-to values between calls to
+	// simulate (or withhold) copy progress.
+	newExecutor := func(copyStateCount, copyStateMaxID *int64) *Executor {
 		return &Executor{
 			vreplicationProgress: make(map[string]vreplStreamProgress),
 			execQuery: func(ctx context.Context, query string) (*sqltypes.Result, error) {
 				require.Contains(t, query, "copy_state")
+				if *copyStateCount == 0 {
+					// max() over no rows is NULL.
+					return sqltypes.MakeTestResult(
+						sqltypes.MakeTestFields("cnt|maxid", "int64|uint64"),
+						"0|null",
+					), nil
+				}
 				return sqltypes.MakeTestResult(
-					sqltypes.MakeTestFields("cnt", "int64"),
-					fmt.Sprintf("%d", copyStateCount),
+					sqltypes.MakeTestFields("cnt|maxid", "int64|uint64"),
+					fmt.Sprintf("%d|%d", *copyStateCount, *copyStateMaxID),
 				), nil
 			},
 		}
 	}
 	ctx := context.Background()
-	stream := func(pos string, rowsCopied int64, timeThrottled int64) *VReplStream {
+	stream := func(pos string, timeThrottled int64) *VReplStream {
 		return &VReplStream{
 			id:            1,
 			pos:           pos,
-			rowsCopied:    rowsCopied,
 			timeThrottled: timeThrottled,
 		}
 	}
+	int64p := func(v int64) *int64 { return &v }
 
 	t.Run("past the copy phase, time_updated is trusted", func(t *testing.T) {
-		e := newExecutor(0)
-		assert.True(t, e.vreplStreamShowsLiveness(ctx, uuid, stream("pos1", 0, 0)))
-		assert.True(t, e.vreplStreamShowsLiveness(ctx, uuid, stream("pos1", 0, 0)))
+		e := newExecutor(int64p(0), int64p(0))
+		assert.True(t, e.vreplStreamShowsLiveness(ctx, uuid, stream("pos1", 0)))
+		assert.True(t, e.vreplStreamShowsLiveness(ctx, uuid, stream("pos1", 0)))
 	})
-	t.Run("copy phase, first observation starts the budget", func(t *testing.T) {
-		e := newExecutor(1)
-		assert.True(t, e.vreplStreamShowsLiveness(ctx, uuid, stream("pos1", 10, 0)))
+	t.Run("copy phase, first observation is baseline only", func(t *testing.T) {
+		e := newExecutor(int64p(1), int64p(10))
+		assert.False(t, e.vreplStreamShowsLiveness(ctx, uuid, stream("pos1", 0)),
+			"the first observation must not refresh liveness: an executor restart would otherwise grant a stuck copy a fresh budget")
 	})
 	t.Run("copy phase, no progress is not liveness", func(t *testing.T) {
-		e := newExecutor(1)
-		require.True(t, e.vreplStreamShowsLiveness(ctx, uuid, stream("pos1", 10, 0)))
-		assert.False(t, e.vreplStreamShowsLiveness(ctx, uuid, stream("pos1", 10, 0)))
+		e := newExecutor(int64p(1), int64p(10))
+		require.False(t, e.vreplStreamShowsLiveness(ctx, uuid, stream("pos1", 0)))
+		assert.False(t, e.vreplStreamShowsLiveness(ctx, uuid, stream("pos1", 0)))
 	})
-	t.Run("copy phase, advanced rows-copied is liveness", func(t *testing.T) {
-		e := newExecutor(1)
-		require.True(t, e.vreplStreamShowsLiveness(ctx, uuid, stream("pos1", 10, 0)))
-		assert.True(t, e.vreplStreamShowsLiveness(ctx, uuid, stream("pos1", 11, 0)))
+	t.Run("copy phase, a newer copy_state checkpoint is liveness", func(t *testing.T) {
+		maxID := int64p(10)
+		e := newExecutor(int64p(1), maxID)
+		require.False(t, e.vreplStreamShowsLiveness(ctx, uuid, stream("pos1", 0)))
+		*maxID = 11
+		assert.True(t, e.vreplStreamShowsLiveness(ctx, uuid, stream("pos1", 0)))
+		// Progress must be relative to the last observation, not the first.
+		assert.False(t, e.vreplStreamShowsLiveness(ctx, uuid, stream("pos1", 0)))
 	})
-	t.Run("copy phase, advanced position is liveness", func(t *testing.T) {
-		e := newExecutor(1)
-		require.True(t, e.vreplStreamShowsLiveness(ctx, uuid, stream("pos1", 10, 0)))
-		assert.True(t, e.vreplStreamShowsLiveness(ctx, uuid, stream("pos2", 10, 0)))
+	t.Run("copy phase, position-only advancement is not liveness", func(t *testing.T) {
+		e := newExecutor(int64p(1), int64p(10))
+		require.False(t, e.vreplStreamShowsLiveness(ctx, uuid, stream("pos1", 0)))
+		assert.False(t, e.vreplStreamShowsLiveness(ctx, uuid, stream("pos2", 0)),
+			"catchup advances the position before every copy attempt, so it cannot prove the copy is progressing")
 	})
 	t.Run("copy phase, active throttling is liveness", func(t *testing.T) {
-		e := newExecutor(1)
-		require.True(t, e.vreplStreamShowsLiveness(ctx, uuid, stream("pos1", 10, 0)))
-		assert.True(t, e.vreplStreamShowsLiveness(ctx, uuid, stream("pos1", 10, time.Now().Unix())))
+		e := newExecutor(int64p(1), int64p(10))
+		require.False(t, e.vreplStreamShowsLiveness(ctx, uuid, stream("pos1", 0)))
+		assert.True(t, e.vreplStreamShowsLiveness(ctx, uuid, stream("pos1", time.Now().Unix())))
 	})
 	t.Run("copy phase, stale throttle stamp is not liveness", func(t *testing.T) {
-		e := newExecutor(1)
-		require.True(t, e.vreplStreamShowsLiveness(ctx, uuid, stream("pos1", 10, 0)))
+		e := newExecutor(int64p(1), int64p(10))
+		require.False(t, e.vreplStreamShowsLiveness(ctx, uuid, stream("pos1", 0)))
 		staleThrottle := time.Now().Add(-2 * vreplThrottleLivenessWindow).Unix()
-		assert.False(t, e.vreplStreamShowsLiveness(ctx, uuid, stream("pos1", 10, staleThrottle)))
+		assert.False(t, e.vreplStreamShowsLiveness(ctx, uuid, stream("pos1", staleThrottle)))
 	})
 }
 
@@ -1429,6 +1494,96 @@ func TestRepairVReplicationQuery(t *testing.T) {
 	assert.Equal(t,
 		`update _vt.vreplication set state='Running', message='', options=json_set(json_insert(coalesce(nullif(options, ''), '{}'), '$.config', json_object()), '$.config."vreplication-max-time-to-retry-on-error"', '0s') where id=42 and state='Error'`,
 		query)
+}
+
+// TestFailStaleMigration tests the terminal transition the stale-migration
+// review applies once it has stopped a stale migration's stream. A user's
+// cancellation whose termination attempt failed transiently is left in
+// 'running' with cancelled_timestamp set and a pending intent, and the stale
+// review may be the path that finally terminates it (both run in the same
+// tick). That termination must then record the cancellation the user asked
+// for — status 'cancelled', with the cancellation's own reason — rather than
+// a failure with the stale-migration message: the transition has to be the
+// failed-or-cancelled one, which follows cancelled_timestamp, and a pending
+// intent's reason takes precedence. With no cancellation pending, the stale
+// message is recorded. Either way the migration's stream tracking is dropped.
+func TestFailStaleMigration(t *testing.T) {
+	uuid := "1cbcd662_8ed6_11ee_bc8f_0a43f95f28a3"
+	onlineDDL := &schema.OnlineDDL{UUID: uuid}
+	newExecutor := func() (*Executor, *[]string) {
+		var queries []string
+		e := &Executor{
+			vreplicationLastError:     map[string]*vterrors.LastError{uuid: vterrors.NewLastError("test", time.Minute)},
+			vreplicationPendingCancel: map[string]string{},
+			vreplicationProgress:      map[string]vreplStreamProgress{uuid: {copyStateID: 1}},
+			ticks:                     timer.NewTimer(time.Hour),
+			execQuery: func(ctx context.Context, query string) (*sqltypes.Result, error) {
+				queries = append(queries, query)
+				return &sqltypes.Result{RowsAffected: 1}, nil
+			},
+		}
+		return e, &queries
+	}
+	findQuery := func(queries []string, substr string) string {
+		for _, q := range queries {
+			if strings.Contains(q, substr) {
+				return q
+			}
+		}
+		return ""
+	}
+	const staleMessage = "stale migration: found running but indicates no liveness"
+
+	t.Run("pending cancellation is recorded as such", func(t *testing.T) {
+		e, queries := newExecutor()
+		e.vreplicationPendingCancel[uuid] = "cancelled by user"
+
+		require.NoError(t, e.failStaleMigration(t.Context(), onlineDDL, staleMessage))
+
+		transition := findQuery(*queries, "migration_status")
+		require.NotEmpty(t, transition, "no status transition issued")
+		assert.Contains(t, transition, "IF(cancelled_timestamp IS NULL, 'failed', 'cancelled')",
+			"the transition must follow cancelled_timestamp so a user-cancelled migration ends 'cancelled', not 'failed'")
+		message := findQuery(*queries, "message=")
+		require.NotEmpty(t, message, "no message update issued")
+		assert.Contains(t, message, "cancelled by user")
+		assert.NotContains(t, message, staleMessage)
+
+		assert.NotContains(t, e.vreplicationLastError, uuid)
+		assert.NotContains(t, e.vreplicationPendingCancel, uuid)
+		assert.NotContains(t, e.vreplicationProgress, uuid)
+	})
+	t.Run("no pending cancellation records the stale message", func(t *testing.T) {
+		e, queries := newExecutor()
+
+		require.NoError(t, e.failStaleMigration(t.Context(), onlineDDL, staleMessage))
+
+		transition := findQuery(*queries, "migration_status")
+		require.NotEmpty(t, transition, "no status transition issued")
+		assert.Contains(t, transition, "IF(cancelled_timestamp IS NULL, 'failed', 'cancelled')")
+		message := findQuery(*queries, "message=")
+		require.NotEmpty(t, message, "no message update issued")
+		assert.Contains(t, message, staleMessage)
+
+		assert.NotContains(t, e.vreplicationLastError, uuid)
+		assert.NotContains(t, e.vreplicationProgress, uuid)
+	})
+	t.Run("failed transition keeps the tracking", func(t *testing.T) {
+		e, _ := newExecutor()
+		e.vreplicationPendingCancel[uuid] = "cancelled by user"
+		e.execQuery = func(ctx context.Context, query string) (*sqltypes.Result, error) {
+			if strings.Contains(query, "migration_status") {
+				return nil, errors.New("transient")
+			}
+			return &sqltypes.Result{RowsAffected: 1}, nil
+		}
+
+		require.Error(t, e.failStaleMigration(t.Context(), onlineDDL, staleMessage))
+
+		// The migration is still 'running'; the next tick must still be able
+		// to re-drive the cancellation with its original reason.
+		assert.Contains(t, e.vreplicationPendingCancel, uuid)
+	})
 }
 
 // TestGetNonConflictingMigrationCancellationIntent pins the scheduling gate:

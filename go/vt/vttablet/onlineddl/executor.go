@@ -218,11 +218,37 @@ func (e *Executor) forgetVReplStream(uuid string) {
 	delete(e.vreplicationProgress, uuid)
 }
 
-// vreplStreamProgress holds the copy-phase progress checkpoints last
-// observed for a migration's vreplication stream.
+// forgetFinishedVReplStreams drops the in-memory stream tracking of every
+// migration that is neither running nor pending (queued/ready): the tracking
+// is only meaningful while a migration can still run, and a migration reaches
+// a terminal status by many paths — a successful cut-over most notably has no
+// single transition point at which to drop it — so it is reconciled here, once
+// per review tick, against the migrations actually found. Pending migrations
+// keep theirs: a ready migration may carry a cancellation intent the
+// scheduler has yet to fulfil. Callers must hold migrationMutex.
+func (e *Executor) forgetFinishedVReplStreams(uuidsFoundRunning, uuidsFoundPending map[string]bool) {
+	forgetUnlessLive := func(uuid string) {
+		if !uuidsFoundRunning[uuid] && !uuidsFoundPending[uuid] {
+			e.forgetVReplStream(uuid)
+		}
+	}
+	// Deleting from a map while ranging over it is well-defined in Go, and
+	// forgetVReplStream removes the UUID from all three maps at once.
+	for uuid := range e.vreplicationLastError {
+		forgetUnlessLive(uuid)
+	}
+	for uuid := range e.vreplicationPendingCancel {
+		forgetUnlessLive(uuid)
+	}
+	for uuid := range e.vreplicationProgress {
+		forgetUnlessLive(uuid)
+	}
+}
+
+// vreplStreamProgress holds the copy-phase progress checkpoint last observed
+// for a migration's vreplication stream: the newest _vt.copy_state row id.
 type vreplStreamProgress struct {
-	pos        string
-	rowsCopied int64
+	copyStateID int64
 }
 
 // vreplThrottleLivenessWindow is how recent a stream's time_throttled stamp
@@ -236,16 +262,26 @@ const vreplThrottleLivenessWindow = 15 * time.Minute
 // applier when the stream is caught up, which is genuine health. During the
 // copy phase, heartbeats can also flow between failing copy attempts — the
 // catchup is current while the copy keeps erroring — so liveness
-// additionally requires actual progress (an advanced position or
-// rows-copied checkpoint) or active throttling (a deliberately paused copy
-// is alive, and throttle updates stamp time_updated without progress).
-// Without this gate, a copy phase stuck in a heartbeat-refreshing retry
-// loop would never trip the stale-migration policy and could retry
-// unbounded, since Online DDL streams pin retry-forever. On a copy-state
-// lookup error the advanced time_updated is trusted (degrading to the
-// pre-gate behavior) rather than freezing liveness on a query blip.
+// additionally requires actual copy progress or active throttling (a
+// deliberately paused copy is alive, and throttle updates stamp time_updated
+// without progress).
+//
+// Copy progress means a newer _vt.copy_state checkpoint row, which every
+// committed copy batch inserts. The stream's replication position is
+// deliberately not consulted: catchup runs before every copy attempt and
+// advances the position on a busy source even when the copy itself keeps
+// failing. The first observation of a stream only establishes the baseline
+// and is not liveness: the tracking is in-memory, and treating the baseline
+// as progress would grant a stuck copy a fresh stale budget on every
+// executor restart or adoption.
+//
+// Without this gate, a copy phase stuck in a heartbeat-refreshing retry loop
+// would never trip the stale-migration policy and could retry unbounded,
+// since Online DDL streams pin retry-forever. On a copy-state lookup error
+// the advanced time_updated is trusted (degrading to the pre-gate behavior)
+// rather than freezing liveness on a query blip.
 func (e *Executor) vreplStreamShowsLiveness(ctx context.Context, uuid string, s *VReplStream) bool {
-	query, err := sqlparser.ParseAndBind(sqlReadCountCopyState,
+	query, err := sqlparser.ParseAndBind(sqlReadCopyStateProgress,
 		sqltypes.Int32BindVariable(s.id),
 	)
 	if err != nil {
@@ -263,16 +299,17 @@ func (e *Executor) vreplStreamShowsLiveness(ctx context.Context, uuid string, s 
 		// Copy phase complete.
 		return true
 	}
+	last, seen := e.vreplicationProgress[uuid]
+	current := vreplStreamProgress{copyStateID: csRow.AsInt64("maxid", 0)}
+	e.vreplicationProgress[uuid] = current
 	if s.timeThrottled > 0 && time.Since(time.Unix(s.timeThrottled, 0)) <= vreplThrottleLivenessWindow {
 		return true
 	}
-	last, seen := e.vreplicationProgress[uuid]
-	e.vreplicationProgress[uuid] = vreplStreamProgress{pos: s.pos, rowsCopied: s.rowsCopied}
 	if !seen {
-		// First observation: the no-progress budget starts here.
-		return true
+		// Baseline only: the no-progress budget starts here.
+		return false
 	}
-	return s.pos != last.pos || s.rowsCopied > last.rowsCopied
+	return current.copyStateID > last.copyStateID
 }
 
 // vreplStreamAction is reviewVReplStreamError's decision on what
@@ -3906,6 +3943,9 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 			}
 			return true
 		})
+		// Likewise, the stream tracking of migrations that have since reached
+		// a terminal status (by whichever path) is no longer needed.
+		e.forgetFinishedVReplStreams(uuidsFoundRunning, uuidsFoundPending)
 	}
 
 	e.reviewedRunningMigrationsFlag = true
@@ -3988,22 +4028,38 @@ func (e *Executor) reviewStaleMigrations(ctx context.Context) error {
 			e.updateMigrationMessage(ctx, onlineDDL.UUID, message)
 			continue // we still want to handle rest of migrations
 		}
-		if err := e.updateMigrationMessage(ctx, onlineDDL.UUID, message); err != nil {
-			return err
-		}
-		if err := e.updateMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusFailed); err != nil {
-			return err
-		}
-		failedMigrations.Add(1)
-		defer e.triggerNextCheckInterval()
-		_ = e.updateMigrationStartedTimestamp(ctx, uuid)
-		// Because the migration is stale, it may not update completed_timestamp. It is essential to set completed_timestamp
-		// as this is then used when cleaning artifacts
-		if err := e.updateMigrationTimestamp(ctx, "completed_timestamp", onlineDDL.UUID); err != nil {
+		if err := e.failStaleMigration(ctx, onlineDDL, message); err != nil {
 			return err
 		}
 	}
 
+	return nil
+}
+
+// failStaleMigration applies the terminal transition for a stale migration
+// whose stream the stale-migration review has just stopped. The transition is
+// the failed-or-cancelled one (see terminallyFailMigration): a user-issued
+// cancellation whose own termination attempt failed transiently is left in
+// 'running' with cancelled_timestamp set and a pending intent (see
+// CancelMigration), and this review — which runs later in the same tick — may
+// be the path that finally terminates it; the migration must then end up
+// 'cancelled', as the user asked, not 'failed'. For the same reason a pending
+// cancellation's own reason takes precedence over the stale-migration message.
+// The transition also sets completed_timestamp, which a stale migration would
+// not otherwise have and which artifact cleanup relies on. The stream tracking
+// is dropped only once the transition has durably landed: until then the
+// migration stays under review and the pending intent must survive to be
+// re-driven. Callers must hold migrationMutex.
+func (e *Executor) failStaleMigration(ctx context.Context, onlineDDL *schema.OnlineDDL, staleMessage string) error {
+	message := staleMessage
+	if pendingCancelMessage, ok := e.vreplicationPendingCancel[onlineDDL.UUID]; ok && pendingCancelMessage != "" {
+		message = pendingCancelMessage
+	}
+	if err := e.terminallyFailMigration(ctx, onlineDDL, errors.New(message)); err != nil {
+		return err
+	}
+	e.forgetVReplStream(onlineDDL.UUID)
+	_ = e.updateMigrationStartedTimestamp(ctx, onlineDDL.UUID)
 	return nil
 }
 
