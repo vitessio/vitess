@@ -1313,10 +1313,10 @@ func comparisonKeyIsSourcePKPrefix(sourceSelect *sqlparser.Select, comparePKs []
 // equalityPinnedColumns returns the set of columns the WHERE clause constrains to
 // a value that is constant under the source stream's ordering via a top-level
 // "col = literal" conjunct (lowercased). It is intentionally conservative: only a
-// same-domain equality (integer column vs integer/exact-decimal literal, or text
-// column vs string literal) is treated as pinned; ranges, IN, OR, in_keyrange,
-// non-literal comparisons, and coercions (which can match order-distinct rows) are
-// ignored.
+// same-domain equality (integer/exact-decimal column vs integer/exact-decimal
+// literal, or text column vs string literal) is treated as pinned; ranges, IN, OR,
+// in_keyrange, non-literal comparisons, and coercions (which can match
+// order-distinct rows) are ignored.
 func equalityPinnedColumns(where *sqlparser.Where, colTypes map[string]querypb.Type) map[string]struct{} {
 	pinned := make(map[string]struct{})
 	if where == nil {
@@ -1325,20 +1325,23 @@ func equalityPinnedColumns(where *sqlparser.Where, colTypes map[string]querypb.T
 	// Pin "col = literal" only when the equality is evaluated in the column's own
 	// ordering domain, so every matched row is equal under the order the source
 	// stream uses and the column is therefore constant across it:
-	//   - an integer column against an integer or exact-decimal literal (matches at
-	//     most one value); float literals use approximate semantics (adjacent values
-	//     near 2^53 both match) and are excluded.
+	//   - an integer or exact-decimal column against an integer or exact-decimal
+	//     literal (matches at most one value); float literals use approximate
+	//     semantics (adjacent values near 2^53 both match) and are excluded.
 	//   - a text column against a string literal (matched values are collation-equal,
 	//     so they sort together).
-	// Coercions (text vs numeric, integer vs float) can match order-distinct rows,
-	// so the column would not be constant and must not be dropped from the merge key.
+	// Coercions (text vs numeric, exact-numeric vs float) can match order-distinct
+	// rows, so the column would not be constant and must not be dropped.
 	pinnable := func(name string, lit *sqlparser.Literal) bool {
 		t, ok := colTypes[strings.ToLower(name)]
 		if !ok {
 			return false
 		}
 		switch {
-		case sqltypes.IsIntegral(t):
+		case sqltypes.IsIntegral(t) || sqltypes.IsDecimal(t):
+			// Exact numeric domain: an integer or exact-decimal literal matches at
+			// most one value. Approximate float literals (and FLOAT/DOUBLE columns,
+			// which are not IsIntegral/IsDecimal) are excluded.
 			return lit.Type == sqlparser.IntVal || lit.Type == sqlparser.DecimalVal
 		case sqltypes.IsText(t):
 			return lit.Type == sqlparser.StrVal

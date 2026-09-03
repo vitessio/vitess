@@ -465,6 +465,16 @@ func TestComparisonKeyIsSourcePKPrefix(t *testing.T) {
 			colTypes:            map[string]querypb.Type{"tenant_id": querypb.Type_INT64, "id": querypb.Type_INT64},
 		},
 		{
+			// Exact-decimal domain: a DECIMAL column pinned to a decimal literal is
+			// single-valued under exact decimal ordering, so the stream stays
+			// ordered by id and comparing on id is valid.
+			name:                "exact decimal column pinned by decimal literal allows compare on suffix",
+			sourceQuery:         "select price, id, data from src where price = 1.25 order by id asc",
+			comparePKColIndices: []int{1},
+			sourcePKColumns:     []string{"price", "id"},
+			colTypes:            map[string]querypb.Type{"price": querypb.Type_DECIMAL, "id": querypb.Type_INT64},
+		},
+		{
 			// Same-domain string equality: a text column pinned to a string
 			// literal matches only collation-equal values, which sort together, so
 			// the stream stays ordered by id and comparing on id is valid.
