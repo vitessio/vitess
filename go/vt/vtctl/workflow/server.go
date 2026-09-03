@@ -2823,6 +2823,17 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 	if err != nil {
 		return nil, err
 	}
+	// Probed once and shared by the read-ordering guard and switchReads so both agree
+	// on whether switchReads will add RDONLY (tablet records are not under the workflow
+	// lock, so probing twice could disagree).
+	autoSwitchRdonly := false
+	if switchReplica && !switchRdonly {
+		rdonlyTabletsExist, err := topotools.DoCellsHaveRdonlyTablets(ctx, s.ts, req.Cells)
+		if err != nil {
+			return nil, err
+		}
+		autoSwitchRdonly = !rdonlyTabletsExist
+	}
 	ts, startState, err := s.getWorkflowState(ctx, req.Keyspace, req.Workflow)
 	if err != nil {
 		return nil, err
@@ -2975,14 +2986,7 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 			}
 			// switchReads auto-adds RDONLY when replica reads are being switched and
 			// the targeted cells have no rdonly tablets, so RDONLY is not stranded then.
-			rdonlySwitchedByReq := switchRdonly
-			if switchReplica && !switchRdonly {
-				rdonlyTabletsExist, err := topotools.DoCellsHaveRdonlyTablets(ctx, s.ts, req.Cells)
-				if err != nil {
-					return nil, err
-				}
-				rdonlySwitchedByReq = !rdonlyTabletsExist
-			}
+			rdonlySwitchedByReq := switchRdonly || autoSwitchRdonly
 			if stranded := cellsStrandedOnSource(topodatapb.TabletType_RDONLY, rdonlySwitchedByReq, lockedState.RdonlyCellsNotSwitched); len(stranded) > 0 {
 				readsNotSwitched = append(readsNotSwitched, fmt.Sprintf("RDONLY (cells: %s)", strings.Join(stranded, ",")))
 			}
@@ -3015,7 +3019,7 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 	if switchReplica || switchRdonly {
 		// If we're going to switch writes immediately after then we don't need to
 		// rebuild the SrvVSchema here as we will do it after switching writes.
-		if rdDryRunResults, err = s.switchReads(ctx, req, ts, startState, !switchPrimary /* rebuildSrvVSchema */, direction); err != nil {
+		if rdDryRunResults, err = s.switchReads(ctx, req, ts, startState, !switchPrimary /* rebuildSrvVSchema */, direction, autoSwitchRdonly); err != nil {
 			return nil, err
 		}
 		s.Logger().Infof("Switch Reads done for workflow %s.%s", req.Keyspace, req.Workflow)
@@ -3078,7 +3082,7 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 }
 
 // switchReads is a generic way of switching read traffic for a workflow.
-func (s *Server) switchReads(ctx context.Context, req *vtctldatapb.WorkflowSwitchTrafficRequest, ts *trafficSwitcher, state *State, rebuildSrvVSchema bool, direction TrafficSwitchDirection) (*[]string, error) {
+func (s *Server) switchReads(ctx context.Context, req *vtctldatapb.WorkflowSwitchTrafficRequest, ts *trafficSwitcher, state *State, rebuildSrvVSchema bool, direction TrafficSwitchDirection, autoSwitchRdonly bool) (*[]string, error) {
 	var roTabletTypes []topodatapb.TabletType
 	// When we are switching all traffic we also get the primary tablet type, which we need to
 	// filter out for switching reads.
@@ -3148,16 +3152,9 @@ func (s *Server) switchReads(ctx context.Context, req *vtctldatapb.WorkflowSwitc
 	// If there are no rdonly tablets in the cells ask to switch rdonly tablets as well so that routing rules
 	// are updated for rdonly as well. Otherwise vitess will not know that the workflow has completed and will
 	// incorrectly report that not all reads have been switched. User currently is forced to switch non-existent
-	// rdonly tablets.
-	if switchReplica && !switchRdonly {
-		var err error
-		rdonlyTabletsExist, err := topotools.DoCellsHaveRdonlyTablets(ctx, s.ts, req.Cells)
-		if err != nil {
-			return nil, err
-		}
-		if !rdonlyTabletsExist {
-			roTabletTypes = append(roTabletTypes, topodatapb.TabletType_RDONLY)
-		}
+	// rdonly tablets. autoSwitchRdonly carries this decision from the caller so it is not re-probed here.
+	if switchReplica && !switchRdonly && autoSwitchRdonly {
+		roTabletTypes = append(roTabletTypes, topodatapb.TabletType_RDONLY)
 	}
 
 	journalsExist, _, err := ts.checkJournals(ctx)
