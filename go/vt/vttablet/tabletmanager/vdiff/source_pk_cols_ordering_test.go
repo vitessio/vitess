@@ -476,12 +476,21 @@ func TestComparisonKeyIsSourcePKPrefix(t *testing.T) {
 			wantErr:             true,
 		},
 		{
-			// An integer column compared to a non-integer literal uses approximate
-			// numeric semantics (e.g. adjacent BIGINT values near 2^53 both match a
-			// float literal), so it is not single-valued and is not pinned; the
-			// suffix comparison is then rejected.
-			name:                "non-integer literal against integer column is not pinned",
-			sourceQuery:         "select tenant_id, id, data from src where tenant_id = 9007199254740993.0 order by id asc",
+			// An exact decimal literal (no exponent) matches at most one integer
+			// value, so the integer column is single-valued and can be pinned.
+			name:                "exact decimal literal against integer column is pinned",
+			sourceQuery:         "select tenant_id, id, data from src where tenant_id = 1.0 order by id asc",
+			comparePKColIndices: []int{1},
+			sourcePKColumns:     []string{"tenant_id", "id"},
+			colTypes:            map[string]querypb.Type{"tenant_id": querypb.Type_INT64, "id": querypb.Type_INT64},
+		},
+		{
+			// A float literal (scientific notation) uses approximate numeric
+			// semantics (adjacent BIGINT values near 2^53 both match), so the column
+			// is not single-valued and is not pinned; the suffix comparison is then
+			// rejected.
+			name:                "float literal against integer column is not pinned",
+			sourceQuery:         "select tenant_id, id, data from src where tenant_id = 9.007199254740993e15 order by id asc",
 			comparePKColIndices: []int{1},
 			sourcePKColumns:     []string{"tenant_id", "id"},
 			colTypes:            map[string]querypb.Type{"tenant_id": querypb.Type_INT64, "id": querypb.Type_INT64},
@@ -519,6 +528,37 @@ func TestComparisonKeyIsSourcePKPrefix(t *testing.T) {
 			require.NoError(t, err)
 		})
 	}
+}
+
+// TestLoadedSourceCheckpointMatches verifies that a loaded source checkpoint is
+// only reused when its stored field names line up, in order, with the source PK
+// as the fixed code projects it. This catches a pre-fix checkpoint whose index
+// mapping coincides with the corrected one but attached fields in a different
+// order (e.g. SELECT b, a with source PK (b, a) but DDL columns (a, b)).
+func TestLoadedSourceCheckpointMatches(t *testing.T) {
+	td := &tableDiffer{
+		tablePlan: &tablePlan{
+			// The fixed code projects source PK fields in the order (b, a).
+			compareCols: []compareColInfo{
+				{colIndex: 0, colName: "b", isPK: true},
+				{colIndex: 1, colName: "a", isPK: true},
+			},
+		},
+	}
+	indices := []int{0, 1}
+
+	// A checkpoint written by the fixed code stores fields (b, a): reusable.
+	td.lastSourcePK = &querypb.QueryResult{Fields: []*querypb.Field{{Name: "b"}, {Name: "a"}}}
+	require.True(t, td.loadedSourceCheckpointMatches(indices))
+
+	// A pre-fix checkpoint for the same layout stored fields (a, b), which do not
+	// line up with the fixed projection order: it must not be reused.
+	td.lastSourcePK = &querypb.QueryResult{Fields: []*querypb.Field{{Name: "a"}, {Name: "b"}}}
+	require.False(t, td.loadedSourceCheckpointMatches(indices))
+
+	// A length mismatch (e.g. the PK changed under the checkpoint) is not reusable.
+	td.lastSourcePK = &querypb.QueryResult{Fields: []*querypb.Field{{Name: "b"}}}
+	require.False(t, td.loadedSourceCheckpointMatches(indices))
 }
 
 // TestLastPKFromRowMixedTypeReorder verifies that lastPKFromRow attaches the

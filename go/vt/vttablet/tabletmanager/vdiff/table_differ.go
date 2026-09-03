@@ -1151,13 +1151,18 @@ func (td *tableDiffer) getSourcePKCols() error {
 	}
 	td.tablePlan.sourcePkCols = indices
 
-	// A loaded checkpoint for a reordered/renamed-PK layout is byte-identical to a
-	// pre-fix one (same field names, only value order differs), so we cannot tell
-	// them apart; discard it and restart both streams. This is always correct but
-	// means such layouts restart on every resume rather than resuming.
+	// Discard a loaded source checkpoint that a pre-fix binary may have written with
+	// its columns in a different order: either the corrected mapping differs from
+	// the pre-fix one, or the checkpoint's stored field names do not line up, in
+	// order, with the source PK as this code projects it. (The two checks are
+	// complementary: the mappings can coincide yet still pair fields with the wrong
+	// values.) A residual case remains indistinguishable and is documented as a
+	// restart-on-resume limitation. This is always correct but means such layouts
+	// restart on every resume rather than resuming.
 	if td.lastSourcePK != nil &&
-		!slices.Equal(indices, legacySourcePkColOrder(td.table.Columns, sourceTable.PrimaryKeyColumns)) {
-		log.Info("restarting table instead of resuming; its source PK projection order does not match the physical column order, so a persisted source checkpoint cannot be safely reused",
+		(!slices.Equal(indices, legacySourcePkColOrder(td.table.Columns, sourceTable.PrimaryKeyColumns)) ||
+			!td.loadedSourceCheckpointMatches(indices)) {
+		log.Info("restarting table instead of resuming; its persisted source checkpoint does not match how this code projects the source primary key and cannot be safely reused",
 			slog.String("table", td.table.Name),
 			slog.String("vdiff", td.wd.ct.uuid))
 		td.tablePlan.sourceCheckpointUnavailable = true
@@ -1167,6 +1172,27 @@ func (td *tableDiffer) getSourcePKCols() error {
 	}
 
 	return nil
+}
+
+// loadedSourceCheckpointMatches reports whether the loaded source checkpoint's
+// field names line up, in order, with the source PK columns as this (fixed) code
+// projects them. A pre-fix binary could attach the fields in a different order for
+// a reordered/renamed-PK layout, so a mismatch means the checkpoint cannot be
+// reused (it predates the fix, or the schema changed under it).
+func (td *tableDiffer) loadedSourceCheckpointMatches(indices []int) bool {
+	src := td.lastSourcePK
+	if src == nil || len(src.Fields) != len(indices) {
+		return false
+	}
+	for i, colIndex := range indices {
+		if colIndex < 0 || colIndex >= len(td.tablePlan.compareCols) {
+			return false
+		}
+		if !strings.EqualFold(src.Fields[i].Name, td.tablePlan.compareCols[colIndex].colName) {
+			return false
+		}
+	}
+	return true
 }
 
 // legacySourcePkColOrder reproduces the pre-fix source-PK index mapping: the
@@ -1258,29 +1284,29 @@ func comparisonKeyIsSourcePKPrefix(sourceSelect *sqlparser.Select, comparePKs []
 }
 
 // equalityPinnedColumns returns the set of integer columns the WHERE clause
-// constrains to a single value via a top-level "col = integer-literal" conjunct
-// (lowercased). It is intentionally conservative: only plain equality of an
-// integer column against an integer literal is treated as pinned; ranges, IN, OR,
-// in_keyrange, non-literal or float-literal comparisons, and coercible
-// (non-integer) columns are ignored.
+// constrains to a single value via a top-level "col = exact-numeric-literal"
+// conjunct (lowercased). It is intentionally conservative: only equality of an
+// integer column against an integer or exact-decimal literal is treated as pinned;
+// ranges, IN, OR, in_keyrange, non-literal or float-literal comparisons, and
+// coercible (non-integer) columns are ignored.
 func equalityPinnedColumns(where *sqlparser.Where, colTypes map[string]querypb.Type) map[string]struct{} {
 	pinned := make(map[string]struct{})
 	if where == nil {
 		return pinned
 	}
-	// Pin only "integer column = integer literal": that guarantees exactly one
-	// matching stored value. A coercible column (e.g. VARCHAR vs a numeric literal,
-	// or a case/pad-insensitive collation) or a float literal against an integer
-	// column (approximate comparison, so adjacent values near 2^53 both match) can
-	// match several stored keys, so the column is not constant across the source
-	// stream and must not be dropped from the merge key.
+	// Pin only an integer column against an exact numeric literal (integer or
+	// decimal): both match at most one stored value. A coercible column (e.g.
+	// VARCHAR vs a numeric literal, or a case/pad-insensitive collation) or a float
+	// literal (approximate comparison, so adjacent values near 2^53 both match) can
+	// match several stored keys, so the column is not constant across the stream
+	// and must not be dropped from the merge key.
 	isPinnable := func(name string) bool {
 		t, ok := colTypes[strings.ToLower(name)]
 		return ok && sqltypes.IsIntegral(t)
 	}
-	isIntLiteral := func(e sqlparser.Expr) bool {
+	isExactLiteral := func(e sqlparser.Expr) bool {
 		lit, ok := e.(*sqlparser.Literal)
-		return ok && lit.Type == sqlparser.IntVal
+		return ok && (lit.Type == sqlparser.IntVal || lit.Type == sqlparser.DecimalVal)
 	}
 	for _, expr := range sqlparser.SplitAndExpression(nil, where.Expr) {
 		cmp, ok := expr.(*sqlparser.ComparisonExpr)
@@ -1288,12 +1314,12 @@ func equalityPinnedColumns(where *sqlparser.Where, colTypes map[string]querypb.T
 			continue
 		}
 		if col, ok := cmp.Left.(*sqlparser.ColName); ok {
-			if isIntLiteral(cmp.Right) && isPinnable(col.Name.String()) {
+			if isExactLiteral(cmp.Right) && isPinnable(col.Name.String()) {
 				pinned[col.Name.Lowered()] = struct{}{}
 			}
 		}
 		if col, ok := cmp.Right.(*sqlparser.ColName); ok {
-			if isIntLiteral(cmp.Left) && isPinnable(col.Name.String()) {
+			if isExactLiteral(cmp.Left) && isPinnable(col.Name.String()) {
 				pinned[col.Name.Lowered()] = struct{}{}
 			}
 		}
