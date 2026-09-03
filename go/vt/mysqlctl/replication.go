@@ -745,11 +745,8 @@ func (mysqld *Mysqld) GetMysqlPort(ctx context.Context) (int32, error) {
 	// during MySQL startup when we still might be loading things like grants.
 	// This means we need to use an isolated connection to avoid poisoning the
 	// DBA connection pool for further queries.
-	params, err := mysqld.dbcfgs.DbaConnector().MysqlParams()
-	if err != nil {
-		return 0, err
-	}
-	conn, err := mysql.Connect(ctx, params)
+	connector := mysqld.dbcfgs.DbaConnector()
+	conn, err := connector.Connect(ctx)
 	if err != nil {
 		return 0, err
 	}

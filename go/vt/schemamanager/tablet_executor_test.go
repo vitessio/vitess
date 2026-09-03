@@ -454,7 +454,7 @@ func TestTabletExecutorPropagatesSessionVariables(t *testing.T) {
 	ctx := t.Context()
 	client := &capturingMultiFetchClient{fakeTabletManagerClient: newFakeTabletManagerClient()}
 	executor := NewTabletExecutor("TestTabletExecutorPropagatesSessionVariables", newFakeTopo(t), client, logutil.NewConsoleLogger(), testWaitReplicasTimeout, 0, sqlparser.NewTestParser())
-	require.NoError(t, executor.SetDDLStrategy("direct --session-variable innodb_strict_mode=off --session-variable sql_mode=ANSI"))
+	require.NoError(t, executor.SetDDLStrategy("direct --session-variable innodb_strict_mode=off --session-variable sql_mode=NO_ZERO_DATE"))
 	require.NoError(t, executor.Open(ctx, "test_keyspace"))
 	defer executor.Close()
 
@@ -465,7 +465,7 @@ func TestTabletExecutorPropagatesSessionVariables(t *testing.T) {
 	for _, request := range requests {
 		assert.Equal(t, []*tabletmanagerdatapb.SessionVariable{
 			{Name: "innodb_strict_mode", Value: "off"},
-			{Name: "sql_mode", Value: "ANSI"},
+			{Name: "sql_mode", Value: "NO_ZERO_DATE"},
 		}, request.SessionVariables)
 	}
 }
