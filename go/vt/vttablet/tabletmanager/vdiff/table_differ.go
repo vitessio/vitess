@@ -1133,7 +1133,11 @@ func (td *tableDiffer) getSourcePKCols() error {
 	}
 	// Reject any plan whose comparison key is not an order-preserving prefix of the
 	// physical source PK; the source stream is always ordered by that PK.
-	if err := comparisonKeyIsSourcePKPrefix(sourceSelect, td.tablePlan.comparePKs, sourceTable.PrimaryKeyColumns); err != nil {
+	sourceColTypes := make(map[string]querypb.Type, len(sourceTable.Fields))
+	for _, f := range sourceTable.Fields {
+		sourceColTypes[strings.ToLower(f.Name)] = f.Type
+	}
+	if err := comparisonKeyIsSourcePKPrefix(sourceSelect, td.tablePlan.comparePKs, sourceTable.PrimaryKeyColumns, sourceColTypes); err != nil {
 		return err
 	}
 	if !allProjected {
@@ -1190,8 +1194,8 @@ func legacySourcePkColOrder(targetColumns, sourcePKColumns []string) []int {
 // its order; they are dropped before the prefix comparison (e.g. a multi-tenant
 // "where tenant_id = 1" filter makes comparing on id valid even though the source
 // PK is (tenant_id, id)).
-func comparisonKeyIsSourcePKPrefix(sourceSelect *sqlparser.Select, comparePKs []compareColInfo, sourcePKColumns []string) error {
-	pinned := equalityPinnedColumns(sourceSelect.Where)
+func comparisonKeyIsSourcePKPrefix(sourceSelect *sqlparser.Select, comparePKs []compareColInfo, sourcePKColumns []string, sourceColTypes map[string]querypb.Type) error {
+	pinned := equalityPinnedColumns(sourceSelect.Where, sourceColTypes)
 	effectivePK := make([]string, 0, len(sourcePKColumns))
 	for _, col := range sourcePKColumns {
 		if _, ok := pinned[strings.ToLower(col)]; !ok {
@@ -1251,14 +1255,23 @@ func comparisonKeyIsSourcePKPrefix(sourceSelect *sqlparser.Select, comparePKs []
 	return nil
 }
 
-// equalityPinnedColumns returns the set of columns the WHERE clause constrains to
-// a single literal value via a top-level "col = literal" conjunct (lowercased). It
-// is intentionally conservative: only plain equality against a literal is treated
-// as pinned; ranges, IN, OR, in_keyrange, and non-literal comparisons are ignored.
-func equalityPinnedColumns(where *sqlparser.Where) map[string]struct{} {
+// equalityPinnedColumns returns the set of integer columns the WHERE clause
+// constrains to a single value via a top-level "col = literal" conjunct
+// (lowercased). It is intentionally conservative: only plain equality against a
+// literal on an integer column is treated as pinned; ranges, IN, OR, in_keyrange,
+// non-literal comparisons, and coercible (non-integer) columns are ignored.
+func equalityPinnedColumns(where *sqlparser.Where, colTypes map[string]querypb.Type) map[string]struct{} {
 	pinned := make(map[string]struct{})
 	if where == nil {
 		return pinned
+	}
+	// Only an integer column is genuinely single-valued under "col = literal";
+	// coercible types (e.g. a VARCHAR column vs a numeric literal, or a
+	// case/pad-insensitive collation) can match several stored keys, so the column
+	// is not constant across the stream and must not be dropped from the merge key.
+	isPinnable := func(name string) bool {
+		t, ok := colTypes[strings.ToLower(name)]
+		return ok && sqltypes.IsIntegral(t)
 	}
 	for _, expr := range sqlparser.SplitAndExpression(nil, where.Expr) {
 		cmp, ok := expr.(*sqlparser.ComparisonExpr)
@@ -1266,12 +1279,12 @@ func equalityPinnedColumns(where *sqlparser.Where) map[string]struct{} {
 			continue
 		}
 		if col, ok := cmp.Left.(*sqlparser.ColName); ok {
-			if _, isLiteral := cmp.Right.(*sqlparser.Literal); isLiteral {
+			if _, isLiteral := cmp.Right.(*sqlparser.Literal); isLiteral && isPinnable(col.Name.String()) {
 				pinned[col.Name.Lowered()] = struct{}{}
 			}
 		}
 		if col, ok := cmp.Right.(*sqlparser.ColName); ok {
-			if _, isLiteral := cmp.Left.(*sqlparser.Literal); isLiteral {
+			if _, isLiteral := cmp.Left.(*sqlparser.Literal); isLiteral && isPinnable(col.Name.String()) {
 				pinned[col.Name.Lowered()] = struct{}{}
 			}
 		}

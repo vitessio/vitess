@@ -388,7 +388,10 @@ func TestComparisonKeyIsSourcePKPrefix(t *testing.T) {
 		// columns, in comparison order (as findPKs would populate comparePKs).
 		comparePKColIndices []int
 		sourcePKColumns     []string
-		wantErr             bool
+		// colTypes maps source columns to their types; only integer columns are
+		// treated as single-valued (pinnable) under "col = literal".
+		colTypes map[string]querypb.Type
+		wantErr  bool
 	}{
 		{
 			// Documented safe case: source PK (cid, typ) compared on cid. cid is a
@@ -440,6 +443,7 @@ func TestComparisonKeyIsSourcePKPrefix(t *testing.T) {
 			sourceQuery:         "select tenant_id, id, data from src where tenant_id = 1 order by id asc",
 			comparePKColIndices: []int{1},
 			sourcePKColumns:     []string{"tenant_id", "id"},
+			colTypes:            map[string]querypb.Type{"tenant_id": querypb.Type_INT64, "id": querypb.Type_INT64},
 		},
 		{
 			// Same shape but without the pinning WHERE: id is not a prefix of
@@ -458,6 +462,18 @@ func TestComparisonKeyIsSourcePKPrefix(t *testing.T) {
 			sourceQuery:         "select tenant_id, id, data from src where tenant_id = 1 order by tenant_id asc, id asc",
 			comparePKColIndices: []int{0, 1},
 			sourcePKColumns:     []string{"tenant_id", "id"},
+			colTypes:            map[string]querypb.Type{"tenant_id": querypb.Type_INT64, "id": querypb.Type_INT64},
+		},
+		{
+			// A non-integer pinned column is not single-valued (e.g. VARCHAR
+			// tenant vs numeric literal coerces and matches '1', '01', ...), so it
+			// must not be dropped; comparing on the suffix id alone is rejected.
+			name:                "coercible pinned column is not dropped",
+			sourceQuery:         "select tenant, id, data from src where tenant = 1 order by id asc",
+			comparePKColIndices: []int{1},
+			sourcePKColumns:     []string{"tenant", "id"},
+			colTypes:            map[string]querypb.Type{"tenant": querypb.Type_VARCHAR, "id": querypb.Type_INT64},
+			wantErr:             true,
 		},
 		{
 			// Constant-injection filter: tenant_id is a literal, not a source
@@ -483,7 +499,7 @@ func TestComparisonKeyIsSourcePKPrefix(t *testing.T) {
 				comparePKs[i] = compareColInfo{colIndex: idx, isPK: true}
 			}
 
-			err = comparisonKeyIsSourcePKPrefix(sourceSelect, comparePKs, tc.sourcePKColumns)
+			err = comparisonKeyIsSourcePKPrefix(sourceSelect, comparePKs, tc.sourcePKColumns, tc.colTypes)
 			if tc.wantErr {
 				require.Error(t, err)
 				return
@@ -610,7 +626,7 @@ func TestComparisonKeyPrefixRejectionIsNonEphemeral(t *testing.T) {
 	// prefix, so the plan is rejected.
 	rejectErr := comparisonKeyIsSourcePKPrefix(sel,
 		[]compareColInfo{{colIndex: 0, colName: "cid", isPK: true}},
-		[]string{"typ", "cid"})
+		[]string{"typ", "cid"}, nil)
 	require.Error(t, rejectErr)
 	require.False(t, sqlerror.IsEphemeralError(rejectErr), "the rejection error must be non-ephemeral")
 
