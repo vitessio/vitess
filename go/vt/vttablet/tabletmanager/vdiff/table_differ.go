@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"math/rand/v2"
 	"slices"
 	"strings"
@@ -1156,8 +1157,9 @@ func (td *tableDiffer) getSourcePKCols() error {
 	// means such layouts restart on every resume rather than resuming.
 	if td.lastSourcePK != nil &&
 		!slices.Equal(indices, legacySourcePkColOrder(td.table.Columns, sourceTable.PrimaryKeyColumns)) {
-		log.Info(fmt.Sprintf("VDiff %s: restarting table %s instead of resuming; its source PK projection order does not match the physical column order, so a persisted source checkpoint cannot be safely reused",
-			td.wd.ct.uuid, td.table.Name))
+		log.Info("restarting table instead of resuming; its source PK projection order does not match the physical column order, so a persisted source checkpoint cannot be safely reused",
+			slog.String("table", td.table.Name),
+			slog.String("vdiff", td.wd.ct.uuid))
 		td.tablePlan.sourceCheckpointUnavailable = true
 		td.tablePlan.sourcePkCols = nil
 		td.lastSourcePK = nil
@@ -1256,22 +1258,29 @@ func comparisonKeyIsSourcePKPrefix(sourceSelect *sqlparser.Select, comparePKs []
 }
 
 // equalityPinnedColumns returns the set of integer columns the WHERE clause
-// constrains to a single value via a top-level "col = literal" conjunct
-// (lowercased). It is intentionally conservative: only plain equality against a
-// literal on an integer column is treated as pinned; ranges, IN, OR, in_keyrange,
-// non-literal comparisons, and coercible (non-integer) columns are ignored.
+// constrains to a single value via a top-level "col = integer-literal" conjunct
+// (lowercased). It is intentionally conservative: only plain equality of an
+// integer column against an integer literal is treated as pinned; ranges, IN, OR,
+// in_keyrange, non-literal or float-literal comparisons, and coercible
+// (non-integer) columns are ignored.
 func equalityPinnedColumns(where *sqlparser.Where, colTypes map[string]querypb.Type) map[string]struct{} {
 	pinned := make(map[string]struct{})
 	if where == nil {
 		return pinned
 	}
-	// Only an integer column is genuinely single-valued under "col = literal";
-	// coercible types (e.g. a VARCHAR column vs a numeric literal, or a
-	// case/pad-insensitive collation) can match several stored keys, so the column
-	// is not constant across the stream and must not be dropped from the merge key.
+	// Pin only "integer column = integer literal": that guarantees exactly one
+	// matching stored value. A coercible column (e.g. VARCHAR vs a numeric literal,
+	// or a case/pad-insensitive collation) or a float literal against an integer
+	// column (approximate comparison, so adjacent values near 2^53 both match) can
+	// match several stored keys, so the column is not constant across the source
+	// stream and must not be dropped from the merge key.
 	isPinnable := func(name string) bool {
 		t, ok := colTypes[strings.ToLower(name)]
 		return ok && sqltypes.IsIntegral(t)
+	}
+	isIntLiteral := func(e sqlparser.Expr) bool {
+		lit, ok := e.(*sqlparser.Literal)
+		return ok && lit.Type == sqlparser.IntVal
 	}
 	for _, expr := range sqlparser.SplitAndExpression(nil, where.Expr) {
 		cmp, ok := expr.(*sqlparser.ComparisonExpr)
@@ -1279,12 +1288,12 @@ func equalityPinnedColumns(where *sqlparser.Where, colTypes map[string]querypb.T
 			continue
 		}
 		if col, ok := cmp.Left.(*sqlparser.ColName); ok {
-			if _, isLiteral := cmp.Right.(*sqlparser.Literal); isLiteral && isPinnable(col.Name.String()) {
+			if isIntLiteral(cmp.Right) && isPinnable(col.Name.String()) {
 				pinned[col.Name.Lowered()] = struct{}{}
 			}
 		}
 		if col, ok := cmp.Right.(*sqlparser.ColName); ok {
-			if _, isLiteral := cmp.Left.(*sqlparser.Literal); isLiteral && isPinnable(col.Name.String()) {
+			if isIntLiteral(cmp.Left) && isPinnable(col.Name.String()) {
 				pinned[col.Name.Lowered()] = struct{}{}
 			}
 		}

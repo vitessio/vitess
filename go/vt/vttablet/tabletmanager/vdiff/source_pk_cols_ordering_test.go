@@ -476,6 +476,18 @@ func TestComparisonKeyIsSourcePKPrefix(t *testing.T) {
 			wantErr:             true,
 		},
 		{
+			// An integer column compared to a non-integer literal uses approximate
+			// numeric semantics (e.g. adjacent BIGINT values near 2^53 both match a
+			// float literal), so it is not single-valued and is not pinned; the
+			// suffix comparison is then rejected.
+			name:                "non-integer literal against integer column is not pinned",
+			sourceQuery:         "select tenant_id, id, data from src where tenant_id = 9007199254740993.0 order by id asc",
+			comparePKColIndices: []int{1},
+			sourcePKColumns:     []string{"tenant_id", "id"},
+			colTypes:            map[string]querypb.Type{"tenant_id": querypb.Type_INT64, "id": querypb.Type_INT64},
+			wantErr:             true,
+		},
+		{
 			// Constant-injection filter: tenant_id is a literal, not a source
 			// column, so it is dropped, leaving (id) vs (id).
 			name:                "constant literal in comparison key is allowed",
