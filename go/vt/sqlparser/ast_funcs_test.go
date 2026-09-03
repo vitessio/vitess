@@ -482,3 +482,97 @@ func TestVersionedCommentParsing(t *testing.T) {
 		})
 	}
 }
+
+// TestContainsVolatile asserts the expected node type alongside the verdict: several of these
+// functions have a dedicated AST node rather than being a *FuncExpr, and matching on name alone
+// silently misses them.
+func TestContainsVolatile(t *testing.T) {
+	tcases := []struct {
+		in       string
+		nodeType any
+		volatile bool
+	}{
+		{in: "1", nodeType: &Literal{}, volatile: false},
+		{in: "col", nodeType: &ColName{}, volatile: false},
+		{in: "concat('a', col)", nodeType: &FuncExpr{}, volatile: false},
+		{in: "database()", nodeType: &FuncExpr{}, volatile: false},
+		{in: "uuid()", nodeType: &FuncExpr{}, volatile: true},
+		{in: "uuid_short()", nodeType: &FuncExpr{}, volatile: true},
+		{in: "rand()", nodeType: &FuncExpr{}, volatile: true},
+		{in: "random_bytes(4)", nodeType: &FuncExpr{}, volatile: true},
+		{in: "connection_id()", nodeType: &FuncExpr{}, volatile: true},
+		{in: "last_insert_id(5)", nodeType: &FuncExpr{}, volatile: true},
+		{in: "found_rows()", nodeType: &FuncExpr{}, volatile: true},
+		{in: "row_count()", nodeType: &FuncExpr{}, volatile: true},
+		{in: "benchmark(10, 1)", nodeType: &FuncExpr{}, volatile: true},
+		{in: "sleep(1)", nodeType: &FuncExpr{}, volatile: true},
+		{in: "load_file('/x')", nodeType: &FuncExpr{}, volatile: true},
+		{in: "master_pos_wait('a', 1)", nodeType: &FuncExpr{}, volatile: true},
+		{in: "source_pos_wait('a', 1)", nodeType: &FuncExpr{}, volatile: true},
+
+		// Evaluated once per statement, so duplicating them is safe.
+		{in: "now()", nodeType: &CurTimeFuncExpr{}, volatile: false},
+		{in: "current_timestamp()", nodeType: &CurTimeFuncExpr{}, volatile: false},
+		{in: "curtime()", nodeType: &CurTimeFuncExpr{}, volatile: false},
+		{in: "utc_timestamp()", nodeType: &CurTimeFuncExpr{}, volatile: false},
+		{in: "localtime()", nodeType: &CurTimeFuncExpr{}, volatile: false},
+		// SYSDATE() is evaluated at the point it runs, so it is not.
+		{in: "sysdate()", nodeType: &CurTimeFuncExpr{}, volatile: true},
+
+		{in: "get_lock('a', 1)", nodeType: &LockingFunc{}, volatile: true},
+		{in: "release_lock('a')", nodeType: &LockingFunc{}, volatile: true},
+		{in: "release_all_locks()", nodeType: &LockingFunc{}, volatile: true},
+		{in: "is_free_lock('a')", nodeType: &LockingFunc{}, volatile: true},
+		{in: "is_used_lock('a')", nodeType: &LockingFunc{}, volatile: true},
+
+		// Only the two wait variants block.
+		{in: "gtid_subset('a', 'b')", nodeType: &GTIDFuncExpr{}, volatile: false},
+		{in: "gtid_subtract('a', 'b')", nodeType: &GTIDFuncExpr{}, volatile: false},
+		{in: "wait_for_executed_gtid_set('x')", nodeType: &GTIDFuncExpr{}, volatile: true},
+		{in: "wait_until_sql_thread_after_gtids('x')", nodeType: &GTIDFuncExpr{}, volatile: true},
+
+		// Reading a user defined variable is stable, assigning to one is not.
+		{in: "@v", nodeType: &Variable{}, volatile: false},
+		{in: "@@session.sql_mode", nodeType: &Variable{}, volatile: false},
+		{in: "@v := 1", nodeType: &AssignmentExpr{}, volatile: true},
+	}
+
+	for _, tcase := range tcases {
+		t.Run(tcase.in, func(t *testing.T) {
+			stmt, err := NewTestParser().Parse("select " + tcase.in + " from t")
+			require.NoError(t, err)
+			expr := stmt.(*Select).GetColumns()[0].(*AliasedExpr).Expr
+
+			require.IsType(t, tcase.nodeType, expr, "the parser does not produce the node type this case claims to cover")
+			assert.Equal(t, tcase.volatile, IsVolatile(expr))
+			assert.Equal(t, tcase.volatile, ContainsVolatile(expr))
+		})
+	}
+}
+
+// TestContainsVolatileNested checks that a volatile node is found wherever it sits, not only at
+// the root of the expression.
+func TestContainsVolatileNested(t *testing.T) {
+	tcases := []struct {
+		in       string
+		volatile bool
+	}{
+		{in: "select 1 from t where a = 1", volatile: false},
+		{in: "select 1 from t where a = now()", volatile: false},
+		{in: "select 1 from t where a = concat('x', b)", volatile: false},
+		{in: "select 1 from t where a = concat('x', rand())", volatile: true},
+		{in: "select 1 from t where a in (select rand() from t2)", volatile: true},
+		{in: "select 1 from t where a = case when b then uuid() else 'x' end", volatile: true},
+		{in: "select 1 from t where a = 1 and get_lock('x', 1)", volatile: true},
+	}
+
+	for _, tcase := range tcases {
+		t.Run(tcase.in, func(t *testing.T) {
+			stmt, err := NewTestParser().Parse(tcase.in)
+			require.NoError(t, err)
+			where := stmt.(*Select).Where
+			require.NotNil(t, where)
+			assert.Equal(t, tcase.volatile, ContainsVolatile(where.Expr))
+		})
+	}
+}
