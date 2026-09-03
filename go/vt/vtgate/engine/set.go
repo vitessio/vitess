@@ -267,7 +267,7 @@ func (svs *SysVarReservedConn) Execute(ctx context.Context, vcursor VCursor, env
 			// at plan time, and a non-constant expression must not reach the
 			// session or the shard unjudged. The judged value is what the session
 			// stores, not the expression.
-			query := fmt.Sprintf("select @@%s orig, %s new", svs.Name, svs.Expr)
+			query := sqlModeJudgmentQuery(svs.Expr)
 			qr, err := execShard(ctx, nil /*primitive*/, vcursor, query, env.BindVars, rss[0], false /* rollbackOnError */, false /* canAutocommit */, false /*fetchLastInsertID*/)
 			if err != nil {
 				return err
@@ -281,14 +281,14 @@ func (svs *SysVarReservedConn) Execute(ctx context.Context, vcursor VCursor, env
 			storedValue = buf.String()
 		}
 		vcursor.Session().NeedsReservedConn()
-		if err := svs.execSetStatement(ctx, vcursor, rss, env); err != nil {
+		if err := svs.execSetStatement(ctx, vcursor, rss, env, storedValue); err != nil {
 			// the statement failed, so the session must not store its value
 			return err
 		}
 		vcursor.Session().SetSysVar(svs.Name, storedValue)
 		return nil
 	}
-	needReservedConn, err := svs.checkAndUpdateSysVar(ctx, vcursor, env)
+	needReservedConn, storedValue, err := svs.checkAndUpdateSysVar(ctx, vcursor, env)
 	if err != nil {
 		return err
 	}
@@ -301,14 +301,21 @@ func (svs *SysVarReservedConn) Execute(ctx context.Context, vcursor VCursor, env
 	if len(rss) == 0 {
 		return nil
 	}
-	return svs.execSetStatement(ctx, vcursor, rss, env)
+	value := svs.Expr
+	if svs.Name == "sql_mode" {
+		// The SET carries the judged value, not the expression: evaluating the
+		// expression a second time could apply a value the session never judged.
+		value = storedValue
+	}
+	return svs.execSetStatement(ctx, vcursor, rss, env, value)
 }
 
-func (svs *SysVarReservedConn) execSetStatement(ctx context.Context, vcursor VCursor, rss []*srvtopo.ResolvedShard, env *evalengine.ExpressionEnv) error {
+// execSetStatement executes `set <name> = <value>` on the given shard sessions.
+func (svs *SysVarReservedConn) execSetStatement(ctx context.Context, vcursor VCursor, rss []*srvtopo.ResolvedShard, env *evalengine.ExpressionEnv, value string) error {
 	queries := make([]*querypb.BoundQuery, len(rss))
 	for i := range rss {
 		queries[i] = &querypb.BoundQuery{
-			Sql:           fmt.Sprintf("set %s = %s", svs.Name, svs.Expr),
+			Sql:           fmt.Sprintf("set %s = %s", svs.Name, value),
 			BindVariables: env.BindVars,
 		}
 	}
@@ -316,48 +323,57 @@ func (svs *SysVarReservedConn) execSetStatement(ctx context.Context, vcursor VCu
 	return vterrors.Aggregate(errs)
 }
 
-func (svs *SysVarReservedConn) checkAndUpdateSysVar(ctx context.Context, vcursor VCursor, res *evalengine.ExpressionEnv) (bool, error) {
+// checkAndUpdateSysVar evaluates the assignment on a shard and, when it changes the
+// variable's value, stores the evaluated value in the session. It returns whether a
+// reserved connection is needed to apply the change, and the stored value.
+func (svs *SysVarReservedConn) checkAndUpdateSysVar(ctx context.Context, vcursor VCursor, res *evalengine.ExpressionEnv) (needReservedConn bool, storedValue string, err error) {
 	sysVarExprValidationQuery := fmt.Sprintf("select %s from dual where @@%s != %s", svs.Expr, svs.Name, svs.Expr)
 	if svs.Name == "sql_mode" {
-		sysVarExprValidationQuery = fmt.Sprintf("select @@%s orig, %s new", svs.Name, svs.Expr)
+		sysVarExprValidationQuery = sqlModeJudgmentQuery(svs.Expr)
 	}
 	rss, _, err := vcursor.ResolveDestinations(ctx, svs.Keyspace.Name, nil, []key.ShardDestination{key.DestinationKeyspaceID{0}})
 	if err != nil {
-		return false, err
+		return false, "", err
 	}
 	qr, err := execShard(ctx, nil /*primitive*/, vcursor, sysVarExprValidationQuery, res.BindVars, rss[0], false /* rollbackOnError */, false /* canAutocommit */, false /*fetchLastInsertID*/)
 	if err != nil {
-		return false, err
+		return false, "", err
 	}
 	changed := len(qr.Rows) > 0
 	if !changed {
-		return false, nil
+		return false, "", nil
 	}
 
 	var value sqltypes.Value
 	if svs.Name == "sql_mode" {
 		changed, value, err = sqlModeChangedValue(qr)
 		if err != nil {
-			return false, err
+			return false, "", err
 		}
 		if !changed {
-			return false, nil
+			return false, "", nil
 		}
 	} else {
 		value = qr.Rows[0][0]
 	}
 	var buf strings.Builder
 	value.EncodeSQL(&buf)
-	s := buf.String()
-	vcursor.Session().SetSysVar(svs.Name, s)
+	storedValue = buf.String()
+	vcursor.Session().SetSysVar(svs.Name, storedValue)
 
 	// If the condition below is true, we want to use reserved connection instead of SET_VAR query hint.
 	// MySQL supports SET_VAR only in MySQL80 and for a limited set of system variables.
 	if !svs.SupportSetVar || !vcursor.CanUseSetVar() {
 		vcursor.Session().NeedsReservedConn()
-		return true, nil
+		return true, storedValue, nil
 	}
-	return false, nil
+	return false, storedValue, nil
+}
+
+// sqlModeJudgmentQuery selects the session's current sql_mode alongside the assigned
+// expression's value, for sqlModeChangedValue to judge.
+func sqlModeJudgmentQuery(expr string) string {
+	return fmt.Sprintf("select @@sql_mode orig, %s new", expr)
 }
 
 // sqlModeChangedValue reports whether the sql_mode assignment changes the session's

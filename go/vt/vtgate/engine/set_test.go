@@ -83,6 +83,7 @@ func TestSetTable(t *testing.T) {
 		execErr          error
 		mysqlVersion     string
 		disableSetVar    bool
+		shardSession     []*srvtopo.ResolvedShard
 	}
 
 	ks := &vindexes.Keyspace{Name: "ks", Sharded: true}
@@ -289,7 +290,9 @@ func TestSetTable(t *testing.T) {
 			`ExecuteMultiShard ks.-20: select @@sql_mode orig, concat('AN', 'SI') new {} false false`,
 		},
 	}, {
-		testName: "targeted sql_mode stores the judged value after the set",
+		// the SET carries the judged value rather than the expression: evaluating the
+		// expression a second time could apply a value the session never judged
+		testName: "targeted sql_mode applies and stores the judged value, not the expression",
 		setOps: []SetOp{
 			&SysVarReservedConn{
 				Name:              "sql_mode",
@@ -309,7 +312,7 @@ func TestSetTable(t *testing.T) {
 			`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
 			`ExecuteMultiShard ks.-20: select @@sql_mode orig, concat('STRICT_TRANS', '_TABLES') new {} false false`,
 			`Needs Reserved Conn`,
-			`ExecuteMultiShard ks.-20: set sql_mode = concat('STRICT_TRANS', '_TABLES') {} false false`,
+			`ExecuteMultiShard ks.-20: set sql_mode = 'STRICT_TRANS_TABLES' {} false false`,
 			`SysVar set with (sql_mode,'STRICT_TRANS_TABLES')`,
 		},
 	}, {
@@ -586,6 +589,31 @@ func TestSetTable(t *testing.T) {
 		)},
 		disableSetVar: true,
 	}, {
+		// on the reserved-connection path the SET carries the judged value rather than
+		// the expression, so the shard applies exactly what the session stores
+		testName:     "sql_mode applies the judged value to the shard sessions, not the expression",
+		mysqlVersion: "8.0.0",
+		setOps: []SetOp{
+			&SysVarReservedConn{
+				Name:          "sql_mode",
+				Keyspace:      &vindexes.Keyspace{Name: "ks", Sharded: true},
+				Expr:          "concat('STRICT_TRANS', '_TABLES')",
+				SupportSetVar: true,
+			},
+		},
+		shardSession: []*srvtopo.ResolvedShard{{Target: &querypb.Target{Keyspace: "ks", Shard: "-20"}}},
+		expectedQueryLog: []string{
+			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
+			`ExecuteMultiShard ks.-20: select @@sql_mode orig, concat('STRICT_TRANS', '_TABLES') new {} false false`,
+			"SysVar set with (sql_mode,'STRICT_TRANS_TABLES')",
+			"Needs Reserved Conn",
+			`ExecuteMultiShard ks.-20: set sql_mode = 'STRICT_TRANS_TABLES' {} false false`,
+		},
+		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
+			"|STRICT_TRANS_TABLES",
+		)},
+		disableSetVar: true,
+	}, {
 		testName:     "sql_mode set an unsupported mode",
 		mysqlVersion: "8.0.0",
 		setOps: []SetOp{
@@ -781,6 +809,7 @@ func TestSetTable(t *testing.T) {
 				multiShardErrs: []error{tc.execErr},
 				disableSetVar:  tc.disableSetVar,
 				parser:         parser,
+				shardSession:   tc.shardSession,
 			}
 			_, err = set.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 			if tc.expectedError == "" {
