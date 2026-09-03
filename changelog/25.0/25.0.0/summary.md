@@ -192,9 +192,11 @@ See [#19906](https://github.com/vitessio/vitess/pull/19906) for details.
 
 #### <a id="vreplication-switch-writes-requires-reads"/>`SwitchTraffic` refuses to switch writes before reads</a>
 
-A forward `SwitchTraffic` request that switches only writes (`PRIMARY`) while read traffic (`REPLICA`/`RDONLY`) is still on the source is now rejected with a `FAILED_PRECONDITION` error. Switching writes first strands the unswitched reads on a source that no longer receives writes, and for a Reshard it leaves the workflow impossible to `Complete` (which requires all read and write traffic to be switched).
+A forward `SwitchTraffic` request that switches `PRIMARY` (writes) while any read type (`REPLICA`/`RDONLY`) would remain on the source is now rejected with a `FAILED_PRECONDITION` error. Switching writes first strands the unswitched reads on a source that no longer receives writes, and for a Reshard it leaves the workflow impossible to `Complete` (which requires all read and write traffic to be switched).
 
-To switch writes, either switch reads first, or include the read types in the same request (e.g. `--tablet-types=rdonly,replica,primary`). The check can be overridden with `--force`.
+The check runs whenever `PRIMARY` is in the request, not only for writes-only requests. It fires per read type, so a `PRIMARY,REPLICA` request is still rejected while `RDONLY` remains on the source. For a Reshard it also fires per cell, so a cell-scoped request that switches all tablet types is rejected while another cell remains unswitched.
+
+To switch writes, either switch the outstanding reads first, or include all outstanding read types (and, for a Reshard, all outstanding cells) in the same request (e.g. `--tablet-types=rdonly,replica,primary`). The check can be overridden with `--force`.
 
 See [#20924](https://github.com/vitessio/vitess/pull/20924) for details.
 
