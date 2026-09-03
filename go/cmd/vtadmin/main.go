@@ -25,7 +25,6 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
-	"syscall"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -233,9 +232,7 @@ func run(cmd *cobra.Command, args []string) {
 		go func() {
 			if err := <-uiErr; err != nil {
 				slog.Error("vtadmin2 UI server failed", slog.Any("error", err))
-				if signalErr := syscall.Kill(syscall.Getpid(), syscall.SIGTERM); signalErr != nil {
-					slog.Error("failed to signal vtadmin shutdown", slog.Any("error", signalErr))
-				}
+				servenv.ExitChan <- os.Interrupt
 			}
 		}()
 	}
