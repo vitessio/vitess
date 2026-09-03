@@ -3294,7 +3294,7 @@ func TestFinalizeLogStatsUsesContextIngressBytes(t *testing.T) {
 func TestForEachStatementIngressBytesFromContext(t *testing.T) {
 	executor, _, _, _, _ := createExecutorEnv(t)
 	vtg := newVTGate(executor, nil, nil, nil, nil)
-	ctx := vtgateservice.ContextWithIngressBytes(context.Background(), 27)
+	ctx := vtgateservice.ContextWithIngressBytes(t.Context(), 27)
 
 	assert.Equal(t, []uint64{10, 17}, statementIngressBytes(t, vtg, ctx, nil, "select 1;select 222222"))
 }
@@ -3306,7 +3306,7 @@ func TestForEachStatementIngressBytesFromMySQLConnection(t *testing.T) {
 	vtg := newVTGate(executor, nil, nil, nil, nil)
 	mysqlCtx := &fakeMysqlConnection{ingressBytes: 27}
 
-	assert.Equal(t, []uint64{10, 17}, statementIngressBytes(t, vtg, context.Background(), mysqlCtx, "select 1;select 222222"))
+	assert.Equal(t, []uint64{10, 17}, statementIngressBytes(t, vtg, t.Context(), mysqlCtx, "select 1;select 222222"))
 }
 
 // statementIngressBytes collects the ingress bytes forEachStatement attaches
