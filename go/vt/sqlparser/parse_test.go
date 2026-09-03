@@ -4414,6 +4414,46 @@ func TestSQLModeParsing(t *testing.T) {
 	assert.Equal(t, "select 'a' from t", String(stmt))
 }
 
+// MySQL recognizes the national-character string introducer only as N'…'. In
+// N"…" the N is an identifier followed by "…" — a string in the default mode, a
+// quoted identifier under ANSI_QUOTES — which MySQL reads as an alias either way,
+// so the lexer must not take the national-string path on a double quote.
+func TestNationalStringRequiresSingleQuote(t *testing.T) {
+	def := NewTestParser()
+	ansi := def.WithSQLMode(SQLModeANSIQuotes)
+	for _, tc := range []struct {
+		parser *Parser
+		in     string
+	}{
+		{def, `select N'foo' from t`},
+		{def, `select n'foo' from t`},
+	} {
+		stmt, err := tc.parser.Parse(tc.in)
+		require.NoError(t, err, tc.in)
+		expr := stmt.(*Select).SelectExprs.Exprs[0].(*AliasedExpr).Expr
+		nstr, ok := expr.(*UnaryExpr)
+		require.True(t, ok, "%s: got %T", tc.in, expr)
+		assert.Equal(t, NStringOp, nstr.Operator)
+		assert.Equal(t, "select N'foo' from t", String(stmt))
+	}
+	for _, tc := range []struct {
+		parser *Parser
+		in     string
+	}{
+		{def, `select N"foo" from t`},
+		{def, `select n"foo" from t`},
+		{ansi, `select N"foo" from t`},
+	} {
+		stmt, err := tc.parser.Parse(tc.in)
+		require.NoError(t, err, tc.in)
+		ae := stmt.(*Select).SelectExprs.Exprs[0].(*AliasedExpr)
+		col, ok := ae.Expr.(*ColName)
+		require.True(t, ok, "%s: got %T", tc.in, ae.Expr)
+		assert.True(t, col.Name.EqualString("n"), tc.in)
+		assert.Equal(t, "foo", ae.As.String(), tc.in)
+	}
+}
+
 // REAL resolves at parse time the way MySQL's parser does: under sql_mode
 // REAL_AS_FLOAT it is a synonym for FLOAT, otherwise for DOUBLE. On MySQL the
 // resolution is parse-time too — a SET_VAR hint cannot change it for its own
