@@ -1,5 +1,4 @@
 # Release of Vitess v23.0.6
-# Release of Vitess v23.0.6
 
 ## Summary
 
