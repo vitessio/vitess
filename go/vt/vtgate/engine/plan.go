@@ -61,8 +61,15 @@ type (
 	}
 
 	// PlanKey identifies a plan uniquely based on keyspace, destination, query,
-	// SET_VAR comment, collation and parse-relevant sql_mode. It is primarily
-	// used as a cache key.
+	// SET_VAR comment, collation and sql_mode. It is primarily used as a cache key.
+	//
+	// The sql_mode enters the key as two narrow bitfields rather than as the session's
+	// value, so the cache is partitioned only on the modes a plan depends on: the
+	// parse-relevant bits decide how the query text was read, the evaluation-relevant
+	// bits how its compiled expressions behave. They are kept separate because they
+	// come from different places — for a prepared statement the parse bits are the
+	// ones pinned at prepare time while the evaluation bits follow the live session,
+	// as in MySQL — so neither can be derived from the other.
 	PlanKey struct {
 		CurrentKeyspace string                // CurrentKeyspace is the name of the keyspace associated with the plan.
 		TabletType      topodatapb.TabletType // TabletType is the type of tablet (primary, replica, etc.) for the plan.
