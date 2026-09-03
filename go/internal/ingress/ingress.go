@@ -72,3 +72,15 @@ func splitBytesEvenly(total uint64, allocations []uint64) {
 		}
 	}
 }
+
+// NextStatementBytes attributes to the next statement of a multi-statement
+// request its share of the request bytes not yet attributed: proportional to
+// the statement's text against the text that still follows it. The last
+// statement (nothing follows) takes everything that is left, so the shares
+// always sum to the request total.
+func NextStatementBytes(remaining uint64, statement, rest string) uint64 {
+	if rest == "" {
+		return remaining
+	}
+	return SplitBytesByWeight(remaining, []int{len(statement), len(rest)})[0]
+}
