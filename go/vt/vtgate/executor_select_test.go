@@ -471,6 +471,86 @@ func TestSessionSQLModeNumericSessionValue(t *testing.T) {
 	assert.Equal(t, "'ANSI_QUOTES'", session.SystemVariables["sql_mode"])
 }
 
+// TestSessionSQLModeExpressionSessionValue covers sessions arriving with a sql_mode
+// stored as an expression — an older vtgate's targeted session stored SET's expression
+// as written — which is evaluated on the shard before anything reads the session's
+// modes, so the modes the text mentions never stand in for the modes it evaluates to.
+func TestSessionSQLModeExpressionSessionValue(t *testing.T) {
+	judgment := func(orig, new string) *sqltypes.Result {
+		return sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"), orig+"|"+new)
+	}
+	newSession := func(target, sqlMode string) *econtext.SafeSession {
+		return econtext.NewAutocommitSession(&vtgatepb.Session{
+			EnableSystemSettings: true,
+			TargetString:         target,
+			SystemVariables:      map[string]string{"sql_mode": sqlMode},
+		})
+	}
+
+	t.Run("an expression removing a lexer mode evaluates to the default", func(t *testing.T) {
+		executor, _, _, lookup, _ := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
+		session := newSession(KsTestUnsharded, "REPLACE(@@sql_mode, 'ANSI_QUOTES', '')")
+		lookup.SetResults([]*sqltypes.Result{judgment("STRICT_TRANS_TABLES", "STRICT_TRANS_TABLES")})
+
+		// the text mentions ANSI_QUOTES, the value does not: "id" is a string literal
+		_, err := executorExecSession(t.Context(), executor, session, `select "id" from information_schema.table`, map[string]*querypb.BindVariable{})
+		require.NoError(t, err)
+		require.Len(t, lookup.Queries, 2)
+		assert.Equal(t, "select @@sql_mode orig, REPLACE(@@sql_mode, 'ANSI_QUOTES', '') new", lookup.Queries[0].Sql)
+		assert.Equal(t, "select :vtg1 /* VARCHAR */ from information_schema.`table`", lookup.Queries[1].Sql)
+		// the value does not change the shard's default, so the session keeps nothing
+		_, stored := session.SystemVariables["sql_mode"]
+		assert.False(t, stored)
+	})
+
+	t.Run("an expression adding a lexer mode enables it", func(t *testing.T) {
+		executor, _, _, lookup, _ := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
+		session := newSession(KsTestUnsharded, "CONCAT(@@sql_mode, ',ANSI_QUOTES')")
+		lookup.SetResults([]*sqltypes.Result{judgment("STRICT_TRANS_TABLES", "STRICT_TRANS_TABLES,ANSI_QUOTES")})
+
+		// "id" is a quoted identifier under the evaluated value
+		_, err := executorExecSession(t.Context(), executor, session, `select "id" from information_schema.table`, map[string]*querypb.BindVariable{})
+		require.NoError(t, err)
+		require.Len(t, lookup.Queries, 2)
+		assert.Equal(t, "select @@sql_mode orig, CONCAT(@@sql_mode, ',ANSI_QUOTES') new", lookup.Queries[0].Sql)
+		assert.Equal(t, "select /*+ SET_VAR(sql_mode = 'ANSI_QUOTES,STRICT_TRANS_TABLES') */ id from information_schema.`table`", lookup.Queries[1].Sql)
+		assert.Equal(t, "'ANSI_QUOTES,STRICT_TRANS_TABLES'", session.SystemVariables["sql_mode"])
+	})
+
+	t.Run("a shard-targeted session stores the judged value", func(t *testing.T) {
+		executor, _, _, lookup, _ := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
+		session := newSession(KsTestUnsharded+"/0", "CONCAT(@@sql_mode, ',ANSI_QUOTES')")
+		lookup.SetResults([]*sqltypes.Result{judgment("STRICT_TRANS_TABLES", "STRICT_TRANS_TABLES,ANSI_QUOTES")})
+
+		_, err := executorExecSession(t.Context(), executor, session, `select "id" from information_schema.table`, map[string]*querypb.BindVariable{})
+		require.NoError(t, err)
+		assert.Equal(t, "'ANSI_QUOTES,STRICT_TRANS_TABLES'", session.SystemVariables["sql_mode"])
+		assert.True(t, session.InReservedConn())
+		var sqls []string
+		for _, q := range lookup.Queries {
+			sqls = append(sqls, q.Sql)
+		}
+		assert.Equal(t, []string{
+			"select @@sql_mode orig, CONCAT(@@sql_mode, ',ANSI_QUOTES') new",
+			"set sql_mode = 'ANSI_QUOTES,STRICT_TRANS_TABLES'",
+			"select /*+ SET_VAR(sql_mode = 'ANSI_QUOTES,STRICT_TRANS_TABLES') */ id from information_schema.`table`",
+		}, sqls)
+	})
+
+	t.Run("an expression evaluating to an invalid value fails the request", func(t *testing.T) {
+		executor, _, _, lookup, _ := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
+		session := newSession(KsTestUnsharded, "CONCAT('BO', 'GUS')")
+		lookup.SetResults([]*sqltypes.Result{judgment("STRICT_TRANS_TABLES", "BOGUS")})
+
+		_, err := executorExecSession(t.Context(), executor, session, `select "id" from information_schema.table`, map[string]*querypb.BindVariable{})
+		require.EqualError(t, err, "Variable 'sql_mode' can't be set to the value of 'BOGUS'")
+		require.Len(t, lookup.Queries, 1)
+		// a value that can never be applied is not kept for the next request to fail on
+		_, stored := session.SystemVariables["sql_mode"]
+		assert.False(t, stored)
+	})
+}
+
 func TestSessionSQLModeParsing(t *testing.T) {
 	executor, _, _, lookup, _ := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
 	session := econtext.NewAutocommitSession(&vtgatepb.Session{EnableSystemSettings: true, TargetString: KsTestUnsharded, SystemVariables: map[string]string{}})

@@ -1242,6 +1242,9 @@ func (e *Executor) fetchOrCreatePlan(
 		return nil, nil, nil, vterrors.VT13001("vschema not initialized")
 	}
 
+	if err := e.materializeSessionSQLMode(ctx, safeSession, logStats); err != nil {
+		return nil, nil, nil, err
+	}
 	query, comments := sqlparser.SplitMarginComments(queryString)
 	vcursor, _ = e.newVCursor(safeSession, comments, logStats)
 
@@ -1433,6 +1436,42 @@ func (e *Executor) getCachedOrBuildPlan(
 	}
 	plan, err = e.buildStatement(ctx, vcursor, query, stmt, reservedVars, bindVarNeeds, qh, paramsCount)
 	return plan, false, stmt, err
+}
+
+// materializeSessionSQLMode replaces a session sql_mode stored as an expression with
+// the value the expression evaluates to, before anything reads the session's modes.
+// Every reader — the parser, the plan cache key, the SET_VAR and settings transports —
+// expects a list of mode names: an older vtgate's targeted session stored a SET's
+// expression as written, and a direct gRPC client may send one, and the modes such
+// text mentions say nothing about the modes it evaluates to. The expression gets the
+// judgment a SET gives it, evaluated on the session's target shard, and the session
+// keeps the judged value, or nothing when it does not change the shard's default —
+// the same value the SET would have left behind. The expression is removed first, so
+// that it is not applied as a connection setting to the very connection judging it;
+// when the judgment fails the request fails and the session is left without a
+// sql_mode, rather than keeping a value that could never be applied.
+func (e *Executor) materializeSessionSQLMode(ctx context.Context, safeSession *econtext.SafeSession, logStats *logstats.LogStats) error {
+	value, ok := safeSession.SQLMode()
+	if !ok || sqlparser.IsSQLModeList(value) {
+		return nil
+	}
+	vcursor, err := e.newVCursor(safeSession, sqlparser.MarginComments{}, logStats)
+	if err != nil {
+		return err
+	}
+	keyspace, err := vcursor.AnyKeyspace()
+	if err != nil {
+		return vterrors.Wrapf(err, "cannot evaluate the session's sql_mode expression %s", value)
+	}
+	vcursor.SafeSession.RemoveSystemVariable(sysvars.SQLMode.Name)
+	set := &engine.SysVarReservedConn{
+		Name:              sysvars.SQLMode.Name,
+		Keyspace:          keyspace,
+		TargetDestination: vcursor.ShardDestination(),
+		Expr:              value,
+		SupportSetVar:     sysvars.SQLMode.SupportSetVar,
+	}
+	return set.Execute(ctx, vcursor, evalengine.NewExpressionEnv(ctx, nil, vcursor))
 }
 
 func buildPlanKey(ctx context.Context, vcursor *econtext.VCursorImpl, query string, setVarComment string) engine.PlanKey {
@@ -1639,6 +1678,9 @@ func (e *Executor) prepare(ctx context.Context, safeSession *econtext.SafeSessio
 		// (WITH ... SELECT/INSERT/REPLACE/UPDATE/DELETE). Anything else stays
 		// unknown and is rejected below, rather than being reported to the
 		// client as a zero-parameter success.
+		if err := e.materializeSessionSQLMode(ctx, safeSession, logStats); err != nil {
+			return nil, 0, err
+		}
 		sessionSQLMode, _ := safeSession.SQLMode()
 		stmt, err := e.env.Parser().WithSQLMode(sqlparser.ParseSQLMode(sessionSQLMode)).Parse(sql)
 		if err != nil {

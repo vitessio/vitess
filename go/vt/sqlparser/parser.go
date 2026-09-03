@@ -662,23 +662,40 @@ func CanonicalizeSQLModeValue(value string) string {
 // not a plain (possibly quoted) mode list — e.g. expressions — are returned
 // unchanged.
 func StripUnforwardableModesValue(value string) string {
-	inner := value
-	quoted := len(inner) >= 2 && inner[0] == '\'' && inner[len(inner)-1] == '\''
-	if quoted {
-		inner = inner[1 : len(inner)-1]
+	if !IsSQLModeList(value) {
+		return value
 	}
-	for _, r := range inner {
-		isWordChar := r == '_' || r == ',' || r == ' ' ||
-			(r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9')
-		if !isWordChar {
-			return value
-		}
-	}
+	inner, quoted := unquoteSQLModeValue(value)
 	stripped := StripUnforwardableModes(inner)
 	if quoted {
 		return "'" + stripped + "'"
 	}
 	return stripped
+}
+
+// IsSQLModeList reports whether a stored sql_mode value is a plain list of mode
+// names — comma-separated, optionally single-quoted — as opposed to an expression
+// (REPLACE(@@sql_mode, ...), a user variable, ...) whose modes cannot be read off
+// its text. Only a list can be parsed for the modes it enables.
+func IsSQLModeList(value string) bool {
+	inner, _ := unquoteSQLModeValue(value)
+	for _, r := range inner {
+		isWordChar := r == '_' || r == ',' || r == ' ' ||
+			(r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9')
+		if !isWordChar {
+			return false
+		}
+	}
+	return true
+}
+
+// unquoteSQLModeValue strips the single quotes of a stored sql_mode value, reporting
+// whether there were any.
+func unquoteSQLModeValue(value string) (inner string, quoted bool) {
+	if len(value) >= 2 && value[0] == '\'' && value[len(value)-1] == '\'' {
+		return value[1 : len(value)-1], true
+	}
+	return value, false
 }
 
 type Options struct {

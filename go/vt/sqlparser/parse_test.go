@@ -7767,3 +7767,27 @@ func parsePartial(r *bufio.Reader, readType []string, lineno int, fileName strin
 func locateFile(name string) string {
 	return "testdata/" + name
 }
+
+func TestIsSQLModeList(t *testing.T) {
+	testCases := []struct {
+		value string
+		list  bool
+	}{
+		{value: "", list: true},
+		{value: "''", list: true},
+		{value: "ANSI_QUOTES", list: true},
+		{value: "'ANSI_QUOTES,STRICT_TRANS_TABLES'", list: true},
+		{value: "'ansi_quotes, no_zero_date'", list: true},
+		{value: "1048576", list: true},
+		{value: "REPLACE(@@sql_mode, 'ANSI_QUOTES', '')", list: false},
+		{value: "concat(@@sql_mode, ',ANSI_QUOTES')", list: false},
+		{value: "@x", list: false},
+		{value: "'ANSI_QUOTES' ", list: false},
+		{value: "\"ANSI_QUOTES\"", list: false},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.value, func(t *testing.T) {
+			assert.Equal(t, tc.list, IsSQLModeList(tc.value))
+		})
+	}
+}
