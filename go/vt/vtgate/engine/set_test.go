@@ -791,9 +791,46 @@ func TestSetTable(t *testing.T) {
 			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
 			`ExecuteMultiShard ks.-20: select @@sql_mode orig, 'STRICT_TRANS_TABLES' new {} false false`,
 		},
-		expectedError: "unexpected result reading sql_mode: 1 fields, 1 columns",
+		expectedError: "unexpected result reading sql_mode: 1 fields, 1 rows",
 		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig", "varchar"),
 			"whatever",
+		)},
+	}, {
+		testName:     "sql_mode verification result with no rows fails",
+		mysqlVersion: "8.0.0",
+		setOps: []SetOp{
+			&SysVarReservedConn{
+				Name:          "sql_mode",
+				Keyspace:      &vindexes.Keyspace{Name: "ks", Sharded: true},
+				Expr:          "'STRICT_TRANS_TABLES'",
+				SupportSetVar: true,
+			},
+		},
+		expectedQueryLog: []string{
+			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
+			`ExecuteMultiShard ks.-20: select @@sql_mode orig, 'STRICT_TRANS_TABLES' new {} false false`,
+		},
+		expectedError: "unexpected result reading sql_mode: 2 fields, 0 rows",
+		qr:            []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"))},
+	}, {
+		testName:     "sql_mode verification result with several rows fails",
+		mysqlVersion: "8.0.0",
+		setOps: []SetOp{
+			&SysVarReservedConn{
+				Name:          "sql_mode",
+				Keyspace:      &vindexes.Keyspace{Name: "ks", Sharded: true},
+				Expr:          "'STRICT_TRANS_TABLES'",
+				SupportSetVar: true,
+			},
+		},
+		expectedQueryLog: []string{
+			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
+			`ExecuteMultiShard ks.-20: select @@sql_mode orig, 'STRICT_TRANS_TABLES' new {} false false`,
+		},
+		expectedError: "unexpected result reading sql_mode: 2 fields, 2 rows",
+		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
+			"|STRICT_TRANS_TABLES",
+			"|STRICT_TRANS_TABLES",
 		)},
 	}, {
 		testName:     "sql_mode set to a removed mode bit",

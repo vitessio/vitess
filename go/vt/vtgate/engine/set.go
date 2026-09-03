@@ -351,22 +351,23 @@ func (svs *SysVarReservedConn) checkAndUpdateSysVar(ctx context.Context, vcursor
 	if err != nil {
 		return false, "", err
 	}
-	changed := len(qr.Rows) > 0
-	if !changed {
-		return false, "", nil
-	}
-
+	var changed bool
 	var value sqltypes.Value
 	if svs.Name == "sql_mode" {
+		// the judgment query always returns one row; the judgment decides whether
+		// the value changed, and a malformed result is an error rather than "no change"
 		changed, value, err = sqlModeChangedValue(qr)
 		if err != nil {
 			return false, "", err
 		}
-		if !changed {
-			return false, "", nil
-		}
 	} else {
-		value = qr.Rows[0][0]
+		changed = len(qr.Rows) > 0
+		if changed {
+			value = qr.Rows[0][0]
+		}
+	}
+	if !changed {
+		return false, "", nil
 	}
 	var buf strings.Builder
 	value.EncodeSQL(&buf)
@@ -394,10 +395,10 @@ func sqlModeJudgmentQuery(expr string) string {
 // unsupported value is rejected even when the assignment would not change the value —
 // name lists, numeric bitmasks, and combination modes like ANSI included.
 func sqlModeChangedValue(qr *sqltypes.Result) (bool, sqltypes.Value, error) {
-	if len(qr.Fields) != 2 || len(qr.Rows[0]) != 2 {
-		// the verification query selects exactly two columns; anything else means the
-		// value cannot be judged, which must fail rather than pass as "no change"
-		return false, sqltypes.Value{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected result reading sql_mode: %d fields, %d columns", len(qr.Fields), len(qr.Rows[0]))
+	if len(qr.Fields) != 2 || len(qr.Rows) != 1 || len(qr.Rows[0]) != 2 {
+		// the verification query selects exactly two columns of one row; anything else
+		// means the value cannot be judged, which must fail rather than pass as "no change"
+		return false, sqltypes.Value{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected result reading sql_mode: %d fields, %d rows", len(qr.Fields), len(qr.Rows))
 	}
 	newMode, err := sqlmode.Validate(qr.Rows[0][1])
 	if err != nil {
