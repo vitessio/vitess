@@ -29,6 +29,12 @@ func resetTokenizer(yylex yyLexer) {
   yylex.(*Tokenizer).reset()
 }
 
+// statementDone tells the tokenizer that the first statement has been
+// reduced; see ParseNext.
+func statementDone(yylex yyLexer) {
+  yylex.(*Tokenizer).statementDone()
+}
+
 func setAllowComments(yylex yyLexer, allow bool) {
   yylex.(*Tokenizer).AllowComments = allow
 }
@@ -700,6 +706,7 @@ multiple_commands:
   {
     $$ = []Statement{$1}
     resetTokenizer(yylex)
+    statementDone(yylex)
   }
 |  multiple_commands ';' comment_command_opt
   {

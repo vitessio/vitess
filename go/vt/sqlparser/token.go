@@ -42,8 +42,20 @@ type Tokenizer struct {
 	lastToken          string
 	posVarIndex        int
 	partialDDL         Statement
-	multi              bool
 	inVersionedComment bool // true when scanning inside a MySQL versioned comment (/*!...*/)
+
+	// stopAfterFirstStatement is set by ParseNext: the grammar tells the
+	// tokenizer when the first statement has been reduced (firstStatementDone),
+	// after which only the ';' that ends it is delivered before end of input.
+	stopAfterFirstStatement bool
+	firstStatementDone      bool
+	// stmtEnd is the offset of the top-level ';' that ended the first
+	// statement, and restStart the offset just after it. Both are -1 while
+	// no such ';' has been seen.
+	stmtEnd   int
+	restStart int
+	// resyncToken is the token at which Error stopped re-syncing: ';', 0 or LEX_ERROR.
+	resyncToken int
 
 	Pos       int
 	buf       string
@@ -76,33 +88,42 @@ func yyLocDefault(cur *location, rhs []yySymType, n int) {
 // sql string.
 func (p *Parser) NewStringTokenizer(sql string) *Tokenizer {
 	return &Tokenizer{
-		buf:      sql,
-		BindVars: make(map[string]struct{}),
-		parser:   p,
+		buf:       sql,
+		BindVars:  make(map[string]struct{}),
+		parser:    p,
+		stmtEnd:   -1,
+		restStart: -1,
 	}
 }
 
 // Lex returns the next token form the Tokenizer.
 // This function is used by go yacc.
 func (tkn *Tokenizer) Lex(lval *yySymType) int {
-	if tkn.SkipToEnd {
+	if tkn.firstStatementDone && tkn.lastTokenType == ';' {
+		// ParseNext: the ';' that ends the first statement has been
+		// delivered, whether the parser fetched it as the lookahead before
+		// reducing the statement or we scanned it afterwards. Everything
+		// after it belongs to the next call.
+		tkn.markStatementEnd()
+		lval.yyloc.start = tkn.Pos
+		lval.yyloc.end = tkn.Pos
+		return 0
+	}
+
+	var typ int
+	var val string
+	if tkn.SkipToEnd && tkn.lastTokenType != ';' {
 		// We need to check the last token type to
 		// prevent us from skipping the next query in a multi
 		// parse mode. If we don't check the last token, we
 		// will skip the next query.
-		if tkn.lastTokenType == ';' {
-			tkn.SkipToEnd = false
-		} else {
-			return tkn.skipStatement()
-		}
-	}
-
-	typ, val := tkn.Scan()
-	for typ == COMMENT {
-		if tkn.AllowComments {
-			break
-		}
+		typ = tkn.skipStatement()
+	} else {
+		tkn.SkipToEnd = false
 		typ, val = tkn.Scan()
+		for typ == COMMENT && !tkn.AllowComments {
+			typ, val = tkn.Scan()
+		}
 	}
 	if typ == 0 || typ == ';' || typ == LEX_ERROR {
 		// If encounter end of statement or invalid token,
@@ -111,12 +132,47 @@ func (tkn *Tokenizer) Lex(lval *yySymType) int {
 		// Parse function to see how this is handled.
 		tkn.partialDDL = nil
 	}
+	if typ == ';' && tkn.firstStatementDone {
+		tkn.markStatementEnd()
+	}
 	lval.yyloc.start = tkn.currStart
 	lval.yyloc.end = tkn.Pos
 	lval.setstr(val)
 	tkn.lastTokenType = typ
 	tkn.lastToken = val
 	return typ
+}
+
+// statementDone is called by the grammar once the first statement has been
+// reduced. In ParseNext mode the token stream then ends at the next ';'.
+func (tkn *Tokenizer) statementDone() {
+	if tkn.stopAfterFirstStatement {
+		tkn.firstStatementDone = true
+	}
+}
+
+// markStatementEnd records the ';' the tokenizer just scanned as the end of
+// the first statement. Only the first such ';' counts.
+func (tkn *Tokenizer) markStatementEnd() {
+	if tkn.stmtEnd >= 0 {
+		return
+	}
+	tkn.stmtEnd = tkn.currStart
+	tkn.restStart = tkn.Pos
+}
+
+// resync scans forward to the next top-level ';' or to the end of the input,
+// stepping over lexical errors, so that a statement the grammar rejected can
+// still be cut where a lexer would cut it. See SplitStatementToPieces.
+func (tkn *Tokenizer) resync() {
+	for tkn.stmtEnd < 0 {
+		switch typ, _ := tkn.Scan(); typ {
+		case ';':
+			tkn.markStatementEnd()
+		case 0:
+			return
+		}
+	}
 }
 
 // PositionedErr holds context related to parser errors
@@ -150,8 +206,15 @@ func (tkn *Tokenizer) GetInputExpression(start, end int) string {
 func (tkn *Tokenizer) Error(err string) {
 	tkn.LastError = PositionedErr{Err: err, Pos: tkn.Pos + 1, Near: tkn.lastToken}
 
+	if tkn.lastTokenType == ';' {
+		// The ';' the parser choked on still ends the statement.
+		tkn.markStatementEnd()
+	}
 	// Try and re-sync to the next statement
-	tkn.skipStatement()
+	tkn.resyncToken = tkn.skipStatement()
+	if tkn.resyncToken == ';' {
+		tkn.markStatementEnd()
+	}
 }
 
 // Scan scans the tokenizer for the next token and returns
@@ -216,12 +279,6 @@ func (tkn *Tokenizer) Scan() (int, string) {
 		case ch == ':':
 			return tkn.scanBindVarOrAssignmentExpression()
 		case ch == ';':
-			if tkn.multi {
-				// In multi mode, ';' is treated as EOF. So, we don't advance.
-				// Repeated calls to Scan will keep returning 0 until ParseNext
-				// forces the advance.
-				return 0, ""
-			}
 			tkn.skip(1)
 			return ';', ""
 		case ch == eofChar:
@@ -368,6 +425,9 @@ func (tkn *Tokenizer) skipStatement() int {
 		}
 	}
 }
+
+// blankChars are the characters skipBlank skips between tokens.
+const blankChars = " \n\r\t"
 
 // skipBlank skips the cursor while it finds whitespace
 func (tkn *Tokenizer) skipBlank() {
