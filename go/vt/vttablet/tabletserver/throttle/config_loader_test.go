@@ -20,17 +20,17 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
 
 	querythrottlerpb "vitess.io/vitess/go/vt/proto/querythrottler"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 )
 
-// TestConvertQueryThrottlerConfigToThrottlerConfig_PicksMinFloorWhenUnsorted
-// verifies that an unsorted Thresholds slice still yields the true minimum
-// threshold as the underlying throttler's floor. The function originally read
-// thresholds[0].GetAbove() assuming sorted order; sanitizeQueryThrottlerConfig
-// in grpcvtctldserver enforces that on the RPC write path but a direct topo
-// write would bypass it. Sorting defensively on receipt here closes the gap.
+// TestConvertQueryThrottlerConfigToThrottlerConfig_PicksMinFloorWhenUnsorted verifies an
+// unsorted Thresholds slice still yields the true minimum as the throttler's floor, and
+// that the input config is left unmutated. sanitizeQueryThrottlerConfig enforces order on
+// the RPC write path, but a direct topo write bypasses it — and that config is the shared
+// srvtopo cached proto, so scanning for the min is required rather than sorting in place.
 func TestConvertQueryThrottlerConfigToThrottlerConfig_PicksMinFloorWhenUnsorted(t *testing.T) {
 	// Thresholds intentionally OUT OF ORDER: a pre-fix read of thresholds[0]
 	// would pick 50 (the first element). The true min is 10 — that's what the
@@ -59,13 +59,19 @@ func TestConvertQueryThrottlerConfigToThrottlerConfig_PicksMinFloorWhenUnsorted(
 		},
 	}
 
+	// srvtopo shares this pointer with every other reader, so convert must not reorder it.
+	before := cfg.CloneVT()
+
 	tc := convertQueryThrottlerConfigToThrottlerConfig(cfg)
 	require.NotNil(t, tc, "convert must return a non-nil ThrottlerConfig for TABLET_THROTTLER strategy")
 	appName := throttlerapp.QueryThrottlerName.String()
 	require.NotNil(t, tc.AppCheckedMetrics[appName], "AppCheckedMetrics for the query throttler app must be populated")
 	require.Equal(t, []string{"lag"}, tc.AppCheckedMetrics[appName].GetNames())
 	require.Equal(t, float64(10), tc.MetricThresholds["lag"],
-		"underlying throttler floor must be the TRUE minimum threshold (10), not thresholds[0] (50) — defensive sort on receipt required")
+		"floor must be the TRUE minimum threshold (10), not thresholds[0] (50)")
+
+	require.True(t, proto.Equal(before, cfg),
+		"convert must not mutate the caller's config; srvtopo shares it with other readers")
 }
 
 // TestConvertQueryThrottlerConfigToThrottlerConfig_MinAcrossRules verifies the

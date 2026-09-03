@@ -43,6 +43,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle"
 )
@@ -1475,12 +1476,10 @@ func TestQueryThrottler_HandleConfigUpdate_DiscardsStrategyAfterShutdown(t *test
 		"snapshot cfg must NOT be replaced with the post-shutdown update")
 }
 
-// TestQueryThrottler_HandleConfigUpdate_SortsThresholdsOnReceipt verifies that
-// HandleConfigUpdate sorts each MetricRule's Thresholds slice ascending by Above
-// before storing the new cfg. GetThrottleDecision relies on sort.Search and
-// therefore on ascending order; sanitizeQueryThrottlerConfig only sorts on the
-// RPC write path, so a direct topo write that landed unsorted thresholds would
-// silently corrupt throttling decisions. Sorting on receipt here closes that gap.
+// TestQueryThrottler_HandleConfigUpdate_SortsThresholdsOnReceipt verifies HandleConfigUpdate
+// stores thresholds sorted ascending by Above, which GetThrottleDecision's sort.Search
+// requires, without mutating the incoming SrvKeyspace. sanitizeQueryThrottlerConfig only
+// sorts on the RPC write path, so a direct topo write can land unsorted.
 func TestQueryThrottler_HandleConfigUpdate_SortsThresholdsOnReceipt(t *testing.T) {
 	ctx := t.Context()
 
@@ -1528,6 +1527,9 @@ func TestQueryThrottler_HandleConfigUpdate_SortsThresholdsOnReceipt(t *testing.T
 		},
 	}
 
+	// srvtopo hands this same pointer to every listener and GetSrvKeyspace caller.
+	before := srvks.CloneVT()
+
 	qt.HandleConfigUpdate(srvks, nil)
 
 	storedThresholds := qt.snapshot.Load().cfg.
@@ -1540,4 +1542,9 @@ func TestQueryThrottler_HandleConfigUpdate_SortsThresholdsOnReceipt(t *testing.T
 	require.Equal(t, float64(10), storedThresholds[0].GetAbove(), "thresholds[0] must be the minimum after defensive sort")
 	require.Equal(t, float64(25), storedThresholds[1].GetAbove())
 	require.Equal(t, float64(50), storedThresholds[2].GetAbove())
+
+	require.True(t, proto.Equal(before, srvks),
+		"HandleConfigUpdate must sort a clone, not the shared SrvKeyspace proto")
+	require.Equal(t, float64(50), unsorted[0].GetAbove(),
+		"the caller's threshold slice must keep its original order")
 }

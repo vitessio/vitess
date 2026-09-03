@@ -467,27 +467,9 @@ func (qt *QueryThrottler) HandleConfigUpdate(srvks *topodatapb.SrvKeyspace, err 
 	// Get the query throttler configuration from the SrvKeyspace that the QueryThrottler uses to manage its throttling behavior.
 	newCfg := srvks.GetQueryThrottlerConfig()
 
-	// Defensively sort each MetricRule's Thresholds slice ascending by Above so
-	// GetThrottleDecision's binary search (and any downstream "thresholds[0] is
-	// the floor" assumption) is correct even if this SrvKeyspace was written
-	// directly to topo, bypassing sanitizeQueryThrottlerConfig on the RPC path.
-	// Sorting BEFORE the proto.Equal short-circuit below lets the short-circuit
-	// also operate on a canonical order — two semantically-equal Configs that
-	// differ only in threshold order are treated as no-op updates.
-	if newCfg.GetStrategy() == querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER {
-		for _, stmtRuleSet := range newCfg.GetTabletStrategyConfig().GetTabletRules() {
-			for _, metricRuleSet := range stmtRuleSet.GetStatementRules() {
-				for _, rule := range metricRuleSet.GetMetricRules() {
-					ts := rule.GetThresholds()
-					if len(ts) > 1 {
-						sort.Slice(ts, func(i, j int) bool {
-							return ts[i].GetAbove() < ts[j].GetAbove()
-						})
-					}
-				}
-			}
-		}
-	}
+	// Canonicalize threshold order before the proto.Equal short-circuit below, so two
+	// Configs differing only in threshold order count as a no-op update.
+	newCfg = normalizeThresholds(newCfg)
 
 	// Atomic load: safe without the lock. Per the function contract, only this
 	// callback writes to qt.snapshot, so the read here is also single-writer.
@@ -566,6 +548,30 @@ func (qt *QueryThrottler) HandleConfigUpdate(srvks *topodatapb.SrvKeyspace, err 
 
 	log.Info(fmt.Sprintf("HandleConfigUpdate: config updated, strategy=%s, enabled=%v", newCfg.GetStrategy(), newCfg.GetEnabled()))
 	return true
+}
+
+// normalizeThresholds returns a Config with every MetricRule.Thresholds slice sorted
+// ascending by Above, which GetThrottleDecision's binary search relies on. A config written
+// straight to topo bypasses sanitizeQueryThrottlerConfig, so it may arrive unsorted.
+//
+// srvtopo hands the same cached *Config pointer to every listener and GetSrvKeyspace caller,
+// so this sorts a clone rather than mutating a proto other readers hold.
+func normalizeThresholds(cfg *querythrottlerpb.Config) *querythrottlerpb.Config {
+	if cfg.GetStrategy() != querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER {
+		return cfg
+	}
+
+	out := cfg.CloneVT()
+	for _, stmtRuleSet := range out.GetTabletStrategyConfig().GetTabletRules() {
+		for _, metricRuleSet := range stmtRuleSet.GetStatementRules() {
+			for _, rule := range metricRuleSet.GetMetricRules() {
+				if ts := rule.GetThresholds(); len(ts) > 1 {
+					sort.Slice(ts, func(i, j int) bool { return ts[i].GetAbove() < ts[j].GetAbove() })
+				}
+			}
+		}
+	}
+	return out
 }
 
 // selectThrottlingStrategy returns the appropriate strategy implementation based on the config.

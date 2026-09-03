@@ -18,7 +18,6 @@ package throttle
 
 import (
 	"math"
-	"sort"
 	"time"
 
 	"vitess.io/vitess/go/protoutil"
@@ -91,17 +90,15 @@ func convertQueryThrottlerConfigToThrottlerConfig(qtCfg *querythrottlerpb.Config
 						metricsNames = append(metricsNames, metricName)
 						seenMetrics[metricName] = true
 					}
-					// Defensively sort thresholds ascending by Above so thresholds[0]
-					// is the true minimum (the "floor" the underlying throttler should
-					// trigger on). sanitizeQueryThrottlerConfig sorts on the RPC write
-					// path, but a direct topo write would bypass it and silently pick
-					// an arbitrary threshold here.
-					if len(thresholds) > 1 {
-						sort.Slice(thresholds, func(i, j int) bool {
-							return thresholds[i].GetAbove() < thresholds[j].GetAbove()
-						})
-					}
+					// Scan for the minimum Above (the "floor" the underlying throttler
+					// triggers on) rather than sorting: this config is the shared
+					// srvtopo cached proto and must not be mutated. Thresholds are not
+					// guaranteed ordered, since a direct topo write bypasses
+					// sanitizeQueryThrottlerConfig.
 					thresholdValue := thresholds[0].GetAbove()
+					for _, t := range thresholds[1:] {
+						thresholdValue = math.Min(thresholdValue, t.GetAbove())
+					}
 					// The throttler applies thresholds per bare metric: getScopedMetric reads
 					// the threshold under the bare key regardless of scope, and
 					// convergeMetricThresholds only converges bare names. Key by the
