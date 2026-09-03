@@ -105,7 +105,9 @@ func TestSetSystemVariable(t *testing.T) {
 	utils.AssertMatches(t, conn, q, `[[DATE("0000-00-00") INT64(7)]]`)
 
 	utils.Exec(t, conn, "SET @@SESSION.sql_mode = CONCAT(CONCAT(@@sql_mode, ',STRICT_ALL_TABLES'), ',NO_AUTO_VALUE_ON_ZERO'),  @@SESSION.sql_auto_is_null = 0, @@SESSION.wait_timeout = 2147483")
-	utils.AssertMatches(t, conn, "select @@sql_mode", `[[VARCHAR(",STRICT_ALL_TABLES,NO_AUTO_VALUE_ON_ZERO")]]`)
+	// the assigned value reads back in the canonical form MySQL reports: the empty
+	// list element dropped, names in MySQL's order
+	utils.AssertMatches(t, conn, "select @@sql_mode", `[[VARCHAR("NO_AUTO_VALUE_ON_ZERO,STRICT_ALL_TABLES")]]`)
 }
 
 func TestSetSystemVarWithTxFailure(t *testing.T) {
