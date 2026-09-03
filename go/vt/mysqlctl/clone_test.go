@@ -32,6 +32,7 @@ import (
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
+	"vitess.io/vitess/go/mysql/sqlmode"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/dbconfigs"
@@ -521,6 +522,9 @@ type mockDonorHandler struct {
 func (h *mockDonorHandler) ComQuery(c *mysql.Conn, query string, callback func(*sqltypes.Result) error) error {
 	// Respond to donor validation queries
 	switch {
+	case strings.EqualFold(query, sqlmode.NeutralizeSessionQuery):
+		// every connection Vitess creates starts by neutralizing its sql_mode
+		return callback(&sqltypes.Result{})
 	case strings.Contains(query, "SELECT @@version"):
 		result := sqltypes.MakeTestResult(
 			sqltypes.MakeTestFields("@@version", "varchar"),
