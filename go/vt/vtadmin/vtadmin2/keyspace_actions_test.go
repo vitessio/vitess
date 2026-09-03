@@ -21,6 +21,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -301,7 +302,8 @@ func TestKeyspaceValidateSchemaFailureResultsDoNotFlashSuccess(t *testing.T) {
 	fake := &keyspaceActionsFakeServer{
 		validateSchemaResp: &vtctldatapb.ValidateSchemaKeyspaceResponse{
 			ResultsByShard: map[string]*vtctldatapb.ValidateShardResponse{
-				"0": {Results: []string{"schemas differ"}},
+				"0":   {Results: []string{"schemas differ"}},
+				"-80": {Results: []string{"missing table"}},
 			},
 		},
 	}
@@ -312,6 +314,8 @@ func TestKeyspaceValidateSchemaFailureResultsDoNotFlashSuccess(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
 	assert.NotEqual(t, keyspaceActionBase, rec.Header().Get("Location"))
 	assert.Contains(t, rec.Body.String(), "schemas differ")
+	assert.Contains(t, rec.Body.String(), "missing table")
+	assert.Less(t, strings.Index(rec.Body.String(), "missing table"), strings.Index(rec.Body.String(), "schemas differ"))
 }
 
 func TestKeyspaceReloadSchemaFailureEventsDoNotFlashSuccess(t *testing.T) {

@@ -18,6 +18,7 @@ package vtadmin2
 
 import (
 	"net/http"
+	"sort"
 	"strings"
 
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
@@ -95,13 +96,19 @@ func schemaValidationError(resp *vtctldatapb.ValidateSchemaKeyspaceResponse) str
 	if len(resp.GetResults()) > 0 {
 		return strings.Join(resp.GetResults(), "; ")
 	}
+	shards := make([]string, 0, len(resp.GetResultsByShard()))
 	for shard, result := range resp.GetResultsByShard() {
 		if result == nil || len(result.GetResults()) == 0 {
 			continue
 		}
-		return shard + ": " + strings.Join(result.GetResults(), "; ")
+		shards = append(shards, shard)
 	}
-	return ""
+	sort.Strings(shards)
+	failures := make([]string, 0, len(shards))
+	for _, shard := range shards {
+		failures = append(failures, shard+": "+strings.Join(resp.GetResultsByShard()[shard].GetResults(), "; "))
+	}
+	return strings.Join(failures, "; ")
 }
 
 func (s *Server) keyspaceValidateVersion(w http.ResponseWriter, r *http.Request) {
