@@ -1496,6 +1496,68 @@ func TestRepairVReplicationQuery(t *testing.T) {
 		query)
 }
 
+// TestTerminallyFailMigrationWriteOrder pins the write order of the terminal
+// transition. Once the status is terminal the migration leaves every review
+// path, so a message write failing after the transition would leave it
+// permanently terminal with a stale message and no way to record the reason.
+// The message must therefore be written first, and a failed message write
+// must abort the transition — the migration stays under review and the
+// caller's re-drive (the running-migrations and stale-migration reviews, or
+// CancelMigration's pending intent) retries the whole transition.
+func TestTerminallyFailMigrationWriteOrder(t *testing.T) {
+	uuid := "1cbcd662_8ed6_11ee_bc8f_0a43f95f28a3"
+	onlineDDL := &schema.OnlineDDL{UUID: uuid}
+	newExecutor := func(failOn string) (*Executor, *[]string) {
+		var queries []string
+		e := &Executor{
+			ticks: timer.NewTimer(time.Hour),
+			execQuery: func(ctx context.Context, query string) (*sqltypes.Result, error) {
+				if failOn != "" && strings.Contains(query, failOn) {
+					return nil, errors.New("transient")
+				}
+				queries = append(queries, query)
+				return &sqltypes.Result{RowsAffected: 1}, nil
+			},
+		}
+		return e, &queries
+	}
+	indexOf := func(queries []string, substr string) int {
+		for i, q := range queries {
+			if strings.Contains(q, substr) {
+				return i
+			}
+		}
+		return -1
+	}
+
+	t.Run("message is written before the status", func(t *testing.T) {
+		e, queries := newExecutor("")
+		require.NoError(t, e.terminallyFailMigration(t.Context(), onlineDDL, errors.New("the reason")))
+		messageIdx := indexOf(*queries, "message=")
+		statusIdx := indexOf(*queries, "migration_status")
+		require.GreaterOrEqual(t, messageIdx, 0, "no message write issued")
+		require.GreaterOrEqual(t, statusIdx, 0, "no status transition issued")
+		assert.Less(t, messageIdx, statusIdx, "the message must land before the status becomes terminal")
+	})
+	t.Run("failed message write aborts the transition", func(t *testing.T) {
+		e, queries := newExecutor("message=")
+		require.Error(t, e.terminallyFailMigration(t.Context(), onlineDDL, errors.New("the reason")))
+		assert.Equal(t, -1, indexOf(*queries, "migration_status"),
+			"the status must not become terminal while the reason could not be recorded")
+	})
+	t.Run("failed status write is reported", func(t *testing.T) {
+		e, queries := newExecutor("migration_status")
+		require.Error(t, e.terminallyFailMigration(t.Context(), onlineDDL, errors.New("the reason")))
+		assert.GreaterOrEqual(t, indexOf(*queries, "message="), 0, "the message write is idempotent and precedes the transition")
+	})
+	t.Run("no error skips the message write", func(t *testing.T) {
+		e, queries := newExecutor("")
+		require.NoError(t, e.terminallyFailMigration(t.Context(), onlineDDL, nil))
+		assert.Equal(t, -1, indexOf(*queries, "message="))
+		assert.GreaterOrEqual(t, indexOf(*queries, "migration_status"), 0)
+	})
+}
+
 // TestFailStaleMigration tests the terminal transition the stale-migration
 // review applies once it has stopped a stale migration's stream. A user's
 // cancellation whose termination attempt failed transiently is left in

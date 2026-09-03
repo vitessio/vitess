@@ -2648,8 +2648,23 @@ func (e *Executor) readFailedCancelledMigrationsInContextBeforeMigration(ctx con
 // reports whether that durable status transition itself succeeded — callers
 // that must know the migration really reached a terminal state (e.g.
 // CancelMigration's stream-tracking cleanup) use this directly.
+//
+// The message is written before the status. Once the status is terminal the
+// migration leaves every review path, so a message write failing after the
+// transition would leave it permanently terminal with a stale message and no
+// way to record the reason. Written first, a failing message write aborts the
+// transition instead: the migration stays under review, and the caller's
+// re-drive (the running-migrations and stale-migration reviews, or
+// CancelMigration's pending intent) retries the whole transition. Whichever
+// write fails, this executor stops owning the migration, as before.
 func (e *Executor) terminallyFailMigration(ctx context.Context, onlineDDL *schema.OnlineDDL, withError error) error {
 	defer e.triggerNextCheckInterval()
+	defer e.ownedRunningMigrations.Delete(onlineDDL.UUID)
+	if withError != nil {
+		if err := e.updateMigrationMessage(ctx, onlineDDL.UUID, withError.Error()); err != nil {
+			return err
+		}
+	}
 	transitionErr := e.updateMigrationStatusFailedOrCancelled(ctx, onlineDDL.UUID)
 	// Count only migrations that actually reached a terminal state: the
 	// review loop re-drives a failed transition on every tick, and counting
@@ -2657,10 +2672,6 @@ func (e *Executor) terminallyFailMigration(ctx context.Context, onlineDDL *schem
 	if transitionErr == nil {
 		failedMigrations.Add(1)
 	}
-	if withError != nil {
-		_ = e.updateMigrationMessage(ctx, onlineDDL.UUID, withError.Error())
-	}
-	e.ownedRunningMigrations.Delete(onlineDDL.UUID)
 	return transitionErr
 }
 
