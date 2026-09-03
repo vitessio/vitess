@@ -134,73 +134,42 @@ func TestSetPlanRejectsUnsupportedSQLModes(t *testing.T) {
 	}
 }
 
-func TestSetVarHintRejectsUnsupportedSQLModes(t *testing.T) {
+// SET_VAR hints are not judged at plan time: a hint applies to the hinted statement's
+// execution only and cannot change how that statement's own text is lexed, so the hint
+// is forwarded verbatim for MySQL to judge — MySQL warns about and ignores an invalid
+// value, as it does for the same hint sent to it directly. This holds for every
+// spelling MySQL's hint grammar accepts: quoted, unquoted (an unquoted word is a string
+// value in that grammar), and numeric.
+func TestSetVarHintSQLModesAreNotJudged(t *testing.T) {
 	env := vtenv.NewTestEnv()
 	tables := map[string]*schema.Table{}
 
-	tests := []struct {
-		sql         string
-		expectedErr string
-	}{{
-		sql: "select /*+ SET_VAR(sql_mode = 'STRICT_TRANS_TABLES,NO_ZERO_DATE') */ 1 from dual",
-	}, {
-		// the placeholder for the empty mode
-		sql: "select /*+ SET_VAR(sql_mode = ' ') */ 1 from dual",
-	}, {
-		sql:         "select /*+ SET_VAR(sql_mode = 'ANSI') */ 1 from dual",
-		expectedErr: "setting the ANSI sql_mode is unsupported",
-	}, {
-		sql:         "update /*+ SET_VAR(sql_mode = 'NO_BACKSLASH_ESCAPES') */ t set a = 1",
-		expectedErr: "setting the NO_BACKSLASH_ESCAPES sql_mode is unsupported",
-	}, {
-		sql:         "select /*+ SET_VAR(sql_safe_updates = 1) SET_VAR(sql_mode = 'PIPES_AS_CONCAT') */ 1 from dual",
-		expectedErr: "setting the PIPES_AS_CONCAT sql_mode is unsupported",
-	}, {
-		// other variables are not this check's concern
-		sql: "select /*+ SET_VAR(sql_safe_updates = 1) */ 1 from dual",
-	}, {
-		// MySQL's hint grammar reads an unquoted word as a string value, not as a
-		// column reference (verified against MySQL 8.0.46), so unquoted spellings
-		// must be judged exactly like quoted ones
-		sql:         "select /*+ SET_VAR(sql_mode = ANSI) */ 1 from dual",
-		expectedErr: "setting the ANSI sql_mode is unsupported",
-	}, {
-		sql:         "select /*+ SET_VAR(sql_mode = ANSI_QUOTES) */ 1 from dual",
-		expectedErr: "setting the ANSI_QUOTES sql_mode is unsupported",
-	}, {
-		sql:         "update /*+ SET_VAR(sql_mode = NO_BACKSLASH_ESCAPES) */ t set a = 1",
-		expectedErr: "setting the NO_BACKSLASH_ESCAPES sql_mode is unsupported",
-	}, {
-		sql: "select /*+ SET_VAR(sql_mode = STRICT_TRANS_TABLES) */ 1 from dual",
-	}, {
-		sql:         "select /*+ SET_VAR(sql_mode = BOGUS) */ 1 from dual",
-		expectedErr: "Variable 'sql_mode' can't be set to the value of 'BOGUS'",
-	}, {
-		sql:         "select /*+ SET_VAR(sql_mode = 1048576) */ 1 from dual",
-		expectedErr: "setting the NO_BACKSLASH_ESCAPES sql_mode is unsupported",
-	}, {
-		// a qualified name is not valid hint syntax; MySQL warns and ignores it
-		sql: "select /*+ SET_VAR(sql_mode = a.b) */ 1 from dual",
-	}}
-	for _, tc := range tests {
-		t.Run(tc.sql, func(t *testing.T) {
-			statement, err := env.Parser().Parse(tc.sql)
+	for _, sql := range []string{
+		"select /*+ SET_VAR(sql_mode = 'STRICT_TRANS_TABLES,NO_ZERO_DATE') */ 1 from dual",
+		"select /*+ SET_VAR(sql_mode = ' ') */ 1 from dual",
+		"select /*+ SET_VAR(sql_mode = 'ANSI') */ 1 from dual",
+		"select /*+ SET_VAR(sql_mode = ANSI) */ 1 from dual",
+		"select /*+ SET_VAR(sql_mode = ANSI_QUOTES) */ 1 from dual",
+		"update /*+ SET_VAR(sql_mode = 'NO_BACKSLASH_ESCAPES') */ t set a = 1",
+		"update /*+ SET_VAR(sql_mode = NO_BACKSLASH_ESCAPES) */ t set a = 1",
+		"select /*+ SET_VAR(sql_safe_updates = 1) SET_VAR(sql_mode = 'PIPES_AS_CONCAT') */ 1 from dual",
+		"select /*+ SET_VAR(sql_mode = 1048576) */ 1 from dual",
+		"select /*+ SET_VAR(sql_mode = 'BOGUS') */ 1 from dual",
+		"select /*+ SET_VAR(sql_mode = BOGUS) */ 1 from dual",
+		"select /*+ SET_VAR(sql_mode = a.b) */ 1 from dual",
+	} {
+		t.Run(sql, func(t *testing.T) {
+			statement, err := env.Parser().Parse(sql)
 			require.NoError(t, err)
 
-			_, err = Build(env, statement, tables, "dbName", false)
-			if tc.expectedErr != "" {
-				require.EqualError(t, err, tc.expectedErr)
-			} else {
-				require.NoError(t, err)
-			}
+			plan, err := Build(env, statement, tables, "dbName", false)
+			require.NoError(t, err)
+			assert.Contains(t, plan.FullQuery.Query, "SET_VAR(sql_mode", "the hint must reach MySQL verbatim")
 
-			// the streaming path builds plans separately and must reject as well
-			_, err = BuildStreaming(env, statement, tables, "dbName")
-			if tc.expectedErr != "" {
-				require.EqualError(t, err, tc.expectedErr)
-			} else {
-				require.NoError(t, err)
-			}
+			// the streaming path builds plans separately
+			plan, err = BuildStreaming(env, statement, tables, "dbName")
+			require.NoError(t, err)
+			assert.Contains(t, plan.FullQuery.Query, "SET_VAR(sql_mode", "the hint must reach MySQL verbatim")
 		})
 	}
 }

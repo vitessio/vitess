@@ -18,7 +18,6 @@ package planbuilder
 
 import (
 	"vitess.io/vitess/go/mysql/sqlmode"
-	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/sysvars"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -33,6 +32,13 @@ import (
 // vtgate's validation at each of those entry points, returning the same errors. Only
 // constant values can be judged here — non-constant expressions pass through, and MySQL
 // still applies its own validation to them.
+//
+// SET_VAR optimizer hints are not judged: a hint applies to the hinted statement's
+// execution only and cannot change how that statement's own text is lexed, which is the
+// vttablet's only stake in sql_mode — the vttablet does not evaluate expressions. The
+// hint is forwarded verbatim, and MySQL warns about and ignores an invalid hint value as
+// it does for clients that send the hint to it directly. The hint's effect on execution
+// is a vtgate concern.
 
 // ValidateSettingsSQLMode mirrors BuildSettingQuery's sql_mode validation for settings
 // that are applied without going through BuildSettingQuery — a true reservation executes
@@ -101,39 +107,4 @@ func validateSetExprsSQLMode(exprs sqlparser.SetExprs) (verify bool, err error) 
 		}
 	}
 	return verify, nil
-}
-
-// validateSetVarHintSQLMode rejects a query whose SET_VAR optimizer hint carries a
-// constant sql_mode value that fails sqlmode.Validate.
-func validateSetVarHintSQLMode(parser *sqlparser.Parser, comments *sqlparser.ParsedComments) error {
-	valText := comments.GetMySQLSetVarValue(sysvars.SQLMode.Name)
-	if valText == "" {
-		return nil
-	}
-	expr, err := parser.ParseExpr(valText)
-	if err != nil {
-		// not judgeable here; MySQL warns about malformed hints and ignores them
-		return nil
-	}
-	var value sqltypes.Value
-	switch node := expr.(type) {
-	case *sqlparser.Literal:
-		value, err = sqlparser.LiteralToValue(node)
-		if err != nil {
-			return nil
-		}
-	case *sqlparser.ColName:
-		// MySQL's hint grammar reads an unquoted word as a string value, not as a
-		// column reference: SET_VAR(sql_mode=ANSI) is the mode ANSI. Verified
-		// against MySQL 8.0.46. A qualified name is not valid hint syntax; MySQL
-		// warns and ignores it.
-		if !node.Qualifier.IsEmpty() {
-			return nil
-		}
-		value = sqltypes.NewVarChar(node.Name.String())
-	default:
-		return nil
-	}
-	_, err = sqlmode.Validate(value)
-	return err
 }

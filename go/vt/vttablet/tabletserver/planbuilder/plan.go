@@ -277,12 +277,6 @@ func BuildStreaming(env *vtenv.Environment, statement sqlparser.Statement, table
 	var plan *Plan
 	var err error
 
-	if commented, ok := statement.(sqlparser.Commented); ok {
-		if err := validateSetVarHintSQLMode(env.Parser(), commented.GetParsedComments()); err != nil {
-			return nil, err
-		}
-	}
-
 	switch stmt := statement.(type) {
 	case *sqlparser.Select:
 		plan, err = analyzeSelect(env, stmt, tables)
