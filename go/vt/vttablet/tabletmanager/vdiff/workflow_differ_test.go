@@ -1349,9 +1349,9 @@ func TestBuildPlanFailure(t *testing.T) {
 // rebuilt by retryVDiffs (via NewSQLErrorFromError), IsEphemeralError still
 // classifies it as non-ephemeral and the engine does not auto-retry it forever.
 func TestUncheckpointableMaxDiffDurationErrorIsNonEphemeral(t *testing.T) {
-	// The error diffTable returns for an un-checkpointable table that timed out.
-	origErr := sqlerror.NewSQLError(sqlerror.ERNotSupportedYet, sqlerror.SSClientError,
-		"table t1 exceeded the configured --max-diff-duration and cannot be resumed because its filter does not project the full source primary key")
+	// Built by the production helper so this test breaks if that branch stops
+	// wrapping the failure as a non-ephemeral ERNotSupportedYet error.
+	origErr := maxDiffDurationUnresumableError("t1")
 	require.False(t, sqlerror.IsEphemeralError(origErr), "the original error must be non-ephemeral")
 
 	// retryVDiffs persists last_error as a string and rebuilds it before

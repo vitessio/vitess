@@ -251,6 +251,16 @@ func (wd *workflowDiffer) doReconcileExtraRows(dr *DiffReport, maxExtraRowsToCom
 	return nil
 }
 
+// maxDiffDurationUnresumableError builds the error diffTable returns when an
+// un-checkpointable table exceeds --max-diff-duration. It is a MySQL
+// ERNotSupportedYet error so it survives persist+rebuild as non-ephemeral and the
+// engine does not auto-retry it forever.
+func maxDiffDurationUnresumableError(tableName string) error {
+	return sqlerror.NewSQLError(sqlerror.ERNotSupportedYet, sqlerror.SSClientError,
+		fmt.Sprintf("table %s exceeded the configured --max-diff-duration and cannot be resumed because its filter does not project the full source primary key; increase or unset --max-diff-duration so it can complete within a single window",
+			tableName))
+}
+
 func (wd *workflowDiffer) diffTable(ctx context.Context, dbClient binlogplayer.DBClient, td *tableDiffer) error {
 	cancelShardStreams := func() {
 		if td.shardStreamsCancel != nil {
@@ -336,9 +346,7 @@ func (wd *workflowDiffer) diffTable(ctx context.Context, dbClient binlogplayer.D
 			// being persisted as a string and rebuilt by retryVDiffs: that makes
 			// IsEphemeralError classify it as non-ephemeral, so the engine does
 			// not auto-retry it forever.
-			return sqlerror.NewSQLError(sqlerror.ERNotSupportedYet, sqlerror.SSClientError,
-				fmt.Sprintf("table %s exceeded the configured --max-diff-duration and cannot be resumed because its filter does not project the full source primary key; increase or unset --max-diff-duration so it can complete within a single window",
-					td.table.Name))
+			return maxDiffDurationUnresumableError(td.table.Name)
 		}
 	}
 	log.Info(fmt.Sprintf("Table diff done on table %s for vdiff %s with report: %+v", td.table.Name, wd.ct.uuid, diffReport))

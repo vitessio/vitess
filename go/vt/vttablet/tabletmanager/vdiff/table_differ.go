@@ -1146,15 +1146,14 @@ func (td *tableDiffer) getSourcePKCols() error {
 	}
 	td.tablePlan.sourcePkCols = indices
 
-	// A loaded checkpoint on a layout the pre-fix code mapped differently
-	// (column-ordinal order) than the corrected SELECT-position order cannot be
-	// proven current: a single reordered PK keeps the same field name, only the
-	// value differs, so a stale pre-upgrade checkpoint is indistinguishable from a
-	// new one. Discard it and restart both streams; this run persists no lastpk, so
-	// a subsequent run loads none and resumes normally with the corrected mapping.
-	// A fresh run (no loaded checkpoint) is unaffected and checkpoints normally.
+	// A loaded checkpoint for a reordered/renamed-PK layout is byte-identical to a
+	// pre-fix one (same field names, only value order differs), so we cannot tell
+	// them apart; discard it and restart both streams. This is always correct but
+	// means such layouts restart on every resume rather than resuming.
 	if td.lastSourcePK != nil &&
 		!slices.Equal(indices, legacySourcePkColOrder(td.table.Columns, sourceTable.PrimaryKeyColumns)) {
+		log.Info(fmt.Sprintf("VDiff %s: restarting table %s instead of resuming; its source PK projection order does not match the physical column order, so a persisted source checkpoint cannot be safely reused",
+			td.wd.ct.uuid, td.table.Name))
 		td.tablePlan.sourceCheckpointUnavailable = true
 		td.tablePlan.sourcePkCols = nil
 		td.lastSourcePK = nil
@@ -1221,6 +1220,12 @@ func comparisonKeyIsSourcePKPrefix(sourceSelect *sqlparser.Select, comparePKs []
 		if !ok {
 			return vterrors.Errorf(vtrpcpb.Code_INTERNAL,
 				"unexpected non-aliased expression at position %d in vdiff source query: %s", cpk.colIndex, sqlparser.String(sourceSelect))
+		}
+		// A constant projected into the comparison key (e.g. "select 1 as
+		// tenant_id, ...") is invariant across the source stream, so like a
+		// WHERE-pinned column it does not affect its order; drop it.
+		if _, isLiteral := aliasedExpr.Expr.(*sqlparser.Literal); isLiteral {
+			continue
 		}
 		colName, ok := underlyingSourceColumn(aliasedExpr.Expr)
 		if !ok {

@@ -459,6 +459,14 @@ func TestComparisonKeyIsSourcePKPrefix(t *testing.T) {
 			comparePKColIndices: []int{0, 1},
 			sourcePKColumns:     []string{"tenant_id", "id"},
 		},
+		{
+			// Constant-injection filter: tenant_id is a literal, not a source
+			// column, so it is dropped, leaving (id) vs (id).
+			name:                "constant literal in comparison key is allowed",
+			sourceQuery:         "select 1 as tenant_id, id, data from src order by id asc",
+			comparePKColIndices: []int{0, 1},
+			sourcePKColumns:     []string{"id"},
+		},
 	}
 
 	parser := sqlparser.NewTestParser()
