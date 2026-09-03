@@ -424,13 +424,22 @@ func (v *VRepl) analyze(ctx context.Context, conn *dbconnpool.DBConnection) erro
 // (repairVReplicationQuery).
 func onlineDDLVReplicationOptions() (string, error) {
 	options, err := json.Marshal(&vtctldatapb.WorkflowOptions{
-		Config: map[string]string{"vreplication-max-time-to-retry-on-error": "0s"},
+		Config: map[string]string{retryForeverConfigKey: retryForeverConfigValue},
 	})
 	if err != nil {
 		return "", err
 	}
 	return string(options), nil
 }
+
+const (
+	// retryForeverConfigKey/Value form the per-workflow config override
+	// pinning the stream's retry window to 0 (retry forever). The key is
+	// the vttablet flag name, parsed by vttablet/common's config override
+	// handling.
+	retryForeverConfigKey   = "vreplication-max-time-to-retry-on-error"
+	retryForeverConfigValue = "0s"
+)
 
 // generateInsertStatement generates the INSERT INTO _vt.replication statement that creates the vreplication workflow
 func (v *VRepl) generateInsertStatement() (string, error) {

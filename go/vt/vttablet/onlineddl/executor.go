@@ -157,6 +157,11 @@ type Executor struct {
 	// The Executor auto-reviews the map and cleans up migrations thought to be running which are not running.
 	ownedRunningMigrations sync.Map
 	vreplicationLastError  map[string]*vterrors.LastError
+	// vreplicationProgress records the last observed copy-phase progress
+	// checkpoints (uuid -> pos/rows_copied) so vreplStreamShowsLiveness can
+	// distinguish a copy phase making progress from one stuck in a
+	// heartbeat-refreshing retry loop.
+	vreplicationProgress map[string]vreplStreamProgress
 	// vreplicationPendingCancel records a cancellation (uuid -> message)
 	// whose durable terminal transition has not landed yet. A user-issued
 	// cancellation leaves a durable cancelled_timestamp behind, but an
@@ -210,6 +215,64 @@ func resolveVReplStreamAction(action vreplStreamAction, cancellationRequested bo
 func (e *Executor) forgetVReplStream(uuid string) {
 	delete(e.vreplicationLastError, uuid)
 	delete(e.vreplicationPendingCancel, uuid)
+	delete(e.vreplicationProgress, uuid)
+}
+
+// vreplStreamProgress holds the copy-phase progress checkpoints last
+// observed for a migration's vreplication stream.
+type vreplStreamProgress struct {
+	pos        string
+	rowsCopied int64
+}
+
+// vreplThrottleLivenessWindow is how recent a stream's time_throttled stamp
+// must be for active throttling to count as copy-phase liveness. Throttle
+// updates are rate-limited on the stream side, so the window is generous.
+const vreplThrottleLivenessWindow = 15 * time.Minute
+
+// vreplStreamShowsLiveness reports whether an advanced time_updated on the
+// migration's stream may be trusted as liveness for the stale-migration
+// policy. Past the copy phase it always is: heartbeats only reach the
+// applier when the stream is caught up, which is genuine health. During the
+// copy phase, heartbeats can also flow between failing copy attempts — the
+// catchup is current while the copy keeps erroring — so liveness
+// additionally requires actual progress (an advanced position or
+// rows-copied checkpoint) or active throttling (a deliberately paused copy
+// is alive, and throttle updates stamp time_updated without progress).
+// Without this gate, a copy phase stuck in a heartbeat-refreshing retry
+// loop would never trip the stale-migration policy and could retry
+// unbounded, since Online DDL streams pin retry-forever. On a copy-state
+// lookup error the advanced time_updated is trusted (degrading to the
+// pre-gate behavior) rather than freezing liveness on a query blip.
+func (e *Executor) vreplStreamShowsLiveness(ctx context.Context, uuid string, s *VReplStream) bool {
+	query, err := sqlparser.ParseAndBind(sqlReadCountCopyState,
+		sqltypes.Int32BindVariable(s.id),
+	)
+	if err != nil {
+		return true
+	}
+	r, err := e.execQuery(ctx, query)
+	if err != nil {
+		return true
+	}
+	csRow := r.Named().Row()
+	if csRow == nil {
+		return true
+	}
+	if csRow.AsInt64("cnt", 0) == 0 {
+		// Copy phase complete.
+		return true
+	}
+	if s.timeThrottled > 0 && time.Since(time.Unix(s.timeThrottled, 0)) <= vreplThrottleLivenessWindow {
+		return true
+	}
+	last, seen := e.vreplicationProgress[uuid]
+	e.vreplicationProgress[uuid] = vreplStreamProgress{pos: s.pos, rowsCopied: s.rowsCopied}
+	if !seen {
+		// First observation: the no-progress budget starts here.
+		return true
+	}
+	return s.pos != last.pos || s.rowsCopied > last.rowsCopied
 }
 
 // vreplStreamAction is reviewVReplStreamError's decision on what
@@ -357,6 +420,7 @@ func (e *Executor) Open() error {
 	})
 	e.vreplicationLastError = make(map[string]*vterrors.LastError)
 	e.vreplicationPendingCancel = make(map[string]string)
+	e.vreplicationProgress = make(map[string]vreplStreamProgress)
 
 	if sidecar.GetName() != sidecar.DefaultName {
 		e.execQuery = e.executeQueryWithSidecarDBReplacement
@@ -3555,18 +3619,16 @@ func (e *Executor) reviewVReplStreamError(uuid string, s *VReplStream) vreplStre
 
 // repairVReplicationQuery returns the statement repairing a stream parked on
 // a retries-exhausted error: restart it, clear the parked message, and
-// install the retry-forever options override so it cannot park on a
-// recoverable error again. Overwriting options wholesale is safe because
-// Online DDL streams are only ever created with either empty options (older
-// executors) or exactly this override. The Error-state guard avoids
-// clobbering a stream that recovered concurrently.
-func repairVReplicationQuery(id int32) (string, error) {
-	options, err := onlineDDLVReplicationOptions()
-	if err != nil {
-		return "", err
-	}
-	return fmt.Sprintf("update _vt.vreplication set state='Running', message='', options=%s where id=%d and state='Error'",
-		sqltypes.EncodeStringSQL(options), id), nil
+// install the retry-forever config override so it cannot park on a
+// recoverable error again. The override is MERGED into the stored options —
+// json_insert creates the config container only when it is absent, then
+// json_set sets just the one key — because an in-flight workflow may carry
+// other overrides applied via `Workflow update --config-overrides`, and the
+// repair must not remove them. The Error-state guard avoids clobbering a
+// stream that recovered concurrently.
+func repairVReplicationQuery(id int32) string {
+	return fmt.Sprintf(`update _vt.vreplication set state='Running', message='', options=json_set(json_insert(coalesce(nullif(options, ''), '{}'), '$.config', json_object()), '$.config."%s"', '%s') where id=%d and state='Error'`,
+		retryForeverConfigKey, retryForeverConfigValue, id)
 }
 
 // reviewRunningMigrations iterates migrations in 'running' state. Normally there's only one running, which was
@@ -3701,10 +3763,7 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 					// stale-migration policy bound a park that never
 					// repairs.
 					e.ownedRunningMigrations.Store(uuid, onlineDDL)
-					query, err := repairVReplicationQuery(s.id)
-					if err != nil {
-						return err
-					}
+					query := repairVReplicationQuery(s.id)
 					tablet, err := e.ts.GetTablet(ctx, e.tabletAlias)
 					if err != nil {
 						log.Error("Online DDL: failed to get tablet for vreplication repair",
@@ -3730,8 +3789,14 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 				// a vreplication migration started by another tablet.
 				e.ownedRunningMigrations.Store(uuid, onlineDDL)
 				if lastVitessLivenessIndicator := migrationRow.AsInt64("vitess_liveness_indicator", 0); lastVitessLivenessIndicator < s.livenessTimeIndicator() {
-					_ = e.updateMigrationTimestamp(ctx, "liveness_timestamp", uuid)
-					_ = e.updateVitessLivenessIndicator(ctx, uuid, s.livenessTimeIndicator())
+					// An advanced time_updated only counts as liveness when
+					// the stream shows genuine health; see
+					// vreplStreamShowsLiveness. Leaving the indicator
+					// un-advanced re-evaluates on the next tick.
+					if e.vreplStreamShowsLiveness(ctx, uuid, s) {
+						_ = e.updateMigrationTimestamp(ctx, "liveness_timestamp", uuid)
+						_ = e.updateVitessLivenessIndicator(ctx, uuid, s.livenessTimeIndicator())
+					}
 				}
 				if onlineDDL.TabletAlias != e.TabletAliasString() {
 					_ = e.updateMigrationTablet(ctx, uuid)

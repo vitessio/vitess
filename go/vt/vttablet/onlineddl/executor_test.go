@@ -23,6 +23,7 @@ package onlineddl
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -1251,23 +1252,100 @@ func TestForgetVReplStream(t *testing.T) {
 	e := &Executor{
 		vreplicationLastError:     make(map[string]*vterrors.LastError),
 		vreplicationPendingCancel: make(map[string]string),
+		vreplicationProgress:      make(map[string]vreplStreamProgress),
 	}
 	uuid := "1cbcd662_8ed6_11ee_bc8f_0a43f95f28a3"
 	e.vreplicationLastError[uuid] = vterrors.NewLastError("test", time.Minute)
 	e.vreplicationPendingCancel[uuid] = "internal cancel"
+	e.vreplicationProgress[uuid] = vreplStreamProgress{pos: "pos", rowsCopied: 1}
 
 	e.forgetVReplStream(uuid)
 	assert.NotContains(t, e.vreplicationLastError, uuid)
 	assert.NotContains(t, e.vreplicationPendingCancel, uuid)
+	assert.NotContains(t, e.vreplicationProgress, uuid)
+}
+
+// TestVReplStreamShowsLiveness tests the gate applied before an advanced
+// time_updated refreshes a migration's liveness_timestamp. Past the copy
+// phase, an advanced time_updated is trusted: heartbeats only reach the
+// applier when the stream is caught up, which is genuine health. During the
+// copy phase, heartbeats can also flow between failing copy attempts — the
+// catchup is current while the copy keeps erroring — so liveness
+// additionally requires actual progress (an advanced position or
+// rows-copied checkpoint) or active throttling (a deliberately paused copy
+// is alive, and throttle updates stamp time_updated without progress).
+// Without this gate, a copy phase stuck in a heartbeat-refreshing retry
+// loop would never trip the stale-migration policy and could retry
+// unbounded now that streams pin retry-forever.
+func TestVReplStreamShowsLiveness(t *testing.T) {
+	uuid := "1cbcd662_8ed6_11ee_bc8f_0a43f95f28a3"
+	newExecutor := func(copyStateCount int64) *Executor {
+		return &Executor{
+			vreplicationProgress: make(map[string]vreplStreamProgress),
+			execQuery: func(ctx context.Context, query string) (*sqltypes.Result, error) {
+				require.Contains(t, query, "copy_state")
+				return sqltypes.MakeTestResult(
+					sqltypes.MakeTestFields("cnt", "int64"),
+					fmt.Sprintf("%d", copyStateCount),
+				), nil
+			},
+		}
+	}
+	ctx := context.Background()
+	stream := func(pos string, rowsCopied int64, timeThrottled int64) *VReplStream {
+		return &VReplStream{
+			id:            1,
+			pos:           pos,
+			rowsCopied:    rowsCopied,
+			timeThrottled: timeThrottled,
+		}
+	}
+
+	t.Run("past the copy phase, time_updated is trusted", func(t *testing.T) {
+		e := newExecutor(0)
+		assert.True(t, e.vreplStreamShowsLiveness(ctx, uuid, stream("pos1", 0, 0)))
+		assert.True(t, e.vreplStreamShowsLiveness(ctx, uuid, stream("pos1", 0, 0)))
+	})
+	t.Run("copy phase, first observation starts the budget", func(t *testing.T) {
+		e := newExecutor(1)
+		assert.True(t, e.vreplStreamShowsLiveness(ctx, uuid, stream("pos1", 10, 0)))
+	})
+	t.Run("copy phase, no progress is not liveness", func(t *testing.T) {
+		e := newExecutor(1)
+		require.True(t, e.vreplStreamShowsLiveness(ctx, uuid, stream("pos1", 10, 0)))
+		assert.False(t, e.vreplStreamShowsLiveness(ctx, uuid, stream("pos1", 10, 0)))
+	})
+	t.Run("copy phase, advanced rows-copied is liveness", func(t *testing.T) {
+		e := newExecutor(1)
+		require.True(t, e.vreplStreamShowsLiveness(ctx, uuid, stream("pos1", 10, 0)))
+		assert.True(t, e.vreplStreamShowsLiveness(ctx, uuid, stream("pos1", 11, 0)))
+	})
+	t.Run("copy phase, advanced position is liveness", func(t *testing.T) {
+		e := newExecutor(1)
+		require.True(t, e.vreplStreamShowsLiveness(ctx, uuid, stream("pos1", 10, 0)))
+		assert.True(t, e.vreplStreamShowsLiveness(ctx, uuid, stream("pos2", 10, 0)))
+	})
+	t.Run("copy phase, active throttling is liveness", func(t *testing.T) {
+		e := newExecutor(1)
+		require.True(t, e.vreplStreamShowsLiveness(ctx, uuid, stream("pos1", 10, 0)))
+		assert.True(t, e.vreplStreamShowsLiveness(ctx, uuid, stream("pos1", 10, time.Now().Unix())))
+	})
+	t.Run("copy phase, stale throttle stamp is not liveness", func(t *testing.T) {
+		e := newExecutor(1)
+		require.True(t, e.vreplStreamShowsLiveness(ctx, uuid, stream("pos1", 10, 0)))
+		staleThrottle := time.Now().Add(-2 * vreplThrottleLivenessWindow).Unix()
+		assert.False(t, e.vreplStreamShowsLiveness(ctx, uuid, stream("pos1", 10, staleThrottle)))
+	})
 }
 
 // TestReviewVReplStreamError tests the executor's per-stream decision in
-// reviewRunningMigrations: any Error-state stream — unrecoverable,
-// retries-exhausted, or legacy — is terminal and cancels the migration
-// immediately (streams created by this executor pin retry-forever via the
-// per-workflow config override, so a retries-exhausted park can only come
-// from a pre-override stream); a transient error is tolerated until it
-// persists past the LastError retry window; a clean stream is left alone.
+// reviewRunningMigrations: an unrecoverable or legacy Error-state stream is
+// terminal and cancels the migration; a retries-exhausted park — only
+// possible for a stream created before this executor's retry-forever config
+// override existed — is repaired instead, unless the park has persisted
+// past the LastError retry window, where the cancel takes precedence; a
+// transient error is tolerated until it persists past that window; a clean
+// stream is left alone.
 func TestReviewVReplStreamError(t *testing.T) {
 	newExecutor := func() *Executor {
 		return &Executor{
@@ -1339,14 +1417,17 @@ func TestReviewVReplStreamError(t *testing.T) {
 
 // TestRepairVReplicationQuery tests the statement that repairs a stream
 // parked on a retries-exhausted error: it must restart the stream, clear the
-// parked message, install the retry-forever options override so the stream
+// parked message, install the retry-forever config override so the stream
 // cannot park on a recoverable error again, and guard on the Error state so
-// a concurrently recovered stream is not clobbered.
+// a concurrently recovered stream is not clobbered. The override must MERGE
+// into the stored options — json_insert creates the config container only
+// when absent, json_set sets only the one key — because an in-flight
+// workflow may carry other overrides applied via
+// `Workflow update --config-overrides`, and those must survive the repair.
 func TestRepairVReplicationQuery(t *testing.T) {
-	query, err := repairVReplicationQuery(42)
-	require.NoError(t, err)
+	query := repairVReplicationQuery(42)
 	assert.Equal(t,
-		`update _vt.vreplication set state='Running', message='', options='{"config":{"vreplication-max-time-to-retry-on-error":"0s"}}' where id=42 and state='Error'`,
+		`update _vt.vreplication set state='Running', message='', options=json_set(json_insert(coalesce(nullif(options, ''), '{}'), '$.config', json_object()), '$.config."vreplication-max-time-to-retry-on-error"', '0s') where id=42 and state='Error'`,
 		query)
 }
 

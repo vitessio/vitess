@@ -207,10 +207,12 @@ func waitForReadyToComplete(t *testing.T, uuid string, expected bool) {
 
 // assertRetryForeverOverride asserts that the migration's vreplication
 // stream carries the per-workflow config override pinning
-// vreplication-max-time-to-retry-on-error to 0 (retry forever). The stored
-// options JSON may be reformatted (whitespace) by the components that handle
-// it, so it is parsed rather than matched as a literal substring.
-func assertRetryForeverOverride(t *testing.T, uuid string) {
+// vreplication-max-time-to-retry-on-error to 0 (retry forever), and returns
+// the stream's full parsed config map for any further assertions. The
+// stored options JSON may be reformatted (whitespace) by the components
+// that handle it, so it is parsed rather than matched as a literal
+// substring.
+func assertRetryForeverOverride(t *testing.T, uuid string) map[string]string {
 	query, err := sqlparser.ParseAndBind("select options from _vt.vreplication where workflow=%a",
 		sqltypes.StringBindVariable(uuid),
 	)
@@ -224,6 +226,7 @@ func assertRetryForeverOverride(t *testing.T, uuid string) {
 	}
 	require.NoError(t, json.Unmarshal([]byte(row.AsString("options", "")), &options))
 	assert.Equal(t, "0s", options.Config["vreplication-max-time-to-retry-on-error"])
+	return options.Config
 }
 
 // parkVReplStream simulates the vreplication controller parking a migration's
@@ -707,12 +710,14 @@ func testScheduler(t *testing.T) {
 			assertRetryForeverOverride(t, t1uuid)
 		})
 		t.Run("park the stream with a retries-exhausted error", func(t *testing.T) {
-			// Simulate a stream created before the retry-forever override
-			// existed (an in-flight migration across a rolling upgrade):
-			// strip the options back to the legacy empty value, then park it
-			// on the standalone retries-exhausted marker exactly as the
-			// controller emits it.
-			query, err := sqlparser.ParseAndBind("update _vt.vreplication set options='{}' where workflow=%a",
+			// Simulate a stream from before the retry-forever override
+			// existed, carrying an unrelated operator-applied config
+			// override (as `Workflow update --config-overrides` would
+			// leave), then park it on the standalone retries-exhausted
+			// marker exactly as the controller emits it. The repair must
+			// merge in the retry-forever override without removing the
+			// operator's.
+			query, err := sqlparser.ParseAndBind(`update _vt.vreplication set options='{"config": {"vreplication-retry-delay": "5s"}}' where workflow=%a`,
 				sqltypes.StringBindVariable(t1uuid),
 			)
 			require.NoError(t, err)
@@ -727,7 +732,10 @@ func testScheduler(t *testing.T) {
 			status := onlineddl.WaitForVReplicationStatus(t, &vtParams, primaryTablet, t1uuid, normalWaitTime, "Running")
 			require.Equal(t, "Running", status)
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusRunning)
-			assertRetryForeverOverride(t, t1uuid)
+			config := assertRetryForeverOverride(t, t1uuid)
+			// The repair merged its override in without removing the
+			// operator's unrelated one.
+			assert.Equal(t, "5s", config["vreplication-retry-delay"])
 		})
 		t.Run("complete", func(t *testing.T) {
 			onlineddl.CheckCompleteMigration(t, &vtParams, shards, t1uuid, true)
