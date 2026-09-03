@@ -305,6 +305,38 @@ func TestSQLModeStripping(t *testing.T) {
 	assert.Equal(t, expr, forwarded["sql_mode"])
 }
 
+// A session proto can carry sql_mode as the number MySQL accepts for the
+// variable — an older vtgate stored numeric assignments as written, and direct
+// gRPC clients may send one. Every reader expects mode names, so the value is
+// decoded into MySQL's canonical form when the session is taken in.
+func TestSQLModeNumericSessionValue(t *testing.T) {
+	for _, tc := range []struct {
+		stored    string
+		mode      string
+		forwarded string
+	}{
+		{stored: "4", mode: "ANSI_QUOTES", forwarded: "'ANSI_QUOTES'"},
+		{stored: "1048576", mode: "NO_BACKSLASH_ESCAPES", forwarded: "''"},
+		{stored: "4194304", mode: "STRICT_ALL_TABLES", forwarded: "'STRICT_ALL_TABLES'"},
+		{stored: "0", mode: "", forwarded: "''"},
+		// names are left as they are, and so are values that are not a valid
+		// numeric mode: the backend judges those
+		{stored: "'STRICT_TRANS_TABLES'", mode: "STRICT_TRANS_TABLES", forwarded: "'STRICT_TRANS_TABLES'"},
+		{stored: "'4'", mode: "4", forwarded: "'4'"},
+		{stored: "99999999999999999", mode: "99999999999999999", forwarded: "99999999999999999"},
+	} {
+		t.Run(tc.stored, func(t *testing.T) {
+			session := NewSafeSession(&vtgatepb.Session{SystemVariables: map[string]string{"sql_mode": tc.stored}})
+			mode, ok := session.SQLMode()
+			require.True(t, ok)
+			assert.Equal(t, tc.mode, mode)
+			forwarded := map[string]string{}
+			session.GetSystemVariables(func(k, v string) { forwarded[k] = v })
+			assert.Equal(t, tc.forwarded, forwarded["sql_mode"])
+		})
+	}
+}
+
 // TestSQLModeUnset verifies the accessor reports absence when the session
 // never set sql_mode.
 func TestSQLModeUnset(t *testing.T) {

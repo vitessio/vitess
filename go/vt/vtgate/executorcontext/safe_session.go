@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -27,6 +28,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/mysql/datetime"
+	"vitess.io/vitess/go/mysql/sqlmode"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -142,7 +144,34 @@ func NewSafeSession(sessn *vtgatepb.Session) *SafeSession {
 	if sessn == nil {
 		sessn = &vtgatepb.Session{}
 	}
+	canonicalizeNumericSQLMode(sessn.SystemVariables)
 	return &SafeSession{Session: sessn}
+}
+
+// canonicalizeNumericSQLMode decodes a session sql_mode stored as the number
+// MySQL accepts for the variable into MySQL's canonical form. An older vtgate
+// stored a numeric assignment as written, and a direct gRPC client may send
+// one; every reader of the session's sql_mode expects mode names. A number
+// that is not a valid mode value is left as it is, for the backend to judge.
+func canonicalizeNumericSQLMode(vars map[string]string) {
+	value, ok := vars["sql_mode"]
+	if !ok || value == "" {
+		return
+	}
+	for _, r := range value {
+		if r < '0' || r > '9' {
+			return
+		}
+	}
+	bits, err := strconv.ParseUint(value, 10, 64)
+	if err != nil {
+		return
+	}
+	mode, err := sqlmode.FromBits(bits)
+	if err != nil {
+		return
+	}
+	vars["sql_mode"] = sqltypes.EncodeStringSQL(mode.String())
 }
 
 // NewAutocommitSession returns a SafeSession based on the original

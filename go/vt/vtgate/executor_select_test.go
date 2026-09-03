@@ -452,6 +452,25 @@ func TestSessionSQLModeNumericAssignment(t *testing.T) {
 	assert.Equal(t, "select /*+ SET_VAR(sql_mode = 'ANSI_QUOTES') */ id from information_schema.`table`", lookup.Queries[0].Sql)
 }
 
+// A session that arrives with a numeric sql_mode — from an older vtgate, or a
+// direct gRPC client — parses under the modes that number encodes, exactly as a
+// session whose SET was canonicalized.
+func TestSessionSQLModeNumericSessionValue(t *testing.T) {
+	executor, _, _, lookup, _ := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
+	session := econtext.NewAutocommitSession(&vtgatepb.Session{
+		EnableSystemSettings: true,
+		TargetString:         KsTestUnsharded,
+		SystemVariables:      map[string]string{"sql_mode": "4"},
+	})
+
+	// "id" is a quoted identifier under ANSI_QUOTES, not a string literal
+	_, err := executorExecSession(t.Context(), executor, session, `select "id" from information_schema.table`, map[string]*querypb.BindVariable{})
+	require.NoError(t, err)
+	require.Len(t, lookup.Queries, 1)
+	assert.Equal(t, "select /*+ SET_VAR(sql_mode = 'ANSI_QUOTES') */ id from information_schema.`table`", lookup.Queries[0].Sql)
+	assert.Equal(t, "'ANSI_QUOTES'", session.SystemVariables["sql_mode"])
+}
+
 func TestSessionSQLModeParsing(t *testing.T) {
 	executor, _, _, lookup, _ := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
 	session := econtext.NewAutocommitSession(&vtgatepb.Session{EnableSystemSettings: true, TargetString: KsTestUnsharded, SystemVariables: map[string]string{}})
