@@ -223,13 +223,25 @@ func (svci *SysVarCheckAndIgnore) Execute(ctx context.Context, vcursor VCursor, 
 		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Unexpected error, DestinationKeyspaceID mapping to multiple shards: %v", svci.TargetDestination)
 	}
 	checkSysVarQuery := fmt.Sprintf("select 1 from dual where @@%s = %s", svci.Name, svci.Expr)
-	_, err = execShard(ctx, nil, vcursor, checkSysVarQuery, env.BindVars, rss[0], false /* rollbackOnError */, false /* canAutocommit */, false)
+	if svci.Name == "sql_mode" {
+		checkSysVarQuery = sqlModeJudgmentQuery(svci.Expr)
+	}
+	qr, err := execShard(ctx, nil, vcursor, checkSysVarQuery, env.BindVars, rss[0], false /* rollbackOnError */, false /* canAutocommit */, false)
 	if err != nil {
 		// Rather than returning the error, we will just log the error
 		// as the intention for executing the query it to validate the current setting and eventually ignore it anyways.
 		// There is no benefit of returning the error back to client.
 		log.Warn(fmt.Sprintf("unable to validate the current settings for '%s': %s", svci.Name, err.Error()))
 		return nil
+	}
+	if svci.Name == "sql_mode" {
+		// The assignment is ignored, but an unsupported sql_mode is an error all the
+		// same: constants were rejected at plan time, and a non-constant value gets
+		// the same judgment here, once evaluated, so that the client does not go on
+		// believing it runs under a mode the Vitess parser cannot honor.
+		if _, _, err := sqlModeChangedValue(qr); err != nil {
+			return err
+		}
 	}
 	return nil
 }

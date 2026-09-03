@@ -171,6 +171,52 @@ func TestSetTable(t *testing.T) {
 			`ExecuteMultiShard ks.-20: select 1 from dual where @@x = dummy_expr {} false false`,
 		},
 	}, {
+		// with system settings disabled a SET is ignored rather than applied, but an
+		// unsupported sql_mode is still an error: constants are rejected at plan time,
+		// and a non-constant value is judged here once evaluated
+		testName: "sysvar check and ignore rejects an unsupported non-constant sql_mode",
+		setOps: []SetOp{
+			&SysVarCheckAndIgnore{
+				Name:              "sql_mode",
+				Keyspace:          ks,
+				TargetDestination: key.DestinationAnyShard{},
+				Expr:              "concat('AN', 'SI')",
+			},
+		},
+		qr: []*sqltypes.Result{sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields(
+				"orig|new",
+				"varchar|varchar",
+			),
+			"STRICT_TRANS_TABLES|ANSI",
+		)},
+		expectedError: "setting the ANSI sql_mode is unsupported",
+		expectedQueryLog: []string{
+			`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
+			`ExecuteMultiShard ks.-20: select @@sql_mode orig, concat('AN', 'SI') new {} false false`,
+		},
+	}, {
+		testName: "sysvar check and ignore ignores a supported non-constant sql_mode",
+		setOps: []SetOp{
+			&SysVarCheckAndIgnore{
+				Name:              "sql_mode",
+				Keyspace:          ks,
+				TargetDestination: key.DestinationAnyShard{},
+				Expr:              "concat('STRICT_TRANS', '_TABLES')",
+			},
+		},
+		qr: []*sqltypes.Result{sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields(
+				"orig|new",
+				"varchar|varchar",
+			),
+			"NO_ZERO_DATE|STRICT_TRANS_TABLES",
+		)},
+		expectedQueryLog: []string{
+			`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
+			`ExecuteMultiShard ks.-20: select @@sql_mode orig, concat('STRICT_TRANS', '_TABLES') new {} false false`,
+		},
+	}, {
 		testName: "sysvar checkAndIgnore multi destination error",
 		setOps: []SetOp{
 			&SysVarCheckAndIgnore{
