@@ -766,6 +766,67 @@ func TestTabletThrottlerStrategy_Evaluate_NilCachedResultFailsOpen(t *testing.T)
 	}, "Evaluate must not panic when cached result is nil")
 }
 
+// TestTabletThrottlerStrategy_Evaluate_ReplaceRuleMatches verifies that a configured
+// REPLACE rule actually throttles a REPLACE statement, and that an INSERT rule does not
+// silently stand in for one.
+//
+// REPLACE parses to an *sqlparser.Insert carrying ReplaceAct. Classifying on the Go type
+// alone reported it as INSERT, so a REPLACE rule — which config validation happily accepts —
+// could never match, while an INSERT rule wrongly applied to REPLACE traffic instead.
+//
+// The statement type is deliberately derived through sqlparser.ASTToStatementType rather than
+// hardcoded, because that call is the fix under test: hardcoding sqlparser.StmtReplace here
+// would make this test pass with or without it.
+func TestTabletThrottlerStrategy_Evaluate_ReplaceRuleMatches(t *testing.T) {
+	parser := sqlparser.NewTestParser()
+	const replaceSQL = "replace into t(a) values (1)"
+
+	stmt, err := parser.Parse(replaceSQL)
+	require.NoError(t, err)
+	stmtType := sqlparser.ASTToStatementType(stmt)
+	require.Equal(t, sqlparser.StmtReplace, stmtType,
+		"REPLACE must classify as StmtReplace, otherwise a REPLACE rule can never match")
+
+	overloaded := &throttle.CheckResult{
+		Metrics: map[string]*throttle.MetricResult{
+			"lag": {ResponseCode: tabletmanagerdata.CheckThrottlerResponseCode_THRESHOLD_EXCEEDED, Value: 20},
+		},
+	}
+
+	// evaluateWithRule runs the REPLACE statement against a config keyed by ruleStmtType.
+	evaluateWithRule := func(ruleStmtType string) registry.ThrottleDecision {
+		strategy := newTestStrategyWithRandom(
+			NewFakeThrottleClientWrapper(overloaded, false),
+			makeTabletStrategyConfig(
+				topodatapb.TabletType_PRIMARY.String(),
+				ruleStmtType,
+				"lag",
+				makeThresholds(10, 100),
+			),
+			testRandomFuncs{
+				randFloat64: func() float64 { return 0.5 },
+				randIntN:    func(n int) int { return 99 },
+			},
+		)
+		strategy.running.Store(true)
+		strategy.cachedState.Store(&cacheState{ok: false, result: overloaded, refreshedAt: time.Now()})
+
+		return strategy.Evaluate(
+			context.Background(),
+			topodatapb.TabletType_PRIMARY,
+			&sqlparser.ParsedQuery{Query: replaceSQL},
+			stmtType,
+			1,
+			toQueryAttributesForTest(&querypb.ExecuteOptions{Priority: "100"}),
+		)
+	}
+
+	require.True(t, evaluateWithRule("REPLACE").Throttle,
+		"a configured REPLACE rule must throttle a REPLACE statement")
+	require.False(t, evaluateWithRule("INSERT").Throttle,
+		"an INSERT rule must not match a REPLACE statement")
+}
+
 // TestTabletThrottlerStrategy_Evaluate_StaleOverloadedStateFailsOpen verifies that an
 // overloaded (ok=false) cached state is discarded once it ages past the staleness
 // threshold, so the hot path fails open instead of throttling forever.

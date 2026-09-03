@@ -94,6 +94,53 @@ func TestPreview(t *testing.T) {
 	}
 }
 
+// TestASTToStatementType checks the AST-based classifier against the statement types
+// callers key rules off. REPLACE is the case that matters: it parses to an *Insert
+// carrying ReplaceAct, so classifying purely on the Go type reports it as StmtInsert
+// and makes a REPLACE rule unmatchable. Preview() has always reported StmtReplace for
+// these (see TestPreview), so the two classifiers must agree.
+func TestASTToStatementType(t *testing.T) {
+	parser := NewTestParser()
+	testcases := []struct {
+		sql  string
+		want StatementType
+	}{
+		{"insert into t(a) values (1)", StmtInsert},
+		{"replace into t(a) values (1)", StmtReplace},
+		{"replace into t select a from u", StmtReplace},
+		{"insert into t select a from u", StmtInsert},
+		{"insert into t(a) values (1) on duplicate key update a = 2", StmtInsert},
+		{"select a from t", StmtSelect},
+		{"with x as (select 1) select * from x", StmtSelect},
+		{"update t set a = 1", StmtUpdate},
+		{"delete from t", StmtDelete},
+	}
+	for _, tcase := range testcases {
+		t.Run(tcase.sql, func(t *testing.T) {
+			stmt, err := parser.Parse(tcase.sql)
+			require.NoError(t, err)
+			assert.Equal(t, tcase.want, ASTToStatementType(stmt))
+		})
+	}
+}
+
+// TestASTToStatementTypeMatchesPreview guards against the AST classifier and the
+// textual classifier drifting apart for INSERT/REPLACE, which is how the REPLACE
+// misclassification went unnoticed.
+func TestASTToStatementTypeMatchesPreview(t *testing.T) {
+	parser := NewTestParser()
+	for _, sql := range []string{
+		"insert into t(a) values (1)",
+		"replace into t(a) values (1)",
+	} {
+		t.Run(sql, func(t *testing.T) {
+			stmt, err := parser.Parse(sql)
+			require.NoError(t, err)
+			assert.Equal(t, Preview(sql), ASTToStatementType(stmt))
+		})
+	}
+}
+
 func TestIsValidStatementType(t *testing.T) {
 	// Every name String() can produce must be accepted.
 	for s := StmtUnknown; s <= StmtKill; s++ {

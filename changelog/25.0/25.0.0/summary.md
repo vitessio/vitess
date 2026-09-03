@@ -32,6 +32,7 @@
         - [Stricter validation of SQL-level PREPARE statements](#vtgate-prepare-stricter-validation)
         - [Stricter PROXY protocol v1 header validation](#vtgate-proxy-protocol-v1-strictness)
         - [New `VEXPLAIN MYSQLPLAN` statement](#vtgate-vexplain-mysqlplan)
+        - [`REPLACE` statements now report the `REPLACE` statement type](#vtgate-replace-statement-type)
     - **[Reparent](#minor-changes-reparent)**
         - [`EmergencyReparentShard` no longer waits on replicas that cannot win the election](#ers-lagging-relay-log-wait)
         - [`EmergencyReparentShard` can explicitly recover from split brain](#ers-allow-split-brain-promotion)
@@ -322,6 +323,18 @@ For each `Route` in the plan, the per-shard `EXPLAIN` queries are run concurrent
 Because each per-shard `EXPLAIN` runs on a separate connection, a `VEXPLAIN MYSQLPLAN` issued inside an open transaction reflects the pre-transaction state of each shard rather than any uncommitted changes made in that transaction — the same limitation as `VEXPLAIN ALL`.
 
 Like a plain `EXPLAIN`, the per-shard `EXPLAIN FORMAT=JSON` queries `VEXPLAIN MYSQLPLAN` issues are not subject to table ACL checks on the explained tables, so `VEXPLAIN MYSQLPLAN` can return per-shard plan metadata (index names, row estimates, filtered percentages) for tables the caller could not otherwise read. For the same reason — the tablet plans an `EXPLAIN` without the explained table's identity — query denylist rules that are conditioned on a table name are not enforced against these per-shard `EXPLAIN` queries either; denylist rules conditioned on the query pattern still apply if their pattern matches the `explain format = json ...` query text. Unlike a plain `EXPLAIN`, which reaches a single arbitrary shard, `VEXPLAIN MYSQLPLAN` extends this to every resolved shard of every keyspace in the plan. Deployments that rely on table ACLs or table-scoped query denylist rules to restrict read access should restrict access to `VEXPLAIN MYSQLPLAN` accordingly.
+
+#### <a id="vtgate-replace-statement-type"/>`REPLACE` statements now report the `REPLACE` statement type</a>
+
+`REPLACE` is represented internally as an `INSERT` carrying a "replace" action, and the AST-based statement classifier previously reported it as `INSERT`. It is now reported as `REPLACE`, matching what the textual classifier has always returned for the same statements.
+
+This changes three user-visible strings for `REPLACE` statements:
+
+- `StmtType` in the VTGate query log
+- `QueryType` in plan output (`/debug/query_plans` and `VEXPLAIN`)
+- `statementType` in query-analysis output
+
+Query planning, routing, transaction behavior, and results are unchanged — only the reported statement type differs. Tooling that parses these fields and matches on the literal `INSERT` will no longer match `REPLACE` statements and should be updated to accept `REPLACE`.
 
 ### <a id="minor-changes-reparent"/>Reparent</a>
 

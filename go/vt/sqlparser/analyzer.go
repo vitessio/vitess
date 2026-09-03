@@ -68,10 +68,17 @@ const (
 
 // ASTToStatementType returns a StatementType from an AST stmt
 func ASTToStatementType(stmt Statement) StatementType {
-	switch stmt.(type) {
+	switch stmt := stmt.(type) {
 	case *Select, *Union:
 		return StmtSelect
 	case *Insert:
+		// REPLACE is parsed as an *Insert carrying ReplaceAct, so the action has to be
+		// consulted to tell the two apart. Preview() already reports StmtReplace for
+		// these, and callers that key off the statement type (e.g. query throttler
+		// rules) can never match a REPLACE rule if it is reported as StmtInsert.
+		if stmt.Action == ReplaceAct {
+			return StmtReplace
+		}
 		return StmtInsert
 	case *Update:
 		return StmtUpdate

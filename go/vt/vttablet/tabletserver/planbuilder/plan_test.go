@@ -222,6 +222,7 @@ func TestBuildStatementType(t *testing.T) {
 		{"select * from a", sqlparser.StmtSelect},
 		{"select * from a union select * from b", sqlparser.StmtSelect},
 		{"insert into a(eid, id) values (1, 2)", sqlparser.StmtInsert},
+		{"replace into a(eid, id) values (1, 2)", sqlparser.StmtReplace},
 		{"update a set name='foo' where id=1", sqlparser.StmtUpdate},
 		{"delete from a where id=1", sqlparser.StmtDelete},
 		{"with cte as (select id from a) select * from cte", sqlparser.StmtSelect},
@@ -264,6 +265,41 @@ func TestBuildStatementType_CTERegression(t *testing.T) {
 	streamPlan, err := BuildStreaming(vtenv.NewTestEnv(), statement, testSchema, "dbName")
 	require.NoError(t, err)
 	require.Equal(t, sqlparser.StmtSelect, streamPlan.StatementType)
+}
+
+// TestBuildStatementType_ReplaceRegression pins down that REPLACE keeps its own
+// statement type. REPLACE parses to an *Insert carrying ReplaceAct, so classifying
+// on the Go type alone reports StmtInsert — which makes a configured REPLACE rule in
+// the query throttler unmatchable while an INSERT rule wrongly applies instead.
+// Both Build and BuildStreaming must classify it as REPLACE.
+func TestBuildStatementType_ReplaceRegression(t *testing.T) {
+	testSchema := loadSchema("schema_test.json")
+	parser := sqlparser.NewTestParser()
+
+	const replaceStmt = "replace into a(eid, id) values (1, 2)"
+
+	statement, err := parser.Parse(replaceStmt)
+	require.NoError(t, err)
+
+	// Premise guard: REPLACE really is represented as an *Insert with ReplaceAct.
+	ins, ok := statement.(*sqlparser.Insert)
+	require.True(t, ok, "REPLACE should parse to *sqlparser.Insert")
+	require.Equal(t, sqlparser.ReplaceAct, ins.Action)
+
+	plan, err := Build(vtenv.NewTestEnv(), statement, testSchema, "dbName", false)
+	require.NoError(t, err)
+	require.Equal(t, sqlparser.StmtReplace, plan.StatementType)
+
+	streamPlan, err := BuildStreaming(vtenv.NewTestEnv(), statement, testSchema, "dbName")
+	require.NoError(t, err)
+	require.Equal(t, sqlparser.StmtReplace, streamPlan.StatementType)
+
+	// An INSERT must stay an INSERT — the branch must not swallow both.
+	insertStatement, err := parser.Parse("insert into a(eid, id) values (1, 2)")
+	require.NoError(t, err)
+	insertPlan, err := Build(vtenv.NewTestEnv(), insertStatement, testSchema, "dbName", false)
+	require.NoError(t, err)
+	require.Equal(t, sqlparser.StmtInsert, insertPlan.StatementType)
 }
 
 func TestMessageStreamingPlan(t *testing.T) {
