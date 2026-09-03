@@ -1839,6 +1839,11 @@ func (e *Executor) ExecuteMultiShard(ctx context.Context, primitive engine.Primi
 	return e.scatterConn.ExecuteMultiShard(ctx, primitive, rss, queries, session, autocommit, ignoreMaxMemoryRows, resultsObserver, fetchLastInsertID)
 }
 
+// ExecuteMultiShardPerShard implements the IExecutor interface
+func (e *Executor) ExecuteMultiShardPerShard(ctx context.Context, primitive engine.Primitive, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, session *econtext.SafeSession, autocommit bool, resultsObserver econtext.ResultsObserver, fetchLastInsertID bool) (results []*sqltypes.Result, errs []error) {
+	return e.scatterConn.ExecuteMultiShardPerShard(ctx, primitive, rss, queries, session, autocommit, resultsObserver, fetchLastInsertID)
+}
+
 // StreamExecuteMulti implements the IExecutor interface
 func (e *Executor) StreamExecuteMulti(ctx context.Context, primitive engine.Primitive, query string, rss []*srvtopo.ResolvedShard, vars []map[string]*querypb.BindVariable, session *econtext.SafeSession, autocommit bool, callback func(reply *sqltypes.Result) error, resultsObserver econtext.ResultsObserver, fetchLastInsertID bool) []error {
 	return e.scatterConn.StreamExecuteMulti(ctx, primitive, query, rss, vars, session, autocommit, callback, resultsObserver, fetchLastInsertID)

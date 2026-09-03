@@ -2999,9 +2999,8 @@ type BinlogDumpGTIDRequest struct {
 	GtidSet string `protobuf:"bytes,6,opt,name=gtid_set,json=gtidSet,proto3" json:"gtid_set,omitempty"`
 	// Raw 2-byte flags field from COM_BINLOG_DUMP_GTID, passed through to MySQL.
 	// Known flags:
-	//
-	//	BINLOG_DUMP_NON_BLOCK  (0x01) — return EOF instead of blocking when caught up
-	//	USE_HEARTBEAT_EVENT_V2 (0x02) — use Heartbeat_event_v2 format
+	//   BINLOG_DUMP_NON_BLOCK  (0x01) — return EOF instead of blocking when caught up
+	//   USE_HEARTBEAT_EVENT_V2 (0x02) — use Heartbeat_event_v2 format
 	Flags         uint32 `protobuf:"varint,7,opt,name=flags,proto3" json:"flags,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
