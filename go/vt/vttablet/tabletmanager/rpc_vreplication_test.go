@@ -850,7 +850,7 @@ func TestGetOptionSetString(t *testing.T) {
 				"password": "secret",
 				"user":     "admin",
 			},
-			want: ", options = json_set(options, '$.config', json_object(), '$.config.\"password\"', 'secret', '$.config.\"user\"', 'admin')",
+			want: ", options = json_set(json_insert(options, '$.config', json_object()), '$.config.\"password\"', 'secret', '$.config.\"user\"', 'admin')",
 		},
 		{
 			name: "valid params, deleting two",
@@ -860,7 +860,7 @@ func TestGetOptionSetString(t *testing.T) {
 				"port":     "",
 				"host":     "",
 			},
-			want: ", options = json_set(json_remove(options, '$.config.\"host\"', '$.config.\"port\"'), '$.config', json_object(), '$.config.\"password\"', 'secret', '$.config.\"user\"', 'admin')",
+			want: ", options = json_set(json_insert(json_remove(options, '$.config.\"host\"', '$.config.\"port\"'), '$.config', json_object()), '$.config.\"password\"', 'secret', '$.config.\"user\"', 'admin')",
 		},
 		// Additional tests for handling escaping errors or complex scenarios can be added here
 	}
