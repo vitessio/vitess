@@ -2074,7 +2074,17 @@ func (e *Executor) PlanPrepareStmt(ctx context.Context, safeSession *econtext.Sa
 	if err != nil {
 		return nil, "", err
 	}
-	return plan, comments.Leading + sqlparser.String(stmt) + comments.Trailing, nil
+	canonical := sqlparser.String(stmt)
+	switch s := stmt.(type) {
+	case *sqlparser.OtherAdmin, *sqlparser.Load:
+		// sent to the backends as written, and without a faithful serialization
+		canonical = statement
+	case sqlparser.DDLStatement:
+		if !s.IsFullyParsed() {
+			canonical = statement
+		}
+	}
+	return plan, comments.Leading + canonical + comments.Trailing, nil
 }
 
 // PlanStoredStmt implements the IExecutor interface: it plans the stored text

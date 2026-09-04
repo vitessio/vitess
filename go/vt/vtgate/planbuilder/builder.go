@@ -535,7 +535,9 @@ func rawTextHasBackslash(vschema plancontext.VSchema, sql string) bool {
 		case sqlparser.COMMENT:
 			continue
 		}
-		if strings.Contains(val, "\\") {
+		// only a string literal reads differently under the mode: a quoted
+		// identifier holds its backslash either way
+		if (typ == sqlparser.STRING || typ == sqlparser.NCHAR_STRING) && strings.Contains(val, "\\") {
 			return true
 		}
 	}

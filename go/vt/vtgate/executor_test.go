@@ -2880,6 +2880,18 @@ func TestExecutorPrepareExecute(t *testing.T) {
 		assert.Equal(t, "/* request-id: 42 */ select * from `user` where id = :v1 /* audit */", prepData.PrepareStatement)
 	})
 
+	t.Run("prepare statement sent as written keeps its text", func(t *testing.T) {
+		// DO has no faithful serialization; its text is what the backends get
+		session := econtext.NewAutocommitSession(&vtgatepb.Session{TargetString: KsTestUnsharded})
+		_, err := executorExecSession(t.Context(), executor, session, "prepare prep_do from 'do 1'", nil)
+		require.NoError(t, err)
+		prepData := session.PrepareStatement["prep_do"]
+		require.NotNil(t, prepData)
+		assert.Equal(t, "do 1", prepData.PrepareStatement)
+		_, err = executorExecSession(t.Context(), executor, session, "execute prep_do", nil)
+		require.NoError(t, err)
+	})
+
 	t.Run("syntax error on prepared query", func(t *testing.T) {
 		_, err := executorExecSession(t.Context(), executor, session, "prepare prep_user2 from 'select'", nil)
 		require.Error(t, err)

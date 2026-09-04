@@ -482,6 +482,10 @@ func TestRawTextUnderNoBackslashEscapes(t *testing.T) {
 	// a backslash inside a comment cannot change how a backend reads the statement
 	_, err = executorExecSession(t.Context(), executor, newSession("'NO_BACKSLASH_ESCAPES'"), `repair /* c:\path */ table main1`, nil)
 	require.NoError(t, err)
+
+	// nor one inside a quoted identifier: only string literals read differently
+	_, err = executorExecSession(t.Context(), executor, newSession("'NO_BACKSLASH_ESCAPES'"), "repair table `a\\b`", nil)
+	require.NoError(t, err)
 }
 
 // A numeric sql_mode assignment must leave the session with the canonical name list,
