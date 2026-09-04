@@ -1146,6 +1146,16 @@ func TestSetVarShowVariables(t *testing.T) {
 	require.NoError(t, err)
 	assert.False(t, session.InReservedConn(), "reserved connection should not be used")
 	assert.Equal(t, `[[VARCHAR("sql_mode") VARCHAR("ONLY_FULL_GROUP_BY")]]`, fmt.Sprintf("%v", qr.Rows))
+
+	// the global form reports the configured default the sessions start with, like
+	// @@global.sql_mode does
+	sbc.SetResults([]*sqltypes.Result{
+		sqltypes.MakeTestResult(sqltypes.MakeTestFields("Variable_name|Value", "varchar|varchar"),
+			"sql_mode|ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE"),
+	})
+	qr, err = executorExecSession(ctx, executor, session, "show global variables like 'sql_mode'", map[string]*querypb.BindVariable{})
+	require.NoError(t, err)
+	assert.Equal(t, `[[VARCHAR("sql_mode") VARCHAR("`+mysqlconfig.DefaultSQLMode+`")]]`, fmt.Sprintf("%v", qr.Rows))
 }
 
 func TestExecutorSetAndSelect(t *testing.T) {
