@@ -53,6 +53,7 @@
     - **[VTCtld](#minor-changes-vtctld)**
         - [MySQL version-aware reparent candidate election](#vtctld-version-aware-reparent)
     - **[Backup/Restore](#minor-changes-backup)**
+        - [Errant GTID validation for base backups with `--verify-backup-errant-gtids`](#vtbackup-errant-gtid-validation)
         - [Chunked backup/restore for the builtinbackupengine](#backup-chunked-builtin)
         - [Slow clean mysqld shutdowns no longer fail backups](#backup-mysqld-shutdown-timeout)
     - **[General](#minor-changes-general)**
@@ -583,6 +584,26 @@ The same caveat applies to a `REPLICA` that is *excluded from election* — beca
 See [#20211](https://github.com/vitessio/vitess/pull/20211) for details.
 
 ### <a id="minor-changes-backup"/>Backup/Restore</a>
+
+#### <a id="vtbackup-errant-gtid-validation"/>Errant GTID validation for base backups with `--verify-backup-errant-gtids`</a>
+
+A new `--verify-backup-errant-gtids` flag (default `false`) has been added to VTBackup. It controls what `vtbackup`
+does when the base backup it restored has errant GTIDs relative to the current shard primary.
+
+The default of `false` logs a warning naming the affected backup and errant GTID set, then takes the backup as usual,
+preserving the existing behavior.
+
+When set to `true`, `vtbackup` fails instead, exiting without creating or pruning backups. Operators are encouraged to
+enable it, since a base backup with errant GTIDs propagates those transactions into every backup taken from it, and a
+tablet restoring from such a backup refuses to join the replication graph and fails to start.
+
+The comparison requires MySQL GTID replication. On other flavors, such as MySQL with GTIDs disabled or MariaDB, the
+positions cannot be compared and `true` fails the backup.
+
+Existing `--init-backup-sql-queries` that generate local GTIDs will trigger this. Configure those statements to avoid
+binary logging, using forms such as `LOCAL` or `NO_WRITE_TO_BINLOG`, or execute them with `sql_log_bin` disabled.
+
+See [#20677](https://github.com/vitessio/vitess/issues/20677) for details.
 
 #### <a id="backup-chunked-builtin"/>Chunked backup/restore for the `builtinbackupengine`</a>
 

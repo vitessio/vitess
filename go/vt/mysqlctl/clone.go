@@ -70,23 +70,23 @@ func registerCloneFlags(fs *pflag.FlagSet) {
 	utils.SetFlagDurationVar(fs, &cloneRestartWaitTimeout, "clone-restart-wait-timeout", cloneRestartWaitTimeout, "Timeout for waiting for MySQL to restart after CLONE REMOTE.")
 }
 
-// CloneFromDonor clones data from the specified donor tablet using MySQL CLONE REMOTE and returns the GTID position of the cloned data. If mycnf is non-nil, CloneFromDonor may use it to restart mysqld locally when CLONE completes but MySQL cannot restart itself.
-func CloneFromDonor(ctx context.Context, topoServer *topo.Server, mysqld MysqlDaemon, mycnf *Mycnf, keyspace, shard string) (replication.Position, error) {
+// CloneFromDonor clones data from the specified donor tablet using MySQL CLONE REMOTE and returns the GTID position of the cloned data along with the alias of the donor tablet. If mycnf is non-nil, CloneFromDonor may use it to restart mysqld locally when CLONE completes but MySQL cannot restart itself.
+func CloneFromDonor(ctx context.Context, topoServer *topo.Server, mysqld MysqlDaemon, mycnf *Mycnf, keyspace, shard string) (replication.Position, *topodatapb.TabletAlias, error) {
 	var donorAlias *topodatapb.TabletAlias
 	var err error
 
 	switch {
 	case cloneFromPrimary && cloneFromTablet != "":
-		return replication.Position{}, errors.New("--clone-from-primary and --clone-from-tablet are mutually exclusive")
+		return replication.Position{}, nil, errors.New("--clone-from-primary and --clone-from-tablet are mutually exclusive")
 	case cloneFromPrimary:
 		// Look up the primary tablet from topology.
 		log.Info(fmt.Sprintf("Looking up primary tablet for shard %s/%s for use as CLONE REMOTE donor", keyspace, shard))
 		si, err := topoServer.GetShard(ctx, keyspace, shard)
 		if err != nil {
-			return replication.Position{}, fmt.Errorf("failed to get shard %s/%s: %v", keyspace, shard, err)
+			return replication.Position{}, nil, fmt.Errorf("failed to get shard %s/%s: %v", keyspace, shard, err)
 		}
 		if topoproto.TabletAliasIsZero(si.PrimaryAlias) {
-			return replication.Position{}, fmt.Errorf("shard %s/%s has no primary", keyspace, shard)
+			return replication.Position{}, nil, fmt.Errorf("shard %s/%s has no primary", keyspace, shard)
 		}
 		donorAlias = si.PrimaryAlias
 		log.Info(fmt.Sprintf("Found primary tablet %s for use as CLONE REMOTE donor", topoproto.TabletAliasString(donorAlias)))
@@ -95,22 +95,22 @@ func CloneFromDonor(ctx context.Context, topoServer *topo.Server, mysqld MysqlDa
 		log.Info(fmt.Sprintf("Using tablet %s for use as CLONE REMOTE donor", cloneFromTablet))
 		donorAlias, err = topoproto.ParseTabletAlias(cloneFromTablet)
 		if err != nil {
-			return replication.Position{}, fmt.Errorf("invalid tablet alias %q: %v", cloneFromTablet, err)
+			return replication.Position{}, nil, fmt.Errorf("invalid tablet alias %q: %v", cloneFromTablet, err)
 		}
 	default:
-		return replication.Position{}, errors.New("no donor specified")
+		return replication.Position{}, nil, errors.New("no donor specified")
 	}
 
 	// Get donor tablet info from topology.
 	donorTablet, err := topoServer.GetTablet(ctx, donorAlias)
 	if err != nil {
-		return replication.Position{}, fmt.Errorf("failed to get tablet %s from topology: %v", topoproto.TabletAliasString(donorAlias), err)
+		return replication.Position{}, nil, fmt.Errorf("failed to get tablet %s from topology: %v", topoproto.TabletAliasString(donorAlias), err)
 	}
 
 	// Get clone credentials.
 	cloneConfig := dbconfigs.GlobalDBConfigs.CloneUser
 	if cloneConfig.User == "" {
-		return replication.Position{}, errors.New("clone user not configured; set --db-clone-user flag")
+		return replication.Position{}, nil, errors.New("clone user not configured; set --db-clone-user flag")
 	}
 
 	// Create the clone executor.
@@ -128,7 +128,7 @@ func CloneFromDonor(ctx context.Context, topoServer *topo.Server, mysqld MysqlDa
 	// Note: ExecuteClone will wait for mysqld to restart and for the CLONE plugin to report successful completion
 	// success via performance_schema before returning.
 	if err := executor.ExecuteClone(ctx, mysqld, mycnf, cloneRestartWaitTimeout); err != nil {
-		return replication.Position{}, fmt.Errorf("clone execution failed: %v", err)
+		return replication.Position{}, nil, fmt.Errorf("clone execution failed: %v", err)
 	}
 
 	// After CLONE, keep going across the expected mysqld restart.
@@ -137,11 +137,11 @@ func CloneFromDonor(ctx context.Context, topoServer *topo.Server, mysqld MysqlDa
 
 	pos, err := mysqld.PrimaryPosition(ctx)
 	if err != nil {
-		return replication.Position{}, fmt.Errorf("failed to get position after clone: %v", err)
+		return replication.Position{}, nil, fmt.Errorf("failed to get position after clone: %v", err)
 	}
 
 	log.Info(fmt.Sprintf("Clone completed successfully at position %v", pos))
-	return pos, nil
+	return pos, donorAlias, nil
 }
 
 // CloneExecutor handles MySQL CLONE REMOTE operations for backup and replica provisioning.
