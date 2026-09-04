@@ -772,9 +772,9 @@ func (stc *ScatterConn) multiGoTransaction(
 			shardSession.RowsAffected = info.rowsAffected
 		}
 		if info.reservedID != 0 && !session.InReservedConn() {
-			// The statement only asked for the session's settings on its connection,
-			// but the tablet reserved one for it (a lock, a temporary table): the
-			// session is pinned to it from here on.
+			// A shard holding a reserved connection pins the session. The session
+			// only asked for its settings, but the tablet reserved a connection for
+			// the statement (a lock, a temporary table).
 			session.SetReservedConn(true)
 		}
 		if info.actionNeeded != nothing && (info.transactionID != 0 || info.reservedID != 0) {

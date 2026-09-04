@@ -164,9 +164,13 @@ type (
 	VCursorImpl struct {
 		config      VCursorConfig
 		SafeSession *SafeSession
-		// settingsForStatement makes the statement carry the session's system variables
-		// on the connection it runs on, without pinning the session; see
-		// NeedsSessionSettings.
+		// settingsForStatement makes the statement run with the session's system
+		// variables applied to its connection through the tablet's connection
+		// settings: the statement cannot carry them in a SET_VAR hint. Unlike
+		// SetReservedConn it does not pin the session; a later hint-capable query
+		// carries the hint again. The session is pinned only when a tablet answers
+		// that it reserved a connection for the statement, which a lock or a
+		// temporary table needs and a DDL does not. See transportContext.
 		settingsForStatement bool
 		keyspace             string
 		tabletType           topodatapb.TabletType
@@ -1142,18 +1146,8 @@ func (vc *VCursorImpl) CheckForReservedConnection(setVarComment string, stmt sql
 		*sqlparser.SRollback, *sqlparser.Release, *sqlparser.Set, *sqlparser.Show,
 		sqlparser.SupportOptimizerHint:
 	default:
-		vc.NeedsSessionSettings()
+		vc.settingsForStatement = true
 	}
-}
-
-// NeedsSessionSettings makes this request's statement run with the session's system
-// variables applied to its connection through the tablet's connection settings: the
-// statement cannot carry them in a SET_VAR hint. Unlike NeedsReservedConn it does not
-// pin the session; a later hint-capable query goes back to carrying the hint. The
-// session gets pinned only when a tablet answers that it reserved a connection for
-// the statement, which a lock or a temporary table needs and a DDL does not.
-func (vc *VCursorImpl) NeedsSessionSettings() {
-	vc.settingsForStatement = true
 }
 
 // transportContext marks the context for the scatter connection when the statement

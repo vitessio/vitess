@@ -141,6 +141,8 @@ func (route *Route) TryExecute(ctx context.Context, vcursor VCursor, bindVars ma
 
 type cxtKey int
 
+// Context markers read by the scatter connection when it decides what a shard
+// needs for a statement; see actionInfo in vtgate/scatter_conn.go.
 const (
 	IgnoreReserveTxn cxtKey = iota
 	// SessionSettingsForStatement asks the transport to apply the session's system

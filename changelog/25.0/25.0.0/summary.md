@@ -310,7 +310,7 @@ See [#20733](https://github.com/vitessio/vitess/pull/20733) for details.
 
 #### <a id="vtgate-settings-per-statement"/>Connection settings are applied per statement</a>
 
-A statement that cannot carry the session's system variables in a `SET_VAR` optimizer hint (DDL, `CALL`, `FLUSH`, `LOAD DATA`, ...) runs with them applied to its connection through vttablet's connection settings. Previously the first such statement switched the whole session to reserved connections: every later query of the session, hint-capable or not, went through a settings connection on each shard it touched. Now only that statement carries the settings, and later queries keep using `SET_VAR` hints on pooled connections.
+A statement that cannot carry the session's system variables in a `SET_VAR` optimizer hint (DDL, `CALL`, `FLUSH`, `LOAD DATA`, ...) runs with them applied to its connection through vttablet's connection settings. Previously the first such statement switched the whole session to reserved connections: every later query of the session, hint-capable or not, went through a settings connection on each shard it touched. Now only that statement carries the settings, and later queries keep using `SET_VAR` hints on pooled connections. Statements that never needed the settings but could not carry the hint either, `PREPARE`, `USE` and `EXPLAIN` among them, pinned the session the same way and no longer do.
 
 A session is pinned to a reserved connection only when a tablet actually reserved one for the statement, which `GET_LOCK()`, `LOCK TABLES`, `FLUSH TABLES WITH READ LOCK` and temporary tables still need. Deployments with `--enable-set-var=false`, or backends without `SET_VAR`, keep using settings connections for every query, as before.
 

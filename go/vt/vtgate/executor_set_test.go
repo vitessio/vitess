@@ -695,9 +695,12 @@ func TestHintIncapableStatementCarriesTheSettingsForItself(t *testing.T) {
 	assert.True(t, session.InReservedConn())
 	require.Len(t, session.ShardSessions, 1)
 	assert.NotZero(t, session.ShardSessions[0].ReservedId)
+	reservedID := session.ShardSessions[0].ReservedId
 	_, err = executorExecSession(ctx, executor, session, "select 1 from user", nil)
 	require.NoError(t, err)
-	assert.EqualValues(t, 2, sbc.ReserveCount.Load(), "the query rode the reserved connection")
+	assert.EqualValues(t, 2, sbc.ReserveCount.Load(), "no new reservation for the query")
+	require.Len(t, session.ShardSessions, 1)
+	assert.Equal(t, reservedID, session.ShardSessions[0].ReservedId, "the query kept the reserved connection")
 }
 
 func TestSetVarShowVariables(t *testing.T) {
