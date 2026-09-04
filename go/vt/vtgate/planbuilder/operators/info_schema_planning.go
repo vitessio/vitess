@@ -171,8 +171,9 @@ func extractInfoSchemaRoutingPredicate(ctx *plancontext.PlanningContext, in sqlp
 				break
 			}
 			// Multi-element schema lists are resolved at execution. table_name
-			// lists already work as pushed-down filters.
-			if !isSchema || !translates(rhs) {
+			// lists already work as pushed-down filters. Lists containing
+			// database()/schema() stay with the tablet, like = database().
+			if !isSchema || !translates(rhs) || slices.ContainsFunc(rhs, func(e sqlparser.Expr) bool { return !shouldRewrite(e) }) {
 				return false, "", nil
 			}
 			cmp.Operator = sqlparser.EqualOp

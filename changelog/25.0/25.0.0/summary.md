@@ -257,7 +257,8 @@ A multi-value `IN` list routes when it names exactly one schema (duplicates and
 those forms, or an `OR` of schema equalities, which plans identically — cannot
 be routed to a single keyspace and now fails with an explicit `VT12001` error
 instead of returning wrong rows. Multi-value `table_name` lists are unaffected
-and keep working as plain filters.
+and keep working as plain filters, and a list containing `database()` or
+`schema()` is left for the tablet to evaluate, as `= database()` always has been.
 
 One narrow shape that previously worked is currently rejected as well: a
 multi-value `IN` list naming only system schemas (e.g. `table_schema IN
