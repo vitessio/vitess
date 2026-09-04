@@ -305,29 +305,28 @@ func (rp *RoutingParameters) routedTable(ctx context.Context, vcursor VCursor, b
 		if err != nil {
 			return nil, err
 		}
-
-		if routedTable != nil {
-			// if we were able to find information about this table, let's use it
-
-			// check if the query is send to single keyspace.
-			if routedKs == nil {
-				routedKs = routedTable.Keyspace
-			}
-			if routedKs.Name != routedTable.Keyspace.Name {
-				return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "cannot send the query to multiple keyspace due to different table_name: %s, %s", routedKs.Name, routedTable.Keyspace.Name)
-			}
-
-			shards, _, err := vcursor.ResolveDestinations(ctx, routedTable.Keyspace.Name, nil, []key.ShardDestination{key.DestinationAnyShard{}})
-			setSysTableNameBindVar(bindVars, tblBvName, routedTable.Name.String())
-			if tableSchema != "" {
-				setReplaceSchemaName(bindVars)
-			}
-			return shards, err
+		if routedTable == nil {
+			// no routed table info found. we'll return nil and check on the outside if we can find the table_schema
+			setSysTableNameBindVar(bindVars, tblBvName, tableName)
+			continue
 		}
-		// no routed table info found. we'll return nil and check on the outside if we can find the table_schema
-		setSysTableNameBindVar(bindVars, tblBvName, tableName)
+		// check if the query is send to single keyspace.
+		if routedKs == nil {
+			routedKs = routedTable.Keyspace
+		}
+		if routedKs.Name != routedTable.Keyspace.Name {
+			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "cannot send the query to multiple keyspace due to different table_name: %s, %s", routedKs.Name, routedTable.Keyspace.Name)
+		}
+		setSysTableNameBindVar(bindVars, tblBvName, routedTable.Name.String())
 	}
-	return nil, nil
+	if routedKs == nil {
+		return nil, nil
+	}
+	shards, _, err := vcursor.ResolveDestinations(ctx, routedKs.Name, nil, []key.ShardDestination{key.DestinationAnyShard{}})
+	if tableSchema != "" {
+		setReplaceSchemaName(bindVars)
+	}
+	return shards, err
 }
 
 // setSysTableNameBindVar keeps the TUPLE shape an `in ::name` predicate expects.

@@ -334,6 +334,42 @@ func TestSystemTableSchemaLists(t *testing.T) {
 	}
 }
 
+// TestSystemTableRoutedTableRewritesEveryTableName pins that every routed
+// table-name predicate is rewritten to its physical name, not just the first.
+func TestSystemTableRoutedTableRewritesEveryTableName(t *testing.T) {
+	sel := &Route{
+		RoutingParameters: &RoutingParameters{
+			Opcode:              DBA,
+			Keyspace:            &vindexes.Keyspace{Name: "ks"},
+			SysTableTableSchema: []evalengine.Expr{evalengine.NewLiteralString([]byte("schema"), collations.SystemCollation)},
+			SysTableTableName: map[string]evalengine.Expr{
+				"t1": evalengine.NewLiteralString([]byte("a"), collations.SystemCollation),
+				"t2": evalengine.NewLiteralString([]byte("b"), collations.SystemCollation),
+			},
+		},
+		Query:      "dummy_select",
+		FieldQuery: "dummy_select_field",
+	}
+	vc := &loggingVCursor{
+		shards:  []string{"1"},
+		results: []*sqltypes.Result{defaultSelectResult},
+		tableRoutes: tableRoutes{
+			tbl: &vindexes.BaseTable{
+				Name:     sqlparser.NewIdentifierCS("routedTable"),
+				Keyspace: &vindexes.Keyspace{Name: "routedKeyspace"},
+			},
+		},
+	}
+	bindVars := map[string]*querypb.BindVariable{}
+
+	_, err := sel.TryExecute(t.Context(), vc, bindVars, false)
+	require.NoError(t, err)
+	want := sqltypes.StringBindVariable("routedTable")
+	assert.True(t, proto.Equal(want, bindVars["t1"]), "t1 = %v", bindVars["t1"])
+	assert.True(t, proto.Equal(want, bindVars["t2"]), "t2 = %v", bindVars["t2"])
+	assert.Contains(t, vc.log, "ResolveDestinations routedKeyspace [] Destinations:DestinationAnyShard()")
+}
+
 // sysTableNameInRoute builds a DBA route for `table_name IN ::tables`, keyed by
 // the dedicated ::vttables while the expression reads the client's ::tables.
 func sysTableNameInRoute() *Route {

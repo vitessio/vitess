@@ -1352,6 +1352,25 @@
     }
   },
   {
+    "comment": "multi-element IN containing database() is left alone",
+    "query": "select table_name from information_schema.tables where table_schema in (database(), 'vt_main')",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select table_name from information_schema.tables where table_schema in (database(), 'vt_main')",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "DBA",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select `table_name` from information_schema.`tables` where 1 != 1",
+        "Query": "select `table_name` from information_schema.`tables` where table_schema in (database(), 'vt_main')"
+      }
+    }
+  },
+  {
     "comment": "single-element IN on a non-routing column is left alone",
     "query": "select * from information_schema.tables where engine in ('InnoDB')",
     "plan": {
