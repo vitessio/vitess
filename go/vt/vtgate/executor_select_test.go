@@ -597,9 +597,9 @@ func TestSessionSQLModeExpressionSessionValue(t *testing.T) {
 		_, err := executorExecSession(t.Context(), executor, session, `select "id" from information_schema.table`, map[string]*querypb.BindVariable{})
 		require.EqualError(t, err, "Variable 'sql_mode' can't be set to the value of 'BOGUS'")
 		require.Empty(t, lookup.Queries)
-		// a value that can never be applied is not kept for the next request to fail on
-		_, stored := session.SystemVariables["sql_mode"]
-		assert.False(t, stored)
+		// a value that can never be applied is not kept for the next request to fail
+		// on: the session stays in the default it started with
+		assert.Equal(t, "'"+defaultMode+"'", session.SystemVariables["sql_mode"])
 	})
 }
 

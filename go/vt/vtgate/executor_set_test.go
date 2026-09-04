@@ -1081,6 +1081,20 @@ func TestSessionSQLModeSeedingDisabled(t *testing.T) {
 	assert.False(t, session.InReservedConn())
 	require.Len(t, lookup.Queries, 1)
 	assert.Equal(t, "select id from main1", lookup.Queries[0].Sql)
+
+	// and reads of the sql_mode are the backends' to answer, in every form
+	lookup.Queries = nil
+	_, err = executorExecSession(ctx, executor, session, "select @@sql_mode, @@global.sql_mode", nil)
+	require.NoError(t, err)
+	require.Len(t, lookup.Queries, 1)
+	assert.Equal(t, "select @@sql_mode, @@global.sql_mode from dual", lookup.Queries[0].Sql)
+
+	lookup.Queries = nil
+	_, err = executorExecSession(ctx, executor, session, "show variables like 'sql_mode'", nil)
+	require.NoError(t, err)
+	require.Len(t, lookup.Queries, 1)
+	assert.Equal(t, "show variables like 'sql_mode'", lookup.Queries[0].Sql)
+	assert.NotContains(t, lookup.Queries[0].BindVariables, "__vtsql_mode")
 }
 
 func TestSetSQLModeRepairsUndecodableSessionValue(t *testing.T) {

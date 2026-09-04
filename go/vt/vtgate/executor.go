@@ -1520,13 +1520,13 @@ func (e *Executor) getCachedOrBuildPlan(
 // expression as written, and a direct gRPC client may send one, and the modes such
 // text mentions say nothing about the modes it evaluates to. The expression is
 // evaluated the way a SET sql_mode is, at the vtgate, and the session keeps the judged
-// value in canonical form. The expression is removed from the session first, so that
-// @@sql_mode inside it resolves to the default the session started with — the value a
-// fresh connection would have shown the SET that stored it. When the evaluation fails
-// the request fails; the expression is put back for the next request to evaluate,
-// unless the failure says the value can never be applied (it is invalid, or
-// unsupported), in which case keeping it would only fail every later request the same
-// way, including the SET that could replace it.
+// value in canonical form. The session is put in the default it started with first, so
+// that @@sql_mode inside the expression resolves to that default — the value a fresh
+// connection would have shown the SET that stored it. When the evaluation fails the
+// request fails; the expression is put back for the next request to evaluate, unless
+// the failure says the value can never be applied (it is invalid, or unsupported), in
+// which case keeping it would only fail every later request the same way, including
+// the SET that could replace it: the session then stays in the default.
 func (e *Executor) materializeSessionSQLMode(ctx context.Context, safeSession *econtext.SafeSession, logStats *logstats.LogStats) error {
 	value, ok := safeSession.SQLMode()
 	if !ok || sqlparser.IsSQLModeList(value) {
@@ -1537,7 +1537,7 @@ func (e *Executor) materializeSessionSQLMode(ctx context.Context, safeSession *e
 		return err
 	}
 	stored := safeSession.SystemVariables[sysvars.SQLMode.Name]
-	safeSession.RemoveSystemVariable(sysvars.SQLMode.Name)
+	safeSession.SetSystemVariable(sysvars.SQLMode.Name, sqltypes.EncodeStringSQL(e.config.SQLMode))
 	err = e.evaluateSessionSQLMode(ctx, vcursor, value)
 	if err == nil {
 		return nil

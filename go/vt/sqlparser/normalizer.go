@@ -200,13 +200,7 @@ func (nz *normalizer) walkDown(node, _ SQLNode) bool {
 		// No rewriting needed for prepare or execute statements.
 		return false
 	case *ShowBasic:
-		if node.Command != VariableGlobal && node.Command != VariableSession {
-			break
-		}
-		varsToAdd := sysvars.GetInterestingVariables()
-		for _, sysVar := range varsToAdd {
-			nz.bindVarNeeds.AddSysVar(sysVar)
-		}
+		nz.rewriteShowBasic(node)
 	}
 	b := nz.err == nil
 	if !b {
@@ -651,13 +645,22 @@ func (nz *normalizer) rewriteView(viewName TableName, node *AliasedTableExpr) {
 	}
 }
 
-// rewriteShowBasic handles the rewriting of SHOW statements, particularly for system variables.
+// rewriteShowBasic records the system variables a SHOW VARIABLES needs vtgate's values
+// of. The sql_mode is among them only when vtgate owns it; the global form reads the
+// configured default rather than the session's value.
 func (nz *normalizer) rewriteShowBasic(node *ShowBasic) {
-	if node.Command == VariableGlobal || node.Command == VariableSession {
-		varsToAdd := sysvars.GetInterestingVariables()
-		for _, sysVar := range varsToAdd {
-			nz.bindVarNeeds.AddSysVar(sysVar)
+	if node.Command != VariableGlobal && node.Command != VariableSession {
+		return
+	}
+	owns := nz.sessionOwnsSQLMode()
+	for _, sysVar := range sysvars.GetInterestingVariables() {
+		if sysVar == sysvars.SQLMode.Name && !owns {
+			continue
 		}
+		nz.bindVarNeeds.AddSysVar(sysVar)
+	}
+	if node.Command == VariableGlobal && owns {
+		nz.bindVarNeeds.AddSysVar(sysvars.GlobalSQLMode)
 	}
 }
 
@@ -704,14 +707,24 @@ func (nz *normalizer) rewriteVariable(cursor *Cursor, node *Variable) {
 }
 
 // globalSysVarRewrite replaces global system variables that the vtgate itself owns with
-// bind variables. The global sql_mode is the vtgate's configured default sql_mode; it is
-// never read from a backend.
+// bind variables. The global sql_mode is the vtgate's configured default sql_mode when
+// the vtgate owns the session's sql_mode; a deployment that leaves the sql_mode to the
+// backends leaves the global one to them as well.
 func (nz *normalizer) globalSysVarRewrite(cursor *Cursor, node *Variable) {
-	if node.Name.Lowered() != sysvars.SQLMode.Name {
+	if node.Name.Lowered() != sysvars.SQLMode.Name || !nz.sessionOwnsSQLMode() {
 		return
 	}
 	cursor.Replace(NewArgument("__vt" + sysvars.GlobalSQLMode))
 	nz.bindVarNeeds.AddSysVar(sysvars.GlobalSQLMode)
+}
+
+// sessionOwnsSQLMode reports whether the session carries a sql_mode, which every
+// session vtgate manages the sql_mode of does from its first request on. A session
+// without one belongs to a deployment that leaves the sql_mode to the backends, and
+// its @@sql_mode reads are theirs to answer.
+func (nz *normalizer) sessionOwnsSQLMode() bool {
+	_, ok := nz.sysVars[sysvars.SQLMode.Name]
+	return ok
 }
 
 // inverseOp returns the inverse operator for a given comparison operator.
@@ -769,7 +782,6 @@ func (nz *normalizer) sysVarRewrite(cursor *Cursor, node *Variable) {
 		sysvars.SessionUUID.Name,
 		sysvars.SkipQueryPlanCache.Name,
 		sysvars.Socket.Name,
-		sysvars.SQLMode.Name,
 		sysvars.SQLSelectLimit.Name,
 		sysvars.Version.Name,
 		sysvars.VersionComment.Name,
