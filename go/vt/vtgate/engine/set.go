@@ -355,12 +355,17 @@ func (svsm *SysVarSQLMode) Execute(ctx context.Context, vcursor VCursor, env *ev
 	// by an older vtgate).
 	encoded := sqltypes.EncodeStringSQL(mode.String())
 	vcursor.Session().SetSysVar(sysvars.SQLMode.Name, encoded)
-	if vcursor.CanUseSetVar() {
-		// every hint-capable query carries the session's sql_mode in a SET_VAR hint, so
-		// there is nothing to apply here
+	if !vcursor.CanUseSetVar() {
+		vcursor.Session().NeedsReservedConn()
+	}
+	if !vcursor.Session().InReservedConn() {
+		// every hint-capable query carries the session's sql_mode in a SET_VAR hint,
+		// and a connection reserved later is set up with the session's settings then
 		return nil
 	}
-	vcursor.Session().NeedsReservedConn()
+	// The reserved connections the session already holds — after a DDL, a lock, or
+	// any other statement that could not carry a hint — keep the mode they were set
+	// up with and serve the next such statement, so they are updated, SET_VAR or not.
 	rss := vcursor.Session().ShardSession()
 	if len(rss) == 0 {
 		return nil

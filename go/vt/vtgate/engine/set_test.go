@@ -106,6 +106,7 @@ func TestSetTable(t *testing.T) {
 		execErr          error
 		mysqlVersion     string
 		disableSetVar    bool
+		inReservedConn   bool
 		shardSession     []*srvtopo.ResolvedShard
 	}
 
@@ -379,6 +380,34 @@ func TestSetTable(t *testing.T) {
 			`SET_VAR can be used`,
 		},
 	}, {
+		// a reserved connection the session already holds keeps serving the
+		// statements that cannot carry a hint, so it is updated even with SET_VAR
+		testName:       "sql_mode set with SET_VAR updates the reserved shard sessions the session holds",
+		mysqlVersion:   "8.0.0",
+		inReservedConn: true,
+		shardSession:   []*srvtopo.ResolvedShard{{Target: &querypb.Target{Keyspace: "ks", Shard: "-20"}}},
+		setOps: []SetOp{
+			&SysVarSQLMode{Expr: evalengine.NewLiteralString([]byte("strict_trans_tables"), collations.SystemCollation)},
+		},
+		expectedQueryLog: []string{
+			`SysVar set with (sql_mode,'STRICT_TRANS_TABLES')`,
+			`SET_VAR can be used`,
+			`ExecuteMultiShard ks.-20: set sql_mode = 'STRICT_TRANS_TABLES' {} false false`,
+		},
+	}, {
+		// a shard session that only holds a transaction is left alone: a later
+		// reservation of it applies the session's settings by itself
+		testName:     "sql_mode set with SET_VAR leaves a transaction-only shard session alone",
+		mysqlVersion: "8.0.0",
+		shardSession: []*srvtopo.ResolvedShard{{Target: &querypb.Target{Keyspace: "ks", Shard: "-20"}}},
+		setOps: []SetOp{
+			&SysVarSQLMode{Expr: evalengine.NewLiteralString([]byte("strict_trans_tables"), collations.SystemCollation)},
+		},
+		expectedQueryLog: []string{
+			`SysVar set with (sql_mode,'STRICT_TRANS_TABLES')`,
+			`SET_VAR can be used`,
+		},
+	}, {
 		testName:     "sql_mode set to the session's current value is re-stored canonically",
 		mysqlVersion: "8.0.0",
 		setOps: []SetOp{
@@ -596,6 +625,7 @@ func TestSetTable(t *testing.T) {
 				results:        tc.qr,
 				multiShardErrs: []error{tc.execErr},
 				disableSetVar:  tc.disableSetVar,
+				inReservedConn: tc.inReservedConn,
 				parser:         parser,
 				shardSession:   tc.shardSession,
 			}
