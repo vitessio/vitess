@@ -222,7 +222,14 @@ jobs:
 
       - name: Setup Node
         if: steps.changes.outputs.proto_changes == 'true'
+<<<<<<< HEAD
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+||||||| parent of 489e008512 (CI: move zizmor ignore comments off action version-pin lines (#20820))
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0  # zizmor: ignore[cache-poisoning] this workflow publishes no artifacts
+=======
+        # zizmor: ignore[cache-poisoning] this workflow publishes no artifacts
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+>>>>>>> 489e008512 (CI: move zizmor ignore comments off action version-pin lines (#20820))
         with:
           # make proto requires newer node than the pre-installed one
           node-version: '22.13.1'
