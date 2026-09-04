@@ -107,7 +107,7 @@ type Engine struct {
 	journaler map[string]*journalEvent
 	ec        *externalConnector
 
-	throttlerClient *throttle.Client
+	throttlerClient throttleChecker
 
 	// This should only be set in Test Engines in order to short
 	// circuit functions as needed in unit tests. It's automatically
@@ -125,6 +125,14 @@ type journalEvent struct {
 }
 
 type (
+	// throttleChecker is what the engine needs from the tablet throttler:
+	// a single check that either passes or briefly waits and denies. It
+	// is an interface -- rather than the *throttle.Client that production
+	// always installs -- so that tests can inject throttler behavior.
+	throttleChecker interface {
+		ThrottleCheckOKOrWaitAppName(ctx context.Context, appName throttlerapp.Name) (checkResult *throttle.CheckResult, throttleCheckOK bool)
+	}
+
 	PostCopyActionType int
 	PostCopyAction     struct {
 		Type PostCopyActionType `json:"type"`
@@ -178,6 +186,7 @@ func NewTestEngine(ts *topo.Server, cell string, mysqld mysqlctl.MysqlDaemon, db
 		dbName:                  dbname,
 		journaler:               make(map[string]*journalEvent),
 		ec:                      newExternalConnector(env, externalConfig),
+		throttlerClient:         throttle.NewBackgroundClient(nil, throttlerapp.VReplicationName, base.UndefinedScope),
 	}
 	return vre
 }
@@ -197,6 +206,7 @@ func NewSimpleTestEngine(ts *topo.Server, cell string, mysqld mysqlctl.MysqlDaem
 		dbName:                  dbname,
 		journaler:               make(map[string]*journalEvent),
 		ec:                      newExternalConnector(env, externalConfig),
+		throttlerClient:         throttle.NewBackgroundClient(nil, throttlerapp.VReplicationName, base.UndefinedScope),
 		shortcircuit:            true,
 	}
 	return vre
@@ -232,8 +242,15 @@ func (vre *Engine) Open(ctx context.Context) {
 	log.Info("VReplication engine opened successfully")
 }
 
+// ThrottlerClient returns the engine's throttle client when it is backed
+// by one. The internal field is a throttleChecker so tests can inject
+// throttler behavior; a non-Client checker maps to nil here, which is safe
+// for callers as *throttle.Client methods accept a nil receiver.
 func (vre *Engine) ThrottlerClient() *throttle.Client {
-	return vre.throttlerClient
+	if client, ok := vre.throttlerClient.(*throttle.Client); ok {
+		return client
+	}
+	return nil
 }
 
 func (vre *Engine) openLocked(ctx context.Context) error {
@@ -582,6 +599,15 @@ func (vre *Engine) registerJournal(journal *binlogdatapb.Journal, id int32) erro
 	}
 
 	workflow := vre.controllers[id].workflow
+	// Insurance against callers that bypass the vplayer's gate (see the
+	// VEventType_JOURNAL handling): lookup vindex backfill streams must
+	// never be transitioned by a TABLES journal, as their keyspace_id()
+	// filter is not expressible in another keyspace. transitionJournal
+	// would otherwise irrecoverably delete the streams.
+	if journal.MigrationType == binlogdatapb.MigrationType_TABLES &&
+		binlogdatapb.VReplicationWorkflowType(vre.controllers[id].workflowType) == binlogdatapb.VReplicationWorkflowType_CreateLookupIndex {
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot follow TABLES journal %d for lookup vindex workflow %s: lookup backfill streams cannot be retargeted to another keyspace", journal.Id, workflow)
+	}
 	key := fmt.Sprintf("%s:%d", workflow, journal.Id)
 	ks := fmt.Sprintf("%s:%s", vre.controllers[id].source.Keyspace, vre.controllers[id].source.Shard)
 	log.Info(fmt.Sprintf("Journal encountered for (%s %s): %v", key, ks, journal))

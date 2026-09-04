@@ -32,6 +32,7 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/fakesqldb"
+	"vitess.io/vitess/go/mysql/sqlmode"
 	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
@@ -544,6 +545,14 @@ func newTabletEnvironment(ddls []sqlparser.DDLStatement, opts *Options, collatio
 func (t *explainTablet) HandleQuery(c *mysql.Conn, query string, callback func(*sqltypes.Result) error) error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
+
+	// The connection-setup statement every Vitess-created connection runs (see
+	// sqlmode.NeutralizeSessionQuery) is connection state, not query execution: it is
+	// answered without being recorded, so the explain output only shows the queries the
+	// statement under explanation caused.
+	if strings.EqualFold(query, sqlmode.NeutralizeSessionQuery) {
+		return callback(&sqltypes.Result{})
+	}
 
 	// If query is part of rejected list then return error right away.
 	if err := t.db.GetRejectedQueryResult(query); err != nil {

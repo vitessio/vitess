@@ -7255,5 +7255,129 @@
         "user.user"
       ]
     }
+  },
+  {
+    "comment": "a destination-targeted union subquery with an empty same-keyspace branch merges into the destination route",
+    "query": "update `user[-80]`.user_extra set val = 1 where user_id in (select id from `user[-80]`.`user` where id in (null) union select id from `user[-80]`.`user`)",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "UPDATE",
+      "Original": "update `user[-80]`.user_extra set val = 1 where user_id in (select id from `user[-80]`.`user` where id in (null) union select id from `user[-80]`.`user`)",
+      "Instructions": {
+        "OperatorType": "UncorrelatedSubquery",
+        "Variant": "PulloutIn",
+        "PulloutVars": [
+          "__sq_has_values",
+          "__sq1"
+        ],
+        "Inputs": [
+          {
+            "InputName": "SubQuery",
+            "OperatorType": "Distinct",
+            "Collations": [
+              "(0:1)"
+            ],
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "ByDestination",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "TargetDestination": "ExactKeyRange(-80)",
+                "FieldQuery": "select id, weight_string(id) from `user` where 1 != 1 union select id, weight_string(id) from `user` where 1 != 1",
+                "Query": "select id, weight_string(id) from `user` where id in (null) union select id, weight_string(id) from `user`"
+              }
+            ]
+          },
+          {
+            "InputName": "Outer",
+            "OperatorType": "Update",
+            "Variant": "ByDestination",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "Query": "update user_extra set val = 1 where :__sq_has_values and user_id in ::__sq1"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user",
+        "user.user_extra"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "a cross-keyspace empty branch stays separate from a destination-targeted branch",
+    "query": "update `user[-80]`.user_extra set val = 1 where user_id in (select oid from ordering.order_event where oid in (null) union select id from `user[-80]`.`user`)",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "UPDATE",
+      "Original": "update `user[-80]`.user_extra set val = 1 where user_id in (select oid from ordering.order_event where oid in (null) union select id from `user[-80]`.`user`)",
+      "Instructions": {
+        "OperatorType": "UncorrelatedSubquery",
+        "Variant": "PulloutIn",
+        "PulloutVars": [
+          "__sq_has_values",
+          "__sq1"
+        ],
+        "Inputs": [
+          {
+            "InputName": "SubQuery",
+            "OperatorType": "Distinct",
+            "Collations": [
+              "(0:1)"
+            ],
+            "Inputs": [
+              {
+                "OperatorType": "Concatenate",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "None",
+                    "Keyspace": {
+                      "Name": "ordering",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select oid, weight_string(oid) from order_event where 1 != 1",
+                    "Query": "select distinct oid, weight_string(oid) from order_event where oid in (null) lock in share mode"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "ByDestination",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "TargetDestination": "ExactKeyRange(-80)",
+                    "FieldQuery": "select id, weight_string(id) from `user` where 1 != 1",
+                    "Query": "select distinct id, weight_string(id) from `user` lock in share mode"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "InputName": "Outer",
+            "OperatorType": "Update",
+            "Variant": "ByDestination",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "Query": "update user_extra set val = 1 where :__sq_has_values and user_id in ::__sq1"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "ordering.order_event",
+        "user.user",
+        "user.user_extra"
+      ]
+    },
+    "skip_e2e": true
   }
 ]

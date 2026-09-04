@@ -181,7 +181,8 @@ func (c *CloneExecutor) validateRecipient(ctx context.Context, mysqld MysqlDaemo
 // all prerequisites for cloning. This is called from ExecuteClone to verify the
 // donor before attempting the clone operation.
 func (c *CloneExecutor) validateDonorRemote(ctx context.Context) error {
-	conn, err := mysql.Connect(ctx, c.donorConnParams())
+	connector := dbconfigs.New(c.donorConnParams())
+	conn, err := connector.Connect(ctx)
 	if err != nil {
 		return vterrors.Wrapf(err, "failed to connect to donor %s:%d", c.DonorHost, c.DonorPort)
 	}
@@ -299,6 +300,31 @@ func (c *CloneExecutor) ExecuteClone(ctx context.Context, mysqld MysqlDaemon, my
 	}
 
 	log.Info(fmt.Sprintf("Starting CLONE REMOTE from %s:%d", c.DonorHost, c.DonorPort))
+
+	// CLONE INSTANCE is a write statement on the recipient, and super_read_only
+	// blocks it for every user with no privilege (SUPER, CONNECTION_ADMIN, ...)
+	// bypass. The recipient commonly boots read-only: the stock mycnf templates
+	// enable super-read-only, and init_db scripts restore that value at the end
+	// of initialization. Disable it explicitly before cloning rather than
+	// relying on the init flow to leave the instance writable.
+	//
+	// Defer the reset closure so a failure before mysqld restarts (e.g. setting
+	// clone_valid_donor_list, or CLONE INSTANCE being rejected) restores the
+	// original super_read_only value instead of leaving the recipient writable
+	// while the tablet restore path aborts back to serving. After a successful
+	// CLONE, mysqld restarts and re-applies the configured value from my.cnf, so
+	// restoring the captured value is harmless.
+	resetSuperReadOnly, err := mysqld.SetSuperReadOnly(ctx, false)
+	if err != nil {
+		return vterrors.Wrap(err, "failed to disable super_read_only before clone")
+	}
+	if resetSuperReadOnly != nil {
+		defer func() {
+			if err := resetSuperReadOnly(); err != nil {
+				log.Error("failed to restore super_read_only after clone", slog.Any("error", err))
+			}
+		}()
+	}
 
 	// Set the valid donor list
 	donorAddr := fmt.Sprintf("%s:%d", c.DonorHost, c.DonorPort)

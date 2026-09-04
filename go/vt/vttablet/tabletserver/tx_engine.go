@@ -34,6 +34,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/planbuilder"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tx"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/txlimiter"
@@ -626,6 +627,12 @@ func (te *TxEngine) stopTransactionWatcher() {
 func (te *TxEngine) ReserveBegin(ctx context.Context, options *querypb.ExecuteOptions, preQueries []string) (int64, string, error) {
 	span, ctx := trace.NewSpan(ctx, "TxEngine.ReserveBegin")
 	defer span.Finish()
+	// The pre-queries are executed directly on the reserved connection, without the
+	// settings pool's BuildSettingQuery pass, so the sql_mode validation must run here —
+	// before any connection is acquired or state is changed.
+	if err := planbuilder.ValidateSettingsSQLMode(preQueries, te.env.Environment().Parser()); err != nil {
+		return 0, "", err
+	}
 	err := te.isTxPoolAvailable(te.beginRequests.Add)
 	if err != nil {
 		return 0, "", err
@@ -652,6 +659,10 @@ var noop = func(int) {}
 func (te *TxEngine) Reserve(ctx context.Context, options *querypb.ExecuteOptions, txID int64, preQueries []string) (int64, error) {
 	span, ctx := trace.NewSpan(ctx, "TxEngine.Reserve")
 	defer span.Finish()
+	// see ReserveBegin: validate before any connection is acquired or tainted
+	if err := planbuilder.ValidateSettingsSQLMode(preQueries, te.env.Environment().Parser()); err != nil {
+		return 0, err
+	}
 	if txID == 0 {
 		err := te.isTxPoolAvailable(noop)
 		if err != nil {

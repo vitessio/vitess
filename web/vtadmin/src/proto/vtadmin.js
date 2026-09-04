@@ -101643,6 +101643,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @property {string|null} [format] VDiffReportOptions format
          * @property {number|Long|null} [max_sample_rows] VDiffReportOptions max_sample_rows
          * @property {number|Long|null} [row_diff_column_truncate_at] VDiffReportOptions row_diff_column_truncate_at
+         * @property {boolean|null} [no_samples] VDiffReportOptions no_samples
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
@@ -101715,6 +101716,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         VDiffReportOptions.prototype.row_diff_column_truncate_at = $util.Long ? $util.Long.fromBits(0,0,false) : 0;
 
         /**
+         * VDiffReportOptions no_samples.
+         * @member {boolean} no_samples
+         * @memberof tabletmanagerdata.VDiffReportOptions
+         * @instance
+         */
+        VDiffReportOptions.prototype.no_samples = false;
+
+        /**
          * Creates a new VDiffReportOptions instance using the specified properties.
          * @function create
          * @memberof tabletmanagerdata.VDiffReportOptions
@@ -101756,6 +101765,8 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 writer.uint32(/* id 4, wireType 0 =*/32).int64(message.max_sample_rows);
             if (message.row_diff_column_truncate_at != null && $Object.hasOwnProperty.call(message, "row_diff_column_truncate_at") && (typeof message.row_diff_column_truncate_at === "object" ? message.row_diff_column_truncate_at.low || message.row_diff_column_truncate_at.high : message.row_diff_column_truncate_at !== 0))
                 writer.uint32(/* id 5, wireType 0 =*/40).int64(message.row_diff_column_truncate_at);
+            if (message.no_samples != null && $Object.hasOwnProperty.call(message, "no_samples") && message.no_samples !== false)
+                writer.uint32(/* id 6, wireType 0 =*/48).bool(message.no_samples);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
                     writer.raw(message.$unknowns[i]);
@@ -101848,6 +101859,15 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                             delete message.row_diff_column_truncate_at;
                         continue;
                     }
+                case 6: {
+                        if (wireType !== 0)
+                            break;
+                        if (value = reader.bool())
+                            message.no_samples = value;
+                        else
+                            delete message.no_samples;
+                        continue;
+                    }
                 }
                 reader.skipType(wireType, _depth, tag);
                 if (!reader.discardUnknown) {
@@ -101906,6 +101926,9 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
             if (message.row_diff_column_truncate_at != null && $Object.hasOwnProperty.call(message, "row_diff_column_truncate_at"))
                 if (!$util.isInteger(message.row_diff_column_truncate_at) && !(message.row_diff_column_truncate_at && $util.isInteger(message.row_diff_column_truncate_at.low) && $util.isInteger(message.row_diff_column_truncate_at.high)))
                     return "row_diff_column_truncate_at: integer|Long expected";
+            if (message.no_samples != null && $Object.hasOwnProperty.call(message, "no_samples"))
+                if (typeof message.no_samples !== "boolean")
+                    return "no_samples: boolean expected";
             return null;
         };
 
@@ -101956,6 +101979,9 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                         message.row_diff_column_truncate_at = object.row_diff_column_truncate_at;
                     else if (typeof object.row_diff_column_truncate_at === "object")
                         message.row_diff_column_truncate_at = new $util.LongBits(object.row_diff_column_truncate_at.low >>> 0, object.row_diff_column_truncate_at.high >>> 0).toNumber();
+            if (object.no_samples != null)
+                if (object.no_samples)
+                    message.no_samples = $Boolean(object.no_samples);
             return message;
         };
 
@@ -101990,6 +102016,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                     object.row_diff_column_truncate_at = options.longs === $String ? long.toString() : options.longs === $Number ? long.toNumber() : typeof $BigInt !== "undefined" && options.longs === $BigInt ? long.toBigInt() : long;
                 } else
                     object.row_diff_column_truncate_at = options.longs === $String ? "0" : typeof $BigInt !== "undefined" && options.longs === $BigInt ? $BigInt("0") : 0;
+                object.no_samples = false;
             }
             if (message.only_pks != null && $Object.hasOwnProperty.call(message, "only_pks"))
                 object.only_pks = message.only_pks;
@@ -102011,6 +102038,8 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                     object.row_diff_column_truncate_at = options.longs === $String ? $String(message.row_diff_column_truncate_at) : message.row_diff_column_truncate_at;
                 else
                     object.row_diff_column_truncate_at = options.longs === $String ? $util.Long.prototype.toString.call(message.row_diff_column_truncate_at) : options.longs === $Number ? new $util.LongBits(message.row_diff_column_truncate_at.low >>> 0, message.row_diff_column_truncate_at.high >>> 0).toNumber() : message.row_diff_column_truncate_at;
+            if (message.no_samples != null && $Object.hasOwnProperty.call(message, "no_samples"))
+                object.no_samples = message.no_samples;
             return object;
         };
 
@@ -245581,6 +245610,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {string|null} [workflow] VDiffShowRequest workflow
          * @property {string|null} [target_keyspace] VDiffShowRequest target_keyspace
          * @property {string|null} [arg] VDiffShowRequest arg
+         * @property {boolean|null} [no_samples] VDiffShowRequest no_samples
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
@@ -245637,6 +245667,14 @@ export const vtctldata = $root.vtctldata = (() => {
         VDiffShowRequest.prototype.arg = "";
 
         /**
+         * VDiffShowRequest no_samples.
+         * @member {boolean} no_samples
+         * @memberof vtctldata.VDiffShowRequest
+         * @instance
+         */
+        VDiffShowRequest.prototype.no_samples = false;
+
+        /**
          * Creates a new VDiffShowRequest instance using the specified properties.
          * @function create
          * @memberof vtctldata.VDiffShowRequest
@@ -245674,6 +245712,8 @@ export const vtctldata = $root.vtctldata = (() => {
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.target_keyspace);
             if (message.arg != null && $Object.hasOwnProperty.call(message, "arg") && message.arg !== "")
                 writer.uint32(/* id 3, wireType 2 =*/26).string(message.arg);
+            if (message.no_samples != null && $Object.hasOwnProperty.call(message, "no_samples") && message.no_samples !== false)
+                writer.uint32(/* id 4, wireType 0 =*/32).bool(message.no_samples);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
                     writer.raw(message.$unknowns[i]);
@@ -245748,6 +245788,15 @@ export const vtctldata = $root.vtctldata = (() => {
                             delete message.arg;
                         continue;
                     }
+                case 4: {
+                        if (wireType !== 0)
+                            break;
+                        if (value = reader.bool())
+                            message.no_samples = value;
+                        else
+                            delete message.no_samples;
+                        continue;
+                    }
                 }
                 reader.skipType(wireType, _depth, tag);
                 if (!reader.discardUnknown) {
@@ -245800,6 +245849,9 @@ export const vtctldata = $root.vtctldata = (() => {
             if (message.arg != null && $Object.hasOwnProperty.call(message, "arg"))
                 if (!$util.isString(message.arg))
                     return "arg: string expected";
+            if (message.no_samples != null && $Object.hasOwnProperty.call(message, "no_samples"))
+                if (typeof message.no_samples !== "boolean")
+                    return "no_samples: boolean expected";
             return null;
         };
 
@@ -245830,6 +245882,9 @@ export const vtctldata = $root.vtctldata = (() => {
             if (object.arg != null)
                 if (typeof object.arg !== "string" || object.arg.length)
                     message.arg = $String(object.arg);
+            if (object.no_samples != null)
+                if (object.no_samples)
+                    message.no_samples = $Boolean(object.no_samples);
             return message;
         };
 
@@ -245854,6 +245909,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 object.workflow = "";
                 object.target_keyspace = "";
                 object.arg = "";
+                object.no_samples = false;
             }
             if (message.workflow != null && $Object.hasOwnProperty.call(message, "workflow"))
                 object.workflow = message.workflow;
@@ -245861,6 +245917,8 @@ export const vtctldata = $root.vtctldata = (() => {
                 object.target_keyspace = message.target_keyspace;
             if (message.arg != null && $Object.hasOwnProperty.call(message, "arg"))
                 object.arg = message.arg;
+            if (message.no_samples != null && $Object.hasOwnProperty.call(message, "no_samples"))
+                object.no_samples = message.no_samples;
             return object;
         };
 

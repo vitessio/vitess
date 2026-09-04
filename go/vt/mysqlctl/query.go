@@ -78,6 +78,22 @@ func (mysqld *Mysqld) ExecuteSuperQueryList(ctx context.Context, queryList []str
 	return mysqld.executeSuperQueryListConn(ctx, conn, queryList)
 }
 
+// ExecuteSuperQueryListTainted executes queries as a super user like
+// ExecuteSuperQueryList, but discards the connection afterwards instead of
+// returning it to the pool. Use it for operator-supplied SQL, whose session
+// state changes (e.g. sql_mode) must not leak into pooled connections.
+func (mysqld *Mysqld) ExecuteSuperQueryListTainted(ctx context.Context, queryList []string) error {
+	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
+	if err != nil {
+		return err
+	}
+	// A closed connection is discarded upon Recycle rather than reused.
+	defer conn.Recycle()
+	defer conn.Close()
+
+	return mysqld.executeSuperQueryListConn(ctx, conn, queryList)
+}
+
 func limitString(s string, limit int) string {
 	if len(s) > limit {
 		return s[:limit]
