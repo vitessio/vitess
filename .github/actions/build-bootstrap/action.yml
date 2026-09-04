@@ -10,6 +10,10 @@ inputs:
     description: "Bootstrap image flavor (e.g. mysql84)"
     required: false
     default: "mysql84"
+  cache-export:
+    description: "Export the build cache to the GitHub Actions cache. Only one job per push should do this, and only on branches whose cache other builds can read (main and release branches)."
+    required: false
+    default: "false"
 
 runs:
   using: "composite"
@@ -24,7 +28,7 @@ runs:
         load: true
         set: |
           *.cache-from=type=gha,scope=bootstrap
-          *.cache-to=type=gha,scope=bootstrap,mode=max
+          ${{ inputs.cache-export == 'true' && '*.cache-to=type=gha,scope=bootstrap,mode=max' || '' }}
       env:
         BOOTSTRAP_VERSION: ${{ inputs.bootstrap-version }}
         BOOTSTRAP_FLAVOR: ${{ inputs.bootstrap-flavor }}

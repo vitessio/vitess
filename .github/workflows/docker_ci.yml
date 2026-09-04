@@ -79,6 +79,7 @@ jobs:
         with:
           bootstrap-version: ${{ env.BOOTSTRAP_VERSION }}
           bootstrap-flavor: ${{ env.BOOTSTRAP_FLAVOR }}
+          cache-export: ${{ matrix.shard == 'java' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/release-')) }}
 
       - name: Set up Go
         if: steps.changes.outputs.end_to_end == 'true'
