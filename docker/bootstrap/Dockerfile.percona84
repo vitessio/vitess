@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-ARG bootstrap_version
+ARG bootstrap_version=60
 ARG image="vitess/bootstrap:${bootstrap_version}-common"
 
 FROM $image

@@ -222,3 +222,36 @@ func TestUpgradeGoModFiles(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, currentContent, got)
 }
+
+// TestUpdateBootstrapVersionInCodebaseKeepsDockerfileDefaultsInSync bumps the bootstrap version in a
+// fixture repository and checks that the flavor Dockerfiles' default bootstrap_version follows the
+// Makefile. The default is what lets a plain `docker build` of a flavor find the common image build.sh produces.
+func TestUpdateBootstrapVersionInCodebaseKeepsDockerfileDefaultsInSync(t *testing.T) {
+	dir := t.TempDir()
+	write := func(rel, content string) {
+		p := filepath.Join(dir, rel)
+		require.NoError(t, os.MkdirAll(filepath.Dir(p), 0o755))
+		require.NoError(t, os.WriteFile(p, []byte(content), 0o644))
+	}
+	write("Makefile", "BOOTSTRAP_VERSION=60\n")
+	write("test.go", "flag.String(\"bootstrap-version\", \"60\", \"the version identifier to use for the docker images\")\n")
+	write("docker/bootstrap/CHANGELOG.md", "# Changelog\n")
+	flavors := []string{"mysql80", "mysql84", "percona80", "percona84"}
+	for _, flavor := range flavors {
+		write("docker/bootstrap/Dockerfile."+flavor, "ARG bootstrap_version=60\nARG image=\"vitess/bootstrap:${bootstrap_version}-common\"\n\nFROM $image\n")
+	}
+	t.Chdir(dir)
+
+	goVersion, err := version.NewVersion("1.27.1")
+	require.NoError(t, err)
+	require.NoError(t, updateBootstrapVersionInCodebase("60", "61", goVersion))
+
+	for _, flavor := range flavors {
+		content, err := os.ReadFile(filepath.Join(dir, "docker/bootstrap/Dockerfile."+flavor))
+		require.NoError(t, err)
+		require.Equal(t, "ARG bootstrap_version=61\nARG image=\"vitess/bootstrap:${bootstrap_version}-common\"\n\nFROM $image\n", string(content))
+	}
+	makefile, err := os.ReadFile(filepath.Join(dir, "Makefile"))
+	require.NoError(t, err)
+	require.Equal(t, "BOOTSTRAP_VERSION=61\n", string(makefile))
+}
