@@ -836,6 +836,25 @@ func TestSetSQLModeExpressions(t *testing.T) {
 	}
 }
 
+// A SET that assigns sql_mode twice evaluates the second expression against the
+// pre-statement value, not the first assignment's: MySQL resolves every expression
+// of a SET before applying any assignment (verified on 8.0.46: from an empty mode,
+// SET sql_mode = 'ANSI_QUOTES', sql_mode = CONCAT(@@sql_mode, ',PIPES_AS_CONCAT')
+// ends in PIPES_AS_CONCAT alone). The @@sql_mode bind variable is filled once per
+// request, which gives exactly that.
+func TestSetSQLModeChainedAssignmentsSeeThePreStatementValue(t *testing.T) {
+	executor, _, _, _, ctx := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
+	session := econtext.NewAutocommitSession(&vtgatepb.Session{
+		EnableSystemSettings: true,
+		TargetString:         KsTestUnsharded,
+		SystemVariables:      map[string]string{"sql_mode": "'STRICT_TRANS_TABLES'"},
+	})
+
+	_, err := executorExecSession(ctx, executor, session, "set sql_mode = '', sql_mode = concat(@@sql_mode, ',ANSI_QUOTES')", nil)
+	require.NoError(t, err)
+	assert.Equal(t, "'ANSI_QUOTES,STRICT_TRANS_TABLES'", session.SystemVariables["sql_mode"])
+}
+
 func TestSetSQLModeDefault(t *testing.T) {
 	executor, _, _, _, ctx := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
 
