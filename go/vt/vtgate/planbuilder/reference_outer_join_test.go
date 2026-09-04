@@ -202,3 +202,37 @@ func TestReferenceJoinedToReferenceIsNotWidenedByAUnion(t *testing.T) {
 	require.IsType(t, &engine.Concatenate{}, primitive,
 		"merging the reference route into the scatter branch would return each unmatched r1 row once per shard")
 }
+
+// The recursive term can be single-shard on its own, and then restoring the recursion's predicate
+// leaves that routing untouched. Only a routing selected by the recursion's own predicate goes
+// away with it.
+func TestReferenceRowsAreMergedIntoACTERoutedByItsOwnTerm(t *testing.T) {
+	primitive := planReferenceOuterJoin(t,
+		"with recursive c as (select 1 as col from dual union all select r.col from ref as r left join (select * from `user` where id = 1) as u on r.col = u.col join c on c.col = r.col) select col from c")
+
+	route, ok := primitive.(*engine.Route)
+	require.True(t, ok, "the term reads one shard whatever the recursion adds, so the recursion belongs on it, got %T", primitive)
+	require.Equal(t, engine.EqualUnique, route.Opcode)
+}
+
+// The preserved rows can come from a route built before the DML target joins it, and the target is
+// still what this join writes through: an unmatched reference row has no `user` row to update.
+func TestMultiTableUpdateThroughANestedReferenceOuterJoinIsStillMerged(t *testing.T) {
+	primitive := planReferenceOuterJoin(t,
+		"update ref r1 left join ref r2 on r1.col = r2.col join `user` u on u.col = r1.col set u.foo = 4")
+
+	upd, ok := primitive.(*engine.Update)
+	require.True(t, ok, "the update is expected to be sent to the shards as it is, got %T", primitive)
+	require.Equal(t, engine.Scatter, upd.Opcode)
+}
+
+// A subquery's rows are consumed by its predicate instead of returned, so a wider route cannot
+// duplicate them into the result: each outer row lives on one shard and asks the question there.
+func TestPreservedRowsConsumedByASubqueryDoNotBlockAScatterOuter(t *testing.T) {
+	primitive := planReferenceOuterJoin(t,
+		"select u.id from `user` u where exists (select 1 from ref r1 left join ref r2 on r1.col = r2.col where r1.col = u.col)")
+
+	route, ok := primitive.(*engine.Route)
+	require.True(t, ok, "the subquery is expected to be merged into the scatter, got %T", primitive)
+	require.Equal(t, engine.Scatter, route.Opcode)
+}
