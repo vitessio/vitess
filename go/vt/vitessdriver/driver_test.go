@@ -161,6 +161,29 @@ func TestBeginIsolation(t *testing.T) {
 	require.EqualError(t, err, errIsolationUnsupported.Error())
 }
 
+func TestBeginTxPropagatesCancellation(t *testing.T) {
+	c, err := drv{}.Open(fmt.Sprintf(`{"address": %q, "target": "@primary"}`, testAddress))
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		require.NoError(t, c.Close())
+	})
+
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	_, err = c.(*conn).BeginTx(ctx, driver.TxOptions{})
+	require.ErrorContains(t, err, context.Canceled.Error())
+}
+
+func TestBeginTxWithSessionTokenPropagatesCancellation(t *testing.T) {
+	c := &conn{cfg: Configuration{SessionToken: "session-token"}}
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	tx, err := c.BeginTx(ctx, driver.TxOptions{})
+	require.Nil(t, tx)
+	require.ErrorIs(t, err, context.Canceled)
+}
+
 func TestExec(t *testing.T) {
 	db, err := Open(testAddress, "@rdonly")
 	require.NoError(t, err)

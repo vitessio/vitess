@@ -3134,9 +3134,12 @@ func TestKillConnectionBoundsItsIO(t *testing.T) {
 	testMysqld := NewMysqld(dbc)
 	defer testMysqld.Close()
 
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+
 	done := make(chan error, 1)
 	go func() {
-		done <- testMysqld.killConnectionWithTimeout(42, 200*time.Millisecond)
+		done <- testMysqld.killConnectionWithTimeout(ctx, 42, 200*time.Millisecond)
 	}()
 	select {
 	case err := <-done:
@@ -3144,6 +3147,7 @@ func TestKillConnectionBoundsItsIO(t *testing.T) {
 	case <-time.After(30 * time.Second):
 		require.FailNow(t, "killConnection did not honor its timeout while the KILL was blocked")
 	}
+	assert.Equal(t, 1, db.GetQueryCalledNum("kill 42"))
 }
 
 // TestDirectExecutorsUnblockWhenKillFails covers a server that blocks the
