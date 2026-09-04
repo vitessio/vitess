@@ -1259,35 +1259,65 @@ func TestForgetFinishedVReplStreams(t *testing.T) {
 	}
 }
 
-// TestVReplStreamShowsLiveness tests the copy-phase liveness gate: past the
-// copy phase an advanced time_updated always counts; during it, only a newer
-// _vt.copy_state checkpoint or active throttling does. The replication
-// position (advanced by catchup before every copy attempt) and the first
-// observation (the baseline) do not.
-func TestVReplStreamShowsLiveness(t *testing.T) {
+// TestRefreshMigrationLiveness tests the copy-phase liveness gate and the
+// refresh it guards: past the copy phase an advanced time_updated always
+// refreshes liveness_timestamp; during it, only a newer _vt.copy_state
+// checkpoint or active throttling does. The replication position (advanced
+// by catchup before every copy attempt) and the first observation (the
+// baseline) do not. The indicator and the checkpoint baseline advance only
+// once the timestamp write has landed, so a failed write is retried.
+func TestRefreshMigrationLiveness(t *testing.T) {
 	uuid := "1cbcd662_8ed6_11ee_bc8f_0a43f95f28a3"
-	// Tests mutate the pointed-to copy_state count and max id between calls
-	// to simulate or withhold progress.
-	newExecutor := func(copyStateCount, copyStateMaxID *int64) *Executor {
-		return &Executor{
+	type harness struct {
+		e                  *Executor
+		copyStateCount     int64
+		copyStateMaxID     int64
+		failCopyStateRead  bool
+		failTimestampWrite bool
+		writes             []string
+	}
+	newHarness := func(copyStateCount, copyStateMaxID int64) *harness {
+		h := &harness{copyStateCount: copyStateCount, copyStateMaxID: copyStateMaxID}
+		h.e = &Executor{
 			vreplicationProgress: make(map[string]vreplStreamProgress),
 			execQuery: func(ctx context.Context, query string) (*sqltypes.Result, error) {
-				require.Contains(t, query, "copy_state")
-				if *copyStateCount == 0 {
-					// max() over no rows is NULL.
+				switch {
+				case strings.Contains(query, "copy_state"):
+					if h.failCopyStateRead {
+						return nil, errors.New("copy_state unavailable")
+					}
+					if h.copyStateCount == 0 {
+						// max() over no rows is NULL.
+						return sqltypes.MakeTestResult(
+							sqltypes.MakeTestFields("cnt|maxid", "int64|uint64"), "0|null"), nil
+					}
 					return sqltypes.MakeTestResult(
 						sqltypes.MakeTestFields("cnt|maxid", "int64|uint64"),
-						"0|null",
-					), nil
+						fmt.Sprintf("%d|%d", h.copyStateCount, h.copyStateMaxID)), nil
+				case strings.Contains(query, "liveness_timestamp") && h.failTimestampWrite:
+					return nil, errors.New("transient")
 				}
-				return sqltypes.MakeTestResult(
-					sqltypes.MakeTestFields("cnt|maxid", "int64|uint64"),
-					fmt.Sprintf("%d|%d", *copyStateCount, *copyStateMaxID),
-				), nil
+				h.writes = append(h.writes, query)
+				return &sqltypes.Result{RowsAffected: 1}, nil
 			},
 		}
+		return h
 	}
-	ctx := t.Context()
+	wrote := func(h *harness, column string) bool {
+		for _, q := range h.writes {
+			if strings.Contains(q, column) {
+				return true
+			}
+		}
+		return false
+	}
+	// tick runs one liveness refresh and reports whether liveness_timestamp
+	// was refreshed.
+	tick := func(h *harness, s *VReplStream) bool {
+		h.writes = nil
+		h.e.refreshMigrationLiveness(t.Context(), uuid, s)
+		return wrote(h, "liveness_timestamp")
+	}
 	stream := func(pos string, timeThrottled int64) *VReplStream {
 		return &VReplStream{
 			id:            1,
@@ -1295,59 +1325,77 @@ func TestVReplStreamShowsLiveness(t *testing.T) {
 			timeThrottled: timeThrottled,
 		}
 	}
-	int64p := func(v int64) *int64 { return &v }
 
 	t.Run("past the copy phase, time_updated is trusted", func(t *testing.T) {
-		e := newExecutor(int64p(0), int64p(0))
-		assert.True(t, e.vreplStreamShowsLiveness(ctx, uuid, stream("pos1", 0)))
-		assert.True(t, e.vreplStreamShowsLiveness(ctx, uuid, stream("pos1", 0)))
+		h := newHarness(0, 0)
+		assert.True(t, tick(h, stream("pos1", 0)))
+		assert.True(t, wrote(h, "vitess_liveness_indicator"))
+		assert.True(t, tick(h, stream("pos1", 0)))
 	})
 	t.Run("copy-state lookup failure is not liveness", func(t *testing.T) {
 		// Granting liveness on an unobserved state would hand a stuck copy a
 		// fresh budget on every transient read failure; leaving the indicator
 		// un-advanced merely defers the decision to the next tick.
-		e := newExecutor(int64p(1), int64p(10))
-		e.execQuery = func(ctx context.Context, query string) (*sqltypes.Result, error) {
-			return nil, errors.New("copy_state unavailable")
-		}
-		assert.False(t, e.vreplStreamShowsLiveness(ctx, uuid, stream("pos1", 0)))
-		assert.NotContains(t, e.vreplicationProgress, uuid, "a failed lookup must not establish a baseline")
+		h := newHarness(1, 10)
+		h.failCopyStateRead = true
+		assert.False(t, tick(h, stream("pos1", 0)))
+		assert.False(t, wrote(h, "vitess_liveness_indicator"))
+		assert.NotContains(t, h.e.vreplicationProgress, uuid, "a failed lookup must not establish a baseline")
 	})
 	t.Run("copy phase, first observation is baseline only", func(t *testing.T) {
-		e := newExecutor(int64p(1), int64p(10))
-		assert.False(t, e.vreplStreamShowsLiveness(ctx, uuid, stream("pos1", 0)),
+		h := newHarness(1, 10)
+		assert.False(t, tick(h, stream("pos1", 0)),
 			"the first observation must not refresh liveness: an executor restart would otherwise grant a stuck copy a fresh budget")
+		assert.Equal(t, vreplStreamProgress{copyStateID: 10}, h.e.vreplicationProgress[uuid])
 	})
 	t.Run("copy phase, no progress is not liveness", func(t *testing.T) {
-		e := newExecutor(int64p(1), int64p(10))
-		require.False(t, e.vreplStreamShowsLiveness(ctx, uuid, stream("pos1", 0)))
-		assert.False(t, e.vreplStreamShowsLiveness(ctx, uuid, stream("pos1", 0)))
+		h := newHarness(1, 10)
+		require.False(t, tick(h, stream("pos1", 0)))
+		assert.False(t, tick(h, stream("pos1", 0)))
 	})
 	t.Run("copy phase, a newer copy_state checkpoint is liveness", func(t *testing.T) {
-		maxID := int64p(10)
-		e := newExecutor(int64p(1), maxID)
-		require.False(t, e.vreplStreamShowsLiveness(ctx, uuid, stream("pos1", 0)))
-		*maxID = 11
-		assert.True(t, e.vreplStreamShowsLiveness(ctx, uuid, stream("pos1", 0)))
+		h := newHarness(1, 10)
+		require.False(t, tick(h, stream("pos1", 0)))
+		h.copyStateMaxID = 11
+		assert.True(t, tick(h, stream("pos1", 0)))
+		assert.True(t, wrote(h, "vitess_liveness_indicator"))
 		// Progress must be relative to the last observation, not the first.
-		assert.False(t, e.vreplStreamShowsLiveness(ctx, uuid, stream("pos1", 0)))
+		assert.False(t, tick(h, stream("pos1", 0)))
 	})
 	t.Run("copy phase, position-only advancement is not liveness", func(t *testing.T) {
-		e := newExecutor(int64p(1), int64p(10))
-		require.False(t, e.vreplStreamShowsLiveness(ctx, uuid, stream("pos1", 0)))
-		assert.False(t, e.vreplStreamShowsLiveness(ctx, uuid, stream("pos2", 0)),
+		h := newHarness(1, 10)
+		require.False(t, tick(h, stream("pos1", 0)))
+		assert.False(t, tick(h, stream("pos2", 0)),
 			"catchup advances the position before every copy attempt, so it cannot prove the copy is progressing")
 	})
 	t.Run("copy phase, active throttling is liveness", func(t *testing.T) {
-		e := newExecutor(int64p(1), int64p(10))
-		require.False(t, e.vreplStreamShowsLiveness(ctx, uuid, stream("pos1", 0)))
-		assert.True(t, e.vreplStreamShowsLiveness(ctx, uuid, stream("pos1", time.Now().Unix())))
+		h := newHarness(1, 10)
+		require.False(t, tick(h, stream("pos1", 0)))
+		assert.True(t, tick(h, stream("pos1", time.Now().Unix())))
 	})
 	t.Run("copy phase, stale throttle stamp is not liveness", func(t *testing.T) {
-		e := newExecutor(int64p(1), int64p(10))
-		require.False(t, e.vreplStreamShowsLiveness(ctx, uuid, stream("pos1", 0)))
+		h := newHarness(1, 10)
+		require.False(t, tick(h, stream("pos1", 0)))
 		staleThrottle := time.Now().Add(-2 * vreplThrottleLivenessWindow).Unix()
-		assert.False(t, e.vreplStreamShowsLiveness(ctx, uuid, stream("pos1", staleThrottle)))
+		assert.False(t, tick(h, stream("pos1", staleThrottle)))
+	})
+	t.Run("failed timestamp write is retried with the same checkpoint", func(t *testing.T) {
+		// The indicator and the baseline must not advance on a failed
+		// timestamp write: either would consume the checkpoint's credit and
+		// leave liveness_timestamp stale until the next checkpoint.
+		h := newHarness(1, 10)
+		require.False(t, tick(h, stream("pos1", 0)))
+		h.copyStateMaxID = 11
+		h.failTimestampWrite = true
+		assert.False(t, tick(h, stream("pos1", 0)))
+		assert.False(t, wrote(h, "vitess_liveness_indicator"),
+			"the indicator must not acknowledge a time_updated whose liveness refresh did not land")
+		assert.Equal(t, vreplStreamProgress{copyStateID: 10}, h.e.vreplicationProgress[uuid],
+			"the baseline must not consume the checkpoint whose refresh did not land")
+		h.failTimestampWrite = false
+		assert.True(t, tick(h, stream("pos1", 0)), "the same checkpoint must earn the refresh once the write succeeds")
+		assert.True(t, wrote(h, "vitess_liveness_indicator"))
+		assert.Equal(t, vreplStreamProgress{copyStateID: 11}, h.e.vreplicationProgress[uuid])
 	})
 }
 
