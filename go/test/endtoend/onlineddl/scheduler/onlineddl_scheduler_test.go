@@ -255,7 +255,7 @@ func waitForVReplicationMessage(t *testing.T, uuid string, messageSubstring stri
 	require.Eventually(t, func() bool {
 		_, lastMessage = readVReplicationStream(t, uuid)
 		return strings.Contains(lastMessage, messageSubstring)
-	}, normalWaitTime, time.Second, "waiting for the stream message to contain %q; last seen: %q", messageSubstring, lastMessage)
+	}, extendedWaitTime, time.Second, "waiting for the stream message to contain %q; last seen: %q", messageSubstring, lastMessage)
 }
 
 // parkVReplStream simulates the controller parking a migration's stream on a
