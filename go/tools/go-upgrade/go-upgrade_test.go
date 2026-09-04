@@ -17,11 +17,20 @@ limitations under the License.
 package main
 
 import (
+	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
 	"testing"
 
+	"github.com/google/go-containerregistry/pkg/name"
+	"github.com/google/go-containerregistry/pkg/registry"
+	gocr "github.com/google/go-containerregistry/pkg/v1"
+	"github.com/google/go-containerregistry/pkg/v1/empty"
+	"github.com/google/go-containerregistry/pkg/v1/mutate"
+	"github.com/google/go-containerregistry/pkg/v1/random"
+	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/hashicorp/go-version"
 	"github.com/stretchr/testify/require"
 )
@@ -221,4 +230,38 @@ func TestUpgradeGoModFiles(t *testing.T) {
 	got, err := os.ReadFile(currentTool)
 	require.NoError(t, err)
 	require.Equal(t, currentContent, got)
+}
+
+// TestResolveGolangImageDigestPinsMultiPlatformIndex publishes a golang tag whose manifest is a
+// multi-platform index and checks that the resolver pins the index itself rather than one of its
+// per-platform children. A per-platform pin cannot be built natively on any other architecture.
+func TestResolveGolangImageDigestPinsMultiPlatformIndex(t *testing.T) {
+	srv := httptest.NewServer(registry.New())
+	t.Cleanup(srv.Close)
+	registryURL, err := url.Parse(srv.URL)
+	require.NoError(t, err)
+
+	var idx gocr.ImageIndex = empty.Index
+	for _, arch := range []string{"amd64", "arm64"} {
+		img, err := random.Image(256, 1)
+		require.NoError(t, err)
+		idx = mutate.AppendManifests(idx, mutate.IndexAddendum{
+			Add:      img,
+			Platform: &gocr.Platform{OS: "linux", Architecture: arch},
+		})
+	}
+
+	goVersion, err := version.NewVersion("1.27.1")
+	require.NoError(t, err)
+	repository := registryURL.Host + "/golang"
+	ref, err := name.ParseReference(repository + ":" + golangDockerTag(goVersion, "bookworm"))
+	require.NoError(t, err)
+	require.NoError(t, remote.WriteIndex(ref, idx))
+
+	want, err := idx.Digest()
+	require.NoError(t, err)
+
+	got, err := resolveGolangImageDigest(repository, goVersion, "bookworm")
+	require.NoError(t, err)
+	require.Equal(t, want.String(), got)
 }
