@@ -329,6 +329,20 @@ func checkRemoved(mode Mode) error {
 	return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.UnsupportedSQLMode, "sql_mode=0x%08x is not supported.", uint64(removed))
 }
 
+// wrongValueErrorValueLen is the length MySQL truncates the offending value to in
+// ER_WRONG_VALUE_FOR_VAR, verified against MySQL 8.0.46: a longer value is cut, with no
+// marker, so an arbitrarily long expression result does not swell the error.
+const wrongValueErrorValueLen = 200
+
 func wrongValueError(value string) error {
+	if n := 0; len(value) > wrongValueErrorValueLen {
+		for i := range value {
+			if n == wrongValueErrorValueLen {
+				value = value[:i]
+				break
+			}
+			n++
+		}
+	}
 	return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongValueForVar, "Variable 'sql_mode' can't be set to the value of '%s'", value)
 }

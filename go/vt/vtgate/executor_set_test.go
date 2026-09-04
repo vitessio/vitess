@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"log/slog"
 	"maps"
+	"strings"
 	"testing"
 
 	mysqlconfig "vitess.io/vitess/go/mysql/config"
@@ -743,6 +744,96 @@ func TestSQLModeFlag(t *testing.T) {
 	require.NoError(t, f.Set("ignore_space,ansi"))
 	assert.Equal(t, "REAL_AS_FLOAT,PIPES_AS_CONCAT,ANSI_QUOTES,IGNORE_SPACE,ONLY_FULL_GROUP_BY,ANSI", f.String())
 	require.EqualError(t, f.Set("BOGUS"), "Variable 'sql_mode' can't be set to the value of 'BOGUS'")
+}
+
+// TestSetSQLModeExpressions pins how SET sql_mode handles the odder expressions MySQL
+// accepts, with every outcome verified against MySQL 8.0.46. Expressions VTGate can
+// compute itself — @@sql_mode, @@global.sql_mode, user variables, system variables the
+// session has set, literals of every kind — are evaluated locally. A sub-expression it
+// cannot compute, such as RAND() or a system variable the session never set, is
+// fetched from a shard with the session's @@sql_mode passed along; the result is then
+// validated and stored like any other value.
+func TestSetSQLModeExpressions(t *testing.T) {
+	const defaultMode = "ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION"
+	tests := []struct {
+		expr        string
+		sessionVars map[string]string
+		shardResult string // what the shard answers the input query with, when one is sent
+		shardQuery  string
+		stored      string
+		err         string
+	}{
+		{expr: "@@sql_mode", stored: "'STRICT_TRANS_TABLES'"},
+		{expr: "@@global.sql_mode", stored: "'" + defaultMode + "'"},
+		{expr: "concat(@@sql_mode, ',ANSI_QUOTES')", stored: "'ANSI_QUOTES,STRICT_TRANS_TABLES'"},
+		{expr: "@x", stored: "'ANSI_QUOTES'"},
+		{expr: "concat(@@sql_mode, ',', @x)", stored: "'ANSI_QUOTES,STRICT_TRANS_TABLES'"},
+		{expr: "(select 'ANSI_QUOTES')", stored: "'ANSI_QUOTES'"},
+		{expr: "(select @@sql_mode)", stored: "'STRICT_TRANS_TABLES'"},
+		{expr: "1 + 3", stored: "'ANSI_QUOTES'"},
+		{expr: "4 | 1048576", stored: "'ANSI_QUOTES,NO_BACKSLASH_ESCAPES'"},
+		// a name list coerces to 0 in arithmetic, as in MySQL
+		{expr: "@@sql_mode | 4", stored: "'ANSI_QUOTES'"},
+		{expr: "true", stored: "'REAL_AS_FLOAT'"},
+		{expr: "cast('4' as unsigned)", stored: "'ANSI_QUOTES'"},
+		{expr: "'ansi_quotes' collate utf8mb4_bin", stored: "'ANSI_QUOTES'"},
+		{expr: "lower('ANSI_QUOTES')", stored: "'ANSI_QUOTES'"},
+		{expr: "_utf8mb4'ANSI_QUOTES'", stored: "'ANSI_QUOTES'"},
+		{expr: "x'414E53495F51554F544553'", stored: "'ANSI_QUOTES'"},
+		// || is OR in the default mode: 0, the empty mode
+		{expr: "'ANSI_QUOTES' || 'STRICT_TRANS_TABLES'", stored: "''"},
+		{expr: "@@sql_mode = 'x'", stored: "''"},
+		// a system variable the session has set is evaluated locally
+		{expr: "if(@@sql_safe_updates = 1, 'STRICT_TRANS_TABLES', 'ANSI_QUOTES')", sessionVars: map[string]string{"sql_safe_updates": "1"}, stored: "'STRICT_TRANS_TABLES'"},
+
+		{expr: "null", err: "Variable 'sql_mode' can't be set to the value of 'NULL'"},
+		{expr: "4.0", err: "Incorrect argument type to variable 'sql_mode'"},
+		{expr: "@@sql_mode + 0", err: "Incorrect argument type to variable 'sql_mode'"},
+		// a string holding a number is a name, not a bitmask
+		{expr: "cast(4 as char)", err: "Variable 'sql_mode' can't be set to the value of '4'"},
+		{expr: "database()", err: "Variable 'sql_mode' can't be set to the value of 'TestUnsharded'"},
+		// the error carries the value truncated to 200 characters, as MySQL's does
+		{expr: "repeat('a', 1000000)", err: "Variable 'sql_mode' can't be set to the value of '" + strings.Repeat("a", 200) + "'"},
+
+		// sub-expressions VTGate cannot compute are fetched from a shard
+		{expr: "if(rand() < 2, 'STRICT_TRANS_TABLES', '')", shardResult: "STRICT_TRANS_TABLES", shardQuery: "select if(rand() < 2, 'STRICT_TRANS_TABLES', '') from dual", stored: "'STRICT_TRANS_TABLES'"},
+		{expr: "concat(@@sql_mode, if(rand() < 2, ',ANSI_QUOTES', ''))", shardResult: "STRICT_TRANS_TABLES,ANSI_QUOTES", shardQuery: "select concat(:__vtsql_mode, if(rand() < 2, ',ANSI_QUOTES', '')) from dual", stored: "'ANSI_QUOTES,STRICT_TRANS_TABLES'"},
+		{expr: "if(@@sql_safe_updates = 1, 'STRICT_TRANS_TABLES', 'ANSI_QUOTES')", shardResult: "ANSI_QUOTES", shardQuery: "select if(@@sql_safe_updates = 1, 'STRICT_TRANS_TABLES', 'ANSI_QUOTES') from dual", stored: "'ANSI_QUOTES'"},
+		{expr: "@@time_zone", shardResult: "SYSTEM", shardQuery: "select @@time_zone from dual", err: "Variable 'sql_mode' can't be set to the value of 'SYSTEM'"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.expr, func(t *testing.T) {
+			executor, _, _, lookup, ctx := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
+			vars := map[string]string{"sql_mode": "'STRICT_TRANS_TABLES'"}
+			maps.Copy(vars, tc.sessionVars)
+			session := econtext.NewAutocommitSession(&vtgatepb.Session{EnableSystemSettings: true, TargetString: KsTestUnsharded, SystemVariables: vars})
+			_, err := executorExecSession(ctx, executor, session, "set @x = 'ANSI_QUOTES'", nil)
+			require.NoError(t, err)
+			if tc.shardResult != "" {
+				lookup.SetResults([]*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("v", "varchar"), tc.shardResult)})
+			}
+			lookup.Queries = nil
+
+			_, err = executorExecSession(ctx, executor, session, "set sql_mode = "+tc.expr, nil)
+			if tc.err != "" {
+				require.EqualError(t, err, tc.err)
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, tc.stored, session.SystemVariables["sql_mode"])
+			}
+			if tc.shardQuery == "" {
+				assert.Empty(t, lookup.Queries, "no shard query expected")
+				return
+			}
+			require.Len(t, lookup.Queries, 1)
+			assert.Equal(t, tc.shardQuery, lookup.Queries[0].Sql)
+			if bv, ok := lookup.Queries[0].BindVariables["__vtsql_mode"]; ok {
+				// the session's value travels with the query: the snapshot the
+				// expression sees is the session's, not the shard's
+				assert.Equal(t, "STRICT_TRANS_TABLES", string(bv.Value))
+			}
+		})
+	}
 }
 
 func TestSetSQLModeDefault(t *testing.T) {
