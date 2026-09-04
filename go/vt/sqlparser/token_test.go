@@ -195,6 +195,17 @@ func TestSplitStatement(t *testing.T) {
 	}, {
 		in:  "",
 		sql: "",
+	}, {
+		in:  "create procedure p() begin select 1; select 2; end; select 3",
+		sql: "create procedure p() begin select 1; select 2; end",
+		rem: " select 3",
+	}, {
+		in:  "bogus; select 3",
+		sql: "bogus",
+		rem: " select 3",
+	}, {
+		in:  `select 'a\'; select 2`,
+		sql: `select 'a\'; select 2`,
 	}}
 
 	parser := NewTestParser()

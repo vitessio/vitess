@@ -265,9 +265,18 @@ func TestEmptyStatement(t *testing.T) {
 	defer conn.Close()
 	defer utils.Exec(t, conn, `delete from t1`)
 	utils.AssertContainsError(t, conn, " \t; \n;", "Query was empty")
-	execMulti(t, conn, `insert into t1(c1, c2, c3, c4) values (300,100,300,'abc');         ;; insert into t1(c1, c2, c3, c4) values (301,101,301,'abcd');;`)
 
-	utils.AssertMatches(t, conn, `select c1,c2,c3 from t1`, `[[INT64(300) INT64(100) INT64(300)] [INT64(301) INT64(101) INT64(301)]]`)
+	// As on MySQL, an empty statement followed by more input is a syntax
+	// error that ends the batch after the statements before it ran; a
+	// trailing ';' is fine.
+	_, more, err := conn.ExecuteFetchMulti(`insert into t1(c1, c2, c3, c4) values (300,100,300,'abc');         ;; insert into t1(c1, c2, c3, c4) values (301,101,301,'abcd');;`, 1000, true)
+	require.NoError(t, err)
+	require.True(t, more)
+	_, more, _, err = conn.ReadQueryResult(1000, true)
+	require.ErrorContains(t, err, "You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near ';; insert into t1(c1, c2, c3, c4) values (301,101,301,'abcd')' at line 1 (errno 1064) (sqlstate 42000)")
+	require.False(t, more)
+
+	utils.AssertMatches(t, conn, `select c1,c2,c3 from t1`, `[[INT64(300) INT64(100) INT64(300)]]`)
 }
 
 func TestTopoDownServingQuery(t *testing.T) {
@@ -278,7 +287,7 @@ func TestTopoDownServingQuery(t *testing.T) {
 
 	defer utils.Exec(t, conn, `delete from t1`)
 
-	execMulti(t, conn, `insert into t1(c1, c2, c3, c4) values (300,100,300,'abc'); ;; insert into t1(c1, c2, c3, c4) values (301,101,301,'abcd');;`)
+	execMulti(t, conn, `insert into t1(c1, c2, c3, c4) values (300,100,300,'abc'); insert into t1(c1, c2, c3, c4) values (301,101,301,'abcd');;`)
 	utils.AssertMatches(t, conn, `select c1,c2,c3 from t1`, `[[INT64(300) INT64(100) INT64(300)] [INT64(301) INT64(101) INT64(301)]]`)
 	clusterInstance.TopoProcess.TearDown(clusterInstance.Cell, clusterInstance.OriginalVTDATAROOT, clusterInstance.CurrentVTDATAROOT, true, *clusterInstance.TopoFlavorString())
 	time.Sleep(3 * time.Second)

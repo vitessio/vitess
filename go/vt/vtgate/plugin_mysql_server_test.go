@@ -25,6 +25,7 @@ import (
 	"net"
 	"os"
 	"path"
+	"slices"
 	"strings"
 	"syscall"
 	"testing"
@@ -34,6 +35,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/internal/ingress"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/replication"
@@ -602,13 +604,15 @@ func TestComQueryMulti(t *testing.T) {
 			firstPacket: []bool{true, true, true},
 			errExpected: false,
 		}, {
-			name:           "Empty query - olap",
-			sql:            "",
-			olap:           true,
-			queryResponses: []sqltypes.QueryResponse{},
-			more:           []bool{false},
-			firstPacket:    []bool{true},
-			errExpected:    true,
+			name: "Empty query - olap",
+			sql:  "",
+			olap: true,
+			queryResponses: []sqltypes.QueryResponse{
+				{QueryResult: nil, QueryError: sqlerror.NewSQLErrorFromError(sqlparser.ErrEmpty)},
+			},
+			more:        []bool{false},
+			firstPacket: []bool{true},
+			errExpected: false,
 		}, {
 			name: "Single query - olap",
 			sql:  "select 1",
@@ -906,6 +910,47 @@ func TestComQueryMulti(t *testing.T) {
 			errExpected: false,
 		},
 	}
+	// An empty statement followed by more input is a syntax error, as in
+	// MySQL; a trailing comment is an empty result. Both paths, OLTP and
+	// OLAP, must agree, but OLAP streams "select 1" as three packets.
+	type testcase = struct {
+		name           string
+		sql            string
+		olap           bool
+		queryResponses []sqltypes.QueryResponse
+		more           []bool
+		firstPacket    []bool
+		errExpected    bool
+	}
+	for _, olap := range []bool{false, true} {
+		suffix := " OLTP"
+		selectOne := []sqltypes.QueryResponse{{QueryResult: selectOneResult()}}
+		more := []bool{true}
+		firstPacket := []bool{true}
+		if olap {
+			suffix = " OLAP"
+			fieldsOnly := selectOneResult()
+			fieldsOnly.Rows = nil
+			selectOne = []sqltypes.QueryResponse{{QueryResult: fieldsOnly}, {QueryResult: fieldsOnly}, {QueryResult: selectOneResult()}}
+			more = []bool{true, true, true}
+			firstPacket = []bool{true, false, false}
+		}
+		testcases = append(testcases, testcase{
+			name:           "Empty statement" + suffix,
+			sql:            "select 1;; select 2",
+			olap:           olap,
+			queryResponses: append(slices.Clone(selectOne), sqltypes.QueryResponse{QueryError: sqlerror.NewSQLErrorFromError(sqlparser.NewParseErrorNear("select 1;; select 2", len("select 1;")))}),
+			more:           append(slices.Clone(more), false),
+			firstPacket:    append(slices.Clone(firstPacket), true),
+		}, testcase{
+			name:           "Comment tail" + suffix,
+			sql:            "select 1; -- done",
+			olap:           olap,
+			queryResponses: append(slices.Clone(selectOne), sqltypes.QueryResponse{QueryResult: &sqltypes.Result{}}),
+			more:           append(slices.Clone(more), false),
+			firstPacket:    append(slices.Clone(firstPacket), true),
+		})
+	}
 
 	executor, _, _, _, _ := createExecutorEnv(t)
 	th := &testHandler{}
@@ -942,6 +987,52 @@ func TestComQueryMulti(t *testing.T) {
 			assert.Equal(t, tt.errExpected, err != nil)
 			assert.Equal(t, len(tt.queryResponses), idx)
 		})
+	}
+}
+
+// TestStreamExecuteMultiQueryDeferredResultCallbackError verifies that a
+// callback failure on a deferred OK-only result is a transport failure: it is
+// returned as is, and the callback is not invoked again with a QueryError.
+func TestStreamExecuteMultiQueryDeferredResultCallbackError(t *testing.T) {
+	executor, _, _, _, _ := createExecutorEnv(t)
+	vh := newVtgateHandler(newVTGate(executor, nil, nil, nil, nil))
+	listener, err := mysql.NewListener("tcp", "127.0.0.1:", mysql.NewAuthServerNone(), &testHandler{}, 0, 0, false, false, 0, 0, false)
+	require.NoError(t, err)
+	defer listener.Close()
+
+	mysqlConn := mysql.GetTestServerConn(listener)
+	mysqlConn.ConnectionID = 1
+	mysqlConn.UserData = &mysql.StaticUserData{}
+	mysqlCtx := &vtgateMySQLConnection{handler: vh, conn: mysqlConn}
+	session := &vtgatepb.Session{
+		Autocommit:   true,
+		TargetString: "TestExecutor",
+		Options:      &querypb.ExecuteOptions{Workload: querypb.ExecuteOptions_OLAP},
+	}
+	writeFailed := errors.New("write failed")
+	calls := 0
+
+	_, err = vh.streamExecuteMultiQuery(t.Context(), mysqlConn, mysqlCtx, session, "set autocommit = 1; select 1", func(qr sqltypes.QueryResponse, more bool, firstPacket bool) error {
+		calls++
+		return writeFailed
+	})
+
+	require.ErrorIs(t, err, writeFailed)
+	assert.Equal(t, 1, calls)
+}
+
+// selectOneResult is what "select 1" returns through vtgate.
+func selectOneResult() *sqltypes.Result {
+	return &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{
+				Name:    "1",
+				Type:    sqltypes.Int64,
+				Flags:   uint32(querypb.MySqlFlag_NUM_FLAG | querypb.MySqlFlag_NOT_NULL_FLAG),
+				Charset: collations.CollationBinaryID,
+			},
+		},
+		Rows: [][]sqltypes.Value{{sqltypes.NewInt64(1)}},
 	}
 }
 
@@ -1995,9 +2086,9 @@ func TestComQueryMultiOLAPIngressBytes(t *testing.T) {
 	require.False(t, more)
 	require.Len(t, result.Rows, 1)
 
-	queries, err := vtgate.executor.Environment().Parser().SplitStatementToPieces(query)
-	require.NoError(t, err)
-	expectedIngressBytes := allocateStatementIngressBytes(uint64(mysql.PacketHeaderSize+1+len(query)), queries)
+	totalIngressBytes := uint64(mysql.PacketHeaderSize + 1 + len(query))
+	firstIngressBytes := ingress.NextStatementBytes(totalIngressBytes, "SELECT id FROM user WHERE id = 1", " SELECT id FROM user WHERE id = 1234567890")
+	expectedIngressBytes := []uint64{firstIngressBytes, totalIngressBytes - firstIngressBytes}
 
 	for i, expectedIngressBytes := range expectedIngressBytes {
 		select {

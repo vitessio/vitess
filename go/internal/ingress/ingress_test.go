@@ -69,3 +69,18 @@ func TestSplitBytesByWeight(t *testing.T) {
 		})
 	}
 }
+
+// TestNextStatementBytes verifies that statements handed out one at a time
+// get the same shares SplitBytesByWeight gives them up front, with the last
+// statement taking the remainder.
+func TestNextStatementBytes(t *testing.T) {
+	remaining := uint64(27)
+	first := NextStatementBytes(remaining, "select 1", "select 222222")
+	remaining -= first
+	last := NextStatementBytes(remaining, "select 222222", "")
+
+	assert.Equal(t, uint64(10), first)
+	assert.Equal(t, uint64(17), last)
+	assert.Equal(t, []uint64{first, last}, SplitBytesByWeight(27, []int{8, 13}))
+	assert.Equal(t, uint64(5), NextStatementBytes(5, "select 1", ""), "a single statement takes it all")
+}

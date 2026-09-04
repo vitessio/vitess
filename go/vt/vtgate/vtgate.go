@@ -622,30 +622,46 @@ func (vtg *VTGate) Execute(
 	return session, nil, err
 }
 
-func queryIngressBytesForStatements(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, queries []string) []uint64 {
-	if len(queries) <= 1 {
-		return nil
+// requestIngressBytes is the ingress byte count of the request: from the
+// context for gRPC requests, from the connection for MySQL protocol ones.
+func requestIngressBytes(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection) (uint64, bool) {
+	if ingressBytes, ok := vtgateservice.IngressBytesFromContext(ctx); ok {
+		return ingressBytes, true
 	}
-	ingressBytes, ok := vtgateservice.IngressBytesFromContext(ctx)
-	if !ok {
-		if mysqlCtx == nil {
-			return nil
-		}
-		ingressBytes = mysqlCtx.IngressBytes()
+	if mysqlCtx == nil {
+		return 0, false
 	}
-
-	return allocateStatementIngressBytes(ingressBytes, queries)
+	return mysqlCtx.IngressBytes(), true
 }
 
-// allocateStatementIngressBytes splits request-level ingress across statements
-// by SQL text length. Multi-statement requests enter VTGate with one ingress
-// byte count, but query log stats are emitted per statement.
-func allocateStatementIngressBytes(total uint64, queries []string) []uint64 {
-	weights := make([]int, len(queries))
-	for i, query := range queries {
-		weights[i] = len(query)
-	}
-	return ingress.SplitBytesByWeight(total, weights)
+// forEachStatement runs fn for each statement of sql the way MySQL runs a
+// multi-statement query (see sqlparser.Parser.ForEachStatement): a statement
+// is parsed only once the statements before it have run, and the first error
+// ends the batch. Each statement gets its share of the request's ingress
+// bytes and the per-statement query timeout on its context. idx counts the
+// statements from 0; more is true when statements follow.
+func (vtg *VTGate) forEachStatement(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, sql string, fn func(ctx context.Context, idx int, query string, more bool) error) error {
+	// TODO(#20884): use the session's parser, so that a SET sql_mode earlier
+	// in the batch applies to the statements after it.
+	parser := vtg.executor.Environment().Parser()
+	remaining, hasIngressBytes := requestIngressBytes(ctx, mysqlCtx)
+	idx := 0
+	return parser.ForEachStatement(sql, func(text, rest string) error {
+		queryCtx := ctx
+		if hasIngressBytes {
+			share := ingress.NextStatementBytes(remaining, text, rest)
+			remaining -= share
+			queryCtx = vtgateservice.ContextWithIngressBytes(queryCtx, share)
+		}
+		if mysqlQueryTimeout != 0 {
+			var cancel context.CancelFunc
+			queryCtx, cancel = context.WithTimeout(queryCtx, mysqlQueryTimeout)
+			defer cancel()
+		}
+		err := fn(queryCtx, idx, text, rest != "")
+		idx++
+		return err
+	})
 }
 
 func queryIngressBytesForBatch(ctx context.Context, sqlList []string, bindVariablesList []map[string]*querypb.BindVariable) []uint64 {
@@ -677,41 +693,25 @@ func allocateBatchIngressBytes(total uint64, sqlList []string, bindVariablesList
 	return ingress.SplitBytesByWeight(total, weights)
 }
 
-// ExecuteMulti executes multiple non-streaming queries.
+// ExecuteMulti executes multiple non-streaming queries. The results of the
+// statements that ran come back with the error that ended the batch, if any.
 func (vtg *VTGate) ExecuteMulti(
 	ctx context.Context,
 	mysqlCtx vtgateservice.MySQLConnection,
 	session *vtgatepb.Session,
 	sqlString string,
 ) (newSession *vtgatepb.Session, qrs []*sqltypes.Result, err error) {
-	queries, err := vtg.executor.Environment().Parser().SplitStatementToPieces(sqlString)
-	if err != nil {
-		return session, nil, err
-	}
-	if len(queries) == 0 {
-		return session, nil, sqlparser.ErrEmpty
-	}
-	var qr *sqltypes.Result
-	queryIngressBytes := queryIngressBytesForStatements(ctx, mysqlCtx, queries)
-	for index, query := range queries {
-		func() {
-			queryCtx := ctx
-			var cancel context.CancelFunc
-			if queryIngressBytes != nil {
-				queryCtx = vtgateservice.ContextWithIngressBytes(queryCtx, queryIngressBytes[index])
-			}
-			if mysqlQueryTimeout != 0 {
-				queryCtx, cancel = context.WithTimeout(queryCtx, mysqlQueryTimeout)
-				defer cancel()
-			}
-			session, qr, err = vtg.Execute(queryCtx, mysqlCtx, session, query, make(map[string]*querypb.BindVariable), false)
-		}()
+	err = vtg.forEachStatement(ctx, mysqlCtx, sqlString, func(queryCtx context.Context, _ int, query string, _ bool) error {
+		var qr *sqltypes.Result
+		var err error
+		session, qr, err = vtg.Execute(queryCtx, mysqlCtx, session, query, make(map[string]*querypb.BindVariable), false)
 		if err != nil {
-			return session, qrs, err
+			return err
 		}
 		qrs = append(qrs, qr)
-	}
-	return session, qrs, nil
+		return nil
+	})
+	return session, qrs, err
 }
 
 // ExecuteBatch executes a batch of queries.
@@ -790,47 +790,28 @@ func (vtg *VTGate) StreamExecute(ctx context.Context, mysqlCtx vtgateservice.MyS
 // StreamExecuteMulti executes a streaming query.
 // Note we guarantee the callback will not be called concurrently by multiple go routines.
 func (vtg *VTGate) StreamExecuteMulti(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, session *vtgatepb.Session, sqlString string, callback func(qr sqltypes.QueryResponse, more bool, firstPacket bool) error) (*vtgatepb.Session, error) {
-	queries, err := vtg.executor.Environment().Parser().SplitStatementToPieces(sqlString)
-	if err != nil {
+	// midStream is set when a statement failed after some of its packets were
+	// already sent; such an error cannot be delivered as a result anymore.
+	midStream := false
+	err := vtg.forEachStatement(ctx, mysqlCtx, sqlString, func(queryCtx context.Context, _ int, query string, more bool) error {
+		firstPacket := true
+		var err error
+		session, err = vtg.StreamExecute(queryCtx, mysqlCtx, session, query, make(map[string]*querypb.BindVariable), false, func(result *sqltypes.Result) error {
+			defer func() {
+				firstPacket = false
+			}()
+			return callback(sqltypes.QueryResponse{QueryResult: result}, more, firstPacket)
+		})
+		midStream = err != nil && !firstPacket
+		return err
+	})
+	if err == nil || midStream {
 		return session, err
 	}
-	if len(queries) == 0 {
-		return session, sqlparser.ErrEmpty
-	}
-	firstPacket := true
-	more := true
-	queryIngressBytes := queryIngressBytesForStatements(ctx, mysqlCtx, queries)
-	for idx, query := range queries {
-		queryCtx := ctx
-		if queryIngressBytes != nil {
-			queryCtx = vtgateservice.ContextWithIngressBytes(queryCtx, queryIngressBytes[idx])
-		}
-		firstPacket = true
-		more = idx < len(queries)-1
-		func() {
-			var cancel context.CancelFunc
-			if mysqlQueryTimeout != 0 {
-				queryCtx, cancel = context.WithTimeout(queryCtx, mysqlQueryTimeout)
-				defer cancel()
-			}
-			session, err = vtg.StreamExecute(queryCtx, mysqlCtx, session, query, make(map[string]*querypb.BindVariable), false, func(result *sqltypes.Result) error {
-				defer func() {
-					firstPacket = false
-				}()
-				return callback(sqltypes.QueryResponse{QueryResult: result}, more, firstPacket)
-			})
-		}()
-		if err != nil {
-			// We got an error before we sent a single packet. So it must be an error
-			// because of the query itself. We should return the error in the packet and stop
-			// processing any more queries.
-			if firstPacket {
-				return session, callback(sqltypes.QueryResponse{QueryError: sqlerror.NewSQLErrorFromError(err)}, false, true)
-			}
-			return session, err
-		}
-	}
-	return session, nil
+	// The error came before a single packet of its statement was sent, so it
+	// is about the statement itself (or the batch: a syntax error in the next
+	// statement, an empty statement). It is the last result of the batch.
+	return session, callback(sqltypes.QueryResponse{QueryError: sqlerror.NewSQLErrorFromError(err)}, false, true)
 }
 
 // CloseSession closes the session, rolling back any implicit transactions. This has the

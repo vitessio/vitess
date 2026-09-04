@@ -898,7 +898,7 @@ func TestMultiStatementStopsOnError(t *testing.T) {
 				cConn.Close()
 			}()
 
-			err := cConn.WriteComQuery("error;select 2")
+			err := cConn.WriteComQuery("select error;select 2")
 			require.NoError(t, err)
 
 			// this handler will return results according to the query. In case the query contains "error" it will return an error
@@ -983,7 +983,7 @@ func TestMultiStatement(t *testing.T) {
 			require.True(t, data.Equal(selectRowsResult))
 
 			// This time we run two queries fist of which will return an error
-			err = cConn.WriteComQuery("error;select 2")
+			err = cConn.WriteComQuery("select error;select 2")
 			require.NoError(t, err)
 
 			res = sConn.handleNextCommand(handler)
@@ -1302,7 +1302,11 @@ func TestComPrepareBytesNotAttributedToExecute(t *testing.T) {
 	assert.Equal(t, executeIngressBytes, sConn.IngressBytes())
 }
 
-func TestMultiStatementOnSplitError(t *testing.T) {
+// TestMultiStatementSyntaxErrorAfterFirstStatement verifies that a batch is
+// split one statement at a time, as MySQL does: the first statement runs and
+// its result reaches the client before the broken second statement is looked
+// at, whose error is the last result of the batch.
+func TestMultiStatementSyntaxErrorAfterFirstStatement(t *testing.T) {
 	for _, b := range []bool{true, false} {
 		t.Run(fmt.Sprintf("MultiQueryProtocol: %v", b), func(t *testing.T) {
 			listener, sConn, cConn := createSocketPair(t)
@@ -1314,24 +1318,154 @@ func TestMultiStatementOnSplitError(t *testing.T) {
 				cConn.Close()
 			}()
 
-			err := cConn.WriteComQuery("broken>'query 1;parse<error 2")
+			err := cConn.WriteComQuery("select 1;error>'broken 2")
 			require.NoError(t, err)
 
-			// this handler will return results according to the query. In case the query contains "error" it will return an error
-			// panic if the query contains "panic" and it will return selectRowsResult in case of any other query
+			// The broken statement is handed to the handler as is, cut where a
+			// lexer would cut it, and the handler reports the error.
 			handler := &testRun{err: errors.New("execution failed")}
-
-			// We will encounter an error in split statement when this multi statement is processed.
 			res := sConn.handleNextCommand(handler)
-			// Since this is an execution error, we should not be closing the connection.
 			require.True(t, res, "we should not break the connection because of execution errors")
-			// Assert that the returned packet is an error packet.
-			data, err := cConn.ReadPacket()
+
+			data, more, _, err := cConn.ReadQueryResult(100, true)
 			require.NoError(t, err)
-			require.NotEmpty(t, data)
-			require.EqualValues(t, ErrPacket, data[0]) // we should see the error here
+			require.True(t, more)
+			require.True(t, data.Equal(selectRowsResult))
+
+			_, more, _, err = cConn.ReadQueryResult(100, true)
+			require.ErrorContains(t, err, "execution failed")
+			require.False(t, more)
 		})
 	}
+}
+
+// TestMultiStatementEmptyStatement verifies MySQL's rule for an empty
+// statement in a batch: followed by more input it is a syntax error
+// (ER_PARSE_ERROR) that ends the batch after the statements before it ran;
+// a trailing comment is an empty result.
+func TestMultiStatementEmptyStatement(t *testing.T) {
+	for _, b := range []bool{true, false} {
+		t.Run(fmt.Sprintf("MultiQueryProtocol: %v", b), func(t *testing.T) {
+			listener, sConn, cConn := createSocketPair(t)
+			sConn.multiQuery = b
+			sConn.Capabilities |= CapabilityClientMultiStatements
+			defer func() {
+				listener.Close()
+				sConn.Close()
+				cConn.Close()
+			}()
+
+			require.NoError(t, cConn.WriteComQuery("select 1;; select 2"))
+			handler := &testRun{}
+			require.True(t, sConn.handleNextCommand(handler))
+
+			data, more, _, err := cConn.ReadQueryResult(100, true)
+			require.NoError(t, err)
+			require.True(t, more)
+			require.True(t, data.Equal(selectRowsResult))
+
+			_, more, _, err = cConn.ReadQueryResult(100, true)
+			require.EqualError(t, err, "You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near '; select 2' at line 1 (errno 1064) (sqlstate 42000)")
+			require.False(t, more)
+
+			require.NoError(t, cConn.WriteComQuery("select 1; -- done"))
+			require.True(t, sConn.handleNextCommand(handler))
+
+			data, more, _, err = cConn.ReadQueryResult(100, true)
+			require.NoError(t, err)
+			require.True(t, more)
+			require.True(t, data.Equal(selectRowsResult))
+
+			// testRun answers every statement, the comment included, with rows.
+			data, more, _, err = cConn.ReadQueryResult(100, true)
+			require.NoError(t, err)
+			require.False(t, more)
+			require.True(t, data.Equal(selectRowsResult))
+		})
+	}
+}
+
+// TestMultiStatementStopsBeforeParsingLaterStatements verifies that after an
+// execution error nothing after the failing statement is even looked at: the
+// third statement here cannot be split at all without a lexer error.
+func TestMultiStatementStopsBeforeParsingLaterStatements(t *testing.T) {
+	for _, b := range []bool{true, false} {
+		t.Run(fmt.Sprintf("MultiQueryProtocol: %v", b), func(t *testing.T) {
+			listener, sConn, cConn := createSocketPair(t)
+			sConn.multiQuery = b
+			sConn.Capabilities |= CapabilityClientMultiStatements
+			defer func() {
+				listener.Close()
+				sConn.Close()
+				cConn.Close()
+			}()
+
+			require.NoError(t, cConn.WriteComQuery("select 1; select error; select 'unterminated"))
+			handler := &testRun{err: errors.New("execution failed")}
+			require.True(t, sConn.handleNextCommand(handler))
+
+			data, more, _, err := cConn.ReadQueryResult(100, true)
+			require.NoError(t, err)
+			require.True(t, more)
+			require.True(t, data.Equal(selectRowsResult))
+
+			_, more, _, err = cConn.ReadQueryResult(100, true)
+			require.ErrorContains(t, err, "execution failed")
+			require.False(t, more)
+		})
+	}
+}
+
+// TestComPrepareRejectsMultipleStatements verifies that COM_STMT_PREPARE
+// accepts exactly one statement (a trailing ';' included), as MySQL does.
+func TestComPrepareRejectsMultipleStatements(t *testing.T) {
+	prepare := func(t *testing.T, query string) (*Conn, *Conn, []byte) {
+		listener, sConn, cConn := createSocketPair(t)
+		sConn.Capabilities |= CapabilityClientMultiStatements
+		t.Cleanup(func() {
+			listener.Close()
+			sConn.Close()
+			cConn.Close()
+		})
+		cConn.sequence = 0
+		require.NoError(t, cConn.writePacket(append([]byte{0, 0, 0, 0, ComPrepare}, query...)))
+		require.True(t, sConn.handleNextCommand(&testRun{}))
+		data, err := cConn.ReadPacket()
+		require.NoError(t, err)
+		return sConn, cConn, data
+	}
+
+	t.Run("two statements", func(t *testing.T) {
+		sConn, _, data := prepare(t, "select 1; select 2")
+		require.EqualValues(t, ErrPacket, data[0])
+		require.EqualError(t, ParseErrorPacket(data), "You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'select 2' at line 1 (errno 1064) (sqlstate 42000)")
+		require.Empty(t, sConn.PrepareData)
+	})
+
+	t.Run("trailing semicolon", func(t *testing.T) {
+		sConn, _, data := prepare(t, "select 1; ")
+		require.EqualValues(t, OKPacket, data[0])
+		require.Len(t, sConn.PrepareData, 1)
+		require.Equal(t, "select 1", sConn.PrepareData[1].PrepareStmt)
+	})
+
+	// a comment after the ';' does not start a second statement, as in MySQL —
+	// an executable comment included, whatever it holds
+	for _, query := range []string{"select 1; -- c", "select 1; /* c */", "select 1; /*!99999 ; */"} {
+		t.Run("comment after the terminator: "+query, func(t *testing.T) {
+			sConn, _, data := prepare(t, query)
+			require.EqualValues(t, OKPacket, data[0])
+			require.Len(t, sConn.PrepareData, 1)
+			require.Equal(t, "select 1", sConn.PrepareData[1].PrepareStmt)
+		})
+	}
+
+	t.Run("comment alone is an empty query", func(t *testing.T) {
+		sConn, _, data := prepare(t, "/* c */")
+		require.EqualValues(t, ErrPacket, data[0])
+		require.ErrorContains(t, ParseErrorPacket(data), "Query was empty")
+		require.Empty(t, sConn.PrepareData)
+	})
 }
 
 // TestExecQueryStreamSurfacesMidStreamError exercises go/mysql/conn.go execQuery (text
@@ -1410,7 +1544,7 @@ func TestExecQueryMultiStreamErrorAfterFirstResultSet(t *testing.T) {
 		cConn.Close()
 	}()
 
-	require.NoError(t, cConn.WriteComQuery("select rows; rows then error"))
+	require.NoError(t, cConn.WriteComQuery("select 1; select `rows then error`"))
 
 	handler := &testRun{err: sqlerror.NewSQLError(sqlerror.ERQueryInterrupted, sqlerror.SSQueryInterrupted, "context canceled")}
 	res := sConn.handleNextCommand(handler)
@@ -1618,7 +1752,7 @@ func TestExecQueryMultiErrorAfterMoreResultsOKSurfacesError(t *testing.T) {
 
 	// Statement 1 OKs with the more-results flag, then the handler errors
 	// before statement 2 emits anything.
-	require.NoError(t, cConn.WriteComQuery("ok then error; select rows"))
+	require.NoError(t, cConn.WriteComQuery("select `ok then error`; select 1"))
 
 	handler := &testRun{err: sqlerror.NewSQLError(sqlerror.ERQueryInterrupted, sqlerror.SSQueryInterrupted, "context canceled")}
 	res := sConn.handleNextCommand(handler)
@@ -1656,7 +1790,7 @@ func TestExecQueryErrorAfterMoreResultsOKSurfacesError(t *testing.T) {
 		cConn.Close()
 	}()
 
-	require.NoError(t, cConn.WriteComQuery("ok then error; select rows"))
+	require.NoError(t, cConn.WriteComQuery("select `ok then error`; select 1"))
 
 	handler := &testRun{err: sqlerror.NewSQLError(sqlerror.ERQueryInterrupted, sqlerror.SSQueryInterrupted, "context canceled")}
 	res := sConn.handleNextCommand(handler)
@@ -2203,25 +2337,28 @@ func (t testRun) ComQuery(c *Conn, query string, callback func(*sqltypes.Result)
 }
 
 func (t testRun) ComQueryMulti(c *Conn, sql string, callback func(qr sqltypes.QueryResponse, more bool, firstPacket bool) error) error {
-	queries, err := t.Env().Parser().SplitStatementToPieces(sql)
-	if err != nil {
-		return err
-	}
-	if len(queries) == 0 {
-		return sqlerror.NewSQLErrorFromError(sqlparser.ErrEmpty)
-	}
-	for i, query := range queries {
+	return comQueryMulti(t.Env().Parser(), t.ComQuery, c, sql, callback)
+}
+
+// comQueryMulti is the multi-query protocol loop of the test handlers, shaped
+// like vtgate's: a statement's error before its first packet is delivered as
+// the (last) result of the batch; an error mid-stream cannot be.
+func comQueryMulti(parser *sqlparser.Parser, comQuery func(c *Conn, query string, callback func(*sqltypes.Result) error) error, c *Conn, sql string, callback func(qr sqltypes.QueryResponse, more bool, firstPacket bool) error) error {
+	midStream := false
+	err := parser.ForEachStatement(sql, func(query, rest string) error {
 		firstPacket := true
-		err = t.ComQuery(c, query, func(result *sqltypes.Result) error {
-			err = callback(sqltypes.QueryResponse{QueryResult: result}, i < len(queries)-1, firstPacket)
+		err := comQuery(c, query, func(result *sqltypes.Result) error {
+			err := callback(sqltypes.QueryResponse{QueryResult: result}, rest != "", firstPacket)
 			firstPacket = false
 			return err
 		})
-		if err != nil {
-			return err
-		}
+		midStream = err != nil && !firstPacket
+		return err
+	})
+	if err == nil || midStream {
+		return err
 	}
-	return nil
+	return callback(sqltypes.QueryResponse{QueryError: sqlerror.NewSQLErrorFromError(err)}, false, true)
 }
 
 func (t testRun) ComPrepare(c *Conn, query string) ([]*querypb.Field, uint16, error) {

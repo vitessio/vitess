@@ -233,22 +233,7 @@ func (th *testHandler) ComQuery(c *Conn, query string, callback func(*sqltypes.R
 }
 
 func (th *testHandler) ComQueryMulti(c *Conn, sql string, callback func(qr sqltypes.QueryResponse, more bool, firstPacket bool) error) error {
-	qries, err := th.Env().Parser().SplitStatementToPieces(sql)
-	if err != nil {
-		return err
-	}
-	for i, query := range qries {
-		firstPacket := true
-		err = th.ComQuery(c, query, func(result *sqltypes.Result) error {
-			err = callback(sqltypes.QueryResponse{QueryResult: result}, i < len(qries)-1, firstPacket)
-			firstPacket = false
-			return err
-		})
-		if err != nil {
-			return err
-		}
-	}
-	return nil
+	return comQueryMulti(th.Env().Parser(), th.ComQuery, c, sql, callback)
 }
 
 func (th *testHandler) ComPrepare(*Conn, string) ([]*querypb.Field, uint16, error) {
