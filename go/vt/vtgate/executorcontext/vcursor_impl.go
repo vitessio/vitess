@@ -436,9 +436,6 @@ func (vc *VCursorImpl) SQLMode() string {
 	if mode, ok := vc.SafeSession.SQLMode(); ok {
 		return mode
 	}
-	if mode, ok := vc.SafeSession.SQLMode(); ok {
-		return mode
-	}
 	return vc.DefaultSQLMode()
 }
 

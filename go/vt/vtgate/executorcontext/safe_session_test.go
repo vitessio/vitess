@@ -209,6 +209,18 @@ func TestSetVarCommentStripsNoBackslashEscapes(t *testing.T) {
 	assert.Equal(t, "SET_VAR(sql_mode = 'BOGUS')", session.SetVarComment())
 }
 
+// The rendered SET_VAR comment is cached on the session; removing a variable
+// must drop the cache like setting one does.
+func TestRemoveSystemVariableRebuildsSetVarComment(t *testing.T) {
+	session := NewSafeSession(&vtgatepb.Session{
+		SystemVariables: map[string]string{"sql_mode": "'STRICT_TRANS_TABLES'", "sql_safe_updates": "1"},
+	})
+	assert.Equal(t, "SET_VAR(sql_mode = 'STRICT_TRANS_TABLES') SET_VAR(sql_safe_updates = 1)", session.SetVarComment())
+
+	session.RemoveSystemVariable("sql_mode")
+	assert.Equal(t, "SET_VAR(sql_safe_updates = 1)", session.SetVarComment())
+}
+
 func TestTimeZone(t *testing.T) {
 	testCases := []struct {
 		tz   string

@@ -779,6 +779,7 @@ func (session *SafeSession) RemoveSystemVariable(name string) {
 	session.mu.Lock()
 	defer session.mu.Unlock()
 	delete(session.SystemVariables, name)
+	session.setVarCommentBuilt = false
 }
 
 // GetSystemVariables takes a visitor function that will receive each MySQL system variable in the session.

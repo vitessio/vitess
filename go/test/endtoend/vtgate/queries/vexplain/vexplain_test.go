@@ -24,7 +24,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -143,9 +142,7 @@ func TestVtGateVExplain(t *testing.T) {
 			qr := utils.Exec(t, conn, `vexplain queries select id from user where lookup = "apa"`)
 			stripOptimizerHints(qr.Rows)
 			got := fmt.Sprintf("%v", qr.Rows)
-			if diff := cmp.Diff(expected, got); diff != "" {
-				t.Errorf("(-want +got):\n%s\nGot:%s", diff, got)
-			}
+			assert.Equal(t, expected, got)
 		})
 	}
 
