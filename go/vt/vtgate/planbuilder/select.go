@@ -124,7 +124,10 @@ func buildSQLCalcFoundRowsPlan(
 		return nil, nil, err
 	}
 
-	statement2, reserved2, err := vschema.Environment().Parser().Parse2(originalQuery)
+	// The count branch is built from a fresh parse of the original text, which
+	// must be read the way the statement was: a prepared statement keeps its raw
+	// text, and only its prepare-time mode lexes it correctly.
+	statement2, reserved2, err := vschema.Environment().Parser().WithSQLMode(vschema.ParseSQLMode()).Parse2(originalQuery)
 	if err != nil {
 		return nil, nil, err
 	}

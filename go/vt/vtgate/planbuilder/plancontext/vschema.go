@@ -72,6 +72,10 @@ type VSchema interface {
 
 	// SQLMode returns the session's sql_mode value
 	SQLMode() string
+	// ParseSQLMode returns the parse-relevant sql_mode bits the statement being
+	// planned was parsed under: the bits pinned at prepare time for a prepared
+	// statement, else the bits of the session's current sql_mode.
+	ParseSQLMode() sqlparser.SQLMode
 
 	// ErrorIfShardedF will return an error if the keyspace is sharded,
 	// and produce a warning if the vtgate if configured to do so

@@ -295,6 +295,10 @@ func (v *vschema) Environment() *vtenv.Environment {
 	return vtenv.NewTestEnv()
 }
 
+func (v *vschema) ParseSQLMode() sqlparser.SQLMode {
+	return sqlparser.ParseSQLMode(v.SQLMode())
+}
+
 func (v *vschema) SQLMode() string {
 	return config.DefaultSQLMode
 }

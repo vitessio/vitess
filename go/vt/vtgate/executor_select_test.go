@@ -423,6 +423,33 @@ func TestPreparedStatementKeepsParseMode(t *testing.T) {
 	})
 }
 
+// A prepared SELECT SQL_CALC_FOUND_ROWS keeps its raw text, and the count branch is
+// built from a fresh parse of that text: it must be read under the prepare-time mode,
+// not the default one, or a query written under ANSI_QUOTES fails to plan.
+func TestPreparedSQLCalcFoundRowsKeepsParseMode(t *testing.T) {
+	executor, sbc1, _, _, _ := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
+	session := econtext.NewAutocommitSession(&vtgatepb.Session{
+		EnableSystemSettings: true,
+		TargetString:         "TestExecutor",
+		SystemVariables:      map[string]string{"sql_mode": "'ANSI_QUOTES'"},
+	})
+	session.PinParseSQLMode(sqlparser.SQLModeANSIQuotes)
+	// the limit branch's rows, then the count branch's scalar
+	sbc1.SetResults([]*sqltypes.Result{
+		sqltypes.MakeTestResult(sqltypes.MakeTestFields("id", "int64"), "1"),
+		sqltypes.MakeTestResult(sqltypes.MakeTestFields("count(*)", "int64"), "1"),
+	})
+
+	_, err := executor.Execute(t.Context(), nil, "TestExecute", session, `select sql_calc_found_rows "id" from "user" where "id" = 1 limit 1`, nil, true)
+	require.NoError(t, err)
+	require.Len(t, sbc1.Queries, 2)
+	// "id" and "user" are identifiers under ANSI_QUOTES, in the count branch too
+	for _, q := range sbc1.Queries {
+		assert.NotContains(t, q.Sql, `'id'`)
+		assert.NotContains(t, q.Sql, `'user'`)
+	}
+}
+
 // A numeric sql_mode assignment must leave the session with the canonical name list,
 // not the number: the parser and the transports decode names, so a session that stored
 // "4" would parse "id" as a string instead of the ANSI_QUOTES identifier it asked for.

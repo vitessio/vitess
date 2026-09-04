@@ -156,6 +156,10 @@ func (vw *VSchemaWrapper) Environment() *vtenv.Environment {
 	return vw.Env
 }
 
+func (vw *VSchemaWrapper) ParseSQLMode() sqlparser.SQLMode {
+	return sqlparser.ParseSQLMode(vw.SQLMode())
+}
+
 func (vw *VSchemaWrapper) SQLMode() string {
 	return config.DefaultSQLMode
 }
