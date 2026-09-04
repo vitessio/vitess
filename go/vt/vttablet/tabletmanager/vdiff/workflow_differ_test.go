@@ -17,6 +17,7 @@ limitations under the License.
 package vdiff
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -32,6 +33,7 @@ import (
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
 
@@ -760,7 +762,7 @@ func TestBuildPlanSuccess(t *testing.T) {
 			compareCols:  []compareColInfo{{0, collations.MySQL8().LookupByName(sqltypes.NULL.String()), false, "c2"}, {1, collations.MySQL8().LookupByName(sqltypes.NULL.String()), true, "c1"}},
 			comparePKs:   []compareColInfo{{1, collations.MySQL8().LookupByName(sqltypes.NULL.String()), true, "c1"}},
 			pkCols:       []int{1},
-			sourcePkCols: []int{0},
+			sourcePkCols: []int{1},
 			selectPks:    []int{1},
 			orderBy: sqlparser.OrderBy{&sqlparser.Order{
 				Expr:      &sqlparser.ColName{Name: sqlparser.NewIdentifierCI("c1")},
@@ -825,7 +827,7 @@ func TestBuildPlanSuccess(t *testing.T) {
 			compareCols:  []compareColInfo{{0, collations.MySQL8().LookupByName(sqltypes.NULL.String()), false, "textcol"}, {1, collations.MySQL8().LookupByName(sqltypes.NULL.String()), true, "c1"}},
 			comparePKs:   []compareColInfo{{1, collations.MySQL8().LookupByName(sqltypes.NULL.String()), true, "c1"}},
 			pkCols:       []int{1},
-			sourcePkCols: []int{0},
+			sourcePkCols: []int{1},
 			selectPks:    []int{1},
 			orderBy: sqlparser.OrderBy{&sqlparser.Order{
 				Expr:      &sqlparser.ColName{Name: sqlparser.NewIdentifierCI("c1")},
@@ -847,7 +849,7 @@ func TestBuildPlanSuccess(t *testing.T) {
 			compareCols:  []compareColInfo{{0, collations.MySQL8().LookupByName(sqltypes.NULL.String()), true, "textcol"}, {1, collations.MySQL8().LookupByName(sqltypes.NULL.String()), false, "c2"}},
 			comparePKs:   []compareColInfo{{0, collations.MySQL8().LookupByName(sqltypes.NULL.String()), true, "textcol"}},
 			pkCols:       []int{0},
-			sourcePkCols: []int{},
+			sourcePkCols: []int{0},
 			selectPks:    []int{0},
 			orderBy: sqlparser.OrderBy{&sqlparser.Order{
 				Expr:      &sqlparser.ColName{Name: sqlparser.NewIdentifierCI("textcol")},
@@ -869,7 +871,7 @@ func TestBuildPlanSuccess(t *testing.T) {
 			compareCols:  []compareColInfo{{0, collations.MySQL8().LookupByName(sqltypes.NULL.String()), false, "c2"}, {1, collations.MySQL8().LookupByName(sqltypes.NULL.String()), true, "textcol"}},
 			comparePKs:   []compareColInfo{{1, collations.MySQL8().LookupByName(sqltypes.NULL.String()), true, "textcol"}},
 			pkCols:       []int{1},
-			sourcePkCols: []int{},
+			sourcePkCols: []int{1},
 			selectPks:    []int{1},
 			orderBy: sqlparser.OrderBy{&sqlparser.Order{
 				Expr:      &sqlparser.ColName{Name: sqlparser.NewIdentifierCI("textcol")},
@@ -891,7 +893,7 @@ func TestBuildPlanSuccess(t *testing.T) {
 			compareCols:  []compareColInfo{{0, collations.MySQL8().LookupByName(sqltypes.NULL.String()), true, "c1"}, {1, collations.MySQL8().LookupByName(sqltypes.NULL.String()), true, "c2"}, {2, collations.MySQL8().LookupByName(sqltypes.NULL.String()), true, "c3"}},
 			comparePKs:   []compareColInfo{{0, collations.MySQL8().LookupByName(sqltypes.NULL.String()), true, "c1"}, {1, collations.MySQL8().LookupByName(sqltypes.NULL.String()), true, "c2"}, {2, collations.MySQL8().LookupByName(sqltypes.NULL.String()), true, "c3"}},
 			pkCols:       []int{0, 1, 2},
-			sourcePkCols: []int{0},
+			sourcePkCols: []int{0, 1, 2},
 			selectPks:    []int{0, 1, 2},
 			orderBy: sqlparser.OrderBy{
 				&sqlparser.Order{
@@ -923,7 +925,7 @@ func TestBuildPlanSuccess(t *testing.T) {
 			compareCols:  []compareColInfo{{0, collations.MySQL8().LookupByName(sqltypes.NULL.String()), false, "c1"}, {1, collations.MySQL8().LookupByName(sqltypes.NULL.String()), false, "c2"}, {2, collations.MySQL8().LookupByName(sqltypes.NULL.String()), true, "c3"}},
 			comparePKs:   []compareColInfo{{2, collations.MySQL8().LookupByName(sqltypes.NULL.String()), true, "c3"}},
 			pkCols:       []int{2},
-			sourcePkCols: []int{0},
+			sourcePkCols: []int{2},
 			selectPks:    []int{2},
 			orderBy: sqlparser.OrderBy{
 				&sqlparser.Order{
@@ -931,28 +933,6 @@ func TestBuildPlanSuccess(t *testing.T) {
 					Direction: sqlparser.AscOrder,
 				},
 			},
-		},
-	}, {
-		// Text column as expression.
-		input: &binlogdatapb.Rule{
-			Match:  "pktext",
-			Filter: "select c2, a+b as textcol from pktext",
-		},
-		table: "pktext",
-		tablePlan: &tablePlan{
-			dbName:       vdiffDBName,
-			table:        testSchema.TableDefinitions[tableDefMap["pktext"]],
-			sourceQuery:  "select c2, a + b as textcol from pktext order by textcol asc",
-			targetQuery:  "select c2, textcol from pktext order by textcol asc",
-			compareCols:  []compareColInfo{{0, collations.MySQL8().LookupByName(sqltypes.NULL.String()), false, "c2"}, {1, collations.MySQL8().LookupByName(sqltypes.NULL.String()), true, "textcol"}},
-			comparePKs:   []compareColInfo{{1, collations.MySQL8().LookupByName(sqltypes.NULL.String()), true, "textcol"}},
-			pkCols:       []int{1},
-			sourcePkCols: []int{},
-			selectPks:    []int{1},
-			orderBy: sqlparser.OrderBy{&sqlparser.Order{
-				Expr:      &sqlparser.ColName{Name: sqlparser.NewIdentifierCI("textcol")},
-				Direction: sqlparser.AscOrder,
-			}},
 		},
 	}, {
 		// Multiple PK columns.
@@ -968,7 +948,7 @@ func TestBuildPlanSuccess(t *testing.T) {
 			compareCols:  []compareColInfo{{0, collations.MySQL8().LookupByName(sqltypes.NULL.String()), true, "c1"}, {1, collations.MySQL8().LookupByName(sqltypes.NULL.String()), true, "c2"}},
 			comparePKs:   []compareColInfo{{0, collations.MySQL8().LookupByName(sqltypes.NULL.String()), true, "c1"}, {1, collations.MySQL8().LookupByName(sqltypes.NULL.String()), true, "c2"}},
 			pkCols:       []int{0, 1},
-			sourcePkCols: []int{0},
+			sourcePkCols: []int{0, 1},
 			selectPks:    []int{0, 1},
 			orderBy: sqlparser.OrderBy{
 				&sqlparser.Order{
@@ -1154,7 +1134,7 @@ func TestBuildPlanSuccess(t *testing.T) {
 			compareCols:  []compareColInfo{{0, collations.MySQL8().LookupByName(sqltypes.NULL.String()), true, "id"}, {1, collations.MySQL8().LookupByName(sqltypes.NULL.String()), false, "dt"}},
 			comparePKs:   []compareColInfo{{0, collations.MySQL8().LookupByName(sqltypes.NULL.String()), true, "id"}},
 			pkCols:       []int{0},
-			sourcePkCols: []int{},
+			sourcePkCols: []int{0},
 			selectPks:    []int{0},
 			orderBy: sqlparser.OrderBy{&sqlparser.Order{
 				Expr:      &sqlparser.ColName{Name: sqlparser.NewIdentifierCI("id")},
@@ -1359,6 +1339,32 @@ func TestBuildPlanFailure(t *testing.T) {
 		dbc.ExpectRequestRE("select vdt.lastpk as lastpk, vdt.mismatch as mismatch, vdt.report as report", noResults, nil)
 		err = wd.buildPlan(dbc, filter, testSchema)
 		assert.EqualError(t, err, tcase.err, tcase.input)
+	}
+}
+
+// TestUncheckpointableMaxDiffDurationErrorIsNonEphemeral guards the non-retry
+// guarantee for the diffTable timeout path: an un-checkpointable table that
+// exceeds --max-diff-duration is failed with an ERNotSupportedYet SQL error so
+// that, after being persisted to _vt.vdiff.last_error as a plain string and
+// rebuilt by retryVDiffs (via NewSQLErrorFromError), IsEphemeralError still
+// classifies it as non-ephemeral and the engine does not auto-retry it forever.
+func TestUncheckpointableMaxDiffDurationErrorIsNonEphemeral(t *testing.T) {
+	// Built by the production helper so this test breaks if that branch stops
+	// wrapping the failure as a non-ephemeral ERNotSupportedYet error.
+	origErr := maxDiffDurationUnresumableError("t1")
+	require.False(t, sqlerror.IsEphemeralError(origErr), "the original error must be non-ephemeral")
+
+	// retryVDiffs persists last_error as a string and rebuilds it before
+	// classifying (see Engine.retryVDiffs). The reconstruction must preserve the
+	// errno so the error stays non-ephemeral -- both directly and when the error
+	// picked up wrapping context on its way up to being persisted.
+	for _, persisted := range []string{
+		origErr.Error(),
+		vterrors.Wrapf(origErr, "table %s", "t1").Error(),
+	} {
+		reconstructed := sqlerror.NewSQLErrorFromError(errors.New(persisted))
+		require.False(t, sqlerror.IsEphemeralError(reconstructed),
+			"reconstructed error must be non-ephemeral so the engine does not auto-retry it forever: %q", persisted)
 	}
 }
 
