@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	"slices"
 	"strconv"
 
 	"vitess.io/vitess/go/mysql/collations"
@@ -206,8 +207,8 @@ func (rp *RoutingParameters) routeInfoSchemaQuery(ctx context.Context, vcursor V
 	}
 
 	env := evalengine.NewExpressionEnv(ctx, bindVars, vcursor)
-	var specifiedKS string
-	for idx, tableSchema := range rp.SysTableTableSchema {
+	names := make([]string, 0, len(rp.SysTableTableSchema))
+	for _, tableSchema := range rp.SysTableTableSchema {
 		result, err := env.Evaluate(tableSchema)
 		if err != nil {
 			return nil, err
@@ -216,11 +217,18 @@ func (rp *RoutingParameters) routeInfoSchemaQuery(ctx context.Context, vcursor V
 		if err != nil {
 			return nil, err
 		}
-		switch {
-		case idx == 0:
-			specifiedKS = ks
-		case specifiedKS != ks:
-			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "specifying two different database in the query is not supported")
+		names = append(names, ks)
+	}
+	// A predicate naming no schema ("") makes the query match nothing;
+	// otherwise all predicates must name the same schema.
+	var specifiedKS string
+	if !slices.Contains(names, "") {
+		for _, ks := range names {
+			if specifiedKS == "" {
+				specifiedKS = ks
+			} else if ks != specifiedKS {
+				return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "specifying two different database in the query is not supported")
+			}
 		}
 	}
 

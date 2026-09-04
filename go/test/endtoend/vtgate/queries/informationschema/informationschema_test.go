@@ -329,6 +329,7 @@ func TestInformationSchemaWithInPredicate(t *testing.T) {
 
 	inDup := utils.Exec(t, mcmp.VtConn, "select table_name from information_schema.tables where table_schema in ('ks', 'ks', null) and table_name = 't1'")
 	require.Equal(t, eq.Rows, inDup.Rows)
+	utils.AssertResultIsEmpty(t, mcmp.VtConn, "table_schema = 'ks' and table_schema in (null, null)")
 
 	// multi-value table_name IN stays a plain filter
 	multiName := utils.Exec(t, mcmp.VtConn, "select table_name from information_schema.tables where table_schema = database() and table_name in ('t1', 't7_xxhash')")

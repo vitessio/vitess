@@ -274,6 +274,17 @@ func TestSystemTableSchemaLists(t *testing.T) {
 		},
 		wantErr: "VT12001",
 	}, {
+		name:    "list naming no schema makes the query match nothing despite a scalar",
+		schemas: []evalengine.Expr{literal("myKeyspace"), tuple("schemas")},
+		bindVars: map[string]*querypb.BindVariable{
+			"schemas": sqltypes.TestBindVariable([]any{nil}),
+		},
+		expectedLog: []string{
+			"ResolveDestinations ks [] Destinations:DestinationAnyShard()",
+			fmt.Sprintf("ExecuteMultiShard ks.1: dummy_select {__vtschemaname: type:VARCHAR schemas: %v} false false",
+				sqltypes.TestBindVariable([]any{nil})),
+		},
+	}, {
 		name:    "scalar and list naming different schemas error",
 		schemas: []evalengine.Expr{literal("myKeyspace"), tuple("schemas")},
 		bindVars: map[string]*querypb.BindVariable{
