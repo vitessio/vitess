@@ -372,11 +372,13 @@ func (svsm *SysVarSQLMode) Execute(ctx context.Context, vcursor VCursor, env *ev
 	}
 	// The statement is sent even when the value did not change: a previous SET may have
 	// updated the session but failed on some of these shard sessions, and a client retry
-	// must converge them instead of short-circuiting as a no-op.
+	// must converge them instead of short-circuiting as a no-op. The shards get the value
+	// without the mode a backend must not lex under, like every other transport.
+	transported := sqlparser.StripUnforwardableModesValue(encoded)
 	queries := make([]*querypb.BoundQuery, len(rss))
 	for i := range rss {
 		queries[i] = &querypb.BoundQuery{
-			Sql: fmt.Sprintf("set %s = %s", sysvars.SQLMode.Name, encoded),
+			Sql: fmt.Sprintf("set %s = %s", sysvars.SQLMode.Name, transported),
 		}
 	}
 	_, errs := vcursor.ExecuteMultiShard(ctx, nil /*primitive*/, rss, queries, false /*rollbackOnError*/, false /*canAutocommit*/, false /*fetchLastInsertID*/)

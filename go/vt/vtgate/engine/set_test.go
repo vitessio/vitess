@@ -395,6 +395,21 @@ func TestSetTable(t *testing.T) {
 			`ExecuteMultiShard ks.-20: set sql_mode = 'STRICT_TRANS_TABLES' {} false false`,
 		},
 	}, {
+		// the reserved shard sessions get the value without NO_BACKSLASH_ESCAPES,
+		// like the hint and the settings transports send it
+		testName:       "sql_mode set with SET_VAR sends the reserved shard sessions the value without NO_BACKSLASH_ESCAPES",
+		mysqlVersion:   "8.0.0",
+		inReservedConn: true,
+		shardSession:   []*srvtopo.ResolvedShard{{Target: &querypb.Target{Keyspace: "ks", Shard: "-20"}}},
+		setOps: []SetOp{
+			&SysVarSQLMode{Expr: evalengine.NewLiteralString([]byte("no_backslash_escapes,strict_trans_tables"), collations.SystemCollation)},
+		},
+		expectedQueryLog: []string{
+			`SysVar set with (sql_mode,'NO_BACKSLASH_ESCAPES,STRICT_TRANS_TABLES')`,
+			`SET_VAR can be used`,
+			`ExecuteMultiShard ks.-20: set sql_mode = 'STRICT_TRANS_TABLES' {} false false`,
+		},
+	}, {
 		// a shard session that only holds a transaction is left alone: a later
 		// reservation of it applies the session's settings by itself
 		testName:     "sql_mode set with SET_VAR leaves a transaction-only shard session alone",
