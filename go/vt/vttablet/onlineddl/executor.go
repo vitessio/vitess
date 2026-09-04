@@ -3947,6 +3947,11 @@ func (e *Executor) reviewStaleMigrations(ctx context.Context) error {
 		if _, err := e.terminateMigration(ctx, onlineDDL); err != nil {
 			message = fmt.Sprintf("error terminating migration (%v): %v", message, err)
 			e.updateMigrationMessage(ctx, onlineDDL.UUID, message)
+			// Termination unconfirmed: the migration is still running, so
+			// restore the ownership terminateMigration dropped — the
+			// scheduler's conflict and concurrency checks consult ownership
+			// alone, and run before the next review could re-adopt it.
+			e.ownedRunningMigrations.Store(uuid, onlineDDL)
 			continue // we still want to handle rest of migrations
 		}
 		if err := e.failStaleMigration(ctx, onlineDDL, message); err != nil {
@@ -3965,13 +3970,15 @@ func (e *Executor) reviewStaleMigrations(ctx context.Context) error {
 // what finally terminates it, in which case the result must be 'cancelled'
 // with the user's reason. The transition also sets completed_timestamp, which
 // artifact cleanup relies on. Tracking is dropped only once the transition has
-// landed. Callers must hold migrationMutex.
+// landed; until then the still-running migration stays owned so the scheduler
+// keeps seeing it. Callers must hold migrationMutex.
 func (e *Executor) failStaleMigration(ctx context.Context, onlineDDL *schema.OnlineDDL, staleMessage string) error {
 	message := staleMessage
 	if pendingCancelMessage, ok := e.vreplicationPendingCancel[onlineDDL.UUID]; ok && pendingCancelMessage != "" {
 		message = pendingCancelMessage
 	}
 	if err := e.terminallyFailMigration(ctx, onlineDDL, errors.New(message)); err != nil {
+		e.ownedRunningMigrations.Store(onlineDDL.UUID, onlineDDL)
 		return err
 	}
 	e.forgetVReplStream(onlineDDL.UUID)

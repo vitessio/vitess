@@ -38,6 +38,7 @@ import (
 	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
@@ -1548,7 +1549,7 @@ func TestFailStaleMigration(t *testing.T) {
 		assert.NotContains(t, e.vreplicationLastError, uuid)
 		assert.NotContains(t, e.vreplicationProgress, uuid)
 	})
-	t.Run("failed transition keeps the tracking", func(t *testing.T) {
+	t.Run("failed transition keeps the tracking and ownership", func(t *testing.T) {
 		e, _ := newExecutor()
 		e.vreplicationPendingCancel[uuid] = "cancelled by user"
 		e.execQuery = func(ctx context.Context, query string) (*sqltypes.Result, error) {
@@ -1561,9 +1562,57 @@ func TestFailStaleMigration(t *testing.T) {
 		require.Error(t, e.failStaleMigration(t.Context(), onlineDDL, staleMessage))
 
 		// Still 'running': the next tick must be able to re-drive the
-		// cancellation with its original reason.
+		// cancellation with its original reason, and the scheduler's
+		// conflict checks must keep seeing the migration.
 		assert.Contains(t, e.vreplicationPendingCancel, uuid)
+		_, owned := e.ownedRunningMigrations.Load(uuid)
+		assert.True(t, owned, "a migration still running after a failed terminal transition must stay owned")
 	})
+}
+
+// TestReviewStaleMigrationsUnconfirmedTermination pins that a stale migration
+// whose termination fails stays owned: it is still 'running', and the
+// scheduler consults ownership alone before the next review can re-adopt it.
+func TestReviewStaleMigrationsUnconfirmedTermination(t *testing.T) {
+	uuid := "1cbcd662_8ed6_11ee_bc8f_0a43f95f28a3"
+	alias := &topodatapb.TabletAlias{Cell: "cell", Uid: 1}
+	var terminalTransitionAttempted bool
+	e := &Executor{
+		tabletAlias:               alias,
+		vreplicationLastError:     map[string]*vterrors.LastError{},
+		vreplicationPendingCancel: map[string]string{},
+		vreplicationProgress:      map[string]vreplStreamProgress{},
+		ticks:                     timer.NewTimer(time.Hour),
+		// No tablet record exists, so terminateMigration's topology lookup
+		// fails before the stream is stopped.
+		ts: memorytopo.NewServer(t.Context(), "cell"),
+		execQuery: func(ctx context.Context, query string) (*sqltypes.Result, error) {
+			q := strings.ToLower(query)
+			switch {
+			case strings.HasPrefix(strings.TrimSpace(q), "update"):
+				if strings.Contains(q, "migration_status") {
+					terminalTransitionAttempted = true
+				}
+				return &sqltypes.Result{RowsAffected: 1}, nil
+			case strings.Contains(q, "liveness_timestamp <"):
+				return sqltypes.MakeTestResult(
+					sqltypes.MakeTestFields("migration_uuid|stale_minutes", "varchar|int64"), uuid+"|200"), nil
+			case strings.Contains(q, "migration_uuid="):
+				return sqltypes.MakeTestResult(
+					sqltypes.MakeTestFields("migration_uuid|migration_status|strategy|tablet", "varchar|varchar|varchar|varchar"),
+					uuid+"|running|vitess|"+topoproto.TabletAliasString(alias)), nil
+			default:
+				return &sqltypes.Result{}, nil
+			}
+		},
+	}
+	e.isOpen.Store(1)
+
+	require.NoError(t, e.reviewStaleMigrations(t.Context()))
+
+	assert.False(t, terminalTransitionAttempted, "the terminal transition must not run when termination was not confirmed")
+	_, owned := e.ownedRunningMigrations.Load(uuid)
+	assert.True(t, owned, "a stale migration whose termination failed is still running and must stay owned")
 }
 
 // TestGetNonConflictingMigrationCancellationIntent pins that the scheduler
