@@ -20,6 +20,7 @@
 - **[Minor Changes](#minor-changes)**
     - **[VReplication](#minor-changes-vreplication)**
         - [Default data protection for `_reverse` workflow cancel/complete](#vreplication-reverse-workflow-data-protection)
+        - [`SwitchTraffic` refuses to switch writes before reads](#vreplication-switch-writes-requires-reads)
         - [`vdiff show --no-samples` strips the per-table row-sample report](#vreplication-vdiff-no-samples)
         - [Preserve Materialize target data on cancel by default](#vreplication-materialize-cancel-data-protection)
     - **[VTGate](#minor-changes-vtgate)**
@@ -190,6 +191,16 @@ When calling `cancel` or `complete` on an auto-generated `_reverse` workflow wit
 The `--keep-data` flag help text has been updated to note this default explicitly. This change applies to MoveTables, Reshard, and other VReplication workflow types that use the shared cancel/complete paths.
 
 See [#19906](https://github.com/vitessio/vitess/pull/19906) for details.
+
+#### <a id="vreplication-switch-writes-requires-reads"/>`SwitchTraffic` refuses to switch writes before reads</a>
+
+A forward `SwitchTraffic` request that switches `PRIMARY` (writes) while any read type (`REPLICA`/`RDONLY`) would remain on the source is now rejected with a `FAILED_PRECONDITION` error. Switching writes first strands the unswitched reads on a source that no longer receives writes, and for a Reshard it leaves the workflow impossible to `Complete` (which requires all read and write traffic to be switched).
+
+The check runs whenever `PRIMARY` is in the request, not only for writes-only requests. It fires per read type, so a `PRIMARY,REPLICA` request is still rejected while `RDONLY` remains on the source. For a Reshard it also fires per cell, so a cell-scoped request that switches all tablet types is rejected while another cell remains unswitched.
+
+To switch writes, either switch the outstanding reads first, or include all outstanding read types (and, for a Reshard, all outstanding cells) in the same request (e.g. `--tablet-types=rdonly,replica,primary`). The check can be overridden with `--force`.
+
+See [#20924](https://github.com/vitessio/vitess/pull/20924) for details.
 
 #### <a id="vreplication-vdiff-no-samples"/>`vdiff show --no-samples` strips the per-table row-sample report</a>
 
