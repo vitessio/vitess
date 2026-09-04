@@ -223,9 +223,6 @@ func TestUpgradeGoModFiles(t *testing.T) {
 	require.Equal(t, currentContent, got)
 }
 
-// TestUpdateBootstrapVersionInCodebaseKeepsDockerfileDefaultsInSync bumps the bootstrap version in a
-// fixture repository and checks that the flavor Dockerfiles' default bootstrap_version follows the
-// Makefile. The default is what lets a plain `docker build` of a flavor find the common image build.sh produces.
 func TestUpdateBootstrapVersionInCodebaseKeepsDockerfileDefaultsInSync(t *testing.T) {
 	dir := t.TempDir()
 	write := func(rel, content string) {
