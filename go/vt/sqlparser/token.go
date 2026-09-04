@@ -279,6 +279,14 @@ func (tkn *Tokenizer) Scan() (int, string) {
 			return tkn.scanBindVarOrAssignmentExpression()
 		case ch == ';':
 			tkn.skip(1)
+			if tkn.inVersionedComment {
+				// MySQL does not let a statement end inside an executable
+				// comment: the ';' is a syntax error, and so it is here. It is
+				// consumed, so that resyncing after the error does not take it
+				// for the statement's end.
+				tkn.inVersionedComment = false
+				return LEX_ERROR, ";"
+			}
 			return ';', ""
 		case ch == eofChar:
 			if tkn.inVersionedComment {
@@ -828,6 +836,14 @@ func (tkn *Tokenizer) scanMySQLSpecificComment() (int, string) {
 			continue
 		}
 		if tkn.cur() == eofChar {
+			return LEX_ERROR, tkn.buf[start:tkn.Pos]
+		}
+		if tkn.cur() == ';' {
+			// as in an executable comment that applies: MySQL does not let a
+			// statement end inside one, whatever its version. The ';' is consumed
+			// so that resyncing after the error does not take it for the
+			// statement's end.
+			tkn.skip(1)
 			return LEX_ERROR, tkn.buf[start:tkn.Pos]
 		}
 		tkn.skip(1)

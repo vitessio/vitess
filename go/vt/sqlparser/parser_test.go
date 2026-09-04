@@ -353,6 +353,30 @@ func TestForEachStatement(t *testing.T) {
 		input: "select 1; /* c */",
 		calls: []call{{"select 1", " /* c */"}, {" /* c */", ""}},
 	}, {
+		// Only the lexer's blanks end a batch: a non-breaking space after the
+		// ';' is handed over as a second statement, for the grammar to reject,
+		// as MySQL rejects it, rather than being dropped.
+		input: "select 1;\u00a0",
+		calls: []call{{"select 1", "\u00a0"}, {"\u00a0", ""}},
+	}, {
+		// A ';' inside an executable comment is a syntax error in MySQL, whatever
+		// the comment's version: the statement is handed over whole, unsplit, for
+		// the grammar to reject it, and nothing after it runs.
+		input: "/*!80000 select 1; */ select 2",
+		calls: []call{{"/*!80000 select 1; */ select 2", ""}},
+	}, {
+		input: "select 3; /*!80000 select 1; */ select 2",
+		calls: []call{{"select 3", " /*!80000 select 1; */ select 2"}, {" /*!80000 select 1; */ select 2", ""}},
+	}, {
+		// the statement holding the comment ends at the next top-level ';' and
+		// fails on its own; the batch stops there once the executor reports it
+		input: "select 1 /*!99999 ; */; select 2",
+		calls: []call{{"select 1 /*!99999 ; */", " select 2"}, {" select 2", ""}},
+	}, {
+		// a ';' inside a plain comment, or outside the executable comment, is fine
+		input: "select 1 /* ; */; select /*!80000 2 */; select 3",
+		calls: []call{{"select 1 /* ; */", " select /*!80000 2 */; select 3"}, {" select /*!80000 2 */", " select 3"}, {" select 3", ""}},
+	}, {
 		input: "select 1;; select 2",
 		calls: []call{{"select 1", "; select 2"}},
 		err:   parseErrorPrefix + "'; select 2' at line 1",
@@ -655,5 +679,30 @@ func TestSplitStatementToPiecesNeverPanics(t *testing.T) {
 			// Whatever the cut, nothing of the input is lost.
 			assert.Equal(t, strings.ReplaceAll(input, ";", ""), strings.ReplaceAll(strings.Join(pieces, ""), ";", ""))
 		})
+	}
+}
+
+// A ';' inside an executable comment is a syntax error in MySQL, whatever the
+// comment's version; a ';' inside a plain comment is not.
+func TestTerminatorInsideExecutableComment(t *testing.T) {
+	parser := NewTestParser()
+	for _, sql := range []string{"/*!80000 select 1; */ select 2", "select /*!80000 1; */ 2", "select 1 /*!80000 ; */", "select 1 /*!99999 ; */"} {
+		_, err := parser.Parse(sql)
+		require.Error(t, err, sql)
+	}
+	for _, sql := range []string{"select 1 /* ; */", "select /*!80000 1 */", "select /*!99999 1 */ 3"} {
+		_, err := parser.Parse(sql)
+		require.NoError(t, err, sql)
+	}
+}
+
+// IsBlankOrComments tells a remainder that holds no statement from one that does.
+func TestIsBlankOrComments(t *testing.T) {
+	parser := NewTestParser()
+	for _, sql := range []string{"", "  \n\t", " -- c", " /* c */ ", "/* a */ -- b\n", "# c"} {
+		assert.True(t, parser.IsBlankOrComments(sql), "%q", sql)
+	}
+	for _, sql := range []string{"select 1", " /* c */ select 1", "b'", "\u00a0", ";"} {
+		assert.False(t, parser.IsBlankOrComments(sql), "%q", sql)
 	}
 }
