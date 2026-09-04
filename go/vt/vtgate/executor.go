@@ -2040,13 +2040,17 @@ func (e *Executor) PlanPrepareStmt(ctx context.Context, safeSession *econtext.Sa
 	// not from the planned AST: planning mutates the statement — most
 	// visibly by injecting the session's SET_VAR transport hint — and none
 	// of that belongs in the stored text, which captures only what the
-	// client's statement meant under the prepare-time sql_mode.
+	// client's statement meant under the prepare-time sql_mode. The margin
+	// comments around the statement are kept as they were: they carry request
+	// identifiers and audit tags that every EXECUTE must keep sending to the
+	// shards.
+	statement, comments := sqlparser.SplitMarginComments(query)
 	sqlMode, _ := safeSession.SQLMode()
-	stmt, err := e.env.Parser().WithSQLMode(sqlparser.ParseSQLMode(sqlMode)).Parse(query)
+	stmt, err := e.env.Parser().WithSQLMode(sqlparser.ParseSQLMode(sqlMode)).Parse(statement)
 	if err != nil {
 		return nil, "", err
 	}
-	return plan, sqlparser.String(stmt), nil
+	return plan, comments.Leading + sqlparser.String(stmt) + comments.Trailing, nil
 }
 
 // PlanStoredStmt implements the IExecutor interface: it plans the stored text

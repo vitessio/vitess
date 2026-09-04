@@ -2868,6 +2868,18 @@ func TestExecutorPrepareExecute(t *testing.T) {
 		assert.EqualValues(t, 3, prepData.ParamsCount)
 	})
 
+	t.Run("prepare statement keeps its margin comments", func(t *testing.T) {
+		_, err := executorExecSession(t.Context(), executor, session, "prepare prep_comments from '/* request-id: 42 */ select * from user where id = ? /* audit */'", nil)
+		require.NoError(t, err)
+
+		prepData := session.PrepareStatement["prep_comments"]
+		require.NotNil(t, prepData)
+		// the statement is stored canonically, the comments around it as they were
+		// (EXECUTE does not send them to the shards, which predates the canonical
+		// storage: the session's stored text is what this pins)
+		assert.Equal(t, "/* request-id: 42 */ select * from `user` where id = :v1 /* audit */", prepData.PrepareStatement)
+	})
+
 	t.Run("syntax error on prepared query", func(t *testing.T) {
 		_, err := executorExecSession(t.Context(), executor, session, "prepare prep_user2 from 'select'", nil)
 		require.Error(t, err)
