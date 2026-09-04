@@ -47,15 +47,15 @@ func (Charset_utf32) EncodeRune(dst []byte, r rune) int {
 	return 4
 }
 
-func (Charset_utf32) DecodeRune(p []byte) (rune, int, bool) {
+func (Charset_utf32) DecodeRune(p []byte) (rune, int, types.Decoding) {
 	if len(p) < 4 {
-		return utf8.RuneError, len(p), false
+		return utf8.RuneError, len(p), types.DecodeInvalid
 	}
 	r := uint32(p[0])<<24 | uint32(p[1])<<16 | uint32(p[2])<<8 | uint32(p[3])
 	if r > uint32(utf8.MaxRune) || (surr1 <= r && r < surr3) {
-		return utf8.RuneError, 4, false
+		return utf8.RuneError, 4, types.DecodeInvalid
 	}
-	return rune(r), 4, true
+	return rune(r), 4, types.DecodeOK
 }
 
 func (Charset_utf32) SupportsSupplementaryChars() bool {

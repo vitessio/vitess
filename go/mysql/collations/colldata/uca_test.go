@@ -31,6 +31,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/collations/charset"
+	"vitess.io/vitess/go/mysql/collations/charset/types"
 	"vitess.io/vitess/go/vt/vthash"
 )
 
@@ -183,14 +184,14 @@ func TestMalformedInput(t *testing.T) {
 	}
 
 	ascii := testcollation(t, "ascii_general_ci").Charset()
-	r, width, ok := ascii.DecodeRune([]byte{0x80})
+	r, width, d := ascii.DecodeRune([]byte{0x80})
 	require.Equal(t, charset.RuneError, r)
 	require.Equal(t, 1, width)
-	require.False(t, ok)
-	r, width, ok = ascii.DecodeRune([]byte{0x00})
+	require.NotEqual(t, types.DecodeOK, d)
+	r, width, d = ascii.DecodeRune([]byte{0x00})
 	require.Equal(t, rune(0), r)
 	require.Equal(t, 1, width)
-	require.True(t, ok)
+	require.Equal(t, types.DecodeOK, d)
 
 	out, err := charset.Convert(nil, charset.Charset_utf8mb4{}, []byte{0x41, 0x80, 0x42}, ascii)
 	require.ErrorContains(t, err, "Cannot convert string")
@@ -1218,4 +1219,12 @@ func BenchmarkUCA900Collation(b *testing.B) {
 			}
 		}
 	}
+}
+
+func TestGB18030UnmappableWeights(t *testing.T) {
+	coll := testcollation(t, "gb18030_unicode_520_ci")
+
+	ws := coll.WeightString(nil, []byte{0xE3, 0x32, 0x9A, 0x36}, 0)
+	require.Equal(t, []byte{0x02, 0x73}, ws)
+	require.Equal(t, coll.WeightString(nil, []byte{0x3F}, 0), ws)
 }

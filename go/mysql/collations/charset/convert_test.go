@@ -21,6 +21,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/mysql/collations/charset/types"
 )
 
 type testCharset1 struct{}
@@ -45,11 +47,11 @@ func (c *testCharset1) EncodeRune([]byte, rune) int {
 	return 0
 }
 
-func (c *testCharset1) DecodeRune(bytes []byte) (rune, int, bool) {
+func (c *testCharset1) DecodeRune(bytes []byte) (rune, int, types.Decoding) {
 	if len(bytes) < 1 {
-		return RuneError, 0, false
+		return RuneError, 0, types.DecodeInvalid
 	}
-	return 1, 1, true
+	return 1, 1, types.DecodeOK
 }
 
 type testCharset2 struct{}
@@ -74,11 +76,11 @@ func (c *testCharset2) EncodeRune([]byte, rune) int {
 	return 0
 }
 
-func (c *testCharset2) DecodeRune(bytes []byte) (rune, int, bool) {
+func (c *testCharset2) DecodeRune(bytes []byte) (rune, int, types.Decoding) {
 	if len(bytes) < 1 {
-		return RuneError, 0, false
+		return RuneError, 0, types.DecodeInvalid
 	}
-	return rune(bytes[0]), 1, true
+	return rune(bytes[0]), 1, types.DecodeOK
 }
 
 func (c *testCharset2) Convert(_, src []byte, from Charset) ([]byte, error) {
@@ -211,7 +213,6 @@ func TestConvert(t *testing.T) {
 			dst:        nil,
 			dstCharset: Charset_utf8mb4{},
 			want:       []byte("A?B"),
-			err:        "Cannot convert string",
 		},
 		{
 			src:        []byte{0xFF, 0xFF, 0xFF, 0xFF},
@@ -235,7 +236,6 @@ func TestConvert(t *testing.T) {
 			dst:        nil,
 			dstCharset: Charset_utf8mb4{},
 			want:       []byte("A?B"),
-			err:        "Cannot convert string",
 		},
 		{
 			src:        []byte{0x80, 0x41},
@@ -467,5 +467,30 @@ func TestConvertFromBinary(t *testing.T) {
 			require.NoError(t, err)
 			assert.Equal(t, tc.want, got)
 		}
+	}
+}
+
+func TestUnmappableSequences(t *testing.T) {
+	cases := []struct {
+		name string
+		cs   Charset
+		in   []byte
+	}{
+		{"gb18030 reserved", Charset_gb18030{}, []byte{0xE3, 0x32, 0x9A, 0x36}},
+		{"sjis unassigned", Charset_sjis{}, []byte{0x81, 0xAD}},
+		{"euckr unassigned", Charset_euckr{}, []byte{0xC9, 0x41}},
+		{"ujis unassigned", Charset_ujis{}, []byte{0xA2, 0xF1}},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			require.True(t, Validate(tc.cs, tc.in))
+			require.Equal(t, 1, Length(tc.cs, tc.in))
+
+			framed := append(append([]byte{0x41}, tc.in...), 0x42)
+			out, err := Convert(nil, Charset_utf8mb4{}, framed, tc.cs)
+			require.NoError(t, err)
+			require.Equal(t, []byte("A?B"), out)
+		})
 	}
 }

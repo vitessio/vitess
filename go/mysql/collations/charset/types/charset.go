@@ -16,6 +16,30 @@ limitations under the License.
 
 package types
 
+// Decoding is the result of decoding a rune. It mirrors the two predicates
+// MySQL keeps separate for multibyte data: whether a byte sequence is a
+// well-formed character (ismbchar, used for walking and counting) and whether
+// it maps to Unicode (mb_wc, used for conversion).
+type Decoding uint8
+
+const (
+	// DecodeOK means the input is well-formed and maps to Unicode. The rune is
+	// the decoded codepoint and the width is the width of the character.
+	DecodeOK Decoding = iota
+
+	// DecodeUnmappable means the input is a well-formed character with no
+	// Unicode mapping. The rune is RuneError and the width is the width of the character.
+	DecodeUnmappable
+
+	// DecodeInvalid means the input is malformed. The rune is RuneError and the
+	// width is the number of bytes to skip to reach the next rune.
+	DecodeInvalid
+)
+
+func (d Decoding) IsChar() bool { return d != DecodeInvalid }
+
+func (d Decoding) IsMapped() bool { return d == DecodeOK }
+
 type Charset interface {
 	Name() string
 	SupportsSupplementaryChars() bool
@@ -24,8 +48,10 @@ type Charset interface {
 
 	EncodeRune([]byte, rune) int
 	// DecodeRune decodes the first rune in the input and returns it along with
-	// its width in bytes and whether the input was well-formed. On malformed
-	// input it returns RuneError, the number of bytes to skip to reach the
-	// next rune (zero for empty input), and false.
-	DecodeRune([]byte) (rune, int, bool)
+	// its width in bytes and the decoding result. The rune is only meaningful
+	// when the result is DecodeOK. Unless the result is DecodeInvalid, the
+	// first width bytes are exactly one character and can be copied through
+	// verbatim; on DecodeInvalid the width is the number of bytes to skip to
+	// reach the next rune, which is zero only for empty input.
+	DecodeRune([]byte) (rune, int, Decoding)
 }

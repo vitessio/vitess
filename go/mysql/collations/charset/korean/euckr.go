@@ -85,22 +85,22 @@ write2:
 	return 2
 }
 
-func (Charset_euckr) DecodeRune(src []byte) (rune, int, bool) {
+func (Charset_euckr) DecodeRune(src []byte) (rune, int, types.Decoding) {
 	if len(src) < 1 {
-		return utf8.RuneError, 0, false
+		return utf8.RuneError, 0, types.DecodeInvalid
 	}
 
 	switch c0 := src[0]; {
 	case c0 < utf8.RuneSelf:
-		return rune(c0), 1, true
+		return rune(c0), 1, types.DecodeOK
 
 	case 0x81 <= c0 && c0 < 0xff:
 		if len(src) < 2 {
-			return utf8.RuneError, 1, false
+			return utf8.RuneError, 1, types.DecodeInvalid
 		}
 		c1 := src[1]
 		if c1 < 0x41 || (0x5a < c1 && c1 < 0x61) || (0x7a < c1 && c1 < 0x81) || 0xfe < c1 {
-			return utf8.RuneError, 1, false
+			return utf8.RuneError, 1, types.DecodeInvalid
 		}
 		var r rune
 		if c0 < 0xc7 {
@@ -116,17 +116,17 @@ func (Charset_euckr) DecodeRune(src []byte) (rune, int, bool) {
 		} else if 0xa1 <= c1 {
 			r = 178*(0xc7-0x81) + rune(c0-0xc7)*94 + rune(c1-0xa1)
 		} else {
-			return utf8.RuneError, 2, false
+			return utf8.RuneError, 2, types.DecodeUnmappable
 		}
 		if int(r) < len(decode) {
 			if r = rune(decode[r]); r != 0 {
-				return r, 2, true
+				return r, 2, types.DecodeOK
 			}
 		}
-		return utf8.RuneError, 2, false
+		return utf8.RuneError, 2, types.DecodeUnmappable
 
 	default:
-		return utf8.RuneError, 1, false
+		return utf8.RuneError, 1, types.DecodeInvalid
 	}
 }
 

@@ -21,6 +21,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/mysql/collations/charset/types"
 )
 
 func TestIsMultibyteByName(t *testing.T) {
@@ -153,10 +155,10 @@ func TestDecodeRuneWidthContract(t *testing.T) {
 
 	for _, cs := range charsets {
 		t.Run(cs.Name(), func(t *testing.T) {
-			r, width, ok := cs.DecodeRune(nil)
+			r, width, d := cs.DecodeRune(nil)
 			require.Equal(t, RuneError, r)
 			require.Zero(t, width)
-			require.False(t, ok)
+			require.Equal(t, types.DecodeInvalid, d)
 
 			for _, in := range inputs {
 				_, width, _ := cs.DecodeRune(in)
@@ -184,8 +186,8 @@ func TestGB18030PUAMapping(t *testing.T) {
 		{[]byte{0xA2, 0xE3}, 0x20AC},
 	}
 	for _, tc := range testCases {
-		r, width, ok := cs.DecodeRune(tc.bytes)
-		require.True(t, ok, "DecodeRune(%X)", tc.bytes)
+		r, width, d := cs.DecodeRune(tc.bytes)
+		require.Equal(t, types.DecodeOK, d, "DecodeRune(%X)", tc.bytes)
 		require.Equal(t, tc.r, r, "DecodeRune(%X)", tc.bytes)
 		require.Equal(t, len(tc.bytes), width, "DecodeRune(%X)", tc.bytes)
 
@@ -200,8 +202,8 @@ func TestGB18030PUAMapping(t *testing.T) {
 			if trail == 0x7F {
 				continue
 			}
-			r, width, ok := cs.DecodeRune([]byte{byte(lead), byte(trail)})
-			require.True(t, ok, "DecodeRune(%X %X) = %U", lead, trail, r)
+			r, width, d := cs.DecodeRune([]byte{byte(lead), byte(trail)})
+			require.Equal(t, types.DecodeOK, d, "DecodeRune(%X %X) = %U", lead, trail, r)
 			require.Equal(t, 2, width)
 		}
 	}
@@ -209,66 +211,66 @@ func TestGB18030PUAMapping(t *testing.T) {
 
 func TestDecodeRuneValidity(t *testing.T) {
 	testCases := []struct {
-		name      string
-		cs        Charset
-		input     []byte
-		wantRune  rune
-		wantWidth int
-		wantOK    bool
+		name         string
+		cs           Charset
+		input        []byte
+		wantRune     rune
+		wantWidth    int
+		wantDecoding types.Decoding
 	}{
-		{"utf8mb3 valid RuneError", Charset_utf8mb3{}, []byte{0xEF, 0xBF, 0xBD}, RuneError, 3, true},
-		{"utf8mb3 invalid", Charset_utf8mb3{}, []byte{0xFF}, RuneError, 1, false},
-		{"utf8mb4 valid RuneError", Charset_utf8mb4{}, []byte{0xEF, 0xBF, 0xBD}, RuneError, 3, true},
-		{"utf8mb4 invalid", Charset_utf8mb4{}, []byte{0xFF}, RuneError, 1, false},
-		{"utf16 valid RuneError", Charset_utf16{}, []byte{0xFF, 0xFD}, RuneError, 2, true},
-		{"utf16 unpaired surrogate", Charset_utf16{}, []byte{0xD8, 0x00}, RuneError, 2, false},
-		{"utf16 broken surrogate pair", Charset_utf16{}, []byte{0xD8, 0x00, 0x00, 0x31}, RuneError, 2, false},
-		{"utf16le valid RuneError", Charset_utf16le{}, []byte{0xFD, 0xFF}, RuneError, 2, true},
-		{"utf16le unpaired surrogate", Charset_utf16le{}, []byte{0x00, 0xD8}, RuneError, 2, false},
-		{"ucs2 valid RuneError", Charset_ucs2{}, []byte{0xFF, 0xFD}, RuneError, 2, true},
-		{"ucs2 invalid", Charset_ucs2{}, []byte{0x00}, RuneError, 1, false},
-		{"ucs2 high surrogate", Charset_ucs2{}, []byte{0xD8, 0x00}, RuneError, 2, false},
-		{"ucs2 low surrogate", Charset_ucs2{}, []byte{0xDC, 0x00}, RuneError, 2, false},
-		{"utf32 valid RuneError", Charset_utf32{}, []byte{0x00, 0x00, 0xFF, 0xFD}, RuneError, 4, true},
-		{"utf32 invalid", Charset_utf32{}, []byte{0x00}, RuneError, 1, false},
-		{"utf32 surrogate", Charset_utf32{}, []byte{0x00, 0x00, 0xD8, 0x00}, RuneError, 4, false},
-		{"utf32 beyond max rune", Charset_utf32{}, []byte{0x00, 0x11, 0x00, 0x00}, RuneError, 4, false},
-		{"utf32 negative rune", Charset_utf32{}, []byte{0xFF, 0xFF, 0xFF, 0xFF}, RuneError, 4, false},
-		{"gb18030 invalid", Charset_gb18030{}, []byte{0xFF}, RuneError, 1, false},
-		{"gb18030 invalid lead 0x80", Charset_gb18030{}, []byte{0x80, 0x41}, RuneError, 1, false},
-		{"gb18030 second byte beyond digits", Charset_gb18030{}, []byte{0x81, 0x3A, 0x81, 0x30}, RuneError, 1, false},
-		{"gb18030 third byte beyond 0xFE", Charset_gb18030{}, []byte{0x81, 0x30, 0xFF, 0x30}, RuneError, 1, false},
-		{"gb18030 reserved pointer", Charset_gb18030{}, []byte{0x84, 0x31, 0xA5, 0x30}, RuneError, 4, false},
-		{"gb18030 four byte minimum", Charset_gb18030{}, []byte{0x81, 0x30, 0x81, 0x30}, 0x80, 4, true},
-		{"gb18030 four byte maximum", Charset_gb18030{}, []byte{0xE3, 0x32, 0x9A, 0x35}, 0x10FFFF, 4, true},
-		{"gb2312 invalid", Charset_gb2312{}, []byte{0xFF}, RuneError, 1, false},
-		{"gb2312 aliasing trail", Charset_gb2312{}, []byte{0xA1, 0x21}, RuneError, 1, false},
-		{"gb2312 invalid trail", Charset_gb2312{}, []byte{0xA1, 0x20}, RuneError, 1, false},
-		{"gb2312 invalid lead", Charset_gb2312{}, []byte{0xF8, 0xA1}, RuneError, 1, false},
-		{"ujis invalid", Charset_ujis{}, []byte{0xFF}, RuneError, 1, false},
-		{"ujis kana invalid trail", Charset_ujis{}, []byte{0x8E, 0xE5}, RuneError, 1, false},
-		{"ujis plane2 invalid trail", Charset_ujis{}, []byte{0x8F, 0xA1, 0x20}, RuneError, 1, false},
-		{"ujis plane2 truncated", Charset_ujis{}, []byte{0x8F, 0xA1}, RuneError, 1, false},
-		{"ujis unassigned pair", Charset_ujis{}, []byte{0xA2, 0xF1}, RuneError, 2, false},
-		{"sjis invalid", Charset_sjis{}, []byte{0x81}, RuneError, 1, false},
-		{"sjis invalid lead", Charset_sjis{}, []byte{0x80, 0x41}, RuneError, 1, false},
-		{"sjis invalid trail", Charset_sjis{}, []byte{0x81, 0x20}, RuneError, 1, false},
-		{"sjis unassigned pair", Charset_sjis{}, []byte{0x81, 0xAD}, RuneError, 2, false},
-		{"cp932 invalid", Charset_cp932{}, []byte{0x81}, RuneError, 1, false},
-		{"cp932 invalid trail", Charset_cp932{}, []byte{0x81, 0x20}, RuneError, 1, false},
-		{"eucjpms invalid", Charset_eucjpms{}, []byte{0xFF}, RuneError, 1, false},
-		{"euckr invalid", Charset_euckr{}, []byte{0xFF}, RuneError, 1, false},
-		{"euckr invalid trail", Charset_euckr{}, []byte{0xB0, 0xFF}, RuneError, 1, false},
-		{"euckr gap trail", Charset_euckr{}, []byte{0xB0, 0x5B}, RuneError, 1, false},
-		{"euckr unassigned pair", Charset_euckr{}, []byte{0xC9, 0x41}, RuneError, 2, false},
+		{"utf8mb3 valid RuneError", Charset_utf8mb3{}, []byte{0xEF, 0xBF, 0xBD}, RuneError, 3, types.DecodeOK},
+		{"utf8mb3 invalid", Charset_utf8mb3{}, []byte{0xFF}, RuneError, 1, types.DecodeInvalid},
+		{"utf8mb4 valid RuneError", Charset_utf8mb4{}, []byte{0xEF, 0xBF, 0xBD}, RuneError, 3, types.DecodeOK},
+		{"utf8mb4 invalid", Charset_utf8mb4{}, []byte{0xFF}, RuneError, 1, types.DecodeInvalid},
+		{"utf16 valid RuneError", Charset_utf16{}, []byte{0xFF, 0xFD}, RuneError, 2, types.DecodeOK},
+		{"utf16 unpaired surrogate", Charset_utf16{}, []byte{0xD8, 0x00}, RuneError, 2, types.DecodeInvalid},
+		{"utf16 broken surrogate pair", Charset_utf16{}, []byte{0xD8, 0x00, 0x00, 0x31}, RuneError, 2, types.DecodeInvalid},
+		{"utf16le valid RuneError", Charset_utf16le{}, []byte{0xFD, 0xFF}, RuneError, 2, types.DecodeOK},
+		{"utf16le unpaired surrogate", Charset_utf16le{}, []byte{0x00, 0xD8}, RuneError, 2, types.DecodeInvalid},
+		{"ucs2 valid RuneError", Charset_ucs2{}, []byte{0xFF, 0xFD}, RuneError, 2, types.DecodeOK},
+		{"ucs2 invalid", Charset_ucs2{}, []byte{0x00}, RuneError, 1, types.DecodeInvalid},
+		{"ucs2 high surrogate", Charset_ucs2{}, []byte{0xD8, 0x00}, RuneError, 2, types.DecodeInvalid},
+		{"ucs2 low surrogate", Charset_ucs2{}, []byte{0xDC, 0x00}, RuneError, 2, types.DecodeInvalid},
+		{"utf32 valid RuneError", Charset_utf32{}, []byte{0x00, 0x00, 0xFF, 0xFD}, RuneError, 4, types.DecodeOK},
+		{"utf32 invalid", Charset_utf32{}, []byte{0x00}, RuneError, 1, types.DecodeInvalid},
+		{"utf32 surrogate", Charset_utf32{}, []byte{0x00, 0x00, 0xD8, 0x00}, RuneError, 4, types.DecodeInvalid},
+		{"utf32 beyond max rune", Charset_utf32{}, []byte{0x00, 0x11, 0x00, 0x00}, RuneError, 4, types.DecodeInvalid},
+		{"utf32 negative rune", Charset_utf32{}, []byte{0xFF, 0xFF, 0xFF, 0xFF}, RuneError, 4, types.DecodeInvalid},
+		{"gb18030 invalid", Charset_gb18030{}, []byte{0xFF}, RuneError, 1, types.DecodeInvalid},
+		{"gb18030 invalid lead 0x80", Charset_gb18030{}, []byte{0x80, 0x41}, RuneError, 1, types.DecodeInvalid},
+		{"gb18030 second byte beyond digits", Charset_gb18030{}, []byte{0x81, 0x3A, 0x81, 0x30}, RuneError, 1, types.DecodeInvalid},
+		{"gb18030 third byte beyond 0xFE", Charset_gb18030{}, []byte{0x81, 0x30, 0xFF, 0x30}, RuneError, 1, types.DecodeInvalid},
+		{"gb18030 reserved pointer", Charset_gb18030{}, []byte{0x84, 0x31, 0xA5, 0x30}, RuneError, 4, types.DecodeUnmappable},
+		{"gb18030 four byte minimum", Charset_gb18030{}, []byte{0x81, 0x30, 0x81, 0x30}, 0x80, 4, types.DecodeOK},
+		{"gb18030 four byte maximum", Charset_gb18030{}, []byte{0xE3, 0x32, 0x9A, 0x35}, 0x10FFFF, 4, types.DecodeOK},
+		{"gb2312 invalid", Charset_gb2312{}, []byte{0xFF}, RuneError, 1, types.DecodeInvalid},
+		{"gb2312 aliasing trail", Charset_gb2312{}, []byte{0xA1, 0x21}, RuneError, 1, types.DecodeInvalid},
+		{"gb2312 invalid trail", Charset_gb2312{}, []byte{0xA1, 0x20}, RuneError, 1, types.DecodeInvalid},
+		{"gb2312 invalid lead", Charset_gb2312{}, []byte{0xF8, 0xA1}, RuneError, 1, types.DecodeInvalid},
+		{"ujis invalid", Charset_ujis{}, []byte{0xFF}, RuneError, 1, types.DecodeInvalid},
+		{"ujis kana invalid trail", Charset_ujis{}, []byte{0x8E, 0xE5}, RuneError, 1, types.DecodeInvalid},
+		{"ujis plane2 invalid trail", Charset_ujis{}, []byte{0x8F, 0xA1, 0x20}, RuneError, 1, types.DecodeInvalid},
+		{"ujis plane2 truncated", Charset_ujis{}, []byte{0x8F, 0xA1}, RuneError, 1, types.DecodeInvalid},
+		{"ujis unassigned pair", Charset_ujis{}, []byte{0xA2, 0xF1}, RuneError, 2, types.DecodeUnmappable},
+		{"sjis invalid", Charset_sjis{}, []byte{0x81}, RuneError, 1, types.DecodeInvalid},
+		{"sjis invalid lead", Charset_sjis{}, []byte{0x80, 0x41}, RuneError, 1, types.DecodeInvalid},
+		{"sjis invalid trail", Charset_sjis{}, []byte{0x81, 0x20}, RuneError, 1, types.DecodeInvalid},
+		{"sjis unassigned pair", Charset_sjis{}, []byte{0x81, 0xAD}, RuneError, 2, types.DecodeUnmappable},
+		{"cp932 invalid", Charset_cp932{}, []byte{0x81}, RuneError, 1, types.DecodeInvalid},
+		{"cp932 invalid trail", Charset_cp932{}, []byte{0x81, 0x20}, RuneError, 1, types.DecodeInvalid},
+		{"eucjpms invalid", Charset_eucjpms{}, []byte{0xFF}, RuneError, 1, types.DecodeInvalid},
+		{"euckr invalid", Charset_euckr{}, []byte{0xFF}, RuneError, 1, types.DecodeInvalid},
+		{"euckr invalid trail", Charset_euckr{}, []byte{0xB0, 0xFF}, RuneError, 1, types.DecodeInvalid},
+		{"euckr gap trail", Charset_euckr{}, []byte{0xB0, 0x5B}, RuneError, 1, types.DecodeInvalid},
+		{"euckr unassigned pair", Charset_euckr{}, []byte{0xC9, 0x41}, RuneError, 2, types.DecodeUnmappable},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			gotRune, gotWidth, gotOK := tc.cs.DecodeRune(tc.input)
+			gotRune, gotWidth, gotDecoding := tc.cs.DecodeRune(tc.input)
 			require.Equal(t, tc.wantRune, gotRune)
 			require.Equal(t, tc.wantWidth, gotWidth)
-			require.Equal(t, tc.wantOK, gotOK)
+			require.Equal(t, tc.wantDecoding, gotDecoding)
 		})
 	}
 }
