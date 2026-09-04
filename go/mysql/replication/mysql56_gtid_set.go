@@ -91,7 +91,14 @@ func ParseMysql56GTIDSet(s string) (Mysql56GTIDSet, error) {
 			return nil, vterrors.Wrapf(err, "invalid MySQL 5.6 GTID set (%q)", s)
 		}
 
-		intervals := make([]interval, 0, strings.Count(tail, ":")+1)
+		// The hint is derived from untrusted input, so bound it: the densest valid
+		// interval list is one singleton per two bytes ("1:"), and a smaller divisor
+		// would under-reserve that.
+		nIntervals := strings.Count(tail, ":") + 1
+		if max := len(tail)/2 + 1; nIntervals > max {
+			nIntervals = max
+		}
+		intervals := make([]interval, 0, nIntervals)
 		for len(tail) > 0 {
 			if idx := strings.IndexByte(tail, ':'); idx >= 0 {
 				head = tail[:idx]

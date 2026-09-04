@@ -17,8 +17,10 @@ limitations under the License.
 package replication
 
 import (
+	"fmt"
 	"maps"
 	"reflect"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -901,4 +903,59 @@ func TestSIDs(t *testing.T) {
 	assert.NotNil(t, sids)
 	require.Len(t, sids, 1)
 	assert.Equal(t, "8bc65cca-3fe4-11ed-bbfb-091034d48b3e", sids[0].String())
+}
+
+// TestParseMysql56GTIDSetIntervalsCapHint pins the bound on the intervals
+// preallocation. Measured on the parent commit, the hostile case allocates
+// 16,785,456 bytes and fails the 12MiB assertion below; with the bound it is
+// 8,400,152. The valid dense case is 1,605,640 either way.
+func TestParseMysql56GTIDSetIntervalsCapHint(t *testing.T) {
+	const sid = "00010203-0405-0607-0809-0a0b0c0d0e0f"
+
+	// Results must be identical either side of the bound.
+	for _, n := range []int{1, 10, 100, 1023, 1024, 1025, 2051, 5000} {
+		var sb strings.Builder
+		sb.WriteString(sid)
+		for i := range n {
+			fmt.Fprintf(&sb, ":%d-%d", 2*i+1, 2*i+1)
+		}
+		got, err := ParseMysql56GTIDSet(sb.String())
+		require.NoError(t, err, "n=%d", n)
+		sidVal, err := ParseSID(sid)
+		require.NoError(t, err)
+		assert.Len(t, got[sidVal], n, "n=%d", n)
+	}
+
+	// A colon run carries no intervals, so reserving one per colon is pure waste.
+	hostile := sid + ":" + strings.Repeat(":", 1<<20)
+	var before, after runtime.MemStats
+	runtime.GC()
+	runtime.ReadMemStats(&before)
+	_, _ = ParseMysql56GTIDSet(hostile)
+	runtime.ReadMemStats(&after)
+	allocated := after.TotalAlloc - before.TotalAlloc
+	assert.Less(t, allocated, uint64(12<<20),
+		"parsing %d colons allocated %d bytes for intervals that are all discarded",
+		1<<20, allocated)
+
+	// The bound must not under-reserve the densest valid list: duplicate singletons
+	// are retained rather than merged, so "1:1:1:..." needs one interval per two bytes.
+	const singletons = 100000
+	var sb strings.Builder
+	sb.WriteString(sid)
+	for range singletons {
+		sb.WriteString(":1")
+	}
+	runtime.GC()
+	runtime.ReadMemStats(&before)
+	dense, err := ParseMysql56GTIDSet(sb.String())
+	runtime.ReadMemStats(&after)
+	require.NoError(t, err)
+	denseAlloc := after.TotalAlloc - before.TotalAlloc
+	sidVal, err := ParseSID(sid)
+	require.NoError(t, err)
+	assert.Len(t, dense[sidVal], singletons)
+	assert.Less(t, denseAlloc, uint64(3<<20),
+		"a dense valid singleton list allocated %d bytes, so the hint under-reserved",
+		denseAlloc)
 }
