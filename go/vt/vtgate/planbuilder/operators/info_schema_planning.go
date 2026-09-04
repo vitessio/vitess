@@ -102,8 +102,7 @@ func (isr *InfoSchemaRouting) updateRoutingLogic(ctx *plancontext.PlanningContex
 		return isr
 	}
 	if existing, ok := isr.SysTableTableName[bvName]; ok && !sqlparser.Equals.Expr(existing, out) {
-		// The column's bind variable already carries a different value; a
-		// second one cannot share it, so this predicate stays a plain filter.
+		// Another value already owns this column's bind variable: stay a filter.
 		if cmp, ok := expr.(*sqlparser.ComparisonExpr); ok {
 			cmp.Right = out
 		}
@@ -173,7 +172,7 @@ func extractInfoSchemaRoutingPredicate(ctx *plancontext.PlanningContext, in sqlp
 			}
 			// Multi-element schema lists are resolved at execution. table_name
 			// lists already work as pushed-down filters.
-			if !isSchema || !translates(rhs) || slices.ContainsFunc(rhs, func(e sqlparser.Expr) bool { return !shouldRewrite(e) }) {
+			if !isSchema || !translates(rhs) {
 				return false, "", nil
 			}
 			cmp.Operator = sqlparser.EqualOp

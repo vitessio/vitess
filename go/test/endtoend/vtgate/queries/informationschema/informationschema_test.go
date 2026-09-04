@@ -331,6 +331,13 @@ func TestInformationSchemaWithInPredicate(t *testing.T) {
 	require.Equal(t, eq.Rows, inDup.Rows)
 	utils.AssertResultIsEmpty(t, mcmp.VtConn, "table_schema = 'ks' and table_schema in (null, null)")
 
+	// database() evaluates to the connected keyspace at vtgate
+	inDB := utils.Exec(t, mcmp.VtConn, "select table_name from information_schema.tables where table_schema in (database(), 'ks') and table_name = 't1'")
+	require.Equal(t, eq.Rows, inDB.Rows)
+	_, err = mcmp.VtConn.ExecuteFetch("select table_name from information_schema.tables where table_schema in (database(), 'other')", 100, false)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "VT12001")
+
 	// multi-value table_name IN stays a plain filter
 	multiName := utils.Exec(t, mcmp.VtConn, "select table_name from information_schema.tables where table_schema = database() and table_name in ('t1', 't7_xxhash')")
 	require.Len(t, multiName.Rows, 2)

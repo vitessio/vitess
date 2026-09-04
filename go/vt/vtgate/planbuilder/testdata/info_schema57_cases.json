@@ -1212,7 +1212,7 @@
     }
   },
   {
-    "comment": "multi-element IN containing database() is left alone",
+    "comment": "multi-element IN containing database() is resolved at execution, database() evaluating to the connected keyspace",
     "query": "select table_name from information_schema.tables where table_schema in (database(), 'vt_main')",
     "plan": {
       "Type": "Passthrough",
@@ -1226,7 +1226,8 @@
           "Sharded": false
         },
         "FieldQuery": "select `table_name` from information_schema.`tables` where 1 != 1",
-        "Query": "select `table_name` from information_schema.`tables` where table_schema in (database(), 'vt_main')"
+        "Query": "select `table_name` from information_schema.`tables` where table_schema = :__vtschemaname /* VARCHAR */",
+        "SysTableTableSchema": "[(database(), 'vt_main')]"
       }
     }
   },
