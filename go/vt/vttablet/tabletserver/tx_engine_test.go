@@ -104,7 +104,7 @@ func TestTxEngineClose(t *testing.T) {
 	c.Unlock()
 	go func() {
 		time.Sleep(10 * time.Millisecond)
-		_, err := te.txPool.GetAndLock(c.ReservedID(), "return")
+		_, err := te.txPool.GetAndLock(ctx, c.ReservedID(), "return")
 		assert.NoError(t, err)
 		te.txPool.RollbackAndRelease(ctx, c)
 	}()
@@ -202,7 +202,7 @@ func TestTxEngineRenewFails(t *testing.T) {
 	connID, _, err := te.ReserveBegin(ctx, options, nil)
 	require.NoError(t, err)
 
-	conn, err := te.txPool.GetAndLock(connID, "for test")
+	conn, err := te.txPool.GetAndLock(ctx, connID, "for test")
 	require.NoError(t, err)
 	conn.Unlock() // but we keep holding on to it... sneaky....
 
@@ -755,7 +755,7 @@ func TestTxEngineFailReserve(t *testing.T) {
 
 	txID, _, _, err := te.Begin(ctx, 0, nil, options)
 	require.NoError(t, err)
-	conn, err := te.txPool.GetAndLock(txID, "for test")
+	conn, err := te.txPool.GetAndLock(ctx, txID, "for test")
 	require.NoError(t, err)
 	conn.Unlock() // but we keep holding on to it... sneaky....
 
@@ -965,4 +965,34 @@ func TestPrepareTx(t *testing.T) {
 			require.Equal(t, tt.queryLogWanted, db.QueryLog())
 		})
 	}
+}
+
+// TestBeginNewDbaConnectionClosesOnFailure verifies that the fresh dba
+// connection is closed when its setup fails (applying the settings query or
+// starting the transaction): the redo-prepared-transactions caller returns
+// immediately on error, so a connection left open here would leak.
+func TestBeginNewDbaConnectionClosesOnFailure(t *testing.T) {
+	ctx := t.Context()
+
+	t.Run("settings query fails", func(t *testing.T) {
+		db := fakesqldb.New(t)
+		defer db.Close()
+		db.AddRejectedQuery("dummy_setting", errors.New("failed executing dummy_setting"))
+		te := setupTxEngine(db)
+
+		_, err := te.beginNewDbaConnection(ctx, "dummy_setting")
+		require.ErrorContains(t, err, "dummy_setting")
+		require.NoError(t, db.WaitForClose(30*time.Second), "dba connection must be closed when applying settings fails")
+	})
+
+	t.Run("begin fails", func(t *testing.T) {
+		db := fakesqldb.New(t)
+		defer db.Close()
+		db.AddRejectedQuery("begin", errors.New("failed executing begin"))
+		te := setupTxEngine(db)
+
+		_, err := te.beginNewDbaConnection(ctx, "")
+		require.ErrorContains(t, err, "begin")
+		require.NoError(t, db.WaitForClose(30*time.Second), "dba connection must be closed when begin fails")
+	})
 }

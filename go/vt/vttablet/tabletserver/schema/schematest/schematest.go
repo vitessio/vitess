@@ -62,6 +62,14 @@ func AddDefaultQueries(db *fakesqldb.DB) {
 			{sqltypes.NewVarBinary("0")},
 		},
 	})
+	db.AddQuery("select @@global.wait_timeout", &sqltypes.Result{
+		Fields: []*querypb.Field{{
+			Type: sqltypes.Uint64,
+		}},
+		Rows: [][]sqltypes.Value{
+			{sqltypes.NewVarBinary("28800")},
+		},
+	})
 
 	db.AddQuery(mysql.BaseShowPrimary, &sqltypes.Result{
 		Fields: mysql.ShowPrimaryFields,

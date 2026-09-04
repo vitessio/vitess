@@ -230,6 +230,16 @@ func (gw *TabletGateway) QueryServiceByAlias(ctx context.Context, alias *topodat
 	return queryservice.Wrap(qs, gw.withShardError), NewShardError(err, target)
 }
 
+// TabletSeemsServing reports whether the healthcheck currently believes the
+// tablet with the given alias is serving. It is a hint, not a guarantee: the
+// healthcheck can lag reality in both directions. Callers use it to bias
+// scheduling (e.g. the temp-table keepalive skips its bounded failing lane for
+// a tablet the healthcheck already sees serving again), never for correctness.
+func (gw *TabletGateway) TabletSeemsServing(alias *topodatapb.TabletAlias) bool {
+	th, err := gw.hc.GetTabletHealthByAlias(alias)
+	return err == nil && th.Serving
+}
+
 // GetServingKeyspaces returns list of serving keyspaces.
 func (gw *TabletGateway) GetServingKeyspaces() []string {
 	if gw.kev == nil {

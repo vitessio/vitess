@@ -26,6 +26,14 @@ import (
 	"vitess.io/vitess/go/cache"
 )
 
+// ErrInUse is wrapped into the error returned by Get when the resource
+// exists but is currently checked out by another caller. Detect it with
+// errors.Is rather than matching the error text. It is deliberately a plain
+// sentinel, not a vterrors error: it composes into prose ("in use: <purpose>")
+// via %w, and a vterrors error would embed its code into that text; callers
+// attach a proper vtrpc code when they wrap it at their boundary.
+var ErrInUse = errors.New("in use")
+
 // Numbered allows you to manage resources by tracking them with numbers.
 // There are no interface restrictions on what you can track.
 type Numbered struct {
@@ -113,7 +121,7 @@ func (nu *Numbered) Get(id int64, purpose string) (val any, err error) {
 		return nil, errors.New("not found (potential transaction timeout)")
 	}
 	if nw.inUse {
-		return nil, fmt.Errorf("in use: %s", nw.purpose)
+		return nil, fmt.Errorf("%w: %s", ErrInUse, nw.purpose)
 	}
 	nw.inUse = true
 	nw.purpose = purpose

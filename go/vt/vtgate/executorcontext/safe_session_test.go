@@ -223,6 +223,13 @@ func TestTargetTabletAlias(t *testing.T) {
 	assert.Nil(t, session.GetTargetTabletAlias())
 }
 
+// The reserved-connection keepalive is a request-level ExecuteRequest field
+// (see queryservice.ContextWithReservedConnKeepAlive), not an ExecuteOptions
+// field, precisely so that a client-supplied session cannot carry it — through
+// this vtgate or through one predating the feature, which would relay unknown
+// option fields to the tablet verbatim. The tablet-side regression test for
+// that relay lives with the TabletServer keepalive tests.
+
 func TestClearPrepareData(t *testing.T) {
 	session := NewSafeSession(&vtgatepb.Session{})
 
@@ -264,4 +271,39 @@ func TestPrepareDataConcurrentAccess(t *testing.T) {
 		}()
 	}
 	wg.Wait()
+}
+
+// TestShardSessionSnapshots verifies the snapshot accessor: it covers the
+// ShardSessions only, and the returned snapshots are copies — a later
+// in-place update of the live proto (as AppendOrUpdate performs during query
+// execution) must not show through.
+func TestShardSessionSnapshots(t *testing.T) {
+	alias := &topodatapb.TabletAlias{Cell: "cell", Uid: 1}
+	shardSession := func(shard string, reservedID, transactionID int64) *vtgatepb.Session_ShardSession {
+		return &vtgatepb.Session_ShardSession{
+			Target:        &querypb.Target{Keyspace: "keyspace", Shard: shard},
+			TabletAlias:   alias,
+			ReservedId:    reservedID,
+			TransactionId: transactionID,
+		}
+	}
+	session := NewSafeSession(&vtgatepb.Session{
+		InReservedConn: true,
+		PreSessions:    []*vtgatepb.Session_ShardSession{shardSession("pre", 1, 0)},
+		ShardSessions:  []*vtgatepb.Session_ShardSession{shardSession("main", 2, 20)},
+		PostSessions:   []*vtgatepb.Session_ShardSession{shardSession("post", 3, 0)},
+	})
+
+	// Only ShardSessions: temp tables live there alone, and the keepalive
+	// sweeper registers exactly that list, so the two must not drift.
+	snapshots := session.ShardSessionSnapshots()
+	require.Len(t, snapshots, 1)
+	assert.Equal(t, "main", snapshots[0].Target.Shard)
+	assert.EqualValues(t, 2, snapshots[0].ReservedID)
+	assert.EqualValues(t, 20, snapshots[0].TransactionID)
+	assert.Equal(t, alias, snapshots[0].TabletAlias)
+
+	session.ShardSessions[0].TransactionId = 999
+	assert.EqualValues(t, 20, snapshots[0].TransactionID,
+		"a snapshot must not observe later in-place updates of the live shard session")
 }

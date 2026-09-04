@@ -1392,7 +1392,7 @@ func (vc *VCursorImpl) SetSessionTrackGTIDs(enable bool) {
 
 // HasCreatedTempTable implements the SessionActions interface
 func (vc *VCursorImpl) HasCreatedTempTable() {
-	vc.SafeSession.GetOrCreateOptions().HasCreatedTempTables = true
+	vc.SafeSession.SetHasCreatedTempTables()
 }
 
 // GetWarnings implements the SessionActions interface

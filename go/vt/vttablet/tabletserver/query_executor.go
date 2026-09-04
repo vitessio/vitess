@@ -45,6 +45,7 @@ import (
 	"vitess.io/vitess/go/vt/tableacl/acl"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
+	"vitess.io/vitess/go/vt/vttablet/queryservice"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	p "vitess.io/vitess/go/vt/vttablet/tabletserver/planbuilder"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
@@ -76,6 +77,11 @@ const (
 	resetLastIDQuery  = "select last_insert_id(18446744073709547416)"
 	resetLastIDValue  = 18446744073709547416
 	userLabelDisabled = "UserLabelDisabled"
+
+	// sessionWaitTimeoutProbeTimeout caps the best-effort probe of a reserved
+	// connection's @@session.wait_timeout, run before a temporary-table DDL
+	// until a capture succeeds; see captureSessionWaitTimeout.
+	sessionWaitTimeoutProbeTimeout = 5 * time.Second
 )
 
 var (
@@ -171,7 +177,14 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 	if qre.connID != 0 {
 		var conn *StatefulConnection
 		// Need upfront connection for DMLs and transactions
-		conn, err = qre.tsv.te.txPool.GetAndLock(qre.connID, "for query")
+		// A temp-table activity refresh locks the connection under a purpose
+		// that colliding client commands briefly wait out (see
+		// TxPool.GetAndLock) instead of failing with an in-use error.
+		lockPurpose := "for query"
+		if queryservice.IsReservedConnActivityRefresh(qre.ctx) {
+			lockPurpose = reservedActivityRefreshPurpose
+		}
+		conn, err = qre.tsv.te.txPool.GetAndLock(qre.ctx, qre.connID, lockPurpose)
 		if err != nil {
 			return nil, err
 		}
@@ -191,7 +204,11 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 	}
 
 	switch qre.plan.PlanID {
-	case p.PlanSelect, p.PlanSelectImpossible, p.PlanShow:
+	// SelectLockFunc reaches this pooled path only for the release functions
+	// (get_lock still requires a reserved connection): vtgate sends them as
+	// plain executes when the session holds no locks, and a pooled connection
+	// can hold no user-level lock, so they run like an ordinary select.
+	case p.PlanSelect, p.PlanSelectImpossible, p.PlanShow, p.PlanSelectLockFunc:
 		maxrows := qre.getSelectLimit()
 		qre.bindVars["#maxLimit"] = sqltypes.Int64BindVariable(maxrows + 1)
 		if qre.bindVars[sqltypes.BvReplaceSchemaName] != nil {
@@ -296,7 +313,14 @@ func (qre *QueryExecutor) txConnExec(conn *StatefulConnection) (*sqltypes.Result
 	case p.PlanInsert, p.PlanUpdate, p.PlanDelete:
 		return qre.txFetch(conn, true)
 	case p.PlanSet:
-		return qre.execSet(conn)
+		result, err := qre.execSet(conn)
+		if err == nil && setsWaitTimeout(qre.plan.FullStmt) {
+			// The SET changed the deadline mysqld enforces on this connection:
+			// re-capture it for the temp-table idle timeout.
+			conn.forgetSessionWaitTimeout()
+			qre.captureSessionWaitTimeout(conn)
+		}
+		return result, err
 	case p.PlanInsertMessage:
 		qre.bindVars["#time_now"] = sqltypes.Int64BindVariable(time.Now().UnixNano())
 		return qre.txFetch(conn, true)
@@ -374,7 +398,7 @@ func (qre *QueryExecutor) streamAdminPlan() (*sqltypes.Result, error) {
 // stateful plans, for streamed plans that run a dedicated executor rather
 // than the generic streaming SQL path.
 func (qre *QueryExecutor) txConnStreamExec() (*sqltypes.Result, error) {
-	conn, err := qre.tsv.te.txPool.GetAndLock(qre.connID, "for streaming query")
+	conn, err := qre.tsv.te.txPool.GetAndLock(qre.ctx, qre.connID, "for streaming query")
 	if err != nil {
 		return nil, err
 	}
@@ -601,7 +625,9 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) (err error) {
 						return err
 					}
 					defer dbConn.Recycle()
-					return qre.execStreamSQL(dbConn, qre.connID != 0, sql, func(result *sqltypes.Result) error {
+					// isStateful is false by construction: this branch requires
+					// connID == 0, so the stream conn is never a reserved connection.
+					return qre.execStreamSQL(dbConn, false /* isStateful */, false /* insideTxn */, sql, func(result *sqltypes.Result) error {
 						// this stream result is potentially used by more than one client, so
 						// the consolidator will return it to the pool once it knows it's no longer
 						// being shared
@@ -635,7 +661,7 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) (err error) {
 	// close rather than attempt a drain-and-recover — while a clean stream runs
 	// the post-stream safety checks.
 	if qre.connID != 0 {
-		txConn, err := qre.tsv.te.txPool.GetAndLock(qre.connID, "for streaming query")
+		txConn, err := qre.tsv.te.txPool.GetAndLock(qre.ctx, qre.connID, "for streaming query")
 		if err != nil {
 			return err
 		}
@@ -653,7 +679,7 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) (err error) {
 		}
 
 		conn := txConn.UnderlyingDBConn()
-		err = qre.execStreamSQL(conn, true, sql, streamCallback)
+		err = qre.execStreamSQL(conn, true /* isStateful */, txConn.IsInTransaction(), sql, streamCallback)
 		if qre.plan.PlanID == p.PlanCallProc {
 			if err != nil {
 				txConn.Close()
@@ -686,7 +712,7 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) (err error) {
 	}
 	defer dbConn.Recycle()
 
-	err = qre.execStreamSQL(dbConn, false, sql, streamCallback)
+	err = qre.execStreamSQL(dbConn, false /* isStateful */, false /* insideTxn */, sql, streamCallback)
 	if qre.plan.PlanID == p.PlanCallProc {
 		if err != nil {
 			dbConn.Close()
@@ -975,16 +1001,24 @@ func (qre *QueryExecutor) execDDL(conn *StatefulConnection) (result *sqltypes.Re
 		defer conn.Release(tx.ConnRelease)
 	}
 
-	// A DDL statement should commit the current transaction in the VTGate.
-	// The change was made in PR: https://github.com/vitessio/vitess/pull/14110 in v18.
-	// DDL statement received by vttablet will be outside of a transaction.
-	if conn.txProps != nil {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "DDL statement executed inside a transaction")
-	}
-
 	isTemporaryTable := false
 	if ddlStmt, ok := qre.plan.FullStmt.(sqlparser.DDLStatement); ok {
 		isTemporaryTable = ddlStmt.IsTemporary()
+	}
+	// Only a CREATE gives the connection temp-table state to protect; a DROP
+	// is temporary DDL too but must not mark or probe (vtgate marks the
+	// session on CREATE only).
+	_, isCreate := qre.plan.FullStmt.(*sqlparser.CreateTable)
+	createsTemporaryTable := isTemporaryTable && isCreate
+
+	// A DDL statement should commit the current transaction in the VTGate.
+	// The change was made in PR: https://github.com/vitessio/vitess/pull/14110 in v18.
+	// DDL statement received by vttablet will be outside of a transaction.
+	// Temporary-table DDL is the exception: MySQL gives it no implicit
+	// commit, and vtgate deliberately preserves the open transaction for it,
+	// so it runs on the transaction's connection like any other statement.
+	if conn.txProps != nil && !isTemporaryTable {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "DDL statement executed inside a transaction")
 	}
 	if !isTemporaryTable {
 		// Temporary tables are limited to the session creating them. There is no need to Reload()
@@ -1013,7 +1047,79 @@ func (qre *QueryExecutor) execDDL(conn *StatefulConnection) (result *sqltypes.Re
 			return nil, err
 		}
 	}
-	return qre.execStatefulConn(conn, sql, true)
+	if createsTemporaryTable {
+		// Capture before the DDL: keeping the connection through a probe
+		// failure is only best-effort, so the probe must precede the
+		// user-visible state change — a connection it costs then surfaces as
+		// this statement's error instead of silently undoing a DDL already
+		// reported successful.
+		qre.captureSessionWaitTimeout(conn)
+	}
+	result, err = qre.execStatefulConn(conn, sql, true)
+	if err != nil {
+		return nil, err
+	}
+	if createsTemporaryTable {
+		// The session holds temporary-table state on this connection, so the
+		// temp-table idle timeout may govern its reclamation.
+		conn.markHoldsTempTables()
+	}
+	return result, nil
+}
+
+// setsWaitTimeout reports whether a SET statement assigns wait_timeout.
+func setsWaitTimeout(stmt sqlparser.Statement) bool {
+	set, ok := stmt.(*sqlparser.Set)
+	if !ok {
+		return false
+	}
+	for _, expr := range set.Exprs {
+		if expr.Var.Name.EqualString("wait_timeout") {
+			return true
+		}
+	}
+	return false
+}
+
+// captureSessionWaitTimeout records the connection's own
+// @@session.wait_timeout for the temp-table idle timeout's auto mode: it is
+// the deadline mysqld actually enforces on this connection, fixed when the
+// connection's thread started, unlike the pool's global mirror which follows
+// runtime SET GLOBAL changes. Best-effort: on a benign failure (probe error,
+// unusable value) the connection falls back to the global mirror until a
+// later temporary-table DDL's probe captures a value. The probe stops once a
+// capture succeeds, and runs BEFORE the temporary-table DDL that needs it:
+// preserving the connection through a probe timeout is itself only
+// best-effort (a KILL QUERY that fails or does not unblock the statement
+// escalates to killing the whole connection, and inside a transaction the
+// connection is always killed), so the probe precedes the user-visible state
+// change and any connection loss it causes surfaces as the DDL's own error
+// rather than silently undoing a statement already reported successful.
+// Because no user-visible state exists before the DDL, the probe runs under
+// the request's own context — a canceled or expired request sends nothing and
+// gives the reservation straight back — capped at the probe timeout so a
+// stuck mysqld cannot pin the connection to a long request deadline.
+func (qre *QueryExecutor) captureSessionWaitTimeout(conn *StatefulConnection) {
+	if qre.tsv.config.TempTableIdleTimeout >= 0 {
+		return
+	}
+	if conn.sessionWaitTimeout != 0 {
+		return
+	}
+	if qre.ctx.Err() != nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(qre.ctx, sessionWaitTimeoutProbeTimeout)
+	defer cancel()
+	qr, err := conn.Exec(ctx, "select @@session.wait_timeout", 1, false, true /* keepConnOnTimeout */)
+	if err != nil || len(qr.Rows) != 1 || len(qr.Rows[0]) != 1 {
+		return
+	}
+	seconds, err := qr.Rows[0][0].ToCastInt64()
+	if err != nil || seconds <= 0 {
+		return
+	}
+	conn.captureSessionWaitTimeout(time.Duration(seconds) * time.Second)
 }
 
 // checkCreateTableLimit rejects a CREATE TABLE/VIEW that would exceed the
@@ -1438,6 +1544,21 @@ func (qre *QueryExecutor) execProc(conn *StatefulConnection) (*sqltypes.Result, 
 	}
 	qr, err := qre.execStatefulConn(conn, sql, true)
 	if err != nil {
+		// A stored procedure can start a transaction that Vitess does not
+		// track. A reserved-connection timeout now kills only the query (KILL
+		// QUERY) and leaves the connection open, so a procedure that had begun
+		// a transaction before failing would leave mysqld in a transaction
+		// while Vitess believes the connection is idle — and the keepalive
+		// would hold it (and its locks) open indefinitely. Close the connection
+		// on a CALL error so no untracked transaction survives — but only
+		// outside a Vitess-tracked transaction: inside one, a query timeout
+		// still kills the whole connection (ExecOnce insideTxn), so the hazard
+		// does not exist, and closing here on a benign statement error (a
+		// SIGNAL from the procedure, a typo'd name) would destroy the client's
+		// open transaction, which MySQL itself leaves usable.
+		if !conn.IsInTransaction() {
+			conn.Close()
+		}
 		return nil, rewriteOUTParamError(err)
 	}
 	if !qr.IsMoreResultsExists() {
@@ -1689,6 +1810,40 @@ func (qre *QueryExecutor) execDBConn(conn *connpool.Conn, sql string, wantfields
 	return exec, nil
 }
 
+// planKeepsConnOnTimeout reports whether a timed-out statement of this plan
+// type may keep its stateful connection (KILL QUERY only) instead of losing it.
+// Only reads and DML qualify: a killed read leaves nothing behind, and InnoDB
+// rolls a killed DML statement back atomically. Everything else — SET (whose
+// session-scope assignments apply left-to-right and are not rolled back by a
+// kill), lock functions (a lock can be granted just as the kill lands), CALL,
+// DDL, admin statements — can leave session or server state the session never
+// recorded, so a timeout kills the whole connection, exactly as it always did,
+// and the session self-heals by re-reserving and re-applying its settings.
+func planKeepsConnOnTimeout(planID p.PlanType) bool {
+	switch planID {
+	case p.PlanSelect, p.PlanSelectImpossible, p.PlanSelectNoLimit, p.PlanShow,
+		p.PlanInsert, p.PlanUpdate, p.PlanDelete, p.PlanInsertMessage,
+		p.PlanUpdateLimit, p.PlanDeleteLimit:
+		return true
+	}
+	return false
+}
+
+// keepsConnOnTimeout is the per-query timeout decision: a safe plan may keep
+// its connection unless the statement carries state a kill does not roll
+// back. A last_insert_id(expr) assignment survives KILL QUERY on the
+// connection even when the statement's row changes roll back, and the error
+// return skips the post-exec fetch that reports the new value to the vtgate
+// session. DML containing a mutating lock function (plan.KillsConnOnTimeout)
+// has the same shape: the rows roll back but the lock grant or release can
+// race the kill. Keeping such a connection would leave it holding state the
+// session never recorded, so it is closed instead.
+func (qre *QueryExecutor) keepsConnOnTimeout() bool {
+	return planKeepsConnOnTimeout(qre.plan.PlanID) &&
+		!qre.plan.KillsConnOnTimeout &&
+		!qre.options.GetFetchLastInsertId()
+}
+
 func (qre *QueryExecutor) execStatefulConn(conn *StatefulConnection, sql string, wantfields bool) (*sqltypes.Result, error) {
 	span, ctx := trace.NewSpan(qre.ctx, "QueryExecutor.execStatefulConn")
 	defer span.Finish()
@@ -1705,7 +1860,7 @@ func (qre *QueryExecutor) execStatefulConn(conn *StatefulConnection, sql string,
 		return nil, err
 	}
 
-	exec, err := conn.Exec(ctx, sql, qre.getMaxResultSize(), wantfields)
+	exec, err := conn.Exec(ctx, sql, qre.getMaxResultSize(), wantfields, qre.keepsConnOnTimeout())
 	if err != nil {
 		return nil, err
 	}
@@ -1758,7 +1913,7 @@ func (qre *QueryExecutor) fetchLastInsertID(ctx context.Context, conn *connpool.
 	return nil
 }
 
-func (qre *QueryExecutor) execStreamSQL(conn *connpool.PooledConn, isTransaction bool, sql string, callback func(*sqltypes.Result) error) error {
+func (qre *QueryExecutor) execStreamSQL(conn *connpool.PooledConn, isStateful, insideTxn bool, sql string, callback func(*sqltypes.Result) error) error {
 	span, ctx := trace.NewSpan(qre.ctx, "QueryExecutor.execStreamSQL")
 	defer span.Finish()
 	trace.AnnotateSQL(span, sqlparser.Preview(sql))
@@ -1786,13 +1941,23 @@ func (qre *QueryExecutor) execStreamSQL(conn *connpool.PooledConn, isTransaction
 	}
 
 	var err error
-	if isTransaction {
+	if isStateful {
 		err = qre.tsv.statefulql.Add(qd)
 		if err != nil {
 			return err
 		}
 		defer qre.tsv.statefulql.Remove(qd)
-		err = conn.Conn.StreamOnce(ctx, sql, cb, allocStreamResult, int(qre.tsv.qe.streamBufferSize.Load()), sqltypes.IncludeFieldsOrDefault(qre.options))
+		// Same timeout decision as the buffered path (see execStatefulConn):
+		// only a statement whose interruption leaves no session state behind
+		// may keep the connection on a mid-statement deadline. A streaming SET
+		// or admin statement that times out must lose the whole connection, or
+		// its half-applied session state would survive on a connection the
+		// temp-table keepalive then pins alive.
+		if insideTxn || !qre.keepsConnOnTimeout() {
+			err = conn.Conn.StreamOnce(ctx, sql, cb, allocStreamResult, int(qre.tsv.qe.streamBufferSize.Load()), sqltypes.IncludeFieldsOrDefault(qre.options))
+		} else {
+			err = conn.Conn.StreamOnceKeepConnOnTimeout(ctx, sql, cb, allocStreamResult, int(qre.tsv.qe.streamBufferSize.Load()), sqltypes.IncludeFieldsOrDefault(qre.options))
+		}
 	} else {
 		err = qre.tsv.olapql.Add(qd)
 		if err != nil {
@@ -1885,7 +2050,7 @@ func (qre *QueryExecutor) executeGetSchemaQuery(query string, callback func(sche
 	}
 	defer conn.Recycle()
 
-	return qre.execStreamSQL(conn, false /* isTransaction */, query, func(result *sqltypes.Result) error {
+	return qre.execStreamSQL(conn, false /* isStateful */, false /* insideTxn */, query, func(result *sqltypes.Result) error {
 		schemaDef := make(map[string]string)
 		for _, row := range result.Rows {
 			tableName := row[0].ToString()
@@ -1911,7 +2076,7 @@ func (qre *QueryExecutor) getUDFs(callback func(schemaRes *querypb.GetSchemaResp
 	}
 	defer conn.Recycle()
 
-	return qre.execStreamSQL(conn, false /* isTransaction */, query, func(result *sqltypes.Result) error {
+	return qre.execStreamSQL(conn, false /* isStateful */, false /* insideTxn */, query, func(result *sqltypes.Result) error {
 		var udfs []*querypb.UDFInfo
 		if len(result.Rows) > 0 {
 			udfs = make([]*querypb.UDFInfo, 0, len(result.Rows))
