@@ -50,29 +50,21 @@ const (
 	// can see and act upon if needed.
 	tabletPickerRetries = 5
 
-	// TerminalErrorIndicator is the prefix marking a vreplication error
-	// message as terminal: the stream stopped retrying and went into the
-	// Error state. The prefix is a contract: the Online DDL executor
-	// matches it (including as a message prefix in _vt.vreplication_log)
-	// to detect terminal streams. The class indicators below extend it to
-	// say why the error is terminal.
+	// TerminalErrorIndicator prefixes the message of a stream that stopped
+	// retrying and went into the Error state. The Online DDL executor matches
+	// it as a message prefix, including in _vt.vreplication_log.
 	TerminalErrorIndicator = "terminal error"
 	// UnrecoverableErrorIndicator marks a terminal error that retrying
 	// cannot fix (e.g. bad data or schema mismatch; see
 	// isUnrecoverableError): the stream cannot be resumed.
 	UnrecoverableErrorIndicator = TerminalErrorIndicator + ": unrecoverable"
-	// RetriesExhaustedIndicator marks a terminal error on a
-	// recoverable-class error whose retry window
-	// (--vreplication-max-time-to-retry-on-error) expired: the stream is
-	// resumable by setting it back to the Running state. It deliberately
-	// does NOT extend TerminalErrorIndicator: the message is operator
-	// visible (workflow status, migration failure messages) and a
-	// condition that is resumable by design must not be labeled a terminal
-	// error. Note that this does not hide the park from previous-version
-	// executors: their _vt.vreplication_log scan selects any state='Error'
-	// history record regardless of message, so after a downgrade an
-	// in-flight migration whose stream ever parked is failed — the
-	// pre-enhancement outcome for a retries-exhausted stream.
+	// RetriesExhaustedIndicator marks a recoverable-class error whose retry
+	// window (--vreplication-max-time-to-retry-on-error) expired; the stream
+	// is resumable by setting it back to Running. It deliberately does not
+	// extend TerminalErrorIndicator: the message is operator-visible, and a
+	// resumable condition must not be labeled a terminal error. Older
+	// executors still see the park: their history scan selects any
+	// state='Error' row regardless of message.
 	RetriesExhaustedIndicator = "retries exhausted"
 )
 
@@ -383,13 +375,10 @@ func (ct *controller) runBlp(ctx context.Context) (err error) {
 	return errors.New("missing source")
 }
 
-// terminalVReplicationError wraps err as a terminal error, recording why
-// it is terminal: unrecoverable errors cannot be fixed by retrying, while
-// a recoverable-class error becomes terminal only because the workflow's
-// retry window expired. In the latter case the message names the flag
-// bounding the window and its effective (per-workflow) value, so that the
-// operator -- and the Online DDL executor -- can tell that the stream is
-// resumable and which knob governs the behavior.
+// terminalVReplicationError wraps err as a terminal error, saying why: it is
+// unrecoverable, or its retry window expired — in which case the message
+// names the flag bounding the window and its effective value, so operators
+// (and the Online DDL executor) can tell the stream is resumable.
 func terminalVReplicationError(err error, unrecoverable bool, maxTimeToRetry time.Duration) error {
 	if unrecoverable {
 		return vterrors.Wrap(err, UnrecoverableErrorIndicator)

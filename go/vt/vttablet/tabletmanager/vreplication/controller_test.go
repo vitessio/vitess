@@ -836,23 +836,16 @@ func TestControllerErrorLogMessages(t *testing.T) {
 		"log message should have format 'workflow X, stream Y: error, will retry after ...', got: %s", errorLogs)
 }
 
-// TestTerminalVReplicationError tests the marker taxonomy and the
-// construction of terminal error messages: the unrecoverable class carries
-// the load-bearing "terminal error:" prefix that the Online DDL executor's
-// _vt.vreplication_log scan matches, while the resumable retries-exhausted
-// class starts with its own marker and names the flag that bounds the
-// retry window along with its effective value so that the message is
-// actionable. The class B marker must NOT extend TerminalErrorIndicator:
-// the message is operator visible, and a condition that is resumable by
-// design must not be labeled a terminal error. That is a labeling
-// invariant, not downgrade protection — a previous-version executor's
-// history scan selects any state='Error' record regardless of message (see
-// RetriesExhaustedIndicator's doc).
+// TestTerminalVReplicationError tests the terminal error messages: the
+// unrecoverable class keeps the "terminal error:" prefix the Online DDL
+// executor's history scan matches; the resumable retries-exhausted class
+// starts with its own marker — a resumable condition must not be labeled a
+// terminal error — and names the flag bounding the retry window and its
+// effective value.
 func TestTerminalVReplicationError(t *testing.T) {
 	assert.False(t, strings.HasPrefix(RetriesExhaustedIndicator, TerminalErrorIndicator),
 		"the resumable marker must not be labeled with the legacy terminal prefix")
-	// The unrecoverable class stays legacy-terminal on purpose: it must be
-	// treated as terminal by every version.
+	// The unrecoverable class must read as terminal to every version.
 	assert.True(t, strings.HasPrefix(UnrecoverableErrorIndicator, TerminalErrorIndicator))
 
 	baseErr := errors.New("connection refused")

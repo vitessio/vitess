@@ -734,14 +734,9 @@ func TestMigrationStatusTransitionsUpdateMetrics(t *testing.T) {
 	}
 }
 
-// TestOverrideStateFromHistory tests readVReplStream's _vt.vreplication_log
-// history-scan decision: a class-B (retries-exhausted) historical row must
-// not force the live state back to Error once the stream is actually
-// running again (Init/Copying/Running) — it records a recoverable-class
-// error that has since cleared, and forcing Error would now trigger repair
-// attempts against a healthy stream. Class A / legacy terminal-error rows
-// keep their original stickiness and always override, regardless of the
-// live state.
+// TestOverrideStateFromHistory tests which historical terminal-error rows
+// override the live stream state: unrecoverable and legacy rows always do, a
+// retries-exhausted row never does, and a live Error row is authoritative.
 func TestOverrideStateFromHistory(t *testing.T) {
 	classBMessage := vreplication.RetriesExhaustedIndicator + ": the same error was encountered continuously for longer than --vreplication-max-time-to-retry-on-error (15m0s): connection refused"
 	classAMessage := vreplication.UnrecoverableErrorIndicator + ": bad data"
@@ -772,9 +767,8 @@ func TestOverrideStateFromHistory(t *testing.T) {
 			wantOverride:      false,
 		},
 		{
-			// The live row is written before the best-effort history insert,
-			// so a live Error is always at least as fresh as any history row
-			// and must stay authoritative.
+			// The live row is written before the history insert, so a live
+			// Error is at least as fresh as any history row.
 			name:              "class B, live Error -> no override, live row is authoritative",
 			liveState:         binlogdatapb.VReplicationWorkflowState_Error,
 			historicalMessage: classBMessage,
@@ -793,17 +787,14 @@ func TestOverrideStateFromHistory(t *testing.T) {
 			wantOverride:      false,
 		},
 		{
-			// Classification is anchored to the message boundary: a class A
-			// error whose cause text embeds the class B marker (e.g. user
-			// data quoted in a MySQL error) must not classify as class B.
+			// The class B marker embedded in a class A error's cause (e.g.
+			// quoted user data) must not classify as class B.
 			name:              "class A embedding class B marker in cause, live Running -> override",
 			liveState:         binlogdatapb.VReplicationWorkflowState_Running,
 			historicalMessage: vreplication.UnrecoverableErrorIndicator + ": Duplicate entry '" + vreplication.RetriesExhaustedIndicator + "' for key 'val'",
 			wantOverride:      true,
 		},
 		{
-			// A retries-exhausted history row never forces the Error state,
-			// regardless of the live state.
 			name:              "class B, live Stopped -> no override",
 			liveState:         binlogdatapb.VReplicationWorkflowState_Stopped,
 			historicalMessage: classBMessage,
@@ -823,11 +814,9 @@ func TestOverrideStateFromHistory(t *testing.T) {
 	}
 }
 
-// TestForgetVReplStreamOrdering pins WHEN the cleanup runs, not just what it
-// deletes: a no-op RETRY (against a migration that is not failed/cancelled)
-// and a cancellation that fails before its durable transition must both
-// leave an active migration's error tracking intact — clearing it would
-// grant the still-running stream a fresh retry window.
+// TestForgetVReplStreamOrdering pins WHEN the tracking is cleared: only once a
+// migration is actually requeued or durably terminal, never while its stream
+// may still be active.
 func TestForgetVReplStreamOrdering(t *testing.T) {
 	uuid := "1cbcd662_8ed6_11ee_bc8f_0a43f95f28a3"
 	newTrackedExecutor := func(execQuery func(ctx context.Context, query string) (*sqltypes.Result, error)) *Executor {
@@ -860,11 +849,9 @@ func TestForgetVReplStreamOrdering(t *testing.T) {
 		assert.NotContains(t, e.vreplicationLastError, uuid)
 	})
 	t.Run("cancellation whose terminal transition fails retains tracking", func(t *testing.T) {
-		// An internal (non-user) cancellation has no durable
-		// cancelled_timestamp: the deferred failMigration IS the terminal
-		// transition. If it fails, the migration and its stream stay
-		// active, and erased tracking would grant the still-active stream
-		// a fresh retry window.
+		// An internal cancellation has no durable cancelled_timestamp: the
+		// deferred transition IS the cancellation, and if it fails the
+		// stream is still active.
 		e := newTrackedExecutor(func(ctx context.Context, query string) (*sqltypes.Result, error) {
 			if strings.HasPrefix(strings.TrimSpace(strings.ToUpper(query)), "UPDATE") {
 				return nil, errors.New("backend unavailable")
@@ -883,11 +870,8 @@ func TestForgetVReplStreamOrdering(t *testing.T) {
 			"a still-running migration under pending cancellation must stay owned, or the scheduler's conflict checks miss it")
 	})
 	t.Run("successful internal cancellation clears tracking", func(t *testing.T) {
-		// The terminal-transition verdict must come from the actual status
-		// update, not from failMigration's propagate-the-cause return value
-		// (which is always non-nil for a cancellation): a successful
-		// internal cancellation must clear the tracking, not log a false
-		// transition failure and leak it.
+		// The verdict must come from the status update itself, not from
+		// failMigration's always-non-nil propagated cause.
 		e := newTrackedExecutor(func(ctx context.Context, query string) (*sqltypes.Result, error) {
 			if strings.HasPrefix(strings.TrimSpace(strings.ToUpper(query)), "UPDATE") {
 				return &sqltypes.Result{RowsAffected: 1}, nil
@@ -903,11 +887,8 @@ func TestForgetVReplStreamOrdering(t *testing.T) {
 		assert.NotContains(t, e.vreplicationPendingCancel, uuid)
 	})
 	t.Run("user cancellation with failed transition retains tracking", func(t *testing.T) {
-		// cancelled_timestamp alone is not a terminal transition: the
-		// running-migrations review only filters on migration_status, so
-		// until the status update lands the migration remains eligible for
-		// review and its tracking must survive — the cancellation intent
-		// is what keeps re-driving the terminal transition in the meantime.
+		// cancelled_timestamp alone is not a terminal transition: the review
+		// filters on migration_status, so the migration stays under review.
 		e := newTrackedExecutor(func(ctx context.Context, query string) (*sqltypes.Result, error) {
 			if strings.Contains(query, "SET cancelled_timestamp=NOW(6)") {
 				return &sqltypes.Result{RowsAffected: 1}, nil
@@ -927,10 +908,8 @@ func TestForgetVReplStreamOrdering(t *testing.T) {
 			"a still-running migration under pending cancellation must stay owned")
 	})
 	t.Run("cancellation with expired caller context still completes the transition", func(t *testing.T) {
-		// The deferred terminal transition must not reuse a context that
-		// terminateMigration may have exhausted: it runs on a bounded,
-		// non-cancellable context, so an expired caller context cannot
-		// leave a cancelled-intent migration stuck in 'running'.
+		// The deferred transition runs on its own bounded context, not the
+		// caller's, which terminateMigration may have exhausted.
 		e := newTrackedExecutor(func(ctx context.Context, query string) (*sqltypes.Result, error) {
 			if err := ctx.Err(); err != nil {
 				return nil, err
@@ -944,7 +923,7 @@ func TestForgetVReplStreamOrdering(t *testing.T) {
 		})
 		expiredCtx, cancel := context.WithCancel(t.Context())
 		readDone := false
-		// let the initial read succeed, then expire the context mid-flight
+		// Let the initial read succeed, then expire the context.
 		inner := e.execQuery
 		e.execQuery = func(ctx context.Context, query string) (*sqltypes.Result, error) {
 			res, err := inner(ctx, query)
@@ -959,14 +938,9 @@ func TestForgetVReplStreamOrdering(t *testing.T) {
 			"the transition must succeed on its own bounded context and clear the tracking")
 	})
 	t.Run("unconfirmed termination defers the terminal transition", func(t *testing.T) {
-		// terminateMigration can fail before the stream is stopped (its
-		// topology lookup, an expired caller context). Durably failing the
-		// migration then would orphan a live stream: once the migration
-		// leaves 'running', the review loop no longer sees it and nothing
-		// stops the stream until artifact GC. The terminal transition must
-		// wait for a termination attempt that did not error — the migration
-		// stays in 'running' and the next review tick re-drives the
-		// cancellation.
+		// terminateMigration can fail before the stream is stopped. Failing
+		// the migration then would orphan a live stream: once out of
+		// 'running', nothing reviews it until artifact GC.
 		var terminalTransitionAttempted bool
 		e := newTrackedExecutor(func(ctx context.Context, query string) (*sqltypes.Result, error) {
 			if strings.HasPrefix(strings.TrimSpace(strings.ToUpper(query)), "UPDATE") {
@@ -975,13 +949,13 @@ func TestForgetVReplStreamOrdering(t *testing.T) {
 				}
 				return &sqltypes.Result{RowsAffected: 1}, nil
 			}
-			// A 'vitess' strategy routes terminateMigration through the
-			// vreplication stop path, whose topology lookup fails below.
+			// A 'vitess' strategy routes termination through the stream stop
+			// path, whose topology lookup fails below.
 			return sqltypes.MakeTestResult(
 				sqltypes.MakeTestFields("migration_uuid|migration_status|strategy", "varchar|varchar|varchar"),
 				uuid+"|running|vitess"), nil
 		})
-		// No tablet record exists: terminateMigration's topology lookup fails.
+		// No tablet record exists, so the topology lookup fails.
 		e.ts = memorytopo.NewServer(t.Context(), "cell")
 		_, err := e.CancelMigration(t.Context(), uuid, "internal cancel", false)
 		require.Error(t, err)
@@ -993,12 +967,9 @@ func TestForgetVReplStreamOrdering(t *testing.T) {
 			"terminateMigration disowned the migration, but with an unconfirmed stop it remains live: ownership must be restored")
 	})
 	t.Run("failed stream stop defers the terminal transition", func(t *testing.T) {
-		// When no delete follows, the graceful stop IS the termination: a
-		// swallowed stop failure would let the deferred transition durably
-		// fail the migration while its stream keeps applying changes,
-		// invisible to the running-migrations review until artifact GC.
-		// The stop failure must propagate so the transition is deferred
-		// and the next review tick re-drives the cancellation.
+		// With no delete following, the stop IS the termination: a swallowed
+		// failure would fail the migration while its stream keeps applying
+		// changes.
 		var terminalTransitionAttempted bool
 		e := newTrackedExecutor(func(ctx context.Context, query string) (*sqltypes.Result, error) {
 			if strings.HasPrefix(strings.TrimSpace(strings.ToUpper(query)), "UPDATE") {
@@ -1036,9 +1007,8 @@ func TestForgetVReplStreamOrdering(t *testing.T) {
 	})
 	t.Run("failed cancellation retains tracking", func(t *testing.T) {
 		e := newTrackedExecutor(func(ctx context.Context, query string) (*sqltypes.Result, error) {
-			// The cancelled_timestamp UPDATE fails; the SELECT that
-			// readMigration issues (which also names that column) succeeds
-			// with a running (cancellable) migration.
+			// The cancelled_timestamp UPDATE fails; readMigration's SELECT
+			// (which also names that column) succeeds.
 			if strings.Contains(query, "SET cancelled_timestamp=NOW(6)") {
 				return nil, errors.New("backend unavailable")
 			}
@@ -1050,20 +1020,17 @@ func TestForgetVReplStreamOrdering(t *testing.T) {
 		require.Error(t, err)
 		assert.Contains(t, e.vreplicationLastError, uuid,
 			"a cancellation that failed before any durable transition must not clear the retry window")
-		// The intent write failed before the deferred cleanup was even
-		// registered: no cancellation was accepted, so no pending intent
-		// may exist — a record here would make the scheduler fail a
-		// migration whose cancellation the caller was told did not happen.
+		// No cancellation was accepted, so no intent may remain: the
+		// scheduler would otherwise fail a migration the caller was told was
+		// not cancelled.
 		assert.NotContains(t, e.vreplicationPendingCancel, uuid,
 			"a rejected cancellation must not leave a pending intent behind")
 	})
 }
 
 // TestTerminallyFailMigrationMetric pins that FailedMigrations counts only
-// migrations that actually reached a terminal state: the review loop
-// re-drives a failed terminal transition on every tick, and an
-// unconditional increment would inflate the counter once per tick while
-// the migration is still running.
+// migrations that actually reached a terminal state, not each re-driven
+// attempt.
 func TestTerminallyFailMigrationMetric(t *testing.T) {
 	onlineDDL := &schema.OnlineDDL{UUID: "1cbcd662_8ed6_11ee_bc8f_0a43f95f28a3"}
 	newMetricExecutor := func(execQuery func(ctx context.Context, query string) (*sqltypes.Result, error)) *Executor {
@@ -1098,15 +1065,10 @@ func TestTerminallyFailMigrationMetric(t *testing.T) {
 	})
 }
 
-// TestReviewRunningMigrationsNilStreamCancellation pins the re-drive path
-// for a migration whose vreplication stream is absent: an unfulfilled
-// cancellation intent (cancelled_timestamp written, terminal transition
-// never landed — e.g. a CancelMigration interrupted between the intent
-// write and the transition) has no stream-side review to convert it, so
-// the running-migrations review must emit the cancellation itself; without
-// this the migration would stay in 'running' until the stale-migration
-// fallback. A nil-stream migration without recorded intent stays untouched
-// — a starting migration's stream may simply not exist yet.
+// TestReviewRunningMigrationsNilStreamCancellation pins how the running
+// migrations review handles a pending cancellation intent that has no stream
+// verdict to ride on: it must emit the cancellation itself, while a migration
+// without intent is left alone.
 func TestReviewRunningMigrationsNilStreamCancellation(t *testing.T) {
 	uuid := "1cbcd662_8ed6_11ee_bc8f_0a43f95f28a3"
 	env := tabletenv.NewEnv(vtenv.NewTestEnv(), tabletenv.NewDefaultConfig(), "ExecutorTest")
@@ -1170,14 +1132,9 @@ func TestReviewRunningMigrationsNilStreamCancellation(t *testing.T) {
 			"a nil-stream migration without cancellation intent must not be cancelled")
 	})
 	t.Run("pending internal intent re-drives a stopped stream", func(t *testing.T) {
-		// An internal cancellation has no durable cancelled_timestamp, and
-		// its successful stream stop erased the Error verdict that
-		// triggered it: the live row is now Stopped. Only the recorded
-		// pending intent can convert this into a cancellation — without it
-		// the migration idles in 'running' until the stale-migration
-		// fallback. The stop rewrites only the state, so the row still
-		// carries its pre-stop message: the cancellation must report the
-		// recorded reason, not that stale leftover.
+		// The successful stop erased the Error verdict and left the pre-stop
+		// message behind; only the recorded intent can drive the
+		// cancellation, and it must carry the recorded reason.
 		stoppedStream := sqltypes.MakeTestResult(
 			sqltypes.MakeTestFields("id|workflow|source|pos|state|message", "int32|varchar|varchar|varchar|varchar|varchar"),
 			"1|"+uuid+"|||Stopped|connection refused: will retry")
@@ -1194,12 +1151,9 @@ func TestReviewRunningMigrationsNilStreamCancellation(t *testing.T) {
 		assert.Equal(t, "internal cancel", cancellable[0].message)
 	})
 	t.Run("a cancel verdict stops the review before cutover", func(t *testing.T) {
-		// A healthy Running stream can carry a pending cancellation intent
-		// (a prior cancellation's terminal transition failed). The cancel
-		// verdict must end this migration's review: proceeding into the
-		// ownership/liveness/cutover flow could cut the migration over and
-		// complete it this very tick, before cancelMigrations processes
-		// the queued cancellation.
+		// A healthy stream can carry a pending intent; continuing into the
+		// cutover flow could complete the migration before cancelMigrations
+		// runs.
 		runningStream := sqltypes.MakeTestResult(
 			sqltypes.MakeTestFields("id|workflow|source|pos|state|message", "int32|varchar|varchar|varchar|varchar|varchar"),
 			"1|"+uuid+"|||Running|")
@@ -1230,11 +1184,9 @@ func TestReviewRunningMigrationsNilStreamCancellation(t *testing.T) {
 	})
 }
 
-// TestResolveVReplStreamAction pins that a migration carrying an unfulfilled
-// cancellation intent (cancelled_timestamp written, terminal transition not
-// yet landed) always converts its verdict into a cancellation, which
-// re-drives the terminal transition. Without intent, verdicts pass through
-// untouched.
+// TestResolveVReplStreamAction pins that a pending cancellation intent
+// converts every stream verdict into a cancellation, and that verdicts pass
+// through untouched without one.
 func TestResolveVReplStreamAction(t *testing.T) {
 	assert.Equal(t, vreplStreamCancel, resolveVReplStreamAction(vreplStreamNoAction, true),
 		"a surviving clean stream yields no action, but the pending cancellation must still be re-driven")
@@ -1246,8 +1198,8 @@ func TestResolveVReplStreamAction(t *testing.T) {
 	assert.Equal(t, vreplStreamRepair, resolveVReplStreamAction(vreplStreamRepair, false))
 }
 
-// TestForgetVReplStream pins the helper's deletion semantics; the lifecycle
-// points at which it may run are pinned by TestForgetVReplStreamOrdering.
+// TestForgetVReplStream pins what the helper deletes; when it may run is
+// pinned by TestForgetVReplStreamOrdering.
 func TestForgetVReplStream(t *testing.T) {
 	e := &Executor{
 		vreplicationLastError:     make(map[string]*vterrors.LastError),
@@ -1265,13 +1217,10 @@ func TestForgetVReplStream(t *testing.T) {
 	assert.NotContains(t, e.vreplicationProgress, uuid)
 }
 
-// TestForgetFinishedVReplStreams tests the per-tick sweep of the in-memory
-// stream tracking: entries for migrations that are neither running nor
-// pending — i.e. that reached a terminal status by any path, including a
-// successful cut-over, which has no single transition point at which to drop
-// them — are removed, while running and pending (queued/ready) migrations
-// keep theirs. A ready migration in particular may carry a pending
-// cancellation intent that the scheduler still has to fulfil.
+// TestForgetFinishedVReplStreams tests the per-tick tracking sweep: entries
+// of migrations that are neither running nor pending are dropped; running and
+// pending migrations (a ready one may still carry a cancellation intent) keep
+// theirs.
 func TestForgetFinishedVReplStreams(t *testing.T) {
 	const (
 		runningUUID  = "1cbcd662_8ed6_11ee_bc8f_0a43f95f28a3"
@@ -1309,28 +1258,15 @@ func TestForgetFinishedVReplStreams(t *testing.T) {
 	}
 }
 
-// TestVReplStreamShowsLiveness tests the gate applied before an advanced
-// time_updated refreshes a migration's liveness_timestamp. Past the copy
-// phase, an advanced time_updated is trusted: heartbeats only reach the
-// applier when the stream is caught up, which is genuine health. During the
-// copy phase, heartbeats can also flow between failing copy attempts — the
-// catchup is current while the copy keeps erroring — so liveness
-// additionally requires actual copy progress (a newer _vt.copy_state
-// checkpoint row, inserted by every committed copy batch) or active
-// throttling (a deliberately paused copy is alive, and throttle updates
-// stamp time_updated without progress). The stream's replication position
-// is deliberately NOT a progress signal: catchup runs before every copy
-// attempt and advances it on a busy source even when the copy itself keeps
-// failing. Nor is the first observation: it only establishes the baseline,
-// so that a stuck copy cannot earn a fresh budget from every executor
-// restart (the tracking is in-memory). Without this gate, a copy phase stuck
-// in a heartbeat-refreshing retry loop would never trip the stale-migration
-// policy and could retry unbounded now that streams pin retry-forever.
+// TestVReplStreamShowsLiveness tests the copy-phase liveness gate: past the
+// copy phase an advanced time_updated always counts; during it, only a newer
+// _vt.copy_state checkpoint or active throttling does. The replication
+// position (advanced by catchup before every copy attempt) and the first
+// observation (the baseline) do not.
 func TestVReplStreamShowsLiveness(t *testing.T) {
 	uuid := "1cbcd662_8ed6_11ee_bc8f_0a43f95f28a3"
-	// newExecutor's fake copy_state lookup reports the given row count and
-	// max checkpoint id; tests mutate the pointed-to values between calls to
-	// simulate (or withhold) copy progress.
+	// Tests mutate the pointed-to copy_state count and max id between calls
+	// to simulate or withhold progress.
 	newExecutor := func(copyStateCount, copyStateMaxID *int64) *Executor {
 		return &Executor{
 			vreplicationProgress: make(map[string]vreplStreamProgress),
@@ -1403,14 +1339,10 @@ func TestVReplStreamShowsLiveness(t *testing.T) {
 	})
 }
 
-// TestReviewVReplStreamError tests the executor's per-stream decision in
-// reviewRunningMigrations: an unrecoverable or legacy Error-state stream is
-// terminal and cancels the migration; a retries-exhausted park — only
-// possible for a stream created before this executor's retry-forever config
-// override existed — is repaired instead, unless the park has persisted
-// past the LastError retry window, where the cancel takes precedence; a
-// transient error is tolerated until it persists past that window; a clean
-// stream is left alone.
+// TestReviewVReplStreamError tests the per-stream verdict: unrecoverable or
+// legacy Error-state streams cancel; a retries-exhausted park is repaired
+// unless it has outlived the retry window; a transient error is tolerated
+// until it outlives the window; a clean stream is left alone.
 func TestReviewVReplStreamError(t *testing.T) {
 	newExecutor := func() *Executor {
 		return &Executor{
@@ -1437,19 +1369,13 @@ func TestReviewVReplStreamError(t *testing.T) {
 		assert.Equal(t, vreplStreamCancel, e.reviewVReplStreamError(uuid, unrecoverableStream))
 	})
 	t.Run("retries-exhausted stream is repaired", func(t *testing.T) {
-		// A retries-exhausted park can only come from a stream created
-		// before this executor's retry-forever options override existed
-		// (e.g. an in-flight migration across a rolling upgrade, with a
-		// finite tablet-wide --vreplication-max-time-to-retry-on-error).
-		// It is repaired — restarted with the override installed — rather
-		// than cancelled, preserving the migration's copy progress.
+		// Only a stream created before the retry-forever override existed
+		// can park this way; repairing it preserves the copy progress.
 		e := newExecutor()
 		assert.Equal(t, vreplStreamRepair, e.reviewVReplStreamError(uuid, retriesExhaustedStream))
 	})
 	t.Run("retries-exhausted stream past the retry window is cancelled", func(t *testing.T) {
-		// If the park persists past the executor's own retry window (e.g.
-		// the repair itself keeps failing), the window-expiry cancel takes
-		// precedence over further repair attempts.
+		// E.g. the repair itself keeps failing.
 		e := newExecutor()
 		lastError := vterrors.NewLastError("test", -time.Nanosecond)
 		lastError.Record(errors.New(retriesExhaustedStream.message))
@@ -1462,9 +1388,8 @@ func TestReviewVReplStreamError(t *testing.T) {
 	})
 	t.Run("transient error past the retry window is cancelled", func(t *testing.T) {
 		e := newExecutor()
-		// Seed a LastError whose window is already expired (negative max
-		// time in error) so that ShouldRetry is deterministically false
-		// once the error has been recorded, without sleeping.
+		// A negative window makes ShouldRetry false once the error is
+		// recorded, without sleeping.
 		lastError := vterrors.NewLastError("test", -time.Nanosecond)
 		lastError.Record(errors.New(transientErrorStream.message))
 		e.vreplicationLastError[uuid] = lastError
@@ -1480,15 +1405,9 @@ func TestReviewVReplStreamError(t *testing.T) {
 	})
 }
 
-// TestRepairVReplicationQuery tests the statement that repairs a stream
-// parked on a retries-exhausted error: it must restart the stream, clear the
-// parked message, install the retry-forever config override so the stream
-// cannot park on a recoverable error again, and guard on the Error state so
-// a concurrently recovered stream is not clobbered. The override must MERGE
-// into the stored options — json_insert creates the config container only
-// when absent, json_set sets only the one key — because an in-flight
-// workflow may carry other overrides applied via
-// `Workflow update --config-overrides`, and those must survive the repair.
+// TestRepairVReplicationQuery pins the repair statement: restart the stream,
+// clear the parked message, merge in the retry-forever override without
+// discarding other config overrides, and guard on the Error state.
 func TestRepairVReplicationQuery(t *testing.T) {
 	query := repairVReplicationQuery(42)
 	assert.Equal(t,
@@ -1496,14 +1415,10 @@ func TestRepairVReplicationQuery(t *testing.T) {
 		query)
 }
 
-// TestTerminallyFailMigrationWriteOrder pins the write order of the terminal
-// transition. Once the status is terminal the migration leaves every review
-// path, so a message write failing after the transition would leave it
-// permanently terminal with a stale message and no way to record the reason.
-// The message must therefore be written first, and a failed message write
-// must abort the transition — the migration stays under review and the
-// caller's re-drive (the running-migrations and stale-migration reviews, or
-// CancelMigration's pending intent) retries the whole transition.
+// TestTerminallyFailMigrationWriteOrder pins that the message is written
+// before the status, and that a failed message write aborts the transition:
+// once terminal, a migration leaves every review path and a missing reason
+// could never be repaired.
 func TestTerminallyFailMigrationWriteOrder(t *testing.T) {
 	uuid := "1cbcd662_8ed6_11ee_bc8f_0a43f95f28a3"
 	onlineDDL := &schema.OnlineDDL{UUID: uuid}
@@ -1558,17 +1473,9 @@ func TestTerminallyFailMigrationWriteOrder(t *testing.T) {
 	})
 }
 
-// TestFailStaleMigration tests the terminal transition the stale-migration
-// review applies once it has stopped a stale migration's stream. A user's
-// cancellation whose termination attempt failed transiently is left in
-// 'running' with cancelled_timestamp set and a pending intent, and the stale
-// review may be the path that finally terminates it (both run in the same
-// tick). That termination must then record the cancellation the user asked
-// for — status 'cancelled', with the cancellation's own reason — rather than
-// a failure with the stale-migration message: the transition has to be the
-// failed-or-cancelled one, which follows cancelled_timestamp, and a pending
-// intent's reason takes precedence. With no cancellation pending, the stale
-// message is recorded. Either way the migration's stream tracking is dropped.
+// TestFailStaleMigration pins the stale-migration terminal transition: it is
+// the failed-or-cancelled one, prefers a pending cancellation's reason over
+// the stale message, and drops the stream tracking only once it has landed.
 func TestFailStaleMigration(t *testing.T) {
 	uuid := "1cbcd662_8ed6_11ee_bc8f_0a43f95f28a3"
 	onlineDDL := &schema.OnlineDDL{UUID: uuid}
@@ -1642,19 +1549,15 @@ func TestFailStaleMigration(t *testing.T) {
 
 		require.Error(t, e.failStaleMigration(t.Context(), onlineDDL, staleMessage))
 
-		// The migration is still 'running'; the next tick must still be able
-		// to re-drive the cancellation with its original reason.
+		// Still 'running': the next tick must be able to re-drive the
+		// cancellation with its original reason.
 		assert.Contains(t, e.vreplicationPendingCancel, uuid)
 	})
 }
 
-// TestGetNonConflictingMigrationCancellationIntent pins the scheduling gate:
-// queued/ready selection ignores cancellation, so a migration carrying an
-// unfulfilled cancellation intent (durable cancelled_timestamp, or the
-// in-memory pending record) must not be picked for execution — the
-// scheduler re-drives its terminal transition instead. Without the gate a
-// user-cancelled migration whose terminal transition failed would be
-// scheduled and start executing.
+// TestGetNonConflictingMigrationCancellationIntent pins that the scheduler
+// never picks a migration carrying an unfulfilled cancellation intent, and
+// re-drives its terminal transition instead.
 func TestGetNonConflictingMigrationCancellationIntent(t *testing.T) {
 	uuid := "1cbcd662_8ed6_11ee_bc8f_0a43f95f28a3"
 	type harness struct {

@@ -84,12 +84,10 @@ func TestMaxQuerySize(t *testing.T) {
 	})
 }
 
-// TestSetStateStampsTimeUpdated pins that a state transition stamps
-// time_updated in the same write: a parked (Error) row's time_updated IS its
-// park time. Online DDL's resume-budget seeding relies on that — without the
-// stamp, a copy-phase park inherits a liveness timestamp up to a full copy
-// cycle old (GenerateUpdateRowsCopied deliberately leaves time_updated
-// unchanged) and the advertised recovery budget is silently shortened.
+// TestSetStateStampsTimeUpdated pins that the Error transition stamps
+// time_updated in the same write, so a parked row's time_updated is its park
+// time rather than up to a full copy cycle old (GenerateUpdateRowsCopied
+// leaves it alone).
 func TestSetStateStampsTimeUpdated(t *testing.T) {
 	dbClient := binlogplayer.NewMockDBClient(t)
 	dbClient.ExpectRequestRE(`update _vt\.vreplication set state='Error', message=left\('boom', 1000\), time_updated=\d+ where id=1`, &sqltypes.Result{}, nil)
@@ -105,11 +103,9 @@ func TestSetStateStampsTimeUpdated(t *testing.T) {
 	}
 	require.NoError(t, vr.setState(binlogdatapb.VReplicationWorkflowState_Error, "boom"))
 
-	// Non-Error transitions must NOT stamp time_updated: with the default
-	// infinite retry config every retry attempt re-enters
-	// setState(Running, ""), and stamping there would report artificial
-	// liveness that keeps the stale-migration fallback from ever firing on
-	// a stuck retry loop.
+	// Non-Error transitions must not stamp it: every retry re-enters
+	// setState(Running, ""), and stamping there would fake liveness on a
+	// stuck retry loop.
 	dbClient2 := binlogplayer.NewMockDBClient(t)
 	dbClient2.ExpectRequest("update _vt.vreplication set state='Running', message=left('', 1000) where id=1", &sqltypes.Result{}, nil)
 	dbClient2.ExpectRequestRE(`insert into _vt\.vreplication_log.*`, &sqltypes.Result{}, nil)

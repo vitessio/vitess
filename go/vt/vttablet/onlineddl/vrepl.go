@@ -88,30 +88,19 @@ func (v *VReplStream) isRunning() bool {
 // derived from the _vt.vreplication_log history scan.
 const vreplMessageWrapperPrefix = "vreplication: "
 
-// isRetriesExhaustedMessage reports whether a vreplication error message
-// carries the retries-exhausted classification. The marker is
-// matched at the message boundary -- after stripping the known
-// "vreplication: " wrapper -- so that marker text embedded in the
-// underlying error (e.g. user data quoted in a MySQL duplicate-entry
-// error) cannot influence the classification.
+// isRetriesExhaustedMessage reports whether a vreplication error message is
+// classified retries-exhausted. The marker must start the message (after the
+// "vreplication: " wrapper) and be followed by ":", as generated, so that
+// marker text embedded in the underlying error (e.g. quoted user data) or a
+// message that merely extends the marker's words cannot match.
 func isRetriesExhaustedMessage(message string) bool {
 	message = strings.TrimPrefix(message, vreplMessageWrapperPrefix)
-	// The generated retries-exhausted message always continues with ":"
-	// right after the marker; requiring it keeps a legacy or externally
-	// written message that merely extends the marker's words (e.g. "...
-	// retries exhausted resources: ...") in the sticky terminal class of
-	// the overrideStateFromHistory scan.
 	return strings.HasPrefix(message, vreplication.RetriesExhaustedIndicator+":")
 }
 
-// hasError returns the stream's error state:
-//   - isTerminal: the stream is in the Error state and the migration cannot
-//     proceed. Any Error state is terminal: streams created by this executor
-//     pin retry-forever via a per-workflow config override (see
-//     generateInsertStatement), so a retries-exhausted park can only come
-//     from a stream created before the override existed — failing it keeps
-//     the actionable message naming the flag that parked it;
-//   - vreplError: the error, terminal or not, if any.
+// hasError returns the stream's error, if any, and whether it is terminal:
+// an Error-state stream will not retry on its own. What terminal means for
+// the migration is decided by reviewVReplStreamError.
 func (v *VReplStream) hasError() (isTerminal bool, vreplError error) {
 	switch {
 	case v.state == binlogdatapb.VReplicationWorkflowState_Error:
@@ -412,16 +401,11 @@ func (v *VRepl) analyze(ctx context.Context, conn *dbconnpool.DBConnection) erro
 }
 
 // onlineDDLVReplicationOptions returns the options JSON every Online DDL
-// vreplication stream carries: a per-workflow config override pinning the
-// stream's retry window to 0 (retry forever) regardless of any tablet-wide
-// --vreplication-max-time-to-retry-on-error value. A recoverable error must
-// keep the stream retrying rather than park it in the Error state, which
-// would fail the migration and lose all copy progress. The migration's own
-// stale policy (staleMigrationFailMinutes, driven by time_updated liveness
-// that pure retry loops do not advance) remains the overall no-progress
-// bound. Used both when creating a stream (generateInsertStatement) and when
-// repairing a pre-override stream parked on a retries-exhausted error
-// (repairVReplicationQuery).
+// stream carries: a per-workflow override pinning
+// --vreplication-max-time-to-retry-on-error to 0 (retry forever), so a
+// recoverable error keeps the stream retrying rather than parking it and
+// failing the migration. The stale-migration policy remains the no-progress
+// bound; pure retry loops do not advance time_updated.
 func onlineDDLVReplicationOptions() (string, error) {
 	options, err := json.Marshal(&vtctldatapb.WorkflowOptions{
 		Config: map[string]string{retryForeverConfigKey: retryForeverConfigValue},
@@ -433,10 +417,8 @@ func onlineDDLVReplicationOptions() (string, error) {
 }
 
 const (
-	// retryForeverConfigKey/Value form the per-workflow config override
-	// pinning the stream's retry window to 0 (retry forever). The key is
-	// the vttablet flag name, parsed by vttablet/common's config override
-	// handling.
+	// The per-workflow config override pinning retry-forever; the key is the
+	// vttablet flag name.
 	retryForeverConfigKey   = "vreplication-max-time-to-retry-on-error"
 	retryForeverConfigValue = "0s"
 )

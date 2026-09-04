@@ -563,10 +563,9 @@ const (
 			_vt.copy_state
 		WHERE vrepl_id=%a
 		`
-	// sqlReadCopyStateProgress reads the copy phase's row count together with
-	// its newest checkpoint id: every committed copy batch inserts a
-	// _vt.copy_state row, and the periodic GC only ever removes older rows,
-	// so max(id) advances if and only if the copy has made durable progress.
+	// sqlReadCopyStateProgress reads the copy phase's row count and newest
+	// checkpoint id: every committed copy batch inserts a row and GC removes
+	// only older ones, so max(id) advances only with durable progress.
 	sqlReadCopyStateProgress = `SELECT
 			count(*) as cnt,
 			max(id) as maxid

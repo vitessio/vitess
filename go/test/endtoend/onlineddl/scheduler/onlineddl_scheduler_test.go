@@ -205,13 +205,10 @@ func waitForReadyToComplete(t *testing.T, uuid string, expected bool) {
 	}
 }
 
-// assertRetryForeverOverride asserts that the migration's vreplication
-// stream carries the per-workflow config override pinning
-// vreplication-max-time-to-retry-on-error to 0 (retry forever), and returns
-// the stream's full parsed config map for any further assertions. The
-// stored options JSON may be reformatted (whitespace) by the components
-// that handle it, so it is parsed rather than matched as a literal
-// substring.
+// assertRetryForeverOverride asserts that the migration's stream carries the
+// retry-forever config override and returns its parsed config map. The stored
+// JSON may be reformatted downstream, so it is parsed rather than matched
+// literally.
 func assertRetryForeverOverride(t *testing.T, uuid string) map[string]string {
 	query, err := sqlparser.ParseAndBind("select options from _vt.vreplication where workflow=%a",
 		sqltypes.StringBindVariable(uuid),
@@ -229,16 +226,12 @@ func assertRetryForeverOverride(t *testing.T, uuid string) map[string]string {
 	return options.Config
 }
 
-// parkVReplStream simulates the vreplication controller parking a migration's
-// stream on a terminal error: it writes the error state and message to the
-// live _vt.vreplication row and records the state change in
-// _vt.vreplication_log, the same two writes the controller performs before
-// exiting.
+// parkVReplStream simulates the controller parking a migration's stream on a
+// terminal error: the Error state and message on the live _vt.vreplication
+// row, plus the matching _vt.vreplication_log record.
 func parkVReplStream(t *testing.T, uuid string, message string) {
-	// A real terminal-error park leaves no controller running, so stop the
-	// workflow through the engine-aware channel first. Without this, the
-	// still-running vplayer's periodic position updates clear the message
-	// column, leaving a state='Error' row with no classifiable message.
+	// Stop the workflow first, as a real park leaves no controller running;
+	// otherwise the live vplayer's position updates clear the message.
 	output, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("Workflow", "--keyspace", keyspaceName, "stop", "--workflow", uuid)
 	require.NoError(t, err, output)
 	status := onlineddl.WaitForVReplicationStatus(t, &vtParams, primaryTablet, uuid, normalWaitTime, "Stopped")
@@ -690,12 +683,10 @@ func testScheduler(t *testing.T) {
 		})
 	})
 
-	// The message literals below deliberately hardcode the values of
-	// vreplication.TerminalErrorIndicator, UnrecoverableErrorIndicator and
-	// RetriesExhaustedIndicator (the latter a standalone marker, not
-	// prefixed by "terminal error"): the markers are a message-string
-	// contract between the vreplication controller and the Online DDL
-	// executor, and these tests pin it.
+	// The message literals below deliberately hardcode the marker constants
+	// (TerminalErrorIndicator, UnrecoverableErrorIndicator and the standalone
+	// RetriesExhaustedIndicator): they are a message-string contract between
+	// the vreplication controller and the Online DDL executor.
 	t.Run("Repair vreplication stream parked on retries-exhausted error", func(t *testing.T) {
 		t1uuid = testOnlineDDLStatement(t, createParams(trivialAlterT1Statement, ddlStrategy+" --postpone-completion", "vtgate", "", "", true)) // skip wait
 
@@ -704,19 +695,13 @@ func testScheduler(t *testing.T) {
 			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
 		})
 		t.Run("verify the retry-forever config override", func(t *testing.T) {
-			// The stream must carry the override so that a recoverable error
-			// keeps it retrying at the controller rather than parking it in
-			// the Error state.
 			assertRetryForeverOverride(t, t1uuid)
 		})
 		t.Run("park the stream with a retries-exhausted error", func(t *testing.T) {
-			// Simulate a stream from before the retry-forever override
-			// existed, carrying an unrelated operator-applied config
-			// override (as `Workflow update --config-overrides` would
-			// leave), then park it on the standalone retries-exhausted
-			// marker exactly as the controller emits it. The repair must
-			// merge in the retry-forever override without removing the
-			// operator's.
+			// Simulate a pre-override stream carrying an unrelated operator
+			// config override, then park it exactly as the controller
+			// would. The repair must merge its override in without removing
+			// the operator's.
 			query, err := sqlparser.ParseAndBind(`update _vt.vreplication set options='{"config": {"vreplication-retry-delay": "5s"}}' where workflow=%a`,
 				sqltypes.StringBindVariable(t1uuid),
 			)
@@ -726,16 +711,11 @@ func testScheduler(t *testing.T) {
 			parkVReplStream(t, t1uuid, "retries exhausted: the same error was encountered continuously for longer than --vreplication-max-time-to-retry-on-error (1m0s): io.EOF")
 		})
 		t.Run("expect repair", func(t *testing.T) {
-			// The executor repairs the park instead of failing the
-			// migration: the stream restarts with the retry-forever
-			// override installed.
 			status := onlineddl.WaitForVReplicationStatus(t, &vtParams, primaryTablet, t1uuid, normalWaitTime, "Running")
 			require.Equal(t, "Running", status)
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusRunning)
 			config := assertRetryForeverOverride(t, t1uuid)
-			// The repair merged its override in without removing the
-			// operator's unrelated one.
-			assert.Equal(t, "5s", config["vreplication-retry-delay"])
+			assert.Equal(t, "5s", config["vreplication-retry-delay"], "the operator's override must survive the repair")
 		})
 		t.Run("complete", func(t *testing.T) {
 			onlineddl.CheckCompleteMigration(t, &vtParams, shards, t1uuid, true)

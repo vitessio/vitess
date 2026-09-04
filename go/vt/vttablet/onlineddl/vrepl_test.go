@@ -34,13 +34,9 @@ import (
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
-// TestGenerateInsertStatementRetryForever tests that the vreplication stream
-// an Online DDL migration creates carries a per-workflow config override
-// pinning vreplication-max-time-to-retry-on-error to 0 (retry forever):
-// recoverable errors must keep the stream retrying rather than parking it in
-// the Error state, regardless of any tablet-wide flag value. The executor's
-// stale-migration policy remains the overall no-progress bound — liveness is
-// driven by time_updated, which pure retry loops do not advance.
+// TestGenerateInsertStatementRetryForever tests that every Online DDL stream
+// is created with the config override pinning
+// vreplication-max-time-to-retry-on-error to 0 (retry forever).
 func TestGenerateInsertStatementRetryForever(t *testing.T) {
 	v := &VRepl{
 		workflow: "wf",
@@ -50,13 +46,11 @@ func TestGenerateInsertStatementRetryForever(t *testing.T) {
 	insert, err := v.generateInsertStatement()
 	require.NoError(t, err)
 
-	// The options JSON is a wire contract read by the vreplication
-	// controller; pin its literal form.
+	// The options JSON is a wire contract read by the controller; pin it.
 	const wantOptions = `{"config":{"vreplication-max-time-to-retry-on-error":"0s"}}`
 	require.Contains(t, insert, wantOptions)
 
-	// Round-trip through the same parsing path the controller uses
-	// (processWorkflowOptions): the override must yield retry-forever.
+	// Round-trip through the controller's parsing path.
 	var workflowOptions vtctldatapb.WorkflowOptions
 	require.NoError(t, json.Unmarshal([]byte(wantOptions), &workflowOptions))
 	config, err := vttablet.NewVReplicationConfig(workflowOptions.Config)
@@ -270,12 +264,8 @@ func TestRevertible(t *testing.T) {
 	}
 }
 
-// TestVReplStreamHasError tests the classification of vreplication stream
-// errors: any Error-state stream is terminal for the migration — including
-// retries-exhausted (class B) parks, which can only come from a stream
-// created before the executor pinned retry-forever via the per-workflow
-// config override; the actionable message still names the flag that parked
-// it. Non-Error states never classify as terminal.
+// TestVReplStreamHasError tests that any Error-state stream reports as
+// terminal, whatever its message, and that non-Error states never do.
 func TestVReplStreamHasError(t *testing.T) {
 	testCases := []struct {
 		name         string

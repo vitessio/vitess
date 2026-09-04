@@ -578,15 +578,12 @@ func (vr *vreplicator) setState(state binlogdatapb.VReplicationWorkflowState, me
 		})
 	}
 	vr.stats.State.Store(state.String())
-	// The Error state write stamps time_updated so a parked row's
-	// time_updated is exactly its park time: consumers seed recovery
-	// budgets from it (Online DDL), and without the stamp a copy-phase
-	// park would carry a liveness timestamp up to a full copy cycle old
-	// (GenerateUpdateRowsCopied deliberately leaves time_updated alone).
-	// Only the Error transition stamps it: with the default infinite retry
-	// config every retry attempt re-enters setState(Running, ""), and
-	// stamping there would report artificial liveness that keeps the
-	// stale-migration fallback from ever firing on a stuck retry loop.
+	// Stamp time_updated on the Error transition only, so a parked row's
+	// time_updated is its park time (GenerateUpdateRowsCopied leaves it
+	// alone, so it could otherwise be a full copy cycle old). Not on Running:
+	// every retry re-enters setState(Running, ""), and stamping there would
+	// fake liveness and keep the stale-migration fallback from firing on a
+	// stuck retry loop.
 	timeUpdatedClause := ""
 	if state == binlogdatapb.VReplicationWorkflowState_Error {
 		timeUpdatedClause = fmt.Sprintf(", time_updated=%v", time.Now().Unix())
