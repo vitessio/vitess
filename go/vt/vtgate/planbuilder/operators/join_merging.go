@@ -22,6 +22,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
+	"vitess.io/vitess/go/vt/vtgate/semantics"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
@@ -120,22 +121,31 @@ func (jm *joinMerger) mergeJoinInputs(ctx *plancontext.PlanningContext, lhs, rhs
 // every shard, so a multi-shard route returns each unmatched preserved row once per shard.
 // Checking the opcode rather than the routing type leaves unsharded routes out: there is only one
 // shard to read them from.
-//
-// A multi-table DML is the exception when the join is its own row source. Nothing reads the
-// preserved rows then: an unmatched one has no row to update or delete on the other side, and a
-// reference table that is itself the target has a physical copy on every shard to write to. A
-// target among these two routes is what says the DML writes through this join rather than reading
-// it from further down, where an outer join in a subquery does have its rows read.
 func owesReferenceRows(ctx *plancontext.PlanningContext, joinType sqlparser.JoinType, preserved, other *Route) bool {
 	if joinType.IsInner() || preserved.Routing.OpCode() != engine.Reference {
 		return false
 	}
 
-	targets := ctx.SemTable.DMLTargets
-	isDirectDMLRowSource := targets.NotEmpty() &&
-		TableID(preserved).Merge(TableID(other)).IsOverlapping(targets)
+	return !isDirectDMLRowSource(ctx, preserved, other)
+}
 
-	return !isDirectDMLRowSource
+// isDirectDMLRowSource reports whether a merge of these routes is the row source of a multi-table
+// DML rather than something that reads it. Nothing reads the preserved rows then: an unmatched one
+// has no row to update or delete on the other side, and a reference table that is itself the
+// target has a physical copy on every shard to write to. A target among these routes is what says
+// the DML writes through this join rather than reading it from further down, where an outer join
+// in a subquery does have its rows read.
+func isDirectDMLRowSource(ctx *plancontext.PlanningContext, routes ...*Route) bool {
+	targets := ctx.SemTable.DMLTargets
+	if targets.IsEmpty() {
+		return false
+	}
+
+	var id semantics.TableSet
+	for _, route := range routes {
+		id = id.Merge(TableID(route))
+	}
+	return id.IsOverlapping(targets)
 }
 
 func mergeAnyShardRoutings(ctx *plancontext.PlanningContext, a, b *AnyShardRouting, joinPredicates []sqlparser.Expr, joinType sqlparser.JoinType) *AnyShardRouting {
@@ -298,7 +308,12 @@ func getKeyspaceName(routing Routing) string {
 }
 
 func (jm *joinMerger) merge(ctx *plancontext.PlanningContext, op1, op2 *Route, r Routing, conditions ...engine.Condition) *Route {
+	// The rows a join further down preserved are not read either when this merge is the DML's row
+	// source, so the target exempts them the same way it exempts the ones this join preserves.
 	preserved, canMerge := referenceRowsInvariant(r, owesReferenceRows(ctx, jm.joinType, op1, op2), op1, op2)
+	if preserved && isDirectDMLRowSource(ctx, op1, op2) {
+		preserved, canMerge = false, true
+	}
 	if !canMerge {
 		debugNoRewrite("apply join merge blocked: %s routing would widen a route that has to stay single-shard", r.OpCode().String())
 		return nil
