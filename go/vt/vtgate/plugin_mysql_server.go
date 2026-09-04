@@ -164,6 +164,11 @@ func (vh *vtgateHandler) NewConnection(c *mysql.Conn) {
 	// Match VTGate's default session state (Autocommit: true) so the
 	// handshake packet reports correct status flags to the client.
 	c.StatusFlags |= mysql.ServerStatusAutocommit
+	// Client libraries pick their escaping from this flag as soon as they connect,
+	// before the first query seeds the session with the configured default.
+	if vh.vtg.executor.defaultSQLModeHasNoBackslashEscapes() {
+		c.StatusFlags |= mysql.ServerStatusNoBackslashEscapes
+	}
 
 	vh.mu.Lock()
 	defer vh.mu.Unlock()

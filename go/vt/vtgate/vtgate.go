@@ -1072,8 +1072,14 @@ func newVTGate(executor *Executor, resolver *Resolver, vsm *vstreamManager, tc *
 	}
 }
 
-// sessionParser returns the parser for the session's current sql_mode.
+// sessionParser returns the parser for the session's current sql_mode: the value the
+// session has set, or the configured default it starts with. A batch is split before
+// its first statement reaches the executor and seeds the session, so the default has
+// to be read here rather than off the session.
 func (vtg *VTGate) sessionParser(session *vtgatepb.Session) *sqlparser.Parser {
-	sqlMode, _ := econtext.NewSafeSession(session).SQLMode()
+	sqlMode, ok := econtext.NewSafeSession(session).SQLMode()
+	if !ok {
+		sqlMode = vtg.executor.config.SQLMode
+	}
 	return vtg.executor.Environment().Parser().WithSQLMode(sqlparser.ParseSQLMode(sqlMode))
 }

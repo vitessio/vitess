@@ -139,6 +139,16 @@ func (e *Executor) canUseSetVar() bool {
 	return e.vConfig.SetVarEnabled && e.env.Parser().IsMySQL80AndAbove()
 }
 
+// defaultSQLModeHasNoBackslashEscapes reports whether sessions start under
+// NO_BACKSLASH_ESCAPES: the configured default carries it, and the deployment lets
+// vtgate own the sql_mode at all.
+func (e *Executor) defaultSQLModeHasNoBackslashEscapes() bool {
+	if e.config.SystemSettingsDisabled {
+		return false
+	}
+	return sqlparser.ParseSQLMode(e.config.SQLMode)&sqlparser.SQLModeNoBackslashEscapes != 0
+}
+
 // seedSQLMode gives the session its starting sql_mode, unless the deployment opted out of
 // vtgate-managed system settings via --enable-system-settings=false — those deployments
 // keep running queries under each backend's configured mode.

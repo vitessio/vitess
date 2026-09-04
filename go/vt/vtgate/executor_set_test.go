@@ -732,6 +732,30 @@ func TestSetVar(t *testing.T) {
 	}
 }
 
+// A batch is split before its first statement seeds the session, so the splitter
+// reads the configured default itself: under NO_BACKSLASH_ESCAPES the backslash
+// does not escape the quote, and the text is two statements.
+func TestExecuteMultiSplitsUnderTheConfiguredSQLMode(t *testing.T) {
+	cfg := createExecutorConfigWithNormalizer()
+	cfg.SQLMode = "NO_BACKSLASH_ESCAPES"
+	executor, _, _, lookup, ctx := createExecutorEnvWithConfig(t, cfg)
+	vtg := newVTGate(executor, nil, nil, nil, nil)
+
+	session := &vtgatepb.Session{Autocommit: true, TargetString: KsTestUnsharded}
+	_, results, err := vtg.ExecuteMulti(ctx, nil, session, `select 'a\' from main1; select 1 from main1`)
+	require.NoError(t, err)
+	assert.Len(t, results, 2)
+	require.Len(t, lookup.Queries, 2)
+	assert.Equal(t, `a\`, string(lookup.Queries[0].BindVariables["vtg1"].Value))
+
+	// under the default mode the same text is one unterminated string (the
+	// target differs so that the counted error does not land on the key another
+	// test in this package pins)
+	executor.config.SQLMode = "STRICT_TRANS_TABLES"
+	_, _, err = vtg.ExecuteMulti(ctx, nil, &vtgatepb.Session{Autocommit: true, TargetString: KsTestSharded}, `select 'a\' from main1; select 1 from main1`)
+	require.ErrorContains(t, err, "syntax")
+}
+
 func TestSQLModeFlag(t *testing.T) {
 	var f sqlModeFlag
 	require.NoError(t, f.Set("no_zero_date,strict_trans_tables"))
