@@ -251,22 +251,25 @@ const vreplThrottleLivenessWindow = 15 * time.Minute
 // advances it before every copy attempt, whether or not the copy then
 // succeeds. Nor is the first observation, which only sets the baseline: the
 // tracking is in-memory, and a stuck copy must not earn a fresh budget from
-// every executor restart. A copy-state lookup error counts as liveness rather
-// than freezing it on a query blip.
+// every executor restart. A failed copy-state lookup is not liveness either:
+// the indicator is left un-advanced and re-evaluated on the next tick.
 func (e *Executor) vreplStreamShowsLiveness(ctx context.Context, uuid string, s *VReplStream) bool {
 	query, err := sqlparser.ParseAndBind(sqlReadCopyStateProgress,
 		sqltypes.Int32BindVariable(s.id),
 	)
-	if err != nil {
-		return true
+	var csRow sqltypes.RowNamedValues
+	if err == nil {
+		var r *sqltypes.Result
+		if r, err = e.execQuery(ctx, query); err == nil {
+			if csRow = r.Named().Row(); csRow == nil {
+				err = errors.New("no row returned")
+			}
+		}
 	}
-	r, err := e.execQuery(ctx, query)
 	if err != nil {
-		return true
-	}
-	csRow := r.Named().Row()
-	if csRow == nil {
-		return true
+		log.Error("Online DDL: failed to read copy state for liveness evaluation; not refreshing liveness this tick",
+			slog.String("uuid", uuid), slog.String("tablet", e.TabletAliasString()), slog.Int64("stream_id", int64(s.id)), slog.Any("error", err))
+		return false
 	}
 	if csRow.AsInt64("cnt", 0) == 0 {
 		// Copy phase complete.
@@ -2620,9 +2623,14 @@ func (e *Executor) terminallyFailMigration(ctx context.Context, onlineDDL *schem
 }
 
 // failMigration marks a migration as failed and returns the causing error,
-// so callers can fail-and-propagate in one statement.
+// so callers can fail-and-propagate in one statement. A failed terminal
+// transition is logged; the stale-migration review is the backstop that
+// eventually fails a migration stuck in 'running'.
 func (e *Executor) failMigration(ctx context.Context, onlineDDL *schema.OnlineDDL, withError error) error {
-	_ = e.terminallyFailMigration(ctx, onlineDDL, withError)
+	if err := e.terminallyFailMigration(ctx, onlineDDL, withError); err != nil {
+		log.Error("Online DDL: failed to transition migration to a terminal state",
+			slog.String("uuid", onlineDDL.UUID), slog.String("tablet", e.TabletAliasString()), slog.Any("cause", withError), slog.Any("error", err))
+	}
 	return withError
 }
 

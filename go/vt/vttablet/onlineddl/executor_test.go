@@ -1301,6 +1301,17 @@ func TestVReplStreamShowsLiveness(t *testing.T) {
 		assert.True(t, e.vreplStreamShowsLiveness(ctx, uuid, stream("pos1", 0)))
 		assert.True(t, e.vreplStreamShowsLiveness(ctx, uuid, stream("pos1", 0)))
 	})
+	t.Run("copy-state lookup failure is not liveness", func(t *testing.T) {
+		// Granting liveness on an unobserved state would hand a stuck copy a
+		// fresh budget on every transient read failure; leaving the indicator
+		// un-advanced merely defers the decision to the next tick.
+		e := newExecutor(int64p(1), int64p(10))
+		e.execQuery = func(ctx context.Context, query string) (*sqltypes.Result, error) {
+			return nil, errors.New("copy_state unavailable")
+		}
+		assert.False(t, e.vreplStreamShowsLiveness(ctx, uuid, stream("pos1", 0)))
+		assert.NotContains(t, e.vreplicationProgress, uuid, "a failed lookup must not establish a baseline")
+	})
 	t.Run("copy phase, first observation is baseline only", func(t *testing.T) {
 		e := newExecutor(int64p(1), int64p(10))
 		assert.False(t, e.vreplStreamShowsLiveness(ctx, uuid, stream("pos1", 0)),
