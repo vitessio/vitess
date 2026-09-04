@@ -880,7 +880,8 @@ var validSQL = []struct {
 	input:  "select /* || */ 1 from t where a = b || a = c",
 	output: "select /* || */ 1 from t where a = b or a = c",
 }, {
-	input: "select /* not */ 1 from t where not a = b",
+	input:  "select /* not */ 1 from t where not a = b",
+	output: "select /* not */ 1 from t where not (a = b)",
 }, {
 	input: "select /* ! */ 1 from t where a = !1",
 }, {
@@ -896,8 +897,7 @@ var validSQL = []struct {
 }, {
 	input: "select /* exists */ 1 from t where exists (select 1 from t)",
 }, {
-	input:  "select /* (boolean) */ 1 from t where not (a = b)",
-	output: "select /* (boolean) */ 1 from t where not a = b",
+	input: "select /* (boolean) */ 1 from t where not (a = b)",
 }, {
 	input: "select /* in value list */ 1 from t where a in (b, c)",
 }, {
@@ -4173,7 +4173,504 @@ var validSQL = []struct {
 }, {
 	input:  "SELECT 1,2 UNION SELECT * from (VALUES ROW(10,15)) t",
 	output: "select 1, 2 from dual union select * from (values row(10, 15)) as t",
+}, {
+	// MySQL's lexer treats these function names as keywords only when
+	// immediately followed by '(' — otherwise they are plain identifiers.
+	input:  "create table CAST (a int)",
+	output: "create table `CAST` (\n\ta int\n)",
+}, {
+	input:  "drop table CAST",
+	output: "drop table `CAST`",
+}, {
+	input:  "create table CURDATE (a int)",
+	output: "create table `CURDATE` (\n\ta int\n)",
+}, {
+	input:  "create table CURTIME (a int)",
+	output: "create table `CURTIME` (\n\ta int\n)",
+}, {
+	input:  "create table EXTRACT (a int)",
+	output: "create table `EXTRACT` (\n\ta int\n)",
+}, {
+	input:  "create table NOW (a int)",
+	output: "create table `NOW` (\n\ta int\n)",
+}, {
+	input:  "create table SUBSTR (a int)",
+	output: "create table `SUBSTR` (\n\ta int\n)",
+}, {
+	input:  "create table SUBSTRING (a int)",
+	output: "create table `SUBSTRING` (\n\ta int\n)",
+}, {
+	input:  "create table SYSDATE (a int)",
+	output: "create table `SYSDATE` (\n\ta int\n)",
+}, {
+	input:  "create table t (cast int, now int, extract int)",
+	output: "create table t (\n\t`cast` int,\n\t`now` int,\n\t`extract` int\n)",
+}, {
+	input:  "select now from t",
+	output: "select `now` from t",
+}, {
+	input:  "select cast(1 as char), now(), now(6), sysdate(), curdate(), curtime(), substr('a', 1), extract(year from d) from t",
+	output: "select cast(1 as char), now(), now(6), sysdate(), curdate(), curtime(), substr('a', 1), extract(year from d) from t",
+}, {
+	// with whitespace before '(' the name is an identifier, and the call is
+	// a generic function call — MySQL's stored-function call path. It
+	// serializes quoted so that MySQL takes that path too, rather than
+	// re-lexing the bare name as the built-in
+	input:  "select now () from t",
+	output: "select `now`() from t",
+}, {
+	input:  "select `now`() from t",
+	output: "select `now`() from t",
+}, {
+	input:  "select sysdate (), curdate (), curtime () from t",
+	output: "select `sysdate`(), `curdate`(), `curtime`() from t",
+}, {
+	input:  "select substr ('abc', 1, 2) from t",
+	output: "select `substr`('abc', 1, 2) from t",
+}, {
+	input:  "select t.now from t",
+	output: "select t.`now` from t",
 }}
+
+func TestParseSQLMode(t *testing.T) {
+	testcases := []struct {
+		in   string
+		mode SQLMode
+	}{
+		{in: "", mode: 0},
+		{in: "ANSI_QUOTES", mode: SQLModeANSIQuotes},
+		{in: "ansi_quotes", mode: SQLModeANSIQuotes},
+		{in: "PIPES_AS_CONCAT,ANSI_QUOTES", mode: SQLModeANSIQuotes | SQLModePipesAsConcat},
+		{in: "STRICT_TRANS_TABLES,NO_ZERO_DATE", mode: 0},
+		{in: "IGNORE_SPACE", mode: SQLModeIgnoreSpace},
+		{in: "NO_BACKSLASH_ESCAPES", mode: SQLModeNoBackslashEscapes},
+		{in: "HIGH_NOT_PRECEDENCE", mode: SQLModeHighNotPrecedence},
+		{in: "REAL_AS_FLOAT", mode: SQLModeRealAsFloat},
+		// the ANSI combination mode includes REAL_AS_FLOAT, ANSI_QUOTES,
+		// PIPES_AS_CONCAT and IGNORE_SPACE
+		{in: "ANSI", mode: SQLModeRealAsFloat | SQLModeANSIQuotes | SQLModePipesAsConcat | SQLModeIgnoreSpace},
+		// ANSI_QUOTES must not be mistaken for the ANSI combination mode
+		{in: "ANSI_QUOTES,ONLY_FULL_GROUP_BY", mode: SQLModeANSIQuotes},
+		// tolerate quoting and expression noise around the mode names
+		{in: "(SELECT CONCAT(@@sql_mode, ',PIPES_AS_CONCAT'))", mode: SQLModePipesAsConcat},
+	}
+	for _, tcase := range testcases {
+		t.Run(tcase.in, func(t *testing.T) {
+			assert.Equal(t, tcase.mode, ParseSQLMode(tcase.in))
+		})
+	}
+}
+
+func TestStripUnforwardableModes(t *testing.T) {
+	testcases := []struct {
+		in  string
+		out string
+	}{
+		{in: "", out: ""},
+		{in: "ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES", out: "ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES"},
+		// only the mode under which serialized SQL would be lexed differently
+		// than written is removed
+		{in: "NO_BACKSLASH_ESCAPES", out: ""},
+		{in: "STRICT_TRANS_TABLES,no_backslash_escapes", out: "STRICT_TRANS_TABLES"},
+		{in: " NO_BACKSLASH_ESCAPES , NO_ZERO_DATE ", out: "NO_ZERO_DATE"},
+		// every other mode is forwarded, the ANSI combination, its members, and
+		// HIGH_NOT_PRECEDENCE included: their lexer aspects are inert on
+		// serialized SQL, and their resolution- and execution-time semantics are
+		// the consumer's to enforce
+		{in: "HIGH_NOT_PRECEDENCE,NO_ZERO_DATE", out: "HIGH_NOT_PRECEDENCE,NO_ZERO_DATE"},
+		{in: "PIPES_AS_CONCAT", out: "PIPES_AS_CONCAT"},
+		{in: "ansi_quotes,STRICT_TRANS_TABLES", out: "ansi_quotes,STRICT_TRANS_TABLES"},
+		{in: "IGNORE_SPACE,STRICT_TRANS_TABLES", out: "IGNORE_SPACE,STRICT_TRANS_TABLES"},
+		{in: "REAL_AS_FLOAT,STRICT_TRANS_TABLES", out: "REAL_AS_FLOAT,STRICT_TRANS_TABLES"},
+		{in: "ANSI,STRICT_ALL_TABLES", out: "ANSI,STRICT_ALL_TABLES"},
+	}
+	for _, tcase := range testcases {
+		t.Run(tcase.in, func(t *testing.T) {
+			assert.Equal(t, tcase.out, StripUnforwardableModes(tcase.in))
+		})
+	}
+}
+
+func TestCanonicalizeSQLModeValue(t *testing.T) {
+	testcases := []struct {
+		in  string
+		out string
+	}{
+		{in: "", out: ""},
+		{in: "''", out: "''"},
+		// MySQL's documented read-back for the combination modes
+		{in: "ANSI", out: "REAL_AS_FLOAT,PIPES_AS_CONCAT,ANSI_QUOTES,IGNORE_SPACE,ONLY_FULL_GROUP_BY,ANSI"},
+		{in: "TRADITIONAL", out: "STRICT_TRANS_TABLES,STRICT_ALL_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,TRADITIONAL,NO_ENGINE_SUBSTITUTION"},
+		// canonical ordering, uppercasing and deduplication
+		{in: "strict_trans_tables,pipes_as_concat", out: "PIPES_AS_CONCAT,STRICT_TRANS_TABLES"},
+		{in: "'STRICT_TRANS_TABLES,STRICT_TRANS_TABLES'", out: "'STRICT_TRANS_TABLES'"},
+		{in: "'ANSI,STRICT_TRANS_TABLES'", out: "'REAL_AS_FLOAT,PIPES_AS_CONCAT,ANSI_QUOTES,IGNORE_SPACE,ONLY_FULL_GROUP_BY,ANSI,STRICT_TRANS_TABLES'"},
+		// unknown names and non-list values stay untouched
+		{in: "'NOT_A_REAL_MODE'", out: "'NOT_A_REAL_MODE'"},
+		{in: "CONCAT(@@sql_mode, ',ANSI')", out: "CONCAT(@@sql_mode, ',ANSI')"},
+	}
+	for _, tcase := range testcases {
+		t.Run(tcase.in, func(t *testing.T) {
+			assert.Equal(t, tcase.out, CanonicalizeSQLModeValue(tcase.in))
+		})
+	}
+}
+
+func TestSQLModeParsing(t *testing.T) {
+	testcases := []struct {
+		mode   SQLMode
+		input  string
+		output string
+	}{{
+		mode:   SQLModeANSIQuotes,
+		input:  `select * from "full"`,
+		output: "select * from `full`",
+	}, {
+		mode:   SQLModeANSIQuotes,
+		input:  `create table t ("blah" int)`,
+		output: "create table t (\n\tblah int\n)",
+	}, {
+		// single-quoted strings are unaffected
+		mode:   SQLModeANSIQuotes,
+		input:  `select "a", 'b' from t`,
+		output: "select a, 'b' from t",
+	}, {
+		// a doubled quote is an escaped quote inside the identifier
+		mode:   SQLModeANSIQuotes,
+		input:  `select * from "a""b"`,
+		output: "select * from `a\"b`",
+	}, {
+		mode:   SQLModePipesAsConcat,
+		input:  "select 'a' || 'b' from dual",
+		output: "select concat('a', 'b') from dual",
+	}, {
+		mode:   SQLModePipesAsConcat,
+		input:  "select 'a' || 'b' || 'c' from dual",
+		output: "select concat(concat('a', 'b'), 'c') from dual",
+	}, {
+		// || binds tighter than LIKE, so the concatenation forms the pattern
+		mode:   SQLModePipesAsConcat,
+		input:  "select 'a%' like 'a!' || '%' escape '!' from dual",
+		output: "select 'a%' like concat('a!', '%') escape '!' from dual",
+	}, {
+		// || binds tighter than comparison operators
+		mode:   SQLModePipesAsConcat,
+		input:  "select a || b = c from t",
+		output: "select concat(a, b) = c from t",
+	}, {
+		// IGNORE_SPACE allows whitespace between a function-name keyword
+		// and its opening parenthesis
+		mode:   SQLModeIgnoreSpace,
+		input:  "select cast (1 as char) from dual",
+		output: "select cast(1 as char) from dual",
+	}, {
+		mode:   SQLModeIgnoreSpace,
+		input:  "select now () from dual",
+		output: "select now() from dual",
+	}, {
+		// a qualified name is never a keyword: it names a stored function or a
+		// column in the schema, in every mode, with or without whitespace
+		mode:   0,
+		input:  "select db.cast(1), t.`cast` from t",
+		output: "select db.`cast`(1), t.`cast` from t",
+	}, {
+		mode:   0,
+		input:  "select db.cast (1), db.now () from t",
+		output: "select db.`cast`(1), db.`now`() from t",
+	}, {
+		mode:   SQLModeIgnoreSpace,
+		input:  "select db.cast (1), db.now (), cast (1 as char) from t",
+		output: "select db.`cast`(1), db.`now`(), cast(1 as char) from t",
+	}, {
+		// NO_BACKSLASH_ESCAPES makes backslash an ordinary character; the
+		// value formats back with default-mode escaping
+		mode:   SQLModeNoBackslashEscapes,
+		input:  `select 'a\nb' from dual`,
+		output: `select 'a\\nb' from dual`,
+	}, {
+		// doubled quotes still escape a quote under NO_BACKSLASH_ESCAPES
+		mode:   SQLModeNoBackslashEscapes,
+		input:  `select 'it''s \ here' from dual`,
+		output: `select 'it\'s \\ here' from dual`,
+	}, {
+		// HIGH_NOT_PRECEDENCE binds NOT like a unary operator
+		mode:   SQLModeHighNotPrecedence,
+		input:  "select not a between b and c from t",
+		output: "select (not a) between b and c from t",
+	}, {
+		mode:   SQLModeHighNotPrecedence,
+		input:  "select not a = b from t",
+		output: "select (not a) = b from t",
+	}, {
+		// composite NOT constructs keep working under the mode
+		mode:   SQLModeHighNotPrecedence,
+		input:  "select * from t where a not like 'x' and b not in (1, 2) and c is not null",
+		output: "select * from t where a not like 'x' and b not in (1, 2) and c is not null",
+	}, {
+		mode:   SQLModeHighNotPrecedence,
+		input:  "create table if not exists t (\n\ta int not null\n)",
+		output: "create table if not exists t (\n\ta int not null\n)",
+	}}
+	for _, tcase := range testcases {
+		t.Run(tcase.input, func(t *testing.T) {
+			parser := NewTestParser().WithSQLMode(tcase.mode)
+			stmt, err := parser.Parse(tcase.input)
+			require.NoError(t, err)
+			assert.Equal(t, tcase.output, String(stmt))
+		})
+	}
+
+	// IGNORE_SPACE makes the function-name keywords reserved before '(',
+	// so the identifier usage that the default mode allows is rejected
+	parser := NewTestParser().WithSQLMode(SQLModeIgnoreSpace)
+	_, err := parser.Parse("create table CAST (a int)")
+	require.Error(t, err)
+
+	// the default mode keeps the historical behavior
+	parser = NewTestParser()
+	stmt, err := parser.Parse("select 'a' || 'b' from dual")
+	require.NoError(t, err)
+	assert.Equal(t, "select 'a' or 'b' from dual", String(stmt))
+	stmt, err = parser.Parse(`select "a" from t`)
+	require.NoError(t, err)
+	assert.Equal(t, "select 'a' from t", String(stmt))
+}
+
+// MySQL recognizes the national-character string introducer only as N'…'. In
+// N"…" the N is an identifier followed by "…" — a string in the default mode, a
+// quoted identifier under ANSI_QUOTES — which MySQL reads as an alias either way,
+// so the lexer must not take the national-string path on a double quote.
+func TestNationalStringRequiresSingleQuote(t *testing.T) {
+	def := NewTestParser()
+	ansi := def.WithSQLMode(SQLModeANSIQuotes)
+	for _, tc := range []struct {
+		parser *Parser
+		in     string
+	}{
+		{def, `select N'foo' from t`},
+		{def, `select n'foo' from t`},
+	} {
+		stmt, err := tc.parser.Parse(tc.in)
+		require.NoError(t, err, tc.in)
+		expr := stmt.(*Select).SelectExprs.Exprs[0].(*AliasedExpr).Expr
+		nstr, ok := expr.(*UnaryExpr)
+		require.True(t, ok, "%s: got %T", tc.in, expr)
+		assert.Equal(t, NStringOp, nstr.Operator)
+		assert.Equal(t, "select N'foo' from t", String(stmt))
+	}
+	for _, tc := range []struct {
+		parser *Parser
+		in     string
+	}{
+		{def, `select N"foo" from t`},
+		{def, `select n"foo" from t`},
+		{ansi, `select N"foo" from t`},
+	} {
+		stmt, err := tc.parser.Parse(tc.in)
+		require.NoError(t, err, tc.in)
+		ae := stmt.(*Select).SelectExprs.Exprs[0].(*AliasedExpr)
+		col, ok := ae.Expr.(*ColName)
+		require.True(t, ok, "%s: got %T", tc.in, ae.Expr)
+		assert.True(t, col.Name.EqualString("n"), tc.in)
+		assert.Equal(t, "foo", ae.As.String(), tc.in)
+	}
+}
+
+// REAL resolves at parse time the way MySQL's parser does: under sql_mode
+// REAL_AS_FLOAT it is a synonym for FLOAT, otherwise for DOUBLE. On MySQL the
+// resolution is parse-time too — a SET_VAR hint cannot change it for its own
+// statement — so the AST and the serialized SQL carry the resolved type and
+// mean the same thing under any consumer's sql_mode.
+func TestRealAsFloatResolution(t *testing.T) {
+	def := NewTestParser()
+	raf := def.WithSQLMode(SQLModeRealAsFloat)
+	for _, tc := range []struct {
+		parser *Parser
+		in     string
+		out    string
+	}{
+		{def, "create table t (r real, s real(5,2))", "create table t (\n\tr double,\n\ts double(5,2)\n)"},
+		{raf, "create table t (r real, s real(5,2))", "create table t (\n\tr float,\n\ts float(5,2)\n)"},
+		{def, "select cast(1 as real) from t", "select cast(1 as double) from t"},
+		{def, "select convert(1, real) from t", "select convert(1, double) from t"},
+		{raf, "select cast(1 as real) from t", "select cast(1 as float) from t"},
+		{raf, "select convert(1, real) from t", "select convert(1, float) from t"},
+		// spelled-out types are untouched by the mode
+		{raf, "select cast(1 as double) from t", "select cast(1 as double) from t"},
+		{raf, "create table t (f float, d double)", "create table t (\n\tf float,\n\td double\n)"},
+	} {
+		stmt, err := tc.parser.Parse(tc.in)
+		require.NoError(t, err)
+		assert.Equal(t, tc.out, String(stmt))
+	}
+}
+
+// Formatted SQL must read identically whether or not the consumer runs with
+// sql_mode=PIPES_AS_CONCAT: serialized text never contains ||. Logical OR
+// prints as the or keyword, and || parsed under PIPES_AS_CONCAT becomes a
+// concat() call.
+func TestFormatPipesAsConcatIndependence(t *testing.T) {
+	def := NewTestParser()
+	pipes := def.WithSQLMode(SQLModePipesAsConcat)
+	for _, tc := range []struct {
+		parser *Parser
+		in     string
+		out    string
+	}{
+		{def, "select 'a' || 'b' from t", "select 'a' or 'b' from t"},
+		{def, "select a or b, a and (b or c) from t", "select a or b, a and (b or c) from t"},
+		{pipes, "select 'a' || 'b' from t", "select concat('a', 'b') from t"},
+		{pipes, "select 'a' || 'b' || 'c' from t", "select concat(concat('a', 'b'), 'c') from t"},
+		{pipes, "select a or b from t", "select a or b from t"},
+	} {
+		stmt, err := tc.parser.Parse(tc.in)
+		require.NoError(t, err)
+		out := String(stmt)
+		assert.Equal(t, tc.out, out)
+		assert.NotContains(t, out, "||")
+	}
+}
+
+// Formatted SQL must read identically whether or not the consumer runs with
+// sql_mode=ANSI_QUOTES: no double-quoted token is ever emitted. Strings print
+// single-quoted (double quotes only ever appear inside a single-quoted
+// literal, where ANSI_QUOTES is inert), and identifiers print backticked or
+// bare.
+func TestFormatAnsiQuotesIndependence(t *testing.T) {
+	def := NewTestParser()
+	ansi := def.WithSQLMode(SQLModeANSIQuotes)
+	for _, tc := range []struct {
+		parser *Parser
+		in     string
+		out    string
+	}{
+		// under the default mode a double-quoted token is a string literal
+		{def, `select "x" from t`, `select 'x' from t`},
+		{def, `select "he said ""hi""" from t`, `select 'he said "hi"' from t`},
+		{def, `select 'contains "quotes"' from t`, `select 'contains "quotes"' from t`},
+		// under ANSI_QUOTES it is an identifier
+		{ansi, `select "id" from t`, `select id from t`},
+		{ansi, `select 'contains "quotes"' from t`, `select 'contains "quotes"' from t`},
+	} {
+		stmt, err := tc.parser.Parse(tc.in)
+		require.NoError(t, err)
+		out := String(stmt)
+		assert.Equal(t, tc.out, out)
+		assert.Empty(t, outsideSingleQuotes(out, '"'), "double quote outside a single-quoted literal in %s", out)
+	}
+}
+
+// Formatted SQL must keep its meaning whether or not the consumer runs with
+// sql_mode=HIGH_NOT_PRECEDENCE, which hoists NOT to the precedence of '!'. The
+// formatter parenthesizes any NOT operand that would bind differently there, so
+// the canonical text parses to the same tree under either precedence.
+func TestFormatHighNotPrecedenceIndependence(t *testing.T) {
+	def := NewTestParser()
+	hnp := def.WithSQLMode(SQLModeHighNotPrecedence)
+
+	// operands binding between '!' and NOT are parenthesized; atoms stay bare
+	for _, tc := range []struct {
+		in  string
+		out string
+	}{
+		{"select not a between 1 and 2 from t", "select not (a between 1 and 2) from t"},
+		{"select not a = b from t", "select not (a = b) from t"},
+		{"select not a like 'x' from t", "select not (a like 'x') from t"},
+		{"select not a is null from t", "select not (a is null) from t"},
+		{"select not a + b from t", "select not (a + b) from t"},
+		{"select not a from t", "select not a from t"},
+		{"select not (a and b) from t", "select not (a and b) from t"},
+	} {
+		t.Run(tc.in, func(t *testing.T) {
+			stmt, err := def.Parse(tc.in)
+			require.NoError(t, err)
+			assert.Equal(t, tc.out, String(stmt))
+		})
+	}
+
+	// the whole corpus: the canonical serialization parses to the same tree under
+	// the default precedence and under HIGH_NOT_PRECEDENCE
+	for _, tcase := range validSQL {
+		canonicalStmt, err := def.Parse(tcase.input)
+		if err != nil {
+			continue
+		}
+		canonical := String(canonicalStmt)
+		defTree, err := def.Parse(canonical)
+		if err != nil {
+			// partially parsed DDL does not round-trip; not this test's concern
+			continue
+		}
+		hnpTree, err := hnp.Parse(canonical)
+		require.NoError(t, err, canonical)
+		assert.True(t, Equals.SQLNode(defTree, hnpTree),
+			"canonical text parses differently under HIGH_NOT_PRECEDENCE: %s", canonical)
+	}
+}
+
+// outsideSingleQuotes returns the occurrences of ch in s that are not inside
+// a single-quoted SQL string literal.
+func outsideSingleQuotes(s string, ch byte) []int {
+	var hits []int
+	inString := false
+	for i := 0; i < len(s); i++ {
+		switch {
+		case s[i] == '\\' && inString:
+			i++
+		case s[i] == '\'':
+			inString = !inString
+		case s[i] == ch && !inString:
+			hits = append(hits, i)
+		}
+	}
+	return hits
+}
+
+// Formatted SQL must read identically whether or not the consumer runs with
+// sql_mode=IGNORE_SPACE: the names MySQL's parser recognizes as function
+// keywords are reserved words under that mode, so as identifiers they must
+// always be quoted, and as function calls they must be written bare with no
+// whitespace before the parenthesis. The list is MySQL's (see "Function Name
+// Parsing and Resolution" in the reference manual), not Vitess's keyword
+// table.
+func TestFormatIgnoreSpaceIndependence(t *testing.T) {
+	names := []string{
+		"ADDDATE", "BIT_AND", "BIT_OR", "BIT_XOR", "CAST", "COUNT", "CURDATE",
+		"CURTIME", "DATE_ADD", "DATE_SUB", "EXTRACT", "GROUP_CONCAT", "MAX",
+		"MID", "MIN", "NOW", "POSITION", "SESSION_USER", "STD", "STDDEV",
+		"STDDEV_POP", "STDDEV_SAMP", "SUBDATE", "SUBSTR", "SUBSTRING", "SUM",
+		"SYSDATE", "SYSTEM_USER", "TRIM", "VARIANCE", "VAR_POP", "VAR_SAMP",
+	}
+	parser := NewTestParser()
+	for _, name := range names {
+		t.Run(name, func(t *testing.T) {
+			lower := strings.ToLower(name)
+			// as an identifier the name is always quoted
+			stmt, err := parser.Parse("select " + lower + " from t")
+			require.NoError(t, err)
+			assert.Equal(t, "select `"+lower+"` from t", String(stmt))
+		})
+	}
+	// function calls print the bare name with no whitespace before the
+	// parenthesis, under which they lex as the function keyword either way
+	calls := []string{
+		"select count(*), max(a), min(a), sum(a), std(a), stddev(a), variance(a), var_pop(a), var_samp(a) from t",
+		"select bit_and(a), bit_or(a), bit_xor(a), group_concat(a) from t",
+		"select cast(a as char), now(), curdate(), curtime(), sysdate(), session_user(), system_user() from t",
+		"select adddate(d, 1), subdate(d, 1), date_add(d, interval 1 day), date_sub(d, interval 1 day) from t",
+		"select extract(year from d), position('a' in b), mid(a, 1, 2), substr(a, 1), substring(a, 1), trim(a) from t",
+	}
+	for _, call := range calls {
+		stmt, err := parser.Parse(call)
+		require.NoError(t, err)
+		out := String(stmt)
+		for _, name := range names {
+			lower := strings.ToLower(name)
+			assert.NotContains(t, out, "`"+lower+"`(", "quoted function name in %s", out)
+			assert.NotContains(t, out, lower+" (", "whitespace before parenthesis in %s", out)
+		}
+	}
+}
 
 func TestValid(t *testing.T) {
 	parser := NewTestParser()
@@ -5155,6 +5652,82 @@ func TestCreateTable(t *testing.T) {
 	col_multipolygon1 multipolygon,
 	col_multipolygon2 multipolygon not null
 )`,
+			// REAL resolves to DOUBLE at parse time (see TestRealAsFloatResolution)
+			output: `create table t (
+	col_bit bit,
+	col_tinyint tinyint auto_increment,
+	col_tinyint3 tinyint(3) unsigned,
+	col_smallint smallint,
+	col_smallint4 smallint(4) zerofill,
+	col_mediumint mediumint,
+	col_mediumint5 mediumint(5) unsigned not null,
+	col_int int,
+	col_int10 int(10) not null,
+	col_integer integer comment 'this is an integer',
+	col_bigint bigint,
+	col_bigint10 bigint(10) zerofill not null default 10,
+	col_real double,
+	col_real2 double(1,2) not null default 1.23,
+	col_double double,
+	col_double2 double(3,4) not null default 1.23,
+	col_float float,
+	col_float2 float(3,4) not null default 1.23,
+	col_decimal decimal,
+	col_decimal2 decimal(2),
+	col_decimal3 decimal(2,3),
+	col_numeric numeric,
+	col_numeric2 numeric(2),
+	col_numeric3 numeric(2,3),
+	col_date date,
+	col_time time,
+	col_timestamp timestamp,
+	col_datetime datetime,
+	col_year year,
+	col_char char,
+	col_char2 char(2),
+	col_char3 char(3) character set ascii,
+	col_char4 char(4) character set ascii collate ascii_bin,
+	col_varchar varchar,
+	col_varchar2 varchar(2),
+	col_varchar3 varchar(3) character set ascii,
+	col_varchar4 varchar(4) character set ascii collate ascii_bin,
+	col_binary binary,
+	col_varbinary varbinary(10),
+	col_tinyblob tinyblob,
+	col_blob blob,
+	col_mediumblob mediumblob,
+	col_longblob longblob,
+	col_tinytext tinytext,
+	col_text text,
+	col_mediumtext mediumtext,
+	col_longtext longtext,
+	col_text text character set ascii collate ascii_bin,
+	col_json json,
+	col_enum enum('a', 'b', 'c', 'd'),
+	col_enum2 enum('a', 'b', 'c', 'd') character set ascii,
+	col_enum3 enum('a', 'b', 'c', 'd') collate ascii_bin,
+	col_enum4 enum('a', 'b', 'c', 'd') character set ascii collate ascii_bin,
+	col_set set('a', 'b', 'c', 'd'),
+	col_set2 set('a', 'b', 'c', 'd') character set ascii,
+	col_set3 set('a', 'b', 'c', 'd') collate ascii_bin,
+	col_set4 set('a', 'b', 'c', 'd') character set ascii collate ascii_bin,
+	col_geometry1 geometry,
+	col_geometry2 geometry not null,
+	col_point1 point,
+	col_point2 point not null,
+	col_linestring1 linestring,
+	col_linestring2 linestring not null,
+	col_polygon1 polygon,
+	col_polygon2 polygon not null,
+	col_geometrycollection1 geometrycollection,
+	col_geometrycollection2 geometrycollection not null,
+	col_multipoint1 multipoint,
+	col_multipoint2 multipoint not null,
+	col_multilinestring1 multilinestring,
+	col_multilinestring2 multilinestring not null,
+	col_multipolygon1 multipolygon,
+	col_multipolygon2 multipolygon not null
+)`,
 		},
 		// test null columns
 		{
@@ -5513,7 +6086,7 @@ func TestCreateTable(t *testing.T) {
 	s2 varchar default 'this is a string',
 	s3 varchar default null,
 	s4 timestamp default current_timestamp,
-	s41 timestamp default now,
+	s41 timestamp default now(),
 	s5 bit(1) default B'0'
 )`,
 			output: `create table t (
@@ -5574,12 +6147,13 @@ func TestCreateTable(t *testing.T) {
 )`,
 		},
 		{
-			// test now with and without ()
+			// test now() variants; bare now (without parens) is an
+			// identifier, like in MySQL
 			input: `create table t (
-	time1 timestamp default now,
+	time1 timestamp default now(),
 	time2 timestamp default now(),
 	time3 timestamp default (now()),
-	time4 timestamp default now on update now,
+	time4 timestamp default now() on update now(),
 	time5 timestamp default now() on update now(),
 	time6 timestamp(3) default now(3) on update now(3)
 )`,
@@ -6694,6 +7268,15 @@ var invalidSQL = []struct {
 }, {
 	input:  "select *, * from t",
 	output: "syntax error at position 12",
+}, {
+	// CAST is only a keyword when directly followed by '('; with a space it
+	// is an identifier and AS is not valid in a generic argument list.
+	input:  "select cast (1 as char)",
+	output: "syntax error at position 18 near 'as'",
+}, {
+	// bare now (without parens) is an identifier, not the now() function
+	input:  "create table t (a datetime default now)",
+	output: "syntax error at position 39 near 'now'",
 }}
 
 func TestErrors(t *testing.T) {
@@ -7197,4 +7780,28 @@ func parsePartial(r *bufio.Reader, readType []string, lineno int, fileName strin
 
 func locateFile(name string) string {
 	return "testdata/" + name
+}
+
+func TestIsSQLModeList(t *testing.T) {
+	testCases := []struct {
+		value string
+		list  bool
+	}{
+		{value: "", list: true},
+		{value: "''", list: true},
+		{value: "ANSI_QUOTES", list: true},
+		{value: "'ANSI_QUOTES,STRICT_TRANS_TABLES'", list: true},
+		{value: "'ansi_quotes, no_zero_date'", list: true},
+		{value: "1048576", list: true},
+		{value: "REPLACE(@@sql_mode, 'ANSI_QUOTES', '')", list: false},
+		{value: "concat(@@sql_mode, ',ANSI_QUOTES')", list: false},
+		{value: "@x", list: false},
+		{value: "'ANSI_QUOTES' ", list: false},
+		{value: "\"ANSI_QUOTES\"", list: false},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.value, func(t *testing.T) {
+			assert.Equal(t, tc.list, IsSQLModeList(tc.value))
+		})
+	}
 }

@@ -255,6 +255,11 @@ type PrepareData struct {
 	BindVars    map[string]*querypb.BindVariable
 	StatementID uint32
 	ParamsCount uint16
+	// ParseSQLMode is the parse-relevant sql_mode bitmask the statement was
+	// prepared under, as reported by the handler's ComPrepare (opaque to this
+	// package; a sqlparser.SQLMode). Execution must interpret the statement
+	// text under these bits, however the session's sql_mode changes later.
+	ParseSQLMode uint32
 	// SpanContext caches the extracted VT_SPAN_CONTEXT value from PrepareStmt.
 	// nil means not yet extracted; non-nil stores the cached value (empty string = no context found).
 	SpanContext *string
@@ -1451,10 +1456,15 @@ func (c *Conn) handleComPrepare(handler Handler, data []byte) (kontinue bool) {
 	query := c.parseComPrepare(data)
 	c.recycleReadPacket()
 
-	if c.Capabilities&CapabilityClientMultiStatements != 0 {
+	modeAwareHandler, modeAware := handler.(PrepareParseModeHandler)
+	if c.Capabilities&CapabilityClientMultiStatements != 0 && !modeAware {
 		// A prepared statement is exactly one statement, as in MySQL:
 		// anything after it is a syntax error, nothing is an empty query.
 		// A comment after the ';' does not start a second statement.
+		// A handler that parses under the session's sql_mode judges that
+		// boundary itself, with its own parser: the default parser cannot
+		// tell where a statement ends under a mode that changes how quotes
+		// are read, so it must not see the text first.
 		parser := handler.Env().Parser()
 		statement, rest, _ := parser.SplitStatement(query)
 		if !parser.IsBlankOrComments(rest) {
@@ -1466,7 +1476,15 @@ func (c *Conn) handleComPrepare(handler Handler, data []byte) (kontinue bool) {
 		query = statement
 	}
 
-	fld, paramsCount, err := handler.ComPrepare(c, query)
+	var fld []*querypb.Field
+	var paramsCount uint16
+	var parseSQLMode uint32
+	var err error
+	if modeAware {
+		fld, paramsCount, parseSQLMode, err = modeAwareHandler.ComPrepareWithParseMode(c, query)
+	} else {
+		fld, paramsCount, err = handler.ComPrepare(c, query)
+	}
 	if err != nil {
 		return c.writeErrorPacketFromErrorAndLog(err)
 	}
@@ -1474,11 +1492,12 @@ func (c *Conn) handleComPrepare(handler Handler, data []byte) (kontinue bool) {
 	// Populate PrepareData
 	c.StatementID++
 	prepare := &PrepareData{
-		StatementID: c.StatementID,
-		PrepareStmt: query,
-		ParamsCount: paramsCount,
-		ParamsType:  make([]int32, paramsCount),
-		BindVars:    make(map[string]*querypb.BindVariable, paramsCount),
+		StatementID:  c.StatementID,
+		PrepareStmt:  query,
+		ParamsCount:  paramsCount,
+		ParamsType:   make([]int32, paramsCount),
+		BindVars:     make(map[string]*querypb.BindVariable, paramsCount),
+		ParseSQLMode: parseSQLMode,
 	}
 	c.PrepareData[c.StatementID] = prepare
 

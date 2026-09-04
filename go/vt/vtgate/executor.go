@@ -1242,6 +1242,9 @@ func (e *Executor) fetchOrCreatePlan(
 		return nil, nil, nil, vterrors.VT13001("vschema not initialized")
 	}
 
+	if err := e.materializeSessionSQLMode(ctx, safeSession, logStats); err != nil {
+		return nil, nil, nil, err
+	}
 	query, comments := sqlparser.SplitMarginComments(queryString)
 	vcursor, _ = e.newVCursor(safeSession, comments, logStats)
 
@@ -1350,7 +1353,8 @@ func (e *Executor) getCachedOrBuildPlan(
 	planKey engine.PlanKey,
 	ignoreCache bool,
 ) (plan *engine.Plan, cached bool, stmt sqlparser.Statement, err error) {
-	stmt, reservedVars, err := parseAndValidateQuery(query, e.env.Parser())
+	sessionParser := e.env.Parser().WithSQLMode(vcursor.ParseSQLMode())
+	stmt, reservedVars, err := parseAndValidateQuery(query, sessionParser)
 	if err != nil {
 		return nil, false, nil, err
 	}
@@ -1434,6 +1438,58 @@ func (e *Executor) getCachedOrBuildPlan(
 	return plan, false, stmt, err
 }
 
+// materializeSessionSQLMode replaces a session sql_mode stored as an expression with
+// the value the expression evaluates to, before anything reads the session's modes.
+// Every reader — the parser, the plan cache key, the SET_VAR and settings transports —
+// expects a list of mode names: an older vtgate's targeted session stored a SET's
+// expression as written, and a direct gRPC client may send one, and the modes such
+// text mentions say nothing about the modes it evaluates to. The expression gets the
+// judgment a SET gives it, evaluated on the session's target shard, and the session
+// keeps the judged value, or nothing when it does not change the shard's default —
+// the same value the SET would have left behind. The expression is removed first, so
+// that it is not applied as a connection setting to the very connection judging it.
+// When the judgment fails the request fails; the expression stays in the session for
+// the next request to evaluate, unless the failure says the value can never be applied
+// (it is invalid, or unsupported), in which case keeping it would only fail every later
+// request the same way, including the SET that could replace it.
+func (e *Executor) materializeSessionSQLMode(ctx context.Context, safeSession *econtext.SafeSession, logStats *logstats.LogStats) error {
+	value, ok := safeSession.SQLMode()
+	if !ok || sqlparser.IsSQLModeList(value) {
+		return nil
+	}
+	vcursor, err := e.newVCursor(safeSession, sqlparser.MarginComments{}, logStats)
+	if err != nil {
+		return err
+	}
+	keyspace, err := vcursor.AnyKeyspace()
+	if err != nil {
+		return vterrors.Wrapf(err, "cannot evaluate the session's sql_mode expression %s", value)
+	}
+	stored := safeSession.SystemVariables[sysvars.SQLMode.Name]
+	vcursor.SafeSession.RemoveSystemVariable(sysvars.SQLMode.Name)
+	set := &engine.SysVarReservedConn{
+		Name:              sysvars.SQLMode.Name,
+		Keyspace:          keyspace,
+		TargetDestination: vcursor.ShardDestination(),
+		Expr:              value,
+		SupportSetVar:     sysvars.SQLMode.SupportSetVar,
+		// the judgment may run on a connection the expression was already applied
+		// to, by the vtgate that stored it: the value is then unchanged there, and
+		// the session must record it all the same
+		StoreUnchanged: true,
+	}
+	err = set.Execute(ctx, vcursor, evalengine.NewExpressionEnv(ctx, nil, vcursor))
+	if err == nil {
+		return nil
+	}
+	switch vterrors.Code(err) {
+	case vtrpcpb.Code_INVALID_ARGUMENT, vtrpcpb.Code_UNIMPLEMENTED:
+		return err
+	}
+	safeSession.SetSystemVariable(sysvars.SQLMode.Name, stored)
+	return err
+}
+
 func buildPlanKey(ctx context.Context, vcursor *econtext.VCursorImpl, query string, setVarComment string) engine.PlanKey {
 	allDest := getDestinations(ctx, vcursor)
 
@@ -1444,6 +1500,8 @@ func buildPlanKey(ctx context.Context, vcursor *econtext.VCursorImpl, query stri
 		Query:           query,
 		SetVarComment:   setVarComment,
 		Collation:       vcursor.ConnCollation(),
+		SQLMode:         vcursor.ParseSQLMode(),
+		EvalSQLMode:     evalengine.ParseSQLMode(vcursor.SQLMode()),
 	}
 }
 
@@ -1628,6 +1686,30 @@ func (e *Executor) Prepare(ctx context.Context, method string, safeSession *econ
 }
 
 func (e *Executor) prepare(ctx context.Context, safeSession *econtext.SafeSession, sql string, logStats *logstats.LogStats) ([]*querypb.Field, uint16, error) {
+	if err := e.materializeSessionSQLMode(ctx, safeSession, logStats); err != nil {
+		return nil, 0, err
+	}
+	sessionSQLMode, _ := safeSession.SQLMode()
+	sessionParser := e.env.Parser().WithSQLMode(sqlparser.ParseSQLMode(sessionSQLMode))
+
+	// A prepared statement is exactly one statement, as in MySQL: anything
+	// after it is a syntax error, a comment after its ';' is not, and nothing
+	// at all is an empty query. The
+	// boundary is judged with the session's parser — only it can tell where a
+	// statement ends under a mode that changes how quotes are read — and
+	// before the statement is classified, so that the statement kinds prepared
+	// without a parse below are held to it as well.
+	statement, rest, _ := sessionParser.SplitStatement(sql)
+	if !sessionParser.IsBlankOrComments(rest) {
+		return nil, 0, sqlparser.NewParseErrorNear(sql, len(sql)-len(rest))
+	}
+	if sessionParser.IsBlankOrComments(statement) {
+		return nil, 0, sqlparser.ErrEmpty
+	}
+	// what is prepared is the statement, without its ';' and whatever comment
+	// followed it
+	sql = statement
+
 	stmtType := sqlparser.Preview(sql)
 	if stmtType == sqlparser.StmtUnknown {
 		// Preview only looks at the first keyword, so statements starting with
@@ -1636,7 +1718,7 @@ func (e *Executor) prepare(ctx context.Context, safeSession *econtext.SafeSessio
 		// (WITH ... SELECT/INSERT/REPLACE/UPDATE/DELETE). Anything else stays
 		// unknown and is rejected below, rather than being reported to the
 		// client as a zero-parameter success.
-		stmt, err := e.env.Parser().Parse(sql)
+		stmt, err := sessionParser.Parse(sql)
 		if err != nil {
 			// The statement stays unknown, and an unparseable statement is
 			// never SHOW, so record the type and clear warnings the way the
@@ -1965,10 +2047,55 @@ func (e *Executor) ReleaseLock(ctx context.Context, session *econtext.SafeSessio
 	return e.txConn.ReleaseLock(ctx, session)
 }
 
-// PlanPrepareStmt implements the IExecutor interface
-func (e *Executor) PlanPrepareStmt(ctx context.Context, safeSession *econtext.SafeSession, query string) (*engine.Plan, error) {
+// PlanPrepareStmt implements the IExecutor interface. The statement text is
+// parsed under the session's sql_mode, and the canonical serialization of
+// that parse is returned alongside the plan: it spells the statement's
+// prepare-time meaning in default-mode SQL, so storing and later re-parsing
+// it under the canonical rules (see PlanStoredStmt) preserves that meaning
+// however the session's sql_mode changes in between.
+func (e *Executor) PlanPrepareStmt(ctx context.Context, safeSession *econtext.SafeSession, query string) (*engine.Plan, string, error) {
 	// creating this log stats to not interfere with the original log stats.
 	lStats := logstats.NewLogStats(ctx, "prepare", query, safeSession.GetSessionUUID(), nil, streamlog.GetQueryLogConfig())
+	plan, _, _, err := e.fetchOrCreatePlan(ctx, safeSession, query, nil, false, true, lStats, false)
+	if err != nil {
+		return nil, "", err
+	}
+	// The canonical text comes from a fresh parse of the client's statement,
+	// not from the planned AST: planning mutates the statement — most
+	// visibly by injecting the session's SET_VAR transport hint — and none
+	// of that belongs in the stored text, which captures only what the
+	// client's statement meant under the prepare-time sql_mode. The margin
+	// comments around the statement are kept as they were: they carry request
+	// identifiers and audit tags that every EXECUTE must keep sending to the
+	// shards.
+	statement, comments := sqlparser.SplitMarginComments(query)
+	sqlMode, _ := safeSession.SQLMode()
+	stmt, err := e.env.Parser().WithSQLMode(sqlparser.ParseSQLMode(sqlMode)).Parse(statement)
+	if err != nil {
+		return nil, "", err
+	}
+	canonical := sqlparser.String(stmt)
+	switch s := stmt.(type) {
+	case *sqlparser.OtherAdmin, *sqlparser.Load:
+		// sent to the backends as written, and without a faithful serialization
+		canonical = statement
+	case sqlparser.DDLStatement:
+		if !s.IsFullyParsed() {
+			canonical = statement
+		}
+	}
+	return plan, comments.Leading + canonical + comments.Trailing, nil
+}
+
+// PlanStoredStmt implements the IExecutor interface: it plans the stored text
+// of a SQL-level prepared statement, which is the canonical serialization of
+// its prepare-time parse, and is therefore parsed under the canonical
+// (default) lexing rules regardless of the session's current sql_mode.
+func (e *Executor) PlanStoredStmt(ctx context.Context, safeSession *econtext.SafeSession, query string) (*engine.Plan, error) {
+	lStats := logstats.NewLogStats(ctx, "execute", query, safeSession.GetSessionUUID(), nil, streamlog.GetQueryLogConfig())
+	var canonical sqlparser.SQLMode
+	prev := safeSession.SwapPinnedParseSQLMode(&canonical)
+	defer safeSession.SwapPinnedParseSQLMode(prev)
 	plan, _, _, err := e.fetchOrCreatePlan(ctx, safeSession, query, nil, false, true, lStats, false)
 	if err != nil {
 		return nil, err

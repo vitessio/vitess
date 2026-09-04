@@ -121,8 +121,10 @@ type Handler interface {
 	ComQueryMulti(c *Conn, sql string, callback func(qr sqltypes.QueryResponse, more bool, firstPacket bool) error) error
 
 	// ComPrepare is called when a connection receives a prepared
-	// statement query.
-	ComPrepare(c *Conn, query string) ([]*querypb.Field, uint16, error)
+	// statement query. A handler that parses the statement under a session
+	// sql_mode also implements PrepareParseModeHandler, which is called
+	// instead.
+	ComPrepare(c *Conn, query string) (fld []*querypb.Field, paramsCount uint16, err error)
 
 	// ComStmtExecute is called when a connection receives a statement
 	// execute query.
@@ -147,6 +149,16 @@ type Handler interface {
 	ComResetConnection(c *Conn)
 
 	Env() *vtenv.Environment
+}
+
+// PrepareParseModeHandler is an optional extension of Handler for handlers
+// that parse prepared statements under a session sql_mode. When the handler
+// implements it, ComPrepareWithParseMode is called in place of ComPrepare,
+// and the parse-relevant sql_mode bitmask it reports (opaque to this
+// package; a sqlparser.SQLMode) is stored on the statement's PrepareData and
+// handed back on execute. Handlers without it prepare under the default mode.
+type PrepareParseModeHandler interface {
+	ComPrepareWithParseMode(c *Conn, query string) (fld []*querypb.Field, paramsCount uint16, parseSQLMode uint32, err error)
 }
 
 // UnimplementedHandler implemnts all of the optional callbacks so as to satisy

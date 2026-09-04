@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -27,6 +28,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/mysql/datetime"
+	"vitess.io/vitess/go/mysql/sqlmode"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -63,6 +65,11 @@ type (
 		// execReadQuery is used to avoid erroring out on multi-db transaction
 		// as the query that started a new transaction on the shard belong to a vindex.
 		execReadQuery bool
+
+		// pinnedParseSQLMode, when set, is the parse-relevant sql_mode bits
+		// queries in this request are parsed and plan-cached under, in place
+		// of the session's current sql_mode; see PinParseSQLMode.
+		pinnedParseSQLMode *sqlparser.SQLMode
 
 		logging *ExecuteLogger
 
@@ -137,7 +144,56 @@ func NewSafeSession(sessn *vtgatepb.Session) *SafeSession {
 	if sessn == nil {
 		sessn = &vtgatepb.Session{}
 	}
+	canonicalizeSessionSQLMode(sessn.SystemVariables)
 	return &SafeSession{Session: sessn}
+}
+
+// canonicalizeSessionSQLMode rewrites a session's sql_mode into MySQL's canonical
+// form: names uppercased, combination modes expanded, in canonical order. An older
+// vtgate stored an assignment as written — the number MySQL accepts for the
+// variable, or a name list in the client's spelling — and a direct gRPC client may
+// send either; every reader of the session's sql_mode expects the canonical names,
+// the evaluation-relevant modes are matched by their canonical spelling. A value
+// that is not a valid mode is left as it is, for the backend to judge, and so is
+// anything that is not a plain list, e.g. an expression (see IsSQLModeList).
+func canonicalizeSessionSQLMode(vars map[string]string) {
+	value, ok := vars["sql_mode"]
+	if !ok || value == "" {
+		return
+	}
+	if strings.EqualFold(strings.TrimSpace(value), "default") {
+		// the DEFAULT keyword stored as written: it names the default the session
+		// starts with, which is what a session without a value runs under
+		delete(vars, "sql_mode")
+		return
+	}
+	if !sqlparser.IsSQLModeList(value) {
+		return
+	}
+	// the same judgment a SET gets, so the session ends up storing what a SET would
+	inner := trimQuotes(value)
+	judged := sqltypes.NewVarChar(inner)
+	if inner == value && isAllDigits(value) {
+		bits, err := strconv.ParseUint(value, 10, 64)
+		if err != nil {
+			return
+		}
+		judged = sqltypes.NewUint64(bits)
+	}
+	mode, err := sqlmode.Validate(judged)
+	if err != nil {
+		return
+	}
+	vars["sql_mode"] = sqltypes.EncodeStringSQL(mode.String())
+}
+
+func isAllDigits(value string) bool {
+	for _, r := range value {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return value != ""
 }
 
 // NewAutocommitSession returns a SafeSession based on the original
@@ -663,9 +719,19 @@ func (session *SafeSession) SetSystemVariable(name string, expr string) {
 	session.SystemVariables[name] = expr
 }
 
+// RemoveSystemVariable removes the system variable from the session, if present.
+func (session *SafeSession) RemoveSystemVariable(name string) {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	delete(session.SystemVariables, name)
+}
+
 // GetSystemVariables takes a visitor function that will receive each MySQL system variable in the session.
 // This function will only yield system variables which apply to MySQL itself; Vitess-aware system variables
-// will be skipped.
+// will be skipped. The yielded values are the ones to apply on backend connections: the sql_mode value has
+// NO_BACKSLASH_ESCAPES removed (see sqlparser.StripUnforwardableModes) — vtgate serializes SQL that a
+// consumer under that mode would lex differently than it was written. Every other mode is forwarded for
+// the backend to enforce.
 func (session *SafeSession) GetSystemVariables(f func(k string, v string)) {
 	session.mu.Lock()
 	defer session.mu.Unlock()
@@ -673,8 +739,74 @@ func (session *SafeSession) GetSystemVariables(f func(k string, v string)) {
 		if sysvars.IsVitessAware(k) {
 			continue
 		}
+		if k == "sql_mode" {
+			v = stripSQLModeForBackend(v)
+		}
 		f(k, v)
 	}
+}
+
+// PinParseSQLMode pins the parse-relevant sql_mode bits queries in this
+// request are parsed and plan-cached under, overriding the session's current
+// sql_mode. The binary-protocol execute path sets it to the bits recorded at
+// prepare time, so a prepared statement keeps its prepare-time meaning
+// however the session's sql_mode changes in between. Not part of the session
+// proto: the pin lives only for the request whose SafeSession this is.
+func (session *SafeSession) PinParseSQLMode(mode sqlparser.SQLMode) {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	session.pinnedParseSQLMode = &mode
+}
+
+// SwapPinnedParseSQLMode replaces the pinned parse mode with the given one
+// (nil clears it) and returns the previous pin, for callers that scope a pin
+// to a sub-plan — the stored text of a SQL-level prepared statement is
+// planned under the canonical rules regardless of the request's pin.
+func (session *SafeSession) SwapPinnedParseSQLMode(mode *sqlparser.SQLMode) *sqlparser.SQLMode {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	prev := session.pinnedParseSQLMode
+	session.pinnedParseSQLMode = mode
+	return prev
+}
+
+// PinnedParseSQLMode returns the parse-relevant sql_mode bits pinned by
+// PinParseSQLMode, if any.
+func (session *SafeSession) PinnedParseSQLMode() (sqlparser.SQLMode, bool) {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	if session.pinnedParseSQLMode == nil {
+		return 0, false
+	}
+	return *session.pinnedParseSQLMode, true
+}
+
+// SQLMode returns the session's full sql_mode value (as set by the user,
+// including any parse-relevant modes) without surrounding quotes. The
+// second return value is false when the session has no sql_mode set.
+func (session *SafeSession) SQLMode() (string, bool) {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	value, ok := session.SystemVariables["sql_mode"]
+	if !ok {
+		return "", false
+	}
+	return trimQuotes(value), true
+}
+
+func trimQuotes(value string) string {
+	if len(value) >= 2 && value[0] == '\'' && value[len(value)-1] == '\'' {
+		return value[1 : len(value)-1]
+	}
+	return value
+}
+
+// stripSQLModeForBackend removes the modes a backend must not lex under from
+// a stored sql_mode value. Values that are not a plain (possibly quoted) mode
+// list — e.g. expressions — are forwarded unchanged, preserving the previous
+// behavior for them.
+func stripSQLModeForBackend(value string) string {
+	return sqlparser.StripUnforwardableModesValue(value)
 }
 
 // HasSystemVariables returns whether the session has system variables that would apply to MySQL

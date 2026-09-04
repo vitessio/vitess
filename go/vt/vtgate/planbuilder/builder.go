@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"strings"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/vschemawrapper"
@@ -343,6 +344,9 @@ func buildLoadPlan(query string, vschema plancontext.VSchema) (*planResult, erro
 		destination = key.DestinationAnyShard{}
 	}
 
+	if err := rejectRawTextUnderNoBackslashEscapes(vschema, query, "LOAD DATA"); err != nil {
+		return nil, err
+	}
 	return newPlanResult(&engine.Send{
 		Keyspace:          keyspace,
 		TargetDestination: destination,
@@ -494,5 +498,47 @@ func newFlushStmt(stmt *sqlparser.Flush, tables sqlparser.TableNames) *sqlparser
 		TableNames: tables,
 		WithLock:   stmt.WithLock,
 		ForExport:  stmt.ForExport,
+	}
+}
+
+// rejectRawTextUnderNoBackslashEscapes guards the plans that forward the client's
+// text to the backends as written rather than as vtgate serializes it. Every mode
+// but NO_BACKSLASH_ESCAPES is forwarded, so a backend reads such text the way the
+// client meant it; that one mode is not, and it cannot be (see
+// sqlparser.StripUnforwardableModes), so a backslash in the text would be an
+// escape to the backend where it was an ordinary character to the client. Text
+// without a backslash outside its comments reads the same either way and is
+// forwarded.
+func rejectRawTextUnderNoBackslashEscapes(vschema plancontext.VSchema, sql string, what string) error {
+	if vschema.ParseSQLMode()&sqlparser.SQLModeNoBackslashEscapes == 0 || !rawTextHasBackslash(vschema, sql) {
+		return nil
+	}
+	return vterrors.VT12001(what + " containing a backslash under NO_BACKSLASH_ESCAPES")
+}
+
+// rawTextHasBackslash reports whether a backslash appears in the text's tokens,
+// lexed as the client meant them, under NO_BACKSLASH_ESCAPES. A backslash inside a
+// comment does not count: comments cannot change how a backend reads the statement.
+func rawTextHasBackslash(vschema plancontext.VSchema, sql string) bool {
+	if !strings.Contains(sql, "\\") {
+		return false
+	}
+	tokenizer := vschema.Environment().Parser().WithSQLMode(sqlparser.SQLModeNoBackslashEscapes).NewStringTokenizer(sql)
+	for {
+		typ, val := tokenizer.Scan()
+		switch typ {
+		case 0:
+			return false
+		case sqlparser.LEX_ERROR:
+			// text the lexer cannot read is judged by its bytes
+			return true
+		case sqlparser.COMMENT:
+			continue
+		}
+		// only a string literal reads differently under the mode: a quoted
+		// identifier holds its backslash either way
+		if (typ == sqlparser.STRING || typ == sqlparser.NCHAR_STRING) && strings.Contains(val, "\\") {
+			return true
+		}
 	}
 }

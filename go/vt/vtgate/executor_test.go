@@ -104,23 +104,23 @@ func TestPlanKey(t *testing.T) {
 
 	tests := []testCase{{
 		targetString:          "",
-		expectedPlanPrefixKey: "CurrentKeyspace: ks1, TabletType: PRIMARY, Destination: , Query: SELECT 1, SetVarComment: , Collation: 255",
+		expectedPlanPrefixKey: "CurrentKeyspace: ks1, TabletType: PRIMARY, Destination: , Query: SELECT 1, SetVarComment: , Collation: 255, SQLMode: 0, EvalSQLMode: 3",
 	}, {
 		setVarComment:         "sEtVaRcOmMeNt",
-		expectedPlanPrefixKey: "CurrentKeyspace: ks1, TabletType: PRIMARY, Destination: , Query: SELECT 1, SetVarComment: sEtVaRcOmMeNt, Collation: 255",
+		expectedPlanPrefixKey: "CurrentKeyspace: ks1, TabletType: PRIMARY, Destination: , Query: SELECT 1, SetVarComment: sEtVaRcOmMeNt, Collation: 255, SQLMode: 0, EvalSQLMode: 3",
 	}, {
 		targetString:          "ks1@replica",
-		expectedPlanPrefixKey: "CurrentKeyspace: ks1, TabletType: REPLICA, Destination: , Query: SELECT 1, SetVarComment: , Collation: 255",
+		expectedPlanPrefixKey: "CurrentKeyspace: ks1, TabletType: REPLICA, Destination: , Query: SELECT 1, SetVarComment: , Collation: 255, SQLMode: 0, EvalSQLMode: 3",
 	}, {
 		targetString:          "ks1:-80",
-		expectedPlanPrefixKey: "CurrentKeyspace: ks1, TabletType: PRIMARY, Destination: DestinationShard(-80), Query: SELECT 1, SetVarComment: , Collation: 255",
+		expectedPlanPrefixKey: "CurrentKeyspace: ks1, TabletType: PRIMARY, Destination: DestinationShard(-80), Query: SELECT 1, SetVarComment: , Collation: 255, SQLMode: 0, EvalSQLMode: 3",
 	}, {
 		targetString: "ks1[deadbeef]",
 		resolvedShard: []*srvtopo.ResolvedShard{
 			{Target: &querypb.Target{Keyspace: "ks1", Shard: "-66"}},
 			{Target: &querypb.Target{Keyspace: "ks1", Shard: "66-"}},
 		},
-		expectedPlanPrefixKey: "CurrentKeyspace: ks1, TabletType: PRIMARY, Destination: -66,66-, Query: SELECT 1, SetVarComment: , Collation: 255",
+		expectedPlanPrefixKey: "CurrentKeyspace: ks1, TabletType: PRIMARY, Destination: -66,66-, Query: SELECT 1, SetVarComment: , Collation: 255, SQLMode: 0, EvalSQLMode: 3",
 	}}
 	cfg := econtext.VCursorConfig{
 		Collation:         collations.CollationUtf8mb4ID,
@@ -1791,6 +1791,32 @@ func TestGetPlanCacheNormalized(t *testing.T) {
 	})
 }
 
+// TestGetPlanCacheEvalSQLMode ensures sessions that differ only in an
+// evaluation-relevant sql_mode get separate plan cache entries when no SET_VAR
+// comment carries the mode into the key: the compiled plan's zero-date handling
+// depends on NO_ZERO_DATE.
+func TestGetPlanCacheEvalSQLMode(t *testing.T) {
+	r, _, _, _, ctx := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
+	r.vConfig.SetVarEnabled = false
+
+	query := "select cast(col as date) from music_user_map where id = 1"
+	zeroDateSession := econtext.NewSafeSession(&vtgatepb.Session{
+		TargetString:    KsTestUnsharded + "@unknown",
+		SystemVariables: map[string]string{"sql_mode": "'STRICT_TRANS_TABLES'"},
+	})
+	noZeroDateSession := econtext.NewSafeSession(&vtgatepb.Session{
+		TargetString:    KsTestUnsharded + "@unknown",
+		SystemVariables: map[string]string{"sql_mode": "'NO_ZERO_DATE,STRICT_TRANS_TABLES'"},
+	})
+
+	getPlanCached(t, ctx, r, zeroDateSession, query, makeComments(""), map[string]*querypb.BindVariable{}, false)
+	assertCacheSize(t, r.plans, 1)
+	getPlanCached(t, ctx, r, zeroDateSession, query, makeComments(""), map[string]*querypb.BindVariable{}, false)
+	assertCacheSize(t, r.plans, 1)
+	getPlanCached(t, ctx, r, noZeroDateSession, query, makeComments(""), map[string]*querypb.BindVariable{}, false)
+	assertCacheSize(t, r.plans, 2)
+}
+
 func TestGetPlanNormalized(t *testing.T) {
 	r, _, _, _, ctx := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
 
@@ -2798,6 +2824,22 @@ func TestExecutorStartTxnStmt(t *testing.T) {
 	}
 }
 
+func TestExecutorPrepareSessionSQLMode(t *testing.T) {
+	// Preview classifies WITH statements as unknown, so the prepare path
+	// parses them to classify — and must do so with the session's sql_mode:
+	// this statement's string literal 'a\' only terminates under
+	// NO_BACKSLASH_ESCAPES.
+	executor, _, _, _, _ := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
+	session := econtext.NewAutocommitSession(&vtgatepb.Session{
+		TargetString:         "TestExecutor",
+		EnableSystemSettings: true,
+		SystemVariables:      map[string]string{"sql_mode": "'NO_BACKSLASH_ESCAPES'"},
+	})
+
+	_, _, err := executor.Prepare(t.Context(), "TestPrepare", session, "with t as (select 'a\\' as c) select c from t")
+	require.NoError(t, err)
+}
+
 func TestExecutorPrepareExecute(t *testing.T) {
 	executor, _, _, _, _ := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
 	session := econtext.NewAutocommitSession(&vtgatepb.Session{})
@@ -2808,7 +2850,8 @@ func TestExecutorPrepareExecute(t *testing.T) {
 
 		prepData := session.PrepareStatement["prep_user"]
 		require.NotNil(t, prepData)
-		assert.Equal(t, "select * from user where id = ?", prepData.PrepareStatement)
+		// the stored text is the canonical serialization of the prepare-time parse
+		assert.Equal(t, "select * from `user` where id = :v1", prepData.PrepareStatement)
 		assert.EqualValues(t, 1, prepData.ParamsCount)
 	})
 
@@ -2820,8 +2863,33 @@ func TestExecutorPrepareExecute(t *testing.T) {
 
 		prepData := session.PrepareStatement["prep_user2"]
 		require.NotNil(t, prepData)
-		assert.Equal(t, "select * from user where id in (?,?,?)", prepData.PrepareStatement)
+		// the stored text is the canonical serialization of the prepare-time parse
+		assert.Equal(t, "select * from `user` where id in (:v1, :v2, :v3)", prepData.PrepareStatement)
 		assert.EqualValues(t, 3, prepData.ParamsCount)
+	})
+
+	t.Run("prepare statement keeps its margin comments", func(t *testing.T) {
+		_, err := executorExecSession(t.Context(), executor, session, "prepare prep_comments from '/* request-id: 42 */ select * from user where id = ? /* audit */'", nil)
+		require.NoError(t, err)
+
+		prepData := session.PrepareStatement["prep_comments"]
+		require.NotNil(t, prepData)
+		// the statement is stored canonically, the comments around it as they were
+		// (EXECUTE does not send them to the shards, which predates the canonical
+		// storage: the session's stored text is what this pins)
+		assert.Equal(t, "/* request-id: 42 */ select * from `user` where id = :v1 /* audit */", prepData.PrepareStatement)
+	})
+
+	t.Run("prepare statement sent as written keeps its text", func(t *testing.T) {
+		// DO has no faithful serialization; its text is what the backends get
+		session := econtext.NewAutocommitSession(&vtgatepb.Session{TargetString: KsTestUnsharded})
+		_, err := executorExecSession(t.Context(), executor, session, "prepare prep_do from 'do 1'", nil)
+		require.NoError(t, err)
+		prepData := session.PrepareStatement["prep_do"]
+		require.NotNil(t, prepData)
+		assert.Equal(t, "do 1", prepData.PrepareStatement)
+		_, err = executorExecSession(t.Context(), executor, session, "execute prep_do", nil)
+		require.NoError(t, err)
 	})
 
 	t.Run("syntax error on prepared query", func(t *testing.T) {
@@ -3017,6 +3085,54 @@ func TestSQLPrepareDoesNotStartTransaction(t *testing.T) {
 				require.NoError(t, err)
 			}
 			require.False(t, session.InTransaction())
+		})
+	}
+}
+
+// TestPrepareRejectsMultipleStatements: a prepared statement is exactly one
+// statement, as in MySQL, whatever kind of statement it is — the kinds prepared
+// without a parse included — and the boundary is judged under the session's
+// sql_mode, since a mode that changes how quotes are read changes where a
+// statement ends.
+func TestPrepareRejectsMultipleStatements(t *testing.T) {
+	executor, _, _, _, ctx := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
+	newSession := func(sqlMode string) *econtext.SafeSession {
+		vars := map[string]string{}
+		if sqlMode != "" {
+			vars["sql_mode"] = sqlMode
+		}
+		return econtext.NewSafeSession(&vtgatepb.Session{EnableSystemSettings: true, TargetString: KsTestUnsharded, SystemVariables: vars})
+	}
+
+	for _, tc := range []struct {
+		name    string
+		sql     string
+		sqlMode string
+		err     string
+	}{
+		{name: "two DDL statements", sql: "create table a (id int); drop table b", err: "right syntax to use near 'drop table b' at line 1"},
+		{name: "two SET statements", sql: "set @a = 1; set @b = 2", err: "right syntax to use near 'set @b = 2' at line 1"},
+		{name: "USE followed by a query", sql: "use ks; select 1", err: "right syntax to use near 'select 1' at line 1"},
+		{name: "FLUSH followed by a query", sql: "flush tables; select 1", err: "right syntax to use near 'select 1' at line 1"},
+		{name: "a trailing semicolon is fine", sql: "create table a (id int);"},
+		{name: "a trailing comment is fine", sql: "create table a (id int) -- done"},
+		{name: "a comment after the terminator is fine", sql: "select 1; -- done"},
+		{name: "a block comment after the terminator is fine", sql: "create table a (id int); /* done */"},
+		{name: "a comment alone is an empty query", sql: "-- only a comment", err: "Query was empty"},
+		// under NO_BACKSLASH_ESCAPES the backslash does not escape the quote:
+		// 'a\' and ';b' are two adjacent string literals of one SET statement,
+		// where the default mode reads 'a\' ' as one literal followed by a second
+		// statement
+		{name: "one statement under NO_BACKSLASH_ESCAPES", sql: `set @x = 'a\' ';b'`, sqlMode: "'NO_BACKSLASH_ESCAPES'"},
+		{name: "two statements in the default mode", sql: `set @x = 'a\' ';b'`, err: "right syntax to use near 'b'' at line 1"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, _, err := executor.Prepare(ctx, "TestExecute", newSession(tc.sqlMode), tc.sql)
+			if tc.err == "" {
+				require.NoError(t, err)
+				return
+			}
+			require.ErrorContains(t, err, tc.err)
 		})
 	}
 }
@@ -3313,7 +3429,7 @@ func TestForEachStatementIngressBytesFromMySQLConnection(t *testing.T) {
 // to each statement's context.
 func statementIngressBytes(t *testing.T, vtg *VTGate, ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, sql string) []uint64 {
 	var ingressBytes []uint64
-	err := vtg.forEachStatement(ctx, mysqlCtx, sql, func(ctx context.Context, _ int, _ string, _ bool) error {
+	err := vtg.forEachStatement(ctx, mysqlCtx, sql, func() *sqlparser.Parser { return vtg.sessionParser(nil) }, func(ctx context.Context, _ int, _ string, _ bool) error {
 		bytes, ok := vtgateservice.IngressBytesFromContext(ctx)
 		require.True(t, ok)
 		ingressBytes = append(ingressBytes, bytes)
@@ -3327,6 +3443,56 @@ func statementIngressBytes(t *testing.T, vtg *VTGate, ctx context.Context, mysql
 // batch the way MySQL does: one statement is parsed and executed at a time,
 // and the first error ends the batch before the statements after it are even
 // parsed.
+// A SET sql_mode earlier in a batch applies to the statements after it, to how
+// they are parsed and to where they end, as MySQL parses each statement of a
+// batch only once the ones before it ran.
+func TestVTGateExecuteMultiParsesUnderTheSessionSQLMode(t *testing.T) {
+	judgment := func(orig, new string) *sqltypes.Result {
+		return sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"), orig+"|"+new)
+	}
+	newSession := func() *vtgatepb.Session {
+		return &vtgatepb.Session{Autocommit: true, TargetString: "TestExecutor", EnableSystemSettings: true}
+	}
+
+	t.Run("ANSI_QUOTES set in the batch", func(t *testing.T) {
+		executor, sbc1, _, _, ctx := createExecutorEnv(t)
+		vtg := newVTGate(executor, nil, nil, nil, nil)
+		sbc1.SetResults([]*sqltypes.Result{judgment("", "ANSI_QUOTES")})
+
+		// "id" is an identifier in the second statement, under the mode the first set
+		_, results, err := vtg.ExecuteMulti(ctx, nil, newSession(), `set sql_mode = 'ANSI_QUOTES'; select "id" from user where "id" = 1`)
+		require.NoError(t, err)
+		require.Len(t, results, 2)
+		require.NotEmpty(t, sbc1.Queries)
+		assert.Equal(t, "select /*+ SET_VAR(sql_mode = 'ANSI_QUOTES') */ id from `user` where id = 1", sbc1.Queries[len(sbc1.Queries)-1].Sql)
+	})
+
+	t.Run("NO_BACKSLASH_ESCAPES set in the batch moves the statement boundaries", func(t *testing.T) {
+		executor, sbc1, _, _, ctx := createExecutorEnv(t)
+		vtg := newVTGate(executor, nil, nil, nil, nil)
+		sbc1.SetResults([]*sqltypes.Result{judgment("", "NO_BACKSLASH_ESCAPES")})
+
+		// under the mode the first statement set, 'a\' is a complete string and the
+		// ';' after it ends the second statement: three statements, not two
+		_, results, err := vtg.ExecuteMulti(ctx, nil, newSession(), `set sql_mode = 'NO_BACKSLASH_ESCAPES'; select 'a\' from user where id = 1; select 2 from user where id = 1`)
+		require.NoError(t, err)
+		require.Len(t, results, 3)
+	})
+
+	t.Run("streamed", func(t *testing.T) {
+		executor, sbc1, _, _, ctx := createExecutorEnv(t)
+		vtg := newVTGate(executor, nil, nil, nil, nil)
+		sbc1.SetResults([]*sqltypes.Result{judgment("", "ANSI_QUOTES")})
+
+		_, err := vtg.StreamExecuteMulti(ctx, nil, newSession(), `set sql_mode = 'ANSI_QUOTES'; select "id" from user where "id" = 1`, func(sqltypes.QueryResponse, bool, bool) error {
+			return nil
+		})
+		require.NoError(t, err)
+		require.NotEmpty(t, sbc1.Queries)
+		assert.Equal(t, "select /*+ SET_VAR(sql_mode = 'ANSI_QUOTES') */ id from `user` where id = 1", sbc1.Queries[len(sbc1.Queries)-1].Sql)
+	})
+}
+
 func TestVTGateExecuteMultiStopsAtFirstError(t *testing.T) {
 	const query = "select id from user where id = 1"
 	newSession := func() *vtgatepb.Session {

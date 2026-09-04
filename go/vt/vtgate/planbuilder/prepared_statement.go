@@ -51,7 +51,7 @@ func buildExecuteStmtPlan(ctx context.Context, vschema plancontext.VSchema, eStm
 		return nil, vterrors.VT03025("EXECUTE")
 	}
 
-	plan, err := vschema.PlanPrepareStatement(ctx, prepareData.PrepareStatement)
+	plan, err := vschema.PlanStoredStatement(ctx, prepareData.PrepareStatement)
 	if err != nil {
 		return nil, err
 	}

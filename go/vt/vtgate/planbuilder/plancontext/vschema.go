@@ -70,6 +70,13 @@ type VSchema interface {
 	ConnCollation() collations.ID
 	Environment() *vtenv.Environment
 
+	// SQLMode returns the session's sql_mode value
+	SQLMode() string
+	// ParseSQLMode returns the parse-relevant sql_mode bits the statement being
+	// planned was parsed under: the bits pinned at prepare time for a prepared
+	// statement, else the bits of the session's current sql_mode.
+	ParseSQLMode() sqlparser.SQLMode
+
 	// ErrorIfShardedF will return an error if the keyspace is sharded,
 	// and produce a warning if the vtgate if configured to do so
 	ErrorIfShardedF(keyspace *vindexes.Keyspace, warn, errFmt string, params ...any) error
@@ -109,8 +116,14 @@ type VSchema interface {
 	// IsViewsEnabled returns true if Vitess manages the views.
 	IsViewsEnabled() bool
 
-	// PlanPrepareStatement plans the prepared statement.
-	PlanPrepareStatement(ctx context.Context, query string) (*engine.Plan, error)
+	// PlanPrepareStatement plans the prepared statement and returns the
+	// canonical serialization of its prepare-time parse.
+	PlanPrepareStatement(ctx context.Context, query string) (*engine.Plan, string, error)
+	// PlanStoredStatement plans the stored text of a SQL-level prepared
+	// statement — the canonical serialization of its prepare-time parse —
+	// under the canonical lexing rules regardless of the session's current
+	// sql_mode.
+	PlanStoredStatement(ctx context.Context, query string) (*engine.Plan, error)
 
 	// GetPrepareData returns the prepared data for the statement from the session.
 	GetPrepareData(stmtName string) *vtgatepb.PrepareData

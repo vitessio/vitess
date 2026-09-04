@@ -2441,11 +2441,14 @@ func (node *FuncExpr) FormatFast(buf *TrackedBuffer) {
 		node.Qualifier.FormatFast(buf)
 		buf.WriteByte('.')
 	}
-	// Function names should not be back-quoted even
-	// if they match a reserved word, only if they contain illegal characters
+	// Function names are not back-quoted for matching a reserved word, only
+	// for containing illegal characters — except the function-call keywords:
+	// a generic call by one of those names only arises from whitespace before
+	// the parenthesis, MySQL's stored-function path, and printing the bare
+	// name would re-lex it as the built-in.
 	funcName := node.Name.String()
 
-	if containEscapableChars(funcName, NoAt) {
+	if containEscapableChars(funcName, NoAt) || isFuncCallKeywordName(funcName) {
 		writeEscapedString(buf, funcName)
 	} else {
 		buf.WriteString(funcName)

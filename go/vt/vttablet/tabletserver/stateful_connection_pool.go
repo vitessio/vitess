@@ -26,6 +26,7 @@ import (
 	"vitess.io/vitess/go/pools/smartconnpool"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tx"
@@ -170,6 +171,17 @@ func (sf *StatefulConnectionPool) GetAndLock(id int64, reason string) (*Stateful
 	return conn.(*StatefulConnection), nil
 }
 
+// ParseSQLMode returns the parse-relevant sql_mode bits recorded on the given
+// connection, or 0 when the connection is not registered. It does not lock the
+// connection: the recorded bits are safe to read concurrently.
+func (sf *StatefulConnectionPool) ParseSQLMode(id int64) sqlparser.SQLMode {
+	conn, _ := sf.active.Peek(id).(*StatefulConnection)
+	if conn == nil {
+		return 0
+	}
+	return conn.ParseSQLMode()
+}
+
 // NewConn creates a new StatefulConnection. It will be created from either the normal pool or
 // the found_rows pool, depending on the options provided
 func (sf *StatefulConnectionPool) NewConn(ctx context.Context, options *querypb.ExecuteOptions, setting *smartconnpool.Setting) (*StatefulConnection, error) {
@@ -203,6 +215,9 @@ func (sf *StatefulConnectionPool) NewConn(ctx context.Context, options *querypb.
 	// This will set both the timeout and initialize the expiryTime.
 	timeout := getTransactionTimeout(options, sf.env.Config(), options.GetWorkload())
 	sfConn.SetTimeout(timeout)
+	if setting != nil && setting.SetsSQLMode() {
+		sfConn.SetParseSQLMode(sqlparser.SQLMode(setting.SQLMode()))
+	}
 
 	err = sf.active.Register(sfConn.ConnID, sfConn)
 	if err != nil {

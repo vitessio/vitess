@@ -585,7 +585,7 @@ func (tsv *TabletServer) begin(
 				return err
 			}
 			for _, query := range postBeginQueries {
-				plan, err := tsv.qe.GetPlan(ctx, logStats, query, true, false)
+				plan, err := tsv.qe.GetPlan(ctx, logStats, query, tsv.parseSQLModeFor(connSetting, transactionID, reservedID), true, false)
 				if err != nil {
 					return err
 				}
@@ -919,6 +919,22 @@ func (tsv *TabletServer) Execute(ctx context.Context, session queryservice.Sessi
 	return tsv.execute(ctx, target, sql, bindVariables, transactionID, reservedID, nil, options)
 }
 
+// parseSQLModeFor returns the parse-relevant sql_mode bits the query's session is in:
+// from the request's settings when present, else from the reserved or transaction
+// connection the query is bound to.
+func (tsv *TabletServer) parseSQLModeFor(connSetting *smartconnpool.Setting, transactionID, reservedID int64) sqlparser.SQLMode {
+	if connSetting != nil && connSetting.SetsSQLMode() {
+		return sqlparser.SQLMode(connSetting.SQLMode())
+	}
+	if reservedID != 0 {
+		return tsv.te.ConnParseSQLMode(reservedID)
+	}
+	if transactionID != 0 {
+		return tsv.te.ConnParseSQLMode(transactionID)
+	}
+	return 0
+}
+
 func (tsv *TabletServer) execute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, reservedID int64, settings []string, options *querypb.ExecuteOptions) (result *sqltypes.Result, err error) {
 	targetType, err := tsv.resolveTargetType(ctx, target)
 	if err != nil {
@@ -937,7 +953,14 @@ func (tsv *TabletServer) execute(ctx context.Context, target *querypb.Target, sq
 			}
 			query, comments := sqlparser.SplitMarginComments(sql)
 
-			plan, err := tsv.qe.GetPlan(ctx, logStats, query, skipQueryPlanCache(options), options.GetInDmlExecution() && tsv.config.PassthroughDML)
+			var connSetting *smartconnpool.Setting
+			if len(settings) > 0 {
+				connSetting, err = tsv.qe.GetConnSetting(ctx, settings)
+				if err != nil {
+					return err
+				}
+			}
+			plan, err := tsv.qe.GetPlan(ctx, logStats, query, tsv.parseSQLModeFor(connSetting, transactionID, reservedID), skipQueryPlanCache(options), options.GetInDmlExecution() && tsv.config.PassthroughDML)
 			if err != nil {
 				return err
 			}
@@ -953,13 +976,6 @@ func (tsv *TabletServer) execute(ctx context.Context, target *querypb.Target, sq
 			logStats.ReservedID = reservedID
 			logStats.TransactionID = transactionID
 
-			var connSetting *smartconnpool.Setting
-			if len(settings) > 0 {
-				connSetting, err = tsv.qe.GetConnSetting(ctx, settings)
-				if err != nil {
-					return err
-				}
-			}
 			qre := &QueryExecutor{
 				query:            query,
 				marginComments:   comments,
@@ -1039,7 +1055,15 @@ func (tsv *TabletServer) streamExecute(ctx context.Context, target *querypb.Targ
 				bindVariables = make(map[string]*querypb.BindVariable)
 			}
 			query, comments := sqlparser.SplitMarginComments(sql)
-			plan, err := tsv.qe.GetStreamPlan(ctx, logStats, query, skipQueryPlanCache(options))
+			var connSetting *smartconnpool.Setting
+			if len(settings) > 0 {
+				var err error
+				connSetting, err = tsv.qe.GetConnSetting(ctx, settings)
+				if err != nil {
+					return err
+				}
+			}
+			plan, err := tsv.qe.GetStreamPlan(ctx, logStats, query, tsv.parseSQLModeFor(connSetting, transactionID, reservedID), skipQueryPlanCache(options))
 			if err != nil {
 				return err
 			}
@@ -1054,13 +1078,6 @@ func (tsv *TabletServer) streamExecute(ctx context.Context, target *querypb.Targ
 			logStats.ReservedID = reservedID
 			logStats.TransactionID = transactionID
 
-			var connSetting *smartconnpool.Setting
-			if len(settings) > 0 {
-				connSetting, err = tsv.qe.GetConnSetting(ctx, settings)
-				if err != nil {
-					return err
-				}
-			}
 			qre := &QueryExecutor{
 				query:            query,
 				marginComments:   comments,
@@ -1179,8 +1196,10 @@ func (tsv *TabletServer) beginWaitForSameRangeTransactions(ctx context.Context, 
 // the query and bind variables or the table name is empty.
 func (tsv *TabletServer) computeTxSerializerKey(ctx context.Context, logStats *tabletenv.LogStats, sql string, bindVariables map[string]*querypb.BindVariable) (string, string) {
 	// Strip trailing comments so we don't pollute the query cache.
+	// The default parse mode is used: a query that only parses under a session's
+	// parse-relevant sql_mode simply skips hot row protection.
 	sql, _ = sqlparser.SplitMarginComments(sql)
-	plan, err := tsv.qe.GetPlan(ctx, logStats, sql, false, false)
+	plan, err := tsv.qe.GetPlan(ctx, logStats, sql, 0, false, false)
 	if err != nil {
 		logComputeRowSerializerKey.Errorf("failed to get plan for query: %v err: %v", sql, err)
 		return "", ""
@@ -1643,7 +1662,7 @@ func (tsv *TabletServer) ReserveBeginExecute(ctx context.Context, session querys
 			}
 
 			for _, query := range postBeginQueries {
-				plan, err := tsv.qe.GetPlan(ctx, logStats, query, true, false)
+				plan, err := tsv.qe.GetPlan(ctx, logStats, query, tsv.te.ConnParseSQLMode(connID), true, false)
 				if err != nil {
 					return err
 				}

@@ -29,6 +29,7 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vthash"
 )
 
@@ -60,7 +61,15 @@ type (
 	}
 
 	// PlanKey identifies a plan uniquely based on keyspace, destination, query,
-	// SET_VAR comment, and collation. It is primarily used as a cache key.
+	// SET_VAR comment, collation and sql_mode. It is primarily used as a cache key.
+	//
+	// The sql_mode enters the key as two narrow bitfields rather than as the session's
+	// value, so the cache is partitioned only on the modes a plan depends on: the
+	// parse-relevant bits decide how the query text was read, the evaluation-relevant
+	// bits how its compiled expressions behave. They are kept separate because they
+	// come from different places — for a prepared statement the parse bits are the
+	// ones pinned at prepare time while the evaluation bits follow the live session,
+	// as in MySQL — so neither can be derived from the other.
 	PlanKey struct {
 		CurrentKeyspace string                // CurrentKeyspace is the name of the keyspace associated with the plan.
 		TabletType      topodatapb.TabletType // TabletType is the type of tablet (primary, replica, etc.) for the plan.
@@ -68,6 +77,8 @@ type (
 		Query           string                // Query is the original or normalized SQL statement used to build the plan.
 		SetVarComment   string                // SetVarComment holds any embedded SET_VAR hints within the query.
 		Collation       collations.ID         // Collation is the character collation ID that governs string comparison.
+		SQLMode         sqlparser.SQLMode     // SQLMode holds the parse-relevant sql_mode flags the query was parsed with.
+		EvalSQLMode     evalengine.SQLMode    // EvalSQLMode holds the evaluation-relevant sql_mode flags the plan's expressions were compiled with.
 	}
 )
 
@@ -255,13 +266,17 @@ func getPlanTypeForUpsert(prim *Upsert) PlanType {
 }
 
 func (pk PlanKey) DebugString() string {
-	return fmt.Sprintf("CurrentKeyspace: %s, TabletType: %s, Destination: %s, Query: %s, SetVarComment: %s, Collation: %d", pk.CurrentKeyspace, pk.TabletType.String(), pk.Destination, pk.Query, pk.SetVarComment, pk.Collation)
+	return fmt.Sprintf("CurrentKeyspace: %s, TabletType: %s, Destination: %s, Query: %s, SetVarComment: %s, Collation: %d, SQLMode: %d, EvalSQLMode: %d", pk.CurrentKeyspace, pk.TabletType.String(), pk.Destination, pk.Query, pk.SetVarComment, pk.Collation, pk.SQLMode, pk.EvalSQLMode)
 }
 
 func (pk PlanKey) Hash() theine.HashKey256 {
 	hasher := vthash.New256()
 	_, _ = hasher.WriteUint16(uint16(pk.Collation))
 	_, _ = hasher.WriteUint16(uint16(pk.TabletType))
+	_, _ = hasher.WriteUint16(uint16(pk.SQLMode))
+	_, _ = hasher.WriteUint16(uint16(pk.SQLMode >> 16))
+	_, _ = hasher.WriteUint16(uint16(pk.EvalSQLMode))
+	_, _ = hasher.WriteUint16(uint16(pk.EvalSQLMode >> 16))
 	_, _ = hasher.WriteString(pk.CurrentKeyspace)
 	_, _ = hasher.WriteString(pk.Destination)
 	_, _ = hasher.WriteString(pk.SetVarComment)

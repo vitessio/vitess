@@ -110,6 +110,9 @@ func buildAlterMigrationPlan(query string, alterMigration *sqlparser.AlterMigrat
 	if dest == nil {
 		dest = key.DestinationAllShards{}
 	}
+	if err := rejectRawTextUnderNoBackslashEscapes(vschema, query, "ALTER VITESS_MIGRATION"); err != nil {
+		return nil, err
+	}
 
 	send := &engine.Send{
 		Keyspace:          ks,

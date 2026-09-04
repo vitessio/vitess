@@ -842,6 +842,32 @@ var (
 // keywordLookupTable is a perfect hash map that maps **case insensitive** keyword names to their ids
 var keywordLookupTable *caseInsensitiveTable
 
+// isFuncCallKeyword reports whether the token is one of the function names
+// that MySQL's lexer only treats as a keyword when it is immediately followed
+// by '(' with no whitespace in between; in any other position the name is an
+// ordinary identifier. See "Function Name Parsing and Resolution" in the
+// MySQL reference manual. (sql_mode=IGNORE_SPACE, which relaxes the
+// no-whitespace requirement, is not supported.) The remaining names on
+// MySQL's list are non-reserved keywords in the grammar and need no lexer
+// special-casing.
+func isFuncCallKeyword(id int) bool {
+	switch id {
+	case CAST, CURDATE, CURTIME, EXTRACT, NOW, SUBSTRING, SYSDATE:
+		return true
+	default:
+		return false
+	}
+}
+
+// isFuncCallKeywordName reports whether name lexes as one of the function-call
+// keywords when directly followed by '('. Written with whitespace before the
+// parenthesis, the same name is an identifier and the call is a generic one —
+// MySQL's stored-function path — which must serialize quoted to stay one.
+func isFuncCallKeywordName(name string) bool {
+	id, ok := keywordLookupTable.LookupString(name)
+	return ok && isFuncCallKeyword(id)
+}
+
 type caseInsensitiveTable struct {
 	h map[uint64]keyword
 }

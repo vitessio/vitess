@@ -59,6 +59,7 @@ type Tokenizer struct {
 	Pos       int
 	buf       string
 	parser    *Parser
+	sqlMode   SQLMode
 	currStart int // start position of current token (set in Scan after skipBlank)
 }
 
@@ -86,11 +87,20 @@ func yyLocDefault(cur *location, rhs []yySymType, n int) {
 // NewStringTokenizer creates a new Tokenizer for the
 // sql string.
 func (p *Parser) NewStringTokenizer(sql string) *Tokenizer {
+	// The parse-relevant sql_mode bits are copied onto the tokenizer: the
+	// lexing hot paths read them per character, and a nil receiver — which
+	// some callers get away with — then lexes under the default modes
+	// instead of dereferencing the nil parser.
+	var sqlMode SQLMode
+	if p != nil {
+		sqlMode = p.sqlMode
+	}
 	return &Tokenizer{
 		buf:      sql,
 		BindVars: make(map[string]struct{}),
 		parser:   p,
 		stmtEnd:  -1,
+		sqlMode:  sqlMode,
 	}
 }
 
@@ -241,7 +251,7 @@ func (tkn *Tokenizer) Scan() (int, string) {
 			var tBytes string
 			if tkn.cur() == '`' {
 				tkn.skip(1)
-				tID, tBytes = tkn.scanLiteralIdentifier()
+				tID, tBytes = tkn.scanLiteralIdentifier('`')
 			} else if tkn.cur() == eofChar {
 				return LEX_ERROR, ""
 			} else {
@@ -264,12 +274,14 @@ func (tkn *Tokenizer) Scan() (int, string) {
 					return tkn.scanBitLiteral()
 				}
 			}
-			// N\'literal' is used to create a string in the national character set
+			// N'literal' is a string in the national character set. MySQL
+			// recognizes the introducer only before a single quote: N"…" is the
+			// identifier N followed by a double-quoted token, whatever the mode
+			// makes of that token.
 			if ch == 'N' || ch == 'n' {
-				nxt := tkn.peek(1)
-				if nxt == '\'' || nxt == '"' {
+				if tkn.peek(1) == '\'' {
 					tkn.skip(2)
-					return tkn.scanString(nxt, NCHAR_STRING)
+					return tkn.scanString('\'', NCHAR_STRING)
 				}
 			}
 			return tkn.scanIdentifier(false)
@@ -313,6 +325,9 @@ func (tkn *Tokenizer) Scan() (int, string) {
 			case '|':
 				if tkn.cur() == '|' {
 					tkn.skip(1)
+					if tkn.sqlMode&SQLModePipesAsConcat != 0 {
+						return PIPE_CONCAT, ""
+					}
 					return OR, ""
 				}
 				return int(ch), ""
@@ -411,10 +426,15 @@ func (tkn *Tokenizer) Scan() (int, string) {
 					return NE, ""
 				}
 				return int(ch), ""
-			case '\'', '"':
+			case '\'':
+				return tkn.scanString(ch, STRING)
+			case '"':
+				if tkn.sqlMode&SQLModeANSIQuotes != 0 {
+					return tkn.scanLiteralIdentifier('"')
+				}
 				return tkn.scanString(ch, STRING)
 			case '`':
-				return tkn.scanLiteralIdentifier()
+				return tkn.scanLiteralIdentifier('`')
 			default:
 				return LEX_ERROR, string(byte(ch))
 			}
@@ -437,6 +457,27 @@ func (tkn *Tokenizer) skipStatement() int {
 // characters MySQL's lexer reads as whitespace — vertical tab and form feed
 // included, non-breaking space and the other Unicode spaces not.
 const blankChars = " \n\r\t\v\f"
+
+// funcCallParenAhead reports whether the character following a function-name
+// keyword opens a call. By default the parenthesis must be directly attached;
+// under IGNORE_SPACE, whitespace between the name and the parenthesis is
+// permitted, as in MySQL.
+func (tkn *Tokenizer) funcCallParenAhead() bool {
+	if tkn.cur() == '(' {
+		return true
+	}
+	if tkn.sqlMode&SQLModeIgnoreSpace == 0 {
+		return false
+	}
+	for i := 0; ; i++ {
+		switch tkn.peek(i) {
+		case ' ', '\t', '\n', '\r', '\v', '\f':
+			continue
+		default:
+			return tkn.peek(i) == '('
+		}
+	}
+}
 
 // skipBlank skips the cursor while it finds whitespace
 func (tkn *Tokenizer) skipBlank() {
@@ -461,6 +502,17 @@ func (tkn *Tokenizer) scanIdentifier(isVariable bool) (int, string) {
 	}
 	keywordName := tkn.buf[start:tkn.Pos]
 	if keywordID, found := keywordLookupTable.LookupString(keywordName); found {
+		if isFuncCallKeyword(keywordID) && (tkn.lastTokenType == '.' || !tkn.funcCallParenAhead()) {
+			// A qualified name is always an identifier: db.cast(1) is a call
+			// of the stored function cast in db, in every sql_mode, as in MySQL.
+			return ID, keywordName
+		}
+		if keywordID == NOT && tkn.sqlMode&SQLModeHighNotPrecedence != 0 {
+			// Under HIGH_NOT_PRECEDENCE, NOT binds like the unary
+			// operators; the grammar accepts NOT_HIGH wherever a composite
+			// NOT appears, mirroring MySQL's NOT2_SYM.
+			return NOT_HIGH, keywordName
+		}
 		return keywordID, keywordName
 	}
 	return ID, keywordName
@@ -498,22 +550,22 @@ func (tkn *Tokenizer) scanBitLiteral() (int, string) {
 // scanLiteralIdentifier once the first escape sequence is found in the identifier.
 // The provided `buf` contains the contents of the identifier that have been scanned
 // so far.
-func (tkn *Tokenizer) scanLiteralIdentifierSlow(buf *strings.Builder) (int, string) {
-	backTickSeen := true
+func (tkn *Tokenizer) scanLiteralIdentifierSlow(buf *strings.Builder, quote uint16) (int, string) {
+	quoteSeen := true
 	for {
-		if backTickSeen {
-			if tkn.cur() != '`' {
+		if quoteSeen {
+			if tkn.cur() != quote {
 				break
 			}
-			backTickSeen = false
-			buf.WriteByte('`')
+			quoteSeen = false
+			buf.WriteByte(byte(quote))
 			tkn.skip(1)
 			continue
 		}
-		// The previous char was not a backtick.
+		// The previous char was not a quote character.
 		switch tkn.cur() {
-		case '`':
-			backTickSeen = true
+		case quote:
+			quoteSeen = true
 		case eofChar:
 			// Premature EOF.
 			return LEX_ERROR, buf.String()
@@ -529,12 +581,12 @@ func (tkn *Tokenizer) scanLiteralIdentifierSlow(buf *strings.Builder) (int, stri
 // scanLiteralIdentifier scans an identifier enclosed by backticks. If the identifier
 // is a simple literal, it'll be returned as a slice of the input buffer. If the identifier
 // contains escape sequences, this function will fall back to scanLiteralIdentifierSlow
-func (tkn *Tokenizer) scanLiteralIdentifier() (int, string) {
+func (tkn *Tokenizer) scanLiteralIdentifier(quote uint16) (int, string) {
 	start := tkn.Pos
 	for {
 		switch tkn.cur() {
-		case '`':
-			if tkn.peek(1) != '`' {
+		case quote:
+			if tkn.peek(1) != quote {
 				if tkn.Pos == start {
 					return LEX_ERROR, ""
 				}
@@ -545,7 +597,7 @@ func (tkn *Tokenizer) scanLiteralIdentifier() (int, string) {
 			var buf strings.Builder
 			buf.WriteString(tkn.buf[start:tkn.Pos])
 			tkn.skip(1)
-			return tkn.scanLiteralIdentifierSlow(&buf)
+			return tkn.scanLiteralIdentifierSlow(&buf, quote)
 		case eofChar:
 			// Premature EOF.
 			return LEX_ERROR, tkn.buf[start:tkn.Pos]
@@ -674,22 +726,25 @@ exit:
 // will fall back to scanStringSlow
 func (tkn *Tokenizer) scanString(delim uint16, typ int) (int, string) {
 	start := tkn.Pos
+	noBackslashEscapes := tkn.sqlMode&SQLModeNoBackslashEscapes != 0
 
 	for {
-		switch tkn.cur() {
-		case delim:
+		switch ch := tkn.cur(); {
+		case ch == delim:
 			if tkn.peek(1) != delim {
 				tkn.skip(1)
 				return typ, tkn.buf[start : tkn.Pos-1]
 			}
-			fallthrough
-
-		case '\\':
 			var buffer strings.Builder
 			buffer.WriteString(tkn.buf[start:tkn.Pos])
 			return tkn.scanStringSlow(&buffer, delim, typ)
 
-		case eofChar:
+		case ch == '\\' && !noBackslashEscapes:
+			var buffer strings.Builder
+			buffer.WriteString(tkn.buf[start:tkn.Pos])
+			return tkn.scanStringSlow(&buffer, delim, typ)
+
+		case ch == eofChar:
 			return LEX_ERROR, tkn.buf[start:tkn.Pos]
 		}
 
@@ -701,6 +756,7 @@ func (tkn *Tokenizer) scanString(delim uint16, typ int) (int, string) {
 // sequencse. The given `buffer` contains the contents of the string that have
 // been scanned so far.
 func (tkn *Tokenizer) scanStringSlow(buffer *strings.Builder, delim uint16, typ int) (int, string) {
+	noBackslashEscapes := tkn.sqlMode&SQLModeNoBackslashEscapes != 0
 	for {
 		ch := tkn.cur()
 		if ch == eofChar {
@@ -708,12 +764,12 @@ func (tkn *Tokenizer) scanStringSlow(buffer *strings.Builder, delim uint16, typ 
 			return LEX_ERROR, buffer.String()
 		}
 
-		if ch != delim && ch != '\\' {
+		if ch != delim && (ch != '\\' || noBackslashEscapes) {
 			// Scan ahead to the next interesting character.
 			start := tkn.Pos
 			for ; tkn.Pos < len(tkn.buf); tkn.Pos++ {
 				ch = uint16(tkn.buf[tkn.Pos])
-				if ch == delim || ch == '\\' {
+				if ch == delim || (ch == '\\' && !noBackslashEscapes) {
 					break
 				}
 			}

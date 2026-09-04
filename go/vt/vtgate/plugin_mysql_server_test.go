@@ -204,6 +204,25 @@ func TestNewConnectionSetsAutocommitStatusFlag(t *testing.T) {
 		"NewConnection should set ServerStatusAutocommit flag to match VTGate's default session state")
 }
 
+// MySQL reports NO_BACKSLASH_ESCAPES in every OK packet's status flags, and client
+// libraries that escape string values themselves switch their escaping on it. The flag
+// must track the session's sql_mode in both directions.
+func TestSessionStatusFlagsNoBackslashEscapes(t *testing.T) {
+	c := &mysql.Conn{}
+	session := &vtgatepb.Session{Autocommit: true}
+
+	fillInSessionStatusFlags(c, session)
+	assert.Zero(t, c.StatusFlags&mysql.ServerStatusNoBackslashEscapes)
+
+	session.SystemVariables = map[string]string{"sql_mode": "'STRICT_TRANS_TABLES,NO_BACKSLASH_ESCAPES'"}
+	fillInSessionStatusFlags(c, session)
+	assert.NotZero(t, c.StatusFlags&mysql.ServerStatusNoBackslashEscapes)
+
+	session.SystemVariables["sql_mode"] = "'STRICT_TRANS_TABLES'"
+	fillInSessionStatusFlags(c, session)
+	assert.Zero(t, c.StatusFlags&mysql.ServerStatusNoBackslashEscapes)
+}
+
 var newSpanOK = func(ctx context.Context, label string) (trace.Span, context.Context) {
 	return trace.NoopSpan{}, context.Background()
 }

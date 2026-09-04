@@ -43,6 +43,7 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -194,8 +195,8 @@ func TestSystemVariablesMySQLBelow80(t *testing.T) {
 
 	wantQueries := []*querypb.BoundQuery{
 		{Sql: "select @@sql_mode orig, 'only_full_group_by' new"},
-		{Sql: "set sql_mode = 'only_full_group_by'", BindVariables: map[string]*querypb.BindVariable{"vtg1": {Type: sqltypes.Int64, Value: []byte("1")}}},
-		{Sql: "select /*+ SET_VAR(sql_mode = 'only_full_group_by') */ :vtg1 /* INT64 */ from information_schema.`table`", BindVariables: map[string]*querypb.BindVariable{"vtg1": {Type: sqltypes.Int64, Value: []byte("1")}}},
+		{Sql: "set sql_mode = 'ONLY_FULL_GROUP_BY'", BindVariables: map[string]*querypb.BindVariable{"vtg1": {Type: sqltypes.Int64, Value: []byte("1")}}},
+		{Sql: "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY') */ :vtg1 /* INT64 */ from information_schema.`table`", BindVariables: map[string]*querypb.BindVariable{"vtg1": {Type: sqltypes.Int64, Value: []byte("1")}}},
 	}
 	require.Len(t, sbc1.Queries, len(wantQueries))
 	utils.MustMatch(t, wantQueries, sbc1.Queries)
@@ -227,7 +228,7 @@ func TestSystemVariablesWithSetVarDisabled(t *testing.T) {
 
 	wantQueries := []*querypb.BoundQuery{
 		{Sql: "select @@sql_mode orig, 'only_full_group_by' new"},
-		{Sql: "set sql_mode = 'only_full_group_by'", BindVariables: map[string]*querypb.BindVariable{"vtg1": {Type: sqltypes.Int64, Value: []byte("1")}}},
+		{Sql: "set sql_mode = 'ONLY_FULL_GROUP_BY'", BindVariables: map[string]*querypb.BindVariable{"vtg1": {Type: sqltypes.Int64, Value: []byte("1")}}},
 		{Sql: "select :vtg1 /* INT64 */ from information_schema.`table`", BindVariables: map[string]*querypb.BindVariable{"vtg1": {Type: sqltypes.Int64, Value: []byte("1")}}},
 	}
 
@@ -286,10 +287,388 @@ func TestSetSystemVariablesTx(t *testing.T) {
 	wantQueries := []*querypb.BoundQuery{
 		{Sql: "select :vtg1 /* INT64 */ from information_schema.`table`", BindVariables: map[string]*querypb.BindVariable{"vtg1": {Type: sqltypes.Int64, Value: []byte("1")}}},
 		{Sql: "select @@sql_mode orig, 'only_full_group_by' new"},
-		{Sql: "select /*+ SET_VAR(sql_mode = 'only_full_group_by') */ :vtg1 /* INT64 */ from information_schema.`table`", BindVariables: map[string]*querypb.BindVariable{"vtg1": {Type: sqltypes.Int64, Value: []byte("1")}}},
+		{Sql: "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY') */ :vtg1 /* INT64 */ from information_schema.`table`", BindVariables: map[string]*querypb.BindVariable{"vtg1": {Type: sqltypes.Int64, Value: []byte("1")}}},
 	}
 
 	utils.MustMatch(t, wantQueries, sbc1.Queries)
+}
+
+func TestSessionSQLModeParsingReservedConn(t *testing.T) {
+	executor, sbc1, _, _, _ := createExecutorEnv(t)
+	executor.config.Normalize = true
+	executor.vConfig.SetVarEnabled = false
+	session := econtext.NewAutocommitSession(&vtgatepb.Session{EnableSystemSettings: true, TargetString: "TestExecutor"})
+
+	sbc1.SetResults([]*sqltypes.Result{{
+		Fields: []*querypb.Field{
+			{Name: "orig", Type: sqltypes.VarChar, Charset: uint32(collations.MySQL8().DefaultConnectionCharset())},
+			{Name: "new", Type: sqltypes.VarChar, Charset: uint32(collations.MySQL8().DefaultConnectionCharset())},
+		},
+		Rows: [][]sqltypes.Value{{
+			sqltypes.NewVarChar(""),
+			sqltypes.NewVarChar("PIPES_AS_CONCAT,STRICT_TRANS_TABLES"),
+		}},
+	}})
+
+	_, err := executorExecSession(t.Context(), executor, session, "set @@sql_mode = 'PIPES_AS_CONCAT,STRICT_TRANS_TABLES'", map[string]*querypb.BindVariable{})
+	require.NoError(t, err)
+	require.True(t, session.InReservedConn())
+
+	_, err = executorExecSession(t.Context(), executor, session, "select 'a' || 'b' from information_schema.table", map[string]*querypb.BindVariable{})
+	require.NoError(t, err)
+
+	// The reserved connection receives the forwarded modes as set, and the
+	// query is parsed under the session's full mode: || lowers to concat().
+	wantQueries := []*querypb.BoundQuery{
+		{Sql: "select @@sql_mode orig, 'PIPES_AS_CONCAT,STRICT_TRANS_TABLES' new"},
+		{Sql: "set sql_mode = 'PIPES_AS_CONCAT,STRICT_TRANS_TABLES'", BindVariables: map[string]*querypb.BindVariable{
+			"vtg1": sqltypes.StringBindVariable("a"),
+			"vtg2": sqltypes.StringBindVariable("b"),
+		}},
+		{Sql: "select concat(:vtg1 /* VARCHAR */, :vtg2 /* VARCHAR */) from information_schema.`table`", BindVariables: map[string]*querypb.BindVariable{
+			"vtg1": sqltypes.StringBindVariable("a"),
+			"vtg2": sqltypes.StringBindVariable("b"),
+		}},
+	}
+	utils.MustMatch(t, wantQueries, sbc1.Queries)
+}
+
+func TestSessionSQLModeReadBack(t *testing.T) {
+	setAndRead := func(t *testing.T, targetString string) (*sandboxconn.SandboxConn, *sqltypes.Result) {
+		executor, sbc1, _, _, _ := createExecutorEnv(t)
+		executor.config.Normalize = true
+		executor.vConfig.SetVarEnabled = false
+		session := econtext.NewAutocommitSession(&vtgatepb.Session{EnableSystemSettings: true, TargetString: targetString})
+
+		sbc1.SetResults([]*sqltypes.Result{{
+			Fields: []*querypb.Field{
+				{Name: "orig", Type: sqltypes.VarChar, Charset: uint32(collations.MySQL8().DefaultConnectionCharset())},
+				{Name: "new", Type: sqltypes.VarChar, Charset: uint32(collations.MySQL8().DefaultConnectionCharset())},
+			},
+			Rows: [][]sqltypes.Value{{
+				sqltypes.NewVarChar(""),
+				sqltypes.NewVarChar("PIPES_AS_CONCAT,STRICT_TRANS_TABLES"),
+			}},
+		}})
+
+		_, err := executorExecSession(t.Context(), executor, session, "set @@sql_mode = 'PIPES_AS_CONCAT,STRICT_TRANS_TABLES'", map[string]*querypb.BindVariable{})
+		require.NoError(t, err)
+		sbc1.Queries = nil
+
+		qr, err := executorExecSession(t.Context(), executor, session, "select @@sql_mode", map[string]*querypb.BindVariable{})
+		require.NoError(t, err)
+		return sbc1, qr
+	}
+
+	t.Run("reserved connection", func(t *testing.T) {
+		// Reading @@sql_mode returns the full session value, parse-relevant
+		// modes included, answered from session state at vtgate even though
+		// the backend connection was given the stripped value.
+		sbc1, qr := setAndRead(t, "TestExecutor")
+		require.Len(t, qr.Rows, 1)
+		assert.Equal(t, "PIPES_AS_CONCAT,STRICT_TRANS_TABLES", qr.Rows[0][0].ToString())
+		for _, q := range sbc1.Queries {
+			assert.NotContains(t, q.Sql, "@@sql_mode")
+		}
+	})
+
+	t.Run("shard targeted", func(t *testing.T) {
+		// Shard-targeted sessions bypass planning, but the normalizer still
+		// rewrites @@sql_mode to a bind variable filled from session state,
+		// so the routed query carries the full value and the user reads it
+		// back unstripped.
+		sbc1, _ := setAndRead(t, "TestExecutor/-20")
+		require.Len(t, sbc1.Queries, 1)
+		assert.Equal(t, "select :__vtsql_mode as `@@sql_mode` from dual", sbc1.Queries[0].Sql)
+		assert.Equal(t, "PIPES_AS_CONCAT,STRICT_TRANS_TABLES", string(sbc1.Queries[0].BindVariables["__vtsql_mode"].Value))
+	})
+}
+
+// A statement prepared over the binary protocol keeps the meaning its text had
+// at prepare time: the parse-relevant sql_mode bits recorded then are pinned
+// for its executes, however the session's sql_mode changes in between. Runtime
+// modes stay the live session's — like MySQL, whose prepared statements are
+// parsed under the prepare-time mode and executed under the current one.
+func TestPreparedStatementKeepsParseMode(t *testing.T) {
+	executor, _, _, lookup, _ := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
+
+	t.Run("prepared under the default mode, executed under ANSI_QUOTES", func(t *testing.T) {
+		// the session moved to ANSI_QUOTES after the prepare; the pinned bits
+		// keep "id" a string literal, while the runtime transport carries the
+		// session's current mode
+		session := econtext.NewAutocommitSession(&vtgatepb.Session{
+			EnableSystemSettings: true,
+			TargetString:         KsTestUnsharded,
+			SystemVariables:      map[string]string{"sql_mode": "'ANSI_QUOTES'"},
+		})
+		session.PinParseSQLMode(0)
+		_, err := executor.Execute(t.Context(), nil, "TestExecute", session, `select "id" from information_schema.table`, nil, true)
+		require.NoError(t, err)
+		require.Len(t, lookup.Queries, 1)
+		assert.Equal(t, "select /*+ SET_VAR(sql_mode = 'ANSI_QUOTES') */ 'id' from information_schema.`table`", lookup.Queries[0].Sql)
+		lookup.Queries = nil
+	})
+
+	t.Run("prepared under ANSI_QUOTES, executed under the default mode", func(t *testing.T) {
+		session := econtext.NewAutocommitSession(&vtgatepb.Session{
+			EnableSystemSettings: true,
+			TargetString:         KsTestUnsharded,
+		})
+		session.PinParseSQLMode(sqlparser.SQLModeANSIQuotes)
+		_, err := executor.Execute(t.Context(), nil, "TestExecute", session, `select "id" from information_schema.table`, nil, true)
+		require.NoError(t, err)
+		require.Len(t, lookup.Queries, 1)
+		assert.Equal(t, "select id from information_schema.`table`", lookup.Queries[0].Sql)
+		lookup.Queries = nil
+	})
+}
+
+// A prepared SELECT SQL_CALC_FOUND_ROWS keeps its raw text, and the count branch is
+// built from a fresh parse of that text: it must be read under the prepare-time mode,
+// not the default one, or a query written under ANSI_QUOTES fails to plan.
+func TestPreparedSQLCalcFoundRowsKeepsParseMode(t *testing.T) {
+	executor, sbc1, _, _, _ := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
+	session := econtext.NewAutocommitSession(&vtgatepb.Session{
+		EnableSystemSettings: true,
+		TargetString:         "TestExecutor",
+		SystemVariables:      map[string]string{"sql_mode": "'ANSI_QUOTES'"},
+	})
+	session.PinParseSQLMode(sqlparser.SQLModeANSIQuotes)
+	// the limit branch's rows, then the count branch's scalar
+	sbc1.SetResults([]*sqltypes.Result{
+		sqltypes.MakeTestResult(sqltypes.MakeTestFields("id", "int64"), "1"),
+		sqltypes.MakeTestResult(sqltypes.MakeTestFields("count(*)", "int64"), "1"),
+	})
+
+	_, err := executor.Execute(t.Context(), nil, "TestExecute", session, `select sql_calc_found_rows "id" from "user" where "id" = 1 limit 1`, nil, true)
+	require.NoError(t, err)
+	require.Len(t, sbc1.Queries, 2)
+	// "id" and "user" are identifiers under ANSI_QUOTES, in the count branch too
+	for _, q := range sbc1.Queries {
+		assert.NotContains(t, q.Sql, `'id'`)
+		assert.NotContains(t, q.Sql, `'user'`)
+	}
+}
+
+// Plans that forward the client's text as written cannot honor NO_BACKSLASH_ESCAPES:
+// that one mode is not sent to the backends, so a backslash the client meant as an
+// ordinary character would be an escape there. Such text is rejected; text without a
+// backslash reads the same either way and goes through.
+func TestRawTextUnderNoBackslashEscapes(t *testing.T) {
+	executor, _, _, _, _ := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
+	newSession := func(sqlMode string) *econtext.SafeSession {
+		return econtext.NewAutocommitSession(&vtgatepb.Session{
+			EnableSystemSettings: true,
+			TargetString:         KsTestUnsharded,
+			SystemVariables:      map[string]string{"sql_mode": sqlMode},
+		})
+	}
+
+	_, err := executorExecSession(t.Context(), executor, newSession("'NO_BACKSLASH_ESCAPES'"), `load data infile '/tmp/data.csv' into table main1 fields terminated by '\t'`, nil)
+	require.EqualError(t, err, "VT12001: unsupported: LOAD DATA containing a backslash under NO_BACKSLASH_ESCAPES")
+
+	// the same text is fine without the mode, and text without a backslash is fine under it
+	_, err = executorExecSession(t.Context(), executor, newSession("'STRICT_TRANS_TABLES'"), `load data infile '/tmp/data.csv' into table main1 fields terminated by '\t'`, nil)
+	require.NoError(t, err)
+	_, err = executorExecSession(t.Context(), executor, newSession("'NO_BACKSLASH_ESCAPES'"), `load data infile '/tmp/data.csv' into table main1 fields terminated by ','`, nil)
+	require.NoError(t, err)
+
+	// the admin statements forwarded as written are held to the same rule
+	_, err = executorExecSession(t.Context(), executor, newSession("'NO_BACKSLASH_ESCAPES'"), `do get_lock('a\b', 0)`, nil)
+	require.EqualError(t, err, "VT12001: unsupported: a statement sent as written containing a backslash under NO_BACKSLASH_ESCAPES")
+	_, err = executorExecSession(t.Context(), executor, newSession("'NO_BACKSLASH_ESCAPES'"), `do get_lock('ab', 0)`, nil)
+	require.NoError(t, err)
+
+	// a backslash inside a comment cannot change how a backend reads the statement
+	_, err = executorExecSession(t.Context(), executor, newSession("'NO_BACKSLASH_ESCAPES'"), `repair /* c:\path */ table main1`, nil)
+	require.NoError(t, err)
+
+	// nor one inside a quoted identifier: only string literals read differently
+	_, err = executorExecSession(t.Context(), executor, newSession("'NO_BACKSLASH_ESCAPES'"), "repair table `a\\b`", nil)
+	require.NoError(t, err)
+}
+
+// A numeric sql_mode assignment must leave the session with the canonical name list,
+// not the number: the parser and the transports decode names, so a session that stored
+// "4" would parse "id" as a string instead of the ANSI_QUOTES identifier it asked for.
+func TestSessionSQLModeNumericAssignment(t *testing.T) {
+	executor, _, _, lookup, _ := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
+	session := econtext.NewAutocommitSession(&vtgatepb.Session{EnableSystemSettings: true, TargetString: KsTestUnsharded})
+
+	lookup.SetResults([]*sqltypes.Result{{
+		Fields: []*querypb.Field{
+			{Name: "orig", Type: sqltypes.VarChar, Charset: uint32(collations.MySQL8().DefaultConnectionCharset())},
+			{Name: "new", Type: sqltypes.Int64, Charset: collations.CollationBinaryID},
+		},
+		Rows: [][]sqltypes.Value{{
+			sqltypes.NewVarChar(""),
+			sqltypes.NewInt64(4),
+		}},
+	}})
+	_, err := executorExecSession(t.Context(), executor, session, "set @@sql_mode = 4", map[string]*querypb.BindVariable{})
+	require.NoError(t, err)
+	require.Equal(t, "'ANSI_QUOTES'", session.SystemVariables["sql_mode"])
+	lookup.Queries = nil
+
+	// "id" is now a quoted identifier, not a string literal
+	_, err = executorExecSession(t.Context(), executor, session, `select "id" from information_schema.table`, map[string]*querypb.BindVariable{})
+	require.NoError(t, err)
+	require.Len(t, lookup.Queries, 1)
+	assert.Equal(t, "select /*+ SET_VAR(sql_mode = 'ANSI_QUOTES') */ id from information_schema.`table`", lookup.Queries[0].Sql)
+}
+
+// A session that arrives with a numeric sql_mode — from an older vtgate, or a
+// direct gRPC client — parses under the modes that number encodes, exactly as a
+// session whose SET was canonicalized.
+func TestSessionSQLModeNumericSessionValue(t *testing.T) {
+	executor, _, _, lookup, _ := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
+	session := econtext.NewAutocommitSession(&vtgatepb.Session{
+		EnableSystemSettings: true,
+		TargetString:         KsTestUnsharded,
+		SystemVariables:      map[string]string{"sql_mode": "4"},
+	})
+
+	// "id" is a quoted identifier under ANSI_QUOTES, not a string literal
+	_, err := executorExecSession(t.Context(), executor, session, `select "id" from information_schema.table`, map[string]*querypb.BindVariable{})
+	require.NoError(t, err)
+	require.Len(t, lookup.Queries, 1)
+	assert.Equal(t, "select /*+ SET_VAR(sql_mode = 'ANSI_QUOTES') */ id from information_schema.`table`", lookup.Queries[0].Sql)
+	assert.Equal(t, "'ANSI_QUOTES'", session.SystemVariables["sql_mode"])
+}
+
+// TestSessionSQLModeExpressionSessionValue covers sessions arriving with a sql_mode
+// stored as an expression — an older vtgate's targeted session stored SET's expression
+// as written — which is evaluated on the shard before anything reads the session's
+// modes, so the modes the text mentions never stand in for the modes it evaluates to.
+func TestSessionSQLModeExpressionSessionValue(t *testing.T) {
+	judgment := func(orig, new string) *sqltypes.Result {
+		return sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"), orig+"|"+new)
+	}
+	newSession := func(target, sqlMode string) *econtext.SafeSession {
+		return econtext.NewAutocommitSession(&vtgatepb.Session{
+			EnableSystemSettings: true,
+			TargetString:         target,
+			SystemVariables:      map[string]string{"sql_mode": sqlMode},
+		})
+	}
+
+	t.Run("an expression removing a lexer mode evaluates to the default", func(t *testing.T) {
+		executor, _, _, lookup, _ := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
+		session := newSession(KsTestUnsharded, "REPLACE(@@sql_mode, 'ANSI_QUOTES', '')")
+		lookup.SetResults([]*sqltypes.Result{judgment("STRICT_TRANS_TABLES", "STRICT_TRANS_TABLES")})
+
+		// the text mentions ANSI_QUOTES, the value does not: "id" is a string literal
+		_, err := executorExecSession(t.Context(), executor, session, `select "id" from information_schema.table`, map[string]*querypb.BindVariable{})
+		require.NoError(t, err)
+		require.Len(t, lookup.Queries, 2)
+		assert.Equal(t, "select @@sql_mode orig, REPLACE(@@sql_mode, 'ANSI_QUOTES', '') new", lookup.Queries[0].Sql)
+		// the session records the value even though the judgment saw no change:
+		// it may have run on a connection the vtgate that stored the expression
+		// had already applied it to, so the shards get it with every query
+		assert.Equal(t, "select /*+ SET_VAR(sql_mode = 'STRICT_TRANS_TABLES') */ :vtg1 /* VARCHAR */ from information_schema.`table`", lookup.Queries[1].Sql)
+		assert.Equal(t, "'STRICT_TRANS_TABLES'", session.SystemVariables["sql_mode"])
+	})
+
+	t.Run("an expression adding a lexer mode enables it", func(t *testing.T) {
+		executor, _, _, lookup, _ := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
+		session := newSession(KsTestUnsharded, "CONCAT(@@sql_mode, ',ANSI_QUOTES')")
+		lookup.SetResults([]*sqltypes.Result{judgment("STRICT_TRANS_TABLES", "STRICT_TRANS_TABLES,ANSI_QUOTES")})
+
+		// "id" is a quoted identifier under the evaluated value
+		_, err := executorExecSession(t.Context(), executor, session, `select "id" from information_schema.table`, map[string]*querypb.BindVariable{})
+		require.NoError(t, err)
+		require.Len(t, lookup.Queries, 2)
+		assert.Equal(t, "select @@sql_mode orig, CONCAT(@@sql_mode, ',ANSI_QUOTES') new", lookup.Queries[0].Sql)
+		assert.Equal(t, "select /*+ SET_VAR(sql_mode = 'ANSI_QUOTES,STRICT_TRANS_TABLES') */ id from information_schema.`table`", lookup.Queries[1].Sql)
+		assert.Equal(t, "'ANSI_QUOTES,STRICT_TRANS_TABLES'", session.SystemVariables["sql_mode"])
+	})
+
+	t.Run("a shard-targeted session stores the judged value", func(t *testing.T) {
+		executor, _, _, lookup, _ := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
+		session := newSession(KsTestUnsharded+"/0", "CONCAT(@@sql_mode, ',ANSI_QUOTES')")
+		lookup.SetResults([]*sqltypes.Result{judgment("STRICT_TRANS_TABLES", "STRICT_TRANS_TABLES,ANSI_QUOTES")})
+
+		_, err := executorExecSession(t.Context(), executor, session, `select "id" from information_schema.table`, map[string]*querypb.BindVariable{})
+		require.NoError(t, err)
+		assert.Equal(t, "'ANSI_QUOTES,STRICT_TRANS_TABLES'", session.SystemVariables["sql_mode"])
+		assert.True(t, session.InReservedConn())
+		var sqls []string
+		for _, q := range lookup.Queries {
+			sqls = append(sqls, q.Sql)
+		}
+		assert.Equal(t, []string{
+			"select @@sql_mode orig, CONCAT(@@sql_mode, ',ANSI_QUOTES') new",
+			"set sql_mode = 'ANSI_QUOTES,STRICT_TRANS_TABLES'",
+			"select /*+ SET_VAR(sql_mode = 'ANSI_QUOTES,STRICT_TRANS_TABLES') */ id from information_schema.`table`",
+		}, sqls)
+	})
+
+	t.Run("a transient failure keeps the expression for the next request", func(t *testing.T) {
+		executor, _, _, lookup, _ := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
+		session := newSession(KsTestUnsharded, "CONCAT(@@sql_mode, ',ANSI_QUOTES')")
+		lookup.MustFailCodes[vtrpcpb.Code_UNAVAILABLE] = 1
+
+		_, err := executorExecSession(t.Context(), executor, session, `select "id" from information_schema.table`, map[string]*querypb.BindVariable{})
+		require.Error(t, err)
+		assert.Equal(t, vtrpcpb.Code_UNAVAILABLE, vterrors.Code(err))
+		// the value could not be judged, but nothing says it never can be: it stays
+		assert.Equal(t, "CONCAT(@@sql_mode, ',ANSI_QUOTES')", session.SystemVariables["sql_mode"])
+
+		lookup.Queries = nil
+		lookup.SetResults([]*sqltypes.Result{judgment("STRICT_TRANS_TABLES", "STRICT_TRANS_TABLES,ANSI_QUOTES")})
+		_, err = executorExecSession(t.Context(), executor, session, `select "id" from information_schema.table`, map[string]*querypb.BindVariable{})
+		require.NoError(t, err)
+		require.Len(t, lookup.Queries, 2)
+		assert.Equal(t, "select /*+ SET_VAR(sql_mode = 'ANSI_QUOTES,STRICT_TRANS_TABLES') */ id from information_schema.`table`", lookup.Queries[1].Sql)
+		assert.Equal(t, "'ANSI_QUOTES,STRICT_TRANS_TABLES'", session.SystemVariables["sql_mode"])
+	})
+
+	t.Run("an expression evaluating to an invalid value fails the request", func(t *testing.T) {
+		executor, _, _, lookup, _ := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
+		session := newSession(KsTestUnsharded, "CONCAT('BO', 'GUS')")
+		lookup.SetResults([]*sqltypes.Result{judgment("STRICT_TRANS_TABLES", "BOGUS")})
+
+		_, err := executorExecSession(t.Context(), executor, session, `select "id" from information_schema.table`, map[string]*querypb.BindVariable{})
+		require.EqualError(t, err, "Variable 'sql_mode' can't be set to the value of 'BOGUS'")
+		require.Len(t, lookup.Queries, 1)
+		// a value that can never be applied is not kept for the next request to fail on
+		_, stored := session.SystemVariables["sql_mode"]
+		assert.False(t, stored)
+	})
+}
+
+func TestSessionSQLModeParsing(t *testing.T) {
+	executor, _, _, lookup, _ := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
+	session := econtext.NewAutocommitSession(&vtgatepb.Session{EnableSystemSettings: true, TargetString: KsTestUnsharded, SystemVariables: map[string]string{}})
+
+	// Set a parse-relevant sql_mode on the session.
+	lookup.SetResults([]*sqltypes.Result{{
+		Fields: []*querypb.Field{
+			{Name: "orig", Type: sqltypes.VarChar, Charset: uint32(collations.MySQL8().DefaultConnectionCharset())},
+			{Name: "new", Type: sqltypes.VarChar, Charset: uint32(collations.MySQL8().DefaultConnectionCharset())},
+		},
+		Rows: [][]sqltypes.Value{{
+			sqltypes.NewVarChar(""),
+			sqltypes.NewVarChar("PIPES_AS_CONCAT"),
+		}},
+	}})
+	_, err := executor.Execute(t.Context(), nil, "TestSetStmt", session, "set @@sql_mode = 'PIPES_AS_CONCAT'", map[string]*querypb.BindVariable{}, false)
+	require.NoError(t, err)
+	lookup.Queries = nil
+
+	// The query must now be parsed under PIPES_AS_CONCAT: || lowers to
+	// concat() in the routed query, and the mode is forwarded to the backend,
+	// where its lexer aspect is inert on the canonical text.
+	_, err = executor.Execute(t.Context(), nil, "TestSelect", session, "select 'a' || 'b' from information_schema.table", map[string]*querypb.BindVariable{}, false)
+	require.NoError(t, err)
+	require.False(t, session.InReservedConn())
+	wantQueries := []*querypb.BoundQuery{
+		{Sql: "select /*+ SET_VAR(sql_mode = 'PIPES_AS_CONCAT') */ concat(:vtg1 /* VARCHAR */, :vtg2 /* VARCHAR */) from information_schema.`table`", BindVariables: map[string]*querypb.BindVariable{
+			"vtg1": sqltypes.StringBindVariable("a"),
+			"vtg2": sqltypes.StringBindVariable("b"),
+		}},
+	}
+	utils.MustMatch(t, wantQueries, lookup.Queries)
 }
 
 func TestSetSystemVariables(t *testing.T) {
@@ -316,7 +695,7 @@ func TestSetSystemVariables(t *testing.T) {
 	require.False(t, session.InReservedConn())
 	wantQueries := []*querypb.BoundQuery{
 		{Sql: "select @@sql_mode orig, 'only_full_group_by' new"},
-		{Sql: "select /*+ SET_VAR(sql_mode = 'only_full_group_by') */ :vtg1 /* INT64 */ from information_schema.`table`", BindVariables: map[string]*querypb.BindVariable{"vtg1": {Type: sqltypes.Int64, Value: []byte("1")}}},
+		{Sql: "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY') */ :vtg1 /* INT64 */ from information_schema.`table`", BindVariables: map[string]*querypb.BindVariable{"vtg1": {Type: sqltypes.Int64, Value: []byte("1")}}},
 	}
 	utils.MustMatch(t, wantQueries, lookup.Queries)
 	lookup.Queries = nil
@@ -327,7 +706,7 @@ func TestSetSystemVariables(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, session.InReservedConn())
 	wantQueries = []*querypb.BoundQuery{
-		{Sql: "select /*+ SET_VAR(sql_mode = 'only_full_group_by') */ /* comment */ :vtg1 /* INT64 */ from information_schema.`table`", BindVariables: map[string]*querypb.BindVariable{"vtg1": {Type: sqltypes.Int64, Value: []byte("1")}}},
+		{Sql: "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY') */ /* comment */ :vtg1 /* INT64 */ from information_schema.`table`", BindVariables: map[string]*querypb.BindVariable{"vtg1": {Type: sqltypes.Int64, Value: []byte("1")}}},
 	}
 	utils.MustMatch(t, wantQueries, lookup.Queries)
 	lookup.Queries = nil
@@ -353,7 +732,7 @@ func TestSetSystemVariables(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, session.InReservedConn())
 	require.Nil(t, lookup.Queries)
-	require.Equal(t, "only_full_group_by", string(session.UserDefinedVariables["var"].GetValue()))
+	require.Equal(t, "ONLY_FULL_GROUP_BY", string(session.UserDefinedVariables["var"].GetValue()))
 
 	lookup.SetResults([]*sqltypes.Result{{
 		Fields: []*querypb.Field{
@@ -367,11 +746,11 @@ func TestSetSystemVariables(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, session.InReservedConn())
 	wantQueries = []*querypb.BoundQuery{
-		{Sql: "select @@max_tmp_tables from dual", BindVariables: map[string]*querypb.BindVariable{"__vtsql_mode": sqltypes.StringBindVariable("only_full_group_by")}},
+		{Sql: "select @@max_tmp_tables from dual", BindVariables: map[string]*querypb.BindVariable{"__vtsql_mode": sqltypes.StringBindVariable("ONLY_FULL_GROUP_BY")}},
 	}
 	utils.MustMatch(t, wantQueries, lookup.Queries)
-	require.Equal(t, "only_full_group_by", string(session.UserDefinedVariables["var"].GetValue()))
-	require.Equal(t, "only_full_group_by", string(session.UserDefinedVariables["x"].GetValue()))
+	require.Equal(t, "ONLY_FULL_GROUP_BY", string(session.UserDefinedVariables["var"].GetValue()))
+	require.Equal(t, "ONLY_FULL_GROUP_BY", string(session.UserDefinedVariables["x"].GetValue()))
 	require.Equal(t, "4", string(session.UserDefinedVariables["y"].GetValue()))
 	lookup.Queries = nil
 
@@ -395,9 +774,9 @@ func TestSetSystemVariables(t *testing.T) {
 
 	wantQueries = []*querypb.BoundQuery{
 		{Sql: "select 1 from dual where @@max_tmp_tables != 1"},
-		{Sql: "set max_tmp_tables = '1', sql_mode = 'only_full_group_by', sql_safe_updates = '0'", BindVariables: map[string]*querypb.BindVariable{"vtg1": {Type: sqltypes.Int64, Value: []byte("1")}}},
+		{Sql: "set max_tmp_tables = '1', sql_mode = 'ONLY_FULL_GROUP_BY', sql_safe_updates = '0'", BindVariables: map[string]*querypb.BindVariable{"vtg1": {Type: sqltypes.Int64, Value: []byte("1")}}},
 		// we don't need the set_var since we are in a reserved connection, but since the plan is in the cache, we'll use it
-		{Sql: "select /*+ SET_VAR(sql_mode = 'only_full_group_by') SET_VAR(sql_safe_updates = '0') */ :vtg1 /* INT64 */ from information_schema.`table`", BindVariables: map[string]*querypb.BindVariable{"vtg1": {Type: sqltypes.Int64, Value: []byte("1")}}},
+		{Sql: "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY') SET_VAR(sql_safe_updates = '0') */ :vtg1 /* INT64 */ from information_schema.`table`", BindVariables: map[string]*querypb.BindVariable{"vtg1": {Type: sqltypes.Int64, Value: []byte("1")}}},
 	}
 
 	diffOpts := []cmp.Option{
@@ -413,7 +792,7 @@ func TestSetSystemVariables(t *testing.T) {
 		return
 	}
 	// try again with rearranged SET_VAR hints
-	wantQueries[2].Sql = "select /*+ SET_VAR(sql_safe_updates = '0') SET_VAR(sql_mode = 'only_full_group_by') */ :vtg1 /* INT64 */ from information_schema.`table`"
+	wantQueries[2].Sql = "select /*+ SET_VAR(sql_safe_updates = '0') SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY') */ :vtg1 /* INT64 */ from information_schema.`table`"
 	diff = cmp.Diff(wantQueries, lookup.Queries, diffOpts...)
 	assert.Empty(t, diff)
 }
@@ -481,7 +860,7 @@ func TestCreateTableValidTimestamp(t *testing.T) {
 	assert.True(t, session.InReservedConn())
 
 	wantQueries := []*querypb.BoundQuery{
-		{Sql: "set sql_mode = ALLOW_INVALID_DATES", BindVariables: map[string]*querypb.BindVariable{}},
+		{Sql: "set sql_mode = 'ALLOW_INVALID_DATES'", BindVariables: map[string]*querypb.BindVariable{}},
 		{Sql: "create table aa (\n\tt timestamp default 0\n)", BindVariables: map[string]*querypb.BindVariable{}},
 	}
 

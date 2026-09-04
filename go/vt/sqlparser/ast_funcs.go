@@ -637,6 +637,20 @@ func NewArgument(in string) *Argument {
 	return &Argument{Name: in, Type: sqltypes.Unknown}
 }
 
+// realTypeName resolves the REAL type keyword the way MySQL's parser does:
+// under sql_mode REAL_AS_FLOAT it is a synonym for FLOAT, otherwise for
+// DOUBLE. The resolution happens at parse time — on MySQL too, a SET_VAR hint
+// cannot change it for its own statement — so the AST and the serialized SQL
+// carry the resolved type and mean the same thing under any consumer's
+// sql_mode: text parsed under the default mode keeps meaning DOUBLE even when
+// it is later executed on a connection running with REAL_AS_FLOAT.
+func realTypeName(yylex yyLexer) string {
+	if yylex.(*Tokenizer).sqlMode&SQLModeRealAsFloat != 0 {
+		return "float"
+	}
+	return "double"
+}
+
 func parseBindVariable(yylex yyLexer, bvar string) *Argument {
 	markBindVariable(yylex, bvar)
 	return NewArgument(bvar)
@@ -1147,11 +1161,34 @@ func formatID(buf *TrackedBuffer, original string, at AtCount) {
 		return
 	}
 	_, isKeyword := keywordLookupTable.LookupString(original)
-	if buf.escape == escapeAllIdentifiers || isKeyword || containEscapableChars(original, at) {
+	if buf.escape == escapeAllIdentifiers || isKeyword || isMySQLFuncCallKeyword(original) || containEscapableChars(original, at) {
 		writeEscapedString(buf, original)
 	} else {
 		buf.WriteString(original)
 	}
+}
+
+// mysqlFuncCallKeywords are the names MySQL's parser recognizes as function
+// keywords (see "Function Name Parsing and Resolution" in the MySQL reference
+// manual). Under sql_mode=IGNORE_SPACE they are reserved words, so formatted
+// SQL always quotes them when they appear as identifiers — the output then
+// reads identically whether or not the consumer has IGNORE_SPACE enabled.
+// All but SESSION_USER and SYSTEM_USER are Vitess keywords and would be
+// quoted through the keyword lookup anyway; the set is listed in full so the
+// property is pinned to MySQL's list rather than to Vitess's keyword table.
+var mysqlFuncCallKeywords = map[string]struct{}{
+	"adddate": {}, "bit_and": {}, "bit_or": {}, "bit_xor": {}, "cast": {},
+	"count": {}, "curdate": {}, "curtime": {}, "date_add": {}, "date_sub": {},
+	"extract": {}, "group_concat": {}, "max": {}, "mid": {}, "min": {},
+	"now": {}, "position": {}, "session_user": {}, "std": {}, "stddev": {},
+	"stddev_pop": {}, "stddev_samp": {}, "subdate": {}, "substr": {},
+	"substring": {}, "sum": {}, "sysdate": {}, "system_user": {}, "trim": {},
+	"variance": {}, "var_pop": {}, "var_samp": {},
+}
+
+func isMySQLFuncCallKeyword(name string) bool {
+	_, ok := mysqlFuncCallKeywords[strings.ToLower(name)]
+	return ok
 }
 
 func writeEscapedString(buf *TrackedBuffer, original string) {

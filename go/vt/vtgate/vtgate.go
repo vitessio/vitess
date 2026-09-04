@@ -594,6 +594,34 @@ func (vtg *VTGate) Execute(
 	bindVariables map[string]*querypb.BindVariable,
 	prepared bool,
 ) (newSession *vtgatepb.Session, qr *sqltypes.Result, err error) {
+	return vtg.execute(ctx, mysqlCtx, session, sql, bindVariables, prepared, nil)
+}
+
+// ExecutePrepared is Execute for a statement prepared over the binary
+// protocol: parseSQLMode carries the parse-relevant sql_mode bits recorded at
+// prepare time, and the statement is parsed and plan-cached under them
+// instead of the session's current mode. Runtime modes stay the live
+// session's, like MySQL's own execute-time semantics.
+func (vtg *VTGate) ExecutePrepared(
+	ctx context.Context,
+	mysqlCtx vtgateservice.MySQLConnection,
+	session *vtgatepb.Session,
+	sql string,
+	bindVariables map[string]*querypb.BindVariable,
+	parseSQLMode sqlparser.SQLMode,
+) (newSession *vtgatepb.Session, qr *sqltypes.Result, err error) {
+	return vtg.execute(ctx, mysqlCtx, session, sql, bindVariables, true, &parseSQLMode)
+}
+
+func (vtg *VTGate) execute(
+	ctx context.Context,
+	mysqlCtx vtgateservice.MySQLConnection,
+	session *vtgatepb.Session,
+	sql string,
+	bindVariables map[string]*querypb.BindVariable,
+	prepared bool,
+	parseSQLMode *sqlparser.SQLMode,
+) (newSession *vtgatepb.Session, qr *sqltypes.Result, err error) {
 	// In this context, we don't care if we can't fully parse destination
 	destKeyspace, destTabletType, _, _, _ := vtg.executor.ParseDestinationTarget(session.TargetString)
 	statsKey := []string{"Execute", destKeyspace, topoproto.TabletTypeLString(destTabletType)}
@@ -603,6 +631,9 @@ func (vtg *VTGate) Execute(
 		err = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", bvErr)
 	} else {
 		safeSession := econtext.NewSafeSession(session)
+		if parseSQLMode != nil {
+			safeSession.PinParseSQLMode(*parseSQLMode)
+		}
 		qr, err = vtg.executor.Execute(ctx, mysqlCtx, "Execute", safeSession, sql, bindVariables, prepared)
 		safeSession.RemoveInternalSavepoint()
 	}
@@ -640,13 +671,12 @@ func requestIngressBytes(ctx context.Context, mysqlCtx vtgateservice.MySQLConnec
 // ends the batch. Each statement gets its share of the request's ingress
 // bytes and the per-statement query timeout on its context. idx counts the
 // statements from 0; more is true when statements follow.
-func (vtg *VTGate) forEachStatement(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, sql string, fn func(ctx context.Context, idx int, query string, more bool) error) error {
-	// TODO(#20884): use the session's parser, so that a SET sql_mode earlier
-	// in the batch applies to the statements after it.
-	parser := vtg.executor.Environment().Parser()
+// parserFor is looked up before each statement's end is looked for, so that a
+// SET sql_mode earlier in the batch applies to the statements after it.
+func (vtg *VTGate) forEachStatement(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, sql string, parserFor func() *sqlparser.Parser, fn func(ctx context.Context, idx int, query string, more bool) error) error {
 	remaining, hasIngressBytes := requestIngressBytes(ctx, mysqlCtx)
 	idx := 0
-	return parser.ForEachStatement(sql, func(text, rest string) error {
+	return sqlparser.ForEachStatementWith(sql, parserFor, func(text, rest string) error {
 		queryCtx := ctx
 		if hasIngressBytes {
 			share := ingress.NextStatementBytes(remaining, text, rest)
@@ -701,7 +731,7 @@ func (vtg *VTGate) ExecuteMulti(
 	session *vtgatepb.Session,
 	sqlString string,
 ) (newSession *vtgatepb.Session, qrs []*sqltypes.Result, err error) {
-	err = vtg.forEachStatement(ctx, mysqlCtx, sqlString, func(queryCtx context.Context, _ int, query string, _ bool) error {
+	err = vtg.forEachStatement(ctx, mysqlCtx, sqlString, func() *sqlparser.Parser { return vtg.sessionParser(session) }, func(queryCtx context.Context, _ int, query string, _ bool) error {
 		var qr *sqltypes.Result
 		var err error
 		session, qr, err = vtg.Execute(queryCtx, mysqlCtx, session, query, make(map[string]*querypb.BindVariable), false)
@@ -750,6 +780,16 @@ func (vtg *VTGate) ExecuteBatch(ctx context.Context, session *vtgatepb.Session, 
 // StreamExecute executes a streaming query.
 // Note we guarantee the callback will not be called concurrently by multiple go routines.
 func (vtg *VTGate) StreamExecute(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable, prepared bool, callback func(*sqltypes.Result) error) (*vtgatepb.Session, error) {
+	return vtg.streamExecute(ctx, mysqlCtx, session, sql, bindVariables, prepared, nil, callback)
+}
+
+// StreamExecutePrepared is StreamExecute for a statement prepared over the
+// binary protocol; see ExecutePrepared.
+func (vtg *VTGate) StreamExecutePrepared(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable, parseSQLMode sqlparser.SQLMode, callback func(*sqltypes.Result) error) (*vtgatepb.Session, error) {
+	return vtg.streamExecute(ctx, mysqlCtx, session, sql, bindVariables, true, &parseSQLMode, callback)
+}
+
+func (vtg *VTGate) streamExecute(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable, prepared bool, parseSQLMode *sqlparser.SQLMode, callback func(*sqltypes.Result) error) (*vtgatepb.Session, error) {
 	// In this context, we don't care if we can't fully parse destination
 	destKeyspace, destTabletType, _, _, _ := vtg.executor.ParseDestinationTarget(session.TargetString)
 	statsKey := []string{"StreamExecute", destKeyspace, topoproto.TabletTypeLString(destTabletType)}
@@ -757,6 +797,9 @@ func (vtg *VTGate) StreamExecute(ctx context.Context, mysqlCtx vtgateservice.MyS
 	defer vtg.timings.Record(statsKey, time.Now())
 
 	safeSession := econtext.NewSafeSession(session)
+	if parseSQLMode != nil {
+		safeSession.PinParseSQLMode(*parseSQLMode)
+	}
 	var err error
 	if bvErr := sqltypes.ValidateBindVariables(bindVariables); bvErr != nil {
 		err = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", bvErr)
@@ -793,7 +836,7 @@ func (vtg *VTGate) StreamExecuteMulti(ctx context.Context, mysqlCtx vtgateservic
 	// midStream is set when a statement failed after some of its packets were
 	// already sent; such an error cannot be delivered as a result anymore.
 	midStream := false
-	err := vtg.forEachStatement(ctx, mysqlCtx, sqlString, func(queryCtx context.Context, _ int, query string, more bool) error {
+	err := vtg.forEachStatement(ctx, mysqlCtx, sqlString, func() *sqlparser.Parser { return vtg.sessionParser(session) }, func(queryCtx context.Context, _ int, query string, more bool) error {
 		firstPacket := true
 		var err error
 		session, err = vtg.StreamExecute(queryCtx, mysqlCtx, session, query, make(map[string]*querypb.BindVariable), false, func(result *sqltypes.Result) error {
@@ -1026,4 +1069,10 @@ func newVTGate(executor *Executor, resolver *Resolver, vsm *vstreamManager, tc *
 		logPrepare:       logutil.NewThrottledLogger("Prepare", 5*time.Second),
 		logStreamExecute: logutil.NewThrottledLogger("StreamExecute", 5*time.Second),
 	}
+}
+
+// sessionParser returns the parser for the session's current sql_mode.
+func (vtg *VTGate) sessionParser(session *vtgatepb.Session) *sqlparser.Parser {
+	sqlMode, _ := econtext.NewSafeSession(session).SQLMode()
+	return vtg.executor.Environment().Parser().WithSQLMode(sqlparser.ParseSQLMode(sqlMode))
 }

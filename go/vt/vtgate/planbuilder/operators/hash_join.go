@@ -343,6 +343,7 @@ func (hj *HashJoin) addColumn(ctx *plancontext.PlanningContext, in sqlparser.Exp
 		ResolveType: ctx.TypeForExpr,
 		Collation:   ctx.SemTable.Collation,
 		Environment: ctx.VSchema.Environment(),
+		SQLMode:     ctx.SQLMode(),
 	}
 	eexpr, err := evalengine.Translate(rewrittenExpr, cfg)
 	if err != nil {
@@ -433,6 +434,7 @@ func (hj *HashJoin) addSingleSidedColumn(
 		ResolveType: ctx.TypeForExpr,
 		Collation:   ctx.SemTable.Collation,
 		Environment: ctx.VSchema.Environment(),
+		SQLMode:     ctx.SQLMode(),
 	}
 	eexpr, err := evalengine.Translate(rewrittenExpr, cfg)
 	if err != nil {

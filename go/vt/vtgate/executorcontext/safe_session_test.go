@@ -18,9 +18,12 @@ package executorcontext
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 	"testing"
 	"time"
+
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -264,4 +267,111 @@ func TestPrepareDataConcurrentAccess(t *testing.T) {
 		}()
 	}
 	wg.Wait()
+}
+
+// TestSQLModeStripping verifies that the sql_mode value applied to backend
+// connections has NO_BACKSLASH_ESCAPES removed — the mode a backend must not
+// lex the vtgate's serialized SQL under — while every other mode is forwarded
+// and the session keeps the full value for parsing and @@sql_mode reads.
+func TestSQLModeStripping(t *testing.T) {
+	session := NewSafeSession(&vtgatepb.Session{SystemVariables: map[string]string{
+		"sql_mode":         "'NO_BACKSLASH_ESCAPES,PIPES_AS_CONCAT,STRICT_TRANS_TABLES'",
+		"sql_safe_updates": "1",
+	}})
+
+	forwarded := map[string]string{}
+	session.GetSystemVariables(func(k, v string) { forwarded[k] = v })
+	assert.Equal(t, "'PIPES_AS_CONCAT,STRICT_TRANS_TABLES'", forwarded["sql_mode"])
+	assert.Equal(t, "1", forwarded["sql_safe_updates"])
+
+	// the session holds the canonical form, the mode kept from the backend included
+	mode, ok := session.SQLMode()
+	require.True(t, ok)
+	assert.Equal(t, "PIPES_AS_CONCAT,NO_BACKSLASH_ESCAPES,STRICT_TRANS_TABLES", mode)
+
+	// a value that only contains the unforwardable mode forwards as the empty
+	// mode: the user replaced the whole value, so the backend must drop its
+	// execution modes too
+	session.SetSystemVariable("sql_mode", "'NO_BACKSLASH_ESCAPES'")
+	session.GetSystemVariables(func(k, v string) { forwarded[k] = v })
+	assert.Equal(t, "''", forwarded["sql_mode"])
+
+	// HIGH_NOT_PRECEDENCE is forwarded: the serialized SQL parenthesizes NOT
+	// operands that would bind differently under it
+	session.SetSystemVariable("sql_mode", "'HIGH_NOT_PRECEDENCE,STRICT_TRANS_TABLES'")
+	session.GetSystemVariables(func(k, v string) { forwarded[k] = v })
+	assert.Equal(t, "'HIGH_NOT_PRECEDENCE,STRICT_TRANS_TABLES'", forwarded["sql_mode"])
+
+	// non-literal values are forwarded unchanged
+	expr := "CONCAT(@@sql_mode, ',PIPES_AS_CONCAT')"
+	session.SetSystemVariable("sql_mode", expr)
+	session.GetSystemVariables(func(k, v string) { forwarded[k] = v })
+	assert.Equal(t, expr, forwarded["sql_mode"])
+}
+
+// A session proto can carry sql_mode as the number MySQL accepts for the
+// variable — an older vtgate stored numeric assignments as written, and direct
+// gRPC clients may send one. Every reader expects mode names, so the value is
+// decoded into MySQL's canonical form when the session is taken in.
+func TestSQLModeSessionValueCanonicalized(t *testing.T) {
+	for _, tc := range []struct {
+		stored    string
+		mode      string
+		forwarded string
+	}{
+		{stored: "4", mode: "ANSI_QUOTES", forwarded: "'ANSI_QUOTES'"},
+		{stored: "1048576", mode: "NO_BACKSLASH_ESCAPES", forwarded: "''"},
+		{stored: "4194304", mode: "STRICT_ALL_TABLES", forwarded: "'STRICT_ALL_TABLES'"},
+		{stored: "0", mode: "", forwarded: "''"},
+		{stored: "'STRICT_TRANS_TABLES'", mode: "STRICT_TRANS_TABLES", forwarded: "'STRICT_TRANS_TABLES'"},
+		// name lists in another spelling — an older vtgate stored them as the client
+		// wrote them — take the canonical form: uppercased, expanded, in canonical order
+		{stored: "'no_zero_date'", mode: "NO_ZERO_DATE", forwarded: "'NO_ZERO_DATE'"},
+		{stored: "'STRICT_TRANS_TABLES,ANSI_QUOTES'", mode: "ANSI_QUOTES,STRICT_TRANS_TABLES", forwarded: "'ANSI_QUOTES,STRICT_TRANS_TABLES'"},
+		{stored: "'ansi'", mode: "REAL_AS_FLOAT,PIPES_AS_CONCAT,ANSI_QUOTES,IGNORE_SPACE,ONLY_FULL_GROUP_BY,ANSI", forwarded: "'REAL_AS_FLOAT,PIPES_AS_CONCAT,ANSI_QUOTES,IGNORE_SPACE,ONLY_FULL_GROUP_BY,ANSI'"},
+		{stored: "pipes_as_concat", mode: "PIPES_AS_CONCAT", forwarded: "'PIPES_AS_CONCAT'"},
+		// values that are not a valid mode are left as they are, for the backend to judge
+		{stored: "'4'", mode: "4", forwarded: "'4'"},
+		{stored: "'MARIADB_ONLY_MODE'", mode: "MARIADB_ONLY_MODE", forwarded: "'MARIADB_ONLY_MODE'"},
+		{stored: "99999999999999999", mode: "99999999999999999", forwarded: "99999999999999999"},
+		// expressions are not lists; they are evaluated when the session is used
+		{stored: "REPLACE(@@sql_mode, 'ANSI_QUOTES', '')", mode: "REPLACE(@@sql_mode, 'ANSI_QUOTES', '')", forwarded: "REPLACE(@@sql_mode, 'ANSI_QUOTES', '')"},
+	} {
+		t.Run(tc.stored, func(t *testing.T) {
+			session := NewSafeSession(&vtgatepb.Session{SystemVariables: map[string]string{"sql_mode": tc.stored}})
+			mode, ok := session.SQLMode()
+			require.True(t, ok)
+			assert.Equal(t, tc.mode, mode)
+			forwarded := map[string]string{}
+			session.GetSystemVariables(func(k, v string) { forwarded[k] = v })
+			assert.Equal(t, tc.forwarded, forwarded["sql_mode"])
+			// the evaluation-relevant modes are matched by their canonical spelling
+			assert.Equal(t, !strings.Contains(strings.ToUpper(tc.stored), "NO_ZERO_DATE"), evalengine.ParseSQLMode(mode).AllowZeroDate())
+		})
+	}
+}
+
+// A session carrying the bare DEFAULT keyword as its sql_mode — a gRPC client may
+// send SET's expression as written — runs under the default the session starts with,
+// which is what a session without a value does: the value is dropped when taken in.
+func TestSQLModeDefaultSessionValue(t *testing.T) {
+	for _, stored := range []string{"default", "DEFAULT", " Default "} {
+		session := NewSafeSession(&vtgatepb.Session{SystemVariables: map[string]string{"sql_mode": stored}})
+		_, ok := session.SQLMode()
+		assert.False(t, ok, stored)
+		assert.NotContains(t, session.SystemVariables, "sql_mode")
+	}
+	// the string 'DEFAULT' is a mode name, and not a valid one: left for the backend to judge
+	session := NewSafeSession(&vtgatepb.Session{SystemVariables: map[string]string{"sql_mode": "'DEFAULT'"}})
+	mode, ok := session.SQLMode()
+	require.True(t, ok)
+	assert.Equal(t, "DEFAULT", mode)
+}
+
+// TestSQLModeUnset verifies the accessor reports absence when the session
+// never set sql_mode.
+func TestSQLModeUnset(t *testing.T) {
+	session := NewSafeSession(&vtgatepb.Session{})
+	_, ok := session.SQLMode()
+	assert.False(t, ok)
 }

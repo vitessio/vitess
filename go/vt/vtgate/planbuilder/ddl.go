@@ -99,6 +99,9 @@ func buildByPassPlan(sql string, vschema plancontext.VSchema, isDDL bool) (*plan
 	if err != nil {
 		return nil, err
 	}
+	if err := rejectRawTextUnderNoBackslashEscapes(vschema, sql, "a statement sent as written"); err != nil {
+		return nil, err
+	}
 	send := &engine.Send{
 		Keyspace:          keyspace,
 		TargetDestination: vschema.ShardDestination(),
@@ -158,6 +161,8 @@ func buildDDLPlans(ctx context.Context, sql string, ddlStatement sqlparser.DDLSt
 	// If the query is fully parsed, generate the query from the ast. Otherwise, use the original query
 	if ddlStatement.IsFullyParsed() {
 		query = sqlparser.String(ddlStatement)
+	} else if err := rejectRawTextUnderNoBackslashEscapes(vschema, sql, "a DDL statement sent as written"); err != nil {
+		return nil, nil, err
 	}
 
 	send := &engine.Send{
