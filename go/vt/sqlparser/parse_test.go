@@ -4368,6 +4368,20 @@ func TestSQLModeParsing(t *testing.T) {
 		input:  "select now () from dual",
 		output: "select now() from dual",
 	}, {
+		// a qualified name is never a keyword: it names a stored function or a
+		// column in the schema, in every mode, with or without whitespace
+		mode:   0,
+		input:  "select db.cast(1), t.`cast` from t",
+		output: "select db.`cast`(1), t.`cast` from t",
+	}, {
+		mode:   0,
+		input:  "select db.cast (1), db.now () from t",
+		output: "select db.`cast`(1), db.`now`() from t",
+	}, {
+		mode:   SQLModeIgnoreSpace,
+		input:  "select db.cast (1), db.now (), cast (1 as char) from t",
+		output: "select db.`cast`(1), db.`now`(), cast(1 as char) from t",
+	}, {
 		// NO_BACKSLASH_ESCAPES makes backslash an ordinary character; the
 		// value formats back with default-mode escaping
 		mode:   SQLModeNoBackslashEscapes,
