@@ -540,6 +540,10 @@ func updateBootstrapVersionInCodebase(old, new string, newGoVersion *version.Ver
 	}
 	files, err := getListOfFilesInPaths([]string{
 		"./Makefile",
+		"./docker/bootstrap/Dockerfile.mysql80",
+		"./docker/bootstrap/Dockerfile.mysql84",
+		"./docker/bootstrap/Dockerfile.percona80",
+		"./docker/bootstrap/Dockerfile.percona84",
 	})
 	if err != nil {
 		return err
