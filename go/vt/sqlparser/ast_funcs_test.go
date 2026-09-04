@@ -60,9 +60,11 @@ func TestAddQueryHint(t *testing.T) {
 			err:       "Query hint comment is malformed",
 		},
 		{
+			// only the first hint comment is merged into; MySQL reads a later one
+			// as an ordinary comment, and so does this
 			comments:  Comments{"/* toto */", "/*+ SET_VAR(bb) */", "/*+ SET_VAR(cc) */"},
 			queryHint: "SET_VAR(aa)",
-			err:       "Must have only one query hint",
+			expected:  Comments{"/*+ SET_VAR(bb) SET_VAR(aa) */", "/* toto */", "/*+ SET_VAR(cc) */"},
 		},
 		{
 			comments:  Comments{"/*+ SET_VAR(bb) */"},

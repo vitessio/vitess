@@ -319,8 +319,9 @@ func SQLTypeToQueryType(typeName string, unsigned bool) querypb.Type {
 
 // AddQueryHint adds the given string to list of comment.
 // If the list is empty, one will be created containing the query hint.
-// If the list already contains a query hint, the given string will be merged with the existing one.
-// This is done because only one query hint is allowed per query.
+// If the list already contains a query hint, the given string will be merged with
+// the first one: MySQL honors only the first optimizer hint comment of a statement
+// and reads any later one as an ordinary comment, so later ones are kept as they are.
 func (node *ParsedComments) AddQueryHint(queryHint string) (Comments, error) {
 	if queryHint == "" {
 		if node == nil {
@@ -338,10 +339,7 @@ func (node *ParsedComments) AddQueryHint(queryHint string) (Comments, error) {
 
 	if node != nil {
 		for _, comment := range node.comments {
-			if strings.HasPrefix(comment, queryOptimizerPrefix) {
-				if hasQueryHint {
-					return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "Must have only one query hint")
-				}
+			if strings.HasPrefix(comment, queryOptimizerPrefix) && !hasQueryHint {
 				hasQueryHint = true
 				before, _, ok := strings.Cut(comment, "*/")
 				if !ok {

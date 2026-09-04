@@ -479,6 +479,19 @@ func TestRawTextUnderNoBackslashEscapes(t *testing.T) {
 	require.NoError(t, err)
 }
 
+// A statement may carry several optimizer hint comments; MySQL honors the first and
+// reads the rest as ordinary comments. The session's sql_mode joins the first one
+// and the statement goes through, as it did before every query carried the mode.
+func TestQueryWithSeveralOptimizerHintComments(t *testing.T) {
+	executor, _, _, lookup, _ := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
+	session := econtext.NewAutocommitSession(&vtgatepb.Session{EnableSystemSettings: true, TargetString: KsTestUnsharded})
+
+	_, err := executorExecSession(t.Context(), executor, session, "select /*+ MAX_EXECUTION_TIME(100) */ /*+ NO_BKA(t) */ id from main1", nil)
+	require.NoError(t, err)
+	require.Len(t, lookup.Queries, 1)
+	assert.Equal(t, "select /*+ MAX_EXECUTION_TIME(100) SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ /*+ NO_BKA(t) */ id from main1", lookup.Queries[0].Sql)
+}
+
 // A numeric sql_mode assignment must leave the session with the canonical name list,
 // not the number: the parser and the transports decode names, so a session that stored
 // "4" would parse "id" as a string instead of the ANSI_QUOTES identifier it asked for.
