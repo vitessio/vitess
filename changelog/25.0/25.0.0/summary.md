@@ -16,6 +16,7 @@
         - [VTOrc: `--cells-to-watch` removed in favor of `--cells-no-recovery`](#vtorc-cells-no-recovery)
     - **[Deprecations](#deprecations)**
         - [CLI Flags](#deprecated-cli-flags)
+        - [MariaDB-backed serving shards](#mariadb-serving-shards-deprecation)
         - [Legacy streaming-path plan types in query rules](#deprecated-selectstream-rule-plan)
 - **[Minor Changes](#minor-changes)**
     - **[VReplication](#minor-changes-vreplication)**
@@ -159,6 +160,12 @@ The flag will be removed entirely in v26. This deprecation is tracked in https:/
 The VTTablet flag `--vreplication-enable-http-log` is now deprecated and is a no-op, as the [VRLog feature it enabled has been removed](#vttablet-vrlog-removed). The flag will be removed entirely in v26.
 
 **Impact**: Remove any usage of the `--vreplication-enable-http-log` flag from VTTablet startup scripts or configuration.
+
+#### <a id="mariadb-serving-shards-deprecation"/>MariaDB-backed serving shards</a>
+
+MariaDB support for serving shards is deprecated and will become unsupported in v26. Managed `vttablet` processes and ERS/PRS operations now warn when MariaDB is detected.
+
+MariaDB remains supported as an import source through an unmanaged tablet in an external keyspace.
 
 #### <a id="deprecated-selectstream-rule-plan"/>Legacy streaming-path plan types in query rules</a>
 
