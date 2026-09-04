@@ -414,31 +414,19 @@ func (bh *S3BackupHandle) ReadFile(ctx context.Context, filename string) (io.Rea
 		return nil, err
 	}
 
-	// The transfer manager's concurrentReader spawns Concurrency goroutines per
-	// Read() call. Vitess's restore pipe (pgzip) reads through a small buffer
-	// (~4 KiB), so without coalescing, each tiny Read() creates a full worker
-	// pool — ~1.3M goroutine lifecycles per GiB. A one-part bufio.Reader is
-	// sufficient: the SDK's GetObjectBufferSize already manages the full transfer
-	// window internally; this buffer only needs to coalesce small downstream reads
-	// into a part-sized read for the SDK.
-	//
-	// NOTE: the SDK's dispatch loop busy-spins while a download window is in
-	// flight. With restore-concurrency defaulting to 4 files, that's up to 4
-	// busy-spinning goroutines (one per file) competing with decompression.
-	// This is upstream SDK behaviour (aws-sdk-go-v2 transfermanager).
-	body := io.Reader(out.Body)
-	if testBodyWrapHook != nil {
-		body = testBodyWrapHook(body)
-	}
-	buffered := bufio.NewReaderSize(body, int(downloadPartSize))
-
-	return &cancelingReader{Reader: buffered, body: out.Body, cancel: cancel}, nil
+	return newCoalescingReader(out.Body, cancel), nil
 }
 
-// testBodyWrapHook allows tests to wrap the SDK body reader before it's passed
-// to bufio.NewReaderSize, enabling read-counting without pinning the
-// coalescing implementation.
-var testBodyWrapHook func(io.Reader) io.Reader
+// newCoalescingReader wraps body with a bufio.Reader to coalesce small
+// downstream reads (e.g. 4 KiB from pgzip) into part-sized reads for the SDK.
+// Without coalescing, each tiny Read() on the transfer manager's
+// concurrentReader spawns a full worker pool (~1.3M goroutine lifecycles per
+// GiB). The SDK's GetObjectBufferSize manages the full transfer window
+// internally; this buffer only needs to batch small reads into larger ones.
+func newCoalescingReader(body io.Reader, cancel context.CancelFunc) *cancelingReader {
+	buffered := bufio.NewReaderSize(body, int(downloadPartSize))
+	return &cancelingReader{Reader: buffered, body: body, cancel: cancel}
+}
 
 // downloadBufferSize computes the GetObjectBufferSize and validates that the
 // resulting per-file memory usage stays within maxPerFileMemory. The total

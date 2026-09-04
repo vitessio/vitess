@@ -1039,81 +1039,21 @@ func TestReadFileZeroLengthObjectCloser(t *testing.T) {
 		"response body should be closed exactly once after rc.Close()")
 }
 
-func TestReadFileCoalescesSmallReads(t *testing.T) {
-	// This test verifies read coalescing behavior: when the caller reads in small
-	// chunks (4 KiB, as pgzip does), the underlying SDK body must see far fewer
-	// Read() calls. Without coalescing, each 4 KiB caller-read maps 1:1 to a
-	// concurrentReader.Read(), each of which spawns Concurrency goroutines.
-	const objectSize = 8 * 1024 * 1024 // 8MiB — exactly one download part
+func TestCoalescingReaderSmallReads(t *testing.T) {
+	// Verify that newCoalescingReader batches small reads (4 KiB, as pgzip does)
+	// into fewer large reads on the underlying body. Without coalescing, each
+	// 4 KiB caller-read maps 1:1 to a concurrentReader.Read(), each of which
+	// spawns Concurrency goroutines in the transfer manager.
+	const objectSize = 8 * 1024 * 1024 // 8 MiB
 
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == "HEAD" {
-			w.Header().Set("Content-Length", strconv.Itoa(objectSize))
-			w.WriteHeader(http.StatusOK)
-			return
-		}
-		if r.Method == "GET" {
-			w.Header().Set("Content-Length", strconv.Itoa(objectSize))
-			w.WriteHeader(http.StatusOK)
-			w.Write(bytes.Repeat([]byte("y"), objectSize))
-			return
-		}
-		w.WriteHeader(http.StatusOK)
-	}))
-	defer server.Close()
-
-	originalBucket := bucket
-	originalRoot := root
 	origPartSize := downloadPartSize
-	origConcurrency := downloadConcurrency
-	defer func() {
-		bucket = originalBucket
-		root = originalRoot
-		downloadPartSize = origPartSize
-		downloadConcurrency = origConcurrency
-	}()
-	bucket = "test-bucket"
-	root = ""
+	defer func() { downloadPartSize = origPartSize }()
 	downloadPartSize = 8 * 1024 * 1024
-	downloadConcurrency = 5
 
-	s3Client := s3.New(s3.Options{
-		Region:       "us-east-1",
-		BaseEndpoint: aws.String(server.URL),
-		UsePathStyle: true,
-		Credentials: aws.CredentialsProviderFunc(func(_ context.Context) (aws.Credentials, error) {
-			return aws.Credentials{AccessKeyID: "test", SecretAccessKey: "test"}, nil
-		}),
-		Retryer: func() aws.Retryer {
-			return retry.NewStandard(func(o *retry.StandardOptions) { o.MaxAttempts = 1 })
-		}(),
-	})
+	inner := &readCounter{reader: bytes.NewReader(bytes.Repeat([]byte("y"), objectSize))}
+	_, cancel := context.WithCancel(context.Background())
+	rc := newCoalescingReader(inner, cancel)
 
-	bh := &S3BackupHandle{
-		s3Client: s3Client,
-		bs: &S3BackupStorage{
-			params: backupstorage.NoParams(),
-			s3SSE:  S3ServerSideEncryption{},
-		},
-		dir:      "testdir",
-		name:     "testbackup",
-		readOnly: true,
-	}
-
-	// Install a test hook that counts Read calls on the SDK body BEFORE the
-	// coalescing layer. This lets us observe the actual coalescing ratio without
-	// pinning a specific implementation (bufio vs custom reader).
-	var innerCounter readCounter
-	testBodyWrapHook = func(r io.Reader) io.Reader {
-		innerCounter.reader = r
-		return &innerCounter
-	}
-	t.Cleanup(func() { testBodyWrapHook = nil })
-
-	rc, err := bh.ReadFile(t.Context(), "testfile")
-	require.NoError(t, err)
-
-	// Read in 4 KiB chunks (simulating pgzip)
 	buf := make([]byte, 4096)
 	callerReads := 0
 	var totalRead int
@@ -1129,11 +1069,10 @@ func TestReadFileCoalescesSmallReads(t *testing.T) {
 	require.Equal(t, objectSize, totalRead)
 	require.NoError(t, rc.Close())
 
-	// The caller made ~2048 reads (8MiB / 4KiB). With coalescing, the inner
-	// reader should see a small fraction of that — the coalescing layer batches
-	// many small reads into fewer large reads on the underlying body. Without
-	// coalescing the ratio would be ~1:1.
-	innerReads := innerCounter.count.Load()
+	// The caller made ~2048 reads (8 MiB / 4 KiB). With coalescing, the inner
+	// reader should see a small fraction of that. Without coalescing the ratio
+	// would be ~1:1.
+	innerReads := inner.count.Load()
 	ratio := float64(callerReads) / float64(innerReads)
 	assert.Greater(t, ratio, float64(10),
 		"expected coalescing ratio >10x (caller=%d, inner=%d) — read coalescing may be missing",
