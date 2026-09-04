@@ -32,6 +32,8 @@
         - [Stricter validation of SQL-level PREPARE statements](#vtgate-prepare-stricter-validation)
         - [Stricter PROXY protocol v1 header validation](#vtgate-proxy-protocol-v1-strictness)
         - [MySQL-faithful `sql_mode` validation, and support for the parse-relevant modes](#vtgate-sql-mode-validation)
+        - [Sessions start with a well-defined default `sql_mode` (new `--sql-mode` flag)](#vtgate-sql-mode-session-default)
+        - [The session's `sql_mode` is applied to every backend query](#vtgate-sql-mode-always-sent)
         - [MySQL-faithful lexing of built-in function names](#sqlparser-function-name-keywords)
         - [New `VEXPLAIN MYSQLPLAN` statement](#vtgate-vexplain-mysqlplan)
         - [Multi-statement queries are split the way MySQL splits them](#vtgate-multi-statement-splitting)
@@ -364,6 +366,28 @@ Incoming v25-canonical query text is unaffected: it parses identically under v24
 *Downgrades.* The documented downgrade order — the reverse of the upgrade order, so VTGates first — passes through the same v24-VTGate/v25-VTTablet mix described above and then reaches the all-v24 state. Component restarts drop client and pooled connections, so no live session or connection carries the new modes across a downgrade, and binary-protocol prepared statements do not survive the reconnect. SQL-level prepared statements are the one durable artifact: v25 stores the canonical serialization in the session, and a v24 VTGate reads those entries correctly, as noted above.
 
 **Impact**: Clients can now `SET sql_mode` to any value their MySQL version accepts, and VTGate honors it for parsing. Invalid values fail with the same errors MySQL returns.
+
+**Impact**: Clients that issue `SET sql_mode` with an unsupported mode now receive an error, also when the `SET` is a no-op that matches the backend's existing `sql_mode`. Clients that set mode names the backend MySQL would itself reject receive an error as well. Such sessions were already unreliable, because VTGate parses queries without honoring these modes. Clients that read `@@sql_mode` back will see MySQL's canonical form instead of their original spelling.
+
+#### <a id="vtgate-sql-mode-session-default"/>Sessions start with a well-defined default `sql_mode` (new `--sql-mode` flag)</a>
+
+VTGate sessions now start with a well-defined `sql_mode`. They no longer implicitly inherit whatever each backend happens to be configured with. A new `--sql-mode` flag sets this session default. The flag is named after MySQL's flag and is validated the same way as a `SET sql_mode` statement. Its default is MySQL 8.x's factory default, the mode Vitess-managed `mysqld` instances run with. As a result:
+
+- VTGate answers `SELECT @@sql_mode`, `SHOW VARIABLES LIKE 'sql_mode'`, and expressions that reference `@@sql_mode` from the session. It never asks an arbitrary shard. Previously, reads and `SET sql_mode` change-detection queried one shard and assumed all backends agreed on `sql_mode`. Nothing guarantees that in a multi-backend cluster.
+- `SET sql_mode = <expr>` is evaluated at the VTGate, with no shard round trip for what VTGate can compute itself. This includes expressions such as `CONCAT(@@sql_mode, '...')`, `@@global.sql_mode`, and user variables. A sub-expression VTGate cannot compute, such as `RAND()` or a system variable the session never set, is fetched from a shard, with the session's `@@sql_mode` passed along, and the result is validated and stored like any other value. `SET` statements no longer force a reserved connection on MySQL 8.0+, where `SET_VAR` is available.
+- `@@global.sql_mode` resolves to the configured default (the `--sql-mode` value), never to a backend's global. In this model the VTGate owns the global `sql_mode`, so `SET sql_mode = @@global.sql_mode` restores the session default.
+
+**Impact**: Sessions that never set `sql_mode` read the configured session default. They no longer read the value of whichever shard happened to answer. Deployments whose backends intentionally run a non-default global `sql_mode` should set `--sql-mode` to that value, so that VTGate's session semantics match their backends. They can also opt out entirely with `--enable-system-settings=false` (see the next section).
+
+#### <a id="vtgate-sql-mode-always-sent"/>The session's `sql_mode` is applied to every backend query</a>
+
+The session's `sql_mode` is now applied to every query sent to the backends, whether or not the session ever set it. Statements that can carry optimizer hints get a `SET_VAR(sql_mode = ...)` hint. Statements that cannot, such as DDL, run on a connection with the session's settings applied through the tablet's settings pool. Previously, sessions that never set `sql_mode` ran queries under whatever mode each backend happened to be configured with, while VTGate reported a different mode to the client. Relatedly, the `SET_VAR` comment is now placed only in the top-level statement comment, where MySQL honors it, instead of also being duplicated into subqueries. `vexplain` and `explain` hint the statement they wrap.
+
+The value sent has exactly one mode removed, `NO_BACKSLASH_ESCAPES`, as described in [the validation section](#vtgate-sql-mode-validation): a session's `sql_mode` governs how the client's SQL is interpreted, the queries a backend receives are always serialized in VTGate's canonical format, and that format is inert under every mode but the backslash-escaping one. Every other mode is forwarded, the parse-relevant ones included, for the backend to enforce its resolution- and execution-time semantics.
+
+Deployments that run with `--enable-system-settings=false` are exempt. Their sessions are not seeded with a `sql_mode`, and no `SET_VAR` hint is sent, so queries keep running under each backend's configured mode, as before. This is the opt-out for deployments that want each backend's configured `sql_mode` to keep governing its own queries.
+
+**Impact**: Queries now run under the `sql_mode` VTGate reports to the client, instead of each backend's configured mode. Note one warning-related effect: a `sql_mode` without a strict mode, such as bare `NO_ZERO_DATE`, makes MySQL attach deprecation warning 3135 to every query that carries the mode as a `SET_VAR` hint. This was already the case for sessions that `SET` such a mode. It now also applies to every session when `--sql-mode` is configured to a non-strict combination.
 
 #### <a id="vtgate-vexplain-mysqlplan"/>New `VEXPLAIN MYSQLPLAN` statement</a>
 

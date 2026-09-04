@@ -55,6 +55,9 @@ type VSchema interface {
 	AnyKeyspace() (*vindexes.Keyspace, error)
 	FirstSortedKeyspace() (*vindexes.Keyspace, error)
 	SysVarSetEnabled() bool
+	// DefaultSQLMode returns the sql_mode sessions start with: the value of the
+	// --sql-mode flag, or the compiled-in default when the flag is unset.
+	DefaultSQLMode() string
 	// IsSystemVariableDenied reports whether the given system variable name is
 	// in the VTGate-configured denylist. Names are compared case-insensitively.
 	IsSystemVariableDenied(name string) bool

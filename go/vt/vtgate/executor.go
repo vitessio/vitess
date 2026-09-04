@@ -38,7 +38,9 @@ import (
 	"vitess.io/vitess/go/cache/theine"
 	"vitess.io/vitess/go/mysql/capabilities"
 	"vitess.io/vitess/go/mysql/collations"
+	mysqlconfig "vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/mysql/sqlerror"
+	"vitess.io/vitess/go/mysql/sqlmode"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/streamlog"
@@ -98,14 +100,63 @@ const (
 )
 
 func init() {
-	registerTabletTypeFlag := func(fs *pflag.FlagSet) {
+	registerExecutorFlags := func(fs *pflag.FlagSet) {
 		utils.SetFlagVar(fs, (*topoproto.TabletTypeFlag)(&defaultTabletType), "default-tablet-type", "The default tablet type to set for queries, when one is not explicitly selected.")
+		utils.SetFlagVar(fs, &defaultSQLMode, "sql-mode", "The sql_mode every session starts with. The value is validated like a SET sql_mode statement.")
 	}
 
-	servenv.OnParseFor("vtgate", registerTabletTypeFlag)
-	servenv.OnParseFor("vtgateclienttest", registerTabletTypeFlag)
-	servenv.OnParseFor("vtcombo", registerTabletTypeFlag)
-	servenv.OnParseFor("vtexplain", registerTabletTypeFlag)
+	servenv.OnParseFor("vtgate", registerExecutorFlags)
+	servenv.OnParseFor("vtgateclienttest", registerExecutorFlags)
+	servenv.OnParseFor("vtcombo", registerExecutorFlags)
+	servenv.OnParseFor("vtexplain", registerExecutorFlags)
+}
+
+// sqlModeFlag is a pflag.Value that validates a MySQL sql_mode list the same way a
+// SET sql_mode statement is validated, and stores it in canonical form.
+type sqlModeFlag struct {
+	mode string
+}
+
+func (s *sqlModeFlag) String() string { return s.mode }
+
+func (s *sqlModeFlag) Type() string { return "string" }
+
+func (s *sqlModeFlag) Set(v string) error {
+	mode, err := sqlmode.Validate(sqltypes.NewVarChar(v))
+	if err != nil {
+		return err
+	}
+	s.mode = mode.String()
+	return nil
+}
+
+var defaultSQLMode = sqlModeFlag{mode: mysqlconfig.DefaultSQLMode}
+
+// canUseSetVar returns whether queries can carry system variables in SET_VAR optimizer
+// hints, the preferred way to apply the session's sql_mode to backend queries. When it is
+// unavailable, the sql_mode travels through the connection settings instead.
+func (e *Executor) canUseSetVar() bool {
+	return e.vConfig.SetVarEnabled && e.env.Parser().IsMySQL80AndAbove()
+}
+
+// defaultSQLModeHasNoBackslashEscapes reports whether sessions start under
+// NO_BACKSLASH_ESCAPES: the configured default carries it, and the deployment lets
+// vtgate own the sql_mode at all.
+func (e *Executor) defaultSQLModeHasNoBackslashEscapes() bool {
+	if e.config.SystemSettingsDisabled {
+		return false
+	}
+	return sqlparser.ParseSQLMode(e.config.SQLMode)&sqlparser.SQLModeNoBackslashEscapes != 0
+}
+
+// seedSQLMode gives the session its starting sql_mode, unless the deployment opted out of
+// vtgate-managed system settings via --enable-system-settings=false — those deployments
+// keep running queries under each backend's configured mode.
+func (e *Executor) seedSQLMode(safeSession *econtext.SafeSession) {
+	if e.config.SystemSettingsDisabled {
+		return
+	}
+	safeSession.SeedSQLMode(e.config.SQLMode, e.canUseSetVar())
 }
 
 // Executor is the engine that executes queries by utilizing
@@ -122,6 +173,14 @@ type (
 		PreventCrossKeyspaceReads bool
 		WarmingReadsPercent       int
 		QueryLogToFile            string
+		// SQLMode is the sql_mode every session starts with. Empty means the value of the
+		// --sql-mode flag (which defaults to config.DefaultSQLMode).
+		SQLMode string
+		// SystemSettingsDisabled reflects --enable-system-settings=false: the deployment
+		// opted out of vtgate-managed system settings, so sessions are not seeded with the
+		// default sql_mode and queries run under each backend's configured mode. The zero
+		// value preserves the default behavior (seeding enabled).
+		SystemSettingsDisabled bool
 	}
 
 	Executor struct {
@@ -193,6 +252,15 @@ func NewExecutor(
 	pv plancontext.PlannerVersion,
 	ddlConfig dynamicconfig.DDL,
 ) *Executor {
+	if eConfig.SQLMode == "" {
+		eConfig.SQLMode = defaultSQLMode.mode
+	} else {
+		mode, err := sqlmode.Validate(sqltypes.NewVarChar(eConfig.SQLMode))
+		if err != nil {
+			panic(fmt.Sprintf("bug: ExecutorConfig.SQLMode is invalid: %v", err))
+		}
+		eConfig.SQLMode = mode.String()
+	}
 	e := &Executor{
 		config:      eConfig,
 		exporter:    servenv.NewExporter(eConfig.Name, ""),
@@ -650,6 +718,10 @@ func (e *Executor) addNeededBindVars(vcursor *econtext.VCursorImpl, bindVarNeeds
 			bindVars[key] = sqltypes.StringBindVariable(servenv.AppVersion.String())
 		case sysvars.Socket.Name:
 			bindVars[key] = sqltypes.StringBindVariable(mysqlSocketPath())
+		case sysvars.SQLMode.Name:
+			bindVars[key] = sqltypes.StringBindVariable(vcursor.SQLMode())
+		case sysvars.GlobalSQLMode:
+			bindVars[key] = sqltypes.StringBindVariable(e.config.SQLMode)
 		default:
 			if value, hasSysVar := session.SystemVariables[sysVar]; hasSysVar {
 				expr, err := e.env.Parser().ParseExpr(value)
@@ -1242,20 +1314,23 @@ func (e *Executor) fetchOrCreatePlan(
 		return nil, nil, nil, vterrors.VT13001("vschema not initialized")
 	}
 
-	if err := e.materializeSessionSQLMode(ctx, safeSession, logStats); err != nil {
+	if err := e.materializeSessionSQLMode(ctx, safeSession); err != nil {
 		return nil, nil, nil, err
 	}
 	query, comments := sqlparser.SplitMarginComments(queryString)
 	vcursor, _ = e.newVCursor(safeSession, comments, logStats)
 
+	// The comment is injected into queries as a SET_VAR optimizer hint only when the
+	// target MySQL version supports it; the plan key discriminates by the session's system
+	// variables regardless (see buildPlanKey).
 	var setVarComment string
-	if e.vConfig.SetVarEnabled {
+	if e.canUseSetVar() {
 		setVarComment = vcursor.PrepareSetVarComment()
 	}
 
 	var planKey engine.PlanKey
 	if preparedPlan {
-		planKey = buildPlanKey(ctx, vcursor, query, setVarComment)
+		planKey = buildPlanKey(ctx, vcursor, query)
 		plan, logStats.CachedPlan = e.plans.Get(planKey.Hash(), e.epoch.Load())
 	}
 
@@ -1378,7 +1453,7 @@ func (e *Executor) getCachedOrBuildPlan(
 
 	defer func() {
 		if err == nil {
-			vcursor.CheckForReservedConnection(setVarComment, stmt)
+			vcursor.CheckForReservedConnection(setVarComment, stmt, plan.Type)
 		}
 	}()
 
@@ -1427,7 +1502,7 @@ func (e *Executor) getCachedOrBuildPlan(
 	if planCachable && !ignoreCache {
 		if !preparedPlan {
 			// build Plan key
-			planKey = buildPlanKey(ctx, vcursor, query, setVarComment)
+			planKey = buildPlanKey(ctx, vcursor, query)
 		}
 		plan, cached, err = e.plans.GetOrLoad(planKey.Hash(), e.epoch.Load(), func() (*engine.Plan, error) {
 			return e.buildStatement(ctx, vcursor, query, stmt, reservedVars, bindVarNeeds, qh, paramsCount)
@@ -1443,42 +1518,23 @@ func (e *Executor) getCachedOrBuildPlan(
 // Every reader — the parser, the plan cache key, the SET_VAR and settings transports —
 // expects a list of mode names: an older vtgate's targeted session stored a SET's
 // expression as written, and a direct gRPC client may send one, and the modes such
-// text mentions say nothing about the modes it evaluates to. The expression gets the
-// judgment a SET gives it, evaluated on the session's target shard, and the session
-// keeps the judged value, or nothing when it does not change the shard's default —
-// the same value the SET would have left behind. The expression is removed first, so
-// that it is not applied as a connection setting to the very connection judging it.
-// When the judgment fails the request fails; the expression stays in the session for
-// the next request to evaluate, unless the failure says the value can never be applied
-// (it is invalid, or unsupported), in which case keeping it would only fail every later
-// request the same way, including the SET that could replace it.
-func (e *Executor) materializeSessionSQLMode(ctx context.Context, safeSession *econtext.SafeSession, logStats *logstats.LogStats) error {
+// text mentions say nothing about the modes it evaluates to. The expression is
+// evaluated the way a SET sql_mode is, at the vtgate, and the session keeps the judged
+// value in canonical form. The session is put in the default it started with first, so
+// that @@sql_mode inside the expression resolves to that default — the value a fresh
+// connection would have shown the SET that stored it. When the evaluation fails the
+// request fails; the expression is put back for the next request to evaluate, unless
+// the failure says the value can never be applied (it is invalid, or unsupported), in
+// which case keeping it would only fail every later request the same way, including
+// the SET that could replace it: the session then stays in the default.
+func (e *Executor) materializeSessionSQLMode(ctx context.Context, safeSession *econtext.SafeSession) error {
 	value, ok := safeSession.SQLMode()
 	if !ok || sqlparser.IsSQLModeList(value) {
 		return nil
 	}
-	vcursor, err := e.newVCursor(safeSession, sqlparser.MarginComments{}, logStats)
-	if err != nil {
-		return err
-	}
-	keyspace, err := vcursor.AnyKeyspace()
-	if err != nil {
-		return vterrors.Wrapf(err, "cannot evaluate the session's sql_mode expression %s", value)
-	}
 	stored := safeSession.SystemVariables[sysvars.SQLMode.Name]
-	vcursor.SafeSession.RemoveSystemVariable(sysvars.SQLMode.Name)
-	set := &engine.SysVarReservedConn{
-		Name:              sysvars.SQLMode.Name,
-		Keyspace:          keyspace,
-		TargetDestination: vcursor.ShardDestination(),
-		Expr:              value,
-		SupportSetVar:     sysvars.SQLMode.SupportSetVar,
-		// the judgment may run on a connection the expression was already applied
-		// to, by the vtgate that stored it: the value is then unchanged there, and
-		// the session must record it all the same
-		StoreUnchanged: true,
-	}
-	err = set.Execute(ctx, vcursor, evalengine.NewExpressionEnv(ctx, nil, vcursor))
+	safeSession.SetSystemVariable(sysvars.SQLMode.Name, sqltypes.EncodeStringSQL(e.config.SQLMode))
+	err := e.evaluateSessionSQLMode(ctx, safeSession, value)
 	if err == nil {
 		return nil
 	}
@@ -1490,7 +1546,25 @@ func (e *Executor) materializeSessionSQLMode(ctx context.Context, safeSession *e
 	return err
 }
 
-func buildPlanKey(ctx context.Context, vcursor *econtext.VCursorImpl, query string, setVarComment string) engine.PlanKey {
+// evaluateSessionSQLMode runs the given sql_mode expression as the SET sql_mode
+// statement that stored it, through the planner: a sub-expression vtgate cannot
+// compute itself is fetched from a shard the way it is for any SET sql_mode.
+func (e *Executor) evaluateSessionSQLMode(ctx context.Context, safeSession *econtext.SafeSession, expr string) error {
+	sql := "set sql_mode = " + expr
+	logStats := logstats.NewLogStats(ctx, "MaterializeSessionSQLMode", sql, safeSession.GetSessionUUID(), nil, streamlog.GetQueryLogConfig())
+	bindVars := make(map[string]*querypb.BindVariable)
+	plan, vcursor, _, err := e.fetchOrCreatePlan(ctx, safeSession, sql, bindVars, false /*parameterize*/, false /*preparedPlan*/, logStats, true /*isExecutePath*/)
+	if err != nil {
+		return err
+	}
+	if err := e.addNeededBindVars(vcursor, plan.BindVarNeeds, bindVars, safeSession); err != nil {
+		return err
+	}
+	_, err = e.executePlan(ctx, safeSession, plan, vcursor, bindVars, logStats, time.Now())
+	return err
+}
+
+func buildPlanKey(ctx context.Context, vcursor *econtext.VCursorImpl, query string) engine.PlanKey {
 	allDest := getDestinations(ctx, vcursor)
 
 	return engine.PlanKey{
@@ -1498,10 +1572,14 @@ func buildPlanKey(ctx context.Context, vcursor *econtext.VCursorImpl, query stri
 		TabletType:      vcursor.TabletType(),
 		Destination:     strings.Join(allDest, ","),
 		Query:           query,
-		SetVarComment:   setVarComment,
-		Collation:       vcursor.ConnCollation(),
-		SQLMode:         vcursor.ParseSQLMode(),
-		EvalSQLMode:     evalengine.ParseSQLMode(vcursor.SQLMode()),
+		// The session's system variables always discriminate the key — normalization
+		// rewrites variables the session carries into bind variables, so sessions with
+		// different variable sets produce different plans for the same query text. This
+		// holds even when no SET_VAR hint is injected (canUseSetVar false).
+		SetVarComment: vcursor.PrepareSetVarComment(),
+		Collation:     vcursor.ConnCollation(),
+		SQLMode:       vcursor.ParseSQLMode(),
+		EvalSQLMode:   evalengine.ParseSQLMode(vcursor.SQLMode()),
 	}
 }
 
@@ -1668,6 +1746,7 @@ func isValidPayloadSize(query string) bool {
 
 // Prepare executes a prepare statements.
 func (e *Executor) Prepare(ctx context.Context, method string, safeSession *econtext.SafeSession, sql string) (fld []*querypb.Field, paramsCount uint16, err error) {
+	e.seedSQLMode(safeSession)
 	logStats := logstats.NewLogStats(ctx, method, sql, safeSession.GetSessionUUID(), nil, streamlog.GetQueryLogConfig())
 	fld, paramsCount, err = e.prepare(ctx, safeSession, sql, logStats)
 	logStats.Error = err
@@ -1686,7 +1765,7 @@ func (e *Executor) Prepare(ctx context.Context, method string, safeSession *econ
 }
 
 func (e *Executor) prepare(ctx context.Context, safeSession *econtext.SafeSession, sql string, logStats *logstats.LogStats) ([]*querypb.Field, uint16, error) {
-	if err := e.materializeSessionSQLMode(ctx, safeSession, logStats); err != nil {
+	if err := e.materializeSessionSQLMode(ctx, safeSession); err != nil {
 		return nil, 0, err
 	}
 	sessionSQLMode, _ := safeSession.SQLMode()
@@ -1775,6 +1854,7 @@ func (e *Executor) initVConfig(warnOnShardedOnly bool, pv plancontext.PlannerVer
 		MaxMemoryRows: maxMemoryRows,
 
 		SetVarEnabled:         setVarEnabled,
+		SQLMode:               e.config.SQLMode,
 		DeniedSystemVariables: buildDeniedSystemVariables(deniedSystemVariables),
 		EnableViews:           enableViews,
 		ForeignKeyMode:        fkMode(foreignKeyMode),

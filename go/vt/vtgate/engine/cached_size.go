@@ -1380,6 +1380,21 @@ func (cached *SysVarReservedConn) CachedSize(alloc bool) int64 {
 	return size
 }
 
+func (cached *SysVarSQLMode) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(16)
+	}
+	// field Expr vitess.io/vitess/go/vt/vtgate/evalengine.Expr
+	if cc, ok := cached.Expr.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	return size
+}
+
 func (cached *SysVarSetAware) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)

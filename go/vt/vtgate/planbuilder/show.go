@@ -185,7 +185,7 @@ func buildVariablePlan(show *sqlparser.ShowBasic, vschema plancontext.VSchema) (
 	if err != nil {
 		return nil, err
 	}
-	plan = engine.NewReplaceVariables(plan)
+	plan = engine.NewReplaceVariables(plan, show.Command == sqlparser.VariableGlobal)
 	return plan, nil
 }
 

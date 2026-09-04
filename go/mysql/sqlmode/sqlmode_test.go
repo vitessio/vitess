@@ -17,6 +17,7 @@ limitations under the License.
 package sqlmode
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -209,6 +210,21 @@ func TestValidate(t *testing.T) {
 			assert.Equal(t, tt.expected, mode.String())
 		})
 	}
+}
+
+// A long invalid value is truncated in the error the way MySQL truncates it: to 200
+// characters, with no marker (verified against MySQL 8.0.46 with a 1 MB value).
+func TestWrongValueErrorTruncatesTheValue(t *testing.T) {
+	long := strings.Repeat("a", 1000000)
+	_, err := Parse(long)
+	require.EqualError(t, err, "Variable 'sql_mode' can't be set to the value of '"+strings.Repeat("a", 200)+"'")
+
+	// the cut falls on a character boundary
+	_, err = Parse(strings.Repeat("é", 201))
+	require.EqualError(t, err, "Variable 'sql_mode' can't be set to the value of '"+strings.Repeat("é", 200)+"'")
+
+	_, err = Parse(strings.Repeat("a", 200))
+	require.EqualError(t, err, "Variable 'sql_mode' can't be set to the value of '"+strings.Repeat("a", 200)+"'")
 }
 
 func TestValidateNoLexerModes(t *testing.T) {

@@ -200,13 +200,7 @@ func (nz *normalizer) walkDown(node, _ SQLNode) bool {
 		// No rewriting needed for prepare or execute statements.
 		return false
 	case *ShowBasic:
-		if node.Command != VariableGlobal && node.Command != VariableSession {
-			break
-		}
-		varsToAdd := sysvars.GetInterestingVariables()
-		for _, sysVar := range varsToAdd {
-			nz.bindVarNeeds.AddSysVar(sysVar)
-		}
+		nz.rewriteShowBasic(node)
 	}
 	b := nz.err == nil
 	if !b {
@@ -239,8 +233,16 @@ func (nz *normalizer) noteAliasedExprName(node *AliasedExpr) {
 // walkUp processes nodes when traversing up the AST.
 // It finalizes normalization logic based on node types.
 func (nz *normalizer) walkUp(cursor *Cursor) bool {
-	// Add SET_VAR comments if applicable.
-	if stmt, supports := cursor.Node().(SupportOptimizerHint); supports {
+	// Add SET_VAR comments if applicable. MySQL only honors SET_VAR in the top-level
+	// statement comment, so nested statements (subqueries, derived tables) are skipped.
+	// The statement wrapped by an EXPLAIN or VEXPLAIN is hinted, since it is the
+	// statement the backend will run.
+	var isRoot bool
+	switch cursor.Parent().(type) {
+	case *RootNode, *VExplainStmt, *ExplainStmt:
+		isRoot = true
+	}
+	if stmt, supports := cursor.Node().(SupportOptimizerHint); supports && isRoot {
 		if nz.setVarComment != "" {
 			newComments, err := stmt.GetParsedComments().AddQueryHint(nz.setVarComment)
 			if err != nil {
@@ -643,13 +645,22 @@ func (nz *normalizer) rewriteView(viewName TableName, node *AliasedTableExpr) {
 	}
 }
 
-// rewriteShowBasic handles the rewriting of SHOW statements, particularly for system variables.
+// rewriteShowBasic records the system variables a SHOW VARIABLES needs vtgate's values
+// of. The sql_mode is among them only when vtgate owns it; the global form reads the
+// configured default rather than the session's value.
 func (nz *normalizer) rewriteShowBasic(node *ShowBasic) {
-	if node.Command == VariableGlobal || node.Command == VariableSession {
-		varsToAdd := sysvars.GetInterestingVariables()
-		for _, sysVar := range varsToAdd {
-			nz.bindVarNeeds.AddSysVar(sysVar)
+	if node.Command != VariableGlobal && node.Command != VariableSession {
+		return
+	}
+	owns := nz.sessionOwnsSQLMode()
+	for _, sysVar := range sysvars.GetInterestingVariables() {
+		if sysVar == sysvars.SQLMode.Name && !owns {
+			continue
 		}
+		nz.bindVarNeeds.AddSysVar(sysVar)
+	}
+	if node.Command == VariableGlobal && owns {
+		nz.bindVarNeeds.AddSysVar(sysvars.GlobalSQLMode)
 	}
 }
 
@@ -688,9 +699,32 @@ func (nz *normalizer) rewriteVariable(cursor *Cursor, node *Variable) {
 	switch node.Scope {
 	case VariableScope:
 		nz.udvRewrite(cursor, node)
+	case GlobalScope:
+		nz.globalSysVarRewrite(cursor, node)
 	case SessionScope, NextTxScope, NoScope:
 		nz.sysVarRewrite(cursor, node)
 	}
+}
+
+// globalSysVarRewrite replaces global system variables that the vtgate itself owns with
+// bind variables. The global sql_mode is the vtgate's configured default sql_mode when
+// the vtgate owns the session's sql_mode; a deployment that leaves the sql_mode to the
+// backends leaves the global one to them as well.
+func (nz *normalizer) globalSysVarRewrite(cursor *Cursor, node *Variable) {
+	if node.Name.Lowered() != sysvars.SQLMode.Name || !nz.sessionOwnsSQLMode() {
+		return
+	}
+	cursor.Replace(NewArgument("__vt" + sysvars.GlobalSQLMode))
+	nz.bindVarNeeds.AddSysVar(sysvars.GlobalSQLMode)
+}
+
+// sessionOwnsSQLMode reports whether the session carries a sql_mode, which every
+// session vtgate manages the sql_mode of does from its first request on. A session
+// without one belongs to a deployment that leaves the sql_mode to the backends, and
+// its @@sql_mode reads are theirs to answer.
+func (nz *normalizer) sessionOwnsSQLMode() bool {
+	_, ok := nz.sysVars[sysvars.SQLMode.Name]
+	return ok
 }
 
 // inverseOp returns the inverse operator for a given comparison operator.

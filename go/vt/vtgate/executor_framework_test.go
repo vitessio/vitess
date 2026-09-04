@@ -31,6 +31,7 @@ import (
 
 	"vitess.io/vitess/go/cache/theine"
 	"vitess.io/vitess/go/constants/sidecar"
+	mysqlconfig "vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/test/utils"
@@ -42,6 +43,7 @@ import (
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/srvtopo"
+	"vitess.io/vitess/go/vt/sysvars"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	econtext "vitess.io/vitess/go/vt/vtgate/executorcontext"
@@ -364,6 +366,14 @@ func executorStream(ctx context.Context, executor *Executor, sql string) (qr *sq
 		qr.Rows = append(qr.Rows, r.Rows...)
 	}
 	return qr, nil
+}
+
+// assertSeededSQLMode asserts that the session carries the seeded default sql_mode and
+// removes it, so that expected session protos in table-driven tests stay readable.
+func assertSeededSQLMode(t *testing.T, session *econtext.SafeSession) {
+	t.Helper()
+	require.Equal(t, sqltypes.EncodeStringSQL(mysqlconfig.DefaultSQLMode), session.SystemVariables[sysvars.SQLMode.Name])
+	delete(session.SystemVariables, sysvars.SQLMode.Name)
 }
 
 func assertQueries(t *testing.T, sbc *sandboxconn.SandboxConn, wantQueries []*querypb.BoundQuery) {

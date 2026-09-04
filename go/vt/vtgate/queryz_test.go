@@ -47,7 +47,7 @@ func TestQueryzHandler(t *testing.T) {
 	_, err := executorExec(ctx, executor, session, sql, nil)
 	require.NoError(t, err)
 	time.Sleep(100 * time.Millisecond)
-	plan1 := assertCacheContains(t, executor, nil, "select id from `user` where id = 1")
+	plan1 := assertCacheContains(t, executor, nil, "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ id from `user` where id = 1")
 	plan1.ExecTime = uint64(1 * time.Millisecond)
 
 	// scatter
@@ -55,7 +55,7 @@ func TestQueryzHandler(t *testing.T) {
 	_, err = executorExec(ctx, executor, session, sql, nil)
 	require.NoError(t, err)
 	time.Sleep(100 * time.Millisecond)
-	plan2 := assertCacheContains(t, executor, nil, "select id from `user`")
+	plan2 := assertCacheContains(t, executor, nil, "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ id from `user`")
 	plan2.ExecTime = uint64(1 * time.Second)
 
 	sql = "insert into user (id, name) values (:id, :name)"
@@ -65,10 +65,10 @@ func TestQueryzHandler(t *testing.T) {
 	})
 	require.NoError(t, err)
 	time.Sleep(100 * time.Millisecond)
-	plan3 := assertCacheContains(t, executor, nil, "insert into `user`(id, `name`) values (:id, :name)")
+	plan3 := assertCacheContains(t, executor, nil, "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into `user`(id, `name`) values (:id, :name)")
 
 	// vindex insert from above execution
-	plan4 := assertCacheContains(t, executor, nil, "insert into name_user_map(`name`, user_id) values (:name_0, :user_id_0)")
+	plan4 := assertCacheContains(t, executor, nil, "insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into name_user_map(`name`, user_id) values (:name_0, :user_id_0)")
 
 	// same query again should add query counts to existing plans
 	sql = "insert into user (id, name) values (:id, :name)"
@@ -86,7 +86,7 @@ func TestQueryzHandler(t *testing.T) {
 	body, _ := io.ReadAll(resp.Body)
 	planPattern1 := []string{
 		`<tr class="low">`,
-		"<td>select id from `user` where id = 1</td>",
+		"<td>select /\\*\\+ SET_VAR\\(sql_mode = .*?\\*/ id from `user` where id = 1</td>",
 		`<td>1</td>`,
 		`<td>0.001000</td>`,
 		`<td>1</td>`,
@@ -103,7 +103,7 @@ func TestQueryzHandler(t *testing.T) {
 	checkQueryzHasPlan(t, planPattern1, plan1, body)
 	planPattern2 := []string{
 		`<tr class="high">`,
-		"<td>select id from `user`</td>",
+		"<td>select /\\*\\+ SET_VAR\\(sql_mode = .*?\\*/ id from `user`</td>",
 		`<td>1</td>`,
 		`<td>1.000000</td>`,
 		`<td>8</td>`,
@@ -120,7 +120,7 @@ func TestQueryzHandler(t *testing.T) {
 	checkQueryzHasPlan(t, planPattern2, plan2, body)
 	planPattern3 := []string{
 		`<tr class="medium">`,
-		"<td>insert into `user`.*</td>",
+		"<td>insert /\\*\\+ SET_VAR\\(sql_mode = .*?\\*/ into `user`.*</td>",
 		`<td>2</td>`,
 		`<td>0.100000</td>`,
 		`<td>2</td>`,
@@ -137,7 +137,7 @@ func TestQueryzHandler(t *testing.T) {
 	checkQueryzHasPlan(t, planPattern3, plan3, body)
 	planPattern4 := []string{
 		`<tr class="high">`,
-		`<td>insert into name_user_map.*</td>`,
+		"<td>insert /\\*\\+ SET_VAR\\(sql_mode = .*?\\*/ into name_user_map.*</td>",
 		`<td>2</td>`,
 		`<td>0.200000</td>`,
 		`<td>2</td>`,

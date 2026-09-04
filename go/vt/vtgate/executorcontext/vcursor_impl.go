@@ -31,7 +31,6 @@ import (
 	"golang.org/x/sync/semaphore"
 
 	"vitess.io/vitess/go/mysql/collations"
-	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sqltypes"
@@ -47,7 +46,6 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/srvtopo"
-	"vitess.io/vitess/go/vt/sysvars"
 	"vitess.io/vitess/go/vt/topo"
 	topoprotopb "vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
@@ -89,6 +87,10 @@ type (
 		EnableViews        bool
 		WarnShardedOnly    bool
 		PlannerVersion     plancontext.PlannerVersion
+
+		// SQLMode is the sql_mode every session starts with, in canonical form. An empty
+		// value falls back to config.DefaultSQLMode, preserving existing behavior.
+		SQLMode string
 
 		PreventCrossKeyspaceReads bool
 
@@ -268,19 +270,7 @@ func (vc *VCursorImpl) GetSafeSession() *SafeSession {
 }
 
 func (vc *VCursorImpl) PrepareSetVarComment() string {
-	var res []string
-	vc.Session().GetSystemVariables(func(k, v string) {
-		if sysvars.SupportsSetVar(k) {
-			if k == "sql_mode" && v == "''" {
-				// SET_VAR(sql_mode, '') is not accepted by MySQL, giving a warning:
-				// | Warning | 1064 | Optimizer hint syntax error near ''') */
-				v = "' '"
-			}
-			res = append(res, fmt.Sprintf("SET_VAR(%s = %s)", k, v))
-		}
-	})
-
-	return strings.Join(res, " ")
+	return vc.SafeSession.SetVarComment()
 }
 
 func (vc *VCursorImpl) CloneForMirroring(ctx context.Context) engine.VCursor {
@@ -439,11 +429,20 @@ func (vc *VCursorImpl) ParseSQLMode() sqlparser.SQLMode {
 	return sqlparser.ParseSQLMode(vc.SQLMode())
 }
 
+// SQLMode returns the session's current sql_mode: the value the session has set, or the
+// configured default the session started with.
 func (vc *VCursorImpl) SQLMode() string {
 	if mode, ok := vc.SafeSession.SQLMode(); ok {
 		return mode
 	}
-	return config.DefaultSQLMode
+	return vc.DefaultSQLMode()
+}
+
+// DefaultSQLMode returns the sql_mode sessions start with: the resolved value of the
+// --sql-mode flag, which the executor fills in. The empty mode is a valid default and
+// is returned as such.
+func (vc *VCursorImpl) DefaultSQLMode() string {
+	return vc.config.SQLMode
 }
 
 // MaxMemoryRows returns the maxMemoryRows flag value.
@@ -1136,7 +1135,7 @@ func (vc *VCursorImpl) SetSysVar(name string, expr string) {
 	vc.SafeSession.SetSystemVariable(name, expr)
 }
 
-func (vc *VCursorImpl) CheckForReservedConnection(setVarComment string, stmt sqlparser.Statement) {
+func (vc *VCursorImpl) CheckForReservedConnection(setVarComment string, stmt sqlparser.Statement, planType engine.PlanType) {
 	if setVarComment == "" {
 		return
 	}
@@ -1149,13 +1148,35 @@ func (vc *VCursorImpl) CheckForReservedConnection(setVarComment string, stmt sql
 	}
 	switch stmt.(type) {
 	// If the statement supports optimizer hints or a transaction statement or a SET statement
-	// no reserved connection is needed
+	// or a USE statement (which never reaches a tablet), no reserved connection is needed.
+	// EXPLAIN and VEXPLAIN don't take hints themselves, but the statement they wrap does.
 	case *sqlparser.Begin, *sqlparser.Commit, *sqlparser.Rollback, *sqlparser.Savepoint,
-		*sqlparser.SRollback, *sqlparser.Release, *sqlparser.Set, *sqlparser.Show,
-		sqlparser.SupportOptimizerHint:
+		*sqlparser.SRollback, *sqlparser.Release, *sqlparser.Set,
+		*sqlparser.Use, *sqlparser.ExplainStmt, *sqlparser.VExplainStmt, sqlparser.SupportOptimizerHint:
+	case *sqlparser.Show:
+		// A SHOW answered by vtgate itself, from its own state or from the
+		// topology, never reaches a tablet. One sent to a backend cannot carry a
+		// hint, and its output depends on the mode — SHOW CREATE TABLE quotes
+		// identifiers by ANSI_QUOTES — so when the session is in a mode that
+		// changes that output, it runs on a connection with the session's
+		// settings applied.
+		if planType != engine.PlanLocal && planType != engine.PlanTopoOp && vc.showOutputFollowsSessionSQLMode() {
+			vc.NeedsReservedConn()
+		}
 	default:
 		vc.NeedsReservedConn()
 	}
+}
+
+// showOutputFollowsSessionSQLMode reports whether the session's sql_mode changes
+// what a backend SHOW prints: only the parse-relevant modes do — SHOW CREATE TABLE
+// quotes identifiers by ANSI_QUOTES — and NO_BACKSLASH_ESCAPES is never sent to a
+// backend, so it does not count. The execution-time modes leave SHOW output alone.
+// The session's own value decides, not its distance from the configured default:
+// a default that carries such a mode is not known to be what the backends run under.
+func (vc *VCursorImpl) showOutputFollowsSessionSQLMode() bool {
+	const showModes = ^sqlparser.SQLModeNoBackslashEscapes
+	return vc.ParseSQLMode()&showModes != 0
 }
 
 // NeedsReservedConn implements the SessionActions interface

@@ -190,8 +190,35 @@ func TestConnectionRespectsExistingUnixSocket(t *testing.T) {
 	assert.Truef(t, strings.HasPrefix(err.Error(), want), "Error: %v, want prefix %s", err, want)
 }
 
+// The handshake tells the client whether backslashes escape, from the mode every
+// session starts with; a query has not reached the executor yet at that point.
+func TestNewConnectionAdvertisesTheDefaultSQLModeEscaping(t *testing.T) {
+	cfg := createExecutorConfigWithNormalizer()
+	cfg.SQLMode = "NO_BACKSLASH_ESCAPES,STRICT_TRANS_TABLES"
+	executor, _, _, _, _ := createExecutorEnvWithConfig(t, cfg)
+	vh := &vtgateHandler{vtg: &VTGate{executor: executor}, connections: make(map[uint32]*mysql.Conn)}
+
+	c := &mysql.Conn{}
+	vh.NewConnection(c)
+	assert.NotZero(t, c.StatusFlags&mysql.ServerStatusNoBackslashEscapes)
+
+	executor.config.SQLMode = "STRICT_TRANS_TABLES"
+	c = &mysql.Conn{}
+	vh.NewConnection(c)
+	assert.Zero(t, c.StatusFlags&mysql.ServerStatusNoBackslashEscapes)
+
+	// a deployment that leaves the sql_mode to the backends advertises nothing
+	executor.config.SQLMode = "NO_BACKSLASH_ESCAPES"
+	executor.config.SystemSettingsDisabled = true
+	c = &mysql.Conn{}
+	vh.NewConnection(c)
+	assert.Zero(t, c.StatusFlags&mysql.ServerStatusNoBackslashEscapes)
+}
+
 func TestNewConnectionSetsAutocommitStatusFlag(t *testing.T) {
+	executor, _, _, _, _ := createExecutorEnv(t)
 	vh := &vtgateHandler{
+		vtg:         &VTGate{executor: executor},
 		connections: make(map[uint32]*mysql.Conn),
 	}
 
@@ -2042,7 +2069,7 @@ func TestComQueryIngressBytes(t *testing.T) {
 	case sentStats := <-subscriber:
 		require.NotNil(t, sentStats)
 		assert.Equal(t, uint64(mysql.PacketHeaderSize+1+len(query)), sentStats.IngressBytes)
-		assert.Equal(t, "select id from `user` where id = :id /* INT64 */", sentStats.SQL)
+		assert.Equal(t, "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ id from `user` where id = :id /* INT64 */", sentStats.SQL)
 	case <-time.After(30 * time.Second):
 		require.FailNow(t, "LogStats should have been sent to queryLogger")
 	}

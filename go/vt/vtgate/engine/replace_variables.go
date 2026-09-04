@@ -21,6 +21,7 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/sysvars"
 )
 
 var _ Primitive = (*ReplaceVariables)(nil)
@@ -29,11 +30,14 @@ var _ Primitive = (*ReplaceVariables)(nil)
 type ReplaceVariables struct {
 	noTxNeeded
 	Input Primitive
+	// Global marks SHOW GLOBAL VARIABLES, whose sql_mode row is the configured default
+	// rather than the session's value.
+	Global bool
 }
 
 // NewReplaceVariables is used to create a new ReplaceVariables primitive
-func NewReplaceVariables(input Primitive) *ReplaceVariables {
-	return &ReplaceVariables{Input: input}
+func NewReplaceVariables(input Primitive, global bool) *ReplaceVariables {
+	return &ReplaceVariables{Input: input, Global: global}
 }
 
 // TryExecute implements the Primitive interface
@@ -42,7 +46,7 @@ func (r *ReplaceVariables) TryExecute(ctx context.Context, vcursor VCursor, bind
 	if err != nil {
 		return nil, err
 	}
-	replaceVariables(qr, bindVars)
+	replaceVariables(qr, bindVars, r.Global)
 	return qr, nil
 }
 
@@ -50,7 +54,7 @@ func (r *ReplaceVariables) TryExecute(ctx context.Context, vcursor VCursor, bind
 func (r *ReplaceVariables) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	innerCallback := callback
 	callback = func(result *sqltypes.Result) error {
-		replaceVariables(result, bindVars)
+		replaceVariables(result, bindVars, r.Global)
 		return innerCallback(result)
 	}
 	return vcursor.StreamExecutePrimitive(ctx, r.Input, bindVars, wantfields, callback)
@@ -73,9 +77,12 @@ func (r *ReplaceVariables) description() PrimitiveDescription {
 	}
 }
 
-func replaceVariables(qr *sqltypes.Result, bindVars map[string]*querypb.BindVariable) {
+func replaceVariables(qr *sqltypes.Result, bindVars map[string]*querypb.BindVariable, global bool) {
 	for i, row := range qr.Rows {
 		variableName := row[0].ToString()
+		if global && variableName == sysvars.SQLMode.Name {
+			variableName = sysvars.GlobalSQLMode
+		}
 		res, found := bindVars["__vt"+variableName]
 		if found {
 			qr.Rows[i][1] = sqltypes.NewVarChar(string(res.GetValue()))

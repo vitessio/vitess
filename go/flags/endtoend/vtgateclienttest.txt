@@ -64,6 +64,7 @@ Flags:
       --purge-logs-interval duration                                     how often try to remove old logs (default 1h0m0s)
       --security-policy string                                           the name of a registered security policy to use for controlling access to URLs - empty means allow all for anyone (built-in policies: deny-all, read-only)
       --service-map strings                                              comma separated list of services to enable (or disable if prefixed with '-') Example: grpc-queryservice
+      --sql-mode string                                                  The sql_mode every session starts with. The value is validated like a SET sql_mode statement. (default "ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION")
       --table-refresh-interval int                                       interval in milliseconds to refresh tables in status page with refreshRequired class
   -v, --version                                                          print binary version
       --vschema-ddl-authorized-users string                              List of users authorized to execute vschema ddl operations, or '%' to allow all users.
