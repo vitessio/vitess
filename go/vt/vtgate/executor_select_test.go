@@ -472,6 +472,16 @@ func TestRawTextUnderNoBackslashEscapes(t *testing.T) {
 	require.NoError(t, err)
 	_, err = executorExecSession(t.Context(), executor, newSession("'NO_BACKSLASH_ESCAPES'"), `load data infile '/tmp/data.csv' into table main1 fields terminated by ','`, nil)
 	require.NoError(t, err)
+
+	// the admin statements forwarded as written are held to the same rule
+	_, err = executorExecSession(t.Context(), executor, newSession("'NO_BACKSLASH_ESCAPES'"), `do get_lock('a\b', 0)`, nil)
+	require.EqualError(t, err, "VT12001: unsupported: a statement sent as written containing a backslash under NO_BACKSLASH_ESCAPES")
+	_, err = executorExecSession(t.Context(), executor, newSession("'NO_BACKSLASH_ESCAPES'"), `do get_lock('ab', 0)`, nil)
+	require.NoError(t, err)
+
+	// a backslash inside a comment cannot change how a backend reads the statement
+	_, err = executorExecSession(t.Context(), executor, newSession("'NO_BACKSLASH_ESCAPES'"), `repair /* c:\path */ table main1`, nil)
+	require.NoError(t, err)
 }
 
 // A numeric sql_mode assignment must leave the session with the canonical name list,

@@ -31,6 +31,9 @@ func buildOtherReadAndAdmin(sql string, vschema plancontext.VSchema) (*planResul
 	if destination == nil {
 		destination = key.DestinationAnyShard{}
 	}
+	if err := rejectRawTextUnderNoBackslashEscapes(vschema, sql, "a statement sent as written"); err != nil {
+		return nil, err
+	}
 
 	return newPlanResult(&engine.Send{
 		Keyspace:          keyspace,

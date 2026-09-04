@@ -507,10 +507,36 @@ func newFlushStmt(stmt *sqlparser.Flush, tables sqlparser.TableNames) *sqlparser
 // client meant it; that one mode is not, and it cannot be (see
 // sqlparser.StripUnforwardableModes), so a backslash in the text would be an
 // escape to the backend where it was an ordinary character to the client. Text
-// without a backslash reads the same either way and is forwarded.
+// without a backslash outside its comments reads the same either way and is
+// forwarded.
 func rejectRawTextUnderNoBackslashEscapes(vschema plancontext.VSchema, sql string, what string) error {
-	if vschema.ParseSQLMode()&sqlparser.SQLModeNoBackslashEscapes == 0 || !strings.Contains(sql, "\\") {
+	if vschema.ParseSQLMode()&sqlparser.SQLModeNoBackslashEscapes == 0 || !rawTextHasBackslash(vschema, sql) {
 		return nil
 	}
 	return vterrors.VT12001(what + " containing a backslash under NO_BACKSLASH_ESCAPES")
+}
+
+// rawTextHasBackslash reports whether a backslash appears in the text's tokens,
+// lexed as the client meant them, under NO_BACKSLASH_ESCAPES. A backslash inside a
+// comment does not count: comments cannot change how a backend reads the statement.
+func rawTextHasBackslash(vschema plancontext.VSchema, sql string) bool {
+	if !strings.Contains(sql, "\\") {
+		return false
+	}
+	tokenizer := vschema.Environment().Parser().WithSQLMode(sqlparser.SQLModeNoBackslashEscapes).NewStringTokenizer(sql)
+	for {
+		typ, val := tokenizer.Scan()
+		switch typ {
+		case 0:
+			return false
+		case sqlparser.LEX_ERROR:
+			// text the lexer cannot read is judged by its bytes
+			return true
+		case sqlparser.COMMENT:
+			continue
+		}
+		if strings.Contains(val, "\\") {
+			return true
+		}
+	}
 }
