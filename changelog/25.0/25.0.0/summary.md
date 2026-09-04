@@ -33,7 +33,6 @@
         - [Stricter PROXY protocol v1 header validation](#vtgate-proxy-protocol-v1-strictness)
         - [MySQL-faithful validation and rejection of unsupported `sql_mode` values](#vtgate-sql-mode-rejection)
         - [New `VEXPLAIN MYSQLPLAN` statement](#vtgate-vexplain-mysqlplan)
-        - [Outer joins that preserve a reference table no longer duplicate rows](#vtgate-reference-outer-join-not-merged)
     - **[Reparent](#minor-changes-reparent)**
         - [`EmergencyReparentShard` no longer waits on replicas that cannot win the election](#ers-lagging-relay-log-wait)
         - [`EmergencyReparentShard` can explicitly recover from split brain](#ers-allow-split-brain-promotion)
@@ -337,16 +336,6 @@ For each `Route` in the plan, the per-shard `EXPLAIN` queries are run concurrent
 Because each per-shard `EXPLAIN` runs on a separate connection, a `VEXPLAIN MYSQLPLAN` issued inside an open transaction reflects the pre-transaction state of each shard rather than any uncommitted changes made in that transaction — the same limitation as `VEXPLAIN ALL`.
 
 Like a plain `EXPLAIN`, the per-shard `EXPLAIN FORMAT=JSON` queries `VEXPLAIN MYSQLPLAN` issues are not subject to table ACL checks on the explained tables, so `VEXPLAIN MYSQLPLAN` can return per-shard plan metadata (index names, row estimates, filtered percentages) for tables the caller could not otherwise read. For the same reason — the tablet plans an `EXPLAIN` without the explained table's identity — query denylist rules that are conditioned on a table name are not enforced against these per-shard `EXPLAIN` queries either; denylist rules conditioned on the query pattern still apply if their pattern matches the `explain format = json ...` query text. Unlike a plain `EXPLAIN`, which reaches a single arbitrary shard, `VEXPLAIN MYSQLPLAN` extends this to every resolved shard of every keyspace in the plan. Deployments that rely on table ACLs or table-scoped query denylist rules to restrict read access should restrict access to `VEXPLAIN MYSQLPLAN` accordingly.
-
-#### <a id="vtgate-reference-outer-join-not-merged"/>Outer joins that preserve a reference table no longer duplicate rows</a>
-
-An outer join whose preserved side is a reference table is no longer merged into a multi-shard route. A reference table has the same rows on every shard, so a scatter route returned each unmatched preserved row once per shard instead of once. These queries now plan as a join between a route reading the reference table and a route reading the other side, which changes the plan shape and can send more queries than before for the same statement.
-
-The merge still happens when the route reads a single shard, and such a route now runs on an arbitrary shard when its routing resolves to no destination — a unique vindex lookup that finds no mapping, or a `NULL` bind value — so the preserved rows come back with `NULL`s rather than the query returning an empty result.
-
-A multi-table `UPDATE` or `DELETE` whose only target is the other side of the join is also unchanged: it never returns the preserved rows, and an unmatched one has no row to write, so those statements keep the plan they had.
-
-See [#20701](https://github.com/vitessio/vitess/pull/20701) for details.
 
 ### <a id="minor-changes-reparent"/>Reparent</a>
 
