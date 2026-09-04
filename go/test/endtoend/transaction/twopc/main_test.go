@@ -193,14 +193,14 @@ var tables = map[string]extractInterestingValues{
 	},
 	"ks.redo_state": func(dtidMap map[string]string, vals []sqltypes.Value) (out []sqltypes.Value) {
 		dtid := getDTID(dtidMap, vals[0].ToString())
-		dtState := getDTState(vals[1])
+		dtState := getDTState(vals[2])
 		out = append(out, sqltypes.NewVarChar(dtid), sqltypes.NewVarChar(dtState.String()))
 		return
 	},
 	"ks.redo_statement": func(dtidMap map[string]string, vals []sqltypes.Value) (out []sqltypes.Value) {
 		dtid := getDTID(dtidMap, vals[0].ToString())
-		stmt := getStatement(vals[2].ToString())
-		out = append([]sqltypes.Value{sqltypes.NewVarChar(dtid)}, vals[1], sqltypes.TestValue(sqltypes.Blob, stmt))
+		stmt := getStatement(vals[3].ToString())
+		out = append([]sqltypes.Value{sqltypes.NewVarChar(dtid)}, vals[2], sqltypes.TestValue(sqltypes.Blob, stmt))
 		return
 	},
 	"ks.twopc_user": func(_ map[string]string, vals []sqltypes.Value) []sqltypes.Value { return vals },
