@@ -3104,6 +3104,8 @@ func TestPrepareRejectsMultipleStatements(t *testing.T) {
 		{name: "FLUSH followed by a query", sql: "flush tables; select 1", err: "right syntax to use near 'select 1' at line 1"},
 		{name: "a trailing semicolon is fine", sql: "create table a (id int);"},
 		{name: "a trailing comment is fine", sql: "create table a (id int) -- done"},
+		{name: "a comment after the terminator is fine", sql: "select 1; -- done"},
+		{name: "a block comment after the terminator is fine", sql: "create table a (id int); /* done */"},
 		{name: "a comment alone is an empty query", sql: "-- only a comment", err: "Query was empty"},
 		// under NO_BACKSLASH_ESCAPES the backslash does not escape the quote:
 		// 'a\' and ';b' are two adjacent string literals of one SET statement,

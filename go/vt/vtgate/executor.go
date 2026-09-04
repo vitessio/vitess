@@ -1689,18 +1689,22 @@ func (e *Executor) prepare(ctx context.Context, safeSession *econtext.SafeSessio
 	sessionParser := e.env.Parser().WithSQLMode(sqlparser.ParseSQLMode(sessionSQLMode))
 
 	// A prepared statement is exactly one statement, as in MySQL: anything
-	// after it is a syntax error, and nothing at all is an empty query. The
+	// after it is a syntax error, a comment after its ';' is not, and nothing
+	// at all is an empty query. The
 	// boundary is judged with the session's parser — only it can tell where a
 	// statement ends under a mode that changes how quotes are read — and
 	// before the statement is classified, so that the statement kinds prepared
 	// without a parse below are held to it as well.
 	statement, rest, _ := sessionParser.SplitStatement(sql)
-	if strings.TrimSpace(rest) != "" {
+	if !sessionParser.IsBlankOrComments(rest) {
 		return nil, 0, sqlparser.NewParseErrorNear(sql, len(sql)-len(rest))
 	}
-	if strings.TrimSpace(sqlparser.StripLeadingComments(statement)) == "" {
+	if sessionParser.IsBlankOrComments(statement) {
 		return nil, 0, sqlparser.ErrEmpty
 	}
+	// what is prepared is the statement, without its ';' and whatever comment
+	// followed it
+	sql = statement
 
 	stmtType := sqlparser.Preview(sql)
 	if stmtType == sqlparser.StmtUnknown {
