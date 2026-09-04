@@ -1064,7 +1064,7 @@ func TestUpdateVReplicationWorkflow(t *testing.T) {
 					"password": "secret",
 				},
 			},
-			query: fmt.Sprintf(`update _vt.vreplication set state = 'Running', source = 'keyspace:"%s" shard:"%s" filter:{rules:{match:"corder" filter:"select * from corder"} rules:{match:"customer" filter:"select * from customer"}}', cell = '%s', tablet_types = '', message = '', options = json_set(options, '$.config', json_object(), '$.config."password"', 'secret', '$.config."user"', 'admin') where id in (%d)`,
+			query: fmt.Sprintf(`update _vt.vreplication set state = 'Running', source = 'keyspace:"%s" shard:"%s" filter:{rules:{match:"corder" filter:"select * from corder"} rules:{match:"customer" filter:"select * from customer"}}', cell = '%s', tablet_types = '', message = '', options = json_set(json_insert(options, '$.config', json_object()), '$.config."password"', 'secret', '$.config."user"', 'admin') where id in (%d)`,
 				keyspace, shard, "zone2", vreplID),
 		},
 		{
