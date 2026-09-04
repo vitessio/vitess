@@ -771,6 +771,12 @@ func (stc *ScatterConn) multiGoTransaction(
 			// We need to track if rows were affected in the transaction.
 			shardSession.RowsAffected = info.rowsAffected
 		}
+		if info.reservedID != 0 && !session.InReservedConn() {
+			// The statement only asked for the session's settings on its connection,
+			// but the tablet reserved one for it (a lock, a temporary table): the
+			// session is pinned to it from here on.
+			session.SetReservedConn(true)
+		}
 		if info.actionNeeded != nothing && (info.transactionID != 0 || info.reservedID != 0) {
 			appendErr := session.AppendOrUpdate(rs.Target, info, shardSession, stc.txConn.txMode.TransactionMode())
 			if appendErr != nil {
@@ -926,7 +932,10 @@ func requireNewQS(err error, target *querypb.Target) bool {
 
 // actionInfo looks at the current session, and returns information about what needs to be done for this tablet
 func actionInfo(ctx context.Context, target *querypb.Target, session *econtext.SafeSession, autocommit bool, txMode vtgatepb.TransactionMode) (*shardActionInfo, *vtgatepb.Session_ShardSession, error) {
-	if !session.InTransaction() && !session.InReservedConn() {
+	// A statement that cannot carry the session's system variables in a hint runs
+	// with them applied to its connection, for this statement only.
+	settingsForStatement := ctx.Value(engine.SessionSettingsForStatement) != nil
+	if !session.InTransaction() && !session.InReservedConn() && !settingsForStatement {
 		// Check for tablet-specific routing for non-transactional queries
 		if alias := session.GetTargetTabletAlias(); alias != nil {
 			return &shardActionInfo{
@@ -949,7 +958,7 @@ func actionInfo(ctx context.Context, target *querypb.Target, session *econtext.S
 		return nil, nil, err
 	}
 
-	shouldReserve := session.InReservedConn() && (shardSession == nil || shardSession.ReservedId == 0)
+	shouldReserve := (session.InReservedConn() || settingsForStatement) && (shardSession == nil || shardSession.ReservedId == 0)
 	shouldBegin := session.InTransaction() && (shardSession == nil || shardSession.TransactionId == 0) && !autocommit
 
 	act := nothing

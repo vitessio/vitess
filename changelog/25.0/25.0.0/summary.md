@@ -31,6 +31,7 @@
         - [Preparing a statement no longer starts an implicit transaction](#vtgate-prepare-no-implicit-tx)
         - [Stricter validation of SQL-level PREPARE statements](#vtgate-prepare-stricter-validation)
         - [Stricter PROXY protocol v1 header validation](#vtgate-proxy-protocol-v1-strictness)
+        - [Connection settings are applied per statement](#vtgate-settings-per-statement)
         - [MySQL-faithful validation and rejection of unsupported `sql_mode` values](#vtgate-sql-mode-rejection)
         - [New `VEXPLAIN MYSQLPLAN` statement](#vtgate-vexplain-mysqlplan)
     - **[Reparent](#minor-changes-reparent)**
@@ -306,6 +307,12 @@ Specification-conformant v1 headers, as emitted by HAProxy, AWS load balancers, 
 **Impact**: Deployments whose proxy emits one of the forms above — most notably the nginx stream module proxying between IPv6 clients and IPv4 upstreams — will have those connections rejected before the MySQL handshake. Configure the proxy to emit specification-conformant headers (for nginx, listen on a matching address family or on a v4-mapped socket so addresses are rendered in IPv6 form).
 
 See [#20733](https://github.com/vitessio/vitess/pull/20733) for details.
+
+#### <a id="vtgate-settings-per-statement"/>Connection settings are applied per statement</a>
+
+A statement that cannot carry the session's system variables in a `SET_VAR` optimizer hint (DDL, `CALL`, `FLUSH`, `LOAD DATA`, ...) runs with them applied to its connection through vttablet's connection settings. Previously the first such statement switched the whole session to reserved connections: every later query of the session, hint-capable or not, went through a settings connection on each shard it touched. Now only that statement carries the settings, and later queries keep using `SET_VAR` hints on pooled connections.
+
+A session is pinned to a reserved connection only when a tablet actually reserved one for the statement, which `GET_LOCK()`, `LOCK TABLES`, `FLUSH TABLES WITH READ LOCK` and temporary tables still need. Deployments with `--enable-set-var=false`, or backends without `SET_VAR`, keep using settings connections for every query, as before.
 
 #### <a id="vtgate-sql-mode-rejection"/>MySQL-faithful validation and rejection of unsupported `sql_mode` values</a>
 

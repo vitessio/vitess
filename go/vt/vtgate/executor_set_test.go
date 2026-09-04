@@ -620,6 +620,8 @@ func createMap(keys []string, values []any) map[string]*querypb.BindVariable {
 func TestSetVar(t *testing.T) {
 	executor, _, _, sbc, ctx := createCustomExecutor(t, "{}", "8.0.0")
 	executor.config.Normalize = true
+	// the DDL runs on a settings-pool connection: the tablet reserves nothing
+	sbc.NoReservation = true
 
 	session := econtext.NewAutocommitSession(&vtgatepb.Session{EnableSystemSettings: true, TargetString: KsTestUnsharded})
 
@@ -631,8 +633,8 @@ func TestSetVar(t *testing.T) {
 	require.NoError(t, err)
 
 	tcases := []struct {
-		sql string
-		rc  bool
+		sql      string
+		settings bool
 	}{
 		{sql: "select 1 from user"},
 		{sql: "update user set col = 2"},
@@ -641,19 +643,61 @@ func TestSetVar(t *testing.T) {
 		{sql: "replace into user(id, col) values (1, 'new')"},
 		{sql: "set autocommit = 0"},
 		{sql: "show create table user"}, // reserved connection should not be set.
-		{sql: "create table foo(bar bigint)", rc: true},
+		{sql: "create table foo(bar bigint)", settings: true},
 	}
 
 	for _, tc := range tcases {
 		t.Run(tc.sql, func(t *testing.T) {
-			// reset reserved conn need.
-			session.SetReservedConn(false)
-
+			sbc.ReserveCount.Store(0)
 			_, err = executorExecSession(ctx, executor, session, tc.sql, map[string]*querypb.BindVariable{})
 			require.NoError(t, err)
-			assert.Equal(t, tc.rc, session.InReservedConn())
+			assert.False(t, session.InReservedConn())
+			assert.Equal(t, tc.settings, sbc.ReserveCount.Load() == 1, "settings carried by the statement")
 		})
 	}
+}
+
+// A statement that cannot carry a SET_VAR hint runs with the session's system
+// variables applied to its connection, for itself only: the session is not pinned,
+// and the next hint-capable query carries the hint again. The session gets pinned
+// when the tablet reserved a connection for the statement.
+func TestHintIncapableStatementCarriesTheSettingsForItself(t *testing.T) {
+	executor, _, _, sbc, ctx := createCustomExecutor(t, "{}", "8.0.0")
+	executor.config.Normalize = true
+	session := econtext.NewAutocommitSession(&vtgatepb.Session{EnableSystemSettings: true, TargetString: KsTestUnsharded})
+	sbc.SetResults([]*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"), "|only_full_group_by")})
+	_, err := executorExecSession(ctx, executor, session, "set @@sql_mode = only_full_group_by", nil)
+	require.NoError(t, err)
+	sbc.Queries = nil
+
+	sbc.NoReservation = true
+	_, err = executorExecSession(ctx, executor, session, "create table foo(bar bigint)", nil)
+	require.NoError(t, err)
+	assert.False(t, session.InReservedConn())
+	assert.Empty(t, session.ShardSessions)
+	var sqls []string
+	for _, q := range sbc.Queries {
+		sqls = append(sqls, q.Sql)
+	}
+	assert.Equal(t, []string{"set sql_mode = 'only_full_group_by'", "create table foo (\n\tbar bigint\n)"}, sqls)
+
+	sbc.Queries = nil
+	_, err = executorExecSession(ctx, executor, session, "select 1 from user", nil)
+	require.NoError(t, err)
+	require.Len(t, sbc.Queries, 1)
+	assert.Equal(t, "select /*+ SET_VAR(sql_mode = 'only_full_group_by') */ :vtg1 /* INT64 */ from `user`", sbc.Queries[0].Sql)
+	assert.EqualValues(t, 1, sbc.ReserveCount.Load())
+
+	// a tablet that reserved a connection for the statement pins the session to it
+	sbc.NoReservation = false
+	_, err = executorExecSession(ctx, executor, session, "create table baz(bar bigint)", nil)
+	require.NoError(t, err)
+	assert.True(t, session.InReservedConn())
+	require.Len(t, session.ShardSessions, 1)
+	assert.NotZero(t, session.ShardSessions[0].ReservedId)
+	_, err = executorExecSession(ctx, executor, session, "select 1 from user", nil)
+	require.NoError(t, err)
+	assert.EqualValues(t, 2, sbc.ReserveCount.Load(), "the query rode the reserved connection")
 }
 
 func TestSetVarShowVariables(t *testing.T) {

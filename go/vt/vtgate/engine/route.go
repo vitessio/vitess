@@ -143,6 +143,11 @@ type cxtKey int
 
 const (
 	IgnoreReserveTxn cxtKey = iota
+	// SessionSettingsForStatement asks the transport to apply the session's system
+	// variables to the connection for this statement only: the statement cannot carry
+	// them in a SET_VAR hint. The session is pinned to that connection only when the
+	// tablet answers that it reserved one.
+	SessionSettingsForStatement
 )
 
 func (route *Route) executeShards(

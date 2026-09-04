@@ -162,17 +162,21 @@ type (
 	// VCursorImpl implements the VCursor functionality used by dependent
 	// packages to call back into VTGate.
 	VCursorImpl struct {
-		config         VCursorConfig
-		SafeSession    *SafeSession
-		keyspace       string
-		tabletType     topodatapb.TabletType
-		destination    key.ShardDestination
-		marginComments sqlparser.MarginComments
-		executor       iExecute
-		resolver       Resolver
-		topoServer     *topo.Server
-		logStats       *logstats.LogStats
-		metrics        Metrics
+		config      VCursorConfig
+		SafeSession *SafeSession
+		// settingsForStatement makes the statement carry the session's system variables
+		// on the connection it runs on, without pinning the session; see
+		// NeedsSessionSettings.
+		settingsForStatement bool
+		keyspace             string
+		tabletType           topodatapb.TabletType
+		destination          key.ShardDestination
+		marginComments       sqlparser.MarginComments
+		executor             iExecute
+		resolver             Resolver
+		topoServer           *topo.Server
+		logStats             *logstats.LogStats
+		metrics              Metrics
 
 		// fkChecksState stores the state of foreign key checks variable.
 		// This state is meant to be the final fk checks state after consulting the
@@ -895,7 +899,7 @@ func (vc *VCursorImpl) ExecuteMultiShard(ctx context.Context, primitive engine.P
 		return nil, []error{err}
 	}
 
-	qr, errs := vc.executor.ExecuteMultiShard(ctx, primitive, rss, commentedShardQueries(queries, vc.marginComments), vc.SafeSession, canAutocommit, vc.ignoreMaxMemoryRows, vc.observer, fetchLastInsertID)
+	qr, errs := vc.executor.ExecuteMultiShard(vc.transportContext(ctx), primitive, rss, commentedShardQueries(queries, vc.marginComments), vc.SafeSession, canAutocommit, vc.ignoreMaxMemoryRows, vc.observer, fetchLastInsertID)
 	vc.setRollbackOnPartialExecIfRequired(len(errs) != len(rss), rollbackOnError)
 	vc.logShardsQueried(primitive, len(rss))
 	if qr != nil && qr.InsertIDUpdated() {
@@ -934,7 +938,7 @@ func (vc *VCursorImpl) StreamExecuteMulti(ctx context.Context, primitive engine.
 		return []error{err}
 	}
 
-	errs := vc.executor.StreamExecuteMulti(ctx, primitive, vc.marginComments.Leading+query+vc.marginComments.Trailing, rss, bindVars, vc.SafeSession, autocommit, callback, vc.observer, fetchLastInsertID)
+	errs := vc.executor.StreamExecuteMulti(vc.transportContext(ctx), primitive, vc.marginComments.Leading+query+vc.marginComments.Trailing, rss, bindVars, vc.SafeSession, autocommit, callback, vc.observer, fetchLastInsertID)
 	vc.setRollbackOnPartialExecIfRequired(len(errs) != len(rss), rollbackOnError)
 
 	return errs
@@ -1138,8 +1142,27 @@ func (vc *VCursorImpl) CheckForReservedConnection(setVarComment string, stmt sql
 		*sqlparser.SRollback, *sqlparser.Release, *sqlparser.Set, *sqlparser.Show,
 		sqlparser.SupportOptimizerHint:
 	default:
-		vc.NeedsReservedConn()
+		vc.NeedsSessionSettings()
 	}
+}
+
+// NeedsSessionSettings makes this request's statement run with the session's system
+// variables applied to its connection through the tablet's connection settings: the
+// statement cannot carry them in a SET_VAR hint. Unlike NeedsReservedConn it does not
+// pin the session; a later hint-capable query goes back to carrying the hint. The
+// session gets pinned only when a tablet answers that it reserved a connection for
+// the statement, which a lock or a temporary table needs and a DDL does not.
+func (vc *VCursorImpl) NeedsSessionSettings() {
+	vc.settingsForStatement = true
+}
+
+// transportContext marks the context for the scatter connection when the statement
+// wants the session's settings on its connection.
+func (vc *VCursorImpl) transportContext(ctx context.Context) context.Context {
+	if !vc.settingsForStatement {
+		return ctx
+	}
+	return context.WithValue(ctx, engine.SessionSettingsForStatement, true)
 }
 
 // NeedsReservedConn implements the SessionActions interface

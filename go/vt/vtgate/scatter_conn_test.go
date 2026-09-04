@@ -17,6 +17,7 @@ limitations under the License.
 package vtgate
 
 import (
+	"context"
 	"log/slog"
 	"sync"
 	"testing"
@@ -36,6 +37,7 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/engine"
 	econtext "vitess.io/vitess/go/vt/vtgate/executorcontext"
 )
 
@@ -755,5 +757,104 @@ func TestActionInfoWithTabletAlias(t *testing.T) {
 		assert.Nil(t, shardSession)
 		assert.Equal(t, nothing, info.actionNeeded)
 		assert.Nil(t, info.alias)
+	})
+}
+
+// A statement that asks for the session's settings on its connection gets a reserve
+// action for itself, in or out of a transaction, without the session being pinned.
+func TestActionInfoSettingsForStatement(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+	target := &querypb.Target{Keyspace: "ks", Shard: "-80", TabletType: topodatapb.TabletType_PRIMARY}
+	withSettings := context.WithValue(ctx, engine.SessionSettingsForStatement, true)
+
+	t.Run("plain session", func(t *testing.T) {
+		session := econtext.NewSafeSession(&vtgatepb.Session{})
+		info, _, err := actionInfo(withSettings, target, session, false, vtgatepb.TransactionMode_MULTI)
+		require.NoError(t, err)
+		assert.Equal(t, reserve, info.actionNeeded)
+		assert.False(t, session.InReservedConn())
+	})
+
+	t.Run("in a transaction the settings go on the transaction's connection", func(t *testing.T) {
+		session := econtext.NewSafeSession(&vtgatepb.Session{
+			InTransaction: true,
+			ShardSessions: []*vtgatepb.Session_ShardSession{{Target: target, TransactionId: 12345}},
+		})
+		info, _, err := actionInfo(withSettings, target, session, false, vtgatepb.TransactionMode_MULTI)
+		require.NoError(t, err)
+		assert.Equal(t, reserve, info.actionNeeded)
+		assert.EqualValues(t, 12345, info.transactionID)
+	})
+
+	t.Run("a new transaction reserves and begins", func(t *testing.T) {
+		session := econtext.NewSafeSession(&vtgatepb.Session{InTransaction: true})
+		info, _, err := actionInfo(withSettings, target, session, false, vtgatepb.TransactionMode_MULTI)
+		require.NoError(t, err)
+		assert.Equal(t, reserveBegin, info.actionNeeded)
+	})
+
+	t.Run("a pinned session keeps its connection", func(t *testing.T) {
+		session := econtext.NewSafeSession(&vtgatepb.Session{
+			InReservedConn: true,
+			ShardSessions:  []*vtgatepb.Session_ShardSession{{Target: target, ReservedId: 7}},
+		})
+		info, _, err := actionInfo(withSettings, target, session, false, vtgatepb.TransactionMode_MULTI)
+		require.NoError(t, err)
+		assert.Equal(t, nothing, info.actionNeeded)
+		assert.EqualValues(t, 7, info.reservedID)
+	})
+
+	t.Run("without the request the session decides", func(t *testing.T) {
+		session := econtext.NewSafeSession(&vtgatepb.Session{})
+		info, _, err := actionInfo(ctx, target, session, false, vtgatepb.TransactionMode_MULTI)
+		require.NoError(t, err)
+		assert.Equal(t, nothing, info.actionNeeded)
+	})
+}
+
+// The settings travel with the statement; whether the session ends up pinned is the
+// tablet's answer: none for a statement served from the settings pool, a reserved
+// id for one that needed a connection of its own.
+func TestSettingsForStatementPinsOnlyWhenTheTabletReserved(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+	keyspace := "keyspace"
+	createSandbox(keyspace)
+	hc := discovery.NewFakeHealthCheck(nil)
+	sc := newTestScatterConn(ctx, hc, newSandboxForCells(ctx, []string{"aa"}), "aa")
+	sbc := hc.AddTestTablet("aa", "0", 1, keyspace, "0", topodatapb.TabletType_REPLICA, true, 1, nil)
+	res := srvtopo.NewResolver(newSandboxForCells(ctx, []string{"aa"}), sc.gateway, "aa")
+	destinations := []key.ShardDestination{key.DestinationShard("0")}
+	withSettings := context.WithValue(ctx, engine.SessionSettingsForStatement, true)
+	newSession := func() *econtext.SafeSession {
+		return econtext.NewSafeSession(&vtgatepb.Session{SystemVariables: map[string]string{"sql_safe_updates": "1"}})
+	}
+
+	t.Run("served from the settings pool", func(t *testing.T) {
+		sbc.NoReservation = true
+		defer func() { sbc.NoReservation = false }()
+		sbc.ReserveCount.Store(0)
+		session := newSession()
+		executeOnShards(t, withSettings, res, keyspace, sc, session, destinations)
+		assert.EqualValues(t, 1, sbc.ReserveCount.Load())
+		assert.False(t, session.InReservedConn())
+		assert.Empty(t, session.ShardSessions)
+
+		// the next statement of the session is a plain execute again
+		executeOnShards(t, ctx, res, keyspace, sc, session, destinations)
+		assert.EqualValues(t, 1, sbc.ReserveCount.Load())
+	})
+
+	t.Run("reserved by the tablet", func(t *testing.T) {
+		sbc.ReserveCount.Store(0)
+		session := newSession()
+		executeOnShards(t, withSettings, res, keyspace, sc, session, destinations)
+		assert.EqualValues(t, 1, sbc.ReserveCount.Load())
+		assert.True(t, session.InReservedConn())
+		require.Len(t, session.ShardSessions, 1)
+		assert.NotZero(t, session.ShardSessions[0].ReservedId)
+
+		// the next statement of the session runs on the reserved connection
+		executeOnShards(t, ctx, res, keyspace, sc, session, destinations)
+		assert.EqualValues(t, 1, sbc.ReserveCount.Load())
 	})
 }
