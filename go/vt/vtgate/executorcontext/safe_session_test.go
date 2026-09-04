@@ -18,9 +18,12 @@ package executorcontext
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 	"testing"
 	"time"
+
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -281,9 +284,10 @@ func TestSQLModeStripping(t *testing.T) {
 	assert.Equal(t, "'PIPES_AS_CONCAT,STRICT_TRANS_TABLES'", forwarded["sql_mode"])
 	assert.Equal(t, "1", forwarded["sql_safe_updates"])
 
+	// the session holds the canonical form, the mode kept from the backend included
 	mode, ok := session.SQLMode()
 	require.True(t, ok)
-	assert.Equal(t, "NO_BACKSLASH_ESCAPES,PIPES_AS_CONCAT,STRICT_TRANS_TABLES", mode)
+	assert.Equal(t, "PIPES_AS_CONCAT,NO_BACKSLASH_ESCAPES,STRICT_TRANS_TABLES", mode)
 
 	// a value that only contains the unforwardable mode forwards as the empty
 	// mode: the user replaced the whole value, so the backend must drop its
@@ -309,7 +313,7 @@ func TestSQLModeStripping(t *testing.T) {
 // variable — an older vtgate stored numeric assignments as written, and direct
 // gRPC clients may send one. Every reader expects mode names, so the value is
 // decoded into MySQL's canonical form when the session is taken in.
-func TestSQLModeNumericSessionValue(t *testing.T) {
+func TestSQLModeSessionValueCanonicalized(t *testing.T) {
 	for _, tc := range []struct {
 		stored    string
 		mode      string
@@ -319,11 +323,19 @@ func TestSQLModeNumericSessionValue(t *testing.T) {
 		{stored: "1048576", mode: "NO_BACKSLASH_ESCAPES", forwarded: "''"},
 		{stored: "4194304", mode: "STRICT_ALL_TABLES", forwarded: "'STRICT_ALL_TABLES'"},
 		{stored: "0", mode: "", forwarded: "''"},
-		// names are left as they are, and so are values that are not a valid
-		// numeric mode: the backend judges those
 		{stored: "'STRICT_TRANS_TABLES'", mode: "STRICT_TRANS_TABLES", forwarded: "'STRICT_TRANS_TABLES'"},
+		// name lists in another spelling — an older vtgate stored them as the client
+		// wrote them — take the canonical form: uppercased, expanded, in canonical order
+		{stored: "'no_zero_date'", mode: "NO_ZERO_DATE", forwarded: "'NO_ZERO_DATE'"},
+		{stored: "'STRICT_TRANS_TABLES,ANSI_QUOTES'", mode: "ANSI_QUOTES,STRICT_TRANS_TABLES", forwarded: "'ANSI_QUOTES,STRICT_TRANS_TABLES'"},
+		{stored: "'ansi'", mode: "REAL_AS_FLOAT,PIPES_AS_CONCAT,ANSI_QUOTES,IGNORE_SPACE,ONLY_FULL_GROUP_BY,ANSI", forwarded: "'REAL_AS_FLOAT,PIPES_AS_CONCAT,ANSI_QUOTES,IGNORE_SPACE,ONLY_FULL_GROUP_BY,ANSI'"},
+		{stored: "pipes_as_concat", mode: "PIPES_AS_CONCAT", forwarded: "'PIPES_AS_CONCAT'"},
+		// values that are not a valid mode are left as they are, for the backend to judge
 		{stored: "'4'", mode: "4", forwarded: "'4'"},
+		{stored: "'MARIADB_ONLY_MODE'", mode: "MARIADB_ONLY_MODE", forwarded: "'MARIADB_ONLY_MODE'"},
 		{stored: "99999999999999999", mode: "99999999999999999", forwarded: "99999999999999999"},
+		// expressions are not lists; they are evaluated when the session is used
+		{stored: "REPLACE(@@sql_mode, 'ANSI_QUOTES', '')", mode: "REPLACE(@@sql_mode, 'ANSI_QUOTES', '')", forwarded: "REPLACE(@@sql_mode, 'ANSI_QUOTES', '')"},
 	} {
 		t.Run(tc.stored, func(t *testing.T) {
 			session := NewSafeSession(&vtgatepb.Session{SystemVariables: map[string]string{"sql_mode": tc.stored}})
@@ -333,6 +345,8 @@ func TestSQLModeNumericSessionValue(t *testing.T) {
 			forwarded := map[string]string{}
 			session.GetSystemVariables(func(k, v string) { forwarded[k] = v })
 			assert.Equal(t, tc.forwarded, forwarded["sql_mode"])
+			// the evaluation-relevant modes are matched by their canonical spelling
+			assert.Equal(t, !strings.Contains(strings.ToUpper(tc.stored), "NO_ZERO_DATE"), evalengine.ParseSQLMode(mode).AllowZeroDate())
 		})
 	}
 }

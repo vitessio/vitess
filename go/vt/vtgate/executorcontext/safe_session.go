@@ -144,34 +144,47 @@ func NewSafeSession(sessn *vtgatepb.Session) *SafeSession {
 	if sessn == nil {
 		sessn = &vtgatepb.Session{}
 	}
-	canonicalizeNumericSQLMode(sessn.SystemVariables)
+	canonicalizeSessionSQLMode(sessn.SystemVariables)
 	return &SafeSession{Session: sessn}
 }
 
-// canonicalizeNumericSQLMode decodes a session sql_mode stored as the number
-// MySQL accepts for the variable into MySQL's canonical form. An older vtgate
-// stored a numeric assignment as written, and a direct gRPC client may send
-// one; every reader of the session's sql_mode expects mode names. A number
-// that is not a valid mode value is left as it is, for the backend to judge.
-func canonicalizeNumericSQLMode(vars map[string]string) {
+// canonicalizeSessionSQLMode rewrites a session's sql_mode into MySQL's canonical
+// form: names uppercased, combination modes expanded, in canonical order. An older
+// vtgate stored an assignment as written — the number MySQL accepts for the
+// variable, or a name list in the client's spelling — and a direct gRPC client may
+// send either; every reader of the session's sql_mode expects the canonical names,
+// the evaluation-relevant modes are matched by their canonical spelling. A value
+// that is not a valid mode is left as it is, for the backend to judge, and so is
+// anything that is not a plain list, e.g. an expression (see IsSQLModeList).
+func canonicalizeSessionSQLMode(vars map[string]string) {
 	value, ok := vars["sql_mode"]
-	if !ok || value == "" {
+	if !ok || value == "" || !sqlparser.IsSQLModeList(value) {
 		return
 	}
-	for _, r := range value {
-		if r < '0' || r > '9' {
+	// the same judgment a SET gets, so the session ends up storing what a SET would
+	inner := trimQuotes(value)
+	judged := sqltypes.NewVarChar(inner)
+	if inner == value && isAllDigits(value) {
+		bits, err := strconv.ParseUint(value, 10, 64)
+		if err != nil {
 			return
 		}
+		judged = sqltypes.NewUint64(bits)
 	}
-	bits, err := strconv.ParseUint(value, 10, 64)
-	if err != nil {
-		return
-	}
-	mode, err := sqlmode.FromBits(bits)
+	mode, err := sqlmode.Validate(judged)
 	if err != nil {
 		return
 	}
 	vars["sql_mode"] = sqltypes.EncodeStringSQL(mode.String())
+}
+
+func isAllDigits(value string) bool {
+	for _, r := range value {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return value != ""
 }
 
 // NewAutocommitSession returns a SafeSession based on the original
