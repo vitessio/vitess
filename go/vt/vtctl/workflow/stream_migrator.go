@@ -427,6 +427,83 @@ func (sm *StreamMigrator) readTabletStreams(ctx context.Context, ti *topo.Tablet
 	return tabletStreams, nil
 }
 
+// filterTerminalOnlineDDL queries _vt.schema_migrations and removes VReplication
+// streams belonging to OnlineDDL migrations that have reached a terminal state
+// (complete, failed, or cancelled). These are dead streams waiting for GC and
+// should neither block SwitchWrites nor be migrated to target shards.
+// It returns the filtered streams and the set of terminal UUIDs, which can be
+// passed to filterStreamsByTerminalUUIDs to filter additional stream lists
+// without a redundant DB query.
+func (sm *StreamMigrator) filterTerminalOnlineDDL(ctx context.Context, tablet *topodatapb.Tablet, streams []*VReplicationStream) ([]*VReplicationStream, map[string]bool, error) {
+	var onlineDDLWorkflows []string
+	for _, s := range streams {
+		if s.WorkflowType == binlogdatapb.VReplicationWorkflowType_OnlineDDL {
+			onlineDDLWorkflows = append(onlineDDLWorkflows, s.Workflow)
+		}
+	}
+	if len(onlineDDLWorkflows) == 0 {
+		return streams, nil, nil
+	}
+
+	terminalUUIDs, err := sm.getTerminalOnlineDDLMigrations(ctx, tablet, onlineDDLWorkflows)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return filterStreamsByTerminalUUIDs(streams, terminalUUIDs), terminalUUIDs, nil
+}
+
+// filterStreamsByTerminalUUIDs removes VReplication streams whose workflow
+// matches a terminal OnlineDDL migration UUID. Use this with the terminalUUIDs
+// returned by filterTerminalOnlineDDL to avoid a redundant DB query.
+func filterStreamsByTerminalUUIDs(streams []*VReplicationStream, terminalUUIDs map[string]bool) []*VReplicationStream {
+	if len(terminalUUIDs) == 0 {
+		return streams
+	}
+	filtered := make([]*VReplicationStream, 0, len(streams))
+	for _, s := range streams {
+		if s.WorkflowType == binlogdatapb.VReplicationWorkflowType_OnlineDDL && terminalUUIDs[s.Workflow] {
+			continue
+		}
+		filtered = append(filtered, s)
+	}
+	return filtered
+}
+
+// getTerminalOnlineDDLMigrations queries _vt.schema_migrations to find which of
+// the given migration UUIDs have reached a terminal state. This uses the same
+// criteria as gcArtifacts() to determine when a migration is done.
+func (sm *StreamMigrator) getTerminalOnlineDDLMigrations(ctx context.Context, tablet *topodatapb.Tablet, uuids []string) (map[string]bool, error) {
+	quotedUUIDs := make([]string, 0, len(uuids))
+	for _, uuid := range uuids {
+		quotedUUIDs = append(quotedUUIDs, encodeString(uuid))
+	}
+	query := fmt.Sprintf(
+		"select migration_uuid from _vt.schema_migrations where migration_uuid in (%s) and migration_status in (%s, %s, %s)",
+		strings.Join(quotedUUIDs, ", "),
+		encodeString(string(schema.OnlineDDLStatusComplete)),
+		encodeString(string(schema.OnlineDDLStatusFailed)),
+		encodeString(string(schema.OnlineDDLStatusCancelled)),
+	)
+
+	p3qr, err := sm.ts.TabletManagerClient().ExecuteFetchAsDba(ctx, tablet, true, &tabletmanagerdatapb.ExecuteFetchAsDbaRequest{
+		Query:   []byte(query),
+		MaxRows: uint64(len(uuids)),
+	})
+	if err != nil {
+		return nil, vterrors.Wrapf(err, "failed to query schema_migrations on tablet %s", topoproto.TabletAliasString(tablet.Alias))
+	}
+
+	qr := sqltypes.Proto3ToResult(p3qr)
+	result := make(map[string]bool, len(qr.Rows))
+	for _, row := range qr.Rows {
+		if len(row) > 0 {
+			result[row[0].ToString()] = true
+		}
+	}
+	return result, nil
+}
+
 /* source streams */
 
 // legacyReadSourceStreams reads all of the VReplication workflow source streams using
@@ -439,6 +516,7 @@ func (sm *StreamMigrator) legacyReadSourceStreams(ctx context.Context, cancelMig
 	)
 
 	err := sm.ts.ForAllSources(func(source *MigrationSource) error {
+		var terminalUUIDs map[string]bool
 		if !cancelMigrate {
 			// This flow protects us from the following scenario: When we create streams,
 			// we always do it in two phases. We start them off as Stopped, and then
@@ -456,6 +534,11 @@ func (sm *StreamMigrator) legacyReadSourceStreams(ctx context.Context, cancelMig
 				return err
 			}
 
+			stoppedStreams, terminalUUIDs, err = sm.filterTerminalOnlineDDL(ctx, source.GetPrimary().Tablet, stoppedStreams)
+			if err != nil {
+				return err
+			}
+
 			if len(stoppedStreams) != 0 {
 				return fmt.Errorf("cannot migrate until all streams are running: %s: %d", source.GetShard().ShardName(), source.GetPrimary().Alias.Uid)
 			}
@@ -465,6 +548,8 @@ func (sm *StreamMigrator) legacyReadSourceStreams(ctx context.Context, cancelMig
 		if err != nil {
 			return err
 		}
+
+		tabletStreams = filterStreamsByTerminalUUIDs(tabletStreams, terminalUUIDs)
 
 		if len(tabletStreams) == 0 {
 			// No VReplication is running. So, we have no work to do.
@@ -543,6 +628,7 @@ func (sm *StreamMigrator) readSourceStreams(ctx context.Context, cancelMigrate b
 	)
 
 	err := sm.ts.ForAllSources(func(source *MigrationSource) error {
+		var terminalUUIDs map[string]bool
 		if !cancelMigrate {
 			// This flow protects us from the following scenario: When we create streams,
 			// we always do it in two phases. We start them off as Stopped, and then
@@ -561,6 +647,11 @@ func (sm *StreamMigrator) readSourceStreams(ctx context.Context, cancelMigrate b
 				return err
 			}
 
+			stoppedStreams, terminalUUIDs, err = sm.filterTerminalOnlineDDL(ctx, source.GetPrimary().Tablet, stoppedStreams)
+			if err != nil {
+				return err
+			}
+
 			if len(stoppedStreams) != 0 {
 				return fmt.Errorf("cannot migrate until all streams are running: %s: %d", source.GetShard().ShardName(), source.GetPrimary().Alias.Uid)
 			}
@@ -570,6 +661,8 @@ func (sm *StreamMigrator) readSourceStreams(ctx context.Context, cancelMigrate b
 		if err != nil {
 			return err
 		}
+
+		tabletStreams = filterStreamsByTerminalUUIDs(tabletStreams, terminalUUIDs)
 
 		if len(tabletStreams) == 0 {
 			// No VReplication is running. So, we have no work to do.
