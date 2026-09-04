@@ -56,6 +56,9 @@ type StatefulConnection struct {
 	// in (from its settings or SET statements); queries on the connection are parsed
 	// under them. Atomic because the plan path reads it without locking the connection.
 	parseSQLMode atomic.Uint32
+	// settingStale is set once a SET statement ran on the connection after its
+	// settings were applied (see MarkSettingStale).
+	settingStale bool
 }
 
 // Properties contains meta information about the connection
@@ -331,14 +334,24 @@ func (sc *StatefulConnection) getUsername() string {
 
 // ApplySetting returns whether the settings where applied or not. It also returns an error, if encountered.
 func (sc *StatefulConnection) ApplySetting(ctx context.Context, setting *smartconnpool.Setting) (bool, error) {
-	if sc.dbConn.Conn.Setting() == setting {
+	if sc.dbConn.Conn.Setting() == setting && !sc.settingStale {
 		return false, nil
 	}
 	if err := sc.dbConn.Conn.ApplySetting(ctx, setting); err != nil {
 		return true, err
 	}
-	sc.SetParseSQLMode(sqlparser.SQLMode(setting.SQLMode()))
+	sc.settingStale = false
+	if setting.SetsSQLMode() {
+		sc.SetParseSQLMode(sqlparser.SQLMode(setting.SQLMode()))
+	}
 	return true, nil
+}
+
+// MarkSettingStale records that a SET statement ran on the connection since its
+// settings were applied: the MySQL session no longer matches them, so a request
+// that brings the same settings must apply them again rather than skip them.
+func (sc *StatefulConnection) MarkSettingStale() {
+	sc.settingStale = true
 }
 
 // ParseSQLMode returns the parse-relevant sql_mode bits the connection's session is in.

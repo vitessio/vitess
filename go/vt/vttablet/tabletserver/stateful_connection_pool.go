@@ -215,7 +215,7 @@ func (sf *StatefulConnectionPool) NewConn(ctx context.Context, options *querypb.
 	// This will set both the timeout and initialize the expiryTime.
 	timeout := getTransactionTimeout(options, sf.env.Config(), options.GetWorkload())
 	sfConn.SetTimeout(timeout)
-	if setting != nil {
+	if setting != nil && setting.SetsSQLMode() {
 		sfConn.SetParseSQLMode(sqlparser.SQLMode(setting.SQLMode()))
 	}
 

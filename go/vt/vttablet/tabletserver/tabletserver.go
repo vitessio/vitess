@@ -923,7 +923,7 @@ func (tsv *TabletServer) Execute(ctx context.Context, session queryservice.Sessi
 // from the request's settings when present, else from the reserved or transaction
 // connection the query is bound to.
 func (tsv *TabletServer) parseSQLModeFor(connSetting *smartconnpool.Setting, transactionID, reservedID int64) sqlparser.SQLMode {
-	if connSetting != nil {
+	if connSetting != nil && connSetting.SetsSQLMode() {
 		return sqlparser.SQLMode(connSetting.SQLMode())
 	}
 	if reservedID != 0 {

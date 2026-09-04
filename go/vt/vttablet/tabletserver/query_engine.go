@@ -560,9 +560,14 @@ func (qe *QueryEngine) GetConnSetting(ctx context.Context, settings []string) (*
 	cacheKey := SettingsCacheKey(buf.String())
 	connSetting, _, err := qe.settings.GetOrLoad(cacheKey, 0, func() (*smartconnpool.Setting, error) {
 		// build the setting queries
-		query, resetQuery, parseMode, err := planbuilder.BuildSettingQuery(settings, qe.env.Environment().Parser())
+		query, resetQuery, parseMode, setsSQLMode, err := planbuilder.BuildSettingQuery(settings, qe.env.Environment().Parser())
 		if err != nil {
 			return nil, err
+		}
+		if !setsSQLMode {
+			// settings that leave sql_mode alone leave the connection's recorded
+			// parse mode alone as well
+			return smartconnpool.NewSetting(query, resetQuery), nil
 		}
 		return smartconnpool.NewSettingWithSQLMode(query, resetQuery, uint32(parseMode)), nil
 	})

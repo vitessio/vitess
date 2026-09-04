@@ -1245,6 +1245,9 @@ func (qre *QueryExecutor) execSet(conn *StatefulConnection) (*sqltypes.Result, e
 	if err != nil {
 		return nil, err
 	}
+	// the MySQL session no longer matches the settings the connection was set up
+	// with; a request that brings them again must apply them again
+	conn.MarkSettingStale()
 	switch {
 	case qre.plan.ReadBackSQLMode:
 		applied, err := qre.readSQLMode(conn)

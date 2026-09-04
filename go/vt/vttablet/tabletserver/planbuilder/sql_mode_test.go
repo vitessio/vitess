@@ -84,7 +84,7 @@ func TestBuildSettingQuerySQLMode(t *testing.T) {
 	}}
 	for _, tc := range tests {
 		t.Run(tc.settings[len(tc.settings)-1], func(t *testing.T) {
-			query, resetQuery, parseMode, err := BuildSettingQuery(tc.settings, parser)
+			query, resetQuery, parseMode, _, err := BuildSettingQuery(tc.settings, parser)
 			if tc.expectedErr != "" {
 				require.EqualError(t, err, tc.expectedErr)
 				return
@@ -103,7 +103,8 @@ func TestBuildSettingQuerySQLMode(t *testing.T) {
 func TestBuildSettingQueryResetNeutralizesSQLMode(t *testing.T) {
 	parser := vtenv.NewTestEnv().Parser()
 
-	query, resetQuery, parseMode, err := BuildSettingQuery([]string{"set sql_mode = 'STRICT_TRANS_TABLES'", "set sql_safe_updates = 1"}, parser)
+	query, resetQuery, parseMode, setsSQLMode, err := BuildSettingQuery([]string{"set sql_mode = 'STRICT_TRANS_TABLES'", "set sql_safe_updates = 1"}, parser)
+	assert.True(t, setsSQLMode)
 	require.NoError(t, err)
 	assert.Equal(t, sqlparser.SQLMode(0), parseMode)
 	assert.Contains(t, query, "sql_mode = 'STRICT_TRANS_TABLES'")
@@ -338,4 +339,19 @@ func TestSetVarHintSQLModesAreNotJudged(t *testing.T) {
 			assert.Contains(t, plan.FullQuery.Query, "SET_VAR(sql_mode", "the hint must reach MySQL verbatim")
 		})
 	}
+}
+
+// Settings that do not assign sql_mode say so, so that the connection they are
+// applied to keeps the parse mode its session is already in.
+func TestBuildSettingQuerySetsSQLMode(t *testing.T) {
+	parser := vtenv.NewTestEnv().Parser()
+	_, _, parseMode, setsSQLMode, err := BuildSettingQuery([]string{"set sql_safe_updates = 1"}, parser)
+	require.NoError(t, err)
+	assert.False(t, setsSQLMode)
+	assert.Equal(t, sqlparser.SQLMode(0), parseMode)
+
+	_, _, parseMode, setsSQLMode, err = BuildSettingQuery([]string{"set sql_mode = ''"}, parser)
+	require.NoError(t, err)
+	assert.True(t, setsSQLMode, "an assignment of the empty mode still assigns it")
+	assert.Equal(t, sqlparser.SQLMode(0), parseMode)
 }

@@ -377,9 +377,9 @@ func hasLockFunc(sel *sqlparser.Select) bool {
 // the parse-relevant sql_mode bits the settings put the session in, so the pooled
 // connection can parse later queries under them; values carrying a mode the MySQL
 // session must not run under are rejected by the validation pass.
-func BuildSettingQuery(settings []string, parser *sqlparser.Parser) (query string, resetQuery string, parseMode sqlparser.SQLMode, err error) {
+func BuildSettingQuery(settings []string, parser *sqlparser.Parser) (query string, resetQuery string, parseMode sqlparser.SQLMode, setsSQLMode bool, err error) {
 	if len(settings) == 0 {
-		return "", "", 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG]: plan called for empty system settings")
+		return "", "", 0, false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG]: plan called for empty system settings")
 	}
 	var setExprs sqlparser.SetExprs
 	var resetSetExprs sqlparser.SetExprs
@@ -387,25 +387,26 @@ func BuildSettingQuery(settings []string, parser *sqlparser.Parser) (query strin
 	for _, setting := range settings {
 		stmt, err := parser.Parse(setting)
 		if err != nil {
-			return "", "", 0, vterrors.Wrapf(err, "[BUG]: failed to parse system setting: %s", setting)
+			return "", "", 0, false, vterrors.Wrapf(err, "[BUG]: failed to parse system setting: %s", setting)
 		}
 		set, ok := stmt.(*sqlparser.Set)
 		if !ok {
-			return "", "", 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG]: invalid set statement: %s", setting)
+			return "", "", 0, false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG]: invalid set statement: %s", setting)
 		}
 		// settings are applied with no read-back afterwards, so sql_mode values must be
 		// constants that can be judged here; vtgates only render constants
 		if err := validateConstantSetExprsSQLMode(set.Exprs); err != nil {
-			return "", "", 0, err
+			return "", "", 0, false, err
 		}
 		if mode, sawConstant := constantSetExprsSQLModeBits(set.Exprs); sawConstant {
 			parseMode = mode
+			setsSQLMode = true
 		}
 		setExprs = append(setExprs, set.Exprs...)
 		for _, sExpr := range set.Exprs {
 			sysVar := sExpr.Var
 			if sysVar.Scope != sqlparser.SessionScope && sysVar.Scope != sqlparser.NoScope {
-				return "", "", 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG]: session scope expected, got: %s", sysVar.Scope.ToString())
+				return "", "", 0, false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG]: session scope expected, got: %s", sysVar.Scope.ToString())
 			}
 			resetExpr := sqlparser.Expr(lDefault)
 			if sysVar.Name.Lowered() == sysvars.SQLMode.Name {
@@ -415,11 +416,11 @@ func BuildSettingQuery(settings []string, parser *sqlparser.Parser) (query strin
 				// the neutralized global instead
 				resetExpr, err = parser.ParseExpr(sqlmode.NeutralizedGlobalExpr)
 				if err != nil {
-					return "", "", 0, vterrors.Wrapf(err, "[BUG]: failed to parse the sql_mode reset expression")
+					return "", "", 0, false, vterrors.Wrapf(err, "[BUG]: failed to parse the sql_mode reset expression")
 				}
 			}
 			resetSetExprs = append(resetSetExprs, &sqlparser.SetExpr{Var: sysVar, Expr: resetExpr})
 		}
 	}
-	return sqlparser.String(&sqlparser.Set{Exprs: setExprs}), sqlparser.String(&sqlparser.Set{Exprs: resetSetExprs}), parseMode, nil
+	return sqlparser.String(&sqlparser.Set{Exprs: setExprs}), sqlparser.String(&sqlparser.Set{Exprs: resetSetExprs}), parseMode, setsSQLMode, nil
 }
