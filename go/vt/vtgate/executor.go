@@ -1682,6 +1682,26 @@ func (e *Executor) Prepare(ctx context.Context, method string, safeSession *econ
 }
 
 func (e *Executor) prepare(ctx context.Context, safeSession *econtext.SafeSession, sql string, logStats *logstats.LogStats) ([]*querypb.Field, uint16, error) {
+	if err := e.materializeSessionSQLMode(ctx, safeSession, logStats); err != nil {
+		return nil, 0, err
+	}
+	sessionSQLMode, _ := safeSession.SQLMode()
+	sessionParser := e.env.Parser().WithSQLMode(sqlparser.ParseSQLMode(sessionSQLMode))
+
+	// A prepared statement is exactly one statement, as in MySQL: anything
+	// after it is a syntax error, and nothing at all is an empty query. The
+	// boundary is judged with the session's parser — only it can tell where a
+	// statement ends under a mode that changes how quotes are read — and
+	// before the statement is classified, so that the statement kinds prepared
+	// without a parse below are held to it as well.
+	statement, rest, _ := sessionParser.SplitStatement(sql)
+	if strings.TrimSpace(rest) != "" {
+		return nil, 0, sqlparser.NewParseErrorNear(sql, len(sql)-len(rest))
+	}
+	if strings.TrimSpace(sqlparser.StripLeadingComments(statement)) == "" {
+		return nil, 0, sqlparser.ErrEmpty
+	}
+
 	stmtType := sqlparser.Preview(sql)
 	if stmtType == sqlparser.StmtUnknown {
 		// Preview only looks at the first keyword, so statements starting with
@@ -1690,11 +1710,7 @@ func (e *Executor) prepare(ctx context.Context, safeSession *econtext.SafeSessio
 		// (WITH ... SELECT/INSERT/REPLACE/UPDATE/DELETE). Anything else stays
 		// unknown and is rejected below, rather than being reported to the
 		// client as a zero-parameter success.
-		if err := e.materializeSessionSQLMode(ctx, safeSession, logStats); err != nil {
-			return nil, 0, err
-		}
-		sessionSQLMode, _ := safeSession.SQLMode()
-		stmt, err := e.env.Parser().WithSQLMode(sqlparser.ParseSQLMode(sessionSQLMode)).Parse(sql)
+		stmt, err := sessionParser.Parse(sql)
 		if err != nil {
 			// The statement stays unknown, and an unparseable statement is
 			// never SHOW, so record the type and clear warnings the way the

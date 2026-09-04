@@ -3077,6 +3077,52 @@ func TestSQLPrepareDoesNotStartTransaction(t *testing.T) {
 	}
 }
 
+// TestPrepareRejectsMultipleStatements: a prepared statement is exactly one
+// statement, as in MySQL, whatever kind of statement it is — the kinds prepared
+// without a parse included — and the boundary is judged under the session's
+// sql_mode, since a mode that changes how quotes are read changes where a
+// statement ends.
+func TestPrepareRejectsMultipleStatements(t *testing.T) {
+	executor, _, _, _, ctx := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
+	newSession := func(sqlMode string) *econtext.SafeSession {
+		vars := map[string]string{}
+		if sqlMode != "" {
+			vars["sql_mode"] = sqlMode
+		}
+		return econtext.NewSafeSession(&vtgatepb.Session{EnableSystemSettings: true, TargetString: KsTestUnsharded, SystemVariables: vars})
+	}
+
+	for _, tc := range []struct {
+		name    string
+		sql     string
+		sqlMode string
+		err     string
+	}{
+		{name: "two DDL statements", sql: "create table a (id int); drop table b", err: "right syntax to use near 'drop table b' at line 1"},
+		{name: "two SET statements", sql: "set @a = 1; set @b = 2", err: "right syntax to use near 'set @b = 2' at line 1"},
+		{name: "USE followed by a query", sql: "use ks; select 1", err: "right syntax to use near 'select 1' at line 1"},
+		{name: "FLUSH followed by a query", sql: "flush tables; select 1", err: "right syntax to use near 'select 1' at line 1"},
+		{name: "a trailing semicolon is fine", sql: "create table a (id int);"},
+		{name: "a trailing comment is fine", sql: "create table a (id int) -- done"},
+		{name: "a comment alone is an empty query", sql: "-- only a comment", err: "Query was empty"},
+		// under NO_BACKSLASH_ESCAPES the backslash does not escape the quote:
+		// 'a\' and ';b' are two adjacent string literals of one SET statement,
+		// where the default mode reads 'a\' ' as one literal followed by a second
+		// statement
+		{name: "one statement under NO_BACKSLASH_ESCAPES", sql: `set @x = 'a\' ';b'`, sqlMode: "'NO_BACKSLASH_ESCAPES'"},
+		{name: "two statements in the default mode", sql: `set @x = 'a\' ';b'`, err: "right syntax to use near 'b'' at line 1"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, _, err := executor.Prepare(ctx, "TestExecute", newSession(tc.sqlMode), tc.sql)
+			if tc.err == "" {
+				require.NoError(t, err)
+				return
+			}
+			require.ErrorContains(t, err, tc.err)
+		})
+	}
+}
+
 func TestPrepareRejectsNonPreparableStatements(t *testing.T) {
 	// MySQL rejects preparing statements that manage prepared statements
 	// (PREPARE, EXECUTE, DEALLOCATE PREPARE) with ER_UNSUPPORTED_PS.
