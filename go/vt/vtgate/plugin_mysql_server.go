@@ -458,7 +458,7 @@ func (vh *vtgateHandler) streamExecuteMultiQuery(ctx context.Context, c *mysql.C
 	// errIdx is the index of the statement an error would be reported for:
 	// the running one, or the next one once a statement completed.
 	errIdx := 0
-	err := vh.vtg.forEachStatement(ctx, mysqlCtx, sql, func(queryCtx context.Context, idx int, query string, more bool) error {
+	err := vh.vtg.forEachStatement(ctx, mysqlCtx, sql, func() *sqlparser.Parser { return vh.vtg.sessionParser(session) }, func(queryCtx context.Context, idx int, query string, more bool) error {
 		errIdx = idx
 		firstPacket := true
 		var deferredResult *sqltypes.Result

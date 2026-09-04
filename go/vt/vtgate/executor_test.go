@@ -3417,7 +3417,7 @@ func TestForEachStatementIngressBytesFromMySQLConnection(t *testing.T) {
 // to each statement's context.
 func statementIngressBytes(t *testing.T, vtg *VTGate, ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, sql string) []uint64 {
 	var ingressBytes []uint64
-	err := vtg.forEachStatement(ctx, mysqlCtx, sql, func(ctx context.Context, _ int, _ string, _ bool) error {
+	err := vtg.forEachStatement(ctx, mysqlCtx, sql, func() *sqlparser.Parser { return vtg.sessionParser(nil) }, func(ctx context.Context, _ int, _ string, _ bool) error {
 		bytes, ok := vtgateservice.IngressBytesFromContext(ctx)
 		require.True(t, ok)
 		ingressBytes = append(ingressBytes, bytes)
@@ -3431,6 +3431,56 @@ func statementIngressBytes(t *testing.T, vtg *VTGate, ctx context.Context, mysql
 // batch the way MySQL does: one statement is parsed and executed at a time,
 // and the first error ends the batch before the statements after it are even
 // parsed.
+// A SET sql_mode earlier in a batch applies to the statements after it, to how
+// they are parsed and to where they end, as MySQL parses each statement of a
+// batch only once the ones before it ran.
+func TestVTGateExecuteMultiParsesUnderTheSessionSQLMode(t *testing.T) {
+	judgment := func(orig, new string) *sqltypes.Result {
+		return sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"), orig+"|"+new)
+	}
+	newSession := func() *vtgatepb.Session {
+		return &vtgatepb.Session{Autocommit: true, TargetString: "TestExecutor", EnableSystemSettings: true}
+	}
+
+	t.Run("ANSI_QUOTES set in the batch", func(t *testing.T) {
+		executor, sbc1, _, _, ctx := createExecutorEnv(t)
+		vtg := newVTGate(executor, nil, nil, nil, nil)
+		sbc1.SetResults([]*sqltypes.Result{judgment("", "ANSI_QUOTES")})
+
+		// "id" is an identifier in the second statement, under the mode the first set
+		_, results, err := vtg.ExecuteMulti(ctx, nil, newSession(), `set sql_mode = 'ANSI_QUOTES'; select "id" from user where "id" = 1`)
+		require.NoError(t, err)
+		require.Len(t, results, 2)
+		require.NotEmpty(t, sbc1.Queries)
+		assert.Equal(t, "select /*+ SET_VAR(sql_mode = 'ANSI_QUOTES') */ id from `user` where id = 1", sbc1.Queries[len(sbc1.Queries)-1].Sql)
+	})
+
+	t.Run("NO_BACKSLASH_ESCAPES set in the batch moves the statement boundaries", func(t *testing.T) {
+		executor, sbc1, _, _, ctx := createExecutorEnv(t)
+		vtg := newVTGate(executor, nil, nil, nil, nil)
+		sbc1.SetResults([]*sqltypes.Result{judgment("", "NO_BACKSLASH_ESCAPES")})
+
+		// under the mode the first statement set, 'a\' is a complete string and the
+		// ';' after it ends the second statement: three statements, not two
+		_, results, err := vtg.ExecuteMulti(ctx, nil, newSession(), `set sql_mode = 'NO_BACKSLASH_ESCAPES'; select 'a\' from user where id = 1; select 2 from user where id = 1`)
+		require.NoError(t, err)
+		require.Len(t, results, 3)
+	})
+
+	t.Run("streamed", func(t *testing.T) {
+		executor, sbc1, _, _, ctx := createExecutorEnv(t)
+		vtg := newVTGate(executor, nil, nil, nil, nil)
+		sbc1.SetResults([]*sqltypes.Result{judgment("", "ANSI_QUOTES")})
+
+		_, err := vtg.StreamExecuteMulti(ctx, nil, newSession(), `set sql_mode = 'ANSI_QUOTES'; select "id" from user where "id" = 1`, func(sqltypes.QueryResponse, bool, bool) error {
+			return nil
+		})
+		require.NoError(t, err)
+		require.NotEmpty(t, sbc1.Queries)
+		assert.Equal(t, "select /*+ SET_VAR(sql_mode = 'ANSI_QUOTES') */ id from `user` where id = 1", sbc1.Queries[len(sbc1.Queries)-1].Sql)
+	})
+}
+
 func TestVTGateExecuteMultiStopsAtFirstError(t *testing.T) {
 	const query = "select id from user where id = 1"
 	newSession := func() *vtgatepb.Session {

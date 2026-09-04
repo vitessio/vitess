@@ -291,11 +291,19 @@ func (p *Parser) parseNext(sql string) (stmt Statement, text string, rest string
 // in MySQL. Comments alone are a statement like any other. An input with no
 // statement at all is ErrEmpty.
 func (p *Parser) ForEachStatement(sql string, fn func(text, rest string) error) error {
+	return ForEachStatementWith(sql, func() *Parser { return p }, fn)
+}
+
+// ForEachStatementWith is ForEachStatement with the parser chosen afresh before
+// each statement's end is looked for, for callers whose parse mode can change
+// between the statements of a batch: a SET sql_mode in it applies to the
+// statements after it, and where they end depends on the mode.
+func ForEachStatementWith(sql string, parserFor func() *Parser, fn func(text, rest string) error) error {
 	if strings.Trim(sql, blankChars) == "" {
 		return ErrEmpty
 	}
 	// fast path: a single statement needs no split.
-	if end, ok := p.singleStatement(sql); ok {
+	if end, ok := parserFor().singleStatement(sql); ok {
 		if strings.Trim(sql[:end], blankChars) == "" {
 			return ErrEmpty
 		}
@@ -308,7 +316,7 @@ func (p *Parser) ForEachStatement(sql string, fn func(text, rest string) error) 
 	}
 	offset := 0 // start of the current statement in sql
 	for {
-		stmt, text, rest, err := p.parseNext(sql[offset:])
+		stmt, text, rest, err := parserFor().parseNext(sql[offset:])
 		if err == nil && stmt == nil {
 			return NewParseErrorNear(sql, offset)
 		}
