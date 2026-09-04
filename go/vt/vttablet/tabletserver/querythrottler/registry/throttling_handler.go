@@ -21,6 +21,7 @@ import (
 
 	"vitess.io/vitess/go/vt/sqlparser"
 
+	querythrottlerpb "vitess.io/vitess/go/vt/proto/querythrottler"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
@@ -28,21 +29,26 @@ import (
 // used by the QueryThrottler. Each strategy encapsulates its own logic
 // to determine whether throttling should be applied for an incoming query.
 type ThrottlingStrategyHandler interface {
-	// Evaluate determines whether a query should be throttled and returns detailed information about the decision.
-	// This method separates the decision-making logic from the enforcement action, enabling features like dry-run mode.
-	// QueryAttributes contains pre-computed workload and priority information to avoid re computation.
-	// It returns a ThrottleDecision struct containing all relevant information about the throttling decision.
-	Evaluate(ctx context.Context, targetTabletType topodatapb.TabletType, parsedQuery *sqlparser.ParsedQuery, transactionID int64, attrs QueryAttributes) ThrottleDecision
+	// Evaluate decides whether a query should be throttled, returning the decision rather
+	// than acting on it so callers can implement dry-run mode. statementType comes from the
+	// parsed AST, which — unlike a textual scan — classifies CTE queries correctly. attrs
+	// carries pre-computed workload and priority so strategies need not recompute them.
+	Evaluate(ctx context.Context, targetTabletType topodatapb.TabletType, parsedQuery *sqlparser.ParsedQuery, statementType sqlparser.StatementType, transactionID int64, attrs QueryAttributes) ThrottleDecision
 
 	// Start initializes and starts the throttling strategy.
 	// This method should be called when the strategy becomes active.
 	// Implementations may start background processes, caching, or other resources.
 	Start()
 
-	// Stop gracefully shuts down the throttling strategy and releases any resources.
-	// This method should be called when the strategy is no longer needed.
-	// Implementations should clean up background processes, caches, or other resources.
+	// Stop shuts the strategy down and releases its background processes and caches.
+	// Stop is terminal: implementations are single-use and must not be restarted.
+	// QueryThrottler enforces this by building a fresh instance on every strategy change.
 	Stop()
+
+	// UpdateConfig applies a new config to a live strategy — the only way an installed
+	// strategy receives config updates. Implementations must pick out their own sub-config
+	// and apply it goroutine-safely; they must not start watches or do unbounded work here.
+	UpdateConfig(cfg *querythrottlerpb.Config)
 
 	// GetStrategyName returns the name of the strategy.
 	GetStrategyName() string

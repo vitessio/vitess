@@ -105564,6 +105564,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @property {string|null} [scope] CheckThrottlerRequest scope
          * @property {boolean|null} [skip_request_heartbeats] CheckThrottlerRequest skip_request_heartbeats
          * @property {boolean|null} [ok_if_not_exists] CheckThrottlerRequest ok_if_not_exists
+         * @property {tabletmanagerdata.ThrottlerType|null} [throttler_type] CheckThrottlerRequest throttler_type
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
@@ -105628,6 +105629,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         CheckThrottlerRequest.prototype.ok_if_not_exists = false;
 
         /**
+         * CheckThrottlerRequest throttler_type.
+         * @member {tabletmanagerdata.ThrottlerType} throttler_type
+         * @memberof tabletmanagerdata.CheckThrottlerRequest
+         * @instance
+         */
+        CheckThrottlerRequest.prototype.throttler_type = 0;
+
+        /**
          * Creates a new CheckThrottlerRequest instance using the specified properties.
          * @function create
          * @memberof tabletmanagerdata.CheckThrottlerRequest
@@ -105667,6 +105676,8 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 writer.uint32(/* id 3, wireType 0 =*/24).bool(message.skip_request_heartbeats);
             if (message.ok_if_not_exists != null && $Object.hasOwnProperty.call(message, "ok_if_not_exists") && message.ok_if_not_exists !== false)
                 writer.uint32(/* id 4, wireType 0 =*/32).bool(message.ok_if_not_exists);
+            if (message.throttler_type != null && $Object.hasOwnProperty.call(message, "throttler_type"))
+                writer.uint32(/* id 6, wireType 0 =*/48).int32(message.throttler_type);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
                     writer.raw(message.$unknowns[i]);
@@ -105750,6 +105761,15 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                             delete message.ok_if_not_exists;
                         continue;
                     }
+                case 6: {
+                        if (wireType !== 0)
+                            break;
+                        if (value = reader.int32())
+                            message.throttler_type = value;
+                        else
+                            delete message.throttler_type;
+                        continue;
+                    }
                 }
                 reader.skipType(wireType, _depth, tag);
                 if (!reader.discardUnknown) {
@@ -105805,6 +105825,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
             if (message.ok_if_not_exists != null && $Object.hasOwnProperty.call(message, "ok_if_not_exists"))
                 if (typeof message.ok_if_not_exists !== "boolean")
                     return "ok_if_not_exists: boolean expected";
+            if (message.throttler_type != null && $Object.hasOwnProperty.call(message, "throttler_type"))
+                switch (message.throttler_type) {
+                default:
+                    return "throttler_type: enum value expected";
+                case 0:
+                case 1:
+                    break;
+                }
             return null;
         };
 
@@ -105838,6 +105866,23 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
             if (object.ok_if_not_exists != null)
                 if (object.ok_if_not_exists)
                     message.ok_if_not_exists = $Boolean(object.ok_if_not_exists);
+            if (object.throttler_type !== 0 && (typeof object.throttler_type !== "string" || $root.tabletmanagerdata.ThrottlerType[object.throttler_type] !== 0))
+                switch (object.throttler_type) {
+                default:
+                    if (typeof object.throttler_type === "number") {
+                        message.throttler_type = object.throttler_type;
+                        break;
+                    }
+                    break;
+                case "DEFAULT_LAG_THROTTLER":
+                case 0:
+                    message.throttler_type = 0;
+                    break;
+                case "DEDICATED_QUERY_THROTTLER":
+                case 1:
+                    message.throttler_type = 1;
+                    break;
+                }
             return message;
         };
 
@@ -105863,6 +105908,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 object.scope = "";
                 object.skip_request_heartbeats = false;
                 object.ok_if_not_exists = false;
+                object.throttler_type = options.enums === $String ? "DEFAULT_LAG_THROTTLER" : 0;
             }
             if (message.app_name != null && $Object.hasOwnProperty.call(message, "app_name"))
                 object.app_name = message.app_name;
@@ -105872,6 +105918,8 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 object.skip_request_heartbeats = message.skip_request_heartbeats;
             if (message.ok_if_not_exists != null && $Object.hasOwnProperty.call(message, "ok_if_not_exists"))
                 object.ok_if_not_exists = message.ok_if_not_exists;
+            if (message.throttler_type != null && $Object.hasOwnProperty.call(message, "throttler_type"))
+                object.throttler_type = options.enums === $String ? $root.tabletmanagerdata.ThrottlerType[message.throttler_type] === $undefined ? message.throttler_type : $root.tabletmanagerdata.ThrottlerType[message.throttler_type] : message.throttler_type;
             return object;
         };
 
@@ -105922,6 +105970,20 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         values[valuesById[3] = "APP_DENIED"] = 3;
         values[valuesById[4] = "UNKNOWN_METRIC"] = 4;
         values[valuesById[5] = "INTERNAL_ERROR"] = 5;
+        return values;
+    })();
+
+    /**
+     * ThrottlerType enum.
+     * @name tabletmanagerdata.ThrottlerType
+     * @enum {number}
+     * @property {number} DEFAULT_LAG_THROTTLER=0 DEFAULT_LAG_THROTTLER value
+     * @property {number} DEDICATED_QUERY_THROTTLER=1 DEDICATED_QUERY_THROTTLER value
+     */
+    tabletmanagerdata.ThrottlerType = (function() {
+        const valuesById = {}, values = $Object.create(valuesById);
+        values[valuesById[0] = "DEFAULT_LAG_THROTTLER"] = 0;
+        values[valuesById[1] = "DEDICATED_QUERY_THROTTLER"] = 1;
         return values;
     })();
 
@@ -106961,6 +107023,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         /**
          * Properties of a GetThrottlerStatusRequest.
          * @typedef {Object} tabletmanagerdata.GetThrottlerStatusRequest.$Properties
+         * @property {tabletmanagerdata.ThrottlerType|null} [throttler_type] GetThrottlerStatusRequest throttler_type
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
@@ -106991,6 +107054,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                     if (properties[keys[i]] != null && keys[i] !== "__proto__")
                         this[keys[i]] = properties[keys[i]];
         };
+
+        /**
+         * GetThrottlerStatusRequest throttler_type.
+         * @member {tabletmanagerdata.ThrottlerType} throttler_type
+         * @memberof tabletmanagerdata.GetThrottlerStatusRequest
+         * @instance
+         */
+        GetThrottlerStatusRequest.prototype.throttler_type = 0;
 
         /**
          * Creates a new GetThrottlerStatusRequest instance using the specified properties.
@@ -107024,6 +107095,8 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
+            if (message.throttler_type != null && $Object.hasOwnProperty.call(message, "throttler_type"))
+                writer.uint32(/* id 1, wireType 0 =*/8).int32(message.throttler_type);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
                     writer.raw(message.$unknowns[i]);
@@ -107061,7 +107134,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 _depth = 0;
             if (_depth > $Reader.recursionLimit)
                 throw $Error("max depth exceeded");
-            let end = length === $undefined ? reader.len : reader.pos + length, message = _target || new $root.tabletmanagerdata.GetThrottlerStatusRequest();
+            let end = length === $undefined ? reader.len : reader.pos + length, message = _target || new $root.tabletmanagerdata.GetThrottlerStatusRequest(), value;
             while (reader.pos < end) {
                 let start = reader.pos;
                 let tag = reader.tag();
@@ -107069,7 +107142,19 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                     _end = $undefined;
                     break;
                 }
-                reader.skipType(tag & 7, _depth, tag);
+                let wireType = tag & 7;
+                switch (tag >>>= 3) {
+                case 1: {
+                        if (wireType !== 0)
+                            break;
+                        if (value = reader.int32())
+                            message.throttler_type = value;
+                        else
+                            delete message.throttler_type;
+                        continue;
+                    }
+                }
+                reader.skipType(wireType, _depth, tag);
                 if (!reader.discardUnknown) {
                     $util.makeProp(message, "$unknowns", false);
                     (message.$unknowns || (message.$unknowns = [])).push(reader.raw(start, reader.pos));
@@ -107111,6 +107196,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 return "max depth exceeded";
+            if (message.throttler_type != null && $Object.hasOwnProperty.call(message, "throttler_type"))
+                switch (message.throttler_type) {
+                default:
+                    return "throttler_type: enum value expected";
+                case 0:
+                case 1:
+                    break;
+                }
             return null;
         };
 
@@ -107131,7 +107224,25 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            return new $root.tabletmanagerdata.GetThrottlerStatusRequest();
+            let message = new $root.tabletmanagerdata.GetThrottlerStatusRequest();
+            if (object.throttler_type !== 0 && (typeof object.throttler_type !== "string" || $root.tabletmanagerdata.ThrottlerType[object.throttler_type] !== 0))
+                switch (object.throttler_type) {
+                default:
+                    if (typeof object.throttler_type === "number") {
+                        message.throttler_type = object.throttler_type;
+                        break;
+                    }
+                    break;
+                case "DEFAULT_LAG_THROTTLER":
+                case 0:
+                    message.throttler_type = 0;
+                    break;
+                case "DEDICATED_QUERY_THROTTLER":
+                case 1:
+                    message.throttler_type = 1;
+                    break;
+                }
+            return message;
         };
 
         /**
@@ -107143,8 +107254,19 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @param {$protobuf.IConversionOptions} [options] Conversion options
          * @returns {Object.<string,*>} Plain object
          */
-        GetThrottlerStatusRequest.toObject = function () {
-            return {};
+        GetThrottlerStatusRequest.toObject = function (message, options, _depth) {
+            if (!options)
+                options = {};
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            let object = {};
+            if (options.defaults)
+                object.throttler_type = options.enums === $String ? "DEFAULT_LAG_THROTTLER" : 0;
+            if (message.throttler_type != null && $Object.hasOwnProperty.call(message, "throttler_type"))
+                object.throttler_type = options.enums === $String ? $root.tabletmanagerdata.ThrottlerType[message.throttler_type] === $undefined ? message.throttler_type : $root.tabletmanagerdata.ThrottlerType[message.throttler_type] : message.throttler_type;
+            return object;
         };
 
         /**
@@ -176968,6 +177090,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {string|null} [scope] CheckThrottlerRequest scope
          * @property {boolean|null} [skip_request_heartbeats] CheckThrottlerRequest skip_request_heartbeats
          * @property {boolean|null} [ok_if_not_exists] CheckThrottlerRequest ok_if_not_exists
+         * @property {tabletmanagerdata.ThrottlerType|null} [throttler_type] CheckThrottlerRequest throttler_type
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
@@ -177040,6 +177163,14 @@ export const vtctldata = $root.vtctldata = (() => {
         CheckThrottlerRequest.prototype.ok_if_not_exists = false;
 
         /**
+         * CheckThrottlerRequest throttler_type.
+         * @member {tabletmanagerdata.ThrottlerType} throttler_type
+         * @memberof vtctldata.CheckThrottlerRequest
+         * @instance
+         */
+        CheckThrottlerRequest.prototype.throttler_type = 0;
+
+        /**
          * Creates a new CheckThrottlerRequest instance using the specified properties.
          * @function create
          * @memberof vtctldata.CheckThrottlerRequest
@@ -177081,6 +177212,8 @@ export const vtctldata = $root.vtctldata = (() => {
                 writer.uint32(/* id 4, wireType 0 =*/32).bool(message.skip_request_heartbeats);
             if (message.ok_if_not_exists != null && $Object.hasOwnProperty.call(message, "ok_if_not_exists") && message.ok_if_not_exists !== false)
                 writer.uint32(/* id 5, wireType 0 =*/40).bool(message.ok_if_not_exists);
+            if (message.throttler_type != null && $Object.hasOwnProperty.call(message, "throttler_type"))
+                writer.uint32(/* id 6, wireType 0 =*/48).int32(message.throttler_type);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
                     writer.raw(message.$unknowns[i]);
@@ -177170,6 +177303,15 @@ export const vtctldata = $root.vtctldata = (() => {
                             delete message.ok_if_not_exists;
                         continue;
                     }
+                case 6: {
+                        if (wireType !== 0)
+                            break;
+                        if (value = reader.int32())
+                            message.throttler_type = value;
+                        else
+                            delete message.throttler_type;
+                        continue;
+                    }
                 }
                 reader.skipType(wireType, _depth, tag);
                 if (!reader.discardUnknown) {
@@ -177230,6 +177372,14 @@ export const vtctldata = $root.vtctldata = (() => {
             if (message.ok_if_not_exists != null && $Object.hasOwnProperty.call(message, "ok_if_not_exists"))
                 if (typeof message.ok_if_not_exists !== "boolean")
                     return "ok_if_not_exists: boolean expected";
+            if (message.throttler_type != null && $Object.hasOwnProperty.call(message, "throttler_type"))
+                switch (message.throttler_type) {
+                default:
+                    return "throttler_type: enum value expected";
+                case 0:
+                case 1:
+                    break;
+                }
             return null;
         };
 
@@ -177268,6 +177418,23 @@ export const vtctldata = $root.vtctldata = (() => {
             if (object.ok_if_not_exists != null)
                 if (object.ok_if_not_exists)
                     message.ok_if_not_exists = $Boolean(object.ok_if_not_exists);
+            if (object.throttler_type !== 0 && (typeof object.throttler_type !== "string" || $root.tabletmanagerdata.ThrottlerType[object.throttler_type] !== 0))
+                switch (object.throttler_type) {
+                default:
+                    if (typeof object.throttler_type === "number") {
+                        message.throttler_type = object.throttler_type;
+                        break;
+                    }
+                    break;
+                case "DEFAULT_LAG_THROTTLER":
+                case 0:
+                    message.throttler_type = 0;
+                    break;
+                case "DEDICATED_QUERY_THROTTLER":
+                case 1:
+                    message.throttler_type = 1;
+                    break;
+                }
             return message;
         };
 
@@ -177294,6 +177461,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 object.scope = "";
                 object.skip_request_heartbeats = false;
                 object.ok_if_not_exists = false;
+                object.throttler_type = options.enums === $String ? "DEFAULT_LAG_THROTTLER" : 0;
             }
             if (message.tablet_alias != null && $Object.hasOwnProperty.call(message, "tablet_alias"))
                 object.tablet_alias = $root.topodata.TabletAlias.toObject(message.tablet_alias, options, _depth + 1);
@@ -177305,6 +177473,8 @@ export const vtctldata = $root.vtctldata = (() => {
                 object.skip_request_heartbeats = message.skip_request_heartbeats;
             if (message.ok_if_not_exists != null && $Object.hasOwnProperty.call(message, "ok_if_not_exists"))
                 object.ok_if_not_exists = message.ok_if_not_exists;
+            if (message.throttler_type != null && $Object.hasOwnProperty.call(message, "throttler_type"))
+                object.throttler_type = options.enums === $String ? $root.tabletmanagerdata.ThrottlerType[message.throttler_type] === $undefined ? message.throttler_type : $root.tabletmanagerdata.ThrottlerType[message.throttler_type] : message.throttler_type;
             return object;
         };
 
@@ -201814,6 +201984,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * Properties of a GetThrottlerStatusRequest.
          * @typedef {Object} vtctldata.GetThrottlerStatusRequest.$Properties
          * @property {topodata.TabletAlias.$Properties|null} [tablet_alias] GetThrottlerStatusRequest tablet_alias
+         * @property {tabletmanagerdata.ThrottlerType|null} [throttler_type] GetThrottlerStatusRequest throttler_type
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
@@ -201854,6 +202025,14 @@ export const vtctldata = $root.vtctldata = (() => {
         GetThrottlerStatusRequest.prototype.tablet_alias = null;
 
         /**
+         * GetThrottlerStatusRequest throttler_type.
+         * @member {tabletmanagerdata.ThrottlerType} throttler_type
+         * @memberof vtctldata.GetThrottlerStatusRequest
+         * @instance
+         */
+        GetThrottlerStatusRequest.prototype.throttler_type = 0;
+
+        /**
          * Creates a new GetThrottlerStatusRequest instance using the specified properties.
          * @function create
          * @memberof vtctldata.GetThrottlerStatusRequest
@@ -201887,6 +202066,8 @@ export const vtctldata = $root.vtctldata = (() => {
                 throw $Error("max depth exceeded");
             if (message.tablet_alias != null && $Object.hasOwnProperty.call(message, "tablet_alias"))
                 $root.topodata.TabletAlias.encode(message.tablet_alias, writer.uint32(/* id 1, wireType 2 =*/10).fork(), _depth + 1).ldelim();
+            if (message.throttler_type != null && $Object.hasOwnProperty.call(message, "throttler_type"))
+                writer.uint32(/* id 2, wireType 0 =*/16).int32(message.throttler_type);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
                     writer.raw(message.$unknowns[i]);
@@ -201940,6 +202121,15 @@ export const vtctldata = $root.vtctldata = (() => {
                         message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.uint32(), $undefined, _depth + 1, message.tablet_alias);
                         continue;
                     }
+                case 2: {
+                        if (wireType !== 0)
+                            break;
+                        if (value = reader.int32())
+                            message.throttler_type = value;
+                        else
+                            delete message.throttler_type;
+                        continue;
+                    }
                 }
                 reader.skipType(wireType, _depth, tag);
                 if (!reader.discardUnknown) {
@@ -201988,6 +202178,14 @@ export const vtctldata = $root.vtctldata = (() => {
                 if (error)
                     return "tablet_alias." + error;
             }
+            if (message.throttler_type != null && $Object.hasOwnProperty.call(message, "throttler_type"))
+                switch (message.throttler_type) {
+                default:
+                    return "throttler_type: enum value expected";
+                case 0:
+                case 1:
+                    break;
+                }
             return null;
         };
 
@@ -202014,6 +202212,23 @@ export const vtctldata = $root.vtctldata = (() => {
                     throw $TypeError(".vtctldata.GetThrottlerStatusRequest.tablet_alias: object expected");
                 message.tablet_alias = $root.topodata.TabletAlias.fromObject(object.tablet_alias, _depth + 1);
             }
+            if (object.throttler_type !== 0 && (typeof object.throttler_type !== "string" || $root.tabletmanagerdata.ThrottlerType[object.throttler_type] !== 0))
+                switch (object.throttler_type) {
+                default:
+                    if (typeof object.throttler_type === "number") {
+                        message.throttler_type = object.throttler_type;
+                        break;
+                    }
+                    break;
+                case "DEFAULT_LAG_THROTTLER":
+                case 0:
+                    message.throttler_type = 0;
+                    break;
+                case "DEDICATED_QUERY_THROTTLER":
+                case 1:
+                    message.throttler_type = 1;
+                    break;
+                }
             return message;
         };
 
@@ -202034,10 +202249,14 @@ export const vtctldata = $root.vtctldata = (() => {
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
             let object = {};
-            if (options.defaults)
+            if (options.defaults) {
                 object.tablet_alias = null;
+                object.throttler_type = options.enums === $String ? "DEFAULT_LAG_THROTTLER" : 0;
+            }
             if (message.tablet_alias != null && $Object.hasOwnProperty.call(message, "tablet_alias"))
                 object.tablet_alias = $root.topodata.TabletAlias.toObject(message.tablet_alias, options, _depth + 1);
+            if (message.throttler_type != null && $Object.hasOwnProperty.call(message, "throttler_type"))
+                object.throttler_type = options.enums === $String ? $root.tabletmanagerdata.ThrottlerType[message.throttler_type] === $undefined ? message.throttler_type : $root.tabletmanagerdata.ThrottlerType[message.throttler_type] : message.throttler_type;
             return object;
         };
 
@@ -253469,6 +253688,516 @@ export const vtctldata = $root.vtctldata = (() => {
         };
 
         return SetVtorcEmergencyReparentResponse;
+    })();
+
+    vtctldata.UpdateQueryThrottlerConfigRequest = (function() {
+
+        /**
+         * Properties of an UpdateQueryThrottlerConfigRequest.
+         * @typedef {Object} vtctldata.UpdateQueryThrottlerConfigRequest.$Properties
+         * @property {string|null} [keyspace] UpdateQueryThrottlerConfigRequest keyspace
+         * @property {querythrottler.Config.$Properties|null} [query_throttler_config] UpdateQueryThrottlerConfigRequest query_throttler_config
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
+         */
+
+        /**
+         * Properties of an UpdateQueryThrottlerConfigRequest.
+         * @memberof vtctldata
+         * @interface IUpdateQueryThrottlerConfigRequest
+         * @augments vtctldata.UpdateQueryThrottlerConfigRequest.$Properties
+         * @deprecated Use vtctldata.UpdateQueryThrottlerConfigRequest.$Properties instead.
+         */
+
+        /**
+         * Shape of an UpdateQueryThrottlerConfigRequest.
+         * @typedef {vtctldata.UpdateQueryThrottlerConfigRequest.$Properties} vtctldata.UpdateQueryThrottlerConfigRequest.$Shape
+         */
+
+        /**
+         * Constructs a new UpdateQueryThrottlerConfigRequest.
+         * @memberof vtctldata
+         * @classdesc Represents an UpdateQueryThrottlerConfigRequest.
+         * @constructor
+         * @param {vtctldata.UpdateQueryThrottlerConfigRequest.$Properties=} [properties] Properties to set
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
+         */
+        const UpdateQueryThrottlerConfigRequest = function (properties) {
+            if (properties)
+                for (let keys = $Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                        this[keys[i]] = properties[keys[i]];
+        };
+
+        /**
+         * UpdateQueryThrottlerConfigRequest keyspace.
+         * @member {string} keyspace
+         * @memberof vtctldata.UpdateQueryThrottlerConfigRequest
+         * @instance
+         */
+        UpdateQueryThrottlerConfigRequest.prototype.keyspace = "";
+
+        /**
+         * UpdateQueryThrottlerConfigRequest query_throttler_config.
+         * @member {querythrottler.Config.$Properties|null|undefined} query_throttler_config
+         * @memberof vtctldata.UpdateQueryThrottlerConfigRequest
+         * @instance
+         */
+        UpdateQueryThrottlerConfigRequest.prototype.query_throttler_config = null;
+
+        /**
+         * Creates a new UpdateQueryThrottlerConfigRequest instance using the specified properties.
+         * @function create
+         * @memberof vtctldata.UpdateQueryThrottlerConfigRequest
+         * @static
+         * @param {vtctldata.UpdateQueryThrottlerConfigRequest.$Properties=} [properties] Properties to set
+         * @returns {vtctldata.UpdateQueryThrottlerConfigRequest} UpdateQueryThrottlerConfigRequest instance
+         * @type {{
+         *   (properties: vtctldata.UpdateQueryThrottlerConfigRequest.$Shape): vtctldata.UpdateQueryThrottlerConfigRequest & vtctldata.UpdateQueryThrottlerConfigRequest.$Shape;
+         *   (properties?: vtctldata.UpdateQueryThrottlerConfigRequest.$Properties): vtctldata.UpdateQueryThrottlerConfigRequest;
+         * }}
+         */
+        UpdateQueryThrottlerConfigRequest.create = function(properties) {
+            return new UpdateQueryThrottlerConfigRequest(properties);
+        };
+
+        /**
+         * Encodes the specified UpdateQueryThrottlerConfigRequest message. Does not implicitly {@link vtctldata.UpdateQueryThrottlerConfigRequest.verify|verify} messages.
+         * @function encode
+         * @memberof vtctldata.UpdateQueryThrottlerConfigRequest
+         * @static
+         * @param {vtctldata.UpdateQueryThrottlerConfigRequest.$Properties} message UpdateQueryThrottlerConfigRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        UpdateQueryThrottlerConfigRequest.encode = function (message, writer, _depth) {
+            if (!writer)
+                writer = $Writer.create();
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
+                writer.uint32(/* id 1, wireType 2 =*/10).string(message.keyspace);
+            if (message.query_throttler_config != null && $Object.hasOwnProperty.call(message, "query_throttler_config"))
+                $root.querythrottler.Config.encode(message.query_throttler_config, writer.uint32(/* id 2, wireType 2 =*/18).fork(), _depth + 1).ldelim();
+            if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
+                for (let i = 0; i < message.$unknowns.length; ++i)
+                    writer.raw(message.$unknowns[i]);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified UpdateQueryThrottlerConfigRequest message, length delimited. Does not implicitly {@link vtctldata.UpdateQueryThrottlerConfigRequest.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtctldata.UpdateQueryThrottlerConfigRequest
+         * @static
+         * @param {vtctldata.UpdateQueryThrottlerConfigRequest.$Properties} message UpdateQueryThrottlerConfigRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        UpdateQueryThrottlerConfigRequest.encodeDelimited = function(message, writer) {
+            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+        };
+
+        /**
+         * Decodes an UpdateQueryThrottlerConfigRequest message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtctldata.UpdateQueryThrottlerConfigRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtctldata.UpdateQueryThrottlerConfigRequest & vtctldata.UpdateQueryThrottlerConfigRequest.$Shape} UpdateQueryThrottlerConfigRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        UpdateQueryThrottlerConfigRequest.decode = function (reader, length, _end, _depth, _target) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $Reader.recursionLimit)
+                throw $Error("max depth exceeded");
+            let end = length === $undefined ? reader.len : reader.pos + length, message = _target || new $root.vtctldata.UpdateQueryThrottlerConfigRequest(), value;
+            while (reader.pos < end) {
+                let start = reader.pos;
+                let tag = reader.tag();
+                if (tag === _end) {
+                    _end = $undefined;
+                    break;
+                }
+                let wireType = tag & 7;
+                switch (tag >>>= 3) {
+                case 1: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.stringVerify()).length)
+                            message.keyspace = value;
+                        else
+                            delete message.keyspace;
+                        continue;
+                    }
+                case 2: {
+                        if (wireType !== 2)
+                            break;
+                        message.query_throttler_config = $root.querythrottler.Config.decode(reader, reader.uint32(), $undefined, _depth + 1, message.query_throttler_config);
+                        continue;
+                    }
+                }
+                reader.skipType(wireType, _depth, tag);
+                if (!reader.discardUnknown) {
+                    $util.makeProp(message, "$unknowns", false);
+                    (message.$unknowns || (message.$unknowns = [])).push(reader.raw(start, reader.pos));
+                }
+            }
+            if (_end !== $undefined)
+                throw $Error("missing end group");
+            return message;
+        };
+
+        /**
+         * Decodes an UpdateQueryThrottlerConfigRequest message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtctldata.UpdateQueryThrottlerConfigRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtctldata.UpdateQueryThrottlerConfigRequest & vtctldata.UpdateQueryThrottlerConfigRequest.$Shape} UpdateQueryThrottlerConfigRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        UpdateQueryThrottlerConfigRequest.decodeDelimited = function(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies an UpdateQueryThrottlerConfigRequest message.
+         * @function verify
+         * @memberof vtctldata.UpdateQueryThrottlerConfigRequest
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        UpdateQueryThrottlerConfigRequest.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
+                if (!$util.isString(message.keyspace))
+                    return "keyspace: string expected";
+            if (message.query_throttler_config != null && $Object.hasOwnProperty.call(message, "query_throttler_config")) {
+                let error = $root.querythrottler.Config.verify(message.query_throttler_config, _depth + 1);
+                if (error)
+                    return "query_throttler_config." + error;
+            }
+            return null;
+        };
+
+        /**
+         * Creates an UpdateQueryThrottlerConfigRequest message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtctldata.UpdateQueryThrottlerConfigRequest
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtctldata.UpdateQueryThrottlerConfigRequest} UpdateQueryThrottlerConfigRequest
+         */
+        UpdateQueryThrottlerConfigRequest.fromObject = function (object, _depth) {
+            if (object instanceof $root.vtctldata.UpdateQueryThrottlerConfigRequest)
+                return object;
+            if (!$util.isObject(object))
+                throw $TypeError(".vtctldata.UpdateQueryThrottlerConfigRequest: object expected");
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            let message = new $root.vtctldata.UpdateQueryThrottlerConfigRequest();
+            if (object.keyspace != null)
+                if (typeof object.keyspace !== "string" || object.keyspace.length)
+                    message.keyspace = $String(object.keyspace);
+            if (object.query_throttler_config != null) {
+                if (!$util.isObject(object.query_throttler_config))
+                    throw $TypeError(".vtctldata.UpdateQueryThrottlerConfigRequest.query_throttler_config: object expected");
+                message.query_throttler_config = $root.querythrottler.Config.fromObject(object.query_throttler_config, _depth + 1);
+            }
+            return message;
+        };
+
+        /**
+         * Creates a plain object from an UpdateQueryThrottlerConfigRequest message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtctldata.UpdateQueryThrottlerConfigRequest
+         * @static
+         * @param {vtctldata.UpdateQueryThrottlerConfigRequest} message UpdateQueryThrottlerConfigRequest
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        UpdateQueryThrottlerConfigRequest.toObject = function (message, options, _depth) {
+            if (!options)
+                options = {};
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            let object = {};
+            if (options.defaults) {
+                object.keyspace = "";
+                object.query_throttler_config = null;
+            }
+            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
+                object.keyspace = message.keyspace;
+            if (message.query_throttler_config != null && $Object.hasOwnProperty.call(message, "query_throttler_config"))
+                object.query_throttler_config = $root.querythrottler.Config.toObject(message.query_throttler_config, options, _depth + 1);
+            return object;
+        };
+
+        /**
+         * Converts this UpdateQueryThrottlerConfigRequest to JSON.
+         * @function toJSON
+         * @memberof vtctldata.UpdateQueryThrottlerConfigRequest
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        UpdateQueryThrottlerConfigRequest.prototype.toJSON = function() {
+            return UpdateQueryThrottlerConfigRequest.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        /**
+         * Gets the type url for UpdateQueryThrottlerConfigRequest
+         * @function getTypeUrl
+         * @memberof vtctldata.UpdateQueryThrottlerConfigRequest
+         * @static
+         * @param {string} [prefix] Custom type url prefix, defaults to `"type.googleapis.com"`
+         * @returns {string} The type url
+         */
+        UpdateQueryThrottlerConfigRequest.getTypeUrl = function(prefix) {
+            if (prefix === $undefined)
+                prefix = "type.googleapis.com";
+            return prefix + "/vtctldata.UpdateQueryThrottlerConfigRequest";
+        };
+
+        return UpdateQueryThrottlerConfigRequest;
+    })();
+
+    vtctldata.UpdateQueryThrottlerConfigResponse = (function() {
+
+        /**
+         * Properties of an UpdateQueryThrottlerConfigResponse.
+         * @typedef {Object} vtctldata.UpdateQueryThrottlerConfigResponse.$Properties
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
+         */
+
+        /**
+         * Properties of an UpdateQueryThrottlerConfigResponse.
+         * @memberof vtctldata
+         * @interface IUpdateQueryThrottlerConfigResponse
+         * @augments vtctldata.UpdateQueryThrottlerConfigResponse.$Properties
+         * @deprecated Use vtctldata.UpdateQueryThrottlerConfigResponse.$Properties instead.
+         */
+
+        /**
+         * Shape of an UpdateQueryThrottlerConfigResponse.
+         * @typedef {vtctldata.UpdateQueryThrottlerConfigResponse.$Properties} vtctldata.UpdateQueryThrottlerConfigResponse.$Shape
+         */
+
+        /**
+         * Constructs a new UpdateQueryThrottlerConfigResponse.
+         * @memberof vtctldata
+         * @classdesc Represents an UpdateQueryThrottlerConfigResponse.
+         * @constructor
+         * @param {vtctldata.UpdateQueryThrottlerConfigResponse.$Properties=} [properties] Properties to set
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
+         */
+        const UpdateQueryThrottlerConfigResponse = function (properties) {
+            if (properties)
+                for (let keys = $Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                        this[keys[i]] = properties[keys[i]];
+        };
+
+        /**
+         * Creates a new UpdateQueryThrottlerConfigResponse instance using the specified properties.
+         * @function create
+         * @memberof vtctldata.UpdateQueryThrottlerConfigResponse
+         * @static
+         * @param {vtctldata.UpdateQueryThrottlerConfigResponse.$Properties=} [properties] Properties to set
+         * @returns {vtctldata.UpdateQueryThrottlerConfigResponse} UpdateQueryThrottlerConfigResponse instance
+         * @type {{
+         *   (properties: vtctldata.UpdateQueryThrottlerConfigResponse.$Shape): vtctldata.UpdateQueryThrottlerConfigResponse & vtctldata.UpdateQueryThrottlerConfigResponse.$Shape;
+         *   (properties?: vtctldata.UpdateQueryThrottlerConfigResponse.$Properties): vtctldata.UpdateQueryThrottlerConfigResponse;
+         * }}
+         */
+        UpdateQueryThrottlerConfigResponse.create = function(properties) {
+            return new UpdateQueryThrottlerConfigResponse(properties);
+        };
+
+        /**
+         * Encodes the specified UpdateQueryThrottlerConfigResponse message. Does not implicitly {@link vtctldata.UpdateQueryThrottlerConfigResponse.verify|verify} messages.
+         * @function encode
+         * @memberof vtctldata.UpdateQueryThrottlerConfigResponse
+         * @static
+         * @param {vtctldata.UpdateQueryThrottlerConfigResponse.$Properties} message UpdateQueryThrottlerConfigResponse message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        UpdateQueryThrottlerConfigResponse.encode = function (message, writer, _depth) {
+            if (!writer)
+                writer = $Writer.create();
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
+                for (let i = 0; i < message.$unknowns.length; ++i)
+                    writer.raw(message.$unknowns[i]);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified UpdateQueryThrottlerConfigResponse message, length delimited. Does not implicitly {@link vtctldata.UpdateQueryThrottlerConfigResponse.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtctldata.UpdateQueryThrottlerConfigResponse
+         * @static
+         * @param {vtctldata.UpdateQueryThrottlerConfigResponse.$Properties} message UpdateQueryThrottlerConfigResponse message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        UpdateQueryThrottlerConfigResponse.encodeDelimited = function(message, writer) {
+            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+        };
+
+        /**
+         * Decodes an UpdateQueryThrottlerConfigResponse message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtctldata.UpdateQueryThrottlerConfigResponse
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtctldata.UpdateQueryThrottlerConfigResponse & vtctldata.UpdateQueryThrottlerConfigResponse.$Shape} UpdateQueryThrottlerConfigResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        UpdateQueryThrottlerConfigResponse.decode = function (reader, length, _end, _depth, _target) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $Reader.recursionLimit)
+                throw $Error("max depth exceeded");
+            let end = length === $undefined ? reader.len : reader.pos + length, message = _target || new $root.vtctldata.UpdateQueryThrottlerConfigResponse();
+            while (reader.pos < end) {
+                let start = reader.pos;
+                let tag = reader.tag();
+                if (tag === _end) {
+                    _end = $undefined;
+                    break;
+                }
+                reader.skipType(tag & 7, _depth, tag);
+                if (!reader.discardUnknown) {
+                    $util.makeProp(message, "$unknowns", false);
+                    (message.$unknowns || (message.$unknowns = [])).push(reader.raw(start, reader.pos));
+                }
+            }
+            if (_end !== $undefined)
+                throw $Error("missing end group");
+            return message;
+        };
+
+        /**
+         * Decodes an UpdateQueryThrottlerConfigResponse message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtctldata.UpdateQueryThrottlerConfigResponse
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtctldata.UpdateQueryThrottlerConfigResponse & vtctldata.UpdateQueryThrottlerConfigResponse.$Shape} UpdateQueryThrottlerConfigResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        UpdateQueryThrottlerConfigResponse.decodeDelimited = function(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies an UpdateQueryThrottlerConfigResponse message.
+         * @function verify
+         * @memberof vtctldata.UpdateQueryThrottlerConfigResponse
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        UpdateQueryThrottlerConfigResponse.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            return null;
+        };
+
+        /**
+         * Creates an UpdateQueryThrottlerConfigResponse message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtctldata.UpdateQueryThrottlerConfigResponse
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtctldata.UpdateQueryThrottlerConfigResponse} UpdateQueryThrottlerConfigResponse
+         */
+        UpdateQueryThrottlerConfigResponse.fromObject = function (object, _depth) {
+            if (object instanceof $root.vtctldata.UpdateQueryThrottlerConfigResponse)
+                return object;
+            if (!$util.isObject(object))
+                throw $TypeError(".vtctldata.UpdateQueryThrottlerConfigResponse: object expected");
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            return new $root.vtctldata.UpdateQueryThrottlerConfigResponse();
+        };
+
+        /**
+         * Creates a plain object from an UpdateQueryThrottlerConfigResponse message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtctldata.UpdateQueryThrottlerConfigResponse
+         * @static
+         * @param {vtctldata.UpdateQueryThrottlerConfigResponse} message UpdateQueryThrottlerConfigResponse
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        UpdateQueryThrottlerConfigResponse.toObject = function () {
+            return {};
+        };
+
+        /**
+         * Converts this UpdateQueryThrottlerConfigResponse to JSON.
+         * @function toJSON
+         * @memberof vtctldata.UpdateQueryThrottlerConfigResponse
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        UpdateQueryThrottlerConfigResponse.prototype.toJSON = function() {
+            return UpdateQueryThrottlerConfigResponse.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        /**
+         * Gets the type url for UpdateQueryThrottlerConfigResponse
+         * @function getTypeUrl
+         * @memberof vtctldata.UpdateQueryThrottlerConfigResponse
+         * @static
+         * @param {string} [prefix] Custom type url prefix, defaults to `"type.googleapis.com"`
+         * @returns {string} The type url
+         */
+        UpdateQueryThrottlerConfigResponse.getTypeUrl = function(prefix) {
+            if (prefix === $undefined)
+                prefix = "type.googleapis.com";
+            return prefix + "/vtctldata.UpdateQueryThrottlerConfigResponse";
+        };
+
+        return UpdateQueryThrottlerConfigResponse;
     })();
 
     return vtctldata;

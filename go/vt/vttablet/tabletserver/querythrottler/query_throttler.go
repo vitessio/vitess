@@ -20,18 +20,22 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	"google.golang.org/protobuf/proto"
+
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/stats"
-	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/topo"
 
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/logutil"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	querythrottlerpb "vitess.io/vitess/go/vt/proto/querythrottler"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -42,66 +46,124 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
+
+	// Import strategy packages for side-effect registration via init()
+	_ "vitess.io/vitess/go/vt/vttablet/tabletserver/querythrottler/strategy/tablethrottler"
 )
 
 const (
 	queryThrottlerAppName = "QueryThrottler"
 	// defaultPriority is the default priority value when none is specified
 	defaultPriority = 100 // sqlparser.MaxPriorityValue
+	// unknownWorkload is the Workload label value used when the client supplies no workload,
+	// and when per-workload metrics are off. See initThrottlerMetrics.
+	unknownWorkload = "unknown"
+
+	// throttledLogInterval bounds how often hot-path log lines (e.g. the dry-run decision)
+	// are emitted, so a high query rate cannot spam the logs. Counters carry the volume.
+	throttledLogInterval = 5 * time.Second
 )
 
-type Stats struct {
+var (
+	metricsInitOnce   sync.Once
 	requestsTotal     *stats.CountersWithMultiLabels
 	requestsThrottled *stats.CountersWithMultiLabels
-	totalLatency      *servenv.MultiTimingsWrapper
-	evaluateLatency   *servenv.MultiTimingsWrapper
+	totalLatency      *stats.MultiTimings
+	evaluateLatency   *stats.MultiTimings
+)
+
+// initThrottlerMetrics registers the query throttler stats once per process.
+//
+// The schema always carries a Workload label, whatever each instance set
+// EnablePerWorkloadTableMetrics to. Only the label's *value* varies per instance
+// (see buildLabels); the count never does. A mismatched count would panic on the hot path.
+func initThrottlerMetrics() {
+	metricsInitOnce.Do(func() {
+		baseLabels := []string{"Strategy", "Workload", "Priority"}
+		throttledLabels := []string{"Strategy", "Workload", "Priority", "MetricName", "DryRun"}
+		requestsTotal = stats.NewCountersWithMultiLabels(queryThrottlerAppName+"Requests", "query throttler requests", baseLabels)
+		requestsThrottled = stats.NewCountersWithMultiLabels(queryThrottlerAppName+"Throttled", "query throttler requests throttled", throttledLabels)
+		totalLatency = stats.NewMultiTimings(queryThrottlerAppName+"TotalLatencyNs", "Total time each request takes in query throttling including evaluation, metric checks, and other overhead (nanoseconds)", baseLabels)
+		evaluateLatency = stats.NewMultiTimings(queryThrottlerAppName+"EvaluateLatencyNs", "Time each request takes to make the throttling decision (nanoseconds)", baseLabels)
+	})
+}
+
+// stateSnapshot is the immutable {cfg, strategy} pair Throttle() loads atomically.
+// HandleConfigUpdate swaps the whole snapshot, so Throttle() never sees a torn pair.
+type stateSnapshot struct {
+	cfg      *querythrottlerpb.Config
+	strategy registry.ThrottlingStrategyHandler
 }
 
 type QueryThrottler struct {
 	ctx                context.Context
 	cancelWatchContext context.CancelFunc
 
-	throttleClient *throttle.Client
-	tabletConfig   *tabletenv.TabletConfig
+	throttlerClient *throttle.Client
+	tabletConfig    *tabletenv.TabletConfig
 
 	keyspace      string
 	cell          string
 	srvTopoServer srvtopo.Server
 
-	mu           sync.RWMutex
+	// mu serializes config updates against Shutdown and each other. Throttle() does not
+	// take it; it loads the snapshot atomically instead.
+	mu           sync.Mutex
 	watchStarted atomic.Bool
 
-	// cfg holds the current configuration for the throttler (proto type used directly).
-	cfg *querythrottlerpb.Config
-	// strategyHandlerInstance is the current throttling strategy handler instance
-	strategyHandlerInstance registry.ThrottlingStrategyHandler
-	env                     tabletenv.Env
-	stats                   Stats
+	// shutdown, guarded by mu, latches true on the first Shutdown(). HandleConfigUpdate
+	// builds its strategy outside the lock, so it must re-check this before Start()'ing —
+	// otherwise it leaks the strategy's ticker and watch goroutines past shutdown.
+	shutdown bool
+
+	// snapshot holds the current {cfg, strategy} pair. Non-nil after NewQueryThrottler.
+	snapshot atomic.Pointer[stateSnapshot]
+
+	// perWorkloadMetrics gates the Workload label's value, never the label count.
+	// Read once at construction from env.Config().EnablePerWorkloadTableMetrics.
+	perWorkloadMetrics bool
+
+	// newStrategyFactory builds a strategy from a config. Tests may swap it; when nil,
+	// buildNewStrategy falls back to the production wiring.
+	newStrategyFactory func(*querythrottlerpb.Config) registry.ThrottlingStrategyHandler
+
+	// throttledLogger rate-limits hot-path log lines. Never nil after NewQueryThrottler.
+	throttledLogger *logutil.ThrottledLogger
+
+	env tabletenv.Env
 }
 
 // NewQueryThrottler creates a new  query throttler.
 func NewQueryThrottler(ctx context.Context, throttler *throttle.Throttler, env tabletenv.Env, alias *topodatapb.TabletAlias, srvTopoServer srvtopo.Server) *QueryThrottler {
 	client := throttle.NewBackgroundClient(throttler, throttlerapp.QueryThrottlerName, base.UndefinedScope)
 
+	perWorkloadMetrics := env.Config().EnablePerWorkloadTableMetrics
+	initThrottlerMetrics()
+
 	qt := &QueryThrottler{
-		ctx:                     ctx,
-		throttleClient:          client,
-		tabletConfig:            env.Config(),
-		cell:                    alias.GetCell(),
-		srvTopoServer:           srvTopoServer,
-		cfg:                     &querythrottlerpb.Config{},
-		strategyHandlerInstance: &registry.NoOpStrategy{}, // default strategy until config is loaded
-		env:                     env,
-		stats: Stats{
-			requestsTotal:     env.Exporter().NewCountersWithMultiLabels(queryThrottlerAppName+"Requests", "query throttler requests", []string{"Strategy", "Workload", "Priority"}),
-			requestsThrottled: env.Exporter().NewCountersWithMultiLabels(queryThrottlerAppName+"Throttled", "query throttler requests throttled", []string{"Strategy", "Workload", "Priority", "MetricName", "MetricValue", "DryRun"}),
-			totalLatency:      env.Exporter().NewMultiTimings(queryThrottlerAppName+"TotalLatencyNs", "Total time each request takes in query throttling including evaluation, metric checks, and other overhead (nanoseconds)", []string{"Strategy", "Workload", "Priority"}),
-			evaluateLatency:   env.Exporter().NewMultiTimings(queryThrottlerAppName+"EvaluateLatencyNs", "Time each request takes to make the throttling decision (nanoseconds)", []string{"Strategy", "Workload", "Priority"}),
-		},
+		ctx:                ctx,
+		throttlerClient:    client,
+		tabletConfig:       env.Config(),
+		cell:               alias.GetCell(),
+		srvTopoServer:      srvTopoServer,
+		env:                env,
+		perWorkloadMetrics: perWorkloadMetrics,
+		throttledLogger:    logutil.NewThrottledLogger("QueryThrottler", throttledLogInterval),
+	}
+	qt.newStrategyFactory = func(cfg *querythrottlerpb.Config) registry.ThrottlingStrategyHandler {
+		return selectThrottlingStrategy(cfg, qt.throttlerClient, qt.tabletConfig, qt.env, qt.keyspace, qt.cell, qt.srvTopoServer)
 	}
 
+	// Initialize snapshot with empty config and default NoOp strategy so Throttle()
+	// always sees a non-nil snapshot until the first config update lands.
+	initial := &stateSnapshot{
+		cfg:      &querythrottlerpb.Config{},
+		strategy: &registry.NoOpStrategy{},
+	}
+	qt.snapshot.Store(initial)
+
 	// Start the initial strategy
-	qt.strategyHandlerInstance.Start()
+	initial.strategy.Start()
 
 	return qt
 }
@@ -112,6 +174,10 @@ func (qt *QueryThrottler) Shutdown() {
 	qt.mu.Lock()
 	defer qt.mu.Unlock()
 
+	// Latch first, so a HandleConfigUpdate callback blocked on qt.mu sees it the moment
+	// it gets the lock and discards the strategy it built rather than starting it.
+	qt.shutdown = true
+
 	// Cancel the watch context to stop the watch goroutine
 	if qt.cancelWatchContext != nil {
 		qt.cancelWatchContext()
@@ -121,26 +187,21 @@ func (qt *QueryThrottler) Shutdown() {
 	qt.watchStarted.Store(false)
 
 	// Stop the current strategy to clean up any background processes
-	if qt.strategyHandlerInstance != nil {
-		qt.strategyHandlerInstance.Stop()
+	if snap := qt.snapshot.Load(); snap != nil && snap.strategy != nil {
+		snap.strategy.Stop()
 	}
 }
 
-// InitDBConfig initializes the keyspace for the config watch and loads the initial configuration.
-// This method is called by TabletServer during the tablet initialization sequence (see
-// go/vt/vttablet/tabletserver/tabletserver.go:InitDBConfig), which happens when:
-//   - A tablet first starts up
-//   - A tablet restarts after a crash or upgrade
-//   - A new tablet node is added to the cluster
-//
-// Why initial config loading is critical:
-// When a tablet starts (or restarts), it needs to immediately have the correct throttling
-// configuration from the topology server. Without this, the tablet would run with the default
-// NoOp strategy until the next configuration update is pushed to the topology, which could
-// result in:
-//   - Unthrottled queries overwhelming a recovering tablet
-//   - Inconsistent throttling behavior across the fleet during rolling restarts
-//   - Missing critical throttling rules during high-load periods
+// IsShutdown reports whether Shutdown has been called. Used to verify lifecycle wiring.
+func (qt *QueryThrottler) IsShutdown() bool {
+	qt.mu.Lock()
+	defer qt.mu.Unlock()
+	return qt.shutdown
+}
+
+// InitDBConfig sets the keyspace and starts the config watch. Called once by
+// TabletServer.InitDBConfig on tablet startup. Until it runs, the throttler is on the
+// NoOp strategy, so a restarting tablet would otherwise serve unthrottled.
 func (qt *QueryThrottler) InitDBConfig(keyspace string) {
 	qt.keyspace = keyspace
 	log.Info("QueryThrottler: initialized with keyspace=" + keyspace)
@@ -149,17 +210,13 @@ func (qt *QueryThrottler) InitDBConfig(keyspace string) {
 	qt.startSrvKeyspaceWatch()
 }
 
-// Throttle checks if the tablet is under heavy load
-// and enforces throttling by rejecting the incoming request if necessary.
-// Note: This method performs lock-free reads of config and strategy for optimal performance.
-// Config updates are rare (default: every 1 minute) compared to query frequency,
-// so the tiny risk of reading slightly stale data during config updates is acceptable
-// for the significant performance improvement of avoiding mutex contention.
-func (qt *QueryThrottler) Throttle(ctx context.Context, tabletType topodatapb.TabletType, parsedQuery *sqlparser.ParsedQuery, transactionID int64, options *querypb.ExecuteOptions) error {
-	// Lock-free read: for maximum performance in the hot path as cfg and strategy are updated rarely (default once per minute).
-	// They are word-sized and safe for atomic reads; stale data for one query is acceptable and avoids mutex contention in the hot path.
-	tCfg := qt.cfg
-	tStrategy := qt.strategyHandlerInstance
+// Throttle rejects the incoming request if the tablet is under heavy load.
+// The hot path takes no lock: one atomic snapshot load gives a consistent (cfg, strategy).
+func (qt *QueryThrottler) Throttle(ctx context.Context, tabletType topodatapb.TabletType, parsedQuery *sqlparser.ParsedQuery, statementType sqlparser.StatementType, transactionID int64, options *querypb.ExecuteOptions) error {
+	// Single atomic load gives a consistent (cfg, strategy) pair for this call.
+	snap := qt.snapshot.Load()
+	tCfg := snap.cfg
+	tStrategy := snap.strategy
 
 	if !tCfg.GetEnabled() {
 		return nil
@@ -174,21 +231,21 @@ func (qt *QueryThrottler) Throttle(ctx context.Context, tabletType topodatapb.Ta
 		Priority:     extractPriority(options),
 	}
 	strategyName := tStrategy.GetStrategyName()
-	workload := attrs.WorkloadName
 	priorityStr := strconv.Itoa(attrs.Priority)
+	labels := qt.buildLabels(strategyName, attrs.WorkloadName, priorityStr)
 
 	// Defer total latency recording to ensure it's always emitted regardless of return path.
 	defer func() {
-		qt.stats.totalLatency.Record([]string{strategyName, workload, priorityStr}, startTime)
+		totalLatency.Record(labels, startTime)
 	}()
 
 	// Evaluate the throttling decision
-	decision := qt.strategyHandlerInstance.Evaluate(ctx, tabletType, parsedQuery, transactionID, attrs)
+	decision := tStrategy.Evaluate(ctx, tabletType, parsedQuery, statementType, transactionID, attrs)
 
 	// Record evaluate-window latency immediately after Evaluate returns
-	qt.stats.evaluateLatency.Record([]string{strategyName, workload, priorityStr}, startTime)
+	evaluateLatency.Record(labels, startTime)
 
-	qt.stats.requestsTotal.Add([]string{strategyName, workload, priorityStr}, 1)
+	requestsTotal.Add(labels, 1)
 
 	// If no throttling is needed, allow the query
 	if !decision.Throttle {
@@ -196,30 +253,26 @@ func (qt *QueryThrottler) Throttle(ctx context.Context, tabletType topodatapb.Ta
 	}
 
 	// Emit metric of query being throttled.
-	qt.stats.requestsThrottled.Add([]string{strategyName, workload, priorityStr, decision.MetricName, strconv.FormatFloat(decision.MetricValue, 'f', -1, 64), strconv.FormatBool(tCfg.GetDryRun())}, 1)
+	requestsThrottled.Add(qt.buildLabels(strategyName, attrs.WorkloadName, priorityStr, decision.MetricName, strconv.FormatBool(tCfg.GetDryRun())), 1)
 
-	// If dry-run mode is enabled, log the decision but don't throttle
+	// If dry-run mode is enabled, log the decision but don't throttle.
 	if tCfg.GetDryRun() {
-		log.Warn(fmt.Sprintf("[DRY-RUN] %s, metric name: %s, metric value: %f", decision.Message, decision.MetricName, decision.MetricValue))
+		// Rate-limited: with a 100% rule this path fires per query; the requestsThrottled
+		// counter (incremented above) carries the volume.
+		qt.throttledLogger.Warningf("[DRY-RUN] %s, metric name: %s, metric value: %f", decision.Message, decision.MetricName, decision.MetricValue)
 		return nil
 	}
 
-	// Normal throttling: return an error to reject the query
-	return vterrors.New(vtrpcpb.Code_RESOURCE_EXHAUSTED, decision.Message)
+	// Normal throttling: return an error to reject the query.
+	// Prefix the stable marker so sqlerror.demuxResourceExhaustedErrors maps this to
+	// ER_OUT_OF_RESOURCES (1041) instead of the default ER_TOO_MANY_USER_CONNECTIONS (1203).
+	return vterrors.New(vtrpcpb.Code_RESOURCE_EXHAUSTED, sqlerror.QueryThrottledMarker+" "+decision.Message)
 }
 
-// startSrvKeyspaceWatch starts watching the SrvKeyspace for event-driven config updates.
-// This method performs two critical operations:
-//  1. Initial Configuration Load (with retry):
-//     Fetches the current SrvKeyspace configuration from the topology server using GetSrvKeyspace.
-//     This is essential for tablets starting up or restarting, as they need immediate access to
-//     throttling rules without waiting for a configuration change event.
-//  2. Watch Establishment:
-//     Starts a background goroutine that watches for future SrvKeyspace changes using WatchSrvKeyspace.
-//     This ensures the tablet receives real-time configuration updates throughout its lifecycle.
-//
-// Thread Safety: This method uses the watchStarted atomic flag to ensure it only runs once, even if called
-// concurrently. Only the first caller will actually start the watch; subsequent calls return early.
+// startSrvKeyspaceWatch loads the config once up front, then watches SrvKeyspace for
+// updates. The upfront load is best-effort — a failure is only logged, since the watch
+// delivers the current value on establishment and retries transient errors anyway.
+// The watchStarted flag ensures at most one watch goroutine ever runs.
 func (qt *QueryThrottler) startSrvKeyspaceWatch() {
 	// Pre-flight validation: ensure required fields are set
 	if qt.srvTopoServer == nil || qt.keyspace == "" {
@@ -227,9 +280,6 @@ func (qt *QueryThrottler) startSrvKeyspaceWatch() {
 		return
 	}
 
-	// Phase 1: Load initial configuration with retry logic
-	// This ensures tablets have the correct throttling config immediately after startup/restart.
-	// TODO(Siddharth) add retry for this initial load
 	srvKS, err := qt.srvTopoServer.GetSrvKeyspace(qt.ctx, qt.cell, qt.keyspace)
 	if err != nil {
 		log.Warn(fmt.Sprintf("QueryThrottler: failed to load initial config for keyspace=%s (GetSrvKeyspace): %v", qt.keyspace, err))
@@ -239,40 +289,64 @@ func (qt *QueryThrottler) startSrvKeyspaceWatch() {
 	}
 	qt.HandleConfigUpdate(srvKS, nil)
 
-	// Phase 2: Start the watch for future configuration updates
-	// Always start the watch, even if initial load failed, to enable recovery when config becomes available
-
-	// Only start the watch once (protected by atomic flag)
+	// Start the watch even if the load above failed, so we recover once config appears.
 	if !qt.watchStarted.CompareAndSwap(false, true) {
 		log.Info("QueryThrottler: SrvKeyspace watch already started for keyspace=" + qt.keyspace)
 		return
 	}
 	watchCtx, cancel := context.WithCancel(qt.ctx)
+	// Publish the cancel func and read the shutdown latch in one critical section:
+	// a listener registered after Shutdown leaks, since only a later notification drops it.
+	qt.mu.Lock()
+	alreadyShutdown := qt.shutdown
 	qt.cancelWatchContext = cancel
+	qt.mu.Unlock()
+
+	if alreadyShutdown {
+		cancel() // nothing registered; release the derived context
+		log.Info("QueryThrottler: not starting SrvKeyspace watch, already shut down for keyspace=" + qt.keyspace)
+		return
+	}
 
 	go func() {
-		// WatchSrvKeyspace will:
-		// 1. Provide the current value immediately (may duplicate our GetSrvKeyspace result, but deduped)
-		// 2. Stream future configuration updates via the callback
-		// 3. Automatically retry on transient errors (handled by resilient watcher)
-		qt.srvTopoServer.WatchSrvKeyspace(watchCtx, qt.cell, qt.keyspace, qt.HandleConfigUpdate)
+		// Delivers the current value immediately (deduped against the load above), then
+		// streams updates. The resilient watcher retries transient errors itself.
+		qt.srvTopoServer.WatchSrvKeyspace(watchCtx, qt.cell, qt.keyspace, qt.srvKeyspaceListener(watchCtx))
 	}()
 
 	log.Info(fmt.Sprintf("QueryThrottler: started event-driven watch for SrvKeyspace keyspace=%s cell=%s", qt.keyspace, qt.cell))
 }
 
-// extractWorkloadName extracts the workload name from ExecuteOptions.
-// If no workload name is provided, returns a default value.
+// srvKeyspaceListener returns the callback for the resilient SrvKeyspace watcher.
+// Returning false is the only way to deregister — srvtopo re-appends any listener that
+// returned true, so cancelling watchCtx alone is not enough. The drop is lazy: it takes
+// effect on the next notification.
+func (qt *QueryThrottler) srvKeyspaceListener(watchCtx context.Context) func(*topodatapb.SrvKeyspace, error) bool {
+	return func(srvks *topodatapb.SrvKeyspace, err error) bool {
+		if watchCtx.Err() != nil {
+			return false
+		}
+		return qt.HandleConfigUpdate(srvks, err)
+	}
+}
+
+// buildLabels returns {Strategy, Workload, Priority} plus any extras. Workload collapses to
+// unknownWorkload unless per-workload metrics are on, since the client-supplied WORKLOAD_NAME
+// is unbounded and would blow up label cardinality.
+func (qt *QueryThrottler) buildLabels(strategyName, workload, priorityStr string, extras ...string) []string {
+	if !qt.perWorkloadMetrics {
+		workload = unknownWorkload
+	}
+	return append([]string{strategyName, workload, priorityStr}, extras...)
+}
+
+// extractWorkloadName returns the workload name from ExecuteOptions, or unknownWorkload
+// when none was supplied (nil options or an empty WorkloadName).
 func extractWorkloadName(options *querypb.ExecuteOptions) string {
-	if options == nil {
-		return "unknown"
+	if options == nil || options.WorkloadName == "" {
+		return unknownWorkload
 	}
-
-	if options.WorkloadName != "" {
-		return options.WorkloadName
-	}
-
-	return "default"
+	return options.WorkloadName
 }
 
 // extractPriority extracts the priority from ExecuteOptions.
@@ -298,39 +372,23 @@ func extractPriority(options *querypb.ExecuteOptions) int {
 	return optionsPriority
 }
 
-// HandleConfigUpdate is the callback invoked when the SrvKeyspace topology changes.
-// It loads the updated configuration from the topo server and updates the QueryThrottler's
-// strategy and configuration accordingly.
+// HandleConfigUpdate applies a SrvKeyspace change to the QueryThrottler's config and
+// strategy. It is only meant to run as a srvtopo.WatchSrvKeyspace callback, and is the
+// only writer of qt.snapshot.
 //
-// IMPORTANT: This method is designed ONLY to be called as a callback from srvtopo.WatchSrvKeyspace.
-// It relies on the resilient watcher's auto-retry behavior (see go/vt/srvtopo/watch.go) and should
-// not be called directly from other contexts.
-//
-// Return value contract (required by WatchSrvKeyspace):
-//   - true: Continue watching (resilient watcher will auto-retry on transient errors)
-//   - false: Stop watching permanently (for fatal errors like NoNode, context canceled, or Interrupted)
-//
-// **NOTE: this method is written with the assumption that this is the only piece of code which will be changing the config of QueryThrottler**
+// It always returns true to keep the watch alive: errors are logged, never fatal, matching
+// throttle.Throttler.WatchSrvKeyspaceCallback.
 func (qt *QueryThrottler) HandleConfigUpdate(srvks *topodatapb.SrvKeyspace, err error) bool {
-	// Handle topology errors using a hybrid approach:
-	// - Permanent errors (NoNode, context canceled): stop watching (return false)
-	// - Transient errors (network issues, etc.): keep watching (return true, auto-retry will reconnect)
+	// Log by error type, but keep watching — the resilient watcher retries transient errors.
 	if err != nil {
-		// Keyspace deleted from topology - stop watching
-		if topo.IsErrType(err, topo.NoNode) {
-			log.Warn(fmt.Sprintf("HandleConfigUpdate: keyspace %s deleted or not found, stopping watch", qt.keyspace))
-			return false
+		switch {
+		case topo.IsErrType(err, topo.NoNode):
+			log.Warn(fmt.Sprintf("HandleConfigUpdate: keyspace %s not found in topology (may not be created yet): %v", qt.keyspace, err))
+		case errors.Is(err, context.Canceled) || topo.IsErrType(err, topo.Interrupted):
+			log.Info(fmt.Sprintf("HandleConfigUpdate: watch interrupted for keyspace %s: %v", qt.keyspace, err))
+		default:
+			log.Error(fmt.Sprintf("HandleConfigUpdate: SrvKeyspace watch error for keyspace %s: %v", qt.keyspace, err))
 		}
-
-		// Context canceled or interrupted - graceful shutdown, stop watching
-		if errors.Is(err, context.Canceled) || topo.IsErrType(err, topo.Interrupted) {
-			log.Info("HandleConfigUpdate: watch stopped (context canceled or interrupted)")
-			return false
-		}
-
-		// Transient error (network, temporary topo server issue) - keep watching
-		// The resilient watcher will automatically retry as defined in go/vt/srvtopo/resilient_server.go:46
-		log.Warn(fmt.Sprintf("HandleConfigUpdate: transient topo watch error (will retry): %v", err))
 		return true
 	}
 
@@ -339,74 +397,117 @@ func (qt *QueryThrottler) HandleConfigUpdate(srvks *topodatapb.SrvKeyspace, err 
 		return true
 	}
 
-	// Get the query throttler configuration from the SrvKeyspace that the QueryThrottler uses to manage its throttling behavior.
 	newCfg := srvks.GetQueryThrottlerConfig()
 
-	// If the config is not changed, return early.
-	if !isConfigUpdateRequired(qt.cfg, newCfg) {
+	// Canonicalize threshold order first, so two Configs differing only in that order
+	// compare equal below and count as a no-op update.
+	newCfg = normalizeThresholds(newCfg)
+
+	// Safe without the lock: per the contract above, only this callback writes the snapshot.
+	currentSnap := qt.snapshot.Load()
+
+	// Compare the whole proto, not just the top-level scalars: a nested-only change to
+	// TabletStrategyConfig must still reach the strategy.
+	if proto.Equal(currentSnap.cfg, newCfg) {
 		return true
 	}
 
-	// No Locking is required because only this function updates the configs of Query Throttler.
-	needsStrategyChange := qt.cfg.GetStrategy() != newCfg.GetStrategy()
-	oldStrategyInstance := qt.strategyHandlerInstance
-
-	var newStrategy registry.ThrottlingStrategyHandler
+	needsStrategyChange := currentSnap.cfg.GetStrategy() != newCfg.GetStrategy()
+	newStrategy := currentSnap.strategy
 	if needsStrategyChange {
-		// Create the new strategy (doesn't need lock)
-		newStrategy = selectThrottlingStrategy(newCfg, qt.throttleClient, qt.tabletConfig)
+		// Build outside the lock; this can be slow. The factory takes newCfg, so the new
+		// strategy already holds the latest nested config and needs no UpdateConfig below.
+		newStrategy = qt.buildNewStrategy(newCfg)
 	}
 
-	// Acquire write lock only for the actual swap operation.
-	// Using closure + defer ensures unlock happens even on panic.
+	// Lock only for the swap. Start() runs under it so the shutdown check, Start, and
+	// Store are atomic — otherwise a Shutdown landing between Start and Store would leak
+	// the new strategy's goroutines. Safe to hold, since Start() is non-blocking.
+	shutdownLost := false
 	func() {
 		qt.mu.Lock()
 		defer qt.mu.Unlock()
 
-		if needsStrategyChange {
-			qt.strategyHandlerInstance = newStrategy
-			// Start a new strategy after assignment, still under lock for consistency.
-			if newStrategy != nil {
-				newStrategy.Start()
-			}
+		// Shutdown may have run while we built newStrategy outside the lock. If so,
+		// drop the update; the discarded strategy is Stop()'d below.
+		if qt.shutdown {
+			shutdownLost = true
+			return
 		}
-		// Always update the configuration
-		qt.cfg = newCfg
+
+		if needsStrategyChange && newStrategy != nil {
+			newStrategy.Start()
+		} else if newStrategy != nil {
+			// Strategy unchanged: push the config into the live strategy before storing the
+			// snapshot, so both land together. Otherwise re-enabling with new rules could
+			// briefly throttle against the strategy's stale nested config.
+			newStrategy.UpdateConfig(newCfg)
+		}
+		qt.snapshot.Store(&stateSnapshot{
+			cfg:      newCfg,
+			strategy: newStrategy,
+		})
 	}()
 
-	// Stop the old strategy (if needed) outside the lock to avoid blocking.
-	if needsStrategyChange && oldStrategyInstance != nil {
-		oldStrategyInstance.Stop()
+	if shutdownLost {
+		// The new strategy was never installed. Stop() it anyway, in case a future
+		// constructor spawns side effects (today's is side-effect-free).
+		if needsStrategyChange && newStrategy != nil {
+			newStrategy.Stop()
+		}
+		log.Info("HandleConfigUpdate: discarded config update after Shutdown for keyspace=" + qt.keyspace)
+		return true
+	}
+
+	// Stop the old strategy outside the lock; this can be slow.
+	if needsStrategyChange && currentSnap.strategy != nil {
+		currentSnap.strategy.Stop()
 	}
 
 	log.Info(fmt.Sprintf("HandleConfigUpdate: config updated, strategy=%s, enabled=%v", newCfg.GetStrategy(), newCfg.GetEnabled()))
 	return true
 }
 
+// normalizeThresholds returns a Config with every Thresholds slice sorted ascending by
+// Above, as GetThrottleDecision's binary search requires. A config written straight to
+// topo bypasses sanitizeQueryThrottlerConfig and may arrive unsorted. Sorts a clone:
+// srvtopo hands this same pointer to every other reader.
+func normalizeThresholds(cfg *querythrottlerpb.Config) *querythrottlerpb.Config {
+	if cfg.GetStrategy() != querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER {
+		return cfg
+	}
+
+	out := cfg.CloneVT()
+	for _, stmtRuleSet := range out.GetTabletStrategyConfig().GetTabletRules() {
+		for _, metricRuleSet := range stmtRuleSet.GetStatementRules() {
+			for _, rule := range metricRuleSet.GetMetricRules() {
+				if ts := rule.GetThresholds(); len(ts) > 1 {
+					sort.Slice(ts, func(i, j int) bool { return ts[i].GetAbove() < ts[j].GetAbove() })
+				}
+			}
+		}
+	}
+	return out
+}
+
 // selectThrottlingStrategy returns the appropriate strategy implementation based on the config.
-func selectThrottlingStrategy(cfg *querythrottlerpb.Config, client *throttle.Client, tabletConfig *tabletenv.TabletConfig) registry.ThrottlingStrategyHandler {
+func selectThrottlingStrategy(cfg *querythrottlerpb.Config, client *throttle.Client, tabletConfig *tabletenv.TabletConfig, env tabletenv.Env, keyspace string, cell string, srvTopoServer srvtopo.Server) registry.ThrottlingStrategyHandler {
 	deps := registry.Deps{
 		ThrottleClient: client,
 		TabletConfig:   tabletConfig,
+		Env:            env,
+		Keyspace:       keyspace,
+		Cell:           cell,
+		SrvTopoServer:  srvTopoServer,
 	}
 	return registry.CreateStrategy(cfg, deps)
 }
 
-// isConfigUpdateRequired checks if the new config is different from the old config.
-// This only checks for enabled, strategy name, and dry run because the strategy itself will update the strategy-specific config
-// during runtime by having a separate watcher similar to the one used in QueryThrottler.
-func isConfigUpdateRequired(oldCfg, newCfg *querythrottlerpb.Config) bool {
-	if oldCfg.GetEnabled() != newCfg.GetEnabled() {
-		return true
+// buildNewStrategy builds via the newStrategyFactory hook when set (tests inject a
+// deterministic one), otherwise via the production wiring.
+func (qt *QueryThrottler) buildNewStrategy(cfg *querythrottlerpb.Config) registry.ThrottlingStrategyHandler {
+	if qt.newStrategyFactory != nil {
+		return qt.newStrategyFactory(cfg)
 	}
-
-	if oldCfg.GetStrategy() != newCfg.GetStrategy() {
-		return true
-	}
-
-	if oldCfg.GetDryRun() != newCfg.GetDryRun() {
-		return true
-	}
-
-	return false
+	return selectThrottlingStrategy(cfg, qt.throttlerClient, qt.tabletConfig, qt.env, qt.keyspace, qt.cell, qt.srvTopoServer)
 }

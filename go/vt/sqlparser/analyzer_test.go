@@ -94,6 +94,61 @@ func TestPreview(t *testing.T) {
 	}
 }
 
+// TestASTToStatementType covers the AST-based classifier. REPLACE is the interesting
+// case: it parses to an *Insert, so classifying on the Go type alone reports INSERT.
+func TestASTToStatementType(t *testing.T) {
+	parser := NewTestParser()
+	testcases := []struct {
+		sql  string
+		want StatementType
+	}{
+		{"insert into t(a) values (1)", StmtInsert},
+		{"replace into t(a) values (1)", StmtReplace},
+		{"replace into t select a from u", StmtReplace},
+		{"insert into t select a from u", StmtInsert},
+		{"insert into t(a) values (1) on duplicate key update a = 2", StmtInsert},
+		{"select a from t", StmtSelect},
+		{"with x as (select 1) select * from x", StmtSelect},
+		{"update t set a = 1", StmtUpdate},
+		{"delete from t", StmtDelete},
+	}
+	for _, tcase := range testcases {
+		t.Run(tcase.sql, func(t *testing.T) {
+			stmt, err := parser.Parse(tcase.sql)
+			require.NoError(t, err)
+			assert.Equal(t, tcase.want, ASTToStatementType(stmt))
+		})
+	}
+}
+
+// TestASTToStatementTypeMatchesPreview guards the two classifiers against drifting
+// apart for INSERT/REPLACE, which is how the REPLACE misclassification went unnoticed.
+func TestASTToStatementTypeMatchesPreview(t *testing.T) {
+	parser := NewTestParser()
+	for _, sql := range []string{
+		"insert into t(a) values (1)",
+		"replace into t(a) values (1)",
+	} {
+		t.Run(sql, func(t *testing.T) {
+			stmt, err := parser.Parse(sql)
+			require.NoError(t, err)
+			assert.Equal(t, Preview(sql), ASTToStatementType(stmt))
+		})
+	}
+}
+
+func TestIsValidStatementType(t *testing.T) {
+	// Every name String() can produce must be accepted.
+	for s := StmtUnknown; s <= StmtKill; s++ {
+		assert.Truef(t, IsValidStatementType(s.String()), "String() output %q must be valid", s.String())
+	}
+
+	// Typos, wrong case, and non-statement strings must be rejected.
+	for _, name := range []string{"SELEC", "PRIMAY", "select", "insert", "", "FOO", "PRIMARY"} {
+		assert.Falsef(t, IsValidStatementType(name), "%q must be rejected", name)
+	}
+}
+
 func TestIsDML(t *testing.T) {
 	testcases := []struct {
 		sql  string

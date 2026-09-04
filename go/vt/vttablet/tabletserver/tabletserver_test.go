@@ -2189,7 +2189,8 @@ func TestTerseErrorsIgnoreFailoverInProgress(t *testing.T) {
 	tsv := NewTabletServer(ctx, vtenv.NewTestEnv(), "TabletServerTest", cfg, memorytopo.NewServer(ctx, ""), &topodatapb.TabletAlias{}, srvTopoCounts)
 	tl := newTestLogger()
 	defer tl.Close()
-	err := tsv.convertAndLogError(ctx, "select * from test_table where id = :a",
+	err := tsv.convertAndLogError(
+		ctx, "select * from test_table where id = :a",
 		map[string]*querypb.BindVariable{"a": sqltypes.Int64BindVariable(1)},
 		sqlerror.NewSQLError(1227, sqlerror.SSClientError, "failover in progress"),
 		nil,
@@ -2741,6 +2742,29 @@ func TestDatabaseNameReplaceByKeyspaceNameReserveBeginExecuteMethod(t *testing.T
 	require.NoError(t, err)
 }
 
+// The production shutdown path (servenv OnClose -> StopService) must shut the query
+// throttler down too, or its strategy updater and SrvKeyspace watch leak until exit.
+func TestTabletServerStopServiceShutsDownQueryThrottler(t *testing.T) {
+	ctx := t.Context()
+	db, tsv := setupTabletServerTest(t, ctx, "keyspaceName")
+	defer db.Close()
+
+	require.False(t, tsv.queryThrottler.IsShutdown(), "query throttler should be running before shutdown")
+	tsv.StopService()
+	require.True(t, tsv.queryThrottler.IsShutdown(), "StopService must shut down the query throttler")
+}
+
+// Same, for the Close path used by vtcombo and vtexplain.
+func TestTabletServerCloseShutsDownQueryThrottler(t *testing.T) {
+	ctx := t.Context()
+	db, tsv := setupTabletServerTest(t, ctx, "keyspaceName")
+	defer db.Close()
+
+	require.False(t, tsv.queryThrottler.IsShutdown(), "query throttler should be running before shutdown")
+	require.NoError(t, tsv.Close(ctx))
+	require.True(t, tsv.queryThrottler.IsShutdown(), "Close must shut down the query throttler")
+}
+
 func setupTabletServerTest(t testing.TB, ctx context.Context, keyspaceName string) (*fakesqldb.DB, *TabletServer) {
 	cfg := tabletenv.NewDefaultConfig()
 	return setupTabletServerTestCustom(t, ctx, cfg, keyspaceName, vtenv.NewTestEnv())
@@ -2780,9 +2804,11 @@ func setupFakeDB(t testing.TB) *fakesqldb.DB {
 				mysql.BaseShowTablesRow("msg", false, "vitess_message,vt_ack_wait=30,vt_purge_after=120,vt_batch_size=1,vt_cache_size=10,vt_poller_interval=30"),
 			},
 		})
-	db.AddQuery("show status like 'Innodb_rows_read'", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
-		"Variable_name|Value",
-		"varchar|int64"),
+	db.AddQuery("show status like 'Innodb_rows_read'", sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields(
+			"Variable_name|Value",
+			"varchar|int64",
+		),
 		"Innodb_rows_read|0",
 	))
 
