@@ -18,6 +18,7 @@ package operators
 
 import (
 	"fmt"
+	"io"
 	"slices"
 	"strings"
 
@@ -95,22 +96,63 @@ The first SELECT of the union dictates the column names, and the second is whate
 can be found on the same offset. The names of the RHS are discarded.
 */
 func (u *Union) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) Operator {
-	offsets := make(map[string]int)
-	sel := u.GetSelectFor(0)
-	for i, selectExpr := range sel.GetColumns() {
-		ae, ok := selectExpr.(*sqlparser.AliasedExpr)
-		if !ok {
-			panic(vterrors.VT12001("pushing predicates on UNION where the first SELECT contains * or NEXT"))
-		}
-		offsets[strings.ToLower(ae.ColumnName())] = i
-	}
-
+	offsets := u.columnOffsets()
 	exprPerSource := u.predicatePerSource(ctx, expr, offsets)
 	for i, src := range u.Sources {
 		u.Sources[i] = src.AddPredicate(ctx, exprPerSource[i])
 	}
 
 	return u
+}
+
+func (u *Union) columnOffsets() map[string]int {
+	offsets := make(map[string]int)
+	for i, selectExpr := range u.GetSelectFor(0).GetColumns() {
+		ae, ok := selectExpr.(*sqlparser.AliasedExpr)
+		if !ok {
+			panic(vterrors.VT12001("pushing predicates on UNION where the first SELECT contains * or NEXT"))
+		}
+		offsets[strings.ToLower(ae.ColumnName())] = i
+	}
+	return offsets
+}
+
+// canPushPredicate reports whether a predicate can be pushed into the sources of the UNION.
+// Pushing duplicates every expression it substitutes in, once per source, so `col <> col` over
+// `select uuid()` must not be pushed - it would become `uuid() <> uuid()`, which is true rather
+// than false.
+//
+// This inspects the projections behind the columns the predicate references rather than the
+// rewritten predicate, because building that one is not free: predicatePerSource registers a join
+// predicate per source in ctx.PredTracker, and CopyOnRewrite over a *predicates.JoinPredicate
+// calls JoinPredicate.Clone, which overwrites the tracked expression.
+func (u *Union) canPushPredicate(expr sqlparser.Expr) bool {
+	offsets := u.columnOffsets()
+
+	safe := true
+	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
+		col, ok := node.(*sqlparser.ColName)
+		if !ok {
+			return true, nil
+		}
+		idx, ok := offsets[col.Name.Lowered()]
+		if !ok {
+			// Not a column of the UNION - predicatePerSource panics on it, so leave the
+			// reporting there.
+			return true, nil
+		}
+		for i := range u.Sources {
+			for _, sel := range u.allSelectsFor(i) {
+				ae, ok := sel.GetColumns()[idx].(*sqlparser.AliasedExpr)
+				if ok && sqlparser.ContainsVolatile(ae.Expr) {
+					safe = false
+					return false, io.EOF
+				}
+			}
+		}
+		return true, nil
+	}, expr)
+	return safe
 }
 
 func (u *Union) predicatePerSource(ctx *plancontext.PlanningContext, expr sqlparser.Expr, offsets map[string]int) []sqlparser.Expr {
@@ -150,6 +192,29 @@ func (u *Union) predicatePerSource(ctx *plancontext.PlanningContext, expr sqlpar
 	}
 
 	return exprPerSource
+}
+
+// allSelectsFor returns every leaf SELECT behind a source, where GetSelectFor returns only the
+// first. `a union all b union all c` parses left-associatively, so source 0 of the outer UNION is
+// itself a union over a and b, and looking at the first SELECT alone would not see b.
+func (u *Union) allSelectsFor(source int) []*sqlparser.Select {
+	src := u.Sources[source]
+	for {
+		switch op := src.(type) {
+		case *Horizon:
+			var sels []*sqlparser.Select
+			for _, stmt := range sqlparser.GetAllSelects(op.Query) {
+				if sel, ok := stmt.(*sqlparser.Select); ok {
+					sels = append(sels, sel)
+				}
+			}
+			return sels
+		case *Route:
+			src = op.Source
+		default:
+			panic(vterrors.VT13001("expected all sources of the UNION to be horizons"))
+		}
+	}
 }
 
 func (u *Union) GetSelectFor(source int) *sqlparser.Select {
