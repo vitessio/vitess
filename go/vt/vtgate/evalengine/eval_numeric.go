@@ -89,6 +89,12 @@ func newEvalFloat(f float64) *evalFloat {
 }
 
 func newEvalDecimal(dec decimal.Decimal, m, d int32) *evalDecimal {
+	// When a target scale is specified (e.g. CAST(x AS DECIMAL(m,d))), MySQL rounds
+	// the value to d fractional digits before applying precision limits. The (0, 0)
+	// case is used for generic decimal conversion without an explicit scale.
+	if !(m == 0 && d == 0) {
+		dec = dec.Round(d)
+	}
 	switch {
 	case m == 0 && d == 0:
 		return newEvalDecimalWithPrec(dec, -dec.Exponent())
