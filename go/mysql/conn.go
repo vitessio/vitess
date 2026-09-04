@@ -1454,11 +1454,13 @@ func (c *Conn) handleComPrepare(handler Handler, data []byte) (kontinue bool) {
 	if c.Capabilities&CapabilityClientMultiStatements != 0 {
 		// A prepared statement is exactly one statement, as in MySQL:
 		// anything after it is a syntax error, nothing is an empty query.
-		statement, rest, _ := handler.Env().Parser().SplitStatement(query)
-		if strings.TrimSpace(rest) != "" {
+		// A comment after the ';' does not start a second statement.
+		parser := handler.Env().Parser()
+		statement, rest, _ := parser.SplitStatement(query)
+		if !parser.IsBlankOrComments(rest) {
 			return c.writeErrorPacketFromErrorAndLog(sqlerror.NewSQLErrorFromError(sqlparser.NewParseErrorNear(query, len(query)-len(rest))))
 		}
-		if strings.TrimSpace(statement) == "" {
+		if parser.IsBlankOrComments(statement) {
 			return c.writeErrorPacketFromErrorAndLog(sqlerror.NewSQLErrorFromError(sqlparser.ErrEmpty))
 		}
 		query = statement

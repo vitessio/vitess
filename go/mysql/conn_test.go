@@ -1448,6 +1448,23 @@ func TestComPrepareRejectsMultipleStatements(t *testing.T) {
 		require.Len(t, sConn.PrepareData, 1)
 		require.Equal(t, "select 1", sConn.PrepareData[1].PrepareStmt)
 	})
+
+	// a comment after the ';' does not start a second statement, as in MySQL
+	for _, query := range []string{"select 1; -- c", "select 1; /* c */"} {
+		t.Run("comment after the terminator: "+query, func(t *testing.T) {
+			sConn, _, data := prepare(t, query)
+			require.EqualValues(t, OKPacket, data[0])
+			require.Len(t, sConn.PrepareData, 1)
+			require.Equal(t, "select 1", sConn.PrepareData[1].PrepareStmt)
+		})
+	}
+
+	t.Run("comment alone is an empty query", func(t *testing.T) {
+		sConn, _, data := prepare(t, "/* c */")
+		require.EqualValues(t, ErrPacket, data[0])
+		require.ErrorContains(t, ParseErrorPacket(data), "Query was empty")
+		require.Empty(t, sConn.PrepareData)
+	})
 }
 
 // TestExecQueryStreamSurfacesMidStreamError exercises go/mysql/conn.go execQuery (text

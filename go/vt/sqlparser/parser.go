@@ -290,19 +290,19 @@ func (p *Parser) parseNext(sql string) (stmt Statement, text string, rest string
 // in MySQL. Comments alone are a statement like any other. An input with no
 // statement at all is ErrEmpty.
 func (p *Parser) ForEachStatement(sql string, fn func(text, rest string) error) error {
-	if strings.TrimSpace(sql) == "" {
+	if strings.Trim(sql, blankChars) == "" {
 		return ErrEmpty
 	}
 	// fast path: a single statement needs no split.
 	if end, ok := p.singleStatement(sql); ok {
-		if strings.TrimSpace(sql[:end]) == "" {
+		if strings.Trim(sql[:end], blankChars) == "" {
 			return ErrEmpty
 		}
 		return fn(sql[:end], "")
 	}
 
 	sql = strings.TrimRight(sql, blankChars+";")
-	if strings.TrimSpace(sql) == "" {
+	if strings.Trim(sql, blankChars) == "" {
 		return ErrEmpty
 	}
 	offset := 0 // start of the current statement in sql
@@ -321,6 +321,23 @@ func (p *Parser) ForEachStatement(sql string, fn func(text, rest string) error) 
 	}
 }
 
+// IsBlankOrComments reports whether sql holds no statement at all: nothing but
+// blanks and comments, the way a comment after a statement's terminating ';'
+// does not start a second statement.
+func (p *Parser) IsBlankOrComments(sql string) bool {
+	tokenizer := p.NewStringTokenizer(sql)
+	for {
+		switch typ, _ := tokenizer.Scan(); typ {
+		case 0:
+			return true
+		case COMMENT:
+			continue
+		default:
+			return false
+		}
+	}
+}
+
 // NewParseErrorNear returns MySQL's ER_PARSE_ERROR (1064) for the input that
 // starts at offset in sql.
 func NewParseErrorNear(sql string, offset int) error {
@@ -334,8 +351,10 @@ func NewParseErrorNear(sql string, offset int) error {
 }
 
 // singleStatement reports, without the grammar, whether sql is a single
-// statement: no ';' token at all, or one that only blanks follow. end is
-// where the statement's text ends (len(sql), or the offset of that ';').
+// statement: no ';' token at all, or one that only blanks follow — the
+// lexer's blanks, so that a character it does not read as blank is handed
+// to the grammar rather than dropped. end is where the statement's text
+// ends (len(sql), or the offset of that ';').
 // A ';' inside a string, a quoted identifier or a comment is not a token,
 // for MySQL's lexer no more than for ours, so such a statement is handed
 // over as is instead of being parsed just to find its end. A lexical error
@@ -349,7 +368,7 @@ func (p *Parser) singleStatement(sql string) (end int, ok bool) {
 		switch typ, _ := tokenizer.Scan(); typ {
 		case ';':
 			end = tokenizer.Pos - 1
-			return end, strings.TrimSpace(sql[tokenizer.Pos:]) == ""
+			return end, strings.Trim(sql[tokenizer.Pos:], blankChars) == ""
 		case 0:
 			return len(sql), true
 		case LEX_ERROR:
