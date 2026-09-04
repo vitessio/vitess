@@ -3546,6 +3546,26 @@ func TestComQueryTempTableHeartbeatRegistration(t *testing.T) {
 	require.False(t, ok)
 }
 
+// TestSessionCleanupContext pins that the remote session cleanup a disconnect
+// or a COM_RESET_CONNECTION performs is bounded by the query timeout, so an
+// unreachable tablet cannot stall the connection's teardown or reuse.
+func TestSessionCleanupContext(t *testing.T) {
+	oldTimeout := mysqlQueryTimeout
+	t.Cleanup(func() { mysqlQueryTimeout = oldTimeout })
+
+	mysqlQueryTimeout = time.Second
+	ctx, cancel := sessionCleanupContext()
+	defer cancel()
+	_, hasDeadline := ctx.Deadline()
+	assert.True(t, hasDeadline, "a non-zero query timeout must bound the cleanup")
+
+	mysqlQueryTimeout = 0
+	ctx, cancel = sessionCleanupContext()
+	defer cancel()
+	_, hasDeadline = ctx.Deadline()
+	assert.False(t, hasDeadline, "a zero query timeout leaves the cleanup unbounded, as it always has")
+}
+
 // TestComQueryIngressBytes verifies that MySQL protocol query ingress bytes are
 // attached to VTGate query log stats.
 func TestComQueryIngressBytes(t *testing.T) {

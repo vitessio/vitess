@@ -17,8 +17,10 @@ limitations under the License.
 package vtgate
 
 import (
+	"cmp"
 	"context"
 	"log/slog"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -58,8 +60,9 @@ const tempTableRefreshPruneEvery = 4096
 // can schedule refreshes for. Shard sessions arrive in the client-roundtripped
 // session, so their count is client-controlled; without a cap a hostile
 // session with tens of thousands of entries would fan a goroutine and RPC out
-// for each. Entries beyond the cap are not stamped, so a legitimate very-wide
-// session still refreshes progressively across its subsequent commands.
+// for each. Entries beyond the cap are not stamped and the least recently
+// refreshed go first, so a legitimate very-wide session is covered
+// progressively across its subsequent commands however they are spaced.
 const tempTableRefreshMaxPerCommand = 256
 
 // tempTableRefreshMaxInFlight bounds refresh goroutines across all sessions.
@@ -179,14 +182,15 @@ func (r *tempTableActivityRefresher) dueTargets(session *econtext.SafeSession) [
 		return nil
 	}
 	now := time.Now().UnixNano()
-	var due []tempTableRefreshTarget
+	type candidate struct {
+		target tempTableRefreshTarget
+		last   int64 // 0: never refreshed
+	}
+	var candidates []candidate
 	// Snapshots, not the live shard-session protos: the lease ticker calls
 	// this concurrently with the command's own execution, which updates
 	// TransactionId and ReservedId on the live protos as it runs.
 	for _, ss := range session.ShardSessionSnapshots() {
-		if len(due) >= tempTableRefreshMaxPerCommand {
-			break
-		}
 		if ss.ReservedID == 0 || ss.TransactionID != 0 ||
 			ss.Target == nil || ss.TabletAlias == nil {
 			continue
@@ -195,21 +199,38 @@ func (r *tempTableActivityRefresher) dueTargets(session *econtext.SafeSession) [
 			alias:      topoproto.TabletAliasString(ss.TabletAlias),
 			reservedID: ss.ReservedID,
 		}
-		if last, ok := r.lastRefresh.Load(key); ok {
-			if now-last.(int64) < interval.Nanoseconds() {
+		var last int64
+		if v, ok := r.lastRefresh.Load(key); ok {
+			last = v.(int64)
+			if now-last < interval.Nanoseconds() {
 				continue
 			}
-		} else if r.insertsSincePrune.Add(1) >= tempTableRefreshPruneEvery {
+		}
+		candidates = append(candidates, candidate{
+			target: tempTableRefreshTarget{
+				target:     ss.Target,
+				alias:      ss.TabletAlias,
+				reservedID: ss.ReservedID,
+				key:        key,
+			},
+			last: last,
+		})
+	}
+	// Oldest first when over the cap, so the entries a previous command's cap
+	// skipped go ahead of the ones it refreshed: a session wider than the cap
+	// is fully covered within ceil(n/cap) commands however they are spaced.
+	if len(candidates) > tempTableRefreshMaxPerCommand {
+		slices.SortStableFunc(candidates, func(a, b candidate) int { return cmp.Compare(a.last, b.last) })
+		candidates = candidates[:tempTableRefreshMaxPerCommand]
+	}
+	due := make([]tempTableRefreshTarget, 0, len(candidates))
+	for _, c := range candidates {
+		if c.last == 0 && r.insertsSincePrune.Add(1) >= tempTableRefreshPruneEvery {
 			r.insertsSincePrune.Store(0)
 			r.prune(now, interval)
 		}
-		r.lastRefresh.Store(key, now)
-		due = append(due, tempTableRefreshTarget{
-			target:     ss.Target,
-			alias:      ss.TabletAlias,
-			reservedID: ss.ReservedID,
-			key:        key,
-		})
+		r.lastRefresh.Store(c.target.key, now)
+		due = append(due, c.target)
 	}
 	return due
 }

@@ -924,7 +924,8 @@ func (vh *vtgateHandler) ComResetConnection(c *mysql.Conn) {
 	// any beat in flight.
 	defer vh.tempTableCommandEnd(c)
 
-	ctx := context.Background()
+	ctx, cancel := sessionCleanupContext()
+	defer cancel()
 	session := vh.session(c)
 	if session.InTransaction {
 		defer vh.busyConnections.Add(-1)
@@ -968,19 +969,23 @@ func (vh *vtgateHandler) ConnectionClosed(c *mysql.Conn) {
 		vh.mu.Unlock()
 	}()
 
-	var ctx context.Context
-	var cancel context.CancelFunc
-	if mysqlQueryTimeout != 0 {
-		ctx, cancel = context.WithTimeout(context.Background(), mysqlQueryTimeout)
-		defer cancel()
-	} else {
-		ctx = context.Background()
-	}
+	ctx, cancel := sessionCleanupContext()
+	defer cancel()
 	session := vh.session(c)
 	if session.InTransaction {
 		defer vh.busyConnections.Add(-1)
 	}
 	_ = vh.vtg.CloseSession(ctx, session)
+}
+
+// sessionCleanupContext bounds the remote session cleanup a disconnect or a
+// COM_RESET_CONNECTION performs, so an unreachable tablet cannot stall the
+// connection's teardown or reuse. A zero query timeout leaves it unbounded.
+func sessionCleanupContext() (context.Context, context.CancelFunc) {
+	if mysqlQueryTimeout != 0 {
+		return context.WithTimeout(context.Background(), mysqlQueryTimeout)
+	}
+	return context.WithCancel(context.Background())
 }
 
 // Regexp to extract parent span id over the sql query

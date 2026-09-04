@@ -157,6 +157,24 @@ func TestTempTableActivityRefresh(t *testing.T) {
 	require.NotEmpty(t, fresh.dueTargets(wideSession),
 		"entries beyond the cap must not be stamped, so later activity picks them up")
 
+	// Commands spaced beyond the interval make every entry due again each
+	// time; the entries the cap skipped last time must go first, or a wide
+	// session's tail would never be refreshed.
+	rotate := newTempTableActivityRefresher(nil)
+	seen := map[int64]struct{}{}
+	for _, target := range rotate.dueTargets(wideSession) {
+		seen[target.reservedID] = struct{}{}
+	}
+	rotate.lastRefresh.Range(func(key, last any) bool {
+		rotate.lastRefresh.Store(key, last.(int64)-2*tempTableHeartbeatTime.Nanoseconds())
+		return true
+	})
+	for _, target := range rotate.dueTargets(wideSession) {
+		seen[target.reservedID] = struct{}{}
+	}
+	require.Len(t, seen, tempTableRefreshMaxPerCommand+10,
+		"every reservation must be refreshed within two commands spaced beyond the interval")
+
 	// The global in-flight bound skips launches and un-stamps the skipped
 	// targets so the next activity retries them.
 	bounded := newTempTableActivityRefresher(nil)
