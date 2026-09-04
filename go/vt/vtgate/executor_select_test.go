@@ -450,6 +450,30 @@ func TestPreparedSQLCalcFoundRowsKeepsParseMode(t *testing.T) {
 	}
 }
 
+// Plans that forward the client's text as written cannot honor NO_BACKSLASH_ESCAPES:
+// that one mode is not sent to the backends, so a backslash the client meant as an
+// ordinary character would be an escape there. Such text is rejected; text without a
+// backslash reads the same either way and goes through.
+func TestRawTextUnderNoBackslashEscapes(t *testing.T) {
+	executor, _, _, _, _ := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
+	newSession := func(sqlMode string) *econtext.SafeSession {
+		return econtext.NewAutocommitSession(&vtgatepb.Session{
+			EnableSystemSettings: true,
+			TargetString:         KsTestUnsharded,
+			SystemVariables:      map[string]string{"sql_mode": sqlMode},
+		})
+	}
+
+	_, err := executorExecSession(t.Context(), executor, newSession("'NO_BACKSLASH_ESCAPES'"), `load data infile '/tmp/data.csv' into table main1 fields terminated by '\t'`, nil)
+	require.EqualError(t, err, "VT12001: unsupported: LOAD DATA containing a backslash under NO_BACKSLASH_ESCAPES")
+
+	// the same text is fine without the mode, and text without a backslash is fine under it
+	_, err = executorExecSession(t.Context(), executor, newSession("'STRICT_TRANS_TABLES'"), `load data infile '/tmp/data.csv' into table main1 fields terminated by '\t'`, nil)
+	require.NoError(t, err)
+	_, err = executorExecSession(t.Context(), executor, newSession("'NO_BACKSLASH_ESCAPES'"), `load data infile '/tmp/data.csv' into table main1 fields terminated by ','`, nil)
+	require.NoError(t, err)
+}
+
 // A numeric sql_mode assignment must leave the session with the canonical name list,
 // not the number: the parser and the transports decode names, so a session that stored
 // "4" would parse "id" as a string instead of the ANSI_QUOTES identifier it asked for.
