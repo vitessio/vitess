@@ -886,8 +886,20 @@ func TestShowSentToBackendRunsUnderTheSessionSQLMode(t *testing.T) {
 	assert.False(t, session.InReservedConn())
 	assert.Empty(t, lookup.Queries)
 
-	// a session in the default mode — the mode the backends already run with — sends
-	// the SHOW as before, on no reserved connection
+	// a SHOW answered from the topology does not reach a tablet either
+	lookup.Queries = nil
+	session = newSession()
+	vschemaacl.AuthorizedDDLUsers.Set(vschemaacl.NewAuthorizedDDLUsers("%"))
+	defer vschemaacl.AuthorizedDDLUsers.Set(vschemaacl.NewAuthorizedDDLUsers(""))
+	_, err = executorExecSession(ctx, executor, session, "set @@vitess_metadata.app_keyspace_v1 = '1'", nil)
+	require.NoError(t, err)
+	_, err = executorExecSession(ctx, executor, session, `show vitess_metadata variables like 'app\\_keyspace\\_v_'`, nil)
+	require.NoError(t, err)
+	assert.False(t, session.InReservedConn())
+	assert.Empty(t, lookup.Queries)
+
+	// a session in a mode that leaves SHOW output alone sends the SHOW as before,
+	// on no reserved connection
 	lookup.Queries = nil
 	session = econtext.NewAutocommitSession(&vtgatepb.Session{EnableSystemSettings: true, TargetString: KsTestUnsharded})
 	_, err = executorExecSession(ctx, executor, session, "show create table main1", nil)
@@ -900,6 +912,24 @@ func TestShowSentToBackendRunsUnderTheSessionSQLMode(t *testing.T) {
 	_, err = executorExecSession(ctx, executor, session, "select id from main1", nil)
 	require.NoError(t, err)
 	assert.False(t, session.InReservedConn())
+}
+
+// A configured default that carries such a mode counts the same way: the session
+// is in the mode, whatever the backends happen to be configured with.
+func TestShowSentToBackendRunsUnderAConfiguredDefaultSQLMode(t *testing.T) {
+	cfg := createExecutorConfigWithNormalizer()
+	cfg.SQLMode = "ANSI_QUOTES,STRICT_TRANS_TABLES"
+	executor, _, _, lookup, ctx := createExecutorEnvWithConfig(t, cfg)
+
+	session := econtext.NewAutocommitSession(&vtgatepb.Session{EnableSystemSettings: true, TargetString: KsTestUnsharded})
+	_, err := executorExecSession(ctx, executor, session, "show create table main1", nil)
+	require.NoError(t, err)
+	assert.True(t, session.InReservedConn())
+	var sqls []string
+	for _, q := range lookup.Queries {
+		sqls = append(sqls, q.Sql)
+	}
+	assert.Equal(t, []string{"set sql_mode = 'ANSI_QUOTES,STRICT_TRANS_TABLES'", "show create table main1"}, sqls)
 }
 
 func TestSetSQLModeDefault(t *testing.T) {

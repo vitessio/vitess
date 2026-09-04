@@ -1157,12 +1157,13 @@ func (vc *VCursorImpl) CheckForReservedConnection(setVarComment string, stmt sql
 		*sqlparser.SRollback, *sqlparser.Release, *sqlparser.Set,
 		*sqlparser.Use, *sqlparser.ExplainStmt, *sqlparser.VExplainStmt, sqlparser.SupportOptimizerHint:
 	case *sqlparser.Show:
-		// A SHOW answered by vtgate itself never reaches a tablet. One sent to a
-		// backend cannot carry a hint, and its output depends on the mode — SHOW
-		// CREATE TABLE quotes identifiers by ANSI_QUOTES — so when the session is
-		// in a mode that changes that output, it runs on a connection with the
-		// session's settings applied.
-		if planType != engine.PlanLocal && vc.showOutputFollowsSessionSQLMode() {
+		// A SHOW answered by vtgate itself, from its own state or from the
+		// topology, never reaches a tablet. One sent to a backend cannot carry a
+		// hint, and its output depends on the mode — SHOW CREATE TABLE quotes
+		// identifiers by ANSI_QUOTES — so when the session is in a mode that
+		// changes that output, it runs on a connection with the session's
+		// settings applied.
+		if planType != engine.PlanLocal && planType != engine.PlanTopoOp && vc.showOutputFollowsSessionSQLMode() {
 			vc.NeedsReservedConn()
 		}
 	default:
@@ -1174,9 +1175,11 @@ func (vc *VCursorImpl) CheckForReservedConnection(setVarComment string, stmt sql
 // what a backend SHOW prints: only the parse-relevant modes do — SHOW CREATE TABLE
 // quotes identifiers by ANSI_QUOTES — and NO_BACKSLASH_ESCAPES is never sent to a
 // backend, so it does not count. The execution-time modes leave SHOW output alone.
+// The session's own value decides, not its distance from the configured default:
+// a default that carries such a mode is not known to be what the backends run under.
 func (vc *VCursorImpl) showOutputFollowsSessionSQLMode() bool {
 	const showModes = ^sqlparser.SQLModeNoBackslashEscapes
-	return vc.ParseSQLMode()&showModes != sqlparser.ParseSQLMode(vc.DefaultSQLMode())&showModes
+	return vc.ParseSQLMode()&showModes != 0
 }
 
 // NeedsReservedConn implements the SessionActions interface
