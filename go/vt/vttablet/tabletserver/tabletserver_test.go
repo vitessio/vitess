@@ -2557,6 +2557,23 @@ func TestTempTableDropOnlyDoesNotMark(t *testing.T) {
 	assert.Zero(t, tsv.te.txPool.scp.tempTableUnmanaged.Load(), "a drop-only connection must stay off the gauge")
 }
 
+// TestTempTableDropWithoutReservation pins that DROP TEMPORARY TABLE runs on
+// a session without a reserved connection: vtgate does not reserve for a
+// drop, so the tablet must accept it and let MySQL answer as it would for a
+// session holding no temporary tables (a no-op for IF EXISTS).
+func TestTempTableDropWithoutReservation(t *testing.T) {
+	ctx := t.Context()
+	db, tsv := setupTabletServerTest(t, ctx, "")
+	defer tsv.StopService()
+	defer db.Close()
+	db.AddQueryPattern("drop temporary table .*", &sqltypes.Result{})
+	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
+
+	_, err := tsv.Execute(ctx, nil, &target, "drop temporary table if exists temp_t", nil, 0, 0, nil)
+	require.NoError(t, err, "a drop-only session must not be required to reserve a connection")
+	assert.Contains(t, db.QueryLog(), "drop temporary table if exists temp_t")
+}
+
 // TestTempTableSessionWaitTimeoutFollowsSet pins that the captured
 // @@session.wait_timeout follows a later SET wait_timeout run as a query on
 // the reserved connection (how vtgate pushes a session variable to existing

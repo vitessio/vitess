@@ -301,6 +301,23 @@
   "NeedsReservedConn": true
 }
 
+# dropping a temporary table needs no reserved connection: a session that
+# holds one is routed to it by vtgate, and a session without one has no
+# temporary table to drop, so the statement is MySQL's no-op (IF EXISTS) or
+# unknown-table error on any connection
+"drop temporary table if exists a"
+{
+  "PlanID": "DDL",
+  "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 2
+    }
+  ],
+  "FullQuery": "drop temporary table if exists a"
+}
+
 # temporary table with ddl statement only partially parsed
 "create temporary table x"
 {

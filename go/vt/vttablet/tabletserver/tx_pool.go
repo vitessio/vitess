@@ -256,14 +256,21 @@ func (tp *TxPool) GetAndLock(ctx context.Context, connID tx.ConnID, reason strin
 	if isBriefHoldInUse(err) {
 		backstop := time.Now().Add(briefHoldWaitBackstop)
 		sleep := 100 * time.Microsecond
+		timer := time.NewTimer(sleep)
+		defer timer.Stop()
 		for err != nil && isBriefHoldInUse(err) && ctx.Err() == nil && time.Now().Before(backstop) {
-			time.Sleep(sleep)
+			select {
+			case <-timer.C:
+			case <-ctx.Done():
+				// Return right away rather than after the backoff.
+			}
 			// Back off toward 10ms: a keepalive hold is gone within a retry
 			// or two, while a refresh stuck in kill cleanup can hold the
 			// lock for seconds — no point hammering the pool mutex.
 			if sleep < 10*time.Millisecond {
 				sleep *= 2
 			}
+			timer.Reset(sleep)
 			conn, err = tp.scp.GetAndLock(connID, reason)
 		}
 	}

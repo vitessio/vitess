@@ -243,7 +243,13 @@ func analyzeDDL(stmt sqlparser.DDLStatement) (*Plan, error) {
 	if stmt.IsFullyParsed() {
 		fullQuery = GenerateFullQuery(stmt)
 	}
-	return &Plan{PlanID: PlanDDL, FullQuery: fullQuery, FullStmt: stmt, NeedsReservedConn: stmt.IsTemporary()}, nil
+	// Only creating a temporary table needs a reserved connection to live on.
+	// Dropping one does not: a session holding the table is routed to its
+	// reserved connection by vtgate, and a session without one has no
+	// temporary table to drop, so MySQL's own answer (a no-op for IF EXISTS,
+	// an unknown-table error otherwise) is right on any connection.
+	_, isCreate := stmt.(*sqlparser.CreateTable)
+	return &Plan{PlanID: PlanDDL, FullQuery: fullQuery, FullStmt: stmt, NeedsReservedConn: stmt.IsTemporary() && isCreate}, nil
 }
 
 func analyzeFlush(stmt *sqlparser.Flush, tables map[string]*schema.Table) (*Plan, error) {

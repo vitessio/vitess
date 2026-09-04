@@ -408,6 +408,15 @@ func TestTempTable(t *testing.T) {
 	utils.AssertMatches(t, conn2, `select count(table_id) from information_schema.innodb_temp_table_info`, `[[INT64(1)]]`)
 	utils.AssertContainsError(t, conn2, `show create table temp_t`, `Table 'vt_customer.temp_t' doesn't exist (errno 1146) (sqlstate 42S02)`)
 
+	// A session without a reserved connection drops a temporary table exactly
+	// as MySQL answers it for a session owning none: a no-op with IF EXISTS,
+	// an unknown-table error without. vtgate does not reserve for a drop, so
+	// the tablet must accept it unreserved — and, temporary tables being
+	// per-connection, the drop cannot touch conn1's table.
+	_ = utils.Exec(t, conn2, `drop temporary table if exists temp_t`)
+	utils.AssertContainsError(t, conn2, `drop temporary table temp_t`, `Unknown table 'vt_customer.temp_t' (errno 1051)`)
+	utils.AssertMatches(t, conn1, `select id from temp_t order by id`, `[[INT64(1)] [INT64(2)] [INT64(3)]]`)
+
 	// The temp table must survive the connection sitting idle for longer than
 	// the tablets' --queryserver-config-transaction-timeout (3s): vtgate's
 	// temp-table heartbeat keeps the reserved connection alive.
