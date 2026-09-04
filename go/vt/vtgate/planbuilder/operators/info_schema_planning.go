@@ -99,9 +99,17 @@ func (isr *InfoSchemaRouting) updateRoutingLogic(ctx *plancontext.PlanningContex
 			}
 		}
 		isr.SysTableTableSchema = append(isr.SysTableTableSchema, out)
-	} else {
-		isr.SysTableTableName[bvName] = out
+		return isr
 	}
+	if existing, ok := isr.SysTableTableName[bvName]; ok && !sqlparser.Equals.Expr(existing, out) {
+		// The column's bind variable already carries a different value; a
+		// second one cannot share it, so this predicate stays a plain filter.
+		if cmp, ok := expr.(*sqlparser.ComparisonExpr); ok {
+			cmp.Right = out
+		}
+		return isr
+	}
+	isr.SysTableTableName[bvName] = out
 	return isr
 }
 

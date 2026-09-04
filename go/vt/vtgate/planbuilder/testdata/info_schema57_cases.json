@@ -951,8 +951,8 @@
                       "Sharded": false
                     },
                     "FieldQuery": "select 1 as `found` from information_schema.`tables` where 1 != 1",
-                    "Query": "select 1 as `found` from information_schema.`tables` where `table_name` = :table_name1 /* VARCHAR */ and `table_name` = :table_name1 /* VARCHAR */ limit :__upper_limit",
-                    "SysTableTableName": "[table_name1:'Music']"
+                    "Query": "select 1 as `found` from information_schema.`tables` where `table_name` = :table_name1 /* VARCHAR */ and `table_name` = 'Music' limit :__upper_limit",
+                    "SysTableTableName": "[table_name1:'music']"
                   },
                   {
                     "OperatorType": "Route",
@@ -962,8 +962,8 @@
                       "Sharded": false
                     },
                     "FieldQuery": "select 1 as `found` from information_schema.views where 1 != 1",
-                    "Query": "select 1 as `found` from information_schema.views where `table_name` = :table_name2 /* VARCHAR */ and `table_name` = :table_name2 /* VARCHAR */ limit :__upper_limit",
-                    "SysTableTableName": "[table_name2:'user']"
+                    "Query": "select 1 as `found` from information_schema.views where `table_name` = :table_name2 /* VARCHAR */ and `table_name` = 'user' limit :__upper_limit",
+                    "SysTableTableName": "[table_name2:'music']"
                   }
                 ]
               }
@@ -978,8 +978,8 @@
               "Sharded": false
             },
             "FieldQuery": "select 1 as `found` from information_schema.`tables` where 1 != 1",
-            "Query": "select 1 as `found` from information_schema.`tables` where `table_name` = :table_name /* VARCHAR */ and `table_name` = :table_name /* VARCHAR */ and :__sq_has_values",
-            "SysTableTableName": "[table_name:'Music']"
+            "Query": "select 1 as `found` from information_schema.`tables` where `table_name` = :table_name /* VARCHAR */ and `table_name` = 'Music' and :__sq_has_values",
+            "SysTableTableName": "[table_name:'music']"
           }
         ]
       }
@@ -1227,6 +1227,46 @@
         },
         "FieldQuery": "select `table_name` from information_schema.`tables` where 1 != 1",
         "Query": "select `table_name` from information_schema.`tables` where table_schema in (database(), 'vt_main')"
+      }
+    }
+  },
+  {
+    "comment": "a second, different table_name value stays a plain filter instead of overwriting the routing source",
+    "query": "select table_name from information_schema.tables where table_name = 't1' and table_name = 't2'",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select table_name from information_schema.tables where table_name = 't1' and table_name = 't2'",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "DBA",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select `table_name` from information_schema.`tables` where 1 != 1",
+        "Query": "select `table_name` from information_schema.`tables` where `table_name` = :table_name /* VARCHAR */ and `table_name` = 't2'",
+        "SysTableTableName": "[table_name:'t1']"
+      }
+    }
+  },
+  {
+    "comment": "a second, different table_name value from a single-element IN stays a plain filter",
+    "query": "select table_name from information_schema.tables where table_name = 't1' and table_name in ('t2')",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select table_name from information_schema.tables where table_name = 't1' and table_name in ('t2')",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "DBA",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select `table_name` from information_schema.`tables` where 1 != 1",
+        "Query": "select `table_name` from information_schema.`tables` where `table_name` = :table_name /* VARCHAR */ and `table_name` = 't2'",
+        "SysTableTableName": "[table_name:'t1']"
       }
     }
   },
