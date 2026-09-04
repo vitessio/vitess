@@ -330,10 +330,6 @@ func TestInformationSchemaWithInPredicate(t *testing.T) {
 	inDup := utils.Exec(t, mcmp.VtConn, "select table_name from information_schema.tables where table_schema in ('ks', 'ks', null) and table_name = 't1'")
 	require.Equal(t, eq.Rows, inDup.Rows)
 
-	// another schema predicate narrows the list to one schema
-	inNarrowed := utils.Exec(t, mcmp.VtConn, "select table_name from information_schema.tables where table_schema = 'ks' and table_schema in ('ks', 'other') and table_name = 't1'")
-	require.Equal(t, eq.Rows, inNarrowed.Rows)
-
 	// multi-value table_name IN stays a plain filter
 	multiName := utils.Exec(t, mcmp.VtConn, "select table_name from information_schema.tables where table_schema = database() and table_name in ('t1', 't7_xxhash')")
 	require.Len(t, multiName.Rows, 2)

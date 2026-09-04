@@ -163,8 +163,7 @@ func extractInfoSchemaRoutingPredicate(ctx *plancontext.PlanningContext, in sqlp
 				cmp.Right = rhs[0]
 				break
 			}
-			// Multi-element schema lists are resolved at execution, where they
-			// are intersected with the other schema predicates. table_name
+			// Multi-element schema lists are resolved at execution. table_name
 			// lists already work as pushed-down filters.
 			if !isSchema || !translates(rhs) {
 				return false, "", nil
@@ -179,10 +178,9 @@ func extractInfoSchemaRoutingPredicate(ctx *plancontext.PlanningContext, in sqlp
 				cmp.Right = sqlparser.NewTypedArgument(sqltypes.BvSchemaName, sqltypes.VarChar)
 				return true, sqltypes.BvSchemaName, rhs
 			}
-			// The normalizer shares one list bindvar between identical IN tuples,
-			// so the engine writes a dedicated variable instead of the client's.
-			// resetRoutingLogic replays this already-rewritten node: recognize
-			// the dedicated variable and recover the client's list (#20972).
+			// The normalizer shares list bindvars between identical IN tuples, so
+			// the engine writes a dedicated variable. On replay (resetRoutingLogic)
+			// recognize it and recover the client's list (#20972).
 			for original, name := range ctx.ReservedArguments {
 				if name != string(rhs) {
 					continue

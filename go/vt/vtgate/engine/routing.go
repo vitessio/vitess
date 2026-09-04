@@ -206,34 +206,22 @@ func (rp *RoutingParameters) routeInfoSchemaQuery(ctx context.Context, vcursor V
 	}
 
 	env := evalengine.NewExpressionEnv(ctx, bindVars, vcursor)
-	// Intersect the schema names the table_schema predicates admit.
-	var candidates map[string]struct{}
-	for _, tableSchema := range rp.SysTableTableSchema {
+	var specifiedKS string
+	for idx, tableSchema := range rp.SysTableTableSchema {
 		result, err := env.Evaluate(tableSchema)
 		if err != nil {
 			return nil, err
 		}
-		names := schemaNames(result, vcursor.ConnCollation())
-		if candidates == nil {
-			candidates = names
-			continue
+		ks, err := schemaName(result, vcursor.ConnCollation())
+		if err != nil {
+			return nil, err
 		}
-		for name := range candidates {
-			if _, ok := names[name]; !ok {
-				delete(candidates, name)
-			}
+		switch {
+		case idx == 0:
+			specifiedKS = ks
+		case specifiedKS != ks:
+			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "specifying two different database in the query is not supported")
 		}
-	}
-	var specifiedKS string
-	switch {
-	case len(candidates) > 1:
-		return nil, vterrors.VT12001("IN list with more than one distinct schema name in an information_schema query")
-	case len(candidates) == 1:
-		for name := range candidates {
-			specifiedKS = name
-		}
-	case candidates != nil:
-		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "specifying two different database in the query is not supported")
 	}
 
 	bindVars[sqltypes.BvSchemaName] = sqltypes.StringBindVariable(specifiedKS)
@@ -246,9 +234,8 @@ func (rp *RoutingParameters) routeInfoSchemaQuery(ctx context.Context, vcursor V
 		}
 		var tabName string
 		if tuple := val.TupleValues(); tuple != nil {
-			// tblBvName is the dedicated list variable the rewritten query
-			// references; the client's list may be shared and is never written.
-			// Only a one-element list contributes to routing.
+			// Write the dedicated tblBvName, never the client's (possibly
+			// shared) list. Only a one-element list routes.
 			if len(tuple) != 1 {
 				bindVars[tblBvName] = tupleBindVariable(tuple)
 				continue
@@ -335,8 +322,7 @@ func (rp *RoutingParameters) routedTable(ctx context.Context, vcursor VCursor, b
 	return nil, nil
 }
 
-// setSysTableNameBindVar sets a table name bind variable, keeping the TUPLE
-// shape a rewritten `in ::name` predicate expects.
+// setSysTableNameBindVar keeps the TUPLE shape an `in ::name` predicate expects.
 func setSysTableNameBindVar(bindVars map[string]*querypb.BindVariable, name, value string) {
 	if bv, ok := bindVars[name]; ok && bv.Type == querypb.Type_TUPLE {
 		bindVars[name] = tupleOfOneBindVariable(value)
@@ -362,25 +348,28 @@ func tupleBindVariable(values []sqltypes.Value) *querypb.BindVariable {
 	return bv
 }
 
-// schemaNames returns the schema names a table_schema predicate admits. NULL
-// list elements are skipped; a list naming no schema matches nothing, like
-// `= NULL`, which the empty name expresses.
-func schemaNames(result evalengine.EvalResult, coll collations.ID) map[string]struct{} {
-	names := map[string]struct{}{}
+// schemaName returns the one schema name a predicate admits, skipping NULL list
+// elements (an all-NULL list yields "", matching nothing like `= NULL`). A list
+// naming several schemas is rejected: predicates may be on different schema
+// columns, so no other predicate can narrow it.
+func schemaName(result evalengine.EvalResult, coll collations.ID) (string, error) {
 	tuple := result.TupleValues()
 	if tuple == nil {
-		names[result.Value(coll).ToString()] = struct{}{}
-		return names
+		return result.Value(coll).ToString(), nil
 	}
+	var name string
+	found := false
 	for _, val := range tuple {
-		if !val.IsNull() {
-			names[val.ToString()] = struct{}{}
+		if val.IsNull() {
+			continue
+		}
+		if s := val.ToString(); !found {
+			name, found = s, true
+		} else if s != name {
+			return "", vterrors.VT12001("IN list with more than one distinct schema name in an information_schema query")
 		}
 	}
-	if len(names) == 0 {
-		names[""] = struct{}{}
-	}
-	return names
+	return name, nil
 }
 
 func (rp *RoutingParameters) anyShard(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {

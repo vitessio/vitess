@@ -39,8 +39,7 @@ func (environmentOnlyVSchema) Environment() *vtenv.Environment {
 }
 
 // TestExtractInfoSchemaRoutingPredicateListArgReplay pins that re-extracting an
-// already-rewritten `table_name IN ::list` node (as resetRoutingLogic does) is
-// idempotent: same dedicated variable, client's list recovered, no re-mutation.
+// already-rewritten `table_name IN ::list` node is idempotent.
 func TestExtractInfoSchemaRoutingPredicateListArgReplay(t *testing.T) {
 	ctx := &plancontext.PlanningContext{
 		ReservedVars:      sqlparser.NewReservedVars("vtg", sqlparser.BindVars{"tables": {}}),

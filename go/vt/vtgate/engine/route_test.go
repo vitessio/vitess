@@ -200,8 +200,6 @@ func TestInformationSchemaWithTableAndSchemaWithRoutedTables(t *testing.T) {
 	}
 }
 
-// TestSystemTableSchemaLists covers schema predicates that evaluate to a list
-// (IN tuples), alone and intersected with other schema predicates.
 func TestSystemTableSchemaLists(t *testing.T) {
 	tuple := func(name string) evalengine.Expr {
 		return evalengine.NewBindVarTuple(name, collations.SystemCollation.Collation)
@@ -268,43 +266,32 @@ func TestSystemTableSchemaLists(t *testing.T) {
 		},
 		wantErr: "VT12001",
 	}, {
-		name:    "scalar narrows a list to one destination",
+		// predicates may be on different schema columns (KEY_COLUMN_USAGE has three)
+		name:    "multi-name list errors even when another predicate names one of them",
 		schemas: []evalengine.Expr{literal("myKeyspace"), tuple("schemas")},
 		bindVars: map[string]*querypb.BindVariable{
 			"schemas": sqltypes.TestBindVariable([]any{"myKeyspace", "other"}),
 		},
-		expectedLog: []string{
-			"ResolveDestinations myKeyspace [] Destinations:DestinationAnyShard()",
-			fmt.Sprintf("ExecuteMultiShard myKeyspace.1: dummy_select {__replacevtschemaname: %v schemas: %v} false false",
-				replace, sqltypes.TestBindVariable([]any{"myKeyspace", "other"})),
-		},
+		wantErr: "VT12001",
 	}, {
-		name:    "list narrows a scalar it does not contain to nothing",
+		name:    "scalar and list naming different schemas error",
 		schemas: []evalengine.Expr{literal("myKeyspace"), tuple("schemas")},
 		bindVars: map[string]*querypb.BindVariable{
-			"schemas": sqltypes.TestBindVariable([]any{"ks1", "ks2"}),
+			"schemas": sqltypes.TestBindVariable([]any{"ks1"}),
 		},
 		wantErr: "specifying two different database in the query is not supported",
 	}, {
-		name:    "two lists intersect",
+		name:    "lists agreeing after duplicates and NULLs route",
 		schemas: []evalengine.Expr{tuple("s1"), tuple("s2")},
 		bindVars: map[string]*querypb.BindVariable{
-			"s1": sqltypes.TestBindVariable([]any{"ks1", "myKeyspace"}),
-			"s2": sqltypes.TestBindVariable([]any{"myKeyspace", "ks2"}),
+			"s1": sqltypes.TestBindVariable([]any{"myKeyspace", nil}),
+			"s2": sqltypes.TestBindVariable([]any{"myKeyspace", "myKeyspace"}),
 		},
 		expectedLog: []string{
 			"ResolveDestinations myKeyspace [] Destinations:DestinationAnyShard()",
 			fmt.Sprintf("ExecuteMultiShard myKeyspace.1: dummy_select {__replacevtschemaname: %v s1: %v s2: %v} false false",
-				replace, sqltypes.TestBindVariable([]any{"ks1", "myKeyspace"}), sqltypes.TestBindVariable([]any{"myKeyspace", "ks2"})),
+				replace, sqltypes.TestBindVariable([]any{"myKeyspace", nil}), sqltypes.TestBindVariable([]any{"myKeyspace", "myKeyspace"})),
 		},
-	}, {
-		name:    "two lists with more than one common value error",
-		schemas: []evalengine.Expr{tuple("s1"), tuple("s2")},
-		bindVars: map[string]*querypb.BindVariable{
-			"s1": sqltypes.TestBindVariable([]any{"ks1", "ks2", "ks3"}),
-			"s2": sqltypes.TestBindVariable([]any{"ks2", "ks3"}),
-		},
-		wantErr: "VT12001",
 	}}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -336,9 +323,8 @@ func TestSystemTableSchemaLists(t *testing.T) {
 	}
 }
 
-// sysTableNameInRoute builds a DBA route for a `table_name IN ::tables`
-// predicate: keyed by the dedicated ::vttables the rewritten query references,
-// while the expression reads the client's ::tables.
+// sysTableNameInRoute builds a DBA route for `table_name IN ::tables`, keyed by
+// the dedicated ::vttables while the expression reads the client's ::tables.
 func sysTableNameInRoute() *Route {
 	return &Route{
 		RoutingParameters: &RoutingParameters{
