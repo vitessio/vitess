@@ -1,0 +1,57 @@
+{{ define "schema.html" }}
+{{ template "layout" . }}
+{{ end }}
+
+{{ define "content" }}
+{{ $d := .Data }}
+<div class="toolbar">
+  <h1>{{ $d.Table }}</h1>
+  <div class="toolbar-links">
+    <a href="/schemas">All schemas</a>
+    <a href="/keyspace/{{ pathEscape $d.ClusterID }}/{{ pathEscape $d.Keyspace }}">Keyspace {{ $d.Keyspace }}</a>
+    <a href="/vschema/{{ pathEscape $d.ClusterID }}/{{ pathEscape $d.Keyspace }}">VSchema</a>
+  </div>
+</div>
+
+<div class="card">
+  <h2>Table definition</h2>
+  <dl>
+    <dt>Cluster</dt><dd>{{ $d.ClusterID }}</dd>
+    <dt>Keyspace</dt><dd>{{ $d.Keyspace }}</dd>
+    <dt>Columns</dt><dd>{{ range $i, $c := $d.Definition.GetColumns }}{{ if $i }}, {{ end }}{{ $c }}{{ end }}</dd>
+    {{ if $d.Definition.GetPrimaryKeyColumns }}
+    <dt>Primary key</dt><dd>{{ range $i, $c := $d.Definition.GetPrimaryKeyColumns }}{{ if $i }}, {{ end }}{{ $c }}{{ end }}</dd>
+    {{ end }}
+  </dl>
+  <pre>{{ $d.Definition.GetSchema }}</pre>
+</div>
+
+{{ if $d.Vindexes }}
+<div class="card">
+  <h2>Vindexes</h2>
+  <p class="muted">A Vindex maps a column value to a keyspace ID, which identifies the shard that contains the row.
+  <a href="https://vitess.io/docs/reference/features/vindexes/" target="_blank" rel="noopener noreferrer">Learn more about Vindexes</a>.</p>
+  <table>
+    <thead>
+      <tr><th>Vindex</th><th>Columns</th><th>Type</th><th>Params</th></tr>
+    </thead>
+    <tbody>
+      {{ range $d.Vindexes }}{{ $v := . }}
+      <tr>
+        <td>{{ $v.Name }}{{ if $v.Primary }} <span class="badge badge-primary">Primary</span>{{ end }}</td>
+        <td>{{ range $i, $c := $v.Columns }}{{ if $i }}, {{ end }}{{ $c }}{{ end }}</td>
+        <td>{{ if $v.Type }}{{ $v.Type }}{{ else }}<span class="muted">N/A</span>{{ end }}</td>
+        <td>
+          {{ if $v.ParamKeys }}
+          {{ range $k := $v.ParamKeys }}<div><strong>{{ $k }}:</strong> {{ index $v.Params $k }}</div>{{ end }}
+          {{ else }}
+          <span class="muted">N/A</span>
+          {{ end }}
+        </td>
+      </tr>
+      {{ end }}
+    </tbody>
+  </table>
+</div>
+{{ end }}
+{{ end }}

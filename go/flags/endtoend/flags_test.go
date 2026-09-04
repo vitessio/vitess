@@ -80,6 +80,12 @@ var (
 	//go:embed zkctld.txt
 	zkctldTxt string
 
+	//go:embed vtadmin.txt
+	vtadminTxt string
+
+	//go:embed vtadmin2.txt
+	vtadmin2Txt string
+
 	//go:embed vtbackup.txt
 	vtbackupTxt string
 
@@ -94,6 +100,8 @@ var (
 		"mysqlctld":        mysqlctldTxt,
 		"topo2topo":        topo2topoTxt,
 		"vtaclcheck":       vtaclcheckTxt,
+		"vtadmin":          vtadminTxt,
+		"vtadmin2":         vtadmin2Txt,
 		"vtbackup":         vtbackupTxt,
 		"vtcombo":          vtcomboTxt,
 		"vtctlclient":      vtctlclientTxt,

@@ -17,6 +17,7 @@ limitations under the License.
 package grpcserver
 
 import (
+	"context"
 	"net"
 	"testing"
 	"time"
@@ -123,6 +124,31 @@ func TestLameduck(t *testing.T) {
 	shutdownDuration := time.Since(shutdownStart)
 	assert.LessOrEqual(t, int64(ldd), int64(shutdownDuration),
 		"should have taken at least %s to shutdown, took only %s", ldd, shutdownDuration)
+}
+
+func TestListenAndServeContextShutsDownWhenCanceled(t *testing.T) {
+	lis, err := nettest.NewLocalListener("tcp")
+	require.NoError(t, err)
+	originalListenFunc := listenFunc
+	listenFunc = func(network, address string) (net.Listener, error) {
+		return lis, nil
+	}
+	t.Cleanup(func() {
+		listenFunc = originalListenFunc
+	})
+
+	s := New("testservice", Options{})
+	ctx, cancel := context.WithCancel(t.Context())
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- s.ListenAndServeContext(ctx)
+	}()
+
+	require.Eventually(t, s.isServing, 30*time.Second, 10*time.Millisecond)
+	cancel()
+
+	require.NoError(t, <-errCh)
+	assert.False(t, s.isServing())
 }
 
 func TestError(t *testing.T) {

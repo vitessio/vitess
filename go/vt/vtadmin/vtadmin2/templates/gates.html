@@ -1,0 +1,30 @@
+{{ define "gates.html" }}
+{{ template "layout" . }}
+{{ end }}
+
+{{ define "content" }}
+<div class="toolbar">
+  <h1>VTGates</h1>
+  <input class="table-filter" data-table-filter="#gates-table" placeholder="Filter VTGates" aria-label="Filter VTGates">
+</div>
+<div class="card">
+  <table id="gates-table">
+    <thead>
+      <tr><th>Cluster</th><th>Hostname</th><th>Cell</th><th>Pool</th><th>FQDN</th></tr>
+    </thead>
+    <tbody>
+      {{ range .Data }}
+      <tr>
+        <td>{{ clusterID .GetCluster }}</td>
+        <td>{{ if .GetHostname }}<a href="{{ externalURL .GetHostname }}" target="_blank" rel="noopener noreferrer">{{ .GetHostname }}</a>{{ end }}</td>
+        <td>{{ .GetCell }}</td>
+        <td>{{ .GetPool }}</td>
+        <td>{{ if .GetFQDN }}<a href="{{ externalURL .GetFQDN }}" target="_blank" rel="noopener noreferrer">{{ .GetFQDN }}</a>{{ end }}</td>
+      </tr>
+      {{ else }}
+      <tr><td colspan="5">No VTGates found.</td></tr>
+      {{ end }}
+    </tbody>
+  </table>
+</div>
+{{ end }}

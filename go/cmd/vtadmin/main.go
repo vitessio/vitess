@@ -17,10 +17,15 @@ limitations under the License.
 package main
 
 import (
+	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
+	"log/slog"
+	"net/http"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -38,6 +43,7 @@ import (
 	vtadminhttp "vitess.io/vitess/go/vt/vtadmin/http"
 	"vitess.io/vitess/go/vt/vtadmin/http/debug"
 	"vitess.io/vitess/go/vt/vtadmin/rbac"
+	"vitess.io/vitess/go/vt/vtadmin/vtadmin2"
 	"vitess.io/vitess/go/vt/vtctl/grpcclientcommon"
 	"vitess.io/vitess/go/vt/vtenv"
 )
@@ -56,11 +62,23 @@ var (
 
 	cacheRefreshKey string
 
+	// Server-rendered UI (vtadmin2) options.
+	ui             string
+	uiAddr         string
+	uiReadOnly     bool
+	uiDebugJSON    bool
+	uiTrustProxy   bool
+	uiTrustedHosts []string
+
 	traceCloser io.Closer = &noopCloser{}
 
 	rootCmd = &cobra.Command{
 		Use: "vtadmin",
 		PreRunE: func(cmd *cobra.Command, args []string) error {
+			if err := validateUIOptions(ui, enableDynamicClusters, uiTrustedHosts); err != nil {
+				return err
+			}
+
 			_flag.TrickGlog()
 
 			if err := log.Init(cmd.Flags()); err != nil {
@@ -105,6 +123,19 @@ func startTracing(cmd *cobra.Command) {
 	}
 
 	traceCloser = trace.StartTracing("vtadmin")
+}
+
+func validateUIOptions(ui string, enableDynamicClusters bool, trustedHosts []string) error {
+	if ui != "react" && ui != "vtadmin2" {
+		return fmt.Errorf("invalid --ui value %q: want react or vtadmin2", ui)
+	}
+	if ui == "vtadmin2" && enableDynamicClusters {
+		return errors.New("--enable-dynamic-clusters is not supported with --ui=vtadmin2")
+	}
+	if ui == "vtadmin2" && len(trustedHosts) == 0 {
+		return errors.New("--ui-trusted-host is required with --ui=vtadmin2")
+	}
+	return nil
 }
 
 func run(cmd *cobra.Command, args []string) {
@@ -164,10 +195,82 @@ func run(cmd *cobra.Command, args []string) {
 		RBAC:                  rbacConfig,
 		EnableDynamicClusters: enableDynamicClusters,
 	})
+
+	// The vtadmin2 server reuses the same API implementation (and its RBAC
+	// enforcement) and runs alongside the JSON API on its own address, so both
+	// UIs can be served during the migration.
+	if ui == "vtadmin2" {
+		uiServer, err := vtadmin2.NewServer(s, vtadmin2.Options{
+			Addr:            uiAddr,
+			ReadOnly:        uiReadOnly,
+			DocumentTitle:   "VTAdmin",
+			EnableDebugJSON: uiDebugJSON,
+			TrustProxyProto: uiTrustProxy,
+			TrustedHosts:    uiTrustedHosts,
+			Authenticator:   rbacConfig.GetAuthenticator(),
+		})
+		if err != nil {
+			fatal(err)
+		}
+
+		httpServer := vtadmin2.NewHTTPServer(uiAddr, uiServer)
+
+		shutdownBase := context.WithoutCancel(cmd.Context())
+		shutdownUI := sync.OnceFunc(func() {
+			shutdownCtx, cancel := context.WithTimeout(shutdownBase, 5*time.Minute)
+			defer cancel()
+			if err := httpServer.Shutdown(shutdownCtx); err != nil && !errors.Is(err, http.ErrServerClosed) {
+				slog.Error("vtadmin2 UI shutdown failed", slog.Any("error", err))
+			}
+		})
+		servenv.OnTermSync(shutdownUI)
+
+		serveUI := func() error {
+			slog.Info("vtadmin2 UI listening", slog.String("addr", uiAddr))
+			if err := httpServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+				return fmt.Errorf("vtadmin2 UI server failed: %w", err)
+			}
+			return nil
+		}
+
+		bootSpan.Finish()
+		if err := serveIntegratedServers(cmd.Context(), s.ListenAndServeContext, serveUI, shutdownUI); err != nil {
+			fatal(err)
+		}
+		return
+	}
 	bootSpan.Finish()
 
 	if err := s.ListenAndServe(); err != nil {
 		fatal(err)
+	}
+}
+
+func serveIntegratedServers(
+	ctx context.Context,
+	serveAPI func(context.Context) error,
+	serveUI func() error,
+	shutdownUI func(),
+) error {
+	ctx, cancel := context.WithCancelCause(ctx)
+	defer cancel(nil)
+	defer shutdownUI()
+
+	uiErr := make(chan error, 1)
+	go func() {
+		err := serveUI()
+		if err != nil {
+			uiErr <- err
+			cancel(err)
+		}
+	}()
+
+	apiErr := serveAPI(ctx)
+	select {
+	case err := <-uiErr:
+		return err
+	default:
+		return apiErr
 	}
 }
 
@@ -182,6 +285,14 @@ func registerFlags() {
 	rootCmd.Flags().Var(&clusterFileConfig, "cluster-config", "path to a yaml cluster configuration. see clusters.example.yaml") // (TODO:@amason) provide example config.
 	rootCmd.Flags().Var(&defaultClusterConfig, "cluster-defaults", "default options for all clusters")
 	rootCmd.Flags().BoolVar(&enableDynamicClusters, "enable-dynamic-clusters", false, "whether to enable dynamic clusters that are set by request header cookies or gRPC metadata")
+
+	// Server-rendered UI flags
+	rootCmd.Flags().StringVar(&ui, "ui", "react", "admin UI to serve: react (default SPA) or vtadmin2 (server-rendered UI)")
+	rootCmd.Flags().StringVar(&uiAddr, "ui-addr", ":14202", "address for the vtadmin2 UI to listen on (used with --ui=vtadmin2)")
+	rootCmd.Flags().BoolVar(&uiReadOnly, "ui-read-only", false, "run the vtadmin2 UI in read-only mode (used with --ui=vtadmin2)")
+	rootCmd.Flags().BoolVar(&uiDebugJSON, "ui-debug-json", false, "enable ?format=json page data output in the vtadmin2 UI (used with --ui=vtadmin2)")
+	rootCmd.Flags().BoolVar(&uiTrustProxy, "ui-trust-proxy-https", false, "mark UI cookies Secure when X-Forwarded-Proto: https is present from a trusted HTTPS-terminating proxy (used with --ui=vtadmin2)")
+	rootCmd.Flags().StringSliceVar(&uiTrustedHosts, "ui-trusted-host", nil, "trusted HTTP Host header for vtadmin2 requests; may be repeated (used with --ui=vtadmin2)")
 
 	// Tracing flags
 	trace.RegisterFlags(rootCmd.Flags()) // defined in go/vt/trace
@@ -201,7 +312,8 @@ func registerFlags() {
 		"HTTP endpoint to expose prometheus metrics on. Omit to disable scraping metrics. "+
 			"Using a path used by VTAdmin's http API is unsupported and causes undefined behavior.")
 	rootCmd.Flags().StringSliceVar(&httpOpts.CORSOrigins, "http-origin", []string{}, "repeated, comma-separated flag of allowed CORS origins. omit to disable CORS")
-	rootCmd.Flags().StringVar(&httpOpts.ExperimentalOptions.TabletURLTmpl,
+	rootCmd.Flags().StringVar(
+		&httpOpts.ExperimentalOptions.TabletURLTmpl,
 		"http-tablet-url-tmpl",
 		"https://{{ .Tablet.Hostname }}:80",
 		"[EXPERIMENTAL] Go template string to generate a reachable http(s) "+
@@ -211,8 +323,8 @@ func registerFlags() {
 
 	// RBAC flags
 	rootCmd.Flags().StringVar(&rbacConfigPath, "rbac-config", "", "path to an RBAC config file. must be set if passing --rbac")
-	rootCmd.Flags().BoolVar(&enableRBAC, "rbac", false, "whether to enable RBAC. must be set if not passing --rbac")
-	rootCmd.Flags().BoolVar(&disableRBAC, "no-rbac", false, "whether to disable RBAC. must be set if not passing --no-rbac")
+	rootCmd.Flags().BoolVar(&enableRBAC, "rbac", false, "whether to enable RBAC. must be set if not passing --no-rbac")
+	rootCmd.Flags().BoolVar(&disableRBAC, "no-rbac", false, "whether to disable RBAC. must be set if not passing --rbac")
 
 	// Global cache flags (N.B. there are also cluster-specific cache flags)
 	cacheRefreshHelp := "instructs a request to ignore any cached data (if applicable) and refresh the cache;" +

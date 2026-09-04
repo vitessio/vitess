@@ -1,0 +1,50 @@
+Usage:
+  vtadmin [flags]
+
+Flags:
+      --addr string                             address to serve on (default ":15000")
+      --cache-refresh-key string                instructs a request to ignore any cached data (if applicable) and refresh the cache;usable as an HTTP header named 'X-<key>' and as a gRPC metadata key '<key>'
+                                                Note: any whitespace characters are replaced with hyphens. (default "vt-cache-refresh")
+      --cluster cluster.ClustersFlag            per-cluster configuration. any values here take precedence over those in -cluster-defaults or -cluster-config (default [])
+      --cluster-config cluster.FileConfig       path to a yaml cluster configuration. see clusters.example.yaml (default {defaults: *cluster.Config:{ID: Name: DiscoveryImpl: DiscoveryFlagsByImpl:map[] TabletFQDNTmplStr: VtSQLFlags:map[] VtctldFlags:map[] BackupReadPoolConfig:<nil> SchemaReadPoolConfig:<nil> TopoRWPoolConfig:<nil> TopoReadPoolConfig:<nil> WorkflowReadPoolConfig:<nil> EmergencyFailoverPoolConfig:<nil> FailoverPoolConfig:<nil> SchemaCacheConfig:<nil> vtctldConfigOpts:[] vtsqlConfigOpts:[]}, clusters: []})
+      --cluster-defaults cluster.Config         default options for all clusters (default *cluster.Config:{ID: Name: DiscoveryImpl: DiscoveryFlagsByImpl:map[] TabletFQDNTmplStr: VtSQLFlags:map[] VtctldFlags:map[] BackupReadPoolConfig:<nil> SchemaReadPoolConfig:<nil> TopoRWPoolConfig:<nil> TopoReadPoolConfig:<nil> WorkflowReadPoolConfig:<nil> EmergencyFailoverPoolConfig:<nil> FailoverPoolConfig:<nil> SchemaCacheConfig:<nil> vtctldConfigOpts:[] vtsqlConfigOpts:[]})
+      --enable-dynamic-clusters                 whether to enable dynamic clusters that are set by request header cookies or gRPC metadata
+      --grpc-allow-reflection                   whether to register the gRPC server for reflection; this is required to use tools like grpc_cli
+      --grpc-enable-channelz                    whether to enable the channelz service on the gRPC server
+      --grpc-tracing                            whether to enable tracing on the gRPC server
+  -h, --help                                    help for vtadmin
+      --http-debug-omit-env StringSetFlag       name of an environment variable to omit from /debug/env, if http debug endpoints are enabled. specify multiple times to omit multiple env vars
+      --http-debug-sanitize-env StringSetFlag   name of an environment variable to sanitize in /debug/env, if http debug endpoints are enabled. specify multiple times to sanitize multiple env vars
+      --http-metrics-endpoint string            HTTP endpoint to expose prometheus metrics on. Omit to disable scraping metrics. Using a path used by VTAdmin's http API is unsupported and causes undefined behavior. (default "/metrics")
+      --http-no-compress                        whether to disable compression of HTTP API responses
+      --http-no-debug                           whether to disable /debug/pprof/* and /debug/env HTTP endpoints
+      --http-origin strings                     repeated, comma-separated flag of allowed CORS origins. omit to disable CORS
+      --http-tablet-url-tmpl string             [EXPERIMENTAL] Go template string to generate a reachable http(s) address for a tablet. Currently used to make passthrough requests to /debug/vars endpoints. (default "https://{{ "{{ .Tablet.Hostname }}" }}:80")
+      --http-tracing                            whether to enable tracing on the HTTP server
+      --lame-duck-duration duration             length of lame duck period at shutdown (default 5s)
+      --lmux-read-timeout duration              how long to spend connection muxing (default 1s)
+      --log-format string                       log output format: json for machine-readable JSON, text for human-readable colored output (default "json")
+      --log-level string                        minimum log level when structured logging is enabled (debug, info, warn, error) (default "info")
+      --log-rotate-max-size uint                size in bytes at which logs are rotated (glog.MaxSize) (default 1887436800)
+      --log-structured                          enable structured JSON logging (default true)
+      --mysql-server-version string             MySQL server version to advertise. (default "8.4.6-Vitess")
+      --no-rbac                                 whether to disable RBAC. must be set if not passing --rbac
+      --otel-endpoint string                    OpenTelemetry collector endpoint (host:port for gRPC); if empty, the OTEL_EXPORTER_OTLP_ENDPOINT env var is used
+      --otel-insecure                           use insecure connection to OpenTelemetry collector
+      --rbac                                    whether to enable RBAC. must be set if not passing --no-rbac
+      --rbac-config string                      path to an RBAC config file. must be set if passing --rbac
+      --tracer string                           tracing service to use (default "noop")
+      --tracing-enable-logging                  whether to enable logging in the tracing service
+      --tracing-sampling-rate float             sampling rate for traces as a probability between 0.0 and 1.0 (default 0.1)
+      --ui string                               admin UI to serve: react (default SPA) or vtadmin2 (server-rendered UI) (default "react")
+      --ui-addr string                          address for the vtadmin2 UI to listen on (used with --ui=vtadmin2) (default ":14202")
+      --ui-debug-json                           enable ?format=json page data output in the vtadmin2 UI (used with --ui=vtadmin2)
+      --ui-read-only                            run the vtadmin2 UI in read-only mode (used with --ui=vtadmin2)
+      --ui-trust-proxy-https                    mark UI cookies Secure when X-Forwarded-Proto: https is present from a trusted HTTPS-terminating proxy (used with --ui=vtadmin2)
+      --ui-trusted-host strings                 trusted HTTP Host header for vtadmin2 requests; may be repeated (used with --ui=vtadmin2)
+      --version                                 version for vtadmin
+      --vtctld-grpc-ca string                   the server ca to use to validate servers when connecting
+      --vtctld-grpc-cert string                 the cert to use to connect
+      --vtctld-grpc-crl string                  the server crl to use to validate server certificates when connecting
+      --vtctld-grpc-key string                  the key to use to connect
+      --vtctld-grpc-server-name string          the server name to use to validate server certificate

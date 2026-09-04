@@ -49,6 +49,8 @@
         - [ApplySchema session variables](#vttablet-applyschema-session-variables)
     - **[VTCtld](#minor-changes-vtctld)**
         - [MySQL version-aware reparent candidate election](#vtctld-version-aware-reparent)
+    - **[VTAdmin](#minor-changes-vtadmin)**
+        - [Experimental server-rendered VTAdmin UI (vtadmin2)](#vtadmin2-experimental-ui)
     - **[Backup/Restore](#minor-changes-backup)**
         - [Chunked backup/restore for the builtinbackupengine](#backup-chunked-builtin)
         - [Slow clean mysqld shutdowns no longer fail backups](#backup-mysqld-shutdown-timeout)
@@ -540,6 +542,21 @@ The same caveat applies to a `REPLICA` that is *excluded from election* — beca
 **Behavior change (self-elected initial promotion now reads and checks every tablet's position):** on the initialization path (a shard that has never had a primary), PRS now issues a `PrimaryPosition` read to every non-`RESTORE` tablet and requires the elect's position to contain all of them before calling `InitPrimary` (the containment check above). This closes a data-loss window — a tablet seeded from a backup or external source can hold transactions the version-preferred elect lacks, which a blind `InitPrimary` would discard. Two consequences follow: initialization now also **fails if any tablet's position read fails** (PRS already required every tablet to be reachable, but it did not previously read positions on this path), and on file-position (non-GTID) shards the elect's containment cannot be established across tablets, so PRS **fails closed** unless an explicit `--new-primary` is given. Passing `--new-primary` does not skip the GTID dominance check — an explicitly-named primary must still contain every reachable tablet's position. On MariaDB shards, which report an executed GTID position but no separate relay-log position, the containment check compares each peer's executed position (the only cross-tablet-comparable position MariaDB exposes), so a version-preferred elect that is behind a MariaDB peer is correctly rejected.
 
 See [#20211](https://github.com/vitessio/vitess/pull/20211) for details.
+
+### <a id="minor-changes-vtadmin"/>VTAdmin</a>
+
+#### <a id="vtadmin2-experimental-ui"/>Experimental server-rendered VTAdmin UI (vtadmin2)</a>
+
+VTAdmin now ships an experimental server-rendered UI alongside the existing React SPA. The React UI remains the default.
+
+There are two opt-in ways to run it:
+
+- Integrated: `vtadmin --ui=vtadmin2` serves the HTML UI (default listen address `:14202`, overridable with `--ui-addr`) and requires at least one `--ui-trusted-host` value. `--ui-read-only` hides mutating actions. `--ui-debug-json` enables `?format=json` page dumps. `--ui-trust-proxy-https` marks cookies `Secure` when `X-Forwarded-Proto: https` is present; only enable this behind a trusted HTTPS-terminating proxy, because that header is otherwise spoofable.
+- Standalone: the `vtadmin2` binary is now included in install and release packages and requires at least one `--trusted-host` value. Example local clusters start it by default unless `SKIP_VTADMIN2` is set.
+
+The UI is experimental: it covers the operator pages and actions needed to manage a cluster without the React frontend toolchain, but it is not a complete replacement yet. RBAC still applies through the backing VTAdmin API. Creating a VDiff now requires a cluster `put` action (it previously accepted cluster `get`). Concluding an unresolved transaction also requires cluster `put` rather than a read. Reloading schema on a shard requires the schema `reload` action.
+
+See [#20107](https://github.com/vitessio/vitess/issues/20107) and [#20946](https://github.com/vitessio/vitess/pull/20946).
 
 ### <a id="minor-changes-backup"/>Backup/Restore</a>
 
