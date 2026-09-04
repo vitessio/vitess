@@ -558,10 +558,11 @@ func TestSessionSQLModeExpressionSessionValue(t *testing.T) {
 		require.NoError(t, err)
 		require.Len(t, lookup.Queries, 2)
 		assert.Equal(t, "select @@sql_mode orig, REPLACE(@@sql_mode, 'ANSI_QUOTES', '') new", lookup.Queries[0].Sql)
-		assert.Equal(t, "select :vtg1 /* VARCHAR */ from information_schema.`table`", lookup.Queries[1].Sql)
-		// the value does not change the shard's default, so the session keeps nothing
-		_, stored := session.SystemVariables["sql_mode"]
-		assert.False(t, stored)
+		// the session records the value even though the judgment saw no change:
+		// it may have run on a connection the vtgate that stored the expression
+		// had already applied it to, so the shards get it with every query
+		assert.Equal(t, "select /*+ SET_VAR(sql_mode = 'STRICT_TRANS_TABLES') */ :vtg1 /* VARCHAR */ from information_schema.`table`", lookup.Queries[1].Sql)
+		assert.Equal(t, "'STRICT_TRANS_TABLES'", session.SystemVariables["sql_mode"])
 	})
 
 	t.Run("an expression adding a lexer mode enables it", func(t *testing.T) {

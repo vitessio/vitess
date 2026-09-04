@@ -362,6 +362,32 @@ func TestSetTable(t *testing.T) {
 			`SysVar set with (sql_mode,'STRICT_TRANS_TABLES')`,
 		},
 	}, {
+		// the session stores the full value; the shard is sent the value it can run
+		// under, which leaves NO_BACKSLASH_ESCAPES out
+		testName: "targeted sql_mode sends the shard the value without NO_BACKSLASH_ESCAPES",
+		setOps: []SetOp{
+			&SysVarReservedConn{
+				Name:              "sql_mode",
+				Keyspace:          ks,
+				TargetDestination: key.DestinationAnyShard{},
+				Expr:              "'NO_BACKSLASH_ESCAPES,STRICT_TRANS_TABLES'",
+			},
+		},
+		qr: []*sqltypes.Result{sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields(
+				"orig|new",
+				"varchar|varchar",
+			),
+			"|NO_BACKSLASH_ESCAPES,STRICT_TRANS_TABLES",
+		)},
+		expectedQueryLog: []string{
+			`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
+			`ExecuteMultiShard ks.-20: select @@sql_mode orig, 'NO_BACKSLASH_ESCAPES,STRICT_TRANS_TABLES' new {} false false`,
+			`Needs Reserved Conn`,
+			`ExecuteMultiShard ks.-20: set sql_mode = 'STRICT_TRANS_TABLES' {} false false`,
+			`SysVar set with (sql_mode,'NO_BACKSLASH_ESCAPES,STRICT_TRANS_TABLES')`,
+		},
+	}, {
 		testName: "sysvar set not modifying setting",
 		setOps: []SetOp{
 			&SysVarReservedConn{

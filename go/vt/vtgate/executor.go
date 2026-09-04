@@ -1473,6 +1473,10 @@ func (e *Executor) materializeSessionSQLMode(ctx context.Context, safeSession *e
 		TargetDestination: vcursor.ShardDestination(),
 		Expr:              value,
 		SupportSetVar:     sysvars.SQLMode.SupportSetVar,
+		// the judgment may run on a connection the expression was already applied
+		// to, by the vtgate that stored it: the value is then unchanged there, and
+		// the session must record it all the same
+		StoreUnchanged: true,
 	}
 	err = set.Execute(ctx, vcursor, evalengine.NewExpressionEnv(ctx, nil, vcursor))
 	if err == nil {

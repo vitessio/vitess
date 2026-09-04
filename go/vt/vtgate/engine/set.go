@@ -81,6 +81,11 @@ type (
 		TargetDestination key.ShardDestination `json:",omitempty"`
 		Expr              string
 		SupportSetVar     bool
+		// StoreUnchanged makes a sql_mode assignment store its judged value in the
+		// session even when it does not change the shard's current value: the
+		// judgment ran against a connection that may already be in that mode, which
+		// the session must then record rather than leave unset.
+		StoreUnchanged bool `json:",omitempty"`
 	}
 
 	// SysVarSetAware implements the SetOp interface and will write the changes variable into the session
@@ -293,7 +298,9 @@ func (svs *SysVarReservedConn) Execute(ctx context.Context, vcursor VCursor, env
 			storedValue = buf.String()
 		}
 		vcursor.Session().NeedsReservedConn()
-		if err := svs.execSetStatement(ctx, vcursor, rss, env, storedValue); err != nil {
+		// the session stores the full value; the shard is sent the value it can run
+		// under (see sqlparser.StripUnforwardableModes)
+		if err := svs.execSetStatement(ctx, vcursor, rss, env, sqlparser.StripUnforwardableModesValue(storedValue)); err != nil {
 			// the statement failed, so the session must not store its value
 			return err
 		}
@@ -366,7 +373,7 @@ func (svs *SysVarReservedConn) checkAndUpdateSysVar(ctx context.Context, vcursor
 			value = qr.Rows[0][0]
 		}
 	}
-	if !changed {
+	if !changed && !(svs.StoreUnchanged && svs.Name == sysvars.SQLMode.Name) {
 		return false, "", nil
 	}
 	var buf strings.Builder
