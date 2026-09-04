@@ -4182,6 +4182,14 @@ var validSQL = []struct {
 	input:  "drop table CAST",
 	output: "drop table `CAST`",
 }, {
+	// a qualified name is never a keyword: it names a stored function or a
+	// column in the schema, with or without whitespace before the parenthesis
+	input:  "select db.cast(1), t.`cast` from t",
+	output: "select db.`cast`(1), t.`cast` from t",
+}, {
+	input:  "select db.cast (1), db.now () from t",
+	output: "select db.`cast`(1), db.`now`() from t",
+}, {
 	input:  "create table CURDATE (a int)",
 	output: "create table `CURDATE` (\n\ta int\n)",
 }, {
