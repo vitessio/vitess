@@ -351,6 +351,23 @@ func TestSQLModeSessionValueCanonicalized(t *testing.T) {
 	}
 }
 
+// A session carrying the bare DEFAULT keyword as its sql_mode — a gRPC client may
+// send SET's expression as written — runs under the default the session starts with,
+// which is what a session without a value does: the value is dropped when taken in.
+func TestSQLModeDefaultSessionValue(t *testing.T) {
+	for _, stored := range []string{"default", "DEFAULT", " Default "} {
+		session := NewSafeSession(&vtgatepb.Session{SystemVariables: map[string]string{"sql_mode": stored}})
+		_, ok := session.SQLMode()
+		assert.False(t, ok, stored)
+		assert.NotContains(t, session.SystemVariables, "sql_mode")
+	}
+	// the string 'DEFAULT' is a mode name, and not a valid one: left for the backend to judge
+	session := NewSafeSession(&vtgatepb.Session{SystemVariables: map[string]string{"sql_mode": "'DEFAULT'"}})
+	mode, ok := session.SQLMode()
+	require.True(t, ok)
+	assert.Equal(t, "DEFAULT", mode)
+}
+
 // TestSQLModeUnset verifies the accessor reports absence when the session
 // never set sql_mode.
 func TestSQLModeUnset(t *testing.T) {

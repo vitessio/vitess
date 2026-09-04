@@ -158,7 +158,16 @@ func NewSafeSession(sessn *vtgatepb.Session) *SafeSession {
 // anything that is not a plain list, e.g. an expression (see IsSQLModeList).
 func canonicalizeSessionSQLMode(vars map[string]string) {
 	value, ok := vars["sql_mode"]
-	if !ok || value == "" || !sqlparser.IsSQLModeList(value) {
+	if !ok || value == "" {
+		return
+	}
+	if strings.EqualFold(strings.TrimSpace(value), "default") {
+		// the DEFAULT keyword stored as written: it names the default the session
+		// starts with, which is what a session without a value runs under
+		delete(vars, "sql_mode")
+		return
+	}
+	if !sqlparser.IsSQLModeList(value) {
 		return
 	}
 	// the same judgment a SET gets, so the session ends up storing what a SET would
