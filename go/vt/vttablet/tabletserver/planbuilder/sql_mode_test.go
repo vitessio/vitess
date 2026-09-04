@@ -150,6 +150,15 @@ func TestValidateReservedSettings(t *testing.T) {
 		assert.True(t, setsSQLMode, "a sql_mode assignment without parse bits still puts the session in a mode")
 	})
 
+	t.Run("the last assignment decides the mode the session is in", func(t *testing.T) {
+		parseMode, setsSQLMode, err := ValidateReservedSettings([]string{
+			"set sql_mode = 'NO_BACKSLASH_ESCAPES', sql_mode = 'PIPES_AS_CONCAT'",
+		}, parser)
+		require.NoError(t, err)
+		assert.Equal(t, sqlparser.SQLModePipesAsConcat, parseMode)
+		assert.True(t, setsSQLMode)
+	})
+
 	t.Run("settings without a sql_mode assignment leave the session's mode alone", func(t *testing.T) {
 		parseMode, setsSQLMode, err := ValidateReservedSettings([]string{"set sql_safe_updates=1", "set @@global.sql_mode = 'ANSI_QUOTES'"}, parser)
 		require.NoError(t, err)
@@ -242,6 +251,35 @@ func TestSetPlanSQLMode(t *testing.T) {
 		sql:         "set @@sql_safe_updates = if(1 = 1, 0, 1), @@sql_mode = 'STRICT_TRANS_TABLES'",
 		setsSQLMode: true,
 		fullQuery:   "set @@sql_safe_updates = if(1 = 1, 0, 1), @@sql_mode = 'STRICT_TRANS_TABLES'",
+	}, {
+		// MySQL applies duplicate assignments in order, so the last one decides the mode
+		// the session ends up in; an earlier NO_BACKSLASH_ESCAPES is superseded before the
+		// connection processes anything else
+		sql:         "set @@sql_mode = 'NO_BACKSLASH_ESCAPES', @@sql_mode = ''",
+		setsSQLMode: true,
+		fullQuery:   "set @@sql_mode = 'NO_BACKSLASH_ESCAPES', @@sql_mode = ''",
+	}, {
+		sql:         "set @@sql_mode = '', @@sql_mode = 'NO_BACKSLASH_ESCAPES'",
+		expectedErr: "setting the NO_BACKSLASH_ESCAPES sql_mode is unsupported",
+	}, {
+		sql:         "set @@sql_mode = 'PIPES_AS_CONCAT', @@sql_mode = 'ANSI_QUOTES'",
+		setsSQLMode: true,
+		parseBits:   sqlparser.SQLModeANSIQuotes,
+		fullQuery:   "set @@sql_mode = 'PIPES_AS_CONCAT', @@sql_mode = 'ANSI_QUOTES'",
+	}, {
+		// every constant value is still validated as MySQL validates it in turn
+		sql:         "set @@sql_mode = 'BOGUS', @@sql_mode = ''",
+		expectedErr: "Variable 'sql_mode' can't be set to the value of 'BOGUS'",
+	}, {
+		// a superseded non-constant value needs no read-back: MySQL validates it itself
+		// and the final constant is judged here
+		sql:         "set @@sql_mode = concat('AN', 'SI'), @@sql_mode = 'PIPES_AS_CONCAT'",
+		setsSQLMode: true,
+		parseBits:   sqlparser.SQLModePipesAsConcat,
+		fullQuery:   "set @@sql_mode = concat('AN', 'SI'), @@sql_mode = 'PIPES_AS_CONCAT'",
+	}, {
+		sql:         "set @@sql_mode = 'PIPES_AS_CONCAT', @@sql_mode = concat('AN', 'SI')",
+		expectedErr: "non-constant sql_mode value in a multi-assignment SET: set @@sql_mode = 'PIPES_AS_CONCAT', @@sql_mode = concat('AN', 'SI')",
 	}}
 	for _, tc := range tests {
 		t.Run(tc.sql, func(t *testing.T) {

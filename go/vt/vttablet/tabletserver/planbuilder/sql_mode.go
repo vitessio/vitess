@@ -18,6 +18,7 @@ package planbuilder
 
 import (
 	"vitess.io/vitess/go/mysql/sqlmode"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/sysvars"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -93,36 +94,54 @@ func validateConstantSetExprsSQLMode(exprs sqlparser.SetExprs) error {
 }
 
 // constantSetExprsSQLModeBits extracts the parse-relevant sql_mode bits of the last
-// constant session-scope sql_mode assignment — the modes the vttablet parses queries on
-// this connection under. sawConstant reports whether one was seen, so callers can
-// record the session's bits even when they are zero. Values the caller's validation
-// pass did not reject as invalid are ignored.
+// session-scope sql_mode assignment — the modes the vttablet parses queries on this
+// connection under — when that assignment is a constant. sawConstant reports whether
+// it is, so callers can record the session's bits even when they are zero. An earlier
+// assignment in the same statement is superseded by the last one, whatever its form.
+// Values the caller's validation pass did not reject as invalid are ignored.
 func constantSetExprsSQLModeBits(exprs sqlparser.SetExprs) (parseMode sqlparser.SQLMode, sawConstant bool) {
 	for _, expr := range exprs {
-		if expr.Var.Name.Lowered() != sysvars.SQLMode.Name {
+		if !isSessionSQLModeAssignment(expr) {
 			continue
 		}
-		switch expr.Var.Scope {
-		case sqlparser.SessionScope, sqlparser.NoScope, sqlparser.NextTxScope:
-		default:
-			continue
-		}
-		lit, ok := expr.Expr.(*sqlparser.Literal)
+		parseMode, sawConstant = 0, false
+		mode, ok := constantSQLModeValue(expr)
 		if !ok {
 			continue
 		}
-		value, err := sqlparser.LiteralToValue(lit)
-		if err != nil {
-			continue
+		if mode, err := sqlmode.Validate(mode); err == nil {
+			parseMode = sqlparser.ParseSQLMode(mode.String())
+			sawConstant = true
 		}
-		mode, err := sqlmode.Validate(value)
-		if err != nil {
-			continue
-		}
-		parseMode = sqlparser.ParseSQLMode(mode.String())
-		sawConstant = true
 	}
 	return parseMode, sawConstant
+}
+
+// isSessionSQLModeAssignment reports whether the assignment sets the session's
+// sql_mode. The global scope is the operator's domain, not a vtgate session's.
+func isSessionSQLModeAssignment(expr *sqlparser.SetExpr) bool {
+	if expr.Var.Name.Lowered() != sysvars.SQLMode.Name {
+		return false
+	}
+	switch expr.Var.Scope {
+	case sqlparser.SessionScope, sqlparser.NoScope, sqlparser.NextTxScope:
+		return true
+	default:
+		return false
+	}
+}
+
+// constantSQLModeValue returns the assigned value when it is a constant.
+func constantSQLModeValue(expr *sqlparser.SetExpr) (sqltypes.Value, bool) {
+	lit, ok := expr.Expr.(*sqlparser.Literal)
+	if !ok {
+		return sqltypes.Value{}, false
+	}
+	value, err := sqlparser.LiteralToValue(lit)
+	if err != nil {
+		return sqltypes.Value{}, false
+	}
+	return value, true
 }
 
 // validateSetStatementSQLMode is validateSetExprsSQLMode for SET statements executed on
@@ -142,39 +161,41 @@ func validateSetStatementSQLMode(set *sqlparser.Set) (readBack bool, err error) 
 	return readBack, nil
 }
 
-// validateSetExprsSQLMode rejects session-scope sql_mode assignments whose constant
-// value fails sqlmode.Validate or carries a mode the MySQL session must not run under
-// (sqlmode.ValidateNoUnforwardableModes). Assignments whose value is not a constant
-// cannot be judged here; for those it returns readBack=true, asking the executor to
-// read back the applied value after the statement runs and judge it then.
+// validateSetExprsSQLMode judges the session-scope sql_mode assignments of a statement
+// the way MySQL applies them: in order, each constant value validated as MySQL would
+// (sqlmode.Validate), with the last assignment deciding the mode the session ends up
+// in. Only that final value is held to the modes the MySQL session must not run under
+// (sqlmode.ValidateNoUnforwardableModes): an earlier assignment in the same statement
+// is superseded before the connection processes anything else. When the last
+// assignment is not a constant it cannot be judged here; readBack=true then asks the
+// executor to read back the applied value after the statement runs and judge it then.
 func validateSetExprsSQLMode(exprs sqlparser.SetExprs) (readBack bool, err error) {
+	var last sqlmode.Mode
+	var lastConstant, seen bool
 	for _, expr := range exprs {
-		if expr.Var.Name.Lowered() != sysvars.SQLMode.Name {
+		if !isSessionSQLModeAssignment(expr) {
 			continue
 		}
-		switch expr.Var.Scope {
-		case sqlparser.SessionScope, sqlparser.NoScope, sqlparser.NextTxScope:
-		default:
-			// the global scope is the operator's domain, not a vtgate session's
-			continue
-		}
-		lit, ok := expr.Expr.(*sqlparser.Literal)
+		seen = true
+		value, ok := constantSQLModeValue(expr)
 		if !ok {
-			readBack = true
-			continue
-		}
-		value, err := sqlparser.LiteralToValue(lit)
-		if err != nil {
-			readBack = true
+			lastConstant = false
 			continue
 		}
 		mode, err := sqlmode.Validate(value)
 		if err != nil {
 			return false, err
 		}
-		if err := sqlmode.ValidateNoUnforwardableModes(mode); err != nil {
-			return false, err
-		}
+		last, lastConstant = mode, true
 	}
-	return readBack, nil
+	if !seen {
+		return false, nil
+	}
+	if !lastConstant {
+		return true, nil
+	}
+	if err := sqlmode.ValidateNoUnforwardableModes(last); err != nil {
+		return false, err
+	}
+	return false, nil
 }
