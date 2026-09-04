@@ -996,6 +996,11 @@ func (qre *QueryExecutor) execDDL(conn *StatefulConnection) (result *sqltypes.Re
 	if ddlStmt, ok := qre.plan.FullStmt.(sqlparser.DDLStatement); ok {
 		isTemporaryTable = ddlStmt.IsTemporary()
 	}
+	// Only a CREATE gives the connection temp-table state to protect; a DROP
+	// is temporary DDL too but must not mark or probe (vtgate marks the
+	// session on CREATE only).
+	_, isCreate := qre.plan.FullStmt.(*sqlparser.CreateTable)
+	createsTemporaryTable := isTemporaryTable && isCreate
 
 	// A DDL statement should commit the current transaction in the VTGate.
 	// The change was made in PR: https://github.com/vitessio/vitess/pull/14110 in v18.
@@ -1033,7 +1038,7 @@ func (qre *QueryExecutor) execDDL(conn *StatefulConnection) (result *sqltypes.Re
 			return nil, err
 		}
 	}
-	if isTemporaryTable {
+	if createsTemporaryTable {
 		// Capture before the DDL: keeping the connection through a probe
 		// failure is only best-effort, so the probe must precede the
 		// user-visible state change — a connection it costs then surfaces as
@@ -1045,7 +1050,7 @@ func (qre *QueryExecutor) execDDL(conn *StatefulConnection) (result *sqltypes.Re
 	if err != nil {
 		return nil, err
 	}
-	if isTemporaryTable {
+	if createsTemporaryTable {
 		// The session holds temporary-table state on this connection, so the
 		// temp-table idle timeout may govern its reclamation.
 		conn.markHoldsTempTables()

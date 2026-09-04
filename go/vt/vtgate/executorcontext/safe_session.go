@@ -443,25 +443,24 @@ func (session *SafeSession) ShardSessionsForCleanup() []*vtgatepb.Session_ShardS
 	return slices.Concat(session.PreSessions, session.ShardSessions, session.PostSessions)
 }
 
-// ShardSessionSnapshots returns per-shard-session snapshots of PreSessions,
-// ShardSessions, and PostSessions, copied field by field under the session
-// mutex. Callers that read shard-session state from a goroutine running
-// concurrently with query execution (which updates TransactionId and
-// ReservedId on the live protos) must use this instead of the
-// ShardSessionsFor* accessors, whose returned protos are shared and racy.
+// ShardSessionSnapshots returns per-shard-session snapshots of ShardSessions
+// (the only list that can hold temporary tables, and the one the keepalive
+// sweeper registers), copied field by field under the session mutex. Callers
+// that read shard-session state from a goroutine running concurrently with
+// query execution (which updates TransactionId and ReservedId on the live
+// protos) must use this instead of the ShardSessionsFor* accessors, whose
+// returned protos are shared and racy.
 func (session *SafeSession) ShardSessionSnapshots() []ShardSessionSnapshot {
 	session.mu.Lock()
 	defer session.mu.Unlock()
-	snapshots := make([]ShardSessionSnapshot, 0, len(session.PreSessions)+len(session.ShardSessions)+len(session.PostSessions))
-	for _, sessions := range [][]*vtgatepb.Session_ShardSession{session.PreSessions, session.ShardSessions, session.PostSessions} {
-		for _, ss := range sessions {
-			snapshots = append(snapshots, ShardSessionSnapshot{
-				Target:        ss.GetTarget(),
-				TabletAlias:   ss.GetTabletAlias(),
-				TransactionID: ss.GetTransactionId(),
-				ReservedID:    ss.GetReservedId(),
-			})
-		}
+	snapshots := make([]ShardSessionSnapshot, 0, len(session.ShardSessions))
+	for _, ss := range session.ShardSessions {
+		snapshots = append(snapshots, ShardSessionSnapshot{
+			Target:        ss.GetTarget(),
+			TabletAlias:   ss.GetTabletAlias(),
+			TransactionID: ss.GetTransactionId(),
+			ReservedID:    ss.GetReservedId(),
+		})
 	}
 	return snapshots
 }

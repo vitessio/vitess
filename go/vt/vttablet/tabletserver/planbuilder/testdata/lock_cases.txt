@@ -164,3 +164,13 @@
   "FullQuery": "update t set id = 1 where is_free_lock('foo') = 1",
   "WhereClause": " where is_free_lock('foo') = 1"
 }
+
+# a union is swept like a select: a get_lock in any branch would otherwise
+# acquire the lock on a pooled connection
+"select get_lock('foo', 10) from dual union select 1 from dual"
+{
+  "PlanID": "SelectLockFunc",
+  "TableName": "",
+  "FullQuery": "select get_lock('foo', 10) from dual union select 1 from dual limit :#maxLimit",
+  "NeedsReservedConn": true
+}

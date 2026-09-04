@@ -188,6 +188,7 @@ func TestTempTableActivityRefresh(t *testing.T) {
 	// the refresh out.
 	vh := newVtgateHandler(&VTGate{executor: executor})
 	pingConn := mysql.GetTestConn()
+	pingConn.UserData = &mysql.StaticUserData{Username: "app_user"}
 	pingConn.ClientData = newSession(52, 0).Session
 	vh.ConnActivity(pingConn)
 	assert.Eventually(t, func() bool {

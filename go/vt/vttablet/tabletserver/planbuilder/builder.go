@@ -29,7 +29,12 @@ import (
 )
 
 func analyzeUnion(stmt *sqlparser.Union) *Plan {
-	return &Plan{PlanID: PlanSelect, FullQuery: GenerateFullQuery(stmt)}
+	plan := &Plan{PlanID: PlanSelect, FullQuery: GenerateFullQuery(stmt)}
+	if mutating, acquiring := lockFuncs(stmt); mutating {
+		plan.PlanID = PlanSelectLockFunc
+		plan.NeedsReservedConn = acquiring
+	}
+	return plan
 }
 
 func analyzeSelect(env *vtenv.Environment, sel *sqlparser.Select, tables map[string]*schema.Table) (plan *Plan, err error) {

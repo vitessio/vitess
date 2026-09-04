@@ -136,6 +136,10 @@ type tempTableHeartbeatTarget struct {
 	// and is carried across a command's target republish so client activity
 	// cannot reset a still-unavailable tablet.
 	failures int
+	// unhonored records that the tablet answered the last touch without the
+	// gone-id result (it predates the keepalive), so nothing was refreshed.
+	// It gates transition logging: warn once, note once when honored again.
+	unhonored bool
 	// route caches tempTableRouteKey for this target, stamped at construction,
 	// so the sweeper's snapshots group and filter targets with plain string
 	// compares instead of rebuilding the key (an allocating fmt of the alias)
@@ -692,7 +696,7 @@ func (vh *vtgateHandler) beatTempTableChunk(ctx context.Context, batch []tempTab
 		ids = append(ids, item.target.reservedID)
 	}
 	bctx, cancel := context.WithTimeout(mysqlConnCallerContext(ctx, batch[0].c), tempTableBeatBudget(tempTableHeartbeatTime))
-	gone, err := vh.sendTempTableBeat(bctx, batch[0].target, ids)
+	gone, honored, err := vh.sendTempTableBeat(bctx, batch[0].target, ids)
 	cancel()
 
 	goneSet := make(map[int64]struct{}, len(gone))
@@ -701,7 +705,7 @@ func (vh *vtgateHandler) beatTempTableChunk(ctx context.Context, batch []tempTab
 	}
 	for _, item := range batch {
 		_, isGone := goneSet[item.target.reservedID]
-		vh.applyTempTableBeatResult(item, isGone, err)
+		vh.applyTempTableBeatResult(item, isGone, honored, err)
 	}
 }
 
@@ -733,8 +737,9 @@ func isStaleTargetErr(err error) bool {
 // client connection's registration: evicting it if the tablet reported it gone or
 // rejected its target as a wrong tablet, resetting its failure count on success,
 // or counting a transient failure (whole-tablet RPC error) so it is retried on
-// the next sweep.
-func (vh *vtgateHandler) applyTempTableBeatResult(item tempTableBeatItem, gone bool, err error) {
+// the next sweep. honored reports whether the tablet actually refreshed the
+// connections (false on a tablet predating the keepalive).
+func (vh *vtgateHandler) applyTempTableBeatResult(item tempTableBeatItem, gone, honored bool, err error) {
 	key := newTempTableTargetKey(item.target)
 	ttc := item.ttc
 	ttc.mu.Lock()
@@ -795,6 +800,19 @@ func (vh *vtgateHandler) applyTempTableBeatResult(item tempTableBeatItem, gone b
 				slog.Int("failed_beats", t.failures))
 		}
 		t.failures = 0
+		// An unhonored touch is a successful RPC that refreshed nothing: the
+		// temp tables will expire at the tablet's timeout until it is
+		// upgraded. Log the transitions so the operator can see which tablet.
+		if !honored && !t.unhonored {
+			log.Warn("temp-table connection keepalive not honored by tablet (predates the keepalive); its temp tables expire at the tablet's timeout until it is upgraded",
+				slog.Int64("reserved_id", item.target.reservedID),
+				slog.String("tablet", topoproto.TabletAliasString(item.target.alias)))
+		} else if honored && t.unhonored {
+			log.Info("temp-table connection keepalive now honored by tablet",
+				slog.Int64("reserved_id", item.target.reservedID),
+				slog.String("tablet", topoproto.TabletAliasString(item.target.alias)))
+		}
+		t.unhonored = !honored
 		ttc.targets[key] = t
 		return
 	}
@@ -827,9 +845,6 @@ func (vh *vtgateHandler) applyTempTableBeatResult(item tempTableBeatItem, gone b
 // authentication time and immutable after, so reading them from any goroutine
 // is safe.
 func mysqlConnCallerContext(ctx context.Context, c *mysql.Conn) context.Context {
-	if c.UserData == nil {
-		return ctx
-	}
 	return callerid.NewContext(ctx,
 		callerid.NewEffectiveCallerID(
 			c.User,                  /* principal: who */
@@ -848,10 +863,10 @@ func mysqlConnCallerContext(ctx context.Context, c *mysql.Conn) context.Context 
 // (reserved id zero) rather than a reserved one, so it can never kill a
 // reserved connection; no reserved connection is kept alive there until the
 // tablet is upgraded.
-func (vh *vtgateHandler) sendTempTableBeat(ctx context.Context, routing tempTableHeartbeatTarget, ids []int64) (gone []int64, err error) {
+func (vh *vtgateHandler) sendTempTableBeat(ctx context.Context, routing tempTableHeartbeatTarget, ids []int64) (gone []int64, honored bool, err error) {
 	qs, err := vh.vtg.gw.QueryServiceByAlias(ctx, routing.alias, routing.target)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	// The keepalive travels as a request-level signal (never in
 	// ExecuteOptions, which round-trip through client sessions and would let
@@ -863,7 +878,7 @@ func (vh *vtgateHandler) sendTempTableBeat(ctx context.Context, routing tempTabl
 	ctx = queryservice.ContextWithReservedConnKeepAlive(ctx, ids)
 	result, err := qs.Execute(ctx, nil, routing.target, "/* temp-table keepalive */ select 1", nil, 0 /* transactionID */, 0 /* reservedID */, nil /* options */)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	// Only an up-to-date tablet returns the gone-id result. A tablet that ran
 	// the fallback query returns its own result, whose rows must not be parsed
@@ -872,7 +887,7 @@ func (vh *vtgateHandler) sendTempTableBeat(ctx context.Context, routing tempTabl
 	// QueryService could send an empty response), and this runs on a bare
 	// sweeper goroutine where a nil deref would crash the whole vtgate.
 	if result == nil || len(result.Fields) != 1 || result.Fields[0].GetName() != queryservice.ReservedConnKeepAliveGoneField {
-		return nil, nil
+		return nil, false, nil
 	}
 	for _, row := range result.Rows {
 		if len(row) == 0 {
@@ -884,7 +899,7 @@ func (vh *vtgateHandler) sendTempTableBeat(ctx context.Context, routing tempTabl
 		}
 		gone = append(gone, id)
 	}
-	return gone, nil
+	return gone, true, nil
 }
 
 func (vh *vtgateHandler) NewConnection(c *mysql.Conn) {

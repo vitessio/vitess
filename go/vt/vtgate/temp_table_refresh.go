@@ -158,7 +158,11 @@ func (r *tempTableActivityRefresher) onSessionActivity(ctx context.Context, sess
 // (a rare race sending one extra refresh is harmless). Shard sessions with an
 // open transaction are excluded — the tablet does not reset its transaction
 // timer for in-transaction activity, so a refresh would only inject a query
-// into the user's transaction — as are sessions without temporary tables.
+// into the user's transaction — as are sessions without temporary tables. The
+// exclusion is a snapshot: a refresh can still lose the race with a BEGIN on
+// the same connection and run inside the new transaction, which is harmless
+// (the tablet accepts transactionID 0 on a transaction connection, a select is
+// not recorded for 2PC redo, and Unlock leaves the transaction timer alone).
 func (r *tempTableActivityRefresher) dueTargets(session *econtext.SafeSession) []tempTableRefreshTarget {
 	// The mutex-guarded read matters: the lease ticker calls this while the
 	// foreground command may be marking temp-table creation on the session.

@@ -2523,6 +2523,40 @@ func TestReserveExecute_WithoutTx(t *testing.T) {
 	require.NoError(t, err)
 }
 
+// TestTempTableDropOnlyDoesNotMark pins that DROP TEMPORARY TABLE neither
+// marks the connection as holding temp tables nor probes wait_timeout: only a
+// CREATE does, matching vtgate, which marks the session on CREATE only. A
+// drop-only reserved session (DROP TEMPORARY TABLE IF EXISTS, then abandoned)
+// must be reclaimed on the normal timer, not held for the wait_timeout one.
+func TestTempTableDropOnlyDoesNotMark(t *testing.T) {
+	ctx := t.Context()
+	db, tsv := setupTabletServerTest(t, ctx, "")
+	defer tsv.StopService()
+	defer db.Close()
+
+	db.AddQueryPattern("set sql_mode = ''", &sqltypes.Result{})
+	db.AddQueryPattern("drop temporary table .*", &sqltypes.Result{})
+	db.AddQuery("select @@session.wait_timeout", sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("@@session.wait_timeout", "int64"),
+		"12345",
+	))
+	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
+
+	state, _, err := tsv.ReserveExecute(ctx, nil, &target, nil, "set sql_mode = ''", nil, 0, nil)
+	require.NoError(t, err)
+	defer func() { _ = tsv.Release(ctx, &target, 0, state.ReservedID) }()
+
+	_, err = tsv.Execute(ctx, nil, &target, "drop temporary table if exists temp_t", nil, 0, state.ReservedID, nil)
+	require.NoError(t, err)
+	conn, err := tsv.te.txPool.GetAndLock(ctx, state.ReservedID, "for test")
+	require.NoError(t, err)
+	assert.False(t, conn.holdsTempTables, "a DROP must not mark the connection")
+	assert.Zero(t, conn.sessionWaitTimeout, "a DROP must not capture wait_timeout")
+	conn.Unlock()
+	assert.NotContains(t, db.QueryLog(), "select @@session.wait_timeout", "a DROP must not probe")
+	assert.Zero(t, tsv.te.txPool.scp.tempTableUnmanaged.Load(), "a drop-only connection must stay off the gauge")
+}
+
 // TestTempTableIdleTimeoutAutoWaitTimeout verifies the temp-table idle
 // timeout's auto mode (-1, the default): the tablet mirrors its own mysqld's
 // @@global.wait_timeout, read via the dba pool when the query service opens

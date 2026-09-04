@@ -273,10 +273,10 @@ func TestPrepareDataConcurrentAccess(t *testing.T) {
 	wg.Wait()
 }
 
-// TestShardSessionSnapshots verifies the snapshot accessor: it covers pre,
-// normal, and post shard sessions in order, and the returned snapshots are
-// copies — a later in-place update of the live proto (as AppendOrUpdate
-// performs during query execution) must not show through.
+// TestShardSessionSnapshots verifies the snapshot accessor: it covers the
+// ShardSessions only, and the returned snapshots are copies — a later
+// in-place update of the live proto (as AppendOrUpdate performs during query
+// execution) must not show through.
 func TestShardSessionSnapshots(t *testing.T) {
 	alias := &topodatapb.TabletAlias{Cell: "cell", Uid: 1}
 	shardSession := func(shard string, reservedID, transactionID int64) *vtgatepb.Session_ShardSession {
@@ -294,16 +294,16 @@ func TestShardSessionSnapshots(t *testing.T) {
 		PostSessions:   []*vtgatepb.Session_ShardSession{shardSession("post", 3, 0)},
 	})
 
+	// Only ShardSessions: temp tables live there alone, and the keepalive
+	// sweeper registers exactly that list, so the two must not drift.
 	snapshots := session.ShardSessionSnapshots()
-	require.Len(t, snapshots, 3)
-	assert.Equal(t, "pre", snapshots[0].Target.Shard)
-	assert.Equal(t, "main", snapshots[1].Target.Shard)
-	assert.Equal(t, "post", snapshots[2].Target.Shard)
-	assert.EqualValues(t, 2, snapshots[1].ReservedID)
-	assert.EqualValues(t, 20, snapshots[1].TransactionID)
-	assert.Equal(t, alias, snapshots[1].TabletAlias)
+	require.Len(t, snapshots, 1)
+	assert.Equal(t, "main", snapshots[0].Target.Shard)
+	assert.EqualValues(t, 2, snapshots[0].ReservedID)
+	assert.EqualValues(t, 20, snapshots[0].TransactionID)
+	assert.Equal(t, alias, snapshots[0].TabletAlias)
 
 	session.ShardSessions[0].TransactionId = 999
-	assert.EqualValues(t, 20, snapshots[1].TransactionID,
+	assert.EqualValues(t, 20, snapshots[0].TransactionID,
 		"a snapshot must not observe later in-place updates of the live shard session")
 }
