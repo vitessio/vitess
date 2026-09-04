@@ -433,13 +433,15 @@ func (tkn *Tokenizer) skipStatement() int {
 	}
 }
 
-// blankChars are the characters skipBlank skips between tokens.
-const blankChars = " \n\r\t"
+// blankChars are the characters skipBlank skips between tokens: the
+// characters MySQL's lexer reads as whitespace — vertical tab and form feed
+// included, non-breaking space and the other Unicode spaces not.
+const blankChars = " \n\r\t\v\f"
 
 // skipBlank skips the cursor while it finds whitespace
 func (tkn *Tokenizer) skipBlank() {
 	ch := tkn.cur()
-	for ch == ' ' || ch == '\n' || ch == '\r' || ch == '\t' {
+	for ch == ' ' || ch == '\n' || ch == '\r' || ch == '\t' || ch == '\v' || ch == '\f' {
 		tkn.skip(1)
 		ch = tkn.cur()
 	}

@@ -359,6 +359,13 @@ func TestForEachStatement(t *testing.T) {
 		input: "select 1;\u00a0",
 		calls: []call{{"select 1", "\u00a0"}, {"\u00a0", ""}},
 	}, {
+		// vertical tab and form feed are whitespace to MySQL's lexer
+		input: "select 1;\v\f",
+		calls: []call{{"select 1", ""}},
+	}, {
+		input: "select\f1;\vselect\v2",
+		calls: []call{{"select\f1", "\vselect\v2"}, {"\vselect\v2", ""}},
+	}, {
 		// A ';' inside an executable comment is a syntax error in MySQL, whatever
 		// the comment's version: the statement is handed over whole, unsplit, for
 		// the grammar to reject it, and nothing after it runs.
@@ -699,10 +706,10 @@ func TestTerminatorInsideExecutableComment(t *testing.T) {
 // IsBlankOrComments tells a remainder that holds no statement from one that does.
 func TestIsBlankOrComments(t *testing.T) {
 	parser := NewTestParser()
-	for _, sql := range []string{"", "  \n\t", " -- c", " /* c */ ", "/* a */ -- b\n", "# c"} {
+	for _, sql := range []string{"", "  \n\t\v\f", " -- c", " /* c */ ", "/* a */ -- b\n", "# c", " /*!99999 ; */", "/*!80000 select 1; */", "--", "--\n/* c */"} {
 		assert.True(t, parser.IsBlankOrComments(sql), "%q", sql)
 	}
-	for _, sql := range []string{"select 1", " /* c */ select 1", "b'", "\u00a0", ";"} {
+	for _, sql := range []string{"select 1", " /* c */ select 1", "b'", "\u00a0", ";", "/* unterminated", "--x", "-- c\nselect 1"} {
 		assert.False(t, parser.IsBlankOrComments(sql), "%q", sql)
 	}
 }

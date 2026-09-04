@@ -1449,8 +1449,9 @@ func TestComPrepareRejectsMultipleStatements(t *testing.T) {
 		require.Equal(t, "select 1", sConn.PrepareData[1].PrepareStmt)
 	})
 
-	// a comment after the ';' does not start a second statement, as in MySQL
-	for _, query := range []string{"select 1; -- c", "select 1; /* c */"} {
+	// a comment after the ';' does not start a second statement, as in MySQL —
+	// an executable comment included, whatever it holds
+	for _, query := range []string{"select 1; -- c", "select 1; /* c */", "select 1; /*!99999 ; */"} {
 		t.Run("comment after the terminator: "+query, func(t *testing.T) {
 			sConn, _, data := prepare(t, query)
 			require.EqualValues(t, OKPacket, data[0])
