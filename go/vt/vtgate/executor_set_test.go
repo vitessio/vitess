@@ -855,6 +855,53 @@ func TestSetSQLModeChainedAssignmentsSeeThePreStatementValue(t *testing.T) {
 	assert.Equal(t, "'ANSI_QUOTES,STRICT_TRANS_TABLES'", session.SystemVariables["sql_mode"])
 }
 
+// A SHOW sent to a backend runs under the session's sql_mode: it cannot carry a
+// SET_VAR hint, and its output depends on the mode (SHOW CREATE TABLE quotes
+// identifiers by it), so it reserves a connection with the session's settings. A
+// SHOW answered by vtgate itself, and a hint-capable query, do not.
+func TestShowSentToBackendRunsUnderTheSessionSQLMode(t *testing.T) {
+	executor, _, _, lookup, ctx := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
+	newSession := func() *econtext.SafeSession {
+		return econtext.NewAutocommitSession(&vtgatepb.Session{
+			EnableSystemSettings: true,
+			TargetString:         KsTestUnsharded,
+			SystemVariables:      map[string]string{"sql_mode": "'ANSI_QUOTES'"},
+		})
+	}
+
+	session := newSession()
+	_, err := executorExecSession(ctx, executor, session, "show create table main1", nil)
+	require.NoError(t, err)
+	assert.True(t, session.InReservedConn())
+	var sqls []string
+	for _, q := range lookup.Queries {
+		sqls = append(sqls, q.Sql)
+	}
+	assert.Equal(t, []string{"set sql_mode = 'ANSI_QUOTES'", "show create table main1"}, sqls)
+
+	lookup.Queries = nil
+	session = newSession()
+	_, err = executorExecSession(ctx, executor, session, "show vitess_shards", nil)
+	require.NoError(t, err)
+	assert.False(t, session.InReservedConn())
+	assert.Empty(t, lookup.Queries)
+
+	// a session in the default mode — the mode the backends already run with — sends
+	// the SHOW as before, on no reserved connection
+	lookup.Queries = nil
+	session = econtext.NewAutocommitSession(&vtgatepb.Session{EnableSystemSettings: true, TargetString: KsTestUnsharded})
+	_, err = executorExecSession(ctx, executor, session, "show create table main1", nil)
+	require.NoError(t, err)
+	assert.False(t, session.InReservedConn())
+	require.Len(t, lookup.Queries, 1)
+	assert.Equal(t, "show create table main1", lookup.Queries[0].Sql)
+
+	session = newSession()
+	_, err = executorExecSession(ctx, executor, session, "select id from main1", nil)
+	require.NoError(t, err)
+	assert.False(t, session.InReservedConn())
+}
+
 func TestSetSQLModeDefault(t *testing.T) {
 	executor, _, _, _, ctx := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
 

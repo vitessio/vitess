@@ -1443,7 +1443,7 @@ func (e *Executor) getCachedOrBuildPlan(
 
 	defer func() {
 		if err == nil {
-			vcursor.CheckForReservedConnection(setVarComment, stmt)
+			vcursor.CheckForReservedConnection(setVarComment, stmt, plan.Type)
 		}
 	}()
 

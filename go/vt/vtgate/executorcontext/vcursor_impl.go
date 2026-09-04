@@ -1141,7 +1141,7 @@ func (vc *VCursorImpl) SetSysVar(name string, expr string) {
 	vc.SafeSession.SetSystemVariable(name, expr)
 }
 
-func (vc *VCursorImpl) CheckForReservedConnection(setVarComment string, stmt sqlparser.Statement) {
+func (vc *VCursorImpl) CheckForReservedConnection(setVarComment string, stmt sqlparser.Statement, planType engine.PlanType) {
 	if setVarComment == "" {
 		return
 	}
@@ -1157,11 +1157,29 @@ func (vc *VCursorImpl) CheckForReservedConnection(setVarComment string, stmt sql
 	// or a USE statement (which never reaches a tablet), no reserved connection is needed.
 	// EXPLAIN and VEXPLAIN don't take hints themselves, but the statement they wrap does.
 	case *sqlparser.Begin, *sqlparser.Commit, *sqlparser.Rollback, *sqlparser.Savepoint,
-		*sqlparser.SRollback, *sqlparser.Release, *sqlparser.Set, *sqlparser.Show,
+		*sqlparser.SRollback, *sqlparser.Release, *sqlparser.Set,
 		*sqlparser.Use, *sqlparser.ExplainStmt, *sqlparser.VExplainStmt, sqlparser.SupportOptimizerHint:
+	case *sqlparser.Show:
+		// A SHOW answered by vtgate itself never reaches a tablet. One sent to a
+		// backend cannot carry a hint, and its output depends on the mode — SHOW
+		// CREATE TABLE quotes identifiers by ANSI_QUOTES — so when the session is
+		// in a mode that changes that output, it runs on a connection with the
+		// session's settings applied.
+		if planType != engine.PlanLocal && vc.showOutputFollowsSessionSQLMode() {
+			vc.NeedsReservedConn()
+		}
 	default:
 		vc.NeedsReservedConn()
 	}
+}
+
+// showOutputFollowsSessionSQLMode reports whether the session's sql_mode changes
+// what a backend SHOW prints: only the parse-relevant modes do — SHOW CREATE TABLE
+// quotes identifiers by ANSI_QUOTES — and NO_BACKSLASH_ESCAPES is never sent to a
+// backend, so it does not count. The execution-time modes leave SHOW output alone.
+func (vc *VCursorImpl) showOutputFollowsSessionSQLMode() bool {
+	const showModes = ^sqlparser.SQLModeNoBackslashEscapes
+	return vc.ParseSQLMode()&showModes != sqlparser.ParseSQLMode(vc.DefaultSQLMode())&showModes
 }
 
 // NeedsReservedConn implements the SessionActions interface
