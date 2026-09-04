@@ -2742,10 +2742,8 @@ func TestDatabaseNameReplaceByKeyspaceNameReserveBeginExecuteMethod(t *testing.T
 	require.NoError(t, err)
 }
 
-// TestTabletServerStopServiceShutsDownQueryThrottler verifies that shutting the tablet
-// down through the production vttablet path (servenv OnClose -> StopService) also shuts
-// down the query throttler, so its background strategy updater and SrvKeyspace watch stop
-// instead of leaking until the process exits.
+// The production shutdown path (servenv OnClose -> StopService) must shut the query
+// throttler down too, or its strategy updater and SrvKeyspace watch leak until exit.
 func TestTabletServerStopServiceShutsDownQueryThrottler(t *testing.T) {
 	ctx := t.Context()
 	db, tsv := setupTabletServerTest(t, ctx, "keyspaceName")
@@ -2756,8 +2754,7 @@ func TestTabletServerStopServiceShutsDownQueryThrottler(t *testing.T) {
 	require.True(t, tsv.queryThrottler.IsShutdown(), "StopService must shut down the query throttler")
 }
 
-// TestTabletServerCloseShutsDownQueryThrottler verifies that closing the tablet through
-// the Close path (used by vtcombo and vtexplain) also shuts down the query throttler.
+// Same, for the Close path used by vtcombo and vtexplain.
 func TestTabletServerCloseShutsDownQueryThrottler(t *testing.T) {
 	ctx := t.Context()
 	db, tsv := setupTabletServerTest(t, ctx, "keyspaceName")

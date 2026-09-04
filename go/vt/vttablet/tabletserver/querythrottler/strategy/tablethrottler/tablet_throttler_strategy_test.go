@@ -317,10 +317,8 @@ func TestTabletThrottlerStrategy_ThrottleIfNeeded_Legacy(t *testing.T) {
 			wantErr:               "[VTTabletThrottler] query throttled: stmtType=DELETE workload=unknown priority=100 metric=lag value=20.00 breached threshold=10.00 throttle=100%",
 		},
 		{
-			// Regression: a scoped config key ("shard/lag") must match the check result,
-			// which the throttler keys by the bare name ("lag") with the scope in
-			// result.Scope. Before the fix, the lookup by "lag" missed "shard/lag" and the
-			// rule silently failed open.
+			// Regression: a scoped config key ("shard/lag") must match a result the
+			// throttler keyed by the bare name ("lag"). The rule used to fail open.
 			name:           "scoped metric rule (shard/lag) matches result keyed by bare name",
 			giveTabletType: topodatapb.TabletType_PRIMARY,
 			giveCfg: makeTabletStrategyConfig(
@@ -354,10 +352,8 @@ func TestTabletThrottlerStrategy_ThrottleIfNeeded_Legacy(t *testing.T) {
 				randFloat64: func() float64 { return tt.giveRandValue },
 				randIntN:    func(n int) int { return tt.givePriorityRandValue },
 			})
-			// Start() now primes the cache asynchronously in the updater goroutine.
-			// Prime synchronously here so Evaluate() deterministically observes the
-			// configured throttle result instead of racing the background refresh
-			// (or failing open while the cache is still cold).
+			// Start() primes asynchronously, so prime again synchronously here rather
+			// than race the background refresh or read a cold cache.
 			tts.Start()
 			defer tts.Stop()
 			tts.refreshCache()
@@ -422,9 +418,8 @@ func TestTabletThrottlerStrategy_CachingBehavior(t *testing.T) {
 
 	options := &querypb.ExecuteOptions{Priority: "100"}
 
-	// Before Start(): the strategy is not running, so Evaluate() must not make
-	// synchronous ThrottleCheckOK calls. getCachedThrottleResult fails open
-	// (returns checkOk=true) to keep the hot path bounded in latency.
+	// Before Start() the strategy is not running, so Evaluate() must fail open rather
+	// than call ThrottleCheckOK synchronously and add latency to the hot path.
 	_ = strategy.Evaluate(context.Background(), topodatapb.TabletType_PRIMARY, &sqlparser.ParsedQuery{Query: "SELECT * FROM table"}, sqlparser.StmtSelect, 1, toQueryAttributesForTest(options))
 	_ = strategy.Evaluate(context.Background(), topodatapb.TabletType_PRIMARY, &sqlparser.ParsedQuery{Query: "SELECT * FROM table"}, sqlparser.StmtSelect, 1, toQueryAttributesForTest(options))
 	require.Equal(t, 0, ftcw.GetCallCount(), "Expected no synchronous throttler calls before Start()")
@@ -501,10 +496,8 @@ func TestTabletThrottlerStrategy_BinarySearchThrottleDecision(t *testing.T) {
 	}
 }
 
-// TestTabletThrottlerStrategy_UpdateConfig_AppliesNewRules verifies that UpdateConfig
-// stores the new nested config so subsequent Evaluate calls observe it. UpdateConfig is
-// invoked synchronously by QueryThrottler.HandleConfigUpdate before the snapshot swap,
-// so this test exercises the same code path that eliminates the dual-watch race.
+// UpdateConfig must store the new nested config so later Evaluate calls see it. This is
+// the same path QueryThrottler.HandleConfigUpdate takes before its snapshot swap.
 func TestTabletThrottlerStrategy_UpdateConfig_AppliesNewRules(t *testing.T) {
 	ftcw := NewFakeThrottleClientWrapper(&throttle.CheckResult{}, true)
 
@@ -521,9 +514,8 @@ func TestTabletThrottlerStrategy_UpdateConfig_AppliesNewRules(t *testing.T) {
 	require.NotContains(t, actualCfg.TabletRules["PRIMARY"].StatementRules, "INSERT", "old rule should be replaced")
 }
 
-// TestTabletThrottlerStrategy_UpdateConfig_NilNestedNormalizesToEmpty verifies that
-// UpdateConfig handles a Config whose TabletStrategyConfig is nil by normalizing to
-// an empty config — preventing Evaluate from panicking on a nil proto field access.
+// A Config with a nil TabletStrategyConfig must normalize to empty, or Evaluate panics
+// reading a field off the nil proto.
 func TestTabletThrottlerStrategy_UpdateConfig_NilNestedNormalizesToEmpty(t *testing.T) {
 	ftcw := NewFakeThrottleClientWrapper(&throttle.CheckResult{}, true)
 
@@ -541,9 +533,7 @@ func TestTabletThrottlerStrategy_UpdateConfig_NilNestedNormalizesToEmpty(t *test
 	require.Empty(t, actualCfg.TabletRules)
 }
 
-// TestTabletThrottlerStrategy_UpdateConfig_NoOpWhenUnchanged verifies that UpdateConfig
-// skips the store when the new config is deep-equal to the current one. This mirrors the
-// behavior of the (now-removed) in-strategy SrvKeyspace watch callback.
+// UpdateConfig must skip the store when the new config is deep-equal to the current one.
 func TestTabletThrottlerStrategy_UpdateConfig_NoOpWhenUnchanged(t *testing.T) {
 	ftcw := NewFakeThrottleClientWrapper(&throttle.CheckResult{}, true)
 
@@ -583,11 +573,9 @@ func (f *slowThrottleClientWrapper) GetCallCount() int {
 	return int(f.callCount.Load())
 }
 
-// TestTabletThrottlerStrategy_FailOpenWhenCacheNotPrimed verifies that when the
-// strategy is not running (or the cache has not been primed yet),
-// getCachedThrottleResult fails open without making any synchronous throttler
-// call. This protects the query hot path from latency spikes when the throttler
-// is slow or stuck during the brief cache-priming window after Start().
+// While the strategy is not running, or the cache is not primed yet,
+// getCachedThrottleResult must fail open rather than call the throttler synchronously —
+// that call could be slow or stuck, and this is the query hot path.
 func TestTabletThrottlerStrategy_FailOpenWhenCacheNotPrimed(t *testing.T) {
 	slowClient := &slowThrottleClientWrapper{
 		checkResult: &throttle.CheckResult{
@@ -671,9 +659,8 @@ func TestFakeThrottleClientWrapper_ThreadSafety(t *testing.T) {
 	require.Equal(t, finalOk, checkOk)
 }
 
-// TestTabletThrottlerStrategy_StopWithoutStartCancelsContext verifies that Stop() is safe
-// to call on a strategy that was never Started. The strategy context must be cancelled
-// so any background work tied to it would exit immediately, even if Start() is never called.
+// Stop() must be safe on a strategy that was never Started, and must still cancel the
+// context so any work tied to it exits.
 func TestTabletThrottlerStrategy_StopWithoutStartCancelsContext(t *testing.T) {
 	ftcw := NewFakeThrottleClientWrapper(&throttle.CheckResult{}, true)
 
@@ -683,21 +670,17 @@ func TestTabletThrottlerStrategy_StopWithoutStartCancelsContext(t *testing.T) {
 	require.Error(t, strategy.ctx.Err(), "Stop() must cancel the strategy context even when Start() was never called")
 }
 
-// nilResultThrottleClient is the canonical "ctx was canceled" return signature from a
-// real ThrottleCheckOK caller: a nil CheckResult paired with checkOk=false. Used to
-// reproduce the Stop-races-refresh race in refreshCache.
+// nilResultThrottleClient returns what a real ThrottleCheckOK returns on a canceled ctx:
+// a nil CheckResult with checkOk=false.
 type nilResultThrottleClient struct{}
 
 func (nilResultThrottleClient) ThrottleCheckOK(ctx context.Context, _ throttlerapp.Name) (*throttle.CheckResult, bool) {
 	return nil, false
 }
 
-// TestTabletThrottlerStrategy_RefreshCache_CanceledContextPreservesPriorState verifies
-// that when Stop() races an in-flight refresh and the underlying ThrottleCheckOK returns
-// (nil, false) due to context cancellation, refreshCache does NOT overwrite the prior
-// good cached state. Before the fix, refreshCache only treated DeadlineExceeded as a
-// failure — Canceled fell through to the store path and poisoned the cache with a nil
-// result, which would later panic in Evaluate's metric loop.
+// When Stop() races an in-flight refresh, refreshCache must keep the prior good state.
+// Treating only DeadlineExceeded as failure lets Canceled reach the store path, poisoning
+// the cache with a nil result that later panics in Evaluate's metric loop.
 func TestTabletThrottlerStrategy_RefreshCache_CanceledContextPreservesPriorState(t *testing.T) {
 	strategy := NewTabletThrottlerStrategy(nilResultThrottleClient{}, &querythrottlerpb.TabletStrategyConfig{}, createTestTabletConfig())
 
@@ -713,23 +696,19 @@ func TestTabletThrottlerStrategy_RefreshCache_CanceledContextPreservesPriorState
 	}
 	strategy.cachedState.Store(primed)
 
-	// Cancel the strategy ctx — simulates Stop() running concurrently with a refresh
-	// that has not yet returned. The derived ctx in refreshCache inherits this cancellation.
+	// Stands in for Stop() running while a refresh is still in flight; refreshCache's
+	// derived ctx inherits the cancellation.
 	strategy.cancel()
 
-	// Run a refresh against the canceled ctx. The client returns (nil, false), the
-	// ctx error is context.Canceled (not DeadlineExceeded), and the prior primed
-	// state must be preserved rather than overwritten.
+	// The client returns (nil, false) and the ctx error is Canceled, not DeadlineExceeded.
 	strategy.refreshCache()
 
 	require.Same(t, primed, strategy.cachedState.Load(),
 		"canceled refresh must preserve the prior good cache state, not overwrite it with (nil, false)")
 }
 
-// TestTabletThrottlerStrategy_Evaluate_NilCachedResultFailsOpen verifies the
-// defense-in-depth guard: even if some future change causes refreshCache to store a
-// cacheState with result=nil, Evaluate must fail open rather than panic on the
-// `for ... range checkResult.Metrics` loop.
+// Defense-in-depth: should a future change let refreshCache store a nil result, Evaluate
+// must fail open rather than panic ranging over checkResult.Metrics.
 func TestTabletThrottlerStrategy_Evaluate_NilCachedResultFailsOpen(t *testing.T) {
 	cfg := makeTabletStrategyConfig(
 		topodatapb.TabletType_PRIMARY.String(),
@@ -746,9 +725,8 @@ func TestTabletThrottlerStrategy_Evaluate_NilCachedResultFailsOpen(t *testing.T)
 		},
 	)
 
-	// Inject a cacheState{ok:false, result:nil} directly — the exact shape refreshCache
-	// would have stored on a Canceled ctx before the fix. running=true so the hot-path
-	// fail-open (returns checkOk=true when !running) does NOT mask the bug.
+	// The exact shape refreshCache stored on a Canceled ctx before the fix. running=true
+	// so the !running fail-open does not mask the bug.
 	strategy.cachedState.Store(&cacheState{ok: false, result: nil, refreshedAt: time.Now()})
 	strategy.running.Store(true)
 
@@ -766,10 +744,8 @@ func TestTabletThrottlerStrategy_Evaluate_NilCachedResultFailsOpen(t *testing.T)
 	}, "Evaluate must not panic when cached result is nil")
 }
 
-// TestTabletThrottlerStrategy_Evaluate_ReplaceRuleMatches verifies a configured REPLACE
-// rule throttles a REPLACE statement, and that an INSERT rule does not stand in for one.
-//
-// The statement type is derived via sqlparser.ASTToStatementType rather than hardcoded:
+// A REPLACE rule must throttle a REPLACE statement, and an INSERT rule must not stand in
+// for one. The statement type comes from ASTToStatementType rather than being hardcoded —
 // that call is the fix under test, so hardcoding StmtReplace would pass either way.
 func TestTabletThrottlerStrategy_Evaluate_ReplaceRuleMatches(t *testing.T) {
 	parser := sqlparser.NewTestParser()
@@ -821,14 +797,9 @@ func TestTabletThrottlerStrategy_Evaluate_ReplaceRuleMatches(t *testing.T) {
 		"an INSERT rule must not match a REPLACE statement")
 }
 
-// TestTabletThrottlerStrategy_Evaluate_StaleOverloadedStateFailsOpen verifies that an
-// overloaded (ok=false) cached state is discarded once it ages past the staleness
-// threshold, so the hot path fails open instead of throttling forever.
-//
-// refreshCache preserves the last state when refreshes fail, so during a metrics outage
-// the cache can freeze at ok=false. Without discarding it, every query would keep hitting
-// that stale overloaded state and be throttled indefinitely. This is the reviewer's
-// "overloaded → refresh failures → fail open" scenario.
+// An overloaded (ok=false) state must be discarded once it ages past the staleness
+// threshold. refreshCache keeps the last state when refreshes fail, so a metrics outage
+// freezes the cache at ok=false and would otherwise throttle every query forever.
 func TestTabletThrottlerStrategy_Evaluate_StaleOverloadedStateFailsOpen(t *testing.T) {
 	cfg := makeTabletStrategyConfig(
 		topodatapb.TabletType_PRIMARY.String(),
@@ -849,8 +820,7 @@ func TestTabletThrottlerStrategy_Evaluate_StaleOverloadedStateFailsOpen(t *testi
 			randIntN:    func(n int) int { return 99 },
 		},
 	)
-	// running=true so the hot-path miss branch (returns checkOk=true when !running) does
-	// NOT mask the behavior under test.
+	// running=true so the !running fail-open does not mask the behavior under test.
 	strategy.running.Store(true)
 
 	evaluate := func() registry.ThrottleDecision {
@@ -864,9 +834,8 @@ func TestTabletThrottlerStrategy_Evaluate_StaleOverloadedStateFailsOpen(t *testi
 		)
 	}
 
-	// A fresh overloaded state must throttle — this proves the rule actually fires when
-	// the signal is current, so the fail-open below is due to staleness and not a
-	// too-aggressive discard that disables throttling outright.
+	// A fresh overloaded state must throttle, so the fail-open below is down to staleness
+	// and not a discard so aggressive it disables throttling outright.
 	strategy.cachedState.Store(&cacheState{ok: false, result: overloaded, refreshedAt: time.Now()})
 	require.True(t, evaluate().Throttle, "fresh overloaded state must throttle")
 

@@ -207,10 +207,8 @@ func TestStreamPlan(t *testing.T) {
 	}
 }
 
-// TestBuildStatementType verifies that Build sets Plan.StatementType from the
-// parsed AST (sqlparser.ASTToStatementType). The CTE cases are the regression:
-// queries beginning with WITH are classified as UNKNOWN by the textual
-// sqlparser.Preview, but resolve to their real type here.
+// Build must set Plan.StatementType from the parsed AST. The CTE cases are the
+// regression: a textual scan calls anything starting with WITH unknown.
 func TestBuildStatementType(t *testing.T) {
 	testSchema := loadSchema("schema_test.json")
 	parser := sqlparser.NewTestParser()
@@ -242,10 +240,9 @@ func TestBuildStatementType(t *testing.T) {
 	}
 }
 
-// TestBuildStatementType_CTERegression pins down why we resolve the statement
-// type from the AST: sqlparser.Preview misclassifies a CTE SELECT as UNKNOWN,
-// which would fail open in the query throttler. Both Build and BuildStreaming
-// must classify it as SELECT.
+// Why the statement type comes from the AST: sqlparser.Preview calls a CTE SELECT
+// UNKNOWN, which fails open in the query throttler. Build and BuildStreaming must both
+// say SELECT.
 func TestBuildStatementType_CTERegression(t *testing.T) {
 	testSchema := loadSchema("schema_test.json")
 	parser := sqlparser.NewTestParser()

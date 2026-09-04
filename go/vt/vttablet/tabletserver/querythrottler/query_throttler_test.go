@@ -48,9 +48,8 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle"
 )
 
-// init ensures throttler metrics are registered before any test runs, since some tests
-// construct QueryThrottler directly (bypassing NewQueryThrottler) and reference the
-// package-level metric vars. The schema is unconditional, so no flag is needed.
+// Register the metrics up front: some tests build a QueryThrottler directly, bypassing
+// NewQueryThrottler, and still touch the package-level metric vars.
 func init() {
 	initThrottlerMetrics()
 }
@@ -291,11 +290,8 @@ func TestQueryThrottler_DryRunMode(t *testing.T) {
 	}
 }
 
-// TestQueryThrottler_DryRunLogIsRateLimited verifies that dry-run decision logging is
-// rate-limited so a 100%-throttle rule cannot spam the logs at query rate during an overload.
-// The logger's last-log time must advance only for the first decision within the interval;
-// subsequent decisions are suppressed. The requestsThrottled counter still records every
-// decision, so volume is not lost.
+// Dry-run logging must be rate-limited, or a 100%-throttle rule spams the logs at query
+// rate. Only the first decision in an interval logs; the counter still records them all.
 func TestQueryThrottler_DryRunLogIsRateLimited(t *testing.T) {
 	mockStrategy := &mockThrottlingStrategy{
 		decision: registry.ThrottleDecision{
@@ -356,12 +352,9 @@ func TestQueryThrottler_DryRunLogIsRateLimited(t *testing.T) {
 		"counters must record every dry-run throttle decision even though logs are rate-limited")
 }
 
-// TestQueryThrottler_ThrottledErrorMapsToOutOfResources verifies the full errno mapping:
-// a throttle rejection must surface to clients as ER_OUT_OF_RESOURCES (1041), matching the
-// transaction throttler, not the default ER_TOO_MANY_USER_CONNECTIONS (1203). The mock
-// strategy's message deliberately omits any "throttled" wording, so the mapping can only
-// succeed via the marker QueryThrottler.Throttle prepends — proving the errno is driven by
-// the central marker, not by the strategy's message text.
+// A throttle rejection must reach clients as ER_OUT_OF_RESOURCES (1041), like the
+// transaction throttler, not the default ER_TOO_MANY_USER_CONNECTIONS (1203). The mock's
+// message avoids the word "throttled", so only the marker Throttle prepends can map it.
 func TestQueryThrottler_ThrottledErrorMapsToOutOfResources(t *testing.T) {
 	mockStrategy := &mockThrottlingStrategy{
 		decision: registry.ThrottleDecision{
@@ -484,12 +477,9 @@ func TestQueryThrottler_buildLabels(t *testing.T) {
 	}
 }
 
-// TestQueryThrottler_metricsLabelCountStableAcrossInstances guards the panic the stats schema
-// would suffer if instances with diverging EnablePerWorkloadTableMetrics shared the
-// process-global metrics: the label *count* must be identical regardless of the per-instance
-// flag, otherwise CountersWithMultiLabels.Add / MultiTimings.Record panic on a count mismatch.
-// On the pre-fix code the enabled instance produced 3 base values against a 2-label registered
-// schema, so the Add/Record calls below panicked.
+// Instances that disagree on EnablePerWorkloadTableMetrics share the process-global stats,
+// so they must emit the same label count — Add/Record panic on a mismatch. Pre-fix, the
+// enabled instance emitted 3 values against a 2-label schema and panicked below.
 func TestQueryThrottler_metricsLabelCountStableAcrossInstances(t *testing.T) {
 	enabled := &QueryThrottler{perWorkloadMetrics: true}
 	disabled := &QueryThrottler{perWorkloadMetrics: false}
@@ -1043,12 +1033,9 @@ func TestQueryThrottler_startSrvKeyspaceWatch_ShutdownStopsWatch(t *testing.T) {
 	require.False(t, qt.watchStarted.Load(), "Watch should remain not started after multiple shutdowns")
 }
 
-// TestQueryThrottler_srvKeyspaceListener_DeregistersAfterWatchCancel pins the
-// deregistration contract: the listener must return false once the watch is cancelled.
-//
-// Not redundant with the shutdown latch in HandleConfigUpdate — that stops post-Shutdown
-// config from being applied, but leaves the listener registered and retaining the
-// throttler. Only the boolean return releases it.
+// The listener must return false once the watch is cancelled. HandleConfigUpdate's
+// shutdown latch is not enough: it stops config being applied, but leaves the listener
+// registered and holding the throttler. Only the boolean return releases it.
 func TestQueryThrottler_srvKeyspaceListener_DeregistersAfterWatchCancel(t *testing.T) {
 	env := tabletenv.NewEnv(vtenv.NewTestEnv(), &tabletenv.TabletConfig{}, "TestThrottler")
 	srvTopoServer := srvtopotest.NewPassthroughSrvTopoServer()
@@ -1074,10 +1061,9 @@ func TestQueryThrottler_srvKeyspaceListener_DeregistersAfterWatchCancel(t *testi
 		"listener must return false after cancellation even on an error notification")
 }
 
-// TestSrvKeyspaceWatcher_DropsListenerReturningFalse is a premise guard against the real
-// resilient watcher: a listener returning false is dropped, while cancelling the context
-// it registered with is not enough. If srvtopo's protocol ever changes, srvKeyspaceListener
-// would silently stop unregistering.
+// Premise guard against the real resilient watcher: returning false drops a listener,
+// cancelling its registration context does not. If srvtopo's protocol changed,
+// srvKeyspaceListener would silently stop unregistering.
 func TestSrvKeyspaceWatcher_DropsListenerReturningFalse(t *testing.T) {
 	ctx := t.Context()
 	const (
@@ -1105,9 +1091,8 @@ func TestSrvKeyspaceWatcher_DropsListenerReturningFalse(t *testing.T) {
 		mu             sync.Mutex
 		calls          int
 		keepRegistered = true
-		// Recorded inside the callback, not sampled from the test goroutine: sampling
-		// could snapshot the baseline before the false-returning call was processed and
-		// then misread it as a post-drop invocation.
+		// Recorded inside the callback: sampling from the test goroutine could snapshot
+		// the baseline too early and misread it as a post-drop invocation.
 		callsAtDrop = -1
 	)
 	srvTopoServer.WatchSrvKeyspace(listenerCtx, cell, keyspace, func(_ *topodatapb.SrvKeyspace, _ error) bool {
@@ -1175,9 +1160,8 @@ func (s *watchRecordingSrvTopoServer) WatchSrvKeyspace(ctx context.Context, cell
 	s.PassthroughSrvTopoServer.WatchSrvKeyspace(ctx, cell, keyspace, callback)
 }
 
-// TestQueryThrottler_startSrvKeyspaceWatch_SkippedAfterShutdown verifies no watch is
-// registered once Shutdown has run. Registering then would leak the listener outright,
-// since dropping it requires a later notification that may never arrive.
+// No watch may be registered once Shutdown has run: dropping a listener needs a later
+// notification, which may never arrive, so one registered now leaks outright.
 func TestQueryThrottler_startSrvKeyspaceWatch_SkippedAfterShutdown(t *testing.T) {
 	env := tabletenv.NewEnv(vtenv.NewTestEnv(), &tabletenv.TabletConfig{}, "TestThrottler")
 	passthrough := srvtopotest.NewPassthroughSrvTopoServer()
@@ -1195,10 +1179,8 @@ func TestQueryThrottler_startSrvKeyspaceWatch_SkippedAfterShutdown(t *testing.T)
 		"no SrvKeyspace watch may be registered once the throttler is shut down")
 }
 
-// TestQueryThrottler_ConcurrentThrottleAndConfigUpdate exercises concurrent
-// Throttle() reads against HandleConfigUpdate() swaps to guard against the
-// data race that previously existed when cfg/strategy were read without
-// synchronization. Must be run with `go test -race` to be meaningful.
+// Runs Throttle() reads against HandleConfigUpdate() swaps. Needs `go test -race` to
+// mean anything: cfg and strategy used to be read without synchronization.
 func TestQueryThrottler_ConcurrentThrottleAndConfigUpdate(t *testing.T) {
 	ctx := t.Context()
 
@@ -1246,14 +1228,10 @@ func TestQueryThrottler_ConcurrentThrottleAndConfigUpdate(t *testing.T) {
 	wg.Wait()
 }
 
-// TestQueryThrottler_HandleConfigUpdate_PushesNestedConfigBeforeSnapshotSwap is the
-// regression test for the dual-watch race described in PR review #3: when a single
-// SrvKeyspace update flips a top-level field (e.g. Enabled or DryRun) AND changes the
-// nested TabletStrategyConfig AND keeps the same Strategy, the strategy's nested
-// config must be updated synchronously before the snapshot swap. Without the fix,
-// QueryThrottler would publish the new top-level snapshot while leaving the strategy's
-// stale nested config in place until the strategy's own SrvKeyspace watch fired,
-// briefly throttling queries against the old rules.
+// When one SrvKeyspace update flips a top-level field, changes the nested config, and
+// keeps the same Strategy, the strategy must be updated before the snapshot swap.
+// Otherwise the new top-level config is published against the strategy's old rules,
+// briefly throttling on them.
 func TestQueryThrottler_HandleConfigUpdate_PushesNestedConfigBeforeSnapshotSwap(t *testing.T) {
 	ctx := t.Context()
 
@@ -1299,23 +1277,17 @@ func TestQueryThrottler_HandleConfigUpdate_PushesNestedConfigBeforeSnapshotSwap(
 	require.Same(t, oldStrategy, snap.strategy, "strategy instance must not change when Strategy enum is unchanged")
 	require.True(t, snap.cfg.GetEnabled(), "snapshot must reflect the new Enabled=true")
 
-	// Core assertion: UpdateConfig was called with the new cfg before HandleConfigUpdate
-	// returned. Without the fix, this slice would be empty — the strategy would have
-	// kept its old nested config until its own watch fired separately.
+	// The core assertion: UpdateConfig ran before HandleConfigUpdate returned.
+	// Without the fix this slice is empty and the strategy keeps its old nested config.
 	require.Len(t, oldStrategy.updateConfigCfgs, 1, "UpdateConfig must be invoked exactly once before the snapshot swap")
 	pushed := oldStrategy.updateConfigCfgs[0]
 	require.True(t, pushed.GetEnabled(), "pushed cfg must reflect new Enabled=true")
 	require.Contains(t, pushed.GetTabletStrategyConfig().GetTabletRules(), "PRIMARY", "pushed cfg must carry the new nested rules")
 }
 
-// TestQueryThrottler_HandleConfigUpdate_NestedOnlyChangePropagates is the regression
-// test for the fact that the old isConfigUpdateRequired helper only compared the three
-// top-level scalar fields (Enabled, Strategy, DryRun). With the strategy's own
-// SrvKeyspace watch removed, a SrvKeyspace update that changes ONLY the nested
-// TabletStrategyConfig — without touching any top-level field — would be silently
-// dropped: HandleConfigUpdate would short-circuit, never calling UpdateConfig on
-// the active strategy. The fix replaces that helper with a full proto.Equal
-// comparison so any change in the nested config also reaches the strategy.
+// A SrvKeyspace update that changes only the nested TabletStrategyConfig must still
+// reach the strategy. Comparing just Enabled/Strategy/DryRun would short-circuit here
+// and drop it.
 func TestQueryThrottler_HandleConfigUpdate_NestedOnlyChangePropagates(t *testing.T) {
 	ctx := t.Context()
 
@@ -1347,9 +1319,7 @@ func TestQueryThrottler_HandleConfigUpdate_NestedOnlyChangePropagates(t *testing
 		strategy: oldStrategy,
 	})
 
-	// New SrvKeyspace: identical top-level fields, but the nested rules changed
-	// (different threshold on the same metric). This is the case the old
-	// isConfigUpdateRequired helper missed.
+	// Same top-level fields, different threshold on the same metric.
 	newNested := &querythrottlerpb.TabletStrategyConfig{
 		TabletRules: map[string]*querythrottlerpb.StatementRuleSet{
 			"PRIMARY": {
@@ -1372,9 +1342,8 @@ func TestQueryThrottler_HandleConfigUpdate_NestedOnlyChangePropagates(t *testing
 
 	require.True(t, qt.HandleConfigUpdate(srvks, nil))
 
-	// The strategy must have been told about the nested change. Without the proto.Equal
-	// guard replacing isConfigUpdateRequired, this slice would be empty: the old helper
-	// only looked at Enabled/Strategy/DryRun (all unchanged) and short-circuited.
+	// The strategy must hear about the nested change. Comparing only the top-level
+	// scalars (all unchanged here) would short-circuit and leave this slice empty.
 	require.Len(t, oldStrategy.updateConfigCfgs, 1, "UpdateConfig must be invoked when only the nested TabletStrategyConfig changes")
 	pushed := oldStrategy.updateConfigCfgs[0].GetTabletStrategyConfig().GetTabletRules()["PRIMARY"].GetStatementRules()["SELECT"].GetMetricRules()["lag"].GetThresholds()
 	require.Len(t, pushed, 1)
@@ -1389,19 +1358,10 @@ func TestQueryThrottler_HandleConfigUpdate_NestedOnlyChangePropagates(t *testing
 	require.Equal(t, float64(5), snapThresholds[0].GetAbove(), "snapshot cfg must carry the new nested config")
 }
 
-// TestQueryThrottler_HandleConfigUpdate_DiscardsStrategyAfterShutdown is the regression
-// test for PR review #4: HandleConfigUpdate builds the new strategy outside qt.mu, so
-// if Shutdown wins the lock first the callback can still proceed to Start() and store
-// the new strategy after Shutdown has returned — leaking the tablet strategy's ticker
-// and SrvKeyspace watch goroutines.
-//
-// The interleaving is forced deterministically via the newStrategyFactory hook: the
-// factory blocks on a channel after the callback has reached it but before the
-// callback can acquire qt.mu. While the factory is parked, the main goroutine runs
-// Shutdown (uncontended, so it wins the lock immediately), then releases the factory
-// so the callback proceeds and tries to take the lock that Shutdown has since
-// released. The callback must observe the shutdown flag and discard the freshly
-// built strategy.
+// HandleConfigUpdate builds its new strategy outside qt.mu. If Shutdown wins the lock
+// first, the callback must discard that strategy rather than Start() and store it —
+// otherwise the tablet strategy's ticker and watch goroutines outlive Shutdown.
+// The newStrategyFactory hook forces that interleaving deterministically below.
 func TestQueryThrottler_HandleConfigUpdate_DiscardsStrategyAfterShutdown(t *testing.T) {
 	ctx := t.Context()
 
@@ -1418,8 +1378,7 @@ func TestQueryThrottler_HandleConfigUpdate_DiscardsStrategyAfterShutdown(t *test
 		strategy: originalMock,
 	})
 
-	// Factory blocks until the test releases it, deterministically parking the
-	// callback between strategy build and the lock acquisition.
+	// Blocks until released, parking the callback between the build and the lock.
 	newMock := &mockThrottlingStrategy{}
 	factoryEntered := make(chan struct{})
 	factoryReleased := make(chan struct{})
@@ -1429,8 +1388,7 @@ func TestQueryThrottler_HandleConfigUpdate_DiscardsStrategyAfterShutdown(t *test
 		return newMock
 	}
 
-	// Strategy enum changes, so HandleConfigUpdate hits the needsStrategyChange path
-	// that builds via the factory.
+	// A different Strategy enum sends HandleConfigUpdate down the factory path.
 	srvks := &topodatapb.SrvKeyspace{
 		QueryThrottlerConfig: &querythrottlerpb.Config{
 			Enabled:  true,
@@ -1444,16 +1402,13 @@ func TestQueryThrottler_HandleConfigUpdate_DiscardsStrategyAfterShutdown(t *test
 		qt.HandleConfigUpdate(srvks, nil)
 	}()
 
-	// Wait until the callback is parked inside the factory; only then is the
-	// "Shutdown wins the lock first" ordering guaranteed.
+	// Only once the callback is parked is "Shutdown wins the lock" guaranteed.
 	<-factoryEntered
 
-	// Shutdown takes qt.mu uncontended (the callback is still in the factory),
-	// flips the shutdown flag, stops originalMock, and releases the lock.
+	// Uncontended, so it takes qt.mu immediately and latches the shutdown flag.
 	qt.Shutdown()
 
-	// Releasing the factory lets the callback continue: it returns newMock and
-	// then acquires qt.mu, where it must see shutdown=true and bail out.
+	// The callback now resumes, takes the lock, and must see shutdown=true.
 	close(factoryReleased)
 
 	require.Eventually(t, func() bool {
@@ -1476,10 +1431,9 @@ func TestQueryThrottler_HandleConfigUpdate_DiscardsStrategyAfterShutdown(t *test
 		"snapshot cfg must NOT be replaced with the post-shutdown update")
 }
 
-// TestQueryThrottler_HandleConfigUpdate_SortsThresholdsOnReceipt verifies HandleConfigUpdate
-// stores thresholds sorted ascending by Above, which GetThrottleDecision's sort.Search
-// requires, without mutating the incoming SrvKeyspace. sanitizeQueryThrottlerConfig only
-// sorts on the RPC write path, so a direct topo write can land unsorted.
+// HandleConfigUpdate must store thresholds sorted ascending, as GetThrottleDecision's
+// binary search requires, without mutating the incoming SrvKeyspace. Only the RPC write
+// path sorts, so a direct topo write can land unsorted.
 func TestQueryThrottler_HandleConfigUpdate_SortsThresholdsOnReceipt(t *testing.T) {
 	ctx := t.Context()
 
@@ -1494,14 +1448,12 @@ func TestQueryThrottler_HandleConfigUpdate_SortsThresholdsOnReceipt(t *testing.T
 		cfg:      &querythrottlerpb.Config{Strategy: querythrottlerpb.ThrottlingStrategy_UNKNOWN},
 		strategy: &mockThrottlingStrategy{},
 	})
-	// Inject a deterministic factory so building the new strategy doesn't pull
-	// in production dependencies (selectThrottlingStrategy needs a real client).
+	// A deterministic factory, so the build doesn't need a real throttler client.
 	qt.newStrategyFactory = func(_ *querythrottlerpb.Config) registry.ThrottlingStrategyHandler {
 		return &mockThrottlingStrategy{}
 	}
 
-	// Thresholds intentionally given OUT OF ORDER to simulate a direct topo write
-	// that bypassed the RPC sanitizer.
+	// Out of order, as a direct topo write bypassing the RPC sanitizer would leave them.
 	unsorted := []*querythrottlerpb.ThrottleThreshold{
 		{Above: 50, Throttle: 100},
 		{Above: 10, Throttle: 25},

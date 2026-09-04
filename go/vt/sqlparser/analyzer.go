@@ -335,10 +335,8 @@ var validStatementTypeNames = func() map[string]struct{} {
 	return names
 }()
 
-// IsValidStatementType reports whether name is a canonical StatementType name,
-// i.e. a value StatementType.String() can produce. Use it to validate
-// externally-supplied statement-type strings (e.g. query-throttler rule keys)
-// against what the runtime can actually emit.
+// IsValidStatementType reports whether name is one StatementType.String() can produce.
+// Use it to check externally-supplied names, such as query-throttler rule keys.
 func IsValidStatementType(name string) bool {
 	_, ok := validStatementTypeNames[name]
 	return ok

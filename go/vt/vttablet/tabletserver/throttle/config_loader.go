@@ -90,19 +90,16 @@ func convertQueryThrottlerConfigToThrottlerConfig(qtCfg *querythrottlerpb.Config
 						metricsNames = append(metricsNames, metricName)
 						seenMetrics[metricName] = true
 					}
-					// Scan for the minimum Above (the "floor" the underlying throttler
-					// triggers on) rather than sorting: this config is the shared
-					// srvtopo cached proto and must not be mutated. Thresholds are not
-					// guaranteed ordered, since a direct topo write bypasses
-					// sanitizeQueryThrottlerConfig.
+					// Scan for the minimum Above — the floor the throttler triggers on —
+					// rather than sorting: this is the shared srvtopo proto and must not
+					// be mutated. A direct topo write can leave thresholds unordered.
 					thresholdValue := thresholds[0].GetAbove()
 					for _, t := range thresholds[1:] {
 						thresholdValue = math.Min(thresholdValue, t.GetAbove())
 					}
-					// The throttler applies thresholds per bare metric: getScopedMetric reads
-					// the threshold under the bare key regardless of scope, and
-					// convergeMetricThresholds only converges bare names. Key by the
-					// disaggregated bare name so scoped configs ("shard/lag") are honored.
+					// The throttler applies thresholds per bare metric — getScopedMetric and
+					// convergeMetricThresholds both look under the bare key — so key by the
+					// disaggregated name or a scoped config ("shard/lag") gets dropped.
 					thresholdKey := metricName
 					if _, bareMetric, err := base.DisaggregateMetricName(metricName); err == nil {
 						thresholdKey = bareMetric.String()

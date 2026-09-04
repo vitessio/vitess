@@ -91,10 +91,8 @@ const (
 	decisionReasonQueryAllowed        = "query_allowed"
 
 	defaultCacheUpdateInterval = 10 * time.Second
-	// cacheStalenessMultiplier defines how many refresh intervals must pass without a
-	// successful refresh before a cached state is considered stale. Stale states are
-	// discarded on the hot path (fail open) and increment CacheStaleConsumption, so a
-	// metrics outage that froze the cache at ok=false cannot throttle queries forever.
+	// cacheStalenessMultiplier is how many refresh intervals may pass without a successful
+	// refresh before the cached state counts as stale. See getCachedThrottleResult.
 	cacheStalenessMultiplier = 6
 
 	cacheRefreshStatusSuccess = "success"
@@ -126,10 +124,8 @@ type TabletThrottlerStrategy struct {
 
 	fastPathLatencySampleRate float64
 
-	// cacheStalenessThreshold is the age past which a cached state is discarded on the hot
-	// path (fail open, CacheStaleConsumption) and, when observed by the background refresher,
-	// counted via CacheStaleRefreshes. Set once in the constructor from the resolved refresh
-	// interval; never mutated after.
+	// cacheStalenessThreshold is the age past which a cached state is discarded.
+	// Set once in the constructor from the resolved refresh interval; never mutated.
 	cacheStalenessThreshold time.Duration
 
 	// Injectable random functions for testing (defaults to math/rand/v2)
@@ -137,11 +133,8 @@ type TabletThrottlerStrategy struct {
 	randIntN    func(n int) int
 }
 
-// NewTabletThrottlerStrategy creates a new TabletThrottlerStrategy.
-//
-// The strategy does not watch SrvKeyspace itself. Config updates flow exclusively
-// through UpdateConfig, invoked by QueryThrottler.HandleConfigUpdate under the
-// snapshot lock so the top-level and nested config are published atomically.
+// NewTabletThrottlerStrategy creates a new TabletThrottlerStrategy. The strategy does not
+// watch SrvKeyspace itself; config reaches it only through UpdateConfig.
 func NewTabletThrottlerStrategy(throttleClient ThrottlerClientWrapper, cfg *querythrottlerpb.TabletStrategyConfig, tabletConfig *tabletenv.TabletConfig) *TabletThrottlerStrategy {
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -156,9 +149,8 @@ func NewTabletThrottlerStrategy(throttleClient ThrottlerClientWrapper, cfg *quer
 		randFloat64:               rand.Float64,
 		randIntN:                  rand.IntN,
 	}
-	// Normalize nil to an empty config so Evaluate() can safely read cfg.TabletRules
-	// (direct field access on a nil proto would panic). An empty TabletRules map means
-	// no rules match for any tablet type, so Evaluate falls through to "allow".
+	// Normalize nil to empty: Evaluate reads cfg.TabletRules directly, which would panic
+	// on a nil proto. Empty rules match nothing, so Evaluate falls through to "allow".
 	if cfg == nil {
 		cfg = &querythrottlerpb.TabletStrategyConfig{}
 	}
@@ -167,18 +159,9 @@ func NewTabletThrottlerStrategy(throttleClient ThrottlerClientWrapper, cfg *quer
 	return strategy
 }
 
-// Start begins the background throttle check updater.
-// Keeping the spawn out of the constructor makes NewTabletThrottlerStrategy
-// side-effect-free: a strategy that is built but never installed (e.g. because
-// QueryThrottler.HandleConfigUpdate races with Shutdown and the strategy is
-// discarded before the snapshot swap) cannot leak background goroutines.
-//
-// Start is non-blocking: the initial cache prime runs inside the updater goroutine
-// (runCacheUpdater), not synchronously here, so Start never blocks on a throttle check.
-// This matters because callers may hold a lock across Start — QueryThrottler.HandleConfigUpdate
-// invokes it under qt.mu — and a synchronous prime (up to throttleCheckTimeout) would stall
-// Shutdown and subsequent config callbacks behind that lock. The hot path fails open while
-// the cache is unprimed.
+// Start spawns the background cache updater. Kept out of the constructor so a strategy
+// that is built but never installed leaks nothing. Non-blocking: the first cache prime
+// runs in the updater goroutine, since callers hold a lock across Start.
 func (s *TabletThrottlerStrategy) Start() {
 	if s.running.CompareAndSwap(false, true) {
 		updateInterval := resolveCacheUpdateInterval(s.tabletConfig)
@@ -198,18 +181,11 @@ func resolveCacheUpdateInterval(cfg *tabletenv.TabletConfig) time.Duration {
 	return cfg.TabletThrottlerCacheUpdateInterval
 }
 
-// Stop stops the background throttle check updater and releases resources.
-// Stop is terminal: this instance must not be restarted after Stop returns.
-// The context and done channel are permanently canceled/closed. Strategy switches
-// in QueryThrottler always create a fresh instance via NewTabletThrottlerStrategy.
-//
-// Stop is safe to call when Start was never invoked: s.cancel() runs unconditionally
-// so any goroutine bound to s.ctx (now or added later) exits promptly, while the
-// ticker/done-wait cleanup only runs when the cache updater was actually started.
+// Stop shuts down the background updater. It is terminal — the instance must not be
+// restarted; QueryThrottler builds a fresh one on every strategy change. Safe to call
+// when Start never ran, and safe to call twice.
 func (s *TabletThrottlerStrategy) Stop() {
-	// Cancel the strategy context unconditionally so any goroutine bound to s.ctx
-	// (now or added later) exits even if Start was never called. cancel() is
-	// idempotent, so repeated Stop calls are safe.
+	// Unconditional, so any goroutine bound to s.ctx exits even if Start never ran.
 	s.cancel()
 
 	if s.running.CompareAndSwap(true, false) {
@@ -221,20 +197,13 @@ func (s *TabletThrottlerStrategy) Stop() {
 	}
 }
 
-// UpdateConfig applies a new querythrottler config to this live strategy. It is
-// invoked synchronously by QueryThrottler.HandleConfigUpdate before the snapshot
-// is swapped, so the (top-level, nested) config pair becomes visible together.
-// This replaces the strategy's prior independent SrvKeyspace watch and removes
-// the race where a top-level Enabled flip could be published while the nested
-// rules still held a stale value.
-//
-// UpdateConfig is safe to call before Start: it only mutates the atomic config
-// pointer that Evaluate reads from on the hot path.
+// UpdateConfig applies a new config to this live strategy. QueryThrottler.HandleConfigUpdate
+// calls it before swapping its snapshot, so the top-level and nested config land together.
+// Safe to call before Start: it only swaps the atomic pointer Evaluate reads.
 func (s *TabletThrottlerStrategy) UpdateConfig(cfg *querythrottlerpb.Config) {
 	newTabletCfg := cfg.GetTabletStrategyConfig()
 	if newTabletCfg == nil {
-		// Normalize to an empty config so Evaluate() can safely read TabletRules
-		// (direct field access on a nil proto would panic).
+		// Normalize to empty; Evaluate would panic reading TabletRules off a nil proto.
 		newTabletCfg = &querythrottlerpb.TabletStrategyConfig{}
 	}
 
@@ -250,10 +219,8 @@ func (s *TabletThrottlerStrategy) runCacheUpdater() {
 	defer close(s.done)
 	defer s.updateTicker.Stop()
 
-	// Prime the cache immediately so the first ticker interval isn't served with a
-	// cold cache. Running it here rather than synchronously in Start keeps Start
-	// non-blocking (callers may hold a lock across it); the hot path fails open until
-	// this first refresh lands.
+	// Prime immediately so the first ticker interval isn't served cold. Done here rather
+	// than in Start to keep Start non-blocking; the hot path fails open until this lands.
 	s.refreshCache()
 
 	for {
@@ -266,18 +233,13 @@ func (s *TabletThrottlerStrategy) runCacheUpdater() {
 	}
 }
 
-// refreshCache updates the cached throttle check results.
-// On timeout/failure the previous cached state is intentionally preserved (fail open):
-// a synchronous hot-path retry would only add latency on an already-degraded path. The
-// CacheRefreshFailures counter tracks failed refreshes, and on each failed refresh we
-// also check whether the existing cache has aged past cacheStalenessThreshold and bump
-// CacheStaleRefreshes — so operators can alert on prolonged outages without per-query
-// time arithmetic in the hot path.
+// refreshCache updates the cached throttle check result.
 //
-// A failed refresh is any of: a derived-ctx error (DeadlineExceeded from our timeout
-// OR Canceled from a Stop racing the in-flight call) OR a nil checkResult returned
-// by the throttler client. Storing a nil result would later panic in Evaluate's
-// metric loop, so we discard it here.
+// A refresh fails on a ctx error (DeadlineExceeded from our timeout, or Canceled from a
+// racing Stop) or a nil checkResult — storing nil would later panic in Evaluate's metric
+// loop. A failed refresh keeps the previous state and bumps CacheRefreshFailures, plus
+// CacheStaleRefreshes if that state has already aged out. getCachedThrottleResult is what
+// eventually discards it.
 func (s *TabletThrottlerStrategy) refreshCache() {
 	ctx, cancel := context.WithTimeout(s.ctx, throttleCheckTimeout)
 	defer cancel()
@@ -305,21 +267,15 @@ func (s *TabletThrottlerStrategy) refreshCache() {
 	cacheLoadLatency.Record([]string{status}, start)
 }
 
-// getCachedThrottleResult returns the current cached throttle check result.
-// If the cache is not yet primed (state is nil) or the strategy is not running,
-// it fails open (returns checkOk=true) instead of making a synchronous throttler
-// call. This avoids latency spikes in the query hot path during the brief
-// cache-priming window after Start() or when Evaluate() is called outside the
-// running lifecycle.
+// getCachedThrottleResult returns the cached throttle check result, failing open
+// (checkOk=true) in three cases rather than calling the throttler synchronously, which
+// would spike hot-path latency:
 //
-// Staleness is tracked by the background refresher (CacheStaleRefreshes counter)
-// and also enforced here: a state older than cacheStalenessThreshold is discarded
-// and we fail open (returning checkOk=true, incrementing CacheStaleConsumption).
-// refreshCache preserves the last state when refreshes fail, so during a metrics
-// outage the cache can freeze at ok=false; serving that stale state would throttle
-// queries indefinitely. The time check runs only on this full/slow path — the fast
-// path has already bypassed a healthy ok=true state — so the healthy hot path stays
-// free of per-query time arithmetic.
+//   - the strategy is not running, or the cache is not primed yet — a brief window after Start
+//   - the state has aged past cacheStalenessThreshold. refreshCache keeps the last state when
+//     refreshes fail, so a metrics outage can freeze it at ok=false and throttle forever.
+//
+// The age check costs nothing on the healthy path, which the fast path already bypassed.
 func (s *TabletThrottlerStrategy) getCachedThrottleResult() (*throttle.CheckResult, bool) {
 	if !s.running.Load() {
 		cacheMisses.Add(1)
@@ -351,26 +307,12 @@ func (s *TabletThrottlerStrategy) isStale(state *cacheState) bool {
 	return time.Since(state.refreshedAt) > s.cacheStalenessThreshold
 }
 
-// Evaluate determines whether a given SQL query should be throttled
-// based on tablet type, SQL statement type, and real-time metrics.
-//
-// It follows a rule-based configuration where specific tablet types and
-// SQL statement types are associated with metric thresholds. If a threshold
-// is exceeded and a probabilistic throttle condition is met, the query should be throttled.
-//
-// Parameters:
-//   - ctx: context for timeout/cancellation control.
-//   - targetTabletType: the type of tablet the query is being run against (e.g., PRIMARY, REPLICA).
-//   - sql: the raw SQL query string.
-//   - transactionID: the ID of the transaction (not used in throttling logic).
-//   - attrs: pre-computed query attributes containing workload name and priority.
-//
-// Returns:
-//   - ThrottleDecision containing detailed information about the throttling decision.
+// Evaluate decides whether to throttle a query. Rules pair a tablet type and statement type
+// with metric thresholds; when a threshold is breached, the query is throttled with the
+// probability that threshold configures. transactionID is unused.
 func (s *TabletThrottlerStrategy) Evaluate(ctx context.Context, targetTabletType topodatapb.TabletType, parsedQuery *sqlparser.ParsedQuery, statementType sqlparser.StatementType, transactionID int64, attrs registry.QueryAttributes) registry.ThrottleDecision {
-	// For DDL statements parsedQuery can be nil because ParsedQuery is `plan.FullQuery`, which is
-	// nil for DDL statements. In plan.go, `Build(...)` does not set FullQuery for ALTER MIGRATION
-	// and REVERT MIGRATION, so parsedQuery arrives nil here. Fail open in that case.
+	// parsedQuery is plan.FullQuery, which Build() leaves nil for ALTER/REVERT MIGRATION
+	// and partially-parsed DDL. Fail open there.
 	if parsedQuery == nil {
 		return registry.ThrottleDecision{
 			Throttle: false,
@@ -395,9 +337,8 @@ func (s *TabletThrottlerStrategy) Evaluate(ctx context.Context, targetTabletType
 	// Use pre-computed query attributes to avoid recomputation
 	workloadName := attrs.WorkloadName
 	priority := attrs.Priority
-	// statementType is resolved from the parsed AST by the caller (sqlparser.ASTToStatementType),
-	// so CTE queries (WITH ... SELECT/DML) match the same rules as their non-CTE counterparts.
-	// A textual scan (sqlparser.Preview) would classify "WITH ..." as UNKNOWN and fail open.
+	// The caller resolves statementType from the AST, so CTE queries (WITH ... SELECT/DML)
+	// match the same rules as plain ones. A textual scan would call them UNKNOWN.
 	stmtType := statementType.String()
 
 	// Step 1: Early priority-based throttling check
@@ -439,16 +380,10 @@ func (s *TabletThrottlerStrategy) Evaluate(ctx context.Context, targetTabletType
 		}
 	}
 
-	// Step 5: Get cached throttle check results.
-	// When the cache is not primed (state is nil) or the strategy is not running,
-	// this returns checkOk=true (fail open) to avoid synchronous throttler calls
-	// in the hot path. checkResult may be nil in that case, but the early return
-	// on checkOk below skips the metrics evaluation that would dereference it.
+	// Step 5: Get cached throttle check results. May fail open with a nil checkResult.
 	checkResult, checkOk := s.getCachedThrottleResult()
-	// If check passes, system is not overloaded → allow query.
-	// checkResult==nil is defense-in-depth: refreshCache must never store a nil
-	// result, but if a future change regresses we fail open here rather than
-	// panicking on the `for ... range checkResult.Metrics` loop below.
+	// checkOk means the system is not overloaded. The nil check is defense-in-depth:
+	// refreshCache never stores a nil result, but ranging over one below would panic.
 	if checkOk || checkResult == nil {
 		s.recordFullDecision(tabletTypeStr, stmtType, decisionOutcomeAllowed, decisionReasonNoMetricBreach, startTime)
 		return registry.ThrottleDecision{
@@ -471,11 +406,9 @@ func (s *TabletThrottlerStrategy) Evaluate(ctx context.Context, targetTabletType
 			continue
 		}
 
-		// Only act on metrics explicitly configured for this SQL type.
-		// CheckResult.Metrics is keyed by the bare metric name (the throttler disaggregates
-		// scoped names) with the actual scope in result.Scope. Config rules may be keyed by
-		// the bare name ("lag") or a scoped name ("shard/lag"), so try the bare key first,
-		// then the reconstructed aggregated name.
+		// Only act on metrics configured for this SQL type. CheckResult.Metrics is keyed by
+		// the bare name ("lag") with the scope in result.Scope, but a config rule may use
+		// either form, so try the bare key first and then the scoped one ("shard/lag").
 		rule, found := metricRuleSet.GetMetricRules()[metricName]
 		if !found {
 			if scope, err := base.ScopeFromString(result.Scope); err == nil {

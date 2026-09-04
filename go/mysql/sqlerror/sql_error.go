@@ -390,10 +390,9 @@ func convertToMysqlError(err error) error {
 
 var isGRPCOverflowRE = regexp.MustCompile(`.*?grpc: (received|trying to send) message larger than max \(\d+ vs. \d+\)`)
 
-// QueryThrottledMarker is embedded in every query-throttler RESOURCE_EXHAUSTED error
-// (see querythrottler.QueryThrottler.Throttle) so it maps to ER_OUT_OF_RESOURCES (1041)
-// rather than the default ER_TOO_MANY_USER_CONNECTIONS (1203), mirroring the transaction
-// throttler's "Transaction throttled" behavior.
+// QueryThrottledMarker prefixes every query-throttler RESOURCE_EXHAUSTED error so it maps
+// to ER_OUT_OF_RESOURCES (1041) instead of the default ER_TOO_MANY_USER_CONNECTIONS (1203),
+// matching what the transaction throttler does.
 const QueryThrottledMarker = "[QueryThrottler]"
 
 func demuxResourceExhaustedErrors(msg string) ErrorCode {

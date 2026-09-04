@@ -26,15 +26,11 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 )
 
-// TestConvertQueryThrottlerConfigToThrottlerConfig_PicksMinFloorWhenUnsorted verifies an
-// unsorted Thresholds slice still yields the true minimum as the throttler's floor, and
-// that the input config is left unmutated. sanitizeQueryThrottlerConfig enforces order on
-// the RPC write path, but a direct topo write bypasses it — and that config is the shared
-// srvtopo cached proto, so scanning for the min is required rather than sorting in place.
+// An unsorted Thresholds slice must still yield the true minimum as the floor, with the
+// input left unmutated. Only the RPC write path sorts, so a direct topo write can arrive
+// unordered — and the config is the shared srvtopo proto, so we scan instead of sorting.
 func TestConvertQueryThrottlerConfigToThrottlerConfig_PicksMinFloorWhenUnsorted(t *testing.T) {
-	// Thresholds intentionally OUT OF ORDER: a pre-fix read of thresholds[0]
-	// would pick 50 (the first element). The true min is 10 — that's what the
-	// underlying throttler must use as its floor.
+	// Out of order on purpose: reading thresholds[0] picks 50, but the floor must be 10.
 	cfg := &querythrottlerpb.Config{
 		Strategy: querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER,
 		Enabled:  true,
@@ -74,21 +70,13 @@ func TestConvertQueryThrottlerConfigToThrottlerConfig_PicksMinFloorWhenUnsorted(
 		"convert must not mutate the caller's config; srvtopo shares it with other readers")
 }
 
-// TestConvertQueryThrottlerConfigToThrottlerConfig_MinAcrossRules verifies the
-// cross-rule MIN reduction: when the same metric appears in MULTIPLE rules
-// (different tablet types, different statement types, or both), the underlying
-// throttler's floor is the GLOBAL minimum across all of them, not whichever rule
-// happens to be visited first by the map iteration. Independent metrics keep
-// their own thresholds, and the AppCheckedMetrics name list deduplicates so the
-// same metric is registered once even when it appears in many rules.
-//
-// This exercises the math.Min branch that the existing patch coverage missed.
+// When one metric appears in several rules, the floor must be the global minimum across
+// all of them, not whichever rule the map iteration reached first. Independent metrics
+// keep their own thresholds, and AppCheckedMetrics lists each metric only once.
 func TestConvertQueryThrottlerConfigToThrottlerConfig_MinAcrossRules(t *testing.T) {
-	// Same `lag` metric appears in TWO rules with different floors; an
-	// independent `cpu` metric appears in a third rule.
 	//   PRIMARY/SELECT/lag → floor 25
-	//   PRIMARY/INSERT/cpu → floor 80 (different metric, independent)
-	//   REPLICA/SELECT/lag → floor 5  ← global minimum across `lag` rules
+	//   PRIMARY/INSERT/cpu → floor 80 (independent metric)
+	//   REPLICA/SELECT/lag → floor 5  ← global minimum for `lag`
 	cfg := &querythrottlerpb.Config{
 		Strategy: querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER,
 		Enabled:  true,
@@ -136,14 +124,10 @@ func TestConvertQueryThrottlerConfigToThrottlerConfig_MinAcrossRules(t *testing.
 	require.ElementsMatch(t, []string{"lag", "cpu"}, names)
 }
 
-// TestConvertQueryThrottlerConfigToThrottlerConfig_ScopedMetricName verifies scope
-// normalization for a scoped config key such as "shard/lag":
-//   - AppCheckedMetrics keeps the SCOPED name so the underlying throttler checks the
-//     correct scope.
-//   - MetricThresholds is keyed by the BARE metric name ("lag"), because the throttler
-//     applies thresholds per bare metric and convergeMetricThresholds only converges bare
-//     names. Keying by the scoped name ("shard/lag") would be silently dropped by
-//     convergeMetricThresholds, leaving the throttler on the inventory default.
+// A scoped config key like "shard/lag" splits two ways: AppCheckedMetrics keeps the
+// scoped name so the throttler checks the right scope, while MetricThresholds is keyed by
+// the bare name — convergeMetricThresholds only handles bare names and would drop the
+// scoped one, leaving the throttler on its inventory default.
 func TestConvertQueryThrottlerConfigToThrottlerConfig_ScopedMetricName(t *testing.T) {
 	cfg := &querythrottlerpb.Config{
 		Strategy: querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER,

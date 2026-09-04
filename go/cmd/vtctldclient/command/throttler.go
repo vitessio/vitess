@@ -212,18 +212,14 @@ func validateQueryThrottlerConfigContent(cfg *querythrottler.Config) error {
 		return errors.New("tablet_rules cannot be empty when strategy is TABLET_THROTTLER")
 	}
 
-	// seenBareMetrics maps a bare metric name (e.g. "lag") to the first rule key that
-	// produced it, tracked across the whole config to catch scope collisions globally.
+	// This mirrors grpcvtctldserver.validateQueryThrottlerConfig, which is where each rule
+	// is explained. Duplicated here only for fast feedback; keep the two in sync.
 	seenBareMetrics := make(map[string]string)
 	for tabletType, stmtRuleSet := range tsc.GetTabletRules() {
-		// Reject tablet types the runtime can never emit. targetTabletType.String()
-		// only produces canonical TabletType_name values, so an exact round-trip
-		// rejects typos ("PRIMAY"), wrong case ("primary"), and aliases ("MASTER").
 		if v, ok := topodatapb.TabletType_value[tabletType]; !ok || topodatapb.TabletType(v).String() != tabletType {
 			return fmt.Errorf("unknown tablet type %q", tabletType)
 		}
 		for stmtType, metricRuleSet := range stmtRuleSet.GetStatementRules() {
-			// Reject statement types the runtime can never emit (StatementType.String()).
 			if !sqlparser.IsValidStatementType(stmtType) {
 				return fmt.Errorf("unknown statement type %q (tablet_type=%s)", stmtType, tabletType)
 			}
@@ -232,17 +228,9 @@ func validateQueryThrottlerConfigContent(cfg *querythrottler.Config) error {
 				if err != nil {
 					return fmt.Errorf("unknown metric name %q (tablet_type=%s, statement=%s)", metricName, tabletType, stmtType)
 				}
-				// The custom metric reads its value from a custom_query the query throttler
-				// config has no way to supply, so it always reads as zero and can never breach
-				// a threshold. Reject it until the query is wired through.
 				if mName == base.CustomMetricName {
 					return fmt.Errorf("custom metric is not supported by the query throttler (tablet_type=%s, statement=%s, metric=%s)", tabletType, stmtType, metricName)
 				}
-				// Reject two distinct rule keys that disaggregate to the same bare metric
-				// (e.g. "self/lag" and "shard/lag"). The throttler shares one CheckResult
-				// keyed by the bare name across the whole config, so scoped variants collapse
-				// to a single entry and one silently stops matching. The same exact key
-				// repeated across statements is fine — it resolves to one consistent entry.
 				bare := mName.String()
 				if prevKey, ok := seenBareMetrics[bare]; ok && prevKey != metricName {
 					return fmt.Errorf("metric %q is configured under multiple scopes; only one scope of a metric may be configured across the query throttler config", bare)
