@@ -46,6 +46,7 @@ import (
 	econtext "vitess.io/vitess/go/vt/vtgate/executorcontext"
 
 	"vitess.io/vitess/go/mysql/collations"
+	mysqlconfig "vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
@@ -125,6 +126,7 @@ func TestPlanKey(t *testing.T) {
 		expectedPlanPrefixKey: "CurrentKeyspace: ks1, TabletType: PRIMARY, Destination: -66,66-, Query: SELECT 1, SetVarComment: , Collation: 255, SQLMode: 0, EvalSQLMode: 3",
 	}}
 	cfg := econtext.VCursorConfig{
+		SQLMode:           mysqlconfig.DefaultSQLMode,
 		Collation:         collations.CollationUtf8mb4ID,
 		DefaultTabletType: topodatapb.TabletType_PRIMARY,
 	}

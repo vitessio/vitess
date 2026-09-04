@@ -31,7 +31,6 @@ import (
 	"golang.org/x/sync/semaphore"
 
 	"vitess.io/vitess/go/mysql/collations"
-	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sqltypes"
@@ -439,13 +438,11 @@ func (vc *VCursorImpl) SQLMode() string {
 	return vc.DefaultSQLMode()
 }
 
-// DefaultSQLMode returns the sql_mode sessions start with: the value of the --sql-mode
-// flag, or the compiled-in default when the flag is unset.
+// DefaultSQLMode returns the sql_mode sessions start with: the resolved value of the
+// --sql-mode flag, which the executor fills in. The empty mode is a valid default and
+// is returned as such.
 func (vc *VCursorImpl) DefaultSQLMode() string {
-	if vc.config.SQLMode != "" {
-		return vc.config.SQLMode
-	}
-	return config.DefaultSQLMode
+	return vc.config.SQLMode
 }
 
 // MaxMemoryRows returns the maxMemoryRows flag value.

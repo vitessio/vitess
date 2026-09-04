@@ -970,6 +970,27 @@ func TestSetSQLModeDefault(t *testing.T) {
 	require.Equal(t, sqltypes.EncodeStringSQL(mysqlconfig.DefaultSQLMode), session.SystemVariables[sysvars.SQLMode.Name])
 }
 
+// An explicitly empty --sql-mode is a valid default: sessions start empty, and
+// DEFAULT restores empty rather than the compiled-in modes.
+func TestSetSQLModeDefaultExplicitlyEmpty(t *testing.T) {
+	saved := defaultSQLMode.mode
+	t.Cleanup(func() { defaultSQLMode.mode = saved })
+	require.NoError(t, defaultSQLMode.Set(""))
+	executor, _, _, _, ctx := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
+
+	session := econtext.NewAutocommitSession(&vtgatepb.Session{EnableSystemSettings: true, TargetString: KsTestUnsharded})
+	qr, err := executorExecSession(ctx, executor, session, "select @@sql_mode, @@global.sql_mode", nil)
+	require.NoError(t, err)
+	assert.Equal(t, `[[VARCHAR("") VARCHAR("")]]`, fmt.Sprintf("%v", qr.Rows))
+	require.Equal(t, "''", session.SystemVariables[sysvars.SQLMode.Name])
+
+	_, err = executorExecSession(ctx, executor, session, "set sql_mode = 'STRICT_ALL_TABLES'", nil)
+	require.NoError(t, err)
+	_, err = executorExecSession(ctx, executor, session, "set sql_mode = default", nil)
+	require.NoError(t, err)
+	require.Equal(t, "''", session.SystemVariables[sysvars.SQLMode.Name])
+}
+
 func TestSQLModeNoBackslashEscapesNotSentToBackends(t *testing.T) {
 	executor, _, _, lookup, ctx := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
 
