@@ -52,6 +52,7 @@
     - **[Backup/Restore](#minor-changes-backup)**
         - [Chunked backup/restore for the builtinbackupengine](#backup-chunked-builtin)
         - [Slow clean mysqld shutdowns no longer fail backups](#backup-mysqld-shutdown-timeout)
+        - [Parallel S3 downloads during restore](#vttablet-s3-parallel-downloads)
     - **[General](#minor-changes-general)**
         - [Build version metadata now sourced from VCS stamping](#build-info-from-vcs)
 
@@ -574,3 +575,26 @@ User-visible consequences:
 - Binaries built from a dirty working tree report their Git revision with a `-dirty` suffix.
 
 The `BUILD_GIT_REV`, `BUILD_GIT_BRANCH`, and `BUILD_TIME` environment-variable overrides still work for builds without VCS metadata (e.g. from a release tarball). When `BUILD_TIME` is set, it takes precedence over the commit time.
+
+#### <a id="vttablet-s3-parallel-downloads"/>Parallel S3 downloads during restore</a>
+
+S3 backup restores can now use the AWS SDK v2 transfer manager for parallel downloads. Each file is fetched via concurrent byte-range GETs instead of a single sequential stream, which should reduce restore wall-clock time for large backups.
+
+The feature is opt-in and disabled by default: set `--s3-backup-download-concurrency` to a value greater than 1 to enable parallel downloads. With the default value of 1, the restore path is unchanged (a single `GetObject` call per file, no `HeadObject`, no ranged GETs).
+
+**When enabled (`--s3-backup-download-concurrency` > 1):**
+
+- A `HeadObject` call is issued per file to determine object size before downloading.
+- Downloads use ranged GETs sized by `--s3-backup-download-part-size` (default 8 MiB) with the configured number of parallel workers per file.
+- Per-file memory is capped at 1 GiB (SDK buffer + read buffer). Configurations exceeding this fail fast at restore start.
+
+**New flags:**
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--s3-backup-download-part-size` | `8388608` (8 MiB) | Part size in bytes for parallel S3 downloads. |
+| `--s3-backup-download-concurrency` | `1` | Number of parallel goroutines per file download. Set > 1 to enable parallel byte-range GETs. |
+
+**CPU note (when parallel downloads are enabled):** The SDK transfer manager's dispatch loop busy-spins while a download window is in flight, consuming meaningful CPU even when the workload is network-bound. With `--restore-concurrency=4` (the default), up to 4 busy-spinning goroutines (one per file) compete with decompression for CPU. This is upstream SDK behaviour.
+
+See [#20225](https://github.com/vitessio/vitess/pull/20225) for details.
