@@ -252,11 +252,14 @@ an empty or incomplete result (issue #20878) — the form ORMs such as Rails
 now generate. A single-valued `IN` (a literal list of one, a bound list with
 one value, or a prepared statement's `IN (?)`) now routes exactly like the
 equivalent `=` predicate, including routed-table handling for `table_name`.
-Any predicate naming more than one schema — a multi-value `IN` list in any of
-those forms, or an `OR` of schema equalities, which plans identically — cannot
-be routed to a single keyspace and now fails with an explicit `VT12001` error
-instead of returning wrong rows. Multi-value `table_name` lists are unaffected
-and keep working as plain filters.
+A multi-value `IN` list routes when the query's schema predicates taken together
+still name exactly one schema (duplicates and `NULL` elements do not count, and
+another predicate such as `table_schema = 'ks'` narrows the list). When they
+name more than one — a multi-value `IN` list in any of those forms, or an `OR`
+of schema equalities, which plans identically — the query cannot be routed to a
+single keyspace and now fails with an explicit `VT12001` error instead of
+returning wrong rows. Multi-value `table_name` lists are unaffected and keep
+working as plain filters.
 
 One narrow shape that previously worked is currently rejected as well: a
 multi-value `IN` list naming only system schemas (e.g. `table_schema IN

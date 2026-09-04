@@ -1094,7 +1094,7 @@
     }
   },
   {
-    "comment": "table_schema OR predicate # rewritten to IN and carried: more than one schema name errors loudly at execution instead of silently querying the default keyspace",
+    "comment": "table_schema OR predicate # rewritten to IN and resolved at execution",
     "query": "SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = 'ks' OR TABLE_SCHEMA = 'main'",
     "plan": {
       "Type": "Passthrough",
@@ -1212,7 +1212,7 @@
     }
   },
   {
-    "comment": "single-element IN on a non-routing column is left alone, no equality rewrite",
+    "comment": "single-element IN on a non-routing column is left alone",
     "query": "select * from information_schema.tables where engine in ('InnoDB')",
     "plan": {
       "Type": "Passthrough",
@@ -1231,7 +1231,7 @@
     }
   },
   {
-    "comment": "IN with a list bindvar on table_schema is extracted; length is enforced at execution time",
+    "comment": "list bindvar IN on table_schema is resolved at execution",
     "query": "select table_name from information_schema.tables where table_schema in ::schemas",
     "plan": {
       "Type": "Passthrough",
@@ -1251,7 +1251,7 @@
     }
   },
   {
-    "comment": "IN with a list bindvar on table_name is extracted without rewriting the predicate; one value routes (incl. routed tables), more stay a working filter",
+    "comment": "list bindvar IN on table_name is re-pointed at a dedicated variable",
     "query": "select column_name from information_schema.statistics where table_schema = 'user' and table_name in ::tables",
     "plan": {
       "Type": "Passthrough",
@@ -1272,7 +1272,7 @@
     }
   },
   {
-    "comment": "a list bindvar shared between predicates (the normalizer dedupes identical IN tuples): only the table_name predicate is re-pointed at the dedicated variable; the shared client variable stays untouched in the other predicate",
+    "comment": "a list bindvar shared between predicates: only the table_name predicate is re-pointed",
     "query": "select column_name from information_schema.statistics where table_schema = 'user' and table_name in ::names and index_name in ::names",
     "plan": {
       "Type": "Passthrough",
@@ -1293,7 +1293,7 @@
     }
   },
   {
-    "comment": "multi-element literal IN on table_schema is carried for the execution-time guard (errors there; never silently unrouted)",
+    "comment": "multi-element literal IN on table_schema is resolved at execution",
     "query": "select table_name from information_schema.tables where table_schema in ('a', 'b')",
     "plan": {
       "Type": "Passthrough",
@@ -1313,7 +1313,7 @@
     }
   },
   {
-    "comment": "prepared-statement IN on table_schema (tuple of arguments) is carried for the execution-time guard",
+    "comment": "prepared-statement IN on table_schema is resolved at execution",
     "query": "select table_name from information_schema.tables where table_schema in (:v1, :v2)",
     "plan": {
       "Type": "Passthrough",
@@ -1333,7 +1333,7 @@
     }
   },
   {
-    "comment": "single-element IN with an untranslatable element is left alone (extraction must fail before any rewrite)",
+    "comment": "single-element IN with an untranslatable element is left alone",
     "query": "select * from information_schema.tables where table_schema in (table_name)",
     "plan": {
       "Type": "Passthrough",
@@ -1352,7 +1352,7 @@
     }
   },
   {
-    "comment": "NOT IN on table_schema is left alone, no rewrite",
+    "comment": "NOT IN on table_schema is left alone",
     "query": "select table_name from information_schema.tables where table_schema not in ('user')",
     "plan": {
       "Type": "Passthrough",
@@ -1371,7 +1371,7 @@
     }
   },
   {
-    "comment": "single-element list bindvar on a non-routing column is left alone, no equality rewrite",
+    "comment": "single-element list bindvar on a non-routing column is left alone",
     "query": "select * from information_schema.tables where engine in ::x",
     "plan": {
       "Type": "Passthrough",

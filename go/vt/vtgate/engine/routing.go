@@ -23,6 +23,7 @@ import (
 	"maps"
 	"strconv"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
@@ -205,37 +206,34 @@ func (rp *RoutingParameters) routeInfoSchemaQuery(ctx context.Context, vcursor V
 	}
 
 	env := evalengine.NewExpressionEnv(ctx, bindVars, vcursor)
-	var specifiedKS string
-	for idx, tableSchema := range rp.SysTableTableSchema {
+	// Intersect the schema names the table_schema predicates admit.
+	var candidates map[string]struct{}
+	for _, tableSchema := range rp.SysTableTableSchema {
 		result, err := env.Evaluate(tableSchema)
 		if err != nil {
 			return nil, err
 		}
-		var ks string
-		if tuple := result.TupleValues(); tuple != nil {
-			// A list bindvar from an IN predicate: elements that all name
-			// the same schema route exactly like the equality form —
-			// duplicates do not change IN semantics — while distinct names
-			// cannot name one keyspace, and falling through would silently
-			// query the wrong one.
-			if len(tuple) == 0 {
-				return nil, vterrors.VT12001("empty IN list for the schema name in an information_schema query")
-			}
-			ks = tuple[0].ToString()
-			for _, val := range tuple[1:] {
-				if val.ToString() != ks {
-					return nil, vterrors.VT12001("IN list with more than one distinct schema name in an information_schema query")
-				}
-			}
-		} else {
-			ks = result.Value(vcursor.ConnCollation()).ToString()
+		names := schemaNames(result, vcursor.ConnCollation())
+		if candidates == nil {
+			candidates = names
+			continue
 		}
-		switch {
-		case idx == 0:
-			specifiedKS = ks
-		case specifiedKS != ks:
-			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "specifying two different database in the query is not supported")
+		for name := range candidates {
+			if _, ok := names[name]; !ok {
+				delete(candidates, name)
+			}
 		}
+	}
+	var specifiedKS string
+	switch {
+	case len(candidates) > 1:
+		return nil, vterrors.VT12001("IN list with more than one distinct schema name in an information_schema query")
+	case len(candidates) == 1:
+		for name := range candidates {
+			specifiedKS = name
+		}
+	case candidates != nil:
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "specifying two different database in the query is not supported")
 	}
 
 	bindVars[sqltypes.BvSchemaName] = sqltypes.StringBindVariable(specifiedKS)
@@ -248,19 +246,10 @@ func (rp *RoutingParameters) routeInfoSchemaQuery(ctx context.Context, vcursor V
 		}
 		var tabName string
 		if tuple := val.TupleValues(); tuple != nil {
-			// A table-name list from an IN predicate. The expression reads
-			// the CLIENT's list bind variable — which the normalizer may
-			// share between identical IN tuples on other columns — while
-			// tblBvName is the dedicated, vtgate-owned list variable the
-			// rewritten query references, so the client's variable is never
-			// written. One name routes like the equality form (including
-			// routed-table handling below); any other length contributes
-			// nothing to routing and the predicate keeps working as the
-			// pushed-down filter it already is.
+			// tblBvName is the dedicated list variable the rewritten query
+			// references; the client's list may be shared and is never written.
+			// Only a one-element list contributes to routing.
 			if len(tuple) != 1 {
-				// The rewritten query still references the dedicated
-				// variable, so it must be populated: copy the client's
-				// values unchanged.
 				bindVars[tblBvName] = tupleBindVariable(tuple)
 				continue
 			}
@@ -346,10 +335,8 @@ func (rp *RoutingParameters) routedTable(ctx context.Context, vcursor VCursor, b
 	return nil, nil
 }
 
-// setSysTableNameBindVar sets a system-table name bind variable, preserving
-// its shape: a name that came from a one-element IN list is a vtgate-owned
-// TUPLE variable (the rewritten query says `in ::name`), while everything
-// else is the scalar the query's `= :name` expects.
+// setSysTableNameBindVar sets a table name bind variable, keeping the TUPLE
+// shape a rewritten `in ::name` predicate expects.
 func setSysTableNameBindVar(bindVars map[string]*querypb.BindVariable, name, value string) {
 	if bv, ok := bindVars[name]; ok && bv.Type == querypb.Type_TUPLE {
 		bindVars[name] = tupleOfOneBindVariable(value)
@@ -358,8 +345,7 @@ func setSysTableNameBindVar(bindVars map[string]*querypb.BindVariable, name, val
 	bindVars[name] = sqltypes.StringBindVariable(value)
 }
 
-// tupleOfOneBindVariable builds the one-element TUPLE bind variable a
-// rewritten `in ::name` list predicate expects.
+// tupleOfOneBindVariable builds a one-element TUPLE bind variable.
 func tupleOfOneBindVariable(value string) *querypb.BindVariable {
 	return &querypb.BindVariable{
 		Type:   querypb.Type_TUPLE,
@@ -374,6 +360,27 @@ func tupleBindVariable(values []sqltypes.Value) *querypb.BindVariable {
 		bv.Values = append(bv.Values, sqltypes.ValueToProto(value))
 	}
 	return bv
+}
+
+// schemaNames returns the schema names a table_schema predicate admits. NULL
+// list elements are skipped; a list naming no schema matches nothing, like
+// `= NULL`, which the empty name expresses.
+func schemaNames(result evalengine.EvalResult, coll collations.ID) map[string]struct{} {
+	names := map[string]struct{}{}
+	tuple := result.TupleValues()
+	if tuple == nil {
+		names[result.Value(coll).ToString()] = struct{}{}
+		return names
+	}
+	for _, val := range tuple {
+		if !val.IsNull() {
+			names[val.ToString()] = struct{}{}
+		}
+	}
+	if len(names) == 0 {
+		names[""] = struct{}{}
+	}
+	return names
 }
 
 func (rp *RoutingParameters) anyShard(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {

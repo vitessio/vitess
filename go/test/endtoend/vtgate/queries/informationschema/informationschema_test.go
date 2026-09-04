@@ -306,10 +306,7 @@ WHERE TABLE_SCHEMA = 'ks' AND TABLE_NAME = 't2';
 }
 
 // TestInformationSchemaWithInPredicate reproduces
-// https://github.com/vitessio/vitess/issues/20878: IN predicates on
-// table_schema/table_name must route like their equality forms instead of
-// silently returning an empty set, and a multi-value schema IN must fail
-// loudly rather than return wrong rows.
+// https://github.com/vitessio/vitess/issues/20878.
 func TestInformationSchemaWithInPredicate(t *testing.T) {
 	if clusterInstance.HasPartialKeyspaces {
 		t.Skip("test can randomly select one of the shards, and the shards are in different keyspaces")
@@ -317,23 +314,27 @@ func TestInformationSchemaWithInPredicate(t *testing.T) {
 	mcmp, closer := start(t)
 	defer closer()
 
-	// equality and single-element IN must agree (both non-empty)
 	eq := utils.Exec(t, mcmp.VtConn, "select table_name from information_schema.tables where table_schema = database() and table_name = 't1'")
 	in := utils.Exec(t, mcmp.VtConn, "select table_name from information_schema.tables where table_schema in (database()) and table_name in ('t1')")
 	require.NotEmpty(t, eq.Rows)
 	require.Equal(t, eq.Rows, in.Rows)
 
-	// the issue's literal repro: schema named by literal IN
+	// the issue's literal repro
 	inLit := utils.Exec(t, mcmp.VtConn, "select table_name from information_schema.tables where table_schema in ('ks') and table_name = 't1'")
 	require.Equal(t, eq.Rows, inLit.Rows)
 
-	// multi-value schema IN fails loudly instead of returning empty/wrong rows
 	_, err := mcmp.VtConn.ExecuteFetch("select table_name from information_schema.tables where table_schema in ('ks', 'other')", 100, false)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "VT12001")
 
-	// a multi-value table_name IN keeps working as a plain filter: the schema
-	// routes, the list filters, no error
+	inDup := utils.Exec(t, mcmp.VtConn, "select table_name from information_schema.tables where table_schema in ('ks', 'ks', null) and table_name = 't1'")
+	require.Equal(t, eq.Rows, inDup.Rows)
+
+	// another schema predicate narrows the list to one schema
+	inNarrowed := utils.Exec(t, mcmp.VtConn, "select table_name from information_schema.tables where table_schema = 'ks' and table_schema in ('ks', 'other') and table_name = 't1'")
+	require.Equal(t, eq.Rows, inNarrowed.Rows)
+
+	// multi-value table_name IN stays a plain filter
 	multiName := utils.Exec(t, mcmp.VtConn, "select table_name from information_schema.tables where table_schema = database() and table_name in ('t1', 't7_xxhash')")
 	require.Len(t, multiName.Rows, 2)
 }

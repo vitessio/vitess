@@ -28,9 +28,8 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
-// environmentOnlyVSchema stubs the one plancontext.VSchema method the
-// extraction code touches; every other method panics via the embedded nil
-// interface, which is exactly what a unit test wants.
+// environmentOnlyVSchema stubs the one plancontext.VSchema method extraction
+// touches.
 type environmentOnlyVSchema struct {
 	plancontext.VSchema
 }
@@ -39,15 +38,9 @@ func (environmentOnlyVSchema) Environment() *vtenv.Environment {
 	return vtenv.NewTestEnv()
 }
 
-// TestExtractInfoSchemaRoutingPredicateListArgReplay pins the idempotence of
-// the table_name IN ::list extraction. resetRoutingLogic replays
-// seenPredicates, which hold the SAME comparison node a previous extraction
-// already re-pointed at a dedicated, vtgate-owned list variable. The replayed
-// extraction must recognize its own variable: reuse the same name, recover
-// the CLIENT's original list as the routing source, and leave the predicate
-// untouched. Reserving another name would store an expression that reads a
-// variable nothing populates, failing execution with a missing-argument
-// error (the hazard class of issue #20972, which this arm must not extend).
+// TestExtractInfoSchemaRoutingPredicateListArgReplay pins that re-extracting an
+// already-rewritten `table_name IN ::list` node (as resetRoutingLogic does) is
+// idempotent: same dedicated variable, client's list recovered, no re-mutation.
 func TestExtractInfoSchemaRoutingPredicateListArgReplay(t *testing.T) {
 	ctx := &plancontext.PlanningContext{
 		ReservedVars:      sqlparser.NewReservedVars("vtg", sqlparser.BindVars{"tables": {}}),

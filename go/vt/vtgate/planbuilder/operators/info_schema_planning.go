@@ -139,14 +139,12 @@ func extractInfoSchemaRoutingPredicate(ctx *plancontext.PlanningContext, in sqlp
 	switch cmp.Operator {
 	case sqlparser.EqualOp:
 	case sqlparser.InOp:
-		// Only routable columns are ever touched: an IN on any other column
-		// must stay exactly as written. All guards run BEFORE any mutation.
+		// Guard before mutating: an IN on a non-routable column stays as written.
 		col, isSchema, isTable := IsTableSchemaOrName(cmp.Left, ctx.VSchema.Environment().MySQLVersion())
 		if col == nil || (!isSchema && !isTable) {
 			return false, "", nil
 		}
 		translates := func(e sqlparser.Expr) bool {
-			// same Config as the shared translatability check below
 			_, err := evalengine.Translate(e, &evalengine.Config{
 				Collation:     collations.SystemCollation.Collation,
 				ResolveColumn: NotImplementedSchemaInfoResolver,
@@ -157,31 +155,17 @@ func extractInfoSchemaRoutingPredicate(ctx *plancontext.PlanningContext, in sqlp
 		switch rhs := cmp.Right.(type) {
 		case sqlparser.ValTuple:
 			if len(rhs) == 1 {
-				// A single-element IN list is an equality: only one destination
-				// is named, so the predicate routes exactly like `=` (mirrors
-				// ShardedRouting.planInOp). An element the equality path would
-				// refuse (e.g. database(), which must stay in the query
-				// untouched) leaves the IN exactly as written.
+				// A one-element IN is an equality (mirrors ShardedRouting.planInOp).
 				if !shouldRewrite(rhs[0]) || !translates(rhs[0]) {
 					return false, "", nil
 				}
 				cmp.Operator = sqlparser.EqualOp
 				cmp.Right = rhs[0]
-				break // continue into the shared equality tail below
+				break
 			}
-			// A multi-element schema list — a literal list with normalization
-			// disabled, or a prepared statement's `IN (?, ?)` — routes only
-			// if every element resolves to the same schema (duplicates do
-			// not change IN semantics). Carry the whole tuple so
-			// routeInfoSchemaQuery decides at execution: elements that all
-			// name one schema route like equality, distinct names are
-			// rejected loudly instead of the query silently running against
-			// the default keyspace. The equality rewrite below is safe
-			// either way: the engine substitutes the resolved value, or
-			// errors on the tuple before the rewritten query can be sent
-			// anywhere.
-			// Multi-element table_name lists are left alone: they already
-			// work as pushed-down filters once the schema routes.
+			// Multi-element schema lists are resolved at execution, where they
+			// are intersected with the other schema predicates. table_name
+			// lists already work as pushed-down filters.
 			if !isSchema || !translates(rhs) {
 				return false, "", nil
 			}
@@ -189,33 +173,16 @@ func extractInfoSchemaRoutingPredicate(ctx *plancontext.PlanningContext, in sqlp
 			cmp.Right = sqlparser.NewTypedArgument(sqltypes.BvSchemaName, sqltypes.VarChar)
 			return true, sqltypes.BvSchemaName, rhs
 		case sqlparser.ListArg:
-			// The normalizer turns `in ('x')` into a list bindvar whose length
-			// is unknown until execution, so routeInfoSchemaQuery decides
-			// there: for the schema column one value routes and any other
-			// length errors, so the predicate is rewritten to the equality
-			// form up front. For the table_name column one value contributes
-			// routed-table handling while other lengths keep working as the
-			// pushed-down filter, so the predicate keeps its IN shape but is
-			// re-pointed at a dedicated, vtgate-owned list variable that the
-			// engine populates at execution — see below.
+			// The list's length is only known at execution.
 			if isSchema {
 				cmp.Operator = sqlparser.EqualOp
 				cmp.Right = sqlparser.NewTypedArgument(sqltypes.BvSchemaName, sqltypes.VarChar)
 				return true, sqltypes.BvSchemaName, rhs
 			}
-			// The client's list may be shared: the normalizer reuses one list
-			// bind variable for identical IN tuples across predicates, so the
-			// engine must never write it. Re-point this predicate at a
-			// dedicated, vtgate-owned list variable; the stored expression
-			// still reads the client's list, and the engine populates the
-			// dedicated one (with the routed table name when applicable).
-			//
-			// The rewrite must be idempotent: resetRoutingLogic replays
-			// seenPredicates, which hold this same, already-mutated node.
-			// A replay that reserved yet another name would store an
-			// expression reading a variable nothing populates (the issue
-			// #20972 hazard class), so recognize our own dedicated variable
-			// and recover the client's original list from the reservations.
+			// The normalizer shares one list bindvar between identical IN tuples,
+			// so the engine writes a dedicated variable instead of the client's.
+			// resetRoutingLogic replays this already-rewritten node: recognize
+			// the dedicated variable and recover the client's list (#20972).
 			for original, name := range ctx.ReservedArguments {
 				if name != string(rhs) {
 					continue
