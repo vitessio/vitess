@@ -1281,13 +1281,15 @@ func TestComStmtCloseClearsPendingLongDataIngressBytes(t *testing.T) {
 // through the optional PrepareParseModeHandler extension.
 type parseModeHandler struct {
 	testRun
+	prepared []string
 }
 
-func (parseModeHandler) ComPrepare(*Conn, string) ([]*querypb.Field, uint16, error) {
+func (*parseModeHandler) ComPrepare(*Conn, string) ([]*querypb.Field, uint16, error) {
 	panic("ComPrepare must not be called on a handler that implements PrepareParseModeHandler")
 }
 
-func (parseModeHandler) ComPrepareWithParseMode(*Conn, string) ([]*querypb.Field, uint16, uint32, error) {
+func (h *parseModeHandler) ComPrepareWithParseMode(_ *Conn, query string) ([]*querypb.Field, uint16, uint32, error) {
+	h.prepared = append(h.prepared, query)
 	return nil, 1, 5, nil
 }
 
@@ -1300,7 +1302,7 @@ func TestComPrepareParseMode(t *testing.T) {
 		handler Handler
 		mode    uint32
 	}{
-		{name: "handler with the extension", handler: parseModeHandler{}, mode: 5},
+		{name: "handler with the extension", handler: &parseModeHandler{}, mode: 5},
 		{name: "handler without the extension", handler: testRun{paramCounts: 1}, mode: 0},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -1318,6 +1320,47 @@ func TestComPrepareParseMode(t *testing.T) {
 			assert.Equal(t, uint16(1), sConn.PrepareData[1].ParamsCount)
 		})
 	}
+}
+
+// With CLIENT_MULTI_STATEMENTS, the server checks that the text is exactly one
+// statement before preparing it — unless the handler parses under the session's
+// sql_mode, in which case only the handler's parser can tell where the statement
+// ends: 'a\' ';b' is one string under NO_BACKSLASH_ESCAPES and two statements in
+// the default mode. Such a handler receives the whole text and judges it itself.
+func TestComPrepareMultiStatementBoundary(t *testing.T) {
+	const query = `select 'a\' ';b'`
+
+	t.Run("mode-aware handler receives the whole text", func(t *testing.T) {
+		listener, sConn, cConn := createSocketPair(t)
+		defer listener.Close()
+		defer sConn.Close()
+		defer cConn.Close()
+		sConn.Capabilities |= CapabilityClientMultiStatements
+		sConn.PrepareData = map[uint32]*PrepareData{}
+		handler := &parseModeHandler{}
+
+		require.NoError(t, cConn.writePacket(preparePacket(t, query)))
+		require.True(t, sConn.handleNextCommand(handler))
+
+		assert.Equal(t, []string{query}, handler.prepared)
+		require.Len(t, sConn.PrepareData, 1)
+		assert.Equal(t, query, sConn.PrepareData[1].PrepareStmt)
+	})
+
+	t.Run("default-mode handler gets the default-parser check", func(t *testing.T) {
+		listener, sConn, cConn := createSocketPair(t)
+		defer listener.Close()
+		defer sConn.Close()
+		defer cConn.Close()
+		sConn.Capabilities |= CapabilityClientMultiStatements
+		sConn.PrepareData = map[uint32]*PrepareData{}
+
+		require.NoError(t, cConn.writePacket(preparePacket(t, query)))
+		require.True(t, sConn.handleNextCommand(testRun{paramCounts: 1}))
+
+		// rejected as two statements before the handler saw it
+		assert.Empty(t, sConn.PrepareData)
+	})
 }
 
 func TestComPrepareBytesNotAttributedToExecute(t *testing.T) {

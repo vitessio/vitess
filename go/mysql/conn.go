@@ -1456,10 +1456,15 @@ func (c *Conn) handleComPrepare(handler Handler, data []byte) (kontinue bool) {
 	query := c.parseComPrepare(data)
 	c.recycleReadPacket()
 
-	if c.Capabilities&CapabilityClientMultiStatements != 0 {
+	modeAwareHandler, modeAware := handler.(PrepareParseModeHandler)
+	if c.Capabilities&CapabilityClientMultiStatements != 0 && !modeAware {
 		// A prepared statement is exactly one statement, as in MySQL:
 		// anything after it is a syntax error, nothing is an empty query.
 		// A comment after the ';' does not start a second statement.
+		// A handler that parses under the session's sql_mode judges that
+		// boundary itself, with its own parser: the default parser cannot
+		// tell where a statement ends under a mode that changes how quotes
+		// are read, so it must not see the text first.
 		parser := handler.Env().Parser()
 		statement, rest, _ := parser.SplitStatement(query)
 		if !parser.IsBlankOrComments(rest) {
@@ -1475,8 +1480,8 @@ func (c *Conn) handleComPrepare(handler Handler, data []byte) (kontinue bool) {
 	var paramsCount uint16
 	var parseSQLMode uint32
 	var err error
-	if h, ok := handler.(PrepareParseModeHandler); ok {
-		fld, paramsCount, parseSQLMode, err = h.ComPrepareWithParseMode(c, query)
+	if modeAware {
+		fld, paramsCount, parseSQLMode, err = modeAwareHandler.ComPrepareWithParseMode(c, query)
 	} else {
 		fld, paramsCount, err = handler.ComPrepare(c, query)
 	}
