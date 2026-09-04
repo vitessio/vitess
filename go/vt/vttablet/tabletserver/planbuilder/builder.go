@@ -194,6 +194,7 @@ func analyzeSet(set *sqlparser.Set) (*Plan, error) {
 	return &Plan{
 		PlanID:            PlanSet,
 		FullQuery:         GenerateFullQuery(set),
+		FullStmt:          set,
 		NeedsReservedConn: true,
 		VerifySQLMode:     verify,
 	}, nil

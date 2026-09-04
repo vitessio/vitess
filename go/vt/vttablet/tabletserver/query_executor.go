@@ -313,7 +313,14 @@ func (qre *QueryExecutor) txConnExec(conn *StatefulConnection) (*sqltypes.Result
 	case p.PlanInsert, p.PlanUpdate, p.PlanDelete:
 		return qre.txFetch(conn, true)
 	case p.PlanSet:
-		return qre.execSet(conn)
+		result, err := qre.execSet(conn)
+		if err == nil && setsWaitTimeout(qre.plan.FullStmt) {
+			// The SET changed the deadline mysqld enforces on this connection:
+			// re-capture it for the temp-table idle timeout.
+			conn.forgetSessionWaitTimeout()
+			qre.captureSessionWaitTimeout(conn)
+		}
+		return result, err
 	case p.PlanInsertMessage:
 		qre.bindVars["#time_now"] = sqltypes.Int64BindVariable(time.Now().UnixNano())
 		return qre.txFetch(conn, true)
@@ -1058,6 +1065,20 @@ func (qre *QueryExecutor) execDDL(conn *StatefulConnection) (result *sqltypes.Re
 		conn.markHoldsTempTables()
 	}
 	return result, nil
+}
+
+// setsWaitTimeout reports whether a SET statement assigns wait_timeout.
+func setsWaitTimeout(stmt sqlparser.Statement) bool {
+	set, ok := stmt.(*sqlparser.Set)
+	if !ok {
+		return false
+	}
+	for _, expr := range set.Exprs {
+		if expr.Var.Name.EqualString("wait_timeout") {
+			return true
+		}
+	}
+	return false
 }
 
 // captureSessionWaitTimeout records the connection's own

@@ -2557,6 +2557,54 @@ func TestTempTableDropOnlyDoesNotMark(t *testing.T) {
 	assert.Zero(t, tsv.te.txPool.scp.tempTableUnmanaged.Load(), "a drop-only connection must stay off the gauge")
 }
 
+// TestTempTableSessionWaitTimeoutFollowsSet pins that the captured
+// @@session.wait_timeout follows a later SET wait_timeout run as a query on
+// the reserved connection (how vtgate pushes a session variable to existing
+// reservations). A stale capture would let the tablet reclaim the connection
+// at the old deadline, or outlive mysqld's new one. Connection settings need
+// no such refresh: they are applied on a fresh reservation before any DDL
+// can capture, and a connection holding a capture is already reserved.
+func TestTempTableSessionWaitTimeoutFollowsSet(t *testing.T) {
+	ctx := t.Context()
+	db, tsv := setupTabletServerTest(t, ctx, "")
+	defer tsv.StopService()
+	defer db.Close()
+	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
+	db.AddQueryPattern("set sql_mode = ''", &sqltypes.Result{})
+	db.AddQueryPattern("set @@sql_mode = ''", &sqltypes.Result{})
+	db.AddQueryPattern("set wait_timeout = .*", &sqltypes.Result{})
+	db.AddQueryPattern("create temporary table .*", &sqltypes.Result{})
+	probeAnswers := func(seconds string) {
+		db.AddQuery("select @@session.wait_timeout", sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields("@@session.wait_timeout", "int64"), seconds))
+	}
+	captured := func(reservedID int64) time.Duration {
+		conn, err := tsv.te.txPool.GetAndLock(ctx, reservedID, "for test")
+		require.NoError(t, err)
+		defer conn.Unlock()
+		return conn.sessionWaitTimeout
+	}
+
+	probeAnswers("28800")
+	state, _, err := tsv.ReserveExecute(ctx, nil, &target, nil, "set sql_mode = ''", nil, 0, nil)
+	require.NoError(t, err)
+	defer func() { _ = tsv.Release(ctx, &target, 0, state.ReservedID) }()
+	_, err = tsv.Execute(ctx, nil, &target, "create temporary table temp_t(id int)", nil, 0, state.ReservedID, nil)
+	require.NoError(t, err)
+	require.Equal(t, 28800*time.Second, captured(state.ReservedID))
+
+	probeAnswers("60")
+	_, err = tsv.Execute(ctx, nil, &target, "set wait_timeout = 60", nil, 0, state.ReservedID, nil)
+	require.NoError(t, err)
+	assert.Equal(t, 60*time.Second, captured(state.ReservedID), "a SET wait_timeout on the connection must refresh the capture")
+
+	// A SET of an unrelated variable must not re-probe.
+	probes := strings.Count(db.QueryLog(), "select @@session.wait_timeout")
+	_, err = tsv.Execute(ctx, nil, &target, "set @@sql_mode = ''", nil, 0, state.ReservedID, nil)
+	require.NoError(t, err)
+	assert.Equal(t, probes, strings.Count(db.QueryLog(), "select @@session.wait_timeout"), "an unrelated SET must not re-probe")
+}
+
 // TestTempTableIdleTimeoutAutoWaitTimeout verifies the temp-table idle
 // timeout's auto mode (-1, the default): the tablet mirrors its own mysqld's
 // @@global.wait_timeout, read via the dba pool when the query service opens

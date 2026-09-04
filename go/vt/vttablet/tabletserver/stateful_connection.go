@@ -63,12 +63,12 @@ type StatefulConnection struct {
 	keepAliveManaged bool
 
 	// sessionWaitTimeout is this connection's own @@session.wait_timeout,
-	// captured when its first temporary-table DDL runs. mysqld fixed the
-	// session value when the connection's thread started, so it — not the
-	// current global — is the deadline mysqld actually enforces on this
-	// connection. Zero until captured (fall back to the pool's global
-	// mirror). Written under the same exclusive-execution discipline as the
-	// marks above.
+	// captured when its first temporary-table DDL runs and re-captured after
+	// a SET wait_timeout on the connection. mysqld fixed the session value
+	// when the connection's thread started, so it — not the current global —
+	// is the deadline mysqld actually enforces on this connection. Zero until
+	// captured (fall back to the pool's global mirror). Written under the
+	// same exclusive-execution discipline as the marks above.
 	sessionWaitTimeout time.Duration
 }
 
@@ -155,12 +155,18 @@ func (sc *StatefulConnection) tempTableIdleTimeout() time.Duration {
 }
 
 // captureSessionWaitTimeout records the connection's own
-// @@session.wait_timeout for auto mode; the first successful capture wins.
-// See tempTableIdleTimeout.
+// @@session.wait_timeout for auto mode; the first successful capture wins
+// until forgetSessionWaitTimeout. See tempTableIdleTimeout.
 func (sc *StatefulConnection) captureSessionWaitTimeout(waitTimeout time.Duration) {
 	if sc.sessionWaitTimeout == 0 && waitTimeout > 0 {
 		sc.sessionWaitTimeout = waitTimeout
 	}
+}
+
+// forgetSessionWaitTimeout drops the capture after a SET wait_timeout on the
+// connection changed the deadline mysqld enforces, so it is re-captured.
+func (sc *StatefulConnection) forgetSessionWaitTimeout() {
+	sc.sessionWaitTimeout = 0
 }
 
 // markHoldsTempTables records that a temporary-table DDL executed on the
