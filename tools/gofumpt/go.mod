@@ -1,6 +1,6 @@
 module vitess.io/vitess/tools/gofumpt
 
-go 1.27.0
+go 1.27.1
 
 tool mvdan.cc/gofumpt
 
