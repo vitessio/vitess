@@ -1314,7 +1314,7 @@ func (e *Executor) fetchOrCreatePlan(
 		return nil, nil, nil, vterrors.VT13001("vschema not initialized")
 	}
 
-	if err := e.materializeSessionSQLMode(ctx, safeSession, logStats); err != nil {
+	if err := e.materializeSessionSQLMode(ctx, safeSession); err != nil {
 		return nil, nil, nil, err
 	}
 	query, comments := sqlparser.SplitMarginComments(queryString)
@@ -1527,18 +1527,14 @@ func (e *Executor) getCachedOrBuildPlan(
 // the failure says the value can never be applied (it is invalid, or unsupported), in
 // which case keeping it would only fail every later request the same way, including
 // the SET that could replace it: the session then stays in the default.
-func (e *Executor) materializeSessionSQLMode(ctx context.Context, safeSession *econtext.SafeSession, logStats *logstats.LogStats) error {
+func (e *Executor) materializeSessionSQLMode(ctx context.Context, safeSession *econtext.SafeSession) error {
 	value, ok := safeSession.SQLMode()
 	if !ok || sqlparser.IsSQLModeList(value) {
 		return nil
 	}
-	vcursor, err := e.newVCursor(safeSession, sqlparser.MarginComments{}, logStats)
-	if err != nil {
-		return err
-	}
 	stored := safeSession.SystemVariables[sysvars.SQLMode.Name]
 	safeSession.SetSystemVariable(sysvars.SQLMode.Name, sqltypes.EncodeStringSQL(e.config.SQLMode))
-	err = e.evaluateSessionSQLMode(ctx, vcursor, value)
+	err := e.evaluateSessionSQLMode(ctx, safeSession, value)
 	if err == nil {
 		return nil
 	}
@@ -1550,34 +1546,22 @@ func (e *Executor) materializeSessionSQLMode(ctx context.Context, safeSession *e
 	return err
 }
 
-// evaluateSessionSQLMode runs the given sql_mode expression through the same
-// normalization, evaluation and storage a SET sql_mode statement gets.
-func (e *Executor) evaluateSessionSQLMode(ctx context.Context, vcursor *econtext.VCursorImpl, expr string) error {
-	stmt, reservedVars, err := parseAndValidateQuery("set sql_mode = "+expr, e.env.Parser())
-	if err != nil {
-		return vterrors.Wrapf(err, "cannot evaluate the session's sql_mode expression %s", expr)
-	}
+// evaluateSessionSQLMode runs the given sql_mode expression as the SET sql_mode
+// statement that stored it, through the planner: a sub-expression vtgate cannot
+// compute itself is fetched from a shard the way it is for any SET sql_mode.
+func (e *Executor) evaluateSessionSQLMode(ctx context.Context, safeSession *econtext.SafeSession, expr string) error {
+	sql := "set sql_mode = " + expr
+	logStats := logstats.NewLogStats(ctx, "MaterializeSessionSQLMode", sql, safeSession.GetSessionUUID(), nil, streamlog.GetQueryLogConfig())
 	bindVars := make(map[string]*querypb.BindVariable)
-	rewritten, err := sqlparser.Normalize(stmt, reservedVars, bindVars, false /*parameterize*/, vcursor.GetKeyspace(), 0 /*selectLimit*/, "" /*setVarComment*/, vcursor.GetSystemVariablesCopy(), nil /*fkChecksState*/, vcursor)
+	plan, vcursor, _, err := e.fetchOrCreatePlan(ctx, safeSession, sql, bindVars, false /*parameterize*/, false /*preparedPlan*/, logStats, true /*isExecutePath*/)
 	if err != nil {
 		return err
 	}
-	if err := e.addNeededBindVars(vcursor, rewritten.BindVarNeeds, bindVars, vcursor.SafeSession); err != nil {
+	if err := e.addNeededBindVars(vcursor, plan.BindVarNeeds, bindVars, safeSession); err != nil {
 		return err
 	}
-	set, ok := rewritten.AST.(*sqlparser.Set)
-	if !ok || len(set.Exprs) != 1 {
-		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "cannot evaluate the session's sql_mode expression %s", expr)
-	}
-	evalExpr, err := evalengine.Translate(set.Exprs[0].Expr, &evalengine.Config{
-		Collation:   vcursor.ConnCollation(),
-		Environment: e.env,
-	})
-	if err != nil {
-		return err
-	}
-	op := &engine.SysVarSQLMode{Expr: evalExpr}
-	return op.Execute(ctx, vcursor, evalengine.NewExpressionEnv(ctx, bindVars, vcursor))
+	_, err = e.executePlan(ctx, safeSession, plan, vcursor, bindVars, logStats, time.Now())
+	return err
 }
 
 func buildPlanKey(ctx context.Context, vcursor *econtext.VCursorImpl, query string) engine.PlanKey {
@@ -1781,7 +1765,7 @@ func (e *Executor) Prepare(ctx context.Context, method string, safeSession *econ
 }
 
 func (e *Executor) prepare(ctx context.Context, safeSession *econtext.SafeSession, sql string, logStats *logstats.LogStats) ([]*querypb.Field, uint16, error) {
-	if err := e.materializeSessionSQLMode(ctx, safeSession, logStats); err != nil {
+	if err := e.materializeSessionSQLMode(ctx, safeSession); err != nil {
 		return nil, 0, err
 	}
 	sessionSQLMode, _ := safeSession.SQLMode()

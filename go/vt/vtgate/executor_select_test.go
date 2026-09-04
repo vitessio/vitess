@@ -590,6 +590,19 @@ func TestSessionSQLModeExpressionSessionValue(t *testing.T) {
 		assert.Equal(t, "select /*+ SET_VAR(sql_mode = 'ANSI_QUOTES,ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ id from information_schema.`table`", lookup.Queries[0].Sql)
 	})
 
+	t.Run("a sub-expression vtgate cannot compute is fetched from a shard", func(t *testing.T) {
+		executor, _, _, lookup, _ := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
+		session := newSession(KsTestUnsharded, "IF(RAND() < 2, 'ANSI_QUOTES', '')")
+		lookup.SetResults([]*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("v", "varchar"), "ANSI_QUOTES")})
+
+		_, err := executorExecSession(t.Context(), executor, session, `select "id" from information_schema.table`, map[string]*querypb.BindVariable{})
+		require.NoError(t, err)
+		require.Len(t, lookup.Queries, 2)
+		assert.Equal(t, "select if(RAND() < 2, 'ANSI_QUOTES', '') from dual", lookup.Queries[0].Sql)
+		assert.Equal(t, "select /*+ SET_VAR(sql_mode = 'ANSI_QUOTES') */ id from information_schema.`table`", lookup.Queries[1].Sql)
+		assert.Equal(t, "'ANSI_QUOTES'", session.SystemVariables["sql_mode"])
+	})
+
 	t.Run("an expression evaluating to an invalid value fails the request", func(t *testing.T) {
 		executor, _, _, lookup, _ := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
 		session := newSession(KsTestUnsharded, "CONCAT('BO', 'GUS')")
