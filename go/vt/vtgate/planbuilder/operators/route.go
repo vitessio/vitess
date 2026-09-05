@@ -52,6 +52,15 @@ type (
 		// this field will contain the conditions under which this route is valid
 		Conditions []engine.Condition
 
+		// MergeFallback is set when a UNION was merged into this route on a
+		// routing that ignores join predicates pushed down from an ApplyJoin
+		// above. It records the routing an argument-based merge would have
+		// installed instead, so later union merge attempts against sources
+		// routed elsewhere can still merge this route the way they would have
+		// before. It is never simultaneously this route's Routing, so
+		// predicates pushed into this route cannot mutate it.
+		MergeFallback *ShardedRouting
+
 		ResultColumns int
 	}
 
@@ -124,6 +133,18 @@ func UpdateRoutingLogic(ctx *plancontext.PlanningContext, in sqlparser.Expr, r R
 		return nr
 	}
 
+	expr := in
+	// If we have a JoinPredicate, let's get the inner expression
+	pred, isJP := in.(*predicates.JoinPredicate)
+	if isJP {
+		expr = pred.Current()
+		if expr == nil {
+			// the predicate has been skipped - the join it belonged to has been
+			// merged away, so it no longer applies and must not influence routing
+			return r
+		}
+	}
+
 	ks := r.Keyspace()
 	inferred := false
 	if ks == nil {
@@ -135,13 +156,6 @@ func UpdateRoutingLogic(ctx *plancontext.PlanningContext, in sqlparser.Expr, r R
 		inferred = true
 	}
 	nr := &NoneRouting{keyspace: ks, inferredKeyspace: inferred}
-
-	expr := in
-	// If we have a JoinPredicate, let's get the inner expression
-	pred, isJP := in.(*predicates.JoinPredicate)
-	if isJP {
-		expr = pred.Current()
-	}
 
 	if b := ctx.IsConstantBool(expr); b != nil && !*b {
 		return nr
@@ -194,6 +208,9 @@ func (r *Route) Clone(inputs []Operator) Operator {
 	cloneRoute := *r
 	cloneRoute.Source = inputs[0]
 	cloneRoute.Routing = r.Routing.Clone()
+	if r.MergeFallback != nil {
+		cloneRoute.MergeFallback = r.MergeFallback.Clone().(*ShardedRouting)
+	}
 	return &cloneRoute
 }
 
