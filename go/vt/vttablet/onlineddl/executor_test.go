@@ -1029,6 +1029,54 @@ func TestForgetVReplStreamOrdering(t *testing.T) {
 	})
 }
 
+// TestCancelPendingMigrationsContinuesPastFailure pins that CANCEL ALL and
+// CANCEL CONTEXT attempt every matching migration: one migration failing to
+// cancel must not leave the rest running, or free to start, and every failure
+// must be reported.
+func TestCancelPendingMigrationsContinuesPastFailure(t *testing.T) {
+	const (
+		firstFailingUUID = "1cbcd662_8ed6_11ee_bc8f_0a43f95f28a3"
+		queuedUUID       = "2cbcd662_8ed6_11ee_bc8f_0a43f95f28a3"
+		lastFailingUUID  = "3cbcd662_8ed6_11ee_bc8f_0a43f95f28a3"
+	)
+	var cancelled []string
+	e := &Executor{
+		vreplicationLastError:     map[string]*vterrors.LastError{},
+		vreplicationPendingCancel: map[string]string{},
+		tabletAlias:               &topodatapb.TabletAlias{Cell: "cell", Uid: 1},
+		ticks:                     timer.NewTimer(time.Hour),
+		execQuery: func(ctx context.Context, query string) (*sqltypes.Result, error) {
+			isSelect := strings.HasPrefix(strings.TrimSpace(strings.ToUpper(query)), "SELECT")
+			switch {
+			case strings.Contains(query, "IN ('queued', 'ready', 'running')"):
+				return sqltypes.MakeTestResult(
+					sqltypes.MakeTestFields("migration_uuid|migration_context", "varchar|varchar"),
+					firstFailingUUID+"|ctx", queuedUUID+"|ctx", lastFailingUUID+"|ctx"), nil
+			case isSelect && (strings.Contains(query, firstFailingUUID) || strings.Contains(query, lastFailingUUID)):
+				// Reading these migrations fails, so their cancellation does.
+				return nil, errors.New("backend unavailable")
+			case isSelect && strings.Contains(query, queuedUUID):
+				return sqltypes.MakeTestResult(
+					sqltypes.MakeTestFields("migration_uuid|migration_status", "varchar|varchar"),
+					queuedUUID+"|queued"), nil
+			case strings.Contains(query, "migration_status") && strings.Contains(query, queuedUUID):
+				cancelled = append(cancelled, queuedUUID)
+			}
+			return &sqltypes.Result{RowsAffected: 1}, nil
+		},
+	}
+	e.isOpen.Store(1)
+
+	result, err := e.CancelPendingMigrations(t.Context(), "", true)
+	require.Error(t, err)
+	assert.ErrorContains(t, err, firstFailingUUID)
+	assert.ErrorContains(t, err, lastFailingUUID, "every failure must be reported, not only the first")
+	assert.Equal(t, []string{queuedUUID}, cancelled,
+		"a migration failing to cancel must not leave the later matches uncancelled and free to start")
+	require.NotNil(t, result)
+	assert.EqualValues(t, 1, result.RowsAffected)
+}
+
 // TestTerminallyFailMigrationMetric pins that FailedMigrations counts only
 // migrations that actually reached a terminal state, not each re-driven
 // attempt.

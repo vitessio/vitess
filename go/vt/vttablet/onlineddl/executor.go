@@ -1969,7 +1969,9 @@ func (e *Executor) cancelMigrations(ctx context.Context, cancellable []*cancella
 // CancelPendingMigrations cancels all pending migrations (that are expected to run or are running)
 // for this keyspace. When migrationContext is non-empty only migrations whose migration_context
 // matches are cancelled (CANCEL CONTEXT 'ctx'). When migrationContext is empty all pending
-// migrations are cancelled (CANCEL ALL).
+// migrations are cancelled (CANCEL ALL). Every matching migration is attempted: one failing to
+// cancel must not leave the rest running, or free to start, so the failures are reported together
+// alongside the result of the cancellations that succeeded.
 func (e *Executor) CancelPendingMigrations(ctx context.Context, migrationContext string, issuedByUser bool) (result *sqltypes.Result, err error) {
 	if e.isOpen.Load() == 0 {
 		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, schema.ErrOnlineDDLDisabled.Error())
@@ -1988,19 +1990,21 @@ func (e *Executor) CancelPendingMigrations(ctx context.Context, migrationContext
 
 	matched := 0
 	result = &sqltypes.Result{}
+	var errs []error
 	for _, pending := range pendingMigrations {
 		if migrationContext == "" || migrationContext == pending.migrationContext {
 			matched++
 			log.Info("CancelPendingMigrations: cancelling " + pending.uuid)
 			res, err := e.CancelMigration(ctx, pending.uuid, message, issuedByUser)
 			if err != nil {
-				return result, err
+				errs = append(errs, vterrors.Wrapf(err, "cancelling migration %s", pending.uuid))
+				continue
 			}
 			result.AppendResult(res)
 		}
 	}
-	log.Info(fmt.Sprintf("CancelPendingMigrations: done iterating %v migrations, matched %d", len(pendingMigrations), matched))
-	return result, nil
+	log.Info(fmt.Sprintf("CancelPendingMigrations: done iterating %v migrations, matched %d, failed %d", len(pendingMigrations), matched, len(errs)))
+	return result, errors.Join(errs...)
 }
 
 func (e *Executor) validateThrottleParams(ctx context.Context, expireString string, ratioLiteral *sqlparser.Literal) (duration time.Duration, ratio float64, err error) {
