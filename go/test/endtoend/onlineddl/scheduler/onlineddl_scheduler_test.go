@@ -794,6 +794,12 @@ func testScheduler(t *testing.T) {
 		t.Run("wait for t1 running", func(t *testing.T) {
 			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, extendedWaitTime, schema.OnlineDDLStatusRunning)
 			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
+			// The migration turns running before its stream is created
+			// (ExecuteWithVReplication), so wait for the stream as well: a
+			// park issued before the stream's own start would be overwritten
+			// by that start.
+			streamState := onlineddl.WaitForVReplicationStatus(t, &vtParams, primaryTablet, t1uuid, extendedWaitTime, "Copying", "Running")
+			require.Contains(t, []string{"Copying", "Running"}, streamState, "the migration's vreplication stream must be running before it is parked")
 		})
 		t.Run("verify the retry-forever config override", func(t *testing.T) {
 			assertRetryForeverOverride(t, t1uuid)
@@ -859,6 +865,12 @@ func testScheduler(t *testing.T) {
 		t.Run("wait for t1 running", func(t *testing.T) {
 			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, extendedWaitTime, schema.OnlineDDLStatusRunning)
 			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
+			// The migration turns running before its stream is created
+			// (ExecuteWithVReplication), so wait for the stream as well: a
+			// park issued before the stream's own start would be overwritten
+			// by that start.
+			streamState := onlineddl.WaitForVReplicationStatus(t, &vtParams, primaryTablet, t1uuid, extendedWaitTime, "Copying", "Running")
+			require.Contains(t, []string{"Copying", "Running"}, streamState, "the migration's vreplication stream must be running before it is parked")
 		})
 		t.Run("park the stream with an unrecoverable error", func(t *testing.T) {
 			parkVReplStream(t, t1uuid, "terminal error: unrecoverable: error applying event: Duplicate entry '1' for key 'PRIMARY' (errno 1062) (sqlstate 23000)")
