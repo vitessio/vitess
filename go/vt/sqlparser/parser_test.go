@@ -254,6 +254,13 @@ func TestParseNext(t *testing.T) {
 		text:    "create table t1",
 		rest:    " select 1",
 		partial: true,
+	}, {
+		// ... and what follows that ';' is the next statement's business.
+		input:   "create table t1; select 'unterminated",
+		stmt:    "*sqlparser.CreateTable",
+		text:    "create table t1",
+		rest:    " select 'unterminated",
+		partial: true,
 	}}
 
 	parser := NewTestParser()

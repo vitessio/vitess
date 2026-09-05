@@ -6729,6 +6729,11 @@ func TestSkipToEnd(t *testing.T) {
 		// Test that we don't step at ';' inside strings.
 		input:  "create table a bb 'a;'; select * from t",
 		output: "extra characters encountered after end of DDL: 'select'",
+	}, {
+		// The ';' the parser chokes on ends the DDL; the statement after it
+		// is the same extra input, not skipped over.
+		input:  "create table t1; select 1",
+		output: "extra characters encountered after end of DDL: 'select'",
 	}}
 	parser := NewTestParser()
 	for _, tcase := range testcases {

@@ -209,8 +209,10 @@ func (tkn *Tokenizer) Error(err string) {
 	tkn.LastError = PositionedErr{Err: err, Pos: tkn.Pos + 1, Near: tkn.lastToken}
 
 	if tkn.lastTokenType == ';' {
-		// The ';' the parser choked on still ends the statement.
+		// The ';' the parser choked on still ends the statement, and what
+		// follows it is the next statement's business.
 		tkn.markStatementEnd()
+		return
 	}
 	// Try and re-sync to the next statement
 	switch tkn.skipStatement() {
