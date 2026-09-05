@@ -259,14 +259,6 @@ func queryVReplicationStream(ctx context.Context, uuid string) (state, message s
 	return row.AsString("state", ""), row.AsString("message", ""), nil
 }
 
-// readVReplicationStream returns the state and message of the migration's
-// vreplication stream.
-func readVReplicationStream(t *testing.T, uuid string) (state, message string) {
-	state, message, err := queryVReplicationStream(t.Context(), uuid)
-	require.NoError(t, err)
-	return state, message
-}
-
 // queryMigrationStatus returns the migration's status as vtgate reports it
 // for this single-shard keyspace. Like queryVReplicationStream, it asserts
 // nothing, so it is safe to call from a require.Never or require.Eventually
@@ -288,11 +280,16 @@ func queryMigrationStatus(ctx context.Context, uuid string) (schema.OnlineDDLSta
 // waitForVReplicationMessage waits for the migration's vreplication stream to
 // report a message containing the given substring.
 func waitForVReplicationMessage(t *testing.T, uuid string, messageSubstring string) {
-	var lastMessage string
-	require.Eventually(t, func() bool {
-		_, lastMessage = readVReplicationStream(t, uuid)
-		return strings.Contains(lastMessage, messageSubstring)
-	}, extendedWaitTime, time.Second, "waiting for the stream message to contain %q; last seen: %q", messageSubstring, lastMessage)
+	// The condition runs in a goroutine: it must not assert on t (a
+	// transient query error would fail the test outright instead of being
+	// retried, and a late probe could touch t after the test ended), so it
+	// collects, and only the last attempt's failures are reported.
+	ctx := t.Context()
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		_, message, err := queryVReplicationStream(ctx, uuid)
+		require.NoError(c, err)
+		assert.Contains(c, message, messageSubstring)
+	}, extendedWaitTime, time.Second, "waiting for the stream message to contain %q", messageSubstring)
 }
 
 // parkVReplStream simulates the controller parking a migration's stream on a
