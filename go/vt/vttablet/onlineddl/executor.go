@@ -278,6 +278,9 @@ const vreplThrottleLivenessWindow = 15 * time.Minute
 // copy-state lookup is not liveness either; it is re-evaluated on the next
 // tick.
 func (e *Executor) vreplStreamShowsLiveness(ctx context.Context, uuid string, s *VReplStream, acknowledgedRowsCopied int64) (showsLiveness bool, observed *vreplStreamProgress) {
+	// The review holds migrationMutex on a tick context with no deadline.
+	ctx, cancel := context.WithTimeout(ctx, reviewQueryTimeout)
+	defer cancel()
 	query, err := sqlparser.ParseAndBind(sqlReadCopyStateProgress,
 		sqltypes.Int32BindVariable(s.id),
 	)

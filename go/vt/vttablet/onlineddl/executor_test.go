@@ -1331,7 +1331,10 @@ func TestRefreshMigrationLiveness(t *testing.T) {
 		// acknowledgedRowsCopied is the migration record's rows_copied: the
 		// stream value the executor last durably acknowledged.
 		acknowledgedRowsCopied int64
-		writes                 []string
+		// copyStateReadBounded records whether the copy-state lookup ran on
+		// a context with a deadline.
+		copyStateReadBounded bool
+		writes               []string
 	}
 	newHarness := func(copyStateCount, copyStateMaxID int64) *harness {
 		h := &harness{copyStateCount: copyStateCount, copyStateMaxID: copyStateMaxID}
@@ -1340,6 +1343,7 @@ func TestRefreshMigrationLiveness(t *testing.T) {
 			execQuery: func(ctx context.Context, query string) (*sqltypes.Result, error) {
 				switch {
 				case strings.Contains(query, "copy_state"):
+					_, h.copyStateReadBounded = ctx.Deadline()
 					if h.failCopyStateRead {
 						return nil, errors.New("copy_state unavailable")
 					}
@@ -1398,6 +1402,13 @@ func TestRefreshMigrationLiveness(t *testing.T) {
 		assert.False(t, tick(h, stream("pos1", 0)))
 		assert.False(t, wrote(h, "vitess_liveness_indicator"))
 		assert.NotContains(t, h.e.vreplicationProgress, uuid, "a failed lookup must not establish a baseline")
+	})
+	t.Run("the copy-state lookup is bounded", func(t *testing.T) {
+		// The review holds migrationMutex on a tick context with no
+		// deadline; a stalled lookup must not hold the mutex indefinitely.
+		h := newHarness(1, 10)
+		tick(h, stream("pos1", 0))
+		assert.True(t, h.copyStateReadBounded)
 	})
 	t.Run("copy phase, the first observation counts once", func(t *testing.T) {
 		// The first observation since the executor opened (a restart or a
