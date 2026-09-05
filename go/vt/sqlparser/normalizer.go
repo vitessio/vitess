@@ -860,6 +860,7 @@ func (nz *normalizer) existsRewrite(cursor *Cursor, node *ExistsExpr) {
 		Exprs: []SelectExpr{&AliasedExpr{Expr: NewIntLiteral("1")}},
 	}
 	sel.GroupBy = nil
+	sel.OrderBy = nil
 }
 
 // rewriteDistinctableAggr removes DISTINCT from certain aggregations to simplify the plan.
