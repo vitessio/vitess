@@ -874,7 +874,7 @@ func isFuncCallKeyword(id int) bool {
 	}
 }
 
-// isKeywordFunctionName reports whether name is a built-in function that this
+// IsKeywordFunctionName reports whether name is a built-in function that this
 // grammar, like MySQL's, parses through a keyword rule into a node of its own:
 // the whitespace-sensitive names, and the user-information functions USER and
 // CURRENT_USER. A generic FuncExpr by such a name therefore never stands for
@@ -882,7 +882,7 @@ func isFuncCallKeyword(id int) bool {
 // ones) with whitespace before the parenthesis — MySQL's stored-function path —
 // and serializes quoted to stay one, since printed bare the name would re-lex
 // as the built-in.
-func isKeywordFunctionName(name string) bool {
+func IsKeywordFunctionName(name string) bool {
 	id, ok := keywordLookupTable.LookupString(name)
 	return ok && (isFuncCallKeyword(id) || id == USER || id == CURRENT_USER)
 }

@@ -1880,12 +1880,12 @@ func (node *FuncExpr) Format(buf *TrackedBuffer) {
 	}
 	// Function names are not back-quoted for matching a reserved word, only
 	// for containing illegal characters — except the keyword-function names
-	// (see isKeywordFunctionName): a generic call by one of those is MySQL's
+	// (see IsKeywordFunctionName): a generic call by one of those is MySQL's
 	// stored-function path, and printed bare the name would re-lex as the
 	// built-in.
 	funcName := node.Name.String()
 
-	if containEscapableChars(funcName, NoAt) || isKeywordFunctionName(funcName) {
+	if containEscapableChars(funcName, NoAt) || IsKeywordFunctionName(funcName) {
 		writeEscapedString(buf, funcName)
 	} else {
 		buf.WriteString(funcName)
