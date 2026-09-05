@@ -4208,10 +4208,16 @@ var validSQL = []struct {
 	input:  "select count, sum, position, trim, std, var_pop from t",
 	output: "select `count`, `sum`, `position`, `trim`, `std`, `var_pop` from t",
 }, {
-	// session_user and system_user are on MySQL's list but are no keywords
-	// here: both spellings are the same generic call, printed as the built-in
-	input:  "select session_user(), system_user () from t",
-	output: "select session_user(), system_user() from t",
+	input:  "select session_user(), system_user(), session_user (), system_user () from t",
+	output: "select session_user(), system_user(), `session_user`(), `system_user`() from t",
+}, {
+	// the user-information functions parse through keyword rules into their own
+	// node; a quoted spelling is an identifier, MySQL's stored-function path
+	input:  "select user(), user (), current_user, current_user(), `user`(), `current_user`(), `session_user`() from t",
+	output: "select user(), user(), current_user(), current_user(), `user`(), `current_user`(), `session_user`() from t",
+}, {
+	input:  "select session_user, system_user from t",
+	output: "select `session_user`, `system_user` from t",
 }, {
 	input:  "create table CURDATE (a int)",
 	output: "create table `CURDATE` (\n\ta int\n)",
@@ -7320,20 +7326,14 @@ func locateFile(name string) string {
 	return "testdata/" + name
 }
 
-// Every name on MySQL's list that is a keyword of this grammar gets the
-// function-call lexing, no other keyword does, and the names that are no
-// keywords here are exactly the two that cannot be told apart from a generic call.
+// Every name on MySQL's list is a keyword of this grammar that gets the
+// function-call lexing, and no other keyword does.
 func TestFuncCallKeywordList(t *testing.T) {
-	var notKeywords []string
 	for name := range mysqlFuncCallKeywords {
 		id, ok := keywordLookupTable.LookupString(name)
-		if !ok {
-			notKeywords = append(notKeywords, name)
-			continue
-		}
+		require.True(t, ok, name)
 		assert.True(t, isFuncCallKeyword(id), name)
 	}
-	assert.ElementsMatch(t, []string{"session_user", "system_user"}, notKeywords)
 	for _, kw := range keywords {
 		if kw.id != UNUSED && isFuncCallKeyword(kw.id) {
 			_, listed := mysqlFuncCallKeywords[kw.name]

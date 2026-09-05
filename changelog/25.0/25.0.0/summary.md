@@ -353,8 +353,8 @@ Each of the following matches MySQL, but removes a Vitess-only leniency:
 - A bare `now` in an expression is now a column reference, not `now()`.
 - `cast (1 as char)` with whitespace before `(` is now a syntax error.
 - `now ()` / `substr (...)` / `sum (x)` with whitespace still parse, but as generic function calls rather than the dedicated AST nodes (a `sum (x)` is no longer an aggregate). That is MySQL's stored-function path, and the call serializes with the name quoted (`` `now`() ``, `` `sum`(x) ``) so that MySQL takes the same path instead of re-lexing the bare name as the built-in.
+- A quoted `` `user`() ``, `` `current_user`() ``, `` `session_user`() `` or `` `system_user`() `` stays quoted, and so remains the stored-function call MySQL reads it as; previously it was sent bare and ran as the built-in.
 - The built-in argument syntax needs the attached parenthesis: `count (*)`, `trim (leading ...)`, `position (... in ...)`, `date_add (..., interval ...)`, `group_concat (distinct ...)`, `substring (... from ...)` and `extract (... from ...)` with whitespace are syntax errors, as in MySQL.
-- `session_user ()` / `system_user ()` are the exception: they are not keywords in Vitess, so both spellings remain the built-in.
 
 #### <a id="vtgate-sql-mode-rejection"/>MySQL-faithful validation and rejection of unsupported `sql_mode` values</a>
 

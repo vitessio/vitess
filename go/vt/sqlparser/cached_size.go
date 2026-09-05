@@ -5354,6 +5354,19 @@ func (cached *Use) CachedSize(alloc bool) int64 {
 	return size
 }
 
+func (cached *UserFuncExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(32)
+	}
+	// field Name vitess.io/vitess/go/vt/sqlparser.IdentifierCI
+	size += cached.Name.CachedSize(false)
+	return size
+}
+
 func (cached *UserOrRole) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
