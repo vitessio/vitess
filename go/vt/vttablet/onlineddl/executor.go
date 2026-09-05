@@ -2689,22 +2689,25 @@ func (e *Executor) readFailedCancelledMigrationsInContextBeforeMigration(ctx con
 // first: once the status is terminal the migration leaves every review path,
 // so a message failure after the transition could never be repaired, whereas
 // one before it aborts the transition for the caller's re-drive to retry
-// whole. This executor stops owning the migration either way.
+// whole. This executor stops owning the migration only once the transition
+// has landed: until then the migration is still running, and a disowned
+// running migration lets the scheduler start conflicting or over-limit work
+// before the review re-adopts it.
 func (e *Executor) terminallyFailMigration(ctx context.Context, onlineDDL *schema.OnlineDDL, withError error) error {
 	defer e.triggerNextCheckInterval()
-	defer e.ownedRunningMigrations.Delete(onlineDDL.UUID)
 	if withError != nil {
 		if err := e.updateMigrationMessage(ctx, onlineDDL.UUID, withError.Error()); err != nil {
 			return err
 		}
 	}
-	transitionErr := e.updateMigrationStatusFailedOrCancelled(ctx, onlineDDL.UUID)
 	// Count only migrations that actually reached a terminal state; the
 	// review loop re-drives a failed transition on every tick.
-	if transitionErr == nil {
-		failedMigrations.Add(1)
+	if err := e.updateMigrationStatusFailedOrCancelled(ctx, onlineDDL.UUID); err != nil {
+		return err
 	}
-	return transitionErr
+	e.ownedRunningMigrations.Delete(onlineDDL.UUID)
+	failedMigrations.Add(1)
+	return nil
 }
 
 // failMigration marks a migration as failed and returns the causing error,

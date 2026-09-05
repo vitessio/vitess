@@ -1975,25 +1975,37 @@ func TestTerminallyFailMigrationWriteOrder(t *testing.T) {
 		return -1
 	}
 
+	owned := func(e *Executor) bool {
+		_, ok := e.ownedRunningMigrations.Load(uuid)
+		return ok
+	}
+
 	t.Run("message is written before the status", func(t *testing.T) {
 		e, queries := newExecutor("")
+		e.ownedRunningMigrations.Store(uuid, onlineDDL)
 		require.NoError(t, e.terminallyFailMigration(t.Context(), onlineDDL, errors.New("the reason")))
 		messageIdx := indexOf(*queries, "message=")
 		statusIdx := indexOf(*queries, "migration_status")
 		require.GreaterOrEqual(t, messageIdx, 0, "no message write issued")
 		require.GreaterOrEqual(t, statusIdx, 0, "no status transition issued")
 		assert.Less(t, messageIdx, statusIdx, "the message must land before the status becomes terminal")
+		assert.False(t, owned(e), "a terminal migration is no longer owned")
 	})
 	t.Run("failed message write aborts the transition", func(t *testing.T) {
 		e, queries := newExecutor("message=")
+		e.ownedRunningMigrations.Store(uuid, onlineDDL)
 		require.Error(t, e.terminallyFailMigration(t.Context(), onlineDDL, errors.New("the reason")))
 		assert.Equal(t, -1, indexOf(*queries, "migration_status"),
 			"the status must not become terminal while the reason could not be recorded")
+		assert.True(t, owned(e),
+			"the migration is still running: disowning it lets the scheduler start conflicting work before the review re-adopts it")
 	})
 	t.Run("failed status write is reported", func(t *testing.T) {
 		e, queries := newExecutor("migration_status")
+		e.ownedRunningMigrations.Store(uuid, onlineDDL)
 		require.Error(t, e.terminallyFailMigration(t.Context(), onlineDDL, errors.New("the reason")))
 		assert.GreaterOrEqual(t, indexOf(*queries, "message="), 0, "the message write is idempotent and precedes the transition")
+		assert.True(t, owned(e), "the migration is still running and must stay owned")
 	})
 	t.Run("no error skips the message write", func(t *testing.T) {
 		e, queries := newExecutor("")
