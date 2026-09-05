@@ -1227,6 +1227,23 @@ func TestReviewRunningMigrationsNilStreamCancellation(t *testing.T) {
 		assert.Equal(t, uuid, cancellable[0].uuid)
 		assert.Equal(t, "internal cancel", cancellable[0].message)
 	})
+	t.Run("a durable user cancellation without a recorded intent keeps a cancellation reason", func(t *testing.T) {
+		// The recorded intent does not survive an executor restart, but the
+		// cancelled_timestamp does: the re-driven cancellation must not
+		// record the stream's unrelated message as the reason.
+		runningStream := sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields("id|workflow|source|pos|state|message", "int32|varchar|varchar|varchar|varchar|varchar"),
+			"1|"+uuid+"|||Running|")
+		e := newReviewExecutor(
+			"migration_uuid|migration_status|strategy|cancelled_timestamp",
+			"varchar|varchar|varchar|varchar",
+			uuid+"|running|vitess|2026-09-02 17:00:00", runningStream)
+		_, cancellable, err := e.reviewRunningMigrations(t.Context())
+		require.NoError(t, err)
+		require.Len(t, cancellable, 1)
+		assert.Equal(t, "cancellation requested by user", cancellable[0].message,
+			"a user cancellation re-driven after a restart must carry a cancellation reason, not the stream's message")
+	})
 	t.Run("a cancel verdict stops the review before cutover", func(t *testing.T) {
 		// A healthy stream can carry a pending intent; continuing into the
 		// cutover flow could complete the migration before cancelMigrations

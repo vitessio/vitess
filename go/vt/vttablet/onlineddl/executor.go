@@ -3856,10 +3856,17 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 				if action == vreplStreamCancel {
 					// Prefer the recorded reason: the stream stop rewrites
 					// only the state, so s.message may be a stale pre-stop
-					// error.
+					// error. A cancellation requested without a recorded
+					// reason is a durable user cancellation whose intent did
+					// not survive an executor restart; the stream's message
+					// is not its reason either. Only a cancellation the
+					// stream's own error triggered takes that message.
 					cancelMessage := s.message
-					if hasPendingCancel && pendingCancelMessage != "" {
+					switch {
+					case hasPendingCancel && pendingCancelMessage != "":
 						cancelMessage = pendingCancelMessage
+					case cancellationRequested:
+						cancelMessage = "cancellation requested by user"
 					}
 					cancellable = append(cancellable, newCancellableMigration(uuid, cancelMessage))
 					// Stop here: a cancel verdict can ride on a healthy
