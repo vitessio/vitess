@@ -25,6 +25,7 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/sqlerror"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -75,6 +76,8 @@ func TestMultiStatementParity(t *testing.T) {
 		"/*! select 1 */; select 2",
 		"select 1 /*!80000 ; */",
 		"/*!80000 select 1; */",
+		"/*!80000 select 1; */ select 2",
+		"select 3; /*!80000 select 1; */ select 2",
 		"select 1 /*!99999 ; */",
 		"select 1 /*!99999 ; */; select 2",
 		"/*!99999 ; */ select 1",
@@ -158,4 +161,93 @@ func runThroughForEachStatement(parser *sqlparser.Parser, sql string) (results i
 		return results, sqlerror.ERParseError
 	}
 	return results, sqlerror.ERUnknownError
+}
+
+// TestPrepareParity checks that the text of a prepared statement is read the
+// way MySQL reads it. For every input, PREPARE on MySQL and
+// sqlparser.Parser.SingleStatement followed by the parse of the statement it
+// returns must end the same way: prepared, a syntax error, or nothing to
+// prepare (MySQL's 1065 or 1295, ErrEmpty here).
+func TestPrepareParity(t *testing.T) {
+	inputs := []string{
+		"select 1",
+		"select 1;",
+		"select 1; ",
+		"select 1; -- c",
+		"select 1; /* c */",
+		"select 1; # c",
+		"select 1; select 2",
+		"select 1; /* c */ select 2",
+		"select 1; ;",
+		"select 1;;",
+		"select 1 ; ; \n",
+		"select 1; /* c */ ;",
+		"select 1; /* c */ ; /* d */",
+		"select 1; ; select 2",
+		"select 1;; /* c */",
+		" ; -- c",
+		";;",
+		"select 1 /*!80000 ; */;",
+		"select 1; ",
+		"select 1; b'",
+		"select 1 /*!80000 ; */",
+		"/*!80000 select 1; */",
+		"select 1; /*!80000 ; */",
+		"select 1; /*!80000 select 2 */",
+		"select 1 /*!80000 ; */ select 2",
+		"select 1 /*!99999 ; */",
+		"select 1; /*!99999 ; */",
+		"select 1; /*!99999 select 2 */",
+		"/*! select 1 */",
+		"/*!99999 select 1 */",
+		"select 1; /*! */",
+		"",
+		" ",
+		";",
+		"/* c */",
+		"-- c",
+	}
+
+	conn, err := mysql.Connect(t.Context(), &connParams)
+	require.NoError(t, err)
+	defer conn.Close()
+	parser := sqlparser.NewTestParser()
+	for _, input := range inputs {
+		t.Run(input, func(t *testing.T) {
+			_, err := conn.ExecuteFetch("set @q = "+sqltypes.EncodeStringSQL(input), 0, false)
+			require.NoError(t, err)
+			_, err = conn.ExecuteFetch("prepare s from @q", 0, false)
+			mysqlOutcome := prepareOutcome(err)
+
+			statement, err := parser.SingleStatement(input)
+			if err == nil {
+				_, err = parser.Parse(statement)
+			}
+			assert.Equal(t, mysqlOutcome, prepareOutcome(err))
+		})
+	}
+}
+
+// prepareOutcome classifies how a prepare ended: prepared, a syntax error,
+// nothing to prepare, or the error itself for anything else.
+func prepareOutcome(err error) string {
+	if err == nil {
+		return "prepared"
+	}
+	if errors.Is(err, sqlparser.ErrEmpty) {
+		return "nothing to prepare"
+	}
+	if sqlErr, ok := errors.AsType[*sqlerror.SQLError](err); ok {
+		switch sqlErr.Num {
+		case sqlerror.ERParseError:
+			return "syntax error"
+		case sqlerror.EREmptyQuery, sqlerror.ERUnsupportedPS:
+			return "nothing to prepare"
+		}
+		return err.Error()
+	}
+	if vterrors.Code(err) == vtrpcpb.Code_INVALID_ARGUMENT {
+		return "syntax error"
+	}
+	return err.Error()
 }

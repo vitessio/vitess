@@ -269,8 +269,16 @@ func (p *Parser) parseNext(sql string) (stmt Statement, text string, rest string
 	if tokenizer.stmtEnd < 0 {
 		return stmt, sql, "", err
 	}
+	if err == nil && tokenizer.stmtEndInComment {
+		err = errStatementEndsInsideExecutableComment
+	}
 	return stmt, sql[:tokenizer.stmtEnd], sql[tokenizer.stmtEnd+1:], err
 }
+
+// errStatementEndsInsideExecutableComment is parseNext's error for a
+// statement whose ';' fell inside an executable comment that applies, which
+// MySQL does not allow in a batch. The text is still cut at that ';'.
+var errStatementEndsInsideExecutableComment = errors.New("statement ends inside an executable comment")
 
 // ForEachStatement hands the statements of sql to fn one at a time, the way
 // MySQL's multi-statement dispatcher does: a statement is parsed only when its
@@ -288,14 +296,15 @@ func (p *Parser) parseNext(sql string) (stmt Statement, text string, rest string
 // whitespace are dropped from the whole text first, so "select 1;;" is one
 // statement. An empty statement followed by more input is a syntax error, as
 // in MySQL, and comments alone are as empty; comments alone that end the
-// batch are a statement of their own. An input with no statement at all is
-// ErrEmpty.
+// batch are a statement of their own. A statement whose ';' falls inside an
+// executable comment that applies is a syntax error at that ';', and nothing
+// runs. An input with no statement at all is ErrEmpty.
 func (p *Parser) ForEachStatement(sql string, fn func(text, rest string) error) error {
 	if strings.Trim(sql, blankChars) == "" {
 		return ErrEmpty
 	}
 	// fast path: a single statement needs no split.
-	if end, ok := p.singleStatement(sql); ok {
+	if end, ok := p.singleStatementEnd(sql); ok {
 		if strings.Trim(sql[:end], blankChars) == "" {
 			return ErrEmpty
 		}
@@ -309,6 +318,12 @@ func (p *Parser) ForEachStatement(sql string, fn func(text, rest string) error) 
 	offset := 0 // start of the current statement in sql
 	for {
 		stmt, text, rest, err := p.parseNext(sql[offset:])
+		if errors.Is(err, errStatementEndsInsideExecutableComment) {
+			// A statement of a batch whose ';' falls inside an executable
+			// comment that applies is a syntax error at that ';' in MySQL, and
+			// nothing runs.
+			return NewParseErrorNear(sql, offset+len(text)+1)
+		}
 		if err == nil {
 			// An empty statement followed by more input is a syntax error at
 			// its ';', as in MySQL, where comments alone are as empty. Comments
@@ -328,21 +343,44 @@ func (p *Parser) ForEachStatement(sql string, fn func(text, rest string) error) 
 	}
 }
 
-// IsBlankOrComments reports whether sql holds no statement at all: nothing but
-// blanks and comments, the way a comment after a statement's terminating ';'
-// does not start a second statement. The text is lexed, as MySQL lexes it:
-// an executable comment that applies holds SQL, one that does not is comment
-// text through and through, a ';' inside it included.
-func (p *Parser) IsBlankOrComments(sql string) bool {
+// SingleStatement returns the one statement sql holds, read the way MySQL's
+// prepare reads a text. Trailing ';' and blanks are dropped first, as MySQL
+// drops them before reading. At most a terminating ';' then ends the
+// statement, and only blanks and comments may follow it, lexed on from the
+// ';': a ';' inside an executable comment that applies ends the statement,
+// and the comment's close after it is a comment, so the whole text is the
+// statement then. Anything else after the ';' is the syntax error MySQL
+// reports there, and so is a ';' with no statement before it. A text with
+// no statement at all is ErrEmpty. A lexical error in the statement's own
+// text is left to the grammar: the text is returned as is.
+func (p *Parser) SingleStatement(sql string) (string, error) {
+	sql = strings.TrimRight(sql, blankChars+";")
 	tokenizer := p.NewStringTokenizer(sql)
+	end := -1 // offset of the terminating ';'
+	endInComment := false
+	empty := true // no token before the terminator
 	for {
-		switch typ, _ := tokenizer.Scan(); typ {
-		case 0:
-			return true
-		case COMMENT:
+		typ, _ := tokenizer.Scan()
+		switch {
+		case typ == COMMENT:
 			continue
+		case typ == 0:
+			if empty {
+				return "", ErrEmpty
+			}
+			if end < 0 || endInComment {
+				return sql, nil
+			}
+			return sql[:end], nil
+		case end >= 0 || (typ == ';' && empty):
+			return "", NewParseErrorNear(sql, tokenizer.currStart)
+		case typ == ';':
+			end = tokenizer.Pos - 1
+			endInComment = tokenizer.semicolonInComment
+		case typ == LEX_ERROR:
+			return sql, nil
 		default:
-			return false
+			empty = false
 		}
 	}
 }
@@ -368,7 +406,7 @@ func NewParseErrorNear(sql string, offset int) error {
 // for MySQL's lexer no more than for ours, so such a statement is handed
 // over as is instead of being parsed just to find its end. A lexical error
 // leaves the question to the grammar.
-func (p *Parser) singleStatement(sql string) (end int, ok bool) {
+func (p *Parser) singleStatementEnd(sql string) (end int, ok bool) {
 	if strings.IndexByte(sql, ';') == -1 {
 		return len(sql), true
 	}
@@ -376,6 +414,10 @@ func (p *Parser) singleStatement(sql string) (end int, ok bool) {
 	for {
 		switch typ, _ := tokenizer.Scan(); typ {
 		case ';':
+			if tokenizer.semicolonInComment {
+				// not a batch's to end a statement with: the loop reports it
+				return 0, false
+			}
 			end = tokenizer.Pos - 1
 			return end, strings.Trim(sql[tokenizer.Pos:], blankChars) == ""
 		case 0:
@@ -391,7 +433,7 @@ func (p *Parser) singleStatement(sql string) (end int, ok bool) {
 // finds; a statement the grammar rejects is cut at the next top-level ';'.
 // A single statement is not parsed.
 func (p *Parser) SplitStatement(blob string) (string, string, error) {
-	if end, ok := p.singleStatement(blob); ok {
+	if end, ok := p.singleStatementEnd(blob); ok {
 		if end == len(blob) {
 			return blob, "", nil
 		}

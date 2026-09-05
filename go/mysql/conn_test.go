@@ -1471,9 +1471,17 @@ func TestComPrepareRejectsMultipleStatements(t *testing.T) {
 	t.Run("executable comment that applies after the terminator", func(t *testing.T) {
 		sConn, _, data := prepare(t, "select 1; /*!80000 select 2 */")
 		require.EqualValues(t, ErrPacket, data[0])
-		require.ErrorContains(t, ParseErrorPacket(data), "You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near '")
-		require.ErrorContains(t, ParseErrorPacket(data), "(errno 1064) (sqlstate 42000)")
+		require.EqualError(t, ParseErrorPacket(data), "You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'select 2 */' at line 1 (errno 1064) (sqlstate 42000)")
 		require.Empty(t, sConn.PrepareData)
+	})
+
+	// a ';' inside an executable comment that applies ends the statement, and
+	// the comment's close after it is a comment: the whole text is prepared
+	t.Run("terminator inside an executable comment that applies", func(t *testing.T) {
+		sConn, _, data := prepare(t, "select 1 /*!80000 ; */")
+		require.EqualValues(t, OKPacket, data[0])
+		require.Len(t, sConn.PrepareData, 1)
+		require.Equal(t, "select 1 /*!80000 ; */", sConn.PrepareData[1].PrepareStmt)
 	})
 
 	t.Run("comment alone is an empty query", func(t *testing.T) {

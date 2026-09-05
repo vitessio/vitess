@@ -305,9 +305,10 @@ func TestParseNextInheritsParserMode(t *testing.T) {
 	assert.Equal(t, " select 2", rest)
 }
 
+const parseErrorPrefix = "You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near "
+
 func TestForEachStatement(t *testing.T) {
 	type call struct{ text, rest string }
-	const parseErrorPrefix = "You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near "
 	testcases := []struct {
 		input string
 		calls []call
@@ -366,14 +367,20 @@ func TestForEachStatement(t *testing.T) {
 		input: "select\f1;\vselect\v2",
 		calls: []call{{"select\f1", "\vselect\v2"}, {"\vselect\v2", ""}},
 	}, {
-		// A ';' inside an executable comment that applies is a syntax error in
-		// MySQL: the statement is handed over whole, unsplit, for the grammar
-		// to reject it, and nothing after it runs.
+		// A batch statement whose ';' falls inside an executable comment that
+		// applies is a syntax error at that ';' in MySQL, and nothing runs.
 		input: "/*!80000 select 1; */ select 2",
-		calls: []call{{"/*!80000 select 1; */ select 2", ""}},
+		err:   parseErrorPrefix + "'*/ select 2' at line 1",
+		state: vterrors.ParseError,
 	}, {
 		input: "select 3; /*!80000 select 1; */ select 2",
-		calls: []call{{"select 3", " /*!80000 select 1; */ select 2"}, {" /*!80000 select 1; */ select 2", ""}},
+		calls: []call{{"select 3", " /*!80000 select 1; */ select 2"}},
+		err:   parseErrorPrefix + "'*/ select 2' at line 1",
+		state: vterrors.ParseError,
+	}, {
+		input: "select 1 /*!80000 ; */",
+		err:   parseErrorPrefix + "'*/' at line 1",
+		state: vterrors.ParseError,
 	}, {
 		// an executable comment that does not apply is a comment, ';' included
 		input: "select 1 /*!99999 ; */; select 2",
@@ -708,16 +715,17 @@ func TestSplitStatementToPiecesNeverPanics(t *testing.T) {
 	}
 }
 
-// A ';' inside an executable comment that applies is a syntax error in MySQL;
-// inside a plain comment, or an executable comment that does not apply, it
-// is comment text.
+// A ';' inside an executable comment that applies is a terminator in MySQL,
+// and the comment goes on after it: a single statement ends there, with the
+// comment's close after it. Inside a plain comment, or an executable comment
+// that does not apply, it is comment text.
 func TestTerminatorInsideExecutableComment(t *testing.T) {
 	parser := NewTestParser()
-	for _, sql := range []string{"/*!80000 select 1; */ select 2", "select /*!80000 1; */ 2", "select 1 /*!80000 ; */"} {
+	for _, sql := range []string{"/*!80000 select 1; */ select 2", "select /*!80000 1; */ 2"} {
 		_, err := parser.Parse(sql)
 		require.Error(t, err, sql)
 	}
-	for _, sql := range []string{"select 1 /* ; */", "select /*!80000 1 */", "select /*!99999 1 */ 3", "select 1 /*!99999 ; */", "/*!99999 ; */ select 1", "select /*!99999 ; */ 1"} {
+	for _, sql := range []string{"select 1 /* ; */", "select /*!80000 1 */", "select /*!99999 1 */ 3", "select 1 /*!99999 ; */", "/*!99999 ; */ select 1", "select /*!99999 ; */ 1", "select 1 /*!80000 ; */", "/*!80000 select 1; */"} {
 		_, err := parser.Parse(sql)
 		require.NoError(t, err, sql)
 	}
@@ -740,15 +748,66 @@ func TestExecutableCommentWithoutTokens(t *testing.T) {
 	}
 }
 
-// IsBlankOrComments tells a remainder that holds no statement from one that
-// does: an executable comment that applies holds SQL, one that does not is
-// comment text through and through.
-func TestIsBlankOrComments(t *testing.T) {
+// SingleStatement reads a text the way MySQL's prepare reads it: one
+// statement, at most with a terminating ';' that only blanks and comments
+// may follow, lexed on from the ';', so that a ';' inside an executable
+// comment that applies ends the statement and the comment's close after it
+// is a comment.
+func TestSingleStatement(t *testing.T) {
 	parser := NewTestParser()
-	for _, sql := range []string{"", "  \n\t\v\f", " -- c", " /* c */ ", "/* a */ -- b\n", "# c", " /*!99999 ; */", "/*!99999 select 1 */", "--", "--\n/* c */"} {
-		assert.True(t, parser.IsBlankOrComments(sql), "%q", sql)
+	for _, tc := range []struct {
+		sql, statement string
+	}{
+		{"select 1", "select 1"},
+		{"select 1;", "select 1"},
+		{"select 1; \n", "select 1"},
+		// trailing ';' and blanks are dropped first, as MySQL drops them
+		{"select 1;;", "select 1"},
+		{"select 1 ; ; \n", "select 1"},
+		{"select 1; /* c */ ;", "select 1"},
+		{"select 1 /*!80000 ; */;", "select 1 /*!80000 ; */"},
+		{"select 1; -- c", "select 1"},
+		{"select 1; /* c */", "select 1"},
+		{"select 1; # c", "select 1"},
+		{"select 1; /*!99999 ; */", "select 1"},
+		{"select 1; /*!99999 select 2 */", "select 1"},
+		{"select 1; /*! */", "select 1"},
+		{"/*! select 1 */", "/*! select 1 */"},
+		{"select 1 /*!99999 ; */", "select 1 /*!99999 ; */"},
+		{"select 1 /*!80000 ; */", "select 1 /*!80000 ; */"},
+		{"/*!80000 select 1; */", "/*!80000 select 1; */"},
+		{"select ';'", "select ';'"},
+		// a lexical error in the statement's own text is left to the grammar
+		{"select b'", "select b'"},
+	} {
+		statement, err := parser.SingleStatement(tc.sql)
+		require.NoError(t, err, "%q", tc.sql)
+		assert.Equal(t, tc.statement, statement, "%q", tc.sql)
 	}
-	for _, sql := range []string{"select 1", " /* c */ select 1", "b'", "\u00a0", ";", "/* unterminated", "--x", "-- c\nselect 1", "/*! select 1 */", "/*!80000 select 1; */", " /*!80000 ; */"} {
-		assert.False(t, parser.IsBlankOrComments(sql), "%q", sql)
+	for _, tc := range []struct {
+		sql, near string
+	}{
+		{"select 1; select 2", "select 2"},
+		{"select 1; /* c */ select 2", "select 2"},
+		{"select 1; /*!80000 select 2 */", "select 2 */"},
+		{"select 1; /*!80000 ; */", "; */"},
+		{"select 1 /*!80000 ; */ select 2", "select 2"},
+		// a ';' that is not trailing, with nothing but blanks and comments
+		// before it, is an empty statement followed by more input
+		{"select 1; ; select 2", "; select 2"},
+		{"select 1;; /* c */", "; /* c */"},
+		{"select 1; /* c */ ; /* d */", "; /* d */"},
+		{" ; -- c", "; -- c"},
+		// after the terminator, anything the lexer does not read as blank is the error
+		{"select 1;\u00a0", "\u00a0"},
+		{"select 1; b'", "b'"},
+	} {
+		_, err := parser.SingleStatement(tc.sql)
+		require.EqualError(t, err, parseErrorPrefix+"'"+tc.near+"' at line 1", "%q", tc.sql)
+		assert.Equal(t, vterrors.ParseError, vterrors.ErrState(err), "%q", tc.sql)
+	}
+	for _, sql := range []string{"", "  \n\t\v\f", ";", " ; ", ";;", "; ;", " -- c", " /* c */ ", "/* a */ -- b\n", "/*!99999 select 1 */", "/*! */;"} {
+		_, err := parser.SingleStatement(sql)
+		require.ErrorIs(t, err, ErrEmpty, "%q", sql)
 	}
 }

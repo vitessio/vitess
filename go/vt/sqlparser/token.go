@@ -53,8 +53,12 @@ type Tokenizer struct {
 	// into a lexical error rather than a ';' or the end of the input.
 	resyncLexError bool
 	// stmtEnd is the offset of the top-level ';' that ended the first
-	// statement, -1 while no such ';' has been seen.
-	stmtEnd int
+	// statement, -1 while no such ';' has been seen. stmtEndInComment is set
+	// when that ';' fell inside an executable comment that applies, which a
+	// batch does not allow (see Parser.ForEachStatement).
+	stmtEnd            int
+	stmtEndInComment   bool
+	semicolonInComment bool // the last ';' scanned fell inside an executable comment that applies
 
 	Pos       int
 	buf       string
@@ -156,6 +160,7 @@ func (tkn *Tokenizer) markStatementEnd() {
 		return
 	}
 	tkn.stmtEnd = tkn.currStart
+	tkn.stmtEndInComment = tkn.semicolonInComment
 }
 
 // resync scans forward to the next top-level ';' or to the end of the input,
@@ -278,15 +283,12 @@ func (tkn *Tokenizer) Scan() (int, string) {
 		case ch == ':':
 			return tkn.scanBindVarOrAssignmentExpression()
 		case ch == ';':
+			// A ';' is a terminator inside an executable comment that applies
+			// too, as in MySQL, and the comment goes on after it: a single
+			// statement ends there, with the comment's close after it. A batch
+			// does not allow it (see Parser.ForEachStatement).
 			tkn.skip(1)
-			if tkn.inVersionedComment {
-				// MySQL does not let a statement end inside an executable
-				// comment: the ';' is a syntax error, and so it is here. It is
-				// consumed, so that resyncing after the error does not take it
-				// for the statement's end.
-				tkn.inVersionedComment = false
-				return LEX_ERROR, ";"
-			}
+			tkn.semicolonInComment = tkn.inVersionedComment
 			return ';', ""
 		case ch == eofChar:
 			if tkn.inVersionedComment {

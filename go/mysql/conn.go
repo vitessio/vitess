@@ -40,7 +40,6 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
@@ -1455,13 +1454,9 @@ func (c *Conn) handleComPrepare(handler Handler, data []byte) (kontinue bool) {
 		// A prepared statement is exactly one statement, as in MySQL:
 		// anything after it is a syntax error, nothing is an empty query.
 		// A comment after the ';' does not start a second statement.
-		parser := handler.Env().Parser()
-		statement, rest, _ := parser.SplitStatement(query)
-		if !parser.IsBlankOrComments(rest) {
-			return c.writeErrorPacketFromErrorAndLog(sqlerror.NewSQLErrorFromError(sqlparser.NewParseErrorNear(query, len(query)-len(rest))))
-		}
-		if parser.IsBlankOrComments(statement) {
-			return c.writeErrorPacketFromErrorAndLog(sqlerror.NewSQLErrorFromError(sqlparser.ErrEmpty))
+		statement, err := handler.Env().Parser().SingleStatement(query)
+		if err != nil {
+			return c.writeErrorPacketFromErrorAndLog(sqlerror.NewSQLErrorFromError(err))
 		}
 		query = statement
 	}
