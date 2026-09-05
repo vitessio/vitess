@@ -46,6 +46,8 @@ var Cases = []TestCase{
 	{Run: LargeDecimals},
 	{Run: LargeIntegers},
 	{Run: DecimalClamping},
+	{Run: JSONNumberComparison},
+	{Run: JSONTimeComparison},
 	{Run: BitwiseOperatorsUnary},
 	{Run: BitwiseOperators},
 	{Run: WeightString},
@@ -910,6 +912,44 @@ func DecimalClamping(yield Query) {
 			for d := 0; d <= min(m, 33); d += 2 {
 				yield(fmt.Sprintf("CAST(%s.%s AS DECIMAL(%d, %d))", inputPi[:pos], inputPi[pos:], m, d), nil, false)
 			}
+		}
+	}
+}
+
+// JSONNumberComparison pins how JSON numbers compare. MySQL fixes a number's
+// form when the document is built rather than when it is compared, so pairs
+// that differ only past the precision of the form they were stored in are the
+// same value, while pairs that kept different forms are not.
+func JSONNumberComparison(yield Query) {
+	numbers := []string{
+		"1", "1.0", "1e0", "2", "0", "-0", "0.0", "-1", "-1.0",
+		"9007199254740992", "9007199254740992.0", "9007199254740992.1", "9007199254740993", "9007199254740993.0",
+		"0.1", "0.10000000000000000000001",
+		"123456789012345678901234567890", "123456789012345678901234567891",
+		"9223372036854775807", "9223372036854775808",
+		"18446744073709551615", "18446744073709551616",
+		"1e308", "1.5", "1.50",
+	}
+
+	for _, lhs := range numbers {
+		for _, rhs := range numbers {
+			yield(fmt.Sprintf("CAST('%s' AS JSON) = CAST('%s' AS JSON)", lhs, rhs), nil, false)
+			yield(fmt.Sprintf("CAST('%s' AS JSON) < CAST('%s' AS JSON)", lhs, rhs), nil, false)
+		}
+	}
+}
+
+// JSONTimeComparison covers times carried in a JSON document, including the
+// negative zero that MySQL reads as plain zero.
+func JSONTimeComparison(yield Query) {
+	times := []string{"'00:00:00'", "'-00:00:00'", "'10:00:00'", "'-10:00:00'", "'00:00:01'", "'-00:00:01'"}
+
+	for _, lhs := range times {
+		for _, rhs := range times {
+			yield(fmt.Sprintf("CAST(CAST(%s AS TIME) AS JSON) = CAST(CAST(%s AS TIME) AS JSON)", lhs, rhs), nil, false)
+			yield(fmt.Sprintf("CAST(CAST(%s AS TIME) AS JSON) < CAST(CAST(%s AS TIME) AS JSON)", lhs, rhs), nil, false)
+			yield(fmt.Sprintf("CAST(%s AS TIME) = CAST(%s AS TIME)", lhs, rhs), nil, false)
+			yield(fmt.Sprintf("CAST(%s AS TIME) < CAST(%s AS TIME)", lhs, rhs), nil, false)
 		}
 	}
 }
