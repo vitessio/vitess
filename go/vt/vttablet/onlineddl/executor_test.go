@@ -614,8 +614,9 @@ type fakeTabletManagerClient struct {
 
 func (fakeTabletManagerClient) Close() {}
 
-// stopFailingTabletManagerClient fails every VReplicationExec call,
-// simulating a stream stop RPC failure during migration termination.
+// stopFailingTabletManagerClient fails every VReplicationExec call with a
+// coded error, simulating a stream stop RPC failure during migration
+// termination.
 type stopFailingTabletManagerClient struct {
 	tmclient.TabletManagerClient
 }
@@ -623,7 +624,7 @@ type stopFailingTabletManagerClient struct {
 func (stopFailingTabletManagerClient) Close() {}
 
 func (stopFailingTabletManagerClient) VReplicationExec(ctx context.Context, tablet *topodatapb.Tablet, query string) (*querypb.QueryResult, error) {
-	return nil, errors.New("stop failed")
+	return nil, vterrors.New(vtrpcpb.Code_DEADLINE_EXCEEDED, "stop failed")
 }
 
 func (fakeTabletManagerClient) ReloadSchema(ctx context.Context, tablet *topodatapb.Tablet, waitPosition string) error {
@@ -1019,6 +1020,8 @@ func TestForgetVReplStreamOrdering(t *testing.T) {
 		e.ts = ts
 		_, err := e.CancelMigration(t.Context(), uuid, "internal cancel", false)
 		require.ErrorContains(t, err, "stop failed")
+		assert.Equal(t, vtrpcpb.Code_DEADLINE_EXCEEDED, vterrors.Code(err),
+			"the stop RPC's error code must survive to the CANCEL caller")
 		assert.False(t, terminalTransitionAttempted,
 			"the durable terminal transition must not run when the stream stop failed")
 		assert.Contains(t, e.vreplicationLastError, uuid)

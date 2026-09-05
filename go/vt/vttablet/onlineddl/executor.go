@@ -1888,7 +1888,9 @@ func (e *Executor) terminateMigration(ctx context.Context, onlineDDL *schema.Onl
 		s, _ := e.readVReplStream(ctx, onlineDDL.UUID, true)
 		foundRunning = (s != nil && s.isRunning())
 		if err := e.terminateVReplMigration(ctx, onlineDDL.UUID, false); err != nil {
-			return foundRunning, fmt.Errorf("Error terminating migration, vreplication exec error: %+v", err)
+			// Wrap rather than format: the stop RPC's error code must reach
+			// the CANCEL caller.
+			return foundRunning, vterrors.Wrapf(err, "error terminating migration, vreplication exec error")
 		}
 	}
 	return foundRunning, nil
