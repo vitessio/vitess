@@ -256,21 +256,23 @@ const vreplThrottleLivenessWindow = 15 * time.Minute
 //   - a stream rows_copied past the value the migration record holds, which
 //     the executor acknowledges from the stream on every tick
 //     (updateRowsCopied). The stream only counts committed batches, so
-//     exceeding the acknowledged value proves durable progress since. Unlike
-//     the in-memory checkpoint baseline this comparison survives a restart or
-//     failover, so it is what lets the first tick after adoption refresh
-//     liveness at all: the stale review runs later in that same tick, and a
-//     migration adopted after an outage longer than staleMigrationFailMinutes
-//     would otherwise be failed while its copy is active. It is secondary
-//     because it can miss progress: rows_copied is a 30s-ticker write of an
-//     in-memory counter, and a retried migration keeps its earlier record.
+//     exceeding the acknowledged value proves durable progress since. It is
+//     secondary because it can miss progress: rows_copied is a 30s-ticker
+//     write of an in-memory counter, and a retried migration keeps its
+//     earlier record.
+//
+// The first observation since this executor opened (a restart or a failover)
+// counts on the advanced time_updated alone, as every observation did before
+// this gate existed: the stale review runs later in the same tick, and a
+// migration adopted after an outage longer than staleMigrationFailMinutes
+// would otherwise be failed while its copy is active, before any checkpoint
+// could be compared. The cost is bounded: the tracking is in-memory, so a
+// stuck copy earns one budget per executor restart, not one per tick.
 //
 // The replication position is not a progress signal: catchup advances it
-// before every copy attempt, whether or not the copy then succeeds. Nor is
-// the first observation of the checkpoint, which only sets the baseline: the
-// tracking is in-memory, and a stuck copy must not earn a fresh budget from
-// every executor restart. A failed copy-state lookup is not liveness either;
-// it is re-evaluated on the next tick.
+// before every copy attempt, whether or not the copy then succeeds. A failed
+// copy-state lookup is not liveness either; it is re-evaluated on the next
+// tick.
 func (e *Executor) vreplStreamShowsLiveness(ctx context.Context, uuid string, s *VReplStream, acknowledgedRowsCopied int64) (showsLiveness bool, observed *vreplStreamProgress) {
 	query, err := sqlparser.ParseAndBind(sqlReadCopyStateProgress,
 		sqltypes.Int32BindVariable(s.id),
@@ -302,8 +304,10 @@ func (e *Executor) vreplStreamShowsLiveness(ctx context.Context, uuid string, s 
 	}
 	last, seen := e.vreplicationProgress[uuid]
 	if !seen {
-		// Baseline only: the no-progress budget starts here.
-		return false, observed
+		// First observation since this executor opened: the advanced
+		// time_updated counts, and the baseline recorded from here makes
+		// every later observation require progress.
+		return true, observed
 	}
 	return observed.copyStateID > last.copyStateID, observed
 }
