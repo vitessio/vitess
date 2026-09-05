@@ -295,18 +295,12 @@ func (tp *TransactionPayload) decode() error {
 			copy(buf, header)
 			for int64(len(buf)) < eventLen {
 				if len(buf) == cap(buf) {
-					next := int64(cap(buf)) * 2
-					if next > eventLen {
-						next = eventLen
-					}
+					next := min(int64(cap(buf))*2, eventLen)
 					grown := make([]byte, len(buf), next)
 					copy(grown, buf)
 					buf = grown
 				}
-				want := int64(cap(buf))
-				if want > eventLen {
-					want = eventLen
-				}
+				want := min(int64(cap(buf)), eventLen)
 				at := len(buf)
 				buf = buf[:want]
 				n, err := io.ReadFull(tp.reader, buf[at:])
