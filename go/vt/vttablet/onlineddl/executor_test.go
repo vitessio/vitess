@@ -1685,120 +1685,150 @@ func TestReviewRunningMigrationsRefreshesLivenessOnAdoption(t *testing.T) {
 		"the first review after adoption must refresh liveness without waiting for the stream to write, or the stale review later in the tick fails an active migration")
 }
 
-// TestReviewRunningMigrationsReDrivesFailedRepair pins what happens when a
-// repair RPC fails after its write landed: the engine applies the update
+// TestReviewRunningMigrationsRepairOutcomes pins the two outcomes of a
+// repair RPC. A successful one is followed by the retirement of the park
+// record in the same review. A failed one — the engine applies the update
 // before it builds the replacement controller, so the row can read Running
-// with no controller behind it. The review must then re-drive the start on
-// the next tick, and stop once it succeeds.
-func TestReviewRunningMigrationsReDrivesFailedRepair(t *testing.T) {
+// with no controller behind it — leaves an intent the review re-drives on
+// the next tick, while the park record stays and nothing else is judged on
+// the row, until the re-drive succeeds.
+func TestReviewRunningMigrationsRepairOutcomes(t *testing.T) {
 	uuid := "1cbcd662_8ed6_11ee_bc8f_0a43f95f28a3"
 	env := tabletenv.NewEnv(vtenv.NewTestEnv(), tabletenv.NewDefaultConfig(), "ExecutorTest")
 	alias := &topodatapb.TabletAlias{Cell: "cell", Uid: 1}
-	streamState := "Error"
-	streamMessage := vreplication.RetriesExhaustedIndicator + ": the same error was encountered continuously for longer than --vreplication-max-time-to-retry-on-error (15m0s): connection refused"
-	parkRecordMessage := streamMessage
-	var queries []string
-	var retireAttempts int
-	var livenessRefreshed bool
-	failing := true
-	protocolName := t.Name()
-	resetProtocol := tmclienttest.SetProtocol(t.Name(), protocolName)
-	defer resetProtocol()
-	tmclient.RegisterTabletManagerClientFactory(protocolName, func() tmclient.TabletManagerClient {
-		return recordingTabletManagerClient{queries: &queries, failing: &failing}
-	})
-	ts := memorytopo.NewServer(t.Context(), "cell")
-	require.NoError(t, ts.CreateTablet(t.Context(), &topodatapb.Tablet{
-		Alias:    alias,
-		Keyspace: "ks",
-		Shard:    "0",
-		Type:     topodatapb.TabletType_PRIMARY,
-	}))
-	e := &Executor{
-		env:                       env,
-		ts:                        ts,
-		tabletAlias:               alias,
-		dbName:                    "vt_ks",
-		vreplicationLastError:     map[string]*vterrors.LastError{},
-		vreplicationPendingCancel: map[string]string{},
-		vreplicationProgress:      map[string]vreplStreamProgress{},
-		vreplicationPendingRepair: map[string]bool{},
-		ticks:                     timer.NewTimer(time.Hour),
-		lagThrottler: throttle.NewThrottler(env, nil, nil, alias, nil,
-			func() topodatapb.TabletType { return topodatapb.TabletType_PRIMARY }, "TestPool"),
-		execQuery: func(ctx context.Context, query string) (*sqltypes.Result, error) {
-			q := strings.ToLower(query)
-			switch {
-			case strings.HasPrefix(strings.TrimSpace(q), "update _vt.vreplication_log"):
-				retireAttempts++
-				return &sqltypes.Result{RowsAffected: 1}, nil
-			case strings.HasPrefix(strings.TrimSpace(q), "update") && strings.Contains(q, "liveness_timestamp"):
-				livenessRefreshed = true
-				return &sqltypes.Result{RowsAffected: 1}, nil
-			case strings.Contains(q, "migration_status='running'"):
-				return sqltypes.MakeTestResult(
-					sqltypes.MakeTestFields("migration_uuid", "varchar"), uuid), nil
-			case strings.Contains(q, "in ('queued', 'ready', 'running')"):
-				return &sqltypes.Result{}, nil
-			case strings.Contains(q, "from _vt.vreplication_log"):
-				// The park record stays until the review retires it.
-				return sqltypes.MakeTestResult(
-					sqltypes.MakeTestFields("state|message", "varchar|varchar"),
-					"Error|"+parkRecordMessage), nil
-			case strings.Contains(q, "copy_state"):
-				return sqltypes.MakeTestResult(
-					sqltypes.MakeTestFields("cnt|maxid", "int64|uint64"), "1|10"), nil
-			case strings.Contains(q, "from _vt.vreplication"):
-				return sqltypes.MakeTestResult(
-					sqltypes.MakeTestFields("id|workflow|source|pos|state|message", "int32|varchar|varchar|varchar|varchar|varchar"),
-					"1|"+uuid+"|||"+streamState+"|"+streamMessage), nil
-			case strings.HasPrefix(strings.TrimSpace(q), "select") && strings.Contains(q, "migration_uuid="):
-				return sqltypes.MakeTestResult(
-					sqltypes.MakeTestFields("migration_uuid|migration_status|strategy", "varchar|varchar|varchar"),
-					uuid+"|running|vitess"), nil
-			}
-			return &sqltypes.Result{RowsAffected: 1}, nil
-		},
+	parkMessage := vreplication.RetriesExhaustedIndicator + ": the same error was encountered continuously for longer than --vreplication-max-time-to-retry-on-error (15m0s): connection refused"
+	type harness struct {
+		e                 *Executor
+		queries           *[]string
+		retireAttempts    *int
+		livenessRefreshed *bool
+		failing           *bool
+		streamState       *string
+		streamMessage     *string
 	}
-	e.isOpen.Store(1)
+	newHarness := func(t *testing.T) harness {
+		streamState, streamMessage := "Error", parkMessage
+		var queries []string
+		var retireAttempts int
+		var livenessRefreshed bool
+		failing := false
+		protocolName := t.Name()
+		t.Cleanup(tmclienttest.SetProtocol(t.Name(), protocolName))
+		tmclient.RegisterTabletManagerClientFactory(protocolName, func() tmclient.TabletManagerClient {
+			return recordingTabletManagerClient{queries: &queries, failing: &failing}
+		})
+		ts := memorytopo.NewServer(t.Context(), "cell")
+		require.NoError(t, ts.CreateTablet(t.Context(), &topodatapb.Tablet{
+			Alias:    alias,
+			Keyspace: "ks",
+			Shard:    "0",
+			Type:     topodatapb.TabletType_PRIMARY,
+		}))
+		e := &Executor{
+			env:                       env,
+			ts:                        ts,
+			tabletAlias:               alias,
+			dbName:                    "vt_ks",
+			vreplicationLastError:     map[string]*vterrors.LastError{},
+			vreplicationPendingCancel: map[string]string{},
+			vreplicationProgress:      map[string]vreplStreamProgress{},
+			vreplicationPendingRepair: map[string]bool{},
+			ticks:                     timer.NewTimer(time.Hour),
+			lagThrottler: throttle.NewThrottler(env, nil, nil, alias, nil,
+				func() topodatapb.TabletType { return topodatapb.TabletType_PRIMARY }, "TestPool"),
+			execQuery: func(ctx context.Context, query string) (*sqltypes.Result, error) {
+				q := strings.ToLower(query)
+				switch {
+				case strings.HasPrefix(strings.TrimSpace(q), "update _vt.vreplication_log"):
+					retireAttempts++
+					return &sqltypes.Result{RowsAffected: 1}, nil
+				case strings.HasPrefix(strings.TrimSpace(q), "update") && strings.Contains(q, "liveness_timestamp"):
+					livenessRefreshed = true
+					return &sqltypes.Result{RowsAffected: 1}, nil
+				case strings.Contains(q, "migration_status='running'"):
+					return sqltypes.MakeTestResult(
+						sqltypes.MakeTestFields("migration_uuid", "varchar"), uuid), nil
+				case strings.Contains(q, "in ('queued', 'ready', 'running')"):
+					return &sqltypes.Result{}, nil
+				case strings.Contains(q, "from _vt.vreplication_log"):
+					// The park record stays until the review retires it.
+					return sqltypes.MakeTestResult(
+						sqltypes.MakeTestFields("state|message", "varchar|varchar"),
+						"Error|"+parkMessage), nil
+				case strings.Contains(q, "copy_state"):
+					return sqltypes.MakeTestResult(
+						sqltypes.MakeTestFields("cnt|maxid", "int64|uint64"), "1|10"), nil
+				case strings.Contains(q, "from _vt.vreplication"):
+					return sqltypes.MakeTestResult(
+						sqltypes.MakeTestFields("id|workflow|source|pos|state|message", "int32|varchar|varchar|varchar|varchar|varchar"),
+						"1|"+uuid+"|||"+streamState+"|"+streamMessage), nil
+				case strings.HasPrefix(strings.TrimSpace(q), "select") && strings.Contains(q, "migration_uuid="):
+					return sqltypes.MakeTestResult(
+						sqltypes.MakeTestFields("migration_uuid|migration_status|strategy", "varchar|varchar|varchar"),
+						uuid+"|running|vitess"), nil
+				}
+				return &sqltypes.Result{RowsAffected: 1}, nil
+			},
+		}
+		e.isOpen.Store(1)
+		return harness{e: e, queries: &queries, retireAttempts: &retireAttempts, livenessRefreshed: &livenessRefreshed, failing: &failing, streamState: &streamState, streamMessage: &streamMessage}
+	}
 
-	// The parked stream is repaired, but the RPC fails.
-	_, cancellable, err := e.reviewRunningMigrations(t.Context())
-	require.NoError(t, err)
-	assert.Empty(t, cancellable)
-	require.Len(t, queries, 1)
-	assert.Contains(t, queries[0], retryForeverConfigKey, "the first RPC is the repair")
-	assert.True(t, e.vreplicationPendingRepair[uuid], "a failed repair RPC must leave a pending intent: its write may have landed")
+	t.Run("a successful repair retires the park record in the same review", func(t *testing.T) {
+		// A downgrade before the next review would otherwise still find an
+		// Error row, which the previous release takes as authoritative.
+		h := newHarness(t)
+		_, cancellable, err := h.e.reviewRunningMigrations(t.Context())
+		require.NoError(t, err)
+		assert.Empty(t, cancellable)
+		require.Len(t, *h.queries, 1)
+		assert.Contains(t, (*h.queries)[0], retryForeverConfigKey, "the RPC is the repair")
+		assert.NotContains(t, h.e.vreplicationPendingRepair, uuid, "a successful repair leaves no intent")
+		assert.Equal(t, 1, *h.retireAttempts, "the park record must be retired as soon as the repair is confirmed")
+	})
+	t.Run("a repair whose RPC failed after its write is re-driven", func(t *testing.T) {
+		h := newHarness(t)
+		*h.failing = true
 
-	// The write had landed: the row reads Running, with the park record
-	// still behind it. The review re-drives the controller start through
-	// the engine; it fails this time, so the intent stays — and the park
-	// record must stay with it, as the durable trace of an unconfirmed
-	// repair.
-	streamState, streamMessage = "Running", ""
-	_, cancellable, err = e.reviewRunningMigrations(t.Context())
-	require.NoError(t, err)
-	assert.Empty(t, cancellable)
-	require.Len(t, queries, 2, "the review must re-drive the start once the row shows the write landed")
-	assert.Contains(t, queries[1], "state='Running'")
-	assert.Contains(t, queries[1], uuid)
-	assert.NotContains(t, queries[1], retryForeverConfigKey, "the re-drive is a plain start, not another repair")
-	assert.True(t, e.vreplicationPendingRepair[uuid], "the intent stays while the re-drive keeps failing")
-	assert.Equal(t, 0, retireAttempts, "the park record must not be retired before the repair is confirmed")
-	assert.False(t, livenessRefreshed,
-		"a Running row with no controller behind it must not be reviewed further: no liveness, no cutover, until the re-drive succeeds")
+		// The parked stream is repaired, but the RPC fails.
+		_, cancellable, err := h.e.reviewRunningMigrations(t.Context())
+		require.NoError(t, err)
+		assert.Empty(t, cancellable)
+		require.Len(t, *h.queries, 1)
+		assert.Contains(t, (*h.queries)[0], retryForeverConfigKey, "the first RPC is the repair")
+		assert.True(t, h.e.vreplicationPendingRepair[uuid], "a failed repair RPC must leave a pending intent: its write may have landed")
+		assert.Equal(t, 0, *h.retireAttempts, "the park record must not be retired while the repair is unconfirmed")
 
-	// The re-drive succeeds: the intent is cleared, and only then is the
-	// park record retired.
-	failing = false
-	_, _, err = e.reviewRunningMigrations(t.Context())
-	require.NoError(t, err)
-	require.Len(t, queries, 3)
-	assert.NotContains(t, e.vreplicationPendingRepair, uuid, "the intent is cleared once the re-drive succeeds")
-	_, _, err = e.reviewRunningMigrations(t.Context())
-	require.NoError(t, err)
-	assert.Len(t, queries, 3, "nothing more to re-drive")
-	assert.Equal(t, 1, retireAttempts, "the park record is retired once the repair is confirmed")
+		// The write had landed: the row reads Running, with the park record
+		// still behind it. The review re-drives the controller start through
+		// the engine; it fails this time, so the intent stays — and the park
+		// record must stay with it, as the durable trace of an unconfirmed
+		// repair, and nothing else may be judged on the row.
+		*h.streamState, *h.streamMessage = "Running", ""
+		_, cancellable, err = h.e.reviewRunningMigrations(t.Context())
+		require.NoError(t, err)
+		assert.Empty(t, cancellable)
+		require.Len(t, *h.queries, 2, "the review must re-drive the start once the row shows the write landed")
+		assert.Contains(t, (*h.queries)[1], "state='Running'")
+		assert.Contains(t, (*h.queries)[1], uuid)
+		assert.NotContains(t, (*h.queries)[1], retryForeverConfigKey, "the re-drive is a plain start, not another repair")
+		assert.True(t, h.e.vreplicationPendingRepair[uuid], "the intent stays while the re-drive keeps failing")
+		assert.Equal(t, 0, *h.retireAttempts, "the park record must not be retired before the repair is confirmed")
+		assert.False(t, *h.livenessRefreshed,
+			"a Running row with no controller behind it must not be reviewed further: no liveness, no cutover, until the re-drive succeeds")
+
+		// The re-drive succeeds: the intent is cleared, and only then is the
+		// park record retired.
+		*h.failing = false
+		_, _, err = h.e.reviewRunningMigrations(t.Context())
+		require.NoError(t, err)
+		require.Len(t, *h.queries, 3)
+		assert.NotContains(t, h.e.vreplicationPendingRepair, uuid, "the intent is cleared once the re-drive succeeds")
+		_, _, err = h.e.reviewRunningMigrations(t.Context())
+		require.NoError(t, err)
+		assert.Len(t, *h.queries, 3, "nothing more to re-drive")
+		assert.Equal(t, 1, *h.retireAttempts, "the park record is retired once the repair is confirmed")
+	})
 }
 
 // TestReviewVReplStreamError tests the per-stream verdict: unrecoverable or

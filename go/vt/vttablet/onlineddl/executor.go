@@ -3772,7 +3772,8 @@ func (e *Executor) redriveVReplRepair(ctx context.Context, uuid string, s *VRepl
 // after a downgrade. The review calls it for as long as readVReplStream
 // keeps reporting such a record and no repair of the stream is pending, so
 // a rewrite that fails is retried on the next tick, and a record is never
-// retired ahead of the repair it traces. Callers must hold migrationMutex.
+// retired ahead of the repair it traces; the repair branch also calls it
+// directly once its RPC has succeeded. Callers must hold migrationMutex.
 func (e *Executor) retireVReplParkRecord(ctx context.Context, uuid string, s *VReplStream) {
 	ctx, cancel := context.WithTimeout(ctx, reviewQueryTimeout)
 	defer cancel()
@@ -3942,8 +3943,11 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 					delete(e.vreplicationPendingRepair, uuid)
 					log.Info("Online DDL: repaired vreplication stream parked on a retries-exhausted error; restarted with the retry-forever override",
 						slog.String("uuid", uuid), slog.String("tablet", e.TabletAliasString()), slog.Int64("stream_id", int64(s.id)))
-					// The park record is retired by the next review, once
-					// the stream is seen past it; see retireVReplParkRecord.
+					// The repair is confirmed: retire the park record now, so
+					// that a downgrade before the next review does not find
+					// an Error row. A rewrite that fails is retried by the
+					// review for as long as the record remains.
+					e.retireVReplParkRecord(ctx, uuid, s)
 					return nil
 				}
 				if !s.isRunning() {
