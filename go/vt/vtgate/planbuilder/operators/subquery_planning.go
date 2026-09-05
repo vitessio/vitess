@@ -240,7 +240,10 @@ func tryPushSubQueryInJoin(
 	// we want to push the subquery as close to its needs
 	// as possible, so that we can potentially merge them together
 	// TODO: we need to check dependencies and break apart all expressions in the subquery, not just the merge predicates
-	deps := semantics.EmptyTableSet()
+	// The predicate that gets restored once the subquery is settled needs every table it
+	// mentions, not just the ones in the merge predicates, or it lands on a route that
+	// cannot see them.
+	deps := ctx.SemTable.RecursiveDeps(inner.Original)
 	for _, predicate := range inner.GetMergePredicates() {
 		deps = deps.Merge(ctx.SemTable.RecursiveDeps(predicate))
 	}
