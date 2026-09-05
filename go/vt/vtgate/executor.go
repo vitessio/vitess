@@ -825,7 +825,7 @@ func (e *Executor) executeSPInAllSessions(ctx context.Context, safeSession *econ
 			})
 			queries = append(queries, &querypb.BoundQuery{Sql: sql})
 		}
-		qr, errs = e.ExecuteMultiShard(ctx, nil, rss, queries, safeSession, false /*autocommit*/, ignoreMaxMemoryRows, nullResultsObserver{}, false)
+		qr, errs = e.ExecuteMultiShard(ctx, nil, rss, queries, safeSession, false /*autocommit*/, false /*settingsForStatement*/, ignoreMaxMemoryRows, nullResultsObserver{}, false)
 		err := vterrors.Aggregate(errs)
 		if err != nil {
 			return nil, err
@@ -1855,8 +1855,8 @@ func parseAndValidateQuery(query string, parser *sqlparser.Parser) (sqlparser.St
 }
 
 // ExecuteMultiShard implements the IExecutor interface
-func (e *Executor) ExecuteMultiShard(ctx context.Context, primitive engine.Primitive, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, session *econtext.SafeSession, autocommit bool, ignoreMaxMemoryRows bool, resultsObserver econtext.ResultsObserver, fetchLastInsertID bool) (qr *sqltypes.Result, errs []error) {
-	return e.scatterConn.ExecuteMultiShard(ctx, primitive, rss, queries, session, autocommit, ignoreMaxMemoryRows, resultsObserver, fetchLastInsertID)
+func (e *Executor) ExecuteMultiShard(ctx context.Context, primitive engine.Primitive, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, session *econtext.SafeSession, autocommit bool, settingsForStatement bool, ignoreMaxMemoryRows bool, resultsObserver econtext.ResultsObserver, fetchLastInsertID bool) (qr *sqltypes.Result, errs []error) {
+	return e.scatterConn.ExecuteMultiShard(ctx, primitive, rss, queries, session, autocommit, settingsForStatement, ignoreMaxMemoryRows, resultsObserver, fetchLastInsertID)
 }
 
 // ExecuteMultiShardPerShard implements the IExecutor interface
@@ -1865,8 +1865,8 @@ func (e *Executor) ExecuteMultiShardPerShard(ctx context.Context, primitive engi
 }
 
 // StreamExecuteMulti implements the IExecutor interface
-func (e *Executor) StreamExecuteMulti(ctx context.Context, primitive engine.Primitive, query string, rss []*srvtopo.ResolvedShard, vars []map[string]*querypb.BindVariable, session *econtext.SafeSession, autocommit bool, callback func(reply *sqltypes.Result) error, resultsObserver econtext.ResultsObserver, fetchLastInsertID bool) []error {
-	return e.scatterConn.StreamExecuteMulti(ctx, primitive, query, rss, vars, session, autocommit, callback, resultsObserver, fetchLastInsertID)
+func (e *Executor) StreamExecuteMulti(ctx context.Context, primitive engine.Primitive, query string, rss []*srvtopo.ResolvedShard, vars []map[string]*querypb.BindVariable, session *econtext.SafeSession, autocommit bool, settingsForStatement bool, callback func(reply *sqltypes.Result) error, resultsObserver econtext.ResultsObserver, fetchLastInsertID bool) []error {
+	return e.scatterConn.StreamExecuteMulti(ctx, primitive, query, rss, vars, session, autocommit, settingsForStatement, callback, resultsObserver, fetchLastInsertID)
 }
 
 // ExecuteLock implements the IExecutor interface
