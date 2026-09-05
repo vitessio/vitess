@@ -52,11 +52,9 @@ type (
 		// this field will contain the conditions under which this route is valid
 		Conditions []engine.Condition
 
-		// PreservesReferenceRows marks a route that produces the rows of a reference table kept
-		// by an outer join. Those rows do not depend on the routing finding a match, which has
-		// two consequences the route carries with it through any later merge: the routing has to
-		// stay single-shard, or each unmatched row comes back once per shard, and the query has
-		// to run even when the routing resolves to no destination, or they do not come back at all.
+		// PreservesReferenceRows marks a route that produces the rows of a reference table kept by
+		// an outer join: it has to stay single-shard and has to run even when the routing finds no
+		// destination, or those rows come back duplicated or not at all.
 		PreservesReferenceRows bool
 
 		ResultColumns int
