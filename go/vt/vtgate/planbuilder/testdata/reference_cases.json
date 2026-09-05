@@ -915,5 +915,357 @@
         "user.ref"
       ]
     }
+  },
+  {
+    "comment": "union of a reference table with a sharded table merges through the reference copy",
+    "query": "select id from ambiguous_ref_with_source union select id from user",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select id from ambiguous_ref_with_source union select id from user",
+      "Instructions": {
+        "OperatorType": "Distinct",
+        "Collations": [
+          "(0:1)"
+        ],
+        "ResultColumns": 1,
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id, weight_string(id) from ambiguous_ref_with_source where 1 != 1 union select id, weight_string(id) from `user` where 1 != 1",
+            "Query": "select id, weight_string(id) from ambiguous_ref_with_source union select id, weight_string(id) from `user`"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.ambiguous_ref_with_source",
+        "user.user"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "union order does not matter when merging through the reference copy",
+    "query": "select id from user union select id from ambiguous_ref_with_source",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select id from user union select id from ambiguous_ref_with_source",
+      "Instructions": {
+        "OperatorType": "Distinct",
+        "Collations": [
+          "(0:1)"
+        ],
+        "ResultColumns": 1,
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id, weight_string(id) from `user` where 1 != 1 union select id, weight_string(id) from ambiguous_ref_with_source where 1 != 1",
+            "Query": "select id, weight_string(id) from `user` union select id, weight_string(id) from ambiguous_ref_with_source"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.ambiguous_ref_with_source",
+        "user.user"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "union through a reference copy with a different physical name rewrites the table",
+    "query": "select id from source_of_ref union select id from user",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select id from source_of_ref union select id from user",
+      "Instructions": {
+        "OperatorType": "Distinct",
+        "Collations": [
+          "(0:1)"
+        ],
+        "ResultColumns": 1,
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id, weight_string(id) from ref_with_source as source_of_ref where 1 != 1 union select id, weight_string(id) from `user` where 1 != 1",
+            "Query": "select id, weight_string(id) from ref_with_source as source_of_ref union select id, weight_string(id) from `user`"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.ref_with_source",
+        "user.user"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "predicates on the reference branch survive the rewrite to the reference copy",
+    "query": "select id from source_of_ref where id = 3 union select id from user",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select id from source_of_ref where id = 3 union select id from user",
+      "Instructions": {
+        "OperatorType": "Distinct",
+        "Collations": [
+          "(0:1)"
+        ],
+        "ResultColumns": 1,
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id, weight_string(id) from ref_with_source as source_of_ref where 1 != 1 union select id, weight_string(id) from `user` where 1 != 1",
+            "Query": "select id, weight_string(id) from ref_with_source as source_of_ref where id = 3 union select id, weight_string(id) from `user`"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.ref_with_source",
+        "user.user"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "union all through a reference copy keeps merging",
+    "query": "select id from source_of_ref union all select id from user",
+    "plan": {
+      "Type": "Scatter",
+      "QueryType": "SELECT",
+      "Original": "select id from source_of_ref union all select id from user",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id from ref_with_source as source_of_ref where 1 != 1 union all select id from `user` where 1 != 1",
+        "Query": "select id from ref_with_source as source_of_ref union all select id from `user`"
+      },
+      "TablesUsed": [
+        "user.ref_with_source",
+        "user.user"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "a union composed of two reference-backed tables before the sharded side stays split",
+    "query": "select id from main.source_of_ref union select id from main.rerouted_ref union select id from user",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select id from main.source_of_ref union select id from main.rerouted_ref union select id from user",
+      "Instructions": {
+        "OperatorType": "Distinct",
+        "Collations": [
+          "(0:1)"
+        ],
+        "ResultColumns": 1,
+        "Inputs": [
+          {
+            "OperatorType": "Concatenate",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "main",
+                  "Sharded": false
+                },
+                "FieldQuery": "select dt.c0 as id, weight_string(dt.c0) from (select id from source_of_ref where 1 != 1 union select id from rerouted_ref where 1 != 1) as dt(c0) where 1 != 1",
+                "Query": "select dt.c0 as id, weight_string(dt.c0) from (select id from source_of_ref union select id from rerouted_ref) as dt(c0)"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select dt.c0 as id, weight_string(dt.c0) from (select id from `user` where 1 != 1) as dt(c0) where 1 != 1",
+                "Query": "select dt.c0 as id, weight_string(dt.c0) from (select distinct id from `user`) as dt(c0)"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.rerouted_ref",
+        "main.source_of_ref",
+        "user.user"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "union all preserves a sharded reference source routing",
+    "query": "select col1 from main_2.sharded_sales_ref union all select cola from user.sales_extra",
+    "plan": {
+      "Type": "Scatter",
+      "QueryType": "SELECT",
+      "Original": "select col1 from main_2.sharded_sales_ref union all select cola from user.sales_extra",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select col1 from sales as sharded_sales_ref where 1 != 1 union all select cola from sales_extra where 1 != 1",
+        "Query": "select col1 from sales as sharded_sales_ref union all select cola from sales_extra"
+      },
+      "TablesUsed": [
+        "user.sales",
+        "user.sales_extra"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "a composite reference union also stays split under union all",
+    "query": "select id from main.source_of_ref union all select id from main.rerouted_ref union all select id from user",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select id from main.source_of_ref union all select id from main.rerouted_ref union all select id from user",
+      "Instructions": {
+        "OperatorType": "Concatenate",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "FieldQuery": "select id from source_of_ref where 1 != 1 union all select id from rerouted_ref where 1 != 1",
+            "Query": "select id from source_of_ref union all select id from rerouted_ref"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id from `user` where 1 != 1",
+            "Query": "select id from `user`"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.rerouted_ref",
+        "main.source_of_ref",
+        "user.user"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "a distinct reference union merges table by table when the sharded side merges first",
+    "query": "select id from user union select id from main.source_of_ref union select id from main.rerouted_ref",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select id from user union select id from main.source_of_ref union select id from main.rerouted_ref",
+      "Instructions": {
+        "OperatorType": "Distinct",
+        "Collations": [
+          "(0:1)"
+        ],
+        "ResultColumns": 1,
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id, weight_string(id) from `user` where 1 != 1 union select id, weight_string(id) from ref_with_source as source_of_ref where 1 != 1 union select id, weight_string(id) from ref as rerouted_ref where 1 != 1",
+            "Query": "select id, weight_string(id) from `user` union select id, weight_string(id) from ref_with_source as source_of_ref union select id, weight_string(id) from ref as rerouted_ref"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.ref",
+        "user.ref_with_source",
+        "user.user"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "a composite union with a table that has no copy in the target keyspace stays split",
+    "query": "select id from main.source_of_ref union select col from unsharded union select id from user",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select id from main.source_of_ref union select col from unsharded union select id from user",
+      "Instructions": {
+        "OperatorType": "Distinct",
+        "Collations": [
+          "(0:1)"
+        ],
+        "ResultColumns": 1,
+        "Inputs": [
+          {
+            "OperatorType": "Concatenate",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "main",
+                  "Sharded": false
+                },
+                "FieldQuery": "select dt.c0 as id, weight_string(dt.c0) from (select id from source_of_ref where 1 != 1 union select col from unsharded where 1 != 1) as dt(c0) where 1 != 1",
+                "Query": "select dt.c0 as id, weight_string(dt.c0) from (select id from source_of_ref union select col from unsharded) as dt(c0)"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select dt.c0 as id, weight_string(dt.c0) from (select id from `user` where 1 != 1) as dt(c0) where 1 != 1",
+                "Query": "select dt.c0 as id, weight_string(dt.c0) from (select distinct id from `user`) as dt(c0)"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.source_of_ref",
+        "main.unsharded",
+        "user.user"
+      ]
+    },
+    "skip_e2e": true
   }
 ]

@@ -17,12 +17,14 @@ limitations under the License.
 package operators
 
 import (
+	"io"
 	"slices"
 
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
 // mergeUnionInputInAnyOrder merges sources the sources of the union in any order
@@ -110,22 +112,44 @@ func mergeUnionInputs(
 	lhsExprs, rhsExprs []sqlparser.SelectExpr,
 	distinct bool,
 ) (Operator, []sqlparser.SelectExpr) {
-	lhsRoute, rhsRoute, routingA, routingB, a, b, sameKeyspace := prepareInputRoutes(ctx, lhs, rhs)
-	if lhsRoute == nil {
+	lhsRoute, rhsRoute := operatorsToRoutes(lhs, rhs)
+	if lhsRoute == nil || rhsRoute == nil {
 		checkCrossKeyspaceOp(ctx, lhs, rhs, "UNION")
 		return nil, nil
 	}
+
+	if op, exprs := mergeUnionRoutings(ctx, lhsRoute, rhsRoute, lhsExprs, rhsExprs, distinct); op != nil {
+		return op, exprs
+	}
+	if op, exprs := tryAlternateUnionMerge(ctx, lhsRoute, rhsRoute, lhsExprs, rhsExprs, distinct); op != nil {
+		return op, exprs
+	}
+
+	// Check cross-keyspace restrictions for UNIONs that cannot be merged.
+	checkCrossKeyspaceOp(ctx, lhs, rhs, "UNION")
+
+	return nil, nil
+}
+
+// mergeUnionRoutings merges two union sources whose routes are usable as they
+// stand, or returns nil when their routings do not allow it.
+func mergeUnionRoutings(
+	ctx *plancontext.PlanningContext,
+	lhsRoute, rhsRoute *Route,
+	lhsExprs, rhsExprs []sqlparser.SelectExpr,
+	distinct bool,
+) (Operator, []sqlparser.SelectExpr) {
+	routingA, routingB := lhsRoute.Routing, rhsRoute.Routing
+	sameKeyspace := routingA.Keyspace() == routingB.Keyspace()
+	a, b := getRoutingType(routingA), getRoutingType(routingB)
 
 	// a none routing resolves to no shards at execution time, so its side of the
 	// union contributes no rows. None pairings must be decided before the dual
 	// and anyShard cases below: those would retain the none routing and
 	// incorrectly discard the other side's rows.
 	if a == none || b == none {
-		if op, exprs, merged := tryMergeNoneUnion(ctx, lhsRoute, rhsRoute, lhsExprs, rhsExprs, distinct, routingA, routingB, a, b); merged {
-			return op, exprs
-		}
-		checkCrossKeyspaceOp(ctx, lhs, rhs, "UNION")
-		return nil, nil
+		op, exprs, _ := tryMergeNoneUnion(ctx, lhsRoute, rhsRoute, lhsExprs, rhsExprs, distinct, routingA, routingB, a, b)
+		return op, exprs
 	}
 
 	switch {
@@ -142,9 +166,6 @@ func mergeUnionInputs(
 			return res, exprs
 		}
 	}
-
-	// Check cross-keyspace restrictions for UNIONs that cannot be merged.
-	checkCrossKeyspaceOp(ctx, lhs, rhs, "UNION")
 
 	return nil, nil
 }
@@ -216,6 +237,164 @@ func tryMergeNoneUnion(
 
 	op, exprs := createMergedUnion(ctx, lhsRoute, rhsRoute, lhsExprs, rhsExprs, distinct, routing, nil)
 	return op, exprs, true
+}
+
+// tryAlternateUnionMerge retries a declined cross-keyspace pairing by moving
+// one side onto the reference copies of its tables in the other side's
+// keyspace. The move mutates the moved side's tables in place, so all
+// semantic bookkeeping keyed on its expressions stays valid; a retry that
+// still cannot merge undoes the move.
+func tryAlternateUnionMerge(
+	ctx *plancontext.PlanningContext,
+	lhsRoute, rhsRoute *Route,
+	lhsExprs, rhsExprs []sqlparser.SelectExpr,
+	distinct bool,
+) (Operator, []sqlparser.SelectExpr) {
+	lhsKs, rhsKs := lhsRoute.Routing.Keyspace(), rhsRoute.Routing.Keyspace()
+	if lhsKs == nil || rhsKs == nil || lhsKs == rhsKs {
+		return nil, nil
+	}
+
+	// a side already composed of a merged union carries shapes the remaining
+	// phases no longer normalize: moving it can hand offset planning a nested
+	// horizon it cannot push into, so only leaf routes are moved
+	canRewrite := func(route *Route) bool {
+		hasUnion := false
+		_ = Visit(route.Source, func(op Operator) error {
+			if _, ok := op.(*Union); ok {
+				hasUnion = true
+				return io.EOF
+			}
+			return nil
+		})
+		return !hasUnion
+	}
+
+	if canRewrite(lhsRoute) {
+		if rewritten, undo := rewriteRouteToAlternate(ctx, lhsRoute, rhsKs); rewritten != nil {
+			if op, exprs := mergeUnionRoutings(ctx, rewritten, rhsRoute, lhsExprs, rhsExprs, distinct); op != nil {
+				return op, exprs
+			}
+			undo()
+		}
+	}
+	if canRewrite(rhsRoute) {
+		if rewritten, undo := rewriteRouteToAlternate(ctx, rhsRoute, lhsKs); rewritten != nil {
+			if op, exprs := mergeUnionRoutings(ctx, lhsRoute, rewritten, lhsExprs, rhsExprs, distinct); op != nil {
+				return op, exprs
+			}
+			undo()
+		}
+	}
+	return nil, nil
+}
+
+// rewriteRouteToAlternate points route's tables at the reference copies living
+// in ks, or returns nil if the route cannot move there. Every real table under
+// the planned tree is resolved to its copy independently, so a route composed
+// by earlier merges moves when each of its tables has a copy. The planned
+// operators are kept and only the table nodes are swapped, so predicates and
+// projections pushed after route creation are preserved and the semantic
+// analysis of the tree stays authoritative. The returned undo puts the
+// original tables back. Reference and unsharded copies are complete on any
+// shard; a single ordinary sharded source keeps its resolved routing.
+func rewriteRouteToAlternate(ctx *plancontext.PlanningContext, route *Route, ks *vindexes.Keyspace) (*Route, func()) {
+	if _, ok := route.Routing.(*AnyShardRouting); !ok {
+		return nil, nil
+	}
+	if !ctx.SemTable.DMLTargets.IsEmpty() && TableID(route).IsOverlapping(ctx.SemTable.DMLTargets) {
+		return nil, nil
+	}
+
+	type tableSwap struct {
+		tbl        *Table
+		altQTable  *QueryTable
+		altVTable  *vindexes.BaseTable
+		origQTable *QueryTable
+		origVTable *vindexes.BaseTable
+	}
+	var swaps []tableSwap
+	var shardedRouting *ShardedRouting
+	resolvable := true
+	_ = Visit(route.Source, func(op Operator) error {
+		tbl, ok := op.(*Table)
+		if !ok || tbl.VTable == nil || tbl.QTable == nil {
+			return nil
+		}
+		alt, altRouting := resolveTableCopyIn(ctx, tbl, ks)
+		if alt == nil {
+			resolvable = false
+			return io.EOF
+		}
+		if alt.VTable.Type != vindexes.TypeReference && alt.VTable.Keyspace.Sharded {
+			var ok bool
+			shardedRouting, ok = altRouting.(*ShardedRouting)
+			if !ok || shardedRouting.Keyspace() != ks {
+				resolvable = false
+				return io.EOF
+			}
+		}
+		swaps = append(swaps, tableSwap{tbl: tbl, altQTable: alt.QTable, altVTable: alt.VTable, origQTable: tbl.QTable, origVTable: tbl.VTable})
+		return nil
+	})
+	if !resolvable || len(swaps) == 0 ||
+		(shardedRouting != nil && (TableID(route).NumberOfTables() != 1 || len(swaps) != 1)) {
+		return nil, nil
+	}
+
+	for _, s := range swaps {
+		s.tbl.QTable, s.tbl.VTable = s.altQTable, s.altVTable
+	}
+	undo := func() {
+		for _, s := range swaps {
+			s.tbl.QTable, s.tbl.VTable = s.origQTable, s.origVTable
+		}
+	}
+
+	rewritten := *route
+	if shardedRouting != nil {
+		rewritten.Routing = shardedRouting
+	} else {
+		rewritten.Routing = &AnyShardRouting{keyspace: ks}
+	}
+	return &rewritten, undo
+}
+
+// resolveTableCopyIn resolves the physical copy of tbl's table living in ks:
+// the table itself, a reference copy from ReferencedBy, or a declared reference
+// source. Candidates are looked up through the planning VSchema and accepted
+// only when they resolve in ks. The returned table carries the physical name
+// with the original name preserved as an alias, along with its routing.
+func resolveTableCopyIn(ctx *plancontext.PlanningContext, tbl *Table, ks *vindexes.Keyspace) (*Table, Routing) {
+	for _, name := range copyCandidates(tbl.VTable, ks) {
+		src, _, _, _, _, err := ctx.VSchema.FindTableOrVindex(name)
+		if err != nil || src == nil || src.Keyspace != ks {
+			continue
+		}
+		altRoute := findVSchemaTableAndCreateRoute(ctx, tbl.QTable, name, false /*planAlternates*/)
+		altTbl, ok := altRoute.Source.(*Table)
+		if !ok || altTbl.VTable == nil || altTbl.VTable.Keyspace != ks {
+			continue
+		}
+		return altTbl, altRoute.Routing
+	}
+	return nil, nil
+}
+
+// copyCandidates lists the declared names under which vt's data may also live
+// in ks. A reference source is returned exactly as declared.
+func copyCandidates(vt *vindexes.BaseTable, ks *vindexes.Keyspace) []sqlparser.TableName {
+	var candidates []sqlparser.TableName
+	if vt.Keyspace == ks {
+		candidates = append(candidates, sqlparser.TableName{Name: vt.Name, Qualifier: sqlparser.NewIdentifierCS(ks.Name)})
+	}
+	if ref, found := vt.ReferencedBy[ks.Name]; found {
+		candidates = append(candidates, sqlparser.TableName{Name: ref.Name, Qualifier: sqlparser.NewIdentifierCS(ks.Name)})
+	}
+	if vt.Source != nil {
+		candidates = append(candidates, vt.Source.TableName)
+	}
+	return candidates
 }
 
 func tryMergeUnionShardedRouting(
