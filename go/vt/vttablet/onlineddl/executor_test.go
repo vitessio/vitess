@@ -1274,7 +1274,10 @@ func TestRefreshMigrationLiveness(t *testing.T) {
 		copyStateMaxID     int64
 		failCopyStateRead  bool
 		failTimestampWrite bool
-		writes             []string
+		// acknowledgedRowsCopied is the migration record's rows_copied: the
+		// stream value the executor last durably acknowledged.
+		acknowledgedRowsCopied int64
+		writes                 []string
 	}
 	newHarness := func(copyStateCount, copyStateMaxID int64) *harness {
 		h := &harness{copyStateCount: copyStateCount, copyStateMaxID: copyStateMaxID}
@@ -1315,7 +1318,7 @@ func TestRefreshMigrationLiveness(t *testing.T) {
 	// was refreshed.
 	tick := func(h *harness, s *VReplStream) bool {
 		h.writes = nil
-		h.e.refreshMigrationLiveness(t.Context(), uuid, s)
+		h.e.refreshMigrationLiveness(t.Context(), uuid, s, h.acknowledgedRowsCopied)
 		return wrote(h, "liveness_timestamp")
 	}
 	stream := func(pos string, timeThrottled int64) *VReplStream {
@@ -1367,6 +1370,31 @@ func TestRefreshMigrationLiveness(t *testing.T) {
 		require.False(t, tick(h, stream("pos1", 0)))
 		assert.False(t, tick(h, stream("pos2", 0)),
 			"catchup advances the position before every copy attempt, so it cannot prove the copy is progressing")
+	})
+	t.Run("copy phase, rows_copied past the acknowledged record is liveness", func(t *testing.T) {
+		// The migration record holds the rows_copied the executor last
+		// acknowledged, so a stream past it has committed copy batches
+		// since; at the acknowledged value it proves nothing.
+		h := newHarness(1, 10)
+		h.acknowledgedRowsCopied = 100
+		s := stream("pos1", 0)
+		s.rowsCopied = 100
+		require.False(t, tick(h, s))
+		s.rowsCopied = 101
+		assert.True(t, tick(h, s))
+		assert.True(t, wrote(h, "vitess_liveness_indicator"))
+	})
+	t.Run("copy phase, rows_copied progress counts without a baseline", func(t *testing.T) {
+		// Unlike the checkpoint baseline, the acknowledged rows_copied
+		// survives a restart or failover, so the first tick after adoption
+		// can refresh liveness on it rather than defer to the next tick —
+		// the stale review runs later in that same tick.
+		h := newHarness(1, 10)
+		h.acknowledgedRowsCopied = 100
+		s := stream("pos1", 0)
+		s.rowsCopied = 101
+		assert.True(t, tick(h, s), "the first observation after adoption must not defer durable progress to the next tick")
+		assert.Equal(t, vreplStreamProgress{copyStateID: 10}, h.e.vreplicationProgress[uuid], "the checkpoint baseline is still established")
 	})
 	t.Run("copy phase, active throttling is liveness", func(t *testing.T) {
 		h := newHarness(1, 10)

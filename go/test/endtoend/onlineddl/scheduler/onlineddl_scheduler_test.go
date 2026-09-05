@@ -234,18 +234,54 @@ func assertRetryForeverOverride(t *testing.T, uuid string) map[string]string {
 	return options.Config
 }
 
-// readVReplicationStream returns the state and message of the migration's
-// vreplication stream.
-func readVReplicationStream(t *testing.T, uuid string) (state, message string) {
+// queryVReplicationStream returns the state and message of the migration's
+// vreplication stream. It asserts nothing and takes no test context, so it
+// is safe to call from a require.Never or require.Eventually condition:
+// testify runs the condition in a goroutine that can outlive the test, and
+// a t.Context() query or a require in there can then fail the test after it
+// has completed.
+func queryVReplicationStream(uuid string) (state, message string, err error) {
 	query, err := sqlparser.ParseAndBind("select state, message from _vt.vreplication where workflow=%a",
 		sqltypes.StringBindVariable(uuid),
 	)
-	require.NoError(t, err)
+	if err != nil {
+		return "", "", err
+	}
 	rs, err := primaryTablet.VttabletProcess.QueryTablet(query, "", true)
-	require.NoError(t, err)
+	if err != nil {
+		return "", "", err
+	}
 	row := rs.Named().Row()
-	require.NotNil(t, row)
-	return row.AsString("state", ""), row.AsString("message", "")
+	if row == nil {
+		return "", "", fmt.Errorf("no vreplication stream found for workflow %s", uuid)
+	}
+	return row.AsString("state", ""), row.AsString("message", ""), nil
+}
+
+// readVReplicationStream returns the state and message of the migration's
+// vreplication stream.
+func readVReplicationStream(t *testing.T, uuid string) (state, message string) {
+	state, message, err := queryVReplicationStream(uuid)
+	require.NoError(t, err)
+	return state, message
+}
+
+// queryMigrationStatus returns the migration's status as vtgate reports it
+// for this single-shard keyspace. Like queryVReplicationStream, it asserts
+// nothing and takes no test context, so it is safe to call from a
+// require.Never or require.Eventually condition.
+func queryMigrationStatus(uuid string) (schema.OnlineDDLStatus, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), normalWaitTime)
+	defer cancel()
+	rs, err := onlineddl.ReadMigrations(ctx, &vtParams, uuid)
+	if err != nil {
+		return "", err
+	}
+	row := rs.Named().Row()
+	if row == nil {
+		return "", fmt.Errorf("migration %s not found", uuid)
+	}
+	return schema.OnlineDDLStatus(row.AsString("migration_status", "")), nil
 }
 
 // waitForVReplicationMessage waits for the migration's vreplication stream to
@@ -829,13 +865,23 @@ func testScheduler(t *testing.T) {
 			// the override parks in that time. Throughout, it must stay out of
 			// the Error state and the migration must stay running.
 			waitForVReplicationMessage(t, t1uuid, injectedError)
-			deadline := time.Now().Add(vreplicationRetryWindow + 2*vreplicationRetryDelay)
-			for time.Now().Before(deadline) {
-				state, message := readVReplicationStream(t, t1uuid)
-				require.NotEqual(t, "Error", state, "the stream must keep retrying, not park: %s", message)
-				onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusRunning)
-				time.Sleep(time.Second)
-			}
+			require.Never(t, func() bool {
+				// Never returns as soon as its window elapses, leaving an
+				// in-flight condition running after this subtest has
+				// completed, so the condition must not touch t: no
+				// assertions and no t.Context().
+				state, message, err := queryVReplicationStream(t1uuid)
+				if err != nil || state == "Error" {
+					fmt.Printf("# stream parked instead of retrying: state=%q message=%q err=%v\n", state, message, err)
+					return true
+				}
+				status, err := queryMigrationStatus(t1uuid)
+				if err != nil || status != schema.OnlineDDLStatusRunning {
+					fmt.Printf("# migration no longer running: status=%q err=%v\n", status, err)
+					return true
+				}
+				return false
+			}, vreplicationRetryWindow+2*vreplicationRetryDelay, time.Second, "the stream must keep retrying and the migration must stay running")
 			// The error is still being retried rather than the stream having
 			// silently stalled.
 			waitForVReplicationMessage(t, t1uuid, injectedError)

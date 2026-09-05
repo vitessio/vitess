@@ -250,14 +250,28 @@ const vreplThrottleLivenessWindow = 15 * time.Minute
 // Past the copy phase an advanced time_updated always counts: heartbeats only
 // reach the applier once the stream is caught up. During the copy phase
 // heartbeats also flow between failing copy attempts, so liveness additionally
-// requires copy progress — a newer _vt.copy_state checkpoint, which every
-// committed batch inserts — or active throttling. The replication position is
-// not a progress signal: catchup advances it before every copy attempt,
-// whether or not the copy then succeeds. Nor is the first observation, which
-// only sets the baseline: the tracking is in-memory, and a stuck copy must not
-// earn a fresh budget from every executor restart. A failed copy-state lookup
-// is not liveness either; it is re-evaluated on the next tick.
-func (e *Executor) vreplStreamShowsLiveness(ctx context.Context, uuid string, s *VReplStream) (showsLiveness bool, observed *vreplStreamProgress) {
+// requires copy progress or active throttling. Progress is shown by either:
+//   - a newer _vt.copy_state checkpoint than the last one observed, which
+//     every committed batch inserts; or
+//   - a stream rows_copied past the value the migration record holds, which
+//     the executor acknowledges from the stream on every tick
+//     (updateRowsCopied). The stream only counts committed batches, so
+//     exceeding the acknowledged value proves durable progress since. Unlike
+//     the in-memory checkpoint baseline this comparison survives a restart or
+//     failover, so it is what lets the first tick after adoption refresh
+//     liveness at all: the stale review runs later in that same tick, and a
+//     migration adopted after an outage longer than staleMigrationFailMinutes
+//     would otherwise be failed while its copy is active. It is secondary
+//     because it can miss progress: rows_copied is a 30s-ticker write of an
+//     in-memory counter, and a retried migration keeps its earlier record.
+//
+// The replication position is not a progress signal: catchup advances it
+// before every copy attempt, whether or not the copy then succeeds. Nor is
+// the first observation of the checkpoint, which only sets the baseline: the
+// tracking is in-memory, and a stuck copy must not earn a fresh budget from
+// every executor restart. A failed copy-state lookup is not liveness either;
+// it is re-evaluated on the next tick.
+func (e *Executor) vreplStreamShowsLiveness(ctx context.Context, uuid string, s *VReplStream, acknowledgedRowsCopied int64) (showsLiveness bool, observed *vreplStreamProgress) {
 	query, err := sqlparser.ParseAndBind(sqlReadCopyStateProgress,
 		sqltypes.Int32BindVariable(s.id),
 	)
@@ -280,6 +294,9 @@ func (e *Executor) vreplStreamShowsLiveness(ctx context.Context, uuid string, s 
 		return true, nil
 	}
 	observed = &vreplStreamProgress{copyStateID: csRow.AsInt64("maxid", 0)}
+	if s.rowsCopied > acknowledgedRowsCopied {
+		return true, observed
+	}
 	if s.timeThrottled > 0 && time.Since(time.Unix(s.timeThrottled, 0)) <= vreplThrottleLivenessWindow {
 		return true, observed
 	}
@@ -297,9 +314,12 @@ func (e *Executor) vreplStreamShowsLiveness(ctx context.Context, uuid string, s 
 // has landed: advancing either on a failed write would acknowledge the
 // time_updated — and consume the checkpoint that earned it — while
 // liveness_timestamp stayed stale, leaving nothing to retry until the next
-// checkpoint. Left as they were, the next tick retries the refresh.
-func (e *Executor) refreshMigrationLiveness(ctx context.Context, uuid string, s *VReplStream) {
-	showsLiveness, observed := e.vreplStreamShowsLiveness(ctx, uuid, s)
+// checkpoint. Left as they were, the next tick retries the refresh. The
+// rows_copied acknowledgment is not held back the same way: updateRowsCopied
+// runs later in the tick regardless, and the retained checkpoint credit is
+// what carries the retry.
+func (e *Executor) refreshMigrationLiveness(ctx context.Context, uuid string, s *VReplStream, acknowledgedRowsCopied int64) {
+	showsLiveness, observed := e.vreplStreamShowsLiveness(ctx, uuid, s, acknowledgedRowsCopied)
 	if showsLiveness {
 		if err := e.updateMigrationTimestamp(ctx, "liveness_timestamp", uuid); err != nil {
 			log.Error("Online DDL: failed to refresh migration liveness; will retry on the next tick",
@@ -3775,7 +3795,7 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 				// a vreplication migration started by another tablet.
 				e.ownedRunningMigrations.Store(uuid, onlineDDL)
 				if lastVitessLivenessIndicator := migrationRow.AsInt64("vitess_liveness_indicator", 0); lastVitessLivenessIndicator < s.livenessTimeIndicator() {
-					e.refreshMigrationLiveness(ctx, uuid, s)
+					e.refreshMigrationLiveness(ctx, uuid, s, migrationRow.AsInt64("rows_copied", 0))
 				}
 				if onlineDDL.TabletAlias != e.TabletAliasString() {
 					_ = e.updateMigrationTablet(ctx, uuid)
