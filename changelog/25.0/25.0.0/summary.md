@@ -267,6 +267,16 @@ because the routing rewrite cannot carry a multi-schema filter. Split the
 query per schema or use equality predicates as a workaround; issue #20974
 tracks restoring support for that shape.
 
+Two `=` behaviors change as well. Contradictory predicates on the same
+table-name column (`table_name = 'a' AND table_name = 'b'`) previously collapsed
+to the last value and returned its rows; they now return the empty result they
+describe. A query with several table-name predicates naming routed tables
+(routing rules, or tables mid-`MoveTables`) previously honored only whichever
+predicate it evaluated first and left the other names unrewritten. Every routed
+name is now rewritten, so tables in one keyspace return complete results, and
+tables in different keyspaces fail with an explicit `cannot send the query to
+multiple keyspace` error instead of routing unpredictably.
+
 #### <a id="vtgate-streamexecute-real-errors"/>Streaming errors no longer surface as connection loss</a>
 
 Streaming queries (under `SET workload = 'OLAP'`, multi-statement batches, and prepared-statement execution) previously returned `ERROR 2013 (HY000): Lost connection to MySQL server during query` and tore down the underlying TCP connection whenever the streaming handler returned an error *after* the first row or field packet had been emitted. VTGate now writes a proper ERR packet in place of the result-set terminator, so the real error code and message reach the client and the connection remains usable for subsequent queries.
