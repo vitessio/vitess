@@ -763,6 +763,15 @@ func testScheduler(t *testing.T) {
 		_, err := primaryTablet.VttabletProcess.QueryTabletWithContext(ctx, "select sleep(30)", "", false)
 		require.Error(t, err, "the query must not run to completion past the context's deadline")
 		assert.Less(t, time.Since(started), 10*time.Second, "the query must return once the context is done, not when the sleep ends")
+
+		// The same holds for the vtgate path the migration status probe uses,
+		// under its own fresh context: the one above has already expired.
+		vtgateCtx, vtgateCancel := context.WithTimeout(t.Context(), time.Second)
+		defer vtgateCancel()
+		started = time.Now()
+		_, err = onlineddl.VtgateExecQuery(vtgateCtx, &vtParams, "select sleep(30)")
+		require.Error(t, err, "the vtgate query must not run to completion past the context's deadline")
+		assert.Less(t, time.Since(started), 10*time.Second, "the vtgate query must return once the context is done, not when the sleep ends")
 	})
 
 	// The message literals below deliberately hardcode the marker constants
