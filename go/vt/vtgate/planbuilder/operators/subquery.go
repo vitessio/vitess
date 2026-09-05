@@ -41,6 +41,7 @@ type SubQuery struct {
 	Predicates        []sqlparser.Expr     // Predicates joining outer and inner queries. Empty for uncorrelated subqueries.
 	OuterPredicate    sqlparser.Expr       // This is the predicate that is using the subquery expression. It will not be empty for projections
 	ArgName           string               // This is the name of the ColName or Argument used to replace the subquery
+	Placeholder       sqlparser.Expr       // This is the exact placeholder AST node created to replace the subquery
 	TopLevel          bool                 // will be false if the subquery is deeply nested
 	JoinColumns       []applyJoinColumn    // Broken up join predicates.
 	SubqueryValueName string               // Value name returned by the subquery (uncorrelated queries).
@@ -278,6 +279,9 @@ func (sq *SubQuery) settleFilter(ctx *plancontext.PlanningContext, outer Operato
 			arg = sqlparser.NewArgument(sq.ArgName)
 		}
 		cursor.Replace(arg)
+		if sq.Placeholder == nil {
+			sq.Placeholder = arg
+		}
 	}
 	rhsPred := sqlparser.CopyOnRewrite(sq.Original, dontEnterSubqueries, post, ctx.SemTable.CopySemanticInfo).(sqlparser.Expr)
 
@@ -319,7 +323,10 @@ func dontEnterSubqueries(node, _ sqlparser.SQLNode) bool {
 }
 
 func (sq *SubQuery) isMerged(ctx *plancontext.PlanningContext) bool {
-	_, ok := ctx.MergedSubqueries[sq.ArgName]
+	if sq.Placeholder == nil {
+		return false
+	}
+	_, ok := ctx.MergedSubqueries[sq.Placeholder]
 	return ok
 }
 

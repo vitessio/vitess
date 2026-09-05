@@ -7011,8 +7011,7 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "max(0|1) AS max((select max(col2) from user u1 where u1.id = u2.id))",
-        "ResultColumns": 1,
+        "Aggregates": "max(0 COLLATE utf8mb4_0900_ai_ci) AS max((select max(col2) from user u1 where u1.id = u2.id))",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -7021,8 +7020,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select max((select max(col2) from `user` as u1 where 1 != 1)), weight_string(max((select max(col2) from `user` as u1 where 1 != 1))) from `user` as u2 where 1 != 1",
-            "Query": "select max((select max(col2) from `user` as u1 where u1.id = u2.id)), weight_string(max((select max(col2) from `user` as u1 where u1.id = u2.id))) from `user` as u2"
+            "FieldQuery": "select max((select max(col2) from `user` as u1 where 1 != 1)) from `user` as u2 where 1 != 1",
+            "Query": "select max((select max(col2) from `user` as u1 where u1.id = u2.id)) from `user` as u2"
           }
         ]
       },
