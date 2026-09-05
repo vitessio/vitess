@@ -466,15 +466,19 @@ func (vttablet *VttabletProcess) QueryTablet(query string, keyspace string, useD
 	return vttablet.QueryTabletWithContext(context.Background(), query, keyspace, useDb)
 }
 
-// QueryTabletWithContext is QueryTablet with the connection opened under the
-// given context, so that a caller's deadline bounds connection establishment.
+// QueryTabletWithContext is QueryTablet bounded by the given context: it
+// bounds connection establishment, and once the context is done the
+// connection is closed, which fails a query still executing, and the
+// context's error is returned instead of the query being retried.
 func (vttablet *VttabletProcess) QueryTabletWithContext(ctx context.Context, query string, keyspace string, useDb bool) (*sqltypes.Result, error) {
 	conn, err := vttablet.TabletConnWithContext(ctx, keyspace, useDb)
 	if err != nil {
 		return nil, err
 	}
 	defer conn.Close()
-	return executeQuery(conn, query)
+	stop := context.AfterFunc(ctx, conn.Close)
+	defer stop()
+	return executeQueryWithContext(ctx, conn, query)
 }
 
 // MultiQueryTablet lets you execute a query in this tablet and get the result
@@ -581,6 +585,12 @@ func (vttablet *VttabletProcess) MultiQueryTabletWithDB(query string, dbname str
 // executeQuery will retry the query up to 10 times with a small sleep in between each try.
 // This allows the tests to be more robust in the face of transient failures.
 func executeQuery(dbConn *mysql.Conn, query string) (*sqltypes.Result, error) {
+	return executeQueryWithContext(context.Background(), dbConn, query)
+}
+
+// executeQueryWithContext is executeQuery that stops retrying, and returns
+// the context's error, once the context is done.
+func executeQueryWithContext(ctx context.Context, dbConn *mysql.Conn, query string) (*sqltypes.Result, error) {
 	var (
 		err    error
 		result *sqltypes.Result
@@ -596,7 +606,14 @@ func executeQuery(dbConn *mysql.Conn, query string) (*sqltypes.Result, error) {
 		if err == nil {
 			break
 		}
-		time.Sleep(retryDelay)
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		select {
+		case <-time.After(retryDelay):
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
 	}
 
 	return result, err

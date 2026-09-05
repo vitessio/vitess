@@ -753,6 +753,18 @@ func testScheduler(t *testing.T) {
 		})
 	})
 
+	t.Run("a bounded tablet query is interrupted while executing", func(t *testing.T) {
+		// The cleanup and the probes above rely on their context bounding
+		// the query, not only the connection: a query that stalls after
+		// connecting must still return when the context is done.
+		ctx, cancel := context.WithTimeout(t.Context(), time.Second)
+		defer cancel()
+		started := time.Now()
+		_, err := primaryTablet.VttabletProcess.QueryTabletWithContext(ctx, "select sleep(30)", "", false)
+		require.Error(t, err, "the query must not run to completion past the context's deadline")
+		assert.Less(t, time.Since(started), 10*time.Second, "the query must return once the context is done, not when the sleep ends")
+	})
+
 	// The message literals below deliberately hardcode the marker constants
 	// (TerminalErrorIndicator, UnrecoverableErrorIndicator and the standalone
 	// RetriesExhaustedIndicator): they are a message-string contract between
