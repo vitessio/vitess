@@ -175,6 +175,9 @@ type Executor struct {
 	// engine applies the repair's write before it builds the replacement
 	// controller, so the row may already read Running with no controller
 	// behind it; the review re-drives the start, see redriveVReplRepair.
+	// Cleared by Open like the other tracking, but the park record outlives
+	// it: the first review since Open reconstructs the intent from a record
+	// still behind a running row.
 	vreplicationPendingRepair     map[string]bool
 	tickReentranceFlag            atomic.Int64
 	reviewedRunningMigrationsFlag bool
@@ -3881,7 +3884,22 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 					// Not while a repair is unconfirmed: until the re-drive
 					// succeeds, the park record is the durable trace of the
 					// repair still owed to this stream.
-					e.retireVReplParkRecord(ctx, uuid, s)
+					if !e.reviewedRunningMigrationsFlag && s.isRunning() {
+						// First review since Open. That intent lived only in
+						// memory, which Open cleared, and the engine is opened
+						// and closed with the tablet type rather than with the
+						// query service: a serving bounce reopens this
+						// executor while the engine, never reopened, may have
+						// no controller behind the row. Reconstruct the intent
+						// from the record and let the re-drive below confirm
+						// the repair before the record is retired; a stream
+						// that already runs is merely restarted, once.
+						log.Info("Online DDL: reconstructing the pending repair of a vreplication stream from its park record after Open; re-driving the start",
+							slog.String("uuid", uuid), slog.String("tablet", e.TabletAliasString()), slog.Int64("stream_id", int64(s.id)))
+						e.vreplicationPendingRepair[uuid] = true
+					} else {
+						e.retireVReplParkRecord(ctx, uuid, s)
+					}
 				}
 				action := resolveVReplStreamAction(
 					e.reviewVReplStreamError(uuid, s),

@@ -1830,6 +1830,47 @@ func TestReviewRunningMigrationsRepairOutcomes(t *testing.T) {
 		require.NoError(t, err)
 		assert.Len(t, *h.queries, 3, "nothing more to re-drive")
 	})
+	t.Run("a repair left unconfirmed across a reopen is re-driven from its park record", func(t *testing.T) {
+		h := newHarness(t)
+		*h.failing = true
+
+		// The repair's RPC fails after its write landed.
+		_, _, err := h.e.reviewRunningMigrations(t.Context())
+		require.NoError(t, err)
+		require.Len(t, *h.queries, 1)
+		require.True(t, h.e.vreplicationPendingRepair[uuid])
+
+		// A serving bounce reopens the executor while the engine, which
+		// follows the tablet type, stays open with no controller for the
+		// row: Open clears the intent and the first-review flag, and the
+		// row reads Running with the park record still behind it.
+		h.e.reviewedRunningMigrationsFlag = false
+		h.e.vreplicationPendingRepair = map[string]bool{}
+		*h.streamState, *h.streamMessage = "Running", ""
+		*h.failing = false
+
+		// The first review since Open must not take the record as retired
+		// business: it reconstructs the intent from it, re-drives the
+		// start, and only then retires the record.
+		_, cancellable, err := h.e.reviewRunningMigrations(t.Context())
+		require.NoError(t, err)
+		assert.Empty(t, cancellable)
+		require.Len(t, *h.queries, 2, "the first review since Open must re-drive the start of a running row that still has a park record behind it")
+		assert.Contains(t, (*h.queries)[1], "state='Running'")
+		assert.Contains(t, (*h.queries)[1], uuid)
+		assert.NotContains(t, (*h.queries)[1], retryForeverConfigKey, "the re-drive is a plain start, not another repair")
+		assert.NotContains(t, h.e.vreplicationPendingRepair, uuid, "the reconstructed intent is cleared once the re-drive succeeds")
+		assert.Equal(t, 1, *h.retireAttempts, "the park record is retired once the re-drive confirms the repair")
+		assert.True(t, *h.livenessRefreshed, "the review continues past a successful re-drive")
+
+		// Only the first review since Open reconstructs: a record that
+		// lingers (here, the harness never clears it) is retired again on a
+		// later review, without restarting the stream.
+		_, _, err = h.e.reviewRunningMigrations(t.Context())
+		require.NoError(t, err)
+		assert.Len(t, *h.queries, 2, "a later review must not restart the stream for a lingering park record")
+		assert.Equal(t, 2, *h.retireAttempts, "a lingering park record is retired again on a later review")
+	})
 }
 
 // TestReviewVReplStreamError tests the per-stream verdict: unrecoverable or
