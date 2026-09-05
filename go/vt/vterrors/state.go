@@ -128,6 +128,7 @@ const (
 	VectorConversion
 
 	UnsupportedSQLMode
+	ParseError
 
 	// No state should be added below NumOfStates
 	NumOfStates

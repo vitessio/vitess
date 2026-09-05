@@ -42,8 +42,23 @@ type Tokenizer struct {
 	lastToken          string
 	posVarIndex        int
 	partialDDL         Statement
-	multi              bool
 	inVersionedComment bool // true when scanning inside a MySQL versioned comment (/*!...*/)
+
+	// stopAfterFirstStatement is set by ParseNext: the grammar tells the
+	// tokenizer when the first statement has been reduced (firstStatementDone),
+	// after which only the ';' that ends it is delivered before end of input.
+	stopAfterFirstStatement bool
+	firstStatementDone      bool
+	// resyncLexError is set when Error's re-sync to the next statement ran
+	// into a lexical error rather than a ';' or the end of the input.
+	resyncLexError bool
+	// stmtEnd is the offset of the top-level ';' that ended the first
+	// statement, -1 while no such ';' has been seen. stmtEndInComment is set
+	// when that ';' fell inside an executable comment that applies, which a
+	// batch does not allow (see Parser.ForEachStatement).
+	stmtEnd            int
+	stmtEndInComment   bool
+	semicolonInComment bool // the last ';' scanned fell inside an executable comment that applies
 
 	Pos       int
 	buf       string
@@ -79,30 +94,38 @@ func (p *Parser) NewStringTokenizer(sql string) *Tokenizer {
 		buf:      sql,
 		BindVars: make(map[string]struct{}),
 		parser:   p,
+		stmtEnd:  -1,
 	}
 }
 
 // Lex returns the next token form the Tokenizer.
 // This function is used by go yacc.
 func (tkn *Tokenizer) Lex(lval *yySymType) int {
-	if tkn.SkipToEnd {
+	if tkn.firstStatementDone && tkn.lastTokenType == ';' {
+		// ParseNext: the ';' that ends the first statement has been
+		// delivered, whether the parser fetched it as the lookahead before
+		// reducing the statement or we scanned it afterwards. Everything
+		// after it belongs to the next call.
+		tkn.markStatementEnd()
+		lval.yyloc.start = tkn.Pos
+		lval.yyloc.end = tkn.Pos
+		return 0
+	}
+
+	var typ int
+	var val string
+	if tkn.SkipToEnd && tkn.lastTokenType != ';' {
 		// We need to check the last token type to
 		// prevent us from skipping the next query in a multi
 		// parse mode. If we don't check the last token, we
 		// will skip the next query.
-		if tkn.lastTokenType == ';' {
-			tkn.SkipToEnd = false
-		} else {
-			return tkn.skipStatement()
-		}
-	}
-
-	typ, val := tkn.Scan()
-	for typ == COMMENT {
-		if tkn.AllowComments {
-			break
-		}
+		typ = tkn.skipStatement()
+	} else {
+		tkn.SkipToEnd = false
 		typ, val = tkn.Scan()
+		for typ == COMMENT && !tkn.AllowComments {
+			typ, val = tkn.Scan()
+		}
 	}
 	if typ == 0 || typ == ';' || typ == LEX_ERROR {
 		// If encounter end of statement or invalid token,
@@ -111,12 +134,47 @@ func (tkn *Tokenizer) Lex(lval *yySymType) int {
 		// Parse function to see how this is handled.
 		tkn.partialDDL = nil
 	}
+	if typ == ';' && tkn.firstStatementDone {
+		tkn.markStatementEnd()
+	}
 	lval.yyloc.start = tkn.currStart
 	lval.yyloc.end = tkn.Pos
 	lval.setstr(val)
 	tkn.lastTokenType = typ
 	tkn.lastToken = val
 	return typ
+}
+
+// statementDone is called by the grammar once the first statement has been
+// reduced. In ParseNext mode the token stream then ends at the next ';'.
+func (tkn *Tokenizer) statementDone() {
+	if tkn.stopAfterFirstStatement {
+		tkn.firstStatementDone = true
+	}
+}
+
+// markStatementEnd records the ';' the tokenizer just scanned as the end of
+// the first statement. Only the first such ';' counts.
+func (tkn *Tokenizer) markStatementEnd() {
+	if tkn.stmtEnd >= 0 {
+		return
+	}
+	tkn.stmtEnd = tkn.currStart
+	tkn.stmtEndInComment = tkn.semicolonInComment
+}
+
+// resync scans forward to the next top-level ';' or to the end of the input,
+// stepping over lexical errors, so that a statement the grammar rejected can
+// still be cut where a lexer would cut it. See SplitStatementToPieces.
+func (tkn *Tokenizer) resync() {
+	for tkn.stmtEnd < 0 {
+		switch typ, _ := tkn.Scan(); typ {
+		case ';':
+			tkn.markStatementEnd()
+		case 0:
+			return
+		}
+	}
 }
 
 // PositionedErr holds context related to parser errors
@@ -150,8 +208,19 @@ func (tkn *Tokenizer) GetInputExpression(start, end int) string {
 func (tkn *Tokenizer) Error(err string) {
 	tkn.LastError = PositionedErr{Err: err, Pos: tkn.Pos + 1, Near: tkn.lastToken}
 
+	if tkn.lastTokenType == ';' {
+		// The ';' the parser choked on still ends the statement, and what
+		// follows it is the next statement's business.
+		tkn.markStatementEnd()
+		return
+	}
 	// Try and re-sync to the next statement
-	tkn.skipStatement()
+	switch tkn.skipStatement() {
+	case ';':
+		tkn.markStatementEnd()
+	case LEX_ERROR:
+		tkn.resyncLexError = true
+	}
 }
 
 // Scan scans the tokenizer for the next token and returns
@@ -216,13 +285,12 @@ func (tkn *Tokenizer) Scan() (int, string) {
 		case ch == ':':
 			return tkn.scanBindVarOrAssignmentExpression()
 		case ch == ';':
-			if tkn.multi {
-				// In multi mode, ';' is treated as EOF. So, we don't advance.
-				// Repeated calls to Scan will keep returning 0 until ParseNext
-				// forces the advance.
-				return 0, ""
-			}
+			// A ';' is a terminator inside an executable comment that applies
+			// too, as in MySQL, and the comment goes on after it: a single
+			// statement ends there, with the comment's close after it. A batch
+			// does not allow it (see Parser.ForEachStatement).
 			tkn.skip(1)
+			tkn.semicolonInComment = tkn.inVersionedComment
 			return ';', ""
 		case ch == eofChar:
 			if tkn.inVersionedComment {
@@ -282,7 +350,7 @@ func (tkn *Tokenizer) Scan() (int, string) {
 					tkn.skip(1)
 					if tkn.cur() == '!' && !tkn.SkipSpecialComments {
 						tkn.skip(1)
-						if tok, val := tkn.scanMySQLSpecificComment(); tok == LEX_ERROR {
+						if tok, val := tkn.scanMySQLSpecificComment(); tok != 0 {
 							return tok, val
 						}
 						continue
@@ -369,10 +437,15 @@ func (tkn *Tokenizer) skipStatement() int {
 	}
 }
 
+// blankChars are the characters skipBlank skips between tokens: the
+// characters MySQL's lexer reads as whitespace — vertical tab and form feed
+// included, non-breaking space and the other Unicode spaces not.
+const blankChars = " \n\r\t\v\f"
+
 // skipBlank skips the cursor while it finds whitespace
 func (tkn *Tokenizer) skipBlank() {
 	ch := tkn.cur()
-	for ch == ' ' || ch == '\n' || ch == '\r' || ch == '\t' {
+	for ch == ' ' || ch == '\n' || ch == '\r' || ch == '\t' || ch == '\v' || ch == '\f' {
 		tkn.skip(1)
 		ch = tkn.cur()
 	}
@@ -743,14 +816,20 @@ func (tkn *Tokenizer) scanMySQLSpecificComment() (int, string) {
 
 	if tkn.parser.version >= versionStr {
 		// Version satisfied — Scan() will read inner tokens and detect
-		// the closing */ via the inVersionedComment flag.
+		// the closing */ via the inVersionedComment flag. A comment that
+		// holds nothing contributes no token and is a comment, as in MySQL.
+		tkn.skipBlank()
+		if tkn.cur() == '*' && tkn.peek(1) == '/' {
+			tkn.skip(2)
+			return COMMENT, tkn.buf[start:tkn.Pos]
+		}
 		tkn.inVersionedComment = true
 		return 0, ""
 	}
 
-	// Version not satisfied — skip the entire comment.
-	// Track one level of /* ... */ nesting so that a nested comment's
-	// closing */ does not prematurely end the versioned comment.
+	// Version not satisfied: the whole comment is a comment, as in MySQL,
+	// a ';' inside it included. Track one level of /* ... */ nesting so
+	// that a nested comment's closing */ does not prematurely end it.
 	for {
 		if tkn.cur() == '/' && tkn.peek(1) == '*' {
 			// Nested /* ... */ comment — consume and discard it.
@@ -773,7 +852,7 @@ func (tkn *Tokenizer) scanMySQLSpecificComment() (int, string) {
 		}
 		tkn.skip(1)
 	}
-	return 0, ""
+	return COMMENT, tkn.buf[start:tkn.Pos]
 }
 
 func (tkn *Tokenizer) cur() uint16 {

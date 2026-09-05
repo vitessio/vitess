@@ -1464,16 +1464,14 @@ func (c *Conn) handleComPrepare(handler Handler, data []byte) (kontinue bool) {
 	c.recycleReadPacket()
 
 	if c.Capabilities&CapabilityClientMultiStatements != 0 {
-		queries, err := handler.Env().Parser().SplitStatementToPieces(query)
+		// A prepared statement is exactly one statement, as in MySQL:
+		// anything after it is a syntax error, nothing is an empty query.
+		// A comment after the ';' does not start a second statement.
+		statement, err := handler.Env().Parser().SingleStatement(query)
 		if err != nil {
-			log.Error(fmt.Sprintf("Conn %v: Error splitting query: %v", c, err))
-			return c.writeErrorPacketFromErrorAndLog(err)
+			return c.writeErrorPacketFromErrorAndLog(sqlerror.NewSQLErrorFromError(err))
 		}
-		if len(queries) != 1 {
-			log.Error(fmt.Sprintf("Conn %v: can not prepare multiple statements", c))
-			return c.writeErrorPacketFromErrorAndLog(err)
-		}
-		query = queries[0]
+		query = statement
 	}
 
 	fld, paramsCount, err := handler.ComPrepare(c, query)
@@ -1700,18 +1698,9 @@ func (c *Conn) execQueryMulti(query string, handler Handler) execResult {
 	return execSuccess
 }
 
-var errEmptyStatement = sqlerror.NewSQLError(sqlerror.EREmptyQuery, sqlerror.SSClientError, "Query was empty")
-
-// allocateQueryIngressBytes splits COM_QUERY ingress bytes across statements by
-// SQL text length. COM_QUERY ingress is measured once for the whole command
-// packet, but query log stats are emitted per statement.
-func allocateQueryIngressBytes(total uint64, queries []string) []uint64 {
-	weights := make([]int, len(queries))
-	for i, query := range queries {
-		weights[i] = len(query)
-	}
-	return ingress.SplitBytesByWeight(total, weights)
-}
+// errBatchStopped ends a multi-statement batch after execQuery reported a
+// statement's outcome; the outcome itself is kept in handleComQuery.
+var errBatchStopped = errors.New("batch stopped")
 
 func (c *Conn) handleComQuery(handler Handler, data []byte) (kontinue bool) {
 	c.startWriterBuffering()
@@ -1726,48 +1715,42 @@ func (c *Conn) handleComQuery(handler Handler, data []byte) (kontinue bool) {
 	query := c.parseComQuery(data)
 	c.recycleReadPacket()
 
-	var queries []string
-	var err error
-	if c.Capabilities&CapabilityClientMultiStatements != 0 {
-		queries, err = handler.Env().Parser().SplitStatementToPieces(query)
-		if err != nil {
-			log.Error(fmt.Sprintf("Conn %v: Error splitting query: %v", c, err))
-			return c.writeErrorPacketFromErrorAndLog(err)
-		}
-	} else {
-		queries = []string{query}
-	}
-
-	if len(queries) == 0 {
-		return c.writeErrorPacketFromErrorAndLog(errEmptyStatement)
-	}
-
-	if len(queries) == 1 {
+	if c.Capabilities&CapabilityClientMultiStatements == 0 {
 		// handleNextCommand already recorded the whole command's ingress bytes.
-		res := c.execQuery(queries[0], handler, false)
-		if res != execSuccess {
+		if res := c.execQuery(query, handler, false); res != execSuccess {
 			return res != connErr
 		}
 		timings.Record(queryTimingKey, queryStart)
 		return true
 	}
 
+	// A client that negotiated CLIENT_MULTI_STATEMENTS may send several
+	// statements in one command. They run the way MySQL runs them: one
+	// statement is split off and executed at a time, and the first error ends
+	// the batch (see sqlparser.Parser.ForEachStatement). Each statement gets
+	// its share of the command's ingress bytes.
 	commandIngressBytes := c.currentCommandIngressBytes
-	queryIngressBytes := allocateQueryIngressBytes(commandIngressBytes, queries)
+	remaining := commandIngressBytes
 	defer func() {
 		c.currentCommandIngressBytes = commandIngressBytes
 	}()
-
-	for index, sql := range queries {
-		c.currentCommandIngressBytes = queryIngressBytes[index]
-		more := false
-		if index != len(queries)-1 {
-			more = true
+	res := execSuccess
+	err := handler.Env().Parser().ForEachStatement(query, func(statement, rest string) error {
+		share := ingress.NextStatementBytes(remaining, statement, rest)
+		remaining -= share
+		c.currentCommandIngressBytes = share
+		if res = c.execQuery(statement, handler, rest != ""); res != execSuccess {
+			return errBatchStopped
 		}
-		res := c.execQuery(sql, handler, more)
-		if res != execSuccess {
-			return res != connErr
-		}
+		return nil
+	})
+	if res != execSuccess {
+		return res != connErr
+	}
+	if err != nil {
+		// An empty query, or an empty statement followed by more input: the
+		// error is the (last) result of the batch, as in MySQL.
+		return c.writeErrorPacketFromErrorAndLog(sqlerror.NewSQLErrorFromError(err))
 	}
 
 	timings.Record(queryTimingKey, queryStart)

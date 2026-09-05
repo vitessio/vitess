@@ -106,9 +106,18 @@ type Handler interface {
 	// Note the contents of the query slice may change after
 	// the first call to callback. So the Handler should not
 	// hang on to the byte slice.
+	//
+	// A client that negotiated CLIENT_MULTI_STATEMENTS may send several
+	// statements in one command. Unless the listener uses the multi-query
+	// protocol (see ComQueryMulti), the connection then calls ComQuery once
+	// per statement, the way MySQL runs a batch: a statement is split off
+	// only once the ones before it ran, and the first error ends the batch.
 	ComQuery(c *Conn, query string, callback func(*sqltypes.Result) error) error
 
 	// ComQueryMulti is a newer version of ComQuery that supports running multiple queries in a single call.
+	// It receives the whole command text; the handler splits and runs the
+	// statements itself (see sqlparser.Parser.ForEachStatement), so that it
+	// can use the session's parser for it.
 	ComQueryMulti(c *Conn, sql string, callback func(qr sqltypes.QueryResponse, more bool, firstPacket bool) error) error
 
 	// ComPrepare is called when a connection receives a prepared
