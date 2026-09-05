@@ -2004,7 +2004,10 @@ func (e *Executor) CancelPendingMigrations(ctx context.Context, migrationContext
 		}
 	}
 	log.Info(fmt.Sprintf("CancelPendingMigrations: done iterating %v migrations, matched %d, failed %d", len(pendingMigrations), matched, len(errs)))
-	return result, errors.Join(errs...)
+	// Aggregate keeps every message and the highest-priority Vitess error
+	// code, which the client maps to a MySQL error; errors.Join would
+	// report UNKNOWN.
+	return result, vterrors.Aggregate(errs)
 }
 
 func (e *Executor) validateThrottleParams(ctx context.Context, expireString string, ratioLiteral *sqlparser.Literal) (duration time.Duration, ratio float64, err error) {
@@ -3417,7 +3420,9 @@ func (e *Executor) runNextMigration(ctx context.Context) error {
 // and legacy terminal errors stay sticky, as the scan always intended: the
 // stream can never progress past them. A retries-exhausted row does not: it
 // records a recoverable-class error, so a live running stream supersedes it
-// (forcing Error would trigger repairs against a healthy stream). A live
+// (forcing Error would trigger repairs against a healthy stream). The repair
+// converts that row into its own record, but this exemption still covers the
+// window before the conversion lands, and a conversion that failed. A live
 // Error row is always authoritative: setState writes it before the
 // best-effort history insert, so the newest history row can lag behind it.
 func overrideStateFromHistory(liveState binlogdatapb.VReplicationWorkflowState, historicalMessage string) bool {
@@ -3654,6 +3659,16 @@ func repairVReplicationQuery(id int32) string {
 		retryForeverConfigKey, retryForeverConfigValue, id)
 }
 
+// repairVReplicationHistoryQuery turns the park's _vt.vreplication_log row
+// into the repair's record, keeping the parked error text. The row must not
+// stay an Error row: a previous release's history scan takes any Error row
+// as authoritative, so after a downgrade the older executor would fail the
+// repaired migration.
+func repairVReplicationHistoryQuery(id int32) string {
+	return fmt.Sprintf(`update _vt.vreplication_log set state='Running', message=concat('Online DDL repaired the stream with the retry-forever override after: ', message) where vrepl_id=%d and state='Error' and message like '%s:%%'`,
+		id, vreplication.RetriesExhaustedIndicator)
+}
+
 // reviewRunningMigrations iterates migrations in 'running' state. Normally there's only one running, which was
 // spawned by this tablet; but vreplication migrations could also resume from failure.
 func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning int, cancellable []*cancellableMigration, err error) {
@@ -3787,6 +3802,13 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 					}
 					log.Info("Online DDL: repaired vreplication stream parked on a retries-exhausted error; restarted with the retry-forever override",
 						slog.String("uuid", uuid), slog.String("tablet", e.TabletAliasString()), slog.Int64("stream_id", int64(s.id)))
+					// The stream is repaired either way; a park record left
+					// behind only matters to a previous release's executor
+					// after a downgrade, which would fail the migration on it.
+					if _, err := e.execQuery(repairCtx, repairVReplicationHistoryQuery(s.id)); err != nil {
+						log.Error("Online DDL: failed to convert the repaired stream's park record in _vt.vreplication_log; a downgrade would fail this migration on it",
+							slog.String("uuid", uuid), slog.String("tablet", e.TabletAliasString()), slog.Int64("stream_id", int64(s.id)), slog.Any("error", err))
+					}
 					return nil
 				}
 				if !s.isRunning() {

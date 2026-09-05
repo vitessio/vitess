@@ -268,11 +268,11 @@ func readVReplicationStream(t *testing.T, uuid string) (state, message string) {
 
 // queryMigrationStatus returns the migration's status as vtgate reports it
 // for this single-shard keyspace. Like queryVReplicationStream, it asserts
-// nothing and takes no test context, so it is safe to call from a
-// require.Never or require.Eventually condition.
-func queryMigrationStatus(uuid string) (schema.OnlineDDLStatus, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), normalWaitTime)
-	defer cancel()
+// nothing, so it is safe to call from a require.Never or require.Eventually
+// condition; pass a context captured on the test goroutine (t.Context()
+// itself must not be called from the condition) so that a probe still in
+// flight when the test ends is cancelled with it rather than running on.
+func queryMigrationStatus(ctx context.Context, uuid string) (schema.OnlineDDLStatus, error) {
 	rs, err := onlineddl.ReadMigrations(ctx, &vtParams, uuid)
 	if err != nil {
 		return "", err
@@ -788,6 +788,24 @@ func testScheduler(t *testing.T) {
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusRunning)
 			config := assertRetryForeverOverride(t, t1uuid)
 			assert.Equal(t, "5s", config["vreplication-retry-delay"], "the operator's override must survive the repair")
+			// The park's history row has become the repair's record: an
+			// Error row left behind would have a previous release's executor
+			// fail the migration after a downgrade.
+			// The LIKE pattern is bound rather than inlined: its wildcards
+			// would be read as verbs by ParseAndBind's format.
+			query, err := sqlparser.ParseAndBind("select state, message from _vt.vreplication_log where vrepl_id=(select id from _vt.vreplication where workflow=%a) and message like %a order by id",
+				sqltypes.StringBindVariable(t1uuid),
+				sqltypes.StringBindVariable("%retries exhausted:%"),
+			)
+			require.NoError(t, err)
+			require.EventuallyWithT(t, func(c *assert.CollectT) {
+				rs, err := primaryTablet.VttabletProcess.QueryTablet(query, "", true)
+				require.NoError(c, err)
+				require.Len(c, rs.Rows, 1)
+				row := rs.Named().Row()
+				assert.Equal(c, "Running", row.AsString("state", ""))
+				assert.Contains(c, row.AsString("message", ""), "Online DDL repaired the stream")
+			}, extendedWaitTime, time.Second, "the retries-exhausted park record must be converted into the repair record")
 		})
 		t.Run("complete", func(t *testing.T) {
 			onlineddl.CheckCompleteMigration(t, &vtParams, shards, t1uuid, true)
@@ -830,8 +848,14 @@ func testScheduler(t *testing.T) {
 		var shadowTable string
 		t.Cleanup(func() {
 			// Never leave the trigger or the row behind for later scenarios.
-			_, _ = primaryTablet.VttabletProcess.QueryTablet("drop trigger if exists "+triggerName, keyspaceName, true)
-			_, _ = onlineddl.VtgateExecQuery(t.Context(), &vtParams, fmt.Sprintf("delete from t1_test where id=%d", injectedRowID))
+			// t.Context() is already cancelled when cleanup runs, so the
+			// query needs its own bounded context.
+			ctx, cancel := context.WithTimeout(context.WithoutCancel(t.Context()), extendedWaitTime)
+			defer cancel()
+			_, err := primaryTablet.VttabletProcess.QueryTablet("drop trigger if exists "+triggerName, keyspaceName, true)
+			assert.NoError(t, err)
+			_, err = onlineddl.VtgateExecQuery(ctx, &vtParams, fmt.Sprintf("delete from t1_test where id=%d", injectedRowID))
+			assert.NoError(t, err)
 		})
 
 		t.Run("wait for t1 running", func(t *testing.T) {
@@ -865,17 +889,22 @@ func testScheduler(t *testing.T) {
 			// the override parks in that time. Throughout, it must stay out of
 			// the Error state and the migration must stay running.
 			waitForVReplicationMessage(t, t1uuid, injectedError)
+			ctx := t.Context()
 			require.Never(t, func() bool {
 				// Never returns as soon as its window elapses, leaving an
 				// in-flight condition running after this subtest has
 				// completed, so the condition must not touch t: no
-				// assertions and no t.Context().
+				// assertions, and only the context captured above.
 				state, message, err := queryVReplicationStream(t1uuid)
 				if err != nil || state == "Error" {
 					fmt.Printf("# stream parked instead of retrying: state=%q message=%q err=%v\n", state, message, err)
 					return true
 				}
-				status, err := queryMigrationStatus(t1uuid)
+				status, err := queryMigrationStatus(ctx, t1uuid)
+				if ctx.Err() != nil {
+					// The subtest has ended and Never has already returned.
+					return false
+				}
 				if err != nil || status != schema.OnlineDDLStatusRunning {
 					fmt.Printf("# migration no longer running: status=%q err=%v\n", status, err)
 					return true

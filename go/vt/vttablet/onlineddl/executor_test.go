@@ -50,6 +50,7 @@ import (
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 func TestShouldCutOverAccordingToBackoff(t *testing.T) {
@@ -1052,9 +1053,12 @@ func TestCancelPendingMigrationsContinuesPastFailure(t *testing.T) {
 				return sqltypes.MakeTestResult(
 					sqltypes.MakeTestFields("migration_uuid|migration_context", "varchar|varchar"),
 					firstFailingUUID+"|ctx", queuedUUID+"|ctx", lastFailingUUID+"|ctx"), nil
-			case isSelect && (strings.Contains(query, firstFailingUUID) || strings.Contains(query, lastFailingUUID)):
-				// Reading these migrations fails, so their cancellation does.
-				return nil, errors.New("backend unavailable")
+			case isSelect && strings.Contains(query, firstFailingUUID):
+				// Reading these migrations fails with coded errors, so their
+				// cancellations do.
+				return nil, vterrors.New(vtrpcpb.Code_UNAVAILABLE, "backend unavailable")
+			case isSelect && strings.Contains(query, lastFailingUUID):
+				return nil, vterrors.New(vtrpcpb.Code_DEADLINE_EXCEEDED, "backend timed out")
 			case isSelect && strings.Contains(query, queuedUUID):
 				return sqltypes.MakeTestResult(
 					sqltypes.MakeTestFields("migration_uuid|migration_status", "varchar|varchar"),
@@ -1071,6 +1075,8 @@ func TestCancelPendingMigrationsContinuesPastFailure(t *testing.T) {
 	require.Error(t, err)
 	assert.ErrorContains(t, err, firstFailingUUID)
 	assert.ErrorContains(t, err, lastFailingUUID, "every failure must be reported, not only the first")
+	assert.Equal(t, vtrpcpb.Code_DEADLINE_EXCEEDED, vterrors.Code(err),
+		"aggregating the failures must keep a structured error code (the highest-priority one) for the client to map to a MySQL error")
 	assert.Equal(t, []string{queuedUUID}, cancelled,
 		"a migration failing to cancel must not leave the later matches uncancelled and free to start")
 	require.NotNil(t, result)
@@ -1549,6 +1555,12 @@ func TestRepairVReplicationQuery(t *testing.T) {
 	assert.Equal(t,
 		`update _vt.vreplication set state='Running', message='', options=json_set(json_insert(coalesce(nullif(options, ''), '{}'), '$.config', json_object()), '$.config."vreplication-max-time-to-retry-on-error"', '0s') where id=42 and state='Error'`,
 		query)
+	// The park's history row becomes the repair's record: a previous release's
+	// history scan takes any Error row as authoritative, so leaving it would
+	// fail the repaired migration after a downgrade.
+	assert.Equal(t,
+		`update _vt.vreplication_log set state='Running', message=concat('Online DDL repaired the stream with the retry-forever override after: ', message) where vrepl_id=42 and state='Error' and message like 'retries exhausted:%'`,
+		repairVReplicationHistoryQuery(42))
 }
 
 // TestTerminallyFailMigrationWriteOrder pins that the message is written
