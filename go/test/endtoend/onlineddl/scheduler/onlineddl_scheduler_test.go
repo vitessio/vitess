@@ -849,10 +849,11 @@ func testScheduler(t *testing.T) {
 		t.Cleanup(func() {
 			// Never leave the trigger or the row behind for later scenarios.
 			// t.Context() is already cancelled when cleanup runs, so the
-			// query needs its own bounded context.
+			// queries need their own bounded context; a stall in here would
+			// otherwise hang the whole suite.
 			ctx, cancel := context.WithTimeout(context.WithoutCancel(t.Context()), extendedWaitTime)
 			defer cancel()
-			_, err := primaryTablet.VttabletProcess.QueryTablet("drop trigger if exists "+triggerName, keyspaceName, true)
+			_, err := primaryTablet.VttabletProcess.QueryTabletWithContext(ctx, "drop trigger if exists "+triggerName, keyspaceName, true)
 			assert.NoError(t, err)
 			_, err = onlineddl.VtgateExecQuery(ctx, &vtParams, fmt.Sprintf("delete from t1_test where id=%d", injectedRowID))
 			assert.NoError(t, err)

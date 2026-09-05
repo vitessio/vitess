@@ -463,7 +463,13 @@ func (vttablet *VttabletProcess) CreateDB(keyspace string) error {
 
 // QueryTablet lets you execute a query in this tablet and get the result
 func (vttablet *VttabletProcess) QueryTablet(query string, keyspace string, useDb bool) (*sqltypes.Result, error) {
-	conn, err := vttablet.TabletConn(keyspace, useDb)
+	return vttablet.QueryTabletWithContext(context.Background(), query, keyspace, useDb)
+}
+
+// QueryTabletWithContext is QueryTablet with the connection opened under the
+// given context, so that a caller's deadline bounds connection establishment.
+func (vttablet *VttabletProcess) QueryTabletWithContext(ctx context.Context, query string, keyspace string, useDb bool) (*sqltypes.Result, error) {
+	conn, err := vttablet.TabletConnWithContext(ctx, keyspace, useDb)
 	if err != nil {
 		return nil, err
 	}
@@ -522,11 +528,17 @@ func (vttablet *VttabletProcess) QueryTabletMultiple(queries []string, keyspace 
 
 // TabletConn opens a MySQL connection on this tablet
 func (vttablet *VttabletProcess) TabletConn(keyspace string, useDb bool) (*mysql.Conn, error) {
+	return vttablet.TabletConnWithContext(context.Background(), keyspace, useDb)
+}
+
+// TabletConnWithContext opens a MySQL connection on this tablet under the
+// given context, so that a caller's deadline bounds connection establishment.
+func (vttablet *VttabletProcess) TabletConnWithContext(ctx context.Context, keyspace string, useDb bool) (*mysql.Conn, error) {
 	if !useDb {
 		keyspace = ""
 	}
 	dbParams := NewConnParams(vttablet.DbPort, vttablet.DbPassword, path.Join(vttablet.Directory, "mysql.sock"), keyspace)
-	return vttablet.conn(&dbParams)
+	return mysql.Connect(ctx, &dbParams)
 }
 
 func (vttablet *VttabletProcess) defaultConn(dbname string) (*mysql.Conn, error) {
