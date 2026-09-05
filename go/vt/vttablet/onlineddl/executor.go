@@ -170,7 +170,12 @@ type Executor struct {
 	// erases the Error verdict that triggered them, so this record is what
 	// the review loop re-drives. Lost on restart like the other tracking; the
 	// stale-migration fallback still converges.
-	vreplicationPendingCancel     map[string]string
+	vreplicationPendingCancel map[string]string
+	// vreplicationPendingRepair records streams whose repair RPC failed. The
+	// engine applies the repair's write before it builds the replacement
+	// controller, so the row may already read Running with no controller
+	// behind it; the review re-drives the start, see redriveVReplRepair.
+	vreplicationPendingRepair     map[string]bool
 	tickReentranceFlag            atomic.Int64
 	reviewedRunningMigrationsFlag bool
 
@@ -208,6 +213,7 @@ func (e *Executor) forgetVReplStream(uuid string) {
 	delete(e.vreplicationLastError, uuid)
 	delete(e.vreplicationPendingCancel, uuid)
 	delete(e.vreplicationProgress, uuid)
+	delete(e.vreplicationPendingRepair, uuid)
 }
 
 // forgetFinishedVReplStreams drops the stream tracking of every migration
@@ -230,6 +236,9 @@ func (e *Executor) forgetFinishedVReplStreams(uuidsFoundRunning, uuidsFoundPendi
 		forgetUnlessLive(uuid)
 	}
 	for uuid := range e.vreplicationProgress {
+		forgetUnlessLive(uuid)
+	}
+	for uuid := range e.vreplicationPendingRepair {
 		forgetUnlessLive(uuid)
 	}
 }
@@ -500,6 +509,7 @@ func (e *Executor) Open() error {
 	e.vreplicationLastError = make(map[string]*vterrors.LastError)
 	e.vreplicationPendingCancel = make(map[string]string)
 	e.vreplicationProgress = make(map[string]vreplStreamProgress)
+	e.vreplicationPendingRepair = make(map[string]bool)
 
 	if sidecar.GetName() != sidecar.DefaultName {
 		e.execQuery = e.executeQueryWithSidecarDBReplacement
@@ -3694,6 +3704,34 @@ func retireVReplParkRecordQuery(id int32) string {
 		id, vreplication.RetriesExhaustedIndicator)
 }
 
+// redriveVReplRepair re-drives the controller start for a stream whose repair
+// RPC failed after its write landed. The engine applies the update before it
+// builds the replacement controller, so the row can read Running with no
+// controller behind it, and nothing else would ever start one: the row no
+// longer matches the repair, and the history scan trusts a Running row. A
+// no-op state update through the engine makes it rebuild the controller;
+// against one that did start, it merely restarts the stream. The intent is
+// cleared once the RPC succeeds and kept, for the next tick, otherwise.
+// Callers must hold migrationMutex.
+func (e *Executor) redriveVReplRepair(ctx context.Context, uuid string, s *VReplStream) {
+	ctx, cancel := context.WithTimeout(ctx, grpcTimeout)
+	defer cancel()
+	tablet, err := e.ts.GetTablet(ctx, e.tabletAlias)
+	if err != nil {
+		log.Error("Online DDL: failed to get tablet to re-drive a vreplication stream repair; will retry on the next tick",
+			slog.String("uuid", uuid), slog.String("tablet", e.TabletAliasString()), slog.Int64("stream_id", int64(s.id)), slog.Any("error", err))
+		return
+	}
+	if err := e.startVReplication(ctx, tablet.Tablet, uuid); err != nil {
+		log.Error("Online DDL: failed to re-drive a vreplication stream repair whose RPC had failed; will retry on the next tick",
+			slog.String("uuid", uuid), slog.String("tablet", e.TabletAliasString()), slog.Int64("stream_id", int64(s.id)), slog.Any("error", err))
+		return
+	}
+	delete(e.vreplicationPendingRepair, uuid)
+	log.Info("Online DDL: re-drove the start of a repaired vreplication stream whose repair RPC had failed",
+		slog.String("uuid", uuid), slog.String("tablet", e.TabletAliasString()), slog.Int64("stream_id", int64(s.id)))
+}
+
 // retireVReplParkRecord rewrites the park records a stream has moved past
 // (repaired, or otherwise resumed) into the record of its resumption, so
 // that a previous release's executor does not fail the migration on them
@@ -3847,10 +3885,16 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 						return nil
 					}
 					if _, err := e.vreplicationExec(repairCtx, tablet.Tablet, query); err != nil {
-						log.Error("Online DDL: failed to repair vreplication stream parked on a retries-exhausted error",
+						// The write may have landed regardless: the engine
+						// applies it before it builds the replacement
+						// controller. Record the intent so the next review
+						// re-drives the start if the row reads Running.
+						e.vreplicationPendingRepair[uuid] = true
+						log.Error("Online DDL: failed to repair vreplication stream parked on a retries-exhausted error; will retry or re-drive on the next tick",
 							slog.String("uuid", uuid), slog.String("tablet", e.TabletAliasString()), slog.Int64("stream_id", int64(s.id)), slog.Any("error", err))
 						return nil
 					}
+					delete(e.vreplicationPendingRepair, uuid)
 					log.Info("Online DDL: repaired vreplication stream parked on a retries-exhausted error; restarted with the retry-forever override",
 						slog.String("uuid", uuid), slog.String("tablet", e.TabletAliasString()), slog.Int64("stream_id", int64(s.id)))
 					// The park record is retired by the next review, once
@@ -3866,6 +3910,11 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 				// VReplication migrations are unique in this respect: we are able to complete
 				// a vreplication migration started by another tablet.
 				e.ownedRunningMigrations.Store(uuid, onlineDDL)
+				if e.vreplicationPendingRepair[uuid] {
+					// The repair's write landed (the row reads Running) but
+					// its RPC failed, so a controller may never have started.
+					e.redriveVReplRepair(ctx, uuid, s)
+				}
 				e.refreshMigrationLiveness(ctx, uuid, s, migrationRow.AsInt64("rows_copied", 0), migrationRow.AsInt64("vitess_liveness_indicator", 0))
 				if onlineDDL.TabletAlias != e.TabletAliasString() {
 					_ = e.updateMigrationTablet(ctx, uuid)

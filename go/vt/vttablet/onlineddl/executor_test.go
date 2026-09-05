@@ -630,6 +630,25 @@ func (fakeTabletManagerClient) ReloadSchema(ctx context.Context, tablet *topodat
 	return nil
 }
 
+// recordingTabletManagerClient records every VReplicationExec query and
+// fails them while *failing is set. The executor creates a client per call,
+// so the state is shared through pointers.
+type recordingTabletManagerClient struct {
+	tmclient.TabletManagerClient
+	queries *[]string
+	failing *bool
+}
+
+func (recordingTabletManagerClient) Close() {}
+
+func (c recordingTabletManagerClient) VReplicationExec(ctx context.Context, tablet *topodatapb.Tablet, query string) (*querypb.QueryResult, error) {
+	*c.queries = append(*c.queries, query)
+	if *c.failing {
+		return nil, errors.New("rpc failed after the write")
+	}
+	return &querypb.QueryResult{}, nil
+}
+
 func TestMigrationMetricsIncrement(t *testing.T) {
 	tcases := []struct {
 		name     string
@@ -1260,16 +1279,19 @@ func TestForgetVReplStream(t *testing.T) {
 		vreplicationLastError:     make(map[string]*vterrors.LastError),
 		vreplicationPendingCancel: make(map[string]string),
 		vreplicationProgress:      make(map[string]vreplStreamProgress),
+		vreplicationPendingRepair: make(map[string]bool),
 	}
 	uuid := "1cbcd662_8ed6_11ee_bc8f_0a43f95f28a3"
 	e.vreplicationLastError[uuid] = vterrors.NewLastError("test", time.Minute)
 	e.vreplicationPendingCancel[uuid] = "internal cancel"
 	e.vreplicationProgress[uuid] = vreplStreamProgress{copyStateID: 1}
+	e.vreplicationPendingRepair[uuid] = true
 
 	e.forgetVReplStream(uuid)
 	assert.NotContains(t, e.vreplicationLastError, uuid)
 	assert.NotContains(t, e.vreplicationPendingCancel, uuid)
 	assert.NotContains(t, e.vreplicationProgress, uuid)
+	assert.NotContains(t, e.vreplicationPendingRepair, uuid)
 }
 
 // TestForgetFinishedVReplStreams tests the per-tick tracking sweep: entries
@@ -1286,11 +1308,13 @@ func TestForgetFinishedVReplStreams(t *testing.T) {
 		vreplicationLastError:     make(map[string]*vterrors.LastError),
 		vreplicationPendingCancel: make(map[string]string),
 		vreplicationProgress:      make(map[string]vreplStreamProgress),
+		vreplicationPendingRepair: make(map[string]bool),
 	}
 	for _, uuid := range []string{runningUUID, readyUUID, finishedUUID} {
 		e.vreplicationLastError[uuid] = vterrors.NewLastError("test", time.Minute)
 		e.vreplicationPendingCancel[uuid] = "cancel " + uuid
 		e.vreplicationProgress[uuid] = vreplStreamProgress{copyStateID: 1}
+		e.vreplicationPendingRepair[uuid] = true
 	}
 	// A finished migration may have left tracking in only some of the maps.
 	const lastErrorOnlyUUID = "4cbcd662_8ed6_11ee_bc8f_0a43f95f28a3"
@@ -1305,11 +1329,13 @@ func TestForgetFinishedVReplStreams(t *testing.T) {
 		assert.Contains(t, e.vreplicationLastError, uuid)
 		assert.Contains(t, e.vreplicationPendingCancel, uuid)
 		assert.Contains(t, e.vreplicationProgress, uuid)
+		assert.Contains(t, e.vreplicationPendingRepair, uuid)
 	}
 	for _, uuid := range []string{finishedUUID, lastErrorOnlyUUID} {
 		assert.NotContains(t, e.vreplicationLastError, uuid)
 		assert.NotContains(t, e.vreplicationPendingCancel, uuid)
 		assert.NotContains(t, e.vreplicationProgress, uuid)
+		assert.NotContains(t, e.vreplicationPendingRepair, uuid)
 	}
 }
 
@@ -1591,6 +1617,97 @@ func TestReviewRunningMigrationsRefreshesLivenessOnAdoption(t *testing.T) {
 	assert.Empty(t, cancellable)
 	assert.True(t, livenessRefreshed,
 		"the first review after adoption must refresh liveness without waiting for the stream to write, or the stale review later in the tick fails an active migration")
+}
+
+// TestReviewRunningMigrationsReDrivesFailedRepair pins what happens when a
+// repair RPC fails after its write landed: the engine applies the update
+// before it builds the replacement controller, so the row can read Running
+// with no controller behind it. The review must then re-drive the start on
+// the next tick, and stop once it succeeds.
+func TestReviewRunningMigrationsReDrivesFailedRepair(t *testing.T) {
+	uuid := "1cbcd662_8ed6_11ee_bc8f_0a43f95f28a3"
+	env := tabletenv.NewEnv(vtenv.NewTestEnv(), tabletenv.NewDefaultConfig(), "ExecutorTest")
+	alias := &topodatapb.TabletAlias{Cell: "cell", Uid: 1}
+	streamState := "Error"
+	streamMessage := vreplication.RetriesExhaustedIndicator + ": the same error was encountered continuously for longer than --vreplication-max-time-to-retry-on-error (15m0s): connection refused"
+	var queries []string
+	failing := true
+	protocolName := t.Name()
+	resetProtocol := tmclienttest.SetProtocol(t.Name(), protocolName)
+	defer resetProtocol()
+	tmclient.RegisterTabletManagerClientFactory(protocolName, func() tmclient.TabletManagerClient {
+		return recordingTabletManagerClient{queries: &queries, failing: &failing}
+	})
+	ts := memorytopo.NewServer(t.Context(), "cell")
+	require.NoError(t, ts.CreateTablet(t.Context(), &topodatapb.Tablet{
+		Alias:    alias,
+		Keyspace: "ks",
+		Shard:    "0",
+		Type:     topodatapb.TabletType_PRIMARY,
+	}))
+	e := &Executor{
+		env:                       env,
+		ts:                        ts,
+		tabletAlias:               alias,
+		dbName:                    "vt_ks",
+		vreplicationLastError:     map[string]*vterrors.LastError{},
+		vreplicationPendingCancel: map[string]string{},
+		vreplicationProgress:      map[string]vreplStreamProgress{},
+		vreplicationPendingRepair: map[string]bool{},
+		ticks:                     timer.NewTimer(time.Hour),
+		lagThrottler: throttle.NewThrottler(env, nil, nil, alias, nil,
+			func() topodatapb.TabletType { return topodatapb.TabletType_PRIMARY }, "TestPool"),
+		execQuery: func(ctx context.Context, query string) (*sqltypes.Result, error) {
+			q := strings.ToLower(query)
+			switch {
+			case strings.Contains(q, "migration_status='running'"):
+				return sqltypes.MakeTestResult(
+					sqltypes.MakeTestFields("migration_uuid", "varchar"), uuid), nil
+			case strings.Contains(q, "in ('queued', 'ready', 'running')"):
+				return &sqltypes.Result{}, nil
+			case strings.Contains(q, "from _vt.vreplication_log"):
+				return &sqltypes.Result{}, nil
+			case strings.Contains(q, "copy_state"):
+				return sqltypes.MakeTestResult(
+					sqltypes.MakeTestFields("cnt|maxid", "int64|uint64"), "1|10"), nil
+			case strings.Contains(q, "from _vt.vreplication"):
+				return sqltypes.MakeTestResult(
+					sqltypes.MakeTestFields("id|workflow|source|pos|state|message", "int32|varchar|varchar|varchar|varchar|varchar"),
+					"1|"+uuid+"|||"+streamState+"|"+streamMessage), nil
+			case strings.HasPrefix(strings.TrimSpace(q), "select") && strings.Contains(q, "migration_uuid="):
+				return sqltypes.MakeTestResult(
+					sqltypes.MakeTestFields("migration_uuid|migration_status|strategy", "varchar|varchar|varchar"),
+					uuid+"|running|vitess"), nil
+			}
+			return &sqltypes.Result{RowsAffected: 1}, nil
+		},
+	}
+	e.isOpen.Store(1)
+
+	// The parked stream is repaired, but the RPC fails.
+	_, cancellable, err := e.reviewRunningMigrations(t.Context())
+	require.NoError(t, err)
+	assert.Empty(t, cancellable)
+	require.Len(t, queries, 1)
+	assert.Contains(t, queries[0], retryForeverConfigKey, "the first RPC is the repair")
+	assert.True(t, e.vreplicationPendingRepair[uuid], "a failed repair RPC must leave a pending intent: its write may have landed")
+
+	// The write had landed: the row reads Running. The review re-drives the
+	// controller start through the engine and clears the intent.
+	streamState, streamMessage, failing = "Running", "", false
+	_, cancellable, err = e.reviewRunningMigrations(t.Context())
+	require.NoError(t, err)
+	assert.Empty(t, cancellable)
+	require.Len(t, queries, 2, "the review must re-drive the start once the row shows the write landed")
+	assert.Contains(t, queries[1], "state='Running'")
+	assert.Contains(t, queries[1], uuid)
+	assert.NotContains(t, queries[1], retryForeverConfigKey, "the re-drive is a plain start, not another repair")
+	assert.NotContains(t, e.vreplicationPendingRepair, uuid, "the intent is cleared once the re-drive succeeds")
+
+	// Nothing more to do.
+	_, _, err = e.reviewRunningMigrations(t.Context())
+	require.NoError(t, err)
+	assert.Len(t, queries, 2)
 }
 
 // TestReviewVReplStreamError tests the per-stream verdict: unrecoverable or
