@@ -1100,9 +1100,8 @@ func TestCancelMigrationsContinuePastFailure(t *testing.T) {
 	}
 	assertOutcome := func(t *testing.T, cancelled []string, result *sqltypes.Result, err error) {
 		t.Helper()
-		require.Error(t, err)
-		assert.ErrorContains(t, err, firstFailingUUID)
-		assert.ErrorContains(t, err, lastFailingUUID, "every failure must be reported, not only the first")
+		require.ErrorContains(t, err, firstFailingUUID)
+		require.ErrorContains(t, err, lastFailingUUID, "every failure must be reported, not only the first")
 		assert.Equal(t, vtrpcpb.Code_DEADLINE_EXCEEDED, vterrors.Code(err),
 			"aggregating the failures must keep a structured error code (the highest-priority one)")
 		assert.Equal(t, []string{queuedUUID}, cancelled,
