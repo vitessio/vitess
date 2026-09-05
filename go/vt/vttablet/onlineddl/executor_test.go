@@ -882,7 +882,8 @@ func TestForgetVReplStreamOrdering(t *testing.T) {
 				sqltypes.MakeTestFields("migration_uuid|migration_status", "varchar|varchar"),
 				uuid+"|running"), nil
 		})
-		_, _ = e.CancelMigration(t.Context(), uuid, "internal cancel", false)
+		_, err := e.CancelMigration(t.Context(), uuid, "internal cancel", false)
+		require.Error(t, err, "a cancellation whose terminal transition failed is not complete and must not report success")
 		assert.Contains(t, e.vreplicationLastError, uuid,
 			"tracking must survive a cancellation whose terminal transition failed")
 		assert.Equal(t, "internal cancel", e.vreplicationPendingCancel[uuid],
@@ -922,7 +923,8 @@ func TestForgetVReplStreamOrdering(t *testing.T) {
 				sqltypes.MakeTestFields("migration_uuid|migration_status", "varchar|varchar"),
 				uuid+"|running"), nil
 		})
-		_, _ = e.CancelMigration(t.Context(), uuid, "user cancel", true)
+		_, err := e.CancelMigration(t.Context(), uuid, "user cancel", true)
+		require.Error(t, err, "the cancellation is recorded but not complete, and the caller must be able to tell")
 		assert.Contains(t, e.vreplicationLastError, uuid,
 			"tracking must survive until the terminal status transition actually lands")
 		_, owned := e.ownedRunningMigrations.Load(uuid)

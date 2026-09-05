@@ -1961,6 +1961,9 @@ func (e *Executor) CancelMigration(ctx context.Context, uuid string, message str
 			}
 			log.Error("CancelMigration: failed to transition migration to a terminal state",
 				slog.String("uuid", uuid), slog.String("tablet", e.TabletAliasString()), slog.Any("error", ferr))
+			// The cancellation is not complete: the caller must not be
+			// told otherwise, and CANCEL ALL must be able to report it.
+			err = vterrors.Wrapf(ferr, "cancellation of migration %s recorded, but its terminal transition failed and will be retried", uuid)
 			return
 		}
 		e.forgetVReplStream(uuid)
