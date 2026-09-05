@@ -835,8 +835,9 @@ func testScheduler(t *testing.T) {
 				sqltypes.StringBindVariable("%retries exhausted:%"),
 			)
 			require.NoError(t, err)
+			ctx := t.Context()
 			require.EventuallyWithT(t, func(c *assert.CollectT) {
-				rs, err := primaryTablet.VttabletProcess.QueryTablet(query, "", true)
+				rs, err := primaryTablet.VttabletProcess.QueryTabletWithContext(ctx, query, "", true)
 				require.NoError(c, err)
 				require.Len(c, rs.Rows, 1)
 				row := rs.Named().Row()
@@ -960,8 +961,9 @@ func testScheduler(t *testing.T) {
 			_, err := primaryTablet.VttabletProcess.QueryTablet("drop trigger "+triggerName, keyspaceName, true)
 			require.NoError(t, err)
 			query := fmt.Sprintf("select count(*) as c from `%s` where id=%d", shadowTable, injectedRowID)
+			ctx := t.Context()
 			require.EventuallyWithT(t, func(c *assert.CollectT) {
-				rs, err := primaryTablet.VttabletProcess.QueryTablet(query, keyspaceName, true)
+				rs, err := primaryTablet.VttabletProcess.QueryTabletWithContext(ctx, query, keyspaceName, true)
 				require.NoError(c, err)
 				row := rs.Named().Row()
 				require.NotNil(c, row)
