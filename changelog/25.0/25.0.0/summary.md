@@ -343,9 +343,10 @@ Like a plain `EXPLAIN`, the per-shard `EXPLAIN FORMAT=JSON` queries `VEXPLAIN MY
 
 VTGate now runs a multi-statement query the way MySQL does: one statement is parsed and executed at a time, the grammar decides where a statement ends, and the first error ends the batch. Three edge cases change as a result:
 
-- An empty statement followed by more input, such as `select 1;; select 2`, is now a syntax error (`ER_PARSE_ERROR`, 1064) after the statements before it ran, as on MySQL. A trailing `;` (`select 1;;`) is still fine.
+- An empty statement followed by more input, such as `select 1;; select 2`, is now a syntax error (`ER_PARSE_ERROR`, 1064) after the statements before it ran, as on MySQL. Comments alone count as empty there, so `select 1; /* c */; select 3` is the same error after `select 1` ran. A trailing `;` (`select 1;;`) is still fine.
 - A batch that ends in a comment, such as `select 1; -- done`, now returns an empty result for the comment, as MySQL does, instead of dropping it.
-- Preparing a statement followed by another one is rejected with `ER_PARSE_ERROR`, as MySQL does; a trailing `;` is accepted.
+- Preparing a statement followed by another one is rejected with `ER_PARSE_ERROR`, as MySQL does; a trailing `;`, and comments after it, are accepted.
+- A single-statement query holding a partially parsed DDL followed by another statement, such as `create table t1; select 1` from a client without `CLIENT_MULTI_STATEMENTS`, is now an error instead of running the DDL and dropping the rest.
 
 ### <a id="minor-changes-reparent"/>Reparent</a>
 
