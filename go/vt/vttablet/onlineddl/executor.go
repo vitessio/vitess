@@ -3754,8 +3754,9 @@ func (e *Executor) redriveVReplRepair(ctx context.Context, uuid string, s *VRepl
 // (repaired, or otherwise resumed) into the record of its resumption, so
 // that a previous release's executor does not fail the migration on them
 // after a downgrade. The review calls it for as long as readVReplStream
-// keeps reporting such a record, so a rewrite that fails is retried on the
-// next tick. Callers must hold migrationMutex.
+// keeps reporting such a record and no repair of the stream is pending, so
+// a rewrite that fails is retried on the next tick, and a record is never
+// retired ahead of the repair it traces. Callers must hold migrationMutex.
 func (e *Executor) retireVReplParkRecord(ctx context.Context, uuid string, s *VReplStream) {
 	ctx, cancel := context.WithTimeout(ctx, reviewQueryTimeout)
 	defer cancel()
@@ -3859,7 +3860,10 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 					}
 					return nil
 				}
-				if s.hasStaleParkRecord {
+				if s.hasStaleParkRecord && !e.vreplicationPendingRepair[uuid] {
+					// Not while a repair is unconfirmed: until the re-drive
+					// succeeds, the park record is the durable trace of the
+					// repair still owed to this stream.
 					e.retireVReplParkRecord(ctx, uuid, s)
 				}
 				action := resolveVReplStreamAction(

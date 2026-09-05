@@ -1671,7 +1671,9 @@ func TestReviewRunningMigrationsReDrivesFailedRepair(t *testing.T) {
 	alias := &topodatapb.TabletAlias{Cell: "cell", Uid: 1}
 	streamState := "Error"
 	streamMessage := vreplication.RetriesExhaustedIndicator + ": the same error was encountered continuously for longer than --vreplication-max-time-to-retry-on-error (15m0s): connection refused"
+	parkRecordMessage := streamMessage
 	var queries []string
+	var retireAttempts int
 	failing := true
 	protocolName := t.Name()
 	resetProtocol := tmclienttest.SetProtocol(t.Name(), protocolName)
@@ -1701,13 +1703,19 @@ func TestReviewRunningMigrationsReDrivesFailedRepair(t *testing.T) {
 		execQuery: func(ctx context.Context, query string) (*sqltypes.Result, error) {
 			q := strings.ToLower(query)
 			switch {
+			case strings.HasPrefix(strings.TrimSpace(q), "update _vt.vreplication_log"):
+				retireAttempts++
+				return &sqltypes.Result{RowsAffected: 1}, nil
 			case strings.Contains(q, "migration_status='running'"):
 				return sqltypes.MakeTestResult(
 					sqltypes.MakeTestFields("migration_uuid", "varchar"), uuid), nil
 			case strings.Contains(q, "in ('queued', 'ready', 'running')"):
 				return &sqltypes.Result{}, nil
 			case strings.Contains(q, "from _vt.vreplication_log"):
-				return &sqltypes.Result{}, nil
+				// The park record stays until the review retires it.
+				return sqltypes.MakeTestResult(
+					sqltypes.MakeTestFields("state|message", "varchar|varchar"),
+					"Error|"+parkRecordMessage), nil
 			case strings.Contains(q, "copy_state"):
 				return sqltypes.MakeTestResult(
 					sqltypes.MakeTestFields("cnt|maxid", "int64|uint64"), "1|10"), nil
@@ -1733,9 +1741,12 @@ func TestReviewRunningMigrationsReDrivesFailedRepair(t *testing.T) {
 	assert.Contains(t, queries[0], retryForeverConfigKey, "the first RPC is the repair")
 	assert.True(t, e.vreplicationPendingRepair[uuid], "a failed repair RPC must leave a pending intent: its write may have landed")
 
-	// The write had landed: the row reads Running. The review re-drives the
-	// controller start through the engine and clears the intent.
-	streamState, streamMessage, failing = "Running", "", false
+	// The write had landed: the row reads Running, with the park record
+	// still behind it. The review re-drives the controller start through
+	// the engine; it fails this time, so the intent stays — and the park
+	// record must stay with it, as the durable trace of an unconfirmed
+	// repair.
+	streamState, streamMessage = "Running", ""
 	_, cancellable, err = e.reviewRunningMigrations(t.Context())
 	require.NoError(t, err)
 	assert.Empty(t, cancellable)
@@ -1743,12 +1754,20 @@ func TestReviewRunningMigrationsReDrivesFailedRepair(t *testing.T) {
 	assert.Contains(t, queries[1], "state='Running'")
 	assert.Contains(t, queries[1], uuid)
 	assert.NotContains(t, queries[1], retryForeverConfigKey, "the re-drive is a plain start, not another repair")
-	assert.NotContains(t, e.vreplicationPendingRepair, uuid, "the intent is cleared once the re-drive succeeds")
+	assert.True(t, e.vreplicationPendingRepair[uuid], "the intent stays while the re-drive keeps failing")
+	assert.Equal(t, 0, retireAttempts, "the park record must not be retired before the repair is confirmed")
 
-	// Nothing more to do.
+	// The re-drive succeeds: the intent is cleared, and only then is the
+	// park record retired.
+	failing = false
 	_, _, err = e.reviewRunningMigrations(t.Context())
 	require.NoError(t, err)
-	assert.Len(t, queries, 2)
+	require.Len(t, queries, 3)
+	assert.NotContains(t, e.vreplicationPendingRepair, uuid, "the intent is cleared once the re-drive succeeds")
+	_, _, err = e.reviewRunningMigrations(t.Context())
+	require.NoError(t, err)
+	assert.Len(t, queries, 3, "nothing more to re-drive")
+	assert.Equal(t, 1, retireAttempts, "the park record is retired once the repair is confirmed")
 }
 
 // TestReviewVReplStreamError tests the per-stream verdict: unrecoverable or
