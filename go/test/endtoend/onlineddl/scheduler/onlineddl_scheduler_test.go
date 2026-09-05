@@ -235,19 +235,20 @@ func assertRetryForeverOverride(t *testing.T, uuid string) map[string]string {
 }
 
 // queryVReplicationStream returns the state and message of the migration's
-// vreplication stream. It asserts nothing and takes no test context, so it
-// is safe to call from a require.Never or require.Eventually condition:
-// testify runs the condition in a goroutine that can outlive the test, and
-// a t.Context() query or a require in there can then fail the test after it
-// has completed.
-func queryVReplicationStream(uuid string) (state, message string, err error) {
+// vreplication stream. It asserts nothing, so it is safe to call from a
+// require.Never or require.Eventually condition: testify runs the condition
+// in a goroutine that can outlive the test, and a require in there can fail
+// the test after it has completed. Pass a context captured on the test
+// goroutine (t.Context() itself must not be called from the condition) so
+// that a probe still in flight when the test ends is cancelled with it.
+func queryVReplicationStream(ctx context.Context, uuid string) (state, message string, err error) {
 	query, err := sqlparser.ParseAndBind("select state, message from _vt.vreplication where workflow=%a",
 		sqltypes.StringBindVariable(uuid),
 	)
 	if err != nil {
 		return "", "", err
 	}
-	rs, err := primaryTablet.VttabletProcess.QueryTablet(query, "", true)
+	rs, err := primaryTablet.VttabletProcess.QueryTabletWithContext(ctx, query, "", true)
 	if err != nil {
 		return "", "", err
 	}
@@ -261,7 +262,7 @@ func queryVReplicationStream(uuid string) (state, message string, err error) {
 // readVReplicationStream returns the state and message of the migration's
 // vreplication stream.
 func readVReplicationStream(t *testing.T, uuid string) (state, message string) {
-	state, message, err := queryVReplicationStream(uuid)
+	state, message, err := queryVReplicationStream(t.Context(), uuid)
 	require.NoError(t, err)
 	return state, message
 }
@@ -896,14 +897,17 @@ func testScheduler(t *testing.T) {
 				// in-flight condition running after this subtest has
 				// completed, so the condition must not touch t: no
 				// assertions, and only the context captured above.
-				state, message, err := queryVReplicationStream(t1uuid)
+				state, message, err := queryVReplicationStream(ctx, t1uuid)
+				if ctx.Err() != nil {
+					// The subtest has ended and Never has already returned.
+					return false
+				}
 				if err != nil || state == "Error" {
 					fmt.Printf("# stream parked instead of retrying: state=%q message=%q err=%v\n", state, message, err)
 					return true
 				}
 				status, err := queryMigrationStatus(ctx, t1uuid)
 				if ctx.Err() != nil {
-					// The subtest has ended and Never has already returned.
 					return false
 				}
 				if err != nil || status != schema.OnlineDDLStatusRunning {
