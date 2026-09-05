@@ -576,6 +576,8 @@ func (c *cow) copyOnRewriteSQLNode(n SQLNode, parent SQLNode) (out SQLNode, chan
 		return c.copyOnRewriteRefOfUpdateXMLExpr(n, parent)
 	case *Use:
 		return c.copyOnRewriteRefOfUse(n, parent)
+	case *UserFuncExpr:
+		return c.copyOnRewriteRefOfUserFuncExpr(n, parent)
 	case *VExplainStmt:
 		return c.copyOnRewriteRefOfVExplainStmt(n, parent)
 	case *VStream:
@@ -7328,6 +7330,29 @@ func (c *cow) copyOnRewriteRefOfUse(n *Use, parent SQLNode) (out SQLNode, change
 	return
 }
 
+func (c *cow) copyOnRewriteRefOfUserFuncExpr(n *UserFuncExpr, parent SQLNode) (out SQLNode, changed bool) {
+	if n == nil || c.cursor.stop {
+		return n, false
+	}
+	out = n
+	if c.pre == nil || c.pre(n, parent) {
+		_Name, changedName := c.copyOnRewriteIdentifierCI(n.Name, n)
+		if changedName {
+			res := *n
+			res.Name, _ = _Name.(IdentifierCI)
+			out = &res
+			if c.cloned != nil {
+				c.cloned(n, out)
+			}
+			changed = true
+		}
+	}
+	if c.post != nil {
+		out, changed = c.postVisit(out, parent, changed)
+	}
+	return
+}
+
 func (c *cow) copyOnRewriteRefOfVExplainStmt(n *VExplainStmt, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -8136,6 +8161,8 @@ func (c *cow) copyOnRewriteCallable(n Callable, parent SQLNode) (out SQLNode, ch
 		return c.copyOnRewriteRefOfTrimFuncExpr(n, parent)
 	case *UpdateXMLExpr:
 		return c.copyOnRewriteRefOfUpdateXMLExpr(n, parent)
+	case *UserFuncExpr:
+		return c.copyOnRewriteRefOfUserFuncExpr(n, parent)
 	case *ValuesFuncExpr:
 		return c.copyOnRewriteRefOfValuesFuncExpr(n, parent)
 	case *WeightStringFuncExpr:
@@ -8503,6 +8530,8 @@ func (c *cow) copyOnRewriteExpr(n Expr, parent SQLNode) (out SQLNode, changed bo
 		return c.copyOnRewriteRefOfUnaryExpr(n, parent)
 	case *UpdateXMLExpr:
 		return c.copyOnRewriteRefOfUpdateXMLExpr(n, parent)
+	case *UserFuncExpr:
+		return c.copyOnRewriteRefOfUserFuncExpr(n, parent)
 	case ValTuple:
 		return c.copyOnRewriteValTuple(n, parent)
 	case *ValuesFuncExpr:

@@ -608,6 +608,7 @@ var keywords = []keyword{
 	{"sequence", SEQUENCE},
 	{"serializable", SERIALIZABLE},
 	{"session", SESSION},
+	{"session_user", SESSION_USER},
 	{"set", SET},
 	{"share", SHARE},
 	{"shared", SHARED},
@@ -727,6 +728,7 @@ var keywords = []keyword{
 	{"sum", SUM},
 	{"sysdate", SYSDATE},
 	{"system", UNUSED},
+	{"system_user", SYSTEM_USER},
 	{"table", TABLE},
 	{"table_name", TABLE_NAME},
 	{"tables", TABLES},
@@ -860,30 +862,29 @@ var mysqlFuncCallKeywords = map[string]struct{}{
 
 // isFuncCallKeyword reports whether the token is the keyword of one of the
 // mysqlFuncCallKeywords names: the lexer only produces it when '(' follows the
-// name directly, and returns an identifier otherwise. The names on the list
-// that are no keywords of this grammar (session_user, system_user) are
-// identifiers to begin with.
+// name directly, and returns an identifier otherwise.
 func isFuncCallKeyword(id int) bool {
 	switch id {
 	case ADDDATE, BIT_AND, BIT_OR, BIT_XOR, CAST, COUNT, CURDATE, CURTIME, DATE_ADD, DATE_SUB,
-		EXTRACT, GROUP_CONCAT, MAX, MID, MIN, NOW, POSITION, STD, STDDEV, STDDEV_POP, STDDEV_SAMP,
-		SUBDATE, SUBSTRING, SUM, SYSDATE, TRIM, VARIANCE, VAR_POP, VAR_SAMP:
+		EXTRACT, GROUP_CONCAT, MAX, MID, MIN, NOW, POSITION, SESSION_USER, STD, STDDEV, STDDEV_POP,
+		STDDEV_SAMP, SUBDATE, SUBSTRING, SUM, SYSDATE, SYSTEM_USER, TRIM, VARIANCE, VAR_POP, VAR_SAMP:
 		return true
 	default:
 		return false
 	}
 }
 
-// isFuncCallKeywordName reports whether name lexes as one of the function-call
-// keywords when directly followed by '('. A generic call by such a name only
-// arises from whitespace before the parenthesis — MySQL's stored-function path —
-// and must serialize quoted to stay one: printed bare, the name would re-lex as
-// the built-in. session_user and system_user are on MySQL's list but are no
-// keywords here: both spellings parse as the same generic call, which prints
-// bare, the built-in reading.
-func isFuncCallKeywordName(name string) bool {
+// isKeywordFunctionName reports whether name is a built-in function that this
+// grammar, like MySQL's, parses through a keyword rule into a node of its own:
+// the whitespace-sensitive names, and the user-information functions USER and
+// CURRENT_USER. A generic FuncExpr by such a name therefore never stands for
+// the built-in: it came quoted, qualified, or (for the whitespace-sensitive
+// ones) with whitespace before the parenthesis — MySQL's stored-function path —
+// and serializes quoted to stay one, since printed bare the name would re-lex
+// as the built-in.
+func isKeywordFunctionName(name string) bool {
 	id, ok := keywordLookupTable.LookupString(name)
-	return ok && isFuncCallKeyword(id)
+	return ok && (isFuncCallKeyword(id) || id == USER || id == CURRENT_USER)
 }
 
 type caseInsensitiveTable struct {

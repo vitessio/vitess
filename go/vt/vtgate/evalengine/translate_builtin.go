@@ -790,6 +790,9 @@ func (ast *astCompiler) translateCallable(call sqlparser.Callable) (IR, error) {
 			Method:    "JSON_KEYS",
 		}, nil
 
+	case *sqlparser.UserFuncExpr:
+		return &builtinUser{CallExpr{Method: call.Name.String()}}, nil
+
 	case *sqlparser.CurTimeFuncExpr:
 		if call.Fsp > 6 {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Too-big precision %d specified for '%s'. Maximum is 6.", call.Fsp, call.Name.String())

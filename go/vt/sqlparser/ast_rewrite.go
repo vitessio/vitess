@@ -577,6 +577,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfUpdateXMLExpr(parent, node, replacer)
 	case *Use:
 		return a.rewriteRefOfUse(parent, node, replacer)
+	case *UserFuncExpr:
+		return a.rewriteRefOfUserFuncExpr(parent, node, replacer)
 	case *VExplainStmt:
 		return a.rewriteRefOfVExplainStmt(parent, node, replacer)
 	case *VStream:
@@ -13973,6 +13975,46 @@ func (a *application) rewriteRefOfUse(parent SQLNode, node *Use, replacer replac
 }
 
 // Function Generation Source: PtrToStructMethod
+func (a *application) rewriteRefOfUserFuncExpr(parent SQLNode, node *UserFuncExpr, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
+			return true
+		}
+	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfUserFuncExprName))
+	}
+	if !a.rewriteIdentifierCI(node, node.Name, func(newNode, parent SQLNode) {
+		parent.(*UserFuncExpr).Name = newNode.(IdentifierCI)
+	}) {
+		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfVExplainStmt(parent SQLNode, node *VExplainStmt, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -15320,6 +15362,8 @@ func (a *application) rewriteCallable(parent SQLNode, node Callable, replacer re
 		return a.rewriteRefOfTrimFuncExpr(parent, node, replacer)
 	case *UpdateXMLExpr:
 		return a.rewriteRefOfUpdateXMLExpr(parent, node, replacer)
+	case *UserFuncExpr:
+		return a.rewriteRefOfUserFuncExpr(parent, node, replacer)
 	case *ValuesFuncExpr:
 		return a.rewriteRefOfValuesFuncExpr(parent, node, replacer)
 	case *WeightStringFuncExpr:
@@ -15694,6 +15738,8 @@ func (a *application) rewriteExpr(parent SQLNode, node Expr, replacer replacerFu
 		return a.rewriteRefOfUnaryExpr(parent, node, replacer)
 	case *UpdateXMLExpr:
 		return a.rewriteRefOfUpdateXMLExpr(parent, node, replacer)
+	case *UserFuncExpr:
+		return a.rewriteRefOfUserFuncExpr(parent, node, replacer)
 	case ValTuple:
 		return a.rewriteValTuple(parent, node, replacer)
 	case *ValuesFuncExpr:

@@ -2947,6 +2947,15 @@ type (
 		Fsp  int // fractional seconds precision, integer from 0 to 6 or an Argument
 	}
 
+	// UserFuncExpr represents the user-information functions USER(),
+	// CURRENT_USER(), SESSION_USER() and SYSTEM_USER(). Their keyword form has a
+	// node of its own so that it is never a generic call: a generic call by one of
+	// these names (quoted, or with whitespace before the parenthesis for the two
+	// whitespace-sensitive ones) is MySQL's stored-function path and prints quoted.
+	UserFuncExpr struct {
+		Name IdentifierCI
+	}
+
 	// JSONPrettyExpr represents the function and argument for JSON_PRETTY()
 	// https://dev.mysql.com/doc/refman/8.0/en/json-utility-functions.html#function_json-pretty
 	JSONPrettyExpr struct {
@@ -3666,6 +3675,7 @@ func (*TimestampDiffExpr) IsExpr()                  {}
 func (*ExtractFuncExpr) IsExpr()                    {}
 func (*WeightStringFuncExpr) IsExpr()               {}
 func (*CurTimeFuncExpr) IsExpr()                    {}
+func (*UserFuncExpr) IsExpr()                       {}
 func (*CaseExpr) IsExpr()                           {}
 func (*ValuesFuncExpr) IsExpr()                     {}
 func (*CastExpr) IsExpr()                           {}
@@ -3764,6 +3774,7 @@ func (*TimestampDiffExpr) iCallable()                  {}
 func (*ExtractFuncExpr) iCallable()                    {}
 func (*WeightStringFuncExpr) iCallable()               {}
 func (*CurTimeFuncExpr) iCallable()                    {}
+func (*UserFuncExpr) iCallable()                       {}
 func (*ValuesFuncExpr) iCallable()                     {}
 func (*ConvertExpr) iCallable()                        {}
 func (*TrimFuncExpr) iCallable()                       {}
