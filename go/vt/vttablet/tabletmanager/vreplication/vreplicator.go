@@ -578,18 +578,7 @@ func (vr *vreplicator) setState(state binlogdatapb.VReplicationWorkflowState, me
 		})
 	}
 	vr.stats.State.Store(state.String())
-	// Stamp time_updated on the Error transition only, so a parked row's
-	// time_updated is its park time (GenerateUpdateRowsCopied leaves it
-	// alone, so it could otherwise be a full copy cycle old). Not on Running:
-	// every retry re-enters setState(Running, ""), and stamping there would
-	// fake liveness and keep the stale-migration fallback from firing on a
-	// stuck retry loop.
-	timeUpdatedClause := ""
-	if state == binlogdatapb.VReplicationWorkflowState_Error {
-		timeUpdatedClause = fmt.Sprintf(", time_updated=%v", time.Now().Unix())
-	}
-	query := fmt.Sprintf("update _vt.vreplication set state=%v, message=left(%v, 1000)%s where id=%v",
-		encodeString(state.String()), encodeString(binlogplayer.MessageTruncate(message)), timeUpdatedClause, vr.id)
+	query := fmt.Sprintf("update _vt.vreplication set state=%v, message=left(%v, 1000) where id=%v", encodeString(state.String()), encodeString(binlogplayer.MessageTruncate(message)), vr.id)
 	// If we're batching a transaction, then include the state update
 	// in the current transaction batch.
 	if vr.dbClient.InTransaction && vr.dbClient.maxBatchSize > 0 {

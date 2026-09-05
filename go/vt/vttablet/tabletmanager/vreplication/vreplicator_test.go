@@ -84,40 +84,6 @@ func TestMaxQuerySize(t *testing.T) {
 	})
 }
 
-// TestSetStateStampsTimeUpdated pins that the Error transition stamps
-// time_updated in the same write, so a parked row's time_updated is its park
-// time rather than up to a full copy cycle old (GenerateUpdateRowsCopied
-// leaves it alone).
-func TestSetStateStampsTimeUpdated(t *testing.T) {
-	dbClient := binlogplayer.NewMockDBClient(t)
-	dbClient.ExpectRequestRE(`update _vt\.vreplication set state='Error', message=left\('boom', 1000\), time_updated=\d+ where id=1`, &sqltypes.Result{}, nil)
-	dbClient.ExpectRequestRE(`insert into _vt\.vreplication_log.*`, &sqltypes.Result{}, nil)
-	stats := binlogplayer.NewStats()
-	stats.VReplicationLagGauges.Stop()
-	t.Cleanup(stats.Stop)
-	vr := &vreplicator{
-		id:             1,
-		stats:          stats,
-		dbClient:       newVDBClient(dbClient, stats, 0),
-		workflowConfig: vttablet.DefaultVReplicationConfig,
-	}
-	require.NoError(t, vr.setState(binlogdatapb.VReplicationWorkflowState_Error, "boom"))
-
-	// Non-Error transitions must not stamp it: every retry re-enters
-	// setState(Running, ""), and stamping there would fake liveness on a
-	// stuck retry loop.
-	dbClient2 := binlogplayer.NewMockDBClient(t)
-	dbClient2.ExpectRequest("update _vt.vreplication set state='Running', message=left('', 1000) where id=1", &sqltypes.Result{}, nil)
-	dbClient2.ExpectRequestRE(`insert into _vt\.vreplication_log.*`, &sqltypes.Result{}, nil)
-	vr2 := &vreplicator{
-		id:             1,
-		stats:          stats,
-		dbClient:       newVDBClient(dbClient2, stats, 0),
-		workflowConfig: vttablet.DefaultVReplicationConfig,
-	}
-	require.NoError(t, vr2.setState(binlogdatapb.VReplicationWorkflowState_Running, ""))
-}
-
 // fakeFetchSuperQueryMysqld is a minimal MysqlDaemon test double that delegates
 // FetchSuperQuery to a callback. Only the methods exercised by tests are valid;
 // any other call will panic on the embedded nil interface.
