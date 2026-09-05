@@ -1334,7 +1334,10 @@ func TestRefreshMigrationLiveness(t *testing.T) {
 		// copyStateReadBounded records whether the copy-state lookup ran on
 		// a context with a deadline.
 		copyStateReadBounded bool
-		writes               []string
+		// lastIndicator is the migration record's vitess_liveness_indicator:
+		// the stream time_updated the executor last acknowledged.
+		lastIndicator int64
+		writes        []string
 	}
 	newHarness := func(copyStateCount, copyStateMaxID int64) *harness {
 		h := &harness{copyStateCount: copyStateCount, copyStateMaxID: copyStateMaxID}
@@ -1376,14 +1379,19 @@ func TestRefreshMigrationLiveness(t *testing.T) {
 	// was refreshed.
 	tick := func(h *harness, s *VReplStream) bool {
 		h.writes = nil
-		h.e.refreshMigrationLiveness(t.Context(), uuid, s, h.acknowledgedRowsCopied)
+		h.e.refreshMigrationLiveness(t.Context(), uuid, s, h.acknowledgedRowsCopied, h.lastIndicator)
 		return wrote(h, "liveness_timestamp")
 	}
+	// Each stream carries a newer time_updated than the last, as a live
+	// stream's does between ticks; the record's indicator starts at 0.
+	var lastTimeUpdated int64 = 1000
 	stream := func(pos string, timeThrottled int64) *VReplStream {
+		lastTimeUpdated++
 		return &VReplStream{
 			id:            1,
 			pos:           pos,
 			timeThrottled: timeThrottled,
+			timeUpdated:   lastTimeUpdated,
 		}
 	}
 
@@ -1409,6 +1417,32 @@ func TestRefreshMigrationLiveness(t *testing.T) {
 		h := newHarness(1, 10)
 		tick(h, stream("pos1", 0))
 		assert.True(t, h.copyStateReadBounded)
+	})
+	t.Run("the first observation counts without an advanced time_updated", func(t *testing.T) {
+		// On the first tick after adoption the record's indicator can
+		// already match the stream's time_updated (the stream has not
+		// written since the previous executor's last acknowledgment); the
+		// adoption still counts, ahead of the stale review later in that
+		// tick.
+		h := newHarness(1, 10)
+		s := stream("pos1", 0)
+		h.lastIndicator = s.timeUpdated
+		assert.True(t, tick(h, s))
+	})
+	t.Run("copy phase, a later observation needs an advanced time_updated", func(t *testing.T) {
+		h := newHarness(1, 10)
+		require.True(t, tick(h, stream("pos1", 0)))
+		s := stream("pos1", 0)
+		h.lastIndicator = s.timeUpdated
+		h.copyStateMaxID = 11
+		assert.False(t, tick(h, s), "an acknowledged time_updated is not new liveness, whatever else is observed")
+	})
+	t.Run("past the copy phase, a later observation needs an advanced time_updated", func(t *testing.T) {
+		h := newHarness(0, 0)
+		require.True(t, tick(h, stream("pos1", 0)))
+		s := stream("pos1", 0)
+		h.lastIndicator = s.timeUpdated
+		assert.False(t, tick(h, s))
 	})
 	t.Run("copy phase, the first observation counts once", func(t *testing.T) {
 		// The first observation since the executor opened (a restart or a
@@ -1498,6 +1532,65 @@ func TestRefreshMigrationLiveness(t *testing.T) {
 		assert.True(t, wrote(h, "vitess_liveness_indicator"))
 		assert.Equal(t, vreplStreamProgress{copyStateID: 11}, h.e.vreplicationProgress[uuid])
 	})
+}
+
+// TestReviewRunningMigrationsRefreshesLivenessOnAdoption pins that the first
+// review of a migration since the executor opened refreshes its liveness
+// even when the stream's time_updated is no newer than the indicator the
+// previous executor acknowledged: the stale review runs later in that same
+// tick, and the restarted stream may not have written anything yet.
+func TestReviewRunningMigrationsRefreshesLivenessOnAdoption(t *testing.T) {
+	uuid := "1cbcd662_8ed6_11ee_bc8f_0a43f95f28a3"
+	env := tabletenv.NewEnv(vtenv.NewTestEnv(), tabletenv.NewDefaultConfig(), "ExecutorTest")
+	alias := &topodatapb.TabletAlias{Cell: "cell", Uid: 1}
+	const timeUpdated = "1700000000"
+	var livenessRefreshed bool
+	e := &Executor{
+		env:                       env,
+		tabletAlias:               alias,
+		vreplicationLastError:     map[string]*vterrors.LastError{},
+		vreplicationPendingCancel: map[string]string{},
+		vreplicationProgress:      map[string]vreplStreamProgress{},
+		ticks:                     timer.NewTimer(time.Hour),
+		lagThrottler: throttle.NewThrottler(env, nil, nil, alias, nil,
+			func() topodatapb.TabletType { return topodatapb.TabletType_PRIMARY }, "TestPool"),
+		execQuery: func(ctx context.Context, query string) (*sqltypes.Result, error) {
+			q := strings.ToLower(query)
+			switch {
+			case strings.HasPrefix(strings.TrimSpace(q), "update") && strings.Contains(q, "liveness_timestamp"):
+				livenessRefreshed = true
+			case strings.Contains(q, "migration_status='running'"):
+				return sqltypes.MakeTestResult(
+					sqltypes.MakeTestFields("migration_uuid", "varchar"), uuid), nil
+			case strings.Contains(q, "in ('queued', 'ready', 'running')"):
+				return &sqltypes.Result{}, nil
+			case strings.Contains(q, "from _vt.vreplication_log"):
+				return &sqltypes.Result{}, nil
+			case strings.Contains(q, "copy_state"):
+				return sqltypes.MakeTestResult(
+					sqltypes.MakeTestFields("cnt|maxid", "int64|uint64"), "1|10"), nil
+			case strings.Contains(q, "from _vt.vreplication"):
+				// A running copy-phase stream whose time_updated is exactly
+				// the acknowledged indicator; an empty pos keeps the review
+				// out of the cutover flow.
+				return sqltypes.MakeTestResult(
+					sqltypes.MakeTestFields("id|workflow|source|pos|state|message|time_updated", "int32|varchar|varchar|varchar|varchar|varchar|int64"),
+					"1|"+uuid+"|||Copying||"+timeUpdated), nil
+			case strings.HasPrefix(strings.TrimSpace(q), "select") && strings.Contains(q, "migration_uuid="):
+				return sqltypes.MakeTestResult(
+					sqltypes.MakeTestFields("migration_uuid|migration_status|strategy|vitess_liveness_indicator", "varchar|varchar|varchar|int64"),
+					uuid+"|running|vitess|"+timeUpdated), nil
+			}
+			return &sqltypes.Result{RowsAffected: 1}, nil
+		},
+	}
+	e.isOpen.Store(1)
+
+	_, cancellable, err := e.reviewRunningMigrations(t.Context())
+	require.NoError(t, err)
+	assert.Empty(t, cancellable)
+	assert.True(t, livenessRefreshed,
+		"the first review after adoption must refresh liveness without waiting for the stream to write, or the stale review later in the tick fails an active migration")
 }
 
 // TestReviewVReplStreamError tests the per-stream verdict: unrecoverable or
