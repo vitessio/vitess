@@ -17,6 +17,8 @@ limitations under the License.
 package sqlparser
 
 import (
+	"slices"
+
 	"vitess.io/vitess/go/mysql/datetime"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -2414,7 +2416,13 @@ type ShowFilter struct {
 // Comments represents a list of comments.
 type Comments []string
 
+// Parsed returns the comments a statement carries. An executable comment
+// among them contributed no tokens, because it did not apply or held
+// nothing, and is a comment to MySQL but not one the statement carries.
 func (c Comments) Parsed() *ParsedComments {
+	if slices.ContainsFunc(c, isExecutableComment) {
+		c = slices.DeleteFunc(slices.Clone(c), isExecutableComment)
+	}
 	if len(c) == 0 {
 		return nil
 	}

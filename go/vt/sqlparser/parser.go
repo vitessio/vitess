@@ -287,8 +287,9 @@ func (p *Parser) parseNext(sql string) (stmt Statement, text string, rest string
 // alone). As MySQL does before parsing a COM_QUERY, trailing ';' and
 // whitespace are dropped from the whole text first, so "select 1;;" is one
 // statement. An empty statement followed by more input is a syntax error, as
-// in MySQL. Comments alone are a statement like any other. An input with no
-// statement at all is ErrEmpty.
+// in MySQL, and comments alone are as empty; comments alone that end the
+// batch are a statement of their own. An input with no statement at all is
+// ErrEmpty.
 func (p *Parser) ForEachStatement(sql string, fn func(text, rest string) error) error {
 	if strings.Trim(sql, blankChars) == "" {
 		return ErrEmpty
@@ -308,8 +309,14 @@ func (p *Parser) ForEachStatement(sql string, fn func(text, rest string) error) 
 	offset := 0 // start of the current statement in sql
 	for {
 		stmt, text, rest, err := p.parseNext(sql[offset:])
-		if err == nil && stmt == nil {
-			return NewParseErrorNear(sql, offset)
+		if err == nil {
+			// An empty statement followed by more input is a syntax error at
+			// its ';', as in MySQL, where comments alone are as empty. Comments
+			// alone that end the batch are a statement of their own.
+			_, comments := stmt.(*CommentOnly)
+			if stmt == nil || (comments && rest != "") {
+				return NewParseErrorNear(sql, offset+len(text))
+			}
 		}
 		if err := fn(text, rest); err != nil {
 			return err
@@ -323,12 +330,11 @@ func (p *Parser) ForEachStatement(sql string, fn func(text, rest string) error) 
 
 // IsBlankOrComments reports whether sql holds no statement at all: nothing but
 // blanks and comments, the way a comment after a statement's terminating ';'
-// does not start a second statement. The text is lexed, as MySQL's prepare
-// lexes it: an executable comment that applies holds SQL, one that does not
-// is comment text through and through, a ';' inside it included.
+// does not start a second statement. The text is lexed, as MySQL lexes it:
+// an executable comment that applies holds SQL, one that does not is comment
+// text through and through, a ';' inside it included.
 func (p *Parser) IsBlankOrComments(sql string) bool {
 	tokenizer := p.NewStringTokenizer(sql)
-	tokenizer.SingleStatement = true
 	for {
 		switch typ, _ := tokenizer.Scan(); typ {
 		case 0:

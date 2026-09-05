@@ -4245,9 +4245,6 @@ func TestInvalid(t *testing.T) {
 			input: "select a, b from (select * from tbl) sort by a",
 			err:   "syntax error",
 		}, {
-			input: "/*!*/",
-			err:   "Query was empty",
-		}, {
 			input: "values row(1) into outfile s3 'out_file_name'",
 			err:   "VALUES does not support INTO at position 46",
 		}, {

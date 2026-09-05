@@ -34,13 +34,9 @@ type Tokenizer struct {
 	AllowComments       bool
 	SkipSpecialComments bool
 	SkipToEnd           bool
-	// SingleStatement is set when the text is one statement, as for MySQL's
-	// prepare: a ';' inside an executable comment that does not apply is
-	// comment text there, rather than the lexical error it is in a batch.
-	SingleStatement bool
-	LastError       error
-	ParseTrees      []Statement
-	BindVars        map[string]struct{}
+	LastError           error
+	ParseTrees          []Statement
+	BindVars            map[string]struct{}
 
 	lastTokenType      int
 	lastToken          string
@@ -350,7 +346,7 @@ func (tkn *Tokenizer) Scan() (int, string) {
 					tkn.skip(1)
 					if tkn.cur() == '!' && !tkn.SkipSpecialComments {
 						tkn.skip(1)
-						if tok, val := tkn.scanMySQLSpecificComment(); tok == LEX_ERROR {
+						if tok, val := tkn.scanMySQLSpecificComment(); tok != 0 {
 							return tok, val
 						}
 						continue
@@ -816,14 +812,20 @@ func (tkn *Tokenizer) scanMySQLSpecificComment() (int, string) {
 
 	if tkn.parser.version >= versionStr {
 		// Version satisfied — Scan() will read inner tokens and detect
-		// the closing */ via the inVersionedComment flag.
+		// the closing */ via the inVersionedComment flag. A comment that
+		// holds nothing contributes no token and is a comment, as in MySQL.
+		tkn.skipBlank()
+		if tkn.cur() == '*' && tkn.peek(1) == '/' {
+			tkn.skip(2)
+			return COMMENT, tkn.buf[start:tkn.Pos]
+		}
 		tkn.inVersionedComment = true
 		return 0, ""
 	}
 
-	// Version not satisfied — skip the entire comment.
-	// Track one level of /* ... */ nesting so that a nested comment's
-	// closing */ does not prematurely end the versioned comment.
+	// Version not satisfied: the whole comment is a comment, as in MySQL,
+	// a ';' inside it included. Track one level of /* ... */ nesting so
+	// that a nested comment's closing */ does not prematurely end it.
 	for {
 		if tkn.cur() == '/' && tkn.peek(1) == '*' {
 			// Nested /* ... */ comment — consume and discard it.
@@ -844,17 +846,9 @@ func (tkn *Tokenizer) scanMySQLSpecificComment() (int, string) {
 		if tkn.cur() == eofChar {
 			return LEX_ERROR, tkn.buf[start:tkn.Pos]
 		}
-		if tkn.cur() == ';' && !tkn.SingleStatement {
-			// as in an executable comment that applies: MySQL does not let a
-			// statement of a batch end inside one, whatever its version. The ';'
-			// is consumed so that resyncing after the error does not take it for
-			// the statement's end.
-			tkn.skip(1)
-			return LEX_ERROR, tkn.buf[start:tkn.Pos]
-		}
 		tkn.skip(1)
 	}
-	return 0, ""
+	return COMMENT, tkn.buf[start:tkn.Pos]
 }
 
 func (tkn *Tokenizer) cur() uint16 {

@@ -300,7 +300,7 @@ func TestParseNextInheritsParserMode(t *testing.T) {
 	require.NoError(t, err)
 	stmt, text, rest, err = parser57.ParseNext(sql)
 	require.NoError(t, err)
-	assert.Nil(t, stmt, "a 5.7 parser skips the versioned comment entirely")
+	assert.IsType(t, &CommentOnly{}, stmt, "a 5.7 parser reads the versioned comment as a comment")
 	assert.Equal(t, "/*!80000 select 1 */", text)
 	assert.Equal(t, " select 2", rest)
 }
@@ -366,19 +366,38 @@ func TestForEachStatement(t *testing.T) {
 		input: "select\f1;\vselect\v2",
 		calls: []call{{"select\f1", "\vselect\v2"}, {"\vselect\v2", ""}},
 	}, {
-		// A ';' inside an executable comment is a syntax error in MySQL, whatever
-		// the comment's version: the statement is handed over whole, unsplit, for
-		// the grammar to reject it, and nothing after it runs.
+		// A ';' inside an executable comment that applies is a syntax error in
+		// MySQL: the statement is handed over whole, unsplit, for the grammar
+		// to reject it, and nothing after it runs.
 		input: "/*!80000 select 1; */ select 2",
 		calls: []call{{"/*!80000 select 1; */ select 2", ""}},
 	}, {
 		input: "select 3; /*!80000 select 1; */ select 2",
 		calls: []call{{"select 3", " /*!80000 select 1; */ select 2"}, {" /*!80000 select 1; */ select 2", ""}},
 	}, {
-		// the statement holding the comment ends at the next top-level ';' and
-		// fails on its own; the batch stops there once the executor reports it
+		// an executable comment that does not apply is a comment, ';' included
 		input: "select 1 /*!99999 ; */; select 2",
 		calls: []call{{"select 1 /*!99999 ; */", " select 2"}, {" select 2", ""}},
+	}, {
+		// Comments alone end a batch as a statement of their own, an executable
+		// comment that does not apply or holds nothing included.
+		input: "select 1; /*!99999 select 2 */",
+		calls: []call{{"select 1", " /*!99999 select 2 */"}, {" /*!99999 select 2 */", ""}},
+	}, {
+		input: "select 1; /*! */",
+		calls: []call{{"select 1", " /*! */"}, {" /*! */", ""}},
+	}, {
+		// Followed by more input, comments alone are an empty statement, a
+		// syntax error as in MySQL.
+		input: "select 1; /* c */; select 3",
+		calls: []call{{"select 1", " /* c */; select 3"}},
+		err:   parseErrorPrefix + "'; select 3' at line 1",
+		state: vterrors.ParseError,
+	}, {
+		input: "select 1; /*!99999 select 2 */; select 3",
+		calls: []call{{"select 1", " /*!99999 select 2 */; select 3"}},
+		err:   parseErrorPrefix + "'; select 3' at line 1",
+		state: vterrors.ParseError,
 	}, {
 		// a ';' inside a plain comment, or outside the executable comment, is fine
 		input: "select 1 /* ; */; select /*!80000 2 */; select 3",
@@ -689,17 +708,35 @@ func TestSplitStatementToPiecesNeverPanics(t *testing.T) {
 	}
 }
 
-// A ';' inside an executable comment is a syntax error in MySQL, whatever the
-// comment's version; a ';' inside a plain comment is not.
+// A ';' inside an executable comment that applies is a syntax error in MySQL;
+// inside a plain comment, or an executable comment that does not apply, it
+// is comment text.
 func TestTerminatorInsideExecutableComment(t *testing.T) {
 	parser := NewTestParser()
-	for _, sql := range []string{"/*!80000 select 1; */ select 2", "select /*!80000 1; */ 2", "select 1 /*!80000 ; */", "select 1 /*!99999 ; */"} {
+	for _, sql := range []string{"/*!80000 select 1; */ select 2", "select /*!80000 1; */ 2", "select 1 /*!80000 ; */"} {
 		_, err := parser.Parse(sql)
 		require.Error(t, err, sql)
 	}
-	for _, sql := range []string{"select 1 /* ; */", "select /*!80000 1 */", "select /*!99999 1 */ 3"} {
+	for _, sql := range []string{"select 1 /* ; */", "select /*!80000 1 */", "select /*!99999 1 */ 3", "select 1 /*!99999 ; */", "/*!99999 ; */ select 1", "select /*!99999 ; */ 1"} {
 		_, err := parser.Parse(sql)
 		require.NoError(t, err, sql)
+	}
+}
+
+// An executable comment that contributes no tokens, because it does not apply
+// or holds nothing, is a comment: alone it is a statement of comments, as a
+// plain comment is, and before a statement it is one of its comments.
+func TestExecutableCommentWithoutTokens(t *testing.T) {
+	parser := NewTestParser()
+	for _, sql := range []string{"/*!99999 select 1 */", "/*! */", "/*!*/", "/*!80000 */", " /*!99999 ; */ /* c */"} {
+		stmt, err := parser.Parse(sql)
+		require.NoError(t, err, sql)
+		assert.IsType(t, &CommentOnly{}, stmt, sql)
+	}
+	for _, sql := range []string{"/*!99999 x */ select 2", "/*! */ select 2"} {
+		stmt, err := parser.Parse(sql)
+		require.NoError(t, err, sql)
+		assert.IsType(t, &Select{}, stmt, sql)
 	}
 }
 
