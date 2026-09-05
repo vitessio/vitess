@@ -1699,6 +1699,7 @@ func TestReviewRunningMigrationsReDrivesFailedRepair(t *testing.T) {
 	parkRecordMessage := streamMessage
 	var queries []string
 	var retireAttempts int
+	var livenessRefreshed bool
 	failing := true
 	protocolName := t.Name()
 	resetProtocol := tmclienttest.SetProtocol(t.Name(), protocolName)
@@ -1730,6 +1731,9 @@ func TestReviewRunningMigrationsReDrivesFailedRepair(t *testing.T) {
 			switch {
 			case strings.HasPrefix(strings.TrimSpace(q), "update _vt.vreplication_log"):
 				retireAttempts++
+				return &sqltypes.Result{RowsAffected: 1}, nil
+			case strings.HasPrefix(strings.TrimSpace(q), "update") && strings.Contains(q, "liveness_timestamp"):
+				livenessRefreshed = true
 				return &sqltypes.Result{RowsAffected: 1}, nil
 			case strings.Contains(q, "migration_status='running'"):
 				return sqltypes.MakeTestResult(
@@ -1781,6 +1785,8 @@ func TestReviewRunningMigrationsReDrivesFailedRepair(t *testing.T) {
 	assert.NotContains(t, queries[1], retryForeverConfigKey, "the re-drive is a plain start, not another repair")
 	assert.True(t, e.vreplicationPendingRepair[uuid], "the intent stays while the re-drive keeps failing")
 	assert.Equal(t, 0, retireAttempts, "the park record must not be retired before the repair is confirmed")
+	assert.False(t, livenessRefreshed,
+		"a Running row with no controller behind it must not be reviewed further: no liveness, no cutover, until the re-drive succeeds")
 
 	// The re-drive succeeds: the intent is cleared, and only then is the
 	// park record retired.

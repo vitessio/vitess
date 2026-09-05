@@ -3742,25 +3742,28 @@ func retireVReplParkRecordQuery(id int32) string {
 // longer matches the repair, and the history scan trusts a Running row. A
 // no-op state update through the engine makes it rebuild the controller;
 // against one that did start, it merely restarts the stream. The intent is
-// cleared once the RPC succeeds and kept, for the next tick, otherwise.
-// Callers must hold migrationMutex.
-func (e *Executor) redriveVReplRepair(ctx context.Context, uuid string, s *VReplStream) {
+// cleared once the RPC succeeds and kept, for the next tick, otherwise. It
+// reports whether the re-drive succeeded: until it has, the row must not be
+// reviewed further, since nothing may be behind it. Callers must hold
+// migrationMutex.
+func (e *Executor) redriveVReplRepair(ctx context.Context, uuid string, s *VReplStream) bool {
 	ctx, cancel := context.WithTimeout(ctx, grpcTimeout)
 	defer cancel()
 	tablet, err := e.ts.GetTablet(ctx, e.tabletAlias)
 	if err != nil {
 		log.Error("Online DDL: failed to get tablet to re-drive a vreplication stream repair; will retry on the next tick",
 			slog.String("uuid", uuid), slog.String("tablet", e.TabletAliasString()), slog.Int64("stream_id", int64(s.id)), slog.Any("error", err))
-		return
+		return false
 	}
 	if err := e.startVReplication(ctx, tablet.Tablet, uuid); err != nil {
 		log.Error("Online DDL: failed to re-drive a vreplication stream repair whose RPC had failed; will retry on the next tick",
 			slog.String("uuid", uuid), slog.String("tablet", e.TabletAliasString()), slog.Int64("stream_id", int64(s.id)), slog.Any("error", err))
-		return
+		return false
 	}
 	delete(e.vreplicationPendingRepair, uuid)
 	log.Info("Online DDL: re-drove the start of a repaired vreplication stream whose repair RPC had failed",
 		slog.String("uuid", uuid), slog.String("tablet", e.TabletAliasString()), slog.Int64("stream_id", int64(s.id)))
+	return true
 }
 
 // retireVReplParkRecord rewrites the park records a stream has moved past
@@ -3955,7 +3958,12 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 				if e.vreplicationPendingRepair[uuid] {
 					// The repair's write landed (the row reads Running) but
 					// its RPC failed, so a controller may never have started.
-					e.redriveVReplRepair(ctx, uuid, s)
+					if !e.redriveVReplRepair(ctx, uuid, s) {
+						// Nothing may be behind this row yet: neither its
+						// liveness nor its readiness to cut over can be
+						// judged on it. The next review re-drives again.
+						return nil
+					}
 				}
 				e.refreshMigrationLiveness(ctx, uuid, s, migrationRow.AsInt64("rows_copied", 0), migrationRow.AsInt64("vitess_liveness_indicator", 0))
 				if onlineDDL.TabletAlias != e.TabletAliasString() {
