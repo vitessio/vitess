@@ -287,6 +287,22 @@ func TestWildcardMySQLParity(t *testing.T) {
 		{"utf8mb4_swedish_ci", "\\", "\\", true},
 		{"sjis_japanese_ci", "\x5C", "", false},
 		{"sjis_japanese_ci", "\x5C", "\x5C", true},
+		// A literal pattern with bytes that do not decode still compares byte
+		// by byte, as in MySQL.
+		{"sjis_japanese_ci", "\x81", "\x81", true},
+		{"sjis_japanese_ci", "A\x81", "A\x81", true},
+		{"sjis_japanese_ci", "\x81", "A", false},
+		// MySQL reads a dangling lead byte before a terminal '%' as one
+		// literal byte, and the wildcard stays live: the pattern matches
+		// every input that starts with the byte.
+		{"sjis_japanese_ci", "\x81%", "\x81", true},
+		{"sjis_japanese_ci", "\x81%", "\x81\x40", true},
+		{"sjis_japanese_ci", "\x81%", "\x81\x41", true},
+		{"sjis_japanese_ci", "\x81%", "\x81%", true},
+		{"sjis_japanese_ci", "\x81%", "\x81\x40\x41", true},
+		{"sjis_japanese_ci", "\x81%", "", false},
+		{"sjis_japanese_ci", "\x81%", "\x82", false},
+		{"sjis_japanese_ci", "\x81%", "A", false},
 	}
 	for _, tc := range testCases {
 		coll := testcollation(t, tc.collation)
@@ -311,6 +327,18 @@ func BenchmarkWildcardLargePattern(b *testing.B) {
 		b.ReportAllocs()
 		for range b.N {
 			_ = coll.Wildcard(wildcard, 0, 0, 0)
+		}
+	})
+
+	collEuc := testcollation(b, "eucjpms_japanese_ci")
+	threeByte := bytes.Repeat([]byte("\x8f\xa2\xafab"), 256*1024)
+	wildcard3 := append(append([]byte{}, threeByte...), '%')
+	wildcard3 = append(wildcard3, threeByte...)
+
+	b.Run("wildcard-threebyte", func(b *testing.B) {
+		b.ReportAllocs()
+		for range b.N {
+			_ = collEuc.Wildcard(wildcard3, 0, 0, 0)
 		}
 	})
 }

@@ -231,6 +231,10 @@ func (Charset_latin1) MaxWidth() int {
 	return 1
 }
 
+func (Charset_latin1) MinWidth() int {
+	return 1
+}
+
 func (Charset_latin1) Slice(src []byte, from, to int) []byte {
 	if from >= len(src) {
 		return nil

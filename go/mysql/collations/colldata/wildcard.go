@@ -113,7 +113,6 @@ func newUnicodeWildcardMatcher(
 ) WildcardPattern {
 	var escape bool
 	var chOneCount, chManyCount, chEscCount int
-	parsedPattern := make([]rune, 0, len(pat))
 	patOriginal := pat
 
 	if chOne == 0 {
@@ -126,23 +125,59 @@ func newUnicodeWildcardMatcher(
 		chEsc = '\\'
 	}
 
+	// A metacharacter always brings its own byte into the pattern, so a
+	// valid pattern without the metacharacter bytes cannot contain a
+	// wildcard or an escape, and it goes to the fastMatcher without any
+	// decoding. A metacharacter byte inside a multibyte character is a false
+	// positive here; the full parse below then classifies it correctly.
+	if collate != nil && len(pat) > 0 && chOne < utf8.RuneSelf && chMany < utf8.RuneSelf && chEsc < utf8.RuneSelf &&
+		bytes.IndexByte(pat, byte(chOne)) < 0 && bytes.IndexByte(pat, byte(chMany)) < 0 &&
+		bytes.IndexByte(pat, byte(chEsc)) < 0 && charset.Validate(cs, pat) {
+		return &fastMatcher{
+			collate:  collate,
+			pattern:  pat,
+			isPrefix: false,
+		}
+	}
+
 	// A character in the pattern is a wildcard or an escape only when its
 	// encoded width is the width of the metacharacter itself. Some charsets
 	// decode a multibyte character to the same rune as an ASCII character,
 	// for example sjis 81 5F and 5C both decode to the backslash; MySQL
 	// compares the metacharacters in the pattern's own encoding, so the
 	// multibyte form is an ordinary character.
-	var enc [4]byte
-	asciiWidth := cs.EncodeRune(enc[:], 'A')
 	metaWidth := func(ch rune) int {
 		if ch >= utf8.RuneSelf {
+			var enc [4]byte
 			if w := cs.EncodeRune(enc[:], ch); w > 0 {
 				return w
 			}
 		}
-		return asciiWidth
+		return cs.MinWidth()
 	}
 	chOneWidth, chManyWidth, chEscWidth := metaWidth(chOne), metaWidth(chMany), metaWidth(chEsc)
+
+	// A decode consumes at least the minimum character width and appends
+	// at most one token, so a charset with a wider minimum width divides
+	// the reservation: one token per pattern byte would hold a multiple
+	// of the needed capacity for the fixed-width unicode charsets.
+	minWidth := cs.MinWidth()
+	reserve := (len(pat) + minWidth - 1) / minWidth
+	// A run of match-many characters collapses to one token and a run
+	// always has a non-wildcard neighbor, so the token count is bounded by
+	// the other bytes plus the number of runs, and the reservation stays
+	// small for a pattern that is mostly wildcards.
+	// The reduction needs the match-many byte to be its own marker: a rune
+	// shared with match-one classifies as match-one and never collapses,
+	// in a charset with a wider minimum width the byte can sit inside an
+	// unrelated character, and a negative rune wraps to an unrelated byte,
+	// so in these cases the count says nothing about wildcards.
+	if minWidth == 1 && chMany != chOne && chMany >= 0 && chMany < utf8.RuneSelf {
+		if manyCount := bytes.Count(pat, []byte{byte(chMany)}); manyCount > 0 {
+			reserve = len(pat) - manyCount + min(manyCount, len(pat)-manyCount+1)
+		}
+	}
+	parsedPattern := make([]rune, 0, reserve)
 
 	for len(pat) > 0 {
 		cp, width, ok := cs.DecodeRune(pat)
@@ -192,14 +227,21 @@ func newUnicodeWildcardMatcher(
 					isPrefix: false,
 				}
 			}
-			if chManyCount == 1 && chMany < utf8.RuneSelf && parsedPattern[len(parsedPattern)-1] == chMany {
+			if chManyCount == 1 && parsedPattern[len(parsedPattern)-1] == patternMatchMany {
 				return &fastMatcher{
 					collate:  collate,
-					pattern:  patOriginal[:len(patOriginal)-1],
+					pattern:  patOriginal[:len(patOriginal)-chManyWidth],
 					isPrefix: true,
 				}
 			}
 		}
+	}
+
+	// The matcher can stay alive in the plan cache, so a large spare
+	// capacity is copied away instead of retained; 256 runes are one
+	// kibibyte.
+	if cap(parsedPattern)-len(parsedPattern) >= 256 {
+		parsedPattern = append(make([]rune, 0, len(parsedPattern)), parsedPattern...)
 	}
 
 	return &unicodeWildcard{
@@ -373,10 +415,7 @@ func newEightbitWildcardMatcher(
 	collate func(left []byte, right []byte, isPrefix bool) int,
 	pat []byte, chOneRune, chManyRune, chEscRune rune,
 ) WildcardPattern {
-	var escape bool
-	parsedPattern := make([]int16, 0, len(pat))
 	var chOne, chMany, chEsc byte = '_', '%', '\\'
-	var chOneCount, chManyCount, chEscCount int
 
 	if chOneRune > 255 || chManyRune > 255 || chEscRune > 255 {
 		return nopMatcher{}
@@ -390,6 +429,46 @@ func newEightbitWildcardMatcher(
 	if chEscRune != 0 {
 		chEsc = byte(chEscRune)
 	}
+
+	// Every character is one byte, so a metacharacter byte in the pattern
+	// is always a metacharacter and the scan is exact: a pattern without
+	// the metacharacter bytes is a literal, and a pattern whose only
+	// metacharacter is a terminal match-many is a prefix.
+	if collate != nil && bytes.IndexByte(pat, chOne) < 0 && bytes.IndexByte(pat, chEsc) < 0 {
+		if len(pat) == 0 {
+			return emptyMatcher{}
+		}
+		switch many := bytes.IndexByte(pat, chMany); {
+		case many < 0:
+			return &fastMatcher{
+				collate:  collate,
+				pattern:  pat,
+				isPrefix: false,
+			}
+		case many == len(pat)-1 && many > 0:
+			return &fastMatcher{
+				collate:  collate,
+				pattern:  pat[:len(pat)-1],
+				isPrefix: true,
+			}
+		}
+	}
+
+	var escape bool
+	// A run of match-many characters collapses to one token and a run
+	// always has a non-wildcard neighbor, so the token count is bounded by
+	// the other bytes plus the number of runs, and the reservation stays
+	// small for a pattern that is mostly wildcards.
+	// The reduction needs the match-many byte to be its own marker: a byte
+	// shared with match-one classifies as match-one and never collapses.
+	reserve := len(pat)
+	if chMany != chOne {
+		if manyCount := bytes.Count(pat, []byte{chMany}); manyCount > 0 {
+			reserve = len(pat) - manyCount + min(manyCount, len(pat)-manyCount+1)
+		}
+	}
+	parsedPattern := make([]int16, 0, reserve)
+	var chOneCount, chManyCount, chEscCount int
 
 	for _, ch := range pat {
 		if escape {
@@ -620,69 +699,116 @@ func newMultibyteWildcardMatcher(
 		chEsc = '\\'
 	}
 
+	// A metacharacter always brings its own byte into the pattern, so a
+	// pattern without the metacharacter bytes cannot contain a wildcard or
+	// an escape, and it goes to the fastMatcher without any decoding. A
+	// metacharacter byte inside a multibyte character is a false positive
+	// here; the full parse below then classifies it correctly.
+	if collate != nil && chOne < utf8.RuneSelf && chMany < utf8.RuneSelf && chEsc < utf8.RuneSelf &&
+		bytes.IndexByte(pat, byte(chOne)) < 0 && bytes.IndexByte(pat, byte(chEsc)) < 0 {
+		if len(pat) == 0 {
+			return emptyMatcher{}
+		}
+		switch many := bytes.IndexByte(pat, byte(chMany)); {
+		case many < 0:
+			return &fastMatcher{
+				collate:  collate,
+				pattern:  pat,
+				isPrefix: false,
+			}
+		// The prefix shortcut reads the terminal byte without a decode.
+		// This is safe because the trail bytes of the multibyte charsets
+		// are all 0x30 or larger, so a metacharacter byte below 0x30
+		// cannot be the tail of a multibyte character. A custom
+		// metacharacter above that limit goes through the full parse, and
+		// so does a negative rune, which byte conversion would wrap into
+		// the trail byte range.
+		case many == len(pat)-1 && many > 0 && chMany >= 0 && chMany < 0x30:
+			return &fastMatcher{
+				collate:  collate,
+				pattern:  pat[:len(pat)-1],
+				isPrefix: true,
+			}
+		}
+	}
+
 	// A character in the pattern is a wildcard or an escape only when its
 	// encoded width is the width of the metacharacter itself; see
 	// newUnicodeWildcardMatcher.
-	var enc [4]byte
-	asciiWidth := cs.EncodeRune(enc[:], 'A')
 	metaWidth := func(ch rune) int {
 		if ch >= utf8.RuneSelf {
+			var enc [4]byte
 			if w := cs.EncodeRune(enc[:], ch); w > 0 {
 				return w
 			}
 		}
-		return asciiWidth
+		return cs.MinWidth()
 	}
 	chOneWidth, chManyWidth, chEscWidth := metaWidth(chOne), metaWidth(chMany), metaWidth(chEsc)
 
-	// The first pass classifies the pattern without any allocation, so the
-	// common literal and trailing-wildcard patterns return a fastMatcher
-	// before the per-character tokens exist.
-	var elements int
-	lastMany := false
-	for p := pat; len(p) > 0; {
-		cp, width, ok := cs.DecodeRune(p)
+	// Each pattern character consumes at least one byte, a run of
+	// match-many characters collapses to one token, and a run always has a
+	// non-wildcard neighbor, so the token count is bounded by the other
+	// bytes plus the number of runs. The reservation stays small for a
+	// pattern that is mostly wildcards, and the parse stays a single pass;
+	// multibyte characters leave spare capacity, which is trimmed before
+	// the matcher is returned.
+	// The reduction needs the match-many byte to be its own marker: a rune
+	// shared with match-one classifies as match-one and never collapses,
+	// and a negative rune wraps to an unrelated byte.
+	reserve := len(pat)
+	if chMany != chOne && chMany >= 0 && chMany < utf8.RuneSelf {
+		if manyCount := bytes.Count(pat, []byte{byte(chMany)}); manyCount > 0 {
+			reserve = len(pat) - manyCount + min(manyCount, len(pat)-manyCount+1)
+		}
+	}
+	parsedPattern := make([]multibytePatternChar, 0, reserve)
+	for len(pat) > 0 {
+		cp, width, ok := cs.DecodeRune(pat)
 		if !ok {
 			return nopMatcher{}
 		}
-		p = p[width:]
+		ch := pat[:width]
+		pat = pat[width:]
 
 		if escape {
+			var token multibytePatternChar
+			token.width = uint8(copy(token.ch[:], ch))
+			parsedPattern = append(parsedPattern, token)
 			escape = false
-			elements++
-			lastMany = false
 			continue
 		}
 
 		switch {
 		case cp == chOne && width == chOneWidth:
 			chOneCount++
-			elements++
-			lastMany = false
+			parsedPattern = append(parsedPattern, multibytePatternChar{match: patternMatchOne})
 		case cp == chMany && width == chManyWidth:
 			chManyCount++
-			if !lastMany {
-				elements++
+			if len(parsedPattern) > 0 && parsedPattern[len(parsedPattern)-1].match == patternMatchMany {
+				continue
 			}
-			lastMany = true
+			parsedPattern = append(parsedPattern, multibytePatternChar{match: patternMatchMany})
 		case cp == chEsc && width == chEscWidth:
 			chEscCount++
 			escape = true
+			escapeChar = ch
 		default:
-			elements++
-			lastMany = false
+			var token multibytePatternChar
+			token.width = uint8(copy(token.ch[:], ch))
+			parsedPattern = append(parsedPattern, token)
 		}
 	}
 	if escape {
-		elements++
-		lastMany = false
+		var token multibytePatternChar
+		token.width = uint8(copy(token.ch[:], escapeChar))
+		parsedPattern = append(parsedPattern, token)
 	}
 
-	// if we have a collation callback, we can detect some common cases for
-	// patterns here and optimize them away without having to return a full
-	// WildcardPattern
+	// the byte scan above can miss these fast paths when a metacharacter
+	// byte sits inside a multibyte character
 	if collate != nil {
-		if elements == 0 {
+		if len(parsedPattern) == 0 {
 			return emptyMatcher{}
 		}
 		if chOneCount == 0 && chEscCount == 0 {
@@ -693,7 +819,7 @@ func newMultibyteWildcardMatcher(
 					isPrefix: false,
 				}
 			}
-			if chManyCount == 1 && chMany < utf8.RuneSelf && lastMany {
+			if chManyCount == 1 && chMany < utf8.RuneSelf && parsedPattern[len(parsedPattern)-1].match == patternMatchMany {
 				return &fastMatcher{
 					collate:  collate,
 					pattern:  patOriginal[:len(patOriginal)-1],
@@ -703,42 +829,11 @@ func newMultibyteWildcardMatcher(
 		}
 	}
 
-	parsedPattern := make([]multibytePatternChar, 0, elements)
-	escape = false
-	appendLiteral := func(ch []byte) {
-		var token multibytePatternChar
-		token.width = uint8(copy(token.ch[:], ch))
-		parsedPattern = append(parsedPattern, token)
-	}
-	for len(pat) > 0 {
-		// the first pass validated the whole pattern
-		cp, width, _ := cs.DecodeRune(pat)
-		ch := pat[:width]
-		pat = pat[width:]
-
-		if escape {
-			appendLiteral(ch)
-			escape = false
-			continue
-		}
-
-		switch {
-		case cp == chOne && width == chOneWidth:
-			parsedPattern = append(parsedPattern, multibytePatternChar{match: patternMatchOne})
-		case cp == chMany && width == chManyWidth:
-			if len(parsedPattern) > 0 && parsedPattern[len(parsedPattern)-1].match == patternMatchMany {
-				continue
-			}
-			parsedPattern = append(parsedPattern, multibytePatternChar{match: patternMatchMany})
-		case cp == chEsc && width == chEscWidth:
-			escape = true
-			escapeChar = ch
-		default:
-			appendLiteral(ch)
-		}
-	}
-	if escape {
-		appendLiteral(escapeChar)
+	// The matcher can stay alive in the plan cache, so a large spare
+	// capacity is copied away instead of retained; 128 tokens are one
+	// kibibyte.
+	if cap(parsedPattern)-len(parsedPattern) >= 128 {
+		parsedPattern = append(make([]multibytePatternChar, 0, len(parsedPattern)), parsedPattern...)
 	}
 
 	return &multibyteWildcard{
@@ -748,14 +843,22 @@ func newMultibyteWildcardMatcher(
 	}
 }
 
-func (wc *multibyteWildcard) equals(p *multibytePatternChar, b []byte) bool {
-	if p.width == 1 && len(b) == 1 {
-		if wc.sort != nil {
-			return wc.sort[p.ch[0]] == wc.sort[b[0]]
-		}
-		return p.ch[0] == b[0]
+func (wc *multibyteWildcard) equals(p *multibytePatternChar, in []byte, width int) bool {
+	if int(p.width) != width {
+		return false
 	}
-	return bytes.Equal(p.literal(), b)
+	if width == 1 {
+		if wc.sort != nil {
+			return wc.sort[p.ch[0]] == wc.sort[in[0]]
+		}
+		return p.ch[0] == in[0]
+	}
+	for i := range width {
+		if p.ch[i] != in[i] {
+			return false
+		}
+	}
+	return true
 }
 
 func (wc *multibyteWildcard) Match(in []byte) bool {
@@ -800,7 +903,7 @@ retry:
 		if !ok {
 			return matchFail
 		}
-		if wc.equals(&p0, in[:width]) {
+		if wc.equals(&p0, in, width) {
 			break
 		}
 		in = in[width:]
@@ -836,7 +939,7 @@ func (wc *multibyteWildcard) matchRecursive(in []byte, pat []multibytePatternCha
 
 		switch {
 		case pat[0].match == patternMatchOne:
-		case wc.equals(&pat[0], in[:width]):
+		case wc.equals(&pat[0], in, width):
 		default:
 			return matchFail
 		}
@@ -886,7 +989,7 @@ retry:
 			if !ok {
 				return false
 			}
-			if len(p) == 0 || !wc.equals(&p0, s[:width]) {
+			if len(p) == 0 || !wc.equals(&p0, s, width) {
 				goto starCheck
 			}
 			s = s[width:]

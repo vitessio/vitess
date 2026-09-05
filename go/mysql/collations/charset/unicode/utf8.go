@@ -184,6 +184,10 @@ func (Charset_utf8mb3) MaxWidth() int {
 	return 3
 }
 
+func (Charset_utf8mb3) MinWidth() int {
+	return 1
+}
+
 type Charset_utf8mb4 struct{}
 
 func (Charset_utf8mb4) Name() string {
@@ -225,4 +229,8 @@ func (Charset_utf8mb4) Length(src []byte) int {
 
 func (Charset_utf8mb4) MaxWidth() int {
 	return 4
+}
+
+func (Charset_utf8mb4) MinWidth() int {
+	return 1
 }
