@@ -17,7 +17,6 @@ limitations under the License.
 package vtgate
 
 import (
-	"context"
 	"log/slog"
 	"sync"
 	"testing"
@@ -37,7 +36,6 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/engine"
 	econtext "vitess.io/vitess/go/vt/vtgate/executorcontext"
 )
 
@@ -99,7 +97,7 @@ func TestExecuteFailOnAutocommit(t *testing.T) {
 		},
 		Autocommit: false,
 	}
-	_, errs := sc.ExecuteMultiShard(ctx, nil, rss, queries, econtext.NewSafeSession(session), true /*autocommit*/, false, nullResultsObserver{}, false)
+	_, errs := sc.ExecuteMultiShard(ctx, nil, rss, queries, econtext.NewSafeSession(session), true /*autocommit*/, false, false, nullResultsObserver{}, false)
 	err := vterrors.Aggregate(errs)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "in autocommit mode, transactionID should be zero but was: 123")
@@ -200,7 +198,7 @@ func TestFetchLastInsertIDResets(t *testing.T) {
 				sbc0.Options = nil
 			}
 
-			_, errs := sc.ExecuteMultiShard(ctx, nil, rss, queries, session, true /*autocommit*/, false, nullResultsObserver{}, tt.fetchLastInsertID)
+			_, errs := sc.ExecuteMultiShard(ctx, nil, rss, queries, session, true /*autocommit*/, false, false, nullResultsObserver{}, tt.fetchLastInsertID)
 			require.NoError(t, vterrors.Aggregate(errs))
 
 			// The shared session options must not be mutated by the call; the
@@ -260,13 +258,13 @@ func TestScatterConnSharedOptionsNoRace(t *testing.T) {
 	for i := range 16 {
 		fetchLastInsertID := i%2 == 0
 		wg.Go(func() {
-			errs := sc.StreamExecuteMulti(ctx, nil, "query", rss, bindVars, session, true /*autocommit*/, func(*sqltypes.Result) error {
+			errs := sc.StreamExecuteMulti(ctx, nil, "query", rss, bindVars, session, true /*autocommit*/, false, func(*sqltypes.Result) error {
 				return nil
 			}, nullResultsObserver{}, fetchLastInsertID)
 			assert.NoError(t, vterrors.Aggregate(errs))
 		})
 		wg.Go(func() {
-			_, errs := sc.ExecuteMultiShard(ctx, nil, rss, queries, session, true /*autocommit*/, false, nullResultsObserver{}, fetchLastInsertID)
+			_, errs := sc.ExecuteMultiShard(ctx, nil, rss, queries, session, true /*autocommit*/, false, false, nullResultsObserver{}, fetchLastInsertID)
 			assert.NoError(t, vterrors.Aggregate(errs))
 		})
 	}
@@ -345,7 +343,7 @@ func TestExecutePanic(t *testing.T) {
 	}
 
 	assert.Panics(t, func() {
-		_, _ = sc.ExecuteMultiShard(ctx, nil, rss, queries, econtext.NewSafeSession(session), true /*autocommit*/, false, nullResultsObserver{}, false)
+		_, _ = sc.ExecuteMultiShard(ctx, nil, rss, queries, econtext.NewSafeSession(session), true /*autocommit*/, false, false, nullResultsObserver{}, false)
 	})
 	require.Contains(t, logMessage, "(*ScatterConn).multiGoTransaction")
 }
@@ -714,7 +712,7 @@ func TestActionInfoWithTabletAlias(t *testing.T) {
 		session := econtext.NewSafeSession(&vtgatepb.Session{})
 		session.SetTargetTabletAlias(tabletAlias)
 
-		info, shardSession, err := actionInfo(ctx, target, session, false, vtgatepb.TransactionMode_MULTI)
+		info, shardSession, err := actionInfo(ctx, target, session, false, false, vtgatepb.TransactionMode_MULTI)
 		require.NoError(t, err)
 		assert.Nil(t, shardSession)
 		assert.Equal(t, nothing, info.actionNeeded)
@@ -727,7 +725,7 @@ func TestActionInfoWithTabletAlias(t *testing.T) {
 		})
 		session.SetTargetTabletAlias(tabletAlias)
 
-		info, shardSession, err := actionInfo(ctx, target, session, false, vtgatepb.TransactionMode_MULTI)
+		info, shardSession, err := actionInfo(ctx, target, session, false, false, vtgatepb.TransactionMode_MULTI)
 		require.NoError(t, err)
 		assert.Nil(t, shardSession)
 		assert.Equal(t, begin, info.actionNeeded)
@@ -745,14 +743,14 @@ func TestActionInfoWithTabletAlias(t *testing.T) {
 		})
 		session.SetTargetTabletAlias(tabletAlias) // zone1-100, different from zone1-50
 
-		_, _, err := actionInfo(ctx, target, session, false, vtgatepb.TransactionMode_MULTI)
+		_, _, err := actionInfo(ctx, target, session, false, false, vtgatepb.TransactionMode_MULTI)
 		require.ErrorContains(t, err, "cannot change tablet target mid-transaction")
 	})
 
 	t.Run("no tablet alias - existing behavior", func(t *testing.T) {
 		session := econtext.NewSafeSession(&vtgatepb.Session{})
 
-		info, shardSession, err := actionInfo(ctx, target, session, false, vtgatepb.TransactionMode_MULTI)
+		info, shardSession, err := actionInfo(ctx, target, session, false, false, vtgatepb.TransactionMode_MULTI)
 		require.NoError(t, err)
 		assert.Nil(t, shardSession)
 		assert.Equal(t, nothing, info.actionNeeded)
@@ -765,11 +763,10 @@ func TestActionInfoWithTabletAlias(t *testing.T) {
 func TestActionInfoSettingsForStatement(t *testing.T) {
 	ctx := utils.LeakCheckContext(t)
 	target := &querypb.Target{Keyspace: "ks", Shard: "-80", TabletType: topodatapb.TabletType_PRIMARY}
-	withSettings := context.WithValue(ctx, engine.SessionSettingsForStatement, true)
 
 	t.Run("plain session", func(t *testing.T) {
 		session := econtext.NewSafeSession(&vtgatepb.Session{})
-		info, _, err := actionInfo(withSettings, target, session, false, vtgatepb.TransactionMode_MULTI)
+		info, _, err := actionInfo(ctx, target, session, false, true, vtgatepb.TransactionMode_MULTI)
 		require.NoError(t, err)
 		assert.Equal(t, reserve, info.actionNeeded)
 		assert.False(t, session.InReservedConn())
@@ -780,7 +777,7 @@ func TestActionInfoSettingsForStatement(t *testing.T) {
 			InTransaction: true,
 			ShardSessions: []*vtgatepb.Session_ShardSession{{Target: target, TransactionId: 12345}},
 		})
-		info, _, err := actionInfo(withSettings, target, session, false, vtgatepb.TransactionMode_MULTI)
+		info, _, err := actionInfo(ctx, target, session, false, true, vtgatepb.TransactionMode_MULTI)
 		require.NoError(t, err)
 		assert.Equal(t, reserve, info.actionNeeded)
 		assert.EqualValues(t, 12345, info.transactionID)
@@ -788,7 +785,7 @@ func TestActionInfoSettingsForStatement(t *testing.T) {
 
 	t.Run("a new transaction reserves and begins", func(t *testing.T) {
 		session := econtext.NewSafeSession(&vtgatepb.Session{InTransaction: true})
-		info, _, err := actionInfo(withSettings, target, session, false, vtgatepb.TransactionMode_MULTI)
+		info, _, err := actionInfo(ctx, target, session, false, true, vtgatepb.TransactionMode_MULTI)
 		require.NoError(t, err)
 		assert.Equal(t, reserveBegin, info.actionNeeded)
 	})
@@ -798,7 +795,7 @@ func TestActionInfoSettingsForStatement(t *testing.T) {
 			InReservedConn: true,
 			ShardSessions:  []*vtgatepb.Session_ShardSession{{Target: target, ReservedId: 7}},
 		})
-		info, _, err := actionInfo(withSettings, target, session, false, vtgatepb.TransactionMode_MULTI)
+		info, _, err := actionInfo(ctx, target, session, false, true, vtgatepb.TransactionMode_MULTI)
 		require.NoError(t, err)
 		assert.Equal(t, nothing, info.actionNeeded)
 		assert.EqualValues(t, 7, info.reservedID)
@@ -806,7 +803,7 @@ func TestActionInfoSettingsForStatement(t *testing.T) {
 
 	t.Run("without the request the session decides", func(t *testing.T) {
 		session := econtext.NewSafeSession(&vtgatepb.Session{})
-		info, _, err := actionInfo(ctx, target, session, false, vtgatepb.TransactionMode_MULTI)
+		info, _, err := actionInfo(ctx, target, session, false, false, vtgatepb.TransactionMode_MULTI)
 		require.NoError(t, err)
 		assert.Equal(t, nothing, info.actionNeeded)
 	})
@@ -823,8 +820,14 @@ func TestSettingsForStatementPinsOnlyWhenTheTabletReserved(t *testing.T) {
 	sc := newTestScatterConn(ctx, hc, newSandboxForCells(ctx, []string{"aa"}), "aa")
 	sbc := hc.AddTestTablet("aa", "0", 1, keyspace, "0", topodatapb.TabletType_REPLICA, true, 1, nil)
 	res := srvtopo.NewResolver(newSandboxForCells(ctx, []string{"aa"}), sc.gateway, "aa")
-	destinations := []key.ShardDestination{key.DestinationShard("0")}
-	withSettings := context.WithValue(ctx, engine.SessionSettingsForStatement, true)
+	rss, _, err := res.ResolveDestinations(ctx, keyspace, topodatapb.TabletType_REPLICA, nil, []key.ShardDestination{key.DestinationShard("0")})
+	require.NoError(t, err)
+	queries := []*querypb.BoundQuery{{Sql: "query1", BindVariables: map[string]*querypb.BindVariable{}}}
+	execute := func(t *testing.T, session *econtext.SafeSession, settingsForStatement bool) {
+		t.Helper()
+		_, errs := sc.ExecuteMultiShard(ctx, nil, rss, queries, session, false, settingsForStatement, false, nullResultsObserver{}, false)
+		require.NoError(t, vterrors.Aggregate(errs))
+	}
 	newSession := func() *econtext.SafeSession {
 		return econtext.NewSafeSession(&vtgatepb.Session{SystemVariables: map[string]string{"sql_safe_updates": "1"}})
 	}
@@ -834,27 +837,27 @@ func TestSettingsForStatementPinsOnlyWhenTheTabletReserved(t *testing.T) {
 		defer func() { sbc.NoReservation = false }()
 		sbc.ReserveCount.Store(0)
 		session := newSession()
-		executeOnShards(t, withSettings, res, keyspace, sc, session, destinations)
+		execute(t, session, true)
 		assert.EqualValues(t, 1, sbc.ReserveCount.Load())
 		assert.False(t, session.InReservedConn())
 		assert.Empty(t, session.ShardSessions)
 
 		// the next statement of the session is a plain execute again
-		executeOnShards(t, ctx, res, keyspace, sc, session, destinations)
+		execute(t, session, false)
 		assert.EqualValues(t, 1, sbc.ReserveCount.Load())
 	})
 
 	t.Run("reserved by the tablet", func(t *testing.T) {
 		sbc.ReserveCount.Store(0)
 		session := newSession()
-		executeOnShards(t, withSettings, res, keyspace, sc, session, destinations)
+		execute(t, session, true)
 		assert.EqualValues(t, 1, sbc.ReserveCount.Load())
 		assert.True(t, session.InReservedConn())
 		require.Len(t, session.ShardSessions, 1)
 		assert.NotZero(t, session.ShardSessions[0].ReservedId)
 
 		// the next statement of the session runs on the reserved connection
-		executeOnShards(t, ctx, res, keyspace, sc, session, destinations)
+		execute(t, session, false)
 		assert.EqualValues(t, 1, sbc.ReserveCount.Load())
 	})
 }
