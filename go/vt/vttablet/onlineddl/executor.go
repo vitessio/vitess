@@ -3818,6 +3818,11 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 					// place: the next tick retries, and the retry window and
 					// stale policy bound a park that never repairs.
 					e.ownedRunningMigrations.Store(uuid, onlineDDL)
+					// The repair rewrites the live row and the park record,
+					// so this is where the parked error stays correlated
+					// with the recovery.
+					log.Info("Online DDL: repairing vreplication stream parked on a retries-exhausted error; restarting it with the retry-forever override",
+						slog.String("uuid", uuid), slog.String("tablet", e.TabletAliasString()), slog.Int64("stream_id", int64(s.id)), slog.String("parked_error", s.message))
 					query := repairVReplicationQuery(s.id)
 					// Bound the lookup and the RPC: we hold migrationMutex
 					// and the tick's context has no deadline.
