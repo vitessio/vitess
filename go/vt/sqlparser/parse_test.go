@@ -4190,6 +4190,29 @@ var validSQL = []struct {
 	input:  "select db.cast (1), db.now () from t",
 	output: "select db.`cast`(1), db.`now`() from t",
 }, {
+	// the rule covers MySQL's whole list of whitespace-sensitive function
+	// names: with whitespace before the parenthesis, each is a generic call
+	input:  "select count (1), sum (x), max (x), min (x) from t",
+	output: "select `count`(1), `sum`(x), `max`(x), `min`(x) from t",
+}, {
+	input:  "select trim (' a '), mid ('abc', 1, 1), adddate (d, 1), std (x), var_pop (x), bit_and (x) from t",
+	output: "select `trim`(' a '), `mid`('abc', 1, 1), `adddate`(d, 1), `std`(x), `var_pop`(x), `bit_and`(x) from t",
+}, {
+	input:  "select curdate (), curtime (), sysdate () from t",
+	output: "select `curdate`(), `curtime`(), `sysdate`() from t",
+}, {
+	input:  "select t.count(1), db.sum (x) from t",
+	output: "select t.`count`(1), db.`sum`(x) from t",
+}, {
+	// and bare, each is an identifier
+	input:  "select count, sum, position, trim, std, var_pop from t",
+	output: "select `count`, `sum`, `position`, `trim`, `std`, `var_pop` from t",
+}, {
+	// session_user and system_user are on MySQL's list but are no keywords
+	// here: both spellings are the same generic call, printed as the built-in
+	input:  "select session_user(), system_user () from t",
+	output: "select session_user(), system_user() from t",
+}, {
 	input:  "create table CURDATE (a int)",
 	output: "create table `CURDATE` (\n\ta int\n)",
 }, {
@@ -6766,6 +6789,29 @@ var invalidSQL = []struct {
 	input:  "select cast (1 as char)",
 	output: "syntax error at position 18 near 'as'",
 }, {
+	// the same for every name on MySQL's list whose built-in form has its own
+	// argument syntax: with whitespace, the generic argument list applies
+	input:  "select count (*) from t",
+	output: "syntax error at position 16",
+}, {
+	input:  "select position ('a' in 'abc') from t",
+	output: "syntax error at position 30 near 'abc'",
+}, {
+	input:  "select trim (leading 'a' from 'abc') from t",
+	output: "syntax error at position 21 near 'leading'",
+}, {
+	input:  "select date_add (now(), interval 1 day) from t",
+	output: "syntax error at position 40",
+}, {
+	input:  "select group_concat (distinct a) from t",
+	output: "syntax error at position 30 near 'distinct'",
+}, {
+	input:  "select substring ('abc' from 1) from t",
+	output: "syntax error at position 29 near 'from'",
+}, {
+	input:  "select extract (year from now()) from t",
+	output: "syntax error at position 26 near 'from'",
+}, {
 	// bare now (without parens) is an identifier, not the now() function
 	input:  "create table t (a datetime default now)",
 	output: "syntax error at position 39 near 'now'",
@@ -7272,4 +7318,26 @@ func parsePartial(r *bufio.Reader, readType []string, lineno int, fileName strin
 
 func locateFile(name string) string {
 	return "testdata/" + name
+}
+
+// Every name on MySQL's list that is a keyword of this grammar gets the
+// function-call lexing, no other keyword does, and the names that are no
+// keywords here are exactly the two that cannot be told apart from a generic call.
+func TestFuncCallKeywordList(t *testing.T) {
+	var notKeywords []string
+	for name := range mysqlFuncCallKeywords {
+		id, ok := keywordLookupTable.LookupString(name)
+		if !ok {
+			notKeywords = append(notKeywords, name)
+			continue
+		}
+		assert.True(t, isFuncCallKeyword(id), name)
+	}
+	assert.ElementsMatch(t, []string{"session_user", "system_user"}, notKeywords)
+	for _, kw := range keywords {
+		if kw.id != UNUSED && isFuncCallKeyword(kw.id) {
+			_, listed := mysqlFuncCallKeywords[kw.name]
+			assert.True(t, listed, kw.name)
+		}
+	}
 }

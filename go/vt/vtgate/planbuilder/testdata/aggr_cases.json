@@ -3965,20 +3965,20 @@
   },
   {
     "comment": "Aggregation on column from inner side in a left join query",
-    "query": "select count (u.id) from user u left join user_extra ue on u.col = ue.col",
+    "query": "select count(u.id) from user u left join user_extra ue on u.col = ue.col",
     "plan": {
       "Type": "Complex",
       "QueryType": "SELECT",
-      "Original": "select count (u.id) from user u left join user_extra ue on u.col = ue.col",
+      "Original": "select count(u.id) from user u left join user_extra ue on u.col = ue.col",
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "sum_count(0) AS count (u.id)",
+        "Aggregates": "sum_count(0) AS count(u.id)",
         "Inputs": [
           {
             "OperatorType": "Projection",
             "Expressions": [
-              "count(u.id) * coalesce(count(*), 1) as count (u.id)"
+              "count(u.id) * coalesce(count(*), 1) as count(u.id)"
             ],
             "Inputs": [
               {
