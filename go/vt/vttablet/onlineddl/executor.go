@@ -1993,23 +1993,31 @@ func (e *Executor) CancelMigration(ctx context.Context, uuid string, message str
 	return result, nil
 }
 
-// cancelMigrations attempts to abort a list of migrations
-func (e *Executor) cancelMigrations(ctx context.Context, cancellable []*cancellableMigration, issuedByUser bool) (err error) {
+// cancelMigrations attempts to abort every listed migration: one failing to
+// cancel must not leave the rest running, or free to start. It returns the
+// combined result of the cancellations that succeeded, and the failures
+// aggregated: Aggregate keeps every message and the highest-priority Vitess
+// error code, which a client maps to a MySQL error (errors.Join would report
+// UNKNOWN).
+func (e *Executor) cancelMigrations(ctx context.Context, cancellable []*cancellableMigration, issuedByUser bool) (result *sqltypes.Result, err error) {
+	result = &sqltypes.Result{}
+	var errs []error
 	for _, migration := range cancellable {
 		log.Info(fmt.Sprintf("cancelMigrations: cancelling %s; reason: %s", migration.uuid, migration.message))
-		if _, err := e.CancelMigration(ctx, migration.uuid, migration.message, issuedByUser); err != nil {
-			return err
+		res, err := e.CancelMigration(ctx, migration.uuid, migration.message, issuedByUser)
+		if err != nil {
+			errs = append(errs, vterrors.Wrapf(err, "cancelling migration %s", migration.uuid))
+			continue
 		}
+		result.AppendResult(res)
 	}
-	return nil
+	return result, vterrors.Aggregate(errs)
 }
 
 // CancelPendingMigrations cancels all pending migrations (that are expected to run or are running)
 // for this keyspace. When migrationContext is non-empty only migrations whose migration_context
 // matches are cancelled (CANCEL CONTEXT 'ctx'). When migrationContext is empty all pending
-// migrations are cancelled (CANCEL ALL). Every matching migration is attempted: one failing to
-// cancel must not leave the rest running, or free to start, so the failures are reported together
-// alongside the result of the cancellations that succeeded.
+// migrations are cancelled (CANCEL ALL). Every matching migration is attempted, see cancelMigrations.
 func (e *Executor) CancelPendingMigrations(ctx context.Context, migrationContext string, issuedByUser bool) (result *sqltypes.Result, err error) {
 	if e.isOpen.Load() == 0 {
 		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, schema.ErrOnlineDDLDisabled.Error())
@@ -2026,26 +2034,14 @@ func (e *Executor) CancelPendingMigrations(ctx context.Context, migrationContext
 		message = fmt.Sprintf("CANCEL CONTEXT '%s' issued by user", migrationContext)
 	}
 
-	matched := 0
-	result = &sqltypes.Result{}
-	var errs []error
+	var cancellable []*cancellableMigration
 	for _, pending := range pendingMigrations {
 		if migrationContext == "" || migrationContext == pending.migrationContext {
-			matched++
-			log.Info("CancelPendingMigrations: cancelling " + pending.uuid)
-			res, err := e.CancelMigration(ctx, pending.uuid, message, issuedByUser)
-			if err != nil {
-				errs = append(errs, vterrors.Wrapf(err, "cancelling migration %s", pending.uuid))
-				continue
-			}
-			result.AppendResult(res)
+			cancellable = append(cancellable, newCancellableMigration(pending.uuid, message))
 		}
 	}
-	log.Info(fmt.Sprintf("CancelPendingMigrations: done iterating %v migrations, matched %d, failed %d", len(pendingMigrations), matched, len(errs)))
-	// Aggregate keeps every message and the highest-priority Vitess error
-	// code, which the client maps to a MySQL error; errors.Join would
-	// report UNKNOWN.
-	return result, vterrors.Aggregate(errs)
+	log.Info(fmt.Sprintf("CancelPendingMigrations: iterating %v migrations, matched %d", len(pendingMigrations), len(cancellable)))
+	return e.cancelMigrations(ctx, cancellable, issuedByUser)
 }
 
 func (e *Executor) validateThrottleParams(ctx context.Context, expireString string, ratioLiteral *sqlparser.Literal) (duration time.Duration, ratio float64, err error) {
@@ -4367,7 +4363,7 @@ func (e *Executor) onMigrationCheckTick() {
 	}
 	if _, cancellable, err := e.reviewRunningMigrations(ctx); err != nil {
 		log.Error(fmt.Sprint(err))
-	} else if err := e.cancelMigrations(ctx, cancellable, false); err != nil {
+	} else if _, err := e.cancelMigrations(ctx, cancellable, false); err != nil {
 		log.Error(fmt.Sprint(err))
 	}
 	if err := e.monitorStaleMigrations(ctx); err != nil {

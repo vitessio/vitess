@@ -1054,57 +1054,77 @@ func TestForgetVReplStreamOrdering(t *testing.T) {
 	})
 }
 
-// TestCancelPendingMigrationsContinuesPastFailure pins that CANCEL ALL and
-// CANCEL CONTEXT attempt every matching migration: one migration failing to
-// cancel must not leave the rest running, or free to start, and every failure
-// must be reported.
-func TestCancelPendingMigrationsContinuesPastFailure(t *testing.T) {
+// TestCancelMigrationsContinuePastFailure pins that both ways of cancelling
+// a batch of migrations — CANCEL ALL / CANCEL CONTEXT, and the review's
+// per-tick cancellations — attempt every migration: one failing to cancel
+// must not leave the rest running, or free to start, and every failure must
+// be reported.
+func TestCancelMigrationsContinuePastFailure(t *testing.T) {
 	const (
 		firstFailingUUID = "1cbcd662_8ed6_11ee_bc8f_0a43f95f28a3"
 		queuedUUID       = "2cbcd662_8ed6_11ee_bc8f_0a43f95f28a3"
 		lastFailingUUID  = "3cbcd662_8ed6_11ee_bc8f_0a43f95f28a3"
 	)
-	var cancelled []string
-	e := &Executor{
-		vreplicationLastError:     map[string]*vterrors.LastError{},
-		vreplicationPendingCancel: map[string]string{},
-		tabletAlias:               &topodatapb.TabletAlias{Cell: "cell", Uid: 1},
-		ticks:                     timer.NewTimer(time.Hour),
-		execQuery: func(ctx context.Context, query string) (*sqltypes.Result, error) {
-			isSelect := strings.HasPrefix(strings.TrimSpace(strings.ToUpper(query)), "SELECT")
-			switch {
-			case strings.Contains(query, "IN ('queued', 'ready', 'running')"):
-				return sqltypes.MakeTestResult(
-					sqltypes.MakeTestFields("migration_uuid|migration_context", "varchar|varchar"),
-					firstFailingUUID+"|ctx", queuedUUID+"|ctx", lastFailingUUID+"|ctx"), nil
-			case isSelect && strings.Contains(query, firstFailingUUID):
-				// Reading these migrations fails with coded errors, so their
-				// cancellations do.
-				return nil, vterrors.New(vtrpcpb.Code_UNAVAILABLE, "backend unavailable")
-			case isSelect && strings.Contains(query, lastFailingUUID):
-				return nil, vterrors.New(vtrpcpb.Code_DEADLINE_EXCEEDED, "backend timed out")
-			case isSelect && strings.Contains(query, queuedUUID):
-				return sqltypes.MakeTestResult(
-					sqltypes.MakeTestFields("migration_uuid|migration_status", "varchar|varchar"),
-					queuedUUID+"|queued"), nil
-			case strings.Contains(query, "migration_status") && strings.Contains(query, queuedUUID):
-				cancelled = append(cancelled, queuedUUID)
-			}
-			return &sqltypes.Result{RowsAffected: 1}, nil
-		},
+	newExecutor := func() (*Executor, *[]string) {
+		var cancelled []string
+		e := &Executor{
+			vreplicationLastError:     map[string]*vterrors.LastError{},
+			vreplicationPendingCancel: map[string]string{},
+			tabletAlias:               &topodatapb.TabletAlias{Cell: "cell", Uid: 1},
+			ticks:                     timer.NewTimer(time.Hour),
+			execQuery: func(ctx context.Context, query string) (*sqltypes.Result, error) {
+				isSelect := strings.HasPrefix(strings.TrimSpace(strings.ToUpper(query)), "SELECT")
+				switch {
+				case strings.Contains(query, "IN ('queued', 'ready', 'running')"):
+					return sqltypes.MakeTestResult(
+						sqltypes.MakeTestFields("migration_uuid|migration_context", "varchar|varchar"),
+						firstFailingUUID+"|ctx", queuedUUID+"|ctx", lastFailingUUID+"|ctx"), nil
+				case isSelect && strings.Contains(query, firstFailingUUID):
+					// Reading these migrations fails with coded errors, so
+					// their cancellations do.
+					return nil, vterrors.New(vtrpcpb.Code_UNAVAILABLE, "backend unavailable")
+				case isSelect && strings.Contains(query, lastFailingUUID):
+					return nil, vterrors.New(vtrpcpb.Code_DEADLINE_EXCEEDED, "backend timed out")
+				case isSelect && strings.Contains(query, queuedUUID):
+					return sqltypes.MakeTestResult(
+						sqltypes.MakeTestFields("migration_uuid|migration_status", "varchar|varchar"),
+						queuedUUID+"|queued"), nil
+				case strings.Contains(query, "migration_status") && strings.Contains(query, queuedUUID):
+					cancelled = append(cancelled, queuedUUID)
+				}
+				return &sqltypes.Result{RowsAffected: 1}, nil
+			},
+		}
+		e.isOpen.Store(1)
+		return e, &cancelled
 	}
-	e.isOpen.Store(1)
+	assertOutcome := func(t *testing.T, cancelled []string, result *sqltypes.Result, err error) {
+		t.Helper()
+		require.Error(t, err)
+		assert.ErrorContains(t, err, firstFailingUUID)
+		assert.ErrorContains(t, err, lastFailingUUID, "every failure must be reported, not only the first")
+		assert.Equal(t, vtrpcpb.Code_DEADLINE_EXCEEDED, vterrors.Code(err),
+			"aggregating the failures must keep a structured error code (the highest-priority one)")
+		assert.Equal(t, []string{queuedUUID}, cancelled,
+			"a migration failing to cancel must not leave the later ones uncancelled and free to start")
+		require.NotNil(t, result)
+		assert.EqualValues(t, 1, result.RowsAffected)
+	}
 
-	result, err := e.CancelPendingMigrations(t.Context(), "", true)
-	require.Error(t, err)
-	assert.ErrorContains(t, err, firstFailingUUID)
-	assert.ErrorContains(t, err, lastFailingUUID, "every failure must be reported, not only the first")
-	assert.Equal(t, vtrpcpb.Code_DEADLINE_EXCEEDED, vterrors.Code(err),
-		"aggregating the failures must keep a structured error code (the highest-priority one) for the client to map to a MySQL error")
-	assert.Equal(t, []string{queuedUUID}, cancelled,
-		"a migration failing to cancel must not leave the later matches uncancelled and free to start")
-	require.NotNil(t, result)
-	assert.EqualValues(t, 1, result.RowsAffected)
+	t.Run("CANCEL ALL", func(t *testing.T) {
+		e, cancelled := newExecutor()
+		result, err := e.CancelPendingMigrations(t.Context(), "", true)
+		assertOutcome(t, *cancelled, result, err)
+	})
+	t.Run("review tick", func(t *testing.T) {
+		e, cancelled := newExecutor()
+		result, err := e.cancelMigrations(t.Context(), []*cancellableMigration{
+			newCancellableMigration(firstFailingUUID, "internal cancel"),
+			newCancellableMigration(queuedUUID, "internal cancel"),
+			newCancellableMigration(lastFailingUUID, "internal cancel"),
+		}, false)
+		assertOutcome(t, *cancelled, result, err)
+	})
 }
 
 // TestTerminallyFailMigrationMetric pins that FailedMigrations counts only
