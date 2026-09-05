@@ -25,6 +25,7 @@
     - **[VTGate](#minor-changes-vtgate)**
         - [Ingress bytes in query LogStats](#vtgate-logstats-ingress-bytes)
         - [New controls for cross-keyspace reads](#vtgate-cross-keyspace-reads)
+        - [information_schema queries with IN predicates route correctly](#information-schema-in-routing)
         - [Streaming errors no longer surface as connection loss](#vtgate-streamexecute-real-errors)
         - [Temporary-table connections are kept alive with a heartbeat](#vtgate-temp-table-heartbeat)
         - [Temp-table idle timeout gives gRPC API sessions MySQL-equivalent temp-table lifetime](#vttablet-temp-table-idle-timeout)
@@ -247,6 +248,39 @@ When enabled, the planner will reject queries that require joining or combining 
 ```
 
 The VTGate flag prevents cross-keyspace reads globally, regardless of per-keyspace VSchema settings.
+
+#### <a id="information-schema-in-routing"/>`information_schema` queries with IN predicates route correctly</a>
+
+An `IN` predicate on `table_schema` or `table_name` in an `information_schema`
+query previously bypassed schema-name routing entirely and silently returned
+an empty or incomplete result (issue #20878) — the form ORMs such as Rails
+now generate. A single-valued `IN` (a literal list of one, a bound list with
+one value, or a prepared statement's `IN (?)`) now routes exactly like the
+equivalent `=` predicate, including routed-table handling for `table_name`.
+A multi-value `IN` list routes when it names exactly one schema (duplicates and
+`NULL` elements do not count). A list naming more than one schema — in any of
+those forms, or an `OR` of schema equalities, which plans identically — cannot
+be routed to a single keyspace and now fails with an explicit `VT12001` error
+instead of returning wrong rows. Multi-value `table_name` lists are unaffected
+and keep working as plain filters, and a list containing `database()` or
+`schema()` is left for the tablet to evaluate, as `= database()` always has been.
+
+One narrow shape that previously worked is currently rejected as well: a
+multi-value `IN` list naming only system schemas (e.g. `table_schema IN
+('information_schema', 'performance_schema')`) now returns the same `VT12001`,
+because the routing rewrite cannot carry a multi-schema filter. Split the
+query per schema or use equality predicates as a workaround; issue #20974
+tracks restoring support for that shape.
+
+Two `=` behaviors change as well. Contradictory predicates on the same
+table-name column (`table_name = 'a' AND table_name = 'b'`) previously collapsed
+to the last value and returned its rows; they now return the empty result they
+describe. A query with several table-name predicates naming routed tables
+(routing rules, or tables mid-`MoveTables`) previously honored only whichever
+predicate it evaluated first and left the other names unrewritten. Every routed
+name is now rewritten, so tables in one keyspace return complete results, and
+tables in different keyspaces fail with an explicit `cannot send the query to
+multiple keyspace` error instead of routing unpredictably.
 
 #### <a id="vtgate-streamexecute-real-errors"/>Streaming errors no longer surface as connection loss</a>
 
