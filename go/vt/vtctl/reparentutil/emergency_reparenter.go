@@ -20,7 +20,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"maps"
 	"slices"
 	"strings"
 	"sync"
@@ -47,6 +46,18 @@ import (
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
+)
+
+// counters for Emergency Reparent Shard
+var (
+	ersCounter = stats.NewCountersWithMultiLabels(
+		"EmergencyReparentCounts", "Number of times Emergency Reparent Shard has been run",
+		[]string{"Keyspace", "Shard", "Result"},
+	)
+	ersSplitBrainOverrides = stats.NewCountersWithMultiLabels(
+		"EmergencyReparentSplitBrainOverrides", "Number of Emergency Reparent Shard split-brain promotions completed for an explicitly selected primary",
+		[]string{"Keyspace", "Shard"},
+	)
 )
 
 // EmergencyReparenter performs EmergencyReparentShard operations.
@@ -76,35 +87,86 @@ type EmergencyReparentOptions struct {
 	durability policy.Durabler
 }
 
+// ersCandidate holds the state ERS tracks for one promotion candidate. It is
+// built once, then reused as the candidate pool is filtered, so its pointer is a
+// stable identity for the whole run.
+type ersCandidate struct {
+	info      *topo.TabletInfo
+	positions *RelayLogPositions
+
+	mysqlVersion    mysqlctl.ServerVersion
+	mysqlFlavor     mysqlctl.MySQLFlavor
+	hasMySQLVersion bool
+
+	// stopStatus is nil for a tablet that reported itself as primary rather than
+	// stopping replication, which is how the pipeline tells the two apart.
+	stopStatus   *replicationdatapb.StopReplicationStatus
+	takingBackup bool
+
+	// reparentJournalLen is filled in during errant-GTID detection.
+	reparentJournalLen int32
+}
+
+func (c *ersCandidate) alias() string {
+	return topoproto.TabletAliasString(c.info.Alias)
+}
+
+func (c *ersCandidate) tablet() *topodatapb.Tablet {
+	return c.info.Tablet
+}
+
+// isSameTablet compares aliases; a candidate without one never matches.
+func (c *ersCandidate) isSameTablet(other *ersCandidate) bool {
+	if c == nil || other == nil || c.info == nil || other.info == nil {
+		return false
+	}
+	if topoproto.TabletAliasIsZero(c.info.Alias) || topoproto.TabletAliasIsZero(other.info.Alias) {
+		return false
+	}
+
+	return topoproto.TabletAliasEqual(c.info.Alias, other.info.Alias)
+}
+
 // relayLogResult is a single tablet's result from waiting on its relay logs to apply.
 type relayLogResult struct {
-	alias string
-	err   error
+	candidate *ersCandidate
+	err       error
 }
 
 // relayLogWaitResult is the per-tablet outcome of waitForRelayLogsToApply.
 type relayLogWaitResult struct {
 	// applied are the tablets that finished applying their relay logs.
-	applied []string
+	applied []*ersCandidate
+
 	// failed are the tablets that couldn't apply their relay logs (RPC error, MySQL
 	// error or timeout).
-	failed []string
+	failed []*ersCandidate
+
 	// cancelled are the tablets we stopped waiting on, because a peer finished or failed
 	// first, or the reparent was aborted. We know nothing about their apply progress.
-	cancelled []string
+	cancelled []*ersCandidate
 }
 
-// counters for Emergency Reparent Shard
-var (
-	ersCounter = stats.NewCountersWithMultiLabels(
-		"EmergencyReparentCounts", "Number of times Emergency Reparent Shard has been run",
-		[]string{"Keyspace", "Shard", "Result"},
-	)
-	ersSplitBrainOverrides = stats.NewCountersWithMultiLabels(
-		"EmergencyReparentSplitBrainOverrides", "Number of Emergency Reparent Shard split-brain promotions completed for an explicitly selected primary",
-		[]string{"Keyspace", "Shard"},
-	)
-)
+// findERSCandidateByAlias returns a single *ersCandidate by tablet alias.
+func findERSCandidateByAlias(candidates []*ersCandidate, alias *topodatapb.TabletAlias) *ersCandidate {
+	for _, candidate := range candidates {
+		if topoproto.TabletAliasEqual(candidate.info.Alias, alias) {
+			return candidate
+		}
+	}
+
+	return nil
+}
+
+// ersCandidateAliases returns a slice of tablet alias strings of candidates.
+func ersCandidateAliases(candidates []*ersCandidate) []string {
+	aliases := make([]string, 0, len(candidates))
+	for _, candidate := range candidates {
+		aliases = append(aliases, candidate.alias())
+	}
+
+	return aliases
+}
 
 // NewEmergencyReparenter returns a new EmergencyReparenter object, ready to
 // perform EmergencyReparentShard operations using the given topo.Server,
@@ -204,11 +266,10 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 		shardInfo                  *topo.ShardInfo
 		prevPrimary                *topodatapb.Tablet
 		tabletMap                  map[string]*topo.TabletInfo
-		validCandidates            map[string]*RelayLogPositions
-		intermediateSource         *topodatapb.Tablet
-		validCandidateTablets      []*topodatapb.Tablet
-		validReplacementCandidates []*topodatapb.Tablet
-		betterCandidate            *topodatapb.Tablet
+		candidates                 []*ersCandidate
+		intermediateSource         *ersCandidate
+		validReplacementCandidates []*ersCandidate
+		betterCandidate            *ersCandidate
 		isIdeal                    bool
 		isGTIDBased                bool
 	)
@@ -303,16 +364,12 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 		return vterrors.Wrap(err, lostTopologyLockMsg)
 	}
 
-	// find the positions of all the valid candidates.
-	validCandidates, isGTIDBased, err = FindPositionsOfAllCandidates(stoppedReplicationSnapshot.statusMap, stoppedReplicationSnapshot.primaryStatusMap)
+	// Find the positions of all the valid candidates.
+	candidates, isGTIDBased, err = buildERSCandidates(stoppedReplicationSnapshot, tabletMap)
 	if err != nil {
 		return err
 	}
-	// Restrict the valid candidates list. We remove any tablet which is of the type DRAINED, RESTORE or BACKUP.
-	validCandidates, err = restrictValidCandidates(validCandidates, tabletMap)
-	if err != nil {
-		return err
-	} else if len(validCandidates) == 0 {
+	if len(candidates) == 0 {
 		return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "no valid candidates for emergency reparent")
 	}
 
@@ -323,21 +380,21 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	// can't hold up or fail the reparent. For non-GTID-based shards (FilePos, MariaDB) the
 	// Combined position only reflects what is executed, so we keep the previous behaviour
 	// of waiting for every candidate and failing on any error.
-	waitCandidates := validCandidates
+	waitCandidates := candidates
 	requireAll := true
 	splitBrainOverrideActive := false
-	var suspectedSplitBrainCandidates map[string]*RelayLogPositions
+	var suspectedSplitBrainCandidates []*ersCandidate
 	if isGTIDBased {
-		waitCandidates = filterToMostAdvancedCombined(validCandidates, erp.logger)
+		waitCandidates = filterToMostAdvancedCombined(candidates, erp.logger)
 		requireAll = !hasUniformCombinedPosition(waitCandidates)
 		if requireAll {
 			leadingPositions := describeCombinedPositions(waitCandidates)
 			if !opts.AllowSplitBrainPromotion {
-				suspectedSplitBrainCandidates = maps.Clone(waitCandidates)
+				suspectedSplitBrainCandidates = slices.Clone(waitCandidates)
 			} else {
 				requestedPrimary := topoproto.TabletAliasString(opts.NewPrimaryAlias)
-				requestedCandidate, ok := waitCandidates[requestedPrimary]
-				if !ok {
+				requestedCandidate := findERSCandidateByAlias(waitCandidates, opts.NewPrimaryAlias)
+				if requestedCandidate == nil {
 					return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "requested primary %s is not a leading candidate in the suspected split-brain: %s", requestedPrimary, leadingPositions)
 				}
 
@@ -349,22 +406,18 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 				// skip, and the election all operate on that one tablet: only it needs to apply
 				// its relay logs, so a wedged losing branch cannot block the recovery this
 				// override exists for.
-				validCandidates = map[string]*RelayLogPositions{requestedPrimary: requestedCandidate}
-				waitCandidates = validCandidates
+				candidates = []*ersCandidate{requestedCandidate}
+				waitCandidates = candidates
 			}
 		}
 	}
-
-	// Keep the pre-wait candidates around: tablets that fail the wait are removed from
-	// candidacy, but their received positions still corroborate errant GTID detection
-	preWaitCandidates := validCandidates
 
 	// The wait budget also covers the possible second wait after errant GTID detection
 	// below, so ERS spends at most WaitReplicasTimeout in total waiting for relay logs
 	// to apply. Time spent in errant GTID detection doesn't count against it
 	waitStart := time.Now()
 	var waitResult *relayLogWaitResult
-	validCandidates, waitResult, err = erp.applyRelayLogsAndReconcile(ctx, waitCandidates, validCandidates, tabletMap, stoppedReplicationSnapshot.statusMap, opts.WaitReplicasTimeout, requireAll, isGTIDBased)
+	candidates, waitResult, err = erp.applyRelayLogsAndReconcile(ctx, waitCandidates, candidates, opts.WaitReplicasTimeout, requireAll, isGTIDBased)
 	if err != nil {
 		return err
 	}
@@ -374,7 +427,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	// count as a semi-sync acker in the forward-progress checks below; promoting a
 	// primary whose only acker is broken would wedge it waiting for an ACK. Cancelled
 	// waits say nothing about the tablet and stay counted
-	nonAckers := slices.Clone(waitResult.failed)
+	nonAckers := ersCandidateAliases(waitResult.failed)
 
 	// Tablets whose replication was fully stopped before the reparent are repointed
 	// without being started, so they can't send semi-sync ACKs either until an operator
@@ -395,18 +448,21 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 		// Failed waiters are only ever removed from a uniform leading group (a
 		// requireAll wait aborts on failure instead of removing anyone), so a failed
 		// tablet received exactly what the surviving leaders received, including every
-		// reparent journal entry: its evidence is max-journal-grade by construction
+		// reparent journal entry: its evidence is max-journal-grade by construction.
+		// A failed waiter was dropped from the candidates but is still in this list, so
+		// its position survives the reconcile that removed it
 		var failedEvidence []replication.Position
-		for _, alias := range waitResult.failed {
-			if pos := preWaitCandidates[alias]; pos != nil && !pos.IsZero() {
-				failedEvidence = append(failedEvidence, pos.Combined)
+		for _, failedCandidate := range waitResult.failed {
+			if failedCandidate.positions != nil && !failedCandidate.positions.IsZero() {
+				failedEvidence = append(failedEvidence, failedCandidate.positions.Combined)
 			}
 		}
-		var starved []string
-		validCandidates, starved, err = erp.findErrantGTIDs(ctx, validCandidates, stoppedReplicationSnapshot.statusMap, tabletMap, opts.WaitReplicasTimeout, failedEvidence, shardNeverInitialized)
+		var starved []*ersCandidate
+		candidates, starved, err = erp.findErrantGTIDs(ctx, candidates, opts.WaitReplicasTimeout, failedEvidence, shardNeverInitialized)
 		if err != nil {
 			return err
 		}
+		starvedAliases := ersCandidateAliases(starved)
 
 		// A candidate accepted without any evidence may be a blind spot of our own
 		// making: reparent journal counts only advance when relay logs are applied, so
@@ -417,15 +473,15 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 		// count and detection has evidence, so this only triggers when ERS runs shortly
 		// after a previous reparent
 		if len(starved) > 0 {
-			rescueCandidates := make(map[string]*RelayLogPositions)
-			for alias, pos := range validCandidates {
-				if _, waited := waitCandidates[alias]; waited {
+			rescueCandidates := make([]*ersCandidate, 0, len(candidates))
+			for _, candidate := range candidates {
+				if slices.Contains(waitCandidates, candidate) {
 					continue
 				}
-				if _, ok := stoppedReplicationSnapshot.statusMap[alias]; !ok {
+				if candidate.stopStatus == nil {
 					continue
 				}
-				rescueCandidates[alias] = pos
+				rescueCandidates = append(rescueCandidates, candidate)
 			}
 			if len(rescueCandidates) > 0 && relayLogBudgetLeft <= 0 {
 				// The blind spot only exists because we skipped these peers in the relay
@@ -434,9 +490,9 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 				// the missing evidence wasn't of our own making, which could mean electing
 				// a leader with an errant GTID that a peer would have exposed. Fail closed
 				// rather than run a doomed zero-budget wait or accept it unconfirmed.
-				return vterrors.Errorf(vtrpc.Code_DEADLINE_EXCEEDED, "errant GTID detection could not corroborate %v and the relay log wait budget (%s) was exhausted before the skipped candidates could apply their relay logs", starved, opts.WaitReplicasTimeout)
+				return vterrors.Errorf(vtrpc.Code_DEADLINE_EXCEEDED, "errant GTID detection could not corroborate %v and the relay log wait budget (%s) was exhausted before the skipped candidates could apply their relay logs", starvedAliases, opts.WaitReplicasTimeout)
 			} else if len(rescueCandidates) > 0 {
-				erp.logger.Warningf("errant GTID detection had no evidence to corroborate %v; waiting for the skipped candidates to apply their relay logs and re-running the detection", starved)
+				erp.logger.Warningf("errant GTID detection had no evidence to corroborate %v; waiting for the skipped candidates to apply their relay logs and re-running the detection", starvedAliases)
 				// A dominated rescue candidate can't hold a journal entry its dominator
 				// lacks, so only the most-advanced skipped candidates are waited on: a
 				// stuck straggler must not abort the reparent from the rescue path.
@@ -447,19 +503,19 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 				requireAll = !hasUniformCombinedPosition(rescueCandidates)
 				rescueStart := time.Now()
 				var rescueResult *relayLogWaitResult
-				validCandidates, rescueResult, err = erp.applyRelayLogsAndReconcile(ctx, rescueCandidates, validCandidates, tabletMap, stoppedReplicationSnapshot.statusMap, relayLogBudgetLeft, requireAll, true /* isGTIDBased */)
+				candidates, rescueResult, err = erp.applyRelayLogsAndReconcile(ctx, rescueCandidates, candidates, relayLogBudgetLeft, requireAll, true /* isGTIDBased */)
 				if err != nil {
 					return err
 				}
 				relayLogBudgetLeft = max(relayLogBudgetLeft-time.Since(rescueStart), 0)
-				nonAckers = append(nonAckers, rescueResult.failed...)
+				nonAckers = append(nonAckers, ersCandidateAliases(rescueResult.failed)...)
 				waitResult.applied = append(waitResult.applied, rescueResult.applied...)
 
 				// If a candidate still has no evidence now that the counts are
 				// truthful, the other candidates genuinely lack journal entries and
 				// there is nothing more to compare against, same as before this
 				// optimization: accept it
-				validCandidates, _, err = erp.findErrantGTIDs(ctx, validCandidates, stoppedReplicationSnapshot.statusMap, tabletMap, opts.WaitReplicasTimeout, failedEvidence, shardNeverInitialized)
+				candidates, _, err = erp.findErrantGTIDs(ctx, candidates, opts.WaitReplicasTimeout, failedEvidence, shardNeverInitialized)
 				if err != nil {
 					return err
 				}
@@ -468,8 +524,8 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 
 		if len(suspectedSplitBrainCandidates) > 0 {
 			survivingLeaders := 0
-			for alias := range suspectedSplitBrainCandidates {
-				if _, ok := validCandidates[alias]; ok {
+			for _, suspectedCandidate := range suspectedSplitBrainCandidates {
+				if slices.Contains(candidates, suspectedCandidate) {
 					survivingLeaders++
 				}
 			}
@@ -478,7 +534,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 			}
 		}
 
-		if len(validCandidates) == 0 {
+		if len(candidates) == 0 {
 			return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "no valid candidates for emergency reparent: all candidates have errant GTIDs")
 		}
 
@@ -487,21 +543,21 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 		// survivors before electing one; we never promote a tablet that hasn't applied
 		// everything it received
 		var appliedSurvived bool
-		for _, alias := range waitResult.applied {
-			if _, ok := validCandidates[alias]; ok {
+		for _, appliedCandidate := range waitResult.applied {
+			if slices.Contains(candidates, appliedCandidate) {
 				appliedSurvived = true
 				break
 			}
 		}
 		if !appliedSurvived {
-			rewaitCandidates := filterToMostAdvancedCombined(validCandidates, erp.logger)
+			rewaitCandidates := filterToMostAdvancedCombined(candidates, erp.logger)
 			// A leading survivor that is in the status map still has relay logs to apply;
 			// promoting it without waiting would violate the received-but-unapplied rule.
 			// A demoted former primary is absent from the status map and is exempt (its
 			// received and executed positions are equal), so it needs no wait.
 			needsWait := false
-			for alias := range rewaitCandidates {
-				if _, ok := stoppedReplicationSnapshot.statusMap[alias]; ok {
+			for _, candidate := range rewaitCandidates {
+				if candidate.stopStatus != nil {
 					needsWait = true
 					break
 				}
@@ -516,11 +572,11 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 				erp.logger.Warningf("no candidate that applied its relay logs survived errant GTID detection; waiting for the remaining candidates to apply their relay logs")
 				requireAll = !hasUniformCombinedPosition(rewaitCandidates)
 				var rewaitResult *relayLogWaitResult
-				validCandidates, rewaitResult, err = erp.applyRelayLogsAndReconcile(ctx, rewaitCandidates, validCandidates, tabletMap, stoppedReplicationSnapshot.statusMap, relayLogBudgetLeft, requireAll, true /* isGTIDBased */)
+				candidates, rewaitResult, err = erp.applyRelayLogsAndReconcile(ctx, rewaitCandidates, candidates, relayLogBudgetLeft, requireAll, true /* isGTIDBased */)
 				if err != nil {
 					return err
 				}
-				nonAckers = append(nonAckers, rewaitResult.failed...)
+				nonAckers = append(nonAckers, ersCandidateAliases(rewaitResult.failed)...)
 			}
 		}
 	}
@@ -528,44 +584,28 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	// Find the intermediate source for replication that we want other tablets to replicate from.
 	// This step chooses the most advanced tablet. Further ties are broken by using the promotion rule.
 	// In case the user has specified a tablet specifically, then it is selected, as long as it is the most advanced.
-	// Version-aware election is restricted to GTID-based (MySQL/Percona) shards. For non-GTID
-	// flavors (MariaDB, file-position), candidate positions are compared on their executed
-	// position and are not reconciled to a common applied position after the relay-log wait, so
-	// two equally-advanced candidates need not compare equal — falling through to a version
-	// tiebreak there would change long-standing election behavior. Passing nil version/flavor
-	// maps disables version-aware ordering for those shards.
-	versionMap := stoppedReplicationSnapshot.mysqlVersions
-	flavorMap := stoppedReplicationSnapshot.mysqlFlavors
-	if !isGTIDBased {
-		versionMap = nil
-		flavorMap = nil
-	}
-
 	// Here we also check for split brain scenarios and check that the selected replica must be more advanced than all the other valid candidates.
 	// We fail in case there is a split brain detected.
-	// The validCandidateTablets list is sorted by the replication positions with ties broken by promotion rules.
-	// Version-aware election is scoped per candidate set: each step below applies the flavor-family guard
-	// to the tablets it actually chooses among, so a non-candidate tablet elsewhere in the shard does not
-	// disable version comparison for the real candidates.
-	intermediateSource, validCandidateTablets, err = erp.findMostAdvanced(validCandidates, tabletMap, versionMap, flavorMap, opts)
+	// The candidates are sorted by replication position with ties broken by promotion rules.
+	intermediateSource, candidates, err = erp.findMostAdvanced(candidates, opts)
 	if err != nil {
 		return err
 	}
-	erp.logger.Infof("intermediate source selected - %v", intermediateSource.Alias)
+	erp.logger.Infof("intermediate source selected - %s", intermediateSource.alias())
 
 	// After finding the intermediate source, we want to filter the valid candidate list by the following criteria -
 	// 1. Only keep the tablets which can make progress after being promoted (have sufficient reachable semi-sync ackers)
 	// 2. Remove the tablets with the Must_not promote rule
 	// 3. Remove cross-cell tablets if PreventCrossCellPromotion is specified
 	// Our final primary candidate MUST belong to this list of valid candidates
-	validCandidateTablets, err = erp.filterValidCandidates(validCandidateTablets, stoppedReplicationSnapshot.reachableTablets, nonAckers, stoppedReplicationSnapshot.tabletsBackupState, prevPrimary, opts)
+	candidates, err = erp.filterValidCandidates(candidates, stoppedReplicationSnapshot.reachableTablets, nonAckers, prevPrimary, opts)
 	if err != nil {
 		return err
 	}
 
 	// Check whether the intermediate source candidate selected is ideal or if it can be improved later.
 	// If the intermediateSource is ideal, then we can be certain that it is part of the valid candidates list.
-	isIdeal, err = erp.isIntermediateSourceIdeal(intermediateSource, validCandidateTablets, tabletMap, versionMap, flavorMap, opts)
+	isIdeal, err = erp.isIntermediateSourceIdeal(intermediateSource, candidates, opts)
 	if err != nil {
 		return err
 	}
@@ -585,9 +625,9 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	if !isIdeal {
 		// we now reparent all the tablets to start replicating from the intermediate source
 		// we do not promote the tablet or change the shard record. We only change the replication for all the other tablets
-		// it also returns the list of the tablets that started replication successfully including itself part of the validCandidateTablets list.
+		// It also returns the candidates that started replication successfully, including the intermediate source.
 		// These are the candidates that we can use to find a replacement.
-		validReplacementCandidates, err = erp.promoteIntermediateSource(ctx, ev, intermediateSource, tabletMap, stoppedReplicationSnapshot.statusMap, validCandidateTablets, opts)
+		validReplacementCandidates, err = erp.promoteIntermediateSource(ctx, ev, intermediateSource, candidates, stoppedReplicationSnapshot.statusMap, opts)
 		if err != nil {
 			return err
 		}
@@ -595,14 +635,14 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 		// try to find a better candidate using the list we got back
 		// We prefer to choose a candidate which is in the same cell as our previous primary and of the best possible durability rule.
 		// However, if there is an explicit request from the user to promote a specific tablet, then we choose that tablet.
-		betterCandidate, err = erp.identifyPrimaryCandidate(intermediateSource, validReplacementCandidates, tabletMap, versionMap, flavorMap, opts)
+		betterCandidate, err = erp.identifyPrimaryCandidate(intermediateSource, validReplacementCandidates, opts)
 		if err != nil {
 			return err
 		}
 
 		// if our better candidate is different from our intermediate source, then we wait for it to catch up to the intermediate source
-		if !topoproto.TabletAliasEqual(betterCandidate.Alias, intermediateSource.Alias) {
-			err = waitForCatchUp(ctx, erp.tmc, erp.logger, betterCandidate, intermediateSource, opts.WaitReplicasTimeout)
+		if !topoproto.TabletAliasEqual(betterCandidate.tablet().Alias, intermediateSource.tablet().Alias) {
+			err = waitForCatchUp(ctx, erp.tmc, erp.logger, betterCandidate.tablet(), intermediateSource.tablet(), opts.WaitReplicasTimeout)
 			if err != nil {
 				return err
 			}
@@ -614,21 +654,21 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 		}
 	}
 
-	// The new primary which will be promoted will always belong to the validCandidateTablets list because -
-	// 	1. 	if the intermediate source is ideal - then we know the intermediate source was in the validCandidateTablets list
+	// The new primary which will be promoted will always belong to the valid candidates because -
+	// 	1. 	if the intermediate source is ideal - then we know the intermediate source was in the valid candidates
 	// 		since we used that list
-	//	2. 	if the intermediate source isn't ideal - we take the intersection of the validCandidateTablets list and the one we
+	//	2. 	if the intermediate source isn't ideal - we take the intersection of the valid candidates and the ones we
 	//		were able to reach during the promotion of intermediate source, as possible candidates. So the final candidate (even if
 	//		it is the intermediate source itself) will belong to the list
-	// Since the new primary tablet belongs to the validCandidateTablets list, we no longer need any additional constraint checks
+	// Since the new primary belongs to the valid candidates, we no longer need any additional constraint checks
 
 	// Final step is to promote our primary candidate
-	_, err = erp.reparentReplicas(ctx, ev, newPrimary, tabletMap, stoppedReplicationSnapshot.statusMap, opts, nonAckers, splitBrainOverrideActive, false /* intermediateReparent */)
+	_, err = erp.reparentReplicas(ctx, ev, newPrimary.tablet(), tabletMap, stoppedReplicationSnapshot.statusMap, opts, nonAckers, splitBrainOverrideActive, false /* intermediateReparent */)
 	if err != nil {
 		return err
 	}
 
-	ev.NewPrimary = newPrimary.CloneVT()
+	ev.NewPrimary = newPrimary.tablet().CloneVT()
 	return err
 }
 
@@ -678,30 +718,25 @@ func (erp *EmergencyReparenter) restartReplicationOnStoppedReplicas(
 // applying wins and the remaining waits are cancelled.
 func (erp *EmergencyReparenter) waitForRelayLogsToApply(
 	ctx context.Context,
-	validCandidates map[string]*RelayLogPositions,
-	tabletMap map[string]*topo.TabletInfo,
-	statusMap map[string]*replicationdatapb.StopReplicationStatus,
+	candidates []*ersCandidate,
 	waitReplicasTimeout time.Duration,
 	requireAll bool,
 ) (*relayLogWaitResult, error) {
-	resultCh := make(chan relayLogResult, len(validCandidates))
+	resultCh := make(chan relayLogResult, len(candidates))
 
 	groupCtx, groupCancel := context.WithTimeout(ctx, waitReplicasTimeout)
 	defer groupCancel()
 
 	waiterCount := 0
 
-	for candidate := range validCandidates {
-		// When we called stopReplicationAndBuildStatusMaps, we got back two
-		// maps: (1) the StopReplicationStatus of any replicas that actually
-		// stopped replication; and (2) the PrimaryStatus of anything that
-		// returned ErrNotReplica, which is a tablet that is either the current
-		// primary or is stuck thinking it is a PRIMARY but is not in actuality.
+	for _, candidate := range candidates {
+		// stopStatus is set for replicas that stopped replication. It is nil for
+		// anything that returned ErrNotReplica, which is either the current primary
+		// or a tablet that is stuck thinking it is PRIMARY but is not in actuality.
 		//
-		// If we have a tablet in the validCandidates map that does not appear
-		// in the statusMap, then we have either (a) the current primary, which
-		// is not replicating, so it is not applying relay logs; or (b) a tablet
-		// that is stuck thinking it is PRIMARY but is not in actuality. In that
+		// If stopStatus is nil, we have either (a) the current primary, which is
+		// not replicating, so it is not applying relay logs; or (b) a tablet that
+		// is stuck thinking it is PRIMARY but is not in actuality. In that
 		// second case - (b) - we will most likely find that the stuck PRIMARY
 		// does not have a winning position, and fail the ERS. If, on the other
 		// hand, it does have a winning position, we are trusting the operator
@@ -709,18 +744,17 @@ func (erp *EmergencyReparenter) waitForRelayLogsToApply(
 		// tablet. In either case, it does not make sense to wait for relay logs
 		// to apply on a tablet that was never applying relay logs in the first
 		// place, so we skip it, and log that we did.
-		status, ok := statusMap[candidate]
-		if !ok {
-			erp.logger.Infof("EmergencyReparent candidate %v not in replica status map; this means it was not running replication (because it was formerly PRIMARY), so skipping WaitForRelayLogsToApply step for this candidate", candidate)
+		if candidate.stopStatus == nil {
+			erp.logger.Infof("EmergencyReparent candidate %s not in replica status map; this means it was not running replication (because it was formerly PRIMARY), so skipping WaitForRelayLogsToApply step for this candidate", candidate.alias())
 			continue
 		}
 
-		go func(alias string, status *replicationdatapb.StopReplicationStatus) {
+		go func(candidate *ersCandidate) {
 			resultCh <- relayLogResult{
-				alias: alias,
-				err:   WaitForRelayLogsToApply(groupCtx, erp.tmc, tabletMap[alias], status),
+				candidate: candidate,
+				err:       WaitForRelayLogsToApply(groupCtx, erp.tmc, candidate.info, candidate.stopStatus),
 			}
-		}(candidate, status)
+		}(candidate)
 
 		waiterCount++
 	}
@@ -741,7 +775,7 @@ func (erp *EmergencyReparenter) waitForRelayLogsToApply(
 		res := <-resultCh
 		switch {
 		case res.err == nil:
-			result.applied = append(result.applied, res.alias)
+			result.applied = append(result.applied, res.candidate)
 			if !requireAll && !weCancelled {
 				// one of the candidates finished applying. the others received the same
 				// changes and can't do better, so stop waiting on them
@@ -752,10 +786,10 @@ func (erp *EmergencyReparenter) waitForRelayLogsToApply(
 			// we stopped waiting on this tablet on purpose (or the reparent was
 			// explicitly aborted), it didn't fail. a parent deadline expiry is not
 			// intentional: the tablet didn't finish in budget and counts as failed below
-			result.cancelled = append(result.cancelled, res.alias)
+			result.cancelled = append(result.cancelled, res.candidate)
 		default:
-			result.failed = append(result.failed, res.alias)
-			erp.logger.Warningf("EmergencyReparent candidate %v failed to apply relay logs: %v", res.alias, res.err)
+			result.failed = append(result.failed, res.candidate)
+			erp.logger.Warningf("EmergencyReparent candidate %s failed to apply relay logs: %v", res.candidate.alias(), res.err)
 			if firstFailure == nil {
 				firstFailure = res.err
 				if requireAll {
@@ -803,93 +837,70 @@ func (erp *EmergencyReparenter) waitForRelayLogsToApply(
 // unwaited former primary.
 func (erp *EmergencyReparenter) applyRelayLogsAndReconcile(
 	ctx context.Context,
-	waitCandidates map[string]*RelayLogPositions,
-	validCandidates map[string]*RelayLogPositions,
-	tabletMap map[string]*topo.TabletInfo,
-	statusMap map[string]*replicationdatapb.StopReplicationStatus,
+	waitCandidates []*ersCandidate,
+	validCandidates []*ersCandidate,
 	waitReplicasTimeout time.Duration,
 	requireAll bool,
 	isGTIDBased bool,
-) (map[string]*RelayLogPositions, *relayLogWaitResult, error) {
-	waitResult, err := erp.waitForRelayLogsToApply(ctx, waitCandidates, tabletMap, statusMap, waitReplicasTimeout, requireAll)
+) ([]*ersCandidate, *relayLogWaitResult, error) {
+	waitResult, err := erp.waitForRelayLogsToApply(ctx, waitCandidates, waitReplicasTimeout, requireAll)
 	if err != nil {
 		return validCandidates, waitResult, err
 	}
 
-	reconciled := maps.Clone(validCandidates)
-	for _, alias := range waitResult.failed {
-		erp.logger.Warningf("EmergencyReparent candidate %v failed to apply its relay logs and cannot be promoted; removing it from the valid candidates", alias)
-		delete(reconciled, alias)
+	reconciled := make([]*ersCandidate, 0, len(validCandidates))
+	for _, candidate := range validCandidates {
+		if slices.Contains(waitResult.failed, candidate) {
+			erp.logger.Warningf("EmergencyReparent candidate %s failed to apply its relay logs and cannot be promoted; removing it from the valid candidates", candidate.alias())
+			continue
+		}
+		reconciled = append(reconciled, candidate)
 	}
-	for _, alias := range waitResult.applied {
-		if pos, ok := reconciled[alias]; ok {
-			erp.logger.Infof("EmergencyReparent candidate %v applied all of its received relay logs", alias)
-			if isGTIDBased {
-				pos.Executed = pos.Combined
-			}
+	for _, candidate := range waitResult.applied {
+		if !slices.Contains(reconciled, candidate) {
+			continue
+		}
+		erp.logger.Infof("EmergencyReparent candidate %s applied all of its received relay logs", candidate.alias())
+		if isGTIDBased {
+			candidate.positions.Executed = candidate.positions.Combined
 		}
 	}
-	for _, alias := range waitResult.cancelled {
-		erp.logger.Infof("EmergencyReparent candidate %v had its relay log wait cancelled after a peer finished applying; keeping its received position", alias)
+	for _, candidate := range waitResult.cancelled {
+		erp.logger.Infof("EmergencyReparent candidate %s had its relay log wait cancelled after a peer finished applying; keeping its received position", candidate.alias())
 	}
 
 	return reconciled, waitResult, nil
 }
 
 // findMostAdvanced finds the intermediate source for ERS. We always choose the most advanced one from our valid candidates list. Further ties are broken by looking at the promotion rules.
-//
-// versionMap and flavorMap are keyed by tablet alias over all reachable tablets;
-// the flavor-family guard is applied over only the candidates being sorted here.
+// It sorts validCandidates in place and returns that same slice, so the caller's ordering
+// is replaced by the promotion order rather than preserved.
 func (erp *EmergencyReparenter) findMostAdvanced(
-	validCandidates map[string]*RelayLogPositions,
-	tabletMap map[string]*topo.TabletInfo,
-	versionMap map[string]mysqlctl.ServerVersion,
-	flavorMap map[string]mysqlctl.MySQLFlavor,
+	validCandidates []*ersCandidate,
 	opts EmergencyReparentOptions,
-) (*topodatapb.Tablet, []*topodatapb.Tablet, error) {
+) (*ersCandidate, []*ersCandidate, error) {
 	erp.logger.Infof("started finding the intermediate source")
 	if len(validCandidates) == 0 {
 		return nil, nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "no valid candidates for emergency reparent")
 	}
-	// convert the valid candidates into a list so that we can use it for sorting
-	validTablets, tabletPositions, err := getValidCandidatesAndPositionsAsList(validCandidates, tabletMap)
-	if err != nil {
-		return nil, nil, err
-	}
 
-	// Scope the flavor-family guard to the candidates actually being sorted;
-	// scopedVersion is nil (disabling version ordering) when they span more than
-	// one family.
-	scopedVersion := scopedVersionMap(validTablets, versionMap, flavorMap)
-	if scopedVersion == nil && len(versionMap) > 0 {
+	// Version ordering is disabled when the candidates span flavor families. The guard is
+	// scoped to the candidates being sorted, so a tablet elsewhere in the shard that is
+	// not a candidate cannot disable version comparison for the ones being elected among.
+	mysqlVersions, mixedFlavorFamilies := usableERSCandidateMySQLVersions(validCandidates)
+	if mixedFlavorFamilies {
 		erp.logger.Warningf("reparent candidates span multiple MySQL flavor families; skipping version-aware election")
 	}
-
-	// build the version slice for sorting; nil scopedVersion disables version ordering
-	var mysqlVersions []mysqlctl.ServerVersion
-	if len(scopedVersion) > 0 {
-		mysqlVersions = make([]mysqlctl.ServerVersion, len(validTablets))
-		for i, tablet := range validTablets {
-			v, ok := scopedVersion[topoproto.TabletAliasString(tablet.Alias)]
-			if !ok {
-				v = unknownVersion
-			}
-			mysqlVersions[i] = v
-		}
-	}
-
-	// sort the tablets for finding the best intermediate source in ERS — position first to minimize data loss
-	err = sortTabletsForReparent(validTablets, tabletPositions, nil, mysqlVersions, opts.durability, SortByPosition)
-	if err != nil {
+	if err := sortERSCandidates(validCandidates, mysqlVersions, opts.durability); err != nil {
 		return nil, nil, err
 	}
-	for _, tablet := range validTablets {
-		erp.logger.Infof("finding intermediate source - sorted replica: %v", tablet.Alias)
+	for _, candidate := range validCandidates {
+		erp.logger.Infof("finding intermediate source - sorted replica: %s", candidate.alias())
 	}
 
 	// The first tablet in the sorted list will be the most eligible candidate unless explicitly asked for some other tablet
-	winningPrimaryTablet := validTablets[0]
-	winningPosition := tabletPositions[0]
+	winningCandidate := validCandidates[0]
+	winningPosition := winningCandidate.positions
 
 	// We have already removed the tablets with errant GTIDs before calling this function. At this point our winning position must be a
 	// superset of all the other valid positions. If any position is incomparable with it, then we have a split brain scenario, and we
@@ -898,17 +909,18 @@ func (erp *EmergencyReparenter) findMostAdvanced(
 	// Reciprocally contained but unequal positions are divergent too, containment just can't order them (MariaDB GTID containment
 	// ignores the origin server), so they must also fail closed. The divergent pair can sit behind a candidate that dominates both
 	// of them, so reciprocal containment is checked between every pair of candidates, not just against the winning position
-	for i, position := range tabletPositions {
+	for i, candidate := range validCandidates {
+		position := candidate.positions
 		if haveIncomparablePositions(winningPosition.Combined, position.Combined) {
-			return nil, nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "split brain detected between servers - %s and %s", topoproto.TabletAliasString(winningPrimaryTablet.Alias), topoproto.TabletAliasString(validTablets[i].Alias))
+			return nil, nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "split brain detected between servers - %s and %s", winningCandidate.alias(), candidate.alias())
 		}
 		// Keep the sort's maximum-at-index-zero guarantee as a defense-in-depth invariant.
 		if hasDominantReparentPosition(position, winningPosition) {
-			return nil, nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "candidate sorting error: %s has a more advanced position than the chosen candidate %s", topoproto.TabletAliasString(validTablets[i].Alias), topoproto.TabletAliasString(winningPrimaryTablet.Alias))
+			return nil, nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "candidate sorting error: %s has a more advanced position than the chosen candidate %s", candidate.alias(), winningCandidate.alias())
 		}
-		for j := i + 1; j < len(tabletPositions); j++ {
-			if haveReciprocallyContainedPositions(position.Combined, tabletPositions[j].Combined) {
-				return nil, nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "split brain detected between servers - %s and %s", topoproto.TabletAliasString(validTablets[i].Alias), topoproto.TabletAliasString(validTablets[j].Alias))
+		for j := i + 1; j < len(validCandidates); j++ {
+			if haveReciprocallyContainedPositions(position.Combined, validCandidates[j].positions.Combined) {
+				return nil, nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "split brain detected between servers - %s and %s", candidate.alias(), validCandidates[j].alias())
 			}
 		}
 	}
@@ -917,22 +929,18 @@ func (erp *EmergencyReparenter) findMostAdvanced(
 	// candidate (non-zero position, no errant GTIDs)
 	if opts.NewPrimaryAlias != nil {
 		requestedPrimaryAlias := topoproto.TabletAliasString(opts.NewPrimaryAlias)
-		pos, ok := validCandidates[requestedPrimaryAlias]
-		if !ok {
+		requestedCandidate := findERSCandidateByAlias(validCandidates, opts.NewPrimaryAlias)
+		if requestedCandidate == nil {
 			return nil, nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "requested primary elect %v has errant GTIDs", requestedPrimaryAlias)
 		}
 		// if the requested tablet is as advanced as the most advanced tablet, then we can just use it for promotion.
 		// otherwise, we should let it catchup to the most advanced tablet and not change the intermediate source
-		if pos.AtLeast(winningPosition) {
-			requestedPrimaryInfo, isFound := tabletMap[requestedPrimaryAlias]
-			if !isFound {
-				return nil, nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "candidate %v not found in the tablet map; this an impossible situation", requestedPrimaryAlias)
-			}
-			winningPrimaryTablet = requestedPrimaryInfo.Tablet
+		if requestedCandidate.positions.AtLeast(winningPosition) {
+			winningCandidate = requestedCandidate
 		}
 	}
 
-	return winningPrimaryTablet, validTablets, nil
+	return winningCandidate, validCandidates, nil
 }
 
 // promoteIntermediateSource reparents all the other tablets to start replicating from the intermediate source.
@@ -940,38 +948,39 @@ func (erp *EmergencyReparenter) findMostAdvanced(
 func (erp *EmergencyReparenter) promoteIntermediateSource(
 	ctx context.Context,
 	ev *events.Reparent,
-	source *topodatapb.Tablet,
-	tabletMap map[string]*topo.TabletInfo,
+	source *ersCandidate,
+	validCandidates []*ersCandidate,
 	statusMap map[string]*replicationdatapb.StopReplicationStatus,
-	validCandidateTablets []*topodatapb.Tablet,
 	opts EmergencyReparentOptions,
-) ([]*topodatapb.Tablet, error) {
+) ([]*ersCandidate, error) {
 	// Create a tablet map from all the valid replicas
 	validTabletMap := map[string]*topo.TabletInfo{}
-	for _, candidate := range validCandidateTablets {
-		alias := topoproto.TabletAliasString(candidate.Alias)
-		validTabletMap[alias] = tabletMap[alias]
+	for _, candidate := range validCandidates {
+		validTabletMap[candidate.alias()] = candidate.info
 	}
 
 	// we reparent all the other valid tablets to start replication from our new source
 	// we wait for all the replicas so that we can choose a better candidate from the ones that started replication later
 	// The intermediate reparent doesn't run the acker quorum gate, so it has no
 	// non-ackers to exclude.
-	reachableTablets, err := erp.reparentReplicas(ctx, ev, source, validTabletMap, statusMap, opts, nil /* nonAckers */, false /* splitBrainOverrideActive */, true /* intermediateReparent */)
+	reachableTablets, err := erp.reparentReplicas(ctx, ev, source.tablet(), validTabletMap, statusMap, opts, nil /* nonAckers */, false /* splitBrainOverrideActive */, true /* intermediateReparent */)
 	if err != nil {
 		return nil, err
 	}
 
 	// also include the current tablet for being considered as part of valid candidates for ERS promotion
-	reachableTablets = append(reachableTablets, source)
+	reachableTablets = append(reachableTablets, source.tablet())
+	reachableAliases := sets.New[string]()
+	for _, tablet := range reachableTablets {
+		reachableAliases.Insert(topoproto.TabletAliasString(tablet.Alias))
+	}
 
 	// The only valid candidates for improvement are the ones which are reachable and part of the valid candidate list.
-	// Here we need to be careful not to mess up the ordering of tablets in validCandidateTablets, since the list is sorted by the
-	// replication positions.
-	var validCandidatesForImprovement []*topodatapb.Tablet
-	for _, tablet := range validCandidateTablets {
-		if topoproto.IsTabletInList(tablet, reachableTablets) {
-			validCandidatesForImprovement = append(validCandidatesForImprovement, tablet)
+	// Preserve candidate order here because the slice is already sorted by replication position.
+	validCandidatesForImprovement := make([]*ersCandidate, 0, len(validCandidates))
+	for _, candidate := range validCandidates {
+		if reachableAliases.Has(candidate.alias()) {
+			validCandidatesForImprovement = append(validCandidatesForImprovement, candidate)
 		}
 	}
 	return validCandidatesForImprovement, nil
@@ -1247,36 +1256,30 @@ func (erp *EmergencyReparenter) reparentReplicas(
 
 // isIntermediateSourceIdeal is used to find whether the intermediate source that ERS chose is also the ideal one or not
 func (erp *EmergencyReparenter) isIntermediateSourceIdeal(
-	intermediateSource *topodatapb.Tablet,
-	validCandidates []*topodatapb.Tablet,
-	tabletMap map[string]*topo.TabletInfo,
-	versionMap map[string]mysqlctl.ServerVersion,
-	flavorMap map[string]mysqlctl.MySQLFlavor,
+	intermediateSource *ersCandidate,
+	validCandidates []*ersCandidate,
 	opts EmergencyReparentOptions,
 ) (bool, error) {
-	candidate, err := erp.identifyPrimaryCandidate(intermediateSource, validCandidates, tabletMap, versionMap, flavorMap, opts)
+	// we try to find a better candidate with the current list of valid candidates, and if it matches our current primary candidate, then we return true
+	candidate, err := erp.identifyPrimaryCandidate(intermediateSource, validCandidates, opts)
 	if err != nil {
 		return false, err
 	}
-	return candidate == intermediateSource, nil
+	return candidate.isSameTablet(intermediateSource), nil
 }
 
 // identifyPrimaryCandidate is used to find the final candidate for ERS promotion.
 //
-// versionMap and flavorMap are keyed by tablet alias over all reachable tablets;
-// the flavor-family guard is applied over only the candidates considered in each
-// promotion tier.
+// Version and flavor state travels with each candidate, and the flavor-family
+// guard is scoped to the candidates considered in each promotion tier.
 func (erp *EmergencyReparenter) identifyPrimaryCandidate(
-	intermediateSource *topodatapb.Tablet,
-	validCandidates []*topodatapb.Tablet,
-	tabletMap map[string]*topo.TabletInfo,
-	versionMap map[string]mysqlctl.ServerVersion,
-	flavorMap map[string]mysqlctl.MySQLFlavor,
+	intermediateSource *ersCandidate,
+	validCandidates []*ersCandidate,
 	opts EmergencyReparentOptions,
-) (candidate *topodatapb.Tablet, err error) {
+) (candidate *ersCandidate, err error) {
 	defer func() {
 		if candidate != nil {
-			erp.logger.Infof("found better candidate - %v", candidate.Alias)
+			erp.logger.Infof("found better candidate - %s", candidate.alias())
 		}
 	}()
 
@@ -1286,15 +1289,11 @@ func (erp *EmergencyReparenter) identifyPrimaryCandidate(
 
 	if opts.NewPrimaryAlias != nil {
 		// explicit request to promote a specific tablet
-		requestedPrimaryAlias := topoproto.TabletAliasString(opts.NewPrimaryAlias)
-		requestedPrimaryInfo, isFound := tabletMap[requestedPrimaryAlias]
-		if !isFound {
-			return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "candidate %v not found in the tablet map; this an impossible situation", requestedPrimaryAlias)
+		requestedCandidate := findERSCandidateByAlias(validCandidates, opts.NewPrimaryAlias)
+		if requestedCandidate != nil {
+			return requestedCandidate, nil
 		}
-		if topoproto.IsTabletInList(requestedPrimaryInfo.Tablet, validCandidates) {
-			return requestedPrimaryInfo.Tablet, nil
-		}
-		return nil, vterrors.Errorf(vtrpc.Code_ABORTED, "requested candidate %v is not in valid candidates list", requestedPrimaryAlias)
+		return nil, vterrors.Errorf(vtrpc.Code_ABORTED, "requested candidate %v is not in valid candidates list", topoproto.TabletAliasString(opts.NewPrimaryAlias))
 	}
 
 	// We have already selected an intermediate source which was selected based on the replication position
@@ -1309,10 +1308,7 @@ func (erp *EmergencyReparenter) identifyPrimaryCandidate(
 	// If versions are equal, we still prefer the intermediate source to avoid catch-up.
 	for _, promotionRule := range promotionrule.AllPromotionRules() {
 		candidates := getTabletsWithPromotionRules(opts.durability, validCandidates, promotionRule)
-		// Scope the flavor-family guard to this tier's candidates: nil disables
-		// version comparison when they span more than one family.
-		scopedVersion := scopedVersionMap(candidates, versionMap, flavorMap)
-		candidate = findCandidate(intermediateSource, candidates, scopedVersion)
+		candidate = findCandidate(intermediateSource, candidates)
 		if candidate != nil {
 			return candidate, nil
 		}
@@ -1323,16 +1319,17 @@ func (erp *EmergencyReparenter) identifyPrimaryCandidate(
 	return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "unreachable - did not find a valid primary candidate even though the valid candidate list was non-empty")
 }
 
-// filterValidCandidates filters valid tablets, keeping only the ones which can successfully be promoted without any
+// filterValidCandidates filters valid candidates, keeping only the ones which can successfully be promoted without any
 // constraint failures and can make forward progress on being promoted. It will filter out candidates taking backups
 // if possible. The nonAckers are reachable tablets that won't be able to send semi-sync ACKs after the promotion,
 // so they don't count towards a candidate's forward progress; they were still reached, so a non-acker remains
 // individually promotable.
-func (erp *EmergencyReparenter) filterValidCandidates(validTablets []*topodatapb.Tablet, tabletsReachable []*topodatapb.Tablet, nonAckers []string, tabletsBackupState map[string]bool, prevPrimary *topodatapb.Tablet, opts EmergencyReparentOptions) ([]*topodatapb.Tablet, error) {
+func (erp *EmergencyReparenter) filterValidCandidates(validCandidates []*ersCandidate, tabletsReachable []*topodatapb.Tablet, nonAckers []string, prevPrimary *topodatapb.Tablet, opts EmergencyReparentOptions) ([]*ersCandidate, error) {
 	ackersReachable := removeTabletsByAlias(tabletsReachable, nonAckers)
-	restrictedValidTablets := make([]*topodatapb.Tablet, 0, len(validTablets))
-	notPreferredValidTablets := make([]*topodatapb.Tablet, 0, len(validTablets))
-	for _, tablet := range validTablets {
+	restrictedValidCandidates := make([]*ersCandidate, 0, len(validCandidates))
+	notPreferredValidCandidates := make([]*ersCandidate, 0, len(validCandidates))
+	for _, candidate := range validCandidates {
+		tablet := candidate.tablet()
 		tabletAliasStr := topoproto.TabletAliasString(tablet.Alias)
 		// Remove tablets which have MustNot promote rule since they must never be promoted
 		if policy.PromotionRule(opts.durability, tablet) == promotionrule.MustNot {
@@ -1365,19 +1362,26 @@ func (erp *EmergencyReparenter) filterValidCandidates(validTablets []*topodatapb
 			continue
 		}
 		// Put candidates that are running a backup in a separate list
-		backingUp, ok := tabletsBackupState[tabletAliasStr]
-		if ok && backingUp {
+		if candidate.takingBackup {
 			erp.logger.Infof("Setting %s in list of valid candidates taking a backup", tabletAliasStr)
-			notPreferredValidTablets = append(notPreferredValidTablets, tablet)
+			notPreferredValidCandidates = append(notPreferredValidCandidates, candidate)
 		} else {
-			restrictedValidTablets = append(restrictedValidTablets, tablet)
+			restrictedValidCandidates = append(restrictedValidCandidates, candidate)
 		}
 	}
-	if len(restrictedValidTablets) > 0 {
-		return restrictedValidTablets, nil
+	if len(restrictedValidCandidates) > 0 {
+		// A backup only costs a candidate its place when a preferred one exists, so this
+		// is the first point where we know the requested primary is actually being
+		// dropped. Say why here: otherwise it resurfaces as a bare "not in valid
+		// candidates list" from identifyPrimaryCandidate, which names the consequence
+		// and not the cause
+		if opts.NewPrimaryAlias != nil && findERSCandidateByAlias(notPreferredValidCandidates, opts.NewPrimaryAlias) != nil {
+			return nil, vterrors.Errorf(vtrpc.Code_ABORTED, "proposed primary %s is taking a backup and other candidates are available", topoproto.TabletAliasString(opts.NewPrimaryAlias))
+		}
+		return restrictedValidCandidates, nil
 	}
 
-	return notPreferredValidTablets, nil
+	return notPreferredValidCandidates, nil
 }
 
 // findErrantGTIDs tries to find errant GTIDs for the valid candidates and returns the updated list of valid candidates.
@@ -1391,16 +1395,14 @@ func (erp *EmergencyReparenter) filterValidCandidates(validTablets []*topodatapb
 // reparentShardLocked).
 func (erp *EmergencyReparenter) findErrantGTIDs(
 	ctx context.Context,
-	validCandidates map[string]*RelayLogPositions,
-	statusMap map[string]*replicationdatapb.StopReplicationStatus,
-	tabletMap map[string]*topo.TabletInfo,
+	validCandidates []*ersCandidate,
 	waitReplicasTimeout time.Duration,
 	extraEvidence []replication.Position,
 	shardNeverInitialized bool,
-) (map[string]*RelayLogPositions, []string, error) {
+) ([]*ersCandidate, []*ersCandidate, error) {
 	allPositionsZero := len(validCandidates) > 0
-	for _, positions := range validCandidates {
-		if positions == nil || !positions.IsZero() {
+	for _, candidate := range validCandidates {
+		if candidate.positions == nil || !candidate.positions.IsZero() {
 			allPositionsZero = false
 			break
 		}
@@ -1414,15 +1416,14 @@ func (erp *EmergencyReparenter) findErrantGTIDs(
 	// A missing journal table is only tolerated when the topology says never initialized
 	// and no candidate has any GTIDs; a nonzero position anywhere proves history, so an
 	// unreadable journal depth must fail the gather
-	reparentJournalLen, err := erp.gatherReparentJournalInfo(ctx, validCandidates, tabletMap, waitReplicasTimeout, shardNeverInitialized && allPositionsZero)
-	if err != nil {
+	if err := erp.gatherReparentJournalInfo(ctx, validCandidates, waitReplicasTimeout, shardNeverInitialized && allPositionsZero); err != nil {
 		return nil, nil, err
 	}
 
 	// Find the maximum length of the reparent journal among all the candidates.
 	var maxLen int32
-	for _, length := range reparentJournalLen {
-		maxLen = max(maxLen, length)
+	for _, candidate := range validCandidates {
+		maxLen = max(maxLen, candidate.reparentJournalLen)
 	}
 
 	// A shard where every candidate has an empty GTID position and an empty reparent
@@ -1436,43 +1437,40 @@ func (erp *EmergencyReparenter) findErrantGTIDs(
 		if !shardNeverInitialized {
 			return nil, nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "every candidate reports an empty GTID position and an empty reparent journal, but the shard topology records a previous primary: refusing to re-initialize a shard that has history to protect; restore a tablet with the shard's data before retrying")
 		}
-		return maps.Clone(validCandidates), nil, nil
+		return slices.Clone(validCandidates), nil, nil
 	}
 
 	// A tablet with nil or zero positions has no GTIDs to corroborate anyone and can't be
 	// promoted over tablets with real history, so it is dropped from candidacy up front.
-	nonZeroCandidates := make(map[string]*RelayLogPositions, len(validCandidates))
-	for alias, positions := range validCandidates {
-		if positions == nil || positions.IsZero() {
-			erp.logger.Warningf("skipping candidate %s during errant GTID detection: nil or zero positions", alias)
+	nonZeroCandidates := make([]*ersCandidate, 0, len(validCandidates))
+	for _, candidate := range validCandidates {
+		if candidate.positions == nil || candidate.positions.IsZero() {
+			erp.logger.Warningf("skipping candidate %s during errant GTID detection: nil or zero positions", candidate.alias())
 			continue
 		}
-		nonZeroCandidates[alias] = positions
+		nonZeroCandidates = append(nonZeroCandidates, candidate)
 	}
 
 	// Find the candidates with the maximum length of the reparent journal. A dropped
 	// zero-position tablet can't be part of the evidence tier: it has no GTIDs to
 	// compare anyone against.
-	var maxLenCandidates []string
-	for alias, length := range reparentJournalLen {
-		if length != maxLen {
+	maxLenCandidates := make([]*ersCandidate, 0, len(nonZeroCandidates))
+	for _, candidate := range nonZeroCandidates {
+		if candidate.reparentJournalLen != maxLen {
 			continue
 		}
-		if _, ok := nonZeroCandidates[alias]; !ok {
-			continue
-		}
-		maxLenCandidates = append(maxLenCandidates, alias)
+		maxLenCandidates = append(maxLenCandidates, candidate)
 	}
 
 	// If every tablet holding the latest reparent journal history had its GTID state
 	// wiped, the surviving candidates provably missed a promotion and no evidence is
 	// left to prove what it contained. Promoting one of them could silently discard
 	// the missed history, so fail closed and leave the decision to an operator.
-	if len(maxLenCandidates) == 0 && len(reparentJournalLen) > 0 {
+	if len(maxLenCandidates) == 0 && len(validCandidates) > 0 {
 		var wipedLeaders []string
-		for alias, length := range reparentJournalLen {
-			if length == maxLen {
-				wipedLeaders = append(wipedLeaders, alias)
+		for _, candidate := range validCandidates {
+			if candidate.reparentJournalLen == maxLen {
+				wipedLeaders = append(wipedLeaders, candidate.alias())
 			}
 		}
 		slices.Sort(wipedLeaders)
@@ -1481,12 +1479,13 @@ func (erp *EmergencyReparenter) findErrantGTIDs(
 
 	// We use all the candidates with the maximum length of the reparent journal to find the errant GTIDs amongst them.
 	var maxLenPositions []replication.Position
-	var starvedCandidates []string
-	updatedValidCandidates := make(map[string]*RelayLogPositions)
+	var starvedCandidates []*ersCandidate
+	// Survivor order carries no contract: findMostAdvanced sorts these again, with a
+	// tablet-alias tiebreak, before anything is elected
+	var updatedValidCandidates []*ersCandidate
 	for _, candidate := range maxLenCandidates {
-		candidatePositions := nonZeroCandidates[candidate]
-		status, ok := statusMap[candidate]
-		if !ok {
+		candidatePositions := candidate.positions
+		if candidate.stopStatus == nil {
 			// If the tablet is not in the status map, and has the maximum length of the reparent journal,
 			// then it should be the latest primary and we don't need to run any errant GTID detection on it!
 			// There is a very unlikely niche case that can happen where we see two tablets report themselves as having
@@ -1498,7 +1497,7 @@ func (erp *EmergencyReparenter) findErrantGTIDs(
 			// Even in this case, the best we can do is not run errant GTID detection on either, and let the split brain detection code
 			// deal with it, if A in fact has errant GTIDs.
 			maxLenPositions = append(maxLenPositions, candidatePositions.Combined)
-			updatedValidCandidates[candidate] = candidatePositions
+			updatedValidCandidates = append(updatedValidCandidates, candidate)
 			continue
 		}
 		// Store all the other candidate's positions so that we can run errant GTID detection using them.
@@ -1507,7 +1506,7 @@ func (erp *EmergencyReparenter) findErrantGTIDs(
 			if otherCandidate == candidate {
 				continue
 			}
-			otherPositions = append(otherPositions, nonZeroCandidates[otherCandidate].Combined)
+			otherPositions = append(otherPositions, otherCandidate.positions.Combined)
 		}
 		otherPositions = append(otherPositions, extraEvidence...)
 		// FindErrantGTIDs accepts a candidate's GTID set as-is when there is nothing to
@@ -1517,17 +1516,17 @@ func (erp *EmergencyReparenter) findErrantGTIDs(
 			starvedCandidates = append(starvedCandidates, candidate)
 		}
 		// Run errant GTID detection and throw away any tablet that has errant GTIDs.
-		afterStatus := replication.ProtoToReplicationStatus(status.After)
+		afterStatus := replication.ProtoToReplicationStatus(candidate.stopStatus.After)
 		errantGTIDs, err := replication.FindErrantGTIDs(afterStatus.RelayLogPosition, afterStatus.SourceUUID, otherPositions)
 		if err != nil {
 			return nil, nil, err
 		}
 		if errantGTIDs != nil {
-			log.Error(fmt.Sprintf("skipping %v with GTIDSet:%v because we detected errant GTIDs - %v", candidate, afterStatus.RelayLogPosition.GTIDSet, errantGTIDs))
+			log.Error(fmt.Sprintf("skipping %s with GTIDSet:%v because we detected errant GTIDs - %v", candidate.alias(), afterStatus.RelayLogPosition.GTIDSet, errantGTIDs))
 			continue
 		}
 		maxLenPositions = append(maxLenPositions, candidatePositions.Combined)
-		updatedValidCandidates[candidate] = candidatePositions
+		updatedValidCandidates = append(updatedValidCandidates, candidate)
 	}
 
 	// The extra evidence positions also corroborate the lagged tablets below.
@@ -1536,8 +1535,8 @@ func (erp *EmergencyReparenter) findErrantGTIDs(
 	// For all the other tablets, that are lagged enough that they haven't seen all the reparent journal entries,
 	// we run errant GTID detection by using the tablets with the maximum length of the reparent journal.
 	// We throw away any tablet that has errant GTIDs.
-	for alias, length := range reparentJournalLen {
-		if length == maxLen {
+	for _, candidate := range nonZeroCandidates {
+		if candidate.reparentJournalLen == maxLen {
 			continue
 		}
 		// Here we don't want to send the source UUID. The reason is that all of these tablets are lagged,
@@ -1555,19 +1554,16 @@ func (erp *EmergencyReparenter) findErrantGTIDs(
 		// This exact scenario outlined above, can be found in the test for this function, subtest `Case 5a`.
 		// The idea is that if the tablet is lagged, then even the server UUID that it is replicating from
 		// should not be considered a valid source of writes that no other tablet has.
-		candidatePositions, ok := nonZeroCandidates[alias]
-		if !ok {
-			continue
-		}
+		candidatePositions := candidate.positions
 		errantGTIDs, err := replication.FindErrantGTIDs(candidatePositions.Combined, replication.SID{}, maxLenPositions)
 		if err != nil {
 			return nil, nil, err
 		}
 		if errantGTIDs != nil {
-			log.Error(fmt.Sprintf("skipping %v with GTIDSet:%v because we detected errant GTIDs - %v", alias, candidatePositions, errantGTIDs))
+			log.Error(fmt.Sprintf("skipping %s with GTIDSet:%v because we detected errant GTIDs - %v", candidate.alias(), candidatePositions, errantGTIDs))
 			continue
 		}
-		updatedValidCandidates[alias] = candidatePositions
+		updatedValidCandidates = append(updatedValidCandidates, candidate)
 	}
 
 	return updatedValidCandidates, starvedCandidates, nil
@@ -1576,13 +1572,10 @@ func (erp *EmergencyReparenter) findErrantGTIDs(
 // gatherReparentJournalInfo reads the reparent journal information from all the tablets in the valid candidates list.
 func (erp *EmergencyReparenter) gatherReparentJournalInfo(
 	ctx context.Context,
-	validCandidates map[string]*RelayLogPositions,
-	tabletMap map[string]*topo.TabletInfo,
+	validCandidates []*ersCandidate,
 	waitReplicasTimeout time.Duration,
 	tolerateMissingJournal bool,
-) (map[string]int32, error) {
-	reparentJournalLen := make(map[string]int32)
-	var mu sync.Mutex
+) error {
 	errCh := make(chan concurrency.Error)
 	defer close(errCh)
 
@@ -1591,8 +1584,8 @@ func (erp *EmergencyReparenter) gatherReparentJournalInfo(
 
 	waiterCount := 0
 
-	for candidate := range validCandidates {
-		go func(alias string) {
+	for _, candidate := range validCandidates {
+		go func(candidate *ersCandidate) {
 			var err error
 			var length int32
 			defer func() {
@@ -1600,19 +1593,17 @@ func (erp *EmergencyReparenter) gatherReparentJournalInfo(
 					Err: err,
 				}
 			}()
-			length, err = erp.tmc.ReadReparentJournalInfo(groupCtx, tabletMap[alias].Tablet)
+			length, err = erp.tmc.ReadReparentJournalInfo(groupCtx, candidate.tablet())
 			if err != nil && tolerateMissingJournal {
 				// A brand-new shard has no sidecar tables yet: treat a missing journal
 				// table as zero entries so ERS can still initialize it
 				if sqlErr, ok := sqlerror.NewSQLErrorFromError(err).(*sqlerror.SQLError); ok &&
 					(sqlErr.Number() == sqlerror.ERNoSuchTable || sqlErr.Number() == sqlerror.ERBadDb) {
-					erp.logger.Warningf("treating missing reparent journal table on %s as zero entries during errant GTID detection: %v", alias, err)
+					erp.logger.Warningf("treating missing reparent journal table on %s as zero entries during errant GTID detection: %v", candidate.alias(), err)
 					length, err = 0, nil
 				}
 			}
-			mu.Lock()
-			defer mu.Unlock()
-			reparentJournalLen[alias] = length
+			candidate.reparentJournalLen = length
 		}(candidate)
 
 		waiterCount++
@@ -1626,8 +1617,8 @@ func (erp *EmergencyReparenter) gatherReparentJournalInfo(
 	rec := errgroup.Wait(groupCancel, errCh)
 
 	if len(rec.Errors) != 0 {
-		return nil, vterrors.Wrapf(rec.Error(), "could not read reparent journal information within the provided waitReplicasTimeout (%s)", waitReplicasTimeout)
+		return vterrors.Wrapf(rec.Error(), "could not read reparent journal information within the provided waitReplicasTimeout (%s)", waitReplicasTimeout)
 	}
 
-	return reparentJournalLen, nil
+	return nil
 }
