@@ -45,6 +45,8 @@ import (
 
 var rowStreamertHeartbeatInterval = 10 * time.Second
 
+const maxRetainedPoolBytes = 4 << 20 // 4 MiB; see #20954
+
 type RowStreamerMode int32
 
 const (
@@ -424,10 +426,11 @@ func (rs *rowStreamer) streamQuery(send func(*binlogdatapb.VStreamRowsResponse) 
 	}()
 
 	var (
-		response binlogdatapb.VStreamRowsResponse
-		rows     []*querypb.Row
-		rowCount int
-		mysqlrow []sqltypes.Value
+		response  binlogdatapb.VStreamRowsResponse
+		rows      []*querypb.Row
+		rowCount  int
+		mysqlrow  []sqltypes.Value
+		poolBytes int // retained cap (Values + Lengths) across the reused rows
 	)
 
 	lastpk := make([]sqltypes.Value, len(rs.pkColumns))
@@ -477,7 +480,9 @@ func (rs *rowStreamer) streamQuery(send func(*binlogdatapb.VStreamRowsResponse) 
 			if rowCount >= len(rows) {
 				rows = append(rows, &querypb.Row{})
 			}
+			prevCap := cap(rows[rowCount].Values) + cap(rows[rowCount].Lengths)*8
 			byteCount += sqltypes.RowToProto3Inplace(filtered, rows[rowCount])
+			poolBytes += cap(rows[rowCount].Values) + cap(rows[rowCount].Lengths)*8 - prevCap
 			rowCount++
 		}
 
@@ -495,6 +500,10 @@ func (rs *rowStreamer) streamQuery(send func(*binlogdatapb.VStreamRowsResponse) 
 			rs.pktsize.Record(byteCount, time.Since(startSend))
 			rowCount = 0
 			byteCount = 0
+			var dropped bool
+			if rows, poolBytes, dropped = trimRowPool(rows, poolBytes, maxRetainedPoolBytes); dropped {
+				response.Rows = nil // release the dropped pool's backing array
+			}
 		}
 	}
 
@@ -510,6 +519,15 @@ func (rs *rowStreamer) streamQuery(send func(*binlogdatapb.VStreamRowsResponse) 
 	}
 
 	return nil
+}
+
+// trimRowPool drops the whole reused row pool once retained capacity exceeds
+// budget (an O(1) reset, not a walk). Call only after the packet is sent.
+func trimRowPool(rows []*querypb.Row, poolBytes, budget int) (_ []*querypb.Row, newPoolBytes int, dropped bool) {
+	if poolBytes <= budget {
+		return rows, poolBytes, false
+	}
+	return nil, 0, true
 }
 
 func GetVReplicationMaxExecutionTimeQueryHint(copyPhaseDuration time.Duration) string {

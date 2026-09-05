@@ -111,6 +111,9 @@ type dynamicPacketSizer struct {
 	// grow is the growth rate with which we adjust the packet size
 	grow int
 
+	// maxSize bounds candidateSize growth; see #20954.
+	maxSize int
+
 	// calls is the amount of calls to the packet sizer
 	calls int
 
@@ -121,6 +124,8 @@ type dynamicPacketSizer struct {
 	elapsed time.Duration
 }
 
+const dynamicPacketSizerMaxGrowthFactor = 16
+
 func newDynamicPacketSizer(baseSize int) PacketSizer {
 	return &dynamicPacketSizer{
 		currentSize:      baseSize,
@@ -128,6 +133,14 @@ func newDynamicPacketSizer(baseSize int) PacketSizer {
 		candidateMetrics: &mathstats.Sample{},
 		candidateSize:    baseSize,
 		grow:             baseSize / 4,
+		maxSize:          baseSize * dynamicPacketSizerMaxGrowthFactor,
+	}
+}
+
+func (ps *dynamicPacketSizer) growCandidate() {
+	ps.candidateSize += ps.grow
+	if ps.maxSize > 0 && ps.candidateSize > ps.maxSize {
+		ps.candidateSize = ps.maxSize
 	}
 }
 
@@ -209,7 +222,7 @@ func (ps *dynamicPacketSizer) Record(byteCount int, d time.Duration) {
 				ps.settled = true
 			} else {
 				if change == notChanging && ps.calls%GrowthFrequency == 0 {
-					ps.candidateSize += ps.grow
+					ps.growCandidate()
 				}
 			}
 
@@ -217,7 +230,7 @@ func (ps *dynamicPacketSizer) Record(byteCount int, d time.Duration) {
 			ps.candidateMetrics, ps.currentMetrics = ps.currentMetrics, ps.candidateMetrics
 			ps.candidateMetrics.Clear()
 
-			ps.candidateSize += ps.grow
+			ps.growCandidate()
 			ps.currentSize = ps.candidateSize
 		}
 	}
