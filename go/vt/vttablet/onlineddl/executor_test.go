@@ -1817,17 +1817,18 @@ func TestReviewRunningMigrationsRepairOutcomes(t *testing.T) {
 		assert.False(t, *h.livenessRefreshed,
 			"a Running row with no controller behind it must not be reviewed further: no liveness, no cutover, until the re-drive succeeds")
 
-		// The re-drive succeeds: the intent is cleared, and only then is the
-		// park record retired.
+		// The re-drive succeeds: the intent is cleared, and the park record
+		// is retired in that same review, so that a downgrade before the
+		// next one does not find an Error row.
 		*h.failing = false
 		_, _, err = h.e.reviewRunningMigrations(t.Context())
 		require.NoError(t, err)
 		require.Len(t, *h.queries, 3)
 		assert.NotContains(t, h.e.vreplicationPendingRepair, uuid, "the intent is cleared once the re-drive succeeds")
+		assert.Equal(t, 1, *h.retireAttempts, "the park record must be retired as soon as the re-drive confirms the repair")
 		_, _, err = h.e.reviewRunningMigrations(t.Context())
 		require.NoError(t, err)
 		assert.Len(t, *h.queries, 3, "nothing more to re-drive")
-		assert.Equal(t, 1, *h.retireAttempts, "the park record is retired once the repair is confirmed")
 	})
 }
 

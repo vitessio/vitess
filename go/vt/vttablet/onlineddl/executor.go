@@ -3968,6 +3968,13 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 						// judged on it. The next review re-drives again.
 						return nil
 					}
+					if s.hasStaleParkRecord {
+						// The re-drive confirmed the repair: retire the park
+						// record now, the check above having deferred it, so
+						// that a downgrade before the next review does not
+						// find an Error row.
+						e.retireVReplParkRecord(ctx, uuid, s)
+					}
 				}
 				e.refreshMigrationLiveness(ctx, uuid, s, migrationRow.AsInt64("rows_copied", 0), migrationRow.AsInt64("vitess_liveness_indicator", 0))
 				if onlineDDL.TabletAlias != e.TabletAliasString() {
