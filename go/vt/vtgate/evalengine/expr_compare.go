@@ -531,6 +531,13 @@ func (i *InExpr) eval(env *ExpressionEnv) (eval, error) {
 }
 
 func (i *InExpr) compileTable(lhs ctype, rhs TupleExpr) map[vthash.Hash]struct{} {
+	// JSON hashes fingerprint arrays and objects by kind and cardinality
+	// only: a hash hit is not equality, so JSON stays on the comparing
+	// slow path.
+	if lhs.Type == sqltypes.TypeJSON {
+		return nil
+	}
+
 	var (
 		table  = make(map[vthash.Hash]struct{})
 		hasher = vthash.New()

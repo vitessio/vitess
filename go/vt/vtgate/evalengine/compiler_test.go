@@ -1129,3 +1129,69 @@ func TestCompilerNonConstant(t *testing.T) {
 		})
 	}
 }
+
+// TestJSONInStaticTable checks that IN over folded JSON literals does not
+// compile the static hash table: JSON arrays and objects hash by kind and
+// cardinality only, so a hash hit is not equality. Compilation fails until
+// the compiler learns to push JSON literals; the follow-up literal change
+// flips this test to compiled evaluation.
+func TestJSONInStaticTable(t *testing.T) {
+	testCases := []struct {
+		expression string
+		values     []sqltypes.Value
+		result     string
+	}{
+		{
+			expression: `column0 IN (JSON_ARRAY(2))`,
+			values:     []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`[1]`))},
+			result:     `INT64(0)`,
+		},
+		{
+			expression: `column0 IN (JSON_OBJECT('b', 2))`,
+			values:     []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`{"a": 1}`))},
+			result:     `INT64(0)`,
+		},
+		{
+			expression: `column0 IN (JSON_ARRAY(1))`,
+			values:     []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`[1]`))},
+			result:     `INT64(1)`,
+		},
+		{
+			expression: `column0 IN (JSON_OBJECT('a', 1))`,
+			values:     []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`{"a": 1}`))},
+			result:     `INT64(1)`,
+		},
+	}
+
+	venv := vtenv.NewTestEnv()
+	for _, tc := range testCases {
+		t.Run(tc.expression, func(t *testing.T) {
+			expr, err := venv.Parser().ParseExpr(tc.expression)
+			require.NoError(t, err)
+
+			fields := evalengine.FieldResolver(makeFields(tc.values))
+			cfg := &evalengine.Config{
+				ResolveColumn: fields.Column,
+				Collation:     collations.CollationUtf8mb4ID,
+				Environment:   venv,
+			}
+
+			translated, err := evalengine.Translate(expr, cfg)
+			require.NoError(t, err)
+
+			untyped, ok := translated.(*evalengine.UntypedExpr)
+			require.True(t, ok)
+
+			env := evalengine.EmptyExpressionEnv(venv)
+			env.Row = tc.values
+			env.Fields = makeFields(tc.values)
+
+			res, err := env.EvaluateAST(untyped)
+			require.NoError(t, err)
+			assert.Equal(t, tc.result, res.String())
+
+			_, err = untyped.Compile(env)
+			require.ErrorContains(t, err, "unsupported literal kind")
+		})
+	}
+}
