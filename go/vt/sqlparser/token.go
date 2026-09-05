@@ -392,6 +392,11 @@ func (tkn *Tokenizer) scanIdentifier(isVariable bool) (int, string) {
 	}
 	keywordName := tkn.buf[start:tkn.Pos]
 	if keywordID, found := keywordLookupTable.LookupString(keywordName); found {
+		if isFuncCallKeyword(keywordID) && (tkn.lastTokenType == '.' || tkn.cur() != '(') {
+			// A qualified name is always an identifier: db.cast(1) is a call
+			// of the stored function cast in db, as in MySQL.
+			return ID, keywordName
+		}
 		return keywordID, keywordName
 	}
 	return ID, keywordName

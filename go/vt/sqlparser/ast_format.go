@@ -1864,6 +1864,11 @@ func (node *CurTimeFuncExpr) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node.
+func (node *UserFuncExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "%#s()", node.Name.String())
+}
+
+// Format formats the node.
 func (node *CollateExpr) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "%v collate %#s", node.Expr, node.Collation)
 }
@@ -1873,11 +1878,14 @@ func (node *FuncExpr) Format(buf *TrackedBuffer) {
 	if node.Qualifier.NotEmpty() {
 		buf.astPrintf(node, "%v.", node.Qualifier)
 	}
-	// Function names should not be back-quoted even
-	// if they match a reserved word, only if they contain illegal characters
+	// Function names are not back-quoted for matching a reserved word, only
+	// for containing illegal characters — except the keyword-function names
+	// (see IsKeywordFunctionName): a generic call by one of those is MySQL's
+	// stored-function path, and printed bare the name would re-lex as the
+	// built-in.
 	funcName := node.Name.String()
 
-	if containEscapableChars(funcName, NoAt) {
+	if containEscapableChars(funcName, NoAt) || IsKeywordFunctionName(funcName) {
 		writeEscapedString(buf, funcName)
 	} else {
 		buf.WriteString(funcName)

@@ -608,6 +608,7 @@ var keywords = []keyword{
 	{"sequence", SEQUENCE},
 	{"serializable", SERIALIZABLE},
 	{"session", SESSION},
+	{"session_user", SESSION_USER},
 	{"set", SET},
 	{"share", SHARE},
 	{"shared", SHARED},
@@ -727,6 +728,7 @@ var keywords = []keyword{
 	{"sum", SUM},
 	{"sysdate", SYSDATE},
 	{"system", UNUSED},
+	{"system_user", SYSTEM_USER},
 	{"table", TABLE},
 	{"table_name", TABLE_NAME},
 	{"tables", TABLES},
@@ -841,6 +843,49 @@ var (
 
 // keywordLookupTable is a perfect hash map that maps **case insensitive** keyword names to their ids
 var keywordLookupTable *caseInsensitiveTable
+
+// mysqlFuncCallKeywords lists the built-in function names that MySQL's lexer
+// treats as keywords only when the name is immediately followed by '(' with no
+// whitespace in between; in any other position the name is an ordinary
+// identifier, and "name (" with whitespace is a call of a stored function by
+// that name. It is the list from "Function Name Parsing and Resolution" in the
+// MySQL reference manual. (sql_mode=IGNORE_SPACE relaxes the no-whitespace
+// requirement and is not supported here.)
+var mysqlFuncCallKeywords = map[string]struct{}{
+	"adddate": {}, "bit_and": {}, "bit_or": {}, "bit_xor": {}, "cast": {}, "count": {},
+	"curdate": {}, "curtime": {}, "date_add": {}, "date_sub": {}, "extract": {},
+	"group_concat": {}, "max": {}, "mid": {}, "min": {}, "now": {}, "position": {},
+	"session_user": {}, "std": {}, "stddev": {}, "stddev_pop": {}, "stddev_samp": {},
+	"subdate": {}, "substr": {}, "substring": {}, "sum": {}, "sysdate": {},
+	"system_user": {}, "trim": {}, "variance": {}, "var_pop": {}, "var_samp": {},
+}
+
+// isFuncCallKeyword reports whether the token is the keyword of one of the
+// mysqlFuncCallKeywords names: the lexer only produces it when '(' follows the
+// name directly, and returns an identifier otherwise.
+func isFuncCallKeyword(id int) bool {
+	switch id {
+	case ADDDATE, BIT_AND, BIT_OR, BIT_XOR, CAST, COUNT, CURDATE, CURTIME, DATE_ADD, DATE_SUB,
+		EXTRACT, GROUP_CONCAT, MAX, MID, MIN, NOW, POSITION, SESSION_USER, STD, STDDEV, STDDEV_POP,
+		STDDEV_SAMP, SUBDATE, SUBSTRING, SUM, SYSDATE, SYSTEM_USER, TRIM, VARIANCE, VAR_POP, VAR_SAMP:
+		return true
+	default:
+		return false
+	}
+}
+
+// IsKeywordFunctionName reports whether name is a built-in function that this
+// grammar, like MySQL's, parses through a keyword rule into a node of its own:
+// the whitespace-sensitive names, and the user-information functions USER and
+// CURRENT_USER. A generic FuncExpr by such a name therefore never stands for
+// the built-in: it came quoted, qualified, or (for the whitespace-sensitive
+// ones) with whitespace before the parenthesis — MySQL's stored-function path —
+// and serializes quoted to stay one, since printed bare the name would re-lex
+// as the built-in.
+func IsKeywordFunctionName(name string) bool {
+	id, ok := keywordLookupTable.LookupString(name)
+	return ok && (isFuncCallKeyword(id) || id == USER || id == CURRENT_USER)
+}
 
 type caseInsensitiveTable struct {
 	h map[uint64]keyword

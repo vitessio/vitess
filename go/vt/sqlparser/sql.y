@@ -404,7 +404,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 // Functions
 %token <str> ADDDATE CURRENT_TIMESTAMP DATABASE CURRENT_DATE CURDATE DATE_ADD DATE_SUB NOW SUBDATE
 %token <str> CURTIME CURRENT_TIME LOCALTIME LOCALTIMESTAMP CURRENT_USER
-%token <str> UTC_DATE UTC_TIME UTC_TIMESTAMP SYSDATE
+%token <str> UTC_DATE UTC_TIME UTC_TIMESTAMP SYSDATE SESSION_USER SYSTEM_USER
 %token <str> DAY DAY_HOUR DAY_MICROSECOND DAY_MINUTE DAY_SECOND HOUR HOUR_MICROSECOND HOUR_MINUTE HOUR_SECOND MICROSECOND MINUTE MINUTE_MICROSECOND MINUTE_SECOND MONTH QUARTER SECOND SECOND_MICROSECOND YEAR_MONTH WEEK
 %token <str> SQL_TSI_DAY SQL_TSI_WEEK SQL_TSI_HOUR SQL_TSI_MINUTE SQL_TSI_MONTH SQL_TSI_QUARTER SQL_TSI_SECOND SQL_TSI_MICROSECOND SQL_TSI_YEAR
 %token <str> REPLACE
@@ -6758,7 +6758,7 @@ function_call_keyword:
   }
 | CURRENT_USER func_paren_opt
   {
-    $$ =  &FuncExpr{Name: NewIdentifierCI($1)}
+    $$ = &UserFuncExpr{Name: NewIdentifierCI("current_user")}
   }
 
 /*
@@ -6783,7 +6783,19 @@ UTC_DATE func_paren_opt
   }
 | CURDATE func_paren_opt
   {
-    $$ = &FuncExpr{Name:NewIdentifierCI("curdate")}
+    $$ = &CurTimeFuncExpr{Name:NewIdentifierCI("curdate")} // a dedicated node like now/curtime/sysdate, so the keyword form is never a generic call (see FuncExpr.Format)
+  }
+| USER openb closeb
+  {
+    $$ = &UserFuncExpr{Name: NewIdentifierCI("user")}
+  }
+| SESSION_USER openb closeb
+  {
+    $$ = &UserFuncExpr{Name: NewIdentifierCI("session_user")}
+  }
+| SYSTEM_USER openb closeb
+  {
+    $$ = &UserFuncExpr{Name: NewIdentifierCI("system_user")}
   }
 | UTC_TIME func_datetime_precision
   {
@@ -9098,6 +9110,7 @@ reserved_keyword:
 | STRAIGHT_JOIN
 | SYSDATE
 | SYSTEM
+| SYSTEM_USER %prec FUNCTION_CALL_NON_KEYWORD
 | TABLE
 | THEN
 | TO
@@ -9461,6 +9474,7 @@ non_reserved_keyword:
 | SECURITY
 | SEQUENCE
 | SESSION
+| SESSION_USER %prec FUNCTION_CALL_NON_KEYWORD
 | SERIALIZABLE
 | SHARE
 | SHARED
@@ -9589,7 +9603,7 @@ non_reserved_keyword:
 | UNUSED
 | UpdateXML %prec FUNCTION_CALL_NON_KEYWORD
 | UPGRADE
-| USER
+| USER %prec FUNCTION_CALL_NON_KEYWORD
 | USER_RESOURCES
 | VALIDATION
 | VALUE

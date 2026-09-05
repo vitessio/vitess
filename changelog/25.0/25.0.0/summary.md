@@ -34,6 +34,7 @@
         - [Stricter validation of SQL-level PREPARE statements](#vtgate-prepare-stricter-validation)
         - [Stricter PROXY protocol v1 header validation](#vtgate-proxy-protocol-v1-strictness)
         - [MySQL-faithful validation and rejection of unsupported `sql_mode` values](#vtgate-sql-mode-rejection)
+        - [MySQL-faithful lexing of built-in function names](#sqlparser-function-name-keywords)
         - [New `VEXPLAIN MYSQLPLAN` statement](#vtgate-vexplain-mysqlplan)
     - **[Reparent](#minor-changes-reparent)**
         - [`EmergencyReparentShard` no longer waits on replicas that cannot win the election](#ers-lagging-relay-log-wait)
@@ -341,6 +342,19 @@ Specification-conformant v1 headers, as emitted by HAProxy, AWS load balancers, 
 **Impact**: Deployments whose proxy emits one of the forms above — most notably the nginx stream module proxying between IPv6 clients and IPv4 upstreams — will have those connections rejected before the MySQL handshake. Configure the proxy to emit specification-conformant headers (for nginx, listen on a matching address family or on a v4-mapped socket so addresses are rendered in IPv6 form).
 
 See [#20733](https://github.com/vitessio/vitess/pull/20733) for details.
+
+#### <a id="sqlparser-function-name-keywords"/>MySQL-faithful lexing of built-in function names</a>
+
+MySQL's lexer treats the built-in function names it lists under "Function Name Parsing and Resolution" (`ADDDATE`, `BIT_AND`, `BIT_OR`, `BIT_XOR`, `CAST`, `COUNT`, `CURDATE`, `CURTIME`, `DATE_ADD`, `DATE_SUB`, `EXTRACT`, `GROUP_CONCAT`, `MAX`, `MID`, `MIN`, `NOW`, `POSITION`, `STD`, `STDDEV`, `STDDEV_POP`, `STDDEV_SAMP`, `SUBDATE`, `SUBSTR`/`SUBSTRING`, `SUM`, `SYSDATE`, `TRIM`, `VARIANCE`, `VAR_POP`, `VAR_SAMP`) as keywords only when the name is immediately followed by `(` with no whitespace in between. In any other position the name is an ordinary identifier, and `name (` with whitespace is a call of a stored function by that name. Vitess reserved some of these words unconditionally, rejecting valid MySQL DDL like `create table CAST (a int)` or columns named `now`, and read `count (*)` or `sum (x)` with whitespace as the built-in. The Vitess parser now applies MySQL's rule to the whole list. This also underpins `sql_mode=IGNORE_SPACE` support, which relaxes the no-whitespace requirement.
+
+Each of the following matches MySQL, but removes a Vitess-only leniency:
+
+- `default now` / `on update now` without parentheses no longer parse; write `now()` instead.
+- A bare `now` in an expression is now a column reference, not `now()`.
+- `cast (1 as char)` with whitespace before `(` is now a syntax error.
+- `now ()` / `substr (...)` / `sum (x)` with whitespace still parse, but as generic function calls rather than the dedicated AST nodes (a `sum (x)` is no longer an aggregate). That is MySQL's stored-function path, and the call serializes with the name quoted (`` `now`() ``, `` `sum`(x) ``) so that MySQL takes the same path instead of re-lexing the bare name as the built-in.
+- A quoted `` `user`() ``, `` `current_user`() ``, `` `session_user`() `` or `` `system_user`() `` stays quoted, and so remains the stored-function call MySQL reads it as; previously it was sent bare and ran as the built-in.
+- The built-in argument syntax needs the attached parenthesis: `count (*)`, `trim (leading ...)`, `position (... in ...)`, `date_add (..., interval ...)`, `group_concat (distinct ...)`, `substring (... from ...)` and `extract (... from ...)` with whitespace are syntax errors, as in MySQL.
 
 #### <a id="vtgate-sql-mode-rejection"/>MySQL-faithful validation and rejection of unsupported `sql_mode` values</a>
 

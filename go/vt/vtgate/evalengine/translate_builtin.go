@@ -45,6 +45,14 @@ func (ast *astCompiler) translateFuncArgs(fnargs []sqlparser.Expr) ([]IR, error)
 }
 
 func (ast *astCompiler) translateFuncExpr(fn *sqlparser.FuncExpr) (IR, error) {
+	// A qualified call names a stored function, whatever the name. So does a
+	// generic call by a keyword-function name: the parser gives the built-in a
+	// node of its own, and a FuncExpr by that name came quoted or with whitespace
+	// before the parenthesis (see sqlparser.IsKeywordFunctionName). Both are
+	// MySQL's to resolve and evaluate.
+	if fn.Qualifier.NotEmpty() || sqlparser.IsKeywordFunctionName(fn.Name.String()) {
+		return nil, translateExprNotSupported(fn)
+	}
 	var args TupleExpr
 	for _, expr := range fn.Exprs {
 		convertedExpr, err := ast.translateExpr(expr)
@@ -368,7 +376,7 @@ func (ast *astCompiler) translateFuncExpr(fn *sqlparser.FuncExpr) (IR, error) {
 		default:
 			return nil, argError(method)
 		}
-	case "curdate", "current_date":
+	case "current_date":
 		if len(args) != 0 {
 			return nil, argError(method)
 		}
@@ -604,11 +612,6 @@ func (ast *astCompiler) translateFuncExpr(fn *sqlparser.FuncExpr) (IR, error) {
 		default:
 			return nil, argError(method)
 		}
-	case "user", "current_user", "session_user", "system_user":
-		if len(args) != 0 {
-			return nil, argError(method)
-		}
-		return &builtinUser{CallExpr: call}, nil
 	case "database", "schema":
 		if len(args) != 0 {
 			return nil, argError(method)
@@ -790,6 +793,9 @@ func (ast *astCompiler) translateCallable(call sqlparser.Callable) (IR, error) {
 			Method:    "JSON_KEYS",
 		}, nil
 
+	case *sqlparser.UserFuncExpr:
+		return &builtinUser{CallExpr{Method: call.Name.String()}}, nil
+
 	case *sqlparser.CurTimeFuncExpr:
 		if call.Fsp > 6 {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Too-big precision %d specified for '%s'. Maximum is 6.", call.Fsp, call.Name.String())
@@ -798,6 +804,8 @@ func (ast *astCompiler) translateCallable(call sqlparser.Callable) (IR, error) {
 		cexpr := CallExpr{Arguments: nil, Method: call.Name.String()}
 		var utc, onlyTime bool
 		switch call.Name.Lowered() {
+		case "curdate":
+			return &builtinCurdate{CallExpr: cexpr}, nil
 		case "current_time", "curtime":
 			onlyTime = true
 		case "utc_time":

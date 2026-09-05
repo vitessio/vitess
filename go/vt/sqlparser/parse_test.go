@@ -4173,6 +4173,100 @@ var validSQL = []struct {
 }, {
 	input:  "SELECT 1,2 UNION SELECT * from (VALUES ROW(10,15)) t",
 	output: "select 1, 2 from dual union select * from (values row(10, 15)) as t",
+}, {
+	// MySQL's lexer treats these function names as keywords only when
+	// immediately followed by '(' — otherwise they are plain identifiers.
+	input:  "create table CAST (a int)",
+	output: "create table `CAST` (\n\ta int\n)",
+}, {
+	input:  "drop table CAST",
+	output: "drop table `CAST`",
+}, {
+	// a qualified name is never a keyword: it names a stored function or a
+	// column in the schema, with or without whitespace before the parenthesis
+	input:  "select db.cast(1), t.`cast` from t",
+	output: "select db.`cast`(1), t.`cast` from t",
+}, {
+	input:  "select db.cast (1), db.now () from t",
+	output: "select db.`cast`(1), db.`now`() from t",
+}, {
+	// the rule covers MySQL's whole list of whitespace-sensitive function
+	// names: with whitespace before the parenthesis, each is a generic call
+	input:  "select count (1), sum (x), max (x), min (x) from t",
+	output: "select `count`(1), `sum`(x), `max`(x), `min`(x) from t",
+}, {
+	input:  "select trim (' a '), mid ('abc', 1, 1), adddate (d, 1), std (x), var_pop (x), bit_and (x) from t",
+	output: "select `trim`(' a '), `mid`('abc', 1, 1), `adddate`(d, 1), `std`(x), `var_pop`(x), `bit_and`(x) from t",
+}, {
+	input:  "select curdate (), curtime (), sysdate () from t",
+	output: "select `curdate`(), `curtime`(), `sysdate`() from t",
+}, {
+	input:  "select t.count(1), db.sum (x) from t",
+	output: "select t.`count`(1), db.`sum`(x) from t",
+}, {
+	// and bare, each is an identifier
+	input:  "select count, sum, position, trim, std, var_pop from t",
+	output: "select `count`, `sum`, `position`, `trim`, `std`, `var_pop` from t",
+}, {
+	input:  "select session_user(), system_user(), session_user (), system_user () from t",
+	output: "select session_user(), system_user(), `session_user`(), `system_user`() from t",
+}, {
+	// the user-information functions parse through keyword rules into their own
+	// node; a quoted spelling is an identifier, MySQL's stored-function path
+	input:  "select user(), user (), current_user, current_user(), `user`(), `current_user`(), `session_user`() from t",
+	output: "select user(), user(), current_user(), current_user(), `user`(), `current_user`(), `session_user`() from t",
+}, {
+	input:  "select session_user, system_user from t",
+	output: "select `session_user`, `system_user` from t",
+}, {
+	input:  "create table CURDATE (a int)",
+	output: "create table `CURDATE` (\n\ta int\n)",
+}, {
+	input:  "create table CURTIME (a int)",
+	output: "create table `CURTIME` (\n\ta int\n)",
+}, {
+	input:  "create table EXTRACT (a int)",
+	output: "create table `EXTRACT` (\n\ta int\n)",
+}, {
+	input:  "create table NOW (a int)",
+	output: "create table `NOW` (\n\ta int\n)",
+}, {
+	input:  "create table SUBSTR (a int)",
+	output: "create table `SUBSTR` (\n\ta int\n)",
+}, {
+	input:  "create table SUBSTRING (a int)",
+	output: "create table `SUBSTRING` (\n\ta int\n)",
+}, {
+	input:  "create table SYSDATE (a int)",
+	output: "create table `SYSDATE` (\n\ta int\n)",
+}, {
+	input:  "create table t (cast int, now int, extract int)",
+	output: "create table t (\n\t`cast` int,\n\t`now` int,\n\t`extract` int\n)",
+}, {
+	input:  "select now from t",
+	output: "select `now` from t",
+}, {
+	input:  "select cast(1 as char), now(), now(6), sysdate(), curdate(), curtime(), substr('a', 1), extract(year from d) from t",
+	output: "select cast(1 as char), now(), now(6), sysdate(), curdate(), curtime(), substr('a', 1), extract(year from d) from t",
+}, {
+	// with whitespace before '(' the name is an identifier, and the call is
+	// a generic function call — MySQL's stored-function call path. It
+	// serializes quoted so that MySQL takes that path too, rather than
+	// re-lexing the bare name as the built-in
+	input:  "select now () from t",
+	output: "select `now`() from t",
+}, {
+	input:  "select `now`() from t",
+	output: "select `now`() from t",
+}, {
+	input:  "select sysdate (), curdate (), curtime () from t",
+	output: "select `sysdate`(), `curdate`(), `curtime`() from t",
+}, {
+	input:  "select substr ('abc', 1, 2) from t",
+	output: "select `substr`('abc', 1, 2) from t",
+}, {
+	input:  "select t.now from t",
+	output: "select t.`now` from t",
 }}
 
 func TestValid(t *testing.T) {
@@ -5513,7 +5607,7 @@ func TestCreateTable(t *testing.T) {
 	s2 varchar default 'this is a string',
 	s3 varchar default null,
 	s4 timestamp default current_timestamp,
-	s41 timestamp default now,
+	s41 timestamp default now(),
 	s5 bit(1) default B'0'
 )`,
 			output: `create table t (
@@ -5574,12 +5668,13 @@ func TestCreateTable(t *testing.T) {
 )`,
 		},
 		{
-			// test now with and without ()
+			// test now() variants; bare now (without parens) is an
+			// identifier, like in MySQL
 			input: `create table t (
-	time1 timestamp default now,
+	time1 timestamp default now(),
 	time2 timestamp default now(),
 	time3 timestamp default (now()),
-	time4 timestamp default now on update now,
+	time4 timestamp default now() on update now(),
 	time5 timestamp default now() on update now(),
 	time6 timestamp(3) default now(3) on update now(3)
 )`,
@@ -6694,6 +6789,38 @@ var invalidSQL = []struct {
 }, {
 	input:  "select *, * from t",
 	output: "syntax error at position 12",
+}, {
+	// CAST is only a keyword when directly followed by '('; with a space it
+	// is an identifier and AS is not valid in a generic argument list.
+	input:  "select cast (1 as char)",
+	output: "syntax error at position 18 near 'as'",
+}, {
+	// the same for every name on MySQL's list whose built-in form has its own
+	// argument syntax: with whitespace, the generic argument list applies
+	input:  "select count (*) from t",
+	output: "syntax error at position 16",
+}, {
+	input:  "select position ('a' in 'abc') from t",
+	output: "syntax error at position 30 near 'abc'",
+}, {
+	input:  "select trim (leading 'a' from 'abc') from t",
+	output: "syntax error at position 21 near 'leading'",
+}, {
+	input:  "select date_add (now(), interval 1 day) from t",
+	output: "syntax error at position 40",
+}, {
+	input:  "select group_concat (distinct a) from t",
+	output: "syntax error at position 30 near 'distinct'",
+}, {
+	input:  "select substring ('abc' from 1) from t",
+	output: "syntax error at position 29 near 'from'",
+}, {
+	input:  "select extract (year from now()) from t",
+	output: "syntax error at position 26 near 'from'",
+}, {
+	// bare now (without parens) is an identifier, not the now() function
+	input:  "create table t (a datetime default now)",
+	output: "syntax error at position 39 near 'now'",
 }}
 
 func TestErrors(t *testing.T) {
@@ -7197,4 +7324,20 @@ func parsePartial(r *bufio.Reader, readType []string, lineno int, fileName strin
 
 func locateFile(name string) string {
 	return "testdata/" + name
+}
+
+// Every name on MySQL's list is a keyword of this grammar that gets the
+// function-call lexing, and no other keyword does.
+func TestFuncCallKeywordList(t *testing.T) {
+	for name := range mysqlFuncCallKeywords {
+		id, ok := keywordLookupTable.LookupString(name)
+		require.True(t, ok, name)
+		assert.True(t, isFuncCallKeyword(id), name)
+	}
+	for _, kw := range keywords {
+		if kw.id != UNUSED && isFuncCallKeyword(kw.id) {
+			_, listed := mysqlFuncCallKeywords[kw.name]
+			assert.True(t, listed, kw.name)
+		}
+	}
 }
