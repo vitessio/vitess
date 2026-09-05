@@ -37,7 +37,6 @@ const (
 	NonUniqTable
 	NonUpdateableTable
 	SyntaxError
-	ParseError
 	WrongFieldWithGroup
 	WrongGroupField
 	WrongTypeForVar
@@ -129,6 +128,7 @@ const (
 	VectorConversion
 
 	UnsupportedSQLMode
+	ParseError
 
 	// No state should be added below NumOfStates
 	NumOfStates
