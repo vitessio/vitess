@@ -22,6 +22,7 @@
         - [Default data protection for `_reverse` workflow cancel/complete](#vreplication-reverse-workflow-data-protection)
         - [`vdiff show --no-samples` strips the per-table row-sample report](#vreplication-vdiff-no-samples)
         - [Preserve Materialize target data on cancel by default](#vreplication-materialize-cancel-data-protection)
+        - [Online DDL migrations are no longer failed by recoverable vreplication errors](#onlineddl-vrepl-auto-resume)
     - **[VTGate](#minor-changes-vtgate)**
         - [Ingress bytes in query LogStats](#vtgate-logstats-ingress-bytes)
         - [New controls for cross-keyspace reads](#vtgate-cross-keyspace-reads)
@@ -211,6 +212,13 @@ Previously `Materialize cancel` exposed no `--keep-data` flag and always omitted
 This is a client-side fix. The server and the generic `vtctldclient Workflow delete` command are unchanged, so operators must upgrade `vtctldclient` to pick it up; an older client canceling a Materialize workflow against a newer server still drops the target tables.
 
 See [#20711](https://github.com/vitessio/vitess/issues/20711) for details.
+
+#### <a id="onlineddl-vrepl-auto-resume"/>Online DDL migrations are no longer failed by recoverable vreplication errors</a>
+
+Online DDL now creates its vreplication streams with a per-workflow configuration override that pins `--vreplication-max-time-to-retry-on-error` to 0 (retry forever). A recoverable error therefore keeps the stream retrying instead of exhausting the retry window and failing the migration, regardless of the tablet-wide flag value. Genuinely unrecoverable errors (e.g. a duplicate-key error on the shadow table) still fail the migration immediately, and the existing 180-minute stale-migration policy remains the overall limit on a migration that makes no progress. A stream created before this change (an in-flight migration across a rolling upgrade) that stops on a retries-exhausted error is repaired on the fly: the executor restarts it with the retry-forever override installed, preserving the migration's copy progress.
+As part of this change, vreplication terminal errors are now classified in their error message as either unrecoverable (retrying cannot fix them) or retries-exhausted (the retry window expired on an otherwise recoverable error), making it clear to operators why a stream stopped.
+
+See [#20926](https://github.com/vitessio/vitess/issues/20926) for details.
 
 ### <a id="minor-changes-vtgate"/>VTGate</a>
 

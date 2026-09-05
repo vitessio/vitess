@@ -21,6 +21,7 @@ package onlineddl
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/url"
@@ -42,6 +43,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
@@ -61,6 +63,11 @@ type VReplStream struct {
 	message              string
 	rowsCopied           int64
 	bls                  *binlogdatapb.BinlogSource
+	// hasStaleParkRecord reports a retries-exhausted Error row still in
+	// _vt.vreplication_log for a stream that is no longer in Error: a park
+	// the stream has moved past (repaired, or otherwise resumed). The review
+	// retires it; see Executor.retireVReplParkRecord.
+	hasStaleParkRecord bool
 }
 
 // livenessTimeIndicator returns a time indicator for last known healthy state.
@@ -82,7 +89,23 @@ func (v *VReplStream) isRunning() bool {
 	return false
 }
 
-// hasError() returns true when the workflow has failed and will not retry
+// vreplMessageWrapperPrefix is prepended by readVReplStream to messages
+// derived from the _vt.vreplication_log history scan.
+const vreplMessageWrapperPrefix = "vreplication: "
+
+// isRetriesExhaustedMessage reports whether a vreplication error message is
+// classified retries-exhausted. The marker must start the message (after the
+// "vreplication: " wrapper) and be followed by ":", as generated, so that
+// marker text embedded in the underlying error (e.g. quoted user data) or a
+// message that merely extends the marker's words cannot match.
+func isRetriesExhaustedMessage(message string) bool {
+	message = strings.TrimPrefix(message, vreplMessageWrapperPrefix)
+	return strings.HasPrefix(message, vreplication.RetriesExhaustedIndicator+":")
+}
+
+// hasError returns the stream's error, if any, and whether it is terminal:
+// an Error-state stream will not retry on its own. What terminal means for
+// the migration is decided by reviewVReplStreamError.
 func (v *VReplStream) hasError() (isTerminal bool, vreplError error) {
 	switch {
 	case v.state == binlogdatapb.VReplicationWorkflowState_Error:
@@ -382,11 +405,38 @@ func (v *VRepl) analyze(ctx context.Context, conn *dbconnpool.DBConnection) erro
 	return nil
 }
 
+// onlineDDLVReplicationOptions returns the options JSON every Online DDL
+// stream carries: a per-workflow override pinning
+// --vreplication-max-time-to-retry-on-error to 0 (retry forever), so a
+// recoverable error keeps the stream retrying rather than parking it and
+// failing the migration. The stale-migration policy remains the no-progress
+// bound; pure retry loops do not advance time_updated.
+func onlineDDLVReplicationOptions() (string, error) {
+	options, err := json.Marshal(&vtctldatapb.WorkflowOptions{
+		Config: map[string]string{retryForeverConfigKey: retryForeverConfigValue},
+	})
+	if err != nil {
+		return "", err
+	}
+	return string(options), nil
+}
+
+const (
+	// The per-workflow config override pinning retry-forever; the key is the
+	// vttablet flag name.
+	retryForeverConfigKey   = "vreplication-max-time-to-retry-on-error"
+	retryForeverConfigValue = "0s"
+)
+
 // generateInsertStatement generates the INSERT INTO _vt.replication statement that creates the vreplication workflow
 func (v *VRepl) generateInsertStatement() (string, error) {
+	options, err := onlineDDLVReplicationOptions()
+	if err != nil {
+		return "", err
+	}
 	ig := vreplication.NewInsertGenerator(binlogdatapb.VReplicationWorkflowState_Stopped, v.dbName)
 	ig.AddRow(v.workflow, v.bls, v.pos, "", "in_order:REPLICA,PRIMARY",
-		binlogdatapb.VReplicationWorkflowType_OnlineDDL, binlogdatapb.VReplicationWorkflowSubType_None, false, "")
+		binlogdatapb.VReplicationWorkflowType_OnlineDDL, binlogdatapb.VReplicationWorkflowSubType_None, false, options)
 
 	return ig.String(), nil
 }

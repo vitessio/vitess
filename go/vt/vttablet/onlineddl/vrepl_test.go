@@ -17,6 +17,7 @@ limitations under the License.
 package onlineddl
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"testing"
@@ -26,7 +27,36 @@ import (
 
 	"vitess.io/vitess/go/vt/schemadiff"
 	"vitess.io/vitess/go/vt/vtenv"
+	vttablet "vitess.io/vitess/go/vt/vttablet/common"
+	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
+
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
+
+// TestGenerateInsertStatementRetryForever tests that every Online DDL stream
+// is created with the config override pinning
+// vreplication-max-time-to-retry-on-error to 0 (retry forever).
+func TestGenerateInsertStatementRetryForever(t *testing.T) {
+	v := &VRepl{
+		workflow: "wf",
+		dbName:   "vt_test",
+		bls:      &binlogdatapb.BinlogSource{Keyspace: "ks", Shard: "0"},
+	}
+	insert, err := v.generateInsertStatement()
+	require.NoError(t, err)
+
+	// The options JSON is a wire contract read by the controller; pin it.
+	const wantOptions = `{"config":{"vreplication-max-time-to-retry-on-error":"0s"}}`
+	require.Contains(t, insert, wantOptions)
+
+	// Round-trip through the controller's parsing path.
+	var workflowOptions vtctldatapb.WorkflowOptions
+	require.NoError(t, json.Unmarshal([]byte(wantOptions), &workflowOptions))
+	config, err := vttablet.NewVReplicationConfig(workflowOptions.Config)
+	require.NoError(t, err)
+	assert.Zero(t, config.MaxTimeToRetryError)
+}
 
 func TestRevertible(t *testing.T) {
 	type revertibleTestCase struct {
@@ -230,6 +260,62 @@ func TestRevertible(t *testing.T) {
 			assert.Equal(t, toStringSlice(tcase.removedUniqueKeyNames), v.analysis.RemovedUniqueKeys.Names())
 			assert.Equal(t, toStringSlice(tcase.droppedNoDefaultColumnNames), v.analysis.DroppedNoDefaultColumns.Names())
 			assert.Equal(t, toStringSlice(tcase.expandedColumnNames), v.analysis.ExpandedColumns.Names())
+		})
+	}
+}
+
+// TestVReplStreamHasError tests that any Error-state stream reports as
+// terminal, whatever its message, and that non-Error states never do.
+func TestVReplStreamHasError(t *testing.T) {
+	testCases := []struct {
+		name         string
+		state        binlogdatapb.VReplicationWorkflowState
+		message      string
+		wantTerminal bool
+		wantErr      bool
+	}{
+		{
+			name:         "unrecoverable",
+			state:        binlogdatapb.VReplicationWorkflowState_Error,
+			message:      vreplication.UnrecoverableErrorIndicator + ": bad data",
+			wantTerminal: true,
+			wantErr:      true,
+		},
+		{
+			name:         "retries exhausted",
+			state:        binlogdatapb.VReplicationWorkflowState_Error,
+			message:      vreplication.RetriesExhaustedIndicator + ": the same error was encountered continuously for longer than --vreplication-max-time-to-retry-on-error (15m0s): connection refused",
+			wantTerminal: true,
+			wantErr:      true,
+		},
+		{
+			name:         "legacy unclassified terminal marker",
+			state:        binlogdatapb.VReplicationWorkflowState_Error,
+			message:      vreplication.TerminalErrorIndicator + ": some error",
+			wantTerminal: true,
+			wantErr:      true,
+		},
+		{
+			name:         "non-terminal error message",
+			state:        binlogdatapb.VReplicationWorkflowState_Running,
+			message:      "error applying event: connection refused",
+			wantTerminal: false,
+			wantErr:      true,
+		},
+		{
+			name:         "no error",
+			state:        binlogdatapb.VReplicationWorkflowState_Running,
+			message:      "",
+			wantTerminal: false,
+			wantErr:      false,
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			s := &VReplStream{state: tc.state, message: tc.message}
+			isTerminal, err := s.hasError()
+			assert.Equal(t, tc.wantTerminal, isTerminal)
+			assert.Equal(t, tc.wantErr, err != nil)
 		})
 	}
 }
