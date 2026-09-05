@@ -3336,7 +3336,14 @@ func (e *Executor) getNonConflictingMigration(ctx context.Context) (*schema.Onli
 			if pendingCancelMessage == "" {
 				pendingCancelMessage = "cancellation requested before migration start"
 			}
-			if ferr := e.terminallyFailMigration(ctx, onlineDDL, errors.New(pendingCancelMessage)); ferr != nil {
+			ferr := func() error {
+				// Bound the writes: the scheduling pass holds migrationMutex
+				// on a tick context with no deadline.
+				tctx, cancel := context.WithTimeout(ctx, reviewQueryTimeout)
+				defer cancel()
+				return e.terminallyFailMigration(tctx, onlineDDL, errors.New(pendingCancelMessage))
+			}()
+			if ferr != nil {
 				log.Error("getNonConflictingMigration: failed to transition cancelled migration to a terminal state",
 					slog.String("uuid", uuid), slog.String("tablet", e.TabletAliasString()), slog.Any("error", ferr))
 			} else {

@@ -2241,9 +2241,10 @@ func TestGetNonConflictingMigrationCancellationIntent(t *testing.T) {
 	type harness struct {
 		e                   *Executor
 		transitionAttempted *bool
+		transitionBounded   *bool
 	}
 	newSchedulerExecutor := func(migrationFields, migrationTypes, migrationRow string) harness {
-		var transitionAttempted bool
+		var transitionAttempted, transitionBounded bool
 		e := &Executor{
 			tabletAlias:               &topodatapb.TabletAlias{Cell: "cell", Uid: 1},
 			vreplicationLastError:     map[string]*vterrors.LastError{},
@@ -2255,6 +2256,7 @@ func TestGetNonConflictingMigrationCancellationIntent(t *testing.T) {
 				case strings.HasPrefix(strings.TrimSpace(q), "update"):
 					if strings.Contains(q, "migration_status") {
 						transitionAttempted = true
+						_, transitionBounded = ctx.Deadline()
 					}
 					return &sqltypes.Result{RowsAffected: 1}, nil
 				case strings.Contains(q, "migration_status='ready'"):
@@ -2271,7 +2273,7 @@ func TestGetNonConflictingMigrationCancellationIntent(t *testing.T) {
 			},
 		}
 		e.isOpen.Store(1)
-		return harness{e: e, transitionAttempted: &transitionAttempted}
+		return harness{e: e, transitionAttempted: &transitionAttempted, transitionBounded: &transitionBounded}
 	}
 
 	t.Run("durable cancellation intent is re-driven, not scheduled", func(t *testing.T) {
@@ -2283,6 +2285,8 @@ func TestGetNonConflictingMigrationCancellationIntent(t *testing.T) {
 		require.NoError(t, err)
 		assert.Nil(t, onlineDDL, "a cancelled migration must not be picked for execution")
 		assert.True(t, *h.transitionAttempted, "the terminal transition must be re-driven instead")
+		assert.True(t, *h.transitionBounded,
+			"the re-drive runs under migrationMutex on a tick context with no deadline, so its writes must be bounded")
 	})
 	t.Run("pending in-memory intent is re-driven, not scheduled", func(t *testing.T) {
 		h := newSchedulerExecutor(
