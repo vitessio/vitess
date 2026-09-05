@@ -1265,6 +1265,31 @@ func TestReviewRunningMigrationsNilStreamCancellation(t *testing.T) {
 		assert.Equal(t, "cancellation requested by user", cancellable[0].message,
 			"a user cancellation re-driven after a restart must carry a cancellation reason, not the stream's message")
 	})
+	t.Run("a pending cancellation of a non-vreplication migration is re-driven", func(t *testing.T) {
+		// A running mysql-strategy migration has no stream verdict for its
+		// pending cancellation to ride on: the review must re-drive it
+		// itself, or the migration stays running until it completes or the
+		// stale review fails it.
+		e := newReviewExecutor(
+			"migration_uuid|migration_status|strategy",
+			"varchar|varchar|varchar",
+			uuid+"|running|mysql", nil)
+		e.vreplicationPendingCancel[uuid] = "internal cancel"
+		_, cancellable, err := e.reviewRunningMigrations(t.Context())
+		require.NoError(t, err)
+		require.Len(t, cancellable, 1)
+		assert.Equal(t, "internal cancel", cancellable[0].message)
+	})
+	t.Run("a durable cancellation of a non-vreplication migration is re-driven after a restart", func(t *testing.T) {
+		e := newReviewExecutor(
+			"migration_uuid|migration_status|strategy|cancelled_timestamp",
+			"varchar|varchar|varchar|varchar",
+			uuid+"|running|mysql|2026-09-02 17:00:00", nil)
+		_, cancellable, err := e.reviewRunningMigrations(t.Context())
+		require.NoError(t, err)
+		require.Len(t, cancellable, 1)
+		assert.Equal(t, "cancellation requested by user", cancellable[0].message)
+	})
 	t.Run("a cancel verdict stops the review before cutover", func(t *testing.T) {
 		// A healthy stream can carry a pending intent; continuing into the
 		// cutover flow could complete the migration before cancelMigrations

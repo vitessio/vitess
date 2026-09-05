@@ -365,6 +365,12 @@ func (e *Executor) refreshMigrationLiveness(ctx context.Context, uuid string, s 
 	}
 }
 
+// cancellationRequestedByUserMessage is the reason recorded for a user
+// cancellation re-driven without its recorded intent (which does not survive
+// an executor restart): the durable cancelled_timestamp proves the request,
+// but not its original text.
+const cancellationRequestedByUserMessage = "cancellation requested by user"
+
 // vreplStreamAction is reviewVReplStreamError's decision on what
 // reviewRunningMigrations should do about a running migration's
 // vreplication stream.
@@ -3883,7 +3889,7 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 					case hasPendingCancel && pendingCancelMessage != "":
 						cancelMessage = pendingCancelMessage
 					case cancellationRequested:
-						cancelMessage = "cancellation requested by user"
+						cancelMessage = cancellationRequestedByUserMessage
 					}
 					cancellable = append(cancellable, newCancellableMigration(uuid, cancelMessage))
 					// Stop here: a cancel verdict can ride on a healthy
@@ -4027,6 +4033,18 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 			}
 			if err := reviewVReplRunningMigration(); err != nil {
 				return countRunnning, cancellable, err
+			}
+		default:
+			// A requested cancellation of a migration without a vreplication
+			// stream has no stream verdict to ride on: re-drive its terminal
+			// transition here. A pending intent carries its reason; a durable
+			// cancelled_timestamp without one is a user cancellation whose
+			// intent did not survive a restart.
+			if pendingCancelMessage, hasPendingCancel := e.vreplicationPendingCancel[uuid]; hasPendingCancel || !migrationRow["cancelled_timestamp"].IsNull() {
+				if pendingCancelMessage == "" {
+					pendingCancelMessage = cancellationRequestedByUserMessage
+				}
+				cancellable = append(cancellable, newCancellableMigration(uuid, pendingCancelMessage))
 			}
 		}
 		countRunnning++
