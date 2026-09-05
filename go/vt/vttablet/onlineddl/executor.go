@@ -2040,7 +2040,7 @@ func (e *Executor) CancelPendingMigrations(ctx context.Context, migrationContext
 			cancellable = append(cancellable, newCancellableMigration(pending.uuid, message))
 		}
 	}
-	log.Info(fmt.Sprintf("CancelPendingMigrations: iterating %v migrations, matched %d", len(pendingMigrations), len(cancellable)))
+	log.Info(fmt.Sprintf("CancelPendingMigrations: matched %d of %v pending migrations", len(cancellable), len(pendingMigrations)))
 	return e.cancelMigrations(ctx, cancellable, issuedByUser)
 }
 
