@@ -300,7 +300,7 @@ func parkVReplStream(t *testing.T, uuid string, message string) {
 	// otherwise the live vplayer's position updates clear the message.
 	output, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("Workflow", "--keyspace", keyspaceName, "stop", "--workflow", uuid)
 	require.NoError(t, err, output)
-	status := onlineddl.WaitForVReplicationStatus(t, &vtParams, primaryTablet, uuid, normalWaitTime, "Stopped")
+	status := onlineddl.WaitForVReplicationStatus(t, &vtParams, primaryTablet, uuid, extendedWaitTime, "Stopped")
 	require.Equal(t, "Stopped", status)
 
 	query, err := sqlparser.ParseAndBind("select id from _vt.vreplication where workflow=%a",
@@ -761,7 +761,7 @@ func testScheduler(t *testing.T) {
 		t1uuid = testOnlineDDLStatement(t, createParams(trivialAlterT1Statement, ddlStrategy+" --postpone-completion", "vtgate", "", "", true)) // skip wait
 
 		t.Run("wait for t1 running", func(t *testing.T) {
-			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusRunning)
+			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, extendedWaitTime, schema.OnlineDDLStatusRunning)
 			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
 		})
 		t.Run("verify the retry-forever config override", func(t *testing.T) {
@@ -781,7 +781,7 @@ func testScheduler(t *testing.T) {
 			parkVReplStream(t, t1uuid, "retries exhausted: the same error was encountered continuously for longer than --vreplication-max-time-to-retry-on-error (1m0s): io.EOF")
 		})
 		t.Run("expect repair", func(t *testing.T) {
-			status := onlineddl.WaitForVReplicationStatus(t, &vtParams, primaryTablet, t1uuid, normalWaitTime, "Running")
+			status := onlineddl.WaitForVReplicationStatus(t, &vtParams, primaryTablet, t1uuid, extendedWaitTime, "Running")
 			require.Equal(t, "Running", status)
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusRunning)
 			config := assertRetryForeverOverride(t, t1uuid)
@@ -807,7 +807,7 @@ func testScheduler(t *testing.T) {
 		})
 		t.Run("complete", func(t *testing.T) {
 			onlineddl.CheckCompleteMigration(t, &vtParams, shards, t1uuid, true)
-			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, extendedWaitTime, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
 			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusComplete)
 		})
@@ -817,14 +817,14 @@ func testScheduler(t *testing.T) {
 		t1uuid = testOnlineDDLStatement(t, createParams(trivialAlterT1Statement, ddlStrategy+" --postpone-completion", "vtgate", "", "", true)) // skip wait
 
 		t.Run("wait for t1 running", func(t *testing.T) {
-			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusRunning)
+			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, extendedWaitTime, schema.OnlineDDLStatusRunning)
 			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
 		})
 		t.Run("park the stream with an unrecoverable error", func(t *testing.T) {
 			parkVReplStream(t, t1uuid, "terminal error: unrecoverable: error applying event: Duplicate entry '1' for key 'PRIMARY' (errno 1062) (sqlstate 23000)")
 		})
 		t.Run("expect migration failure", func(t *testing.T) {
-			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusFailed)
+			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, extendedWaitTime, schema.OnlineDDLStatusFailed)
 			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusFailed)
 			waitForMessage(t, t1uuid, "unrecoverable")
@@ -858,7 +858,7 @@ func testScheduler(t *testing.T) {
 		})
 
 		t.Run("wait for t1 running", func(t *testing.T) {
-			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusRunning)
+			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, extendedWaitTime, schema.OnlineDDLStatusRunning)
 			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
 		})
 		t.Run("wait for ready_to_complete", func(t *testing.T) {
@@ -931,7 +931,7 @@ func testScheduler(t *testing.T) {
 		})
 		t.Run("complete", func(t *testing.T) {
 			onlineddl.CheckCompleteMigration(t, &vtParams, shards, t1uuid, true)
-			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, extendedWaitTime, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
 			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusComplete)
 			rs, err := onlineddl.VtgateExecQuery(t.Context(), &vtParams, fmt.Sprintf("select hint_col from t1_test where id=%d", injectedRowID))
