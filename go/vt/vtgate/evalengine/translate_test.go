@@ -114,6 +114,16 @@ func TestTranslateSimplification(t *testing.T) {
 		{"2 not between 5 and 20", ok("2 < 5 or 2 > 20"), ok(`1`)},
 		{"json->\"$.c\"", ok("JSON_EXTRACT(`json`, '$.c')"), ok("JSON_EXTRACT(`json`, '$.c')")},
 		{"json->>\"$.c\"", ok("JSON_UNQUOTE(JSON_EXTRACT(`json`, '$.c'))"), ok("JSON_UNQUOTE(JSON_EXTRACT(`json`, '$.c'))")},
+		// the keyword form of a built-in evaluates here; a stored-function call by
+		// the same name (whitespace before the parenthesis, quoted, or qualified)
+		// is MySQL's to evaluate
+		{"user()", ok("user()"), ok("user()")},
+		{"session_user()", ok("session_user()"), ok("session_user()")},
+		{"curdate()", ok("curdate()"), ok("curdate()")},
+		{"session_user ()", err("not supported"), err("not supported")},
+		{"`user`()", err("not supported"), err("not supported")},
+		{"curdate ()", err("not supported"), err("not supported")},
+		{"db.curdate()", err("not supported"), err("not supported")},
 	}
 
 	venv := vtenv.NewTestEnv()
