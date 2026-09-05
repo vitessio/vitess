@@ -236,3 +236,28 @@ func TestPreservedRowsConsumedByASubqueryDoNotBlockAScatterOuter(t *testing.T) {
 	require.True(t, ok, "the subquery is expected to be merged into the scatter, got %T", primitive)
 	require.Equal(t, engine.Scatter, route.Opcode)
 }
+
+// The outer route can be single-shard on its own, and then nothing of the subquery's is riding on
+// it: a destination it does not find is one where there was no outer row to ask the question. The
+// merged route keeps its own reach, and a later union is free to widen it.
+func TestPreservedRowsConsumedByASubqueryDoNotBlockASingleShardOuter(t *testing.T) {
+	primitive := planReferenceOuterJoin(t,
+		"select u.id from `user` u where u.id = 1 and exists (select 1 from ref r1 left join ref r2 on r1.col = r2.col) union all select col from `user`")
+
+	route, ok := primitive.(*engine.Route)
+	require.True(t, ok, "the union is expected to be merged into a single route, got %T", primitive)
+	require.Equal(t, engine.Scatter, route.Opcode)
+}
+
+// When the subquery is the one routing the merged route, its preserved rows are riding on that
+// routing: the outer predicate is answered by rows the subquery only returns if the route runs.
+func TestSubqueryRoutingTheMergedRouteKeepsItsPreservedRows(t *testing.T) {
+	primitive := planReferenceOuterJoin(t,
+		"select r.col from ref r where r.col in (select r1.col from ref r1 left join (select * from `user` where id = :id) as u on r1.col = u.col)")
+
+	route, ok := primitive.(*engine.Route)
+	require.True(t, ok, "the subquery is expected to be merged into the outer route, got %T", primitive)
+	require.Equal(t, engine.EqualUnique, route.Opcode)
+	require.True(t, route.NoRoutesSpecialHandling,
+		"the outer rows are selected by the preserved rows, so they go missing with them")
+}
