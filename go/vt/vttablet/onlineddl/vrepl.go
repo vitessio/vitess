@@ -63,6 +63,11 @@ type VReplStream struct {
 	message              string
 	rowsCopied           int64
 	bls                  *binlogdatapb.BinlogSource
+	// hasStaleParkRecord reports a retries-exhausted Error row still in
+	// _vt.vreplication_log for a stream that is no longer in Error: a park
+	// the stream has moved past (repaired, or otherwise resumed). The review
+	// retires it; see Executor.retireVReplParkRecord.
+	hasStaleParkRecord bool
 }
 
 // livenessTimeIndicator returns a time indicator for last known healthy state.

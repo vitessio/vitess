@@ -115,19 +115,23 @@ func registerOnlineDDLFlags(fs *pflag.FlagSet) {
 }
 
 const (
-	staleMigrationFailMinutes                = 180
-	staleMigrationWarningMinutes             = 5
-	progressPctStarted               float64 = 0
-	progressPctFull                  float64 = 100.0
-	etaSecondsUnknown                        = -1
-	etaSecondsNow                            = 0
-	rowsCopiedUnknown                        = 0
-	emptyHint                                = ""
-	readyToCompleteHint                      = "ready_to_complete"
-	databasePoolSize                         = 3
-	qrBufferExtraTimeout                     = 5 * time.Second
-	grpcTimeout                              = 30 * time.Second
-	vreplicationTestSuiteWaitSeconds         = 5
+	staleMigrationFailMinutes            = 180
+	staleMigrationWarningMinutes         = 5
+	progressPctStarted           float64 = 0
+	progressPctFull              float64 = 100.0
+	etaSecondsUnknown                    = -1
+	etaSecondsNow                        = 0
+	rowsCopiedUnknown                    = 0
+	emptyHint                            = ""
+	readyToCompleteHint                  = "ready_to_complete"
+	databasePoolSize                     = 3
+	qrBufferExtraTimeout                 = 5 * time.Second
+	grpcTimeout                          = 30 * time.Second
+	// reviewQueryTimeout bounds the sidecar queries the migration review
+	// issues while holding migrationMutex: the tick's context has no
+	// deadline, and a stalled query must not hold the mutex indefinitely.
+	reviewQueryTimeout               = 30 * time.Second
+	vreplicationTestSuiteWaitSeconds = 5
 )
 
 // Executor is a state machine running migrations
@@ -3424,11 +3428,11 @@ func (e *Executor) runNextMigration(ctx context.Context) error {
 // and legacy terminal errors stay sticky, as the scan always intended: the
 // stream can never progress past them. A retries-exhausted row does not: it
 // records a recoverable-class error, so a live running stream supersedes it
-// (forcing Error would trigger repairs against a healthy stream). The repair
-// converts that row into its own record, but this exemption still covers the
-// window before the conversion lands, and a conversion that failed. A live
-// Error row is always authoritative: setState writes it before the
-// best-effort history insert, so the newest history row can lag behind it.
+// (forcing Error would trigger repairs against a healthy stream); the review
+// retires such a row once the stream is past it (retireVReplParkRecord), and
+// this exemption covers it until then. A live Error row is always
+// authoritative: setState writes it before the best-effort history insert,
+// so the newest history row can lag behind it.
 func overrideStateFromHistory(liveState binlogdatapb.VReplicationWorkflowState, historicalMessage string) bool {
 	if liveState == binlogdatapb.VReplicationWorkflowState_Error {
 		return false
@@ -3496,6 +3500,8 @@ func (e *Executor) readVReplStream(ctx context.Context, uuid string, okIfMissing
 				if historicalMessage != "" {
 					s.message = vreplMessageWrapperPrefix + historicalMessage
 				}
+			} else if s.state != binlogdatapb.VReplicationWorkflowState_Error && isRetriesExhaustedMessage(historicalMessage) {
+				s.hasStaleParkRecord = true
 			}
 		}
 	}
@@ -3663,14 +3669,32 @@ func repairVReplicationQuery(id int32) string {
 		retryForeverConfigKey, retryForeverConfigValue, id)
 }
 
-// repairVReplicationHistoryQuery turns the park's _vt.vreplication_log row
-// into the repair's record, keeping the parked error text. The row must not
-// stay an Error row: a previous release's history scan takes any Error row
-// as authoritative, so after a downgrade the older executor would fail the
-// repaired migration.
-func repairVReplicationHistoryQuery(id int32) string {
-	return fmt.Sprintf(`update _vt.vreplication_log set state='Running', message=concat('Online DDL repaired the stream with the retry-forever override after: ', message) where vrepl_id=%d and state='Error' and message like '%s:%%'`,
+// retireVReplParkRecordQuery turns a stream's retries-exhausted park rows in
+// _vt.vreplication_log into the record of the stream's resumption, keeping
+// the parked error text. They must not stay Error rows: a previous release's
+// history scan takes any Error row as authoritative, so after a downgrade
+// the older executor would fail the migration on them.
+func retireVReplParkRecordQuery(id int32) string {
+	return fmt.Sprintf(`update _vt.vreplication_log set state='Running', message=concat('Online DDL: the stream resumed after: ', message) where vrepl_id=%d and state='Error' and message like '%s:%%'`,
 		id, vreplication.RetriesExhaustedIndicator)
+}
+
+// retireVReplParkRecord rewrites the park records a stream has moved past
+// (repaired, or otherwise resumed) into the record of its resumption, so
+// that a previous release's executor does not fail the migration on them
+// after a downgrade. The review calls it for as long as readVReplStream
+// keeps reporting such a record, so a rewrite that fails is retried on the
+// next tick. Callers must hold migrationMutex.
+func (e *Executor) retireVReplParkRecord(ctx context.Context, uuid string, s *VReplStream) {
+	ctx, cancel := context.WithTimeout(ctx, reviewQueryTimeout)
+	defer cancel()
+	if _, err := e.execQuery(ctx, retireVReplParkRecordQuery(s.id)); err != nil {
+		log.Error("Online DDL: failed to retire the vreplication stream's park record in _vt.vreplication_log; will retry on the next tick",
+			slog.String("uuid", uuid), slog.String("tablet", e.TabletAliasString()), slog.Int64("stream_id", int64(s.id)), slog.Any("error", err))
+		return
+	}
+	log.Info("Online DDL: retired the vreplication stream's park record in _vt.vreplication_log",
+		slog.String("uuid", uuid), slog.String("tablet", e.TabletAliasString()), slog.Int64("stream_id", int64(s.id)))
 }
 
 // reviewRunningMigrations iterates migrations in 'running' state. Normally there's only one running, which was
@@ -3764,6 +3788,9 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 					}
 					return nil
 				}
+				if s.hasStaleParkRecord {
+					e.retireVReplParkRecord(ctx, uuid, s)
+				}
 				action := resolveVReplStreamAction(
 					e.reviewVReplStreamError(uuid, s),
 					cancellationRequested,
@@ -3806,13 +3833,8 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 					}
 					log.Info("Online DDL: repaired vreplication stream parked on a retries-exhausted error; restarted with the retry-forever override",
 						slog.String("uuid", uuid), slog.String("tablet", e.TabletAliasString()), slog.Int64("stream_id", int64(s.id)))
-					// The stream is repaired either way; a park record left
-					// behind only matters to a previous release's executor
-					// after a downgrade, which would fail the migration on it.
-					if _, err := e.execQuery(repairCtx, repairVReplicationHistoryQuery(s.id)); err != nil {
-						log.Error("Online DDL: failed to convert the repaired stream's park record in _vt.vreplication_log; a downgrade would fail this migration on it",
-							slog.String("uuid", uuid), slog.String("tablet", e.TabletAliasString()), slog.Int64("stream_id", int64(s.id)), slog.Any("error", err))
-					}
+					// The park record is retired by the next review, once
+					// the stream is seen past it; see retireVReplParkRecord.
 					return nil
 				}
 				if !s.isRunning() {

@@ -804,7 +804,7 @@ func testScheduler(t *testing.T) {
 				require.Len(c, rs.Rows, 1)
 				row := rs.Named().Row()
 				assert.Equal(c, "Running", row.AsString("state", ""))
-				assert.Contains(c, row.AsString("message", ""), "Online DDL repaired the stream")
+				assert.Contains(c, row.AsString("message", ""), "Online DDL: the stream resumed after: retries exhausted:")
 			}, extendedWaitTime, time.Second, "the retries-exhausted park record must be converted into the repair record")
 		})
 		t.Run("complete", func(t *testing.T) {

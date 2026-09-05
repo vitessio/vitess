@@ -1563,12 +1563,165 @@ func TestRepairVReplicationQuery(t *testing.T) {
 	assert.Equal(t,
 		`update _vt.vreplication set state='Running', message='', options=json_set(json_insert(coalesce(nullif(options, ''), '{}'), '$.config', json_object()), '$.config."vreplication-max-time-to-retry-on-error"', '0s') where id=42 and state='Error'`,
 		query)
-	// The park's history row becomes the repair's record: a previous release's
-	// history scan takes any Error row as authoritative, so leaving it would
-	// fail the repaired migration after a downgrade.
+	// The park's history row becomes the record of the resumption: a previous
+	// release's history scan takes any Error row as authoritative, so leaving
+	// it would fail the migration after a downgrade.
 	assert.Equal(t,
-		`update _vt.vreplication_log set state='Running', message=concat('Online DDL repaired the stream with the retry-forever override after: ', message) where vrepl_id=42 and state='Error' and message like 'retries exhausted:%'`,
-		repairVReplicationHistoryQuery(42))
+		`update _vt.vreplication_log set state='Running', message=concat('Online DDL: the stream resumed after: ', message) where vrepl_id=42 and state='Error' and message like 'retries exhausted:%'`,
+		retireVReplParkRecordQuery(42))
+}
+
+// TestReadVReplStreamStaleParkRecord pins which history rows readVReplStream
+// reports as a stale park record for the review to retire: a
+// retries-exhausted row behind a stream that is no longer in Error, and
+// nothing else — a live Error row is the park itself, and an unrecoverable
+// row overrides the live state instead.
+func TestReadVReplStreamStaleParkRecord(t *testing.T) {
+	uuid := "1cbcd662_8ed6_11ee_bc8f_0a43f95f28a3"
+	classBMessage := vreplication.RetriesExhaustedIndicator + ": the same error was encountered continuously for longer than --vreplication-max-time-to-retry-on-error (15m0s): connection refused"
+	classAMessage := vreplication.UnrecoverableErrorIndicator + ": bad data"
+	newExecutor := func(liveState, historicalMessage string) *Executor {
+		return &Executor{
+			execQuery: func(ctx context.Context, query string) (*sqltypes.Result, error) {
+				q := strings.ToLower(query)
+				switch {
+				case strings.Contains(q, "from _vt.vreplication_log"):
+					if historicalMessage == "" {
+						return &sqltypes.Result{}, nil
+					}
+					return sqltypes.MakeTestResult(
+						sqltypes.MakeTestFields("state|message", "varchar|varchar"),
+						"Error|"+historicalMessage), nil
+				case strings.Contains(q, "from _vt.vreplication"):
+					return sqltypes.MakeTestResult(
+						sqltypes.MakeTestFields("id|workflow|source|pos|state|message", "int32|varchar|varchar|varchar|varchar|varchar"),
+						"1|"+uuid+"|||"+liveState+"|"), nil
+				}
+				return &sqltypes.Result{}, nil
+			},
+		}
+	}
+	testCases := []struct {
+		name              string
+		liveState         string
+		historicalMessage string
+		wantStale         bool
+		wantState         binlogdatapb.VReplicationWorkflowState
+	}{
+		{
+			name:              "class B row behind a running stream is a stale park record",
+			liveState:         "Running",
+			historicalMessage: classBMessage,
+			wantStale:         true,
+			wantState:         binlogdatapb.VReplicationWorkflowState_Running,
+		},
+		{
+			name:              "class B row behind a stopped stream is a stale park record",
+			liveState:         "Stopped",
+			historicalMessage: classBMessage,
+			wantStale:         true,
+			wantState:         binlogdatapb.VReplicationWorkflowState_Stopped,
+		},
+		{
+			name:              "class B row with a live Error is the park itself",
+			liveState:         "Error",
+			historicalMessage: classBMessage,
+			wantStale:         false,
+			wantState:         binlogdatapb.VReplicationWorkflowState_Error,
+		},
+		{
+			name:              "class A row overrides the live state and is not retired",
+			liveState:         "Running",
+			historicalMessage: classAMessage,
+			wantStale:         false,
+			wantState:         binlogdatapb.VReplicationWorkflowState_Error,
+		},
+		{
+			name:      "no history row",
+			liveState: "Running",
+			wantStale: false,
+			wantState: binlogdatapb.VReplicationWorkflowState_Running,
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			s, err := newExecutor(tc.liveState, tc.historicalMessage).readVReplStream(t.Context(), uuid, false)
+			require.NoError(t, err)
+			require.NotNil(t, s)
+			assert.Equal(t, tc.wantStale, s.hasStaleParkRecord)
+			assert.Equal(t, tc.wantState, s.state)
+		})
+	}
+}
+
+// TestReviewRunningMigrationsRetiresParkRecord pins that the review retires
+// a stale park record with a bounded query for as long as the record
+// remains, so a rewrite that failed once (e.g. right after the repair) is
+// retried on the next tick rather than left for a downgrade to trip over.
+func TestReviewRunningMigrationsRetiresParkRecord(t *testing.T) {
+	uuid := "1cbcd662_8ed6_11ee_bc8f_0a43f95f28a3"
+	env := tabletenv.NewEnv(vtenv.NewTestEnv(), tabletenv.NewDefaultConfig(), "ExecutorTest")
+	alias := &topodatapb.TabletAlias{Cell: "cell", Uid: 1}
+	classBMessage := vreplication.RetriesExhaustedIndicator + ": the same error was encountered continuously for longer than --vreplication-max-time-to-retry-on-error (15m0s): connection refused"
+	var retireAttempts int
+	var retireBounded bool
+	failRetire := true
+	e := &Executor{
+		env:                       env,
+		tabletAlias:               alias,
+		vreplicationLastError:     map[string]*vterrors.LastError{},
+		vreplicationPendingCancel: map[string]string{},
+		vreplicationProgress:      map[string]vreplStreamProgress{},
+		ticks:                     timer.NewTimer(time.Hour),
+		lagThrottler: throttle.NewThrottler(env, nil, nil, alias, nil,
+			func() topodatapb.TabletType { return topodatapb.TabletType_PRIMARY }, "TestPool"),
+		execQuery: func(ctx context.Context, query string) (*sqltypes.Result, error) {
+			q := strings.ToLower(query)
+			switch {
+			case strings.HasPrefix(strings.TrimSpace(q), "update _vt.vreplication_log"):
+				retireAttempts++
+				_, retireBounded = ctx.Deadline()
+				if failRetire {
+					return nil, errors.New("backend unavailable")
+				}
+				return &sqltypes.Result{RowsAffected: 1}, nil
+			case strings.Contains(q, "migration_status='running'"):
+				return sqltypes.MakeTestResult(
+					sqltypes.MakeTestFields("migration_uuid", "varchar"), uuid), nil
+			case strings.Contains(q, "in ('queued', 'ready', 'running')"):
+				return &sqltypes.Result{}, nil
+			case strings.Contains(q, "from _vt.vreplication_log"):
+				return sqltypes.MakeTestResult(
+					sqltypes.MakeTestFields("state|message", "varchar|varchar"),
+					"Error|"+classBMessage), nil
+			case strings.Contains(q, "from _vt.vreplication"):
+				// A stopped stream: past its park, and the review has nothing
+				// else to do with it.
+				return sqltypes.MakeTestResult(
+					sqltypes.MakeTestFields("id|workflow|source|pos|state|message", "int32|varchar|varchar|varchar|varchar|varchar"),
+					"1|"+uuid+"|||Stopped|"), nil
+			case strings.HasPrefix(strings.TrimSpace(q), "select") && strings.Contains(q, "migration_uuid="):
+				return sqltypes.MakeTestResult(
+					sqltypes.MakeTestFields("migration_uuid|migration_status|strategy", "varchar|varchar|varchar"),
+					uuid+"|running|vitess"), nil
+			}
+			return &sqltypes.Result{}, nil
+		},
+	}
+	e.isOpen.Store(1)
+
+	_, cancellable, err := e.reviewRunningMigrations(t.Context())
+	require.NoError(t, err)
+	assert.Empty(t, cancellable)
+	assert.Equal(t, 1, retireAttempts, "the review must try to retire a stale park record")
+	assert.True(t, retireBounded, "the rewrite runs under migrationMutex on a tick context with no deadline, so it must be bounded")
+
+	// The failed rewrite is retried on the next tick, for as long as the
+	// record remains.
+	failRetire = false
+	_, _, err = e.reviewRunningMigrations(t.Context())
+	require.NoError(t, err)
+	assert.Equal(t, 2, retireAttempts, "a failed rewrite must be retried while the record remains")
 }
 
 // TestTerminallyFailMigrationWriteOrder pins that the message is written
