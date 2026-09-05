@@ -1806,9 +1806,12 @@ func TestRepairVReplicationQuery(t *testing.T) {
 		query)
 	// The park's history row becomes the record of the resumption: a previous
 	// release's history scan takes any Error row as authoritative, so leaving
-	// it would fail the migration after a downgrade.
+	// it would fail the migration after a downgrade. The message column is a
+	// TEXT and the park record may already be at its limit, so the prefix
+	// must never push the rewrite past it: an overflowing message is cut to
+	// a character count that fits under the limit in any charset.
 	assert.Equal(t,
-		`update _vt.vreplication_log set state='Running', message=concat('Online DDL: the stream resumed after: ', message) where vrepl_id=42 and state='Error' and message like 'retries exhausted:%'`,
+		`update _vt.vreplication_log set state='Running', message=concat('Online DDL: the stream resumed after: ', if(length(message) + 38 <= 65535, message, left(message, 16374))) where vrepl_id=42 and state='Error' and message like 'retries exhausted:%'`,
 		retireVReplParkRecordQuery(42))
 }
 

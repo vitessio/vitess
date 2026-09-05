@@ -779,6 +779,14 @@ func testScheduler(t *testing.T) {
 			_, err = primaryTablet.VttabletProcess.QueryTablet(query, "", true)
 			require.NoError(t, err)
 			parkVReplStream(t, t1uuid, "retries exhausted: the same error was encountered continuously for longer than --vreplication-max-time-to-retry-on-error (1m0s): io.EOF")
+			// Pad the park record to the log message column's limit, as
+			// insertLog can leave it: retiring it must not push it past.
+			query, err = sqlparser.ParseAndBind("update _vt.vreplication_log set message=concat(message, repeat('x', 65535 - length(message))) where vrepl_id=(select id from _vt.vreplication where workflow=%a) and state='Error'",
+				sqltypes.StringBindVariable(t1uuid),
+			)
+			require.NoError(t, err)
+			_, err = primaryTablet.VttabletProcess.QueryTablet(query, "", true)
+			require.NoError(t, err)
 		})
 		t.Run("expect repair", func(t *testing.T) {
 			status := onlineddl.WaitForVReplicationStatus(t, &vtParams, primaryTablet, t1uuid, extendedWaitTime, "Running")

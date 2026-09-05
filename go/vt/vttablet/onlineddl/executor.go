@@ -3704,9 +3704,23 @@ func repairVReplicationQuery(id int32) string {
 // the parked error text. They must not stay Error rows: a previous release's
 // history scan takes any Error row as authoritative, so after a downgrade
 // the older executor would fail the migration on them.
+//
+// The message column is a TEXT, and a park record may already be at its
+// limit (insertLog truncates to exactly that), so the prefix must never push
+// the rewrite past it: under strict SQL mode the update would then fail on
+// every review and the row would stay an Error row. A message that would
+// overflow is cut to a character count that fits under the limit in any
+// charset, keeping its head, which carries the classification.
 func retireVReplParkRecordQuery(id int32) string {
-	return fmt.Sprintf(`update _vt.vreplication_log set state='Running', message=concat('Online DDL: the stream resumed after: ', message) where vrepl_id=%d and state='Error' and message like '%s:%%'`,
-		id, vreplication.RetriesExhaustedIndicator)
+	const (
+		prefix = "Online DDL: the stream resumed after: "
+		// vreplLogMessageMaxBytes is the TEXT column's limit in bytes.
+		vreplLogMessageMaxBytes = 65535
+		// utf8mb4 characters take up to four bytes.
+		maxBytesPerChar = 4
+	)
+	return fmt.Sprintf(`update _vt.vreplication_log set state='Running', message=concat('%s', if(length(message) + %d <= %d, message, left(message, %d))) where vrepl_id=%d and state='Error' and message like '%s:%%'`,
+		prefix, len(prefix), vreplLogMessageMaxBytes, (vreplLogMessageMaxBytes-len(prefix))/maxBytesPerChar, id, vreplication.RetriesExhaustedIndicator)
 }
 
 // redriveVReplRepair re-drives the controller start for a stream whose repair
