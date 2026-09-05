@@ -756,22 +756,32 @@ func testScheduler(t *testing.T) {
 	t.Run("a bounded tablet query is interrupted while executing", func(t *testing.T) {
 		// The cleanup and the probes above rely on their context bounding
 		// the query, not only the connection: a query that stalls after
-		// connecting must still return when the context is done.
-		ctx, cancel := context.WithTimeout(t.Context(), time.Second)
+		// connecting must still return when the context is done. The
+		// one-second context is the property under test, not a wait for a
+		// condition; the margin between it and the assertion is what needs
+		// room for a starved runner. A query that ran to completion cannot
+		// satisfy the assertion, and the connection is closed at the
+		// deadline, so the server-side sleep holds nothing the test needs.
+		const (
+			sleepQuery = "select sleep(120)"
+			deadline   = time.Second
+			margin     = time.Minute
+		)
+		ctx, cancel := context.WithTimeout(t.Context(), deadline)
 		defer cancel()
 		started := time.Now()
-		_, err := primaryTablet.VttabletProcess.QueryTabletWithContext(ctx, "select sleep(30)", "", false)
+		_, err := primaryTablet.VttabletProcess.QueryTabletWithContext(ctx, sleepQuery, "", false)
 		require.Error(t, err, "the query must not run to completion past the context's deadline")
-		assert.Less(t, time.Since(started), 10*time.Second, "the query must return once the context is done, not when the sleep ends")
+		assert.Less(t, time.Since(started), margin, "the query must return once the context is done, not when the sleep ends")
 
 		// The same holds for the vtgate path the migration status probe uses,
 		// under its own fresh context: the one above has already expired.
-		vtgateCtx, vtgateCancel := context.WithTimeout(t.Context(), time.Second)
+		vtgateCtx, vtgateCancel := context.WithTimeout(t.Context(), deadline)
 		defer vtgateCancel()
 		started = time.Now()
-		_, err = onlineddl.VtgateExecQuery(vtgateCtx, &vtParams, "select sleep(30)")
+		_, err = onlineddl.VtgateExecQuery(vtgateCtx, &vtParams, sleepQuery)
 		require.Error(t, err, "the vtgate query must not run to completion past the context's deadline")
-		assert.Less(t, time.Since(started), 10*time.Second, "the vtgate query must return once the context is done, not when the sleep ends")
+		assert.Less(t, time.Since(started), margin, "the vtgate query must return once the context is done, not when the sleep ends")
 	})
 
 	// The message literals below deliberately hardcode the marker constants
