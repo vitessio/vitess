@@ -34,9 +34,13 @@ type Tokenizer struct {
 	AllowComments       bool
 	SkipSpecialComments bool
 	SkipToEnd           bool
-	LastError           error
-	ParseTrees          []Statement
-	BindVars            map[string]struct{}
+	// SingleStatement is set when the text is one statement, as for MySQL's
+	// prepare: a ';' inside an executable comment that does not apply is
+	// comment text there, rather than the lexical error it is in a batch.
+	SingleStatement bool
+	LastError       error
+	ParseTrees      []Statement
+	BindVars        map[string]struct{}
 
 	lastTokenType      int
 	lastToken          string
@@ -840,11 +844,11 @@ func (tkn *Tokenizer) scanMySQLSpecificComment() (int, string) {
 		if tkn.cur() == eofChar {
 			return LEX_ERROR, tkn.buf[start:tkn.Pos]
 		}
-		if tkn.cur() == ';' {
+		if tkn.cur() == ';' && !tkn.SingleStatement {
 			// as in an executable comment that applies: MySQL does not let a
-			// statement end inside one, whatever its version. The ';' is consumed
-			// so that resyncing after the error does not take it for the
-			// statement's end.
+			// statement of a batch end inside one, whatever its version. The ';'
+			// is consumed so that resyncing after the error does not take it for
+			// the statement's end.
 			tkn.skip(1)
 			return LEX_ERROR, tkn.buf[start:tkn.Pos]
 		}

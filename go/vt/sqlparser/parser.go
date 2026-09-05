@@ -323,28 +323,18 @@ func (p *Parser) ForEachStatement(sql string, fn func(text, rest string) error) 
 
 // IsBlankOrComments reports whether sql holds no statement at all: nothing but
 // blanks and comments, the way a comment after a statement's terminating ';'
-// does not start a second statement. The text is read as text, not lexed: an
-// executable comment left after the terminator is a comment here whatever it
-// holds, as it is for MySQL's prepare, where a ';' inside one would be a
-// syntax error in a statement's own text.
+// does not start a second statement. The text is lexed, as MySQL's prepare
+// lexes it: an executable comment that applies holds SQL, one that does not
+// is comment text through and through, a ';' inside it included.
 func (p *Parser) IsBlankOrComments(sql string) bool {
+	tokenizer := p.NewStringTokenizer(sql)
+	tokenizer.SingleStatement = true
 	for {
-		sql = strings.TrimLeft(sql, blankChars)
-		switch {
-		case sql == "":
+		switch typ, _ := tokenizer.Scan(); typ {
+		case 0:
 			return true
-		case strings.HasPrefix(sql, "/*"):
-			end := strings.Index(sql[2:], "*/")
-			if end < 0 {
-				return false
-			}
-			sql = sql[2+end+2:]
-		case strings.HasPrefix(sql, "#"), strings.HasPrefix(sql, "-- "), strings.HasPrefix(sql, "--\t"), sql == "--", strings.HasPrefix(sql, "--\n"), strings.HasPrefix(sql, "--\r"):
-			end := strings.IndexByte(sql, '\n')
-			if end < 0 {
-				return true
-			}
-			sql = sql[end+1:]
+		case COMMENT:
+			continue
 		default:
 			return false
 		}

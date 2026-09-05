@@ -1450,8 +1450,8 @@ func TestComPrepareRejectsMultipleStatements(t *testing.T) {
 	})
 
 	// a comment after the ';' does not start a second statement, as in MySQL —
-	// an executable comment included, whatever it holds
-	for _, query := range []string{"select 1; -- c", "select 1; /* c */", "select 1; /*!99999 ; */"} {
+	// an executable comment that does not apply included, whatever it holds
+	for _, query := range []string{"select 1; -- c", "select 1; /* c */", "select 1; /*!99999 ; */", "select 1; /*!99999 select 2 */"} {
 		t.Run("comment after the terminator: "+query, func(t *testing.T) {
 			sConn, _, data := prepare(t, query)
 			require.EqualValues(t, OKPacket, data[0])
@@ -1459,6 +1459,22 @@ func TestComPrepareRejectsMultipleStatements(t *testing.T) {
 			require.Equal(t, "select 1", sConn.PrepareData[1].PrepareStmt)
 		})
 	}
+
+	// an executable comment that applies holds SQL, as in MySQL
+	t.Run("executable comment that applies is a statement", func(t *testing.T) {
+		sConn, _, data := prepare(t, "/*! select 1 */")
+		require.EqualValues(t, OKPacket, data[0])
+		require.Len(t, sConn.PrepareData, 1)
+		require.Equal(t, "/*! select 1 */", sConn.PrepareData[1].PrepareStmt)
+	})
+
+	t.Run("executable comment that applies after the terminator", func(t *testing.T) {
+		sConn, _, data := prepare(t, "select 1; /*!80000 select 2 */")
+		require.EqualValues(t, ErrPacket, data[0])
+		require.ErrorContains(t, ParseErrorPacket(data), "You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near '")
+		require.ErrorContains(t, ParseErrorPacket(data), "(errno 1064) (sqlstate 42000)")
+		require.Empty(t, sConn.PrepareData)
+	})
 
 	t.Run("comment alone is an empty query", func(t *testing.T) {
 		sConn, _, data := prepare(t, "/* c */")

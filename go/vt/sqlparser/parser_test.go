@@ -703,13 +703,15 @@ func TestTerminatorInsideExecutableComment(t *testing.T) {
 	}
 }
 
-// IsBlankOrComments tells a remainder that holds no statement from one that does.
+// IsBlankOrComments tells a remainder that holds no statement from one that
+// does: an executable comment that applies holds SQL, one that does not is
+// comment text through and through.
 func TestIsBlankOrComments(t *testing.T) {
 	parser := NewTestParser()
-	for _, sql := range []string{"", "  \n\t\v\f", " -- c", " /* c */ ", "/* a */ -- b\n", "# c", " /*!99999 ; */", "/*!80000 select 1; */", "--", "--\n/* c */"} {
+	for _, sql := range []string{"", "  \n\t\v\f", " -- c", " /* c */ ", "/* a */ -- b\n", "# c", " /*!99999 ; */", "/*!99999 select 1 */", "--", "--\n/* c */"} {
 		assert.True(t, parser.IsBlankOrComments(sql), "%q", sql)
 	}
-	for _, sql := range []string{"select 1", " /* c */ select 1", "b'", "\u00a0", ";", "/* unterminated", "--x", "-- c\nselect 1"} {
+	for _, sql := range []string{"select 1", " /* c */ select 1", "b'", "\u00a0", ";", "/* unterminated", "--x", "-- c\nselect 1", "/*! select 1 */", "/*!80000 select 1; */", " /*!80000 ; */"} {
 		assert.False(t, parser.IsBlankOrComments(sql), "%q", sql)
 	}
 }
