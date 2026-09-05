@@ -222,7 +222,7 @@ func assertRetryForeverOverride(t *testing.T, uuid string) map[string]string {
 		sqltypes.StringBindVariable(uuid),
 	)
 	require.NoError(t, err)
-	rs, err := primaryTablet.VttabletProcess.QueryTablet(query, "", true)
+	rs, err := primaryTablet.VttabletProcess.QueryTabletWithContext(t.Context(), query, "", true)
 	require.NoError(t, err)
 	row := rs.Named().Row()
 	require.NotNil(t, row)
@@ -307,7 +307,7 @@ func parkVReplStream(t *testing.T, uuid string, message string) {
 		sqltypes.StringBindVariable(uuid),
 	)
 	require.NoError(t, err)
-	rs, err := primaryTablet.VttabletProcess.QueryTablet(query, "", true)
+	rs, err := primaryTablet.VttabletProcess.QueryTabletWithContext(t.Context(), query, "", true)
 	require.NoError(t, err)
 	row := rs.Named().Row()
 	require.NotNil(t, row)
@@ -319,7 +319,7 @@ func parkVReplStream(t *testing.T, uuid string, message string) {
 		sqltypes.Int64BindVariable(vreplID),
 	)
 	require.NoError(t, err)
-	_, err = primaryTablet.VttabletProcess.QueryTablet(query, "", true)
+	_, err = primaryTablet.VttabletProcess.QueryTabletWithContext(t.Context(), query, "", true)
 	require.NoError(t, err)
 
 	query, err = sqlparser.ParseAndBind("insert into _vt.vreplication_log (vrepl_id, type, state, message) values (%a, 'State Changed', 'Error', %a)",
@@ -327,7 +327,7 @@ func parkVReplStream(t *testing.T, uuid string, message string) {
 		sqltypes.StringBindVariable(message),
 	)
 	require.NoError(t, err)
-	_, err = primaryTablet.VttabletProcess.QueryTablet(query, "", true)
+	_, err = primaryTablet.VttabletProcess.QueryTabletWithContext(t.Context(), query, "", true)
 	require.NoError(t, err)
 }
 
@@ -807,7 +807,7 @@ func testScheduler(t *testing.T) {
 				sqltypes.StringBindVariable(t1uuid),
 			)
 			require.NoError(t, err)
-			_, err = primaryTablet.VttabletProcess.QueryTablet(query, "", true)
+			_, err = primaryTablet.VttabletProcess.QueryTabletWithContext(t.Context(), query, "", true)
 			require.NoError(t, err)
 			parkVReplStream(t, t1uuid, "retries exhausted: the same error was encountered continuously for longer than --vreplication-max-time-to-retry-on-error (1m0s): io.EOF")
 			// Pad the park record to the log message column's limit, as
@@ -816,7 +816,7 @@ func testScheduler(t *testing.T) {
 				sqltypes.StringBindVariable(t1uuid),
 			)
 			require.NoError(t, err)
-			_, err = primaryTablet.VttabletProcess.QueryTablet(query, "", true)
+			_, err = primaryTablet.VttabletProcess.QueryTabletWithContext(t.Context(), query, "", true)
 			require.NoError(t, err)
 		})
 		t.Run("expect repair", func(t *testing.T) {
@@ -915,7 +915,7 @@ func testScheduler(t *testing.T) {
 			// A trigger rejecting inserts into the shadow table makes every
 			// apply of the row inserted below fail with ER_SIGNAL_EXCEPTION,
 			// which vreplication classifies as recoverable and retries.
-			_, err = primaryTablet.VttabletProcess.QueryTablet(fmt.Sprintf(
+			_, err = primaryTablet.VttabletProcess.QueryTabletWithContext(t.Context(), fmt.Sprintf(
 				"create trigger %s before insert on `%s` for each row signal sqlstate '45000' set message_text = '%s'",
 				triggerName, shadowTable, injectedError), keyspaceName, true)
 			require.NoError(t, err)
@@ -958,7 +958,7 @@ func testScheduler(t *testing.T) {
 			waitForVReplicationMessage(t, t1uuid, injectedError)
 		})
 		t.Run("clear the error and expect the pending event to apply", func(t *testing.T) {
-			_, err := primaryTablet.VttabletProcess.QueryTablet("drop trigger "+triggerName, keyspaceName, true)
+			_, err := primaryTablet.VttabletProcess.QueryTabletWithContext(t.Context(), "drop trigger "+triggerName, keyspaceName, true)
 			require.NoError(t, err)
 			query := fmt.Sprintf("select count(*) as c from `%s` where id=%d", shadowTable, injectedRowID)
 			ctx := t.Context()
