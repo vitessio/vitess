@@ -145,7 +145,9 @@ func (u *Union) canPushPredicate(ctx *plancontext.PlanningContext, expr sqlparse
 		for i := range u.Sources {
 			for _, sel := range u.allSelectsFor(i) {
 				ae, ok := sel.GetColumns()[idx].(*sqlparser.AliasedExpr)
-				if ok && projectsVolatile(ctx, ae.Expr) {
+				// A leaf we cannot look inside counts as unsafe. Nothing reaches that today:
+				// NEXT VALUE does not parse inside a UNION branch, and * is expanded earlier.
+				if !ok || projectsVolatile(ctx, ae.Expr) {
 					safe = false
 					return false, io.EOF
 				}
