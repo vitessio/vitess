@@ -69,19 +69,39 @@ var (
 
 type (
 	// writeCloserOnly hides every method of the wrapped writer except
-	// Write and Close. The lz4 writer's ReadFrom only accepts a writer
-	// with nothing written to it yet, while io.Copy and io.CopyN select
-	// the destination's ReadFrom whenever the source has no visible
-	// WriteTo; repeated copies into one compressor — the striped
-	// xtrabackup backup round-robins io.CopyN over its destination
-	// writers — would then fail after the first copy. Hiding the method
-	// keeps every copy on the plain Write path.
-	writeCloserOnly struct{ io.WriteCloser }
+	// Write and Close, and closes the wrapped writer at most once. The
+	// lz4 writer's ReadFrom only accepts a writer with nothing written
+	// to it yet, while io.Copy and io.CopyN select the destination's
+	// ReadFrom whenever the source has no visible WriteTo; repeated
+	// copies into one compressor — the striped xtrabackup backup
+	// round-robins io.CopyN over its destination writers — would then
+	// fail after the first copy. Hiding the method keeps every copy on
+	// the plain Write path. A second Close on the lz4 writer, which the
+	// builtin backup engine issues when it retries a failed close,
+	// blocks forever in concurrent mode: the goroutine that orders the
+	// compressed blocks exits during the first Close, and the second
+	// one waits on it. Every Close after the first returns the recorded
+	// result of the first instead.
+	writeCloserOnly struct {
+		io.WriteCloser
+		closeOnce sync.Once
+		closeErr  error
+	}
 	// readCloserOnly hides every method of the wrapped reader except
-	// Read and Close; the lz4 reader's WriteTo carries the same
-	// fresh-stream restriction as the writer's ReadFrom.
+	// Read and Close. The lz4 reader's WriteTo accepts a reader that is
+	// already mid-stream but discards the bytes still buffered from the
+	// current block, so an io.Copy issued after a partial Read would
+	// silently lose data. Hiding the method keeps every copy on the
+	// plain Read path.
 	readCloserOnly struct{ io.ReadCloser }
 )
+
+func (w *writeCloserOnly) Close() error {
+	w.closeOnce.Do(func() {
+		w.closeErr = w.WriteCloser.Close()
+	})
+	return w.closeErr
+}
 
 func init() {
 	for _, cmd := range []string{"vtbackup", "vtcombo", "vttablet", "vttestserver"} {
@@ -275,7 +295,10 @@ func lz4ConcurrencyBlocks(blocks int) int {
 // depth of 1 that a value of 1 previously requested does almost no
 // searching, so the fast compressor is the closest match. Values from 2
 // through 9 map onto the matching hash-chain levels, whose fixed search
-// depths grow from 1024 (Level2) to 131072 (Level9).
+// depths grow from 1024 (Level2) to 131072 (Level9). Values above 9,
+// which the lz4 v2 writer used as a raw search depth, also select
+// Level9: there is no deeper named level, and a level above the scale
+// asks for the strongest compression.
 func lz4CompressionLevel(level int) lz4.CompressionLevel {
 	switch {
 	case level < 0 || level >= 9:
@@ -311,7 +334,7 @@ func newBuiltinCompressor(engine string, writer io.Writer, logger logutil.Logger
 		); err != nil {
 			return compressor, vterrors.Wrap(err, "cannot create lz4 compressor")
 		}
-		compressor = writeCloserOnly{lz4Writer}
+		compressor = &writeCloserOnly{WriteCloser: lz4Writer}
 	case ZstdCompressor:
 		zst, err := zstd.NewWriter(writer, zstd.WithEncoderLevel(zstd.EncoderLevel(compressionLevel)))
 		if err != nil {

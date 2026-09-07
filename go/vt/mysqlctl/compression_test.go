@@ -21,6 +21,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"math/rand/v2"
@@ -34,6 +35,23 @@ import (
 
 	"vitess.io/vitess/go/vt/logutil"
 )
+
+type (
+	// failingWriter rejects every Write while armed, so a compressor's
+	// Close can be made to fail once and then be retried against a
+	// destination that accepts writes again.
+	failingWriter struct {
+		bytes.Buffer
+		fail bool
+	}
+)
+
+func (w *failingWriter) Write(p []byte) (int, error) {
+	if w.fail {
+		return 0, errors.New("destination unavailable")
+	}
+	return w.Buffer.Write(p)
+}
 
 func TestGetExtensionFromEngine(t *testing.T) {
 	tests := []struct {
@@ -183,6 +201,76 @@ func TestLz4ConcurrencyBlocksMapping(t *testing.T) {
 	require.Equal(t, -1, lz4ConcurrencyBlocks(-1))
 	require.Equal(t, 1, lz4ConcurrencyBlocks(1))
 	require.Equal(t, 2, lz4ConcurrencyBlocks(2))
+}
+
+// TestLz4CompressorCloseRetry closes an lz4 compressor whose destination
+// fails during the first Close, then closes it again the way the builtin
+// backup engine's closeWithRetry does. The lz4 v4 writer cannot be closed
+// twice in concurrent mode: the second Close blocks forever on a manager
+// goroutine that exited during the first one. The compressor must close
+// the writer once and answer every later Close with the recorded result,
+// so the retry loop fails fast with the original error.
+func TestLz4CompressorCloseRetry(t *testing.T) {
+	logger := logutil.NewMemoryLogger()
+	oldBlocks := backupCompressBlocks
+	backupCompressBlocks = 2
+	t.Cleanup(func() { backupCompressBlocks = oldBlocks })
+
+	dest := &failingWriter{}
+	compressor, err := newBuiltinCompressor(Lz4Compressor, dest, logger)
+	require.NoError(t, err)
+	_, err = compressor.Write(bytes.Repeat([]byte("lz4 backup data "), 4096))
+	require.NoError(t, err)
+
+	dest.fail = true
+	firstErr := compressor.Close()
+	require.ErrorContains(t, firstErr, "destination unavailable")
+
+	dest.fail = false
+	retried := make(chan error, 1)
+	go func() { retried <- compressor.Close() }()
+	var retriedErr error
+	require.Eventually(t, func() bool {
+		select {
+		case retriedErr = <-retried:
+			return true
+		default:
+			return false
+		}
+	}, 30*time.Second, 10*time.Millisecond, "retried Close did not return")
+	assert.Equal(t, firstErr, retriedErr)
+}
+
+// TestBuiltinDecompressorsPartialReadThenCopy reads a few bytes from each
+// decompressor and copies the rest with io.Copy, which prefers the source's
+// WriteTo whenever it sees one. The lz4 v4 reader's WriteTo accepts a
+// reader that is already mid-stream but discards the bytes still buffered
+// from the current block, so the remainder has to arrive through Read.
+func TestBuiltinDecompressorsPartialReadThenCopy(t *testing.T) {
+	logger := logutil.NewMemoryLogger()
+	data := bytes.Repeat([]byte("0123456789"), 100_000)
+
+	for _, engine := range []string{"pgzip", "pargzip", "lz4", "zstd"} {
+		t.Run(engine, func(t *testing.T) {
+			var compressed bytes.Buffer
+			compressor, err := newBuiltinCompressor(engine, &compressed, logger)
+			require.NoError(t, err)
+			_, err = compressor.Write(data)
+			require.NoError(t, err)
+			require.NoError(t, compressor.Close())
+
+			decompressor, err := newBuiltinDecompressor(engine, &compressed, logger)
+			require.NoError(t, err)
+			head := make([]byte, 10)
+			_, err = io.ReadFull(decompressor, head)
+			require.NoError(t, err)
+			var rest bytes.Buffer
+			_, err = io.Copy(&rest, decompressor)
+			require.NoError(t, err)
+			require.NoError(t, decompressor.Close())
+			require.Equal(t, data, append(head, rest.Bytes()...))
+		})
+	}
 }
 
 func TestUnSupportedBuiltinCompressors(t *testing.T) {
