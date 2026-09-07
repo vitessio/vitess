@@ -7198,3 +7198,29 @@ func parsePartial(r *bufio.Reader, readType []string, lineno int, fileName strin
 func locateFile(name string) string {
 	return "testdata/" + name
 }
+
+// MySQL recognizes the national-character string introducer only as N'…'. In
+// N"…" the N is an identifier followed by "…" — a string, which MySQL reads as
+// an alias — so the lexer must not take the national-string path on a double
+// quote.
+func TestNationalStringRequiresSingleQuote(t *testing.T) {
+	parser := NewTestParser()
+	for _, in := range []string{`select N'foo' from t`, `select n'foo' from t`} {
+		stmt, err := parser.Parse(in)
+		require.NoError(t, err, in)
+		expr := stmt.(*Select).SelectExprs.Exprs[0].(*AliasedExpr).Expr
+		nstr, ok := expr.(*UnaryExpr)
+		require.True(t, ok, "%s: got %T", in, expr)
+		assert.Equal(t, NStringOp, nstr.Operator)
+		assert.Equal(t, "select N'foo' from t", String(stmt))
+	}
+	for _, in := range []string{`select N"foo" from t`, `select n"foo" from t`} {
+		stmt, err := parser.Parse(in)
+		require.NoError(t, err, in)
+		ae := stmt.(*Select).SelectExprs.Exprs[0].(*AliasedExpr)
+		col, ok := ae.Expr.(*ColName)
+		require.True(t, ok, "%s: got %T", in, ae.Expr)
+		assert.True(t, col.Name.EqualString("n"), in)
+		assert.Equal(t, "foo", ae.As.String(), in)
+	}
+}
