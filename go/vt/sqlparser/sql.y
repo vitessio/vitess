@@ -5208,7 +5208,7 @@ explain_format_opt:
     case "traditional":
       $$ = TraditionalType
     default:
-      yylex.Error("unknown EXPLAIN format: " + $3.String())
+      yylex.Error("Unknown EXPLAIN format name: '" + $3.String() + "'")
       return 1
     }
   }

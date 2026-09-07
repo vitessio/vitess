@@ -20638,7 +20638,7 @@ yydefault:
 			case "traditional":
 				yyLOCAL = TraditionalType
 			default:
-				yylex.Error("unknown EXPLAIN format: " + yyDollar[3].identifierCI().String())
+				yylex.Error("Unknown EXPLAIN format name: '" + yyDollar[3].identifierCI().String() + "'")
 				return 1
 			}
 		}

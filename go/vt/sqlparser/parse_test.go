@@ -6529,7 +6529,8 @@ var invalidSQL = []struct {
 	output: "migration context cannot be empty at position 41",
 }, {
 	input:  "explain format = bogus select * from t",
-	output: "unknown EXPLAIN format: bogus at position 23 near 'bogus'",
+	// MySQL's own error text (1791)
+	output: "Unknown EXPLAIN format name: 'bogus' at position 23 near 'bogus'",
 }, {
 	input:  "alter vitess_migration cleanup context ''",
 	output: "migration context cannot be empty at position 42",
