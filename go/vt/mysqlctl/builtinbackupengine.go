@@ -1114,7 +1114,13 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupPara
 			defer func() {
 				params.Logger.Infof("Closing compressor for file: %s %s", label, retryStr)
 				closeCompressorAt := time.Now()
-				if cerr := closeWithRetry(ctx, params.Logger, closer, "compressor"); cerr != nil {
+				// A compressor is closed once, without closeWithRetry: a failed
+				// close leaves the compressed stream broken, and closing again
+				// cannot repair it. The builtin compressors answer every later
+				// Close with the same error, and an external compressor's
+				// process has already exited. The file is retried as a whole
+				// by the caller instead.
+				if cerr := closer.Close(); cerr != nil {
 					cerr = vterrors.Wrapf(cerr, "failed to close compressor %v", label)
 					params.Logger.Error(cerr)
 					createAndCopyErr = errors.Join(createAndCopyErr, cerr)
@@ -1599,7 +1605,11 @@ func createDecompressor(ctx context.Context, bm builtinBackupManifest, reader io
 	cleanup := func() error {
 		params.Logger.Infof("closing decompressor for %s", name)
 		closeAt := time.Now()
-		cerr := closeWithRetry(ctx, params.Logger, closer, "decompressor")
+		// A decompressor is closed once, without closeWithRetry: its Close
+		// reports the state of the stream it has read, and closing again
+		// cannot change that. The file is retried as a whole by the caller
+		// instead.
+		cerr := closer.Close()
 		if cerr != nil {
 			cerr = vterrors.Wrapf(cerr, "failed to close decompressor %v", name)
 			params.Logger.Error(cerr)

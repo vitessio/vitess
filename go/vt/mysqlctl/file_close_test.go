@@ -639,6 +639,101 @@ func TestRestoreFileWithCloseRetriesIntegration(t *testing.T) {
 	assert.Equal(t, content, restoredContent)
 }
 
+// TestBackupFileCompressorCloseNotRetried backs up a file through an
+// external compressor whose process exits with a failure, so that the
+// compressor's Close fails. Closing a compressor again cannot repair the
+// stream it was writing, and the compressors used here answer every later
+// Close with the same error, so the close must run once and surface its
+// own error. Running it through closeWithRetry would burn all
+// maxFileCloseRetries attempts and then replace that error with the
+// loop's "giving up" message.
+func TestBackupFileCompressorCloseNotRetried(t *testing.T) {
+	if _, err := validateExternalCmd("false"); err != nil {
+		t.Skip("Command not available in this host:", err)
+	}
+	tmpDir := t.TempDir()
+	require.NoError(t, os.WriteFile(path.Join(tmpDir, "source.txt"), []byte("test content"), 0o644))
+
+	oldCmd := ExternalCompressorCmd
+	oldMaxRetries := maxFileCloseRetries
+	t.Cleanup(func() {
+		ExternalCompressorCmd = oldCmd
+		maxFileCloseRetries = oldMaxRetries
+	})
+	ExternalCompressorCmd = "false"
+	maxFileCloseRetries = 0
+
+	bh := newMockBackupHandle()
+	bh.addFileReturn = newMockReadWriteCloser(0, nil)
+	params := BackupParams{
+		Cnf:         &Mycnf{DataDir: tmpDir},
+		Logger:      logutil.NewMemoryLogger(),
+		Stats:       backupstats.NoStats(),
+		Concurrency: 1,
+	}
+	fe := &FileEntry{
+		Base: backupData,
+		Name: "source.txt",
+	}
+
+	be := &BuiltinBackupEngine{}
+	err := be.backupFile(t.Context(), params, bh, fe, "0", -1)
+
+	require.ErrorContains(t, err, "failed to close compressor")
+	require.ErrorContains(t, err, "exit status 1")
+	assert.NotContains(t, err.Error(), "giving up")
+}
+
+// TestRestoreFileDecompressorCloseNotRetried restores a file through an
+// external decompressor whose process exits with a failure, so that the
+// decompressor's Close fails. As with the compressor, a second Close cannot
+// change the outcome, so the close must run once and surface its own error
+// instead of going through closeWithRetry.
+func TestRestoreFileDecompressorCloseNotRetried(t *testing.T) {
+	if _, err := validateExternalCmd("false"); err != nil {
+		t.Skip("Command not available in this host:", err)
+	}
+	tmpDir := t.TempDir()
+
+	oldCmd := ExternalDecompressorCmd
+	oldMaxRetries := maxFileCloseRetries
+	t.Cleanup(func() {
+		ExternalDecompressorCmd = oldCmd
+		maxFileCloseRetries = oldMaxRetries
+	})
+	ExternalDecompressorCmd = "false"
+	maxFileCloseRetries = 0
+
+	source := newMockReadOnlyCloser(0, nil)
+	bh := newMockBackupHandle()
+	bh.readFileReturn = source
+	params := RestoreParams{
+		Cnf:    &Mycnf{DataDir: tmpDir},
+		Logger: logutil.NewMemoryLogger(),
+		Stats:  backupstats.NoStats(),
+	}
+	// The hash covers the bytes read from the source, whether or not the
+	// external process consumed them.
+	bp := newBackupReader("test", 0, bytes.NewReader([]byte("test data")))
+	_, err := io.ReadAll(bp)
+	require.NoError(t, err)
+	fe := &FileEntry{
+		Base: backupData,
+		Name: "restored.txt",
+		Hash: bp.HashString(),
+	}
+	bm := builtinBackupManifest{
+		CompressionEngine: ExternalCompressor,
+	}
+
+	be := &BuiltinBackupEngine{}
+	err = be.restoreFile(t.Context(), params, bh, fe, bm, "0")
+
+	require.ErrorContains(t, err, "failed to close decompressor")
+	require.ErrorContains(t, err, "exit status 1")
+	assert.NotContains(t, err.Error(), "giving up")
+}
+
 // Helper function to create a test replication position.
 func testPosition() replication.Position {
 	return replication.Position{}
