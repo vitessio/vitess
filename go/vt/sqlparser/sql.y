@@ -449,7 +449,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %token <str> GTID_SUBSET GTID_SUBTRACT WAIT_FOR_EXECUTED_GTID_SET WAIT_UNTIL_SQL_THREAD_AFTER_GTIDS
 
 // Explain tokens
-%token <str> FORMAT TREE VITESS TRADITIONAL VTEXPLAIN VEXPLAIN PLAN MYSQLPLAN
+%token <str> FORMAT VITESS VTEXPLAIN VEXPLAIN PLAN MYSQLPLAN
 
 // Lock type tokens
 %token <str> LOCAL LOW_PRIORITY
@@ -5194,17 +5194,21 @@ explain_format_opt:
   {
     $$ = EmptyType
   }
-| FORMAT '=' JSON
+| FORMAT '=' sql_id
   {
-    $$ = JSONType
-  }
-| FORMAT '=' TREE
-  {
-    $$ = TreeType
-  }
-| FORMAT '=' TRADITIONAL
-  {
-    $$ = TraditionalType
+    // The format names are matched by text rather than as keywords, as MySQL does:
+    // they stay plain identifiers everywhere else in the language.
+    switch $3.Lowered() {
+    case "json":
+      $$ = JSONType
+    case "tree":
+      $$ = TreeType
+    case "traditional":
+      $$ = TraditionalType
+    default:
+      yylex.Error("unknown EXPLAIN format: " + $3.String())
+      return 1
+    }
   }
 | ANALYZE
   {
@@ -9570,10 +9574,8 @@ non_reserved_keyword:
 | TINYINT
 | TINYTEXT
 | TRACE
-| TRADITIONAL
 | TRANSACTION
 | TRANSACTIONS
-| TREE
 | TRIGGER
 | TRIGGERS
 | TRIM %prec FUNCTION_CALL_NON_KEYWORD
