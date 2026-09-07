@@ -2450,6 +2450,10 @@ func formatAddress(address string) string {
 // effect. NOW() and friends are absent on purpose: MySQL evaluates them once per statement, so
 // duplicating them is safe. SYSDATE() is evaluated at the point it runs, so it is not.
 //
+// Reading session state is safe to duplicate unless the same statement can move it, so
+// CONNECTION_ID(), FOUND_ROWS() and ROW_COUNT() are absent while LAST_INSERT_ID() and MariaDB's
+// LASTVAL() stay - a sibling LAST_INSERT_ID(expr) or NEXTVAL() moves those.
+//
 // Several of these functions have a dedicated AST node rather than being a *FuncExpr, so this
 // matches on node type as well as on name.
 func IsVolatile(node SQLNode) bool {
@@ -2459,8 +2463,7 @@ func IsVolatile(node SQLNode) bool {
 	case *FuncExpr:
 		switch node.Name.Lowered() {
 		case "uuid", "uuid_short", "rand", "random_bytes",
-			"connection_id", "last_insert_id", "found_rows", "row_count",
-			"benchmark", "sleep",
+			"last_insert_id", "benchmark", "sleep",
 			"load_file", "master_pos_wait", "source_pos_wait",
 			// MariaDB. Its sequence functions have no dedicated node - Nextval is
 			// Vitess's own `select next value from seq`, not MariaDB's NEXTVAL(seq).

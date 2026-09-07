@@ -500,15 +500,20 @@ func TestContainsVolatile(t *testing.T) {
 		{in: "uuid_short()", nodeType: &FuncExpr{}, volatile: true},
 		{in: "rand()", nodeType: &FuncExpr{}, volatile: true},
 		{in: "random_bytes(4)", nodeType: &FuncExpr{}, volatile: true},
-		{in: "connection_id()", nodeType: &FuncExpr{}, volatile: true},
-		{in: "last_insert_id(5)", nodeType: &FuncExpr{}, volatile: true},
-		{in: "found_rows()", nodeType: &FuncExpr{}, volatile: true},
-		{in: "row_count()", nodeType: &FuncExpr{}, volatile: true},
 		{in: "benchmark(10, 1)", nodeType: &FuncExpr{}, volatile: true},
 		{in: "sleep(1)", nodeType: &FuncExpr{}, volatile: true},
 		{in: "load_file('/x')", nodeType: &FuncExpr{}, volatile: true},
 		{in: "master_pos_wait('a', 1)", nodeType: &FuncExpr{}, volatile: true},
 		{in: "source_pos_wait('a', 1)", nodeType: &FuncExpr{}, volatile: true},
+
+		// A sibling LAST_INSERT_ID(expr) moves it, so both forms count.
+		{in: "last_insert_id()", nodeType: &FuncExpr{}, volatile: true},
+		{in: "last_insert_id(5)", nodeType: &FuncExpr{}, volatile: true},
+
+		// Nothing in the same statement can move these, so duplicating them is safe.
+		{in: "connection_id()", nodeType: &FuncExpr{}, volatile: false},
+		{in: "found_rows()", nodeType: &FuncExpr{}, volatile: false},
+		{in: "row_count()", nodeType: &FuncExpr{}, volatile: false},
 
 		// MariaDB only. Vitess parses them as plain function calls, so nothing else
 		// would mark them.

@@ -3248,6 +3248,51 @@
     }
   },
   {
+    "comment": "connection_id() is stable for the connection, so it is still pushed",
+    "query": "select * from (select connection_id() as c from user where id = 1 union all select connection_id() from user where id = 2) u where c = connection_id()",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select * from (select connection_id() as c from user where id = 1 union all select connection_id() from user where id = 2) u where c = connection_id()",
+      "Instructions": {
+        "OperatorType": "Concatenate",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select connection_id() as c from `user` where 1 != 1",
+            "Query": "select connection_id() as c from `user` where id = 1 and connection_id() = connection_id()",
+            "Values": [
+              "1"
+            ],
+            "Vindex": "user_index"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select connection_id() from `user` where 1 != 1",
+            "Query": "select connection_id() from `user` where id = 2 and connection_id() = connection_id()",
+            "Values": [
+              "2"
+            ],
+            "Vindex": "user_index"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
     "comment": "a deterministic branch expression is still pushed",
     "query": "select * from (select 1 as c from dual union all select 2 from dual) sub where c <> c",
     "plan": {
