@@ -123,6 +123,9 @@ func buildSubqueryPermissions(stmt sqlparser.Statement, role tableacl.Role, perm
 // gatherCTEs gathers the CTEs from the WITH clause.
 func gatherCTEs(with *sqlparser.With) []sqlparser.IdentifierCS {
 	var ctes []sqlparser.IdentifierCS
+	if len(with.CTEs) > 0 {
+		ctes = make([]sqlparser.IdentifierCS, 0, len(with.CTEs))
+	}
 	for _, cte := range with.CTEs {
 		ctes = append(ctes, cte.ID)
 	}

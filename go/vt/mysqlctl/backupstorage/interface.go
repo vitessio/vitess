@@ -66,8 +66,7 @@ type BackupHandle interface {
 	// characters and hyphens.
 	// It should be thread safe, it is possible to call AddFile in
 	// multiple go routines once a backup has been started.
-	// The context is valid for the duration of the writes, until the
-	// WriteCloser is closed.
+	// The context is valid until Wait() returns, even for async backends.
 	// filesize should not be treated as an exact value but rather
 	// as an approximate value.
 	// A filesize of -1 should be treated as a special value indicating that

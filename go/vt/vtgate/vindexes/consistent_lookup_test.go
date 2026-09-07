@@ -494,7 +494,7 @@ func createConsistentLookup(t *testing.T, name string, writeOnly bool) SingleCol
 
 func newTestContext() context.Context {
 	type testContextKey string // keep static checks from complaining about built-in types as context keys
-	return context.WithValue(context.Background(), (testContextKey)("test"), "foo")
+	return context.WithValue(context.Background(), testContextKey("test"), "foo")
 }
 
 var _ VCursor = (*loggingVCursor)(nil)

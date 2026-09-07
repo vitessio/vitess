@@ -61,12 +61,10 @@ func newInsertSelect(
 	input Primitive,
 ) *InsertSelect {
 	ins := &InsertSelect{
-		InsertCommon: InsertCommon{
-			Ignore:   ignore,
-			Keyspace: keyspace,
-			Prefix:   prefix,
-			Suffix:   suffix,
-		},
+		Ignore:            ignore,
+		Keyspace:          keyspace,
+		Prefix:            prefix,
+		Suffix:            suffix,
 		Input:             input,
 		VindexValueOffset: vv,
 	}

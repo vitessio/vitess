@@ -108,10 +108,8 @@ type filePosQueryEvent struct {
 
 func newFilePosQueryEvent(query string, ts uint32) filePosQueryEvent {
 	return filePosQueryEvent{
-		query: query,
-		filePosFakeEvent: filePosFakeEvent{
-			timestamp: ts,
-		},
+		query:     query,
+		timestamp: ts,
 	}
 }
 
@@ -294,9 +292,7 @@ type filePosGTIDEvent struct {
 
 func newFilePosGTIDEvent(file string, pos uint64, timestamp uint32) filePosGTIDEvent {
 	return filePosGTIDEvent{
-		filePosFakeEvent: filePosFakeEvent{
-			timestamp: timestamp,
-		},
+		timestamp: timestamp,
 		gtid: replication.FilePosGTID{
 			File: file,
 			Pos:  pos,

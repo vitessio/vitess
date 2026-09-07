@@ -124,7 +124,7 @@ func main() {
 	logSyslog(startMsg)
 
 	closer := trace.StartTracing("vtctl")
-	defer trace.LogErrorsWhenClosing(closer)
+	defer trace.LogErrorsWhenClosing(closer)()
 
 	servenv.FireRunHooks()
 

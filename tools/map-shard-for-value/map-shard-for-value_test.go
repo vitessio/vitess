@@ -84,7 +84,7 @@ func TestProcess(t *testing.T) {
 			scanner := bufio.NewScanner(reader)
 			got, err := processValues(scanner, &tc.shardsCSV, tc.vindexType, tc.valueType)
 			require.NoError(t, err)
-			require.EqualValues(t, tc.expected, got)
+			require.Equal(t, tc.expected, got)
 		})
 	}
 }

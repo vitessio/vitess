@@ -29,6 +29,7 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/reparent/utils"
+	endtoendutils "vitess.io/vitess/go/test/endtoend/utils"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 
@@ -126,6 +127,78 @@ func TestReparentDownPrimary(t *testing.T) {
 	utils.CheckPrimaryTablet(t, clusterInstance, tablets[1])
 	utils.ConfirmReplication(t, tablets[1], []*cluster.Vttablet{tablets[2], tablets[3]})
 	utils.ResurrectTablet(ctx, t, clusterInstance, tablets[0])
+}
+
+func TestERSSplitBrainDetection(t *testing.T) {
+	endtoendutils.SkipIfBinaryIsBelowVersion(t, 25, "vtctld")
+
+	clusterInstance := utils.SetupReparentCluster(t, policy.DurabilitySemiSync)
+	t.Cleanup(func() {
+		utils.TeardownCluster(clusterInstance)
+	})
+	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
+	newPrimary := tablets[2]
+	otherLeader := tablets[1]
+
+	utils.ConfirmReplication(t, tablets[0], tablets[1:])
+
+	utils.RunSQLs(t.Context(), t, []string{
+		"STOP REPLICA",
+		"RESET REPLICA ALL",
+		"SET GLOBAL super_read_only = 0",
+		"SET GLOBAL read_only = 0",
+		"INSERT INTO vt_insert_test(id, msg) VALUES (999901, 'new primary')",
+	}, newPrimary)
+	utils.RunSQLs(t.Context(), t, []string{
+		"STOP REPLICA",
+		"RESET REPLICA ALL",
+		"SET GLOBAL super_read_only = 0",
+		"SET GLOBAL read_only = 0",
+		"INSERT INTO vt_insert_test(id, msg) VALUES (999902, 'other leader')",
+	}, otherLeader)
+
+	utils.StopTablet(t, tablets[0], true)
+
+	out, err := utils.Ers(clusterInstance, nil, "60s", "30s")
+	require.Error(t, err, out)
+	require.Contains(t, out, "suspected split-brain")
+	require.Contains(t, out, newPrimary.Alias)
+	require.Contains(t, out, otherLeader.Alias)
+
+	out, err = clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput(
+		"--action-timeout", "60s",
+		"EmergencyReparentShard", utils.KeyspaceShard,
+		"--new-primary", newPrimary.Alias,
+		"--allow-split-brain-promotion",
+		"--wait-replicas-timeout", "30s",
+	)
+	require.NoError(t, err, out)
+	vars := clusterInstance.VtctldProcess.GetVars()
+	require.NotNil(t, vars)
+	overrideCounts, ok := vars["EmergencyReparentSplitBrainOverrides"].(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, float64(1), overrideCounts[utils.KeyspaceName+"."+utils.ShardName])
+	utils.CheckPrimaryTablet(t, clusterInstance, newPrimary)
+
+	result := utils.RunSQL(t.Context(), t, "SELECT msg FROM vt_insert_test WHERE id = 999901", newPrimary)
+	require.Len(t, result.Rows, 1)
+	require.Equal(t, "new primary", result.Rows[0][0].ToString())
+
+	result = utils.RunSQL(t.Context(), t, "SELECT msg FROM vt_insert_test WHERE id = 999902", newPrimary)
+	require.Empty(t, result.Rows)
+
+	// The losing leader must be fenced from serving its discarded history: the
+	// errant-GTID check in SetReplicationSource refuses to repoint it, so it never
+	// rejoins the replication graph and stays unhealthy
+	require.NoError(t, otherLeader.VttabletProcess.WaitForTabletStatus("NOT_SERVING"))
+	result = utils.RunSQL(t.Context(), t, "SHOW REPLICA STATUS", otherLeader)
+	require.Empty(t, result.Rows)
+
+	// The divergent row stays on the losing leader for an operator to inspect; the
+	// tablet keeps its history until it is rebuilt from the new primary
+	result = utils.RunSQL(t.Context(), t, "SELECT msg FROM vt_insert_test WHERE id = 999902", otherLeader)
+	require.Len(t, result.Rows, 1)
+	require.Equal(t, "other leader", result.Rows[0][0].ToString())
 }
 
 func TestEmergencyReparentWithBlockedPrimary(t *testing.T) {

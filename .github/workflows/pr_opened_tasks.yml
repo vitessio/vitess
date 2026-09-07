@@ -3,10 +3,11 @@
 # - Adds initial labels (NeedsWebsiteDocsUpdate, NeedsDescriptionUpdate, NeedsIssue, NeedsBackportReason)
 name: PR opened tasks
 
-permissions: read-all
+permissions:
+  contents: read
 
 on:
-  pull_request_target:
+  pull_request_target: # zizmor: ignore[dangerous-triggers] only checks out the base ref, never PR code
     types: [opened]
 
 jobs:
@@ -19,7 +20,7 @@ jobs:
 
     steps:
       - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
+        uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2.21.0
         with:
           egress-policy: audit
 
@@ -64,16 +65,15 @@ jobs:
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
           permission-pull-requests: write
 
-      - name: Set token in environment
-        run: echo "GH_TOKEN=${{ steps.app-token.outputs.token }}" >> "$GITHUB_ENV"
-
       - name: Checkout code
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.base_ref }}
           persist-credentials: 'false'
 
       - name: Add Review Checklist Comment
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           gh pr comment ${{ github.event.pull_request.number }} \
             --repo ${{ github.repository }} \
@@ -94,10 +94,9 @@ jobs:
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
           permission-pull-requests: write
 
-      - name: Set token in environment
-        run: echo "GH_TOKEN=${{ steps.app-token.outputs.token }}" >> "$GITHUB_ENV"
-
       - name: Add Initial Labels
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           gh pr edit ${{ github.event.pull_request.number }} \
             --repo ${{ github.repository }} \
@@ -112,4 +111,4 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Run actions/labeler
-        uses: actions/labeler@b8dd2d9be0f68b860e7dae5dae7d772984eacd6d # v6.2.0
+        uses: actions/labeler@bf12e9b00b37c5c0ca2b87b79b2daf7891dbda13 # v7.0.0

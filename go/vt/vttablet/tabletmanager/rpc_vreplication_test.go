@@ -1859,7 +1859,7 @@ func addInvariants(dbClient *binlogplayer.MockDBClient, vreplID, sourceTabletUID
 		"0",
 	))
 	dbClient.AddInvariant(fmt.Sprintf(updatePickedSourceTablet, cell, sourceTabletUID, vreplID), &sqltypes.Result{})
-	dbClient.AddInvariant("update _vt.vreplication set state='Running', message=left('', 1000) where id=1", &sqltypes.Result{})
+	dbClient.AddInvariant(fmt.Sprintf("update _vt.vreplication set state='Running', message=left('', 1000) where id=%d", vreplID), &sqltypes.Result{})
 	dbClient.AddInvariant(vreplication.SqlMaxAllowedPacket, sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
 			"max_allowed_packet",
@@ -2252,12 +2252,12 @@ func TestExternalizeLookupVindex(t *testing.T) {
 			expectedWorkflowStopCalls := preWorkflowStopCalls
 			if tcase.expectStopped {
 				// We expect the RPC to be called on each target shard.
-				expectedWorkflowStopCalls = preWorkflowStopCalls + (len(targetShards))
+				expectedWorkflowStopCalls = preWorkflowStopCalls + len(targetShards)
 			}
 			expectedWorkflowDeleteCalls := preWorkflowDeleteCalls
 			if tcase.expectDeleted {
 				// We expect the RPC to be called on each target shard.
-				expectedWorkflowDeleteCalls = preWorkflowDeleteCalls + (len(targetShards))
+				expectedWorkflowDeleteCalls = preWorkflowDeleteCalls + len(targetShards)
 			}
 			require.Equal(t, expectedWorkflowStopCalls, tenv.tmc.workflowStopCalls)
 			require.Equal(t, expectedWorkflowDeleteCalls, tenv.tmc.workflowDeleteCalls)
@@ -2905,7 +2905,7 @@ func TestCompleteLookupVindex(t *testing.T) {
 			expectedWorkflowDeleteCalls := preWorkflowDeleteCalls
 			if tcase.expectDelete {
 				// We expect the RPC to be called on each target shard.
-				expectedWorkflowDeleteCalls = preWorkflowDeleteCalls + (len(targetShards))
+				expectedWorkflowDeleteCalls = preWorkflowDeleteCalls + len(targetShards)
 			}
 			require.Equal(t, expectedWorkflowDeleteCalls, tenv.tmc.workflowDeleteCalls)
 

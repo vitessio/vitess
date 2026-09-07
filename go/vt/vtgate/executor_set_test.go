@@ -352,14 +352,15 @@ func TestExecutorSetOp(t *testing.T) {
 	}{{
 		in: "set big_tables = 1", // ignore
 	}, {
-		in:      "set sql_mode = 'STRICT_ALL_TABLES,NO_AUTO_UPDATES'",
-		sysVars: map[string]string{"sql_mode": "'STRICT_ALL_TABLES,NO_AUTO_UPDATES'"},
-		result:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"), "|STRICT_ALL_TABLES,NO_AUTO_UPDATES"),
+		in:      "set sql_mode = 'STRICT_ALL_TABLES,NO_ZERO_DATE'",
+		sysVars: map[string]string{"sql_mode": "'STRICT_ALL_TABLES,NO_ZERO_DATE'"},
+		result:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"), "|STRICT_ALL_TABLES,NO_ZERO_DATE"),
 	}, {
 		// even though the tablet is saying that the value has changed,
-		// useReservedConn is false, so we won't allow this change
-		in:              "set sql_mode = 'STRICT_ALL_TABLES,NO_AUTO_UPDATES'",
-		result:          returnResult("sql_mode", "varchar", "STRICT_ALL_TABLES,NO_AUTO_UPDATES"),
+		// useReservedConn is false, so we won't allow this change; the value is
+		// still judged, so the check query has the judgment's shape
+		in:              "set sql_mode = 'STRICT_ALL_TABLES,NO_ZERO_DATE'",
+		result:          sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"), "|STRICT_ALL_TABLES,NO_ZERO_DATE"),
 		sysVars:         nil,
 		disallowResConn: true,
 	}, {

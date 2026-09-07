@@ -129,6 +129,7 @@ func registerTabletEnvFlags(fs *pflag.FlagSet) {
 	fs.IntVar(&currentConfig.TxPool.Size, "queryserver-config-transaction-cap", defaultConfig.TxPool.Size, "query server transaction cap is the maximum number of transactions allowed to happen at any given point of a time for a single vttablet. E.g. by setting transaction cap to 100, there are at most 100 transactions will be processed by a vttablet and the 101th transaction will be blocked (and fail if it cannot get connection within specified timeout)")
 	fs.IntVar(&currentConfig.MessagePostponeParallelism, "queryserver-config-message-postpone-cap", defaultConfig.MessagePostponeParallelism, "query server message postpone cap is the maximum number of messages that can be postponed at any given time. Set this number to substantially lower than transaction cap, so that the transaction pool isn't exhausted by the message subsystem.")
 	fs.DurationVar(&currentConfig.Oltp.TxTimeout, "queryserver-config-transaction-timeout", defaultConfig.Oltp.TxTimeout, "query server transaction timeout, a transaction will be killed if it takes longer than this value")
+	fs.DurationVar(&currentConfig.TempTableIdleTimeout, "queryserver-config-temp-table-idle-timeout", defaultConfig.TempTableIdleTimeout, "idle timeout for reserved connections that hold temporary tables and are not kept alive by vtgate (e.g. gRPC API sessions). -1 (default): mirror this mysqld's @@global.wait_timeout, refreshed on the schema reload interval. 0: disabled, these connections are reclaimed at the transaction timeout as before. > 0: use this value; keep it at or below mysqld's wait_timeout and at or above the transaction timeout.")
 	utils.SetFlagDurationVar(fs, &currentConfig.GracePeriods.Shutdown, "shutdown-grace-period", defaultConfig.GracePeriods.Shutdown, "how long to wait for queries and transactions to complete during graceful shutdown.")
 	fs.IntVar(&currentConfig.Oltp.MaxRows, "queryserver-config-max-result-size", defaultConfig.Oltp.MaxRows, "query server max result size, maximum number of rows allowed to return from vttablet for non-streaming queries.")
 	fs.IntVar(&currentConfig.Oltp.WarnRows, "queryserver-config-warn-result-size", defaultConfig.Oltp.WarnRows, "query server result size warning threshold, warn if number of rows returned from vttablet for non-streaming queries exceeds this")
@@ -362,6 +363,13 @@ type TabletConfig struct {
 	EnableTableACLDryRun bool          `json:"-"`
 	TableACLExemptACL    string        `json:"-"`
 	TwoPCAbandonAge      time.Duration `json:"-"`
+
+	// TempTableIdleTimeout is the idle timeout for reserved connections that
+	// hold temporary tables and are not covered by the vtgate keepalive
+	// contract. -1 means auto (mirror mysqld's @@global.wait_timeout), 0
+	// means disabled (the transaction timeout applies as before), > 0 is an
+	// explicit timeout.
+	TempTableIdleTimeout time.Duration `json:"-"`
 
 	EnableTxThrottler              bool                          `json:"-"`
 	TxThrottlerConfig              *TxThrottlerConfigFlag        `json:"-"`
@@ -1140,6 +1148,9 @@ var defaultConfig = TabletConfig{
 	EnablePerWorkloadTableMetrics: false,
 
 	TwoPCAbandonAge: 15 * time.Minute,
+
+	// Auto: mirror this mysqld's @@global.wait_timeout.
+	TempTableIdleTimeout: -1,
 
 	QueryThrottlerConfigRefreshInterval: time.Minute,
 }

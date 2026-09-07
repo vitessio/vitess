@@ -299,6 +299,8 @@ const (
 	ERRegexpInvalidCaptureGroup           = ErrorCode(3887)
 	ERRegexpInvalidFlag                   = ErrorCode(3900)
 
+	ERUnsupportedSQLMode = ErrorCode(3899)
+
 	ERCharacterSetMismatch = ErrorCode(3995)
 
 	ERWrongParametersToNativeFct = ErrorCode(1583)
@@ -320,6 +322,20 @@ const (
 
 	// server not available
 	ERServerIsntAvailable = ErrorCode(3168)
+
+	// ERStopReplicaSQLThreadTimeout is ER_STOP_REPLICA_SQL_THREAD_TIMEOUT and
+	// ERStopReplicaIOThreadTimeout is ER_STOP_REPLICA_IO_THREAD_TIMEOUT.
+	// Returned when STOP REPLICA hits rpl_stop_replica_timeout; the stop
+	// instruction remains in effect after the error is returned.
+	ERStopReplicaSQLThreadTimeout = ErrorCode(1875)
+	ERStopReplicaIOThreadTimeout  = ErrorCode(1876)
+
+	// ERStopReplicaMonitorIOThreadTimeout is
+	// ER_STOP_REPLICA_MONITOR_IO_THREAD_TIMEOUT. With
+	// SOURCE_CONNECTION_AUTO_FAILOVER=1, STOP REPLICA IO_THREAD stops the
+	// connection-failover monitor thread first and returns this error if that
+	// times out -- before the receiver stop was even requested.
+	ERStopReplicaMonitorIOThreadTimeout = ErrorCode(4011)
 )
 
 // HandlerErrorCode is for errors thrown by the handler, and which are then embedded in other errors.

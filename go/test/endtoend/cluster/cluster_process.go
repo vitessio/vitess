@@ -125,6 +125,9 @@ type LocalProcessCluster struct {
 
 	VtctldExtraArgs []string
 
+	// Extra arguments for vtorc
+	VTOrcExtraArgs []string
+
 	// mutex added to handle the parallel teardowns
 	mx                *sync.Mutex
 	teardownCompleted bool
@@ -283,6 +286,7 @@ func (cluster *LocalProcessCluster) StartTopo() (err error) {
 func (cluster *LocalProcessCluster) StartVTOrc(cell, keyspace string) error {
 	// Start vtorc
 	vtorcProcess := cluster.NewVTOrcProcess(VTOrcConfiguration{}, cell)
+	vtorcProcess.ExtraArgs = append(vtorcProcess.ExtraArgs, cluster.VTOrcExtraArgs...)
 	err := vtorcProcess.Setup()
 	if err != nil {
 		log.Error(err.Error())

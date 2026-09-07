@@ -165,12 +165,11 @@ func compileRegex(pat eval, c colldata.Charset, flags icuregex.RegexpFlag) (*icu
 		return regexp, nil
 	}
 
-	var compileErr *icuregex.CompileError
 	if errors.Is(err, icuerrors.ErrUnsupported) {
 		err = vterrors.NewError(vtrpcpb.Code_UNIMPLEMENTED, vterrors.RegexpUnimplemented, err.Error())
 	} else if errors.Is(err, icuerrors.ErrIllegalArgument) {
 		err = vterrors.NewError(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.RegexpIllegalArgument, err.Error())
-	} else if errors.As(err, &compileErr) {
+	} else if compileErr, ok := errors.AsType[*icuregex.CompileError](err); ok {
 		switch compileErr.Code {
 		case icuregex.InternalError:
 			err = vterrors.NewError(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.RegexpInternal, compileErr.Error())
