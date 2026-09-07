@@ -581,7 +581,7 @@ func ExecuteBackupInitSQL(ctx context.Context, params *BackupParams) error {
 		}
 		select {
 		case <-initCtx.Done():
-			params.Logger.Infof("Canceling init SQL work due to hitting the configured timeout of %v or the the backup itself having been canceled", initTimeout)
+			params.Logger.Infof("Canceling init SQL work due to hitting the configured timeout of %v or the backup itself having been canceled", initTimeout)
 		default:
 			params.Logger.Infof("Failed to execute init SQL queries %q: %v", queriesCSV, err)
 		}

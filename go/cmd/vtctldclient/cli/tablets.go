@@ -42,7 +42,7 @@ func TabletAliasesFromPosArgs(args []string) ([]*topodatapb.TabletAlias, error) 
 	return aliases, nil
 }
 
-// TabletTagsFromPosArgs takes a list of positional (non-flag) arguements and
+// TabletTagsFromPosArgs takes a list of positional (non-flag) arguments and
 // converts them to a map of tablet tags.
 func TabletTagsFromPosArgs(args []string) (map[string]string, error) {
 	if len(args) == 0 {
