@@ -230,7 +230,7 @@ func newBuiltinDecompressor(engine string, reader io.Reader, logger logutil.Logg
 		}
 		decompressor = d.IOReadCloser()
 	default:
-		err = fmt.Errorf("Unkown decompressor engine: %q", engine)
+		err = fmt.Errorf("Unknown decompressor engine: %q", engine)
 		return decompressor, err
 	}
 

@@ -166,7 +166,7 @@ func (node *Insert) Format(buf *TrackedBuffer) {
 			node.Table.Expr, node.Partitions, node.Columns, node.Rows, node.RowAlias, node.OnDup)
 	default:
 		buf.astPrintf(node, "%s %v%sinto %v%v%v %v%v%v",
-			"Unkown Insert Action",
+			"Unknown Insert Action",
 			node.Comments, node.Ignore.ToString(),
 			node.Table.Expr, node.Partitions, node.Columns, node.Rows, node.RowAlias, node.OnDup)
 	}

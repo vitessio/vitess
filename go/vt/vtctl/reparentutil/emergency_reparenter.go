@@ -1346,7 +1346,7 @@ func (erp *EmergencyReparenter) filterValidCandidates(validTablets []*topodatapb
 		if opts.PreventCrossCellPromotion && prevPrimary != nil && tablet.Alias.Cell != prevPrimary.Alias.Cell {
 			erp.logger.Infof("Removing %s from list of valid candidates for promotion because it isn't in the same cell as the previous primary", tabletAliasStr)
 			if opts.NewPrimaryAlias != nil && topoproto.TabletAliasEqual(opts.NewPrimaryAlias, tablet.Alias) {
-				return nil, vterrors.Errorf(vtrpc.Code_ABORTED, "proposed primary %s is is a different cell as the previous primary", topoproto.TabletAliasString(opts.NewPrimaryAlias))
+				return nil, vterrors.Errorf(vtrpc.Code_ABORTED, "proposed primary %s is in a different cell than the previous primary", topoproto.TabletAliasString(opts.NewPrimaryAlias))
 			}
 			continue
 		}

@@ -221,7 +221,7 @@ func (node *Insert) FormatFast(buf *TrackedBuffer) {
 		node.OnDup.FormatFast(buf)
 
 	default:
-		buf.WriteString("Unkown Insert Action")
+		buf.WriteString("Unknown Insert Action")
 		buf.WriteByte(' ')
 
 		node.Comments.FormatFast(buf)
