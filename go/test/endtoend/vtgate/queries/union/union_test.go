@@ -175,6 +175,11 @@ func TestUnionVolatilePredicate(t *testing.T) {
 			mcmp.AssertIsEmpty("select * from (select uuid() as c from t1 union all select uuid() from t1) sub where c <> c")
 			mcmp.AssertMatches("select count(*) from (select uuid() as c from t1 union all select uuid() from t1) sub where c = c", `[[INT64(4)]]`)
 
+			// Branches on two different vindex values do not merge into one route, so
+			// the predicate is evaluated by a vtgate filter rather than by the shard.
+			mcmp.AssertIsEmpty("select * from (select uuid() as c from t1 where id1 = 1 union all select uuid() from t1 where id1 = 2) sub where c <> c")
+			mcmp.AssertMatches("select count(*) from (select uuid() as c from t1 where id1 = 1 union all select uuid() from t1 where id1 = 2) sub where c = c", `[[INT64(2)]]`)
+
 			// The volatile projection can sit a derived table deeper inside the branch.
 			// The second branch is deterministic on purpose, so only the nested one can
 			// hold the predicate back.

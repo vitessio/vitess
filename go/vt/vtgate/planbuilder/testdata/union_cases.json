@@ -2930,6 +2930,57 @@
     }
   },
   {
+    "comment": "the predicate is held back to a vtgate filter when the UNION does not merge into a single route",
+    "query": "select * from (select uuid() as c from user where id = 1 union all select uuid() from user where id = 2) sub where c <> c",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select * from (select uuid() as c from user where id = 1 union all select uuid() from user where id = 2) sub where c <> c",
+      "Instructions": {
+        "OperatorType": "Filter",
+        "Predicate": "c != c",
+        "Inputs": [
+          {
+            "OperatorType": "Concatenate",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "EqualUnique",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select uuid() as c from `user` where 1 != 1",
+                "Query": "select uuid() as c from `user` where id = 1",
+                "Values": [
+                  "1"
+                ],
+                "Vindex": "user_index"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "EqualUnique",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select uuid() from `user` where 1 != 1",
+                "Query": "select uuid() from `user` where id = 2",
+                "Values": [
+                  "2"
+                ],
+                "Vindex": "user_index"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
     "comment": "the same for rand()",
     "query": "select * from (select rand() as c from dual union all select rand() from dual) sub where c < 0.5",
     "plan": {
