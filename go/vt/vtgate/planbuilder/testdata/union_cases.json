@@ -266,7 +266,7 @@
     }
   },
   {
-    "comment": "union operations in derived table, without star expression (FROM)¡",
+    "comment": "union operations in derived table, without star expression (FROM)\u00a1",
     "query": "select col1,col2 from (select col1, col2 from user union all select col1, col2 from user_extra) as t",
     "plan": {
       "Type": "Scatter",
@@ -2965,6 +2965,28 @@
         "FieldQuery": "select c from (select 0 as c from dual where 1 != 1 union all select rand() from dual where 1 != 1 union all select 0 from dual where 1 != 1) as sub where 1 != 1",
         "Query": "select c from (select 0 as c from dual union all select rand() from dual union all select 0 from dual) as sub where c > 0.5"
       }
+    }
+  },
+  {
+    "comment": "a volatile projection one derived table deeper is found too",
+    "query": "select * from (select c from (select uuid() as c from user) x union all select 'z' from dual) sub where c <> c",
+    "plan": {
+      "Type": "Scatter",
+      "QueryType": "SELECT",
+      "Original": "select * from (select c from (select uuid() as c from user) x union all select 'z' from dual) sub where c <> c",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select c from (select c from (select uuid() as c from `user` where 1 != 1) as x where 1 != 1 union all select 'z' from dual where 1 != 1) as sub where 1 != 1",
+        "Query": "select c from (select c from (select uuid() as c from `user`) as x union all select 'z' from dual) as sub where c != c"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
     }
   },
   {

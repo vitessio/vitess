@@ -84,7 +84,7 @@ func (h *Horizon) IsMergeable(ctx *plancontext.PlanningContext) bool {
 func (h *Horizon) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) Operator {
 	if union, isUNion := h.Source.(*Union); isUNion {
 		// If we have a derived table on top of a UNION, we can let the UNION do the expression rewriting
-		if !union.canPushPredicate(expr) {
+		if !union.canPushPredicate(ctx, expr) {
 			return newFilter(h, expr)
 		}
 		h.Source = h.Source.AddPredicate(ctx, expr)

@@ -175,6 +175,12 @@ func TestUnionVolatilePredicate(t *testing.T) {
 			mcmp.AssertIsEmpty("select * from (select uuid() as c from t1 union all select uuid() from t1) sub where c <> c")
 			mcmp.AssertMatches("select count(*) from (select uuid() as c from t1 union all select uuid() from t1) sub where c = c", `[[INT64(4)]]`)
 
+			// The volatile projection can sit a derived table deeper inside the branch.
+			// The second branch is deterministic on purpose, so only the nested one can
+			// hold the predicate back.
+			mcmp.AssertIsEmpty("select * from (select c from (select uuid() as c from t1) x union all select 'z' from t1 where id1 = 1) sub where c <> c")
+			mcmp.AssertMatches("select count(*) from (select c from (select uuid() as c from t1) x union all select 'z' from t1 where id1 = 1) sub where c = c", `[[INT64(3)]]`)
+
 			// A predicate on a deterministic column still pushes, and still routes.
 			mcmp.AssertMatches("select count(*) from (select uuid() as c, id1 as d from t1 union all select uuid(), id1 from t1) sub where d = 1", `[[INT64(2)]]`)
 			// A conjunction splits: the routable half pushes, the duplicating half stays above.

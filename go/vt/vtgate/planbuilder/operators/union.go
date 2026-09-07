@@ -27,6 +27,7 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/predicates"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
+	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 type Union struct {
@@ -126,7 +127,7 @@ func (u *Union) columnOffsets() map[string]int {
 // rewritten predicate, because building that one is not free: predicatePerSource registers a join
 // predicate per source in ctx.PredTracker, and CopyOnRewrite over a *predicates.JoinPredicate
 // calls JoinPredicate.Clone, which overwrites the tracked expression.
-func (u *Union) canPushPredicate(expr sqlparser.Expr) bool {
+func (u *Union) canPushPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) bool {
 	offsets := u.columnOffsets()
 
 	safe := true
@@ -144,7 +145,7 @@ func (u *Union) canPushPredicate(expr sqlparser.Expr) bool {
 		for i := range u.Sources {
 			for _, sel := range u.allSelectsFor(i) {
 				ae, ok := sel.GetColumns()[idx].(*sqlparser.AliasedExpr)
-				if ok && sqlparser.ContainsVolatile(ae.Expr) {
+				if ok && projectsVolatile(ctx, ae.Expr) {
 					safe = false
 					return false, io.EOF
 				}
@@ -153,6 +154,37 @@ func (u *Union) canPushPredicate(expr sqlparser.Expr) bool {
 		return true, nil
 	}, expr)
 	return safe
+}
+
+// projectsVolatile reports whether a branch of the UNION projects a volatile expression, resolving
+// column references through derived tables first. A branch can select from a derived table of its
+// own, and it is that branch's Horizon.AddPredicate that then substitutes the volatile expression in.
+func projectsVolatile(ctx *plancontext.PlanningContext, expr sqlparser.Expr) bool {
+	if sqlparser.ContainsVolatile(expr) {
+		return true
+	}
+
+	found := false
+	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
+		col, ok := node.(*sqlparser.ColName)
+		if !ok {
+			return true, nil
+		}
+		tbl, err := ctx.SemTable.TableInfoForExpr(col)
+		if err != nil {
+			return true, nil
+		}
+		dt, ok := tbl.(*semantics.DerivedTable)
+		if !ok {
+			return true, nil
+		}
+		if projectsVolatile(ctx, semantics.RewriteDerivedTableExpression(col, dt)) {
+			found = true
+			return false, io.EOF
+		}
+		return true, nil
+	}, expr)
+	return found
 }
 
 func (u *Union) predicatePerSource(ctx *plancontext.PlanningContext, expr sqlparser.Expr, offsets map[string]int) []sqlparser.Expr {
