@@ -65,15 +65,13 @@ func buildSetPlan(stmt *sqlparser.Set, vschema plancontext.VSchema) (*planResult
 		// we have a UDV. If the original query didn't explicitly specify the scope, it
 		// would have been explicitly set to sqlparser.SessionStr before reaching this
 		// phase of planning
-		if expr.Var.Scope != sqlparser.VariableScope {
-			if err := rejectQualifiedName(expr); err != nil {
-				return nil, err
-			}
-		}
 		switch expr.Var.Scope {
 		case sqlparser.GlobalScope:
 			if vschema.IsSystemVariableDenied(expr.Var.Name.Lowered()) {
 				return nil, vterrors.VT12001(fmt.Sprintf("system setting: %s", expr.Var.Name))
+			}
+			if err := rejectQualifiedName(expr); err != nil {
+				return nil, err
 			}
 			setOp, err := planSysVarCheckIgnore(expr, vschema, true)
 			if err != nil {
@@ -107,6 +105,9 @@ func buildSetPlan(stmt *sqlparser.Set, vschema plancontext.VSchema) (*planResult
 				vschema.PlannerWarning("converted 'next transaction' scope to 'session' scope")
 			}
 		case sqlparser.VitessMetadataScope:
+			if err := rejectQualifiedName(expr); err != nil {
+				return nil, err
+			}
 			value, err := getValueFor(expr)
 			if err != nil {
 				return nil, err
@@ -138,14 +139,28 @@ func buildSetPlan(stmt *sqlparser.Set, vschema plancontext.VSchema) (*planResult
 // name, such as `set autocommit = t.off`. MySQL accepts an unqualified bare identifier
 // as the equivalent string, and the plan functions coerce it the same way (on/off,
 // enumeration values, mode names); a qualified name is never a value, and MySQL rejects
-// it as the wrong argument type, whatever the qualifier. This runs before any of that
-// coercion, so no plan function has to repeat the check.
+// it as the wrong argument type, whatever the qualifier. As in MySQL, the variable is
+// resolved first: an unknown or denied variable is reported as such, whatever its value,
+// so for session-scope variables this runs from rejectQualifiedNamePlan, which wraps
+// every known variable's plan function, ahead of any coercion.
 func rejectQualifiedName(expr *sqlparser.SetExpr) error {
 	colName, ok := expr.Expr.(*sqlparser.ColName)
 	if !ok || colName.Qualifier.IsEmpty() {
 		return nil
 	}
 	return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongTypeForVar, "Incorrect argument type to variable '%s'", expr.Var.Name.Lowered())
+}
+
+// rejectQualifiedNamePlan wraps a known system variable's plan function with
+// rejectQualifiedName, so a qualified name is rejected before the plan function coerces
+// the value.
+func rejectQualifiedNamePlan(inner planFunc) planFunc {
+	return func(expr *sqlparser.SetExpr, vschema plancontext.VSchema, ec *expressionConverter) (engine.SetOp, error) {
+		if err := rejectQualifiedName(expr); err != nil {
+			return nil, err
+		}
+		return inner(expr, vschema, ec)
+	}
 }
 
 func buildSetOpReadOnly(setting) planFunc {
