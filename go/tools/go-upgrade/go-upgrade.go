@@ -31,7 +31,6 @@ import (
 	"time"
 
 	"github.com/google/go-containerregistry/pkg/crane"
-	gocr "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/hashicorp/go-version"
 	"github.com/spf13/cobra"
 )
@@ -39,10 +38,12 @@ import (
 const (
 	goDevAPI = "https://go.dev/dl/?mode=json"
 
-	// dockerPlatformOS is the target OS for the Go base image.
-	dockerPlatformOS = "linux"
+	// golangImageRepository is the Docker Hub repository of the official Go images.
+	golangImageRepository = "golang"
 
-	// dockerPlatformArch is the target architecture for the Go base image.
+	// dockerPlatformOS and dockerPlatformArch identify the only explicit --platform
+	// the Go image rewrite recognizes in FROM lines.
+	dockerPlatformOS   = "linux"
 	dockerPlatformArch = "amd64"
 
 	// regexpFindBootstrapVersion greps the current bootstrap version from the Makefile. The bootstrap
@@ -441,7 +442,7 @@ func replaceGolangImageReferences(content string, goVersion *version.Version) (s
 			continue
 		}
 
-		digest, err := resolveGolangImageDigest(goVersion, distro)
+		digest, err := resolveGolangImageDigest(golangImageRepository, goVersion, distro)
 		if err != nil {
 			return "", err
 		}
@@ -479,10 +480,15 @@ func replaceGolangImageReferences(content string, goVersion *version.Version) (s
 }
 
 // resolveGolangImageDigest resolves the pinned digest for the given Go version and distro.
-func resolveGolangImageDigest(goVersion *version.Version, distro string) (string, error) {
-	ref := "golang:" + golangDockerTag(goVersion, distro)
+//
+// The digest is the one the tag itself points to, which for the official Go images is a
+// multi-platform index. Pinning the index keeps the Dockerfiles buildable on every
+// architecture, whereas pinning a single platform's manifest would break native builds
+// on the others.
+func resolveGolangImageDigest(repository string, goVersion *version.Version, distro string) (string, error) {
+	ref := repository + ":" + golangDockerTag(goVersion, distro)
 
-	digest, err := crane.Digest(ref, crane.WithPlatform(&gocr.Platform{OS: dockerPlatformOS, Architecture: dockerPlatformArch}))
+	digest, err := crane.Digest(ref)
 	if err != nil {
 		return "", fmt.Errorf("resolve golang digest for %s: %w", ref, err)
 	}
