@@ -18,6 +18,7 @@ package planbuilder
 
 import (
 	"vitess.io/vitess/go/mysql/sqlmode"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/sysvars"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -100,9 +101,11 @@ func validateSetStatementSQLMode(set *sqlparser.Set) (verify bool, err error) {
 }
 
 // validateSetExprsSQLMode rejects session-scope sql_mode assignments whose constant value
-// fails sqlmode.Validate. Assignments whose value is not a constant cannot be judged here;
-// for those it returns verify=true, asking the executor to read back and validate the
-// applied value after the statement runs.
+// fails sqlmode.Validate. A constant is a literal or an unquoted mode name: MySQL accepts
+// `SET sql_mode = TRADITIONAL` as `SET sql_mode = 'TRADITIONAL'`, and the parser yields
+// the unquoted name as a bare, unqualified column name. Assignments whose value is not a
+// constant cannot be judged here; for those it returns verify=true, asking the executor to
+// read back and validate the applied value after the statement runs.
 func validateSetExprsSQLMode(exprs sqlparser.SetExprs) (verify bool, err error) {
 	for _, expr := range exprs {
 		if expr.Var.Name.Lowered() != sysvars.SQLMode.Name {
@@ -114,13 +117,8 @@ func validateSetExprsSQLMode(exprs sqlparser.SetExprs) (verify bool, err error) 
 			// the global scope is the operator's domain, not a vtgate session's
 			continue
 		}
-		lit, ok := expr.Expr.(*sqlparser.Literal)
+		value, ok := constantSQLModeValue(expr.Expr)
 		if !ok {
-			verify = true
-			continue
-		}
-		value, err := sqlparser.LiteralToValue(lit)
-		if err != nil {
 			verify = true
 			continue
 		}
@@ -129,4 +127,24 @@ func validateSetExprsSQLMode(exprs sqlparser.SetExprs) (verify bool, err error) 
 		}
 	}
 	return verify, nil
+}
+
+// constantSQLModeValue returns the value of a constant sql_mode expression: a literal, or
+// an unquoted mode name, which MySQL accepts as the equivalent string. A qualified name is
+// not a mode name and, like any other expression, is left for MySQL to judge.
+func constantSQLModeValue(expr sqlparser.Expr) (sqltypes.Value, bool) {
+	switch node := expr.(type) {
+	case *sqlparser.Literal:
+		value, err := sqlparser.LiteralToValue(node)
+		if err != nil {
+			return sqltypes.Value{}, false
+		}
+		return value, true
+	case *sqlparser.ColName:
+		if !node.Qualifier.IsEmpty() {
+			return sqltypes.Value{}, false
+		}
+		return sqltypes.NewVarChar(node.Name.String()), true
+	}
+	return sqltypes.Value{}, false
 }

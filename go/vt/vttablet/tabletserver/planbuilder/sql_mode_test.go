@@ -56,6 +56,17 @@ func TestBuildSettingQueryRejectsUnsupportedSQLModes(t *testing.T) {
 		// judged upfront is rejected
 		settings:    []string{"set sql_safe_updates = 1", "set sql_mode = concat('AN', 'SI')"},
 		expectedErr: "non-constant sql_mode value in connection settings: set sql_mode = concat('AN', 'SI')",
+	}, {
+		// MySQL accepts an unquoted mode name as the equivalent string: it is a constant
+		settings: []string{"set sql_mode = TRADITIONAL"},
+	}, {
+		settings: []string{"set sql_mode = strict_trans_tables"},
+	}, {
+		settings:    []string{"set sql_mode = ANSI"},
+		expectedErr: "setting the ANSI sql_mode is unsupported",
+	}, {
+		settings:    []string{"set sql_mode = BOGUS"},
+		expectedErr: "Variable 'sql_mode' can't be set to the value of 'BOGUS'",
 	}}
 	for _, tc := range tests {
 		t.Run(tc.settings[len(tc.settings)-1], func(t *testing.T) {
@@ -127,6 +138,24 @@ func TestSetPlanRejectsUnsupportedSQLModes(t *testing.T) {
 	}, {
 		// a constant sql_mode in a multi-assignment SET is judged at plan time as usual
 		sql: "set @@sql_safe_updates = if(1 = 1, 0, 1), @@sql_mode = 'STRICT_TRANS_TABLES'",
+	}, {
+		// MySQL accepts an unquoted mode name as the equivalent string: it is a constant,
+		// judged at plan time like its quoted spelling
+		sql: "set @@sql_mode = TRADITIONAL",
+	}, {
+		sql: "set sql_mode = strict_trans_tables",
+	}, {
+		sql:         "set @@sql_mode = ANSI",
+		expectedErr: "setting the ANSI sql_mode is unsupported",
+	}, {
+		sql:         "set session sql_mode = BOGUS",
+		expectedErr: "Variable 'sql_mode' can't be set to the value of 'BOGUS'",
+	}, {
+		sql: "set @@sql_safe_updates = if(1 = 1, 0, 1), @@sql_mode = STRICT_TRANS_TABLES",
+	}, {
+		// a qualified name is not a mode name; it is left for MySQL to judge
+		sql:          "set @@sql_mode = t.sql_mode",
+		verifySQLMod: true,
 	}}
 	for _, tc := range tests {
 		t.Run(tc.sql, func(t *testing.T) {
