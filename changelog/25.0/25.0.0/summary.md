@@ -49,7 +49,6 @@
         - [New `--demote-primary-lock-wait-timeout` flag](#vttablet-demote-primary-lock-wait-timeout)
         - [Schema engine table-count limit is now configurable](#vttablet-schema-max-table-count)
         - [Replicas are placed in a crash-safe state before shutdown](#vttablet-replica-crash-safe-shutdown)
-        - [Connections with session settings are reset instead of replaced](#vttablet-settings-reset-reuses-connection)
         - [Skip MySQL version check when restoring from a mysql-shell backup](#vttablet-mysql-shell-restore-skip-version-check)
         - [ApplySchema session variables](#vttablet-applyschema-session-variables)
     - **[VTCtld](#minor-changes-vtctld)**
@@ -495,14 +494,6 @@ A failed shutdown that leaves such a restoration pending can delay process exit 
 **Impact**: On a graceful replica shutdown that completes the preparation, `innodb_flush_log_at_trx_commit`, `sync_binlog`, and `sync_relay_log` are set to `1` and both replication threads are stopped, regardless of their prior runtime values; if the preparation cannot complete, it is skipped and logged. The preparation keys off `SHOW REPLICA STATUS`, so it applies to any mysqld with a replication source configured — which excludes a normally promoted `PRIMARY`, but includes a `PRIMARY` that keeps a replication channel configured (e.g. one replicating from an external source with `--disable_active_reparents`), whose replication is stopped by the preparation like any replica's.
 
 See [#20599](https://github.com/vitessio/vitess/pull/20599) for details.
-
-#### <a id="vttablet-settings-reset-reuses-connection"/>Connections with session settings are reset instead of replaced</a>
-
-When a pooled connection carrying session settings (from a `SET` on a reserved connection, or from settings forwarded by VTGate) is handed to a request that needs different settings or none, the tablet resets the settings first. The reset statement restored every setting other than `sql_mode` with the quoted string `'default'`, which MySQL rejects for these variables, so the reset always failed. The pool recovered by closing the connection and opening a new one, without logging, and the `ResetSetting` metric counted the attempt. In effect, every settings reset since v16 was a reconnect. The reset now uses the `DEFAULT` keyword, which MySQL accepts for every system variable, so the connection is reused.
-
-**Impact**: Workloads that mix requests with and without session settings on the same tablet see fewer MySQL connection open/close cycles. The `ResetSetting` and `DiffSetting` pool metrics now measure what their names say.
-
-See [#21026](https://github.com/vitessio/vitess/pull/21026) for details.
 
 #### <a id="vttablet-mysql-shell-restore-skip-version-check"/>Skip MySQL version check when restoring from a mysql-shell backup</a>
 
