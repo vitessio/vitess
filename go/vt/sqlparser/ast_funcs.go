@@ -2461,7 +2461,11 @@ func IsVolatile(node SQLNode) bool {
 		case "uuid", "uuid_short", "rand", "random_bytes",
 			"connection_id", "last_insert_id", "found_rows", "row_count",
 			"benchmark", "sleep",
-			"load_file", "master_pos_wait", "source_pos_wait":
+			"load_file", "master_pos_wait", "source_pos_wait",
+			// MariaDB. Its sequence functions have no dedicated node - Nextval is
+			// Vitess's own `select next value from seq`, not MariaDB's NEXTVAL(seq).
+			"uuid_v4", "uuid_v7", "sys_guid", "master_gtid_wait", "rownum",
+			"nextval", "lastval", "setval":
 			return true
 		}
 	case *LockingFunc:

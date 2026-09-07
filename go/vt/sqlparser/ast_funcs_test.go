@@ -510,6 +510,17 @@ func TestContainsVolatile(t *testing.T) {
 		{in: "master_pos_wait('a', 1)", nodeType: &FuncExpr{}, volatile: true},
 		{in: "source_pos_wait('a', 1)", nodeType: &FuncExpr{}, volatile: true},
 
+		// MariaDB only. Vitess parses them as plain function calls, so nothing else
+		// would mark them.
+		{in: "uuid_v4()", nodeType: &FuncExpr{}, volatile: true},
+		{in: "uuid_v7()", nodeType: &FuncExpr{}, volatile: true},
+		{in: "sys_guid()", nodeType: &FuncExpr{}, volatile: true},
+		{in: "master_gtid_wait('0-1-100', 1)", nodeType: &FuncExpr{}, volatile: true},
+		{in: "rownum()", nodeType: &FuncExpr{}, volatile: true},
+		{in: "nextval(s)", nodeType: &FuncExpr{}, volatile: true},
+		{in: "lastval(s)", nodeType: &FuncExpr{}, volatile: true},
+		{in: "setval(s, 100)", nodeType: &FuncExpr{}, volatile: true},
+
 		// Evaluated once per statement, so duplicating them is safe.
 		{in: "now()", nodeType: &CurTimeFuncExpr{}, volatile: false},
 		{in: "current_timestamp()", nodeType: &CurTimeFuncExpr{}, volatile: false},
