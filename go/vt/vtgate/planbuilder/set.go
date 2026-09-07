@@ -65,6 +65,11 @@ func buildSetPlan(stmt *sqlparser.Set, vschema plancontext.VSchema) (*planResult
 		// we have a UDV. If the original query didn't explicitly specify the scope, it
 		// would have been explicitly set to sqlparser.SessionStr before reaching this
 		// phase of planning
+		if expr.Var.Scope != sqlparser.VariableScope {
+			if err := rejectQualifiedName(expr); err != nil {
+				return nil, err
+			}
+		}
 		switch expr.Var.Scope {
 		case sqlparser.GlobalScope:
 			if vschema.IsSystemVariableDenied(expr.Var.Name.Lowered()) {
@@ -129,6 +134,20 @@ func buildSetPlan(stmt *sqlparser.Set, vschema plancontext.VSchema) (*planResult
 	}), nil
 }
 
+// rejectQualifiedName rejects a system variable assignment whose value is a qualified
+// name, such as `set autocommit = t.off`. MySQL accepts an unqualified bare identifier
+// as the equivalent string, and the plan functions coerce it the same way (on/off,
+// enumeration values, mode names); a qualified name is never a value, and MySQL rejects
+// it as the wrong argument type, whatever the qualifier. This runs before any of that
+// coercion, so no plan function has to repeat the check.
+func rejectQualifiedName(expr *sqlparser.SetExpr) error {
+	colName, ok := expr.Expr.(*sqlparser.ColName)
+	if !ok || colName.Qualifier.IsEmpty() {
+		return nil
+	}
+	return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongTypeForVar, "Incorrect argument type to variable '%s'", expr.Var.Name.Lowered())
+}
+
 func buildSetOpReadOnly(setting) planFunc {
 	return func(expr *sqlparser.SetExpr, schema plancontext.VSchema, _ *expressionConverter) (engine.SetOp, error) {
 		return nil, vterrors.VT03010(expr.Var.Name)
@@ -185,10 +204,10 @@ func planSysVarCheckIgnore(expr *sqlparser.SetExpr, schema plancontext.VSchema, 
 // execution time, once their value is known.
 func validateSQLModePlan(inner planFunc) planFunc {
 	return func(expr *sqlparser.SetExpr, vschema plancontext.VSchema, ec *expressionConverter) (engine.SetOp, error) {
-		if colName, ok := expr.Expr.(*sqlparser.ColName); ok && colName.Qualifier.IsEmpty() {
+		if colName, ok := expr.Expr.(*sqlparser.ColName); ok {
 			// MySQL accepts an unquoted mode name as the equivalent string: a constant,
-			// judged here like its quoted spelling. A qualified name is never a mode
-			// name; extractValue rejects it as MySQL does.
+			// judged here like its quoted spelling. Qualified names never get here
+			// (see rejectQualifiedName).
 			if _, err := sqlmode.Validate(sqltypes.NewVarChar(colName.Name.String())); err != nil {
 				return nil, err
 			}
@@ -307,14 +326,10 @@ func extractValue(expr *sqlparser.SetExpr, boolean bool) (string, error) {
 		case "off":
 			return "0", nil
 		}
-		// a qualified name is never a value: MySQL rejects it as the wrong argument
-		// type, whatever the qualifier
-		if !node.Qualifier.IsEmpty() {
-			return "", vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongTypeForVar, "Incorrect argument type to variable '%s'", expr.Var.Name.Lowered())
-		}
 		// the identifier's own text, not its formatted form: formatting backticks a
 		// name that is a keyword in the Vitess grammar, and MySQL would take the
-		// backticks as part of the string value
+		// backticks as part of the string value. Qualified names never get here
+		// (see rejectQualifiedName).
 		return sqltypes.EncodeStringSQL(node.Name.String()), nil
 
 	case *sqlparser.Default:

@@ -483,5 +483,20 @@
     "comment": "a qualified name is never a value for any system variable",
     "query": "set @@sql_safe_updates = t.x",
     "plan": "Incorrect argument type to variable 'sql_safe_updates'"
+  },
+  {
+    "comment": "a qualified name is rejected before on/off coercion of a reserved-connection boolean",
+    "query": "set foreign_key_checks = t.off",
+    "plan": "Incorrect argument type to variable 'foreign_key_checks'"
+  },
+  {
+    "comment": "a qualified name is rejected before on/off coercion of a Vitess-aware boolean",
+    "query": "set autocommit = t.off",
+    "plan": "Incorrect argument type to variable 'autocommit'"
+  },
+  {
+    "comment": "a qualified name is rejected for global-scope assignments too",
+    "query": "set global sql_safe_updates = t.x",
+    "plan": "Incorrect argument type to variable 'sql_safe_updates'"
   }
 ]
