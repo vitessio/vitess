@@ -22,6 +22,7 @@ import (
 	"strings"
 
 	"vitess.io/vitess/go/mysql/sqlmode"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/sysvars"
@@ -30,6 +31,8 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
+
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 type (
@@ -182,6 +185,15 @@ func planSysVarCheckIgnore(expr *sqlparser.SetExpr, schema plancontext.VSchema, 
 // execution time, once their value is known.
 func validateSQLModePlan(inner planFunc) planFunc {
 	return func(expr *sqlparser.SetExpr, vschema plancontext.VSchema, ec *expressionConverter) (engine.SetOp, error) {
+		if colName, ok := expr.Expr.(*sqlparser.ColName); ok && colName.Qualifier.IsEmpty() {
+			// MySQL accepts an unquoted mode name as the equivalent string: a constant,
+			// judged here like its quoted spelling. A qualified name is never a mode
+			// name; extractValue rejects it as MySQL does.
+			if _, err := sqlmode.Validate(sqltypes.NewVarChar(colName.Name.String())); err != nil {
+				return nil, err
+			}
+			return inner(expr, vschema, ec)
+		}
 		evalExpr, err := evalengine.Translate(expr.Expr, &evalengine.Config{
 			Collation:   vschema.ConnCollation(),
 			Environment: vschema.Environment(),
@@ -295,7 +307,15 @@ func extractValue(expr *sqlparser.SetExpr, boolean bool) (string, error) {
 		case "off":
 			return "0", nil
 		}
-		return fmt.Sprintf("'%s'", sqlparser.String(expr.Expr)), nil
+		// a qualified name is never a value: MySQL rejects it as the wrong argument
+		// type, whatever the qualifier
+		if !node.Qualifier.IsEmpty() {
+			return "", vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongTypeForVar, "Incorrect argument type to variable '%s'", expr.Var.Name.Lowered())
+		}
+		// the identifier's own text, not its formatted form: formatting backticks a
+		// name that is a keyword in the Vitess grammar, and MySQL would take the
+		// backticks as part of the string value
+		return sqltypes.EncodeStringSQL(node.Name.String()), nil
 
 	case *sqlparser.Default:
 		return "", vterrors.VT12001(defaultNotSupportedErrFmt, expr.Var.Name)
