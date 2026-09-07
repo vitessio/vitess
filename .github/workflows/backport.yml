@@ -3,8 +3,7 @@ name: Backport and Forwardport PRs
 permissions: read-all
 
 on:
-  pull_request_target:
-    types: [closed]
+  push:
     branches:
       - main
   workflow_dispatch:
@@ -25,7 +24,7 @@ jobs:
     permissions:
       pull-requests: write
     runs-on: ubuntu-latest
-    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.merged == true
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'push'
     steps:
       - name: Harden the runner (Audit all outbound calls)
         uses: step-security/harden-runner@f808768d1510423e83855289c910610ca9b43176 # v2.17.0
@@ -66,6 +65,7 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           fetch-depth: 0
+          persist-credentials: false
           token: ${{ steps.app-token.outputs.token }}
 
       - name: Perform backport/forwardport
